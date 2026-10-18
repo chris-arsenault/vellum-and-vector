@@ -6,6 +6,7 @@ import {
   type DomainSnapshot,
   type FieldRef,
   type Layer,
+  type World,
 } from "@atlas/domain";
 import {
   atlasParametersSchema,
@@ -42,7 +43,7 @@ export function startGeneration(
   input = {
     ...input,
     parameters: atlasParametersSchema.parse(
-      input.parameters ?? inheritedParameters(snapshot, input.areaId) ?? {}
+      input.parameters ?? inheritedGeneration(snapshot.world, input.areaId)?.parameters ?? {}
     ),
   };
   requireThat(
@@ -76,19 +77,15 @@ export function startGeneration(
   changed("jobs");
   return { ...job };
 }
-function inheritedParameters(
-  snapshot: DomainSnapshot,
+export function inheritedGeneration(
+  world: World,
   areaId: string
-): Record<string, number> | undefined {
-  for (
-    let current: string | null = areaId;
-    current;
-    current = snapshot.world.areas[current].parentId
-  ) {
-    const previous = snapshot.world.generations
+): World["generations"][number] | undefined {
+  for (let current: string | null = areaId; current; current = world.areas[current].parentId) {
+    const previous = world.generations
       .filter((run) => run.areaId === current && run.domains.includes("physical"))
       .at(-1);
-    if (previous?.parameters) return previous.parameters;
+    if (previous) return previous;
   }
   return undefined;
 }

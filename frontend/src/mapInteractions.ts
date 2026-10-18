@@ -66,6 +66,7 @@ export function installMapTools(
       navigation.space = held;
     }
   );
+  map.getTargetElement()?.focus({ preventScroll: true });
   const enter = map.on("dblclick", (event) => {
     if (tool !== "select") return;
     const child = engine.areas

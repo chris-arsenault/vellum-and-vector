@@ -27,6 +27,16 @@ test("choose landscape parameters and physical history before generating", async
   await page.getByText("Land, climate & erosion controls", { exact: true }).click();
   await expect(page.getByLabel("Baseline temperature · °C", { exact: true })).toHaveValue("25");
   await expect(page.getByLabel("Continental crust fraction", { exact: true })).toHaveValue("0.7");
+  await expect(page.getByLabel("Detail level")).toHaveValue("draft");
+  await tool(page, "Draw region rectangle").click();
+  await drag(page, [220, 220], [450, 440]);
+  await page.getByLabel("Develop as").selectOption("site");
+  await page.getByLabel("Place name").fill("Warm child");
+  await page.getByRole("button", { name: "Create mapped area", exact: true }).click();
+  await expect(page.locator(".breadcrumbs")).toContainText("Warm child");
+  await expect(page.getByLabel("Detail level")).toHaveValue("draft");
+  await expect(page.getByLabel("Baseline temperature · °C", { exact: true })).toHaveValue("25");
+  await expect(page.getByLabel("Continental crust fraction", { exact: true })).toHaveValue("0.7");
 });
 const map = (page: Page) => page.getByRole("application", { name: "World map canvas" });
 const tool = (page: Page, name: string) =>
@@ -54,6 +64,11 @@ async function exportMap(page: Page) {
 test("draw, adjust and enter regions without coordinate entry", async ({ page }) => {
   await createWorld(page);
   await page.getByRole("button", { name: "Draw a region to develop", exact: true }).click();
+  await page.keyboard.down("Space");
+  await drag(page, [200, 200], [240, 240]);
+  await page.keyboard.up("Space");
+  await expect(page.getByText(/Selected extent ·/)).toHaveCount(0);
+  await page.getByRole("button", { name: "Fit area", exact: true }).click();
   await drag(page, [220, 220], [450, 440]);
   await expect(page.getByText(/Selected extent ·/)).toBeVisible();
   const before = await page.getByText(/Selected extent ·/).textContent();
@@ -94,6 +109,7 @@ test("place, move and reshape features; pan during an unfinished route and cance
   await tool(page, "Draw road").click();
   await page.getByLabel("Feature name").fill("Coast road");
   await map(page).click({ position: { x: 220, y: 240 } });
+  const firstVertex = await page.locator(".coordinates").textContent();
   await map(page).click({ position: { x: 330, y: 280 } });
   await page.keyboard.down("Space");
   await drag(page, [380, 300], [410, 330]);
@@ -104,15 +120,8 @@ test("place, move and reshape features; pan during an unfinished route and cance
     (feature: { properties: { name: string } }) => feature.properties.name === "Coast road"
   );
   expect(road.geometry.coordinates.length).toBeGreaterThanOrEqual(3);
-  const resolution = (moved.geometry.coordinates[0] - original.geometry.coordinates[0]) / 60;
-  expect(road.geometry.coordinates[0][0]).toBeCloseTo(
-    original.geometry.coordinates[0] - 80 * resolution,
-    4
-  );
-  expect(road.geometry.coordinates[0][1]).toBeCloseTo(
-    original.geometry.coordinates[1] + 60 * resolution,
-    4
-  );
+  const [firstX, firstY] = road.geometry.coordinates[0];
+  expect(`${firstX.toFixed(1)} E · ${firstY.toFixed(1)} N · m`).toBe(firstVertex);
   await page.getByRole("button", { name: "Reshape on map", exact: true }).click();
   await drag(page, [360, 310], [370, 350]);
   await expect(page.locator(".map-status")).toContainText("Revision 6");

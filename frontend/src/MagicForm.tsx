@@ -3,10 +3,14 @@ import { useState } from "react";
 import { ErrorMessage } from "./ErrorMessage";
 import type { EditorState } from "./useEditor";
 import { magicFeatures } from "./magicFeatures";
+import { inheritedGeneration } from "./generationJobs";
 
 export function MagicForm({ editor }: { editor: EditorState }) {
   const generate = useGenerate(editor.world, editor.area.id);
-  const [quality, setQuality] = useState(editor.world.generations.at(-1)?.quality ?? "draft");
+  const previous = editor.world.generations.filter((run) => run.areaId === editor.area.id).at(-1);
+  const [quality, setQuality] = useState(
+    previous?.quality ?? inheritedGeneration(editor.world, editor.area.id)?.quality ?? "draft"
+  );
   const source = editor.world.magic.find((source) => source.id === editor.magicDraft?.id);
   return (
     <section>

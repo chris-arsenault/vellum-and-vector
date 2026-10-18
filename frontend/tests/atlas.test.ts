@@ -30,6 +30,7 @@ test("session world, generation, skipped refinement, editing and located templat
   await page.getByLabel("Field visualization").selectOption("temperature");
   await page.getByRole("button", { name: "Atlas", exact: true }).click();
   await createArea(page, "Borderlands", "region", 1000, 1000, 20000, 20000);
+  await page.getByLabel("Detail level").scrollIntoViewIfNeeded();
   await page.getByLabel("Detail level").selectOption("draft");
   await page.getByRole("button", { name: "Generate selected domains" }).click();
   await expect(page.locator(".job-row")).toHaveCount(2);

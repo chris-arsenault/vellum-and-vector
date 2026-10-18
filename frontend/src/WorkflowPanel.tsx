@@ -23,6 +23,6 @@ export function WorkflowPanel({ world, editor }: { world: World; editor: EditorS
     case "magic":
       return <MagicForm editor={editor} />;
     default:
-      return <DevelopmentPanel world={world} editor={editor} />;
+      return <DevelopmentPanel key={editor.area.id} world={world} editor={editor} />;
   }
 }

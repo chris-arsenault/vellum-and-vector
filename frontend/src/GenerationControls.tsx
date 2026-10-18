@@ -28,9 +28,11 @@ const presets: Record<string, Partial<AtlasParameters>> = {
 export function GenerationControls({
   seed,
   initial,
+  quality = "standard",
 }: {
   seed: number;
   initial?: Record<string, number>;
+  quality?: string;
 }) {
   const [values, setValues] = useState({ ...defaultAtlasParameters, ...initial });
   const [preset, setPreset] = useState(initial ? "custom" : "balanced");
@@ -82,7 +84,7 @@ export function GenerationControls({
       </details>
       <label>
         Detail level
-        <select name="quality" defaultValue="standard">
+        <select name="quality" defaultValue={quality}>
           <option value="draft">Draft · 16,384 terrain triangles</option>
           <option value="standard">Standard · 65,536 terrain triangles</option>
           <option value="fine">Fine · 262,144 terrain triangles</option>
