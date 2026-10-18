@@ -17,6 +17,7 @@ import { frameSchema, geometrySchema } from "./schemas";
 import { requireThat } from "./errors";
 
 interface Shape {
+  isRectangle(): boolean;
   isEmpty(): boolean;
   normalize(): void;
   getGeometryType(): string;
@@ -90,6 +91,23 @@ export class Spatial {
 
   covers(a: Geometry, b: Geometry): boolean {
     return Boolean(RelateOp.covers(this.read(a), this.read(b)));
+  }
+  geometryCoverage(footprint: Geometry): (geometry: Geometry) => boolean {
+    const shape = this.read(footprint);
+    if (!shape.isRectangle())
+      return (geometry) => Boolean(RelateOp.covers(shape, this.read(geometry)));
+    // A rectangle is convex: envelope containment is exact coverage for any
+    // valid geometry. Other footprints retain their full topological predicate.
+    const extent = shape.getEnvelopeInternal();
+    return (geometry) => {
+      const probe = this.read(geometry).getEnvelopeInternal();
+      return (
+        extent.getMinX() <= probe.getMinX() &&
+        extent.getMaxX() >= probe.getMaxX() &&
+        extent.getMinY() <= probe.getMinY() &&
+        extent.getMaxY() >= probe.getMaxY()
+      );
+    };
   }
   pointCoverage(footprint: Geometry): (position: Position) => boolean {
     const shape = this.read(footprint),

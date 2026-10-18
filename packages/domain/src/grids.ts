@@ -132,7 +132,12 @@ function validateGridExtent(bounds: Bounds, footprint: Geometry) {
   );
 }
 
-export function neighbors(grid: Grid, index: number, diagonal = false): number[] {
+export function neighbors(
+  grid: Grid,
+  index: number,
+  diagonal = false,
+  covers = (geometry: Geometry) => spatial.covers(grid.scope.footprint, geometry)
+): number[] {
   const x = index % grid.width,
     y = Math.floor(index / grid.width);
   const offsets = diagonal
@@ -159,7 +164,7 @@ export function neighbors(grid: Grid, index: number, diagonal = false): number[]
     .filter((i) => {
       const a = gridPosition(grid, index),
         b = gridPosition(grid, i);
-      return spatial.covers(grid.scope.footprint, {
+      return covers({
         type: "LineString",
         coordinates: [
           [a.x, a.y],

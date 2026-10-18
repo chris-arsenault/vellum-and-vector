@@ -45,16 +45,7 @@ export function JobsPanel({ world }: { world: World }) {
             {!job.finishedAt && ` · Last update ${seconds(Math.max(0, now - job.updatedAt))} ago`}
           </p>
           <progress aria-label="Generation progress" value={job.progress} max="1" />
-          <details>
-            <summary>Generation log ({job.events.length})</summary>
-            <ol>
-              {job.events.map((event, index) => (
-                <li key={index}>
-                  <time>{seconds(event.elapsedMs)}</time> {event.message}
-                </li>
-              ))}
-            </ol>
-          </details>
+          <GenerationLog events={job.events} />
           {job.error && <p className="error">{job.error}</p>}
           {["running", "queued"].includes(job.status) && (
             <button className="quiet" onClick={() => control.mutate(job.id)}>
@@ -65,6 +56,24 @@ export function JobsPanel({ world }: { world: World }) {
       ))}
       <ErrorMessage error={jobs.error ?? control.error} />
     </section>
+  );
+}
+
+function GenerationLog({ events }: { events: { elapsedMs: number; message: string }[] }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <details onToggle={(event) => setVisible(event.currentTarget.open)}>
+      <summary>Generation log ({events.length})</summary>
+      {visible && (
+        <ol>
+          {events.map((event, index) => (
+            <li key={index}>
+              <time>{seconds(event.elapsedMs)}</time> {event.message}
+            </li>
+          ))}
+        </ol>
+      )}
+    </details>
   );
 }
 

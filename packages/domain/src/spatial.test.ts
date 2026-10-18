@@ -15,6 +15,84 @@ const scope = (footprint: Geometry): SpatialScope => ({
   resolution: 1,
 });
 
+const coverageFootprints: Geometry[] = [
+  rectangle([0, 0, 10, 10]),
+  {
+    type: "Polygon",
+    coordinates: [
+      [
+        [0, 0],
+        [10, 0],
+        [10, 10],
+        [0, 10],
+        [0, 0],
+      ],
+      [
+        [4, 4],
+        [6, 4],
+        [6, 6],
+        [4, 6],
+        [4, 4],
+      ],
+    ],
+  },
+  {
+    type: "Polygon",
+    coordinates: [
+      [
+        [0, 0],
+        [10, 0],
+        [10, 3],
+        [3, 3],
+        [3, 10],
+        [0, 10],
+        [0, 0],
+      ],
+    ],
+  },
+];
+
+it("reuses exact coverage predicates for rectangular extents, concavities and holes", () => {
+  const probes: Geometry[] = [
+    rectangle([1, 1, 2, 2]),
+    rectangle([3, 3, 7, 7]),
+    {
+      type: "LineString",
+      coordinates: [
+        [1, 5],
+        [9, 5],
+      ],
+    },
+    {
+      type: "LineString",
+      coordinates: [
+        [0, 0],
+        [10, 0],
+      ],
+    },
+    {
+      type: "LineString",
+      coordinates: [
+        [4, 4],
+        [6, 4],
+      ],
+    },
+    {
+      type: "LineString",
+      coordinates: [
+        [1, 5],
+        [5, 1],
+      ],
+    },
+    { type: "Point", coordinates: [10, 10] },
+    { type: "Point", coordinates: [10.01, 10] },
+  ];
+  for (const footprint of coverageFootprints) {
+    const covers = spatial.geometryCoverage(footprint);
+    for (const probe of probes) expect(covers(probe)).toBe(spatial.covers(footprint, probe));
+  }
+});
+
 it("preserves local units, floors and directed geometry through transforms", () => {
   const frame = {
     origin: { x: 1e7, y: -1e7, z: 120 },

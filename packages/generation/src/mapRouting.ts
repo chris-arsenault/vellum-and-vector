@@ -65,6 +65,9 @@ function nearest(grid: Grid, point: Position) {
 export function findRoute(grid: Grid, from: Position, to: Position, kind: string): Position[] {
   const start = nearest(grid, from),
     end = nearest(grid, to);
+  // Every edge uses the same footprint. Read its topology once per route
+  // while retaining exact segment checks at concavities and holes.
+  const covers = spatial.geometryCoverage(grid.scope.footprint);
   const costs = new Float64Array(grid.active.length).fill(Infinity);
   const previous = new Int32Array(grid.active.length).fill(-1),
     queue = new RouteHeap();
@@ -73,7 +76,7 @@ export function findRoute(grid: Grid, from: Position, to: Position, kind: string
   for (let entry = queue.pop(); entry; entry = queue.pop()) {
     if (entry.cost !== costs[entry.cell]) continue;
     if (entry.cell === end) return routePoints(grid, previous, start, end, from, to);
-    for (const next of neighbors(grid, entry.cell, true)) {
+    for (const next of neighbors(grid, entry.cell, true, covers)) {
       const step = routeCost(grid, entry.cell, next, kind);
       const cost = entry.cost + step;
       if (cost >= costs[next]) continue;
