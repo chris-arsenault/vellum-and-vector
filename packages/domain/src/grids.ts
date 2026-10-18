@@ -196,6 +196,33 @@ export function sample(grid: GridSurface, channel: string, p: Position, discrete
   return interpolateSample(grid, channel, p, discrete);
 }
 
+// Prepare immutable coverage once for a batch of samples. Overlay precedence,
+// fixed precision and interpolation are identical to individual sample calls.
+export function gridSampler(
+  grid: GridSurface,
+  channel: string,
+  discrete = false
+): (position: Position) => number {
+  requireThat(
+    grid.channels[channel],
+    "missing_channel",
+    `Field channel ${channel} is unavailable.`
+  );
+  const covered = spatial.pointCoverage(grid.scope.footprint),
+    overlays = [...(grid.overlays ?? [])]
+      .reverse()
+      .filter((overlay) => overlay.channels.includes(channel))
+      .map((overlay) => ({
+        covered: spatial.pointCoverage(overlay.grid.scope.footprint),
+        valueAt: gridSampler(overlay.grid, channel, discrete),
+      }));
+  return (position: Position): number => {
+    requireThat(covered(position), "outside_field", "Sample lies outside field coverage.");
+    for (const overlay of overlays) if (overlay.covered(position)) return overlay.valueAt(position);
+    return interpolateSample(grid, channel, position, discrete);
+  };
+}
+
 // Evaluate the lattice polynomial after the caller has established coverage.
 // Clipped-cell extrema use this directly: snapping a point on an oblique edge
 // again can move it across that edge even though the clipped segment is valid.

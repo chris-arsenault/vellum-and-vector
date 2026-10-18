@@ -1,8 +1,8 @@
 import {
   gridPosition,
+  gridSampler,
   interpolateSample,
   point,
-  sample,
   spatial,
   type Grid,
   type Position,
@@ -132,16 +132,13 @@ function fixedSamples(
   binding: ChannelBinding
 ) {
   const values = new Float64Array(work.map.mesh.count).fill(NaN);
+  const covers = spatial.pointCoverage(footprint),
+    sourceCovers = spatial.pointCoverage(source.scope.footprint),
+    valueAt = gridSampler(source, binding.name, binding.unit === "category");
   for (let i = 0; i < values.length; i++) {
-    const position = nativePosition(work, i),
-      location = point(position);
-    if (!spatial.covers(footprint, location) || !spatial.covers(source.scope.footprint, location))
-      continue;
-    values[i] = Math.round(
-      (sample(source, binding.name, position, binding.unit === "category") -
-        (binding.offset ?? 0)) /
-        binding.scale
-    );
+    const position = nativePosition(work, i);
+    if (!covers(position) || !sourceCovers(position)) continue;
+    values[i] = Math.round((valueAt(position) - (binding.offset ?? 0)) / binding.scale);
   }
   return values;
 }

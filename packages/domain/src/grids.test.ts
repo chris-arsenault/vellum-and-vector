@@ -4,6 +4,7 @@ import { createGrid, gridPosition } from "./grids";
 import { point, rectangle, spatial, type Bounds } from "./spatial";
 
 function compareClipping(footprint: Geometry, bounds: Bounds) {
+  const covers = spatial.pointCoverage(footprint);
   const grid = createGrid(
     "measures",
     {
@@ -32,6 +33,7 @@ function compareClipping(footprint: Geometry, bounds: Bounds) {
       ]),
       clipped = spatial.intersection(cell, footprint);
     expect(grid.active[i]).toBe(spatial.covers(footprint, point(p)) ? 1 : 0);
+    expect(covers(p)).toBe(spatial.covers(footprint, point(p)));
     expect(grid.measures[i]).toBeCloseTo(clipped ? spatial.area(clipped) : 0, 10);
   }
 }
@@ -56,4 +58,43 @@ it("retains clipped cell measures for translated fractional rectangles and polyg
     },
     bounds
   );
+});
+
+it("retains prepared point coverage at hole boundaries and fixed-precision offsets", () => {
+  const footprint: Geometry = {
+      type: "MultiPolygon",
+      coordinates: [
+        [
+          [
+            [0, 0],
+            [8, 0],
+            [8, 8],
+            [0, 8],
+            [0, 0],
+          ],
+          [
+            [2, 2],
+            [2, 6],
+            [6, 6],
+            [6, 2],
+            [2, 2],
+          ],
+        ],
+        [
+          [
+            [10, 0],
+            [12, 0],
+            [12, 2],
+            [10, 2],
+            [10, 0],
+          ],
+        ],
+      ],
+    },
+    covers = spatial.pointCoverage(footprint);
+  for (const x of [-1, 0, 2 - 0.0000004, 2, 2 + 0.0000006, 4, 6, 8, 10, 11, 12, 13])
+    for (const y of [0, 2, 4, 6, 8]) {
+      const position = { x, y, z: 0 };
+      expect(covers(position)).toBe(spatial.covers(footprint, point(position)));
+    }
 });

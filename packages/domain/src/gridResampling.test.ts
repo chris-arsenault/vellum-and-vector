@@ -1,6 +1,14 @@
 import { expect, it } from "vitest";
-import { createGrid, putChannel, resample, type GridSurface } from "./grids";
-import { rectangle } from "./spatial";
+import {
+  createGrid,
+  gridPosition,
+  gridSampler,
+  putChannel,
+  resample,
+  sample,
+  type GridSurface,
+} from "./grids";
+import { point, rectangle, spatial } from "./spatial";
 import { resampleChannels } from "./gridResampling";
 
 it("retains scalar resampling across concave coverage, categorical channels and nested overlapping patches", () => {
@@ -64,4 +72,14 @@ it("retains scalar resampling across concave coverage, categorical channels and 
   resampleChannels(source, actual);
   expect(actual.channels).toEqual(expected.channels);
   expect(actual.units).toEqual(expected.units);
+  for (const channel of Object.keys(source.channels)) {
+    const discrete = source.units[channel] === "category",
+      valueAt = gridSampler(source, channel, discrete);
+    for (let i = 0; i < actual.active.length; i++) {
+      const position = gridPosition(actual, i);
+      if (spatial.covers(source.scope.footprint, point(position)))
+        expect(valueAt(position)).toBe(sample(source, channel, position, discrete));
+      else expect(() => valueAt(position)).toThrow("Sample lies outside field coverage.");
+    }
+  }
 });

@@ -1,8 +1,7 @@
 import {
   gridPosition,
-  point,
+  gridSampler,
   requireThat,
-  sample,
   sameValue,
   spatial,
   type DomainSnapshot,
@@ -67,11 +66,12 @@ function composeSamples(
       "authored_field_units",
       `Authored ${channel} samples retain their units during generation.`
     );
+    const covers = spatial.pointCoverage(footprint),
+      sourceCovers = spatial.pointCoverage(source.scope.footprint),
+      valueAt = gridSampler(source, channel);
     for (let i = 0; i < grid.active.length; i++) {
-      const position = gridPosition(grid, i),
-        location = point(position);
-      if (spatial.covers(footprint, location) && spatial.covers(source.scope.footprint, location))
-        grid.channels[channel][i] = sample(source, channel, position);
+      const position = gridPosition(grid, i);
+      if (covers(position) && sourceCovers(position)) grid.channels[channel][i] = valueAt(position);
     }
   }
 }

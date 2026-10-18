@@ -10,6 +10,8 @@ import DistanceOp from "jsts/org/locationtech/jts/operation/distance/DistanceOp.
 import BufferOp from "jsts/org/locationtech/jts/operation/buffer/BufferOp.js";
 import GeometryPrecisionReducer from "jsts/org/locationtech/jts/precision/GeometryPrecisionReducer.js";
 import UnaryUnionOp from "jsts/org/locationtech/jts/operation/union/UnaryUnionOp.js";
+import IndexedPointInAreaLocator from "jsts/org/locationtech/jts/algorithm/locate/IndexedPointInAreaLocator.js";
+import Location from "jsts/org/locationtech/jts/geom/Location.js";
 import type { Frame, Position } from "./model";
 import { frameSchema, geometrySchema } from "./schemas";
 import { requireThat } from "./errors";
@@ -88,6 +90,18 @@ export class Spatial {
 
   covers(a: Geometry, b: Geometry): boolean {
     return Boolean(RelateOp.covers(this.read(a), this.read(b)));
+  }
+  pointCoverage(footprint: Geometry): (position: Position) => boolean {
+    const shape = this.read(footprint),
+      locator = ["Polygon", "MultiPolygon"].includes(shape.getGeometryType())
+        ? new IndexedPointInAreaLocator(shape)
+        : null;
+    return (position) => {
+      const probe = this.read(point(position));
+      return locator
+        ? locator.locate(probe.getCoordinates()[0]) !== Location.EXTERIOR
+        : Boolean(RelateOp.covers(shape, probe));
+    };
   }
   intersects(a: Geometry, b: Geometry): boolean {
     return Boolean(RelateOp.intersects(this.read(a), this.read(b)));
