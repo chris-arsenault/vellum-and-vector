@@ -1,6 +1,7 @@
 import type { Geometry } from "geojson";
 import { bounds, frameAt, rectangle } from "./presentation";
 import { makeCommand } from "./useAtlas";
+import { session } from "./atlasState";
 import { brushChannel, drawingDefinition, type Workspace } from "./cartography";
 import { drawnFeature, magicInput, regionExtent, sourceFootprint } from "./mapAuthoring";
 import type { EditorEditing, EditorSessionState } from "./useEditor";
@@ -128,7 +129,7 @@ function placeExtent(feature: AtlasFeature) {
   return rectangle(x - 25, y - 25, 50, 50);
 }
 function enterArea(world: World, state: EditorSessionState, id: string) {
-  const area = world.areas[id] ?? state.area,
+  const area = session(world.id).snapshot.world.areas[id] ?? state.area,
     box = bounds(area.footprint);
   state.setAreaId(id);
   state.setViewport(null);

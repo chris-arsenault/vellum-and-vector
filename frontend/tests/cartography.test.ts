@@ -39,6 +39,42 @@ test("choose landscape parameters and physical history before generating", async
   await expect(page.getByLabel("Continental crust fraction", { exact: true })).toHaveValue("0.7");
 });
 const map = (page: Page) => page.getByRole("application", { name: "World map canvas" });
+test("develop a building interior and draw rooms in its located space", async ({ page }) => {
+  await createWorld(page);
+  await tool(page, "Draw region rectangle").click();
+  await drag(page, [220, 220], [450, 440]);
+  await page.getByLabel("Develop as").selectOption("site");
+  await page.getByLabel("Place name").fill("Town");
+  await page.getByRole("button", { name: "Create mapped area", exact: true }).click();
+  await expect(page.locator(".breadcrumbs")).toContainText("Town");
+  await page.getByLabel("Working layer").selectOption("places");
+  await tool(page, "Draw building").click();
+  await page.getByLabel("Feature name").fill("Hall");
+  await map(page).click({ position: { x: 300, y: 250 } });
+  await map(page).click({ position: { x: 600, y: 250 } });
+  await map(page).dblclick({ position: { x: 600, y: 550 } });
+  await expect(page.locator(".right-panel h2")).toHaveText("Hall");
+  await page.getByRole("button", { name: "Refine this footprint", exact: true }).click();
+  await expect(page.getByLabel("Develop as")).toHaveValue("interior");
+  await page.getByLabel("Place name").fill("Hall interior");
+  await page.getByRole("button", { name: "Create mapped area", exact: true }).click();
+  await expect(page.locator(".breadcrumbs")).toContainText("Hall interior");
+  await expect(page.getByLabel("Working layer")).toHaveValue("interior");
+  await tool(page, "Draw room").click();
+  await page.getByLabel("Feature name").fill("Great room");
+  await map(page).click({ position: { x: 500, y: 250 } });
+  await map(page).click({ position: { x: 650, y: 250 } });
+  await map(page).dblclick({ position: { x: 650, y: 350 } });
+  await expect(page.locator(".right-panel h2")).toHaveText("Great room");
+  const data = await exportMap(page),
+    room = data.features.find(
+      (feature: { properties: { kind: string } }) => feature.properties.kind === "room"
+    ),
+    building = data.features.find(
+      (feature: { properties: { kind: string } }) => feature.properties.kind === "building"
+    );
+  expect(room.properties.spaceId).not.toEqual(building.properties.spaceId);
+});
 const tool = (page: Page, name: string) =>
   page.getByRole("toolbar", { name: "Map tools" }).getByRole("button", { name, exact: true });
 async function createWorld(page: Page) {
