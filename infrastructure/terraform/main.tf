@@ -31,7 +31,6 @@ module "frontend" {
   source         = "git::https://github.com/chris-arsenault/ahara-tf-patterns.git//modules/website?ref=34287b1925e1b5681281c1fb3ee9199211202ec9"
   prefix         = local.prefix
   hostname       = local.app
-  aliases        = ["vellum-and-vector.ahara.io"]
   site_directory = "${path.module}/../../frontend/dist"
   encrypt        = false
   vpc            = module.ctx.vpc
