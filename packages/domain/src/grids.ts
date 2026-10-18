@@ -89,6 +89,10 @@ export function createGrid(
     ),
   };
   validateGridExtent(grid.bounds, scope.footprint);
+  if (spatial.covers(scope.footprint, rectangle(grid.bounds))) {
+    rectangularMeasures(grid);
+    return grid;
+  }
   for (let i = 0; i < grid.active.length; i++) {
     const cell = rectangle(cellBounds(grid, i));
     const clipped = spatial.intersection(cell, scope.footprint);
@@ -96,6 +100,25 @@ export function createGrid(
     grid.measures[i] = clipped ? spatial.area(clipped) : 0;
   }
   return grid;
+}
+
+function rectangularMeasures(grid: Grid) {
+  // Both coverage predicates establish that the footprint equals the sample
+  // rectangle. Match JSTS's fixed precision without clipping each whole cell.
+  const scale = 1 / spatial.precision,
+    precise = (value: number) => Math.round(value * scale) / scale;
+  grid.active.fill(1);
+  for (let i = 0; i < grid.active.length; i++) {
+    const [x0, y0, x1, y1] = cellBounds(grid, i),
+      width = precise(x1) - precise(x0),
+      height = precise(y1) - precise(y0);
+    requireThat(
+      width > 0 && height > 0,
+      "precision_collapse",
+      "Grid cells collapse at the declared precision."
+    );
+    grid.measures[i] = width * height;
+  }
 }
 
 function validateGridExtent(bounds: Bounds, footprint: Geometry) {
