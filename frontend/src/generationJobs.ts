@@ -23,9 +23,6 @@ interface GenerationJob {
   progress: number;
   error: string | null;
   startedAt: number;
-  updatedAt: number;
-  finishedAt: number | null;
-  events: { elapsedMs: number; message: string }[];
 }
 interface RunningJob {
   job: GenerationJob;
@@ -70,16 +67,13 @@ export function startGeneration(
     progress: 0,
     error: null,
     startedAt: Date.now(),
-    updatedAt: Date.now(),
-    finishedAt: null,
-    events: [],
   };
   logProgress(
     job,
     `Preparing ${input.quality} geography; seed ${input.seed}; ${input.domains.join(", ")}`,
     0
   );
-  console.info(`[atlas generation ${job.id}] Inputs`, input);
+  console.log(`[atlas generation ${job.id}] Inputs`, input);
   jobs.unshift(job);
   running.set(job.id, { job, worker, expectedVersion: input.expectedVersion, input });
   worker.onmessage = (event: MessageEvent<WorkerResult>) => receive(job.id, event.data);
@@ -165,7 +159,6 @@ function finish(id: string, status: string, error: string | null = null) {
     status,
     error,
     stage,
-    finishedAt: Date.now(),
     progress: status === "completed" ? 1 : active.job.progress,
   });
   changed("jobs");
@@ -173,10 +166,9 @@ function finish(id: string, status: string, error: string | null = null) {
 function logProgress(job: GenerationJob, message: string, progress: number) {
   job.stage = message;
   job.progress = progress;
-  job.updatedAt = Date.now();
-  const elapsedMs = job.updatedAt - job.startedAt;
-  job.events.push({ elapsedMs, message });
-  console.info(`[atlas generation ${job.id}] +${(elapsedMs / 1000).toFixed(1)}s ${message}`);
+  console.log(
+    `[atlas generation ${job.id}] +${((Date.now() - job.startedAt) / 1000).toFixed(1)}s ${message}`
+  );
 }
 export function cancelGeneration(id: string) {
   finish(id, "cancelled");

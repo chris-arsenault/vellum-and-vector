@@ -16,7 +16,7 @@ class TestWorker {
 
 afterEach(() => vi.unstubAllGlobals());
 
-it("retains timed progress and the active stage when a worker fails", () => {
+it("retains the active stage and error when a worker fails", () => {
   vi.stubGlobal("Worker", TestWorker);
   const world = createWorld({ name: "Failure diagnostics", seed: 42, width: 10000, height: 10000 });
   const job = startGeneration(world.id, {
@@ -42,13 +42,6 @@ it("retains timed progress and the active stage when a worker fails", () => {
   expect(failed.status).toBe("failed");
   expect(failed.stage).toContain("Building territory for Polity 1");
   expect(failed.error).toBe("Worker exhausted memory");
-  expect(failed.events.map((event) => event.message)).toEqual([
-    expect.stringContaining("seed 42"),
-    "Building territory for Polity 1",
-    expect.stringContaining("Worker exhausted memory"),
-  ]);
-  expect(failed.events.every((event) => event.elapsedMs >= 0)).toBe(true);
   expect(worker.terminate).toHaveBeenCalledOnce();
-  expect(failed.finishedAt).not.toBeNull();
   cancelGeneration(job.id);
 });

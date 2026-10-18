@@ -21,7 +21,6 @@ test("session world, generation, skipped refinement, editing and located templat
   await page.getByLabel("Territory & claims", { exact: true }).check();
   await page.getByRole("button", { name: "Generate selected domains" }).click();
   await expect(page.locator(".job-row strong").first()).toHaveText("completed", { timeout: 90000 });
-  await checkGenerationLog(page);
   await page.screenshot({ path: "test-results/atlas-world.png" });
   await page.getByRole("button", { name: "Layers", exact: true }).click();
   await page.getByLabel("View preset").selectOption("political");
@@ -68,17 +67,6 @@ test("session world, generation, skipped refinement, editing and located templat
   expect(serviceRequests).toEqual([]);
   expect(errors).toEqual([]);
 });
-
-async function checkGenerationLog(page: Page) {
-  const job = page.locator(".job-row").first();
-  await job.getByText(/^Generation log/).click();
-  const log = job.getByRole("group");
-  await expect(log).toContainText("Starting human.politics");
-  await expect(log).toContainText("Validating completed geography");
-  await expect(log).toContainText("Sending completed geography to the editor");
-  await expect(log).toContainText("Publishing fields and coverage in the editor");
-  await job.getByText(/^Generation log/).click();
-}
 
 async function createArea(
   page: Page,
