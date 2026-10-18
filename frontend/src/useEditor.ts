@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { DomainError } from "@atlas/domain";
-import { bounds, defaultStyles, frameAt, rectangle } from "./presentation";
+import { bounds, defaultStyles, frameAt } from "./presentation";
 import { makeCommand, useCommit } from "./useAtlas";
 import type { Area, AtlasFeature, LayerStyle, Tool, World } from "./types";
 import type { Geometry } from "geojson";
 import { useMapData } from "./useScene";
 import { editArea } from "./useScene";
+import { useCartographicState } from "./useCartographicState";
+import { useMapActions } from "./useMapActions";
 
 function useEditorState(world: World) {
   const [selectedAreaId, setAreaId] = useState(
@@ -19,7 +21,12 @@ function useEditorState(world: World) {
   const [selection, setSelection] = useState<Geometry | null>(null);
   const [drawing, setDrawing] = useState<Geometry | null>(null);
   const [channel, setChannel] = useState("elevation");
-  const [brush, setBrush] = useState({ radius: 100, delta: 10 });
+  const extent = bounds(area.footprint);
+  const [brush, setBrush] = useState({
+    radius: (extent[2] - extent[0]) / 30,
+    delta: 10,
+    mode: "add" as "add" | "set" | "smooth",
+  });
   const [panel, setPanel] = useState("generate");
   const [proposedFeatures, setProposedFeatures] = useState<AtlasFeature[]>([]);
   const [pendingEdits, setPendingEdits] = useState<{ areaId: string; feature: AtlasFeature }[]>([]);
@@ -56,52 +63,13 @@ function useEditorState(world: World) {
     setReconciling,
     viewport,
     setViewport,
+    ...useCartographicState(),
   };
 }
 export function useEditor(world: World) {
   const state = useEditorState(world);
-  const {
-    area,
-    tool,
-    channel,
-    brush,
-    savedStyles,
-    viewport,
-    setAreaId,
-    setViewport,
-    setSelected,
-    setTool,
-    setPanel,
-    setDrawing,
-    setSelection,
-    setStyles,
-    setChannel,
-  } = state;
+  const { area, channel, savedStyles, viewport, setViewport, setStyles, setChannel } = state;
   const editing = useEditing(world, state);
-  const { execute, saveFeature } = editing;
-  function enter(id: string) {
-    setAreaId(id);
-    setViewport(null);
-    setSelected(null);
-    setTool("select");
-  }
-  function draw(geometry: Geometry) {
-    if (tool === "refine") {
-      setSelection(geometry);
-      setPanel("refine");
-    } else {
-      setDrawing(geometry);
-      setSelected(draftForTool(area, geometry, tool));
-      setPanel("feature");
-    }
-    setTool("select");
-  }
-  function refinePoi(feature: AtlasFeature) {
-    if (feature.geometry.type !== "Point") return;
-    const [x, y] = feature.geometry.coordinates;
-    setSelection(rectangle(x - 25, y - 25, 50, 50));
-    setPanel("refine");
-  }
   return {
     ...state,
     ...editing,
@@ -109,12 +77,7 @@ export function useEditor(world: World) {
     styles: completeStyles(world, savedStyles),
     ...useMapData(world, area.id, channel, viewport),
     viewport: setViewport,
-    enter,
-    draw,
-    modify: (feature: AtlasFeature, geometry: Geometry) => saveFeature({ ...feature, geometry }),
-    sculpt: (x: number, y: number) =>
-      execute("sculptField", { ...sculptInput(area, channel, x, y), ...brush }),
-    refinePoi,
+    ...useMapActions(world, state, editing),
     preset: (name: string) => {
       setStyles(defaultStyles(world, name));
       setChannel(presetChannel(world, name));
@@ -187,25 +150,6 @@ function completeStyles(world: World, saved: LayerStyle[]) {
     defaultStyles(world).filter((s) => !saved.some((previous) => previous.layerId === s.layerId))
   );
 }
-function draftForTool(area: Area, geometry: Geometry, tool: Tool) {
-  return newFeature(
-    area,
-    geometry,
-    "",
-    tool === "polygon" ? "survey" : tool,
-    tool === "river" ? "rivers" : tool === "road" ? "roads" : "pois"
-  );
-}
-function sculptInput(area: Area, channel: string, x: number, y: number) {
-  const extent = bounds(area.footprint);
-  return {
-    areaId: area.id,
-    channel,
-    center: { x, y, z: area.frame.origin.z },
-    radius: (extent[2] - extent[0]) / 20,
-    delta: 10,
-  };
-}
 function presetChannel(world: World, name: string) {
   const entity = Object.values(world.entities).find((e) => e.kind === "culture");
   if (name === "cultural" && entity) return `culture:${entity.id}`;
@@ -214,6 +158,8 @@ function presetChannel(world: World, name: string) {
   return "elevation";
 }
 export type EditorState = ReturnType<typeof useEditor>;
+export type EditorSessionState = ReturnType<typeof useEditorState>;
+export type EditorEditing = ReturnType<typeof useEditing>;
 
 export function newFeature(
   area: Area,

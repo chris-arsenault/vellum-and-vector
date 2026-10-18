@@ -1,6 +1,6 @@
 import type { Grid, GridSurface } from "./grids";
-import { gridPosition, sample } from "./grids";
-import { spatial, point } from "./spatial";
+import { gridPosition, gridSampler } from "./grids";
+import { spatial } from "./spatial";
 import { requireThat } from "./errors";
 
 export function overlayField(
@@ -30,10 +30,13 @@ export function materializeField(source: GridSurface): Grid {
   const { overlays, ...raw } = source;
   const result = structuredClone(raw);
   if (!overlays?.length) return result;
-  for (const [name, values] of Object.entries(result.channels))
+  const covered = spatial.pointCoverage(source.scope.footprint);
+  for (const [name, values] of Object.entries(result.channels)) {
+    const valueAt = gridSampler(source, name);
     for (let i = 0; i < values.length; i++) {
       const p = gridPosition(source, i);
-      if (spatial.covers(source.scope.footprint, point(p))) values[i] = sample(source, name, p);
+      if (covered(p)) values[i] = valueAt(p);
     }
+  }
   return result;
 }

@@ -1,93 +1,247 @@
+import { makeCommand, useGenerate } from "./useAtlas";
+import { useState } from "react";
+import { ErrorMessage } from "./ErrorMessage";
 import type { EditorState } from "./useEditor";
-import { FrameFields } from "./FormFields";
+import { magicFeatures } from "./magicFeatures";
 
 export function MagicForm({ editor }: { editor: EditorState }) {
-  const origin = editor.area.frame.origin;
+  const generate = useGenerate(editor.world, editor.area.id);
+  const [quality, setQuality] = useState(editor.world.generations.at(-1)?.quality ?? "draft");
+  const source = editor.world.magic.find((source) => source.id === editor.magicDraft?.id);
+  return (
+    <section>
+      <h2>Magic in this landscape</h2>
+      <p>Locate a source and its reach, then choose how it changes the environment.</p>
+      <button className="primary" onClick={() => editor.setTool("magic")}>
+        Draw source & reach
+      </button>
+      {editor.magicDraft ? (
+        <SourceSettings
+          key={`${source?.id ?? "new"}:${editor.magicDraft.source.x}:${editor.magicDraft.source.y}`}
+          editor={editor}
+        />
+      ) : (
+        <p>
+          Click the source position, then click the edge of its influence. Select an existing source
+          to edit or move it.
+        </p>
+      )}
+      <SourceList editor={editor} />
+      <label>
+        Application detail
+        <select value={quality} onChange={(event) => setQuality(event.target.value)}>
+          <option value="draft">Draft</option>
+          <option value="standard">Standard</option>
+          <option value="fine">Fine</option>
+        </select>
+      </label>
+      <button
+        className="secondary"
+        disabled={generate.isPending || !editor.world.magic.length}
+        onClick={() => generate.mutate({ domains: ["magic"], quality, seed: editor.world.seed })}
+      >
+        Apply magic to geography
+      </button>
+      <p className="hint">
+        Saving changes the source. Apply magic to update climate and water from the current
+        geography; generate land and magic together to evolve geological history.
+      </p>
+      <ErrorMessage error={generate.error} />
+    </section>
+  );
+}
+function SourceList({ editor }: { editor: EditorState }) {
+  return (
+    <section>
+      <h3>Located sources</h3>
+      {editor.world.magic.map((source) => (
+        <div key={source.id}>
+          <strong>{source.name}</strong>
+          <small>
+            {source.effect} · reach {source.radius.toFixed(0)} m
+          </small>
+          <button
+            className="quiet"
+            onClick={() => {
+              editor.setMagicDraft({ id: source.id, source: source.source, radius: source.radius });
+              editor.setTool("select");
+            }}
+          >
+            Edit source
+          </button>
+          <button
+            className="quiet"
+            onClick={() => editor.execute("removeMagicSource", { id: source.id })}
+          >
+            Remove source
+          </button>
+        </div>
+      ))}
+    </section>
+  );
+}
+function SourceSettings({ editor }: { editor: EditorState }) {
+  const draft = editor.magicDraft!,
+    source = editor.world.magic.find((source) => source.id === draft.id);
   return (
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        const form = new FormData(event.currentTarget);
-        editor.execute("putMagicSource", magicInput(form, editor));
+        saveSource(editor, new FormData(event.currentTarget));
       }}
     >
-      <h3>Declare a magical force</h3>
-      <p className="hint">
-        Sources, propagation and retained effects participate in physical generation and epoch
-        history.
-      </p>
+      <h3>{source ? `Edit ${source.name}` : "Configure this source"}</h3>
       <label>
-        Name
-        <input name="name" required placeholder="Geothermal heart" />
+        Source name
+        <input name="name" defaultValue={source?.name ?? "Magical source"} required />
       </label>
-      <FrameFields origin={origin} />
-      <div className="form-row">
-        <label>
-          Radius · m
-          <input name="radius" type="number" min="0.01" step="any" defaultValue="500" required />
-        </label>
-        <label>
-          Strength
-          <input name="strength" type="number" defaultValue="250" required />
-        </label>
-      </div>
+      <SourceEffect effect={source?.effect} />
+      <label>
+        Strength
+        <input
+          name="strength"
+          type="number"
+          min="0"
+          step="any"
+          defaultValue={source?.strength ?? 25}
+          required
+        />
+      </label>
+      <label>
+        Reach · m
+        <input
+          name="radius"
+          type="number"
+          min=".01"
+          step="any"
+          value={draft.radius}
+          onChange={(event) =>
+            editor.setMagicDraft({ ...draft, radius: Number(event.target.value) })
+          }
+          required
+        />
+      </label>
       <label>
         Propagation
-        <select name="propagation">
-          <option value="radial">Radial decay</option>
-          <option value="fracture">Through fractures</option>
-          <option value="cold">Toward cold / stored in ice</option>
-          <option value="ocean">Through ocean and bathymetry</option>
+        <select name="propagation" defaultValue={source?.propagation ?? "radial"}>
+          <option value="radial">Outward from source</option>
+          <option value="fracture">Along fractures</option>
+          <option value="cold">Toward cold, retained in ice</option>
+          <option value="ocean">Through ocean & bathymetry</option>
+          <option value="advect">Carried with crust</option>
         </select>
       </label>
-      <label>
-        Environmental effect
-        <select name="effect">
-          <option value="heat">Heating</option>
-          <option value="cold">Cooling</option>
-          <option value="erosionResistance">Rock hardening</option>
-          <option value="pressure">Coastal forcing</option>
-          <option value="gravity">Gravity exception</option>
-        </select>
-      </label>
-      <div className="form-row">
-        <label>
-          Decay
-          <input name="decay" type="number" min="0" max="1" step="0.05" defaultValue="0.2" />
-        </label>
-        <label>
-          Historical storage
-          <input name="storage" type="number" min="0" max="1" step="0.05" defaultValue="0.3" />
-        </label>
-      </div>
-      {editor.world.magic.length > 0 && (
-        <label>
-          Interacts with
-          <select name="dependsOn" multiple>
-            {editor.world.magic.map((rule) => (
-              <option key={rule.id} value={rule.id}>
-                {rule.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      <button className="primary">Save magical system</button>
+      <MagicHistory editor={editor} />
+      <button className="primary" disabled={editor.commit.isPending}>
+        Save magical source
+      </button>
+      {source && <MoveSource editor={editor} id={source.id} />}
+      <button type="button" className="quiet" onClick={() => editor.setMagicDraft(null)}>
+        Cancel source editing
+      </button>
     </form>
   );
 }
-function magicInput(form: FormData, editor: EditorState) {
-  return {
-    id: crypto.randomUUID(),
-    name: String(form.get("name")),
-    source: { x: Number(form.get("x")), y: Number(form.get("y")), z: Number(form.get("z")) },
-    radius: Number(form.get("radius")),
-    strength: Number(form.get("strength")),
-    propagation: String(form.get("propagation")),
-    effect: String(form.get("effect")),
-    decay: Number(form.get("decay")),
-    storage: Number(form.get("storage")),
-    dependsOn: form.getAll("dependsOn").map(String),
-    ...(editor.selection ? { scope: editor.selection } : {}),
-  };
+function MoveSource({ editor, id }: { editor: EditorState; id: string }) {
+  return (
+    <button
+      type="button"
+      className="secondary"
+      onClick={() => {
+        editor.setSelected(
+          magicFeatures(editor.world, editor.area.id, editor.area.footprint).find(
+            (feature) => feature.id === id
+          ) ?? null
+        );
+        editor.setTool("move");
+      }}
+    >
+      Move source on map
+    </button>
+  );
+}
+function SourceEffect({ effect }: { effect?: string }) {
+  return (
+    <label>
+      Environmental effect
+      <select name="effect" defaultValue={effect ?? "heat"}>
+        <option value="heat">Heating · strength in °C</option>
+        <option value="cold">Cooling · strength in °C</option>
+        <option value="erosionResistance">Rock hardening · strength / 1,000</option>
+        <option value="pressure">Coastal forcing · relative strength</option>
+      </select>
+    </label>
+  );
+}
+function saveSource(editor: EditorState, form: FormData) {
+  const draft = editor.magicDraft!,
+    source = editor.world.magic.find((source) => source.id === draft.id);
+  editor.commit.mutate(
+    makeCommand(editor.world, "putMagicSource", {
+      id: source?.id ?? crypto.randomUUID(),
+      areaId: source?.areaId ?? editor.area.id,
+      name: String(form.get("name")),
+      source: draft.source,
+      radius: Number(form.get("radius")),
+      strength: Number(form.get("strength")),
+      effect: String(form.get("effect")),
+      propagation: String(form.get("propagation")),
+      decay: Number(form.get("decay")),
+      storage: Number(form.get("storage")),
+      startsAtEpoch: Number(form.get("startsAtEpoch")),
+      dependsOn: form.getAll("dependsOn").map(String),
+    }),
+    { onSuccess: () => editor.setMagicDraft(null) }
+  );
+}
+function MagicHistory({ editor }: { editor: EditorState }) {
+  const source = editor.world.magic.find((source) => source.id === editor.magicDraft?.id);
+  return (
+    <details>
+      <summary>Persistence through epochs & interactions</summary>
+      <label>
+        Decay per epoch
+        <input
+          name="decay"
+          type="number"
+          min="0"
+          max="1"
+          step=".05"
+          defaultValue={source?.decay ?? 0.2}
+        />
+      </label>
+      <label>
+        Stored effect
+        <input
+          name="storage"
+          type="number"
+          min="0"
+          step=".05"
+          defaultValue={source?.storage ?? 0.3}
+        />
+      </label>
+      <label>
+        Active from
+        <select name="startsAtEpoch" defaultValue={source?.startsAtEpoch ?? 0}>
+          {editor.world.epochs.map((epoch, index) => (
+            <option key={epoch.id} value={index}>
+              {epoch.id}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        Interacts with
+        <select name="dependsOn" multiple defaultValue={source?.dependsOn ?? []}>
+          {editor.world.magic
+            .filter((other) => other.id !== source?.id)
+            .map((other) => (
+              <option key={other.id} value={other.id}>
+                {other.name}
+              </option>
+            ))}
+        </select>
+      </label>
+    </details>
+  );
 }

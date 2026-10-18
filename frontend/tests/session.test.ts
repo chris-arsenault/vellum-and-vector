@@ -6,21 +6,23 @@ test("editing, undo, cancellation and independent worlds work without services",
   await page.goto("/");
   await page.getByLabel("World name").fill("First world");
   await page.getByRole("button", { name: "Create world", exact: true }).click();
-  await page.getByRole("button", { name: "Place point", exact: true }).click();
+  await page
+    .getByRole("toolbar", { name: "Map tools" })
+    .getByRole("button", { name: "Place point", exact: true })
+    .click();
+  await page.getByLabel("Feature name").fill("Keep this place");
   await page
     .getByRole("application", { name: "World map canvas" })
     .click({ position: { x: 250, y: 250 } });
   const panel = page.locator(".right-panel");
-  await panel.getByLabel("Name", { exact: true }).fill("Keep this place");
-  await page.getByRole("button", { name: "Create feature", exact: true }).click();
   await expect(panel.getByRole("heading", { name: "Keep this place" })).toBeVisible();
-  await page.getByRole("button", { name: "generate", exact: true }).click();
-  await page.getByLabel("Quality").selectOption("fine");
+  await page.getByRole("button", { name: "Develop", exact: true }).click();
+  await page.getByLabel("Detail level").selectOption("fine");
   await page.getByRole("button", { name: "Generate selected domains" }).click();
   await page.getByRole("button", { name: "Cancel generation" }).click();
   await expect(page.locator(".job-row strong").first()).toHaveText("cancelled");
   await expect(page.locator(".map-status")).toContainText("1 world features");
-  await page.getByRole("button", { name: "more", exact: true }).click();
+  await page.getByRole("button", { name: "Library", exact: true }).click();
   await page.getByRole("combobox", { name: /^Workspace/ }).selectOption("history");
   await page.getByRole("button", { name: "Undo latest operation" }).click();
   await expect(page.locator(".map-status")).toContainText("0 world features");
@@ -36,15 +38,17 @@ test("manual edits made during generation survive its outdated result", async ({
   await page.goto("/");
   await page.getByLabel("World name").fill("Editable while generating");
   await page.getByRole("button", { name: "Create world", exact: true }).click();
-  await page.getByLabel("Quality").selectOption("draft");
+  await page.getByLabel("Detail level").selectOption("draft");
   await page.getByRole("button", { name: "Generate selected domains" }).click();
-  await page.getByRole("button", { name: "Place point", exact: true }).click();
+  await page
+    .getByRole("toolbar", { name: "Map tools" })
+    .getByRole("button", { name: "Place point", exact: true })
+    .click();
+  await page.getByLabel("Feature name").fill("Keep the live edit");
   await page
     .getByRole("application", { name: "World map canvas" })
     .click({ position: { x: 250, y: 250 } });
   const panel = page.locator(".right-panel");
-  await panel.getByLabel("Name", { exact: true }).fill("Keep the live edit");
-  await page.getByRole("button", { name: "Create feature", exact: true }).click();
   await expect(panel.getByRole("heading", { name: "Keep the live edit" })).toBeVisible();
   await expect(page.locator(".job-row strong").first()).toHaveText("failed", { timeout: 90000 });
   await expect(page.locator(".job-row .error")).toContainText("Your edits were kept");

@@ -3,6 +3,7 @@ import { listWorlds, session } from "./atlasState";
 import { commitCommand } from "./atlasCommands";
 import { listJobs, startGeneration } from "./generationJobs";
 import type { Command, World } from "./types";
+import type { AtlasParameters } from "@atlas/generation";
 
 export function useWorlds() {
   return useQuery({
@@ -54,10 +55,12 @@ export function useGenerate(world: World, areaId: string) {
       domains,
       quality,
       seed,
+      parameters,
     }: {
       domains: string[];
       quality: string;
       seed: number;
+      parameters?: Partial<AtlasParameters>;
     }) =>
       Promise.resolve(
         startGeneration(world.id, {
@@ -67,6 +70,7 @@ export function useGenerate(world: World, areaId: string) {
           domains,
           quality,
           seed,
+          parameters,
         })
       ),
     onSuccess: () => {

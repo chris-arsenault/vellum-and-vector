@@ -24,12 +24,14 @@ import { prepareGeneratedProcess } from "./mapFeatures";
 import { atlasNativeProcesses } from "./canonry/atlasProcesses";
 import { atlasPhysicalSequence } from "./canonry/atlasSequence";
 import { atlasQuality } from "./canonry/atlasProfile";
+import { atlasParametersSchema, type AtlasParameters } from "./atlasParameters";
 
 export interface AtlasGenerationInput {
   areaId: string;
   domains: string[];
   quality: string;
   seed: number;
+  parameters?: Partial<AtlasParameters>;
 }
 const processes = [
   thermalMagicProcess,
@@ -54,6 +56,7 @@ export async function generateAtlas(
     "Select at least one generation domain."
   );
   requireThat(Number.isInteger(input.seed), "generation_seed", "Use an integer generation seed.");
+  input = { ...input, parameters: atlasParametersSchema.parse(input.parameters ?? {}) };
   options.progress?.(["prepare"], 0, "Sampling inherited geography");
   const initial = initialState(source, input);
   const registry = [...processes, ...atlasNativeProcesses(input)]
@@ -162,5 +165,10 @@ export function atlasConfiguration(
     "profile_domains",
     "Choose a generation domain supported by this profile."
   );
-  return { id: `atlas:${area.profile}`, version: 2, parameters: {}, sequence };
+  return {
+    id: `atlas:${area.profile}`,
+    version: 2,
+    parameters: atlasParametersSchema.parse(input.parameters ?? {}),
+    sequence,
+  };
 }

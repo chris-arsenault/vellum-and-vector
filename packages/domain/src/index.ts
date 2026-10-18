@@ -3,6 +3,7 @@ export * from "./errors";
 export * from "./schemas";
 export * from "./spatial";
 export * from "./grids";
+export * from "./brush";
 export * from "./gridResampling";
 export * from "./operations";
 export * from "./identity";

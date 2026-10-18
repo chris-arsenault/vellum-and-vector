@@ -16,6 +16,7 @@ import { atlasChannels, type ChannelBinding } from "./atlasChannels";
 import type { PhysicalProfile } from "./profile";
 import { clamp, units } from "./math";
 import { nativeContracts } from "./contracts";
+import type { AtlasParameters } from "../atlasParameters";
 
 export interface AtlasPhysicalWorkspace {
   map: PhysicalField;
@@ -163,10 +164,11 @@ function fixedAuthoring(state: GenerationState, work: AtlasPhysicalWorkspace) {
 }
 export function createAtlasWorkspace(
   state: GenerationState,
-  quality: keyof typeof atlasQuality
+  quality: keyof typeof atlasQuality,
+  parameters: Partial<AtlasParameters> = {}
 ): AtlasPhysicalWorkspace {
   const { triangles } = atlasQuality[quality],
-    profile = atlasPhysicalProfile(triangles);
+    profile = atlasPhysicalProfile(triangles, parameters);
   const map = createField(createMesh(triangles, profile.BoundaryPaddingSteps)),
     bounds = state.surface.bounds;
   const center: [number, number] = [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2];

@@ -10,6 +10,7 @@ import {
 } from "./grids";
 import { point, rectangle, spatial } from "./spatial";
 import { resampleChannels } from "./gridResampling";
+import { materializeField } from "./fieldComposition";
 
 it("retains scalar resampling across concave coverage, categorical channels and nested overlapping patches", () => {
   const footprint = {
@@ -72,6 +73,7 @@ it("retains scalar resampling across concave coverage, categorical channels and 
   resampleChannels(source, actual);
   expect(actual.channels).toEqual(expected.channels);
   expect(actual.units).toEqual(expected.units);
+  checkMaterialization(source);
   for (const channel of Object.keys(source.channels)) {
     const discrete = source.units[channel] === "category",
       valueAt = gridSampler(source, channel, discrete);
@@ -83,3 +85,17 @@ it("retains scalar resampling across concave coverage, categorical channels and 
     }
   }
 });
+function checkMaterialization(source: GridSurface) {
+  const original = structuredClone(source),
+    actual = materializeField(source);
+  for (const [name, values] of Object.entries(actual.channels))
+    for (let i = 0; i < values.length; i++) {
+      const position = gridPosition(source, i);
+      const expected = spatial.covers(source.scope.footprint, point(position))
+        ? sample(source, name, position)
+        : source.channels[name][i];
+      expect(values[i]).toBe(expected);
+    }
+  expect(source).toEqual(original);
+  expect(actual).not.toHaveProperty("overlays");
+}

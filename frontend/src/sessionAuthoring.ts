@@ -20,6 +20,7 @@ import {
 } from "@atlas/domain";
 import { routeNetwork } from "./routeAuthoring";
 import { reconcileBrush } from "./fieldReconcile";
+import { setPhysicalHistory } from "./physicalHistory";
 
 const registry = createIntentRegistry();
 export function supplementalChanges(
@@ -35,6 +36,8 @@ export function supplementalChanges(
       return connect(snapshot, context, data);
     case "setHumanEras":
       return humanEras(snapshot, context, data);
+    case "setPhysicalEpochs":
+      return setPhysicalHistory(snapshot, context, data);
     case "putEntity":
       return data.origin ? locatedEntity(snapshot, context, data) : null;
     case "putLandform":

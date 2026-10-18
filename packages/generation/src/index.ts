@@ -6,4 +6,5 @@ export * from "./mapRunner";
 export * from "./mapClimate";
 export * from "./mapMagic";
 export * from "./atlasWorkflow";
+export * from "./atlasParameters";
 export * from "./mapRouting";

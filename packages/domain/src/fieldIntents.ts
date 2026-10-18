@@ -1,10 +1,11 @@
 import { z } from "zod";
-import { finite, geometrySchema } from "./schemas";
+import { finite, geometrySchema, positionSchema } from "./schemas";
+import { applyFieldBrush } from "./brush";
 import { uuid } from "./authoringSchemas";
 import { intentChanges, intentReads, type IntentContext, type IntentRegistry } from "./intent";
 import type { DomainSnapshot, ChangeSet } from "./operations";
 import type { Area } from "./model";
-import { createGrid, putChannel, resample, gridPosition, neighbors, type Grid } from "./grids";
+import { createGrid, putChannel, resample, type Grid } from "./grids";
 import { gridType } from "./gridSchema";
 import { spatial, point } from "./spatial";
 import { areaSpace, isDescendant } from "./composition";
@@ -33,6 +34,7 @@ export const createFieldSchema = z.object({
 const sculptSchema = z.object({
   fieldId: uuid,
   center: z.object({ x: finite, y: finite, z: finite.default(0) }),
+  stroke: z.array(positionSchema).min(1).optional(),
   radius: finite.positive(),
   channel: z.string().min(1),
   mode: z.enum(["add", "set", "smooth"]),
@@ -178,7 +180,11 @@ function populateChannels(data: CreateField, snapshot: DomainSnapshot, grid: Gri
   );
 }
 function brushScope(data: Sculpt, context: IntentContext) {
-  const brush = spatial.buffer(point(data.center), data.radius);
+  const line =
+    data.stroke && data.stroke.length > 1
+      ? { type: "LineString" as const, coordinates: data.stroke.map((p) => [p.x, p.y]) }
+      : point(data.center);
+  const brush = spatial.buffer(line, data.radius);
   const footprint = brush && spatial.intersection(brush, context.scope.footprint);
   requireThat(
     footprint && spatial.area(footprint) > 0,
@@ -219,7 +225,7 @@ function sculpt(data: Sculpt, context: IntentContext, snapshot: DomainSnapshot):
     "Choose a channel in this field."
   );
   grid.id = semanticId(snapshot.world.id, "authored-grid", context.operationId);
-  applyBrush(data, support, grid);
+  applyFieldBrush(data, support, grid);
   const layer = snapshot.world.layers[field.layerId];
   requireThat(layer, "missing_layer", "The field needs a registered layer.");
   validateAuthoredField(snapshot, area, grid, layer);
@@ -253,32 +259,6 @@ function sculpt(data: Sculpt, context: IntentContext, snapshot: DomainSnapshot):
     grid.scope.footprint
   );
   return changes;
-}
-function applyBrush(data: Sculpt, source: Grid, grid: Grid) {
-  const values = grid.channels[data.channel],
-    original = source.channels[data.channel];
-  for (let i = 0; i < values.length; i++) {
-    const p = gridPosition(grid, i),
-      distance = Math.hypot(p.x - data.center.x, p.y - data.center.y);
-    if (distance > data.radius || !grid.active[i]) continue;
-    const t = Math.max(0, 1 - distance / data.radius),
-      weight =
-        data.falloff === "constant" ? 1 : data.falloff === "linear" ? t : t * t * (3 - 2 * t);
-    values[i] = brushValue(data, source, original, i, weight);
-  }
-}
-function brushValue(
-  data: Sculpt,
-  source: Grid,
-  values: Float64Array,
-  index: number,
-  weight: number
-) {
-  if (data.mode === "add") return values[index] + data.amount * weight;
-  if (data.mode === "set") return values[index] + (data.amount - values[index]) * weight;
-  const adjacent = neighbors(source, index, true),
-    average = adjacent.reduce((sum, i) => sum + values[i], values[index]) / (adjacent.length + 1);
-  return values[index] + (average - values[index]) * Math.max(0, Math.min(1, data.amount)) * weight;
 }
 export function registerFieldIntents(registry: IntentRegistry): void {
   registry.register({

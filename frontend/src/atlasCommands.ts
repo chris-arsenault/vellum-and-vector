@@ -110,11 +110,19 @@ function normalize(snapshot: DomainSnapshot, command: Command): Record<string, u
       },
     };
   if (command.kind === "sculptField") {
-    const field = brushField(snapshot, area.id, data);
-    requireThat(field, "missing_field", "Generate or initialize this field before sculpting.");
-    return { ...data, fieldId: field.id, mode: "add", amount: data.delta };
+    return normalizeBrush(snapshot, area.id, data);
   }
   return data;
+}
+function normalizeBrush(snapshot: DomainSnapshot, areaId: string, data: Record<string, unknown>) {
+  const field = brushField(snapshot, areaId, data);
+  requireThat(field, "missing_field", "Generate or initialize this field before sculpting.");
+  return {
+    ...data,
+    fieldId: field.id,
+    mode: data.mode ?? "add",
+    amount: data.amount ?? data.delta,
+  };
 }
 function brushField(snapshot: DomainSnapshot, areaId: string, data: Record<string, unknown>) {
   return [...snapshot.world.fields]

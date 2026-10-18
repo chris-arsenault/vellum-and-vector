@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { point, spatial } from "@atlas/domain";
 import { Brand } from "./App";
 import { ErrorMessage } from "./ErrorMessage";
 import { MapCanvas } from "./MapCanvas";
@@ -12,6 +13,8 @@ import { exportWorld } from "./atlasReads";
 import { download } from "./download";
 import type { Tool, World } from "./types";
 import { ToolIcon } from "./ToolIcon";
+import { UndoButton } from "./UndoButton";
+import { paletteTools, toolLabel, workspaces, type Workspace } from "./cartography";
 
 interface Props {
   world: World;
@@ -86,9 +89,18 @@ function EditorHeader({ world, worlds, changeWorld, newWorld }: Props) {
   );
 }
 function MapWorkspace({ world, editor }: { world: World; editor: EditorState }) {
-  const proposal = editor.drawing
-    ? [{ id: "drawing", geometry: editor.drawing } as import("./types").AtlasFeature]
-    : editor.proposedFeatures;
+  const proposal = editor.magicDraft
+    ? [
+        {
+          id: "magic-reach",
+          geometry: spatial.buffer(point(editor.magicDraft.source), editor.magicDraft.radius),
+        } as import("./types").AtlasFeature,
+      ]
+    : editor.drawing
+      ? [{ id: "drawing", geometry: editor.drawing } as import("./types").AtlasFeature]
+      : editor.selection
+        ? [{ id: "region-selection", geometry: editor.selection } as import("./types").AtlasFeature]
+        : editor.proposedFeatures;
   return (
     <main className="map-workspace">
       <nav className="breadcrumbs" aria-label="Geographic lineage">
@@ -100,15 +112,24 @@ function MapWorkspace({ world, editor }: { world: World; editor: EditorState }) 
         ))}
       </nav>
       <div className="map-toolbar">
-        <ToolButtons current={editor.tool} choose={editor.setTool} />
+        <ToolButtons
+          current={editor.tool}
+          choose={editor.setTool}
+          palette={paletteTools(editor.workspace, world.layers[editor.customLayer])}
+        />
+        <UndoButton world={world} />
         <label>
-          View
-          <select aria-label="View preset" onChange={(event) => editor.preset(event.target.value)}>
-            <option value="physical">Physical</option>
-            <option value="political">Political</option>
-            <option value="cultural">Cultural</option>
-            <option value="magical">Magical</option>
-            <option value="infrastructure">Infrastructure</option>
+          Work on
+          <select
+            aria-label="Working layer"
+            value={editor.workspace}
+            onChange={(event) => editor.setWorkspace(event.target.value as Workspace)}
+          >
+            {Object.entries(workspaces).map(([id, label]) => (
+              <option key={id} value={id}>
+                {label}
+              </option>
+            ))}
           </select>
         </label>
       </div>
@@ -119,14 +140,14 @@ function MapWorkspace({ world, editor }: { world: World; editor: EditorState }) 
         raster={editor.raster.data}
         baseRaster={editor.baseRaster.data}
         tool={editor.tool}
+        selected={editor.selected}
         events={{
-          select: (feature) => {
-            editor.setSelected(feature);
-            editor.setPanel("inspect");
-          },
+          select: editor.select,
           draw: editor.draw,
+          extent: editor.selectExtent,
           modify: editor.modify,
-          sculpt: editor.sculpt,
+          stroke: editor.stroke,
+          cancel: editor.cancel,
           enter: editor.enter,
           viewport: editor.viewport,
         }}
@@ -158,13 +179,18 @@ function AuthoringPanel({ world, editor }: { world: World; editor: EditorState }
   return (
     <aside className="right-panel">
       <nav className="panel-tabs" aria-label="Authoring panels">
-        {["generate", "refine", "inspect", "more"].map((name) => (
+        {[
+          ["generate", "Develop"],
+          ["author", "Draw & edit"],
+          ["inspect", "Inspect"],
+          ["more", "Library"],
+        ].map(([name, label]) => (
           <button
             key={name}
             aria-pressed={editor.panel === name}
             onClick={() => editor.setPanel(name)}
           >
-            {name}
+            {label}
           </button>
         ))}
       </nav>
@@ -182,6 +208,7 @@ function AuthoringPanel({ world, editor }: { world: World; editor: EditorState }
             editor.baseRaster.error
           }
         />
+        <ErrorMessage error={editor.interactionError} />
       </div>
       <JobsPanel world={world} />
     </aside>
@@ -229,24 +256,23 @@ function AtlasTree({
     </div>
   );
 }
-function ToolButtons({ current, choose }: { current: Tool; choose: (tool: Tool) => void }) {
-  const tools: [Tool, string][] = [
-    ["select", "Select"],
-    ["reshape", "Reshape"],
-    ["poi", "Place point"],
-    ["road", "Draw road"],
-    ["river", "Draw river"],
-    ["polygon", "Draw polygon"],
-    ["refine", "Refine extent"],
-    ["sculpt", "Sculpt field"],
-  ];
+function ToolButtons({
+  current,
+  choose,
+  palette,
+}: {
+  current: Tool;
+  choose: (tool: Tool) => void;
+  palette: Tool[];
+}) {
+  const tools: Tool[] = ["select", "pan", "move", "reshape", ...palette, "refine"];
   return (
     <div className="tools" role="toolbar" aria-label="Map tools">
-      {tools.map(([id, label]) => (
+      {tools.map((id) => (
         <button
           key={id}
-          title={label}
-          aria-label={label}
+          title={toolLabel(id)}
+          aria-label={toolLabel(id)}
           aria-pressed={current === id}
           onClick={() => choose(id)}
         >

@@ -92,39 +92,47 @@ export function TemplatePlacement({
   const socket = template.sockets?.find((s) => s.required && !s.connectsTo);
   const origin = placementOrigin(template, editor);
   return (
-    <form
-      key={`${template.id}:${selected?.id}`}
-      onSubmit={(event) => {
-        event.preventDefault();
-        const form = new FormData(event.currentTarget);
-        editor.execute("instantiateTemplate", {
-          templateId: template.id,
-          definitionVersion: template.version ?? 1,
-          parentId: editor.area.id,
-          name: String(form.get("name")),
-          frame: frameAt(
-            Number(form.get("x")),
-            Number(form.get("y")),
-            Number(form.get("z")),
-            Number(form.get("rotation")),
-            String(form.get("floor")) || null
-          ),
-          contextFeatureId: contextFeature(editor),
-          bindings: socket && selected ? { [socket.id]: selected.id } : {},
-        });
-      }}
-    >
-      <small>
-        Requires {template.parentProfiles.join(" / ")} parent
-        {socket ? " · select the target door or access feature" : ""}
-      </small>
-      <label>
-        Instance name
-        <input name="name" defaultValue={template.name} required />
-      </label>
-      <FrameFields origin={origin} floorLabel="Floor" />
-      <button className="primary">Place located instance</button>
-    </form>
+    <section>
+      <button className="primary" onClick={() => editor.placeTemplate(template)}>
+        Place {template.name} on map
+      </button>
+      <details>
+        <summary>Precise placement & access binding</summary>
+        <form
+          key={`${template.id}:${selected?.id}`}
+          onSubmit={(event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            editor.execute("instantiateTemplate", {
+              templateId: template.id,
+              definitionVersion: template.version ?? 1,
+              parentId: editor.area.id,
+              name: String(form.get("name")),
+              frame: frameAt(
+                Number(form.get("x")),
+                Number(form.get("y")),
+                Number(form.get("z")),
+                Number(form.get("rotation")),
+                String(form.get("floor")) || null
+              ),
+              contextFeatureId: contextFeature(editor),
+              bindings: socket && selected ? { [socket.id]: selected.id } : {},
+            });
+          }}
+        >
+          <small>
+            Requires {template.parentProfiles.join(" / ")} parent
+            {socket ? " · select the target door or access feature" : ""}
+          </small>
+          <label>
+            Instance name
+            <input name="name" defaultValue={template.name} required />
+          </label>
+          <FrameFields origin={origin} floorLabel="Floor" />
+          <button className="primary">Place located instance</button>
+        </form>
+      </details>
+    </section>
   );
 }
 function contextFeature(editor: EditorState) {

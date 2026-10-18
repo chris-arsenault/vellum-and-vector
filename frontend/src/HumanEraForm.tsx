@@ -16,8 +16,8 @@ export function HumanEraForm({ world, editor }: { world: World; editor: EditorSt
     >
       <h3>Human history</h3>
       <p className="hint">
-        Eras generate the present population and political geography. Completed histories stay fixed
-        during ordinary edits.
+        Years and mobility control cultural spread through suitable terrain. Completed histories
+        stay fixed during ordinary edits.
       </p>
       {eras.map((era, index) => (
         <fieldset key={index} disabled={fixed}>
@@ -60,15 +60,7 @@ function EraFields({ era, change }: { era: Era; change: (era: Era) => void }) {
         Name
         <input value={era.id} required onChange={(e) => change({ ...era, id: e.target.value })} />
       </label>
-      <label>
-        Physical context
-        <input
-          placeholder="Present geography, or an epoch ID"
-          value={era.physicalEpoch ?? ""}
-          onChange={(e) => change({ ...era, physicalEpoch: e.target.value || null })}
-        />
-      </label>
-      {(["years", "mobility", "politicalCapacity"] as const).map((key) => (
+      {(["years", "mobility"] as const).map((key) => (
         <label key={key}>
           {eraLabels[key]}
           <input
@@ -83,4 +75,4 @@ function EraFields({ era, change }: { era: Era; change: (era: Era) => void }) {
     </>
   );
 }
-const eraLabels = { years: "Years", mobility: "Mobility", politicalCapacity: "Political capacity" };
+const eraLabels = { years: "Years", mobility: "Mobility" };

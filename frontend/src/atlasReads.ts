@@ -11,6 +11,7 @@ import {
 import type { Geometry } from "geojson";
 import { session } from "./atlasState";
 import { analyzeNetwork } from "./networkAnalysis";
+import { magicFeatures } from "./magicFeatures";
 
 export function readFeature(id: string, featureId: string, areaId: string): AtlasFeature {
   const world = session(id).snapshot.world;
@@ -33,12 +34,14 @@ export function readScene(id: string, areaId: string, extent?: number[]) {
     ? spatial.intersection(area.footprint, rectangle(extent as [number, number, number, number]))
     : area.footprint;
   if (!footprint) return [];
-  return Object.values(world.features).flatMap((feature) => {
-    if (areaSpace(world, feature.areaId) !== space) return [];
-    const presented = readFeature(id, feature.id, areaId);
-    const geometry = spatial.intersection(presented.geometry, footprint);
-    return geometry ? [{ ...presented, geometry }] : [];
-  });
+  return [
+    ...Object.values(world.features).flatMap((feature) => {
+      if (areaSpace(world, feature.areaId) !== space) return [];
+      const presented = readFeature(id, feature.id, areaId);
+      return spatial.intersects(presented.geometry, footprint) ? [presented] : [];
+    }),
+    ...magicFeatures(world, areaId, footprint),
+  ];
 }
 
 export function readRaster(id: string, fieldId: string, channel: string) {

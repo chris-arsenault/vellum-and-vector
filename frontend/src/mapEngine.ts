@@ -9,11 +9,13 @@ import ImageStatic from "ol/source/ImageStatic.js";
 import GeoJSON from "ol/format/GeoJSON.js";
 import { Circle, Fill, Stroke, Style, Text } from "ol/style.js";
 import { ScaleLine } from "ol/control.js";
+import { defaults as defaultInteractions } from "ol/interaction/defaults.js";
 import { bounds, rasterImage } from "./presentation";
 import type { Area, AtlasFeature, LayerStyle, Raster, World } from "./types";
 
 const format = new GeoJSON();
 export function createMap(target: HTMLElement, reference: World["reference"]) {
+  target.tabIndex = 0;
   const extent = bounds(reference.domain);
   const projection = new Projection({ code: reference.id, units: "m", extent });
   const image = new LayerGroup();
@@ -29,6 +31,7 @@ export function createMap(target: HTMLElement, reference: World["reference"]) {
   });
   const map = new Map({
     target,
+    interactions: defaultInteractions({ dragPan: false, doubleClickZoom: false }),
     layers: [image, overlay, features, areas, preview],
     view: new View({
       projection,
@@ -64,8 +67,8 @@ export function updateFeatures(
       })[0];
       source.addFeature(ol);
     } else {
-      const previous = ol.get("domain") as AtlasFeature;
-      if (JSON.stringify(previous.geometry) !== JSON.stringify(presented.geometry))
+      const geometry = format.writeGeometryObject(ol.getGeometry()!);
+      if (JSON.stringify(geometry) !== JSON.stringify(presented.geometry))
         ol.setGeometry(format.readGeometry(presented.geometry)!);
       ol.set("domain", presented);
     }
@@ -79,6 +82,7 @@ export function updateFeatures(
     );
   });
   const areas = engine.areas.getSource()!;
+  engine.areas.set("currentArea", area.id);
   areas.clear();
   for (const child of Object.values(world.areas).filter(
     (a) => a.parentId === area.id || a.id === area.id

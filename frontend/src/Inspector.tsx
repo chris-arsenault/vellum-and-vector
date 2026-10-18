@@ -47,16 +47,15 @@ function FeatureInspection({
         {feature.kind} · {feature.state}
       </p>
       <h2>{feature.name}</h2>
-      <dl>
-        <dt>Layer</dt>
-        <dd>{world.layers[feature.layerId].name}</dd>
-        <dt>Stable feature ID</dt>
-        <dd className="mono">{feature.id}</dd>
-        <dt>Source</dt>
-        <dd>{feature.actor}</dd>
-        <dt>Authored protection</dt>
-        <dd>{feature.protected ? "Protected from regeneration" : "Regeneratable"}</dd>
-      </dl>
+      <button className="secondary" onClick={() => editor.setTool("move")}>
+        Move on map
+      </button>
+      {feature.geometry.type !== "Point" && (
+        <button className="secondary" onClick={() => editor.setTool("reshape")}>
+          Reshape on map
+        </button>
+      )}
+      <FeatureIdentity feature={feature} world={world} />
       <FeatureEditor key={feature.id} feature={feature} editor={editor} world={world} />
       {feature.geometry.type === "Point" && (
         <button className="secondary" onClick={() => editor.refinePoi(feature)}>
@@ -64,21 +63,15 @@ function FeatureInspection({
         </button>
       )}
       {["Polygon", "MultiPolygon"].includes(feature.geometry.type) && (
-        <button
-          className="secondary"
-          onClick={() => {
-            editor.setSelection(feature.geometry);
-            editor.setPanel("refine");
-          }}
-        >
+        <button className="secondary" onClick={() => editor.selectExtent(feature.geometry)}>
           Refine this footprint
         </button>
       )}
       <details>
         <summary>Causes & relationships</summary>
         <ul>
-          {feature.causes.map((cause, i) => (
-            <li key={i}>{cause}</li>
+          {feature.causes.map((cause, index) => (
+            <li key={index}>{cause}</li>
           ))}
         </ul>
         <pre>{JSON.stringify(feature.relations, null, 2)}</pre>
@@ -101,6 +94,23 @@ function FeatureInspection({
         Delete feature
       </button>
     </section>
+  );
+}
+function FeatureIdentity({ feature, world }: { feature: AtlasFeature; world: World }) {
+  return (
+    <details>
+      <summary>Identity & protection</summary>
+      <dl>
+        <dt>Layer</dt>
+        <dd>{world.layers[feature.layerId].name}</dd>
+        <dt>Stable feature ID</dt>
+        <dd className="mono">{feature.id}</dd>
+        <dt>Source</dt>
+        <dd>{feature.actor}</dd>
+        <dt>Authored protection</dt>
+        <dd>{feature.protected ? "Protected from regeneration" : "Regeneratable"}</dd>
+      </dl>
+    </details>
   );
 }
 function FeatureEditor({
@@ -132,21 +142,24 @@ function FeatureEditor({
         Name
         <input name="name" defaultValue={feature.name} required />
       </label>
-      <AttributeEditor
-        values={attributes}
-        schema={world.layers[feature.layerId].schema}
-        change={setAttributes}
-      />
-      <RelationshipEditor
-        world={world}
-        features={editor.scene.data ?? []}
-        value={relations}
-        change={setRelations}
-      />
-      <label className="check">
-        <input type="checkbox" name="protected" defaultChecked={feature.protected} />
-        Protect authored feature
-      </label>
+      <details>
+        <summary>Properties & relationships</summary>
+        <AttributeEditor
+          values={attributes}
+          schema={world.layers[feature.layerId].schema}
+          change={setAttributes}
+        />
+        <RelationshipEditor
+          world={world}
+          features={editor.scene.data ?? []}
+          value={relations}
+          change={setRelations}
+        />
+        <label className="check">
+          <input type="checkbox" name="protected" defaultChecked={feature.protected} />
+          Protect authored feature
+        </label>
+      </details>
       <button className="primary" disabled={editor.commit.isPending}>
         Save feature
       </button>

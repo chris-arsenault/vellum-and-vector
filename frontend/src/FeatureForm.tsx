@@ -8,9 +8,16 @@ import { RelationshipEditor } from "./RelationshipEditor";
 
 export function FeatureForm({ world, editor }: { world: World; editor: EditorState }) {
   const geometry = editor.drawing;
-  const [layerId, setLayerId] = useState(editor.selected?.layerId ?? "pois");
-  const [attributes, setAttributes] = useState<Record<string, unknown>>({});
-  const [relations, setRelations] = useState<AtlasFeature["relations"]>([]);
+  const draft = editor.selected ?? {
+    layerId: "pois",
+    attributes: {},
+    relations: [],
+    name: "",
+    kind: "poi",
+  };
+  const [layerId, setLayerId] = useState(draft.layerId);
+  const [attributes, setAttributes] = useState<Record<string, unknown>>(draft.attributes);
+  const [relations, setRelations] = useState<AtlasFeature["relations"]>(draft.relations);
   if (!geometry) return <p>Choose a drawing tool to create a located feature.</p>;
   return (
     <section>
@@ -20,23 +27,14 @@ export function FeatureForm({ world, editor }: { world: World; editor: EditorSta
         onSubmit={(event) => {
           event.preventDefault();
           const form = new FormData(event.currentTarget);
-          const feature = newFeature(
-            editor.area,
-            geometry,
-            String(form.get("name")),
-            String(form.get("kind")),
-            layerId
-          );
-          feature.attributes = { ...booleanDefaults(world.layers[layerId].schema), ...attributes };
-          feature.relations = relations;
-          createFeature(world, editor, feature, form);
+          submitDraft(world, editor, form, { layerId, attributes, relations });
         }}
       >
         <label>
           Name
-          <input name="name" required placeholder="Name this feature" />
+          <input name="name" required defaultValue={draft.name} placeholder="Name this feature" />
         </label>
-        <FeatureKind kind={editor.selected?.kind ?? "poi"} />
+        <FeatureKind kind={draft.kind} />
         <label>
           World layer
           <select name="layer" value={layerId} onChange={(e) => setLayerId(e.target.value)}>
@@ -79,6 +77,31 @@ export function FeatureForm({ world, editor }: { world: World; editor: EditorSta
       </form>
     </section>
   );
+}
+function submitDraft(
+  world: World,
+  editor: EditorState,
+  form: FormData,
+  properties: {
+    layerId: string;
+    attributes: Record<string, unknown>;
+    relations: AtlasFeature["relations"];
+  }
+) {
+  const feature = newFeature(
+    editor.area,
+    editor.drawing!,
+    String(form.get("name")),
+    String(form.get("kind")),
+    properties.layerId
+  );
+  if (editor.selected && !world.features[editor.selected.id]) feature.id = editor.selected.id;
+  feature.attributes = {
+    ...booleanDefaults(world.layers[properties.layerId].schema),
+    ...properties.attributes,
+  };
+  feature.relations = properties.relations;
+  createFeature(world, editor, feature, form);
 }
 function booleanDefaults(schema: Record<string, unknown>) {
   return Object.fromEntries(

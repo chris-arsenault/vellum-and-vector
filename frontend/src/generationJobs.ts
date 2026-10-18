@@ -7,7 +7,11 @@ import {
   type FieldRef,
   type Layer,
 } from "@atlas/domain";
-import type { AtlasGenerationInput, CompletedBoundary } from "@atlas/generation";
+import {
+  atlasParametersSchema,
+  type AtlasGenerationInput,
+  type CompletedBoundary,
+} from "@atlas/generation";
 import { session, changed, publish, worldScope } from "./atlasState";
 
 interface GenerationJob {
@@ -35,6 +39,12 @@ export function startGeneration(
   input: AtlasGenerationInput & { expectedVersion: number; operationId: string }
 ) {
   const snapshot = session(id).snapshot;
+  input = {
+    ...input,
+    parameters: atlasParametersSchema.parse(
+      input.parameters ?? inheritedParameters(snapshot, input.areaId) ?? {}
+    ),
+  };
   requireThat(
     snapshot.world.version === input.expectedVersion,
     "stale_version",
@@ -65,6 +75,22 @@ export function startGeneration(
   });
   changed("jobs");
   return { ...job };
+}
+function inheritedParameters(
+  snapshot: DomainSnapshot,
+  areaId: string
+): Record<string, number> | undefined {
+  for (
+    let current: string | null = areaId;
+    current;
+    current = snapshot.world.areas[current].parentId
+  ) {
+    const previous = snapshot.world.generations
+      .filter((run) => run.areaId === current && run.domains.includes("physical"))
+      .at(-1);
+    if (previous?.parameters) return previous.parameters;
+  }
+  return undefined;
 }
 type WorkerResult =
   | { kind: "progress"; path: string[]; fraction: number; message: string }
@@ -160,8 +186,11 @@ export function generationSnapshot(
   area.version = world.version;
   world.generations.push({
     id,
+    areaId: input.areaId,
     domains: input.domains,
     quality: input.quality,
+    seed: input.seed,
+    parameters: atlasParametersSchema.parse(input.parameters ?? {}),
     completedAt: new Date().toISOString(),
   });
   return snapshot;
@@ -169,6 +198,8 @@ export function generationSnapshot(
 function channelLayer(channel: string) {
   if (channel === "elevation") return "elevation";
   if (channel.startsWith("culture:")) return "cultures";
+  if (channel.startsWith("language:")) return "languages";
+  if (channel.startsWith("religion:")) return "religions";
   if (channel.startsWith("magic:") || ["heat", "storedHeat", "coastalPressure"].includes(channel))
     return "magic";
   if (

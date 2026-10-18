@@ -313,6 +313,9 @@ export interface World {
     domains: string[];
     quality: string;
     completedAt: string;
+    areaId?: string;
+    seed?: number;
+    parameters?: Record<string, number>;
   }[];
   views: { id: string; name: string; areaId: string; layers: LayerStyle[] }[];
   connections?: Record<string, Connection>;

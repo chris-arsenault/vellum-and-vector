@@ -11,6 +11,41 @@ implementation guidance lives in [AGENTS.md](AGENTS.md), with decisions in the
 [frontend session ADR](docs/adr/0003-frontend-session.md), which supersedes the
 earlier backend and persistence direction.
 
+Open product work is tracked in the [backlog](docs/backlog.md).
+
+## Authoring workflow
+
+Start in **Develop**: generate a landscape from a preset, or edit a blank map by
+hand. Generation controls set continental assemblies, tectonic provinces, crust
+balance, temperature, rainfall, river erosion, sea level and initial community
+counts independently of sampling detail. Configure physical epochs and cultural
+history before generation; completed history remains fixed. Chosen generation
+inputs remain available in the session.
+
+Use **Draw a region to develop** to drag a rectangle or trace an outline, adjust
+its vertices and choose a profile. The map previews the selected extent and its
+dimensions. Coordinates are optional precision controls. Double-click a mapped
+child area to enter it, or use the atlas tree and geographic breadcrumbs.
+
+Choose **Work on** to get tools for terrain, rivers and lakes, roads, places,
+political boundaries, communities, magic, interiors or a custom layer. Drawing
+places ordinary features immediately; select a feature to rename, move, reshape
+or develop it. Community origins establish groups whose distributions can be
+painted. Political tools distinguish sovereignty, administration, claims and
+control. Each field stroke is one undoable edit; **Undo** stays beside the map.
+
+Double-click or press Enter to finish a line or polygon, use Backspace to remove
+its last vertex, and Escape to cancel. Hold Space to pan without discarding an
+unfinished drawing. The Pan tool provides ordinary drag navigation. Magnetic
+snapping uses existing feature vertices and edges.
+
+For magic, draw a source and its reach, configure heating, cooling, rock hardening
+or coastal forcing, and apply it to the current geography. Sources can be selected,
+moved and edited, with propagation, decay, storage, interactions and starting epoch
+settings. **Library** retains templates and the supporting analysis, connection
+and schema tools. Templates can be placed on the map; precise placement and access
+bindings remain available.
+
 ## Architecture
 
 The application is written in TypeScript. React and OpenLayers provide the editor;

@@ -139,7 +139,11 @@ function initializeProcess(input: AtlasGenerationInput): MapProcess {
         "generation_quality",
         "Choose draft, standard or fine."
       );
-      state.physical = createAtlasWorkspace(state, input.quality as keyof typeof atlasQuality);
+      state.physical = createAtlasWorkspace(
+        state,
+        input.quality as keyof typeof atlasQuality,
+        input.parameters
+      );
       for (const fact of state.physical.map.AvailableFacts) state.facts.add(prefix(fact));
     },
     validate: validateWorkspace,

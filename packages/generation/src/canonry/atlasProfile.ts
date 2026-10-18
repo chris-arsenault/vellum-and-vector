@@ -1,6 +1,7 @@
 import type { Epoch } from "@atlas/domain";
 import { physicalProfile, type PhysicalProfile } from "./profile";
 import { clamp, round } from "./math";
+import { atlasParametersSchema, type AtlasParameters } from "../atlasParameters";
 
 export const atlasQuality = {
   draft: { triangles: 16384, samples: 192 },
@@ -54,7 +55,11 @@ const steps = [
   "OceanCurrentFetchSteps",
   "DrainageGuidanceLookaheadSteps",
 ] as const;
-export function atlasPhysicalProfile(triangles: number): PhysicalProfile {
+export function atlasPhysicalProfile(
+  triangles: number,
+  parameters: Partial<AtlasParameters> = {}
+): PhysicalProfile {
+  const settings = atlasParametersSchema.parse(parameters);
   const profile = structuredClone(physicalProfile),
     scale = Math.sqrt(triangles / referenceTriangles);
   for (const key of distances) profile[key] = Math.max(1, physicalProfile[key] * scale);
@@ -64,8 +69,14 @@ export function atlasPhysicalProfile(triangles: number): PhysicalProfile {
   profile.MassWastingStableStep /= scale;
   profile.FluvialEquilibriumStep /= scale;
   profile.CoastalDetailWarp *= scale;
-  profile.TectonicProvinceCount = 42;
-  profile.TemperatureBaseline = 450;
+  profile.ContinentalAssemblyCount = settings.continents;
+  profile.TectonicProvinceCount = settings.provinces;
+  profile.ContinentalCrustFraction = settings.landFraction;
+  profile.TemperatureBaseline = 300 + settings.temperature * 10;
+  profile.PrecipitationBaseline *= settings.rainfall;
+  profile.OrographicPrecipitationStrength *= settings.rainfall;
+  profile.FluvialErosionStrength *= settings.erosion;
+  profile.SeaLevel = settings.seaLevel / profile.ElevationScale;
   profile.HeartWarmthStrength = 0;
   profile.WarmthPocketCount = 0;
   profile.QualityTargets.LandIceCoverage.target = 0.14;

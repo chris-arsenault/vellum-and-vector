@@ -15,6 +15,14 @@ export function LayerPanel({ world, editor }: { world: World; editor: EditorStat
   return (
     <div className="layer-panel">
       <div className="section-title">WORLD LAYERS</div>
+      <label>
+        View preset
+        <select aria-label="View preset" onChange={(event) => editor.preset(event.target.value)}>
+          {["physical", "political", "cultural", "magical", "infrastructure"].map((preset) => (
+            <option key={preset}>{preset}</option>
+          ))}
+        </select>
+      </label>
       <label className="field-channel">
         Field visualization
         <select value={editor.channel} onChange={(event) => editor.setChannel(event.target.value)}>

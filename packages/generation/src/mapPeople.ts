@@ -79,13 +79,15 @@ export const culturalProcess: MapProcess = {
   contract: {
     id: "human.cultures",
     version: "1",
-    parameters: {},
+    parameters: {
+      cultureCount: { type: "integer", unit: null, required: false, default: 3, minimum: 1 },
+    },
     requires: ["elevation"],
     produces: ["cultures"],
     invalidates: [],
   },
   apply(state, context) {
-    const origins = centers(state, context, "culture", 3),
+    const origins = centers(state, context, "culture", Number(context.parameters.cultureCount)),
       grid = state.surface;
     const eras = state.domain.world.humanEras ?? [];
     const span = Math.max(grid.bounds[2] - grid.bounds[0], grid.bounds[3] - grid.bounds[1]);
@@ -127,13 +129,15 @@ export const politicalProcess: MapProcess = {
   contract: {
     id: "human.politics",
     version: "1",
-    parameters: {},
+    parameters: {
+      polityCount: { type: "integer", unit: null, required: false, default: 3, minimum: 1 },
+    },
     requires: ["elevation"],
     produces: ["politics"],
     invalidates: [],
   },
   apply(state, context) {
-    const polities = centers(state, context, "polity", 3),
+    const polities = centers(state, context, "polity", Number(context.parameters.polityCount)),
       grid = state.surface;
     const owner = new Int32Array(grid.active.length).fill(-1);
     for (const i of landCells(state)) {
