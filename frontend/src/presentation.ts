@@ -97,7 +97,7 @@ export function rasterImage(raster: Raster, limits?: number[]): string {
       if (!footprint.intersectsCoordinate(worldPoint)) continue;
       const color =
         raster.channel === "elevation"
-          ? terrainColor(value, min, max)
+          ? shadedTerrain(raster, x, y, value, min)
           : fieldColor(value, min, max);
       const index = ((raster.height - 1 - y) * raster.width + x) * 4;
       image.data.set([...color, raster.channel === "elevation" ? 255 : 165], index);
@@ -112,16 +112,57 @@ function rasterExtrema(values: number[]) {
   ];
 }
 
-function terrainColor(value: number, min: number, max: number): number[] {
+function terrainColor(value: number, min: number): number[] {
   if (value < 0) {
-    const depth = Math.min(1, value / Math.min(-1, min));
-    return [45 - depth * 20, 100 - depth * 35, 114 - depth * 33];
+    const depth = Math.sqrt(Math.min(1, value / Math.min(-1, min)));
+    return [67 - depth * 44, 146 - depth * 87, 158 - depth * 66];
   }
-  const t = Math.min(1, value / max);
-  if (t < 0.1) return [184 + t * 110, 187 + t * 100, 139 + t * 180];
-  if (t < 0.4) return [161 - t * 45, 172 - t * 55, 124 - t * 30];
-  if (t < 0.75) return [155 + t * 35, 150 + t * 25, 125 + t * 30];
-  return [205 + t * 35, 201 + t * 40, 186 + t * 50];
+  const stops = [
+    [0, 161, 179, 126],
+    [180, 140, 164, 114],
+    [600, 150, 159, 114],
+    [1200, 171, 158, 128],
+    [2200, 193, 180, 159],
+    [3200, 220, 215, 201],
+    [4000, 241, 240, 231],
+  ];
+  let upper = 1;
+  while (upper < stops.length - 1 && value > stops[upper][0]) upper++;
+  const a = stops[upper - 1],
+    b = stops[upper],
+    t = Math.min(1, (value - a[0]) / (b[0] - a[0]));
+  return [1, 2, 3].map((i) => a[i] + (b[i] - a[i]) * t);
+}
+function shadedTerrain(
+  raster: Raster,
+  x: number,
+  y: number,
+  value: number,
+  minimum: number
+): number[] {
+  const index = y * raster.width + x,
+    water = raster.water?.[index] ?? (value < 0 ? 1 : 0);
+  let color = water === 2 ? [73, 139, 153] : terrainColor(value, minimum);
+  if (!water && value >= 0) {
+    const height = (dx: number, dy: number) => {
+      const ix = Math.max(0, Math.min(raster.width - 1, x + dx)),
+        iy = Math.max(0, Math.min(raster.height - 1, y + dy));
+      const neighbor = raster.values[iy * raster.width + ix];
+      return Number.isFinite(neighbor) ? neighbor : value;
+    };
+    const dx = (raster.bounds[2] - raster.bounds[0]) / (raster.width - 1),
+      dy = (raster.bounds[3] - raster.bounds[1]) / (raster.height - 1);
+    const east = ((height(1, 0) - height(-1, 0)) / (2 * dx)) * 8;
+    const north = ((height(0, 1) - height(0, -1)) / (2 * dy)) * 8;
+    const light = Math.max(
+      0,
+      (east * 0.5 - north * 0.5 + Math.SQRT1_2) / Math.sqrt(1 + east * east + north * north)
+    );
+    const shade = 0.63 + light * 0.52;
+    color = color.map((channel) => Math.min(255, channel * shade));
+  }
+  const ice = Math.min(1, (raster.ice?.[index] ?? 0) * (water ? 2 : 1.5));
+  return color.map((channel, i) => channel + ([226, 237, 232][i] - channel) * ice);
 }
 function fieldColor(value: number, min: number, max: number): number[] {
   const t = (value - min) / Math.max(1e-9, max - min);

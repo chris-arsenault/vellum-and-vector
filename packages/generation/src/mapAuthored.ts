@@ -10,7 +10,7 @@ import {
 } from "@atlas/domain";
 import type { GenerationState } from "./process";
 
-function authorities(original: DomainSnapshot) {
+export function authoredFields(original: DomainSnapshot) {
   const fields = original.world.fields
     .filter((field) => field.state === "authored" || field.state === "protected")
     .map((field) => ({
@@ -32,7 +32,7 @@ function authorities(original: DomainSnapshot) {
 // samples to numerical consumers of the regenerated base at this resolution.
 export function composeAuthoredSamples(state: GenerationState, original: DomainSnapshot): void {
   const grid = state.surface;
-  for (const authority of authorities(original)) {
+  for (const authority of authoredFields(original)) {
     if (authority.spaceId && authority.spaceId !== grid.scope.spaceId) continue;
     if (authority.footprint && !spatial.intersects(authority.footprint, grid.scope.footprint))
       continue;

@@ -33,11 +33,11 @@ entrance connections.
 
 ### Procedural generation
 
-[The Canonry Game](https://github.com/chris-arsenault/the-canonry-game) is the
-reference for causal generation: ordered physical processes, accumulated epoch
-history, and magic that changes subsequent environmental outcomes. Translate
-those ideas into algorithms suited to this atlas's editable, progressively
-refined world model.
+The physical generator ports [The Canonry Game's implementation at
+0f62584c](https://github.com/chris-arsenault/the-canonry-game/tree/0f62584c114863ffadeb5e29e021f5fce6b37a61/src/Engine.WorldGen/PhysicalGeneration)
+to TypeScript. It retains the native triangular mesh, fixed-point elevations,
+material transport, physical processes and multi-epoch order. The atlas adapter
+projects completed geography into metric GIS fields and retains authored inputs.
 
 The [generation system](docs/generation-workflows.md) follows Canonry's structure
 in TypeScript: configured processes operate on shared GIS/domain working state,
@@ -68,11 +68,14 @@ located templates, inspect causes and undo session edits.
 generation.** There is no automatic browser storage or recovery. Explicit GIS
 and template exports download local files.
 
-The physical catalog currently includes crustal provinces, tectonic movement,
-temperature, precipitation, ice accumulation/melt, conditioned drainage and
-erosion/deposition. Cultural prevalence, political territory/claims/control and
-basic settlement/site/interior layouts use the same process contract. This is
-an initial atlas generator; full Canonry algorithm parity remains future work.
+Physical generation includes continental assemblies and sutures, plate advection,
+mountain construction, volcanism, impacts, flexure, continental margins, ocean
+currents, atmospheric transport, water-budget lakes, capture drainage, rivers,
+sediment, grounded glaciers, coasts and landforms. Reference fixtures compare
+the TypeScript numerical output with the original C# implementation. Atlas profile
+and unit adaptations are described in the [generation design](docs/generation-workflows.md#physical-port-and-atlas-adapter).
+Cultural prevalence, political territory/claims/control and basic settlement,
+site and interior layouts remain atlas-specific processes.
 
 `backend/`, `db/`, `infrastructure/backend-prototype/` and their prototype scripts
 remain historical source outside the active workspace and build. Do not run

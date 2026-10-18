@@ -192,6 +192,8 @@ export interface Raster {
   height: number;
   channel: string;
   values: number[];
+  water?: number[];
+  ice?: number[];
 }
 export interface TemplateSocket {
   id: string;

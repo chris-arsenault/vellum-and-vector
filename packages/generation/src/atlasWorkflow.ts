@@ -1,7 +1,7 @@
 import {
   areaSpace,
   createGrid,
-  resample,
+  resampleChannels,
   spatial,
   semanticId,
   requireThat,
@@ -16,19 +16,14 @@ import {
   type ProcessConfiguration,
   type ProcessSequence,
 } from "./process";
-import { initializeTerrainProcess, tectonicsProcess } from "./mapTerrain";
-import {
-  resetForcingProcess,
-  temperatureProcess,
-  precipitationProcess,
-  iceBalanceProcess,
-} from "./mapClimate";
 import { thermalMagicProcess, magicStorageProcess } from "./mapMagic";
 import { materialMagicProcess } from "./mapMagicEffects";
-import { drainageProcess, erosionProcess } from "./mapHydrology";
 import { culturalProcess, politicalProcess } from "./mapPeople";
 import { builtProcess } from "./mapBuilt";
-import { extractGeographyProcess, prepareGeneratedProcess } from "./mapFeatures";
+import { prepareGeneratedProcess } from "./mapFeatures";
+import { atlasNativeProcesses } from "./canonry/atlasProcesses";
+import { atlasPhysicalSequence } from "./canonry/atlasSequence";
+import { atlasQuality } from "./canonry/atlasProfile";
 
 export interface AtlasGenerationInput {
   areaId: string;
@@ -37,17 +32,8 @@ export interface AtlasGenerationInput {
   seed: number;
 }
 const processes = [
-  initializeTerrainProcess,
-  tectonicsProcess,
-  resetForcingProcess,
   thermalMagicProcess,
   magicStorageProcess,
-  temperatureProcess,
-  precipitationProcess,
-  iceBalanceProcess,
-  drainageProcess,
-  erosionProcess,
-  extractGeographyProcess,
   culturalProcess,
   politicalProcess,
   builtProcess,
@@ -70,11 +56,11 @@ export async function generateAtlas(
   requireThat(Number.isInteger(input.seed), "generation_seed", "Use an integer generation seed.");
   options.progress?.(["prepare"], 0, "Sampling inherited geography");
   const initial = initialState(source, input);
-  const registry = processes
+  const registry = [...processes, ...atlasNativeProcesses(input)]
     .reduce((r, process) => r.register(process), new MapProcessRegistry())
     .register(prepareGeneratedProcess(input.domains));
   const configuration = atlasConfiguration(source, input);
-  return new MapRunner(configuration, registry).run(initial, {
+  const result = await new MapRunner(configuration, registry).run(initial, {
     ...options,
     seed: String(input.seed),
     seedScope: JSON.stringify([
@@ -82,14 +68,16 @@ export async function generateAtlas(
       spatial.bounds(source.world.areas[input.areaId].footprint),
     ]),
   });
+  // Numerical scratch never leaves the worker or becomes a saved execution state.
+  delete result.state.physical;
+  return result;
 }
 
 function initialState(source: DomainSnapshot, input: AtlasGenerationInput): GenerationState {
   const domain = structuredClone(source),
     area = domain.world.areas[input.areaId];
   requireThat(area, "generation_area", "Choose an existing mapped area.");
-  const sizes: Record<string, number> = { draft: 48, standard: 96, fine: 192 };
-  const size = sizes[input.quality];
+  const size = atlasQuality[input.quality as keyof typeof atlasQuality]?.samples;
   requireThat(size, "generation_quality", "Choose draft, standard or fine detail.");
   const scope = {
     worldId: domain.world.id,
@@ -132,8 +120,7 @@ function inheritSurface(source: DomainSnapshot, target: Grid, input: AtlasGenera
   );
   for (const field of available) {
     const grid = source.numerical[field.id];
-    for (const name of Object.keys(grid.channels))
-      resample(grid, target, name, grid.units[name] === "category");
+    resampleChannels(grid, target);
   }
   requireThat(
     input.domains.includes("physical") ||
@@ -157,15 +144,6 @@ function invoke(process: MapProcess, id = process.contract.id) {
     version: process.contract.version,
   };
 }
-function weather(magic: boolean): ProcessSequence {
-  return [
-    invoke(resetForcingProcess),
-    ...(magic ? [invoke(thermalMagicProcess)] : []),
-    invoke(temperatureProcess),
-    invoke(precipitationProcess),
-    ...(magic ? [invoke(materialMagicProcess)] : []),
-  ];
-}
 export function atlasConfiguration(
   source: DomainSnapshot,
   input: AtlasGenerationInput
@@ -173,34 +151,8 @@ export function atlasConfiguration(
   const sequence: ProcessSequence = [invoke(prepareGeneratedProcess(input.domains))];
   const area = source.world.areas[input.areaId],
     physical = input.domains.includes("physical");
-  const magic = input.domains.includes("magic") || source.world.magic.length > 0;
   if (area.profile !== "interior" && (physical || input.domains.includes("magic"))) {
-    sequence.push(invoke(initializeTerrainProcess));
-    if (physical)
-      sequence.push({
-        kind: "epochs",
-        id: "physical-history",
-        resetFacts: [],
-        epochs: source.world.epochs.map((epoch) => ({
-          id: epoch.id,
-          duration: 1000,
-          parentEpoch: epoch.id,
-          variables: {
-            temperature: epoch.temperature,
-            seaLevel: epoch.seaLevel,
-            activity: epoch.tectonics,
-          },
-        })),
-        body: [
-          invoke(tectonicsProcess),
-          ...weather(magic),
-          invoke(iceBalanceProcess),
-          invoke(drainageProcess),
-          invoke(erosionProcess),
-          ...(magic ? [invoke(magicStorageProcess)] : []),
-        ],
-      });
-    sequence.push(...weather(magic), invoke(drainageProcess), invoke(extractGeographyProcess));
+    sequence.push(...atlasPhysicalSequence(source, input));
   }
   if (input.domains.includes("cultural")) sequence.push(invoke(culturalProcess));
   if (input.domains.includes("political")) sequence.push(invoke(politicalProcess));
@@ -210,5 +162,5 @@ export function atlasConfiguration(
     "profile_domains",
     "Choose a generation domain supported by this profile."
   );
-  return { id: `atlas:${area.profile}`, version: 1, parameters: {}, sequence };
+  return { id: `atlas:${area.profile}`, version: 2, parameters: {}, sequence };
 }

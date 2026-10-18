@@ -22,6 +22,9 @@ export interface MapRunnerOptions {
   // numerical workspace is shared and the following epoch mutates it.
   saveBoundary?(boundary: CompletedBoundary): Promise<void>;
 }
+function activeCauses(state: GenerationState, nested: GenerationCause[][]): GenerationCause[] {
+  return nested.at(-1) ?? (state.causes ??= []);
+}
 
 export class MapRunner {
   private readonly configuration: ProcessConfiguration;
@@ -54,7 +57,7 @@ export class MapRunner {
     };
     composeAuthoredSamples(state, initial.domain);
     validate();
-    for (const stage of this.stages) {
+    for (const [stageIndex, stage] of this.stages.entries()) {
       this.checkCancelled(options);
       if (stage.kind === "epochStart") {
         causes.push([]);
@@ -68,14 +71,18 @@ export class MapRunner {
           causes: causes.pop()!,
         });
       } else {
-        await this.applyProcess(
+        const spatialChanged = await this.applyProcess(
           state,
           stage,
-          options,
-          causes.at(-1) ?? (state.causes ??= []),
+          {
+            ...options,
+            progress: (path, fraction, message) =>
+              options.progress?.(path, (stageIndex + fraction) / this.stages.length, message),
+          },
+          activeCauses(state, causes),
           initial.domain
         );
-        validate();
+        if (spatialChanged) validate();
       }
       this.checkCancelled(options);
       if (stage.kind === "epochEnd") {
@@ -109,7 +116,8 @@ export class MapRunner {
         {},
         ...stage.epochs.map((epoch) => epoch.variables)
       ) as ParameterValues;
-    if (invocation.when && variables[invocation.when.variable] !== invocation.when.equals) return;
+    if (invocation.when && variables[invocation.when.variable] !== invocation.when.equals)
+      return false;
     for (const fact of process.contract.requires)
       requireThat(
         state.facts.has(fact),
@@ -127,7 +135,7 @@ export class MapRunner {
     );
     const context = this.context(state, stage, parameters, options, causes);
     await process.apply(state, context);
-    composeAuthoredSamples(state, original);
+    if (!process.contract.workspaceOnly) composeAuthoredSamples(state, original);
     const diagnostics = process.validate(state, context);
     requireThat(
       diagnostics.every((d) => d.severity !== "error"),
@@ -137,6 +145,7 @@ export class MapRunner {
     for (const fact of process.contract.invalidates) state.facts.delete(fact);
     for (const fact of process.contract.produces) state.facts.add(fact);
     options.progress?.(stage.path, 1, `Completed ${process.contract.id}`);
+    return !process.contract.workspaceOnly;
   }
   private context(
     state: GenerationState,

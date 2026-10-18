@@ -194,6 +194,66 @@ Domain processes remain independent of the browser adapter.
 - Publish selected regeneration safely across cancellation, validation failure
   and concurrent authoring.
 
+## Physical port and atlas adapter
+
+`packages/generation/src/canonry/` ports Canonry commit
+`0f62584c114863ffadeb5e29e021f5fce6b37a61`. The physical kernel uses the original
+equilateral triangle graph, 1024 elevation subunits per authored metre, seed salts,
+material histories and epoch order. Its unsigned 64-bit hash uses exact 32-bit
+word arithmetic in JavaScript. Domain-neutral source processes cover crust,
+orogeny, volcanoes, impacts, support/flexure, margins, climate, drainage, erosion,
+sediment, glaciers, coasts and final geographic classifications.
+
+The atlas runs these registered processes through the shared runner. Native
+steps update private numerical arrays; projection and feature extraction update
+GIS state. Numerical checks cover ranges, landscape budgets, flow topology,
+river coverage and grounding. GIS validation runs when spatial state changes,
+at completed epoch boundaries and before publication. Authored samples are also
+composed into the native workspace before physical consumers run.
+
+The standalone `physicalProfile` retains Canonry's defaults. `atlasPhysicalProfile`
+adapts them for the atlas rather than copying the game's frozen-world setting:
+
+- Horizontal distances scale with mesh density against the reference seed's
+  1,188,888 physical triangles; elevations remain metres. The atlas uses 42
+  crustal provinces and four continental assemblies.
+- The native snow threshold of 300 represents zero Celsius, with ten native
+  climate units per degree. Epoch temperature settings remain Celsius and sea
+  levels remain metres relative to the world's calibrated sea datum.
+- The game's central warmth source and mandatory scattered warmth pockets are
+  disabled. User-configured sources provide magical forcing. Sea-ice coverage
+  is bounded by the ocean cold enough to freeze under the authored climate.
+- Magical storage follows the native dominant source mapping when crust moves.
+  Thermal forcing refreshes with climate; material feedback and elapsed storage
+  advance once per epoch.
+
+| Quality  | Content triangles | GIS field samples |
+| -------- | ----------------: | ----------------: |
+| Draft    |            16,384 |         192 × 192 |
+| Standard |            65,536 |         384 × 384 |
+| Fine     |           262,144 |         768 × 768 |
+
+All qualities execute the physical processes and configured epochs. Generation
+cost increases with numerical detail. Native scratch arrays are discarded before
+the result leaves the worker; no intermediate state is stored.
+
+Regional refinement imports parent crust and accumulated material histories. It
+refines climate, drainage, erosion, ice and coasts without assembling a new set
+of continents or replaying global plate movement. The native work boundary can
+receive drainage outside the write extent, so an inland patch does not require
+a fabricated ocean. Inherited ocean distances retain metre units. The authored
+area boundary, protected samples and contracted network crossings stay fixed.
+This uses current inherited material history; it does not reconstruct a separate
+parent terrain snapshot for each historical epoch.
+
+The optional offline `tools/canonry-reference` program reads the original C#
+library to produce reference fixtures and `contracts.generated.json`. With the
+pinned reference repository at `../the-canonry-game` and .NET 8 available, run
+`make canonry-fixtures`. Fixtures compare mesh topology, hashing, default
+parameters and numerical field hashes across initial geology, transport and a
+complete two-epoch evolution. Ordinary app builds and CI consume committed
+fixtures and need neither that repository nor .NET.
+
 ## Reference and implementation state
 
 Read the corresponding Canonry bodies before adapting their structure:
@@ -209,6 +269,8 @@ The TypeScript runner applies registered processes to one working map in a brows
 worker. The frontend publishes semantic field groups into session memory, retains
 completed causes by area, and uses direct shared domain validation for edits.
 World generation, located refinement, manual editing, templates, cancellation and
-undo have browser journeys. The catalog is an initial implementation rather than
-full Canonry algorithm parity. Earlier SQL migration and backend source are
-historical material outside the current execution path.
+undo have browser journeys. The physical kernel is a source-traceable port;
+atlas profile settings, GIS projection and user-configurable magic are explicit
+adaptations. The cultural, political and built catalogs remain initial atlas
+implementations. Earlier SQL migration and backend source are historical material
+outside the current execution path.

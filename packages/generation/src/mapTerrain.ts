@@ -30,9 +30,8 @@ interface Province {
   continental: number;
 }
 
-// Canonry's province/uplift layers distinguish persistent crust and province
-// motion from broad continental and fine interior relief. Here those causes
-// are sampled on the atlas's planar regular grid rather than its triangle mesh.
+// Earlier rectangular-grid prototype, retained by process-composition tests.
+// Active atlas generation uses the source port in canonry/.
 export const initializeTerrainProcess: MapProcess = {
   contract: {
     id: "physical.initialize",

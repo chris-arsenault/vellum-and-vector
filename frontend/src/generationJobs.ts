@@ -122,7 +122,7 @@ export function cancelGeneration(id: string) {
   finish(id, "cancelled");
 }
 
-function generationSnapshot(
+export function generationSnapshot(
   result: CompletedBoundary,
   input: AtlasGenerationInput,
   id: string
@@ -185,6 +185,27 @@ function channelLayer(channel: string) {
       "carbonate",
       "erosion",
       "deposition",
+      "crustThickness",
+      "crustSupport",
+      "rockLoad",
+      "continentalFraction",
+      "crustAge",
+      "sutureStrength",
+      "suturePair",
+      "assembly",
+      "tectonicBoundary",
+      "boundaryPair",
+      "margin",
+      "tectonicStrain",
+      "volcanicConstruction",
+      "impactExcavation",
+      "impactRim",
+      "impactEjecta",
+      "fluvialErosion",
+      "glacialErosion",
+      "coastalErosion",
+      "glacialDeposition",
+      "landform",
     ].includes(channel)
   )
     return "geology";
@@ -200,32 +221,45 @@ function channelLayer(channel: string) {
       "water",
       "waterDepth",
       "depressionDepth",
+      "waterBody",
+      "oceanDistance",
+      "riverOrder",
+      "riverChannel",
+      "floodplain",
+      "delta",
+      "oceanCurrent",
+      "waveExposure",
     ].includes(channel)
   )
     return "rivers";
   return "climate";
 }
-function publishFields(
-  snapshot: DomainSnapshot,
-  grid: CompletedBoundary["state"]["surface"],
-  runId: string
-) {
+function fieldGroups(grid: CompletedBoundary["state"]["surface"]) {
   const groups = new Map<string, string[]>();
   for (const channel of Object.keys(grid.channels)) {
     if (grid.units[channel] === "cell-index") continue;
     const layer = channelLayer(channel);
     groups.set(layer, [...(groups.get(layer) ?? []), channel]);
   }
-  for (const [layerId, channels] of groups) {
+  return groups;
+}
+function publishFields(
+  snapshot: DomainSnapshot,
+  grid: CompletedBoundary["state"]["surface"],
+  runId: string
+) {
+  for (const [layerId, channels] of fieldGroups(grid)) {
     const world = snapshot.world,
       areaId = grid.scope.areaId;
     const fieldId = semanticId(world.id, "atlas-field", `${areaId}:${layerId}`);
+    const existing = world.fields.find((field) => field.id === fieldId);
+    if (existing?.state === "authored" || existing?.state === "protected") continue;
     const resourceId = semanticId(world.id, "atlas-samples", `${runId}:${layerId}`);
     const field: FieldRef = {
       id: fieldId,
       areaId,
       layerId,
-      algorithm: "atlas-1",
+      algorithm: "atlas-2/canonry-0f62584c",
       source: { kind: "run", id: runId },
       samples: grid.active.length,
       channels,

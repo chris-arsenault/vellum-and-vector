@@ -1,4 +1,4 @@
-.PHONY: ci lint format format-check typecheck test test-browser terraform-fmt-check build dev
+.PHONY: ci lint format format-check typecheck test test-browser terraform-fmt-check build dev canonry-fixtures
 
 ci: lint format-check typecheck test terraform-fmt-check
 
@@ -30,3 +30,6 @@ build:
 
 dev:
 	pnpm dev
+
+canonry-fixtures:
+	dotnet run --project tools/canonry-reference/CanonryReference.csproj -c Release -- packages/generation/fixtures/canonry-foundation.json packages/generation/src/canonry/contracts.generated.json

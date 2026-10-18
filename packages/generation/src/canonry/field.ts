@@ -1,0 +1,213 @@
+// Canonry PhysicalGeographyField, commit 0f62584c. Plain arrays remain worker-local.
+import type { PhysicalMesh } from "./mesh";
+import { noWaterSurface } from "./math";
+
+const integerFields = [
+  "CrustBasePotential",
+  "CrustAssemblyIds",
+  "CrustAssemblySeparation",
+  "CrustCollisionIntensity",
+  "CrustSuturePairIds",
+  "CrustSutureStrength",
+  "RockResistance",
+  "CrustMotionX",
+  "CrustMotionY",
+  "CrustProvinceIds",
+  "CrustTypeCodes",
+  "CrustContinentalFraction",
+  "AdvectionSourceIndex",
+  "MarginCodes",
+  "OceanMarginDistance",
+  "CoastalMarginCodes",
+  "CrustAge",
+  "ContinentalPotential",
+  "Temperature",
+  "WindX",
+  "WindY",
+  "UpwindTargets",
+  "MoistureBarriers",
+  "PrecipitationBarriers",
+  "UpwindOceanSources",
+  "TectonicBoundaryCodes",
+  "TectonicStrain",
+  "InitialTectonicBoundaryCodes",
+  "InitialTectonicStrain",
+  "TectonicBoundaryPairIds",
+  "TectonicTangentX",
+  "TectonicTangentY",
+  "OrogenicComponentIds",
+  "OrogenicSystemProminence",
+  "OceanCurrentX",
+  "OceanCurrentY",
+  "OceanCurrentStrength",
+  "OceanCurrentHeat",
+  "WaveExposure",
+  "OceanDistance",
+  "Rainfall",
+  "Snowfall",
+  "SeaIceSuitability",
+  "MaximumIceThickness",
+  "MaximumIceFlux",
+  "MaximumGroundedIceFlux",
+  "TectonicActivityHistory",
+  "WaveExposureHistory",
+  "GeothermalHistory",
+  "ImpactHeat",
+  "GlacialMeltwater",
+  "ExternalHeatForcing",
+  "ExternalCoastalForcing",
+  "ExternalCoastalForcingHistory",
+  "Moisture",
+  "Geothermal",
+  "MantlePlumeRootStrength",
+  "VolcanicActivity",
+  "VolcanicLastActiveEpoch",
+  "LandformCodes",
+  "WaterKindCodes",
+  "WaterBodyIds",
+  "DrainageBasinIds",
+  "FlowEdges",
+  "FlowAccumulation",
+  "RiverOrders",
+  "RiverChannelStrength",
+  "RiverChannelOrders",
+  "FloodplainIntensity",
+  "DeltaIntensity",
+  "RiverSpineEdgeMasks",
+  "FeatureFlags",
+  "LandmassIds",
+  "LandmassClassCodes",
+  "ContinentalGroupIds",
+  "BathymetricZoneCodes",
+  "IceThickness",
+  "IceFlux",
+  "IceFlowTargets",
+  "IceBalance",
+  "GroundedIce",
+  "FractureConductance",
+  "HeatSourceDensity",
+  "DrainageParents",
+  "DrainageRanks",
+  "DrainageGuidanceTargets",
+  "FlowTargets",
+  "LakeOutletTargets",
+  "Runoff",
+  "Warmth",
+] as const;
+const elevationFields = [
+  "Elevation",
+  "BedrockElevation",
+  "CrustThickness",
+  "CrustSupportElevation",
+  "CrustSupportTarget",
+  "SurfaceRockLoad",
+  "SedimentThickness",
+  "SedimentSupply",
+  "CumulativeFluvialErosion",
+  "CumulativeGlacialErosion",
+  "CumulativeGlacialDeposition",
+  "CumulativeCoastalErosion",
+  "CumulativeDeposition",
+  "OrogenicConstruction",
+  "ConvergentCrustSurplus",
+  "ImpactExcavation",
+  "ImpactRimUplift",
+  "ImpactEjectaThickness",
+  "VolcanicConstructionHistory",
+  "Slope",
+  "WaterDepths",
+  "WaterSurfaceElevations",
+  "DrainageElevations",
+  "LakeOverflow",
+] as const;
+const floatFields = ["RidgeInfluence", "Uplift"] as const;
+export type PhysicalField = Record<(typeof integerFields)[number], Int32Array> &
+  Record<(typeof elevationFields)[number], Float64Array> &
+  Record<(typeof floatFields)[number], Float32Array> & {
+    mesh: PhysicalMesh;
+    AvailableFacts: Set<string>;
+    EffectiveSeaLevel: number;
+    BaseSeaLevel: number;
+    SeaLevelInitialized: boolean;
+    OpenBoundary: boolean;
+    CrustSupportInitialized: boolean;
+    SedimentProducedTotal: number;
+    SedimentDepositedTotal: number;
+    SedimentExportedTotal: number;
+    CompletedEpochCount: number;
+    AccumulatedPlateDrift: number;
+    LastPlateDriftStep: number;
+    DrainageTieDecisionTotal: number;
+    DrainageDecisionTotal: number;
+    FloodFlatFillTotal: number;
+    FloodFillTotal: number;
+  };
+export function createField(mesh: PhysicalMesh): PhysicalField {
+  const arrays = {
+    ...Object.fromEntries(integerFields.map((name) => [name, new Int32Array(mesh.count)])),
+    ...Object.fromEntries(elevationFields.map((name) => [name, new Float64Array(mesh.count)])),
+    ...Object.fromEntries(floatFields.map((name) => [name, new Float32Array(mesh.count)])),
+  };
+  const field = {
+    ...arrays,
+    mesh,
+    AvailableFacts: new Set<string>(),
+    EffectiveSeaLevel: 0,
+    BaseSeaLevel: 0,
+    SeaLevelInitialized: false,
+    OpenBoundary: false,
+    CrustSupportInitialized: false,
+    SedimentProducedTotal: 0,
+    SedimentDepositedTotal: 0,
+    SedimentExportedTotal: 0,
+    CompletedEpochCount: 0,
+    AccumulatedPlateDrift: 0,
+    LastPlateDriftStep: 0,
+    DrainageTieDecisionTotal: 0,
+    DrainageDecisionTotal: 0,
+    FloodFlatFillTotal: 0,
+    FloodFillTotal: 0,
+  } as PhysicalField;
+  for (const name of [
+    "OceanMarginDistance",
+    "OceanDistance",
+    "OrogenicComponentIds",
+    "VolcanicLastActiveEpoch",
+    "FlowEdges",
+    "IceFlowTargets",
+    "DrainageParents",
+    "DrainageGuidanceTargets",
+    "FlowTargets",
+    "LakeOutletTargets",
+    "UpwindTargets",
+    "UpwindOceanSources",
+  ] as const)
+    field[name].fill(-1);
+  field.WaterSurfaceElevations.fill(noWaterSurface);
+  return field;
+}
+export function clearWaterSurface(map: PhysicalField, i: number) {
+  map.WaterDepths[i] = 0;
+  map.WaterSurfaceElevations[i] = noWaterSurface;
+}
+export const isOpenOutlet = (map: PhysicalField, i: number) =>
+  map.OpenBoundary && Boolean(map.mesh.boundary[i]);
+export function setWaterSurface(map: PhysicalField, i: number, surface: number) {
+  const depth = surface - map.Elevation[i];
+  if (depth <= 0) throw new Error("Water surface must be above its physical floor.");
+  map.WaterSurfaceElevations[i] = surface;
+  map.WaterDepths[i] = depth;
+}
+export function reconcileWater(map: PhysicalField, i: number) {
+  const surface = map.WaterSurfaceElevations[i];
+  if (surface === noWaterSurface) return;
+  if (surface > map.Elevation[i]) {
+    map.WaterDepths[i] = surface - map.Elevation[i];
+    return;
+  }
+  map.WaterKindCodes[i] = 0;
+  map.WaterBodyIds[i] = 0;
+  map.LakeOutletTargets[i] = -1;
+  map.LakeOverflow[i] = 0;
+  clearWaterSurface(map, i);
+}

@@ -1,0 +1,906 @@
+{
+  "ancestral-fluvial-erosion": {
+    "salt": 0,
+    "requires": ["Elevation", "Ocean", "LandscapeHistory"],
+    "produces": ["Elevation", "SedimentSupply"],
+    "invalidates": [
+      "LandIce",
+      "IceFlow",
+      "SeaIce",
+      "Landforms",
+      "Validated",
+      "SedimentTransport",
+      "GlacialEvolution",
+      "CoastalEvolution",
+      "RiverGeometry",
+      "Floodplains",
+      "Deltas"
+    ]
+  },
+  "atmospheric-flow": {
+    "salt": 5122227,
+    "requires": ["Elevation", "Ocean"],
+    "produces": ["AtmosphericFlow"],
+    "invalidates": ["Moisture", "Runoff", "LandIce", "Validated", "Precipitation"]
+  },
+  "bathymetry": {
+    "salt": 0,
+    "requires": ["Elevation", "Ocean", "OceanDistance"],
+    "produces": ["Bathymetry"],
+    "invalidates": ["Landmasses", "Landforms", "Validated", "OceanCurrents"]
+  },
+  "coastal-detail": {
+    "salt": 2861009,
+    "requires": ["Elevation", "LandscapeHistory", "TectonicMargins"],
+    "produces": ["Elevation"],
+    "invalidates": [
+      "Ocean",
+      "Bathymetry",
+      "Landmasses",
+      "Temperature",
+      "Moisture",
+      "Runoff",
+      "Lakes",
+      "FlowRouting",
+      "Rivers",
+      "LandIce",
+      "IceFlow",
+      "SeaIce",
+      "Landforms",
+      "Validated",
+      "OceanCurrents",
+      "Precipitation",
+      "RiverGeometry",
+      "Floodplains",
+      "Deltas",
+      "OceanDistance",
+      "DrainageConditioning"
+    ]
+  },
+  "coastal-erosion-and-deposition": {
+    "salt": 0,
+    "requires": [
+      "Elevation",
+      "Ocean",
+      "Bathymetry",
+      "OceanCurrents",
+      "LandscapeHistory",
+      "SedimentTransport"
+    ],
+    "produces": ["Elevation", "CoastalEvolution"],
+    "invalidates": [
+      "Ocean",
+      "Bathymetry",
+      "Landmasses",
+      "Warmth",
+      "Temperature",
+      "Moisture",
+      "Runoff",
+      "Lakes",
+      "FlowRouting",
+      "Rivers",
+      "LandIce",
+      "IceFlow",
+      "SeaIce",
+      "Landforms",
+      "Validated",
+      "OceanCurrents",
+      "Precipitation",
+      "AtmosphericFlow",
+      "DrainageConditioning"
+    ]
+  },
+  "continental-domains": {
+    "salt": 19815057,
+    "requires": ["TectonicProvinces"],
+    "produces": ["ContinentalDomains"],
+    "invalidates": [
+      "Elevation",
+      "Ocean",
+      "Bathymetry",
+      "Landmasses",
+      "Fractures",
+      "Geothermal",
+      "Validated"
+    ]
+  },
+  "continental-margin-evolution": {
+    "salt": 0,
+    "requires": ["Elevation", "Ocean", "TectonicMargins"],
+    "produces": ["TectonicMargins"],
+    "invalidates": [
+      "Bathymetry",
+      "Landmasses",
+      "Validated",
+      "OceanCurrents",
+      "OceanDistance",
+      "CrustalSupport"
+    ]
+  },
+  "continental-sutures": {
+    "salt": 0,
+    "requires": ["TectonicProvinces"],
+    "produces": ["ContinentalSutures"],
+    "invalidates": [
+      "Elevation",
+      "Ocean",
+      "Bathymetry",
+      "Landmasses",
+      "Landforms",
+      "Validated",
+      "CrustalSupport",
+      "OrogenicConstruction"
+    ]
+  },
+  "crustal-support": {
+    "salt": 0,
+    "requires": ["Elevation", "TectonicProvinces", "LandscapeHistory"],
+    "produces": ["CrustalSupport"],
+    "invalidates": []
+  },
+  "drainage-conditioning": {
+    "salt": 0,
+    "requires": ["Elevation", "Ocean"],
+    "produces": ["DrainageConditioning"],
+    "invalidates": ["Lakes", "FlowRouting", "Rivers", "Landforms", "Validated", "DrainageGuidance"]
+  },
+  "drainage-guidance": {
+    "salt": 6405411,
+    "requires": ["Elevation", "Ocean", "Lakes", "LandscapeHistory", "DrainageConditioning"],
+    "produces": ["DrainageGuidance"],
+    "invalidates": [
+      "FlowRouting",
+      "Rivers",
+      "Landforms",
+      "Validated",
+      "RiverGeometry",
+      "Floodplains",
+      "Deltas"
+    ]
+  },
+  "external-coastal-forcing": {
+    "salt": 0,
+    "requires": [
+      "Elevation",
+      "Ocean",
+      "Bathymetry",
+      "OceanCurrents",
+      "LandscapeHistory",
+      "SedimentTransport"
+    ],
+    "produces": ["Elevation", "CoastalEvolution"],
+    "invalidates": [
+      "Landmasses",
+      "Warmth",
+      "Temperature",
+      "Moisture",
+      "Runoff",
+      "Lakes",
+      "FlowRouting",
+      "Rivers",
+      "LandIce",
+      "IceFlow",
+      "SeaIce",
+      "Landforms",
+      "Validated",
+      "Precipitation",
+      "RiverGeometry",
+      "Floodplains",
+      "Deltas",
+      "AtmosphericFlow",
+      "DrainageConditioning"
+    ]
+  },
+  "flow-routing": {
+    "salt": 0,
+    "requires": ["Ocean", "Lakes", "DrainageConditioning", "DrainageGuidance"],
+    "produces": ["FlowRouting"],
+    "invalidates": ["Rivers", "Landforms", "Validated"]
+  },
+  "fracture-network": {
+    "salt": 117035697,
+    "requires": ["ContinentalDomains", "Elevation", "TectonicProvinces", "Impacts"],
+    "produces": ["Fractures"],
+    "invalidates": ["Geothermal", "Validated"]
+  },
+  "geothermal": {
+    "salt": 1387319,
+    "requires": ["Elevation", "Fractures", "TectonicProvinces", "VolcanicConstruction"],
+    "produces": ["Geothermal"],
+    "invalidates": [
+      "Warmth",
+      "Temperature",
+      "Moisture",
+      "Runoff",
+      "LandIce",
+      "Validated",
+      "OceanCurrents",
+      "Precipitation"
+    ]
+  },
+  "glacial-deposition": {
+    "salt": 0,
+    "requires": [
+      "Elevation",
+      "LandIce",
+      "IceFlow",
+      "LandscapeHistory",
+      "SedimentSupply",
+      "GlacialEvolution"
+    ],
+    "produces": ["Elevation", "GlacialEvolution"],
+    "invalidates": [
+      "Ocean",
+      "Bathymetry",
+      "Landmasses",
+      "Warmth",
+      "Temperature",
+      "Moisture",
+      "Runoff",
+      "Lakes",
+      "FlowRouting",
+      "Rivers",
+      "LandIce",
+      "IceFlow",
+      "SeaIce",
+      "Landforms",
+      "Validated",
+      "OceanCurrents",
+      "Precipitation",
+      "AtmosphericFlow",
+      "GlacialMeltwater",
+      "DrainageConditioning"
+    ]
+  },
+  "glacial-erosion": {
+    "salt": 0,
+    "requires": ["Elevation", "Lakes", "LandIce", "IceFlow", "LandscapeHistory"],
+    "produces": ["Elevation", "SedimentSupply", "GlacialEvolution"],
+    "invalidates": [
+      "Ocean",
+      "Bathymetry",
+      "Landmasses",
+      "Warmth",
+      "Temperature",
+      "Moisture",
+      "Runoff",
+      "Lakes",
+      "FlowRouting",
+      "Rivers",
+      "SeaIce",
+      "Landforms",
+      "Validated",
+      "OceanCurrents",
+      "Precipitation",
+      "AtmosphericFlow",
+      "GlacialMeltwater",
+      "DrainageConditioning"
+    ]
+  },
+  "glacial-landforms": {
+    "salt": 0,
+    "requires": ["Elevation", "Ocean", "Rivers", "LandIce", "IceFlow", "GlacialEvolution"],
+    "produces": ["GlacialRelief"],
+    "invalidates": ["Landforms", "Validated"]
+  },
+  "glacial-meltwater": {
+    "salt": 0,
+    "requires": ["Ocean", "Geothermal", "Temperature", "Lakes", "LandIce", "IceFlow"],
+    "produces": ["GlacialMeltwater"],
+    "invalidates": [
+      "Runoff",
+      "Lakes",
+      "FlowRouting",
+      "Rivers",
+      "Validated",
+      "RiverGeometry",
+      "Floodplains",
+      "Deltas"
+    ]
+  },
+  "glacial-runoff": {
+    "salt": 0,
+    "requires": ["Ocean", "Runoff", "GlacialMeltwater"],
+    "produces": ["Runoff"],
+    "invalidates": [
+      "Lakes",
+      "FlowRouting",
+      "Rivers",
+      "Validated",
+      "RiverGeometry",
+      "Floodplains",
+      "Deltas"
+    ]
+  },
+  "ice-flow": {
+    "salt": 0,
+    "requires": ["Elevation", "Ocean", "Lakes", "LandIce"],
+    "produces": ["IceFlow"],
+    "invalidates": ["Landforms", "Validated", "GlacialMeltwater"]
+  },
+  "impact-cratering": {
+    "salt": 5075873,
+    "requires": ["Elevation", "LandscapeHistory"],
+    "produces": ["Elevation", "SedimentSupply", "Impacts"],
+    "invalidates": ["Lakes", "FlowRouting", "Rivers", "Validated", "DrainageConditioning"]
+  },
+  "lake-basins": {
+    "salt": 31281,
+    "requires": [
+      "Elevation",
+      "Ocean",
+      "Temperature",
+      "Runoff",
+      "Precipitation",
+      "DrainageConditioning"
+    ],
+    "produces": ["Lakes"],
+    "invalidates": [
+      "FlowRouting",
+      "Rivers",
+      "LandIce",
+      "IceFlow",
+      "Landforms",
+      "Validated",
+      "DrainageGuidance"
+    ]
+  },
+  "land-ice-mass-balance": {
+    "salt": 0,
+    "requires": [
+      "Elevation",
+      "Ocean",
+      "Geothermal",
+      "Temperature",
+      "Moisture",
+      "Lakes",
+      "Precipitation"
+    ],
+    "produces": ["LandIce"],
+    "invalidates": ["IceFlow", "Landforms", "Validated", "GlacialMeltwater"]
+  },
+  "landform-classification": {
+    "salt": 0,
+    "requires": [
+      "Elevation",
+      "Ocean",
+      "Bathymetry",
+      "Lakes",
+      "Rivers",
+      "GlacialRelief",
+      "LandscapeHistory",
+      "Impacts",
+      "VolcanicConstruction"
+    ],
+    "produces": ["Landforms"],
+    "invalidates": ["Validated"]
+  },
+  "landmasses-and-shelf-groups": {
+    "salt": 0,
+    "requires": ["Elevation", "Ocean", "Bathymetry"],
+    "produces": ["Landmasses"],
+    "invalidates": ["Validated"]
+  },
+  "landscape-initialization": {
+    "salt": 0,
+    "requires": ["Elevation", "TectonicProvinces"],
+    "produces": ["LandscapeHistory"],
+    "invalidates": []
+  },
+  "lithospheric-flexure": {
+    "salt": 0,
+    "requires": ["Elevation", "LandscapeHistory", "CrustalSupport"],
+    "produces": ["Elevation", "CrustalSupport"],
+    "invalidates": [
+      "Ocean",
+      "Bathymetry",
+      "Landmasses",
+      "Warmth",
+      "Temperature",
+      "Moisture",
+      "Runoff",
+      "Lakes",
+      "FlowRouting",
+      "Rivers",
+      "LandIce",
+      "IceFlow",
+      "SeaIce",
+      "Landforms",
+      "Validated",
+      "OceanCurrents",
+      "Precipitation",
+      "RiverGeometry",
+      "Floodplains",
+      "Deltas",
+      "AtmosphericFlow",
+      "OceanDistance",
+      "DrainageConditioning",
+      "DrainageGuidance"
+    ]
+  },
+  "mantle-plume-roots": {
+    "salt": 14273,
+    "requires": ["Elevation", "TectonicProvinces", "LandscapeHistory"],
+    "produces": ["MantlePlumeRoots"],
+    "invalidates": ["Geothermal", "Validated", "VolcanicConstruction"]
+  },
+  "marine-sedimentation": {
+    "salt": 0,
+    "requires": ["Elevation", "Ocean", "LandscapeHistory", "TectonicMargins"],
+    "produces": ["Elevation", "LandscapeHistory"],
+    "invalidates": ["Bathymetry", "Landmasses", "Validated", "OceanDistance", "CrustalSupport"]
+  },
+  "mass-wasting": {
+    "salt": 0,
+    "requires": ["Elevation", "LandscapeHistory"],
+    "produces": ["Elevation"],
+    "invalidates": [
+      "Ocean",
+      "Bathymetry",
+      "Landmasses",
+      "Warmth",
+      "Temperature",
+      "Moisture",
+      "Runoff",
+      "Lakes",
+      "FlowRouting",
+      "Rivers",
+      "LandIce",
+      "IceFlow",
+      "SeaIce",
+      "Landforms",
+      "Validated",
+      "OceanCurrents",
+      "Precipitation",
+      "RiverGeometry",
+      "Floodplains",
+      "Deltas",
+      "AtmosphericFlow",
+      "OceanDistance",
+      "DrainageConditioning",
+      "DrainageGuidance",
+      "CrustalSupport"
+    ]
+  },
+  "moisture-transport": {
+    "salt": 24105,
+    "requires": ["Elevation", "Ocean", "Temperature", "AtmosphericFlow", "OceanDistance"],
+    "produces": ["Moisture"],
+    "invalidates": ["Runoff", "LandIce", "Validated", "Precipitation"]
+  },
+  "ocean-connectivity": {
+    "salt": 0,
+    "requires": ["Elevation"],
+    "produces": ["Ocean"],
+    "invalidates": [
+      "Bathymetry",
+      "Landmasses",
+      "Warmth",
+      "Temperature",
+      "Moisture",
+      "Runoff",
+      "Lakes",
+      "FlowRouting",
+      "Rivers",
+      "LandIce",
+      "IceFlow",
+      "SeaIce",
+      "Landforms",
+      "Validated",
+      "OceanCurrents",
+      "Precipitation",
+      "AtmosphericFlow",
+      "OceanDistance",
+      "DrainageConditioning"
+    ]
+  },
+  "ocean-currents": {
+    "salt": 7094754,
+    "requires": ["Ocean", "Bathymetry", "Geothermal"],
+    "produces": ["OceanCurrents"],
+    "invalidates": [
+      "Warmth",
+      "Temperature",
+      "Moisture",
+      "Runoff",
+      "SeaIce",
+      "Validated",
+      "Precipitation"
+    ]
+  },
+  "ocean-distance": {
+    "salt": 0,
+    "requires": ["Ocean"],
+    "produces": ["OceanDistance"],
+    "invalidates": []
+  },
+  "orogenic-construction": {
+    "salt": 7490003,
+    "requires": [
+      "Elevation",
+      "TectonicProvinces",
+      "LandscapeHistory",
+      "TectonicMargins",
+      "ContinentalSutures"
+    ],
+    "produces": ["Elevation", "OrogenicConstruction"],
+    "invalidates": [
+      "Ocean",
+      "Bathymetry",
+      "Landmasses",
+      "Fractures",
+      "Geothermal",
+      "Warmth",
+      "Temperature",
+      "Moisture",
+      "Runoff",
+      "Lakes",
+      "FlowRouting",
+      "Rivers",
+      "LandIce",
+      "IceFlow",
+      "SeaIce",
+      "Landforms",
+      "Validated",
+      "OceanCurrents",
+      "Precipitation",
+      "RiverGeometry",
+      "Floodplains",
+      "Deltas",
+      "AtmosphericFlow",
+      "GlacialMeltwater",
+      "DrainageConditioning",
+      "VolcanicConstruction",
+      "CrustalSupport"
+    ]
+  },
+  "physical-epoch-history": {
+    "salt": 0,
+    "requires": [
+      "Elevation",
+      "Geothermal",
+      "TectonicProvinces",
+      "LandscapeHistory",
+      "SedimentTransport",
+      "GlacialEvolution",
+      "CoastalEvolution",
+      "VolcanicConstruction"
+    ],
+    "produces": ["EpochHistory"],
+    "invalidates": [
+      "Ocean",
+      "Bathymetry",
+      "Landmasses",
+      "Warmth",
+      "Temperature",
+      "Moisture",
+      "Runoff",
+      "Lakes",
+      "FlowRouting",
+      "Rivers",
+      "LandIce",
+      "IceFlow",
+      "SeaIce",
+      "Landforms",
+      "Validated",
+      "OceanCurrents",
+      "Precipitation",
+      "RiverGeometry",
+      "Floodplains",
+      "Deltas",
+      "AtmosphericFlow",
+      "DrainageConditioning"
+    ]
+  },
+  "physical-structural-validation": {
+    "salt": 0,
+    "requires": [
+      "Ocean",
+      "Bathymetry",
+      "Landmasses",
+      "Lakes",
+      "FlowRouting",
+      "Rivers",
+      "LandIce",
+      "IceFlow",
+      "SeaIce",
+      "Landforms",
+      "LandscapeHistory",
+      "SedimentTransport",
+      "GlacialEvolution",
+      "CoastalEvolution",
+      "RiverGeometry",
+      "Floodplains",
+      "Deltas",
+      "Impacts",
+      "DrainageConditioning",
+      "VolcanicConstruction"
+    ],
+    "produces": ["Validated"],
+    "invalidates": []
+  },
+  "plate-advection": {
+    "salt": 0,
+    "requires": ["TectonicProvinces", "LandscapeHistory", "ContinentalSutures"],
+    "produces": ["LandscapeHistory"],
+    "invalidates": [
+      "ContinentalDomains",
+      "Elevation",
+      "Ocean",
+      "Bathymetry",
+      "Landmasses",
+      "Landforms",
+      "Validated",
+      "TectonicMargins",
+      "CrustalSupport",
+      "OrogenicConstruction"
+    ]
+  },
+  "post-fluvial-mass-wasting": {
+    "salt": 0,
+    "requires": ["Elevation", "LandscapeHistory"],
+    "produces": ["Elevation"],
+    "invalidates": [
+      "Ocean",
+      "Bathymetry",
+      "Landmasses",
+      "Warmth",
+      "Temperature",
+      "Moisture",
+      "Runoff",
+      "Lakes",
+      "FlowRouting",
+      "Rivers",
+      "LandIce",
+      "IceFlow",
+      "SeaIce",
+      "Landforms",
+      "Validated",
+      "OceanCurrents",
+      "Precipitation",
+      "RiverGeometry",
+      "Floodplains",
+      "Deltas",
+      "AtmosphericFlow",
+      "OceanDistance",
+      "DrainageConditioning",
+      "DrainageGuidance",
+      "CrustalSupport"
+    ]
+  },
+  "precipitation": {
+    "salt": 3898649,
+    "requires": [
+      "Elevation",
+      "Ocean",
+      "Temperature",
+      "Moisture",
+      "OceanCurrents",
+      "AtmosphericFlow"
+    ],
+    "produces": ["Precipitation"],
+    "invalidates": ["Runoff", "Rivers", "LandIce", "Validated"]
+  },
+  "river-channel-geometry": {
+    "salt": 0,
+    "requires": ["Elevation", "Lakes", "FlowRouting", "Rivers"],
+    "produces": ["RiverGeometry"],
+    "invalidates": ["Validated", "Floodplains", "Deltas"]
+  },
+  "river-delta-formation": {
+    "salt": 0,
+    "requires": [
+      "Ocean",
+      "Bathymetry",
+      "FlowRouting",
+      "Rivers",
+      "OceanCurrents",
+      "LandscapeHistory",
+      "SedimentTransport",
+      "RiverGeometry",
+      "Floodplains"
+    ],
+    "produces": ["Deltas"],
+    "invalidates": ["Validated"]
+  },
+  "river-floodplains": {
+    "salt": 0,
+    "requires": ["Elevation", "FlowRouting", "Rivers", "LandscapeHistory", "RiverGeometry"],
+    "produces": ["Floodplains"],
+    "invalidates": ["Validated", "Deltas"]
+  },
+  "river-network": {
+    "salt": 0,
+    "requires": ["Runoff", "FlowRouting"],
+    "produces": ["Rivers"],
+    "invalidates": ["Landforms", "Validated", "RiverGeometry", "Floodplains", "Deltas"]
+  },
+  "runoff": {
+    "salt": 0,
+    "requires": ["Ocean", "Temperature", "Precipitation"],
+    "produces": ["Runoff"],
+    "invalidates": ["Rivers", "Validated"]
+  },
+  "sea-ice": {
+    "salt": 0,
+    "requires": ["Ocean", "Temperature", "LandIce", "OceanCurrents"],
+    "produces": ["SeaIce"],
+    "invalidates": ["Validated"]
+  },
+  "sediment-transport": {
+    "salt": 0,
+    "requires": ["Elevation", "Bathymetry", "Runoff", "FlowRouting", "Rivers", "SedimentSupply"],
+    "produces": ["Elevation", "SedimentTransport"],
+    "invalidates": [
+      "LandIce",
+      "IceFlow",
+      "SeaIce",
+      "Landforms",
+      "Validated",
+      "GlacialEvolution",
+      "CoastalEvolution",
+      "RiverGeometry",
+      "Floodplains",
+      "Deltas"
+    ]
+  },
+  "tectonic-epoch-activity": {
+    "salt": 1929667,
+    "requires": ["TectonicProvinces"],
+    "produces": ["TectonicProvinces"],
+    "invalidates": [
+      "ContinentalDomains",
+      "Elevation",
+      "Ocean",
+      "Bathymetry",
+      "Landmasses",
+      "Fractures",
+      "Geothermal",
+      "Warmth",
+      "Temperature",
+      "Moisture",
+      "Runoff",
+      "Lakes",
+      "FlowRouting",
+      "Rivers",
+      "LandIce",
+      "IceFlow",
+      "SeaIce",
+      "Landforms",
+      "Validated",
+      "OceanCurrents",
+      "Precipitation",
+      "RiverGeometry",
+      "Floodplains",
+      "Deltas",
+      "AtmosphericFlow",
+      "GlacialMeltwater",
+      "DrainageConditioning",
+      "VolcanicConstruction",
+      "OrogenicConstruction",
+      "ContinentalSutures"
+    ]
+  },
+  "tectonic-margins": {
+    "salt": 0,
+    "requires": ["TectonicProvinces"],
+    "produces": ["TectonicMargins"],
+    "invalidates": ["Ocean", "Bathymetry", "Landmasses", "Validated", "CoastalEvolution"]
+  },
+  "tectonic-provinces": {
+    "salt": 7025127,
+    "requires": [],
+    "produces": ["TectonicProvinces"],
+    "invalidates": [
+      "ContinentalDomains",
+      "Elevation",
+      "Ocean",
+      "Fractures",
+      "Geothermal",
+      "Validated",
+      "OrogenicConstruction",
+      "ContinentalSutures"
+    ]
+  },
+  "tectonic-uplift": {
+    "salt": 5188375,
+    "requires": [
+      "ContinentalDomains",
+      "TectonicProvinces",
+      "TectonicMargins",
+      "ContinentalSutures"
+    ],
+    "produces": ["Elevation"],
+    "invalidates": [
+      "Ocean",
+      "Bathymetry",
+      "Landmasses",
+      "Fractures",
+      "Geothermal",
+      "Warmth",
+      "Temperature",
+      "Moisture",
+      "Runoff",
+      "Lakes",
+      "FlowRouting",
+      "Rivers",
+      "LandIce",
+      "IceFlow",
+      "SeaIce",
+      "Landforms",
+      "Validated",
+      "OceanCurrents",
+      "Precipitation",
+      "RiverGeometry",
+      "Floodplains",
+      "Deltas",
+      "AtmosphericFlow",
+      "GlacialMeltwater",
+      "DrainageConditioning",
+      "VolcanicConstruction",
+      "CrustalSupport",
+      "OrogenicConstruction"
+    ]
+  },
+  "temperature": {
+    "salt": 0,
+    "requires": ["Elevation", "Ocean", "Geothermal", "Warmth", "OceanCurrents", "OceanDistance"],
+    "produces": ["Temperature"],
+    "invalidates": [
+      "Moisture",
+      "Runoff",
+      "LandIce",
+      "SeaIce",
+      "Validated",
+      "Precipitation",
+      "GlacialMeltwater"
+    ]
+  },
+  "volcanic-construction": {
+    "salt": 7579933,
+    "requires": ["Elevation", "TectonicProvinces", "LandscapeHistory", "MantlePlumeRoots"],
+    "produces": ["Elevation", "VolcanicConstruction"],
+    "invalidates": [
+      "Ocean",
+      "Bathymetry",
+      "Landmasses",
+      "Fractures",
+      "Geothermal",
+      "Warmth",
+      "Temperature",
+      "Moisture",
+      "Runoff",
+      "Lakes",
+      "FlowRouting",
+      "Rivers",
+      "LandIce",
+      "IceFlow",
+      "SeaIce",
+      "Landforms",
+      "Validated",
+      "OceanCurrents",
+      "Precipitation",
+      "RiverGeometry",
+      "Floodplains",
+      "Deltas",
+      "AtmosphericFlow",
+      "GlacialMeltwater",
+      "DrainageConditioning",
+      "DrainageGuidance"
+    ]
+  },
+  "warmth-sources": {
+    "salt": 77929587,
+    "requires": ["Elevation", "Ocean", "Geothermal", "OceanCurrents", "OceanDistance"],
+    "produces": ["Warmth"],
+    "invalidates": [
+      "Temperature",
+      "Moisture",
+      "Runoff",
+      "LandIce",
+      "SeaIce",
+      "Validated",
+      "Precipitation"
+    ]
+  }
+}

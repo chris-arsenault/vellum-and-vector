@@ -46,6 +46,7 @@ export function readRaster(id: string, fieldId: string, channel: string) {
   requireThat(source, "missing_field", "Choose an available field.");
   const grid = materializeField(source);
   requireThat(grid.channels[channel], "missing_channel", `No ${channel} samples in this field.`);
+  const companions = channel === "elevation" ? terrainCompanions(id, grid) : {};
   return {
     id: fieldId,
     areaId: grid.scope.areaId,
@@ -55,7 +56,26 @@ export function readRaster(id: string, fieldId: string, channel: string) {
     height: grid.height,
     channel,
     values: Array.from(grid.channels[channel], (value, i) => (grid.active[i] ? value : Number.NaN)),
+    ...companions,
   };
+}
+function terrainCompanions(id: string, elevation: import("@atlas/domain").Grid) {
+  const snapshot = session(id).snapshot,
+    result: { water?: number[]; ice?: number[] } = {};
+  for (const name of ["water", "ice"] as const) {
+    const field = snapshot.world.fields.find(
+      (field) => field.areaId === elevation.scope.areaId && field.channels?.includes(name)
+    );
+    const grid = field && snapshot.numerical[field.id];
+    if (
+      grid &&
+      grid.width === elevation.width &&
+      grid.height === elevation.height &&
+      grid.bounds.every((value, i) => value === elevation.bounds[i])
+    )
+      result[name] = Array.from(materializeField(grid).channels[name]);
+  }
+  return result;
 }
 
 export function exportWorld(id: string) {

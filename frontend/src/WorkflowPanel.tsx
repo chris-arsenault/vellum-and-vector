@@ -83,9 +83,9 @@ function GenerateForm({ world, editor }: { world: World; editor: EditorState }) 
         <label>
           Quality
           <select name="quality" defaultValue="standard">
-            <option value="draft">Draft · 48 × 48 field samples</option>
-            <option value="standard">Standard · 96 × 96</option>
-            <option value="fine">Fine · 192 × 192</option>
+            <option value="draft">Draft · 16,384 terrain triangles</option>
+            <option value="standard">Standard · 65,536 terrain triangles</option>
+            <option value="fine">Fine · 262,144 terrain triangles</option>
           </select>
         </label>
         <label>

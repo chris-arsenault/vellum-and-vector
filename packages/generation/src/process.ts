@@ -9,6 +9,7 @@ import type {
 import { requireThat } from "@atlas/domain";
 
 export interface GenerationState {
+  physical?: import("./canonry/atlasWorkspace").AtlasPhysicalWorkspace;
   domain: DomainSnapshot;
   surface: Grid;
   facts: Set<string>;
@@ -73,6 +74,8 @@ export interface MapProcessContract {
   requires: string[];
   produces: string[];
   invalidates: string[];
+  // Private numerical steps publish no GIS changes until an explicit projection.
+  workspaceOnly?: boolean;
 }
 export interface MapProcessContext {
   scope: SpatialScope;
