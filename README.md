@@ -1,0 +1,127 @@
+# Vellum & Vector
+
+A web atlas for creating fictional worlds progressively, from continents and
+regions to settlements, caves and interiors. Creators combine procedural
+generation, direct editing and reusable templates within one geographically
+connected world. The current application runs entirely in the browser.
+
+The [product contract](docs/product-spec.md) defines the behavior. Project
+implementation guidance lives in [AGENTS.md](AGENTS.md), with decisions in the
+[spatial ADR](docs/adr/0001-spatial-authority.md) and
+[frontend session ADR](docs/adr/0003-frontend-session.md), which supersedes the
+earlier backend and persistence direction.
+
+## Architecture
+
+The application is written in TypeScript. React and OpenLayers provide the editor;
+shared TypeScript modules define world data, commands, validation and procedural
+generation. The UI calls domain operations directly against browser memory.
+Generation runs in a Web Worker with progress, cancellation and complete result
+publication. There is no backend, authentication, database or MCP.
+
+| Responsibility | Direction                                                                               |
+| -------------- | --------------------------------------------------------------------------------------- |
+| Editor         | React, OpenLayers, explicit geographic refinement and responsive manual tools           |
+| Domain         | Shared TypeScript types, spatial identity, constraints and versioned commands           |
+| Generation     | Shared working map, registered processes and causal epoch sequences in a browser worker |
+| Session        | In-memory worlds, fields, templates, history and undo                                   |
+
+Every area has a geographic parent, footprint and coordinate frame. Features keep
+their identity as finer representations are authored. Layer views compose the
+same geography. Interior floors retain explicit spatial identity and located
+entrance connections.
+
+### Procedural generation
+
+[The Canonry Game](https://github.com/chris-arsenault/the-canonry-game) is the
+reference for causal generation: ordered physical processes, accumulated epoch
+history, and magic that changes subsequent environmental outcomes. Translate
+those ideas into algorithms suited to this atlas's editable, progressively
+refined world model.
+
+The [generation system](docs/generation-workflows.md) follows Canonry's structure
+in TypeScript: configured processes operate on shared GIS/domain working state,
+check required facts, apply their changes, validate them and update fact validity.
+The common contract covers typed parameters, spatial scope, deterministic seeds
+and application/validation for GIS and domain processes.
+
+Map profiles configure which processes run, their order and workflow parameters.
+A process can be reused at different levels or several positions in a sequence.
+Epoch loops carry altered state forward and bind changing variables such as
+temperature, sea level, source activity or population pressure. Physical and
+magical nodes interleave at their causal positions. Cultural, political, site
+and cave generation use the same structure with their inherited context.
+
+Generation and completed causes stay in memory. Cancellation discards the worker's
+unpublished output. If you edit the world during generation, the edits are kept
+and the outdated result is rejected. Generate again from the current geography.
+Child fields inherit parent geography and retain its boundary band while finer
+numerical work occupies the interior.
+
+## Implementation state
+
+Create a world, generate its geography, refine areas with skipped profiles, draw
+and inspect protected features, compose layers, author entities and fields, place
+located templates, inspect causes and undo session edits.
+
+**Reloading or closing the tab discards every world and template and stops
+generation.** There is no automatic browser storage or recovery. Explicit GIS
+and template exports download local files.
+
+The physical catalog currently includes crustal provinces, tectonic movement,
+temperature, precipitation, ice accumulation/melt, conditioned drainage and
+erosion/deposition. Cultural prevalence, political territory/claims/control and
+basic settlement/site/interior layouts use the same process contract. This is
+an initial atlas generator; full Canonry algorithm parity remains future work.
+
+`backend/`, `db/`, `infrastructure/backend-prototype/` and their prototype scripts
+remain historical source outside the active workspace and build. Do not run
+their deployment or migration commands for this frontend.
+
+## Local development
+
+Use the Node version in `.node-version`, the pinned pnpm version in
+`frontend/package.json`, and the
+[Ahara TypeScript standards](https://github.com/chris-arsenault/ahara-standards/blob/main/standards/typescript.md).
+From the repository root:
+
+```sh
+pnpm install --frozen-lockfile
+pnpm dev
+```
+
+Vite serves the frontend on its printed local URL. No environment file, runtime
+configuration script, credential or container is required.
+
+```sh
+make ci
+make build
+pnpm --dir frontend exec playwright install chromium
+make test-browser
+```
+
+The browser tests start and stop their own temporary Vite server. The production
+build is `frontend/dist/` and includes its generation worker.
+
+## Deployment
+
+CI uses Ahara's shared workflow for TypeScript checks, coverage, browser tests
+and frontend deployment on `main`. `platform.yml` declares the `typescript` and
+`terraform` stacks and has no `migrations` entry. The active Terraform root uses
+Ahara's website module to serve `frontend/dist` at
+<https://vellum-and-vector.ahara.io> through private S3 and CloudFront, with DNS
+and TLS. It declares no application API, database or Cognito client.
+
+The project registration in `ahara-infra` provisions the standard deployer role
+and repository Actions secrets (`OIDC_ROLE`, `STATE_BUCKET`, `PREFIX`). Deploy
+that registration before the initial product push. Later pushes to `main` use
+the shared CI workflow to test, build and deploy the frontend automatically.
+The earlier combined backend Terraform and its registration remain preserved
+under `infrastructure/backend-prototype` as disabled source files. User data
+stays in the tab; publishing data or using a hosted presentation service requires
+explicit authorization.
+
+## License
+
+Project code is under the [MIT license](LICENSE). Source currently present under
+`backend/vendor` retains its [provenance](backend/vendor/README.md).

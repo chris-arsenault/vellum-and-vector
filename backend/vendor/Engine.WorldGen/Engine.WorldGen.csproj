@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Engine.Constants\Engine.Constants.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Engine.WorldGen.Tests" />
+    <InternalsVisibleTo Include="WorldGenerator" />
+    <InternalsVisibleTo Include="Atlas.Generation" />
+  </ItemGroup>
+</Project>

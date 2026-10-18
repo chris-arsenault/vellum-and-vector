@@ -1,0 +1,21 @@
+{
+  "name": "@atlas/domain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./model": "./src/model.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "jsts": "2.12.1",
+    "zod": "4.6.7",
+    "uuid": "14.0.3"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.16"
+  }
+}

@@ -1,0 +1,11 @@
+services:
+  database:
+    image: postgis/postgis:16-3.5
+    environment:
+      POSTGRES_USER: atlas
+      POSTGRES_DB: atlas
+      POSTGRES_PASSWORD: ${ATLAS_DATABASE_PASSWORD:?Set a local development database password}
+    ports: ["127.0.0.1:54329:5432"]
+    volumes: ["atlas-database:/var/lib/postgresql/data"]
+volumes:
+  atlas-database:

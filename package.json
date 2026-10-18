@@ -1,0 +1,29 @@
+{
+  "name": "vellum-and-vector-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.29.3",
+  "scripts": {
+    "dev": "pnpm --dir frontend dev",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "test": "vitest run",
+    "lint": "eslint packages && pnpm --dir frontend run lint",
+    "format": "prettier --write packages *.json *.ts *.yaml && pnpm --dir frontend run format",
+    "build": "pnpm -r --if-present build"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.16",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.15.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0",
+    "eslint": "^9.39.0",
+    "@eslint/js": "^9.39.0",
+    "typescript-eslint": "^8.48.0",
+    "eslint-config-prettier": "^10.1.0",
+    "prettier": "^3.7.0",
+    "tsx": "^4.20.0",
+    "esbuild": "^0.27.0"
+  }
+}

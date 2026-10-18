@@ -1,0 +1,60 @@
+import { putChannel } from "@atlas/domain";
+import { magicalForcing } from "./mapMagic";
+import { summarizeChannel } from "./mapFields";
+import type { MapProcess } from "./process";
+
+// The physical processes consume altered material resistance and coastal stress,
+// following Canonry's interleaved magic/material feedback boundary.
+export const materialMagicProcess: MapProcess = {
+  contract: {
+    id: "magic.material",
+    version: "1",
+    parameters: {
+      sourceActivity: { type: "number", unit: "ratio", required: false, default: 1 },
+      heatActivity: { type: "number", unit: "ratio", required: false, default: 1 },
+      coldActivity: { type: "number", unit: "ratio", required: false, default: 1 },
+    },
+    requires: ["elevation", "geology"],
+    produces: ["magicMaterial"],
+    invalidates: [],
+  },
+  apply(state, context) {
+    const grid = state.surface;
+    if (!grid.channels.naturalRock)
+      putChannel(grid, "naturalRock", "ratio", grid.channels.rock.slice());
+    grid.channels.rock.set(grid.channels.naturalRock);
+    const pressure = new Float64Array(grid.active.length);
+    for (const source of state.domain.world.magic) {
+      if (
+        ["heat", "cold"].includes(source.effect) ||
+        (source.spaceId && source.spaceId !== context.scope.spaceId)
+      )
+        continue;
+      const values = Float64Array.from(grid.active, (active, i) =>
+        active ? magicalForcing(state, context, source, i) : 0
+      );
+      const key = `magic:${source.id}`;
+      putChannel(grid, key, "ratio", values);
+      for (let i = 0; i < values.length; i++) {
+        if (source.effect === "erosionResistance")
+          grid.channels.rock[i] = Math.max(
+            0.1,
+            Math.min(1, grid.channels.rock[i] + values[i] / 1000)
+          );
+        if (source.effect === "pressure") pressure[i] += Math.abs(values[i]);
+      }
+      context.recordCause({
+        kind: "magic",
+        process: "magic.material",
+        sourceId: source.id,
+        activity: 1,
+        forcing: summarizeChannel(grid, key),
+        stored: summarizeChannel(grid, key),
+      });
+    }
+    putChannel(grid, "coastalPressure", "ratio", pressure);
+  },
+  validate() {
+    return [];
+  },
+};

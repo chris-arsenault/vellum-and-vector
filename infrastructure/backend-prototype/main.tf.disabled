@@ -1,0 +1,91 @@
+terraform {
+  required_version = ">= 1.12"
+  required_providers {
+    aws = { source = "hashicorp/aws", version = "~> 6.22" }
+  }
+  backend "s3" {
+    region       = "us-east-1"
+    key          = "projects/vellum-and-vector.tfstate"
+    encrypt      = true
+    use_lockfile = true
+  }
+}
+
+provider "aws" {
+  region = "us-east-1"
+  default_tags {
+    tags = { Project = "vellum-and-vector", ManagedBy = "Terraform" }
+  }
+}
+
+locals {
+  prefix = "vellum-and-vector"
+  app    = "vellum-and-vector.ahara.io"
+  api    = "api.vellum-and-vector.ahara.io"
+}
+
+module "platform" {
+  source = "git::https://github.com/chris-arsenault/ahara-tf-patterns.git//modules/platform-context?ref=34287b1925e1b5681281c1fb3ee9199211202ec9"
+}
+
+data "aws_ssm_parameter" "db_username" { name = "/ahara/db/${local.prefix}/username" }
+data "aws_ssm_parameter" "db_password" { name = "/ahara/db/${local.prefix}/password" }
+data "aws_ssm_parameter" "db_database" { name = "/ahara/db/${local.prefix}/database" }
+
+module "cognito" {
+  source  = "git::https://github.com/chris-arsenault/ahara-tf-patterns.git//modules/cognito-app?ref=34287b1925e1b5681281c1fb3ee9199211202ec9"
+  name    = "${local.prefix}-app"
+  cognito = module.platform.cognito
+}
+
+resource "aws_ssm_parameter" "auth_client" {
+  name  = "/ahara/auth-trigger/clients/${local.prefix}"
+  type  = "String"
+  value = module.cognito.client_id
+}
+
+module "api" {
+  source   = "git::https://github.com/chris-arsenault/ahara-tf-patterns.git//modules/alb-api?ref=34287b1925e1b5681281c1fb3ee9199211202ec9"
+  prefix   = local.prefix
+  hostname = local.api
+  vpc      = module.platform.vpc
+  alb      = module.platform.alb
+  cognito  = module.platform.cognito
+  environment = {
+    DB_HOST                        = module.platform.rds.address
+    DB_PORT                        = module.platform.rds.port
+    DB_USERNAME                    = nonsensitive(data.aws_ssm_parameter.db_username.value)
+    DB_PASSWORD                    = nonsensitive(data.aws_ssm_parameter.db_password.value)
+    DB_NAME                        = nonsensitive(data.aws_ssm_parameter.db_database.value)
+    ATLAS_ORIGIN                   = "https://${local.app}"
+    COGNITO_CLIENT_ID              = module.cognito.client_id
+    DOTNET_BUNDLE_EXTRACT_BASE_DIR = "/tmp/dotnet"
+  }
+  lambdas = {
+    api = {
+      binary = "${path.module}/../../.artifacts/publish/bootstrap"
+      routes = [
+        { priority = 409, paths = ["/api/*", "/mcp"], methods = ["OPTIONS"], authenticated = false },
+        { priority = 410, paths = ["/health"], methods = ["GET"], authenticated = false },
+        { priority = 411, paths = ["/api/*", "/mcp"], authenticated = true }
+      ]
+    }
+  }
+}
+
+module "frontend" {
+  source         = "git::https://github.com/chris-arsenault/ahara-tf-patterns.git//modules/website?ref=34287b1925e1b5681281c1fb3ee9199211202ec9"
+  prefix         = local.prefix
+  hostname       = local.app
+  site_directory = "${path.module}/../../frontend/dist"
+  encrypt        = false
+  runtime_config = {
+    authMode          = "cognito"
+    cognitoUserPoolId = module.platform.cognito.user_pool_id
+    cognitoClientId   = module.cognito.client_id
+    apiBaseUrl        = "https://${local.api}"
+  }
+}
+
+output "app_url" { value = "https://${local.app}" }
+output "api_url" { value = "https://${local.api}" }

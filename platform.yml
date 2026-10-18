@@ -1,0 +1,4 @@
+project: vellum-and-vector
+prefix: vellum-and-vector
+stack: [typescript, terraform]
+typescript_dir: frontend

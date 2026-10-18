@@ -1,0 +1,4 @@
+DROP TRIGGER atlas_template_instance_member_immutable ON atlas_template_instance_members;
+DROP TABLE atlas_template_instance_layers,atlas_template_instances;
+ALTER TABLE atlas_layers DROP CONSTRAINT atlas_layers_scope_id_id_fkey;
+DROP TABLE atlas_layer_ids;

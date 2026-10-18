@@ -1,0 +1,6 @@
+**
+!.artifacts
+!.artifacts/publish
+!.artifacts/publish/bootstrap
+!worker
+!worker/Dockerfile

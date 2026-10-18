@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="Atlas.Domain/Atlas.Domain.csproj" />
+  <Project Path="Atlas.Generation/Atlas.Generation.csproj" />
+  <Project Path="Atlas.Persistence/Atlas.Persistence.csproj" />
+  <Project Path="Atlas.Api/Atlas.Api.csproj" />
+  <Project Path="Atlas.Tests/Atlas.Tests.csproj" />
+  <Project Path="vendor/Engine.Constants/Engine.Constants.csproj" />
+  <Project Path="vendor/Engine.WorldGen/Engine.WorldGen.csproj" />
+</Solution>

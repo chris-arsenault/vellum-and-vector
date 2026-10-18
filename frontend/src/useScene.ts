@@ -1,0 +1,82 @@
+import { useQuery } from "@tanstack/react-query";
+import { readScene, readRaster } from "./atlasReads";
+import { bounds } from "./presentation";
+import { profiles, type Area, type AtlasFeature, type World } from "./types";
+
+export function useMapData(
+  world: World,
+  areaId: string,
+  channel: string,
+  extent: number[] | null = null
+) {
+  const scene = useScene(world, areaId, extent);
+  const raster = useRasters(world, areaId, channel, extent);
+  const baseRaster = useRasters(world, areaId, "elevation", extent);
+  return { scene, raster, baseRaster };
+}
+
+export function editArea(world: World, areaId: string, feature: AtlasFeature) {
+  for (let current: string | null = areaId; current; current = world.areas[current].parentId)
+    if (current === feature.areaId) return areaId;
+  return feature.areaId;
+}
+
+export function useScene(
+  world: World,
+  areaId: string,
+  extent: number[] | null | undefined = undefined
+) {
+  return useQuery({
+    queryKey: ["scene", world.id, areaId, world.version, extent?.join(",")],
+    enabled: extent !== null,
+    placeholderData: (previous, query) => (query?.queryKey[2] === areaId ? previous : undefined),
+    queryFn: () => readScene(world.id, areaId, extent ?? undefined),
+  });
+}
+
+function space(world: World, area: Area): string | null {
+  if (area.profile === "interior" || area.context === "cave" || area.frame.floor !== null)
+    return area.id;
+  return area.parentId ? space(world, world.areas[area.parentId]) : null;
+}
+
+export function useRasters(
+  world: World,
+  areaId: string,
+  channel: string,
+  viewport: number[] | null | undefined = undefined
+) {
+  const area = world.areas[areaId];
+  const extent = viewport ?? bounds(area.footprint);
+  const fields = world.fields
+    .filter((f) => {
+      if (f.channels && !f.channels.includes(channel)) return false;
+      if (!f.channels && f.layerId !== channel && f.layerId !== "elevation") return false;
+      const owner = world.areas[f.areaId];
+      const box = bounds(owner.footprint);
+      return (
+        space(world, owner) === space(world, area) &&
+        box[0] <= extent[2] &&
+        box[2] >= extent[0] &&
+        box[1] <= extent[3] &&
+        box[3] >= extent[1]
+      );
+    })
+    .sort(
+      (a, b) =>
+        profiles.indexOf(world.areas[a.areaId].profile) -
+        profiles.indexOf(world.areas[b.areaId].profile)
+    );
+  return useQuery({
+    queryKey: [
+      "rasters",
+      world.id,
+      world.version,
+      areaId,
+      fields.map((f) => f.id).join(","),
+      channel,
+    ],
+    enabled: viewport !== null,
+    queryFn: () => fields.map((f) => readRaster(world.id, f.id, channel)),
+  });
+}
