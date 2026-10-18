@@ -39,18 +39,21 @@ export function centers(
       })
   );
   if (existing.length) return existing;
-  const candidates = landCells(state).map((i) => ({
-    i,
-    score: suitability(state, i) * (0.6 + context.random() * 0.4),
-  }));
+  const candidates = landCells(state)
+    .map((i) => ({
+      i,
+      score: suitability(state, i) * (0.6 + context.random() * 0.4),
+    }))
+    .sort((a, b) => b.score - a.score);
   const selected: number[] = [];
   const span = Math.max(
     state.surface.bounds[2] - state.surface.bounds[0],
     state.surface.bounds[3] - state.surface.bounds[1]
   );
-  while (selected.length < count && candidates.length) {
-    candidates.sort((a, b) => b.score - a.score);
-    const { i } = candidates.shift()!;
+  // Scores never change. Visit the ranked candidates once, including when the
+  // remaining land cannot fit another origin at the requested separation.
+  for (const { i } of candidates) {
+    if (selected.length === count) break;
     const position = gridPosition(state.surface, i);
     if (
       selected.some((j) => {
@@ -87,6 +90,7 @@ export const culturalProcess: MapProcess = {
     invalidates: [],
   },
   apply(state, context) {
+    context.progress(0, "Choosing cultural origins");
     const origins = centers(state, context, "culture", Number(context.parameters.cultureCount)),
       grid = state.surface;
     const eras = state.domain.world.humanEras ?? [];
@@ -94,6 +98,10 @@ export const culturalProcess: MapProcess = {
     const elapsed = eras.reduce((sum, era) => sum + era.years * era.mobility, 0);
     const spread = span * (0.15 + Math.sqrt(elapsed / 200) * 0.15);
     for (const origin of origins) {
+      context.progress(
+        (origins.indexOf(origin) / origins.length) * 0.9,
+        `Spreading ${origin.name}`
+      );
       const center = origin.attributes.center as Position;
       const values = Float64Array.from(grid.active, (active, i) => {
         if (!active || grid.channels.elevation[i] <= 0) return 0;
@@ -137,9 +145,11 @@ export const politicalProcess: MapProcess = {
     invalidates: [],
   },
   apply(state, context) {
+    context.progress(0, "Choosing polity locations");
     const polities = centers(state, context, "polity", Number(context.parameters.polityCount)),
       grid = state.surface;
     const owner = new Int32Array(grid.active.length).fill(-1);
+    context.progress(0.1, `Assigning territory to ${polities.length} polities`);
     for (const i of landCells(state)) {
       const p = gridPosition(grid, i);
       const scores = polities.map((entity) => {
@@ -148,7 +158,13 @@ export const politicalProcess: MapProcess = {
       });
       if (scores.length) owner[i] = scores.indexOf(Math.min(...scores));
     }
-    for (const [index, polity] of polities.entries()) territory(state, owner, index, polity);
+    for (const [index, polity] of polities.entries()) {
+      context.progress(
+        0.3 + (0.65 * index) / polities.length,
+        `Building territory and claims for ${polity.name} (${index + 1}/${polities.length})`
+      );
+      territory(state, owner, index, polity);
+    }
     context.recordCause({
       kind: "domain",
       process: "human.politics",
@@ -175,9 +191,7 @@ function territory(state: GenerationState, owner: Int32Array, index: number, pol
   if (!polygons.length) return;
   // Union contiguous row strips before publishing OGC polygons; shared edges
   // in a raw MultiPolygon would otherwise be topologically invalid.
-  let shape = { type: "Polygon" as const, coordinates: polygons[0] } as import("geojson").Geometry;
-  for (const coordinates of polygons.slice(1))
-    shape = spatial.union(shape, { type: "Polygon", coordinates });
+  let shape = spatial.unionAll(polygons.map((coordinates) => ({ type: "Polygon", coordinates })));
   shape = spatial.intersection(shape, grid.scope.footprint)!;
   const feature = generatedFeature(
     state,

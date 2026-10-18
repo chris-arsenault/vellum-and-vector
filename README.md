@@ -147,8 +147,16 @@ CI uses Ahara's shared workflow for TypeScript checks, coverage, browser tests
 and frontend deployment on `main`. `platform.yml` declares the `typescript` and
 `terraform` stacks and has no `migrations` entry. The active Terraform root uses
 Ahara's website module to serve `frontend/dist` at
-<https://vellum-and-vector.ahara.io> through private S3 and CloudFront, with DNS
-and TLS. It declares no application API, database or Cognito client.
+<https://maps.ahara.io> through private S3 and CloudFront, with DNS and TLS. The
+previous hostname remains an alias. Ahara's OpenGraph origin serves the HTML
+shell with literal site metadata and `/og-image.png`; it has no database query
+configuration. Geography and authoring run in the browser. It declares no
+application API, database or Cognito client.
+
+Each generation exposes a timed log in **Generation jobs** and emits the same
+stage messages in the browser console, including validation, worker transfer
+and publication. Failed jobs retain the active stage and error. These logs,
+like the map, remain in the current tab.
 
 The project registration in `ahara-infra` provisions the standard deployer role
 and repository Actions secrets (`OIDC_ROLE`, `STATE_BUCKET`, `PREFIX`). Deploy

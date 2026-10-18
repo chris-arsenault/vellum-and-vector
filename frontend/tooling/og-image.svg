@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#19272a" />
+  <g fill="none" stroke="#76908b" stroke-width="2" opacity="0.35">
+    <path d="M760-30C590 92 1050 110 916 266S724 445 1080 689M860-30C686 104 1140 94 1010 287S832 478 1180 689M660-30C494 76 958 130 822 250S620 412 980 689M560-30C398 64 866 150 728 234S516 378 880 689M460-30C302 52 774 170 634 218S412 344 780 689" />
+    <path d="M940 184C1002 144 1156 198 1128 284S984 378 942 318 878 224 940 184ZM968 216C1008 190 1106 216 1088 276S996 334 970 298 928 242 968 216Z" />
+  </g>
+  <g transform="translate(72 62) scale(2.5)" fill="#eee6d3">
+    <path d="M16 2 20 12 30 16 20 20 16 30 12 20 2 16 12 12Z" fill="none" stroke="#eee6d3" stroke-width="1.5" />
+    <path d="M16 7 18 14 25 16 18 18 16 25 14 18 7 16 14 14Z" />
+  </g>
+  <g fill="#eee6d3" font-family="Georgia, serif">
+    <text x="72" y="280" font-size="80">Vellum &amp; Vector</text>
+    <text x="76" y="356" font-size="38">Build your world's atlas.</text>
+  </g>
+  <g fill="#bdccc3" font-family="Arial, sans-serif" font-size="25">
+    <text x="76" y="426">From continents and cultures to cities and interiors.</text>
+    <text x="76" y="548" font-size="23" letter-spacing="3">maps.ahara.io</text>
+  </g>
+</svg>

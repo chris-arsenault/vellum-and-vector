@@ -14,6 +14,7 @@ export const builtProcess: MapProcess = {
     invalidates: [],
   },
   apply(state, context) {
+    context.progress(0, "Laying out settlements and structures");
     const area = state.domain.world.areas[state.domain.scope.areaId];
     if (area.profile === "interior") interior(state);
     else if (area.profile === "site") site(state);
@@ -59,6 +60,7 @@ function settlements(state: GenerationState, context: MapProcessContext) {
     if (points.length === 8) break;
   }
   for (let i = 1; i < points.length; i++) {
+    context.progress((i / points.length) * 0.9, `Routing road ${i}/${points.length - 1}`);
     const target = points
       .slice(0, i)
       .sort(

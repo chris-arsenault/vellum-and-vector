@@ -56,6 +56,7 @@ export class MapRunner {
       );
     };
     composeAuthoredSamples(state, initial.domain);
+    options.progress?.(["prepare"], 0, "Validating inherited geography");
     validate();
     for (const [stageIndex, stage] of this.stages.entries()) {
       this.checkCancelled(options);
@@ -71,18 +72,22 @@ export class MapRunner {
           causes: causes.pop()!,
         });
       } else {
-        const spatialChanged = await this.applyProcess(
+        await this.runProcess(
           state,
           stage,
           {
             ...options,
             progress: (path, fraction, message) =>
-              options.progress?.(path, (stageIndex + fraction) / this.stages.length, message),
+              options.progress?.(
+                path,
+                ((stageIndex + fraction) / this.stages.length) * 0.98,
+                message
+              ),
           },
           activeCauses(state, causes),
-          initial.domain
+          initial.domain,
+          validate
         );
-        if (spatialChanged) validate();
       }
       this.checkCancelled(options);
       if (stage.kind === "epochEnd") {
@@ -95,6 +100,7 @@ export class MapRunner {
         });
       }
     }
+    options.progress?.(["finalize"], 0.99, "Validating completed geography");
     validate();
     const result: CompletedBoundary = { configurationHash, kind: "final", ancestry: [], state };
     await options.saveBoundary?.(result);
@@ -102,6 +108,25 @@ export class MapRunner {
   }
   private checkCancelled(options: MapRunnerOptions): void {
     requireThat(!options.cancelled?.(), "generation_cancelled", "Generation was cancelled.");
+  }
+  private async runProcess(
+    state: GenerationState,
+    stage: SequenceStage,
+    options: MapRunnerOptions,
+    causes: GenerationCause[],
+    original: GenerationState["domain"],
+    validate: () => void
+  ) {
+    const spatialChanged = await this.applyProcess(state, stage, options, causes, original);
+    if (spatialChanged === null) {
+      options.progress?.(stage.path, 1, `Skipped ${stage.invocation!.process}`);
+      return;
+    }
+    if (spatialChanged) {
+      options.progress?.(stage.path, 0.98, `Checking geography after ${stage.invocation!.process}`);
+      validate();
+    }
+    options.progress?.(stage.path, 1, `Completed ${stage.invocation!.process}`);
   }
   private async applyProcess(
     state: GenerationState,
@@ -117,7 +142,7 @@ export class MapRunner {
         ...stage.epochs.map((epoch) => epoch.variables)
       ) as ParameterValues;
     if (invocation.when && variables[invocation.when.variable] !== invocation.when.equals)
-      return false;
+      return null;
     for (const fact of process.contract.requires)
       requireThat(
         state.facts.has(fact),
@@ -134,7 +159,9 @@ export class MapRunner {
       invocation.parameters ?? {}
     );
     const context = this.context(state, stage, parameters, options, causes);
+    options.progress?.(stage.path, 0, `Starting ${process.contract.id}`);
     await process.apply(state, context);
+    options.progress?.(stage.path, 0.95, `Validating ${process.contract.id}`);
     if (!process.contract.workspaceOnly) composeAuthoredSamples(state, original);
     const diagnostics = process.validate(state, context);
     requireThat(
@@ -144,7 +171,6 @@ export class MapRunner {
     );
     for (const fact of process.contract.invalidates) state.facts.delete(fact);
     for (const fact of process.contract.produces) state.facts.add(fact);
-    options.progress?.(stage.path, 1, `Completed ${process.contract.id}`);
     return !process.contract.workspaceOnly;
   }
   private context(
@@ -172,7 +198,7 @@ export class MapRunner {
       recordCause: (cause) => causes.push(structuredClone(cause)),
       random: (persistent = false) => (persistent ? stable : varying).next(),
       cancelled: () => options.cancelled?.() ?? false,
-      progress: (fraction, message) => options.progress?.(stage.path, fraction, message),
+      progress: (fraction, message) => options.progress?.(stage.path, fraction * 0.9, message),
     };
   }
 }

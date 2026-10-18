@@ -124,6 +124,12 @@ export class Spatial {
   union(a: Geometry, b: Geometry): Geometry {
     return this.write(OverlayOp.union(this.read(a), this.read(b)) as Shape)!;
   }
+  unionAll(geometries: Geometry[]): Geometry {
+    requireThat(geometries.length > 0, "invalid_geometry", "Union requires at least one geometry.");
+    return this.write(
+      UnaryUnionOp.union(this.read({ type: "GeometryCollection", geometries })) as Shape
+    )!;
+  }
   nodeLines(value: Geometry): Geometry {
     return this.write(UnaryUnionOp.union(this.read(value)) as Shape)!;
   }

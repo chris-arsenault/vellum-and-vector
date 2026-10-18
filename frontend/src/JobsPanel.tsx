@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { cancelGeneration } from "./generationJobs";
 import { ErrorMessage } from "./ErrorMessage";
 import { useJobs } from "./useAtlas";
@@ -6,6 +7,13 @@ import type { World } from "./types";
 
 export function JobsPanel({ world }: { world: World }) {
   const jobs = useJobs(world.id);
+  const [now, setNow] = useState(Date.now);
+  const active = jobs.data?.some((job) => ["running", "queued"].includes(job.status));
+  useEffect(() => {
+    if (!active) return;
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [active]);
   const cache = useQueryClient();
   const control = useMutation({
     mutationFn: async (id: string) => cancelGeneration(id),
@@ -32,7 +40,21 @@ export function JobsPanel({ world }: { world: World }) {
             <strong>{job.status}</strong>
           </div>
           <p>{job.stage}</p>
+          <p className="hint">
+            Elapsed {seconds((job.finishedAt ?? Math.max(now, job.updatedAt)) - job.startedAt)}
+            {!job.finishedAt && ` · Last update ${seconds(Math.max(0, now - job.updatedAt))} ago`}
+          </p>
           <progress aria-label="Generation progress" value={job.progress} max="1" />
+          <details>
+            <summary>Generation log ({job.events.length})</summary>
+            <ol>
+              {job.events.map((event, index) => (
+                <li key={index}>
+                  <time>{seconds(event.elapsedMs)}</time> {event.message}
+                </li>
+              ))}
+            </ol>
+          </details>
           {job.error && <p className="error">{job.error}</p>}
           {["running", "queued"].includes(job.status) && (
             <button className="quiet" onClick={() => control.mutate(job.id)}>
@@ -44,4 +66,8 @@ export function JobsPanel({ world }: { world: World }) {
       <ErrorMessage error={jobs.error ?? control.error} />
     </section>
   );
+}
+
+function seconds(milliseconds: number) {
+  return `${(milliseconds / 1000).toFixed(1)}s`;
 }

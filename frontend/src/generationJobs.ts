@@ -22,6 +22,10 @@ interface GenerationJob {
   stage: string;
   progress: number;
   error: string | null;
+  startedAt: number;
+  updatedAt: number;
+  finishedAt: number | null;
+  events: { elapsedMs: number; message: string }[];
 }
 interface RunningJob {
   job: GenerationJob;
@@ -65,11 +69,23 @@ export function startGeneration(
     stage: "Preparing geography",
     progress: 0,
     error: null,
+    startedAt: Date.now(),
+    updatedAt: Date.now(),
+    finishedAt: null,
+    events: [],
   };
+  logProgress(
+    job,
+    `Preparing ${input.quality} geography; seed ${input.seed}; ${input.domains.join(", ")}`,
+    0
+  );
+  console.info(`[atlas generation ${job.id}] Inputs`, input);
   jobs.unshift(job);
   running.set(job.id, { job, worker, expectedVersion: input.expectedVersion, input });
   worker.onmessage = (event: MessageEvent<WorkerResult>) => receive(job.id, event.data);
   worker.onerror = (event) => finish(job.id, "failed", event.message);
+  worker.onmessageerror = () =>
+    finish(job.id, "failed", "Could not read the generation worker's result.");
   worker.postMessage({
     snapshot: { ...snapshot, scope: worldScope(snapshot.world, input.areaId) },
     input,
@@ -97,8 +113,11 @@ function receive(id: string, message: WorkerResult) {
   const active = running.get(id);
   if (!active) return;
   if (message.kind === "progress") {
-    active.job.stage = `${message.path.slice(0, -1).join(" / ")}${message.path.length > 1 ? " · " : ""}${message.message}`;
-    active.job.progress = message.fraction;
+    logProgress(
+      active.job,
+      `${message.path.slice(0, -1).join(" / ")}${message.path.length > 1 ? " · " : ""}${message.message}`,
+      message.fraction
+    );
     changed("jobs");
     return;
   }
@@ -107,6 +126,8 @@ function receive(id: string, message: WorkerResult) {
     return;
   }
   try {
+    logProgress(active.job, "Publishing fields and coverage in the editor", 0.997);
+    changed("jobs");
     requireThat(
       session(active.job.worldId).snapshot.world.version === active.expectedVersion,
       "generation_conflict",
@@ -133,13 +154,29 @@ function finish(id: string, status: string, error: string | null = null) {
   if (!active) return;
   active.worker.terminate();
   running.delete(id);
+  const stage = status === "completed" ? "Geography ready" : `${status}: ${active.job.stage}`;
+  logProgress(
+    active.job,
+    error ? `${stage}: ${error}` : stage,
+    status === "completed" ? 1 : active.job.progress
+  );
+  if (error) console.error(`[atlas generation ${id}] ${error}`);
   Object.assign(active.job, {
     status,
     error,
-    stage: status === "completed" ? "Geography ready" : status,
+    stage,
+    finishedAt: Date.now(),
     progress: status === "completed" ? 1 : active.job.progress,
   });
   changed("jobs");
+}
+function logProgress(job: GenerationJob, message: string, progress: number) {
+  job.stage = message;
+  job.progress = progress;
+  job.updatedAt = Date.now();
+  const elapsedMs = job.updatedAt - job.startedAt;
+  job.events.push({ elapsedMs, message });
+  console.info(`[atlas generation ${job.id}] +${(elapsedMs / 1000).toFixed(1)}s ${message}`);
 }
 export function cancelGeneration(id: string) {
   finish(id, "cancelled");

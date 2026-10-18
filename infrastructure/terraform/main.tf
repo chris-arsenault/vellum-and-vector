@@ -20,15 +20,31 @@ provider "aws" {
 
 locals {
   prefix = "vellum-and-vector"
-  app    = "vellum-and-vector.ahara.io"
+  app    = "maps.ahara.io"
+}
+
+module "ctx" {
+  source = "git::https://github.com/chris-arsenault/ahara-tf-patterns.git//modules/platform-context?ref=34287b1925e1b5681281c1fb3ee9199211202ec9"
 }
 
 module "frontend" {
-  source         = "git::https://github.com/chris-arsenault/ahara-tf-patterns.git//modules/website?ref=34287b1925e1b5681281c1fb3ee9199211202ec9"
-  prefix         = local.prefix
-  hostname       = local.app
-  site_directory = "${path.module}/../../frontend/dist"
-  encrypt        = false
+  source                     = "git::https://github.com/chris-arsenault/ahara-tf-patterns.git//modules/website?ref=34287b1925e1b5681281c1fb3ee9199211202ec9"
+  prefix                     = local.prefix
+  hostname                   = local.app
+  aliases                    = ["vellum-and-vector.ahara.io"]
+  site_directory             = "${path.module}/../../frontend/dist"
+  encrypt                    = false
+  vpc                        = module.ctx.vpc
+  og_artifact                = module.ctx.og_server
+  static_asset_path_patterns = ["manifest.webmanifest"]
+  og_config = {
+    site_name = "Vellum & Vector"
+    defaults = {
+      title       = "Build your world's atlas"
+      description = "Generate and shape fictional worlds, from continents and cultures to cities and interiors."
+      image       = "/og-image.png"
+    }
+  }
 }
 
 output "app_url" { value = "https://${local.app}" }
