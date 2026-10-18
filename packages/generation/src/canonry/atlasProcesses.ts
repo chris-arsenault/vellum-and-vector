@@ -19,6 +19,8 @@ import { clamp, rockResistance, round } from "./math";
 import type { NativeStep } from "./sequence";
 import { atlasSeaIce } from "./atlasSeaIce";
 import { advectAtlasMagic } from "./atlasMagic";
+import { magicProcesses } from "./magicProcesses";
+import { advectMagic } from "./magicState";
 
 const prefix = (fact: string) => `canonry:${fact}`;
 const contract = (id: string, requires: string[] = [], produces: string[] = []) => ({
@@ -39,14 +41,12 @@ export function nativeContext(
   const index = context.epochIndices[0],
     epoch = index === undefined ? null : atlasEpoch(state.domain.world.epochs[index]);
   const nativeIndex = index ?? (state.physical!.map.CrustSupportInitialized ? -1 : 0);
-  return physicalContext(
-    seed,
-    salt,
-    state.physical!.profile,
-    epoch,
-    nativeIndex,
-    state.domain.world.epochs.length
-  );
+  const definition = index === undefined ? undefined : state.domain.world.epochs[index];
+  const profile = { ...state.physical!.profile };
+  profile.ImpactCraterCount = round(profile.ImpactCraterCount * (definition?.impacts ?? 1));
+  for (const key of ["VolcanicConeHeight", "VolcanicApronHeight", "VolcanicCalderaDepth"] as const)
+    profile[key] *= definition?.volcanism ?? 1;
+  return physicalContext(seed, salt, profile, epoch, nativeIndex, state.domain.world.epochs.length);
 }
 function validateWorkspace(state: GenerationState) {
   requireThat(state.physical, "physical_workspace", "Initialize the physical mesh first.");
@@ -93,6 +93,7 @@ function nativeProcess(step: NativeStep, seed: number): MapProcess {
           : step;
       if (name === "sea-ice") selected = [name, source.salt, atlasSeaIce];
       applyNativeStep(map, c, selected);
+      if (name === "plate-advection") advectMagic(state);
       restoreAuthoring(work);
       if (name === "physical-epoch-history")
         context.recordCause({
@@ -127,6 +128,7 @@ export function atlasNativeProcesses(input: AtlasGenerationInput): MapProcess[] 
     epochStartProcess(),
     finishProcess(),
     advectAtlasMagic,
+    ...magicProcesses(input.seed, input.domains.includes("magic")),
     ...Array.from(implementations.values(), (step) => nativeProcess(step, input.seed)),
   ];
 }
@@ -179,23 +181,29 @@ function forcingProcess(): MapProcess {
         map.ExternalHeatForcing[i] = state.surface.channels.heat
           ? round(sampleSurfaceAtNative(state, "heat", i) * 10)
           : 0;
+        map.ExternalHeatForcing[i] += state.physical!.magic?.heat[i] ?? 0;
         if (state.surface.channels.rock)
           map.RockResistance[i] = rockResistance(
             round(sampleSurfaceAtNative(state, "rock", i) * 4000)
           );
-        let pressure = 0;
-        if (state.surface.channels.coastalPressure)
-          for (let edge = 0; edge < 3; edge++) {
-            const j = map.mesh.neighbors[i * 3 + edge];
-            if (j >= 0 && map.WaterKindCodes[j] === 1)
-              pressure = Math.max(pressure, sampleSurfaceAtNative(state, "coastalPressure", j));
-          }
+        const pressure = sampleCoastalPressure(state, i);
         map.ExternalCoastalForcing[i] =
           map.WaterKindCodes[i] === 0 ? round(clamp(pressure, 0, 1000)) : 0;
       }
     },
     validate: validateWorkspace,
   };
+}
+function sampleCoastalPressure(state: GenerationState, i: number) {
+  if (!state.surface.channels.coastalPressure) return 0;
+  const map = state.physical!.map;
+  let pressure = 0;
+  for (let edge = 0; edge < 3; edge++) {
+    const j = map.mesh.neighbors[i * 3 + edge];
+    if (j >= 0 && map.WaterKindCodes[j] === 1)
+      pressure = Math.max(pressure, sampleSurfaceAtNative(state, "coastalPressure", j));
+  }
+  return pressure;
 }
 function epochStartProcess(): MapProcess {
   return {
@@ -205,6 +213,8 @@ function epochStartProcess(): MapProcess {
       map.ExternalHeatForcing.fill(0);
       map.ExternalCoastalForcing.fill(0);
       map.GlacialMeltwater.fill(0);
+      state.physical!.magic?.heat.fill(0);
+      state.physical!.magic?.coastal.fill(0);
     },
     validate: validateWorkspace,
   };

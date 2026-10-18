@@ -1,6 +1,7 @@
 import {
   areaSpace,
   createWorldBlueprint,
+  canonryMagicPresets,
   FactDependencies,
   requireThat,
   rectangle,
@@ -125,6 +126,7 @@ export function createWorld(input: { name: string; seed: number; width: number; 
     entities: {},
     templates: {},
     magic: [],
+    magicSystems: canonryMagicPresets(),
     views: [],
     generations: [],
     epochs: defaultEpochs(),

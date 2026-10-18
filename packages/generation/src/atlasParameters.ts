@@ -8,6 +8,12 @@ export const atlasParametersSchema = z.object({
   rainfall: z.number().min(0).max(5).default(1),
   erosion: z.number().min(0).max(5).default(1),
   seaLevel: z.number().min(-5000).max(5000).default(0),
+  impacts: z.number().int().nonnegative().default(6),
+  impactSize: z.number().positive().default(1),
+  volcanism: z.number().nonnegative().default(1),
+  plateDrift: z.number().nonnegative().default(1),
+  glaciers: z.number().nonnegative().default(1),
+  coastalErosion: z.number().nonnegative().default(1),
   cultureCount: z.number().int().min(1).default(3),
   polityCount: z.number().int().min(1).default(3),
 });

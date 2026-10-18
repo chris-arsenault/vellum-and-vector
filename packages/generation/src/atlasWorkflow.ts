@@ -3,6 +3,7 @@ import {
   createGrid,
   resampleChannels,
   spatial,
+  canonryMagicPresets,
   semanticId,
   requireThat,
   type DomainSnapshot,
@@ -167,8 +168,11 @@ export function atlasConfiguration(
   );
   return {
     id: `atlas:${area.profile}`,
-    version: 2,
-    parameters: atlasParametersSchema.parse(input.parameters ?? {}),
+    version: 3,
+    parameters: {
+      ...atlasParametersSchema.parse(input.parameters ?? {}),
+      magicConfiguration: JSON.stringify(source.world.magicSystems ?? canonryMagicPresets()),
+    },
     sequence,
   };
 }

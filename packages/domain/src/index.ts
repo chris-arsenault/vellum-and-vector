@@ -1,4 +1,7 @@
 export * from "./model";
+export * from "./magicSystems";
+export * from "./magicPresets";
+export * from "./geographySurfaces";
 export * from "./errors";
 export * from "./schemas";
 export * from "./spatial";

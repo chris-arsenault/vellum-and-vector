@@ -153,8 +153,13 @@ function completeStyles(world: World, saved: LayerStyle[]) {
 function presetChannel(world: World, name: string) {
   const entity = Object.values(world.entities).find((e) => e.kind === "culture");
   if (name === "cultural" && entity) return `culture:${entity.id}`;
-  if (name === "magical" && world.magic.length)
-    return `magic:${(world.magic[0] as { id: string }).id}`;
+  if (name === "magical") return magicalChannel(world);
+  return "elevation";
+}
+function magicalChannel(world: World) {
+  const available = world.fields.flatMap((field) => field.channels ?? []);
+  if (available.includes("finalSurface")) return "finalSurface";
+  if (world.magic.length) return `magic:${world.magic[0].id}`;
   return "elevation";
 }
 export type EditorState = ReturnType<typeof useEditor>;

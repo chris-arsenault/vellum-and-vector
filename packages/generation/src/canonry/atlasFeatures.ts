@@ -5,6 +5,7 @@ import { generatedFeature, putGeneratedNetwork } from "../mapFeatures";
 import { nativePosition } from "./atlasWorkspace";
 import { dischargeScale } from "./atlasProjection";
 import { triangleIdentity } from "./mesh";
+import { extractLakes, extractNamedLandforms, extractMagicPlaces } from "./geographicRegions";
 
 function riverReach(state: GenerationState, start: number, incoming: Int32Array) {
   const work = state.physical!,
@@ -67,6 +68,9 @@ function publishReach(state: GenerationState, start: number, members: number[]) 
   }
 }
 export function extractNativeGeography(state: GenerationState, context: MapProcessContext) {
+  extractLakes(state);
+  extractNamedLandforms(state);
+  extractMagicPlaces(state);
   const work = state.physical!,
     map = work.map,
     incoming = new Int32Array(map.mesh.count);

@@ -32,6 +32,7 @@ type Source = World["magic"][number];
 function sources(state: GenerationState, context: MapProcessContext): Source[] {
   return state.domain.world.magic.filter(
     (source) =>
+      !source.systemId &&
       ["heat", "cold"].includes(source.effect) &&
       (!source.spaceId || source.spaceId === context.scope.spaceId)
   );

@@ -4,6 +4,7 @@ import { ErrorMessage } from "./ErrorMessage";
 import type { EditorState } from "./useEditor";
 import { magicFeatures } from "./magicFeatures";
 import { inheritedGeneration } from "./generationJobs";
+import { MagicSystemsForm } from "./MagicSystemsForm";
 
 export function MagicForm({ editor }: { editor: EditorState }) {
   const generate = useGenerate(editor.world, editor.area.id);
@@ -15,6 +16,7 @@ export function MagicForm({ editor }: { editor: EditorState }) {
   return (
     <section>
       <h2>Magic in this landscape</h2>
+      <MagicSystemsForm editor={editor} />
       <p>Locate a source and its reach, then choose how it changes the environment.</p>
       <button className="primary" onClick={() => editor.setTool("magic")}>
         Draw source & reach
@@ -41,7 +43,7 @@ export function MagicForm({ editor }: { editor: EditorState }) {
       </label>
       <button
         className="secondary"
-        disabled={generate.isPending || !editor.world.magic.length}
+        disabled={generate.isPending}
         onClick={() => generate.mutate({ domains: ["magic"], quality, seed: editor.world.seed })}
       >
         Apply magic to geography
@@ -87,6 +89,7 @@ function SourceList({ editor }: { editor: EditorState }) {
 function SourceSettings({ editor }: { editor: EditorState }) {
   const draft = editor.magicDraft!,
     source = editor.world.magic.find((source) => source.id === draft.id);
+  const [systemId, setSystemId] = useState(source?.systemId ?? "");
   return (
     <form
       onSubmit={(event) => {
@@ -99,7 +102,25 @@ function SourceSettings({ editor }: { editor: EditorState }) {
         Source name
         <input name="name" defaultValue={source?.name ?? "Magical source"} required />
       </label>
-      <SourceEffect effect={source?.effect} />
+      <SourceSystem editor={editor} systemId={systemId} change={setSystemId} />
+      {!systemId && <SourceEffect effect={source?.effect} />}
+      <SourceStrengthAndReach key={systemId} editor={editor} systemId={systemId} />
+      <SourceBehavior editor={editor} systemId={systemId} />
+      <button className="primary" disabled={editor.commit.isPending}>
+        Save magical source
+      </button>
+      {source && <MoveSource editor={editor} id={source.id} />}
+      <button type="button" className="quiet" onClick={() => editor.setMagicDraft(null)}>
+        Cancel source editing
+      </button>
+    </form>
+  );
+}
+function SourceStrengthAndReach({ editor, systemId }: { editor: EditorState; systemId: string }) {
+  const draft = editor.magicDraft!,
+    source = editor.world.magic.find((source) => source.id === draft.id);
+  return (
+    <>
       <label>
         Strength
         <input
@@ -107,7 +128,7 @@ function SourceSettings({ editor }: { editor: EditorState }) {
           type="number"
           min="0"
           step="any"
-          defaultValue={source?.strength ?? 25}
+          defaultValue={source?.strength ?? (systemId ? 1000 : 25)}
           required
         />
       </label>
@@ -125,6 +146,46 @@ function SourceSettings({ editor }: { editor: EditorState }) {
           required
         />
       </label>
+    </>
+  );
+}
+function SourceSystem({
+  editor,
+  systemId,
+  change,
+}: {
+  editor: EditorState;
+  systemId: string;
+  change: (systemId: string) => void;
+}) {
+  return (
+    <label>
+      Magical system
+      <select name="systemId" value={systemId} onChange={(event) => change(event.target.value)}>
+        <option value="">Independent local effect</option>
+        {(editor.world.magicSystems ?? []).map((system) => (
+          <option key={system.id} value={system.id}>
+            {system.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+function SourceBehavior({ editor, systemId }: { editor: EditorState; systemId: string }) {
+  const source = editor.world.magic.find((source) => source.id === editor.magicDraft?.id);
+  if (systemId)
+    return (
+      <>
+        <p>
+          This core uses its system's propagation, feedback and storage. Strength uses the 0–1,000
+          scale. Reach controls radial propagation; fractures and ocean routes follow geography.
+        </p>
+        <SourceStart editor={editor} />
+      </>
+    );
+  return (
+    <>
       <label>
         Propagation
         <select name="propagation" defaultValue={source?.propagation ?? "radial"}>
@@ -136,14 +197,7 @@ function SourceSettings({ editor }: { editor: EditorState }) {
         </select>
       </label>
       <MagicHistory editor={editor} />
-      <button className="primary" disabled={editor.commit.isPending}>
-        Save magical source
-      </button>
-      {source && <MoveSource editor={editor} id={source.id} />}
-      <button type="button" className="quiet" onClick={() => editor.setMagicDraft(null)}>
-        Cancel source editing
-      </button>
-    </form>
+    </>
   );
 }
 function MoveSource({ editor, id }: { editor: EditorState; id: string }) {
@@ -185,18 +239,24 @@ function saveSource(editor: EditorState, form: FormData) {
       id: source?.id ?? crypto.randomUUID(),
       areaId: source?.areaId ?? editor.area.id,
       name: String(form.get("name")),
+      ...(form.get("systemId") ? { systemId: String(form.get("systemId")) } : {}),
       source: draft.source,
       radius: Number(form.get("radius")),
       strength: Number(form.get("strength")),
-      effect: String(form.get("effect")),
-      propagation: String(form.get("propagation")),
-      decay: Number(form.get("decay")),
-      storage: Number(form.get("storage")),
-      startsAtEpoch: Number(form.get("startsAtEpoch")),
-      dependsOn: form.getAll("dependsOn").map(String),
+      ...sourceBehavior(form, source),
     }),
     { onSuccess: () => editor.setMagicDraft(null) }
   );
+}
+function sourceBehavior(form: FormData, source?: EditorState["world"]["magic"][number]) {
+  return {
+    effect: String(form.get("effect") ?? source?.effect ?? "heat"),
+    propagation: String(form.get("propagation") ?? source?.propagation ?? "radial"),
+    decay: Number(form.get("decay")),
+    storage: Number(form.get("storage")),
+    startsAtEpoch: Number(form.get("startsAtEpoch")),
+    dependsOn: form.getAll("dependsOn").map(String),
+  };
 }
 function MagicHistory({ editor }: { editor: EditorState }) {
   const source = editor.world.magic.find((source) => source.id === editor.magicDraft?.id);
@@ -204,7 +264,7 @@ function MagicHistory({ editor }: { editor: EditorState }) {
     <details>
       <summary>Persistence through epochs & interactions</summary>
       <label>
-        Decay per epoch
+        Decay per year
         <input
           name="decay"
           type="number"
@@ -224,18 +284,9 @@ function MagicHistory({ editor }: { editor: EditorState }) {
           defaultValue={source?.storage ?? 0.3}
         />
       </label>
+      <SourceStart editor={editor} />
       <label>
-        Active from
-        <select name="startsAtEpoch" defaultValue={source?.startsAtEpoch ?? 0}>
-          {editor.world.epochs.map((epoch, index) => (
-            <option key={epoch.id} value={index}>
-              {epoch.id}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Interacts with
+        Depends on these sources
         <select name="dependsOn" multiple defaultValue={source?.dependsOn ?? []}>
           {editor.world.magic
             .filter((other) => other.id !== source?.id)
@@ -247,5 +298,20 @@ function MagicHistory({ editor }: { editor: EditorState }) {
         </select>
       </label>
     </details>
+  );
+}
+function SourceStart({ editor }: { editor: EditorState }) {
+  const source = editor.world.magic.find((source) => source.id === editor.magicDraft?.id);
+  return (
+    <label>
+      Active from
+      <select name="startsAtEpoch" defaultValue={source?.startsAtEpoch ?? 0}>
+        {editor.world.epochs.map((epoch, index) => (
+          <option key={epoch.id} value={index}>
+            {epoch.id}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

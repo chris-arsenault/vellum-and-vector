@@ -85,7 +85,7 @@ export interface ChangeSet {
   removes: { kind: ObjectKind; id: string }[];
   invalidations: FactInvalidation[];
   highImpact: boolean;
-  worldMetadata?: Pick<World, "name" | "seed" | "epochs" | "humanEras">;
+  worldMetadata?: Pick<World, "name" | "seed" | "epochs" | "humanEras" | "magicSystems">;
   templateInstances?: import("./templates").TemplateInstance[];
   fieldArtifacts?: { reference: ResourceReference; grid: import("./grids").Grid }[];
 }

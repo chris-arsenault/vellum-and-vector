@@ -218,10 +218,24 @@ export function generationSnapshot(
     seed: input.seed,
     parameters: atlasParametersSchema.parse(input.parameters ?? {}),
     completedAt: new Date().toISOString(),
+    physicalEpochs: structuredClone(world.epochs),
+    magicSystems: structuredClone(world.magicSystems ?? []),
   });
   return snapshot;
 }
+const nativeHistoryChannels = new Set([
+  "naturalSurface",
+  "finalSurface",
+  "physicalMaterial",
+  "physicalFeatures",
+  "bathymetry",
+  "volcanicLastActiveEpoch",
+  "geothermalHistory",
+  "tectonicHistory",
+  "coastalForcingHistory",
+]);
 function channelLayer(channel: string) {
+  if (nativeHistoryChannels.has(channel)) return "geology";
   if (channel === "elevation") return "elevation";
   if (channel.startsWith("culture:")) return "cultures";
   if (channel.startsWith("language:")) return "languages";

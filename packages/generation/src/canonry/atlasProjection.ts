@@ -2,6 +2,7 @@ import { gridPosition, putChannel } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { atlasChannels, type ChannelBinding } from "./atlasChannels";
 import { nativeIndexAtSurface } from "./atlasWorkspace";
+import { projectPhysicalMaterial } from "./physicalMaterial";
 
 export function dischargeScale(state: GenerationState): number {
   return (1.299038105676658 * state.physical!.metresPerStep ** 2) / (1000 * 365.25 * 24 * 60 * 60);
@@ -97,6 +98,7 @@ export function projectNative(
     )
   );
   // Keep substrate useful to cave generation without inventing a second geology.
+  projectPhysicalMaterial(state);
   putChannel(
     grid,
     "carbonate",

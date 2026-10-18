@@ -49,8 +49,19 @@ function validEpoch(epoch: Epoch) {
     !!epoch.id.trim() &&
     Number.isFinite(epoch.temperature) &&
     Number.isFinite(epoch.seaLevel) &&
+    validEpochEvents(epoch) &&
     [epoch.tectonics, epoch.hydrology, epoch.ice, epoch.coasts].every(
       (value) => Number.isFinite(value) && value >= 0 && value <= 1
+    )
+  );
+}
+function validEpochEvents(epoch: Epoch) {
+  const duration = epoch.duration ?? 1000;
+  return (
+    Number.isFinite(duration) &&
+    duration > 0 &&
+    [epoch.impacts ?? 1, epoch.volcanism ?? 1, ...Object.values(epoch.magicActivity ?? {})].every(
+      (value) => Number.isFinite(value) && value >= 0
     )
   );
 }

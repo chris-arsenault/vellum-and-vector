@@ -6,8 +6,10 @@ import { requireThat } from "./errors";
 import { requireIdentity, requireRelations, invalidateFacts } from "./authoringBasics";
 import { spatial, point } from "./spatial";
 import type { World } from "./model";
+import { registerMagicSystemIntents } from "./magicSystemIntents";
 
 const magicSchema = z.object({
+  systemId: z.string().min(1).optional(),
   id: uuid,
   name: z.string().trim().min(1),
   source: positionSchema,
@@ -201,6 +203,7 @@ function registerViews(registry: IntentRegistry) {
   });
 }
 export function registerSettingsIntents(registry: IntentRegistry): void {
+  registerMagicSystemIntents(registry);
   registerMagic(registry);
   registerRemoveMagic(registry);
   registerViews(registry);

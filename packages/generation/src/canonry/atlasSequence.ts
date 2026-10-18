@@ -66,6 +66,8 @@ function epochBody(magic: boolean, inherited: boolean): ProcessSequence {
     invoke("canonry.begin-epoch"),
     ...nativeSteps(inherited ? [] : geologySteps, magic),
     ...nativeSteps(climateSteps, magic, false, false, true),
+    invoke("canonry.magic-climate"),
+    invoke("canonry.magic-rocks"),
     ...drainage(magic),
     ...nativeSteps(incisionSteps, magic),
     ...nativeSteps(climateSteps, magic),
@@ -76,6 +78,9 @@ function epochBody(magic: boolean, inherited: boolean): ProcessSequence {
     ...drainage(magic),
     ...nativeSteps([...iceSteps, meltwaterStep], magic),
     ...drainage(magic, true),
+    invoke("canonry.magic-post-glacial"),
+    invoke("canonry.magic-history"),
+    invoke("canonry.magic-coast"),
     ...nativeSteps(coastalSteps, magic),
     ...(magic ? [legacy(magicStorageProcess)] : []),
     ...nativeSteps([historyStep], magic),
@@ -87,10 +92,13 @@ export function atlasPhysicalSequence(
   input: AtlasGenerationInput
 ): ProcessSequence {
   const physical = input.domains.includes("physical"),
-    magic = input.domains.includes("magic") || source.world.magic.length > 0;
+    magic = source.world.magic.some((source) => !source.systemId);
   const area = source.world.areas[input.areaId],
     inherited = !physical || Boolean(area.parentId && source.world.fields.length);
-  const result: ProcessSequence = [invoke("canonry.initialize")];
+  const result: ProcessSequence = [
+    invoke("canonry.initialize"),
+    invoke("canonry.magic-initialize"),
+  ];
   if (!inherited) result.push(...nativeSteps(initialSteps, magic, true));
   if (physical)
     result.push({
@@ -99,7 +107,7 @@ export function atlasPhysicalSequence(
       resetFacts: [],
       epochs: source.world.epochs.map((epoch) => ({
         id: epoch.id,
-        duration: 1000,
+        duration: epoch.duration ?? 1000,
         parentEpoch: epoch.id,
         variables: {
           temperature: epoch.temperature,
@@ -111,12 +119,18 @@ export function atlasPhysicalSequence(
     });
   result.push(
     ...nativeSteps(climateSteps, magic, false, false, !physical),
+    invoke("canonry.magic-climate"),
+    ...(!physical ? [invoke("canonry.magic-rocks")] : []),
     ...drainage(magic),
     ...nativeSteps([...iceSteps, meltwaterStep], magic),
     ...drainage(magic, true),
     ...nativeSteps([...iceSteps, ...extractionSteps, validationStep], magic),
-    invoke("canonry.project")
+    invoke("canonry.magic-post-glacial"),
+    ...(!physical ? [invoke("canonry.magic-history")] : []),
+    invoke("canonry.magic-classify"),
+    invoke("canonry.project"),
+    invoke("canonry.magic-project")
   );
-  if (physical) result.push(invoke("canonry.features"));
+  if (physical || input.domains.includes("magic")) result.push(invoke("canonry.features"));
   return result.map((step, index) => ({ ...step, id: `${step.id}:${index}` }));
 }

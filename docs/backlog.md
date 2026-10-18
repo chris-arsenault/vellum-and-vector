@@ -49,18 +49,18 @@ with no backend, persistence or MCP; preserve the existing backend source.
       typing coordinates and dimensions into text boxes. Keep numeric entry available
       as an optional precision control.
 
-- [ ] **7. Implement customizable magic.** Complete the magical generation and
+- [x] **7. Implement customizable magic.** Complete the magical generation and
       authoring workflow, including defining a world's magical systems, placing and
       shaping sources, and configuring their rules and interactions. Support the
       applicable propagation, storage, decay and epoch behavior, with causal effects
       on physical geography and visible explanations of those effects. Existing
       forcing processes do not by themselves complete this capability.
 
-      UI implemented for the existing physical effects: map placement with visible
-      reach, source editing and movement, propagation, storage, decay, dependencies,
-      named starting epoch and application to geography. Additional magical rules
-      and effects remain generator work; unsupported effects are not offered as
-      functioning controls.
+      Implemented automatic and placed sources, fracture transport, cold drainage
+      and ice retention, ocean rays and wakes, heat/ice/rock/coastal feedback,
+      advected history, configurable feature regions and cross-system interactions.
+      Fire, Aurora and Pressure are editable examples of the same vocabulary.
+      Variants, per-epoch activity, storage and source timing use that configuration.
 
 - [x] **8. Expose meaningful generation parameters beyond detail level.** Provide
       understandable controls for the applicable physical, magical, cultural and
@@ -70,7 +70,7 @@ with no backend, persistence or MCP; preserve the existing backend source.
       that determine the world's character, and retain the chosen configuration for
       reproducibility within the session.
 
-      Implemented landscape presets, nine parameters including initial culture and
+      Implemented landscape presets, fifteen parameters including initial culture and
       polity counts, physical history presets and per-epoch controls, cultural
       spread history, magical source settings and retained session configurations.
       Further political and cultural controls belong with the generators in item 3.

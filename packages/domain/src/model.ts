@@ -65,6 +65,10 @@ export interface FieldSample {
   values: Record<string, number>;
 }
 export interface Epoch {
+  duration?: number;
+  impacts?: number;
+  volcanism?: number;
+  magicActivity?: Record<string, number>;
   id: string;
   tectonics: number;
   hydrology: number;
@@ -262,6 +266,7 @@ export interface NetworkReach {
   endFlow: number | null;
 }
 export interface World {
+  magicSystems?: import("./magicSystems").MagicSystem[];
   featureCount?: number;
   id: string;
   name: string;
@@ -285,6 +290,7 @@ export interface World {
   entities: Record<string, Entity>;
   templates: Record<string, Template>;
   magic: {
+    systemId?: string;
     areaId?: string;
     spaceId?: string;
     scope?: Geometry | null;
@@ -309,6 +315,8 @@ export interface World {
     politicalCapacity: number;
   }[];
   generations: {
+    physicalEpochs?: Epoch[];
+    magicSystems?: import("./magicSystems").MagicSystem[];
     id: string;
     domains: string[];
     quality: string;

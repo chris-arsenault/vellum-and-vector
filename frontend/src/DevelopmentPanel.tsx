@@ -34,6 +34,9 @@ export function DevelopmentPanel({ world, editor }: { world: World; editor: Edit
       <button className="secondary" onClick={() => editor.setPanel("more")}>
         Use a reusable template
       </button>
+      <button className="secondary" onClick={() => editor.setWorkspace("magic")}>
+        Configure magical systems
+      </button>
       <details open={!generated}>
         <summary>
           {generated ? "Generate or regenerate systems" : "Generate a starting landscape"}
@@ -81,6 +84,12 @@ const parameterLabels: Record<string, string> = {
   rainfall: "Rainfall multiplier",
   erosion: "River erosion multiplier",
   seaLevel: "Sea level adjustment · m",
+  impacts: "Meteor impacts",
+  impactSize: "Crater radius multiplier",
+  volcanism: "Volcanic construction multiplier",
+  plateDrift: "Plate drift multiplier",
+  glaciers: "Glacial erosion & deposition multiplier",
+  coastalErosion: "Coastal erosion multiplier",
   cultureCount: "Starting cultures",
   polityCount: "Starting polities",
 };
@@ -139,7 +148,7 @@ export function DomainChoices({ profile }: { profile: string }) {
             type="checkbox"
             name="domains"
             value={domain}
-            defaultChecked={domain === "physical" || domain === "built"}
+            defaultChecked={domain === "physical" || domain === "magic" || domain === "built"}
           />
           {labels[domain]}
         </label>

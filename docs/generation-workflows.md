@@ -274,3 +274,63 @@ atlas profile settings, GIS projection and user-configurable magic are explicit
 adaptations. The cultural, political and built catalogs remain initial atlas
 implementations. Earlier SQL migration and backend source are historical material
 outside the current execution path.
+
+## Completion work
+
+The implementation follows Sulion plan `01c3a7d3-a35c-425c-b4c1-b9640d8bd670`.
+The requested outcome is complete Canonry physical and magical generation in the
+browser, including configurable epochs, impacts, glacial history and the Fire,
+Aurora and Pressure examples. Backend and persistence remain outside this work.
+
+1. Physical history and configuration: expose event and landscape controls,
+   epoch duration and ordering, and extract geographic features from the native
+   fields. Check declining impacts and retained ice/erosion histories.
+2. Configurable magic and causal integration: port fracture propagation, cold
+   drainage and ocean rays; apply heat, ice, resistance and coastal feedback in
+   the physical sequence. Presets use declarative source, propagation, effect,
+   feature and interaction definitions. Retain and advect accumulated histories.
+3. Workflow and publication: configure and combine those systems through the
+   existing generation and magic surfaces, expose natural/final geography and
+   history channels, run focused generation checks and ordinary CI.
+
+Implementation choices: use the existing shared mesh and process runner; keep
+working arrays transient. A configurable system has a bounded vocabulary rather
+than executable user code. The reference's game-specific names and thresholds
+are presets, not branches on system names. Existing manually placed effects
+remain usable. Reference numerical scaling is retained during this port; metre
+native algorithm conversion remains a separate backlog item. Cultural and built
+generation are atlas processes rather than missing Canonry physical layers.
+
+At each milestone, evidence is the resulting geography and focused behavioral
+checks. Deployment uses the existing platform workflow without repeated live
+walkthroughs or additional infrastructure.
+
+The physical sequence now exposes meteor count/size, volcanic construction,
+plate drift, glacier transport and coastal erosion. Epochs can be ordered, named
+and configured independently; presets include repeated glacial cycles and the
+four Ice Remembers epochs. Physical algorithms still take per-epoch activity
+strengths as in Canonry. Duration records elapsed years and controls annual
+local-source storage; it does not turn the geological model into a yearly solver.
+
+`World.magicSystems` holds declarative systems. Source strategies select geothermal
+maxima, cold/high terrain, deep-ocean basins or authored map sources. Propagation
+strategies port Fire's priority-queue fracture transport, Aurora's coldward
+accumulation and ice retention, and Pressure's standing rays, coastal rays and
+wandering wakes. Radial propagation supports located variants. There are no
+branches on system identities. Presets specify their feedback, feature thresholds,
+hysteresis and interactions, including thermal war rims, steam fractures and
+pressure/Aurora breaches. Configurations participate in the generation hash.
+
+Each epoch advects accumulated activity, first occurrence, storage and coastal
+history with Canonry's crust source map. Climate-phase fields alter heat and rock
+before hydrology; post-glacial fields contribute coastal forcing and material
+feedback carried into the following epoch. Final classification retains every
+feature mask, natural geography, physical materials and a priority-selected
+surface. An inland refinement has no fabricated pressure locus. A warm present
+may have no active Aurora while preserving its glacial activity history.
+
+The atlas publishes lakes as geographic polygons and extracts named peaks,
+craters, volcanoes, calderas, cirques, fjords, moraines, gorges, waterfalls and
+magical landmark regions alongside its river network. Landmark points identify
+connected regions; numerical masks retain their full extent. Completed session
+generations retain epoch and magical definitions when current settings change.

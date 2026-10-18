@@ -105,6 +105,7 @@ function constructTriangle(
 }
 export function volcanicConstruction(map: PhysicalField, context: PhysicalContext) {
   map.VolcanicActivity.fill(0);
+  if (!hasVolcanism(context)) return;
   const clear =
     Feature.MantlePlume |
     (context.IsEvolutionEpoch
@@ -126,4 +127,7 @@ export function volcanicConstruction(map: PhysicalField, context: PhysicalContex
         constructTriangle(map, context, i, distance, strength, recorded, caldera);
     }
   }
+}
+function hasVolcanism(context: PhysicalContext) {
+  return context.Profile.VolcanicConeHeight > 0 || context.Profile.VolcanicApronHeight > 0;
 }

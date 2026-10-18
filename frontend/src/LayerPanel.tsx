@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { World, LayerStyle } from "./types";
 import type { EditorState } from "./useEditor";
+import { canonryMagicPresets, naturalSurfaceNames, physicalMaterialNames } from "@atlas/domain";
 
 export function LayerPanel({ world, editor }: { world: World; editor: EditorState }) {
   const channels = useChannels(world);
@@ -33,6 +34,7 @@ export function LayerPanel({ world, editor }: { world: World; editor: EditorStat
           ))}
         </select>
       </label>
+      <SurfaceLegend world={world} channel={editor.channel} />
       {styles.map((style, index) => (
         <LayerRow
           key={style.layerId}
@@ -74,7 +76,7 @@ export function LayerPanel({ world, editor }: { world: World; editor: EditorStat
 }
 function useChannels(world: World) {
   return useQuery({
-    queryKey: ["channels", world.id, world.fields.map((f) => f.id).join(",")],
+    queryKey: ["channels", world.id, world.version],
     queryFn: async () =>
       (
         await Promise.all(
@@ -184,6 +186,43 @@ function LayerDetails({
   );
 }
 function labelChannel(world: World, channel: string) {
-  const [kind, id] = channel.split(":");
+  const [kind, id, ...rest] = channel.split(":");
+  if (kind === "magic" && id) {
+    const system = (world.magicSystems ?? canonryMagicPresets()).find((system) => system.id === id);
+    if (system) return `${system.name} · ${rest.join(" · ")}`;
+  }
+  const labels: Record<string, string> = {
+    naturalSurface: "Natural geography",
+    finalSurface: "Geography with magic",
+    physicalMaterial: "Physical materials",
+  };
+  if (labels[channel]) return labels[channel];
   return id ? `${kind} · ${world.entities[id]?.name ?? id.slice(0, 8)}` : kind;
+}
+function SurfaceLegend({ world, channel }: { world: World; channel: string }) {
+  const names: Record<number, string> = {};
+  if (channel === "physicalMaterial") physicalMaterialNames.forEach((name, i) => (names[i] = name));
+  if (["naturalSurface", "finalSurface"].includes(channel))
+    naturalSurfaceNames.forEach((name, i) => (names[i] = name));
+  if (channel === "finalSurface") {
+    let code = 100;
+    for (const system of (world.magicSystems ?? canonryMagicPresets()).filter(
+      (system) => system.enabled
+    ))
+      for (const rule of system.features) names[code++] = `${system.name} · ${rule.name}`;
+  }
+  if (!Object.keys(names).length) return null;
+  return (
+    <details>
+      <summary>Surface codes</summary>
+      <dl>
+        {Object.entries(names).map(([code, name]) => (
+          <div key={code}>
+            <dt>{code}</dt>
+            <dd>{name}</dd>
+          </div>
+        ))}
+      </dl>
+    </details>
+  );
 }

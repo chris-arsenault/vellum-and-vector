@@ -77,6 +77,16 @@ export function atlasPhysicalProfile(
   profile.OrographicPrecipitationStrength *= settings.rainfall;
   profile.FluvialErosionStrength *= settings.erosion;
   profile.SeaLevel = settings.seaLevel / profile.ElevationScale;
+  profile.ImpactCraterCount = settings.impacts;
+  profile.ImpactMinimumRadius *= settings.impactSize;
+  profile.ImpactMaximumRadius *= settings.impactSize;
+  profile.VolcanicConeHeight *= settings.volcanism;
+  profile.VolcanicApronHeight *= settings.volcanism;
+  profile.VolcanicCalderaDepth *= settings.volcanism;
+  profile.PlateDriftPerEpoch *= settings.plateDrift;
+  profile.MaximumGlacialErosionPerPass *= settings.glaciers;
+  profile.MaximumGlacialDepositionPerPass *= settings.glaciers;
+  profile.CoastalErosionStrength *= settings.coastalErosion;
   profile.HeartWarmthStrength = 0;
   profile.WarmthPocketCount = 0;
   profile.QualityTargets.LandIceCoverage.target = 0.14;

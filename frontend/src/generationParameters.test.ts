@@ -57,6 +57,9 @@ it("changes real geography, retains chosen inputs, and rejects invalid settings"
   );
   const published = generationSnapshot(changed, { ...input, parameters }, crypto.randomUUID());
   expect(published.world.generations.at(-1)).toMatchObject({ seed: input.seed, parameters });
-  expect(atlasConfiguration(source, { ...input, parameters }).parameters).toEqual(parameters);
+  expect(atlasConfiguration(source, { ...input, parameters }).parameters).toMatchObject(parameters);
+  expect(
+    JSON.parse(String(atlasConfiguration(source, input).parameters.magicConfiguration))
+  ).toEqual(source.world.magicSystems);
   await expect(generateAtlas(source, { ...input, parameters: { rainfall: -1 } })).rejects.toThrow();
 }, 60000);

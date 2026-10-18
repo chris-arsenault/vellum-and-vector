@@ -91,4 +91,10 @@ export const atlasChannels: ChannelBinding[] = [
   category("basin", "DrainageBasinIds"),
   category("riverOrder", "RiverOrders"),
   category("groundedIce", "GroundedIce"),
+  category("physicalFeatures", "FeatureFlags"),
+  category("volcanicLastActiveEpoch", "VolcanicLastActiveEpoch"),
+  category("bathymetry", "BathymetricZoneCodes"),
+  scalar("geothermalHistory", "GeothermalHistory"),
+  scalar("tectonicHistory", "TectonicActivityHistory"),
+  scalar("coastalForcingHistory", "ExternalCoastalForcingHistory"),
 ];

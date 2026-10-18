@@ -26,6 +26,7 @@ export const materialMagicProcess: MapProcess = {
     const pressure = new Float64Array(grid.active.length);
     for (const source of state.domain.world.magic) {
       if (
+        source.systemId ||
         ["heat", "cold"].includes(source.effect) ||
         (source.spaceId && source.spaceId !== context.scope.spaceId)
       )

@@ -1,0 +1,116 @@
+import type { GenerationState } from "../process";
+import type { MagicField } from "./magicState";
+import { PriorityQueue } from "./priorityQueue";
+import { clamp, round } from "./math";
+import { hashUnit } from "./noise";
+import { triangleIdentity } from "./mesh";
+import { oceanPropagation } from "./magicOcean";
+
+function fracturePropagation(state: GenerationState, field: MagicField, activity: number) {
+  const map = state.physical!.map,
+    p = field.definition.parameters;
+  const queue = new PriorityQueue<{ index: number; value: number }>(
+    (a, b) => b.value - a.value || a.index - b.index
+  );
+  for (let i = 0; i < map.mesh.count; i++)
+    if (field.source[i] > 0) {
+      field.intensity[i] = clamp(round(field.source[i] * activity), 0, 1000);
+      queue.push({ index: i, value: field.intensity[i] });
+    }
+  while (queue.count) {
+    const { index: i, value } = queue.pop();
+    if (field.intensity[i] !== value) continue;
+    for (let edge = 0; edge < 3; edge++) {
+      const j = map.mesh.neighbors[i * 3 + edge];
+      if (j < 0) continue;
+      const conductance = (map.FractureConductance[i] + map.FractureConductance[j]) / 2;
+      const next = value - p.baseCost - Math.trunc((1000 - conductance) / p.conductanceDivisor);
+      if (next <= field.intensity[j]) continue;
+      field.intensity[j] = next;
+      queue.push({ index: j, value: next });
+    }
+  }
+}
+function coldTarget(state: GenerationState, i: number, seed: number) {
+  const map = state.physical!.map;
+  let target = -1,
+    lowest = map.Temperature[i],
+    tie = -1;
+  for (let edge = 0; edge < 3; edge++) {
+    const j = map.mesh.neighbors[i * 3 + edge];
+    if (j < 0 || map.Temperature[j] >= map.Temperature[i]) continue;
+    const score = hashUnit(
+      seed ^ 0x4dcb,
+      triangleIdentity(map.mesh, i),
+      triangleIdentity(map.mesh, j)
+    );
+    if (map.Temperature[j] < lowest || (map.Temperature[j] === lowest && score > tie)) {
+      target = j;
+      lowest = map.Temperature[j];
+      tie = score;
+    }
+  }
+  return target;
+}
+function coldPropagation(state: GenerationState, field: MagicField, seed: number) {
+  const map = state.physical!.map,
+    p = field.definition.parameters;
+  const accumulation = field.source.slice();
+  const order = Array.from({ length: map.mesh.count }, (_, i) => i).sort(
+    (a, b) => map.Temperature[b] - map.Temperature[a] || b - a
+  );
+  for (const i of order) {
+    const target = coldTarget(state, i, seed),
+      capacity = clamp(map.IceThickness[i], 0, 900);
+    const retained = Math.trunc((accumulation[i] * capacity) / p.iceRetention);
+    field.intensity[i] = clamp(
+      round(Math.log2(accumulation[i] + 1) * p.logScale) + Math.trunc(capacity / 4),
+      0,
+      1000
+    );
+    field.retained[i] = retained;
+    if (target >= 0)
+      accumulation[target] = Math.min(
+        2147483647,
+        accumulation[target] + Math.max(0, accumulation[i] - retained)
+      );
+  }
+}
+function radialPropagation(state: GenerationState, field: MagicField) {
+  const work = state.physical!,
+    map = work.map;
+  for (let source = 0; source < map.mesh.count; source++) {
+    if (!field.source[source]) continue;
+    const radius = field.radii[source] || Math.max(1, field.definition.parameters.sourceSpacing);
+    for (let i = 0; i < map.mesh.count; i++) {
+      const distance = Math.hypot(
+        map.mesh.x[i] - map.mesh.x[source],
+        map.mesh.y[i] - map.mesh.y[source]
+      );
+      field.intensity[i] = Math.max(
+        field.intensity[i],
+        field.source[source] * Math.max(0, 1 - distance / radius)
+      );
+    }
+  }
+}
+export function propagateMagic(
+  state: GenerationState,
+  field: MagicField,
+  seed: number,
+  activity: number
+) {
+  field.intensity.fill(0);
+  field.wake.fill(0);
+  field.rogue.fill(0);
+  const strategy = field.definition.propagation;
+  if (activity > 0) {
+    if (strategy === "fracture") fracturePropagation(state, field, activity);
+    if (strategy === "cold-drainage") coldPropagation(state, field, seed);
+    if (strategy === "ocean-rays") oceanPropagation(state, field, seed, activity);
+    if (strategy === "radial") radialPropagation(state, field);
+  }
+  const scalar = strategy === "cold-drainage" || strategy === "radial" ? activity : 1;
+  for (let i = 0; i < field.intensity.length; i++)
+    field.intensity[i] = clamp(round(field.intensity[i] * scalar + field.stored[i]), 0, 1000);
+}

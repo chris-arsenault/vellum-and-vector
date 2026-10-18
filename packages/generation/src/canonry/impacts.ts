@@ -10,6 +10,7 @@ import { triangleDistanceSquared } from "./radial";
 import { deposit, rebuild } from "./surface";
 
 function impactCount(map: PhysicalField, c: PhysicalContext): number {
+  if (c.Profile.ImpactCraterCount === 0) return 0;
   const primordial = truncate(
     (c.Profile.ImpactCraterCount * c.Profile.ImpactPrimordialShare) / 1000
   );

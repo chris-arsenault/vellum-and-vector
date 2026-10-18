@@ -19,6 +19,7 @@ import { nativeContracts } from "./contracts";
 import type { AtlasParameters } from "../atlasParameters";
 
 export interface AtlasPhysicalWorkspace {
+  magic?: import("./magicState").MagicWorkspace;
   map: PhysicalField;
   profile: PhysicalProfile;
   center: [number, number];
