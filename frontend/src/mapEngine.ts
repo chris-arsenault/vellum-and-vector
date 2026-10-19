@@ -1,40 +1,49 @@
-import Map from "ol/Map.js";
+import OLMap from "ol/Map.js";
+import Collection from "ol/Collection.js";
+import type Feature from "ol/Feature.js";
 import View from "ol/View.js";
 import Projection from "ol/proj/Projection.js";
 import VectorLayer from "ol/layer/Vector.js";
-import TileLayer from "ol/layer/Tile.js";
 import LayerGroup from "ol/layer/Group.js";
 import VectorSource from "ol/source/Vector.js";
-import type ImageTileSource from "ol/source/ImageTile.js";
 import GeoJSON from "ol/format/GeoJSON.js";
-import LineString from "ol/geom/LineString.js";
-import { Circle, Fill, Stroke, Style, Text } from "ol/style.js";
+import { Fill, Stroke, Style, Text } from "ol/style.js";
+import type { StyleLike } from "ol/style/Style.js";
 import { ScaleLine } from "ol/control.js";
 import { defaults as defaultInteractions } from "ol/interaction/defaults.js";
 import { bounds } from "./presentation";
-import { rasterLimits, rasterTileSource } from "./rasterTiles";
-import type { Area, AtlasFeature, LayerStyle, Raster, World } from "./types";
+import { featureStyle } from "./vectorStyles";
+import type { Area, AtlasFeature, LayerStyle, World } from "./types";
 
 const format = new GeoJSON();
 export function createMap(target: HTMLElement, reference: World["reference"]) {
   target.tabIndex = 0;
   const extent = bounds(reference.domain);
   const projection = new Projection({ code: reference.id, units: "m", extent });
-  const image = new LayerGroup();
-  const overlay = new LayerGroup();
-  const features = new VectorLayer({ source: new VectorSource({ wrapX: false }) });
-  const areas = new VectorLayer({ source: new VectorSource({ wrapX: false }) });
+  const image = new LayerGroup({ properties: { title: "Base map", openInLayerSwitcher: true } });
+  const overlay = new LayerGroup({
+    properties: { title: "Field overlays", openInLayerSwitcher: true },
+  });
+  const vectors = new LayerGroup({ properties: { title: "Features", openInLayerSwitcher: true } });
+  const features = new VectorSource({ wrapX: false });
+  const snapFeatures = new Collection<Feature>();
+  const featureLayers = new Map<string, VectorLayer>();
+  const areas = new VectorLayer({
+    source: new VectorSource({ wrapX: false }),
+    properties: { title: "Area boundaries", displayInLayerSwitcher: false },
+  });
   const preview = new VectorLayer({
     source: new VectorSource({ wrapX: false }),
+    properties: { displayInLayerSwitcher: false },
     style: new Style({
       stroke: new Stroke({ color: "#f8d589", width: 3, lineDash: [8, 5] }),
       fill: new Fill({ color: "#f8d58933" }),
     }),
   });
-  const map = new Map({
+  const map = new OLMap({
     target,
     interactions: defaultInteractions({ dragPan: false, doubleClickZoom: false }),
-    layers: [image, overlay, features, areas, preview],
+    layers: [image, overlay, vectors, areas, preview],
     view: new View({
       projection,
       center: [(extent[0] + extent[2]) / 2, (extent[1] + extent[3]) / 2],
@@ -42,9 +51,81 @@ export function createMap(target: HTMLElement, reference: World["reference"]) {
     }),
   });
   map.addControl(new ScaleLine({ units: "metric" }));
-  return { map, image, overlay, features, areas, preview };
+  return {
+    map,
+    image,
+    overlay,
+    vectors,
+    features,
+    snapFeatures,
+    featureLayers,
+    areas,
+    preview,
+    sync: { applying: false },
+  };
 }
 export type MapEngine = ReturnType<typeof createMap>;
+export function applyMapUpdate(engine: MapEngine, update: () => void) {
+  engine.sync.applying = true;
+  try {
+    update();
+  } finally {
+    engine.sync.applying = false;
+  }
+}
+
+function syncVectorLayers(engine: MapEngine, world: World, styles: LayerStyle[]) {
+  for (const [id, layer] of engine.featureLayers) {
+    if (world.layers[id]) continue;
+    engine.vectors.getLayers().remove(layer);
+    engine.featureLayers.delete(id);
+  }
+  for (const style of styles) {
+    let layer = engine.featureLayers.get(style.layerId);
+    if (!layer) {
+      layer = new VectorLayer({
+        source: new VectorSource({ wrapX: false }),
+        properties: { title: world.layers[style.layerId].name, layerId: style.layerId },
+      });
+      engine.featureLayers.set(style.layerId, layer);
+      engine.vectors.getLayers().push(layer);
+    }
+    layer.setVisible(style.visible);
+    layer.setOpacity(style.opacity);
+    layer.setMinResolution(style.minScale);
+    applyVectorStyle(layer, style);
+  }
+  const collection = engine.vectors.getLayers();
+  styles
+    .slice()
+    .reverse()
+    .forEach((style, position) => {
+      const layer = engine.featureLayers.get(style.layerId)!;
+      if (collection.item(position) !== layer) {
+        collection.remove(layer);
+        collection.insertAt(position, layer);
+      }
+    });
+}
+function applyVectorStyle(layer: VectorLayer, style: LayerStyle) {
+  if (!style.symbols) {
+    layer.set("symbols", null);
+    layer.setStyle((feature, resolution) => featureStyle(feature.get("domain"), style, resolution));
+    return;
+  }
+  if (layer.get("symbols") === style.symbols) return;
+  layer.set("symbols", style.symbols);
+  void import("geostyler-openlayers-parser")
+    .then(async ({ default: Parser }) => {
+      const result = await new Parser().writeStyle(style.symbols!);
+      if (layer.get("symbols") !== style.symbols) return;
+      if (result.errors?.length) throw result.errors[0];
+      layer.setStyle(result.output as StyleLike);
+    })
+    .catch((error: unknown) => {
+      layer.set("styleError", error instanceof Error ? error.message : String(error));
+    });
+}
 
 export function updateFeatures(
   engine: MapEngine,
@@ -53,39 +134,70 @@ export function updateFeatures(
   styles: LayerStyle[],
   scene: AtlasFeature[]
 ) {
-  const source = engine.features.getSource()!;
+  syncVectorLayers(engine, world, styles);
   const wanted = new Set(scene.map((feature) => feature.id));
-  for (const feature of source.getFeatures())
-    if (!wanted.has(String(feature.getId()))) source.removeFeature(feature);
-  scene.forEach((feature) => {
-    const presented = feature;
-    let ol = source.getFeatureById(feature.id);
-    if (!ol) {
-      ol = format.readFeatures({
-        type: "Feature",
-        id: feature.id,
-        geometry: presented.geometry,
-        properties: { domain: presented },
-      })[0];
-      source.addFeature(ol);
-    } else {
-      const geometry = format.writeGeometryObject(ol.getGeometry()!);
-      if (JSON.stringify(geometry) !== JSON.stringify(presented.geometry))
-        ol.setGeometry(format.readGeometry(presented.geometry)!);
-      ol.set("domain", presented);
-    }
-    ol.setStyle((_feature, resolution) =>
-      featureStyle(
-        presented,
-        styles.find((s) => s.layerId === feature.layerId),
-        resolution,
-        styles.length - styles.findIndex((s) => s.layerId === feature.layerId)
-      )
+  for (const feature of engine.features.getFeatures()) {
+    if (wanted.has(String(feature.getId()))) continue;
+    engine.featureLayers.get(feature.get("domain").layerId)?.getSource()!.removeFeature(feature);
+    engine.features.removeFeature(feature);
+  }
+  for (const feature of scene) syncFeature(engine, feature);
+  syncSnapping(engine);
+  updateAreas(engine, world, area);
+}
+function syncSnapping(engine: MapEngine) {
+  const visible = engine.features
+    .getFeatures()
+    .filter((feature) =>
+      engine.featureLayers.get(feature.get("domain").layerId)?.isVisible(engine.map.getView())
     );
-  });
-  const areas = engine.areas.getSource()!;
+  const wanted = new Set(visible);
+  for (const feature of engine.snapFeatures.getArray().slice())
+    if (!wanted.has(feature)) engine.snapFeatures.remove(feature);
+  const existing = new Set(engine.snapFeatures.getArray());
+  for (const feature of visible) if (!existing.has(feature)) engine.snapFeatures.push(feature);
+}
+function syncFeature(engine: MapEngine, feature: AtlasFeature) {
+  const source = engine.featureLayers.get(feature.layerId)?.getSource();
+  if (!source) return;
+  let ol = engine.features.getFeatureById(feature.id);
+  if (!ol) {
+    ol = format.readFeatures({
+      type: "Feature",
+      id: feature.id,
+      geometry: feature.geometry,
+      properties: {
+        ...feature.attributes,
+        name: feature.name,
+        kind: feature.kind,
+        domain: feature,
+      },
+    })[0];
+    engine.features.addFeature(ol);
+  } else {
+    const previous = ol.get("domain") as AtlasFeature;
+    if (previous.layerId !== feature.layerId)
+      engine.featureLayers.get(previous.layerId)?.getSource()!.removeFeature(ol);
+    if (
+      JSON.stringify(format.writeGeometryObject(ol.getGeometry()!)) !==
+      JSON.stringify(feature.geometry)
+    )
+      ol.setGeometry(format.readGeometry(feature.geometry)!);
+    for (const key of Object.keys(previous.attributes))
+      if (!(key in feature.attributes)) ol.unset(key);
+    ol.setProperties({
+      ...feature.attributes,
+      name: feature.name,
+      kind: feature.kind,
+      domain: feature,
+    });
+  }
+  if (!source.hasFeature(ol)) source.addFeature(ol);
+}
+function updateAreas(engine: MapEngine, world: World, area: Area) {
+  const source = engine.areas.getSource()!;
   engine.areas.set("currentArea", area.id);
-  areas.clear();
+  source.clear();
   for (const child of Object.values(world.areas).filter(
     (a) => a.parentId === area.id || a.id === area.id
   )) {
@@ -109,182 +221,9 @@ export function updateFeatures(
         }),
       })
     );
-    areas.addFeature(ol);
+    source.addFeature(ol);
   }
-}
-
-function featureStyle(
-  feature: AtlasFeature,
-  style: LayerStyle | undefined,
-  resolution: number,
-  order: number
-) {
-  if (!style?.visible || resolution < style.minScale) return new Style({});
-  if (
-    style.filter &&
-    !JSON.stringify([feature.name, feature.attributes])
-      .toLowerCase()
-      .includes(style.filter.toLowerCase())
-  )
-    return new Style({});
-  const color = style.color;
-  const opacity = Math.round(style.opacity * 255)
-    .toString(16)
-    .padStart(2, "0");
-  const result = new Style({
-    zIndex: order,
-    text: style.labels
-      ? new Text({
-          text: feature.name,
-          font: "12px system-ui",
-          fill: new Fill({ color }),
-          stroke: new Stroke({ color: "#203739", width: 3 }),
-        })
-      : undefined,
-    stroke: new Stroke({
-      color: color + opacity,
-      width: physicalStrokeWidth(feature, resolution),
-      lineDash: feature.layerId === "claims" ? [7, 5] : undefined,
-    }),
-    fill: new Fill({
-      color:
-        color +
-        Math.round(style.opacity * 100)
-          .toString(16)
-          .padStart(2, "0"),
-    }),
-    image: new Circle({
-      radius: feature.kind === "settlement" ? 4 : 5,
-      fill: new Fill({ color }),
-      stroke: new Stroke({ color: "#233638", width: 1.5 }),
-    }),
-  });
-  return profiledLineStyles(feature, result, color + opacity, resolution, order);
-}
-
-function profiledLineStyles(
-  feature: AtlasFeature,
-  base: Style,
-  color: string,
-  resolution: number,
-  order: number
-) {
-  const widths = feature.attributes.widths;
-  if (
-    feature.geometry.type !== "LineString" ||
-    !Array.isArray(widths) ||
-    widths.length !== feature.geometry.coordinates.length ||
-    physicalStrokeWidth(feature, resolution) <= 1.7
-  )
-    return base;
-  base.setStroke(null);
-  const styles = feature.geometry.coordinates.slice(1).map(
-    (coordinate, i) =>
-      new Style({
-        zIndex: order,
-        geometry: new LineString([
-          feature.geometry.type === "LineString" ? feature.geometry.coordinates[i] : coordinate,
-          coordinate,
-        ]),
-        stroke: new Stroke({
-          color,
-          width: Math.max(1.7, (Number(widths[i]) + Number(widths[i + 1])) / (2 * resolution)),
-        }),
-      })
-  );
-  return [base, ...styles];
-}
-
-function physicalStrokeWidth(feature: AtlasFeature, resolution: number) {
-  if (feature.kind !== "river") return 2;
-  const samples = feature.attributes.widths;
-  const width = Array.isArray(samples)
-    ? samples.reduce<number>(
-        (maximum, value) => (typeof value === "number" ? Math.max(maximum, value) : maximum),
-        0
-      )
-    : Number(feature.attributes.width ?? 0);
-  const minimum = 1.7;
-  return Number.isFinite(width) ? Math.max(minimum, width / resolution) : minimum;
-}
-
-export function updateRaster(
-  engine: MapEngine,
-  raster: Raster[] | undefined,
-  base: Raster[] | undefined,
-  styles: LayerStyle[]
-) {
-  const apply = (group: LayerGroup, data: Raster[]) => {
-    const layers = group.getLayers();
-    const wanted = new Set(data.map((raster) => `${raster.id}:${raster.channel}`));
-    for (const layer of layers.getArray().slice())
-      if (!wanted.has(String(layer.get("rasterKey")))) layers.remove(layer);
-    const limits = rasterLimits(data);
-    for (const [index, raster] of data.entries()) {
-      const key = raster.channel.split(":")[0];
-      const id = rasterLayer(key);
-      const style = styles.find((item) => item.layerId === id);
-      const rasterKey = `${raster.id}:${raster.channel}`;
-      let layer = layers.getArray().find((layer) => layer.get("rasterKey") === rasterKey) as
-        TileLayer<ImageTileSource> | undefined;
-      if (!layer) {
-        layer = new TileLayer<ImageTileSource>();
-        layer.set("rasterKey", rasterKey);
-        layers.insertAt(index, layer);
-      }
-      if (layer.get("raster") !== raster || layer.get("limits") !== limits.join(",")) {
-        layer.setSource(rasterTileSource(raster, limits, engine.map.getView().getProjection()));
-        layer.set("raster", raster);
-        layer.set("limits", limits.join(","));
-      }
-      applyRasterStyle(layer, style);
-      if (layers.item(index) !== layer) {
-        layers.remove(layer);
-        layers.insertAt(index, layer);
-      }
-    }
-  };
-  apply(engine.image, base ?? []);
-  apply(
-    engine.overlay,
-    (raster ?? []).filter((r) => r.channel !== "elevation")
-  );
 }
 export function fitArea(engine: MapEngine, area: Area) {
   engine.map.getView().fit(bounds(area.footprint), { padding: [35, 35, 35, 35] });
-}
-function applyRasterStyle(layer: TileLayer<ImageTileSource>, style: LayerStyle | undefined) {
-  layer.setVisible(style?.visible ?? true);
-  layer.setOpacity(style?.opacity ?? 1);
-}
-
-function rasterLayer(channel: string) {
-  const layers: Record<string, string> = {
-    culture: "cultures",
-    language: "languages",
-    religion: "religions",
-    magic: "magic",
-    people: "cultures",
-    population: "cultures",
-    speakers: "languages",
-    faith: "religions",
-    temperature: "climate",
-    moisture: "climate",
-    rainfall: "climate",
-    snowfall: "climate",
-    ice: "climate",
-    rock: "geology",
-    fracture: "geology",
-    bedrock: "geology",
-    sediment: "geology",
-    geothermal: "geology",
-    naturalSurface: "geology",
-    finalSurface: "geology",
-    physicalMaterial: "geology",
-    reach: "sovereignty",
-    sovereignty: "sovereignty",
-    claim: "claims",
-    control: "control",
-  };
-  return layers[channel] ?? channel;
 }

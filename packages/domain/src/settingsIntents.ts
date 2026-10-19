@@ -7,6 +7,7 @@ import { requireIdentity, requireRelations, invalidateFacts } from "./authoringB
 import { spatial, point } from "./spatial";
 import type { World } from "./model";
 import { registerMagicSystemIntents } from "./magicSystemIntents";
+import { rasterPresentationSchema, symbolStyleSchema } from "./viewSchemas";
 
 const magicSchema = z.object({
   systemId: z.string().min(1).optional(),
@@ -33,6 +34,7 @@ const magicSchema = z.object({
   scope: geometrySchema.optional(),
 });
 const styleSchema = z.object({
+  symbols: symbolStyleSchema.optional(),
   layerId: z.string().min(1),
   visible: z.boolean(),
   opacity: finite.min(0).max(1),
@@ -46,6 +48,7 @@ const viewSchema = z.object({
   name: z.string().trim().min(1),
   areaId: uuid,
   layers: z.array(styleSchema),
+  raster: rasterPresentationSchema.optional(),
 });
 
 function validateMagicGraph(values: World["magic"]) {

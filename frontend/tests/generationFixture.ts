@@ -4,9 +4,9 @@ import type { DomainSnapshot, Grid } from "@atlas/domain";
 import type { CompletedBoundary } from "@atlas/generation";
 
 /** UI journeys receive small completed fields; algorithms run in the headless suite. */
-export async function installGenerationFixture(page: Page, hold = false) {
+export async function installGenerationFixture(page: Page, hold = false, terrain = false) {
   await page.addInitScript(
-    ({ hold }) => {
+    ({ hold, terrain }) => {
       const pending = new Set<() => void>();
       Object.assign(window, {
         completeGenerationFixture() {
@@ -58,9 +58,13 @@ export async function installGenerationFixture(page: Page, hold = false) {
                     `magic:${system.id}:coastalHistory`,
                   ]),
                 ]) {
-                  channels[name] = Float64Array.from({ length: size * size }, (_, i) =>
-                    name === "water" ? 0 : i % size
-                  );
+                  channels[name] = Float64Array.from({ length: size * size }, (_, i) => {
+                    if (name === "water") return 0;
+                    if (name !== "elevation" || !terrain) return i % size;
+                    const x = (i % size) / (size - 1),
+                      y = Math.floor(i / size) / (size - 1);
+                    return -500 + 2400 * Math.exp(-8 * ((x - 0.6) ** 2 + (y - 0.6) ** 2));
+                  });
                 }
                 const surface: Grid = {
                   id: "browser-fixture",
@@ -110,7 +114,7 @@ export async function installGenerationFixture(page: Page, hold = false) {
         },
       });
     },
-    { hold }
+    { hold, terrain }
   );
 }
 

@@ -8,6 +8,8 @@ import { useMapData } from "./useScene";
 import { editArea } from "./useScene";
 import { useCartographicState } from "./useCartographicState";
 import { useMapActions } from "./useMapActions";
+import type { MapEngine } from "./mapEngine";
+import { defaultRasterPresentation, defaultFieldStyle } from "./rasterPresentation";
 
 function useEditorState(world: World) {
   const [selectedAreaId, setAreaId] = useState(
@@ -20,7 +22,9 @@ function useEditorState(world: World) {
   const [savedStyles, setStyles] = useState<LayerStyle[]>(() => defaultStyles(world));
   const [selection, setSelection] = useState<Geometry | null>(null);
   const [drawing, setDrawing] = useState<Geometry | null>(null);
-  const [channel, setChannel] = useState("elevation");
+  const [channel, setBrushChannel] = useState("elevation");
+  const [rasterView, setRasterView] = useState(defaultRasterPresentation);
+  const [mapEngine, setMapEngine] = useState<MapEngine | null>(null);
   const extent = bounds(area.footprint);
   const [brush, setBrush] = useState({
     radius: (extent[2] - extent[0]) / 30,
@@ -48,7 +52,22 @@ function useEditorState(world: World) {
     drawing,
     setDrawing,
     channel,
-    setChannel,
+    setChannel: (channel: string) => {
+      setBrushChannel(channel);
+      if (channel !== "elevation")
+        setRasterView((view) => ({
+          ...view,
+          fields: view.fields.some((field) => field.channel === channel)
+            ? view.fields.map((field) =>
+                field.channel === channel ? { ...field, visible: true } : field
+              )
+            : [...view.fields, defaultFieldStyle(channel)],
+        }));
+    },
+    rasterView,
+    setRasterView,
+    mapEngine,
+    setMapEngine,
     brush,
     setBrush,
     panel,
@@ -68,19 +87,24 @@ function useEditorState(world: World) {
 }
 export function useEditor(world: World) {
   const state = useEditorState(world);
-  const { area, channel, savedStyles, viewport, setViewport, setStyles, setChannel } = state;
+  const { area, savedStyles, viewport, setViewport, setStyles, setChannel } = state;
   const editing = useEditing(world, state);
   return {
     ...state,
     ...editing,
     world,
     styles: completeStyles(world, savedStyles),
-    ...useMapData(world, area.id, channel, viewport),
+    ...useMapData(world, area.id, viewport),
     viewport: setViewport,
     ...useMapActions(world, state, editing),
     preset: (name: string) => {
       setStyles(defaultStyles(world, name));
       setChannel(presetChannel(world, name));
+      const selected = presetChannel(world, name);
+      state.setRasterView((view) => ({
+        ...view,
+        fields: selected === "elevation" ? [] : [defaultFieldStyle(selected)],
+      }));
     },
   };
 }

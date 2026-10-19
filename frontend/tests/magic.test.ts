@@ -42,7 +42,7 @@ test("save a magic variant and inspect generated history fields", async ({ page 
   const status = page.locator(".job-row strong").first();
   await expect(status).toHaveText("completed");
   await page.getByRole("button", { name: "Layers", exact: true }).click();
-  const channels = page.getByLabel("Field visualization");
+  const channels = page.getByLabel("Field style", { exact: true });
   await channels.selectOption("magic:pressure:coastalHistory");
   await channels.selectOption("magic:aurora:history");
   await channels.selectOption("finalSurface");

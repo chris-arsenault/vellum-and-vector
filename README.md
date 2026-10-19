@@ -46,6 +46,18 @@ settings. **Library** retains templates and the supporting analysis, connection
 and schema tools. Templates can be placed on the map; precise placement and access
 bindings remain available.
 
+Open **Layers** to switch between **Topographic** and **Relief** base maps.
+The layer tree provides visibility, opacity and drag ordering for feature layers
+and independent field overlays. Search the tree to find a layer. Its style button
+opens GeoStyler for vector symbols or field controls for color ramps, linear or
+signed logarithmic scaling, and display ranges. Visible field legends show units
+and values; missing coverage is transparent, while measured zero remains visible.
+Terrain controls adjust lighting, vertical exaggeration and contour interval.
+These display settings do not change the geography. Satellite appearance is deferred.
+
+**Session map views** retain the base, field overlays and vector styles together
+for this tab's session. Reloading the tab still discards the world and its views.
+
 ## Architecture
 
 The application is written in TypeScript. React and OpenLayers provide the editor;

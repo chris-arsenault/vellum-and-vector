@@ -1,0 +1,108 @@
+import { fieldInterpolator, adaptiveLeafAt, type Position, type GridSurface } from "@atlas/domain";
+import DataTileSource from "ol/source/DataTile.js";
+import GeoJSON from "ol/format/GeoJSON.js";
+import VectorSource from "ol/source/Vector.js";
+import Feature from "ol/Feature.js";
+import type Projection from "ol/proj/Projection.js";
+import { createXYZ } from "ol/tilegrid.js";
+import type { Raster } from "./types";
+import { categorical } from "./rasterTiles";
+import { scaledValue } from "./rasterPresentation";
+
+function terrainAt(raster: Raster) {
+  const lakes = new VectorSource({
+    features: raster.lakes?.map(
+      (lake) =>
+        new Feature({
+          geometry: new GeoJSON().readGeometry(lake.geometry)!,
+          level: lake.level,
+        })
+    ),
+    wrapX: false,
+  });
+  const sea = raster.water?.channels.seaLevel
+    ? fieldInterpolator(raster.water, "seaLevel")
+    : () => 0;
+  const ice = raster.ice ? fieldInterpolator(raster.ice, "ice") : () => 0;
+  return (p: Position, height: number) => {
+    const level = sea(p);
+    const lake = lakes
+      .getFeaturesAtCoordinate([p.x, p.y])
+      .some((feature) => height < Number(feature.get("level")));
+    return [height - level, lake ? 2 : Number(height < level), Math.min(1, ice(p))];
+  };
+}
+
+/** Sampling is shared with geographic reads; pixels never introduce new terrain. */
+export function numericTileSampler(raster: Raster) {
+  const footprint = new GeoJSON().readGeometry(raster.footprint)!;
+  const valueAt = fieldInterpolator(raster.field, raster.channel);
+  const active = activeSampler(raster.field, raster.channel);
+  const terrain = raster.channel === "elevation" ? terrainAt(raster) : null;
+  const bands = terrain ? 6 : 3;
+  return (extent: number[], size: number) => {
+    const values = new Float32Array(size * size * bands);
+    const dx = (extent[2] - extent[0]) / size,
+      dy = (extent[3] - extent[1]) / size;
+    for (let row = 0; row < size; row++)
+      for (let col = 0; col < size; col++) {
+        const p = { x: extent[0] + (col + 0.5) * dx, y: extent[3] - (row + 0.5) * dy, z: 0 };
+        if (!footprint.intersectsCoordinate([p.x, p.y]) || !active(p)) continue;
+        const value = valueAt(p);
+        if (!Number.isFinite(value)) continue;
+        const companions = terrain ? [...terrain(p, value), dx] : [scaledValue(value, "log")];
+        if (!companions.every(Number.isFinite)) continue;
+        values.set([value, 1, ...companions], (row * size + col) * bands);
+      }
+    return values;
+  };
+}
+
+export function numericTileSource(
+  raster: Raster,
+  projection: Projection,
+  pixelRatio = globalThis.devicePixelRatio ?? 1
+) {
+  const tileGrid = createXYZ({ extent: projection.getExtent(), tileSize: 256 / pixelRatio });
+  const sample = numericTileSampler(raster);
+  return new DataTileSource({
+    projection,
+    tileGrid,
+    tileSize: 256,
+    gutter: 1,
+    bandCount: raster.channel === "elevation" ? 6 : 3,
+    interpolate: !categorical(raster),
+    transition: 0,
+    wrapX: false,
+    loader: (z, x, y) => {
+      const box = tileGrid.getTileCoordExtent([z, x, y]);
+      const resolution = (box[2] - box[0]) / 256;
+      return sample(
+        [box[0] - resolution, box[1] - resolution, box[2] + resolution, box[3] + resolution],
+        258
+      );
+    },
+  });
+}
+function activeSampler(grid: GridSurface, channel: string): (p: Position) => boolean {
+  const overlays = (grid.overlays ?? [])
+    .filter((overlay) => overlay.channels.includes(channel))
+    .slice()
+    .reverse()
+    .map(({ grid }) => ({
+      footprint: new GeoJSON().readGeometry(grid.scope.footprint)!,
+      at: activeSampler(grid, channel),
+    }));
+  return (p) => {
+    const overlay = overlays.find(({ footprint }) => footprint.intersectsCoordinate([p.x, p.y]));
+    if (overlay) return overlay.at(p);
+    if (grid.topology) return grid.active[adaptiveLeafAt(grid.topology, p.x, p.y)] === 1;
+    const x = Math.round(
+      ((p.x - grid.bounds[0]) / (grid.bounds[2] - grid.bounds[0])) * (grid.width - 1)
+    );
+    const y = Math.round(
+      ((p.y - grid.bounds[1]) / (grid.bounds[3] - grid.bounds[1])) * (grid.height - 1)
+    );
+    return grid.active[y * grid.width + x] === 1;
+  };
+}

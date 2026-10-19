@@ -1,16 +1,28 @@
 import { useQuery } from "@tanstack/react-query";
 import { readScene, readRaster } from "./atlasReads";
 import { bounds } from "./presentation";
+import { areaSpace } from "@atlas/domain";
 import { profiles, type Area, type AtlasFeature, type World } from "./types";
 
-export function useMapData(
-  world: World,
-  areaId: string,
-  channel: string,
-  extent: number[] | null = null
-) {
+export function useMapData(world: World, areaId: string, extent: number[] | null = null) {
   const scene = useScene(world, areaId, extent);
-  const raster = useRasters(world, areaId, channel, extent);
+  const raster = useQuery({
+    queryKey: ["fields", world.id, areaId, world.version],
+    queryFn: () =>
+      world.fields
+        .filter((field) => areaSpace(world, field.areaId) === areaSpace(world, areaId))
+        .sort(
+          (a, b) =>
+            profiles.indexOf(world.areas[a.areaId].profile) -
+            profiles.indexOf(world.areas[b.areaId].profile)
+        )
+        .flatMap((field) =>
+          (field.channels ?? [])
+            .filter((channel) => channel !== "elevation" && !channel.startsWith("magicApplied:"))
+            .map((channel) => readRaster(world.id, field.id, channel))
+        )
+        .filter((raster) => raster.field.units[raster.channel] !== "cell-index"),
+  });
   const baseRaster = useRasters(world, areaId, "elevation", extent);
   return { scene, raster, baseRaster };
 }

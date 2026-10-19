@@ -234,6 +234,7 @@ export interface Template {
   context?: string;
 }
 export interface LayerStyle {
+  symbols?: import("geostyler-style").Style;
   labels?: boolean;
   filter?: string | null;
   layerId: string;
@@ -241,6 +242,22 @@ export interface LayerStyle {
   opacity: number;
   color: string;
   minScale: number;
+}
+export interface FieldStyle {
+  channel: string;
+  visible: boolean;
+  opacity: number;
+  palette: "viridis" | "magma" | "blueRed" | "terrain";
+  scale: "linear" | "log";
+  range: [number, number] | null;
+}
+export interface RasterPresentation {
+  base: "topographic" | "relief";
+  sunAzimuth: number;
+  sunElevation: number;
+  exaggeration: number;
+  contourInterval: number;
+  fields: FieldStyle[];
 }
 export interface Connection {
   id: string;
@@ -325,7 +342,13 @@ export interface World {
     seed?: number;
     parameters?: Record<string, number>;
   }[];
-  views: { id: string; name: string; areaId: string; layers: LayerStyle[] }[];
+  views: {
+    id: string;
+    name: string;
+    areaId: string;
+    layers: LayerStyle[];
+    raster?: RasterPresentation;
+  }[];
   connections?: Record<string, Connection>;
   networkNodes?: Record<string, NetworkNode>;
   networkReaches?: Record<string, NetworkReach>;

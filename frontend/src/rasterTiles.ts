@@ -17,7 +17,7 @@ export function categorical(raster: Raster): boolean {
 }
 
 export function rasterLimits(data: Raster[]): number[] {
-  const limits = [0, 1];
+  const limits = [Infinity, -Infinity];
   const include = (field: GridSurface, channel: string) => {
     field.channels[channel]?.forEach((value, i) => {
       if (!field.active[i] || !Number.isFinite(value)) return;
@@ -28,7 +28,7 @@ export function rasterLimits(data: Raster[]): number[] {
       if (overlay.channels.includes(channel)) include(overlay.grid, channel);
   };
   for (const raster of data) include(raster.field, raster.channel);
-  return limits;
+  return Number.isFinite(limits[0]) ? limits : [0, 1];
 }
 
 /** Pixels query committed geography. Tile boundaries do not bound derivative reads. */

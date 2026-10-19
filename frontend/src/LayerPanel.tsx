@@ -1,59 +1,90 @@
-import { useQuery } from "@tanstack/react-query";
-import type { World, LayerStyle } from "./types";
+import { lazy, Suspense, useRef, useState, useEffect } from "react";
+import type { World } from "./types";
 import type { EditorState } from "./useEditor";
-import { canonryMagicPresets, naturalSurfaceNames, physicalMaterialNames } from "@atlas/domain";
+import { LayerBrowser } from "./LayerBrowser";
+import { RasterPanel } from "./RasterPanel";
+import { defaultRasterPresentation } from "./rasterPresentation";
 
+const SymbolEditor = lazy(() => import("./SymbolEditor"));
 export function LayerPanel({ world, editor }: { world: World; editor: EditorState }) {
-  const channels = useChannels(world);
-  function update(id: string, changes: Record<string, unknown>) {
-    editor.setStyles(editor.styles.map((s) => (s.layerId === id ? { ...s, ...changes } : s)));
-  }
-  const styles = editor.styles.concat(
-    Object.values(world.layers)
-      .filter((l) => !editor.styles.some((s) => s.layerId === l.id))
-      .map((l) => ({ layerId: l.id, visible: true, opacity: 0.8, color: l.color, minScale: 0 }))
-  );
+  const [target, setTarget] = useState("base");
+  const vector = target.startsWith("vector:") ? target.slice(7) : null;
+  const style = editor.styles.find((style) => style.layerId === vector);
   return (
     <div className="layer-panel">
-      <div className="section-title">WORLD LAYERS</div>
       <label>
         View preset
-        <select aria-label="View preset" onChange={(event) => editor.preset(event.target.value)}>
+        <select
+          aria-label="View preset"
+          defaultValue="physical"
+          onChange={(event) => editor.preset(event.target.value)}
+        >
           {["physical", "political", "cultural", "magical", "infrastructure"].map((preset) => (
             <option key={preset}>{preset}</option>
           ))}
         </select>
       </label>
-      <label className="field-channel">
-        Field visualization
-        <select value={editor.channel} onChange={(event) => editor.setChannel(event.target.value)}>
-          {[...new Set(["elevation", ...(channels.data ?? [])])].map((channel) => (
-            <option key={channel} value={channel}>
-              {labelChannel(world, channel)}
-            </option>
-          ))}
-        </select>
+      <LayerBrowser editor={editor} edit={setTarget} />
+      <RasterPanel world={world} editor={editor} target={target} edit={setTarget} />
+      {style && (
+        <StyleDialog name={world.layers[style.layerId].name} close={() => setTarget("base")}>
+          <Suspense fallback={<p>Loading style editor…</p>}>
+            <SymbolEditor
+              world={world}
+              presentation={style}
+              close={() => setTarget("base")}
+              apply={(symbols) =>
+                editor.setStyles(
+                  editor.styles.map((item) =>
+                    item.layerId === style.layerId ? { ...item, symbols } : item
+                  )
+                )
+              }
+            />
+          </Suspense>
+          <label>
+            Minimum metres per pixel
+            <input
+              type="number"
+              min="0"
+              step="any"
+              value={style.minScale}
+              onChange={(event) =>
+                editor.setStyles(
+                  editor.styles.map((item) =>
+                    item.layerId === style.layerId
+                      ? { ...item, minScale: Number(event.target.value) }
+                      : item
+                  )
+                )
+              }
+            />
+          </label>
+        </StyleDialog>
+      )}
+      <SessionViews world={world} editor={editor} />
+    </div>
+  );
+}
+function SessionViews({ world, editor }: { world: World; editor: EditorState }) {
+  const [name, setName] = useState("Custom composition");
+  return (
+    <details className="session-views">
+      <summary>Session map views</summary>
+      <label>
+        View name
+        <input value={name} onChange={(event) => setName(event.target.value)} />
       </label>
-      <SurfaceLegend world={world} channel={editor.channel} />
-      {styles.map((style, index) => (
-        <LayerRow
-          key={style.layerId}
-          presentation={style}
-          index={index}
-          styles={styles}
-          world={world}
-          editor={editor}
-          update={update}
-        />
-      ))}
       <button
         className="secondary"
+        disabled={!name.trim()}
         onClick={() =>
           editor.execute("setView", {
             id: crypto.randomUUID(),
-            name: "Custom composition",
+            name: name.trim(),
             areaId: editor.area.id,
-            layers: styles,
+            layers: editor.styles,
+            raster: editor.rasterView,
           })
         }
       >
@@ -66,163 +97,37 @@ export function LayerPanel({ world, editor }: { world: World; editor: EditorStat
           onClick={() => {
             editor.enter(view.areaId);
             editor.setStyles(view.layers);
+            editor.setRasterView(view.raster ?? defaultRasterPresentation());
           }}
         >
           {view.name}
         </button>
       ))}
-    </div>
+    </details>
   );
 }
-function useChannels(world: World) {
-  return useQuery({
-    queryKey: ["channels", world.id, world.version],
-    queryFn: async () =>
-      (
-        await Promise.all(
-          world.fields.map((f) => (f.channels ? Promise.resolve(f.channels) : Promise.resolve([])))
-        )
-      )
-        .flat()
-        .filter((channel) => !channel.startsWith("magicApplied:")),
-  });
-}
-function LayerRow({
-  presentation,
-  index,
-  styles,
-  world,
-  editor,
-  update,
+function StyleDialog({
+  name,
+  close,
+  children,
 }: {
-  presentation: LayerStyle;
-  index: number;
-  styles: LayerStyle[];
-  world: World;
-  editor: EditorState;
-  update: (id: string, changes: Record<string, unknown>) => void;
+  name: string;
+  close: () => void;
+  children: import("react").ReactNode;
 }) {
-  const style = presentation;
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    dialog.current?.showModal();
+  }, []);
   return (
-    <div className="layer-row">
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={style.visible}
-          onChange={(event) => update(style.layerId, { visible: event.target.checked })}
-        />
-        {world.layers[style.layerId].name}
-      </label>
-      <small>{editor.area.layers[style.layerId] ?? "inherited / unmaterialized"}</small>
-      <div className="layer-settings">
-        <input
-          aria-label={`${style.layerId} opacity`}
-          type="range"
-          min="0"
-          max="1"
-          step="0.05"
-          value={style.opacity}
-          onChange={(event) => update(style.layerId, { opacity: Number(event.target.value) })}
-        />
-        <input
-          aria-label={`${style.layerId} color`}
-          type="color"
-          value={style.color}
-          onChange={(event) => update(style.layerId, { color: event.target.value })}
-        />
-        <button
-          className="quiet"
-          disabled={index === 0}
-          title="Move layer up"
-          onClick={() => {
-            const next = [...styles];
-            [next[index - 1], next[index]] = [next[index], next[index - 1]];
-            editor.setStyles(next);
-          }}
-        >
-          ↑
+    <dialog className="style-dialog" ref={dialog} aria-label={`Style ${name}`} onCancel={close}>
+      <header>
+        <h2>Style {name}</h2>
+        <button onClick={close} aria-label="Close style editor">
+          ×
         </button>
-      </div>
-      <LayerDetails presentation={style} update={update} />
-    </div>
-  );
-}
-function LayerDetails({
-  presentation: style,
-  update,
-}: {
-  presentation: LayerStyle;
-  update: (id: string, changes: Record<string, unknown>) => void;
-}) {
-  return (
-    <details>
-      <summary>Labels and filter</summary>
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={style.labels ?? false}
-          onChange={(event) => update(style.layerId, { labels: event.target.checked })}
-        />
-        Feature labels
-      </label>
-      <label>
-        Attribute or name contains
-        <input
-          value={style.filter ?? ""}
-          onChange={(event) => update(style.layerId, { filter: event.target.value })}
-        />
-      </label>
-      <label>
-        Minimum metres per pixel
-        <input
-          type="number"
-          min="0"
-          step="any"
-          value={style.minScale}
-          onChange={(event) => update(style.layerId, { minScale: Number(event.target.value) })}
-        />
-      </label>
-    </details>
-  );
-}
-function labelChannel(world: World, channel: string) {
-  const [kind, id, ...rest] = channel.split(":");
-  if (kind === "magic" && id) {
-    const system = (world.magicSystems ?? canonryMagicPresets()).find((system) => system.id === id);
-    if (system) return `${system.name} · ${rest.join(" · ")}`;
-  }
-  const labels: Record<string, string> = {
-    naturalSurface: "Natural geography",
-    finalSurface: "Geography with magic",
-    physicalMaterial: "Physical materials",
-  };
-  if (labels[channel]) return labels[channel];
-  return id ? `${kind} · ${world.entities[id]?.name ?? id.slice(0, 8)}` : kind;
-}
-function SurfaceLegend({ world, channel }: { world: World; channel: string }) {
-  const names: Record<number, string> = {};
-  if (channel === "physicalMaterial") physicalMaterialNames.forEach((name, i) => (names[i] = name));
-  if (["naturalSurface", "finalSurface"].includes(channel))
-    naturalSurfaceNames.forEach((name, i) => (names[i] = name));
-  if (channel === "finalSurface") {
-    let code = 100;
-    for (const system of (world.magicSystems ?? canonryMagicPresets()).filter(
-      (system) => system.enabled
-    ))
-      for (const rule of system.features) names[code++] = `${system.name} · ${rule.name}`;
-  }
-  if (!Object.keys(names).length) return null;
-  return (
-    <details>
-      <summary>Surface codes</summary>
-      <dl>
-        {Object.entries(names).map(([code, name]) => (
-          <div key={code}>
-            <dt>{code}</dt>
-            <dd>{name}</dd>
-          </div>
-        ))}
-      </dl>
-    </details>
+      </header>
+      {children}
+    </dialog>
   );
 }

@@ -50,7 +50,7 @@ export function installMapTools(
   const draw = installDrawing(tool, events, () => navigation.space);
   if (draw) active.push(draw);
   if (draw && tool !== "sculpt")
-    active.push(new Snap({ source: engine.features.getSource()!, pixelTolerance: 8 }));
+    active.push(new Snap({ features: engine.snapFeatures, pixelTolerance: 8 }));
   const pan = new DragPan({
     condition: (event) =>
       primaryAction(event) && (navigation.space || tool === "pan" || tool === "select"),
@@ -97,8 +97,11 @@ function featureTools(
 ) {
   const active: (Select | Modify | Translate)[] = [];
   if (!["select", "reshape", "move"].includes(tool)) return active;
-  const select = new Select({ layers: [engine.features], hitTolerance: 8 });
-  const feature = selected ? engine.features.getSource()!.getFeatureById(selected) : null;
+  const select = new Select({
+    layers: (layer) => engine.vectors.getLayers().getArray().includes(layer),
+    hitTolerance: 8,
+  });
+  const feature = selected ? engine.features.getFeatureById(selected) : null;
   if (feature) select.getFeatures().push(feature);
   select.on("select", (event) => events().select(event.selected[0]?.get("domain") ?? null));
   if (["select", "reshape", "move"].includes(tool)) active.push(select);

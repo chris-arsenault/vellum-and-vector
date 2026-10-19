@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./App";
 import { subscribe } from "./atlasState";
 import "ol/ol.css";
+import "ol-ext/control/LayerSwitcher.css";
+import "./cartography.css";
 import "./styles.css";
 
 const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 500 } } });
