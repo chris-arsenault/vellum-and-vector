@@ -1,5 +1,11 @@
 import { expect, it } from "vitest";
-import { createAdaptiveTopology, rectangle, refineAdaptiveTopology } from "@atlas/domain";
+import {
+  createAdaptiveTopology,
+  reconstructAdaptive,
+  rectangle,
+  refineAdaptiveTopology,
+  sampleAdaptive,
+} from "@atlas/domain";
 import { adaptivePhysicalMesh } from "./adaptiveMesh";
 import { createField } from "./field";
 import { smoothMetric } from "./metricSmoothing";
@@ -36,6 +42,27 @@ function hillsideFixture() {
 }
 const integral = (values: Float64Array, areas: Float64Array) =>
   values.reduce((sum, value, i) => sum + value * areas[i], 0);
+
+it("samples an immutable physical surface lazily with the same coarse/fine reconstruction", () => {
+  const map = fixture(),
+    mesh = map.mesh;
+  map.Elevation.set(
+    Float64Array.from(mesh.x, (x, i) => 200 + Math.sin(x / 10000) * Math.cos(mesh.y[i] / 9000))
+  );
+  const expected = reconstructAdaptive(
+    mesh.topology!,
+    Float64Array.from(mesh.leafToCell, (cell) => map.Elevation[cell])
+  );
+  const at = physicalSampler(mesh, map.Elevation);
+  map.Elevation.fill(-999);
+  for (let y = -49000; y < 50000; y += 7319)
+    for (let x = -49000; x < 50000; x += 6173)
+      expect(at(x, y)).toBeCloseTo(
+        sampleAdaptive(expected, x + mesh.origin[0], y + mesh.origin[1]),
+        10
+      );
+  expect(at(60000, 0)).toBeNaN();
+});
 
 it.each([0, 2500, 20_000])(
   "matches the analytical four-cell diffusion solution at reach %s",

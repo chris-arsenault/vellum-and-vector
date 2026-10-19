@@ -93,11 +93,12 @@ export function GenerationControls({
       <label>
         Detail level
         <select name="quality" defaultValue={quality}>
-          <option value="draft">Draft · 16,384 terrain triangles</option>
-          <option value="standard">Standard · 65,536 terrain triangles</option>
-          <option value="fine">Fine · 262,144 terrain triangles</option>
+          <option value="draft">Draft · coarse adaptive sampling</option>
+          <option value="standard">Standard · medium adaptive sampling</option>
+          <option value="fine">Fine · dense adaptive sampling</option>
         </select>
       </label>
+      <p className="hint">Higher detail takes longer to sample the same world more finely.</p>
       <label>
         Seed
         <input name="seed" type="number" defaultValue={seed} required />

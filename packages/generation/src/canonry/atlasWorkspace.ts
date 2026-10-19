@@ -292,6 +292,10 @@ export function composeNativeAuthoring(work: AtlasPhysicalWorkspace) {
 }
 export function sampleSurfaceAtNative(state: GenerationState, name: string, i: number): number {
   const work = state.physical!;
+  // Publication and physical feedback share these exact cell centres. Reading
+  // their stored samples avoids rebuilding a Hermite evaluator for every cell.
+  if (state.surface.topology === work.map.mesh.topology && state.surface.topology)
+    return state.surface.channels[name][work.map.mesh.cellToLeaf[i]];
   return interpolateSample(state.surface, name, nativePosition(work, i));
 }
 export function nativeIndexAtSurface(state: GenerationState, x: number, y: number) {

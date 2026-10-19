@@ -36,9 +36,9 @@ export function MagicForm({ editor }: { editor: EditorState }) {
       <label>
         Application detail
         <select value={quality} onChange={(event) => setQuality(event.target.value)}>
-          <option value="draft">Draft</option>
-          <option value="standard">Standard</option>
-          <option value="fine">Fine</option>
+          <option value="draft">Draft · coarse adaptive sampling</option>
+          <option value="standard">Standard · medium adaptive sampling</option>
+          <option value="fine">Fine · dense adaptive sampling</option>
         </select>
       </label>
       <button

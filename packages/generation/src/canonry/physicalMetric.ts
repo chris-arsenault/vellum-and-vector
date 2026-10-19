@@ -1,5 +1,5 @@
 import type { PhysicalMesh } from "./mesh";
-import { reconstructAdaptive, sampleAdaptive } from "@atlas/domain";
+import { adaptivePointSampler } from "@atlas/domain";
 import { nearestTriangle } from "./mesh";
 
 export const physicalDistance = (mesh: PhysicalMesh, i: number, j: number) =>
@@ -72,9 +72,9 @@ export function cellTravel(mesh: PhysicalMesh, i: number, dx: number, dy: number
 }
 export function physicalSampler(mesh: PhysicalMesh, values: ArrayLike<number>) {
   if (!mesh.topology) return (x: number, y: number) => values[nearestTriangle(mesh, x, y)];
-  const surface = reconstructAdaptive(
+  const at = adaptivePointSampler(
     mesh.topology,
     Float64Array.from(mesh.leafToCell, (cell) => values[cell])
   );
-  return (x: number, y: number) => sampleAdaptive(surface, x + mesh.origin[0], y + mesh.origin[1]);
+  return (x: number, y: number) => at(x + mesh.origin[0], y + mesh.origin[1]);
 }

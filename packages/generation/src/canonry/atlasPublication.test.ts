@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import {
   createAdaptiveField,
   createAdaptiveTopology,
+  fieldInterpolator,
   point,
   rectangle,
   spatial,
@@ -16,6 +17,7 @@ import { extractGeologicalEvents } from "./geologicalFeatures";
 import { Landform } from "./codes";
 import { initializeMagic } from "./magicState";
 import { refineWorkspace } from "./adaptiveWorkspace";
+import { nativePosition, sampleSurfaceAtNative } from "./atlasWorkspace";
 
 // Supply an evolved state directly. Extraction/projection must not require
 // tectonics, climate or epochs to run before their algorithms can be tested.
@@ -77,6 +79,43 @@ it("projects evolved channels in leaf order with SI units and the same vertical 
     expect(grid.channels.seaLevel[leaf]).toBe(20);
     expect(grid.channels.waterLevel[leaf]).toBe(cell % 2 ? 150 : 20);
   }
+});
+
+it("reads physical feedback in cell order across refined terrain and its numerical halo", () => {
+  const state = fixture(),
+    mesh = state.physical!.map.mesh;
+  state.surface.channels.heat = Float64Array.from(
+    mesh.leafToCell,
+    (_, leaf) => Math.sin(leaf * 0.3) * 20
+  );
+  state.surface.units.heat = "celsius";
+  const expected = fieldInterpolator(state.surface, "heat");
+  expect(mesh.contentCount).toBeLessThan(mesh.count);
+  for (let i = 0; i < mesh.count; i++)
+    expect(sampleSurfaceAtNative(state, "heat", i)).toBeCloseTo(
+      expected(nativePosition(state.physical!, i)),
+      9
+    );
+  // A later channel replacement must be visible without a cached evaluator.
+  state.surface.channels.heat = new Float64Array(mesh.count).fill(37);
+  expect(sampleSurfaceAtNative(state, "heat", 0)).toBe(37);
+});
+
+it("interpolates feedback when its source and physical topology differ", () => {
+  const state = fixture(),
+    mesh = state.physical!.map.mesh;
+  const tree = createAdaptiveTopology(mesh.topology!.bounds, {
+    maximumSize: 25_000,
+    minimumSize: 25_000,
+  });
+  state.surface = createAdaptiveField("coarse", state.domain.scope, tree);
+  state.surface.channels.heat = Float64Array.from(tree.leaves, (_, leaf) => leaf * 3);
+  state.surface.units.heat = "celsius";
+  const expected = fieldInterpolator(state.surface, "heat");
+  for (let i = 0; i < mesh.count; i++)
+    expect(sampleSurfaceAtNative(state, "heat", i)).toBe(
+      expected(nativePosition(state.physical!, i))
+    );
 });
 
 it("extracts two lakes without merging bodies or losing their physical stage", () => {

@@ -70,6 +70,12 @@ function split(piece: Piece): Piece[] {
     return region ? [{ i: piece.i, box: box as Bounds, region }] : [];
   });
 }
+function discreteChannel(field: AdaptiveField, channel: string) {
+  return (
+    ["category", "cell-index"].includes(field.units[channel]) ||
+    ["category", "extensive"].includes(field.quantities?.[channel] ?? "")
+  );
+}
 /** Bound the same reconstructed polynomial, including extrema inside clipped cells. */
 export function adaptiveExtrema(
   field: AdaptiveField,
@@ -78,9 +84,7 @@ export function adaptiveExtrema(
 ): [number, number] | null {
   const values = field.channels[channel],
     surface = reconstructAdaptive(field.topology, values);
-  const discrete =
-    ["category", "cell-index"].includes(field.units[channel]) ||
-    ["category", "extensive"].includes(field.quantities?.[channel] ?? "");
+  const discrete = discreteChannel(field, channel);
   let low = Infinity,
     high = -Infinity;
   const pending: Piece[] = [];
