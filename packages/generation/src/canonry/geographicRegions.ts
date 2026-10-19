@@ -13,13 +13,16 @@ export function extractLakes(state: GenerationState) {
     topology = mesh.topology!;
   const floor = physicalSampler(mesh, map.Elevation);
   const bodies = new Map<number, number[]>();
-  for (let i = 0; i < mesh.contentCount; i++) {
+  // A visible lake can continue into the numerical halo. Trace its complete
+  // basin before clipping; truncating its support leaves an open shoreline.
+  for (let i = 0; i < mesh.count; i++) {
     if (map.WaterKindCodes[i] !== 2) continue;
     const body = map.WaterBodyIds[i];
     if (!bodies.has(body)) bodies.set(body, []);
     bodies.get(body)!.push(i);
   }
   for (const [body, members] of bodies) {
+    if (!members.some((i) => i < mesh.contentCount)) continue;
     const level = map.WaterSurfaceElevations[members[0]];
     const connected = adaptivePointSampler(topology, (leaf) =>
       Number(map.WaterBodyIds[mesh.leafToCell[leaf]] === body)

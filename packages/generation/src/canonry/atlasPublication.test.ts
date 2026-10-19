@@ -146,6 +146,35 @@ it("extracts two lakes without merging bodies or losing their physical stage", (
   }
 });
 
+it("closes a lake crossing the world boundary by tracing its complete numerical halo", () => {
+  const state = fixture(),
+    map = state.physical!.map;
+  for (let i = 0; i < map.mesh.count; i++) {
+    const radius = Math.hypot(map.mesh.x[i], map.mesh.y[i] - 30_000);
+    map.Elevation[i] = (100 + radius / 200) * 1024;
+    if (radius < 30_000) {
+      map.WaterKindCodes[i] = 2;
+      map.WaterBodyIds[i] = 17;
+      map.WaterSurfaceElevations[i] = 250 * 1024;
+    }
+    if (map.mesh.x[i] > 40_000 && map.mesh.y[i] > 40_000) {
+      map.WaterKindCodes[i] = 2;
+      map.WaterBodyIds[i] = 29;
+      map.WaterSurfaceElevations[i] = 500 * 1024;
+    }
+  }
+  extractLakes(state);
+  const lakes = Object.values(state.domain.world.features);
+  expect(lakes).toHaveLength(1);
+  const lake = lakes[0];
+  expect(lake.attributes.waterBody).toBe(17);
+  expect(lake.attributes.waterLevel).toBe(150);
+  expect(spatial.covers(state.domain.scope.footprint, lake.geometry)).toBe(true);
+  expect(spatial.area(lake.geometry)).toBeGreaterThan(1e9);
+  expect(spatial.covers(lake.geometry, point({ x: 2_050_000, y: 3_084_999, z: 0 }))).toBe(true);
+  expect(spatial.covers(lake.geometry, point({ x: 2_050_000, y: 3_085_001, z: 0 }))).toBe(false);
+});
+
 it("publishes subcell geological events in world coordinates without resizing their footprint", () => {
   const state = fixture(),
     map = state.physical!.map;
