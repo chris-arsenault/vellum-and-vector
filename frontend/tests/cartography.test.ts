@@ -1,8 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
+import { installGenerationFixture } from "./generationFixture";
 
 test.use({ actionTimeout: 15000 });
 test("choose landscape parameters and physical history before generating", async ({ page }) => {
+  await installGenerationFixture(page);
   await createWorld(page, 4000, 2000);
   await page.getByText("Configure physical history", { exact: true }).click();
   await page.getByLabel("History starting point").selectOption("young");
@@ -15,7 +17,7 @@ test("choose landscape parameters and physical history before generating", async
   await page.getByLabel("Baseline temperature · °C", { exact: true }).fill("25");
   await page.getByLabel("Detail level").selectOption("draft");
   await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
-  await expect(page.locator(".job-row strong").first()).toHaveText("completed", { timeout: 90000 });
+  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
   await page.screenshot({ path: "test-results/cartographic-landscape.png" });
   await expect(
     page.getByRole("button", { name: "Save physical history", exact: true })
@@ -53,7 +55,8 @@ test("develop a building interior and draw rooms in its located space", async ({
   await page.getByLabel("Feature name").fill("Hall");
   await map(page).click({ position: { x: 300, y: 250 } });
   await map(page).click({ position: { x: 600, y: 250 } });
-  await map(page).dblclick({ position: { x: 600, y: 550 } });
+  await map(page).click({ position: { x: 600, y: 550 } });
+  await map(page).dblclick({ position: { x: 300, y: 550 } });
   await expect(page.locator(".right-panel h2")).toHaveText("Hall");
   await page.getByRole("button", { name: "Refine this footprint", exact: true }).click();
   await expect(page.getByLabel("Develop as")).toHaveValue("interior");
@@ -75,6 +78,17 @@ test("develop a building interior and draw rooms in its located space", async ({
       (feature: { properties: { kind: string } }) => feature.properties.kind === "building"
     );
   expect(room.properties.spaceId).not.toEqual(building.properties.spaceId);
+  // Exercise the actual bundled worker and publication once, without generating a world.
+  await page.getByRole("button", { name: "Develop", exact: true }).click();
+  await page.getByLabel("Detail level").selectOption("draft");
+  await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
+  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
+  const completed = await exportMap(page);
+  expect(
+    completed.features.some(
+      (feature: { properties: { kind: string } }) => feature.properties.kind === "furniture"
+    )
+  ).toBe(true);
 });
 const tool = (page: Page, name: string) =>
   page.getByRole("toolbar", { name: "Map tools" }).getByRole("button", { name, exact: true });
@@ -176,6 +190,7 @@ test("place, move and reshape features; pan during an unfinished route and cance
 test("terrain strokes, cultural distributions, political claims and magical sources use the map", async ({
   page,
 }) => {
+  await installGenerationFixture(page);
   await createWorld(page);
   await page.getByRole("button", { name: "Edit this map by hand", exact: true }).click();
   await page.getByRole("button", { name: "Start blank field", exact: true }).click();
@@ -229,6 +244,6 @@ test("terrain strokes, cultural distributions, political claims and magical sour
   await drag(page, [330, 320], [350, 360]);
   await expect(page.locator(".map-status")).toContainText("Revision 12");
   await page.getByRole("button", { name: "Apply magic to geography", exact: true }).click();
-  await expect(page.locator(".job-row strong").first()).toHaveText("completed", { timeout: 90000 });
+  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
   await page.screenshot({ path: "test-results/cartographic-workflow.png" });
 });

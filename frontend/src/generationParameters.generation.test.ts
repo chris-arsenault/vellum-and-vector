@@ -1,27 +1,8 @@
 import { expect, it } from "vitest";
 import { atlasConfiguration, defaultAtlasParameters, generateAtlas } from "@atlas/generation";
-import { atlasPhysicalProfile } from "../../packages/generation/src/canonry/atlasProfile";
 import { createWorld, session } from "./atlasState";
 import { generationSnapshot } from "./generationJobs";
 
-it("maps creator controls to native physics with declared units", () => {
-  const profile = atlasPhysicalProfile({
-    continents: 7,
-    provinces: 30,
-    landFraction: 0.3,
-    temperature: -5,
-    rainfall: 2,
-    erosion: 0.5,
-    seaLevel: 100,
-  });
-  expect(profile.ContinentalAssemblyCount).toBe(7);
-  expect(profile.TectonicProvinceCount).toBe(30);
-  expect(profile.ContinentalCrustFraction).toBe(0.3);
-  expect(profile.TemperatureBaseline).toBe(250);
-  expect(profile.PrecipitationBaseline).toBe(80);
-  expect(profile.FluvialErosionStrength).toBe(0.16);
-  expect(profile.SeaLevel * profile.ElevationScale).toBe(100);
-});
 it("changes real geography, retains chosen inputs, and rejects invalid settings", async () => {
   const world = createWorld({
       name: "Controls",

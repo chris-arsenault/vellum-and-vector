@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
+    "test:generation": "vitest run --config vitest.generation.config.ts",
     "test:browser": "playwright test",
     "format": "prettier --write src *.ts *.json index.html"
   },

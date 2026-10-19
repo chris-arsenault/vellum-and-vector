@@ -1,9 +1,8 @@
 import { expect, test } from "@playwright/test";
+import { installGenerationFixture } from "./generationFixture";
 
-test("configure a magic variant, evolve repeated ice ages and inspect generated histories", async ({
-  page,
-}) => {
-  test.setTimeout(300000);
+test("save a magic variant and inspect generated history fields", async ({ page }) => {
+  await installGenerationFixture(page);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
@@ -29,12 +28,19 @@ test("configure a magic variant, evolve repeated ice ages and inspect generated 
   await page.getByRole("button", { name: "Save magical systems", exact: true }).click();
   await expect(page.locator(".map-status")).toContainText("Revision 3");
   await page.getByRole("button", { name: "Develop", exact: true }).click();
+  await page.getByRole("button", { name: "Configure magical systems", exact: true }).click();
+  await page.getByText("Ice forging · active", { exact: true }).click();
+  const saved = page
+    .locator("details")
+    .filter({ has: page.locator("summary", { hasText: /^Ice forging · active$/ }) });
+  await saved.getByText("Environmental feedback", { exact: true }).click();
+  await expect(saved.getByLabel("Heat per intensity unit", { exact: false })).toHaveValue("-0.2");
+  await page.getByRole("button", { name: "Develop", exact: true }).click();
   await page.getByLabel("Landscape starting point").selectOption("canonry");
   await page.getByLabel("Detail level").selectOption("draft");
   await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
   const status = page.locator(".job-row strong").first();
-  await expect(status).toHaveText(/^(completed|failed|cancelled)$/, { timeout: 180000 });
-  expect(await status.textContent()).toBe("completed");
+  await expect(status).toHaveText("completed");
   await page.getByRole("button", { name: "Layers", exact: true }).click();
   const channels = page.getByLabel("Field visualization");
   await channels.selectOption("magic:pressure:coastalHistory");

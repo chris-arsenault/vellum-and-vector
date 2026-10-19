@@ -3,7 +3,6 @@ import { createWorld, session, undoWorld } from "./atlasState";
 import { commitCommand, previewCommand } from "./atlasCommands";
 import { readScene, readRaster, exportWorld } from "./atlasReads";
 import { saveTemplate } from "./atlasTemplates";
-import { generateAtlas } from "@atlas/generation";
 import { rectangle, type Command, type World } from "@atlas/domain";
 
 function command(world: World, kind: string, data: Record<string, unknown>): Command {
@@ -148,45 +147,6 @@ it("instantiates a detached template with independent identities and a rotated m
   );
   expect(definition.features[0].geometry).toEqual(rectangle([0, 0, 10, 10]));
 });
-it("runs a causal landscape without services and retains authored features", async () => {
-  const initial = createWorld({ name: "Atlas", seed: 104729, width: 4_000_000, height: 2_000_000 }),
-    areaId = Object.keys(initial.areas)[0];
-  const markerId = crypto.randomUUID();
-  commitCommand(
-    initial.id,
-    command(initial, "putFeature", {
-      areaId,
-      feature: {
-        id: markerId,
-        name: "Authored landmark",
-        kind: "poi",
-        layerId: "pois",
-        geometry: { type: "Point", coordinates: [50000, 50000] },
-        attributes: {},
-        relations: [],
-        protected: true,
-      },
-    })
-  );
-  const input = {
-    areaId,
-    domains: ["physical", "cultural", "political", "built"],
-    quality: "draft",
-    seed: initial.seed,
-  };
-  const result = await generateAtlas(session(initial.id).snapshot, input);
-  expect(result.state.history).toHaveLength(3);
-  expect(result.state.surface.channels.flow.some((v) => v > 0)).toBe(true);
-  expect(result.state.surface.channels.elevation.every(Number.isFinite)).toBe(true);
-  expect(result.state.domain.world.features[markerId].name).toBe("Authored landmark");
-  expect(
-    Object.values(result.state.domain.world.features).some((f) => f.kind === "sovereignty")
-  ).toBe(true);
-  expect(
-    Object.keys(result.state.surface.channels).filter((c) => c.startsWith("culture:"))
-  ).toHaveLength(3);
-}, 120000);
-
 it("publishes landform geometry and sampled changes together, then undoes both", () => {
   const initial = world(),
     areaId = Object.keys(initial.areas)[0];

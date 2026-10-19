@@ -1,4 +1,7 @@
 import { test, expect } from "@playwright/test";
+import { installGenerationFixture, completeGenerationFixture } from "./generationFixture";
+
+test.beforeEach(async ({ page }) => installGenerationFixture(page, true));
 
 test("editing, undo, cancellation and independent worlds work without services", async ({
   page,
@@ -50,7 +53,8 @@ test("manual edits made during generation survive its outdated result", async ({
     .click({ position: { x: 250, y: 250 } });
   const panel = page.locator(".right-panel");
   await expect(panel.getByRole("heading", { name: "Keep the live edit" })).toBeVisible();
-  await expect(page.locator(".job-row strong").first()).toHaveText("failed", { timeout: 90000 });
+  await completeGenerationFixture(page);
+  await expect(page.locator(".job-row strong").first()).toHaveText("failed");
   await expect(page.locator(".job-row .error")).toContainText("Your edits were kept");
   await expect(page.locator(".map-status")).toContainText("1 world features");
   await expect(panel.getByRole("heading", { name: "Keep the live edit" })).toBeVisible();

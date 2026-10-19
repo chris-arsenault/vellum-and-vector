@@ -141,6 +141,12 @@ make test-browser
 The browser tests start and stop their own temporary Vite server. The production
 build is `frontend/dist/` and includes its generation worker.
 
+Browser workflow tests use small completed-field fixtures, with one real worker
+check for interior generation and publication. Default unit tests cover individual
+processes and domain behavior. Full world generation, epoch histories, refinement
+and Standard/Fine scale comparisons run headlessly with `pnpm test:generation`;
+these expensive checks are separate from the default CI suite.
+
 ## Deployment
 
 CI uses Ahara's shared workflow for TypeScript checks, coverage, browser tests
