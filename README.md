@@ -153,6 +153,12 @@ make test-browser
 The browser tests start and stop their own temporary Vite server. The production
 build is `frontend/dist/` and includes its generation worker.
 
+Use `BROWSER=firefox pnpm --dir frontend test:browser` to run Firefox. On Linux,
+the command uses headed Firefox under Xvfb because headless Firefox cannot create
+the WebGL context required for raster layers. Install `xvfb` and `xauth` for local
+Linux runs; Ahara's Playwright CI container already includes them. Chromium and
+WebKit keep their default headless execution.
+
 Use small deterministic inputs to test algorithm changes first. The normal Vitest
 suite exercises actual reconstruction, contour topology, conservative remeshing,
 physical processes, configurable magic and publication. Expectations include
