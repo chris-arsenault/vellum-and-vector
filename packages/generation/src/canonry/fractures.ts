@@ -1,131 +1,134 @@
-// FractureNetworkLayer.cs, Canonry 0f62584c.
+// FractureNetworkLayer.cs, Canonry 0f62584c; world-space steering replaces lattice directions.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { hashSigned, hashUnit } from "./noise";
 import { round, truncate } from "./math";
 import { nearestTriangle } from "./mesh";
 import { worldCandidates } from "./worldSources";
-import { triangleDistanceSquared } from "./radial";
 
+type Coordinate = [number, number];
+const cellAt = (map: PhysicalField, [x, y]: Coordinate) => nearestTriangle(map.mesh, x, y);
 function separatedRoot(
-  map: PhysicalField,
-  candidates: number[],
-  selected: number[],
+  candidates: Coordinate[],
+  roots: Coordinate[],
   branch: number,
   minimum: number
 ) {
   const skip = branch % Math.max(1, truncate(candidates.length / 8));
-  for (let index = skip; index < candidates.length; index++) {
-    const i = candidates[index];
-    if (selected.every((j) => triangleDistanceSquared(map.mesh, i, j) >= minimum * minimum))
-      return i;
-  }
-  return candidates[branch % candidates.length];
+  return (
+    candidates
+      .slice(skip)
+      .find(([x, y]) => roots.every(([a, b]) => Math.hypot(x - a, y - b) >= minimum)) ??
+    candidates[branch % candidates.length]
+  );
 }
-function directedNeighbor(
+function directedStep(
   map: PhysicalField,
   seed: number,
-  current: number,
-  previous: number,
+  point: Coordinate,
   angle: number,
   branch: number,
-  step: number
+  step: number,
+  distance: number
 ) {
-  let best = -1,
-    bestScore = -Number.MAX_VALUE;
-  for (let edge = 0; edge < 3; edge++) {
-    const j = map.mesh.neighbors[current * 3 + edge];
-    if (j < 0 || j === previous) continue;
-    const direction = Math.atan2(
-      Math.fround(map.mesh.y[j] - map.mesh.y[current]),
-      Math.fround(map.mesh.x[j] - map.mesh.x[current])
-    );
+  let best: { point: Coordinate; angle: number } | undefined,
+    score = -Infinity;
+  // Angles are relative to the evolving heading, never the global mesh axes.
+  for (const turn of [-0.65, -0.325, 0, 0.325, 0.65]) {
+    const direction = angle + turn;
+    const next: Coordinate = [
+      point[0] + Math.cos(direction) * distance,
+      point[1] + Math.sin(direction) * distance,
+    ];
+    const j = cellAt(map, next);
+    if (j < 0) continue;
     const novelty = map.FractureConductance[j] < 560 ? 0.22 : -0.08;
-    const bias = (map.TectonicStrain[j] / 1000) * 0.12;
-    const score =
-      Math.cos(direction - angle) +
+    const value =
+      Math.cos(turn) +
       novelty +
-      bias +
+      (map.TectonicStrain[j] / 1000) * 0.12 +
       hashSigned(
         seed ^ 0x6c53,
         branch + Math.floor(step / 10_000),
-        Math.floor(map.mesh.x[j] / 10_000) ^ Math.floor(map.mesh.y[j] / 10_000)
+        Math.floor(next[0] / 10_000) ^ Math.floor(next[1] / 10_000)
       ) *
         0.12;
-    if (score > bestScore) {
-      best = j;
-      bestScore = score;
+    if (value > score) {
+      score = value;
+      best = { point: next, angle: direction };
     }
   }
   return best;
 }
+export function widenFracture(
+  map: PhysicalField,
+  point: Coordinate,
+  width: number,
+  strength: number
+) {
+  const source = cellAt(map, point);
+  if (source < 0) return;
+  const queue = [source],
+    visited = new Set(queue);
+  for (let head = 0; head < queue.length; head++) {
+    const i = queue[head];
+    const distance = Math.hypot(map.mesh.x[i] - point[0], map.mesh.y[i] - point[1]);
+    const support = width / 2 + Math.hypot(map.mesh.cellWidth[i], map.mesh.cellHeight[i]) / 2;
+    if (distance > support && i !== source) continue;
+    map.FractureConductance[i] = Math.max(
+      map.FractureConductance[i],
+      i === source ? strength : round(560 * Math.max(0, 1 - distance / support))
+    );
+    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
+      if (j < 0 || visited.has(j)) continue;
+      visited.add(j);
+      queue.push(j);
+    }
+  }
+}
 function growBranch(
   map: PhysicalField,
   c: PhysicalContext,
-  root: number,
+  root: Coordinate,
   branch: number,
-  nodes: number[]
+  nodes: Coordinate[]
 ) {
-  let current = root,
-    previous = -1;
-  let angle = hashUnit(c.Seed ^ 0x3da7, branch, 0) * Math.PI * 2;
+  let point = root,
+    angle = hashUnit(c.Seed ^ 0x3da7, branch, 0) * Math.PI * 2;
   const length =
     c.Profile.FractureMinimumLength +
     (c.Profile.FractureMaximumLength - c.Profile.FractureMinimumLength) *
       hashUnit(c.Seed ^ 0x4f39, branch, 1);
   const fault = {
     id: `fault:${c.Seed}:${branch}`,
-    coordinates: [] as [number, number][],
+    coordinates: [] as Coordinate[],
     width: c.Profile.FractureWidth,
   };
   map.faults.push(fault);
-  for (let step = 0; step < length; step += map.mesh.spacing) {
-    map.FractureConductance[current] = Math.max(
-      map.FractureConductance[current],
-      760 + truncate(hashUnit(c.Seed, branch, Math.floor(step / 10_000)) * 240)
+  const increment = Math.min(fault.width / 2, length / 32);
+  for (let step = 0; step < length; step += increment) {
+    const strength = 760 + truncate(hashUnit(c.Seed, branch, Math.floor(step / 10_000)) * 240);
+    nodes.push(point);
+    fault.coordinates.push(point);
+    widenFracture(map, point, fault.width, strength);
+    const next = directedStep(
+      map,
+      c.Seed,
+      point,
+      angle,
+      branch,
+      step,
+      Math.min(increment, length - step)
     );
-    nodes.push(current);
-    fault.coordinates.push([map.mesh.x[current], map.mesh.y[current]]);
-    widenFracture(map, current, fault.width);
-    const next = directedNeighbor(map, c.Seed, current, previous, angle, branch, step);
-    if (next < 0) break;
-    angle =
-      Math.atan2(
-        Math.fround(map.mesh.y[next] - map.mesh.y[current]),
-        Math.fround(map.mesh.x[next] - map.mesh.x[current])
-      ) +
-      hashSigned(c.Seed ^ 0x5ac1, branch, Math.floor(step / 10_000)) * 0.22;
-    previous = current;
-    current = next;
+    if (!next) break;
+    point = next.point;
+    angle = next.angle + hashSigned(c.Seed ^ 0x5ac1, branch, Math.floor(step / 10_000)) * 0.22;
   }
-}
-function widenFracture(map: PhysicalField, source: number, width: number) {
-  const queue = [source],
-    visited = new Set(queue);
-  for (let head = 0; head < queue.length; head++) {
-    const i = queue[head];
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[i * 3 + edge];
-      if (j < 0 || visited.has(j)) continue;
-      visited.add(j);
-      const distance = Math.sqrt(triangleDistanceSquared(map.mesh, source, j));
-      if (distance > width / 2) continue;
-      map.FractureConductance[j] = Math.max(
-        map.FractureConductance[j],
-        round(560 * (1 - distance / width))
-      );
-      queue.push(j);
-    }
-  }
+  fault.coordinates.push(point);
 }
 function candidateScore(map: PhysicalField, i: number) {
-  const f = Math.fround;
-  return f(
-    f(
-      f(f(map.TectonicStrain[i] * f(0.48)) + f(map.Uplift[i] * 310)) +
-        f(map.RidgeInfluence[i] * 120)
-    )
-  );
+  return map.TectonicStrain[i] * 0.48 + map.Uplift[i] * 310 + map.RidgeInfluence[i] * 120;
 }
 export function fractureNetwork(map: PhysicalField, c: PhysicalContext) {
   if (!c.IsEvolutionEpoch)
@@ -140,21 +143,58 @@ export function fractureNetwork(map: PhysicalField, c: PhysicalContext) {
       : Math.max(1, truncate((c.Profile.FractureBranchCount * c.TectonicStrength) / 1000));
   if (count === 0) return;
   const candidates = worldCandidates(map.mesh, c.Seed, Math.max(1024, count * 256))
-      .map((source) => ({
-        i: nearestTriangle(map.mesh, source.x, source.y),
-        score:
-          candidateScore(map, nearestTriangle(map.mesh, source.x, source.y)) + source.priority * 90,
-      }))
-      .sort((a, b) => b.score - a.score)
-      .map((source) => source.i),
-    nodes: number[] = [],
-    roots: number[] = [];
+    .map((source) => ({
+      ...source,
+      score:
+        candidateScore(map, nearestTriangle(map.mesh, source.x, source.y)) + source.priority * 90,
+    }))
+    .sort((a, b) => b.score - a.score)
+    .map((source): Coordinate => [source.x, source.y]);
+  const nodes: Coordinate[] = [],
+    roots: Coordinate[] = [];
   for (let branch = 0; branch < count; branch++) {
     const root =
       branch > 0 && branch % 3 === 0 && nodes.length > 0
         ? nodes[truncate(hashUnit(c.Seed ^ 0x29f1, branch, 0) * nodes.length) % nodes.length]
-        : separatedRoot(map, candidates, roots, branch, c.Profile.FractureMinimumSpacing);
+        : separatedRoot(candidates, roots, branch, c.Profile.FractureMinimumSpacing);
     roots.push(root);
     growBranch(map, c, root, branch, nodes);
   }
+}
+
+/** Plan against the current terrain; refining support must not choose a different network. */
+export function plannedFractures(map: PhysicalField, c: PhysicalContext) {
+  const scratch: PhysicalField = {
+    ...map,
+    FractureConductance: map.FractureConductance.slice(),
+    faults: [],
+  };
+  fractureNetwork(scratch, c);
+  return scratch.faults;
+}
+export function applyPlannedFractures(
+  map: PhysicalField,
+  c: PhysicalContext,
+  faults: PhysicalField["faults"]
+) {
+  if (!c.IsEvolutionEpoch)
+    for (let i = 0; i < map.mesh.count; i++)
+      map.FractureConductance[i] = Math.max(
+        map.FractureConductance[i],
+        c.Profile.FractureConductanceFloor
+      );
+  faults.forEach((fault, branch) => {
+    let distance = 0;
+    fault.coordinates.forEach((point, index) => {
+      if (index)
+        distance += Math.hypot(
+          point[0] - fault.coordinates[index - 1][0],
+          point[1] - fault.coordinates[index - 1][1]
+        );
+      const strength =
+        760 + truncate(hashUnit(c.Seed, branch, Math.floor(distance / 10_000)) * 240);
+      widenFracture(map, point, fault.width, strength);
+    });
+    map.faults.push(fault);
+  });
 }

@@ -3,6 +3,11 @@ import { createWorld, session, undoWorld } from "./atlasState";
 import { commitCommand } from "./atlasCommands";
 import { readRaster, readScene } from "./atlasReads";
 import { makeCommand } from "./useAtlas";
+import { sample, type World } from "@atlas/domain";
+
+function elevation(world: World, fieldId: string, x = 500) {
+  return sample(readRaster(world.id, fieldId, "elevation").field, "elevation", { x, y: 500, z: 0 });
+}
 
 it("paints a complete stroke once, supports erase and smooth, and undoes all its samples together", () => {
   const initial = createWorld({ name: "Stroke", seed: 7, width: 1000, height: 1000 }),
@@ -25,8 +30,10 @@ it("paints a complete stroke once, supports erase and smooth, and undoes all its
     delta: 20,
   });
   world = commitCommand(world.id, command).candidate;
-  const row = readRaster(world.id, fieldId, "elevation").values.slice(55, 66);
-  expect(row).toEqual([0, 0, 20, 20, 20, 20, 20, 20, 20, 0, 0]);
+  const row = Array.from({ length: 11 }, (_, i) => elevation(world, fieldId, i * 100));
+  [0, 0, 20, 20, 20, 20, 20, 20, 20, 0, 0].forEach((expected, i) =>
+    expect(row[i]).toBeCloseTo(expected, 0)
+  );
   expect(session(world.id).history[0].operationId).toBe(command.operationId);
   const original = session(world.id).snapshot.numerical[fieldId];
   world = commitCommand(
@@ -40,10 +47,10 @@ it("paints a complete stroke once, supports erase and smooth, and undoes all its
       delta: 0,
     })
   ).candidate;
-  expect(readRaster(world.id, fieldId, "elevation").values[60]).toBe(0);
+  expect(elevation(world, fieldId)).toBeCloseTo(0, 0);
   expect(original.channels.elevation[60]).toBe(0);
   world = undoWorld(world.id, session(world.id).history[0].operationId);
-  expect(readRaster(world.id, fieldId, "elevation").values[60]).toBe(20);
+  expect(elevation(world, fieldId)).toBeCloseTo(20, 0);
   world = commitCommand(
     world.id,
     makeCommand(world, "sculptField", {
@@ -55,12 +62,12 @@ it("paints a complete stroke once, supports erase and smooth, and undoes all its
       delta: 1,
     })
   ).candidate;
-  expect(readRaster(world.id, fieldId, "elevation").values[60]).toBeGreaterThan(0);
-  expect(readRaster(world.id, fieldId, "elevation").values[60]).toBeLessThan(20);
+  expect(elevation(world, fieldId)).toBeGreaterThan(0);
+  expect(elevation(world, fieldId)).toBeLessThan(20);
   world = undoWorld(world.id, session(world.id).history[0].operationId);
   undoWorld(world.id, command.operationId);
-  expect(readRaster(world.id, fieldId, "elevation").values.every((value) => value === 0)).toBe(
-    true
+  expect(Array.from({ length: 11 }, (_, i) => elevation(world, fieldId, i * 100))).toEqual(
+    new Array(11).fill(0)
   );
 });
 

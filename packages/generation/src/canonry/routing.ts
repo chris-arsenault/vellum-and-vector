@@ -26,8 +26,8 @@ function lakeRanks(map: PhysicalField, root: number): Map<number, number> {
     queue = [root];
   for (let head = 0; head < queue.length; head++) {
     const i = queue[head];
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[i * 3 + edge];
+    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
       if (
         j < 0 ||
         map.WaterKindCodes[j] !== 2 ||
@@ -61,8 +61,8 @@ function routeLake(map: PhysicalField, members: number[], seed: number) {
   for (const member of members) {
     if (member === root) continue;
     const candidates: number[] = [];
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[member * 3 + edge],
+    for (let edge = 0; edge < map.mesh.degree[member]; edge++) {
+      const j = map.mesh.neighbors[member * map.mesh.stride + edge],
         rank = ranks.get(j);
       if (rank !== undefined && rank < ranks.get(member)!) candidates.push(j);
     }

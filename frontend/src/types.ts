@@ -1,4 +1,15 @@
 export * from "@atlas/domain/model";
+export interface Raster {
+  id: string;
+  areaId: string;
+  footprint: import("geojson").Geometry;
+  bounds: number[];
+  channel: string;
+  field: import("@atlas/domain").GridSurface;
+  water?: import("@atlas/domain").GridSurface;
+  ice?: import("@atlas/domain").GridSurface;
+  lakes?: { geometry: import("geojson").Geometry; level: number }[];
+}
 export type Tool =
   | "select"
   | "pan"

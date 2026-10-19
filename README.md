@@ -141,11 +141,30 @@ make test-browser
 The browser tests start and stop their own temporary Vite server. The production
 build is `frontend/dist/` and includes its generation worker.
 
+Use small deterministic inputs to test algorithm changes first. The normal Vitest
+suite exercises actual reconstruction, contour topology, conservative remeshing,
+physical processes, configurable magic and publication. Expectations include
+analytical solutions, known geometry and budgets, parameter effects and causal
+history; they do not require generating a world first. For example:
+
+```sh
+pnpm test packages/domain/src/fieldContours.test.ts
+pnpm test packages/generation/src/canonry/atlasPublication.test.ts
+pnpm test packages/generation/src/canonry/adaptiveGeology.test.ts
+pnpm --dir frontend test src/rasterTiles.test.ts
+```
+
+When a complete-world check exposes a defect, reproduce it with a small algorithm
+or boundary test and fix that case before another integration run. Full generation
+is integration and geographic review evidence, not the feedback loop for small
+changes. Select the relevant file with `pnpm test:generation <file>`; the expensive
+world and quality comparisons are opt-in and excluded from default CI.
+
 Browser workflow tests use small completed-field fixtures, with one real worker
-check for interior generation and publication. Default unit tests cover individual
-processes and domain behavior. Full world generation, epoch histories, refinement
-and Standard/Fine scale comparisons run headlessly with `pnpm test:generation`;
-these expensive checks are separate from the default CI suite.
+check for interior generation and publication. They test interaction; physical
+history stays headless. Reuse a completed run's ignored terrain artifacts in
+`frontend/.artifacts/generation/` when reviewing display changes instead of
+generating another world. Browser tests clear their own `test-results/` directory.
 
 ## Deployment
 

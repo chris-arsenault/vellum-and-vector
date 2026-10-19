@@ -50,8 +50,9 @@ export function reconcileBrush(
           areaId: field.areaId,
           layerId: field.layerId,
           footprint: grid.scope.footprint,
-          width: grid.width,
-          height: grid.height,
+          ...(grid.topology
+            ? { topology: grid.topology }
+            : { width: grid.width, height: grid.height }),
           channels: Object.fromEntries(
             Object.entries(grid.channels).map(([name, values]) => [
               name,

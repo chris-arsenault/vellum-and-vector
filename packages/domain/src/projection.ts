@@ -104,7 +104,7 @@ export function projectChanges(snapshot: DomainSnapshot, changes: ChangeSet): Do
   };
 }
 function projectFields(snapshot: DomainSnapshot, changes: ChangeSet) {
-  const numerical = structuredClone(snapshot.numerical);
+  const numerical = { ...snapshot.numerical };
   for (const artifact of changes.fieldArtifacts ?? []) {
     const field = changes.writes.find(
       (w) => w.kind === "field" && w.value.resourceId === artifact.reference.id
@@ -118,8 +118,10 @@ function projectFields(snapshot: DomainSnapshot, changes: ChangeSet) {
     for (const { value: patch } of changes.writes
       .filter((w) => w.kind === "fieldPatch")
       .filter((w) => w.value.resourceId === artifact.reference.id))
-      if (numerical[patch.fieldId])
+      if (numerical[patch.fieldId]) {
+        numerical[patch.fieldId] = { ...numerical[patch.fieldId] };
         overlayField(numerical[patch.fieldId], artifact.grid, patch.channels);
+      }
   }
   return numerical;
 }

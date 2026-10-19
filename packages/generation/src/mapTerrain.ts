@@ -270,6 +270,11 @@ function advect(
       "crustMotionY",
     ];
   const source = Object.fromEntries(channels.map((key) => [key, grid.channels[key].slice()]));
+  requireThat(
+    !grid.topology,
+    "prototype_grid",
+    "Use the Canonry workflow for adaptive physical geography."
+  );
   const stepX = (grid.bounds[2] - grid.bounds[0]) / (grid.width - 1),
     stepY = (grid.bounds[3] - grid.bounds[1]) / (grid.height - 1);
   for (let i = 0; i < movable.length; i++) {

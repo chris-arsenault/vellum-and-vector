@@ -1,6 +1,4 @@
 import type { Grid, GridSurface } from "./grids";
-import { gridPosition, gridSampler } from "./grids";
-import { spatial } from "./spatial";
 import { requireThat } from "./errors";
 
 export function overlayField(
@@ -26,17 +24,7 @@ export function overlayField(
     { grid: patch, channels: channels.filter((c) => Object.hasOwn(base.channels, c)) },
   ];
 }
-export function materializeField(source: GridSurface): Grid {
-  const { overlays, ...raw } = source;
-  const result = structuredClone(raw);
-  if (!overlays?.length) return result;
-  const covered = spatial.pointCoverage(source.scope.footprint);
-  for (const [name, values] of Object.entries(result.channels)) {
-    const valueAt = gridSampler(source, name);
-    for (let i = 0; i < values.length; i++) {
-      const p = gridPosition(source, i);
-      if (covered(p)) values[i] = valueAt(p);
-    }
-  }
-  return result;
+/** Keep authored patches at their own resolution; consumers use the shared evaluator. */
+export function materializeField(source: GridSurface): GridSurface {
+  return structuredClone(source);
 }

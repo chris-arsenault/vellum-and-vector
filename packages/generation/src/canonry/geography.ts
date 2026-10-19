@@ -2,6 +2,8 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { units } from "./math";
+import { metricSearch } from "./metricSearch";
+import { physicalGradients } from "./physicalMetric";
 
 function retainInheritedDistance(map: PhysicalField, inherited: Float64Array | null) {
   if (!inherited) return;
@@ -11,37 +13,22 @@ function retainInheritedDistance(map: PhysicalField, inherited: Float64Array | n
 }
 export function oceanDistance(map: PhysicalField) {
   const inherited = map.OpenBoundary ? map.OceanDistance.slice() : null;
-  map.OceanDistance.fill(-1);
+  map.OceanDistance.fill(Infinity);
   const queue: number[] = [];
   for (let i = 0; i < map.mesh.count; i++)
     if (map.WaterKindCodes[i] === 1) {
       map.OceanDistance[i] = 0;
       queue.push(i);
     }
-  for (let head = 0; head < queue.length; head++) {
-    const i = queue[head];
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[i * 3 + edge];
-      if (j < 0 || map.OceanDistance[j] >= 0) continue;
-      map.OceanDistance[j] = map.OceanDistance[i] + map.mesh.edgeLength[i * 3 + edge];
-      queue.push(j);
-    }
-  }
+  metricSearch(map.mesh, queue, map.OceanDistance, Infinity, () => {});
+  for (let i = 0; i < map.mesh.count; i++)
+    if (!Number.isFinite(map.OceanDistance[i])) map.OceanDistance[i] = -1;
   retainInheritedDistance(map, inherited);
 }
 export function measureSlopes(map: PhysicalField) {
-  for (let i = 0; i < map.mesh.count; i++) {
-    let slope = 0;
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[i * 3 + edge];
-      if (j >= 0)
-        slope = Math.max(
-          slope,
-          Math.abs(map.Elevation[i] - map.Elevation[j]) / (1024 * map.mesh.edgeLength[i * 3 + edge])
-        );
-    }
-    map.Slope[i] = slope;
-  }
+  const gradient = physicalGradients(map.mesh, map.Elevation);
+  for (let i = 0; i < map.mesh.count; i++)
+    map.Slope[i] = Math.hypot(gradient.x[i], gradient.y[i]) / 1024;
 }
 export function bathymetry(map: PhysicalField, c: PhysicalContext) {
   measureSlopes(map);
@@ -72,8 +59,8 @@ function collect(
   const members = [start];
   labels[start] = id;
   for (let head = 0; head < members.length; head++)
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[members[head] * 3 + edge];
+    for (let edge = 0; edge < map.mesh.degree[members[head]]; edge++) {
+      const j = map.mesh.neighbors[members[head] * map.mesh.stride + edge];
       if (j < 0 || labels[j] !== 0 || !eligible(j)) continue;
       labels[j] = id;
       members.push(j);

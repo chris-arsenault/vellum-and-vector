@@ -42,8 +42,8 @@ export function splitConnected(map: PhysicalField, submerged: Set<number>): numb
     visited.add(start);
     const members = [start];
     for (let head = 0; head < members.length; head++)
-      for (let edge = 0; edge < 3; edge++) {
-        const j = map.mesh.neighbors[members[head] * 3 + edge];
+      for (let edge = 0; edge < map.mesh.degree[members[head]]; edge++) {
+        const j = map.mesh.neighbors[members[head] * map.mesh.stride + edge];
         if (j < 0 || !submerged.has(j) || visited.has(j)) continue;
         visited.add(j);
         members.push(j);
@@ -106,8 +106,8 @@ function basinInput(map: PhysicalField, component: Depression, water: Float64Arr
   let input = 0;
   for (const i of component.members) {
     input += depthRateToDischarge(map.Runoff[i], map.mesh.areas[i]);
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[i * 3 + edge];
+    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
       if (j >= 0 && !basin.has(j) && map.DrainageParents[j] === i) input += water[j];
     }
   }
@@ -145,11 +145,16 @@ export function qualifies(map: PhysicalField, p: PhysicalProfile, lake: Supporte
   const area = lake.members.reduce((sum, i) => sum + map.mesh.areas[i], 0);
   if (area < p.MinimumLakeArea || lake.depth < units(p.LakeDepthThreshold)) return false;
   const set = new Set(lake.members);
-  let interior = 0;
+  let interior = 0,
+    total = 0;
   for (const i of lake.members) {
-    let neighbors = 0;
-    for (let edge = 0; edge < 3; edge++) if (set.has(map.mesh.neighbors[i * 3 + edge])) neighbors++;
-    if (neighbors >= 2) interior++;
+    let supported = 0;
+    for (let edge = 0; edge < map.mesh.degree[i]; edge++)
+      if (set.has(map.mesh.neighbors[i * map.mesh.stride + edge]))
+        supported += map.mesh.faceLength[i * map.mesh.stride + edge];
+    const perimeter = 2 * (map.mesh.cellWidth[i] + map.mesh.cellHeight[i]);
+    if (supported >= perimeter / 2) interior += map.mesh.areas[i];
+    total += map.mesh.areas[i];
   }
-  return interior * 1000 >= lake.members.length * p.LakeCompactnessShare;
+  return interior * 1000 >= total * p.LakeCompactnessShare;
 }

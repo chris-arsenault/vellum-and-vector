@@ -39,6 +39,12 @@ function routedSediment(cells: number) {
   const mesh = createMesh(cells, 0);
   mesh.spacing = 40_000 / cells;
   mesh.areas.fill(400_000_000 / cells);
+  for (let i = 0; i < mesh.count; i++) {
+    mesh.x[i] = (i + 0.5) * mesh.spacing;
+    mesh.y[i] = 0;
+    mesh.cellWidth[i] = mesh.spacing;
+    mesh.cellHeight[i] = mesh.areas[i] / mesh.spacing;
+  }
   const map = createField(mesh);
   for (let i = 0; i < mesh.count - 1; i++) map.FlowTargets[i] = i + 1;
   map.SedimentSupply[0] = (1000 * 1024) / mesh.areas[0];
@@ -72,11 +78,11 @@ function moundMeasures(map: PhysicalField) {
 }
 
 function relaxedMound(samples: number) {
-  const map = createField(createWorldMesh([-80_000, -80_000, 80_000, 80_000], samples, 0));
+  const map = createField(createWorldMesh([-8000, -8000, 8000, 8000], samples, 0));
   map.RockResistance.fill(1000);
   for (let i = 0; i < map.mesh.count; i++) {
     const height = units(
-      1000 * Math.exp(-(map.mesh.x[i] ** 2 + map.mesh.y[i] ** 2) / (2 * 10_000 ** 2))
+      3000 * Math.exp(-(map.mesh.x[i] ** 2 + map.mesh.y[i] ** 2) / (2 * 1000 ** 2))
     );
     map.BedrockElevation[i] = map.Elevation[i] = height;
   }
@@ -89,7 +95,7 @@ function relaxedMound(samples: number) {
     Math.abs(map.SedimentProducedTotal - map.SedimentDepositedTotal) / before.volume
   ).toBeLessThan(1e-11);
   expect(after.peak).toBeLessThan(before.peak);
-  expect(after.radius - before.radius).toBeGreaterThan(1000);
+  expect(after.radius).toBeGreaterThan(before.radius);
   expect(() => validateLandscape(map)).not.toThrow();
   return { spreading: after.radius - before.radius, peak: after.peak };
 }

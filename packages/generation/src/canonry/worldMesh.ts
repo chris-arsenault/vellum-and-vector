@@ -108,6 +108,18 @@ export function createWorldMesh(
       i < inside.length ? area / inside.length : triangleArea * spacing ** 2
     ),
     edgeLength: new Float64Array(count * 3).fill(spacing),
+    degree: new Int32Array(count).fill(3),
+    stride: 3,
+    cellWidth: new Float64Array(count).fill(Math.sqrt(triangleArea) * spacing),
+    cellHeight: new Float64Array(count).fill(Math.sqrt(triangleArea) * spacing),
+    faceLength: new Float64Array(count * 3).fill(Math.sqrt(3) * spacing),
+    faceDistance: new Float64Array(count * 3).fill(spacing),
+    contentAreas: Float64Array.from(coords, (_, i) =>
+      i < inside.length ? area / inside.length : 0
+    ),
+    topology: null,
+    cellToLeaf: Int32Array.from({ length: count }, (_, i) => i),
+    leafToCell: Int32Array.from({ length: count }, (_, i) => i),
   };
   coords.forEach((p, i) => {
     [mesh.x[i], mesh.y[i]] = coordinates(p, spacing, latticeOffset);

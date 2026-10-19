@@ -3,7 +3,8 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, round, toUnits, truncate } from "./math";
 import { unitNoise } from "./noise";
-import { smoothMetric } from "./metricSmoothing";
+import { prepareMetricSmoother } from "./metricSmoothing";
+import { physicalDistance, physicalGradients, physicalFace } from "./physicalMetric";
 
 function normalized(x: number, y: number): [number, number] {
   const length = Math.sqrt(x * x + y * y);
@@ -12,12 +13,14 @@ function normalized(x: number, y: number): [number, number] {
 function basinInfluence(map: PhysicalField, i: number): [number, number] {
   let x = 0,
     y = 0;
-  for (let edge = 0; edge < 3; edge++) {
-    const offset = i * 3 + edge,
+  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+    const offset = i * map.mesh.stride + edge,
       j = map.mesh.neighbors[offset];
     if (j < 0) continue;
-    const dx = map.mesh.edgeX[offset],
-      dy = map.mesh.edgeY[offset];
+    const face = physicalFace(map.mesh, i, edge);
+    const support = face.length / (2 * (map.mesh.cellWidth[i] + map.mesh.cellHeight[i]));
+    const dx = face.nx * support * 4,
+      dy = face.ny * support * 4;
     if (map.WaterKindCodes[j] !== 1) {
       x -= dx * 1.4;
       y -= dy * 1.4;
@@ -38,18 +41,11 @@ function seedDirections(map: PhysicalField, c: PhysicalContext) {
   const potential = Float64Array.from({ length: map.mesh.count }, (_, i) =>
     unitNoise(map.mesh.x[i], map.mesh.y[i], c.Seed, scale, 3)
   );
+  const gradient = physicalGradients(map.mesh, potential);
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes[i] !== 1) continue;
-    let gx = 0,
-      gy = 0;
-    for (let edge = 0; edge < 3; edge++) {
-      const offset = i * 3 + edge,
-        j = map.mesh.neighbors[offset];
-      if (j < 0) continue;
-      const difference = ((potential[j] - potential[i]) / map.mesh.edgeLength[offset]) * 10_000;
-      gx += map.mesh.edgeX[offset] * difference;
-      gy += map.mesh.edgeY[offset] * difference;
-    }
+    const gx = gradient.x[i] * 10_000,
+      gy = gradient.y[i] * 10_000;
     const x = map.mesh.x[i],
       y = map.mesh.y[i],
       f = Math.fround;
@@ -64,8 +60,9 @@ function seedDirections(map: PhysicalField, c: PhysicalContext) {
 }
 function smoothDirections(map: PhysicalField, length: number) {
   const ocean = Uint8Array.from(map.WaterKindCodes, (kind) => Number(kind === 1));
-  const x = smoothMetric(map.mesh, Float64Array.from(map.OceanCurrentX), length, ocean);
-  const y = smoothMetric(map.mesh, Float64Array.from(map.OceanCurrentY), length, ocean);
+  const smooth = prepareMetricSmoother(map.mesh, length, ocean);
+  const x = smooth(Float64Array.from(map.OceanCurrentX));
+  const y = smooth(Float64Array.from(map.OceanCurrentY));
   for (let i = 0; i < map.mesh.count; i++)
     if (map.WaterKindCodes[i] === 1)
       [map.OceanCurrentX[i], map.OceanCurrentY[i]] = normalized(x[i], y[i]);
@@ -75,8 +72,8 @@ function upstreamNeighbors(map: PhysicalField): Int32Array {
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes[i] !== 1) continue;
     let best = 0;
-    for (let edge = 0; edge < 3; edge++) {
-      const offset = i * 3 + edge,
+    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+      const offset = i * map.mesh.stride + edge,
         j = map.mesh.neighbors[offset];
       if (j < 0 || map.WaterKindCodes[j] !== 1) continue;
       const f = Math.fround;
@@ -121,8 +118,8 @@ function heatSources(map: PhysicalField): Int32Array {
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes[i] !== 1) continue;
     let heat = map.Geothermal[i];
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[i * 3 + edge];
+    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
       if (j >= 0) heat = Math.max(heat, truncate((map.Geothermal[j] * 4) / 5));
     }
     source[i] = clamp(60 + truncate((heat * 4) / 5), 0, 1000);
@@ -130,7 +127,32 @@ function heatSources(map: PhysicalField): Int32Array {
   }
   return source;
 }
-/** Upwind mixing and cooling over one configured physical transport interval. */
+function upstreamHeat(
+  map: PhysicalField,
+  source: Int32Array,
+  targets: Int32Array,
+  start: number,
+  reach: number,
+  cooling: number
+) {
+  let current = start,
+    traveled = 0,
+    heat = source[start];
+  const visited = new Set([start]);
+  while (traveled < reach) {
+    const next = targets[current];
+    if (next < 0 || visited.has(next)) break;
+    const segment = physicalDistance(map.mesh, current, next);
+    const distance = Math.min(segment, reach - traveled);
+    const mixed = source[current] + ((source[next] - source[current]) * distance) / segment;
+    traveled += distance;
+    heat = Math.max(heat, mixed - (cooling * traveled) / reach);
+    current = next;
+    visited.add(next);
+  }
+  return heat;
+}
+/** Characteristic upwind interpolation, source floors and cooling over physical travel. */
 export function transportOceanHeat(
   map: PhysicalField,
   reach: number,
@@ -139,20 +161,9 @@ export function transportOceanHeat(
 ) {
   const source = heatSources(map);
   if (reach <= 0) return;
-  const passes = Math.max(1, Math.ceil(reach / (map.mesh.spacing * 0.7))),
-    fraction = reach / (passes * map.mesh.spacing),
-    loss = cooling / passes;
-  let current = Float64Array.from(source),
-    next = current.slice();
-  for (let pass = 0; pass < passes; pass++) {
-    for (let i = 0; i < map.mesh.count; i++) {
-      if (map.WaterKindCodes[i] !== 1) continue;
-      const upstream = targets[i] < 0 ? 0 : current[targets[i]];
-      next[i] = Math.max(source[i], (1 - fraction) * current[i] + fraction * upstream - loss);
-    }
-    [current, next] = [next, current];
-  }
-  for (let i = 0; i < current.length; i++) map.OceanCurrentHeat[i] = round(current[i]);
+  for (let i = 0; i < map.mesh.count; i++)
+    if (map.WaterKindCodes[i] === 1)
+      map.OceanCurrentHeat[i] = round(upstreamHeat(map, source, targets, i, reach, cooling));
 }
 function waveExposure(map: PhysicalField, steps: number, targets: Int32Array) {
   for (let i = 0; i < map.mesh.count; i++) {
@@ -165,7 +176,7 @@ function waveExposure(map: PhysicalField, steps: number, targets: Int32Array) {
       const next = targets[current];
       if (next < 0 || next === previous || visited.has(next)) break;
       visited.add(next);
-      fetch += map.mesh.spacing;
+      fetch += physicalDistance(map.mesh, current, next);
       previous = current;
       current = next;
     }

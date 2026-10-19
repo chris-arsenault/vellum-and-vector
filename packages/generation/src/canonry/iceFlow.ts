@@ -9,10 +9,10 @@ function assignTargets(map: PhysicalField, surface: Float64Array) {
     if (!canCarryIce(map, i)) continue;
     let best = -1,
       slope = 0;
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[i * 3 + edge];
+    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
       if (j < 0 || surface[j] >= surface[i]) continue;
-      const drop = (surface[i] - surface[j]) / map.mesh.edgeLength[i * 3 + edge];
+      const drop = (surface[i] - surface[j]) / map.mesh.edgeLength[i * map.mesh.stride + edge];
       if (drop > slope) {
         best = j;
         slope = drop;

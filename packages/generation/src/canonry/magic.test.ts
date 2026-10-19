@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { canonryMagicPresets, magicSystemSchema } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
-import { createWorldMesh } from "./worldMesh";
+import { createAdaptiveWorldMesh } from "./adaptiveMesh";
 import { createField } from "./field";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { initializeMagic, advectMagic } from "./magicState";
@@ -12,7 +12,17 @@ import { classifyMagicFeatures } from "./magicFeatures";
 
 function scenario() {
   const state = landscape(),
-    map = createField(createWorldMesh([-100_000, -100_000, 100_000, 100_000], 256, 20_000));
+    map = createField(
+      createAdaptiveWorldMesh(
+        [-100_000, -100_000, 100_000, 100_000],
+        {
+          maximumSize: 25_000,
+          minimumSize: 6250,
+          refine: ([x, , right]) => x < 25_000 && right > -25_000,
+        },
+        0
+      )
+    );
   state.domain.world.magicSystems = canonryMagicPresets();
   state.physical = {
     map,
@@ -20,6 +30,7 @@ function scenario() {
     samples: new Int32Array(state.surface.active.length),
     fixed: [],
     inherited: false,
+    sampling: { maximumSize: map.mesh.spacing, minimumSize: map.mesh.spacing, featureSamples: 2 },
   };
   map.RockResistance.fill(1000);
   map.FractureConductance.fill(800);

@@ -3,12 +3,13 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, round, toUnits, truncate } from "./math";
 import { fractalNoise, hashUnit } from "./noise";
+import { physicalDistance } from "./physicalMetric";
 
 export function alignedNeighbor(map: PhysicalField, i: number, dx: number, dy: number): number {
   let best = -1,
     score = -Number.MAX_VALUE;
-  for (let edge = 0; edge < 3; edge++) {
-    const offset = i * 3 + edge,
+  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+    const offset = i * map.mesh.stride + edge,
       j = map.mesh.neighbors[offset];
     if (j < 0) continue;
     const alignment = map.mesh.edgeX[offset] * dx + map.mesh.edgeY[offset] * dy;
@@ -44,9 +45,11 @@ function traceAirMass(map: PhysicalField, scale: number, start: number) {
     moistureBarrier = -1,
     ocean = -1;
   const visited = new Set<number>();
-  for (let distance = 0; distance < 180_000; distance += map.mesh.spacing) {
+  for (let distance = 0; distance < 180_000;) {
     const next = map.UpwindTargets[current];
     if (next < 0 || visited.has(next)) break;
+    distance += physicalDistance(map.mesh, current, next);
+    if (distance > 180_000) break;
     visited.add(next);
     current = next;
     barrier = Math.max(barrier, map.Elevation[current] - map.Elevation[start]);

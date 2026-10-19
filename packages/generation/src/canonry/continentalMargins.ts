@@ -4,6 +4,7 @@ import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
 import { buoyancy, clamp, thickness, toUnits, units } from "./math";
 import { deposit } from "./surface";
+import { PriorityQueue } from "./priorityQueue";
 
 const smooth = (value: number) => {
   const c = clamp(value, 0, 1);
@@ -12,8 +13,8 @@ const smooth = (value: number) => {
 function adjacentLandMargin(map: PhysicalField, i: number): number {
   let selected = -1,
     priority = -1;
-  for (let edge = 0; edge < 3; edge++) {
-    const j = map.mesh.neighbors[i * 3 + edge];
+  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
     if (j < 0 || map.WaterKindCodes[j] === 1) continue;
     const margin = map.MarginCodes[j],
       rank = [0, 1, 4, 3, 2][margin];
@@ -30,7 +31,14 @@ function seedOceanCoast(map: PhysicalField): number[] {
     if (map.WaterKindCodes[i] !== 1) continue;
     const margin = adjacentLandMargin(map, i);
     if (margin < 0) continue;
-    map.OceanMarginDistance[i] = map.mesh.spacing;
+    let distance = Infinity;
+    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+      const at = i * map.mesh.stride + edge,
+        j = map.mesh.neighbors[at];
+      if (j >= 0 && map.WaterKindCodes[j] !== 1)
+        distance = Math.min(distance, map.mesh.edgeLength[at] / 2);
+    }
+    map.OceanMarginDistance[i] = distance;
     map.CoastalMarginCodes[i] = margin;
     queue.push(i);
   }
@@ -39,8 +47,8 @@ function seedOceanCoast(map: PhysicalField): number[] {
 function seedLandCoast(map: PhysicalField) {
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes[i] === 1) continue;
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[i * 3 + edge];
+    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
       if (j >= 0 && map.WaterKindCodes[j] === 1) {
         map.OceanMarginDistance[i] = -1;
         map.CoastalMarginCodes[i] = map.MarginCodes[i];
@@ -50,20 +58,28 @@ function seedLandCoast(map: PhysicalField) {
   }
 }
 function marginFrame(map: PhysicalField) {
-  map.OceanMarginDistance.fill(0);
+  map.OceanMarginDistance.fill(Infinity);
   map.CoastalMarginCodes.fill(0);
-  const queue = seedOceanCoast(map);
+  const queue = new PriorityQueue<{ i: number; distance: number }>(
+    (a, b) => a.distance - b.distance || a.i - b.i
+  );
+  for (const i of seedOceanCoast(map)) queue.push({ i, distance: map.OceanMarginDistance[i] });
   seedLandCoast(map);
-  for (let head = 0; head < queue.length; head++) {
-    const i = queue[head];
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[i * 3 + edge];
-      if (j < 0 || map.OceanMarginDistance[j] !== 0 || map.WaterKindCodes[j] !== 1) continue;
-      map.OceanMarginDistance[j] = map.OceanMarginDistance[i] + map.mesh.spacing;
+  while (queue.count) {
+    const { i, distance } = queue.pop();
+    if (distance !== map.OceanMarginDistance[i]) continue;
+    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+      const at = i * map.mesh.stride + edge,
+        j = map.mesh.neighbors[at];
+      const next = distance + map.mesh.edgeLength[at];
+      if (j < 0 || map.OceanMarginDistance[j] <= next || map.WaterKindCodes[j] !== 1) continue;
+      map.OceanMarginDistance[j] = next;
       map.CoastalMarginCodes[j] = map.CoastalMarginCodes[i];
-      queue.push(j);
+      queue.push({ i: j, distance: next });
     }
   }
+  for (let i = 0; i < map.mesh.count; i++)
+    if (!Number.isFinite(map.OceanMarginDistance[i])) map.OceanMarginDistance[i] = 0;
 }
 function convergentDepth(p: PhysicalProfile, distance: number, current: number): number {
   const ambient = Math.max(p.ContinentalSlopeDepth, p.OceanicSubsidenceDepth + 200);

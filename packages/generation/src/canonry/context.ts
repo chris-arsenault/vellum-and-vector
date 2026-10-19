@@ -1,5 +1,8 @@
 // Canonry PhysicalGeographyGenerationContext.cs, commit 0f62584c.
 import type { PhysicalProfile } from "./profile";
+import type { GenerationState, MapProcessContext } from "../process";
+import { atlasEpoch } from "./atlasProfile";
+import { round } from "./math";
 export interface PhysicalEpoch {
   StableName: string;
   TectonicStrength: number;
@@ -31,6 +34,22 @@ const neutral = {
   TemperatureOffset: 0,
   SeaLevelOffset: 0,
 };
+export function nativeContext(
+  state: GenerationState,
+  context: MapProcessContext,
+  seed: number,
+  salt: number
+) {
+  const index = context.epochIndices[0],
+    epoch = index === undefined ? null : atlasEpoch(state.domain.world.epochs[index]);
+  const nativeIndex = index ?? (state.physical!.map.CrustSupportInitialized ? -1 : 0);
+  const definition = index === undefined ? undefined : state.domain.world.epochs[index];
+  const profile = { ...state.physical!.profile };
+  profile.ImpactCraterCount = round(profile.ImpactCraterCount * (definition?.impacts ?? 1));
+  for (const key of ["VolcanicConeHeight", "VolcanicApronHeight", "VolcanicCalderaDepth"] as const)
+    profile[key] *= definition?.volcanism ?? 1;
+  return physicalContext(seed, salt, profile, epoch, nativeIndex, state.domain.world.epochs.length);
+}
 export function physicalContext(
   seed: number,
   salt: number,

@@ -30,6 +30,16 @@ function centers(map: PhysicalField, c: PhysicalContext): WorldCandidate[] {
   );
   return separatedCandidates(ranked, count, c.Profile.ImpactMinimumSpacing);
 }
+export function plannedImpacts(map: PhysicalField, c: PhysicalContext) {
+  if (c.IsEvolutionEpoch && c.EpochIndex >= c.EpochCount - 1) return [];
+  return centers(map, c).map((center) => ({
+    ...center,
+    radius:
+      c.Profile.ImpactMinimumRadius +
+      (c.Profile.ImpactMaximumRadius - c.Profile.ImpactMinimumRadius) *
+        hashUnit(c.Seed ^ 0x3a91, center.id, 0),
+  }));
+}
 function excavate(
   map: PhysicalField,
   i: number,
@@ -133,11 +143,8 @@ function applyImpact(
   map.SedimentExportedTotal += excavation - ejecta(map, p, candidates, excavation);
 }
 export function impactCratering(map: PhysicalField, c: PhysicalContext) {
-  if (c.IsEvolutionEpoch && c.EpochIndex >= c.EpochCount - 1) return;
-  centers(map, c).forEach((center) => {
-    const minimum = c.Profile.ImpactMinimumRadius;
-    const radius =
-      minimum + (c.Profile.ImpactMaximumRadius - minimum) * hashUnit(c.Seed ^ 0x3a91, center.id, 0);
+  plannedImpacts(map, c).forEach((center) => {
+    const radius = center.radius;
     map.events.push({
       id: `impact:${c.Seed}:${center.id}`,
       kind: "impact",

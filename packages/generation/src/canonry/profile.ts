@@ -93,7 +93,8 @@ export const physicalProfile = {
   LithosphericFlexureLength: 35_000,
   MassWastingIterations: 4,
   PostFluvialMassWastingIterations: 2,
-  MassWastingStableGradient: 0.0072,
+  // Rise/run: about 35 degrees for baseline rock, varied by material resistance.
+  MassWastingStableGradient: 0.7,
   MassWastingTransportLength: 10_000,
   MassWastingTransportFraction: 280,
   // Cubic metres per metre of contour width in one physical relaxation pass.

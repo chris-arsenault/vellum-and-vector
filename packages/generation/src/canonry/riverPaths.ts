@@ -1,4 +1,5 @@
 import type { PhysicalField } from "./field";
+import { physicalSampler } from "./physicalMetric";
 
 type Coordinate = [number, number];
 type Station = { point: Coordinate; segment: number; fraction: number };
@@ -6,6 +7,7 @@ export interface RiverPaths {
   x: Float64Array;
   y: Float64Array;
   upstream: Int32Array;
+  elevationAt?: (x: number, y: number) => number;
 }
 const mix = (a: Coordinate, b: Coordinate, t = 0.5): Coordinate => [
   a[0] + (b[0] - a[0]) * t,
@@ -19,6 +21,7 @@ export function createRiverPaths(map: PhysicalField): RiverPaths {
     x: Float64Array.from(map.mesh.x),
     y: Float64Array.from(map.mesh.y),
     upstream: new Int32Array(map.mesh.count).fill(-1),
+    elevationAt: map.mesh.topology ? physicalSampler(map.mesh, map.Elevation) : undefined,
   };
   for (let i = 0; i < map.mesh.count; i++) {
     const target = map.FlowTargets[i];
@@ -42,7 +45,13 @@ function relax(map: PhysicalField, paths: RiverPaths) {
     const dx = (x[previous] + x[next] + 2 * x[i]) / 4 - map.mesh.x[i],
       dy = (y[previous] + y[next] + 2 * y[i]) / 4 - map.mesh.y[i];
     // The centroid-to-edge distance is h/2. Keep the point strictly inside its cell.
-    const factor = Math.min(1, (map.mesh.spacing * 0.45) / Math.hypot(dx, dy));
+    const factor = map.mesh.topology
+      ? Math.min(
+          1,
+          (map.mesh.cellWidth[i] * 0.45) / Math.abs(dx),
+          (map.mesh.cellHeight[i] * 0.45) / Math.abs(dy)
+        )
+      : Math.min(1, (map.mesh.spacing * 0.45) / Math.hypot(dx, dy));
     paths.x[i] = map.mesh.x[i] + dx * factor;
     paths.y[i] = map.mesh.y[i] + dy * factor;
   }
@@ -101,9 +110,10 @@ function appendCurve(
   points: Coordinate[],
   segment: number,
   tolerance: number,
-  stations: Station[]
+  stations: Station[],
+  range: [number, number] = [0, 1]
 ) {
-  const pending = [{ points, start: 0, end: 1 }];
+  const pending = [{ points, start: range[0], end: range[1] }];
   while (pending.length) {
     const {
       points: [a, b, c, d],
@@ -125,6 +135,124 @@ function appendCurve(
     pending.push({ points: [a, ab, abc, center], start, end: middle });
   }
 }
+function cellHandle(map: PhysicalField, i: number, a: Coordinate, vector: Coordinate) {
+  const low = [
+    map.mesh.x[i] - map.mesh.cellWidth[i] / 2,
+    map.mesh.y[i] - map.mesh.cellHeight[i] / 2,
+  ];
+  const high = [
+    map.mesh.x[i] + map.mesh.cellWidth[i] / 2,
+    map.mesh.y[i] + map.mesh.cellHeight[i] / 2,
+  ];
+  let factor = 1;
+  for (let axis = 0; axis < 2; axis++) {
+    if (vector[axis] > 0) factor = Math.min(factor, (high[axis] - a[axis]) / vector[axis]);
+    if (vector[axis] < 0) factor = Math.min(factor, (low[axis] - a[axis]) / vector[axis]);
+  }
+  return [
+    a[0] + vector[0] * Math.max(0, factor),
+    a[1] + vector[1] * Math.max(0, factor),
+  ] as Coordinate;
+}
+function portal(
+  map: PhysicalField,
+  i: number,
+  j: number,
+  a: Coordinate,
+  b: Coordinate
+): Coordinate {
+  const low = [
+    Math.max(map.mesh.x[i] - map.mesh.cellWidth[i] / 2, map.mesh.x[j] - map.mesh.cellWidth[j] / 2),
+    Math.max(
+      map.mesh.y[i] - map.mesh.cellHeight[i] / 2,
+      map.mesh.y[j] - map.mesh.cellHeight[j] / 2
+    ),
+  ];
+  const high = [
+    Math.min(map.mesh.x[i] + map.mesh.cellWidth[i] / 2, map.mesh.x[j] + map.mesh.cellWidth[j] / 2),
+    Math.min(
+      map.mesh.y[i] + map.mesh.cellHeight[i] / 2,
+      map.mesh.y[j] + map.mesh.cellHeight[j] / 2
+    ),
+  ];
+  const axis = Math.abs(high[0] - low[0]) < Math.abs(high[1] - low[1]) ? 0 : 1;
+  const fraction = (low[axis] - a[axis]) / (b[axis] - a[axis]);
+  const point = mix(a, b, fraction);
+  return [
+    Math.max(low[0], Math.min(high[0], point[0])),
+    Math.max(low[1], Math.min(high[1], point[1])),
+  ];
+}
+function curvedHandle(
+  map: PhysicalField,
+  paths: RiverPaths,
+  i: number,
+  a: Coordinate,
+  b: Coordinate,
+  reverse = false
+) {
+  const t = tangent(map, paths, i),
+    chord: Coordinate = [b[0] - a[0], b[1] - a[1]];
+  const vector = t[0] * chord[0] + t[1] * chord[1] > 0 ? t : chord;
+  const scale = (Math.hypot(...chord) / (3 * Math.hypot(...vector))) * (reverse ? -1 : 1);
+  return cellHandle(map, i, reverse ? b : a, [vector[0] * scale, vector[1] * scale]);
+}
+function appendAdaptiveSegment(
+  map: PhysicalField,
+  paths: RiverPaths,
+  i: number,
+  j: number,
+  segment: number,
+  stations: Station[]
+) {
+  const a = position(paths, i),
+    d = position(paths, j),
+    crossing = portal(map, i, j, a, d);
+  const chord: Coordinate = [d[0] - a[0], d[1] - a[1]];
+  const before = Math.hypot(crossing[0] - a[0], crossing[1] - a[1]);
+  const after = Math.hypot(d[0] - crossing[0], d[1] - crossing[1]);
+  const fraction = before / (before + after),
+    length = Math.hypot(...chord);
+  const tolerance = Math.min(
+    100,
+    Math.min(
+      map.mesh.cellWidth[i],
+      map.mesh.cellHeight[i],
+      map.mesh.cellWidth[j],
+      map.mesh.cellHeight[j]
+    ) / 64
+  );
+  appendCurve(
+    [
+      a,
+      curvedHandle(map, paths, i, a, crossing),
+      cellHandle(map, i, crossing, [
+        (-chord[0] * before) / (3 * length),
+        (-chord[1] * before) / (3 * length),
+      ]),
+      crossing,
+    ],
+    segment,
+    tolerance,
+    stations,
+    [0, fraction]
+  );
+  appendCurve(
+    [
+      crossing,
+      cellHandle(map, j, crossing, [
+        (chord[0] * after) / (3 * length),
+        (chord[1] * after) / (3 * length),
+      ]),
+      curvedHandle(map, paths, j, crossing, d, true),
+      d,
+    ],
+    segment,
+    tolerance,
+    stations,
+    [fraction, 1]
+  );
+}
 function profile(
   members: number[],
   stations: Station[],
@@ -140,13 +268,52 @@ function profile(
       scale
   );
 }
+function clipReceivingWater(
+  map: PhysicalField,
+  paths: RiverPaths,
+  members: number[],
+  stations: Station[]
+) {
+  const last = members.at(-1)!;
+  if (!paths.elevationAt || map.WaterKindCodes[last] === 0) return stations;
+  const level = map.WaterSurfaceElevations[last];
+  if (!Number.isFinite(level) || paths.elevationAt(...stations.at(-1)!.point) >= level)
+    return stations;
+  for (let n = stations.length - 2; n >= 0; n--) {
+    const a = stations[n],
+      b = stations[n + 1];
+    if (paths.elevationAt(...a.point) < level) continue;
+    let low = 0,
+      high = 1;
+    while ((high - low) * Math.hypot(b.point[0] - a.point[0], b.point[1] - a.point[1]) > 1e-6) {
+      const middle = (low + high) / 2;
+      if (paths.elevationAt(...mix(a.point, b.point, middle)) >= level) low = middle;
+      else high = middle;
+    }
+    const fraction = (low + high) / 2;
+    const start = a.segment === b.segment ? a.fraction : 0;
+    return [
+      ...stations.slice(0, n + 1),
+      {
+        point: mix(a.point, b.point, fraction),
+        segment: b.segment,
+        fraction: start + (b.fraction - start) * fraction,
+      },
+    ];
+  }
+  return stations;
+}
 
 /** The same continuous channel and longitudinal profiles feed drawing, inspection and export. */
 export function riverPath(map: PhysicalField, paths: RiverPaths, members: number[]) {
-  const stations: Station[] = [{ point: position(paths, members[0]), segment: 0, fraction: 0 }];
+  let stations: Station[] = [{ point: position(paths, members[0]), segment: 0, fraction: 0 }];
   for (let segment = 0; segment < members.length - 1; segment++) {
     const i = members[segment],
       j = members[segment + 1];
+    if (map.mesh.topology) {
+      appendAdaptiveSegment(map, paths, i, j, segment, stations);
+      continue;
+    }
     appendCurve(
       [
         position(paths, i),
@@ -159,6 +326,7 @@ export function riverPath(map: PhysicalField, paths: RiverPaths, members: number
       stations
     );
   }
+  stations = clipReceivingWater(map, paths, members, stations);
   return {
     geometry: {
       type: "LineString" as const,
@@ -173,6 +341,9 @@ export function riverPath(map: PhysicalField, paths: RiverPaths, members: number
       depths: profile(members, stations, map.RiverDepth),
       catchmentAreas: profile(members, stations, map.CatchmentArea),
       elevations: profile(members, stations, map.DrainageElevations, 1 / 1024, map.BaseSeaLevel),
+      bedElevations: paths.elevationAt
+        ? stations.map(({ point }) => (paths.elevationAt!(...point) - map.BaseSeaLevel) / 1024)
+        : profile(members, stations, map.Elevation, 1 / 1024, map.BaseSeaLevel),
     },
   };
 }

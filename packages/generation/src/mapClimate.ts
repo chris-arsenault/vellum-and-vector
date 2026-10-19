@@ -75,6 +75,11 @@ export const temperatureProcess: MapProcess = {
 // ocean evaporation. Rising terrain removes more moisture; the remaining air
 // reaches the lee side depleted. These are rates, not an elapsed-time advance.
 function* airPaths(grid: Grid, wind: string): Generator<number[]> {
+  requireThat(
+    !grid.topology,
+    "prototype_grid",
+    "Use the Canonry workflow for adaptive physical geography."
+  );
   const horizontal = wind === "east" || wind === "west",
     positive = wind === "east" || wind === "north",
     along = horizontal ? grid.width : grid.height,

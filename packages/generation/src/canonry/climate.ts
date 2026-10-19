@@ -3,6 +3,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, round, toUnits, truncate } from "./math";
 import { unitNoise } from "./noise";
+import { physicalDistance } from "./physicalMetric";
 
 export function temperature(map: PhysicalField, c: PhysicalContext) {
   const p = c.Profile;
@@ -81,7 +82,10 @@ export function precipitation(map: PhysicalField, c: PhysicalContext) {
         ? 0
         : clamp(
             truncate(
-              ((map.Elevation[i] - map.Elevation[upwind]) / 1024 / map.mesh.spacing) * 30_000
+              ((map.Elevation[i] - map.Elevation[upwind]) /
+                1024 /
+                physicalDistance(map.mesh, i, upwind)) *
+                30_000
             ),
             0,
             1000

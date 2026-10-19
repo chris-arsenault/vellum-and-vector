@@ -2,26 +2,25 @@
 import type { PhysicalField } from "./field";
 import { nearestTriangle } from "./mesh";
 import { clamp, round } from "./math";
+import { adaptiveCell, visitAdaptiveOverlap, type Bounds } from "@atlas/domain";
 
 export const weightScale = 1_000_000;
 export interface TransportPlan {
+  offsets: Int32Array;
   targets: Int32Array;
-  weights: Int32Array;
+  weights: Float64Array;
   arrivals: Float64Array;
   dominant: Int32Array;
   dominantWeight: Float64Array;
 }
-function add(
-  map: PhysicalField,
-  plan: TransportPlan,
-  source: number,
-  slot: number,
-  target: number,
-  weight: number
-) {
+type Builder = Omit<TransportPlan, "targets" | "weights"> & {
+  targets: number[];
+  weights: number[];
+};
+function add(map: PhysicalField, plan: Builder, source: number, target: number, weight: number) {
   if (weight <= 0) return;
-  plan.targets[source * 4 + slot] = target;
-  plan.weights[source * 4 + slot] = weight;
+  plan.targets.push(target);
+  plan.weights.push(weight);
   const contribution = (weight * map.mesh.areas[source]) / map.mesh.areas[target];
   plan.arrivals[target] += contribution;
   if (
@@ -32,18 +31,18 @@ function add(
     plan.dominantWeight[target] = contribution;
   }
 }
-function scatter(map: PhysicalField, plan: TransportPlan, source: number, x: number, y: number) {
+function scatter(map: PhysicalField, plan: Builder, source: number, x: number, y: number) {
   const mesh = map.mesh,
     nearest = nearestTriangle(mesh, x, y);
   if (nearest < 0) return;
   const distance2 = (i: number) => (mesh.x[i] - x) ** 2 + (mesh.y[i] - y) ** 2;
   if (distance2(nearest) < 0.00000001) {
-    add(map, plan, source, 0, nearest, weightScale);
+    add(map, plan, source, nearest, weightScale);
     return;
   }
   const candidates = [nearest];
-  for (let edge = 0; edge < 3; edge++) {
-    const j = mesh.neighbors[nearest * 3 + edge];
+  for (let edge = 0; edge < mesh.degree[nearest]; edge++) {
+    const j = mesh.neighbors[nearest * mesh.stride + edge];
     if (j >= 0) candidates.push(j);
   }
   const scores = candidates.map((i) => 1 / Math.max(0.0025, distance2(i)) ** 2);
@@ -55,25 +54,50 @@ function scatter(map: PhysicalField, plan: TransportPlan, source: number, x: num
         ? remaining
         : clamp(round((weightScale * scores[n]) / total), 0, remaining);
     remaining -= weight;
-    add(map, plan, source, n, candidates[n], weight);
+    add(map, plan, source, candidates[n], weight);
   }
+}
+function scatterVolume(map: PhysicalField, plan: Builder, source: number, x: number, y: number) {
+  const mesh = map.mesh,
+    topology = mesh.topology!;
+  const box: Bounds = [
+    x + mesh.origin[0] - mesh.cellWidth[source] / 2,
+    y + mesh.origin[1] - mesh.cellHeight[source] / 2,
+    x + mesh.origin[0] + mesh.cellWidth[source] / 2,
+    y + mesh.origin[1] + mesh.cellHeight[source] / 2,
+  ];
+  visitAdaptiveOverlap(topology, box, (leaf) => {
+    const old = adaptiveCell(topology, leaf);
+    const area =
+      (Math.min(box[2], old[2]) - Math.max(box[0], old[0])) *
+      (Math.min(box[3], old[3]) - Math.max(box[1], old[1]));
+    add(map, plan, source, mesh.leafToCell[leaf], (area / mesh.areas[source]) * weightScale);
+  });
 }
 export function buildTransportPlan(map: PhysicalField, step: number): TransportPlan {
   const count = map.mesh.count;
-  const plan: TransportPlan = {
-    targets: new Int32Array(count * 4).fill(-1),
-    weights: new Int32Array(count * 4),
+  const plan: Builder = {
+    offsets: new Int32Array(count + 1),
+    targets: [],
+    weights: [],
     arrivals: new Float64Array(count),
     dominant: new Int32Array(count).fill(-1),
     dominantWeight: new Float64Array(count),
   };
-  for (let i = 0; i < count; i++)
-    scatter(
+  for (let i = 0; i < count; i++) {
+    plan.offsets[i] = plan.targets.length;
+    (map.mesh.topology ? scatterVolume : scatter)(
       map,
       plan,
       i,
       map.mesh.x[i] + (map.CrustMotionX[i] / 1000) * step,
       map.mesh.y[i] + (map.CrustMotionY[i] / 1000) * step
     );
-  return plan;
+  }
+  plan.offsets[count] = plan.targets.length;
+  return {
+    ...plan,
+    targets: Int32Array.from(plan.targets),
+    weights: Float64Array.from(plan.weights),
+  };
 }

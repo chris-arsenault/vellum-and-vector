@@ -3,22 +3,28 @@ import type { Position } from "./model";
 import type { SpatialScope } from "./schemas";
 import { requireThat } from "./errors";
 import { point, rectangle, spatial, type Bounds } from "./spatial";
+import { adaptiveCell, adaptiveLeafAt, type AdaptiveTopology } from "./adaptiveTopology";
+import type { AdaptiveField } from "./adaptiveField";
+import { sampleAdaptivePoint, adaptivePointSampler } from "./adaptivePoint";
 
-export interface Grid {
+export interface FieldSamples {
   id: string;
   scope: SpatialScope;
   bounds: Bounds;
-  width: number;
-  height: number;
   active: Uint8Array;
   measures: Float64Array;
   channels: Record<string, Float64Array>;
   units: Record<string, string>;
   waterBodies?: WaterBody[] | null;
+  quantities?: Record<string, "intensive" | "extensive" | "category">;
 }
-export interface GridSurface extends Grid {
-  overlays?: { grid: Grid; channels: string[] }[];
+export interface RegularGrid extends FieldSamples {
+  width: number;
+  height: number;
+  topology?: never;
 }
+export type Grid = RegularGrid | AdaptiveField;
+export type GridSurface = Grid & { overlays?: { grid: GridSurface; channels: string[] }[] };
 
 export interface WaterBody {
   id: string;
@@ -33,10 +39,11 @@ export interface WaterBody {
   outletPath: Position[] | null;
 }
 
-export function gridPosition(
-  grid: Pick<Grid, "bounds" | "width" | "height">,
-  index: number
-): Position {
+export function gridPosition(grid: Grid, index: number): Position {
+  if (grid.topology) {
+    const [x0, y0, x1, y1] = adaptiveCell(grid.topology, index);
+    return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, z: 0 };
+  }
   const [x0, y0, x1, y1] = grid.bounds;
   return {
     x: x0 + ((x1 - x0) * (index % grid.width)) / (grid.width - 1),
@@ -45,7 +52,8 @@ export function gridPosition(
   };
 }
 
-function cellBounds(grid: Grid, index: number): Bounds {
+export function gridCellBounds(grid: Grid, index: number): Bounds {
+  if (grid.topology) return adaptiveCell(grid.topology, index);
   const p = gridPosition(grid, index);
   const [x0, y0, x1, y1] = grid.bounds;
   const dx = (x1 - x0) / (grid.width - 1) / 2;
@@ -64,13 +72,13 @@ export function createGrid(
   width: number,
   height: number,
   sampleBounds?: Bounds
-): Grid {
+): RegularGrid {
   requireThat(
     Number.isInteger(width) && Number.isInteger(height) && width >= 2 && height >= 2,
     "invalid_grid",
     "Grid dimensions must be integers of at least two samples."
   );
-  const grid: Grid = {
+  const grid: RegularGrid = {
     id,
     scope,
     bounds: sampleBounds ?? spatial.bounds(scope.footprint),
@@ -94,7 +102,7 @@ export function createGrid(
     return grid;
   }
   for (let i = 0; i < grid.active.length; i++) {
-    const cell = rectangle(cellBounds(grid, i));
+    const cell = rectangle(gridCellBounds(grid, i));
     const clipped = spatial.intersection(cell, scope.footprint);
     grid.active[i] = spatial.covers(scope.footprint, point(gridPosition(grid, i))) ? 1 : 0;
     grid.measures[i] = clipped ? spatial.area(clipped) : 0;
@@ -102,14 +110,14 @@ export function createGrid(
   return grid;
 }
 
-function rectangularMeasures(grid: Grid) {
+function rectangularMeasures(grid: RegularGrid) {
   // Both coverage predicates establish that the footprint equals the sample
   // rectangle. Match JSTS's fixed precision without clipping each whole cell.
   const scale = 1 / spatial.precision,
     precise = (value: number) => Math.round(value * scale) / scale;
   grid.active.fill(1);
   for (let i = 0; i < grid.active.length; i++) {
-    const [x0, y0, x1, y1] = cellBounds(grid, i),
+    const [x0, y0, x1, y1] = gridCellBounds(grid, i),
       width = precise(x1) - precise(x0),
       height = precise(y1) - precise(y0);
     requireThat(
@@ -138,6 +146,7 @@ export function neighbors(
   diagonal = false,
   covers = (geometry: Geometry) => spatial.covers(grid.scope.footprint, geometry)
 ): number[] {
+  if (grid.topology) return adaptiveNeighbors(grid, index, covers);
   const x = index % grid.width,
     y = Math.floor(index / grid.width);
   const offsets = diagonal
@@ -174,14 +183,21 @@ export function neighbors(
     });
 }
 
-export function putChannel(grid: Grid, name: string, unit: string, values: Float64Array): void {
+export function putChannel(
+  grid: Grid,
+  name: string,
+  unit: string,
+  values: Float64Array,
+  quantity: "intensive" | "extensive" | "category" = unit === "category" ? "category" : "intensive"
+): void {
   requireThat(
-    values.length === grid.width * grid.height && values.every(Number.isFinite),
+    values.length === grid.active.length && values.every(Number.isFinite),
     "invalid_channel",
     "Field channels require one finite value per sample."
   );
   grid.channels[name] = values;
   grid.units[name] = unit;
+  (grid.quantities ??= {})[name] = quantity;
 }
 
 export function sample(grid: GridSurface, channel: string, p: Position, discrete = false): number {
@@ -213,36 +229,35 @@ export function gridSampler(
     "missing_channel",
     `Field channel ${channel} is unavailable.`
   );
-  const covered = spatial.pointCoverage(grid.scope.footprint),
-    overlays = [...(grid.overlays ?? [])]
-      .reverse()
-      .filter((overlay) => overlay.channels.includes(channel))
-      .map((overlay) => ({
-        covered: spatial.pointCoverage(overlay.grid.scope.footprint),
-        valueAt: gridSampler(overlay.grid, channel, discrete),
-      }));
+  const covered = spatial.pointCoverage(grid.scope.footprint);
+  const valueAt = fieldInterpolator(grid, channel, discrete);
   return (position: Position): number => {
     requireThat(covered(position), "outside_field", "Sample lies outside field coverage.");
-    for (const overlay of overlays) if (overlay.covered(position)) return overlay.valueAt(position);
-    return interpolateSample(grid, channel, position, discrete);
+    return valueAt(position);
   };
 }
 
 // Evaluate the lattice polynomial after the caller has established coverage.
 // Clipped-cell extrema use this directly: snapping a point on an oblique edge
 // again can move it across that edge even though the clipped segment is valid.
-export function interpolateSample(
-  grid: Grid,
-  channel: string,
-  p: Position,
-  discrete = false
-): number {
+function rawSample(grid: Grid, channel: string, p: Position, discrete = false): number {
   const values = grid.channels[channel];
   requireThat(values, "missing_channel", `Field channel ${channel} is unavailable.`);
+  if (grid.topology) {
+    const [x0, y0, x1, y1] = grid.topology.bounds;
+    const x = Math.max(x0, Math.min(x1, p.x)),
+      y = Math.max(y0, Math.min(y1, p.y));
+    const i = adaptiveLeafAt(grid.topology, x, y);
+    if (i < 0) return NaN;
+    return discreteChannel(grid, channel, discrete)
+      ? values[i]
+      : sampleAdaptivePoint(grid.topology, values, x, y);
+  }
   const [x0, y0, x1, y1] = grid.bounds;
   const gx = Math.max(0, Math.min(grid.width - 1, ((p.x - x0) / (x1 - x0)) * (grid.width - 1)));
   const gy = Math.max(0, Math.min(grid.height - 1, ((p.y - y0) / (y1 - y0)) * (grid.height - 1)));
-  if (discrete) return values[Math.round(gy) * grid.width + Math.round(gx)];
+  if (discreteChannel(grid, channel, discrete))
+    return values[Math.round(gy) * grid.width + Math.round(gx)];
   const x = Math.min(Math.floor(gx), grid.width - 2),
     y = Math.min(Math.floor(gy), grid.height - 2);
   const tx = gx - x,
@@ -251,6 +266,13 @@ export function interpolateSample(
   return (
     (1 - ty) * ((1 - tx) * values[i] + tx * values[i + 1]) +
     ty * ((1 - tx) * values[i + grid.width] + tx * values[i + grid.width + 1])
+  );
+}
+function discreteChannel(grid: Grid, channel: string, discrete: boolean) {
+  return (
+    discrete ||
+    ["category", "cell-index"].includes(grid.units[channel]) ||
+    ["category", "extensive"].includes(grid.quantities?.[channel] ?? "")
   );
 }
 
@@ -270,18 +292,77 @@ export function resample(
     "missing_parent_field",
     "Parent coverage must contain the refined field."
   );
+  const valueAt = fieldInterpolator(source, channel, discrete);
   putChannel(
     target,
     channel,
     source.units[channel],
-    Float64Array.from(target.active, (_active, i) =>
-      spatial.covers(source.scope.footprint, point(gridPosition(target, i)))
-        ? sample(source, channel, gridPosition(target, i), discrete)
-        : interpolateSample(source, channel, gridPosition(target, i), discrete)
-    )
+    Float64Array.from(target.active, (_active, i) => valueAt(gridPosition(target, i))),
+    source.quantities?.[channel]
   );
+}
+
+/** Prepared base polynomial, including numerical-halo extension; public reads use gridSampler. */
+export function fieldInterpolator(
+  grid: GridSurface,
+  channel: string,
+  discrete = false
+): (p: Position) => number {
+  const overlays = [...(grid.overlays ?? [])]
+    .reverse()
+    .filter((overlay) => overlay.channels.includes(channel))
+    .map((overlay) => ({
+      covered: spatial.pointCoverage(overlay.grid.scope.footprint),
+      at: fieldInterpolator(overlay.grid, channel, discrete),
+    }));
+  const base = baseInterpolator(grid, channel, discrete);
+  return (p: Position) => {
+    const overlay = overlays.find((candidate) => candidate.covered(p));
+    return overlay ? overlay.at(p) : base(p);
+  };
+}
+function baseInterpolator(grid: Grid, channel: string, discrete: boolean) {
+  if (!grid.topology) return (p: Position) => rawSample(grid, channel, p, discrete);
+  const t = grid.topology,
+    values = grid.channels[channel];
+  const categorical = discreteChannel(grid, channel, discrete);
+  const surface = categorical ? null : adaptivePointSampler(t, values);
+  return (p: Position) => {
+    const x = Math.max(t.bounds[0], Math.min(t.bounds[2], p.x)),
+      y = Math.max(t.bounds[1], Math.min(t.bounds[3], p.y));
+    return surface ? surface(x, y) : values[adaptiveLeafAt(t, x, y)];
+  };
+}
+export function interpolateSample(
+  grid: Grid,
+  channel: string,
+  p: Position,
+  discrete = false
+): number {
+  return fieldInterpolator(grid, channel, discrete)(p);
 }
 
 export function fieldCoverage(grid: Grid): Geometry {
   return grid.scope.footprint;
+}
+
+function adaptiveNeighbors(
+  grid: AdaptiveField,
+  index: number,
+  covers: (geometry: Geometry) => boolean
+) {
+  const t: AdaptiveTopology = grid.topology;
+  const a = gridPosition(grid, index);
+  return Array.from(t.neighbors.subarray(t.offsets[index], t.offsets[index + 1]))
+    .filter((i) => grid.active[i] === 1)
+    .filter((i) => {
+      const b = gridPosition(grid, i);
+      return covers({
+        type: "LineString",
+        coordinates: [
+          [a.x, a.y],
+          [b.x, b.y],
+        ],
+      });
+    });
 }

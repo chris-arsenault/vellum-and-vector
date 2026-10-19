@@ -1,29 +1,40 @@
-import { spatial, point } from "@atlas/domain";
+import { spatial, point, adaptivePointSampler, fieldContour, contourSupport } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { GenerationState } from "../process";
-import { cellPolygon, generatedFeature, putGenerated } from "../mapFeatures";
+import { generatedFeature, putGenerated } from "../mapFeatures";
 import { nativePosition } from "./atlasWorkspace";
 import { coordinateKey } from "./worldSources";
 import { Landform } from "./codes";
+import { physicalSampler } from "./physicalMetric";
 
 export function extractLakes(state: GenerationState) {
-  const grid = state.surface,
-    work = state.physical!,
-    map = work.map;
-  const shapes = new Map<number, Geometry[]>();
-  for (let y = 0; y < grid.height; y++)
-    for (let x = 0; x < grid.width; x++) {
-      const i = y * grid.width + x,
-        native = work.samples[i];
-      if (!grid.active[i] || map.WaterKindCodes[native] !== 2) continue;
-      const body = map.WaterBodyIds[native],
-        start = x;
-      while (x + 1 < grid.width && lakeBody(state, y * grid.width + x + 1) === body) x++;
-      if (!shapes.has(body)) shapes.set(body, []);
-      shapes.get(body)!.push(cellPolygon(grid, start, x, y));
-    }
-  for (const [body, parts] of shapes) {
-    const shape = lakeShape(state, parts);
+  const map = state.physical!.map,
+    mesh = map.mesh,
+    topology = mesh.topology!;
+  const floor = physicalSampler(mesh, map.Elevation);
+  const bodies = new Map<number, number[]>();
+  for (let i = 0; i < mesh.contentCount; i++) {
+    if (map.WaterKindCodes[i] !== 2) continue;
+    const body = map.WaterBodyIds[i];
+    if (!bodies.has(body)) bodies.set(body, []);
+    bodies.get(body)!.push(i);
+  }
+  for (const [body, members] of bodies) {
+    const level = map.WaterSurfaceElevations[members[0]];
+    const connected = adaptivePointSampler(topology, (leaf) =>
+      Number(map.WaterBodyIds[mesh.leafToCell[leaf]] === body)
+    );
+    const valueAt = (x: number, y: number) =>
+      Math.min(
+        (level - floor(x - mesh.origin[0], y - mesh.origin[1])) / 1024,
+        (connected(x, y) - 0.1) * 1e6
+      );
+    const support = contourSupport(
+      topology,
+      members.map((i) => mesh.cellToLeaf[i])
+    );
+    const contour = fieldContour(topology, valueAt, support, 0);
+    const shape = clipRegion(state, contour);
     if (!shape) continue;
     putGenerated(
       state,
@@ -40,22 +51,15 @@ export function extractLakes(state: GenerationState) {
         {
           sourceAlgorithm: "canonry-0f62584c",
           waterBody: body,
+          waterLevel: (level - map.BaseSeaLevel) / 1024,
           area: spatial.area(shape),
         }
       )
     );
   }
 }
-function lakeShape(state: GenerationState, parts: Geometry[]) {
-  const union = spatial.unionAll(parts);
-  return union && spatial.intersection(union, state.domain.scope.footprint);
-}
-function lakeBody(state: GenerationState, i: number) {
-  const work = state.physical!,
-    native = work.samples[i];
-  return state.surface.active[i] && work.map.WaterKindCodes[native] === 2
-    ? work.map.WaterBodyIds[native]
-    : -1;
+function clipRegion(state: GenerationState, shape: Geometry | null) {
+  return shape && spatial.intersection(shape, state.domain.scope.footprint);
 }
 function connectedMembers(
   state: GenerationState,
@@ -68,8 +72,8 @@ function connectedMembers(
     mesh = state.physical!.map.mesh;
   visited[start] = region;
   for (let head = 0; head < members.length; head++)
-    for (let edge = 0; edge < 3; edge++) {
-      const j = mesh.neighbors[members[head] * 3 + edge];
+    for (let edge = 0; edge < mesh.degree[members[head]]; edge++) {
+      const j = mesh.neighbors[members[head] * mesh.stride + edge];
       if (j < 0 || j >= visited.length || visited[j] >= 0 || !includes(j)) continue;
       visited[j] = region;
       members.push(j);
@@ -93,22 +97,24 @@ function components(
   regions.forEach((members, i) => publish(members, shapes.get(i)));
 }
 function regionShapes(state: GenerationState, labels: Int32Array) {
-  const { surface: grid, physical: work } = state;
-  const parts = new Map<number, Geometry[]>();
-  const label = (i: number) => (grid.active[i] ? (labels[work!.samples[i]] ?? -1) : -1);
-  for (let y = 0; y < grid.height; y++)
-    for (let x = 0; x < grid.width; x++) {
-      const region = label(y * grid.width + x),
-        start = x;
-      if (region < 0) continue;
-      while (x + 1 < grid.width && label(y * grid.width + x + 1) === region) x++;
-      if (!parts.has(region)) parts.set(region, []);
-      parts.get(region)!.push(cellPolygon(grid, start, x, y));
-    }
+  const mesh = state.physical!.map.mesh,
+    topology = mesh.topology!;
+  const members = new Map<number, number[]>();
+  labels.forEach((label, cell) => {
+    if (label < 0) return;
+    if (!members.has(label)) members.set(label, []);
+    members.get(label)!.push(mesh.cellToLeaf[cell]);
+  });
   const result = new Map<number, Geometry>();
-  for (const [id, strips] of parts) {
-    const shape = lakeShape(state, strips);
-    if (shape) result.set(id, shape);
+  for (const [label, leaves] of members) {
+    const valueAt = adaptivePointSampler(topology, (leaf) =>
+      Number(labels[mesh.leafToCell[leaf]] === label)
+    );
+    const shape = clipRegion(
+      state,
+      fieldContour(topology, valueAt, contourSupport(topology, leaves))
+    );
+    if (shape) result.set(label, shape);
   }
   return result;
 }

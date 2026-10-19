@@ -94,8 +94,12 @@ function checkMaterialization(source: GridSurface) {
       const expected = spatial.covers(source.scope.footprint, point(position))
         ? sample(source, name, position)
         : source.channels[name][i];
-      expect(values[i]).toBe(expected);
+      expect(
+        spatial.covers(actual.scope.footprint, point(position))
+          ? sample(actual, name, position)
+          : values[i]
+      ).toBe(expected);
     }
   expect(source).toEqual(original);
-  expect(actual).not.toHaveProperty("overlays");
+  expect(actual.overlays).toEqual(source.overlays);
 }

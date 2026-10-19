@@ -234,52 +234,50 @@ const nativeHistoryChannels = new Set([
   "tectonicHistory",
   "coastalForcingHistory",
 ]);
+const nativeGeologyChannels = new Set([
+  "bedrock",
+  "sediment",
+  "rock",
+  "naturalRock",
+  "fracture",
+  "province",
+  "crustMotionX",
+  "crustMotionY",
+  "uplift",
+  "carbonate",
+  "erosion",
+  "deposition",
+  "crustThickness",
+  "crustSupport",
+  "rockLoad",
+  "continentalFraction",
+  "crustAge",
+  "sutureStrength",
+  "suturePair",
+  "assembly",
+  "tectonicBoundary",
+  "boundaryPair",
+  "margin",
+  "tectonicStrain",
+  "volcanicConstruction",
+  "impactExcavation",
+  "impactRim",
+  "impactEjecta",
+  "fluvialErosion",
+  "glacialErosion",
+  "coastalErosion",
+  "glacialDeposition",
+  "landform",
+  "slope",
+]);
 function channelLayer(channel: string) {
-  if (nativeHistoryChannels.has(channel)) return "geology";
+  if (nativeHistoryChannels.has(channel) || nativeGeologyChannels.has(channel)) return "geology";
   if (channel === "elevation") return "elevation";
   if (channel.startsWith("culture:")) return "cultures";
   if (channel.startsWith("language:")) return "languages";
   if (channel.startsWith("religion:")) return "religions";
   if (channel.startsWith("magic:") || ["heat", "storedHeat", "coastalPressure"].includes(channel))
     return "magic";
-  if (
-    [
-      "bedrock",
-      "sediment",
-      "rock",
-      "naturalRock",
-      "fracture",
-      "province",
-      "crustMotionX",
-      "crustMotionY",
-      "uplift",
-      "carbonate",
-      "erosion",
-      "deposition",
-      "crustThickness",
-      "crustSupport",
-      "rockLoad",
-      "continentalFraction",
-      "crustAge",
-      "sutureStrength",
-      "suturePair",
-      "assembly",
-      "tectonicBoundary",
-      "boundaryPair",
-      "margin",
-      "tectonicStrain",
-      "volcanicConstruction",
-      "impactExcavation",
-      "impactRim",
-      "impactEjecta",
-      "fluvialErosion",
-      "glacialErosion",
-      "coastalErosion",
-      "glacialDeposition",
-      "landform",
-    ].includes(channel)
-  )
-    return "geology";
   if (
     [
       "receiver",
@@ -291,11 +289,16 @@ function channelLayer(channel: string) {
       "basin",
       "water",
       "waterDepth",
+      "waterLevel",
+      "seaLevel",
       "depressionDepth",
       "waterBody",
       "oceanDistance",
       "riverOrder",
       "riverChannel",
+      "riverWidth",
+      "riverDepth",
+      "catchmentArea",
       "floodplain",
       "delta",
       "oceanCurrent",

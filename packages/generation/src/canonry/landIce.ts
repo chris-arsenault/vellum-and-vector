@@ -2,22 +2,21 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
-import { clamp, round, toUnits, truncate } from "./math";
+import { clamp, toUnits, truncate } from "./math";
 import { canCarryIce, supportElevation } from "./glacierSurface";
 
 function concavity(map: PhysicalField, i: number): number {
-  let total = 0,
-    count = 0;
-  for (let edge = 0; edge < 3; edge++) {
-    const j = map.mesh.neighbors[i * 3 + edge];
+  let curvature = 0;
+  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+    const at = i * map.mesh.stride + edge,
+      j = map.mesh.neighbors[at];
     if (j >= 0) {
-      total += supportElevation(map, j) - supportElevation(map, i);
-      count++;
+      curvature +=
+        (((supportElevation(map, j) - supportElevation(map, i)) / 1024) * map.mesh.faceLength[at]) /
+        map.mesh.faceDistance[at];
     }
   }
-  return count === 0
-    ? 0
-    : (toUnits(Math.max(0, total / count)) / map.mesh.spacing ** 2) * 200_000_000;
+  return Math.max(0, curvature / map.mesh.areas[i]) * 50_000_000;
 }
 function massBalance(map: PhysicalField, p: PhysicalProfile, i: number): number {
   const cold = Math.max(0, p.IceTemperatureThreshold - map.Temperature[i]);
@@ -61,8 +60,8 @@ function advanceFrom(
   queue: number[]
 ) {
   const p = c.Profile;
-  for (let edge = 0; edge < 3; edge++) {
-    const target = map.mesh.neighbors[source * 3 + edge];
+  for (let edge = 0; edge < map.mesh.degree[source]; edge++) {
+    const target = map.mesh.neighbors[source * map.mesh.stride + edge];
     if (
       target < 0 ||
       map.WaterKindCodes[target] !== 2 ||
@@ -73,7 +72,8 @@ function advanceFrom(
       continue;
     const candidate = Math.max(
         0,
-        map.IceThickness[source] - p.FrozenLakeIceAdvanceGradient * map.mesh.spacing
+        map.IceThickness[source] -
+          p.FrozenLakeIceAdvanceGradient * map.mesh.edgeLength[source * map.mesh.stride + edge]
       ),
       improved = candidate > map.IceThickness[target];
     if (improved) map.IceThickness[target] = candidate;
@@ -101,7 +101,7 @@ function advanceLakes(map: PhysicalField, c: PhysicalContext) {
 }
 export function landIce(map: PhysicalField, c: PhysicalContext) {
   map.IceBalance.fill(0);
-  const balances: number[] = [];
+  const balances: { balance: number; area: number }[] = [];
   for (let i = 0; i < map.mesh.count; i++) {
     if (!canCarryIce(map, i)) {
       map.IceThickness[i] = 0;
@@ -109,23 +109,26 @@ export function landIce(map: PhysicalField, c: PhysicalContext) {
     }
     const balance = massBalance(map, c.Profile, i);
     map.IceBalance[i] = balance;
-    if (map.WaterKindCodes[i] === 0 && i < map.mesh.contentCount) balances.push(balance);
+    if (map.WaterKindCodes[i] === 0 && map.mesh.contentAreas[i] > 0)
+      balances.push({ balance, area: map.mesh.contentAreas[i] });
   }
   if (balances.length === 0) {
     advanceLakes(map, c);
     return;
   }
-  const count = clamp(
-    round(
-      (balances.length * c.Profile.QualityTargets.LandIceCoverage.target * c.GlaciationStrength) /
-        1000
-    ),
-    0,
-    balances.length
-  );
-  balances.sort((a, b) => b - a);
-  const cutoff =
-    count === 0 ? 2147483647 : Math.max(c.Profile.MinimumIceBalance, balances[count - 1]);
+  const target =
+    (balances.reduce((sum, value) => sum + value.area, 0) *
+      c.Profile.QualityTargets.LandIceCoverage.target *
+      c.GlaciationStrength) /
+    1000;
+  balances.sort((a, b) => b.balance - a.balance);
+  let covered = 0,
+    cutoff = 2147483647;
+  for (const cell of balances) {
+    if (covered >= target) break;
+    covered += cell.area;
+    cutoff = Math.max(c.Profile.MinimumIceBalance, cell.balance);
+  }
   dryLandBalance(map, c, cutoff);
   advanceLakes(map, c);
 }

@@ -5,7 +5,7 @@ export function requireChannel(grid: Grid, name: string, unit: string): Float64A
   const values = grid.channels[name];
   requireThat(
     values &&
-      values.length === grid.width * grid.height &&
+      values.length === grid.active.length &&
       grid.units[name] === unit &&
       values.every(Number.isFinite),
     "physical_channel",

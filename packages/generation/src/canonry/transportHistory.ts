@@ -173,9 +173,8 @@ function completeTarget(a: Accumulator, map: PhysicalField, target: number, arri
 export function transportHistory(map: PhysicalField, plan: TransportPlan) {
   const a = accumulator(map.mesh.count);
   for (let source = 0; source < map.mesh.count; source++)
-    for (let slot = 0; slot < 4; slot++) {
-      const offset = source * 4 + slot,
-        target = plan.targets[offset];
+    for (let offset = plan.offsets[source]; offset < plan.offsets[source + 1]; offset++) {
+      const target = plan.targets[offset];
       if (target >= 0) addSource(a, map, source, target, plan.weights[offset]);
     }
   for (let target = 0; target < map.mesh.count; target++)

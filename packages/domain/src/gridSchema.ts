@@ -8,6 +8,7 @@ import {
   type ResourceType,
 } from "./schemas";
 import type { Grid } from "./grids";
+import { adaptiveTopologySchema } from "./adaptiveSchema";
 
 const channel = z
   .instanceof(Float64Array)
@@ -32,22 +33,26 @@ const bodySchema = z.object({
   outletPath: z.array(positionSchema).nullable(),
 });
 
-export const gridSchema: z.ZodType<Grid> = z
+const fieldSchema = z
   .object({
     id: identifier,
     scope: scopeSchema,
     bounds: z.tuple([finite, finite, finite, finite]),
-    width: z.number().int().min(2),
-    height: z.number().int().min(2),
     active: z.instanceof(Uint8Array).refine((values) => values.every((value) => value <= 1)),
     measures: channel.refine((values) => values.every((value) => value >= 0)),
     channels: z.record(identifier, channel),
     units: z.record(identifier, identifier),
+    quantities: z.record(identifier, z.enum(["intensive", "extensive", "category"])).optional(),
     waterBodies: z.array(bodySchema).nullable().optional(),
   })
-  .strict()
+  .strict();
+export const gridSchema: z.ZodType<Grid> = z
+  .union([
+    fieldSchema.extend({ width: z.number().int().min(2), height: z.number().int().min(2) }),
+    fieldSchema.extend({ topology: adaptiveTopologySchema }),
+  ])
   .superRefine((grid, context) => {
-    const count = grid.width * grid.height;
+    const count = "topology" in grid ? grid.topology.leaves.length : grid.width * grid.height;
     if (grid.bounds[0] >= grid.bounds[2] || grid.bounds[1] >= grid.bounds[3])
       context.addIssue({ code: "custom", message: "Grid bounds must have positive area." });
     if (grid.active.length !== count || grid.measures.length !== count)

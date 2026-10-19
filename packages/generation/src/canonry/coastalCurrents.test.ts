@@ -8,9 +8,13 @@ import { coastalDetail } from "./coastalDetail";
 import { smoothMetric } from "./metricSmoothing";
 import { transportOceanHeat } from "./currents";
 import { alignedNeighbor } from "./atmosphere";
+import { createAdaptiveWorldMesh } from "./adaptiveMesh";
 
 function coast(samples: number) {
-  const map = createField(createWorldMesh([0, 0, 100_000, 100_000], samples, 0));
+  const size = 100_000 / Math.sqrt(samples);
+  const map = createField(
+    createAdaptiveWorldMesh([0, 0, 100_000, 100_000], { maximumSize: size, minimumSize: size }, 0)
+  );
   for (let i = 0; i < map.mesh.count; i++) {
     map.WaterKindCodes[i] = map.mesh.x[i] < 0 ? 1 : 0;
     map.WaveExposure[i] = 1000;
@@ -47,8 +51,8 @@ it("applies external coastal forcing through the same physical shore band", () =
       profile = atlasPhysicalProfile();
     for (let i = 0; i < map.mesh.count; i++) {
       if (map.WaterKindCodes[i] !== 0) continue;
-      for (let edge = 0; edge < 3; edge++) {
-        const j = map.mesh.neighbors[i * 3 + edge];
+      for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+        const j = map.mesh.neighbors[i * map.mesh.stride + edge];
         if (j >= 0 && map.WaterKindCodes[j] === 1) map.ExternalCoastalForcing[i] = 500;
       }
     }

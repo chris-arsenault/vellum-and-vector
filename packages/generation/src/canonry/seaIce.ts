@@ -7,7 +7,6 @@ import { Feature } from "./codes";
 
 export function seaIce(map: PhysicalField, c: PhysicalContext) {
   const ocean: number[] = [],
-    suitability: number[] = [],
     p = c.Profile;
   map.SeaIceSuitability.fill(0);
   for (let i = 0; i < map.mesh.count; i++) {
@@ -30,19 +29,23 @@ export function seaIce(map: PhysicalField, c: PhysicalContext) {
       1000
     );
     map.SeaIceSuitability[i] = value;
-    suitability.push(value);
   }
-  if (ocean.length === 0) throw new Error("Sea-ice generation requires ocean.");
-  const count = clamp(
-    round(ocean.length * p.QualityTargets.SeaIceCoverage.target),
-    1,
-    ocean.length
-  );
-  suitability.sort((a, b) => b - a);
-  const cutoff = suitability[count - 1];
+  const eligible = ocean
+    .filter((i) => map.Temperature[i] <= p.IceMarginTemperature)
+    .sort((a, b) => map.SeaIceSuitability[b] - map.SeaIceSuitability[a] || a - b);
+  const target =
+    ocean.reduce((area, i) => area + map.mesh.contentAreas[i], 0) *
+    p.QualityTargets.SeaIceCoverage.target;
+  let area = 0,
+    cutoff = Infinity;
+  for (const i of eligible) {
+    if (area >= target) break;
+    area += map.mesh.contentAreas[i];
+    cutoff = map.SeaIceSuitability[i];
+  }
   for (const i of ocean) {
     const cold = map.SeaIceSuitability[i];
-    if (cold < cutoff) continue;
+    if (cold < cutoff || map.Temperature[i] > p.IceMarginTemperature) continue;
     map.IceThickness[i] = clamp(50 + (cold - cutoff) * 2, 50, 240);
     map.FeatureFlags[i] |=
       map.Temperature[i] <= p.PermanentSeaIceTemperature

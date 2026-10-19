@@ -6,6 +6,7 @@ import { clamp } from "./math";
 import { contributingArea, sourceToOutletOrder } from "./flowGraph";
 import { depthRateToDischarge } from "./dimensions";
 import { edgeLeadingTo } from "./mesh";
+import { physicalDistance } from "./physicalMetric";
 
 function completeChannels(map: PhysicalField, order: number[], channels: Uint8Array) {
   const downstream = channels.slice();
@@ -94,7 +95,10 @@ function pruneHeadwaters(map: PhysicalField, p: PhysicalProfile, channels: Uint8
     if (!channels[i] || incoming[i] !== 0 || protectedStarts[i]) continue;
     const reach = headwaterReach(map, channels, incoming, protectedStarts, i);
     if (
-      reach.length * map.mesh.spacing < p.MinimumRiverReachLength &&
+      reach.reduce((length, cell) => {
+        const target = map.FlowTargets[cell];
+        return length + (target < 0 ? 0 : physicalDistance(map.mesh, cell, target));
+      }, 0) < p.MinimumRiverReachLength &&
       !shortReachSupported(map, p, channels, incoming, reach)
     )
       for (const member of reach) channels[member] = 0;

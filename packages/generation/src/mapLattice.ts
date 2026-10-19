@@ -1,4 +1,12 @@
-import { gridPosition, neighbors, point, requireThat, spatial, type Grid } from "@atlas/domain";
+import {
+  gridPosition,
+  gridCellBounds,
+  neighbors,
+  point,
+  requireThat,
+  spatial,
+  type Grid,
+} from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
 
 export const secondsPerYear = 365.25 * 24 * 60 * 60;
@@ -25,6 +33,17 @@ export function cellDistance(grid: Grid, a: number, b: number): number {
 }
 
 export function boundaryCell(grid: Grid, i: number): boolean {
+  if (grid.topology) {
+    const b = gridCellBounds(grid, i),
+      t = grid.topology;
+    return (
+      b[0] <= grid.bounds[0] ||
+      b[1] <= grid.bounds[1] ||
+      b[2] >= grid.bounds[2] ||
+      b[3] >= grid.bounds[3] ||
+      Array.from(t.neighbors.subarray(t.offsets[i], t.offsets[i + 1])).some((j) => !grid.active[j])
+    );
+  }
   const x = i % grid.width,
     y = Math.floor(i / grid.width);
   return (

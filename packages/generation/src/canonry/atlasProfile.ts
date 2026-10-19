@@ -4,9 +4,9 @@ import { clamp, round } from "./math";
 import { atlasParametersSchema, type AtlasParameters } from "../atlasParameters";
 
 export const atlasQuality = {
-  draft: { triangles: 16384, samples: 192 },
-  standard: { triangles: 65536, samples: 384 },
-  fine: { triangles: 262144, samples: 768 },
+  draft: { baseCells: 16384 },
+  standard: { baseCells: 65536 },
+  fine: { baseCells: 262144 },
 };
 export function atlasPhysicalProfile(parameters: Partial<AtlasParameters> = {}): PhysicalProfile {
   const settings = atlasParametersSchema.parse(parameters);

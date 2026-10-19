@@ -3,6 +3,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp } from "./math";
 import { sourceToOutletOrder } from "./flowGraph";
+import { physicalDistance } from "./physicalMetric";
 
 function sedimentDelivery(map: PhysicalField): Float64Array {
   const delivery = Float64Array.from(
@@ -77,7 +78,7 @@ function buildFan(map: PhysicalField, c: PhysicalContext, mouth: number, ocean: 
     dx = f(x / length),
     dy = f(y / length);
   const order = map.RiverOrders[mouth],
-    queue = [{ i: ocean, depth: map.mesh.spacing, previous: mouth }],
+    queue = [{ i: ocean, depth: physicalDistance(map.mesh, mouth, ocean), previous: mouth }],
     p = c.Profile;
   markDelta(map, mouth, 1000, order);
   for (let head = 0; head < queue.length; head++) {
@@ -87,15 +88,19 @@ function buildFan(map: PhysicalField, c: PhysicalContext, mouth: number, ocean: 
     if (intensity <= map.DeltaIntensity[front.i]) continue;
     markDelta(map, front.i, intensity, order);
     if (front.depth >= p.DeltaMaximumRadius) continue;
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[front.i * 3 + edge];
+    for (let edge = 0; edge < map.mesh.degree[front.i]; edge++) {
+      const j = map.mesh.neighbors[front.i * map.mesh.stride + edge];
       if (
         j < 0 ||
         j === front.previous ||
         !pointsIntoFan(map, front.i, j, dx, dy, p.DeltaMinimumForwardAlignment)
       )
         continue;
-      queue.push({ i: j, depth: front.depth + map.mesh.spacing, previous: front.i });
+      queue.push({
+        i: j,
+        depth: front.depth + physicalDistance(map.mesh, front.i, j),
+        previous: front.i,
+      });
     }
   }
 }

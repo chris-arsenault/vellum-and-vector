@@ -6,6 +6,7 @@ import type { PhysicalProfile } from "./profile";
 import { clamp, round, toUnits } from "./math";
 import { hashUnit } from "./noise";
 import { contributingArea } from "./flowGraph";
+import { physicalDistance, physicalGradients } from "./physicalMetric";
 
 const epsilon = 0.0000001;
 function normalize(x: number, y: number): [number, number] {
@@ -71,39 +72,27 @@ function candidateScore(
     (inherited * p.DrainageInheritedValleyWeight) / 1000
   );
 }
-function descentGradient(map: PhysicalField, i: number): [number, number] {
-  let x = 0,
-    y = 0;
-  for (let edge = 0; edge < 3; edge++) {
-    const offset = i * 3 + edge,
-      j = map.mesh.neighbors[offset];
-    if (j < 0) continue;
-    const drop =
-      (map.DrainageElevations[i] - map.DrainageElevations[j]) /
-      (1024 * map.mesh.edgeLength[offset]);
-    x += map.mesh.edgeX[offset] * drop;
-    y += map.mesh.edgeY[offset] * drop;
-  }
-  return [x, y];
-}
 function descentDirection(
   map: PhysicalField,
   p: PhysicalProfile,
-  source: number
+  source: number,
+  gradient: ReturnType<typeof physicalGradients>
 ): [number, number] {
   let x = 0,
     y = 0,
     current = source;
-  for (
-    let distance = 0;
-    distance < p.DrainageGuidanceLookaheadDistance;
-    distance += map.mesh.spacing
-  ) {
-    const [gx, gy] = descentGradient(map, current);
-    x += gx;
-    y += gy;
+  for (let distance = 0; distance < p.DrainageGuidanceLookaheadDistance;)
+  // Advance by the actual parent segment, including coarse/fine crossings.
+  {
     const parent = map.DrainageParents[current];
     if (parent < 0) break;
+    const segment = Math.min(
+      physicalDistance(map.mesh, current, parent),
+      p.DrainageGuidanceLookaheadDistance - distance
+    );
+    x -= gradient.x[current] * segment;
+    y -= gradient.y[current] * segment;
+    distance += segment;
     current = parent;
   }
   return Math.abs(x) < 0.000001 && Math.abs(y) < 0.000001
@@ -119,15 +108,16 @@ function selectTarget(
   map: PhysicalField,
   c: PhysicalContext,
   source: number,
-  area: Float64Array | null
+  area: Float64Array | null,
+  gradient: ReturnType<typeof physicalGradients>
 ): number {
-  const [dx, dy] = descentDirection(map, c.Profile, source);
+  const [dx, dy] = descentDirection(map, c.Profile, source, gradient);
   let best = -1,
     bestScore = -Number.MAX_VALUE,
     bestTie = -Number.MAX_VALUE,
     tieDecided = false;
-  for (let edge = 0; edge < 3; edge++) {
-    const offset = source * 3 + edge,
+  for (let edge = 0; edge < map.mesh.degree[source]; edge++) {
+    const offset = source * map.mesh.stride + edge,
       target = map.mesh.neighbors[offset];
     if (target < 0 || !legalAdjacentTarget(map, source, target)) continue;
     const alignment = map.mesh.edgeX[offset] * dx + map.mesh.edgeY[offset] * dy;
@@ -156,12 +146,13 @@ function selectTarget(
 }
 export function resolveLandTargets(map: PhysicalField, c: PhysicalContext): Int32Array {
   const targets = new Int32Array(map.mesh.count).fill(-1);
+  const gradient = physicalGradients(map.mesh, map.DrainageElevations);
   for (let i = 0; i < map.mesh.count; i++)
-    if (map.WaterKindCodes[i] !== 1) targets[i] = selectTarget(map, c, i, null);
+    if (map.WaterKindCodes[i] !== 1) targets[i] = selectTarget(map, c, i, null, gradient);
   if (c.Profile.DrainageCaptureWeight <= 0) return targets;
   const area = contributingArea(targets, map.mesh.areas);
   for (let i = 0; i < map.mesh.count; i++)
-    if (map.WaterKindCodes[i] !== 1) targets[i] = selectTarget(map, c, i, area);
+    if (map.WaterKindCodes[i] !== 1) targets[i] = selectTarget(map, c, i, area, gradient);
   return targets;
 }
 export function drainageGuidance(map: PhysicalField, c: PhysicalContext) {

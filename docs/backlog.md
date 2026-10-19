@@ -93,6 +93,24 @@ with no backend, persistence or MCP; preserve the existing backend source.
       spread history, magical source settings and retained session configurations.
       Further political and cultural controls belong with the generators in item 3.
 
+- [ ] **9. Inject and preserve major landscape landmarks during epochs.** Provide
+      an optional generation process for deliberately introducing exceptional
+      landscapes at chosen points within the epoch sequence: Niagara-scale falls,
+      a Grand Canyon-scale gorge, a Matterhorn-like peak, and other epic locations.
+      Let creators guarantee these landmarks' presence, location and defining
+      physical characteristics. Preserve those characteristics through subsequent
+      epochs while integrating the surrounding procedural terrain, geology,
+      drainage and magical effects into coherent geography.
+
+      Keep naturally emerging landforms and their existing generation and feature
+      detection routes available alongside deliberate injection. Injected landmarks
+      participate in the shared causal generation system and remain identifiable
+      through later evolution. Design the preservation and integration behavior as
+      part of this future work.
+
+      **Deferred: outside the current continuous-terrain and adaptive-generation
+      replacement plan.**
+
 The [product contract](product-spec.md) supplies the geographic and authoring
 requirements. [ADR 0003](adr/0003-frontend-session.md) defines the current execution
 and session boundary; the [generation design](generation-workflows.md) records

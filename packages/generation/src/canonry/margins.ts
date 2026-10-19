@@ -3,6 +3,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, round } from "./math";
 import { hashUnit } from "./noise";
+import { metricSearch } from "./metricSearch";
 
 const unreachable = 2147483647;
 function expand(
@@ -12,18 +13,9 @@ function expand(
   kind: Int32Array | null,
   reach: number
 ) {
-  for (let head = 0; head < queue.length; head++) {
-    const i = queue[head],
-      next = distance[i] + map.mesh.spacing;
-    if (next > reach) continue;
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[i * 3 + edge];
-      if (j < 0 || distance[j] <= next) continue;
-      distance[j] = next;
-      if (kind) kind[j] = kind[i];
-      queue.push(j);
-    }
-  }
+  metricSearch(map.mesh, queue, distance, reach, (j, i) => {
+    if (kind) kind[j] = kind[i];
+  });
 }
 export function tectonicMargins(map: PhysicalField, context: PhysicalContext) {
   const count = map.mesh.count,

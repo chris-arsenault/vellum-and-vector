@@ -3,10 +3,12 @@ import {
   putChannel,
   semanticId,
   spatial,
+  fieldContour,
+  fieldInterpolator,
   type Entity,
   type Position,
 } from "@atlas/domain";
-import { generatedFeature, putGenerated, cellPolygon } from "./mapFeatures";
+import { generatedFeature, putGenerated } from "./mapFeatures";
 import type { GenerationState, MapProcess, MapProcessContext } from "./process";
 
 export function landCells(state: GenerationState) {
@@ -163,7 +165,7 @@ export const politicalProcess: MapProcess = {
         0.3 + (0.65 * index) / polities.length,
         `Building territory and claims for ${polity.name} (${index + 1}/${polities.length})`
       );
-      territory(state, owner, index, polity);
+      territory(state, owner, index, polity, polities);
     }
     context.recordCause({
       kind: "domain",
@@ -177,22 +179,36 @@ export const politicalProcess: MapProcess = {
     return [];
   },
 };
-function territory(state: GenerationState, owner: Int32Array, index: number, polity: Entity) {
+function territory(
+  state: GenerationState,
+  owner: Int32Array,
+  index: number,
+  polity: Entity,
+  polities: Entity[]
+) {
   const grid = state.surface;
-  const polygons: number[][][][] = [];
-  for (let y = 0; y < grid.height; y++) {
-    for (let x = 0; x < grid.width; x++) {
-      if (owner[y * grid.width + x] !== index) continue;
-      const start = x;
-      while (x + 1 < grid.width && owner[y * grid.width + x + 1] === index) x++;
-      polygons.push(cellPolygon(grid, start, x, y).coordinates);
-    }
-  }
-  if (!polygons.length) return;
-  // Union contiguous row strips before publishing OGC polygons; shared edges
-  // in a raw MultiPolygon would otherwise be topologically invalid.
-  let shape = spatial.unionAll(polygons.map((coordinates) => ({ type: "Polygon", coordinates })));
-  shape = spatial.intersection(shape, grid.scope.footprint)!;
+  const topology = grid.topology ?? grid;
+  const heightAt = fieldInterpolator(grid, "elevation");
+  const center = polity.attributes.center as Position;
+  const other = polities
+    .filter((p) => p.id !== polity.id)
+    .map((p) => p.attributes.center as Position);
+  const valueAt = (x: number, y: number) => {
+    const distance = Math.hypot(x - center.x, y - center.y);
+    const reach = other.reduce(
+      (limit, p) => Math.min(limit, Math.hypot(x - p.x, y - p.y) - distance),
+      Infinity
+    );
+    return Math.min(heightAt({ x, y, z: 0 }), reach);
+  };
+  const cells = Array.from(owner.keys()).filter((i) => owner[i] === index);
+  if (!cells.length) return;
+  // Voronoi reach and height remain defined throughout the numerical halo.
+  // A stencil around owned world cells can cut an otherwise open contour;
+  // trace the complete field, then clip the closed geometry to the world.
+  const contour = fieldContour(topology, valueAt, undefined, 0);
+  const shape = contour && spatial.intersection(contour, grid.scope.footprint);
+  if (!shape) return;
   const feature = generatedFeature(
     state,
     `sovereignty:${polity.id}`,

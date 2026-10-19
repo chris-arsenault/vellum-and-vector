@@ -23,58 +23,48 @@ function canFlood(
       p.FloodplainMaximumLongitudinalAlignment / 1000
   );
 }
-function seedFloodplains(map: PhysicalField, c: PhysicalContext, upstream: Int32Array): number[] {
-  const frontier: number[] = [];
+type Front = { i: number; distance: number };
+function seedFloodplains(map: PhysicalField, c: PhysicalContext, upstream: Int32Array): Front[] {
+  const frontier: Front[] = [];
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.RiverChannelOrders[i] < c.Profile.FloodplainMinimumRiverOrder) continue;
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[i * 3 + edge];
-      if (map.mesh.spacing > c.Profile.FloodplainMaximumWidth || !canFlood(map, c, upstream, i, j))
+    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+      const at = i * map.mesh.stride + edge,
+        j = map.mesh.neighbors[at];
+      const distance = map.mesh.edgeLength[at];
+      if (distance > c.Profile.FloodplainMaximumWidth || !canFlood(map, c, upstream, i, j))
         continue;
       const intensity = clamp(
         map.RiverChannelStrength[i] + toUnits(map.CumulativeDeposition[j]) - map.Slope[j] * 60_000,
         1,
         1000
       );
-      if (intensity > map.FloodplainIntensity[j]) {
-        map.FloodplainIntensity[j] = intensity;
-        frontier.push(j);
-      }
+      if (intensity <= map.FloodplainIntensity[j]) continue;
+      map.FloodplainIntensity[j] = intensity;
+      frontier.push({ i: j, distance });
     }
   }
   return frontier;
 }
-function expandFront(
-  map: PhysicalField,
-  c: PhysicalContext,
-  upstream: Int32Array,
-  frontier: number[]
-): number[] {
-  const next: number[] = [];
-  for (const i of frontier)
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[i * 3 + edge];
-      if (!canFlood(map, c, upstream, i, j)) continue;
+export function floodplains(map: PhysicalField, c: PhysicalContext) {
+  map.FloodplainIntensity.fill(0);
+  const upstream = dominantUpstream(map),
+    frontier = seedFloodplains(map, c, upstream);
+  for (let head = 0; head < frontier.length; head++) {
+    const { i, distance } = frontier[head];
+    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+      const at = i * map.mesh.stride + edge,
+        j = map.mesh.neighbors[at];
+      const next = distance + map.mesh.edgeLength[at];
+      if (next > c.Profile.FloodplainMaximumWidth || !canFlood(map, c, upstream, i, j)) continue;
       const relief = toUnits(Math.abs(map.Elevation[i] - map.Elevation[j]));
       const intensity =
         map.FloodplainIntensity[i] -
-        (c.Profile.FloodplainIntensityDecay * map.mesh.spacing) / 10_000 -
+        (c.Profile.FloodplainIntensityDecay * map.mesh.edgeLength[at]) / 10_000 -
         relief;
-      if (intensity > map.FloodplainIntensity[j]) {
-        map.FloodplainIntensity[j] = intensity;
-        next.push(j);
-      }
+      if (intensity <= map.FloodplainIntensity[j]) continue;
+      map.FloodplainIntensity[j] = intensity;
+      frontier.push({ i: j, distance: next });
     }
-  return next;
-}
-export function floodplains(map: PhysicalField, c: PhysicalContext) {
-  map.FloodplainIntensity.fill(0);
-  const upstream = dominantUpstream(map);
-  let frontier = seedFloodplains(map, c, upstream);
-  for (
-    let step = map.mesh.spacing;
-    step < c.Profile.FloodplainMaximumWidth && frontier.length > 0;
-    step += map.mesh.spacing
-  )
-    frontier = expandFront(map, c, upstream, frontier);
+  }
 }

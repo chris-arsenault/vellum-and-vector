@@ -3,7 +3,7 @@ import { createWorld, session, undoWorld } from "./atlasState";
 import { commitCommand, previewCommand } from "./atlasCommands";
 import { readScene, readRaster, exportWorld } from "./atlasReads";
 import { saveTemplate } from "./atlasTemplates";
-import { rectangle, type Command, type World } from "@atlas/domain";
+import { rectangle, sample, type Command, type World } from "@atlas/domain";
 
 function command(world: World, kind: string, data: Record<string, unknown>): Command {
   return { operationId: crypto.randomUUID(), expectedVersion: world.version, kind, data };
@@ -75,7 +75,13 @@ it("creates skipped profiles, sculpts fields and keeps changes out of other worl
       delta: 50,
     })
   );
-  expect(Math.max(...readRaster(initial.id, fields.fields[0].id, "elevation").values)).toBe(50);
+  const peak = sample(readRaster(initial.id, fields.fields[0].id, "elevation").field, "elevation", {
+    x: 300,
+    y: 300,
+    z: 0,
+  });
+  expect(peak).toBeGreaterThan(48);
+  expect(peak).toBeLessThanOrEqual(50);
   expect(Object.keys(session(other.id).snapshot.world.areas)).toHaveLength(1);
 });
 
@@ -168,10 +174,22 @@ it("publishes landform geometry and sampled changes together, then undoes both",
   });
   const result = commitCommand(initial.id, operation).candidate;
   expect(Object.values(result.features).find((f) => f.name === "Authored hill")).toBeDefined();
-  expect(Math.max(...readRaster(initial.id, fields.fields[0].id, "elevation").values)).toBe(60);
+  const peak = sample(readRaster(initial.id, fields.fields[0].id, "elevation").field, "elevation", {
+    x: 50000,
+    y: 50000,
+    z: 0,
+  });
+  expect(peak).toBeGreaterThan(58);
+  expect(peak).toBeLessThanOrEqual(60);
   undoWorld(initial.id, operation.operationId);
   expect(readScene(initial.id, areaId)).toEqual([]);
-  expect(Math.max(...readRaster(initial.id, fields.fields[0].id, "elevation").values)).toBe(0);
+  expect(
+    sample(readRaster(initial.id, fields.fields[0].id, "elevation").field, "elevation", {
+      x: 50000,
+      y: 50000,
+      z: 0,
+    })
+  ).toBe(0);
 });
 
 it("routes an authored road across sampled terrain and creates its network topology", () => {

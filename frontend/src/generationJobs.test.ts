@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { createWorld } from "./atlasState";
-import { cancelGeneration, listJobs, startGeneration } from "./generationJobs";
+import { createWorld, session } from "./atlasState";
+import { cancelGeneration, listJobs, startGeneration, generationSnapshot } from "./generationJobs";
+import { createAdaptiveField, createAdaptiveTopology, putChannel } from "@atlas/domain";
 
 class TestWorker {
   static latest: TestWorker;
@@ -44,4 +45,41 @@ it("retains the active stage and error when a worker fails", () => {
   expect(failed.error).toBe("Worker exhausted memory");
   expect(worker.terminate).toHaveBeenCalledOnce();
   cancelGeneration(job.id);
+});
+
+it("publishes adaptive world quantities in their geographic layers without rasterizing them", () => {
+  const world = createWorld({ name: "World fields", seed: 42, width: 10000, height: 10000 });
+  const domain = session(world.id).snapshot;
+  const topology = createAdaptiveTopology([0, 0, 10000, 10000], {
+    maximumSize: 2500,
+    minimumSize: 2500,
+  });
+  const grid = createAdaptiveField("world-field", domain.scope, topology);
+  for (const [channel, unit] of [
+    ["elevation", "metre"],
+    ["slope", "gradient"],
+    ["riverWidth", "metre"],
+    ["riverDepth", "metre"],
+    ["catchmentArea", "square-metre"],
+  ])
+    putChannel(grid, channel, unit, new Float64Array(grid.active.length).fill(1));
+  const output = generationSnapshot(
+    {
+      kind: "final",
+      configurationHash: "world-fields",
+      ancestry: [],
+      state: { domain, surface: grid, facts: new Set(["elevation"]), history: [] },
+    },
+    { areaId: domain.scope.areaId, seed: 42, quality: "draft", domains: ["physical"] },
+    crypto.randomUUID()
+  );
+  const rivers = output.world.fields.find((field) => field.layerId === "rivers")!;
+  expect(rivers.channels).toEqual(
+    expect.arrayContaining(["riverWidth", "riverDepth", "catchmentArea"])
+  );
+  expect(output.world.fields.find((field) => field.layerId === "geology")!.channels).toContain(
+    "slope"
+  );
+  expect(output.numerical[rivers.id].topology).toBe(topology);
+  expect(output.numerical[rivers.id].channels.riverWidth).toBe(grid.channels.riverWidth);
 });

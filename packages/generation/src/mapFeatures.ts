@@ -1,4 +1,10 @@
-import { gridPosition, semanticId, spatial, type AtlasFeature, type Grid } from "@atlas/domain";
+import {
+  gridPosition,
+  semanticId,
+  spatial,
+  type AtlasFeature,
+  type RegularGrid,
+} from "@atlas/domain";
 import type { GenerationState, MapProcess } from "./process";
 
 export function generatedFeature(
@@ -205,7 +211,7 @@ export const extractGeographyProcess: MapProcess = {
   },
 };
 
-export function cellPolygon(grid: Grid, x0: number, x1: number, y: number) {
+export function cellPolygon(grid: RegularGrid, x0: number, x1: number, y: number) {
   const dx = (grid.bounds[2] - grid.bounds[0]) / (grid.width - 1),
     dy = (grid.bounds[3] - grid.bounds[1]) / (grid.height - 1);
   const west = Math.max(grid.bounds[0], grid.bounds[0] + (x0 - 0.5) * dx);

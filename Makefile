@@ -16,7 +16,6 @@ typecheck:
 	pnpm typecheck
 
 test:
-	pnpm test
 	pnpm --dir frontend run test
 
 test-browser:

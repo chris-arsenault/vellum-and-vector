@@ -8,29 +8,41 @@ import type { Area } from "./model";
 import { createGrid, putChannel, resample, type Grid } from "./grids";
 import { gridType } from "./gridSchema";
 import { spatial, point } from "./spatial";
+import { rectangle } from "./spatial";
+import { createAdaptiveField } from "./adaptiveField";
+import { createAdaptiveTopology } from "./adaptiveTopology";
+import { adaptiveTopologySchema } from "./adaptiveSchema";
 import { areaSpace, isDescendant } from "./composition";
 import { semanticId } from "./identity";
 import { requireThat } from "./errors";
 import { validateAuthoredField, fieldFact } from "./fieldValidation";
 import { layerSupports } from "./builtinLayers";
 import { invalidateFacts, upsertArea } from "./authoringBasics";
-import { materializeField } from "./fieldComposition";
 import { authoredFieldCoverage } from "./fieldOwnership";
 
 const channelSchema = z.object({
   unit: z.string().min(1),
   values: z.union([finite, z.array(finite)]),
 });
-export const createFieldSchema = z.object({
-  id: uuid,
-  areaId: uuid,
-  layerId: z.string().min(1),
-  footprint: geometrySchema,
-  width: z.number().int().min(2),
-  height: z.number().int().min(2),
-  channels: z.record(z.string().min(1), channelSchema),
-  parentFieldId: uuid.optional(),
-});
+export const createFieldSchema = z
+  .object({
+    id: uuid,
+    areaId: uuid,
+    layerId: z.string().min(1),
+    footprint: geometrySchema,
+    width: z.number().int().min(2).optional(),
+    height: z.number().int().min(2).optional(),
+    topology: adaptiveTopologySchema.optional(),
+    channels: z.record(z.string().min(1), channelSchema),
+    parentFieldId: uuid.optional(),
+  })
+  .refine(
+    (data) =>
+      data.topology
+        ? data.width === undefined && data.height === undefined
+        : data.width !== undefined && data.height !== undefined,
+    "A field uses adaptive topology or regular dimensions."
+  );
 const sculptSchema = z.object({
   fieldId: uuid,
   center: z.object({ x: finite, y: finite, z: finite.default(0) }),
@@ -105,12 +117,7 @@ export function createField(
     "field_extent",
     "The sampled field stays within its mapped area."
   );
-  const grid = createGrid(
-    semanticId(snapshot.world.id, "authored-grid", context.operationId),
-    { ...context.scope, footprint: data.footprint },
-    data.width,
-    data.height
-  );
+  const grid = authoredGrid(data, context, snapshot);
   populateChannels(data, snapshot, grid);
   validateAuthoredField(snapshot, area, grid, layer, !reconcile);
   const coverage = authoredFieldCoverage(snapshot, area, layer, data.id, grid);
@@ -135,7 +142,7 @@ export function createField(
       layerId: layer.id,
       algorithm: "authored",
       source: { kind: "operation", id: context.operationId },
-      samples: grid.width * grid.height,
+      samples: grid.active.length,
       channels: Object.keys(grid.channels),
       resourceId: reference.id,
       state: "authored",
@@ -154,6 +161,13 @@ export function createField(
   );
   return changes;
 }
+function authoredGrid(data: CreateField, context: IntentContext, snapshot: DomainSnapshot) {
+  const id = semanticId(snapshot.world.id, "authored-grid", context.operationId);
+  const scope = { ...context.scope, footprint: data.footprint };
+  return data.topology
+    ? createAdaptiveField(id, scope, data.topology)
+    : createGrid(id, scope, data.width!, data.height!);
+}
 function populateChannels(data: CreateField, snapshot: DomainSnapshot, grid: Grid) {
   if (data.parentFieldId) {
     const parent = snapshot.numerical[data.parentFieldId];
@@ -170,7 +184,7 @@ function populateChannels(data: CreateField, snapshot: DomainSnapshot, grid: Gri
       name,
       channel.unit,
       typeof channel.values === "number"
-        ? new Float64Array(grid.width * grid.height).fill(channel.values)
+        ? new Float64Array(grid.active.length).fill(channel.values)
         : Float64Array.from(channel.values)
     );
   requireThat(
@@ -202,18 +216,14 @@ function sculpt(data: Sculpt, context: IntentContext, snapshot: DomainSnapshot):
     "Load the selected sampled field before sculpting."
   );
   const area = fieldArea(snapshot, context, context.scope.areaId),
-    support = materializeField(source);
-  const footprint = spatial.intersection(snapshot.scope.footprint, support.scope.footprint);
-  requireThat(footprint, "field_extent", "The brush must intersect the sampled field.");
-  const grid = createGrid(
-    semanticId(snapshot.world.id, "authored-grid", context.operationId),
-    { ...context.scope, footprint },
-    support.width,
-    support.height,
-    support.bounds
+    support = source;
+  const footprint = spatial.intersection(
+    brushScope(data, context).footprint,
+    support.scope.footprint
   );
-  grid.channels = structuredClone(support.channels);
-  grid.units = { ...support.units };
+  requireThat(footprint, "field_extent", "The brush must intersect the sampled field.");
+  const grid = brushField(data, context, snapshot, footprint);
+  resample(support, grid, data.channel, support.units[data.channel] === "category");
   requireThat(
     isDescendant(snapshot.world.areas, area.id, field.areaId),
     "field_area",
@@ -259,6 +269,25 @@ function sculpt(data: Sculpt, context: IntentContext, snapshot: DomainSnapshot):
     grid.scope.footprint
   );
   return changes;
+}
+function brushField(
+  data: Sculpt,
+  context: IntentContext,
+  snapshot: DomainSnapshot,
+  footprint: Area["footprint"]
+) {
+  const bounds = spatial.bounds(footprint),
+    minimumSize = data.radius / 8;
+  const topology = createAdaptiveTopology(bounds, {
+    maximumSize: Math.max(minimumSize, Math.max(bounds[2] - bounds[0], bounds[3] - bounds[1]) / 8),
+    minimumSize,
+    refine: (box) => spatial.intersects(rectangle(box), footprint),
+  });
+  return createAdaptiveField(
+    semanticId(snapshot.world.id, "authored-grid", context.operationId),
+    { ...context.scope, footprint },
+    topology
+  );
 }
 export function registerFieldIntents(registry: IntentRegistry): void {
   registry.register({

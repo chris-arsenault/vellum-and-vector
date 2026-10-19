@@ -35,8 +35,8 @@ function collectDepressions(
   for (let head = 0; head < collected.length; head++) {
     const i = collected[head];
     spill = Math.min(spill, map.DrainageElevations[i]);
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[i * 3 + edge];
+    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
       if (j < 0 || !mask[j] || marks[j] !== 0) continue;
       marks[j] = id;
       collected.push(j);

@@ -1,5 +1,5 @@
 import type { Position } from "./model";
-import { gridPosition, neighbors, type Grid } from "./grids";
+import { gridPosition, neighbors, fieldInterpolator, type Grid, type GridSurface } from "./grids";
 
 export interface BrushInput {
   center: Position;
@@ -10,30 +10,33 @@ export interface BrushInput {
   mode: "add" | "set" | "smooth";
   falloff: "linear" | "smooth" | "constant";
 }
-export function applyFieldBrush(data: BrushInput, source: Grid, grid: Grid) {
+export function applyFieldBrush(data: BrushInput, source: GridSurface, grid: Grid) {
   const values = grid.channels[data.channel],
-    original = source.channels[data.channel];
+    valueAt = fieldInterpolator(source, data.channel);
   for (let i = 0; i < values.length; i++) {
     const distance = strokeDistance(gridPosition(grid, i), data.stroke ?? [data.center]);
     if (distance > data.radius || !grid.active[i]) continue;
     const t = Math.max(0, 1 - distance / data.radius),
       weight =
         data.falloff === "constant" ? 1 : data.falloff === "linear" ? t : t * t * (3 - 2 * t);
-    values[i] = brushValue(data, source, original, i, weight);
+    values[i] = brushValue(data, grid, valueAt, i, weight);
   }
 }
 function brushValue(
   data: BrushInput,
   source: Grid,
-  values: Float64Array,
+  valueAt: (p: Position) => number,
   index: number,
   weight: number
 ) {
-  if (data.mode === "add") return values[index] + data.amount * weight;
-  if (data.mode === "set") return values[index] + (data.amount - values[index]) * weight;
+  const original = valueAt(gridPosition(source, index));
+  if (data.mode === "add") return original + data.amount * weight;
+  if (data.mode === "set") return original + (data.amount - original) * weight;
   const adjacent = neighbors(source, index, true),
-    average = adjacent.reduce((sum, i) => sum + values[i], values[index]) / (adjacent.length + 1);
-  return values[index] + (average - values[index]) * Math.max(0, Math.min(1, data.amount)) * weight;
+    average =
+      adjacent.reduce((sum, i) => sum + valueAt(gridPosition(source, i)), original) /
+      (adjacent.length + 1);
+  return original + (average - original) * Math.max(0, Math.min(1, data.amount)) * weight;
 }
 
 export function strokeDistance(point: Position, path: Position[]): number {

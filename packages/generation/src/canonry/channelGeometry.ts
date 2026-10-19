@@ -4,6 +4,7 @@ import type { PhysicalContext } from "./context";
 import { clamp, toUnits, truncate, units } from "./math";
 import { edgeLeadingTo } from "./mesh";
 import { channelDimensions } from "./dimensions";
+import { physicalDistance } from "./physicalMetric";
 
 function normalize(x: number, y: number): [number, number] {
   const length = Math.max(0.000001, Math.sqrt(x * x + y * y));
@@ -97,7 +98,8 @@ function tryWiden(
   front: Front,
   target: number
 ): boolean {
-  const depth = front.depth + map.mesh.spacing,
+  const depth =
+      front.depth + (target < 0 ? Infinity : physicalDistance(map.mesh, front.triangle, target)),
     p = c.Profile;
   if (depth > front.maximum || !canWiden(map, c, upstream, front.spine, target)) return false;
   const relief = toUnits(Math.abs(map.Elevation[front.spine] - map.Elevation[target]));
@@ -167,10 +169,14 @@ export function riverChannelGeometry(map: PhysicalField, c: PhysicalContext) {
   }
   for (let head = 0; head < frontier.length; head++) {
     const front = frontier[head];
-    for (let edge = 0; edge < 3; edge++) {
-      const target = map.mesh.neighbors[front.triangle * 3 + edge];
+    for (let edge = 0; edge < map.mesh.degree[front.triangle]; edge++) {
+      const target = map.mesh.neighbors[front.triangle * map.mesh.stride + edge];
       if (tryWiden(map, c, upstream, front, target))
-        frontier.push({ ...front, triangle: target, depth: front.depth + map.mesh.spacing });
+        frontier.push({
+          ...front,
+          triangle: target,
+          depth: front.depth + physicalDistance(map.mesh, front.triangle, target),
+        });
     }
   }
   extendSpines(map);

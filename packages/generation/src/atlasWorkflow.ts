@@ -1,11 +1,14 @@
 import {
   areaSpace,
   createGrid,
+  createAdaptiveField,
+  createAdaptiveTopology,
   resampleChannels,
   spatial,
   canonryMagicPresets,
   semanticId,
   requireThat,
+  cloneSnapshot,
   type DomainSnapshot,
   type Grid,
 } from "@atlas/domain";
@@ -78,11 +81,12 @@ export async function generateAtlas(
 }
 
 function initialState(source: DomainSnapshot, input: AtlasGenerationInput): GenerationState {
-  const domain = structuredClone(source),
+  const domain = cloneSnapshot(source),
     area = domain.world.areas[input.areaId];
   requireThat(area, "generation_area", "Choose an existing mapped area.");
-  const size = atlasQuality[input.quality as keyof typeof atlasQuality]?.samples;
-  requireThat(size, "generation_quality", "Choose draft, standard or fine detail.");
+  const quality = atlasQuality[input.quality as keyof typeof atlasQuality];
+  requireThat(quality, "generation_quality", "Choose draft, standard or fine detail.");
+  const size = Math.sqrt(quality.baseCells);
   const scope = {
     worldId: domain.world.id,
     areaId: area.id,
@@ -104,12 +108,16 @@ function initialState(source: DomainSnapshot, input: AtlasGenerationInput): Gene
     "generation_extent",
     "Choose an extent with room for interior field samples."
   );
-  const surface = createGrid(
-    semanticId(domain.world.id, "surface", `${area.id}:${input.seed}`),
-    { ...scope, footprint: interior },
-    size,
-    size
-  );
+  const id = semanticId(domain.world.id, "surface", `${area.id}:${input.seed}`);
+  const maximumSize = Math.max(extent[2] - extent[0], extent[3] - extent[1]) / size;
+  const surface =
+    area.profile === "interior"
+      ? createGrid(id, { ...scope, footprint: interior }, size, size)
+      : createAdaptiveField(
+          id,
+          { ...scope, footprint: interior },
+          createAdaptiveTopology(extent, { maximumSize, minimumSize: maximumSize })
+        );
   inheritSurface(source, surface, input);
   return { domain, surface, facts: initialFacts(surface), history: [], causes: [] };
 }

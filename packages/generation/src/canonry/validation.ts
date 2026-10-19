@@ -81,7 +81,9 @@ function validateIce(map: PhysicalField, c: PhysicalContext) {
       !range(map.GroundedIce[i], 0, 1) ||
       (map.GroundedIce[i] !== 0 && !isGrounded(map, i, c.Profile));
     if (invalidGrounding || map.MaximumGroundedIceFlux[i] > map.MaximumIceFlux[i])
-      throw new Error("Grounded-ice history contradicts physical support.");
+      throw new Error(
+        `Grounded-ice history contradicts physical support at (${map.mesh.x[i]}, ${map.mesh.y[i]}): grounded=${map.GroundedIce[i]}, ice=${map.IceThickness[i]}, water=${map.WaterKindCodes[i]}, depth=${map.WaterDepths[i]}, maximumGroundedFlux=${map.MaximumGroundedIceFlux[i]}, maximumFlux=${map.MaximumIceFlux[i]}.`
+      );
   }
 }
 export function validatePhysical(map: PhysicalField, c: PhysicalContext) {

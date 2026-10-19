@@ -2,6 +2,7 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, round } from "./math";
+import { PriorityQueue } from "./priorityQueue";
 
 interface Contact {
   pair: number;
@@ -50,29 +51,29 @@ function findContact(
   start: number,
   visited: Int32Array,
   distance: Float64Array,
-  queue: Int32Array,
   visit: number
 ): Contact | null {
   const p = context.Profile;
-  let head = 0,
-    tail = 0;
+  const queue = new PriorityQueue<{ i: number; d: number }>((a, b) => a.d - b.d || a.i - b.i);
   const search = new MaterialSearch();
   visited[start] = visit;
   distance[start] = 0;
-  queue[tail++] = start;
-  while (head < tail) {
-    const i = queue[head++],
-      d = distance[i];
+  queue.push({ i: start, d: 0 });
+  while (queue.count) {
+    const { i, d } = queue.pop();
+    if (d !== distance[i]) continue;
     search.observe(map, context, i, d);
     const contact = search.contact(p.ContinentalSutureDetectionReach);
     if (contact) return contact;
     if (d >= p.ContinentalSutureDetectionReach) continue;
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[i * 3 + edge];
-      if (j < 0 || visited[j] === visit) continue;
+    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
+      const next = d + map.mesh.edgeLength[i * map.mesh.stride + edge];
+      if (j < 0 || next > p.ContinentalSutureDetectionReach) continue;
+      if (visited[j] === visit && distance[j] <= next) continue;
       visited[j] = visit;
-      distance[j] = d + map.mesh.edgeLength[i * 3 + edge];
-      queue[tail++] = j;
+      distance[j] = next;
+      queue.push({ i: j, d: next });
     }
   }
   return null;
@@ -118,12 +119,11 @@ export function continentalSutures(map: PhysicalField, context: PhysicalContext)
           Math.trunc(((p.OrogenicCoreRockResistance - 1000) * map.CrustSutureStrength[i]) / 1000)
       );
   const visited = new Int32Array(count),
-    distance = new Float64Array(count),
-    queue = new Int32Array(count);
+    distance = new Float64Array(count);
   let visit = 0;
   for (let i = 0; i < count; i++) {
     if (map.TectonicBoundaryCodes[i] !== 1 || map.TectonicStrain[i] <= 0) continue;
-    const contact = findContact(map, context, i, visited, distance, queue, ++visit);
+    const contact = findContact(map, context, i, visited, distance, ++visit);
     if (contact) recordCollision(map, context, i, contact);
   }
 }

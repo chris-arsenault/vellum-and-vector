@@ -20,14 +20,14 @@ function fracturePropagation(state: GenerationState, field: MagicField, activity
   while (queue.count) {
     const { index: i, value } = queue.pop();
     if (field.intensity[i] !== value) continue;
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[i * 3 + edge];
+    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
       if (j < 0) continue;
       const conductance = (map.FractureConductance[i] + map.FractureConductance[j]) / 2;
       const next =
         value -
         ((p.baseCost + (1000 - conductance) / p.conductanceDivisor) *
-          map.mesh.edgeLength[i * 3 + edge]) /
+          map.mesh.edgeLength[i * map.mesh.stride + edge]) /
           1000;
       if (next <= field.intensity[j]) continue;
       field.intensity[j] = next;
@@ -38,19 +38,21 @@ function fracturePropagation(state: GenerationState, field: MagicField, activity
 function coldTarget(state: GenerationState, i: number, seed: number) {
   const map = state.physical!.map;
   let target = -1,
-    lowest = map.Temperature[i],
+    lowest = 0,
     tie = -1;
-  for (let edge = 0; edge < 3; edge++) {
-    const j = map.mesh.neighbors[i * 3 + edge];
+  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
     if (j < 0 || map.Temperature[j] >= map.Temperature[i]) continue;
     const score = hashUnit(
       seed ^ 0x4dcb,
       triangleIdentity(map.mesh, i),
       triangleIdentity(map.mesh, j)
     );
-    if (map.Temperature[j] < lowest || (map.Temperature[j] === lowest && score > tie)) {
+    const gradient =
+      (map.Temperature[j] - map.Temperature[i]) / map.mesh.edgeLength[i * map.mesh.stride + edge];
+    if (gradient < lowest || (gradient === lowest && score > tie)) {
       target = j;
-      lowest = map.Temperature[j];
+      lowest = gradient;
       tie = score;
     }
   }
@@ -67,7 +69,8 @@ function coldPropagation(state: GenerationState, field: MagicField, seed: number
     const target = coldTarget(state, i, seed),
       capacity = clamp(map.IceThickness[i], 0, 900);
     const edge = edgeLeadingTo(map.mesh, i, target);
-    const travel = edge >= 0 ? map.mesh.edgeLength[i * 3 + edge] : map.mesh.spacing;
+    const travel =
+      edge >= 0 ? map.mesh.edgeLength[i * map.mesh.stride + edge] : Math.sqrt(map.mesh.areas[i]);
     const capture =
       1 - (1 - clamp(capacity / p.iceRetention, 0, 1)) ** (travel / p.coldRetentionDistance);
     const retained = accumulation[i] * capture;
@@ -118,6 +121,8 @@ export function propagateMagic(
     if (strategy === "radial") radialPropagation(state, field);
   }
   const scalar = strategy === "cold-drainage" || strategy === "radial" ? activity : 1;
-  for (let i = 0; i < field.intensity.length; i++)
+  for (let i = 0; i < field.intensity.length; i++) {
     field.intensity[i] = clamp(round(field.intensity[i] * scalar + field.stored[i]), 0, 1000);
+    field.wake[i] *= Number(field.intensity[i] > 0);
+  }
 }

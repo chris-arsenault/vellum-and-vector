@@ -1,5 +1,6 @@
 // Canonry PhysicalGeographyGrid.cs and MicrotriangleCoord.cs, commit 0f62584c.
 import { round } from "./math";
+import { adaptiveLeafAt, type AdaptiveTopology } from "@atlas/domain";
 
 const rootThree = Number("1.7320508075688772935");
 const triangleArea = Number("1.2990381056766579701");
@@ -28,6 +29,16 @@ export interface PhysicalMesh {
   latticeOffset: [number, number];
   bounds: [number, number, number, number];
   edgeLength: Float64Array;
+  degree: Int32Array;
+  stride: number;
+  cellWidth: Float64Array;
+  cellHeight: Float64Array;
+  faceLength: Float64Array;
+  faceDistance: Float64Array;
+  contentAreas: Float64Array;
+  topology: AdaptiveTopology | null;
+  cellToLeaf: Int32Array;
+  leafToCell: Int32Array;
 }
 const key = (p: TriangleCoord) => `${p.u}:${p.v}:${Number(p.inverted)}`;
 function centroid(p: TriangleCoord): [number, number] {
@@ -92,6 +103,18 @@ export function createMesh(contentCount: number, padding: number): PhysicalMesh 
     latticeOffset: [0, 0],
     bounds: [-radius, -radius, radius, radius],
     edgeLength: new Float64Array(count * 3).fill(1),
+    degree: new Int32Array(count).fill(3),
+    stride: 3,
+    cellWidth: new Float64Array(count).fill(Math.sqrt(triangleArea)),
+    cellHeight: new Float64Array(count).fill(Math.sqrt(triangleArea)),
+    faceLength: new Float64Array(count * 3).fill(Math.sqrt(3)),
+    faceDistance: new Float64Array(count * 3).fill(1),
+    contentAreas: Float64Array.from({ length: count }, (_, i) =>
+      i < contentCount ? triangleArea : 0
+    ),
+    topology: null,
+    cellToLeaf: Int32Array.from({ length: count }, (_, i) => i),
+    leafToCell: Int32Array.from({ length: count }, (_, i) => i),
   };
   connectMesh(mesh);
   return mesh;
@@ -114,10 +137,19 @@ function connectMesh(mesh: PhysicalMesh) {
     }
 }
 export function triangleIdentity(mesh: PhysicalMesh, i: number): number {
+  if (mesh.topology)
+    return (
+      Math.imul(round((mesh.x[i] + mesh.origin[0]) * 1000), 73856093) ^
+      Math.imul(round((mesh.y[i] + mesh.origin[1]) * 1000), 19349663)
+    );
   const p = mesh.coords[i];
   return Math.imul(p.u, 73856093) ^ Math.imul(p.v, 19349663) ^ (p.inverted ? 83492791 : 0);
 }
 export function nearestTriangle(mesh: PhysicalMesh, x: number, y: number): number {
+  if (mesh.topology) {
+    const leaf = adaptiveLeafAt(mesh.topology, x + mesh.origin[0], y + mesh.origin[1]);
+    return leaf < 0 ? -1 : mesh.leafToCell[leaf];
+  }
   const latticeX = (x - mesh.latticeOffset[0]) / mesh.spacing,
     latticeY = (y - mesh.latticeOffset[1]) / mesh.spacing;
   let index = -1,
@@ -141,6 +173,7 @@ export function nearestTriangle(mesh: PhysicalMesh, x: number, y: number): numbe
   return index;
 }
 export function edgeLeadingTo(mesh: PhysicalMesh, i: number, target: number): number {
-  for (let edge = 0; edge < 3; edge++) if (mesh.neighbors[i * 3 + edge] === target) return edge;
+  for (let edge = 0; edge < mesh.degree[i]; edge++)
+    if (mesh.neighbors[i * mesh.stride + edge] === target) return edge;
   return -1;
 }

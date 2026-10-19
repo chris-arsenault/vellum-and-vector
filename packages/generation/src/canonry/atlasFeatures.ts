@@ -9,19 +9,18 @@ import { extractLakes, extractNamedLandforms, extractMagicPlaces } from "./geogr
 import { createRiverPaths, riverPath, type RiverPaths } from "./riverPaths";
 
 function riverReach(state: GenerationState, start: number, incoming: Int32Array) {
-  const work = state.physical!,
-    map = work.map,
+  const map = state.physical!.map,
     members = [start];
   let i = start;
   while (map.FlowTargets[i] >= 0) {
-    const target = map.FlowTargets[i];
-    members.push(target);
-    if (map.WaterKindCodes[target] === 1 || map.RiverOrders[target] <= 0 || incoming[target] !== 1)
-      break;
-    i = target;
+    const j = map.FlowTargets[i];
+    members.push(j);
+    if (map.WaterKindCodes[j] !== 0 || map.RiverOrders[j] <= 0 || incoming[j] !== 1) break;
+    i = j;
   }
   return members;
 }
+
 function lineParts(geometry: Geometry): number[][][] {
   if (geometry.type === "LineString") return [geometry.coordinates];
   if (geometry.type === "MultiLineString") return geometry.coordinates;
@@ -83,8 +82,8 @@ export function extractNativeGeography(state: GenerationState, context: MapProce
     incoming = new Int32Array(map.mesh.count),
     paths = createRiverPaths(map);
   for (let i = 0; i < map.mesh.count; i++) {
-    const target = map.FlowTargets[i];
-    if (map.RiverOrders[i] > 0 && target >= 0 && map.RiverOrders[target] > 0) incoming[target]++;
+    const j = map.FlowTargets[i];
+    if (map.RiverOrders[i] > 0 && j >= 0 && map.RiverOrders[j] > 0) incoming[j]++;
   }
   for (let i = 0; i < map.mesh.contentCount; i++) {
     if (map.RiverOrders[i] <= 0 || incoming[i] === 1) continue;

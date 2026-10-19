@@ -2,16 +2,17 @@ import Map from "ol/Map.js";
 import View from "ol/View.js";
 import Projection from "ol/proj/Projection.js";
 import VectorLayer from "ol/layer/Vector.js";
-import ImageLayer from "ol/layer/Image.js";
+import TileLayer from "ol/layer/Tile.js";
 import LayerGroup from "ol/layer/Group.js";
 import VectorSource from "ol/source/Vector.js";
-import ImageStatic from "ol/source/ImageStatic.js";
+import type ImageTileSource from "ol/source/ImageTile.js";
 import GeoJSON from "ol/format/GeoJSON.js";
 import LineString from "ol/geom/LineString.js";
 import { Circle, Fill, Stroke, Style, Text } from "ol/style.js";
 import { ScaleLine } from "ol/control.js";
 import { defaults as defaultInteractions } from "ol/interaction/defaults.js";
-import { bounds, rasterImage } from "./presentation";
+import { bounds } from "./presentation";
+import { rasterLimits, rasterTileSource } from "./rasterTiles";
 import type { Area, AtlasFeature, LayerStyle, Raster, World } from "./types";
 
 const format = new GeoJSON();
@@ -225,20 +226,14 @@ export function updateRaster(
       const style = styles.find((item) => item.layerId === id);
       const rasterKey = `${raster.id}:${raster.channel}`;
       let layer = layers.getArray().find((layer) => layer.get("rasterKey") === rasterKey) as
-        ImageLayer<ImageStatic> | undefined;
+        TileLayer<ImageTileSource> | undefined;
       if (!layer) {
-        layer = new ImageLayer<ImageStatic>();
+        layer = new TileLayer<ImageTileSource>();
         layer.set("rasterKey", rasterKey);
         layers.insertAt(index, layer);
       }
       if (layer.get("raster") !== raster || layer.get("limits") !== limits.join(",")) {
-        layer.setSource(
-          new ImageStatic({
-            url: rasterImage(raster, limits),
-            projection: engine.map.getView().getProjection(),
-            imageExtent: raster.bounds,
-          })
-        );
+        layer.setSource(rasterTileSource(raster, limits, engine.map.getView().getProjection()));
         layer.set("raster", raster);
         layer.set("limits", limits.join(","));
       }
@@ -258,17 +253,7 @@ export function updateRaster(
 export function fitArea(engine: MapEngine, area: Area) {
   engine.map.getView().fit(bounds(area.footprint), { padding: [35, 35, 35, 35] });
 }
-function rasterLimits(data: Raster[]) {
-  const limits = [0, 1];
-  for (const raster of data)
-    for (const value of raster.values) {
-      if (!Number.isFinite(value)) continue;
-      limits[0] = Math.min(limits[0], value);
-      limits[1] = Math.max(limits[1], value);
-    }
-  return limits;
-}
-function applyRasterStyle(layer: ImageLayer<ImageStatic>, style: LayerStyle | undefined) {
+function applyRasterStyle(layer: TileLayer<ImageTileSource>, style: LayerStyle | undefined) {
   layer.setVisible(style?.visible ?? true);
   layer.setOpacity(style?.opacity ?? 1);
 }

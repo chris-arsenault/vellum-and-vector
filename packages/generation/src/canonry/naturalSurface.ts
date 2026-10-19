@@ -4,8 +4,8 @@ import type { PhysicalField } from "./field";
 import { Feature, Landform } from "./codes";
 
 function frozenNeighbor(map: PhysicalField, i: number) {
-  for (let edge = 0; edge < 3; edge++) {
-    const j = map.mesh.neighbors[i * 3 + edge];
+  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
     if (j >= 0 && map.WaterKindCodes[j] === 1 && map.IceThickness[j] > 0) return true;
   }
   return false;
@@ -61,8 +61,8 @@ function landClimate(map: PhysicalField, i: number): (typeof naturalSurfaceNames
 }
 function landRelief(map: PhysicalField, i: number): (typeof naturalSurfaceNames)[number] {
   if (map.RiverOrders[i] >= 1) return "River valley";
-  for (let edge = 0; edge < 3; edge++) {
-    const j = map.mesh.neighbors[i * 3 + edge];
+  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
     if (j >= 0 && map.RiverChannelOrders[j] >= 1) return "River valley";
   }
   if (map.Slope[i] >= 0.0235) return "Scree field";

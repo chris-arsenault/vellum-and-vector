@@ -1,8 +1,8 @@
 import { requireThat, type DomainSnapshot } from "@atlas/domain";
-import type { GenerationState, MapProcess, MapProcessContext } from "../process";
+import type { GenerationState, MapProcess } from "../process";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
 import { nativeContracts, applyNativeStep } from "./contracts";
-import { physicalContext } from "./context";
+import { nativeContext } from "./context";
 import { atlasEpoch, atlasQuality } from "./atlasProfile";
 import {
   composeNativeAuthoring,
@@ -22,6 +22,12 @@ import { advectAtlasMagic } from "./atlasMagic";
 import { magicProcesses } from "./magicProcesses";
 import { advectMagic } from "./magicState";
 import { retainGeographicIdentities } from "./geographicIdentity";
+import { refineGeologicalCauses } from "./adaptiveWorkspace";
+import { adaptiveWaterProcess } from "./adaptiveWater";
+import { adaptiveClimateProcess, adaptiveIceProcess, shoreSupport } from "./adaptiveClimate";
+import { refineWorkspace } from "./adaptiveWorkspace";
+import { prepareAdaptiveFractures } from "./adaptiveFractures";
+import { refreshGrounding } from "./glacierSurface";
 
 const prefix = (fact: string) => `canonry:${fact}`;
 const contract = (id: string, requires: string[] = [], produces: string[] = []) => ({
@@ -33,22 +39,6 @@ const contract = (id: string, requires: string[] = [], produces: string[] = []) 
   invalidates: [],
   workspaceOnly: true,
 });
-export function nativeContext(
-  state: GenerationState,
-  context: MapProcessContext,
-  seed: number,
-  salt: number
-) {
-  const index = context.epochIndices[0],
-    epoch = index === undefined ? null : atlasEpoch(state.domain.world.epochs[index]);
-  const nativeIndex = index ?? (state.physical!.map.CrustSupportInitialized ? -1 : 0);
-  const definition = index === undefined ? undefined : state.domain.world.epochs[index];
-  const profile = { ...state.physical!.profile };
-  profile.ImpactCraterCount = round(profile.ImpactCraterCount * (definition?.impacts ?? 1));
-  for (const key of ["VolcanicConeHeight", "VolcanicApronHeight", "VolcanicCalderaDepth"] as const)
-    profile[key] *= definition?.volcanism ?? 1;
-  return physicalContext(seed, salt, profile, epoch, nativeIndex, state.domain.world.epochs.length);
-}
 function validateWorkspace(state: GenerationState) {
   requireThat(state.physical, "physical_workspace", "Initialize the physical mesh first.");
   return [];
@@ -60,6 +50,18 @@ function restoreAuthoring(work: AtlasPhysicalWorkspace) {
     for (let i = 0; i < values.length; i++)
       if (Number.isFinite(values[i])) reconcileWater(work.map, i);
   }
+  refreshGrounding(work.map, work.profile);
+}
+function prepareSpatialStep(
+  state: GenerationState,
+  c: ReturnType<typeof nativeContext>,
+  step: NativeStep
+) {
+  const [name, salt] = step;
+  refineGeologicalCauses(state, c, name);
+  if (name === "coastal-detail") refineWorkspace(state, shoreSupport(state, c));
+  if (name === "fracture-network") return [name, salt, prepareAdaptiveFractures(state, c)] as const;
+  return step;
 }
 function nativeProcess(step: NativeStep, seed: number): MapProcess {
   const [name] = step,
@@ -79,19 +81,20 @@ function nativeProcess(step: NativeStep, seed: number): MapProcess {
       },
     },
     apply(state, context) {
-      const work = state.physical!,
-        map = work.map;
+      const work = state.physical!;
       const c = nativeContext(state, context, seed, source.salt);
       if (context.parameters.initial) {
         c.EpochIndex = 0;
         c.Seed = seed ^ source.salt ^ 0x45d9f3b;
       }
+      const spatialStep = prepareSpatialStep(state, c, step);
+      const map = work.map;
       restoreAuthoring(work);
       if (name === "temperature" && context.parameters.unforced) map.ExternalHeatForcing.fill(0);
       let selected: NativeStep =
         context.parameters.iceLoad && name === "crustal-support"
           ? [name, source.salt, (map, c) => crustalSupport(map, c, true)]
-          : step;
+          : spatialStep;
       if (name === "sea-ice") selected = [name, source.salt, atlasSeaIce];
       applyNativeStep(map, c, selected);
       if (name === "plate-advection") advectMagic(state);
@@ -132,6 +135,9 @@ export function atlasNativeProcesses(
     epochStartProcess(),
     finishProcess(original),
     advectAtlasMagic,
+    adaptiveWaterProcess(input.seed),
+    adaptiveClimateProcess(input.seed),
+    adaptiveIceProcess(input.seed),
     ...magicProcesses(input.seed, input.domains.includes("magic")),
     ...Array.from(implementations.values(), (step) => nativeProcess(step, input.seed)),
   ];
@@ -202,8 +208,8 @@ function sampleCoastalPressure(state: GenerationState, i: number) {
   if (!state.surface.channels.coastalPressure) return 0;
   const map = state.physical!.map;
   let pressure = 0;
-  for (let edge = 0; edge < 3; edge++) {
-    const j = map.mesh.neighbors[i * 3 + edge];
+  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
     if (j >= 0 && map.WaterKindCodes[j] === 1)
       pressure = Math.max(pressure, sampleSurfaceAtNative(state, "coastalPressure", j));
   }

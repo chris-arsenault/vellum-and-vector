@@ -11,8 +11,8 @@ export function atlasSeaIce(map: PhysicalField, c: PhysicalContext) {
     freezing = 0;
   for (let i = 0; i < map.mesh.contentCount; i++) {
     if (map.WaterKindCodes[i] !== 1) continue;
-    ocean++;
-    if (map.Temperature[i] <= c.Profile.IceMarginTemperature) freezing++;
+    ocean += map.mesh.contentAreas[i];
+    if (map.Temperature[i] <= c.Profile.IceMarginTemperature) freezing += map.mesh.contentAreas[i];
   }
   if (freezing === 0) {
     map.SeaIceSuitability.fill(0);

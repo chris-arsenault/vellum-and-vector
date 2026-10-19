@@ -1,8 +1,8 @@
 import { expect, it } from "vitest";
-import { canonryMagicPresets } from "@atlas/domain";
+import { canonryMagicPresets, rectangle } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import type { MapProcessContext } from "../process";
-import { createWorldMesh } from "./worldMesh";
+import { createAdaptiveWorldMesh } from "./adaptiveMesh";
 import { createMesh } from "./mesh";
 import { createField } from "./field";
 import { atlasPhysicalProfile } from "./atlasProfile";
@@ -12,10 +12,20 @@ import { propagateMagic } from "./magicPropagation";
 import { magicCoastalFeedback, magicThermalFeedback } from "./magicFeedback";
 import { classifyMagicFeatures, projectMagic } from "./magicFeatures";
 import { Feature } from "./codes";
+import { traceOceanBeam } from "./magicBeams";
+import { nearestTriangle } from "./mesh";
 
 function scenario(samples = 4096) {
   const state = landscape();
-  const map = createField(createWorldMesh([0, 0, 2_000_000, 1_000_000], samples, 0));
+  const size = 2_000_000 / Math.sqrt(samples);
+  const map = createField(
+    createAdaptiveWorldMesh(
+      [0, 0, 2_000_000, 1_000_000],
+      { maximumSize: size, minimumSize: size },
+      0,
+      rectangle([0, 0, 2_000_000, 1_000_000])
+    )
+  );
   state.domain.world.magicSystems = canonryMagicPresets();
   state.physical = {
     map,
@@ -23,6 +33,7 @@ function scenario(samples = 4096) {
     samples: new Int32Array(state.surface.active.length),
     fixed: [],
     inherited: false,
+    sampling: { maximumSize: map.mesh.spacing, minimumSize: map.mesh.spacing, featureSamples: 2 },
   };
   initializeMagic(state);
   return state;
@@ -65,8 +76,8 @@ it("selects geothermal peaks rather than random points on a heat gradient", () =
   expect(field.source.some((value) => value > 0)).toBe(true);
   for (let i = 0; i < map.mesh.count; i++) {
     if (!field.source[i]) continue;
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[i * 3 + edge];
+    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
       if (j >= 0) expect(map.HeatSourceDensity[j]).toBeLessThanOrEqual(map.HeatSourceDensity[i]);
     }
   }
@@ -133,6 +144,29 @@ it("records hot source chambers and removes inactive source cores", () => {
     map.FeatureFlags.some((value) => Boolean(value & (Feature.FireCore | Feature.MagmaChamber)))
   ).toBe(false);
   expect(field.features.core.every((value) => value === 0)).toBe(true);
+});
+
+it("propagates an oblique ocean ray without snapping its heading to adaptive faces", () => {
+  const state = scenario(16_384),
+    map = state.physical!.map;
+  const field = state.physical!.magic!.fields[2];
+  map.WaterKindCodes.fill(1);
+  const angle = 0.37,
+    source = nearestTriangle(map.mesh, -500_000, -200_000);
+  traceOceanBeam(map, field, 12, source, angle, 1000, 700_000);
+  let far = 0;
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (!field.intensity[i]) continue;
+    const dx = map.mesh.x[i] - map.mesh.x[source],
+      dy = map.mesh.y[i] - map.mesh.y[source];
+    const across = Math.abs(dy * Math.cos(angle) - dx * Math.sin(angle));
+    expect(across).toBeLessThan(
+      field.definition.parameters.beamWidth / 2 +
+        Math.hypot(map.mesh.cellWidth[i], map.mesh.cellHeight[i]) / 2
+    );
+    far = Math.max(far, dx * Math.cos(angle) + dy * Math.sin(angle));
+  }
+  expect(far).toBeGreaterThan(650_000);
 });
 
 function context(state: ReturnType<typeof scenario>, epoch: number): MapProcessContext {

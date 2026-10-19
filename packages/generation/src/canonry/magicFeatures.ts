@@ -96,8 +96,8 @@ function growRegion(
       queue.push(i);
     }
   for (let head = 0; head < queue.length; head++)
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[queue[head] * 3 + edge];
+    for (let edge = 0; edge < map.mesh.degree[queue[head]]; edge++) {
+      const j = map.mesh.neighbors[queue[head] * map.mesh.stride + edge];
       if (j < 0 || included[j] || !retains(j)) continue;
       included[j] = 1;
       queue.push(j);
@@ -152,7 +152,12 @@ export function projectMagic(state: GenerationState) {
       state.surface,
       key,
       unit,
-      Float64Array.from(work.samples, (i) => values[i])
+      Float64Array.from(work.samples, (i) => values[i]),
+      unit === "intensity-square-metre"
+        ? "extensive"
+        : unit === "category"
+          ? "category"
+          : "intensive"
     );
   project("naturalSurface", "category", magic.naturalSurface);
   project("finalSurface", "category", magic.finalSurface);

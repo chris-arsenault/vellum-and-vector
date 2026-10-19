@@ -10,6 +10,14 @@ behavior; [ADR 0002](adr/0002-relational-spatial-storage.md) records application
 boundaries. User requirements and explicitly agreed constraints govern changes
 to the implementation choices described here.
 
+**Current replacement plan — 2026-10-19:**
+[Continuous terrain and adaptive generation](#continuous-terrain-and-adaptive-generation--replacement-plan)
+replaces the fixed microtriangle working topology and whole-area raster display.
+The completed metre conversion remains useful groundwork; its choice to retain
+that topology is historical, not a constraint on this replacement. Current scope
+is top-level world generation and display, preserving existing generator and layer
+semantics. Editor development and lower-level generation are excluded.
+
 ## Reference parity requirement
 
 The user's explicit requirement is **semantic algorithm parity**, not numerical
@@ -713,7 +721,8 @@ solution; do not treat an agent-selected mechanism as another user requirement.
   not multiply every feature's dimensions to make the same miniature landscape
   fit any rectangle. Choose plausible physical distributions, not one fixed size
   per feature or a quota of visible landforms.
-- **Retain triangular topology where it serves the algorithms.** Supply actual
+- **Historical metre-plan choice, superseded by the continuous-terrain plan:
+  retain triangular topology where it serves the algorithms.** Supply actual
   world positions, represented cell areas, neighbor distances and edge geometry.
   Cover the declared footprint with a physically defined surrounding work area;
   stop fitting a circular game world onto the rectangle by its diagonal. Local
@@ -1112,3 +1121,667 @@ an ocean is present; subsequent epochs recompute the roots. This preserves sea
 level and terrain instead of creating water to satisfy the solver. The reference
 disk retains its closed-world requirement. This numerical drainage boundary is
 separate from the inherited parent-boundary fields used by refinement.
+
+## Continuous terrain and adaptive generation — replacement plan
+
+State: execute the complete **top-level world generation and display** replacement.
+The user's 2026-10-19 scope correction supersedes the earlier agent expansion into
+editors and lower-level map generation. Sulion root:
+`4aa8fb20-3d26-40a8-939a-ddf9a8bca02b`.
+
+### Outcome and boundaries
+
+Generate one physically scaled world with the existing geological, hydrological,
+climatic, glacial, coastal, magical and human/built semantic operations. Display
+its evolved terrain continuously, with useful physical detail around meaningful
+features, coherent layer geometry and view-resolution rendering.
+
+Complete the world generator and map display together. Do not stop at a terrain
+demo or ship a second world engine. Preserve the existing epoch order, causal
+feedback, feature identities, authored input protection and configurable magic.
+
+**Excluded:** editor development, regional/site/interior generation, template,
+routing-tool, analysis or export redesign, new river simulation, deliberate
+landmark injection, political/cultural generator redesign, backend, persistence,
+MCP, deployment machinery and style changes. Make existing-consumer compatibility
+fixes only when the changed world output requires them. World units and outputs
+must remain usable for later lower-level work.
+
+**Numerical equivalence is not a target.** Preserve semantic operations and
+plausible map behavior. Quantity and topology checks protect real geography;
+they do not justify engineering-grade accuracy, unbounded numerical tuning or
+repeated expensive worlds without a concrete unresolved question.
+
+### Implementation direction
+
+- Retain the TypeScript generation modules, existing process runner, browser
+  worker, session publication and React/OpenLayers presentation.
+- Use adaptive numerical support and shared continuous reconstruction instead
+  of the fixed microtriangle world mesh and nearest-cell raster publication.
+  Quality changes sampling, not physical feature dimensions or elapsed history.
+- Refine causes and evolving relief where physical support is needed. Mountains,
+  craters, volcanoes, shores and valleys remain products of the existing processes.
+  Do not add an independent river-bed lowering or bank-shaping model to drawing.
+- Waterfalls and gorges remain emergent consequences and detections of physical
+  and magical evolution. Landmark injection stays in backlog item 9.
+- Render the committed field with standard OpenLayers view-resolution tiles.
+  Terrain, lake geometry, relief and thematic layers must describe the generated
+  world. Panning and zooming do not run new generation.
+- Preserve categories as categories and scalar fields as scalar fields.
+  Transfer conserved physical quantities appropriately across adaptive support.
+- Keep expensive generation checks headless. Reuse completed output for overview
+  and close display checks; browser journeys use small fixtures. Alert the user
+  promptly if a conversion exposes a design mismatch or disproportionate cost.
+
+Research that informed the representation choice:
+[adaptive fields](https://basilisk.fr/src/grid/tree-common.h),
+[coarse/fine water operations](https://basilisk.fr/src/saint-venant.h),
+[continuous terrain research](https://perso.liris.cnrs.fr/eric.galin/Articles/2013-river-networks.pdf),
+and [terrain display LOD](https://hhoppe.com/proj/geomclipmap/).
+These inform spatial machinery, not permission to replace Canonry's generators
+with a river-first terrain generator.
+
+### World process coverage
+
+The following assigns **all 55 current physical contract IDs** to milestones.
+It is registration coverage, not a fresh claim that every implementation already
+has semantic parity. For each operation, read its current implementation and
+corresponding pinned Canonry body/helpers while porting, preserve its input causes,
+transformation, feedback, retained history and outputs, and record any intentional
+adaptation in this document. A process name, empty invocation or generic noise
+replacement does not establish preservation.
+
+| Owner                                  | Existing physical contracts to migrate                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M2, geology (17)                       | `tectonic-provinces`, `continental-sutures`, `tectonic-margins`, `continental-domains`, `tectonic-uplift`, `landscape-initialization`, `orogenic-construction`, `mantle-plume-roots`, `volcanic-construction`, `impact-cratering`, `mass-wasting`, `crustal-support`, `lithospheric-flexure`, `fracture-network`, `geothermal`, `plate-advection`, `tectonic-epoch-activity`                                                                                                                                              |
+| M3, water and sediment (12)            | `runoff`, `drainage-conditioning`, `lake-basins`, `drainage-guidance`, `flow-routing`, `river-network`, `ancestral-fluvial-erosion`, `post-fluvial-mass-wasting`, `sediment-transport`, `river-channel-geometry`, `river-floodplains`, `river-delta-formation`                                                                                                                                                                                                                                                            |
+| M4, remaining physical evolution (24)  | `continental-margin-evolution`, `marine-sedimentation`, `coastal-detail`, `ocean-connectivity`, `ocean-distance`, `bathymetry`, `landmasses-and-shelf-groups`, `ocean-currents`, `warmth-sources`, `temperature`, `atmospheric-flow`, `moisture-transport`, `precipitation`, `land-ice-mass-balance`, `ice-flow`, `glacial-erosion`, `glacial-deposition`, `glacial-meltwater`, `glacial-runoff`, `external-coastal-forcing`, `coastal-erosion-and-deposition`, `sea-ice`, `glacial-landforms`, `landform-classification` |
+| M5, coupled history and validation (2) | `physical-epoch-history`, `physical-structural-validation`                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+
+M5 additionally owns the complete configurable magic mechanism set: automatic and
+placed sources; Fire fracture propagation and thermal/rock feedback; Aurora cold
+routing, accumulation and ice retention; Pressure ocean rays, reflections, coastal
+rays, wakes and rogue effects; storage, decay, first-occurrence and coastal history;
+crust advection; feature growth/classification; cross-system interactions;
+natural/final surface classifications; and existing placed forcing operations.
+Preserve configurable variants, disable/enable behavior, source timing and
+per-epoch activity. Use the earlier 15-reference-layer inventory as source
+navigation, not as evidence that its historical gap statuses are still current.
+
+The remaining world boundaries are `atlasWorkflow`, `atlasSequence`,
+`atlasWorkspace`, `atlasProjection`, geographic extraction, the existing
+`mapPeople`/`mapBuilt` world layers, worker/session publication and map tiles.
+Editor and lower-level consumers are dependency context, not additional milestones.
+
+### Milestones and acceptance
+
+#### M0 — Shared world terrain contract
+
+Record physical coordinates, adaptive-field ownership, reconstruction, publication
+and the complete world process inventory. Preserve semantic algorithms rather
+than array/hash/rounding equivalence. Existing source review and contract work is
+retained; broaden no further into editor or lower-level generation requirements.
+
+#### M1 — Adaptive support and continuous operators
+
+Implement lookup, physical cell/face geometry, gradients, reconstruction and
+appropriate quantity transfer. Focused coarse/fine, rotated-plane, narrow-feature
+and categorical checks establish the representation. Do not create new landscape
+behavior to satisfy an interpolation test.
+
+#### M2 — Geological generation
+
+Migrate all 17 assigned geological operations: world-space causes, crust,
+tectonics, impacts, volcanism, fractures, support, mass wasting and material/history
+advection. Preserve construction and later erosion/deformation. Actual relief,
+not a crater or mountain label alone, must survive into the displayed field.
+
+#### M3 — Hydrology and sediment
+
+Migrate all 12 assigned operations with physical catchments, discharge, dimensions,
+lake budgets, routing, incision, sediment, floodplains and deltas. Preserve topology
+and receiving waters. Use the existing evolved terrain; no separate river simulator,
+extra channel-carving stage or independently placed gorge/waterfall is required.
+
+#### M4 — Climate, oceans, glaciers and coasts
+
+Migrate all 24 assigned operations and retain orographic, oceanic, ice-load,
+erosion/deposition, meltwater and coastal feedback. Focused cold/warm, wet/dry and
+coarse/fine checks establish retained causal effects.
+
+#### M5 — Magic and complete epoch coupling
+
+Preserve all configurable Fire, Aurora and Pressure mechanisms, placed forcing,
+interactions, history, storage, advection and physical feedback. Complete the
+existing interleaved initialization, repeated epochs and finalization sequence.
+The complete-world check must finish structural validation; a completed epoch log
+is insufficient.
+
+Evidence: one complete top-level world with repeated cold/warm epochs and all
+existing world domains, plus focused causal magic variants and physical cases.
+The previous requirement for multiple expensive full-world seeds was an agent
+acceptance choice, not a user requirement; focused contrasting cases supply that
+additional causal coverage without repeating an entire planet unnecessarily.
+
+#### M6 — World publication and displayed layers
+
+Finish geographic extraction and publish typed adaptive fields through the
+existing worker/session path. Preserve current world-level cultural, political,
+built and magical output. Eliminate nearest-cell world raster projection and
+raster-strip lake/region outlines. Existing authored protection, cancellation and
+stale-publication checks remain compatibility checks.
+
+No editor improvements, child-profile work, template/routing-tool changes,
+analytics or GIS export expansion are required for completion.
+
+#### M7 — Continuous map display
+
+Replace whole-field image stretching with OpenLayers tiles evaluated from the
+shared field. Preserve current colors and interactions. Coasts, lake shores,
+mountain relief, craters, volcanoes and valleys must show their actual generated
+shape at overview and close extents. Thematic fields retain scalar/category
+meaning. No zoom-dependent generation or extra landscape shaping is allowed.
+
+Evidence: focused tile seams/category/patch checks, one existing fixture browser
+journey, and geographic review of the same completed world at several extents.
+Reuse generated output; do not regenerate worlds through browser journeys.
+
+#### M8 — Finish and retire the active old world path
+
+Check that the top-level world entry point uses the adaptive engine with no
+legacy lattice/projection/display fallback. Retain useful reference fixtures and
+the backend prototype. Run the applicable default tests, typechecks, lint/build
+and complete-world check. Update current generation documentation and close the
+corrected plan only after world generation and display work together.
+
+Deployment is outside this request.
+
+### Current execution
+
+M0–M8 are complete for top-level world generation and display. The active world
+path uses adaptive SI control volumes, shared curvature-aware Hermite reconstruction,
+typed publication and view-resolution OpenLayers tiles. Physical/magical epochs
+and all existing world layers are retained. The failed terrain review led to the
+reconstruction, physical slope and underwater presentation corrections below.
+The experimental extra river carving and bank formula have been removed.
+
+The execution notes below retain work history. Their earlier mentions of all
+editors, child profiles, every consumer or mandatory river-profile machinery are
+superseded by this corrected contract and are not further implementation scope.
+
+M8 source inspection confirms that fixed triangle constructors remain reference-test
+fixtures, with no active old world lattice/projection/display path. Existing editor
+behavior and the backend prototype are preserved. Editor development, lower-level
+generation and deployment were excluded from this plan.
+
+The 4,000 × 2,000 km five-epoch run completed physical/magical history and final
+structural validation in about 26 minutes, then exposed a lake-contour join defect.
+A small reconstructed-shore fixture reproduced it. Shared contour-face stations
+now prevent independently refined cells from choosing different crossings.
+The complete publication/display check uses a 2,000 × 1,000 km world with the same
+five epochs, processes, parameters and Draft detail. This changes the test extent,
+not generation behavior or fidelity, and avoids repeating the largest history as
+a debugging loop. The large-world structural result remains relevant evidence.
+
+Algorithm changes use small deterministic tests as their first feedback loop.
+`fieldContours.test.ts` covers exact-level vertices, disconnected islands, holes,
+coarse/fine joins and fragmented label fields, checking geometry and coverage.
+`adaptiveGeology.test.ts` includes an independent four-cell analytical diffusion
+solution and material/history transfer cases. `atlasPublication.test.ts` supplies
+small evolved states directly to lake/landform/event extraction, channel projection
+and physical/magical refinement; no epoch generation is needed to test those
+boundaries. Magic feedback tests use the adaptive mesh. Tile tests check the same
+terrain painter used by OpenLayers without a browser or world generation.
+
+The smaller five-epoch integration run completed physical history in about eleven
+minutes but failed during landform polygon assembly. Sixteen small reconstructed
+label cases reproduced self-touching/retraced contour walks in milliseconds per
+case. The existing GIS engine now nodes and polygonizes that linework; face
+selection samples the same field. Those cases check interior/exterior coverage as
+well as validity. Full-world runs remain integration evidence, never a substitute
+for reproducing a local algorithm defect. The commands are in README's development
+section; no custom test runner or documentation-freshness assertions are involved.
+
+After that correction, the five-epoch run completed geological extraction and
+cultures, then exposed a separate political-contour support error. A 75 ms territory
+case with a numerical halo reproduced it. Political boundaries now trace the full
+field before clipping to the world; a stencil around owned interior samples cannot
+bound a Voronoi field that remains positive in that halo. Single- and three-polity
+regressions verify closure, world clipping and located polity coverage. The final
+display review uses a single-epoch all-domain world, rather than repeating physical
+history to verify an extraction correction. The five-epoch all-domain test remains
+available explicitly; its last full run failed before this political fix.
+
+The initial single-epoch all-domain world completed in 247.82 seconds with 132,079 adaptive
+cells and 128 channels, including natural and magical features, three polities and
+eight settlements. The ignored `frontend/.artifacts/generation/completed-world.bin` contains
+its published field and features. Overview and feature images use the same terrain
+painter as OpenLayers. That initial review exposed cell-shaped slope shading and
+weak recognizable feature relief. Small reconstruction and physical-relief tests
+using analytic inputs and the saved output isolated the failures described below.
+Feature counts alone were not treated as visual acceptance.
+
+Before the M7 corrections, normal CI passed 168 tests in 15.77 seconds, with shared
+package tests run once. This established the fast regression loop and publication
+corrections; it did not establish satisfactory terrain presentation.
+
+M7 correction: the C0 bilinear/bubble reconstruction allowed slope jumps at cell
+faces. Shared bicubic Hermite values and derivatives now constrain coarse/fine
+faces; a quartic interior correction retains each measured height while vanishing
+with its first derivatives at the edges. Monotone face slope limits and bounded
+cell values prevent invented extrema. Point queries and bulk reconstruction use
+the same patches; clipped extrema bound that same polynomial with Bernstein
+controls. No renderer-only terrain, added noise or extra landscape shaping is used.
+Local normalized quadratic fits recover corner curvature and mixed derivatives;
+linear estimates alone biased curved surfaces and created repeated centre humps.
+A direct curved-surface regression catches that defect. Sparse stencils fall back
+to their fitted plane. Discrete quantities retain their category/extensive semantics
+in both point reads and clipped extrema, including metre-valued lake stages.
+
+The weak relief also exposed an incorrect physical parameter from the metre
+conversion: `MassWastingStableGradient = 0.0072` treated slopes of about 0.4 degrees
+as unstable. The baseline is now 0.7 rise/run, approximately 35 degrees, with the
+existing material-resistance variation. This is the appropriate scale for the
+model's rock/talus failure operation; [USGS talus examples](https://pubs.usgs.gov/of/1993/0278a/report.pdf)
+give approximately 35 degrees. The earlier test requiring a gentle Gaussian hill
+to spread was an agent assumption and has been replaced by an actually unstable
+slope at two resolutions. A separate test requires gentle relief to remain intact.
+The conservative transport algorithm and its physical reach/budgets are retained.
+
+Direct generated-cone/crater cases now check relief before/after relaxation and
+after material advection, including event location. Geological events already move
+with the material; no extra relocation model was needed. Ocean hillshade now reads
+the actual floor rather than suppressing all submerged relief. Lake surfaces stay
+flat. Image review extents use event radii, so a 73 km crater is not judged from a
+60 km-wide crop of its interior.
+
+The world with corrected physical defaults completed all-domain generation and
+publication in 267.11 seconds, with 131,974 adaptive cells and 128 channels. Its
+overview and feature extents were reviewed, then redrawn with the final curvature
+fit without regenerating history. A newly active volcanic island retains a summit
+near 658 m where the earlier over-relaxed counterpart stayed submerged. Historical
+event footprints can still be eroded or submerged; the renderer does not restore
+pristine cones/craters over evolved terrain. Landmark preservation remains backlog
+item 9. Draft output retains its finite sampling detail.
+
+Final checks: normal CI passed 174 tests in 16.10 seconds, with lint, formatting,
+workspace typechecks and Terraform formatting passing. The production build and
+existing fixture browser workflow passed; the final browser journey took 37.9 s.
+An interrupted browser invocation produced no test verdict and left an orphaned
+preview process; that owned process was stopped before the successful rerun.
+A subsequent category-extrema predicate correction passed its focused field suite.
+No five-epoch all-domain rerun or Standard/Fine world matrix was used to debug these
+local changes. Earlier coupled physical-history evidence and focused epoch/magic
+cases remain the basis for epoch behavior.
+
+Completed field data and terrain images live in the ignored
+`frontend/.artifacts/generation/` directory. Browser tests clear `test-results/`, so
+these reusable generation inputs are kept outside it. This is test output, with
+no product persistence, recovery host or backend change.
+
+### Adaptive M0 execution — shared contract and migration decisions
+
+Sulion expansion `3aa87351-3837-4f7b-b87c-12b335954cc7`, anchored to
+`46f83e56-f843-46dc-b44f-3d6e821633f0`.
+
+1. **Fix semantic and spatial authority contract**
+   (`e5c7ae6a-61c8-4d1a-b010-17f93df085dd`). Read the current field, mesh,
+   projection, region extraction and domain field/worker contracts; record the
+   emergent-feature correction and the shared data contract below. Verify by
+   tracing the four M0 examples through generation, publication and authoring.
+2. **Resolve migration dependencies and examples**
+   (`e7a9d96d-b992-4522-a41b-127cd628b9ab`). Reconcile all 55 physical IDs and
+   magic actions with the existing ownership table, including direct array users
+   and exported prototype callers. Identify shared spatial operators before
+   changing individual physical mechanisms. Source review establishes this
+   design milestone; it does not establish implementation of later milestones.
+
+Implementation decisions from the actual source contracts:
+
+- Keep the existing process functions, registry and epoch orchestration. Replace
+  their numerical spatial substrate: variable neighbor ranges, physical shared
+  faces and cell measures replace three-neighbor triangle slots. A loop rewrite
+  alone does not establish correctness: constant-cell arithmetic, counts,
+  directional traversal and transport weights must be adapted in each family.
+- Domain numerical fields support adaptive leaf data and regular authored patches.
+  Both use the same scoped sampling, composition, integration and editing APIs.
+  Regular grids remain a valid brush/template input, not a second world generator
+  or a mandatory uniform raster through which generated terrain must pass.
+- Adaptive data uses a serializable quadtree, leaf geometry and reciprocal
+  variable-degree adjacency with shared-face lengths. Physical algorithms carry
+  cell values and declared quantities; terrain reconstruction shares edge values
+  across coarse/fine boundaries. Categorical fields use explicit discrete queries.
+- Fields carry present evolved values. Geological sources seed initial physical
+  construction, while subsequent operations update that state. Extracted gorge,
+  waterfall and ridge geometry is derived from physical state and can guide
+  resolution; it cannot reapply an un-eroded feature after evolution.
+- Refinement transfers intensive quantities using physical measures, extensive
+  quantities by apportioned support, and discrete categories by explicit ownership.
+  Index-valued routing and derived fluxes must be recomputed after topology changes.
+  Plain interpolation of those indices is forbidden. Quantities such as lake stage
+  also require their domain relationship, not independent smoothing of each cell.
+- Construction/remeshing happens at causal boundaries before dependent climate,
+  drainage and transport passes. A shared transfer invalidates derived facts and
+  those passes rebuild them. Do not remesh independently inside each domain or
+  turn extra numerical work into extra geological elapsed time.
+
+Concrete contract examples:
+
+- An impact crossing patches is one world-space source. Adaptive samples resolve
+  its initial bowl/rim/ejecta; later incision and deposition change those samples.
+  Queries and tiles reconstruct the evolved surface, never the pristine impact.
+- A river entering a lake shares its reach identity, bed profile and receiving
+  body. Discharge is routed across the connected topology; the body's stage and
+  terrain determine the shore. Neither topology nor shore is derived from painted
+  raster rectangles.
+- A protected authored stroke is a scoped patch of the same field. Physical
+  sampling respects it, reconstruction and tiles show it, boundary validation
+  constrains it, and undo restores the same prior geographic state.
+- A material or polity ID is discrete at a query point; prevalence is a scalar
+  distribution. Render antialiasing may cover pixels fractionally but does not
+  interpolate category IDs or turn cultural overlap into exclusive territories.
+
+M0 source review: the physical contract registry has 55 IDs, each assigned once
+above. `PhysicalField` is typed arrays plus a mesh, event/fault causes and budget
+totals; most process bodies depend on fixed three-neighbor slots. `GridSurface`
+currently owns regular-grid overlays and the frontend materializes them at base
+resolution. M1 supplies shared adaptive operators; M2–M5 migrate all those physical
+and magic consumers; M6 replaces the mandatory base-grid materialization and
+remaining authoring/human consumers; M7 replaces field-sized image presentation.
+No implementation milestone is complete on the strength of this source review.
+
+### Adaptive M1 execution
+
+Sulion expansion `01762f8b-bf7a-49b7-bd0a-ac2d7b2b0756`, anchored to
+`58041cc4-d5f0-4267-9ec9-19d2ff0db507`.
+
+1. `1a4fadc9-da4c-41a1-b7c3-cd4ee9dc56e4`: implement serializable adaptive
+   topology, leaf lookup and reciprocal physical face adjacency in domain modules.
+   Verify partition area, boundary coverage and coarse/fine shared-face measures.
+2. `366d3821-6b3f-452b-9c6f-ac0e68f53f32`: implement shared-edge reconstruction,
+   gradients, category sampling and physical transfer between nested topologies.
+   Verify linear-field reproduction, continuity and conservation through refinement.
+3. `b577bbf4-22f3-4af2-995e-351a602331a8`: exercise a localized narrow feature,
+   rotated fields, nonuniform interfaces and representative topology sizes. Use
+   focused domain tests and typechecks, recording actual results here. The
+   algorithms remain shared domain code; production generation cutover is M8.
+
+M1 implementation: domain adaptive topology uses reciprocal variable-degree
+faces, 2:1 cell grading, physical measures and tree lookup. Reconstruction shares
+corner/edge values at nonconforming interfaces and retains physical interior
+samples; categories remain discrete. Transfer integrates overlap and gradients
+to conserve intensive integrals and extensive totals. Generated-field data can
+retain adaptive samples directly, with footprint clipping and scoped evaluators.
+
+An ungraded initial topology spread narrow relief into an overly coarse adjacent
+cell. The focused narrow-feature case exposed it; standard 2:1 grading fixed it
+without broadening the feature or loosening the geometric assertion. Field-shaped
+construction stays with its owning physical operation in M2/M3, rather than
+introducing independently placed gorge/waterfall primitives into M1.
+
+The five focused cases cover variable-degree reciprocity/area, rotated-plane
+reconstruction and coarse/fine continuity, conservative transfer/categories,
+narrow feature support, and clipped fields/category queries. A representative
+4,000 km × 2,000 km topology with a locally refined corridor used 15,532 cells
+and 3.34 MB of topology arrays and built in about 0.25 s. This measures topology
+construction only, not full generation performance. Domain typecheck and focused
+lint passed; 87 other domain/generation checks passed during the shared run.
+
+### Adaptive M2 execution
+
+Sulion expansion `36671812-61ae-40e6-aa52-2b3a80b4c6a3`, anchored to
+`b725cb8a-545e-4fe4-bcf2-cfb7b85d1f4c`.
+
+1. `8266b407-5d3c-48f0-a5c8-7a44b3a7f6ea`: generalize physical spatial access
+   to variable-degree cells, local size and physical shared-face geometry; add
+   adaptive world workspace construction. Preserve the existing physical bodies
+   and registry rather than introduce another generator. Convert common neighbor
+   traversal together; semantic/weight conversions remain with each owning family.
+2. `47f6b52c-8419-4e52-9f51-3092217a5978`: review and convert the assigned 17
+   geological bodies and helpers, including source construction, physical distances,
+   area-weighted components, transport and support. Remove fixed four-target
+   advection assumptions and conserve material during spatial transfer. Refine
+   physical state at declared causal boundaries with proper invalidation.
+3. `ecda9086-205b-491a-bd0d-d5a51079e4e1`: check geological consequences,
+   construction/evolution, material budgets, source scales and adaptive interfaces.
+   Read the corresponding Canonry bodies/helpers and retain meaningful regression
+   checks. Full coupled-world acceptance remains M5/M8.
+
+M2 implementation retains the existing 17 process bodies and sequence. Province
+warping, continental composition, relative plate motion, convergence/rifting,
+finite crustal deformation, prominence ranking and shortening distribution remain
+causal inputs to relief. Component statistics now weight physical area; influence
+and suture contact searches use physical shortest distances. Airy support and
+load/rebound retain their material interface, with conservative finite-volume
+screened diffusion replacing equal-cell flexure. Hillslope transfer uses shared
+faces, stable gradients, material budgets and physical substeps. Fractures steer
+in world space with the existing novelty/strain/branching mechanisms, rather than
+choosing lattice headings. Geothermal feedback still consumes those fractures,
+plate boundaries, impacts and plume activity.
+
+Impact and volcanic causes request local support before excavation/construction;
+they are evaluated at the added physical samples. Remeshing conserves represented
+material/history, keeps provenance discrete and resets index-valued diagnostics
+for the already scheduled reconciliation. It never restores pristine event
+relief. Plate advection now transports translated control-volume footprints by
+overlap, including coarse/fine crossings, rather than scattering one coarse
+column at its centre. The adaptive workspace is wired into the existing runner;
+publication and display remain transitional until M6–M8.
+
+Five focused adaptive geology cases cover support conservation, remeshing evolved
+material/provenance, hillslope transfer, footprint advection and collision/rift
+consequences. The complete draft initial geological sequence (4,000 × 2,000 km,
+seed 104729) passes with 19,222 cells and physical impact/volcanic relief and fault
+geometry. Its first measured run took 71.6 s: repeated overlap searches cost
+31.1 s for volcanic remeshing and 34.6 s for impact remeshing. Reusing the same
+geometric transfer calculation across channels reduced the complete pass to
+7.6 s. Hillslope transport itself took 2.2 s, so replacing that solver is not
+justified by this case. The user was alerted when the initial cost exposed this
+design risk. Focused tests, generation typecheck and adaptive/physical lint pass.
+Full multi-epoch, water/ice/magic and display acceptance remains outstanding.
+
+### Adaptive M3 execution
+
+Migrate the existing 12 water/sediment operations and their consumers of physical
+geometry. Preserve priority flooding, lake volume/stage/spill budgets, drainage
+capture, runoff/discharge, Strahler connectivity, incision, sediment deposition,
+channel dimensions, floodplains and deltas. Continuous paths must remain inside
+their drainage corridor and describe terrain modified by those processes.
+
+1. Replace remaining global-spacing/count assumptions with actual travel
+   distances and local/shared-face measures. Review the reference bodies while
+   retaining each physical operation and budget.
+2. Couple adaptive valley support and continuous paths to incision/routing;
+   preserve confluences, lake/coast interfaces and emergent drops. Rebuild routing
+   after remeshing at an existing causal reconciliation boundary.
+3. Check branching/coarse-fine flow, closed/spilling lakes, sediment conservation,
+   physical channel profiles and rotated corridor geometry. Keep full histories
+   headless, with final cross-family acceptance at M5/M8.
+
+M3 cost correction: the first river-supported world grew from 19,222 to 377,875
+cells; refinement/reconciliation took 30.5 s and incision 24.0 s, before the global
+finest-cell hillslope clock dominated subsequent work. Alerted the user rather
+than continuing to force that integration scheme. Refine sharp drops at the
+waterfall scale rather than applying that scale to every slope meeting the much
+lower gorge-gradient threshold. Retain broad valley support. Replace the global
+explicit clock with conservative implicit shared-face exchanges, preserving
+rock-dependent stable gradients, source transport budgets and geological time.
+This changes numerical integration, not the hillslope mechanism or product scope.
+
+The corrective sub-plan is `f82a6759-a218-4701-9d8c-fd816a42c460`. It is complete:
+implicit exchanges solve the thresholded shared-face material flux with finite
+source budgets, preserving each configured geological pass. A queue revisits only
+faces whose neighboring heights changed; there is no global finest-cell clock
+or runtime cap. The existing physical-reach and material-conservation checks pass.
+The world-sized first geology/river/sediment sequence now completes in 52.8 s at
+207,442 cells: refinement/reconciliation 17.3 s, incision 12.0 s, post-fluvial
+hillslope transport 3.9 s and ocean currents 13.1 s. Ocean transport is M4 work.
+
+M3 implementation also separates the reference's heavy-tailed cheap-corridor
+cost from physical flood height. Dijkstra propagation uses actual segment lengths
+through a seeded world-space resistance field; flood height remains the minimum
+physical spill surface, with ranks ordering flat drainage. This retains preferred
+branching corridors without adding one vertical epsilon per refined sample.
+Runoff, catchment and lake losses remain area-weighted. Reach lengths, sediment
+residence, channel/floodplain expansion and delta extent use physical travel.
+
+Adaptive river paths cross shared-face portals, with each curve bounded by its
+own control volume. Confluences share positions/tangents; receiving-water endpoints
+meet water level on the same continuous terrain evaluator. Valley support is
+refined before incision and all drainage indices/lake budgets are rebuilt there,
+without rerunning geological time. Sharp-drop support uses the waterfall gradient,
+not the lower gorge threshold. No independent gorge or waterfall primitive was
+introduced. Six focused cases cover corridor continuity, receiving shore, runoff
+conservation, flat conditioning, closed/spilling lake budgets and incision/drop
+consequences. Publication/extraction and final terrain-profile agreement remain
+part of M6–M8 integration, rather than another uniform raster projection here.
+
+### Adaptive M4 execution
+
+Keep all 24 assigned physical operations and the existing causal schedule. Replace
+remaining equal-distance/area assumptions, including initial sea coverage,
+ocean/shelf distances, current and atmospheric transport, orographic gradients,
+ice balance/flow and coastal erosion. Use existing physical influence lengths;
+refinement must not create additional elapsed climate or glacial activity.
+
+1. Convert ocean connectivity, shelf/marine structure and atmosphere/current
+   transport to physical area, travel and shared-face geometry. Preserve currents,
+   geothermal mixing/cooling, wave fetch, wind bands, rain shadows and runoff.
+2. Convert ice support/flow, erosion, deposition, meltwater, coastal forcing and
+   derived landforms. Preserve load/rebound and subsequent water reconciliation.
+3. Check wet/dry and warm/cold contrasts, coarse/fine transport, ice retreat and
+   material accounting. Reuse the measured world scene; full magic/history and
+   application publication/display remain M5–M8.
+
+Coupled review must also resolve physical source support for fractures: their
+paths now steer in world space, but painting a source into an unresolved coarse
+cell still broadens its conductance. Prepare the actual path, refine its support,
+then apply the source at the added physical samples before geothermal feedback.
+This is an M2 integration miss to finish in M5, not a reason to drop fracture
+feedback or accept a visual-only curve. Final continuous terrain/profile
+constraints and their authoring/query agreement remain explicit M6–M8 work.
+
+M4 sampling correction: a predicted-cold/roughness policy grew the draft to
+602,797 cells and the test process reached about 2.9 GB RSS before publication.
+Alerted the user and removed that broad trigger. Climate temperature alone does
+not request detailed physical terrain. Actual grounded ice-flow paths request
+support immediately before scour; thickness transfers conservatively and ice
+routing is rebuilt without repeating accumulation. Coastal support remains
+before its construction and scheduled climate reconciliation. Full coupled
+spatial-fact reconciliation remains part of M5 acceptance.
+
+M4 implementation uses physical area for ocean and ice coverage, weighted
+shortest paths for shore/shelf/ocean distance, local gradients and travel for
+precipitation and atmospheric fetch, and characteristic upwind interpolation
+with source floors/cooling for ocean heat. Screened diffusion assembles only
+participating cells and conserves each disconnected component independently.
+Coastal exposure/erosion uses actual shared-face segments and local strip
+coverage. Ice curvature/advance uses physical faces/distances; ice flux,
+grounding, scour, deposition, meltwater, runoff and retained history keep their
+existing causal bodies. Landform neighborhoods sample the continuous field at
+their physical radius rather than counting the mesh's neighbors.
+
+Six focused cases cover area-based connected ocean, coarse/fine heat and cooling,
+independent basins, physical ice flux/scour/retreat, coastal strip conservation
+and floating frozen-lake ice without bed scour. The coastal physical fixtures
+now use adaptive work cells; their convergence assertions were retained.
+The focused physical suite has 65 passing cases. Generation typecheck and physical
+lint pass. The world-sized geological/river/sediment/glacial transition completes
+in 228.1 s at 358,546 cells, including actual ice-loaded support and warm retreat.
+Grounded-flow refinement added 24,300 cells instead of the earlier broad cold
+policy. This is a substantial headless runtime; remeshing, flexure and current
+solves remain costs to measure in complete M5 worlds. No M5–M8 completion is claimed.
+
+### Adaptive M5 execution
+
+Sulion expansion `77de2eef-c5c7-4206-8953-387428348fc7`, anchored to root M5.
+
+Retain all configurable magic mechanisms and causal interleaving; test semantic
+effects rather than reference hashes. Fix the discovered fracture-support miss
+before claiming complete coupling. Keep one shared state and the existing worker.
+
+1. Prepare/refine physical fracture sources before applying conductance. Convert
+   automatic/placed magic sources, physical propagation and beams, history,
+   storage, advection, feature growth and interactions to the adaptive geography.
+   Preserve independent configured variants, timing, enable/disable and feedback.
+2. Reconcile spatial facts after topology changes without duplicating physical
+   growth or elapsed epochs. Check the complete 55-process schedule, feedback and
+   structural validation against the shared numerical state.
+3. Run focused magic causal checks and full headless worlds with different seeds
+   and histories. Measure cost/memory; alert when a mechanism/design needs revision.
+   Complete publication, authoring, renderer and retirement remain M6–M8.
+
+M5 source and spatial conversion is implemented; coupled-world validation remains
+open while independent M6 integration proceeds. Fractures retain their planned
+world-space network during support refinement. Ocean magic integrates continuous
+headings and physical beam footprints, with configured rays, reflection, decay
+and wakes retained. Cold transport uses local travel and extensive retained
+activity; thermal/rock/coastal feedback and advected history remain interleaved.
+Remeshing rebuilds lake levels from retained inventory rather than independently
+interpolating level and depth. The focused physical suite has 67 passing cases;
+the complete five-epoch headless run completed all five epochs in 2,596 seconds,
+then failed final grounded-ice support validation. The failure is unresolved;
+this run does not establish complete coupling. It loaded the earlier remeshing
+implementation, so it does not measure the subsequent transfer optimizations.
+
+### Adaptive M6 execution
+
+1. Publish adaptive topology and evolved physical samples directly through the
+   shared evaluator. Remove the experimental extra river carving and bank formula;
+   no new physical shaping model is required to finish world generation.
+2. Complete world-level geographic extraction and preserve existing human/built
+   world layers. Pass typed output through the existing worker/session publication.
+3. Editor development, lower-level profiles and analytics/export expansion are
+   excluded. Existing authored-protection and publication checks remain useful
+   compatibility checks, not new product work.
+
+M5 acceptance remains required while independent consumer/display work proceeds.
+Its final grounded-ice support failure needs a focused reproduction before another
+complete world run. No M5 completion is recorded.
+
+The ice-history failure has a small reproduction: separately limited intensive
+transfer made grounded historical flux exceed total historical flux after a split.
+Refinement now inherits recorded maxima from their parent support, matching the
+meaning of a historical observation; it does not interpolate independent new
+extrema. Grounding is recomputed after remeshing and authored-floor restoration.
+Structural validation remains unchanged. The complete-world rerun is still required.
+
+Coupled-cost blocker (`c896975a-7436-4741-9c1f-d5e6d6b282c2`): the first full
+five-epoch Draft run exceeded thirteen minutes with about 2.3 GB process RSS.
+A three-second live Node CPU profile located the work in the screened-diffusion
+solve called by ocean-current direction smoothing. The run was stopped. Replace
+Jacobi-only conditioning with a symmetric aggregation multigrid V-cycle while
+CG still solves the same fine physical equation to the same residual tolerance.
+Connected aggregates and Galerkin coarse operators preserve independent basins;
+this is numerical acceleration, with no reduced transport reach, epochs or
+physical activity. This follows the established aggregation/Galerkin mechanism
+described in the [PETSc solver manual](https://petsc.org/main/manual/ksp/).
+The logged coupled run will be repeated after focused operator checks.
+
+### Adaptive M7 execution
+
+Sulion expansion `c5d32e35-ec91-45f2-ba6b-d2c4a40021bf` runs against the shared
+field contract while world publication and complete generation checks stay open.
+This scheduling overlap does not waive M6 acceptance or authorize a partial cutover.
+
+1. Replace whole-field image creation and `ImageStatic` with OpenLayers'
+   `ImageTile` source and ordinary canvas tile layer. Evaluate the committed field
+   at tile pixel positions and derive hillshade using neighboring world positions.
+   Reuse current colors and map interactions. Field reads retain typed samples and
+   authored patch resolution; they do not copy a world into JSON number arrays.
+2. Check neighboring tile edges, footprint clipping, categorical queries, zoom,
+   edits and picking using fixtures and one small worker path. Complete physical
+   histories stay headless; no new history or facts are generated by panning.
+
+The field-backed tile path is implemented. `ImageStatic`, whole-world canvas
+encoding and copied JSON sample arrays are removed from frontend presentation.
+Tile pixels and hillshade query the shared evaluator, including authored overlays;
+one-pixel gutters sample neighboring geography. Sixteen focused checks pass for
+tile partition equivalence, discrete materials, clipping, small patches, strokes,
+publication and undo. Frontend typechecking passes. Interior reconstructed vertices
+are bounded by their contributing samples to prevent invented brush peaks; planar
+and coarse/fine continuity checks still pass. All 111 package tests pass, and the
+existing browser terrain/culture/politics/magic authoring workflow passes against
+the tile renderer (36 seconds; fixture generation). The temporary test server is
+stopped. This does not establish real-world relief fidelity. The complete headless
+world and its display at multiple extents remain required for M7/M8 acceptance.

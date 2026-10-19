@@ -1,7 +1,8 @@
 import {
   areaSpace,
   composeFeature,
-  materializeField,
+  gridPosition,
+  gridSampler,
   requireThat,
   spatial,
   rectangle,
@@ -44,40 +45,44 @@ export function readScene(id: string, areaId: string, extent?: number[]) {
   ];
 }
 
-export function readRaster(id: string, fieldId: string, channel: string) {
-  const source = session(id).snapshot.numerical[fieldId];
-  requireThat(source, "missing_field", "Choose an available field.");
-  const grid = materializeField(source);
+export function readRaster(id: string, fieldId: string, channel: string): import("./types").Raster {
+  const grid = session(id).snapshot.numerical[fieldId];
+  requireThat(grid, "missing_field", "Choose an available field.");
   requireThat(grid.channels[channel], "missing_channel", `No ${channel} samples in this field.`);
-  const companions = channel === "elevation" ? terrainCompanions(id, grid) : {};
   return {
     id: fieldId,
     areaId: grid.scope.areaId,
     footprint: grid.scope.footprint,
     bounds: grid.bounds,
-    width: grid.width,
-    height: grid.height,
     channel,
-    values: Array.from(grid.channels[channel], (value, i) => (grid.active[i] ? value : Number.NaN)),
-    ...companions,
+    field: grid,
+    ...(channel === "elevation" ? terrainCompanions(id, grid) : {}),
   };
 }
 function terrainCompanions(id: string, elevation: import("@atlas/domain").Grid) {
   const snapshot = session(id).snapshot,
-    result: { water?: number[]; ice?: number[] } = {};
+    result: {
+      water?: import("@atlas/domain").GridSurface;
+      ice?: import("@atlas/domain").GridSurface;
+      lakes?: { geometry: Geometry; level: number }[];
+    } = {};
   for (const name of ["water", "ice"] as const) {
     const field = snapshot.world.fields.find(
       (field) => field.areaId === elevation.scope.areaId && field.channels?.includes(name)
     );
-    const grid = field && snapshot.numerical[field.id];
-    if (
-      grid &&
-      grid.width === elevation.width &&
-      grid.height === elevation.height &&
-      grid.bounds.every((value, i) => value === elevation.bounds[i])
-    )
-      result[name] = Array.from(materializeField(grid).channels[name]);
+    if (field) result[name] = snapshot.numerical[field.id];
   }
+  result.lakes = Object.values(snapshot.world.features)
+    .filter(
+      (feature) =>
+        feature.kind === "lake" &&
+        feature.areaId === elevation.scope.areaId &&
+        typeof feature.attributes.waterLevel === "number"
+    )
+    .map((feature) => ({
+      geometry: composeFeature(snapshot.world, feature) ?? feature.geometry,
+      level: Number(feature.attributes.waterLevel),
+    }));
   return result;
 }
 
@@ -220,16 +225,14 @@ function statistics(result: AnalysisResult, id: string, input: AnalysisInput) {
     )
       continue;
     const raster = readRaster(id, field.id, input.channel!);
-    const [x0, y0, x1, y1] = raster.bounds;
-    raster.values.forEach((v, i) => {
-      const x = x0 + ((i % raster.width) * (x1 - x0)) / (raster.width - 1);
-      const y = y0 + (Math.floor(i / raster.width) * (y1 - y0)) / (raster.height - 1);
-      if (
-        Number.isFinite(v) &&
-        spatial.covers(input.geometry, { type: "Point", coordinates: [x, y] })
-      )
-        values.push(v);
-    });
+    const grid = raster.field,
+      valueAt = gridSampler(grid, input.channel!);
+    const covers = spatial.pointCoverage(input.geometry),
+      covered = spatial.pointCoverage(grid.scope.footprint);
+    for (let i = 0; i < grid.active.length; i++) {
+      const p = gridPosition(grid, i);
+      if (grid.active[i] && covered(p) && covers(p)) values.push(valueAt(p));
+    }
   }
   requireThat(
     values.length,

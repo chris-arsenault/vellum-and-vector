@@ -3,6 +3,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { round, toUnits } from "./math";
 import { hashUnit } from "./noise";
+import { metricSearch } from "./metricSearch";
 
 export interface BoundaryComponent {
   id: number;
@@ -30,14 +31,14 @@ const active = (map: PhysicalField, i: number, minimum: number) =>
 function addCell(c: BoundaryComponent, map: PhysicalField, i: number) {
   c.count++;
   c.area += map.mesh.areas[i];
-  c.collision += map.CrustCollisionIntensity[i];
-  c.suture += map.CrustSutureStrength[i];
-  c.strain += map.TectonicStrain[i];
-  c.continental += map.CrustContinentalFraction[i];
+  c.collision += map.CrustCollisionIntensity[i] * map.mesh.areas[i];
+  c.suture += map.CrustSutureStrength[i] * map.mesh.areas[i];
+  c.strain += map.TectonicStrain[i] * map.mesh.areas[i];
+  c.continental += map.CrustContinentalFraction[i] * map.mesh.areas[i];
   c.maximumContinental = Math.max(c.maximumContinental, map.CrustContinentalFraction[i] / 1000);
   c.shortening += toUnits(map.ConvergentCrustSurplus[i]) * map.mesh.areas[i];
-  c.x += map.mesh.x[i];
-  c.y += map.mesh.y[i];
+  c.x += map.mesh.x[i] * map.mesh.areas[i];
+  c.y += map.mesh.y[i] * map.mesh.areas[i];
 }
 function floodComponent(
   map: PhysicalField,
@@ -50,8 +51,8 @@ function floodComponent(
   for (let head = 0; head < queue.length; head++) {
     const i = queue[head];
     addCell(component, map, i);
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[i * 3 + edge];
+    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
       if (
         j < 0 ||
         ids[j] >= 0 ||
@@ -64,12 +65,12 @@ function floodComponent(
       queue.push(j);
     }
   }
-  component.collision /= component.count * 1000;
-  component.suture /= component.count * 1000;
-  component.strain /= component.count * 1000;
-  component.continental /= component.count * 1000;
-  component.x = round(component.x / component.count);
-  component.y = round(component.y / component.count);
+  component.collision /= component.area * 1000;
+  component.suture /= component.area * 1000;
+  component.strain /= component.area * 1000;
+  component.continental /= component.area * 1000;
+  component.x = round(component.x / component.area);
+  component.y = round(component.y / component.area);
 }
 export function discoverComponents(
   map: PhysicalField,
@@ -148,19 +149,10 @@ export function propagateInfluence(
     source[i] = i;
     queue.push(i);
   }
-  for (let head = 0; head < queue.length; head++) {
-    const i = queue[head],
-      next = distance[i] + map.mesh.spacing;
-    if (next > context.Profile.OrogenicInfluenceReach) continue;
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[i * 3 + edge];
-      if (j < 0 || distance[j] <= next) continue;
-      distance[j] = next;
-      source[j] = source[i];
-      map.OrogenicComponentIds[j] = map.OrogenicComponentIds[i];
-      map.OrogenicSystemProminence[j] = map.OrogenicSystemProminence[i];
-      queue.push(j);
-    }
-  }
+  metricSearch(map.mesh, queue, distance, context.Profile.OrogenicInfluenceReach, (j, i) => {
+    source[j] = source[i];
+    map.OrogenicComponentIds[j] = map.OrogenicComponentIds[i];
+    map.OrogenicSystemProminence[j] = map.OrogenicSystemProminence[i];
+  });
   return { distance, source };
 }

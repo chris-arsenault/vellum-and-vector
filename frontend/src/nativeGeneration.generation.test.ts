@@ -1,6 +1,12 @@
 import { expect, it } from "vitest";
 import { generateAtlas, type CompletedBoundary } from "@atlas/generation";
-import { gridPosition, rectangle, sample, type DomainSnapshot } from "@atlas/domain";
+import {
+  gridPosition,
+  rectangle,
+  sample,
+  adaptiveLeafAt,
+  type DomainSnapshot,
+} from "@atlas/domain";
 import { createWorld, session, worldScope } from "./atlasState";
 import { commitCommand } from "./atlasCommands";
 import { generationSnapshot } from "./generationJobs";
@@ -32,7 +38,7 @@ async function checkThermalFeedback(
   });
   const result = await generateAtlas(magical, { ...input, domains: ["magic"] });
   const grid = result.state.surface,
-    i = Math.floor(grid.height / 2) * grid.width + Math.floor(grid.width / 2);
+    i = adaptiveLeafAt(grid.topology!, 2_000_000, 1_000_000);
   expect(grid.channels.heat[i]).toBeGreaterThan(4);
   expect(grid.channels.temperature[i]).toBeGreaterThan(grid.channels.naturalTemperature[i] + 3);
   expect(grid.channels.elevation[i]).toBeCloseTo(
@@ -94,9 +100,7 @@ it("refines inherited Canonry terrain and retains authored geography and its fix
   expect(refined.state.surface.channels.elevation.every(Number.isFinite)).toBe(true);
   expect(refined.state.surface.scope.footprint).not.toEqual(area.footprint);
   expect(refined.state.domain.fieldPatches).toEqual(inherited.fieldPatches);
-  const middle =
-    Math.floor(refined.state.surface.height / 2) * refined.state.surface.width +
-    Math.floor(refined.state.surface.width / 2);
+  const middle = adaptiveLeafAt(refined.state.surface.topology!, 11000, 11000);
   const position = gridPosition(refined.state.surface, middle),
     patch = inherited.fieldPatches[0];
   expect(refined.state.surface.channels.elevation[middle]).toBeCloseTo(

@@ -5,29 +5,35 @@ import type { PhysicalProfile } from "./profile";
 import { units, truncate } from "./math";
 import { Landform as L } from "./codes";
 import { measureSlopes } from "./geography";
-import { nearestTriangle } from "./mesh";
+import { physicalSampler } from "./physicalMetric";
 
-function shape(map: PhysicalField, i: number, radius: number) {
+function shape(
+  map: PhysicalField,
+  i: number,
+  radius: number,
+  valueAt: ReturnType<typeof physicalSampler>
+) {
   let higher = 0,
     lower = 0,
-    highest = -(2 ** 63);
-  for (let edge = 0; edge < 3; edge++) {
-    const at = i * 3 + edge;
-    let j = nearestTriangle(
-      map.mesh,
-      map.mesh.x[i] + map.mesh.edgeX[at] * radius,
-      map.mesh.y[i] + map.mesh.edgeY[at] * radius
+    highest = -(2 ** 63),
+    count = 0;
+  for (let direction = 0; direction < 16; direction++) {
+    const angle = (direction * Math.PI) / 8;
+    const height = valueAt(
+      map.mesh.x[i] + Math.cos(angle) * radius,
+      map.mesh.y[i] + Math.sin(angle) * radius
     );
-    if (j === i) j = map.mesh.neighbors[at];
-    if (j < 0) continue;
-    const distance = Math.hypot(map.mesh.x[i] - map.mesh.x[j], map.mesh.y[i] - map.mesh.y[j]);
-    const height =
-      map.Elevation[i] + (map.Elevation[j] - map.Elevation[i]) * Math.min(1, radius / distance);
+    if (!Number.isFinite(height)) continue;
+    count++;
     if (height > map.Elevation[i]) higher++;
     if (height < map.Elevation[i]) lower++;
     highest = Math.max(highest, height);
   }
-  return { higher, lower, highest };
+  return {
+    higher: count ? (higher * 3) / count : 0,
+    lower: count ? (lower * 3) / count : 0,
+    highest,
+  };
 }
 function retained(map: PhysicalField, p: PhysicalProfile, i: number): number {
   const glacial = map.LandformCodes[i];
@@ -73,8 +79,8 @@ function hasDrop(map: PhysicalField, p: PhysicalProfile, i: number): boolean {
 function waterfall(map: PhysicalField, p: PhysicalProfile, i: number): boolean {
   if (map.RiverOrders[i] <= 0) return false;
   if (hasDrop(map, p, i)) return true;
-  for (let edge = 0; edge < 3; edge++) {
-    const j = map.mesh.neighbors[i * 3 + edge];
+  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
     if (j >= 0 && map.RiverOrders[j] >= map.RiverOrders[i] && hasDrop(map, p, j)) return true;
   }
   return false;
@@ -135,8 +141,13 @@ function relief(
   if (valley(map, p, i, s)) return L.Valley;
   return map.Slope[i] <= p.PlainSlopeThreshold ? L.Plain : L.Slope;
 }
-function classify(map: PhysicalField, p: PhysicalProfile, i: number): number {
-  const s = shape(map, i, p.LandformNeighborhoodRadius),
+function classify(
+  map: PhysicalField,
+  p: PhysicalProfile,
+  i: number,
+  valueAt: ReturnType<typeof physicalSampler>
+): number {
+  const s = shape(map, i, p.LandformNeighborhoodRadius, valueAt),
     preserved = retained(map, p, i);
   if (preserved !== 0) return preserved;
   const history = historical(map, p, i, s);
@@ -152,5 +163,7 @@ function classify(map: PhysicalField, p: PhysicalProfile, i: number): number {
 }
 export function landformClassification(map: PhysicalField, c: PhysicalContext) {
   measureSlopes(map);
-  for (let i = 0; i < map.mesh.count; i++) map.LandformCodes[i] = classify(map, c.Profile, i);
+  const valueAt = physicalSampler(map.mesh, map.Elevation);
+  for (let i = 0; i < map.mesh.count; i++)
+    map.LandformCodes[i] = classify(map, c.Profile, i, valueAt);
 }

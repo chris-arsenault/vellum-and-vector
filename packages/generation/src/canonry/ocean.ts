@@ -1,25 +1,25 @@
 // OceanConnectivityLayer.cs, Canonry 0f62584c.
 import { setWaterSurface, type PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import { noWaterSurface, round, units } from "./math";
+import { noWaterSurface, units } from "./math";
 
 class OceanComponents {
   readonly parent: Int32Array;
   readonly sizes: Int32Array;
-  readonly contents: Int32Array;
+  readonly contents: Float64Array;
   readonly boundary: Uint8Array;
   connected = 0;
   constructor(private readonly map: PhysicalField) {
     const n = map.mesh.count;
     this.parent = new Int32Array(n).fill(-1);
     this.sizes = new Int32Array(n);
-    this.contents = new Int32Array(n);
+    this.contents = new Float64Array(n);
     this.boundary = new Uint8Array(n);
   }
   activate(i: number) {
     this.parent[i] = i;
     this.sizes[i] = 1;
-    this.contents[i] = i < this.map.mesh.contentCount ? 1 : 0;
+    this.contents[i] = this.map.mesh.contentAreas[i];
     this.boundary[i] = this.map.mesh.boundary[i];
     if (this.boundary[i]) this.connected += this.contents[i];
   }
@@ -61,8 +61,8 @@ function connectedOceanLevel(map: PhysicalField, target: number): number {
       components.activate(order[cursor--]);
     for (let index = end; index > cursor; index--) {
       const i = order[index];
-      for (let edge = 0; edge < 3; edge++) {
-        const j = map.mesh.neighbors[i * 3 + edge];
+      for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+        const j = map.mesh.neighbors[i * map.mesh.stride + edge];
         if (j >= 0 && components.parent[j] >= 0) components.union(i, j);
       }
     }
@@ -72,13 +72,8 @@ function connectedOceanLevel(map: PhysicalField, target: number): number {
 }
 function seaLevel(map: PhysicalField, c: PhysicalContext) {
   if (!map.SeaLevelInitialized) {
-    const target = Math.max(
-      1,
-      Math.min(
-        map.mesh.contentCount,
-        round(map.mesh.contentCount * c.Profile.QualityTargets.OceanCoverage.target)
-      )
-    );
+    const area = map.mesh.contentAreas.reduce((sum, value) => sum + value, 0);
+    const target = area * c.Profile.QualityTargets.OceanCoverage.target;
     let boundary = Number.MAX_VALUE;
     for (let i = 0; i < map.mesh.count; i++)
       if (map.mesh.boundary[i]) boundary = Math.min(boundary, map.Elevation[i]);
@@ -106,5 +101,6 @@ export function oceanConnectivity(map: PhysicalField, c: PhysicalContext) {
   };
   for (let i = 0; i < map.mesh.count; i++) if (map.mesh.boundary[i]) mark(i);
   for (let head = 0; head < queue.length; head++)
-    for (let edge = 0; edge < 3; edge++) mark(map.mesh.neighbors[queue[head] * 3 + edge]);
+    for (let edge = 0; edge < map.mesh.degree[queue[head]]; edge++)
+      mark(map.mesh.neighbors[queue[head] * map.mesh.stride + edge]);
 }

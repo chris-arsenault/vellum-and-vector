@@ -6,7 +6,7 @@ import { hashUnit } from "./noise";
 import { Feature } from "./codes";
 import { rebuild } from "./surface";
 
-function plumeCenter(
+export function plumeCenter(
   context: PhysicalContext,
   root: { x: number; y: number; id: string },
   sequence: number

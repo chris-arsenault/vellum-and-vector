@@ -4,6 +4,7 @@ import { interpolateSample } from "./grids";
 import { spatial, rectangle } from "./spatial";
 import { geometryParts } from "./composition";
 import { requireThat } from "./errors";
+import { adaptiveExtrema } from "./adaptiveExtrema";
 
 export function fieldExtrema(
   grid: GridSurface,
@@ -78,6 +79,7 @@ function rawFieldExtrema(
 ): [number, number] | null {
   const region = spatial.intersection(grid.scope.footprint, footprint);
   if (!region) return null;
+  if (grid.topology) return adaptiveExtrema(grid, channel, region);
   const [x0, y0, x1, y1] = grid.bounds,
     dx = (x1 - x0) / (grid.width - 1),
     dy = (y1 - y0) / (grid.height - 1),

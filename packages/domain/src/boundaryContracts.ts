@@ -13,6 +13,8 @@ import { composeFeature, areaSpace } from "./composition";
 import { validateCausalLift } from "./causalLift";
 import { spatial, point } from "./spatial";
 import { sample, type Grid } from "./grids";
+import { adaptiveCell } from "./adaptiveTopology";
+import { visitAdaptiveOverlap } from "./adaptiveTransfer";
 import { crossingDirection, lineParts, stationAt } from "./lineStations";
 import { semanticId } from "./identity";
 import { requireThat } from "./errors";
@@ -68,12 +70,22 @@ function sampleDivisions(fields: Grid[], a: number[], b: number[]): number {
   const spacings = fields
     .filter((g) => spatial.intersects(g.scope.footprint, segment))
     .map((g) =>
-      Math.min(
-        (g.bounds[2] - g.bounds[0]) / (g.width - 1),
-        (g.bounds[3] - g.bounds[1]) / (g.height - 1)
-      )
+      g.topology
+        ? adaptiveBoundarySpacing(g, segment)
+        : Math.min(
+            (g.bounds[2] - g.bounds[0]) / (g.width - 1),
+            (g.bounds[3] - g.bounds[1]) / (g.height - 1)
+          )
     );
   return spacings.length ? Math.max(1, Math.ceil(length / Math.min(...spacings))) : 1;
+}
+function adaptiveBoundarySpacing(grid: Grid, segment: Geometry) {
+  const sizes: number[] = [];
+  visitAdaptiveOverlap(grid.topology!, spatial.bounds(segment), (i) => {
+    const b = adaptiveCell(grid.topology!, i);
+    sizes.push(Math.min(b[2] - b[0], b[3] - b[1]));
+  });
+  return sizes.reduce((size, value) => Math.min(size, value), Infinity);
 }
 export function featureStation(
   snapshot: DomainSnapshot,

@@ -33,6 +33,21 @@ function legacy(process: MapProcess): ProcessInvocation {
     version: process.contract.version,
   };
 }
+function temperatureForcing(material: boolean): ProcessSequence {
+  return [
+    invoke("canonry.temperature", { unforced: true }),
+    invoke("canonry.project", { forcingOnly: true }),
+    legacy(thermalMagicProcess),
+    ...(material ? [legacy(materialMagicProcess)] : []),
+    invoke("canonry.forcing"),
+  ];
+}
+function afterNativeStep(name: string, magic: boolean, iceLoad: boolean): ProcessSequence {
+  const result: ProcessSequence = [];
+  if (iceLoad && name === "ice-flow") result.push(invoke("canonry.refine-ice"));
+  if (magic && name === "plate-advection") result.push(legacy(advectAtlasMagic));
+  return result;
+}
 function nativeSteps(
   steps: readonly NativeStep[],
   magic: boolean,
@@ -41,17 +56,11 @@ function nativeSteps(
   material = false
 ): ProcessSequence {
   const body: ProcessSequence = [];
+  if (steps === climateSteps) body.push(invoke("canonry.refine-climate"));
   for (const [index, [name]] of steps.entries()) {
-    if (magic && name === "temperature")
-      body.push(
-        invoke("canonry.temperature", { unforced: true }),
-        invoke("canonry.project", { forcingOnly: true }),
-        legacy(thermalMagicProcess),
-        ...(material ? [legacy(materialMagicProcess)] : []),
-        invoke("canonry.forcing")
-      );
+    if (magic && name === "temperature") body.push(...temperatureForcing(material));
     body.push({ ...invoke(`canonry.${name}`, { initial, iceLoad }), id: `${name}:${index}` });
-    if (magic && name === "plate-advection") body.push(legacy(advectAtlasMagic));
+    body.push(...afterNativeStep(name, magic, iceLoad));
   }
   return body;
 }
@@ -69,6 +78,7 @@ function epochBody(magic: boolean, inherited: boolean): ProcessSequence {
     invoke("canonry.magic-climate"),
     invoke("canonry.magic-rocks"),
     ...drainage(magic),
+    invoke("canonry.refine-water"),
     ...nativeSteps(incisionSteps, magic),
     ...nativeSteps(climateSteps, magic),
     ...drainage(magic),

@@ -17,12 +17,19 @@ export function authoredFields(original: DomainSnapshot) {
       channels: field.channels,
       footprint: field.footprint,
       spaceId: field.spaceId,
+      resolution: original.numerical[field.id]?.scope.resolution,
     }));
   const patches = original.fieldPatches.map((patch) => ({
     source: original.numerical[patch.fieldId] ?? original.numerical[patch.resourceId],
     channels: patch.channels,
     footprint: patch.footprint,
     spaceId: patch.spaceId,
+    resolution:
+      original.numerical[patch.resourceId]?.scope.resolution ??
+      original.numerical[patch.fieldId]?.overlays?.find(
+        (overlay) => overlay.grid.id === patch.resourceId
+      )?.grid.scope.resolution ??
+      original.numerical[patch.fieldId]?.scope.resolution,
   }));
   return [...fields, ...patches];
 }

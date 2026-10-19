@@ -1,4 +1,10 @@
-import { requireThat, resolveParameters, sameValue, type ParameterValues } from "@atlas/domain";
+import {
+  requireThat,
+  resolveParameters,
+  sameValue,
+  cloneSnapshot,
+  type ParameterValues,
+} from "@atlas/domain";
 import {
   MapProcessRegistry,
   type CompletedBoundary,
@@ -45,7 +51,10 @@ export class MapRunner {
       seed: options.seed,
       seedScope: options.seedScope,
     });
-    const state = structuredClone(initial);
+    const state = {
+      ...structuredClone({ ...initial, domain: undefined }),
+      domain: cloneSnapshot(initial.domain),
+    };
     const causes: GenerationCause[][] = [];
     const validate = () => {
       validateWorkingMap(state, initial.domain);

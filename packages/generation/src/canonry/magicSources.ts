@@ -8,8 +8,8 @@ import { hashUnit } from "./noise";
 
 function isHeatMaximum(map: PhysicalField, start: number, radius: number) {
   const { mesh, HeatSourceDensity: density } = map;
-  for (let edge = 0; edge < 3; edge++) {
-    const j = mesh.neighbors[start * 3 + edge];
+  for (let edge = 0; edge < mesh.degree[start]; edge++) {
+    const j = mesh.neighbors[start * mesh.stride + edge];
     if (j >= 0 && density[j] > density[start]) return false;
   }
   const queue = [start],
@@ -17,8 +17,8 @@ function isHeatMaximum(map: PhysicalField, start: number, radius: number) {
   for (let head = 0; head < queue.length; head++) {
     const i = queue[head];
     if (density[i] > density[start]) return false;
-    for (let edge = 0; edge < 3; edge++) {
-      const j = mesh.neighbors[i * 3 + edge];
+    for (let edge = 0; edge < mesh.degree[i]; edge++) {
+      const j = mesh.neighbors[i * mesh.stride + edge];
       if (j < 0 || visited.has(j)) continue;
       visited.add(j);
       if (Math.hypot(mesh.x[j] - mesh.x[start], mesh.y[j] - mesh.y[start]) <= radius) queue.push(j);
@@ -59,7 +59,7 @@ function geothermalSources(state: GenerationState, field: MagicField, seed: numb
 function geothermalCandidates(state: GenerationState, field: MagicField, seed: number) {
   const map = state.physical!.map,
     p = field.definition.parameters;
-  const radius = Math.max(map.mesh.spacing * 1.001, p.sourceSpacing / 2);
+  const radius = p.sourceSpacing / 2;
   const maximum = map.HeatSourceDensity.reduce((peak, value) => Math.max(peak, value), 0);
   const candidates = [];
   for (let i = 0; i < map.mesh.contentCount; i++) {
@@ -87,10 +87,14 @@ function oceanSource(state: GenerationState, field: MagicField) {
     const i = nearestTriangle(map.mesh, source.x, source.y);
     if (i < 0 || i >= map.mesh.contentCount || map.WaterKindCodes[i] !== 1) continue;
     let depth = map.WaterDepths[i];
-    for (let edge = 0; edge < 3; edge++) {
-      const j = map.mesh.neighbors[i * 3 + edge];
+    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
       if (j >= 0)
-        depth += (Math.max(0, map.WaterDepths[i] - map.WaterDepths[j]) / map.mesh.spacing) * 10_000;
+        depth +=
+          ((Math.max(0, map.WaterDepths[i] - map.WaterDepths[j]) /
+            map.mesh.edgeLength[i * map.mesh.stride + edge]) *
+            10_000) /
+          map.mesh.degree[i];
     }
     if (depth > score) {
       best = i;
