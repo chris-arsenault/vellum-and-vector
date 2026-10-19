@@ -68,7 +68,8 @@ function validateIce(map: PhysicalField, c: PhysicalContext) {
   scalar(map, "GroundedIce", 0, 1);
   for (let i = 0; i < map.mesh.count; i++) {
     if (
-      map.IceFlux[i] < map.IceThickness[i] ||
+      map.IceFlux[i] + 1e-6 <
+        (map.IceThickness[i] * map.mesh.areas[i]) / c.Profile.IceTransportYears ||
       (map.GroundedIce[i] !== 0 && !isGrounded(map, i, c.Profile))
     )
       throw new Error("Ice flow or grounding contradicts its support surface.");
@@ -76,7 +77,8 @@ function validateIce(map: PhysicalField, c: PhysicalContext) {
 }
 function validateBudget(map: PhysicalField) {
   if (
-    map.SedimentDepositedTotal + map.SedimentExportedTotal !== map.SedimentProducedTotal ||
+    Math.abs(map.SedimentDepositedTotal + map.SedimentExportedTotal - map.SedimentProducedTotal) >
+      Math.max(0.001, map.SedimentProducedTotal * 1e-9) ||
     map.SedimentSupply.some((value) => value !== 0)
   )
     throw new Error("Sediment transport did not conserve its supplied load.");

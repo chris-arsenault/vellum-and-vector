@@ -4,7 +4,6 @@ import type { MagicField } from "./magicState";
 import { magicKey } from "./magicState";
 import { classifyNaturalSurface } from "./naturalSurface";
 import { unitNoise, hashUnit } from "./noise";
-import { triangleIdentity } from "./mesh";
 
 function conditionReader(
   state: GenerationState,
@@ -26,6 +25,8 @@ function conditionReader(
     rogue: field.rogue,
     stored: field.stored,
     coastalHistory: field.coastalHistory,
+    firstEpoch: field.firstEpoch,
+    coastalFirstEpoch: field.coastalFirstEpoch,
     temperature: map.Temperature,
     ice: map.IceThickness,
     water: map.WaterKindCodes,
@@ -36,12 +37,24 @@ function conditionReader(
     river: map.RiverOrders,
   };
   if (key === "elevation") return (i: number) => (map.Elevation[i] - map.BaseSeaLevel) / 1024;
-  if (key === "slope") return (i: number) => map.Slope[i] / 1024;
+  if (key === "slope") return (i: number) => map.Slope[i];
   if (key === "noise")
-    return (i: number) => unitNoise(map.mesh.x[i], map.mesh.y[i], test.salt ?? 0x621d, 7, 1);
+    return (i: number) =>
+      unitNoise(
+        map.mesh.x[i],
+        map.mesh.y[i],
+        test.salt ?? 0x621d,
+        field.definition.parameters.featureNoiseScale,
+        1
+      );
   if (key === "scatter")
     return (i: number) =>
-      hashUnit(seed ^ (test.salt ?? 0), triangleIdentity(map.mesh, i), test.index ?? 0);
+      hashUnit(
+        seed ^ (test.salt ?? 0),
+        Math.floor(map.mesh.x[i] / field.definition.parameters.featureNoiseScale),
+        Math.floor(map.mesh.y[i] / field.definition.parameters.featureNoiseScale) ^
+          (test.index ?? 0)
+      );
   const array = values[key];
   return (i: number) => array?.[i] ?? 0;
 }
@@ -91,6 +104,25 @@ function growRegion(
     }
   return included;
 }
+function independentInteraction(rule: MagicField["definition"]["features"][number], owner: string) {
+  const conditions = [...rule.seeds, ...(rule.retains ?? [])].flat();
+  const local = new Set([
+    "intensity",
+    "history",
+    "source",
+    "wake",
+    "rogue",
+    "stored",
+    "coastalHistory",
+    "firstEpoch",
+    "coastalFirstEpoch",
+    `system:${owner}`,
+  ]);
+  return (
+    conditions.some((test) => test.field.startsWith("system:")) &&
+    conditions.every((test) => !local.has(test.field))
+  );
+}
 export function classifyMagicFeatures(state: GenerationState, seed = state.domain.world.seed) {
   classifyNaturalSurface(state);
   const magic = state.physical!.magic!;
@@ -98,16 +130,16 @@ export function classifyMagicFeatures(state: GenerationState, seed = state.domai
   let code = 100;
   for (const field of magic.fields) {
     field.features = {};
-    if (!field.definition.enabled) continue;
     for (const rule of field.definition.features) {
+      const surfaceCode = code++;
+      if (!field.definition.enabled && !independentInteraction(rule, field.definition.id)) continue;
       const members = growRegion(state, field, rule, seed);
       field.features[rule.id] = members;
       for (let i = 0; i < members.length; i++)
         if (members[i] && rule.priority > priority[i]) {
-          magic.finalSurface[i] = code;
+          magic.finalSurface[i] = surfaceCode;
           priority[i] = rule.priority;
         }
-      code++;
     }
   }
 }
@@ -132,13 +164,18 @@ export function projectMagic(state: GenerationState) {
       "stored",
       "retained",
       "coastalHistory",
+      "coastalFirstEpoch",
       "source",
       "wake",
       "rogue",
     ] as const)
       project(
         magicKey(field, channel),
-        channel === "firstEpoch" ? "category" : "relative-intensity",
+        channel.endsWith("Epoch")
+          ? "category"
+          : channel === "retained"
+            ? "intensity-square-metre"
+            : "relative-intensity",
         field[channel]
       );
     for (const [id, members] of Object.entries(field.features))

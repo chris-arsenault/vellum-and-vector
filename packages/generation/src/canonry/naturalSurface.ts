@@ -54,7 +54,7 @@ function landClimate(map: PhysicalField, i: number): (typeof naturalSurfaceNames
     map.Temperature[i] >= 235 &&
     map.Moisture[i] >= 150 &&
     map.Moisture[i] <= 520 &&
-    map.Slope[i] <= 42 * 1024
+    map.Slope[i] <= 0.0042
   )
     return "Cold steppe";
   return "Tundra";
@@ -65,7 +65,7 @@ function landRelief(map: PhysicalField, i: number): (typeof naturalSurfaceNames)
     const j = map.mesh.neighbors[i * 3 + edge];
     if (j >= 0 && map.RiverChannelOrders[j] >= 1) return "River valley";
   }
-  if (map.Slope[i] >= 235 * 1024) return "Scree field";
+  if (map.Slope[i] >= 0.0235) return "Scree field";
   if (
     [Landform.Ridge, Landform.Peak, Landform.Pass, Landform.ImpactRim].includes(
       map.LandformCodes[i]

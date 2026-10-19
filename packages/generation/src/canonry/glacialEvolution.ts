@@ -31,7 +31,7 @@ export function glacialErosion(map: PhysicalField, c: PhysicalContext) {
     erode(map, i, cut);
     map.CumulativeGlacialErosion[i] += cut;
     map.SedimentSupply[i] += cut;
-    map.SedimentProducedTotal += cut;
+    map.SedimentProducedTotal += (cut / 1024) * map.mesh.areas[i];
   }
   refreshGrounding(map, p);
 }
@@ -47,7 +47,8 @@ function isTerminus(map: PhysicalField, c: PhysicalContext, i: number, target: n
 export function glacialDeposition(map: PhysicalField, c: PhysicalContext) {
   const moving = new Float64Array(map.mesh.count);
   for (const i of targetOrder(map.IceFlowTargets)) {
-    const load = moving[i] + map.SedimentSupply[i];
+    const area = map.mesh.areas[i];
+    const load = moving[i] + (map.SedimentSupply[i] / 1024) * area;
     map.SedimentSupply[i] = 0;
     if (load <= 0) continue;
     const target = map.IceFlowTargets[i];
@@ -57,14 +58,15 @@ export function glacialDeposition(map: PhysicalField, c: PhysicalContext) {
           i,
           Math.min(
             units((c.Profile.MaximumGlacialDepositionPerPass * c.GlaciationStrength) / 1000),
-            load
+            (load * 1024) / area
           )
         )
       : 0;
     if (deposited > 0) map.GroundedIce[i] = isGrounded(map, i, c.Profile) ? 1 : 0;
     map.CumulativeGlacialDeposition[i] += deposited;
-    if (target >= 0) moving[target] += load - deposited;
-    else map.SedimentExportedTotal += load - deposited;
+    const volume = (deposited / 1024) * area;
+    if (target >= 0) moving[target] += load - volume;
+    else map.SedimentExportedTotal += load - volume;
   }
 }
 export function glacialMeltwater(map: PhysicalField, c: PhysicalContext) {

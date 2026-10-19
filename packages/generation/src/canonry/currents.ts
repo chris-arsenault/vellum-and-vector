@@ -1,8 +1,9 @@
 // OceanCurrentLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import { clamp, round, toUnits, truncate, units } from "./math";
+import { clamp, round, toUnits, truncate } from "./math";
 import { unitNoise } from "./noise";
+import { smoothMetric } from "./metricSmoothing";
 
 function normalized(x: number, y: number): [number, number] {
   const length = Math.sqrt(x * x + y * y);
@@ -22,14 +23,18 @@ function basinInfluence(map: PhysicalField, i: number): [number, number] {
       y -= dy * 1.4;
       continue;
     }
-    const gain = clamp((map.WaterDepths[j] - map.WaterDepths[i]) / units(240), -1, 1);
+    const gain = clamp(
+      (map.WaterDepths[j] - map.WaterDepths[i]) / (1024 * map.mesh.edgeLength[offset] * 0.024),
+      -1,
+      1
+    );
     x += dx * gain;
     y += dy * gain;
   }
   return [x, y];
 }
 function seedDirections(map: PhysicalField, c: PhysicalContext) {
-  const scale = Math.max(18, map.mesh.contentRadius * 0.46);
+  const scale = Math.max(180_000, map.mesh.contentRadius * 0.46);
   const potential = Float64Array.from({ length: map.mesh.count }, (_, i) =>
     unitNoise(map.mesh.x[i], map.mesh.y[i], c.Seed, scale, 3)
   );
@@ -41,7 +46,7 @@ function seedDirections(map: PhysicalField, c: PhysicalContext) {
       const offset = i * 3 + edge,
         j = map.mesh.neighbors[offset];
       if (j < 0) continue;
-      const difference = potential[j] - potential[i];
+      const difference = ((potential[j] - potential[i]) / map.mesh.edgeLength[offset]) * 10_000;
       gx += map.mesh.edgeX[offset] * difference;
       gy += map.mesh.edgeY[offset] * difference;
     }
@@ -57,28 +62,13 @@ function seedDirections(map: PhysicalField, c: PhysicalContext) {
     );
   }
 }
-function smoothDirections(map: PhysicalField, iterations: number) {
-  const nx = new Int32Array(map.mesh.count),
-    ny = new Int32Array(map.mesh.count);
-  for (let pass = 0; pass < iterations; pass++) {
-    for (let i = 0; i < map.mesh.count; i++) {
-      if (map.WaterKindCodes[i] !== 1) continue;
-      let x = map.OceanCurrentX[i] * 3,
-        y = map.OceanCurrentY[i] * 3,
-        weight = 3;
-      for (let edge = 0; edge < 3; edge++) {
-        const j = map.mesh.neighbors[i * 3 + edge];
-        if (j >= 0 && map.WaterKindCodes[j] === 1) {
-          x += map.OceanCurrentX[j];
-          y += map.OceanCurrentY[j];
-          weight++;
-        }
-      }
-      [nx[i], ny[i]] = normalized(x / weight, y / weight);
-    }
-    map.OceanCurrentX.set(nx);
-    map.OceanCurrentY.set(ny);
-  }
+function smoothDirections(map: PhysicalField, length: number) {
+  const ocean = Uint8Array.from(map.WaterKindCodes, (kind) => Number(kind === 1));
+  const x = smoothMetric(map.mesh, Float64Array.from(map.OceanCurrentX), length, ocean);
+  const y = smoothMetric(map.mesh, Float64Array.from(map.OceanCurrentY), length, ocean);
+  for (let i = 0; i < map.mesh.count; i++)
+    if (map.WaterKindCodes[i] === 1)
+      [map.OceanCurrentX[i], map.OceanCurrentY[i]] = normalized(x[i], y[i]);
 }
 function upstreamNeighbors(map: PhysicalField): Int32Array {
   const targets = new Int32Array(map.mesh.count).fill(-1);
@@ -115,7 +105,7 @@ function measureStrength(map: PhysicalField, c: PhysicalContext) {
         map.mesh.x[i],
         map.mesh.y[i],
         c.Seed ^ 0x19af,
-        Math.max(20, map.mesh.contentRadius * 0.38),
+        Math.max(200_000, map.mesh.contentRadius * 0.38),
         2
       ) * 250
     );
@@ -140,23 +130,29 @@ function heatSources(map: PhysicalField): Int32Array {
   }
   return source;
 }
-function transportHeat(map: PhysicalField, iterations: number, targets: Int32Array) {
-  const source = heatSources(map),
-    next = new Int32Array(map.mesh.count);
-  for (let pass = 0; pass < iterations; pass++) {
+/** Upwind mixing and cooling over one configured physical transport interval. */
+export function transportOceanHeat(
+  map: PhysicalField,
+  reach: number,
+  cooling: number,
+  targets: Int32Array
+) {
+  const source = heatSources(map);
+  if (reach <= 0) return;
+  const passes = Math.max(1, Math.ceil(reach / (map.mesh.spacing * 0.7))),
+    fraction = reach / (passes * map.mesh.spacing),
+    loss = cooling / passes;
+  let current = Float64Array.from(source),
+    next = current.slice();
+  for (let pass = 0; pass < passes; pass++) {
     for (let i = 0; i < map.mesh.count; i++) {
-      if (map.WaterKindCodes[i] !== 1) {
-        next[i] = 0;
-        continue;
-      }
-      const advected = targets[i] >= 0 ? map.OceanCurrentHeat[targets[i]] : 0;
-      next[i] = Math.max(
-        source[i],
-        Math.max(0, truncate((map.OceanCurrentHeat[i] * 3 + advected * 7) / 10) - 5)
-      );
+      if (map.WaterKindCodes[i] !== 1) continue;
+      const upstream = targets[i] < 0 ? 0 : current[targets[i]];
+      next[i] = Math.max(source[i], (1 - fraction) * current[i] + fraction * upstream - loss);
     }
-    map.OceanCurrentHeat.set(next);
+    [current, next] = [next, current];
   }
+  for (let i = 0; i < current.length; i++) map.OceanCurrentHeat[i] = round(current[i]);
 }
 function waveExposure(map: PhysicalField, steps: number, targets: Int32Array) {
   for (let i = 0; i < map.mesh.count; i++) {
@@ -164,10 +160,12 @@ function waveExposure(map: PhysicalField, steps: number, targets: Int32Array) {
     let fetch = 0,
       current = i,
       previous = -1;
+    const visited = new Set([i]);
     while (fetch < steps) {
       const next = targets[current];
-      if (next < 0 || next === previous) break;
-      fetch++;
+      if (next < 0 || next === previous || visited.has(next)) break;
+      visited.add(next);
+      fetch += map.mesh.spacing;
       previous = current;
       current = next;
     }
@@ -188,9 +186,14 @@ export function oceanCurrents(map: PhysicalField, c: PhysicalContext) {
   ] as const)
     map[name].fill(0);
   seedDirections(map, c);
-  smoothDirections(map, c.Profile.OceanCurrentSmoothingIterations);
+  smoothDirections(map, c.Profile.OceanCurrentSmoothingLength);
   measureStrength(map, c);
   const upstream = upstreamNeighbors(map);
-  transportHeat(map, c.Profile.OceanCurrentHeatIterations, upstream);
-  waveExposure(map, c.Profile.OceanCurrentFetchSteps, upstream);
+  transportOceanHeat(
+    map,
+    c.Profile.OceanCurrentHeatDistance,
+    c.Profile.OceanCurrentHeatCooling,
+    upstream
+  );
+  waveExposure(map, c.Profile.OceanCurrentFetchDistance, upstream);
 }

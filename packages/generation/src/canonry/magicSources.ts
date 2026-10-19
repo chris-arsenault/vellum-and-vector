@@ -1,69 +1,112 @@
 import type { GenerationState } from "../process";
 import type { MagicField } from "./magicState";
-import { hashUnit } from "./noise";
-import { triangleIdentity, nearestTriangle } from "./mesh";
+import { nearestTriangle } from "./mesh";
 import { clamp, round } from "./math";
-import { BoundedCandidates } from "./priorityQueue";
-import { triangleDistanceSquared } from "./radial";
+import { worldCandidates } from "./worldSources";
+import type { PhysicalField } from "./field";
+import { hashUnit } from "./noise";
+
+function isHeatMaximum(map: PhysicalField, start: number, radius: number) {
+  const { mesh, HeatSourceDensity: density } = map;
+  for (let edge = 0; edge < 3; edge++) {
+    const j = mesh.neighbors[start * 3 + edge];
+    if (j >= 0 && density[j] > density[start]) return false;
+  }
+  const queue = [start],
+    visited = new Set(queue);
+  for (let head = 0; head < queue.length; head++) {
+    const i = queue[head];
+    if (density[i] > density[start]) return false;
+    for (let edge = 0; edge < 3; edge++) {
+      const j = mesh.neighbors[i * 3 + edge];
+      if (j < 0 || visited.has(j)) continue;
+      visited.add(j);
+      if (Math.hypot(mesh.x[j] - mesh.x[start], mesh.y[j] - mesh.y[start]) <= radius) queue.push(j);
+    }
+  }
+  return true;
+}
 
 function geothermalSources(state: GenerationState, field: MagicField, seed: number) {
   const map = state.physical!.map,
     p = field.definition.parameters;
   if (p.maximumSources === 0) return;
   const candidates = geothermalCandidates(state, field, seed);
-  const selected: number[] = [];
-  for (const i of candidates) {
-    const spacing = p.sourceSpacing + (1000 - map.HeatSourceDensity[i]) / 150;
-    if (selected.some((j) => triangleDistanceSquared(map.mesh, i, j) < spacing ** 2)) continue;
-    selected.push(i);
+  const selected: typeof candidates = [];
+  for (const source of candidates) {
+    const i = source.i;
+    const spacing = p.sourceSpacing + ((1000 - map.HeatSourceDensity[i]) * 10_000) / 150;
+    if (selected.some((j) => Math.hypot(source.x - j.x, source.y - j.y) < spacing)) continue;
+    selected.push(source);
     if (selected.length >= p.maximumSources) break;
   }
-  if (!selected.length)
-    selected.push(strongestHeatSource(map.HeatSourceDensity, map.mesh.contentCount));
-  for (const i of selected)
+  if (!selected.length) {
+    const i = strongestHeatSource(map.HeatSourceDensity, map.mesh.contentCount);
+    selected.push({ i, id: -1, x: map.mesh.x[i], y: map.mesh.y[i], priority: 0 });
+  }
+  for (const source of selected) {
+    const i = source.i;
     field.source[i] = clamp(720 + Math.trunc(map.HeatSourceDensity[i] / 3), 1, 1000);
+    field.origins.push({
+      id: `geothermal:${seed}:${source.id}`,
+      x: source.x,
+      y: source.y,
+      radius: p.sourceSpacing,
+      strength: field.source[i],
+    });
+  }
 }
 function geothermalCandidates(state: GenerationState, field: MagicField, seed: number) {
   const map = state.physical!.map,
     p = field.definition.parameters;
-  const candidates = new BoundedCandidates(map.mesh.contentCount);
+  const radius = Math.max(map.mesh.spacing * 1.001, p.sourceSpacing / 2);
+  const maximum = map.HeatSourceDensity.reduce((peak, value) => Math.max(peak, value), 0);
+  const candidates = [];
   for (let i = 0; i < map.mesh.contentCount; i++) {
-    const density = map.HeatSourceDensity[i];
-    if (density < p.sourceThreshold || !isMaximum(map.HeatSourceDensity, map.mesh.neighbors, i))
-      continue;
-    candidates.consider(i, density * 1000 + hashUnit(seed, triangleIdentity(map.mesh, i), 0) * 999);
+    if (map.HeatSourceDensity[i] < p.sourceThreshold) continue;
+    if (map.HeatSourceDensity[i] !== maximum && !isHeatMaximum(map, i, radius)) continue;
+    const x = map.mesh.x[i],
+      y = map.mesh.y[i];
+    const priority = hashUnit(seed, Math.floor(x / radius), Math.floor(y / radius));
+    candidates.push({ i, id: Math.round(priority * 2147483647), x, y, priority });
   }
-  return candidates.bestIndexes();
+  return candidates.sort(
+    (a, b) => map.HeatSourceDensity[b.i] - map.HeatSourceDensity[a.i] || b.priority - a.priority
+  );
 }
 function strongestHeatSource(values: Int32Array, count: number) {
   let strongest = 0;
   for (let i = 1; i < count; i++) if (values[i] > values[strongest]) strongest = i;
   return strongest;
 }
-function isMaximum(values: Int32Array, neighbors: Int32Array, i: number) {
-  for (let edge = 0; edge < 3; edge++) {
-    const j = neighbors[i * 3 + edge];
-    if (j >= 0 && values[j] > values[i]) return false;
-  }
-  return true;
-}
 function oceanSource(state: GenerationState, field: MagicField) {
   const map = state.physical!.map;
   let best = -1,
     score = -Infinity;
-  for (let i = 0; i < map.mesh.contentCount; i++) {
-    if (map.WaterKindCodes[i] !== 1) continue;
+  for (const source of worldCandidates(map.mesh, state.domain.world.seed, 2048)) {
+    const i = nearestTriangle(map.mesh, source.x, source.y);
+    if (i < 0 || i >= map.mesh.contentCount || map.WaterKindCodes[i] !== 1) continue;
     let depth = map.WaterDepths[i];
     for (let edge = 0; edge < 3; edge++) {
       const j = map.mesh.neighbors[i * 3 + edge];
-      if (j >= 0) depth += Math.max(0, map.WaterDepths[i] - map.WaterDepths[j]);
+      if (j >= 0)
+        depth += (Math.max(0, map.WaterDepths[i] - map.WaterDepths[j]) / map.mesh.spacing) * 10_000;
     }
     if (depth > score) {
       best = i;
       score = depth;
     }
   }
-  if (best >= 0) field.source[best] = 1000;
+  if (best >= 0) {
+    field.source[best] = 1000;
+    field.origins.push({
+      id: "deep-ocean",
+      x: map.mesh.x[best],
+      y: map.mesh.y[best],
+      radius: field.definition.parameters.beamWidth,
+      strength: 1000,
+    });
+  }
 }
 function placedSources(state: GenerationState, field: MagicField, epochIndex: number) {
   const work = state.physical!;
@@ -73,12 +116,19 @@ function placedSources(state: GenerationState, field: MagicField, epochIndex: nu
     if (source.startsAtEpoch > epochIndex) continue;
     const i = nearestTriangle(
       work.map.mesh,
-      (source.source.x - work.center[0]) / work.metresPerStep,
-      (source.source.y - work.center[1]) / work.metresPerStep
+      source.source.x - work.map.mesh.origin[0],
+      source.source.y - work.map.mesh.origin[1]
     );
     if (i >= 0) {
       field.source[i] = clamp(round(source.strength), 0, 1000);
-      field.radii[i] = source.radius / work.metresPerStep;
+      field.radii[i] = source.radius;
+      field.origins.push({
+        id: source.id,
+        x: source.source.x - work.map.mesh.origin[0],
+        y: source.source.y - work.map.mesh.origin[1],
+        radius: source.radius,
+        strength: source.strength,
+      });
     }
   }
 }
@@ -90,6 +140,7 @@ export function locateMagicSources(
 ) {
   field.source.fill(0);
   field.radii.fill(0);
+  field.origins = [];
   const map = state.physical!.map,
     definition = field.definition;
   if (definition.source === "geothermal") geothermalSources(state, field, seed);

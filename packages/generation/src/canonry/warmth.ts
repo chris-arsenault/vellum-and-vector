@@ -15,8 +15,8 @@ function candidateSets(map: PhysicalField, c: PhysicalContext): number[][] {
     }
     const distance = map.OceanDistance[i],
       peak = units(c.Profile.PeakElevationThreshold);
-    if (distance >= 1 && distance <= 12) result[1].push(i);
-    if (distance >= 20 && map.Elevation[i] < peak) result[2].push(i);
+    if (distance > 0 && distance <= 120_000) result[1].push(i);
+    if (distance >= 200_000 && map.Elevation[i] < peak) result[2].push(i);
     if (map.Elevation[i] >= peak && map.Geothermal[i] >= 420) result[3].push(i);
   }
   return result;
@@ -41,7 +41,7 @@ function selectSource(
         ? 0
         : Math.min(...selected.map((j) => triangleDistanceSquared(map.mesh, i, j)));
     const score =
-      distance +
+      distance / 100_000_000 +
       map.Geothermal[i] * 0.25 +
       map.OceanCurrentHeat[i] * 0.22 +
       hashUnit(seed ^ 0x4b67, triangleIdentity(map.mesh, i), sample);

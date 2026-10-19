@@ -8,67 +8,9 @@ export const atlasQuality = {
   standard: { triangles: 65536, samples: 384 },
   fine: { triangles: 262144, samples: 768 },
 };
-// Canonry's 128-radius seed requests 49,537 kernel cells, each with 24 physical
-// triangles. Scale authored horizontal distances to the requested mesh density;
-// elevations remain metres. The algorithms and their dimensionless parameters stay intact.
-const referenceTriangles = 1188888;
-const distances = [
-  "ContinentalTransitionWidth",
-  "ContinentalWarpScale",
-  "ContinentalWarpStrength",
-  "RidgeWidth",
-  "CoastalDetailScale",
-  "InteriorReliefScale",
-  "ElevationVariationScale",
-  "CollisionRangeWidth",
-  "SubductionRangeWidth",
-  "RiftShoulderDistance",
-  "TransformRangeWidth",
-  "OrogenicAlongStrikeScale",
-  "ImpactMinimumRadius",
-  "ImpactMaximumRadius",
-  "ImpactMinimumSpacing",
-  "ImpactThermalRadiusThreshold",
-  "PlumeLobeScale",
-  "WarmthPocketMinRadius",
-  "WarmthPocketMaxRadius",
-  "HeartWarmthRadius",
-  "SeaIceVariationScale",
-  "MantlePlumeRadius",
-  "MantlePlumeMinimumSpacing",
-  "VolcanicConeRadius",
-] as const;
-const steps = [
-  "BoundaryPaddingSteps",
-  "ContinentalSutureDetectionReach",
-  "MarginInfluenceReach",
-  "CrustAgeSaturationDistance",
-  "PassiveShelfWidth",
-  "RiftedShelfWidth",
-  "TransformShelfWidth",
-  "ContinentalSlopeWidth",
-  "ContinentalRiseMinimumWidth",
-  "OrogenicInfluenceReach",
-  "OceanModerationDistance",
-  "OceanMoistureDistance",
-  "MantlePlumeDriftPerEpoch",
-  "OceanCurrentFetchSteps",
-  "DrainageGuidanceLookaheadSteps",
-] as const;
-export function atlasPhysicalProfile(
-  triangles: number,
-  parameters: Partial<AtlasParameters> = {}
-): PhysicalProfile {
+export function atlasPhysicalProfile(parameters: Partial<AtlasParameters> = {}): PhysicalProfile {
   const settings = atlasParametersSchema.parse(parameters);
-  const profile = structuredClone(physicalProfile),
-    scale = Math.sqrt(triangles / referenceTriangles);
-  for (const key of distances) profile[key] = Math.max(1, physicalProfile[key] * scale);
-  for (const key of steps) profile[key] = Math.max(1, round(physicalProfile[key] * scale));
-  // Slope controls describe height per lattice step, so a coarser mesh permits
-  // the same geographic gradient over its longer steps.
-  profile.MassWastingStableStep /= scale;
-  profile.FluvialEquilibriumStep /= scale;
-  profile.CoastalDetailWarp *= scale;
+  const profile = structuredClone(physicalProfile);
   profile.ContinentalAssemblyCount = settings.continents;
   profile.TectonicProvinceCount = settings.provinces;
   profile.ContinentalCrustFraction = settings.landFraction;

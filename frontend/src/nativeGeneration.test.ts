@@ -19,8 +19,8 @@ async function checkThermalFeedback(
   magical.world.magic.push({
     id: crypto.randomUUID(),
     name: "Thermal source",
-    source: { x: 50000, y: 50000, z: 0 },
-    radius: 100000,
+    source: { x: 2_000_000, y: 1_000_000, z: 0 },
+    radius: 3_000_000,
     strength: 5,
     propagation: "radial",
     effect: "heat",
@@ -49,8 +49,8 @@ it("refines inherited Canonry terrain and retains authored geography and its fix
   const world = createWorld({
     name: "Native refinement",
     seed: 104729,
-    width: 100000,
-    height: 100000,
+    width: 4_000_000,
+    height: 2_000_000,
   });
   const root = Object.keys(world.areas)[0],
     input = { areaId: root, seed: world.seed, quality: "draft", domains: ["physical"] };

@@ -7,6 +7,7 @@ import LayerGroup from "ol/layer/Group.js";
 import VectorSource from "ol/source/Vector.js";
 import ImageStatic from "ol/source/ImageStatic.js";
 import GeoJSON from "ol/format/GeoJSON.js";
+import LineString from "ol/geom/LineString.js";
 import { Circle, Fill, Stroke, Style, Text } from "ol/style.js";
 import { ScaleLine } from "ol/control.js";
 import { defaults as defaultInteractions } from "ol/interaction/defaults.js";
@@ -129,7 +130,7 @@ function featureStyle(
   const opacity = Math.round(style.opacity * 255)
     .toString(16)
     .padStart(2, "0");
-  return new Style({
+  const result = new Style({
     zIndex: order,
     text: style.labels
       ? new Text({
@@ -141,7 +142,7 @@ function featureStyle(
       : undefined,
     stroke: new Stroke({
       color: color + opacity,
-      width: feature.kind === "river" ? 1.7 : 2,
+      width: physicalStrokeWidth(feature, resolution),
       lineDash: feature.layerId === "claims" ? [7, 5] : undefined,
     }),
     fill: new Fill({
@@ -157,6 +158,53 @@ function featureStyle(
       stroke: new Stroke({ color: "#233638", width: 1.5 }),
     }),
   });
+  return profiledLineStyles(feature, result, color + opacity, resolution, order);
+}
+
+function profiledLineStyles(
+  feature: AtlasFeature,
+  base: Style,
+  color: string,
+  resolution: number,
+  order: number
+) {
+  const widths = feature.attributes.widths;
+  if (
+    feature.geometry.type !== "LineString" ||
+    !Array.isArray(widths) ||
+    widths.length !== feature.geometry.coordinates.length ||
+    physicalStrokeWidth(feature, resolution) <= 1.7
+  )
+    return base;
+  base.setStroke(null);
+  const styles = feature.geometry.coordinates.slice(1).map(
+    (coordinate, i) =>
+      new Style({
+        zIndex: order,
+        geometry: new LineString([
+          feature.geometry.type === "LineString" ? feature.geometry.coordinates[i] : coordinate,
+          coordinate,
+        ]),
+        stroke: new Stroke({
+          color,
+          width: Math.max(1.7, (Number(widths[i]) + Number(widths[i + 1])) / (2 * resolution)),
+        }),
+      })
+  );
+  return [base, ...styles];
+}
+
+function physicalStrokeWidth(feature: AtlasFeature, resolution: number) {
+  if (feature.kind !== "river") return 2;
+  const samples = feature.attributes.widths;
+  const width = Array.isArray(samples)
+    ? samples.reduce<number>(
+        (maximum, value) => (typeof value === "number" ? Math.max(maximum, value) : maximum),
+        0
+      )
+    : Number(feature.attributes.width ?? 0);
+  const minimum = 1.7;
+  return Number.isFinite(width) ? Math.max(minimum, width / resolution) : minimum;
 }
 
 export function updateRaster(

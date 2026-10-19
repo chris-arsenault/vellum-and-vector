@@ -1,7 +1,7 @@
 // FluvialErosionLayer.cs and SedimentTransportLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import { clamp, ratio, toUnits, truncate, units } from "./math";
+import { clamp, truncate, units } from "./math";
 import { erode, deposit } from "./surface";
 import { drainageConditioning } from "./drainageFlood";
 import { resolveLandTargets } from "./flowGuidance";
@@ -11,13 +11,13 @@ function recordCut(map: PhysicalField, i: number, requested: number) {
   const amount = erode(map, i, requested);
   map.CumulativeFluvialErosion[i] += amount;
   map.SedimentSupply[i] += amount;
-  map.SedimentProducedTotal += amount;
+  map.SedimentProducedTotal += (amount / 1024) * map.mesh.areas[i];
 }
 function controllingSill(map: PhysicalField, start: number, maximumSteps: number): number {
   let selected = -1,
     highest = -Number.MAX_VALUE,
     i = start;
-  for (let step = 0; step < maximumSteps && i >= 0; step++) {
+  for (let distance = 0; distance < maximumSteps && i >= 0; distance += map.mesh.spacing) {
     if (map.WaterKindCodes[i] === 1) break;
     if (map.WaterKindCodes[i] === 0 && map.Elevation[i] > highest) {
       selected = i;
@@ -35,7 +35,7 @@ function erodeOutlets(map: PhysicalField, c: PhysicalContext) {
     const overflow = map.LakeOverflow[i],
       outlet = map.LakeOutletTargets[i];
     if (overflow <= 0 || outlet < 0) continue;
-    const sill = controllingSill(map, outlet, p.LakeOutletIncisionSearchSteps);
+    const sill = controllingSill(map, outlet, p.LakeOutletIncisionSearchDistance);
     if (sill < 0) continue;
     const incision =
       (p.MaximumLakeOutletIncisionPerPass *
@@ -55,16 +55,21 @@ function erodeTriangle(
   map: PhysicalField,
   c: PhysicalContext,
   targets: Int32Array,
-  area: Int32Array,
+  area: Float64Array,
   i: number
 ) {
   const target = targets[i];
   if (target < 0 || map.WaterKindCodes[i] === 1) return;
-  const fall = Math.max(0, toUnits(map.DrainageElevations[i] - map.DrainageElevations[target]));
-  const equilibrium = c.Profile.FluvialEquilibriumStep / Math.max(1, area[i]) ** 0.12;
+  const length = Math.hypot(map.mesh.x[i] - map.mesh.x[target], map.mesh.y[i] - map.mesh.y[target]);
+  const fall = Math.max(
+    0,
+    (map.DrainageElevations[i] - map.DrainageElevations[target]) / (1024 * length)
+  );
+  const catchment = area[i] / 100_000_000;
+  const equilibrium = c.Profile.FluvialEquilibriumGradient / Math.max(1, catchment) ** 0.12;
   const erosiveFall = Math.max(0, fall - equilibrium);
   if (erosiveFall <= 0) return;
-  const power = area[i] ** 0.42 * Math.sqrt(erosiveFall);
+  const power = catchment ** 0.42 * Math.sqrt(erosiveFall) * 100;
   const cut = units(
     (Math.min(22, (power * c.Profile.FluvialErosionStrength * 1000) / surfaceResistance(map, i)) *
       c.HydrologyStrength) /
@@ -82,7 +87,7 @@ export function fluvialErosion(map: PhysicalField, c: PhysicalContext) {
     const pass = { ...c, Seed: c.Seed ^ iteration };
     drainageConditioning(map, pass);
     const targets = resolveLandTargets(map, pass),
-      area = contributingArea(targets);
+      area = contributingArea(targets, map.mesh.areas);
     for (let i = 0; i < targets.length; i++) erodeTriangle(map, c, targets, area, i);
   }
 }
@@ -90,25 +95,28 @@ export function sedimentTransport(map: PhysicalField, c: PhysicalContext) {
   const moving = new Float64Array(map.mesh.count),
     p = c.Profile;
   for (const i of sourceToOutletOrder(map)) {
-    const load = moving[i] + map.SedimentSupply[i];
+    const area = map.mesh.areas[i];
+    const load = moving[i] + (map.SedimentSupply[i] / 1024) * area;
     map.SedimentSupply[i] = 0;
     if (load <= 0) continue;
     const target = map.FlowTargets[i];
     const shouldDeposit =
       map.WaterKindCodes[i] === 2 ||
-      map.Slope[i] <= units(p.SedimentDepositionSlopeThreshold) ||
+      map.Slope[i] <= p.SedimentDepositionSlopeThreshold ||
       (target >= 0 && map.WaterKindCodes[target] === 1);
+    const capture = -Math.expm1(
+      (Math.log1p(-p.SedimentTransportFraction / 1000) * map.mesh.spacing) /
+        p.SedimentDepositionLength
+    );
     const deposited = shouldDeposit
       ? deposit(
           map,
           i,
-          Math.min(
-            units(p.MaximumSedimentDepositionPerPass),
-            Math.max(1, ratio(load, p.SedimentTransportFraction, 1000))
-          )
+          Math.min(units(p.MaximumSedimentDepositionPerPass), ((load * 1024) / area) * capture)
         )
       : 0;
-    if (target >= 0) moving[target] += load - deposited;
-    else map.SedimentExportedTotal += load - deposited;
+    const volume = (deposited / 1024) * area;
+    if (target >= 0) moving[target] += load - volume;
+    else map.SedimentExportedTotal += load - volume;
   }
 }

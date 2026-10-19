@@ -17,7 +17,7 @@ function canFlood(
     map.WaterKindCodes[target] === 0 &&
     map.RiverChannelStrength[target] === 0 &&
     map.DrainageBasinIds[target] === map.DrainageBasinIds[source] &&
-    map.Slope[target] <= units(p.FloodplainMaximumSlope) &&
+    map.Slope[target] <= p.FloodplainMaximumSlope &&
     Math.abs(map.Elevation[source] - map.Elevation[target]) <= units(p.FloodplainMaximumRelief) &&
     longitudinalAlignment(map, upstream, source, target) <=
       p.FloodplainMaximumLongitudinalAlignment / 1000
@@ -29,11 +29,10 @@ function seedFloodplains(map: PhysicalField, c: PhysicalContext, upstream: Int32
     if (map.RiverChannelOrders[i] < c.Profile.FloodplainMinimumRiverOrder) continue;
     for (let edge = 0; edge < 3; edge++) {
       const j = map.mesh.neighbors[i * 3 + edge];
-      if (!canFlood(map, c, upstream, i, j)) continue;
+      if (map.mesh.spacing > c.Profile.FloodplainMaximumWidth || !canFlood(map, c, upstream, i, j))
+        continue;
       const intensity = clamp(
-        map.RiverChannelStrength[i] +
-          toUnits(map.CumulativeDeposition[j]) -
-          toUnits(map.Slope[j]) * 6,
+        map.RiverChannelStrength[i] + toUnits(map.CumulativeDeposition[j]) - map.Slope[j] * 60_000,
         1,
         1000
       );
@@ -57,7 +56,10 @@ function expandFront(
       const j = map.mesh.neighbors[i * 3 + edge];
       if (!canFlood(map, c, upstream, i, j)) continue;
       const relief = toUnits(Math.abs(map.Elevation[i] - map.Elevation[j]));
-      const intensity = map.FloodplainIntensity[i] - c.Profile.FloodplainIntensityDecay - relief;
+      const intensity =
+        map.FloodplainIntensity[i] -
+        (c.Profile.FloodplainIntensityDecay * map.mesh.spacing) / 10_000 -
+        relief;
       if (intensity > map.FloodplainIntensity[j]) {
         map.FloodplainIntensity[j] = intensity;
         next.push(j);
@@ -70,9 +72,9 @@ export function floodplains(map: PhysicalField, c: PhysicalContext) {
   const upstream = dominantUpstream(map);
   let frontier = seedFloodplains(map, c, upstream);
   for (
-    let step = 1;
-    step < c.Profile.FloodplainMaximumExpansionSteps && frontier.length > 0;
-    step++
+    let step = map.mesh.spacing;
+    step < c.Profile.FloodplainMaximumWidth && frontier.length > 0;
+    step += map.mesh.spacing
   )
     frontier = expandFront(map, c, upstream, frontier);
 }

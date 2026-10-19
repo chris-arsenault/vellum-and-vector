@@ -4,6 +4,7 @@ import { nativePosition } from "./atlasWorkspace";
 
 export interface MagicField {
   definition: MagicSystem;
+  origins: { id: string; x: number; y: number; radius: number; strength: number }[];
   intensity: Float64Array;
   source: Float64Array;
   wake: Float64Array;
@@ -14,6 +15,7 @@ export interface MagicField {
   retained: Float64Array;
   radii: Float64Array;
   coastalHistory: Float64Array;
+  coastalFirstEpoch: Float64Array;
   features: Record<string, Uint8Array>;
 }
 export interface MagicWorkspace {
@@ -34,6 +36,7 @@ function createMagicField(state: GenerationState, definition: MagicSystem): Magi
   const array = () => new Float64Array(count);
   const field: MagicField = {
     definition,
+    origins: [],
     intensity: array(),
     source: array(),
     wake: array(),
@@ -44,10 +47,17 @@ function createMagicField(state: GenerationState, definition: MagicSystem): Magi
     retained: array(),
     radii: array(),
     coastalHistory: array(),
+    coastalFirstEpoch: array().fill(-1),
     features: {},
   };
   if (!state.physical!.inherited) return field;
-  for (const channel of ["history", "firstEpoch", "stored", "coastalHistory"] as const) {
+  for (const channel of [
+    "history",
+    "firstEpoch",
+    "stored",
+    "coastalHistory",
+    "coastalFirstEpoch",
+  ] as const) {
     const key = magicKey(field, channel);
     if (!state.surface.channels[key]) continue;
     for (let i = 0; i < count; i++)
@@ -55,7 +65,7 @@ function createMagicField(state: GenerationState, definition: MagicSystem): Magi
         state.surface,
         key,
         nativePosition(state.physical!, i),
-        channel === "firstEpoch"
+        channel.endsWith("Epoch")
       );
   }
   return field;
@@ -76,11 +86,17 @@ export function advectMagic(state: GenerationState) {
   const work = state.physical!;
   for (const field of work.magic?.fields ?? []) {
     if (!field.definition.history.advect) continue;
-    for (const channel of ["history", "firstEpoch", "stored", "coastalHistory"] as const) {
+    for (const channel of [
+      "history",
+      "firstEpoch",
+      "stored",
+      "coastalHistory",
+      "coastalFirstEpoch",
+    ] as const) {
       const previous = field[channel].slice();
       for (let i = 0; i < work.map.mesh.count; i++) {
         const source = work.map.AdvectionSourceIndex[i];
-        field[channel][i] = source >= 0 ? previous[source] : channel === "firstEpoch" ? -1 : 0;
+        field[channel][i] = source >= 0 ? previous[source] : channel.endsWith("Epoch") ? -1 : 0;
       }
     }
   }

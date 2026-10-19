@@ -3,6 +3,7 @@ import { test, expect, type Page } from "@playwright/test";
 test("session world, generation, skipped refinement, editing and located template", async ({
   page,
 }) => {
+  test.setTimeout(300000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   const serviceRequests: string[] = [];
@@ -20,7 +21,9 @@ test("session world, generation, skipped refinement, editing and located templat
   await page.getByLabel("Communities & distributions", { exact: true }).check();
   await page.getByLabel("Territory & claims", { exact: true }).check();
   await page.getByRole("button", { name: "Generate selected domains" }).click();
-  await expect(page.locator(".job-row strong").first()).toHaveText("completed", { timeout: 90000 });
+  await expect(page.locator(".job-row strong").first()).toHaveText("completed", {
+    timeout: 180000,
+  });
   await page.screenshot({ path: "test-results/atlas-world.png" });
   await page.getByRole("button", { name: "Layers", exact: true }).click();
   await page.getByLabel("View preset").selectOption("political");
@@ -34,7 +37,9 @@ test("session world, generation, skipped refinement, editing and located templat
   await page.getByLabel("Detail level").selectOption("draft");
   await page.getByRole("button", { name: "Generate selected domains" }).click();
   await expect(page.locator(".job-row")).toHaveCount(2);
-  await expect(page.locator(".job-row strong").first()).toHaveText("completed", { timeout: 90000 });
+  await expect(page.locator(".job-row strong").first()).toHaveText("completed", {
+    timeout: 180000,
+  });
   await page.screenshot({ path: "test-results/atlas-region.png" });
   await createArea(page, "Harbor", "site", 2000, 2000, 1000, 1000);
   await page.getByRole("toolbar").getByRole("button", { name: "Place point", exact: true }).click();

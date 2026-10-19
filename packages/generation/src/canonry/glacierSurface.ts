@@ -9,9 +9,7 @@ export const canCarryIce = (map: PhysicalField, i: number) =>
 export function isGrounded(map: PhysicalField, i: number, p: PhysicalProfile): boolean {
   if (map.IceThickness[i] <= 0 || map.WaterKindCodes[i] === 1) return false;
   if (map.WaterKindCodes[i] === 0) return true;
-  return (
-    ratio(units(map.IceThickness[i] / 3), p.GlacierGroundingFraction, 1000) >= map.WaterDepths[i]
-  );
+  return ratio(units(map.IceThickness[i]), p.GlacierGroundingFraction, 1000) >= map.WaterDepths[i];
 }
 export function refreshGrounding(map: PhysicalField, p: PhysicalProfile) {
   for (let i = 0; i < map.mesh.count; i++) map.GroundedIce[i] = isGrounded(map, i, p) ? 1 : 0;

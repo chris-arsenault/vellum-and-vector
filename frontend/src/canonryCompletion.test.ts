@@ -9,8 +9,8 @@ it("evolves impacts, repeated ice ages and all three magic systems through share
   const world = createWorld({
     name: "Complete history",
     seed: 104729,
-    width: 100000,
-    height: 100000,
+    width: 4_000_000,
+    height: 2_000_000,
   });
   const source = structuredClone(session(world.id).snapshot),
     present = world.epochs.at(-1)!;

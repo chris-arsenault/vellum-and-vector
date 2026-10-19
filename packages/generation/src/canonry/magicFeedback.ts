@@ -1,17 +1,23 @@
 import type { GenerationState, MapProcessContext } from "../process";
 import { clamp, rockResistance, round } from "./math";
+import { Feature } from "./codes";
 
 export function magicThermalFeedback(state: GenerationState) {
   const work = state.physical!,
     magic = work.magic!,
     map = work.map;
   for (let i = 0; i < map.mesh.count; i++) {
+    map.FeatureFlags[i] &= ~(Feature.FireCore | Feature.MagmaChamber);
     let heat = 0,
       melt = 0;
     for (const field of magic.fields) {
       const effects = field.definition.effects;
       heat += field.intensity[i] * effects.heat;
       melt += field.intensity[i] * effects.iceMelt;
+      if (effects.heat > 0 && field.source[i] > 0 && field.intensity[i] > 0) {
+        map.FeatureFlags[i] |= Feature.FireCore;
+        if (field.intensity[i] >= 940) map.FeatureFlags[i] |= Feature.MagmaChamber;
+      }
     }
     // Replace this contribution; later climate passes use the same external forcing.
     const previous = magic.heat[i];
@@ -31,10 +37,14 @@ export function magicRockFeedback(state: GenerationState) {
     map.RockResistance[i] = rockResistance(map.RockResistance[i] + round(delta));
   }
 }
-export function magicCoastalFeedback(state: GenerationState) {
+function coastalEpoch(state: GenerationState, context?: MapProcessContext) {
+  return context?.epochIndices[0] ?? Math.max(0, state.domain.world.epochs.length - 1);
+}
+export function magicCoastalFeedback(state: GenerationState, context?: MapProcessContext) {
   const work = state.physical!,
     magic = work.magic!,
     map = work.map;
+  const epoch = coastalEpoch(state, context);
   for (let i = 0; i < map.mesh.count; i++) {
     let total = 0;
     for (const field of magic.fields) {
@@ -64,6 +74,7 @@ export function magicCoastalFeedback(state: GenerationState) {
       );
       total += forcing;
       field.coastalHistory[i] += forcing;
+      if (field.coastalFirstEpoch[i] < 0) field.coastalFirstEpoch[i] = epoch;
     }
     map.ExternalCoastalForcing[i] += clamp(total, 0, 1000) - magic.coastal[i];
     magic.coastal[i] = clamp(total, 0, 1000);
@@ -82,14 +93,14 @@ export function retainMagicHistory(state: GenerationState, context: MapProcessCo
       field.stored[i] = field.stored[i] * retention.retention + value * retention.storage;
       if (value > 0 && field.firstEpoch[i] < 0) field.firstEpoch[i] = index;
       if (i >= map.mesh.contentCount) continue;
-      active += Number(value > 0);
+      active += value > 0 ? map.mesh.areas[i] : 0;
       maximum = Math.max(maximum, value);
     }
     context.recordCause({
       kind: "domain",
       process: "canonry.magic-history",
       subjects: [],
-      description: `${field.definition.name}: epoch ${index + 1}, ${active} affected triangles, peak intensity ${maximum}; accumulated activity and first occurrence travel with the crust.`,
+      description: `${field.definition.name}: epoch ${index + 1}, ${Math.round(active / 1_000_000)} affected km², peak intensity ${maximum}; accumulated activity and first occurrence travel with the crust.`,
     });
   }
 }

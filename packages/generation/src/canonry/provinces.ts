@@ -183,7 +183,7 @@ export function continentalDomains(map: PhysicalField, context: PhysicalContext)
       map.mesh.x[i],
       map.mesh.y[i],
       context.Seed ^ 0x41c7,
-      Math.max(8, context.Profile.ContinentalWarpScale * 0.44),
+      context.Profile.ContinentalWarpScale * 0.44,
       4
     );
     const margin = 1 - clamp(Math.abs(potential - 0.5) * 2, 0, 1);

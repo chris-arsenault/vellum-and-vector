@@ -15,10 +15,10 @@ function character(p: PhysicalProfile, margin: number) {
     p.CoastalDetailTransformAmplitude,
   ];
   return {
-    amplitude: amplitudes[margin] / 1000,
+    amplitude: amplitudes[margin],
     scale: p.CoastalDetailScale * [1, 1, 0.55, 0.7, 1.3][margin],
     octaves: [4, 6, 6, 5, 4][margin],
-    warp: (p.CoastalDetailWarp / 1000) * [0, 1, 1.6, 0.7, 0.35][margin],
+    warp: p.CoastalDetailWarp * [0, 1, 1.6, 0.7, 0.35][margin],
     ridged: margin === 2 || margin === 3,
   };
 }
@@ -32,7 +32,7 @@ function coastalNoise(
     y = map.mesh.y[i],
     scale = Math.max(1, ch.scale * 1.7);
   const wx = fractalNoise(x, y, c.Seed ^ 0x51a3, scale, 3) * ch.warp;
-  const wy = fractalNoise(x + 91.7, y - 43.1, c.Seed ^ 0x51a3, scale, 3) * ch.warp;
+  const wy = fractalNoise(x + 917_000, y - 431_000, c.Seed ^ 0x51a3, scale, 3) * ch.warp;
   const value = fractalNoise(x + wx, y + wy, c.Seed ^ 0x7c4b, ch.scale, ch.octaves);
   return ch.ridged ? 2 * Math.abs(value) - 1 : value;
 }

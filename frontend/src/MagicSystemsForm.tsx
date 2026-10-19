@@ -209,15 +209,22 @@ const effectLabels = {
 const parameterLabels: Record<keyof MagicSystem["parameters"], string> = {
   sourceThreshold: "Minimum source density · 0–1,000",
   maximumSources: "Maximum cores",
-  sourceSpacing: "Core spacing / radial reach · mesh steps",
-  baseCost: "Propagation loss per step",
+  sourceSpacing: "Core spacing / radial reach · metres",
+  baseCost: "Propagation loss per kilometre",
   conductanceDivisor: "Fracture conductance divisor",
   baseInput: "Cold accumulation input",
   logScale: "Cold accumulation logarithmic scale",
-  iceRetention: "Ice retention divisor",
+  iceRetention: "Ice retention depth · metres",
+  coldRetentionDistance: "Ice capture reference travel distance · metres",
+  accumulationArea: "Cold accumulation reference area · m²",
+  featureNoiseScale: "Feature variation wavelength · metres",
   rayCount: "Standing rays per core",
-  raySteps: "Ray travel steps",
+  rayDistance: "Ray travel distance · metres",
+  coastalRayDistance: "Coastal ray distance · metres",
+  wakeDistance: "Wake travel distance · metres",
+  beamWidth: "Ray / wake width · metres",
   coastalSources: "Coastal wave sources",
+  coastalSourceDistance: "Coastal source band · metres",
   wakeSources: "Ancient wake sources",
   coastalThreshold: "Pressure threshold at coast · 0–999",
   waveAmplification: "Wave amplification",
@@ -234,16 +241,21 @@ function PropagationSettings({
     system.propagation === "ocean-rays"
       ? [
           "rayCount",
-          "raySteps",
+          "rayDistance",
+          "coastalRayDistance",
+          "wakeDistance",
+          "beamWidth",
           "coastalSources",
+          "coastalSourceDistance",
           "wakeSources",
           "coastalThreshold",
           "waveAmplification",
           "currentAmplification",
         ]
       : system.propagation === "cold-drainage"
-        ? ["baseInput", "logScale", "iceRetention"]
+        ? ["baseInput", "logScale", "iceRetention", "coldRetentionDistance", "accumulationArea"]
         : ["sourceSpacing", "baseCost", "conductanceDivisor"];
+  keys.push("featureNoiseScale");
   if (system.source === "geothermal") keys.push("maximumSources", "sourceThreshold");
   return keys.map((key) => (
     <NumberSetting

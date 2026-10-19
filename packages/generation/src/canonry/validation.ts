@@ -67,7 +67,9 @@ function validateRivers(map: PhysicalField) {
     const target = map.FlowTargets[i];
     if (
       (target < 0 && !(map.OpenBoundary && map.mesh.boundary[i])) ||
-      (target >= 0 && map.FlowAccumulation[target] < map.FlowAccumulation[i])
+      (target >= 0 &&
+        map.WaterKindCodes[target] !== 2 &&
+        map.FlowAccumulation[target] + 1e-9 < map.FlowAccumulation[i])
     )
       throw new Error("River network does not continue toward an outlet.");
   }

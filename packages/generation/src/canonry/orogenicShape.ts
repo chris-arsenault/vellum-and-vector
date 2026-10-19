@@ -65,7 +65,7 @@ export function alongStrike(
 ) {
   const noise = unitNoise(
     alongPosition(map, i, source, false),
-    c.id * 19,
+    c.pair * 190_000,
     context.EpochStableSeed ^ 0x6c91,
     context.Profile.OrogenicAlongStrikeScale,
     3
@@ -81,7 +81,7 @@ export function summitVariation(
 ) {
   const noise = unitNoise(
     alongPosition(map, i, source, true),
-    c.id * 31,
+    c.pair * 310_000,
     context.EpochStableSeed ^ 0x19d7,
     Math.max(3, context.Profile.OrogenicAlongStrikeScale * 0.28),
     3

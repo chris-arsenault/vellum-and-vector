@@ -15,12 +15,18 @@ export interface PhysicalMesh {
   workRadius: number;
   coords: TriangleCoord[];
   indexes: Map<string, number>;
-  x: Float32Array;
-  y: Float32Array;
+  x: Float32Array | Float64Array;
+  y: Float32Array | Float64Array;
   neighbors: Int32Array;
   edgeX: Float32Array;
   edgeY: Float32Array;
   boundary: Uint8Array;
+  spacing: number;
+  areas: Float64Array;
+  origin: [number, number];
+  latticeOffset: [number, number];
+  bounds: [number, number, number, number];
+  edgeLength: Float64Array;
 }
 const key = (p: TriangleCoord) => `${p.u}:${p.v}:${Number(p.inverted)}`;
 function centroid(p: TriangleCoord): [number, number] {
@@ -78,6 +84,12 @@ export function createMesh(contentCount: number, padding: number): PhysicalMesh 
     edgeX: new Float32Array(count * 3),
     edgeY: new Float32Array(count * 3),
     boundary: new Uint8Array(count),
+    spacing: 1,
+    areas: new Float64Array(count).fill(triangleArea),
+    origin: [0, 0],
+    latticeOffset: [0, 0],
+    bounds: [-radius, -radius, radius, radius],
+    edgeLength: new Float64Array(count * 3).fill(1),
   };
   connectMesh(mesh);
   return mesh;
@@ -94,6 +106,7 @@ function connectMesh(mesh: PhysicalMesh) {
       const dx = mesh.x[j] - mesh.x[i],
         dy = mesh.y[j] - mesh.y[i];
       const length = Math.max(0.001, Math.hypot(dx, dy));
+      mesh.edgeLength[i * 3 + edge] = length;
       mesh.edgeX[i * 3 + edge] = dx / length;
       mesh.edgeY[i * 3 + edge] = dy / length;
     }
@@ -103,11 +116,13 @@ export function triangleIdentity(mesh: PhysicalMesh, i: number): number {
   return Math.imul(p.u, 73856093) ^ Math.imul(p.v, 19349663) ^ (p.inverted ? 83492791 : 0);
 }
 export function nearestTriangle(mesh: PhysicalMesh, x: number, y: number): number {
+  const latticeX = (x - mesh.latticeOffset[0]) / mesh.spacing,
+    latticeY = (y - mesh.latticeOffset[1]) / mesh.spacing;
   let index = -1,
     best = Infinity;
   for (const inverted of [false, true]) {
-    const sum = (x - (inverted ? 2 : 1)) / 1.5,
-      difference = (2 * y) / rootThree;
+    const sum = (latticeX - (inverted ? 2 : 1)) / 1.5,
+      difference = (2 * latticeY) / rootThree;
     const u = round((sum - difference) * 0.5),
       v = round((sum + difference) * 0.5);
     for (let du = -2; du <= 2; du++)

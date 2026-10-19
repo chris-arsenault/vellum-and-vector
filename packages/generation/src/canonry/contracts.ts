@@ -19,8 +19,12 @@ export function applyNativeStep(map: PhysicalField, context: PhysicalContext, st
     throw new Error(`Unknown Canonry process or salt: ${name}.`);
   for (const fact of contract.requires)
     if (!map.AvailableFacts.has(fact)) throw new Error(`${name} requires fresh ${fact}.`);
-  process(map, context);
-  validateNativeLayer(map, context, name, contract.produces);
+  try {
+    process(map, context);
+    validateNativeLayer(map, context, name, contract.produces);
+  } catch (cause) {
+    throw new Error(`${name} failed in epoch ${context.EpochIndex + 1}.`, { cause });
+  }
   for (const fact of contract.invalidates) map.AvailableFacts.delete(fact);
   for (const fact of contract.produces) map.AvailableFacts.add(fact);
 }

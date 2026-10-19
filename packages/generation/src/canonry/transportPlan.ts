@@ -7,21 +7,29 @@ export const weightScale = 1_000_000;
 export interface TransportPlan {
   targets: Int32Array;
   weights: Int32Array;
-  arrivals: Int32Array;
+  arrivals: Float64Array;
   dominant: Int32Array;
-  dominantWeight: Int32Array;
+  dominantWeight: Float64Array;
 }
-function add(plan: TransportPlan, source: number, slot: number, target: number, weight: number) {
+function add(
+  map: PhysicalField,
+  plan: TransportPlan,
+  source: number,
+  slot: number,
+  target: number,
+  weight: number
+) {
   if (weight <= 0) return;
   plan.targets[source * 4 + slot] = target;
   plan.weights[source * 4 + slot] = weight;
-  plan.arrivals[target] += weight;
+  const contribution = (weight * map.mesh.areas[source]) / map.mesh.areas[target];
+  plan.arrivals[target] += contribution;
   if (
-    weight > plan.dominantWeight[target] ||
-    (weight === plan.dominantWeight[target] && source < plan.dominant[target])
+    contribution > plan.dominantWeight[target] ||
+    (contribution === plan.dominantWeight[target] && source < plan.dominant[target])
   ) {
     plan.dominant[target] = source;
-    plan.dominantWeight[target] = weight;
+    plan.dominantWeight[target] = contribution;
   }
 }
 function scatter(map: PhysicalField, plan: TransportPlan, source: number, x: number, y: number) {
@@ -30,7 +38,7 @@ function scatter(map: PhysicalField, plan: TransportPlan, source: number, x: num
   if (nearest < 0) return;
   const distance2 = (i: number) => (mesh.x[i] - x) ** 2 + (mesh.y[i] - y) ** 2;
   if (distance2(nearest) < 0.00000001) {
-    add(plan, source, 0, nearest, weightScale);
+    add(map, plan, source, 0, nearest, weightScale);
     return;
   }
   const candidates = [nearest];
@@ -47,7 +55,7 @@ function scatter(map: PhysicalField, plan: TransportPlan, source: number, x: num
         ? remaining
         : clamp(round((weightScale * scores[n]) / total), 0, remaining);
     remaining -= weight;
-    add(plan, source, n, candidates[n], weight);
+    add(map, plan, source, n, candidates[n], weight);
   }
 }
 export function buildTransportPlan(map: PhysicalField, step: number): TransportPlan {
@@ -55,9 +63,9 @@ export function buildTransportPlan(map: PhysicalField, step: number): TransportP
   const plan: TransportPlan = {
     targets: new Int32Array(count * 4).fill(-1),
     weights: new Int32Array(count * 4),
-    arrivals: new Int32Array(count),
+    arrivals: new Float64Array(count),
     dominant: new Int32Array(count).fill(-1),
-    dominantWeight: new Int32Array(count),
+    dominantWeight: new Float64Array(count),
   };
   for (let i = 0; i < count; i++)
     scatter(

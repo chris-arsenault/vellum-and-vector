@@ -55,7 +55,7 @@ export function moisture(map: PhysicalField, c: PhysicalContext) {
             0,
             720 - truncate((map.OceanDistance[i] * 720) / c.Profile.OceanMoistureDistance)
           );
-    const weather = round(unitNoise(map.mesh.x[i], map.mesh.y[i], c.Seed, 31, 3) * 230);
+    const weather = round(unitNoise(map.mesh.x[i], map.mesh.y[i], c.Seed, 310_000, 3) * 230);
     const shadow = truncate((map.MoistureBarriers[i] * c.Profile.RainShadowStrength) / 1000);
     const thaw = truncate(Math.max(0, map.Temperature[i] - 260) / 3);
     map.Moisture[i] = clamp(80 + exposure + weather + thaw - shadow, 0, 1000);
@@ -81,8 +81,7 @@ export function precipitation(map: PhysicalField, c: PhysicalContext) {
         ? 0
         : clamp(
             truncate(
-              (toUnits(map.Elevation[i] - map.Elevation[upwind]) * 1000) /
-                Math.max(1, truncate(p.ElevationScale / 3))
+              ((map.Elevation[i] - map.Elevation[upwind]) / 1024 / map.mesh.spacing) * 30_000
             ),
             0,
             1000

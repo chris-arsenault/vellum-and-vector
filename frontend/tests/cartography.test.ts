@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 test.use({ actionTimeout: 15000 });
 test("choose landscape parameters and physical history before generating", async ({ page }) => {
-  await createWorld(page);
+  await createWorld(page, 4000, 2000);
   await page.getByText("Configure physical history", { exact: true }).click();
   await page.getByLabel("History starting point").selectOption("young");
   await page.getByRole("button", { name: "Save physical history", exact: true }).click();
@@ -16,6 +16,7 @@ test("choose landscape parameters and physical history before generating", async
   await page.getByLabel("Detail level").selectOption("draft");
   await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
   await expect(page.locator(".job-row strong").first()).toHaveText("completed", { timeout: 90000 });
+  await page.screenshot({ path: "test-results/cartographic-landscape.png" });
   await expect(
     page.getByRole("button", { name: "Save physical history", exact: true })
   ).toBeDisabled();
@@ -77,11 +78,11 @@ test("develop a building interior and draw rooms in its located space", async ({
 });
 const tool = (page: Page, name: string) =>
   page.getByRole("toolbar", { name: "Map tools" }).getByRole("button", { name, exact: true });
-async function createWorld(page: Page) {
+async function createWorld(page: Page, width = 1, height = 1) {
   await page.goto("/");
   await page.getByLabel("World name").fill("Cartographer's desk");
-  await page.getByLabel("Width · km").fill("1");
-  await page.getByLabel("Height · km").fill("1");
+  await page.getByLabel("Width · km").fill(String(width));
+  await page.getByLabel("Height · km").fill(String(height));
   await page.getByRole("button", { name: "Create world", exact: true }).click();
   await expect(map(page)).toBeVisible();
 }

@@ -113,7 +113,8 @@ function addSource(
   target: number,
   weight: number
 ) {
-  for (const name of weighted) a[name][target] += map[name][source] * weight;
+  const areaWeight = (weight * map.mesh.areas[source]) / map.mesh.areas[target];
+  for (const name of weighted) a[name][target] += map[name][source] * areaWeight;
   for (const name of maxima) a[name][target] = Math.max(a[name][target], map[name][source]);
   addAssembly(a, map, source, target, weight);
   addSuture(a, map, source, target, weight);
@@ -133,7 +134,7 @@ function finalize(
   isExtensive: boolean
 ): number {
   if (arrival <= 0) return fresh;
-  if (isExtensive && boundary === 1 && arrival > weightScale) return truncate(sum / weightScale);
+  if (isExtensive) return sum / weightScale;
   if (boundary === 2 && arrival < weightScale)
     return truncate((sum + fresh * (weightScale - arrival)) / weightScale);
   return truncate(sum / arrival);

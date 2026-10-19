@@ -5,15 +5,24 @@ import type { PhysicalProfile } from "./profile";
 import { units, truncate } from "./math";
 import { Landform as L } from "./codes";
 import { measureSlopes } from "./geography";
+import { nearestTriangle } from "./mesh";
 
-function shape(map: PhysicalField, i: number) {
+function shape(map: PhysicalField, i: number, radius: number) {
   let higher = 0,
     lower = 0,
     highest = -(2 ** 63);
   for (let edge = 0; edge < 3; edge++) {
-    const j = map.mesh.neighbors[i * 3 + edge];
+    const at = i * 3 + edge;
+    let j = nearestTriangle(
+      map.mesh,
+      map.mesh.x[i] + map.mesh.edgeX[at] * radius,
+      map.mesh.y[i] + map.mesh.edgeY[at] * radius
+    );
+    if (j === i) j = map.mesh.neighbors[at];
     if (j < 0) continue;
-    const height = map.Elevation[j];
+    const distance = Math.hypot(map.mesh.x[i] - map.mesh.x[j], map.mesh.y[i] - map.mesh.y[j]);
+    const height =
+      map.Elevation[i] + (map.Elevation[j] - map.Elevation[i]) * Math.min(1, radius / distance);
     if (height > map.Elevation[i]) higher++;
     if (height < map.Elevation[i]) lower++;
     highest = Math.max(highest, height);
@@ -45,13 +54,21 @@ function historical(
   if (map.ImpactExcavation[i] >= units(p.ImpactLandformMinimumExcavation) && s.higher >= 2)
     return L.ImpactBasin;
   return map.CumulativeGlacialDeposition[i] >= units(p.OutwashMinimumGlacialDeposition) &&
-    map.Slope[i] <= units(p.PlainSlopeThreshold)
+    map.Slope[i] <= p.PlainSlopeThreshold
     ? L.OutwashPlain
     : 0;
 }
 function hasDrop(map: PhysicalField, p: PhysicalProfile, i: number): boolean {
   const target = map.FlowTargets[i];
-  return target >= 0 && map.Elevation[i] - map.Elevation[target] >= units(p.WaterfallMinimumDrop);
+  if (target < 0) return false;
+  const distance = Math.hypot(
+    map.mesh.x[i] - map.mesh.x[target],
+    map.mesh.y[i] - map.mesh.y[target]
+  );
+  return (
+    ((map.Elevation[i] - map.Elevation[target]) / distance) * p.WaterfallEvaluationLength >=
+    units(p.WaterfallMinimumDrop)
+  );
 }
 function waterfall(map: PhysicalField, p: PhysicalProfile, i: number): boolean {
   if (map.RiverOrders[i] <= 0) return false;
@@ -65,7 +82,7 @@ function waterfall(map: PhysicalField, p: PhysicalProfile, i: number): boolean {
 function ridge(map: PhysicalField, p: PhysicalProfile, i: number): boolean {
   return (
     map.Elevation[i] >= units(p.RidgeElevationThreshold) &&
-    map.Slope[i] >= units(p.RidgeSlopeThreshold) &&
+    map.Slope[i] >= p.RidgeSlopeThreshold &&
     (map.RidgeInfluence[i] >= Math.fround(0.26) ||
       map.Uplift[i] >= Math.fround(0.42) ||
       map.TectonicActivityHistory[i] >= p.InheritedRidgeActivityThreshold)
@@ -81,7 +98,7 @@ function valley(
     map.RiverOrders[i] > 0 ||
     map.CumulativeFluvialErosion[i] >= units(p.AncestralValleyMinimumErosion) ||
     (s.higher >= 2 &&
-      map.Slope[i] > units(p.PlainSlopeThreshold) &&
+      map.Slope[i] > p.PlainSlopeThreshold &&
       map.FlowAccumulation[i] >= truncate(p.RiverAccumulationThreshold / 3))
   );
 }
@@ -116,10 +133,10 @@ function relief(
   if (summit) return summit;
   if (ridge(map, p, i)) return L.Ridge;
   if (valley(map, p, i, s)) return L.Valley;
-  return map.Slope[i] <= units(p.PlainSlopeThreshold) ? L.Plain : L.Slope;
+  return map.Slope[i] <= p.PlainSlopeThreshold ? L.Plain : L.Slope;
 }
 function classify(map: PhysicalField, p: PhysicalProfile, i: number): number {
-  const s = shape(map, i),
+  const s = shape(map, i, p.LandformNeighborhoodRadius),
     preserved = retained(map, p, i);
   if (preserved !== 0) return preserved;
   const history = historical(map, p, i, s);
@@ -127,7 +144,7 @@ function classify(map: PhysicalField, p: PhysicalProfile, i: number): number {
   if (waterfall(map, p, i)) return L.Waterfall;
   if (
     map.RiverOrders[i] > 0 &&
-    map.Slope[i] >= units(p.GorgeMinimumSlope) &&
+    map.Slope[i] >= p.GorgeMinimumSlope &&
     map.CumulativeFluvialErosion[i] >= units(p.GorgeMinimumIncision)
   )
     return L.Gorge;

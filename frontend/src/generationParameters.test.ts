@@ -5,7 +5,7 @@ import { createWorld, session } from "./atlasState";
 import { generationSnapshot } from "./generationJobs";
 
 it("maps creator controls to native physics with declared units", () => {
-  const profile = atlasPhysicalProfile(16384, {
+  const profile = atlasPhysicalProfile({
     continents: 7,
     provinces: 30,
     landFraction: 0.3,
@@ -23,7 +23,12 @@ it("maps creator controls to native physics with declared units", () => {
   expect(profile.SeaLevel * profile.ElevationScale).toBe(100);
 });
 it("changes real geography, retains chosen inputs, and rejects invalid settings", async () => {
-  const world = createWorld({ name: "Controls", seed: 104729, width: 100000, height: 100000 }),
+  const world = createWorld({
+      name: "Controls",
+      seed: 104729,
+      width: 4_000_000,
+      height: 2_000_000,
+    }),
     source = structuredClone(session(world.id).snapshot);
   source.world.epochs = source.world.epochs.slice(-1);
   const areaId = Object.keys(world.areas)[0],

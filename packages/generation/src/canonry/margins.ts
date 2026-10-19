@@ -8,13 +8,13 @@ const unreachable = 2147483647;
 function expand(
   map: PhysicalField,
   queue: number[],
-  distance: Int32Array,
+  distance: Float64Array,
   kind: Int32Array | null,
   reach: number
 ) {
   for (let head = 0; head < queue.length; head++) {
     const i = queue[head],
-      next = distance[i] + 1;
+      next = distance[i] + map.mesh.spacing;
     if (next > reach) continue;
     for (let edge = 0; edge < 3; edge++) {
       const j = map.mesh.neighbors[i * 3 + edge];
@@ -28,7 +28,7 @@ function expand(
 export function tectonicMargins(map: PhysicalField, context: PhysicalContext) {
   const count = map.mesh.count,
     p = context.Profile;
-  const distance = new Int32Array(count).fill(unreachable),
+  const distance = new Float64Array(count).fill(unreachable),
     spreading = distance.slice();
   const kind = new Int32Array(count),
     frontier: number[] = [],
@@ -52,7 +52,7 @@ function assignMarginsAndAge(
   map: PhysicalField,
   context: PhysicalContext,
   kind: Int32Array,
-  spreading: Int32Array
+  spreading: Float64Array
 ) {
   const p = context.Profile;
   let oldest = 0;

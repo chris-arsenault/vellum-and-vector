@@ -13,7 +13,7 @@ function landMaterial(map: PhysicalField, i: number): number {
 function exposedMaterial(map: PhysicalField, i: number): number {
   if ([Landform.Gorge, Landform.Waterfall].includes(map.LandformCodes[i])) return 0;
   if ([Landform.Peak, Landform.Ridge].includes(map.LandformCodes[i]))
-    return map.Slope[i] >= 85 * 1024 ? 0 : 1;
+    return map.Slope[i] >= 0.0085 ? 0 : 1;
   if (map.Temperature[i] <= 250) return map.Moisture[i] >= 560 ? 4 : 2;
   return map.Moisture[i] >= 330 ? 3 : 2;
 }

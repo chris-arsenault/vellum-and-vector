@@ -10,6 +10,7 @@ export interface BoundaryComponent {
   pair: number;
   prominence: number;
   count: number;
+  area: number;
   totalWeight: number;
   shortening: number;
   collision: number;
@@ -21,19 +22,20 @@ export interface BoundaryComponent {
   y: number;
 }
 export interface OrogenicFrame {
-  distance: Int32Array;
+  distance: Float64Array;
   source: Int32Array;
 }
 const active = (map: PhysicalField, i: number, minimum: number) =>
   map.TectonicBoundaryCodes[i] !== 0 && map.TectonicStrain[i] >= minimum;
 function addCell(c: BoundaryComponent, map: PhysicalField, i: number) {
   c.count++;
+  c.area += map.mesh.areas[i];
   c.collision += map.CrustCollisionIntensity[i];
   c.suture += map.CrustSutureStrength[i];
   c.strain += map.TectonicStrain[i];
   c.continental += map.CrustContinentalFraction[i];
   c.maximumContinental = Math.max(c.maximumContinental, map.CrustContinentalFraction[i] / 1000);
-  c.shortening += toUnits(map.ConvergentCrustSurplus[i]);
+  c.shortening += toUnits(map.ConvergentCrustSurplus[i]) * map.mesh.areas[i];
   c.x += map.mesh.x[i];
   c.y += map.mesh.y[i];
 }
@@ -83,6 +85,7 @@ export function discoverComponents(
       pair: map.TectonicBoundaryPairIds[i],
       prominence: 0,
       count: 0,
+      area: 0,
       totalWeight: 0,
       shortening: 0,
       collision: 0,
@@ -100,9 +103,9 @@ export function discoverComponents(
   return components;
 }
 function componentScore(c: BoundaryComponent, context: PhysicalContext) {
-  const variation = hashUnit(context.EpochStableSeed ^ 0x35a7, c.pair, c.x ^ (c.y << 8));
+  const variation = hashUnit(context.EpochStableSeed ^ 0x35a7, c.pair, c.code);
   return (
-    Math.log2(c.count + 1) *
+    Math.log2(c.area / 100_000_000 + 1) *
     (0.7 + variation * 0.6) *
     (0.55 + c.strain) *
     (1 + Math.max(c.collision, c.suture) * 3.2) *
@@ -115,7 +118,7 @@ export function rankComponents(components: BoundaryComponent[], context: Physica
   const ranked = components
     .filter(
       (c) =>
-        c.code === 1 && c.count >= p.OrogenicMinimumComponentSize && c.maximumContinental >= 0.35
+        c.code === 1 && c.area >= p.OrogenicMinimumComponentArea && c.maximumContinental >= 0.35
     )
     .map((c) => ({ c, score: componentScore(c, context) }))
     .sort((a, b) => b.score - a.score || a.c.pair - b.c.pair);
@@ -133,12 +136,12 @@ export function propagateInfluence(
   components: BoundaryComponent[],
   ids: Int32Array
 ): OrogenicFrame {
-  const distance = new Int32Array(map.mesh.count).fill(2147483647),
+  const distance = new Float64Array(map.mesh.count).fill(Infinity),
     source = new Int32Array(map.mesh.count).fill(-1);
   const queue: number[] = [];
   for (let i = 0; i < ids.length; i++) {
     const id = ids[i];
-    if (id < 0 || components[id].count < context.Profile.OrogenicMinimumComponentSize) continue;
+    if (id < 0 || components[id].area < context.Profile.OrogenicMinimumComponentArea) continue;
     map.OrogenicComponentIds[i] = id;
     map.OrogenicSystemProminence[i] = components[id].prominence;
     distance[i] = 0;
@@ -147,7 +150,7 @@ export function propagateInfluence(
   }
   for (let head = 0; head < queue.length; head++) {
     const i = queue[head],
-      next = distance[i] + 1;
+      next = distance[i] + map.mesh.spacing;
     if (next > context.Profile.OrogenicInfluenceReach) continue;
     for (let edge = 0; edge < 3; edge++) {
       const j = map.mesh.neighbors[i * 3 + edge];

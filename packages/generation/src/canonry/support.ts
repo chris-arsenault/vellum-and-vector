@@ -3,6 +3,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, crustHeight, ratio, toUnits, units } from "./math";
 import { rebuild } from "./surface";
+import { smoothMetric } from "./metricSmoothing";
 
 export function crustalSupport(map: PhysicalField, context: PhysicalContext, includeIce: boolean) {
   const p = context.Profile;
@@ -20,28 +21,12 @@ export function crustalSupport(map: PhysicalField, context: PhysicalContext, inc
     map.CrustSupportTarget[i] = clamp(airy - subsidence - load, units(-4000), units(4000));
   }
 }
-function relaxed(map: PhysicalField, current: Float64Array, i: number, relaxation: number): number {
-  let total = 0,
-    count = 0;
-  for (let edge = 0; edge < 3; edge++) {
-    const j = map.mesh.neighbors[i * 3 + edge];
-    if (j >= 0) {
-      total += current[j];
-      count++;
-    }
-  }
-  if (count === 0) return current[i];
-  return current[i] + Math.trunc(((Math.trunc(total / count) - current[i]) * relaxation) / 1000);
-}
 export function lithosphericFlexure(map: PhysicalField, context: PhysicalContext) {
-  const p = context.Profile;
-  let current = map.CrustSupportTarget.slice(),
-    next = new Float64Array(current.length);
-  for (let iteration = 0; iteration < p.LithosphericFlexureIterations; iteration++) {
-    for (let i = 0; i < current.length; i++)
-      next[i] = relaxed(map, current, i, p.LithosphericFlexureRelaxationPerMille);
-    [current, next] = [next, current];
-  }
+  const current = smoothMetric(
+    map.mesh,
+    map.CrustSupportTarget,
+    context.Profile.LithosphericFlexureLength
+  );
   for (let i = 0; i < current.length; i++) {
     if (!map.CrustSupportInitialized) {
       map.CrustSupportElevation[i] = current[i];

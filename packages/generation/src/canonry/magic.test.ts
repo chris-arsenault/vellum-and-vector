@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import { canonryMagicPresets, magicSystemSchema } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
-import { createMesh } from "./mesh";
+import { createWorldMesh } from "./worldMesh";
 import { createField } from "./field";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { initializeMagic, advectMagic } from "./magicState";
@@ -12,13 +12,11 @@ import { classifyMagicFeatures } from "./magicFeatures";
 
 function scenario() {
   const state = landscape(),
-    map = createField(createMesh(256, 3));
+    map = createField(createWorldMesh([-100_000, -100_000, 100_000, 100_000], 256, 20_000));
   state.domain.world.magicSystems = canonryMagicPresets();
   state.physical = {
     map,
-    profile: atlasPhysicalProfile(256),
-    center: [0, 0],
-    metresPerStep: 1,
+    profile: atlasPhysicalProfile(),
     samples: new Int32Array(state.surface.active.length),
     fixed: [],
     inherited: false,
@@ -27,8 +25,8 @@ function scenario() {
   map.FractureConductance.fill(800);
   map.HeatSourceDensity[0] = 1000;
   for (let i = 0; i < map.mesh.count; i++) {
-    map.Temperature[i] = Math.round(300 + map.mesh.x[i] * 5);
-    map.Elevation[i] = Math.round(map.mesh.x[i] * 1024);
+    map.Temperature[i] = Math.round(300 + map.mesh.x[i] * 0.0005);
+    map.Elevation[i] = Math.round(map.mesh.x[i] * 0.01 * 1024);
     map.WaterKindCodes[i] = map.mesh.x[i] < 0 ? 1 : 0;
     map.WaterDepths[i] = Math.max(0, -map.Elevation[i]);
     map.IceThickness[i] = map.Temperature[i] < 300 ? 400 : 0;
@@ -59,7 +57,7 @@ it("uses configurable fracture transport, heating, melting and rock hardening wi
   const warm = map.Temperature.slice();
   magicThermalFeedback(state);
   expect(map.Temperature).toEqual(warm);
-  field.definition.parameters.baseCost = 1000;
+  field.definition.parameters.baseCost = 1_000_000;
   propagateMagic(state, field, 42, 1);
   expect(field.intensity.filter((value) => value > 0).length).toBe(
     field.source.filter((value) => value > 0).length

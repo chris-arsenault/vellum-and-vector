@@ -17,7 +17,6 @@ const integerFields = [
   "CrustContinentalFraction",
   "AdvectionSourceIndex",
   "MarginCodes",
-  "OceanMarginDistance",
   "CoastalMarginCodes",
   "CrustAge",
   "ContinentalPotential",
@@ -42,13 +41,9 @@ const integerFields = [
   "OceanCurrentStrength",
   "OceanCurrentHeat",
   "WaveExposure",
-  "OceanDistance",
   "Rainfall",
   "Snowfall",
   "SeaIceSuitability",
-  "MaximumIceThickness",
-  "MaximumIceFlux",
-  "MaximumGroundedIceFlux",
   "TectonicActivityHistory",
   "WaveExposureHistory",
   "GeothermalHistory",
@@ -67,7 +62,6 @@ const integerFields = [
   "WaterBodyIds",
   "DrainageBasinIds",
   "FlowEdges",
-  "FlowAccumulation",
   "RiverOrders",
   "RiverChannelStrength",
   "RiverChannelOrders",
@@ -79,8 +73,6 @@ const integerFields = [
   "LandmassClassCodes",
   "ContinentalGroupIds",
   "BathymetricZoneCodes",
-  "IceThickness",
-  "IceFlux",
   "IceFlowTargets",
   "IceBalance",
   "GroundedIce",
@@ -121,10 +113,35 @@ const elevationFields = [
   "LakeOverflow",
 ] as const;
 const floatFields = ["RidgeInfluence", "Uplift"] as const;
+const metricFields = [
+  "OceanMarginDistance",
+  "OceanDistance",
+  "FlowAccumulation",
+  "CatchmentArea",
+  "RiverWidth",
+  "RiverDepth",
+  "IceFlux",
+  "MaximumIceFlux",
+  "MaximumGroundedIceFlux",
+  "IceThickness",
+  "MaximumIceThickness",
+] as const;
 export type PhysicalField = Record<(typeof integerFields)[number], Int32Array> &
   Record<(typeof elevationFields)[number], Float64Array> &
+  Record<(typeof metricFields)[number], Float64Array> &
   Record<(typeof floatFields)[number], Float32Array> & {
     mesh: PhysicalMesh;
+    events: {
+      id: string;
+      kind: "impact" | "plume" | "volcano";
+      x: number;
+      y: number;
+      radius: number;
+      epoch: number;
+      strength: number;
+      caldera?: boolean;
+    }[];
+    faults: { id: string; coordinates: [number, number][]; width: number }[];
     AvailableFacts: Set<string>;
     EffectiveSeaLevel: number;
     BaseSeaLevel: number;
@@ -146,11 +163,14 @@ export function createField(mesh: PhysicalMesh): PhysicalField {
   const arrays = {
     ...Object.fromEntries(integerFields.map((name) => [name, new Int32Array(mesh.count)])),
     ...Object.fromEntries(elevationFields.map((name) => [name, new Float64Array(mesh.count)])),
+    ...Object.fromEntries(metricFields.map((name) => [name, new Float64Array(mesh.count)])),
     ...Object.fromEntries(floatFields.map((name) => [name, new Float32Array(mesh.count)])),
   };
   const field = {
     ...arrays,
     mesh,
+    events: [] as PhysicalField["events"],
+    faults: [] as PhysicalField["faults"],
     AvailableFacts: new Set<string>(),
     EffectiveSeaLevel: 0,
     BaseSeaLevel: 0,

@@ -2,8 +2,9 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
-import { clamp, truncate, units } from "./math";
-import { saturatingAdd, sourceToOutletOrder } from "./flowGraph";
+import { clamp } from "./math";
+import { contributingArea, sourceToOutletOrder } from "./flowGraph";
+import { depthRateToDischarge } from "./dimensions";
 import { edgeLeadingTo } from "./mesh";
 
 function completeChannels(map: PhysicalField, order: number[], channels: Uint8Array) {
@@ -19,7 +20,7 @@ function completeChannels(map: PhysicalField, order: number[], channels: Uint8Ar
 function buildChannels(map: PhysicalField, p: PhysicalProfile, order: number[]): Uint8Array {
   let largest = 0;
   for (const basin of map.DrainageBasinIds) largest = Math.max(largest, basin);
-  const maximum = new Int32Array(largest + 1),
+  const maximum = new Float64Array(largest + 1),
     channels = new Uint8Array(map.mesh.count);
   for (let i = 0; i < map.mesh.count; i++) {
     const basin = map.DrainageBasinIds[i];
@@ -32,16 +33,16 @@ function buildChannels(map: PhysicalField, p: PhysicalProfile, order: number[]):
         basin > 0 && basin < maximum.length ? maximum[basin] : p.RiverAccumulationThreshold;
     if (discharge < p.RiverMinimumBasinDischarge) continue;
     const threshold = clamp(
-      Math.min(2147483647, truncate((discharge * p.RiverBasinHeadwaterFraction) / 1000)),
+      (discharge * p.RiverBasinHeadwaterFraction) / 1000,
       p.RiverMinimumAccumulationThreshold,
       p.RiverAccumulationThreshold
     );
     const factor = clamp(
-      Math.sqrt(Math.max(0, map.Slope[i]) / Math.max(1, units(p.ChannelReferenceSlope))),
+      Math.sqrt(Math.max(0, map.Slope[i]) / Math.max(0.000001, p.ChannelReferenceSlope)),
       p.ChannelSlopeFloor / 1000,
       p.ChannelSlopeCeiling / 1000
     );
-    if (truncate(map.FlowAccumulation[i] * factor) >= threshold) channels[i] = 1;
+    if (map.FlowAccumulation[i] * factor >= threshold) channels[i] = 1;
   }
   completeChannels(map, order, channels);
   return channels;
@@ -93,7 +94,7 @@ function pruneHeadwaters(map: PhysicalField, p: PhysicalProfile, channels: Uint8
     if (!channels[i] || incoming[i] !== 0 || protectedStarts[i]) continue;
     const reach = headwaterReach(map, channels, incoming, protectedStarts, i);
     if (
-      reach.length < p.MinimumRiverReachTriangles &&
+      reach.length * map.mesh.spacing < p.MinimumRiverReachLength &&
       !shortReachSupported(map, p, channels, incoming, reach)
     )
       for (const member of reach) channels[member] = 0;
@@ -140,16 +141,16 @@ function spineMasks(map: PhysicalField) {
   }
 }
 export function riverNetwork(map: PhysicalField, c: PhysicalContext) {
-  map.FlowAccumulation.set(map.Runoff);
+  for (let i = 0; i < map.mesh.count; i++)
+    map.FlowAccumulation[i] = depthRateToDischarge(map.Runoff[i], map.mesh.areas[i]);
+  map.CatchmentArea.set(contributingArea(map.FlowTargets, map.mesh.areas));
   map.RiverOrders.fill(0);
   const order = sourceToOutletOrder(map);
   for (const i of order) {
     const target = map.FlowTargets[i];
-    if (target >= 0)
-      map.FlowAccumulation[target] = saturatingAdd(
-        map.FlowAccumulation[target],
-        map.FlowAccumulation[i]
-      );
+    if (map.LakeOutletTargets[i] >= 0)
+      map.FlowAccumulation[i] = Math.min(map.FlowAccumulation[i], map.LakeOverflow[i]);
+    if (target >= 0) map.FlowAccumulation[target] += map.FlowAccumulation[i];
   }
   const channels = buildChannels(map, c.Profile, order);
   pruneHeadwaters(map, c.Profile, channels);

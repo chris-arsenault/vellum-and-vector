@@ -2,7 +2,7 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
-import { buoyancy, clamp, thickness, toUnits, truncate, units } from "./math";
+import { buoyancy, clamp, thickness, toUnits, units } from "./math";
 import { deposit } from "./surface";
 
 const smooth = (value: number) => {
@@ -30,7 +30,7 @@ function seedOceanCoast(map: PhysicalField): number[] {
     if (map.WaterKindCodes[i] !== 1) continue;
     const margin = adjacentLandMargin(map, i);
     if (margin < 0) continue;
-    map.OceanMarginDistance[i] = 1;
+    map.OceanMarginDistance[i] = map.mesh.spacing;
     map.CoastalMarginCodes[i] = margin;
     queue.push(i);
   }
@@ -59,7 +59,7 @@ function marginFrame(map: PhysicalField) {
     for (let edge = 0; edge < 3; edge++) {
       const j = map.mesh.neighbors[i * 3 + edge];
       if (j < 0 || map.OceanMarginDistance[j] !== 0 || map.WaterKindCodes[j] !== 1) continue;
-      map.OceanMarginDistance[j] = map.OceanMarginDistance[i] + 1;
+      map.OceanMarginDistance[j] = map.OceanMarginDistance[i] + map.mesh.spacing;
       map.CoastalMarginCodes[j] = map.CoastalMarginCodes[i];
       queue.push(j);
     }
@@ -67,9 +67,10 @@ function marginFrame(map: PhysicalField) {
 }
 function convergentDepth(p: PhysicalProfile, distance: number, current: number): number {
   const ambient = Math.max(p.ContinentalSlopeDepth, p.OceanicSubsidenceDepth + 200);
-  if (distance <= 5)
-    return Math.max(current, ambient + p.ConvergentTrenchDepth * smooth(distance / 5));
-  const recovery = clamp((distance - 5) / p.ContinentalSlopeWidth, 0, 1);
+  const trenchWidth = 50_000;
+  if (distance <= trenchWidth)
+    return Math.max(current, ambient + p.ConvergentTrenchDepth * smooth(distance / trenchWidth));
+  const recovery = clamp((distance - trenchWidth) / p.ContinentalSlopeWidth, 0, 1);
   return recovery >= 1
     ? current
     : Math.max(current, ambient + p.ConvergentTrenchDepth * (1 - smooth(recovery)));
@@ -87,10 +88,10 @@ function desiredDepth(
   if (distance <= width) return Math.min(current, 12 + (depth - 12) * smooth(distance / width));
   const step =
     margin === 3
-      ? p.RiftedMarginMaximumStep
+      ? p.RiftedMarginMaximumGradient
       : margin === 4
-        ? p.TransformMarginMaximumStep
-        : p.PassiveMarginMaximumStep;
+        ? p.TransformMarginMaximumGradient
+        : p.PassiveMarginMaximumGradient;
   const oceanward = distance - width,
     ramp = p.ContinentalRiseMinimumWidth;
   const rise =
@@ -119,7 +120,7 @@ function capacity(map: PhysicalField, p: PhysicalProfile, i: number): number {
   const margin = map.CoastalMarginCodes[i],
     distance = map.OceanMarginDistance[i];
   const width = margin === 1 ? p.PassiveShelfWidth : p.RiftedShelfWidth;
-  const step = margin === 1 ? p.PassiveMarginMaximumStep : p.RiftedMarginMaximumStep;
+  const step = margin === 1 ? p.PassiveMarginMaximumGradient : p.RiftedMarginMaximumGradient;
   const rise =
     p.ContinentalRiseMinimumWidth +
     Math.ceil(Math.max(0, p.OceanicSubsidenceDepth + 200 - p.ContinentalShelfDepth) / step);
@@ -133,12 +134,14 @@ function capacity(map: PhysicalField, p: PhysicalProfile, i: number): number {
 }
 export function marineSedimentation(map: PhysicalField, c: PhysicalContext) {
   if (map.SedimentExportedTotal <= 0) return;
-  const capacities = Float64Array.from({ length: map.mesh.count }, (_, i) =>
-    capacity(map, c.Profile, i)
+  const capacities = Float64Array.from(
+    { length: map.mesh.count },
+    (_, i) => (capacity(map, c.Profile, i) / 1024) * map.mesh.areas[i]
   );
   let remainingCapacity = capacities.reduce((sum, value) => sum + value, 0);
-  let budget = Math.min(map.SedimentExportedTotal, remainingCapacity),
-    deposited = 0;
+  const exported = map.SedimentExportedTotal;
+  const initialBudget = Math.min(exported, remainingCapacity);
+  let budget = initialBudget;
   for (let i = 0; i < map.mesh.count; i++) {
     const available = capacities[i];
     if (available <= 0 || budget <= 0) {
@@ -148,12 +151,13 @@ export function marineSedimentation(map: PhysicalField, c: PhysicalContext) {
     const amount =
       remainingCapacity <= 0
         ? 0
-        : Math.min(available, truncate((budget * available) / remainingCapacity));
+        : Math.min(available, budget, (budget * available) / remainingCapacity);
     if (amount > 0) {
-      deposited += deposit(map, i, amount);
-      budget -= amount;
+      const deposited =
+        (deposit(map, i, (amount * 1024) / map.mesh.areas[i]) / 1024) * map.mesh.areas[i];
+      budget -= Math.min(budget, deposited);
     }
     remainingCapacity -= available;
   }
-  map.SedimentExportedTotal -= deposited;
+  map.SedimentExportedTotal = exported - initialBudget + budget;
 }

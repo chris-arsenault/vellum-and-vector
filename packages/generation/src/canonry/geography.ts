@@ -3,7 +3,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { units } from "./math";
 
-function retainInheritedDistance(map: PhysicalField, inherited: Int32Array | null) {
+function retainInheritedDistance(map: PhysicalField, inherited: Float64Array | null) {
   if (!inherited) return;
   for (let i = 0; i < inherited.length; i++)
     if (inherited[i] >= 0 && (map.OceanDistance[i] < 0 || inherited[i] < map.OceanDistance[i]))
@@ -23,7 +23,7 @@ export function oceanDistance(map: PhysicalField) {
     for (let edge = 0; edge < 3; edge++) {
       const j = map.mesh.neighbors[i * 3 + edge];
       if (j < 0 || map.OceanDistance[j] >= 0) continue;
-      map.OceanDistance[j] = map.OceanDistance[i] + 1;
+      map.OceanDistance[j] = map.OceanDistance[i] + map.mesh.edgeLength[i * 3 + edge];
       queue.push(j);
     }
   }
@@ -34,7 +34,11 @@ export function measureSlopes(map: PhysicalField) {
     let slope = 0;
     for (let edge = 0; edge < 3; edge++) {
       const j = map.mesh.neighbors[i * 3 + edge];
-      if (j >= 0) slope = Math.max(slope, Math.abs(map.Elevation[i] - map.Elevation[j]));
+      if (j >= 0)
+        slope = Math.max(
+          slope,
+          Math.abs(map.Elevation[i] - map.Elevation[j]) / (1024 * map.mesh.edgeLength[i * 3 + edge])
+        );
     }
     map.Slope[i] = slope;
   }
@@ -53,7 +57,7 @@ export function bathymetry(map: PhysicalField, c: PhysicalContext) {
       const shelf =
         map.Elevation[i] <= map.EffectiveSeaLevel + units(c.Profile.ShelfDepth / 2) &&
         map.OceanDistance[i] >= 0 &&
-        map.OceanDistance[i] <= 18;
+        map.OceanDistance[i] <= 180_000;
       map.BathymetricZoneCodes[i] = shelf ? 1 : 0;
     }
   }
@@ -86,7 +90,8 @@ export function landmasses(map: PhysicalField, c: PhysicalContext) {
   for (let i = 0; i < map.mesh.count; i++) {
     if (!dry(i) || map.LandmassIds[i] !== 0) continue;
     const members = collect(map, i, ++next, map.LandmassIds, dry);
-    const code = members.length >= c.Profile.IslandTriangleThreshold ? 2 : 1;
+    const area = members.reduce((sum, j) => sum + map.mesh.areas[j], 0);
+    const code = area >= c.Profile.IslandAreaThreshold ? 2 : 1;
     for (const j of members) map.LandmassClassCodes[j] = code;
   }
   const shelfFloor = map.EffectiveSeaLevel - units(c.Profile.ShelfBreakDepth);

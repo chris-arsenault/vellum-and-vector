@@ -60,7 +60,7 @@ export async function generateAtlas(
   input = { ...input, parameters: atlasParametersSchema.parse(input.parameters ?? {}) };
   options.progress?.(["prepare"], 0, "Sampling inherited geography");
   const initial = initialState(source, input);
-  const registry = [...processes, ...atlasNativeProcesses(input)]
+  const registry = [...processes, ...atlasNativeProcesses(input, source)]
     .reduce((r, process) => r.register(process), new MapProcessRegistry())
     .register(prepareGeneratedProcess(input.domains));
   const configuration = atlasConfiguration(source, input);

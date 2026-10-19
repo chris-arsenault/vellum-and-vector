@@ -4,44 +4,18 @@ import type { PhysicalContext } from "./context";
 import { clamp, round, units } from "./math";
 import { hashUnit } from "./noise";
 import { Feature } from "./codes";
-import { triangleDistanceSquared } from "./radial";
 import { rebuild } from "./surface";
 
-function nextAlongMotion(map: PhysicalField, current: number, mx: number, my: number): number {
-  let best = current,
-    alignment = 0;
-  for (let edge = 0; edge < 3; edge++) {
-    const j = map.mesh.neighbors[current * 3 + edge];
-    if (j < 0 || j >= map.mesh.contentCount) continue;
-    const dx = Math.fround(map.mesh.x[j] - map.mesh.x[current]),
-      dy = Math.fround(map.mesh.y[j] - map.mesh.y[current]);
-    const score = Math.fround(Math.fround(dx * mx) + Math.fround(dy * my));
-    if (score > alignment) {
-      best = j;
-      alignment = score;
-    }
-  }
-  return best;
-}
 function plumeCenter(
-  map: PhysicalField,
   context: PhysicalContext,
-  root: number,
+  root: { x: number; y: number; id: string },
   sequence: number
-): number {
-  const angle = hashUnit(0x51f3, root, sequence) * Math.PI * 2;
-  const mx = round(Math.cos(angle) * 1000),
-    my = round(Math.sin(angle) * 1000);
-  const steps = round(
-    context.Profile.MantlePlumeDriftPerEpoch * (0.35 + hashUnit(0x2c87, root, sequence) * 0.65)
-  );
-  let current = root;
-  for (let step = 0; step < steps; step++) {
-    const next = nextAlongMotion(map, current, mx, my);
-    if (next === current) break;
-    current = next;
-  }
-  return current;
+): [number, number] {
+  const id = Number(root.id.split(":").at(-1));
+  const angle = hashUnit(0x51f3, id, sequence) * Math.PI * 2;
+  const distance =
+    context.Profile.MantlePlumeDriftPerEpoch * (0.35 + hashUnit(0x2c87, id, sequence) * 0.65);
+  return [root.x + Math.cos(angle) * distance, root.y + Math.sin(angle) * distance];
 }
 function physicalFeatures(
   map: PhysicalField,
@@ -114,15 +88,25 @@ export function volcanicConstruction(map: PhysicalField, context: PhysicalContex
   for (let i = 0; i < map.mesh.count; i++) map.FeatureFlags[i] &= ~clear;
   const sequence = context.IsEvolutionEpoch ? context.EpochIndex + 1 : 0,
     recorded = context.IsEvolutionEpoch ? context.EpochIndex : 0;
-  for (let root = 0; root < map.mesh.count; root++) {
-    const strength = map.MantlePlumeRootStrength[root];
+  for (const root of map.events.filter((event) => event.kind === "plume")) {
+    const strength = root.strength;
     if (strength <= 0) continue;
-    const center = plumeCenter(map, context, root, sequence);
+    const center = plumeCenter(context, root, sequence);
     const caldera =
-      hashUnit(context.Seed ^ 0x2f41, root, sequence) <
+      hashUnit(context.Seed ^ 0x2f41, Number(root.id.split(":").at(-1)), sequence) <
       context.Profile.VolcanicCalderaChance / 1000;
+    map.events.push({
+      id: `volcano:${root.id}:${sequence}`,
+      kind: "volcano",
+      x: center[0],
+      y: center[1],
+      radius: context.Profile.VolcanicConeRadius,
+      epoch: recorded,
+      strength,
+      caldera,
+    });
     for (let i = 0; i < map.mesh.count; i++) {
-      const distance = Math.sqrt(triangleDistanceSquared(map.mesh, i, center));
+      const distance = Math.hypot(map.mesh.x[i] - center[0], map.mesh.y[i] - center[1]);
       if (distance <= context.Profile.MantlePlumeRadius)
         constructTriangle(map, context, i, distance, strength, recorded, caldera);
     }

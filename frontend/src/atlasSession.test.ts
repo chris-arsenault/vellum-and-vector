@@ -149,7 +149,7 @@ it("instantiates a detached template with independent identities and a rotated m
   expect(definition.features[0].geometry).toEqual(rectangle([0, 0, 10, 10]));
 });
 it("runs a causal landscape without services and retains authored features", async () => {
-  const initial = world(),
+  const initial = createWorld({ name: "Atlas", seed: 104729, width: 4_000_000, height: 2_000_000 }),
     areaId = Object.keys(initial.areas)[0];
   const markerId = crypto.randomUUID();
   commitCommand(

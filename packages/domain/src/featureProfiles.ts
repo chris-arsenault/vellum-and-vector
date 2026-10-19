@@ -12,6 +12,8 @@ const stations = [
   "discharges",
   "junctionInflows",
   "widths",
+  "depths",
+  "catchmentAreas",
   "floorElevations",
   "floodDepths",
 ];
@@ -107,7 +109,16 @@ function populateProfiles(
         "station_profile",
         `Channel ${channel} needs finite numeric samples.`
       );
-      if (["discharges", "junctionInflows", "widths", "floodDepths"].includes(channel))
+      if (
+        [
+          "discharges",
+          "junctionInflows",
+          "widths",
+          "depths",
+          "catchmentAreas",
+          "floodDepths",
+        ].includes(channel)
+      )
         requireThat(
           provided.every((v) => typeof v === "number" && v >= 0),
           "station_profile",

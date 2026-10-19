@@ -48,6 +48,12 @@ export function putGenerated(state: GenerationState, feature: AtlasFeature) {
   state.domain.world.features[feature.id] = feature;
   return true;
 }
+function networkHeight(feature: AtlasFeature, index: number, coordinate: number[]) {
+  const elevations = feature.attributes.elevations;
+  return Array.isArray(elevations)
+    ? Number(index === 0 ? elevations[0] : elevations.at(-1))
+    : (coordinate[2] ?? 0);
+}
 export function putGeneratedNetwork(state: GenerationState, feature: AtlasFeature) {
   if (!putGenerated(state, feature) || feature.geometry.type !== "LineString") return;
   const world = state.domain.world,
@@ -66,7 +72,11 @@ export function putGeneratedNetwork(state: GenerationState, feature: AtlasFeatur
     world.networkNodes[ids[index]] = {
       id: ids[index],
       kind: feature.kind,
-      position: { x: p[0], y: p[1], z: 0 },
+      position: {
+        x: p[0],
+        y: p[1],
+        z: networkHeight(feature, index, p),
+      },
       spaceId: state.domain.scope.spaceId,
       waterLevel: null,
     };
@@ -78,7 +88,9 @@ export function putGeneratedNetwork(state: GenerationState, feature: AtlasFeatur
     end: ids[1],
     geometry: feature.geometry,
     flow: Number(feature.attributes.discharge ?? 0),
-    endFlow: null,
+    endFlow: Array.isArray(feature.attributes.discharges)
+      ? Number(feature.attributes.discharges.at(-1))
+      : null,
   };
 }
 export function prepareGeneratedProcess(domains: string[]): MapProcess {

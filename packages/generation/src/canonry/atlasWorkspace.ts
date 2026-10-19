@@ -10,11 +10,12 @@ import {
 import type { GenerationState } from "../process";
 import { authoredFields } from "../mapAuthored";
 import { createField, type PhysicalField } from "./field";
-import { createMesh, nearestTriangle } from "./mesh";
+import { nearestTriangle } from "./mesh";
+import { createWorldMesh } from "./worldMesh";
 import { atlasPhysicalProfile, atlasQuality } from "./atlasProfile";
 import { atlasChannels, type ChannelBinding } from "./atlasChannels";
 import type { PhysicalProfile } from "./profile";
-import { clamp, units } from "./math";
+import { units } from "./math";
 import { nativeContracts } from "./contracts";
 import type { AtlasParameters } from "../atlasParameters";
 
@@ -22,16 +23,14 @@ export interface AtlasPhysicalWorkspace {
   magic?: import("./magicState").MagicWorkspace;
   map: PhysicalField;
   profile: PhysicalProfile;
-  center: [number, number];
-  metresPerStep: number;
   samples: Int32Array;
   fixed: { binding: ChannelBinding; values: Float64Array }[];
   inherited: boolean;
 }
 export function nativePosition(work: AtlasPhysicalWorkspace, i: number): Position {
   return {
-    x: work.center[0] + work.map.mesh.x[i] * work.metresPerStep,
-    y: work.center[1] + work.map.mesh.y[i] * work.metresPerStep,
+    x: work.map.mesh.origin[0] + work.map.mesh.x[i],
+    y: work.map.mesh.origin[1] + work.map.mesh.y[i],
     z: 0,
   };
 }
@@ -86,7 +85,10 @@ function inheritNumerical(state: GenerationState, work: AtlasPhysicalWorkspace) 
   inheritChannels(surface, work, parent, datum);
   map.CrustSupportInitialized = true;
   initializeInheritedMaterial(map, surface);
-  map.SedimentProducedTotal = map.CumulativeDeposition.reduce((a, b) => a + b, 0);
+  map.SedimentProducedTotal = map.CumulativeDeposition.reduce(
+    (a, b, i) => a + (b / 1024) * map.mesh.areas[i],
+    0
+  );
   map.SedimentDepositedTotal = map.SedimentProducedTotal;
   for (const contract of Object.values(nativeContracts))
     for (const fact of contract.produces) map.AvailableFacts.add(fact);
@@ -109,10 +111,9 @@ function inheritChannels(
         nativePosition(work, i),
         binding.unit === "category"
       );
-      const scale = binding.name === "oceanDistance" ? work.metresPerStep : binding.scale;
-      map[binding.native][i] = Math.round(
-        (value - (binding.offset ?? 0) + (binding.datum ? datum : 0)) / scale
-      );
+      const native = (value - (binding.offset ?? 0) + (binding.datum ? datum : 0)) / binding.scale;
+      map[binding.native][i] =
+        map[binding.native] instanceof Int32Array ? Math.round(native) : native;
     }
   }
 }
@@ -120,7 +121,7 @@ function fixedInheritedBoundary(state: GenerationState, work: AtlasPhysicalWorks
   if (!work.inherited) return;
   const values = new Float64Array(work.map.mesh.count).fill(NaN);
   const footprint = state.surface.scope.footprint,
-    margin = work.metresPerStep * 2;
+    margin = work.map.mesh.spacing * 2;
   const interior = spatial.buffer(footprint, -margin);
   for (let i = 0; i < values.length; i++)
     if (!interior || !spatial.covers(interior, point(nativePosition(work, i))))
@@ -140,7 +141,8 @@ function fixedSamples(
   for (let i = 0; i < values.length; i++) {
     const position = nativePosition(work, i);
     if (!covers(position) || !sourceCovers(position)) continue;
-    values[i] = Math.round((valueAt(position) - (binding.offset ?? 0)) / binding.scale);
+    const value = (valueAt(position) - (binding.offset ?? 0)) / binding.scale;
+    values[i] = work.map[binding.native] instanceof Int32Array ? Math.round(value) : value;
   }
   return values;
 }
@@ -169,28 +171,33 @@ export function createAtlasWorkspace(
   parameters: Partial<AtlasParameters> = {}
 ): AtlasPhysicalWorkspace {
   const { triangles } = atlasQuality[quality],
-    profile = atlasPhysicalProfile(triangles, parameters);
-  const map = createField(createMesh(triangles, profile.BoundaryPaddingSteps)),
-    bounds = state.surface.bounds;
-  const center: [number, number] = [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2];
-  const metresPerStep =
-    Math.hypot(bounds[2] - bounds[0], bounds[3] - bounds[1]) / (map.mesh.contentRadius * 1.96);
+    profile = atlasPhysicalProfile(parameters);
+  const bounds = state.surface.bounds,
+    covers = spatial.pointCoverage(state.domain.scope.footprint);
+  const center = { x: (bounds[0] + bounds[2]) / 2, y: (bounds[1] + bounds[3]) / 2, z: 0 };
+  const anchor = covers(center)
+    ? center
+    : spatial.read(state.domain.scope.footprint).getCoordinates()[0];
+  const map = createField(
+    createWorldMesh(
+      bounds,
+      triangles,
+      profile.BoundaryPadding,
+      (x, y) => covers({ x, y, z: 0 }),
+      spatial.area(state.domain.scope.footprint),
+      [anchor.x, anchor.y]
+    )
+  );
   const work: AtlasPhysicalWorkspace = {
     map,
     profile,
-    center,
-    metresPerStep,
     samples: new Int32Array(state.surface.active.length),
     fixed: [],
     inherited: Boolean(state.surface.channels.elevation),
   };
   for (let i = 0; i < work.samples.length; i++) {
     const p = gridPosition(state.surface, i);
-    work.samples[i] = nearestTriangle(
-      map.mesh,
-      (p.x - center[0]) / metresPerStep,
-      (p.y - center[1]) / metresPerStep
-    );
+    work.samples[i] = nearestTriangle(map.mesh, p.x - map.mesh.origin[0], p.y - map.mesh.origin[1]);
   }
   if (work.inherited) inheritNumerical(state, work);
   fixedInheritedBoundary(state, work);
@@ -204,8 +211,10 @@ export function composeNativeAuthoring(work: AtlasPhysicalWorkspace) {
       if (!Number.isFinite(values[i])) continue;
       const value = values[i] + (binding.datum ? map.BaseSeaLevel : 0);
       map[binding.native][i] = value;
-      if (binding.native === "Elevation")
+      if (binding.native === "Elevation") {
         map.BedrockElevation[i] = value - map.SedimentThickness[i];
+        map.Elevation[i] = map.BedrockElevation[i] + map.SedimentThickness[i];
+      }
     }
 }
 export function sampleSurfaceAtNative(state: GenerationState, name: string, i: number): number {
@@ -214,17 +223,5 @@ export function sampleSurfaceAtNative(state: GenerationState, name: string, i: n
 }
 export function nativeIndexAtSurface(state: GenerationState, x: number, y: number) {
   const work = state.physical!;
-  return nearestTriangle(
-    work.map.mesh,
-    clamp(
-      (x - work.center[0]) / work.metresPerStep,
-      -work.map.mesh.workRadius,
-      work.map.mesh.workRadius
-    ),
-    clamp(
-      (y - work.center[1]) / work.metresPerStep,
-      -work.map.mesh.workRadius,
-      work.map.mesh.workRadius
-    )
-  );
+  return nearestTriangle(work.map.mesh, x - work.map.mesh.origin[0], y - work.map.mesh.origin[1]);
 }

@@ -1,4 +1,4 @@
-import { requireThat } from "@atlas/domain";
+import { requireThat, type DomainSnapshot } from "@atlas/domain";
 import type { GenerationState, MapProcess, MapProcessContext } from "../process";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
 import { nativeContracts, applyNativeStep } from "./contracts";
@@ -21,6 +21,7 @@ import { atlasSeaIce } from "./atlasSeaIce";
 import { advectAtlasMagic } from "./atlasMagic";
 import { magicProcesses } from "./magicProcesses";
 import { advectMagic } from "./magicState";
+import { retainGeographicIdentities } from "./geographicIdentity";
 
 const prefix = (fact: string) => `canonry:${fact}`;
 const contract = (id: string, requires: string[] = [], produces: string[] = []) => ({
@@ -106,7 +107,10 @@ function nativeProcess(step: NativeStep, seed: number): MapProcess {
     validate: validateWorkspace,
   };
 }
-export function atlasNativeProcesses(input: AtlasGenerationInput): MapProcess[] {
+export function atlasNativeProcesses(
+  input: AtlasGenerationInput,
+  original: DomainSnapshot
+): MapProcess[] {
   const steps = physicalSchedule([
     atlasEpoch({
       id: "epoch",
@@ -126,7 +130,7 @@ export function atlasNativeProcesses(input: AtlasGenerationInput): MapProcess[] 
     projectProcess(input),
     forcingProcess(),
     epochStartProcess(),
-    finishProcess(),
+    finishProcess(original),
     advectAtlasMagic,
     ...magicProcesses(input.seed, input.domains.includes("magic")),
     ...Array.from(implementations.values(), (step) => nativeProcess(step, input.seed)),
@@ -219,13 +223,22 @@ function epochStartProcess(): MapProcess {
     validate: validateWorkspace,
   };
 }
-function finishProcess(): MapProcess {
+function finishProcess(original: DomainSnapshot): MapProcess {
   return {
     contract: {
       ...contract("canonry.features", ["canonry:Validated"], ["geographicFeatures"]),
       workspaceOnly: false,
     },
-    apply: extractNativeGeography,
+    apply(state, context) {
+      const before = new Map(Object.entries(state.domain.world.features));
+      extractNativeGeography(state, context);
+      const generated = new Set(
+        Object.values(state.domain.world.features)
+          .filter((feature) => before.get(feature.id) !== feature)
+          .map((feature) => feature.id)
+      );
+      retainGeographicIdentities(state, original, state.physical!.map.mesh.spacing * 2, generated);
+    },
     validate: validateWorkspace,
   };
 }

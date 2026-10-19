@@ -49,6 +49,20 @@ corresponding reference implementation before extending its structure.
 Choose numerical fidelity and validation precision from the product's map scale
 and plausibility requirements, including its approximate physical interfaces.
 
+**Reference parity means semantic algorithm parity.** Per the user's explicit
+2026-10-18 direction, numerical equivalence to Canonry is not a product target.
+Compare the operations inside process implementations: their inputs, transformations,
+causal order, feedback, state carried between epochs and geographic outputs.
+Enumerating process names alone does not establish this parity.
+
+Do not chase matching numbers, hashes, exact seed mappings, rounding or identical
+arrays, or use their differences as evidence that a semantic operation is missing.
+Existing reference fixtures are regression aids, not acceptance requirements for
+atlas adaptations or metre conversion. Assess numerical changes only when they
+change a required mechanism, physical meaning, creator control or useful geography.
+Record concrete missing or materially changed operations separately from parameter,
+representation and implementation differences. Preserve determinism within the atlas.
+
 The [generation design](docs/generation-workflows.md) describes these adaptations.
 Registered GIS, physical, magical and human/built processes use the same contract.
 Map profiles select processes, their order and typed parameters. Epoch loops bind

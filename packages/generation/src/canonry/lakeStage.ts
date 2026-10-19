@@ -2,6 +2,7 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalProfile } from "./profile";
 import { clamp, truncate, units } from "./math";
+import { depthRateToDischarge } from "./dimensions";
 
 export interface Depression {
   id: number;
@@ -24,7 +25,7 @@ export function contributingWater(map: PhysicalField): Float64Array {
     if (rank < 0 || rank >= count || order[rank] >= 0)
       throw new Error("Priority-flood ranks are not a complete order.");
     order[rank] = i;
-    water[i] = map.Runoff[i];
+    water[i] = depthRateToDischarge(map.Runoff[i], map.mesh.areas[i]);
   }
   for (let rank = count - 1; rank >= 0; rank--) {
     const i = order[rank],
@@ -67,11 +68,13 @@ function basinCells(map: PhysicalField, p: PhysicalProfile, component: Depressio
     .map((i) => ({
       i,
       floor: map.Elevation[i],
-      loss:
+      loss: depthRateToDischarge(
         p.LakeEvaporationMinimum +
-        truncate((map.Temperature[i] * p.LakeEvaporationTemperatureStrength) / 1000) +
-        p.LakeInfiltrationLoss,
-      adjustment: directInput(map, p, i) - map.Runoff[i],
+          truncate((map.Temperature[i] * p.LakeEvaporationTemperatureStrength) / 1000) +
+          p.LakeInfiltrationLoss,
+        map.mesh.areas[i]
+      ),
+      adjustment: depthRateToDischarge(directInput(map, p, i) - map.Runoff[i], map.mesh.areas[i]),
     }))
     .sort((a, b) => a.floor - b.floor || a.i - b.i);
 }
@@ -98,6 +101,18 @@ function stageBudget(cells: ReturnType<typeof basinCells>, input: number) {
   }
   return { loss, adjustment, count };
 }
+function basinInput(map: PhysicalField, component: Depression, water: Float64Array) {
+  const basin = new Set(component.members);
+  let input = 0;
+  for (const i of component.members) {
+    input += depthRateToDischarge(map.Runoff[i], map.mesh.areas[i]);
+    for (let edge = 0; edge < 3; edge++) {
+      const j = map.mesh.neighbors[i * 3 + edge];
+      if (j >= 0 && !basin.has(j) && map.DrainageParents[j] === i) input += water[j];
+    }
+  }
+  return input;
+}
 export function solveStage(
   map: PhysicalField,
   p: PhysicalProfile,
@@ -105,9 +120,8 @@ export function solveStage(
   water: Float64Array
 ): SupportedLake | null {
   if (component.members.length === 0) return null;
-  const cells = basinCells(map, p, component);
-  let input = 0;
-  for (const i of component.members) input = Math.max(input, water[i]);
+  const cells = basinCells(map, p, component),
+    input = basinInput(map, component, water);
   const budget = stageBudget(cells, input);
   if (budget.count === 0) return null;
   const surface =
@@ -128,8 +142,8 @@ export function solveStage(
   return { component, surface, members, depth, overflow };
 }
 export function qualifies(map: PhysicalField, p: PhysicalProfile, lake: SupportedLake): boolean {
-  if (lake.members.length < p.MinimumLakeTriangles || lake.depth < units(p.LakeDepthThreshold))
-    return false;
+  const area = lake.members.reduce((sum, i) => sum + map.mesh.areas[i], 0);
+  if (area < p.MinimumLakeArea || lake.depth < units(p.LakeDepthThreshold)) return false;
   const set = new Set(lake.members);
   let interior = 0;
   for (const i of lake.members) {

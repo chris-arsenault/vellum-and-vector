@@ -5,11 +5,11 @@ import type { PhysicalProfile } from "./profile";
 import { clamp, rockResistance, round, truncate, units } from "./math";
 import { hashUnit } from "./noise";
 import { Feature } from "./codes";
-import { BoundedCandidates } from "./priorityQueue";
-import { triangleDistanceSquared } from "./radial";
+import { nearestTriangle } from "./mesh";
+import { worldCandidates, separatedCandidates, type WorldCandidate } from "./worldSources";
 import { deposit, rebuild } from "./surface";
 
-function impactCount(map: PhysicalField, c: PhysicalContext): number {
+function impactCount(c: PhysicalContext): number {
   if (c.Profile.ImpactCraterCount === 0) return 0;
   const primordial = truncate(
     (c.Profile.ImpactCraterCount * c.Profile.ImpactPrimordialShare) / 1000
@@ -20,35 +20,15 @@ function impactCount(map: PhysicalField, c: PhysicalContext): number {
   const configured = c.IsEvolutionEpoch
     ? Math.max(1, round(share * 0.6 ** c.EpochIndex))
     : primordial;
-  return configured === 0
-    ? 0
-    : Math.min(configured, Math.max(1, truncate(map.mesh.contentCount / 3600)));
+  return configured;
 }
-function centers(map: PhysicalField, c: PhysicalContext): number[] {
-  const count = impactCount(map, c);
+function centers(map: PhysicalField, c: PhysicalContext): WorldCandidate[] {
+  const count = impactCount(c);
   if (count === 0) return [];
-  const candidates = new BoundedCandidates(Math.max(256, count * 256));
-  for (let i = 0; i < map.mesh.contentCount; i++)
-    candidates.consider(
-      i,
-      hashUnit(c.Seed, round(map.mesh.x[i] * 256), round(map.mesh.y[i] * 256))
-    );
-  const ranked = candidates.bestIndexes(),
-    selected: number[] = [];
-  const spacing = Math.min(
-    c.Profile.ImpactMinimumSpacing,
-    Math.max(3, map.mesh.contentRadius * 0.72)
+  const ranked = worldCandidates(map.mesh, c.Seed, Math.max(256, count * 256)).sort(
+    (a, b) => b.priority - a.priority
   );
-  for (const i of ranked) {
-    if (selected.every((j) => triangleDistanceSquared(map.mesh, i, j) >= spacing * spacing))
-      selected.push(i);
-    if (selected.length === count) return selected;
-  }
-  for (const i of ranked) {
-    if (!selected.includes(i)) selected.push(i);
-    if (selected.length === count) break;
-  }
-  return selected;
+  return separatedCandidates(ranked, count, c.Profile.ImpactMinimumSpacing);
 }
 function excavate(
   map: PhysicalField,
@@ -110,17 +90,27 @@ function ejecta(
   for (const [i, weight] of candidates) {
     if (remaining <= 0 || totalWeight <= 0) break;
     const headroom = Math.max(0, units(3800) - map.Elevation[i]);
-    const requested = Math.min(headroom, Math.max(1, truncate((remaining * weight) / totalWeight)));
+    const requested = Math.min(
+      headroom,
+      (((remaining * weight) / totalWeight) * 1024) / map.mesh.areas[i]
+    );
     totalWeight -= weight;
     if (requested <= 0) continue;
     const amount = deposit(map, i, requested);
     map.ImpactEjectaThickness[i] += amount;
-    remaining -= amount;
-    deposited += amount;
+    const volume = (amount / 1024) * map.mesh.areas[i];
+    remaining -= volume;
+    deposited += volume;
   }
   return deposited;
 }
-function applyImpact(map: PhysicalField, p: PhysicalProfile, center: number, radius: number) {
+function applyImpact(
+  map: PhysicalField,
+  p: PhysicalProfile,
+  source: WorldCandidate,
+  radius: number
+) {
+  const center = nearestTriangle(map.mesh, source.x, source.y);
   map.FeatureFlags[center] |= Feature.ImpactCenter;
   const scale = radius / Math.max(radius, p.ImpactMaximumRadius);
   const depth = Math.max(1, round(((p.ElevationScale * p.ImpactDepthRatio) / 1000) * scale));
@@ -129,29 +119,34 @@ function applyImpact(map: PhysicalField, p: PhysicalProfile, center: number, rad
   let excavation = 0;
   const candidates: [number, number][] = [];
   for (let i = 0; i < map.mesh.count; i++) {
-    const distance = Math.sqrt(triangleDistanceSquared(map.mesh, center, i));
-    excavation += excavate(map, i, distance, radius, depth);
+    const distance = Math.hypot(map.mesh.x[i] - source.x, map.mesh.y[i] - source.y);
+    excavation += (excavate(map, i, distance, radius, depth) / 1024) * map.mesh.areas[i];
     raiseRim(map, i, distance, radius, rim);
     shock(map, p, i, distance, radius, share);
     if (distance >= radius && distance <= radius * 2.2)
-      candidates.push([i, Math.max(1, round(1000 * (1 - (distance - radius) / (radius * 1.2))))]);
+      candidates.push([
+        i,
+        map.mesh.areas[i] * Math.max(0, 1 - (distance - radius) / (radius * 1.2)),
+      ]);
   }
   map.SedimentProducedTotal += excavation;
   map.SedimentExportedTotal += excavation - ejecta(map, p, candidates, excavation);
 }
 export function impactCratering(map: PhysicalField, c: PhysicalContext) {
   if (c.IsEvolutionEpoch && c.EpochIndex >= c.EpochCount - 1) return;
-  centers(map, c).forEach((center, index) => {
-    const maximum = Math.min(
-      c.Profile.ImpactMaximumRadius,
-      Math.max(2, map.mesh.contentRadius * 0.24)
-    );
-    const minimum = Math.min(c.Profile.ImpactMinimumRadius, maximum * 0.72);
-    applyImpact(
-      map,
-      c.Profile,
-      center,
-      minimum + (maximum - minimum) * hashUnit(c.Seed ^ 0x3a91, index, 0)
-    );
+  centers(map, c).forEach((center) => {
+    const minimum = c.Profile.ImpactMinimumRadius;
+    const radius =
+      minimum + (c.Profile.ImpactMaximumRadius - minimum) * hashUnit(c.Seed ^ 0x3a91, center.id, 0);
+    map.events.push({
+      id: `impact:${c.Seed}:${center.id}`,
+      kind: "impact",
+      x: center.x,
+      y: center.y,
+      radius,
+      epoch: c.IsEvolutionEpoch ? c.EpochIndex : -1,
+      strength: 1000,
+    });
+    applyImpact(map, c.Profile, center, radius);
   });
 }

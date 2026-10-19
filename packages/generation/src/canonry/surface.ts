@@ -19,7 +19,7 @@ export function deposit(map: PhysicalField, i: number, requested: number): numbe
   const deposited = Math.max(0, requested);
   map.SedimentThickness[i] += deposited;
   map.CumulativeDeposition[i] += deposited;
-  map.SedimentDepositedTotal += deposited;
+  map.SedimentDepositedTotal += (deposited / 1024) * map.mesh.areas[i];
   rebuild(map, i);
   return deposited;
 }
@@ -65,13 +65,19 @@ export function validateLandscape(map: PhysicalField) {
       map.CumulativeDeposition[i],
     ].some((v) => v < 0);
     if (invalid || map.Elevation[i] !== map.BedrockElevation[i] + map.SedimentThickness[i])
-      throw new Error("Persistent landscape state is inconsistent.");
+      throw new Error(
+        `Landscape cell ${i} is inconsistent: elevation ${map.Elevation[i]}, bedrock ${map.BedrockElevation[i]}, sediment ${map.SedimentThickness[i]}, negative material ${invalid}.`
+      );
   }
   if (
     map.SedimentProducedTotal < 0 ||
     map.SedimentDepositedTotal < 0 ||
     map.SedimentExportedTotal < 0 ||
-    map.SedimentDepositedTotal + map.SedimentExportedTotal > map.SedimentProducedTotal
+    map.SedimentDepositedTotal + map.SedimentExportedTotal >
+      map.SedimentProducedTotal + Math.max(0.001, map.SedimentProducedTotal * 1e-9)
   )
-    throw new Error("Sediment accounting is inconsistent.");
+    throw new Error(
+      `Sediment accounting is inconsistent: produced ${map.SedimentProducedTotal} m³, ` +
+        `deposited ${map.SedimentDepositedTotal} m³, exported ${map.SedimentExportedTotal} m³.`
+    );
 }

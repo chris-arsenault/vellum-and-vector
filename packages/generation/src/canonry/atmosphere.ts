@@ -31,7 +31,7 @@ function windDirection(map: PhysicalField, c: PhysicalContext, i: number): [numb
       map.mesh.x[i],
       map.mesh.y[i],
       c.Seed ^ 0x713b,
-      Math.max(12, map.mesh.contentRadius * 0.28),
+      Math.max(120_000, map.mesh.contentRadius * 0.28),
       3
     ) *
     (p.CirculationWander / 1000);
@@ -43,12 +43,14 @@ function traceAirMass(map: PhysicalField, scale: number, start: number) {
     barrier = 0,
     moistureBarrier = -1,
     ocean = -1;
-  for (let step = 1; step <= 18; step++) {
+  const visited = new Set<number>();
+  for (let distance = 0; distance < 180_000; distance += map.mesh.spacing) {
     const next = map.UpwindTargets[current];
-    if (next < 0 || next === current) break;
+    if (next < 0 || visited.has(next)) break;
+    visited.add(next);
     current = next;
     barrier = Math.max(barrier, map.Elevation[current] - map.Elevation[start]);
-    if (step === 14) moistureBarrier = barrier;
+    if (distance <= 140_000) moistureBarrier = barrier;
     if (map.WaterKindCodes[current] === 1) {
       ocean = current;
       break;

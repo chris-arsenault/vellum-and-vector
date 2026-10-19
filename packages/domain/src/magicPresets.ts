@@ -21,7 +21,7 @@ const firePreset = magicSystemSchema.parse({
   phase: "climate",
   effects: { heat: 0.36, iceMelt: 0.5, rockResistance: 900 },
   features: [
-    feature("core", "Fire core", 90, [[at("source", 1)]]),
+    feature("core", "Fire core", 90, [[at("source", 1), at("intensity", 1)]]),
     feature(
       "vein",
       "Thermal vein",
@@ -67,8 +67,8 @@ const firePreset = magicSystemSchema.parse({
       "basalt",
       "Basalt flat",
       25,
-      [[land, at("intensity", 560), { field: "slope", max: 45 }]],
-      [[land, at("intensity", 470), { field: "slope", max: 60 }]]
+      [[land, at("intensity", 560), { field: "slope", max: 0.0045 }]],
+      [[land, at("intensity", 470), { field: "slope", max: 0.006 }]]
     ),
     feature(
       "halo",

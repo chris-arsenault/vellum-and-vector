@@ -46,19 +46,27 @@ function candidateScore(
     100
   );
   if (map.WaterKindCodes[target] === 1) return 10000 + alignment;
-  const drop = (map.DrainageElevations[source] - map.DrainageElevations[target]) / 1024;
+  const length = Math.hypot(
+    map.mesh.x[source] - map.mesh.x[target],
+    map.mesh.y[source] - map.mesh.y[target]
+  );
+  const drop = (map.DrainageElevations[source] - map.DrainageElevations[target]) / (1024 * length);
   if (drop <= 0) {
-    const progress = clamp(map.DrainageRanks[source] - map.DrainageRanks[target], 0, 20);
+    const progress = map.DrainageParents[source] === target ? 1 : 0;
     return (
       (alignment * p.DrainageOutletAlignmentWeight) / 10 +
       progress * 0.15 +
       (inherited * p.DrainageInheritedValleyWeight) / 1000
     );
   }
-  const floorDrop = clamp((map.Elevation[source] - map.Elevation[target]) / 1024, -50, 200);
+  const floorDrop = clamp(
+    (map.Elevation[source] - map.Elevation[target]) / (1024 * length),
+    -0.005,
+    0.02
+  );
   return (
-    (floorDrop * p.DrainageFloorGradientWeight) / 1000 +
-    (Math.min(200, drop) * p.DrainageConditionedGradientWeight) / 1000 +
+    (floorDrop * p.DrainageFloorGradientWeight) / 0.1 +
+    (Math.min(0.02, drop) * p.DrainageConditionedGradientWeight) / 0.1 +
     (alignment * p.DrainageOutletAlignmentWeight) / 20 +
     (inherited * p.DrainageInheritedValleyWeight) / 1000
   );
@@ -70,7 +78,9 @@ function descentGradient(map: PhysicalField, i: number): [number, number] {
     const offset = i * 3 + edge,
       j = map.mesh.neighbors[offset];
     if (j < 0) continue;
-    const drop = (map.DrainageElevations[i] - map.DrainageElevations[j]) / 1024;
+    const drop =
+      (map.DrainageElevations[i] - map.DrainageElevations[j]) /
+      (1024 * map.mesh.edgeLength[offset]);
     x += map.mesh.edgeX[offset] * drop;
     y += map.mesh.edgeY[offset] * drop;
   }
@@ -84,7 +94,11 @@ function descentDirection(
   let x = 0,
     y = 0,
     current = source;
-  for (let step = 0; step < p.DrainageGuidanceLookaheadSteps; step++) {
+  for (
+    let distance = 0;
+    distance < p.DrainageGuidanceLookaheadDistance;
+    distance += map.mesh.spacing
+  ) {
     const [gx, gy] = descentGradient(map, current);
     x += gx;
     y += gy;
@@ -96,14 +110,16 @@ function descentDirection(
     ? desiredDirection(map, source, current)
     : normalize(x, y);
 }
-function captureScore(area: Int32Array | null, target: number, p: PhysicalProfile): number {
-  return area === null ? 0 : (Math.log2(1 + area[target]) * p.DrainageCaptureWeight) / 1000;
+function captureScore(area: Float64Array | null, target: number, p: PhysicalProfile): number {
+  return area === null
+    ? 0
+    : (Math.log2(1 + area[target] / 100_000_000) * p.DrainageCaptureWeight) / 1000;
 }
 function selectTarget(
   map: PhysicalField,
   c: PhysicalContext,
   source: number,
-  area: Int32Array | null
+  area: Float64Array | null
 ): number {
   const [dx, dy] = descentDirection(map, c.Profile, source);
   let best = -1,
@@ -143,7 +159,7 @@ export function resolveLandTargets(map: PhysicalField, c: PhysicalContext): Int3
   for (let i = 0; i < map.mesh.count; i++)
     if (map.WaterKindCodes[i] !== 1) targets[i] = selectTarget(map, c, i, null);
   if (c.Profile.DrainageCaptureWeight <= 0) return targets;
-  const area = contributingArea(targets);
+  const area = contributingArea(targets, map.mesh.areas);
   for (let i = 0; i < map.mesh.count; i++)
     if (map.WaterKindCodes[i] !== 1) targets[i] = selectTarget(map, c, i, area);
   return targets;

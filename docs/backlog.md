@@ -10,6 +10,24 @@ with no backend, persistence or MCP; preserve the existing backend source.
       the physical meaning of a parameter. Retain deterministic generation and its
       causal process sequence.
 
+      Recommended next physical-generation work. The source inventory maps all
+      55 physical contracts and 15 magic layers; it establishes concrete magic,
+      execution and extraction differences, not complete application parity.
+      Compare reference algorithms while converting their dimensions. Relief
+      loss already occurs during generation. Domain coverage,
+      feature geometry and cartographic display also need correction; unit
+      conversion alone will not resolve them. See the recorded
+      [generation and display findings](generation-workflows.md#generation-and-display-findings-2026-10-18).
+
+      Execution is now scoped to **top-level world generation** in the
+      [physical-dimensions plan](generation-workflows.md#world-generation-with-physical-dimensions--execution-plan),
+      Sulion `c024ba6d-9344-47a2-b9ac-10a6c3faf42a`. Standard/Fine must change
+      sampling rather than feature size. Regional generation remains later work;
+      world outputs must retain physical dimensions, identities and topology for it.
+      Top-level M0–M4 implementation is complete, including physical dimensions,
+      reviewed algorithm corrections and continuous river geometry. Regional
+      generation remains pending.
+
 - [x] **2. Make the UI a workflow surface.** Organize the editor around creating a
       world, choosing geography, refining it, generating selected systems and
       authoring the result. Present tools and next actions in the context of the

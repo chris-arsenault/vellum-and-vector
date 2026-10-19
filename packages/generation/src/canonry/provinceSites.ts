@@ -3,6 +3,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, lerp, round } from "./math";
 import { hashUnit } from "./noise";
+import { worldCandidates } from "./worldSources";
 
 interface Candidate {
   x: number;
@@ -137,21 +138,14 @@ function assemblies(sites: Candidate[], context: PhysicalContext, radius: number
 export function createProvinceSites(map: PhysicalField, context: PhysicalContext): ProvinceSite[] {
   const p = context.Profile,
     seed = context.EpochStableSeed,
-    radius = map.mesh.workRadius * 0.94;
-  const candidates = Array.from(
-    { length: p.TectonicProvinceCount * p.TectonicSiteCandidateMultiplier },
-    (_, i) => {
-      const angle = hashUnit(seed ^ 0x1b73, i, 0) * Math.PI * 2;
-      const r = Math.sqrt(hashUnit(seed ^ 0x2db9, i, 1)) * radius;
-      return {
-        x: Math.cos(angle) * r,
-        y: Math.sin(angle) * r,
-        priority: hashUnit(seed ^ 0x4a91, i, 2),
-      };
-    }
+    radius = map.mesh.contentRadius * 0.94;
+  const candidates = worldCandidates(
+    map.mesh,
+    seed,
+    p.TectonicProvinceCount * p.TectonicSiteCandidateMultiplier
   );
   const selected = separated(candidates, p.TectonicProvinceCount);
-  const groups = assemblies(selected, context, map.mesh.contentRadius * 0.94);
+  const groups = assemblies(selected, context, radius);
   return selected.map((site, i) => {
     const angle = hashUnit(seed ^ 0x5c27, i, 0) * Math.PI * 2;
     const speed = lerp(

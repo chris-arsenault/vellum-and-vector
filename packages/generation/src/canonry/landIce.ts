@@ -15,7 +15,9 @@ function concavity(map: PhysicalField, i: number): number {
       count++;
     }
   }
-  return count === 0 ? 0 : toUnits(Math.max(0, truncate(total / count))) * 2;
+  return count === 0
+    ? 0
+    : (toUnits(Math.max(0, total / count)) / map.mesh.spacing ** 2) * 200_000_000;
 }
 function massBalance(map: PhysicalField, p: PhysicalProfile, i: number): number {
   const cold = Math.max(0, p.IceTemperatureThreshold - map.Temperature[i]);
@@ -69,7 +71,10 @@ function advanceFrom(
       map.IceBalance[target] < p.MinimumIceBalance
     )
       continue;
-    const candidate = Math.max(0, map.IceThickness[source] - p.FrozenLakeIceAdvanceDecay),
+    const candidate = Math.max(
+        0,
+        map.IceThickness[source] - p.FrozenLakeIceAdvanceGradient * map.mesh.spacing
+      ),
       improved = candidate > map.IceThickness[target];
     if (improved) map.IceThickness[target] = candidate;
     if (!reached[target] || improved) {
@@ -107,11 +112,8 @@ export function landIce(map: PhysicalField, c: PhysicalContext) {
     if (map.WaterKindCodes[i] === 0 && i < map.mesh.contentCount) balances.push(balance);
   }
   if (balances.length === 0) {
-    if (map.OpenBoundary) {
-      advanceLakes(map, c);
-      return;
-    }
-    throw new Error("Land-ice generation requires dry land.");
+    advanceLakes(map, c);
+    return;
   }
   const count = clamp(
     round(

@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import { createMesh } from "./mesh";
+import { createWorldMesh } from "./worldMesh";
 import { createField } from "./field";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { units } from "./math";
@@ -16,7 +17,7 @@ it("routes a lake spill across an open patch boundary while requiring water in a
   map.WaterKindCodes[lake] = 2;
   map.WaterBodyIds[lake] = 2;
   map.LakeOutletTargets[lake] = outlet;
-  const context = physicalContext(104729, 0, atlasPhysicalProfile(32));
+  const context = physicalContext(104729, 0, atlasPhysicalProfile());
   expect(() => flowRouting(map, context)).toThrow("Lake spill route does not reach water.");
   map.OpenBoundary = true;
   flowRouting(map, context);
@@ -25,7 +26,7 @@ it("routes a lake spill across an open patch boundary while requiring water in a
 });
 
 function patch(kind: string) {
-  const map = createField(createMesh(512, 8));
+  const map = createField(createWorldMesh([0, 0, 400_000, 400_000], 512, 100_000));
   map.OpenBoundary = true;
   map.SeaLevelInitialized = true;
   map.CrustSupportInitialized = true;
@@ -34,7 +35,7 @@ function patch(kind: string) {
   map.CrustTypeCodes.fill(kind === "inland" ? 2 : 1);
   map.RockResistance.fill(1000);
   for (let i = 0; i < map.mesh.count; i++)
-    map.Elevation[i] = units(kind === "inland" ? 200 + map.mesh.x[i] : -1800);
+    map.Elevation[i] = units(kind === "inland" ? 200 + map.mesh.x[i] / 10_000 : -1800);
   map.BedrockElevation.set(map.Elevation);
   map.CrustSupportElevation.set(map.Elevation);
   for (const contract of Object.values(nativeContracts))
@@ -45,7 +46,7 @@ it.each(["inland", "ocean"])(
   "refines an entirely %s patch without manufacturing another geographic domain",
   (kind) => {
     const map = patch(kind),
-      profile = atlasPhysicalProfile(512);
+      profile = atlasPhysicalProfile();
     const epoch = {
       StableName: "refinement",
       TectonicStrength: 0,

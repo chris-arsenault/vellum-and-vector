@@ -26,7 +26,7 @@ export function MagicRuleEditor({
         Grow each landmark from strong seed conditions through neighboring cells meeting retention
         conditions. All conditions in a group must hold; any group can qualify. Other systems can
         participate in the same rule. Intensity and climate fields use Canonry's 0–1,000 scale;
-        elevation and slope use metres.
+        elevation and ice use metres; slope is rise divided by run.
       </p>
       {system.features.map((rule, index) => (
         <FeatureRuleEditor

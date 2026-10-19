@@ -4,9 +4,6 @@ import { atlasChannels, type ChannelBinding } from "./atlasChannels";
 import { nativeIndexAtSurface } from "./atlasWorkspace";
 import { projectPhysicalMaterial } from "./physicalMaterial";
 
-export function dischargeScale(state: GenerationState): number {
-  return (1.299038105676658 * state.physical!.metresPerStep ** 2) / (1000 * 365.25 * 24 * 60 * 60);
-}
 const forcingChannels = new Set([
   "elevation",
   "bedrock",
@@ -33,7 +30,7 @@ function projectChannel(state: GenerationState, binding: ChannelBinding) {
     grid = state.surface;
   const values = new Float64Array(work.samples.length),
     datum = binding.datum ? map.BaseSeaLevel : 0;
-  const scale = binding.name === "oceanDistance" ? work.metresPerStep : binding.scale,
+  const scale = binding.scale,
     offset = binding.offset ?? 0;
   for (let i = 0; i < values.length; i++)
     values[i] = (map[binding.native][work.samples[i]] - datum) * scale + offset;
@@ -70,7 +67,7 @@ export function projectNative(
     grid,
     "flow",
     "cubic-metre/second",
-    Float64Array.from(work.samples, (i) => map.FlowAccumulation[i] * dischargeScale(state))
+    Float64Array.from(work.samples, (i) => map.FlowAccumulation[i])
   );
   putChannel(
     grid,

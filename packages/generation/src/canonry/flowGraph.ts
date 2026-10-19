@@ -17,11 +17,11 @@ export function targetOrder(targets: Int32Array): number[] {
   if (queue.length !== targets.length) throw new Error("Flow routing contains a cycle.");
   return queue;
 }
-export function contributingArea(targets: Int32Array): Int32Array {
-  const accumulated = new Int32Array(targets.length).fill(1);
+export function contributingArea(targets: Int32Array, areas: Float64Array): Float64Array {
+  const accumulated = areas.slice();
   for (const i of targetOrder(targets)) {
     const target = targets[i];
-    if (target >= 0) accumulated[target] = saturatingAdd(accumulated[target], accumulated[i]);
+    if (target >= 0) accumulated[target] += accumulated[i];
   }
   return accumulated;
 }

@@ -49,7 +49,7 @@ function findContact(
   context: PhysicalContext,
   start: number,
   visited: Int32Array,
-  distance: Int32Array,
+  distance: Float64Array,
   queue: Int32Array,
   visit: number
 ): Contact | null {
@@ -71,7 +71,7 @@ function findContact(
       const j = map.mesh.neighbors[i * 3 + edge];
       if (j < 0 || visited[j] === visit) continue;
       visited[j] = visit;
-      distance[j] = d + 1;
+      distance[j] = d + map.mesh.edgeLength[i * 3 + edge];
       queue[tail++] = j;
     }
   }
@@ -118,7 +118,7 @@ export function continentalSutures(map: PhysicalField, context: PhysicalContext)
           Math.trunc(((p.OrogenicCoreRockResistance - 1000) * map.CrustSutureStrength[i]) / 1000)
       );
   const visited = new Int32Array(count),
-    distance = new Int32Array(count),
+    distance = new Float64Array(count),
     queue = new Int32Array(count);
   let visit = 0;
   for (let i = 0; i < count; i++) {

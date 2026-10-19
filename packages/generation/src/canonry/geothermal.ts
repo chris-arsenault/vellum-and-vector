@@ -28,7 +28,7 @@ export function geothermal(map: PhysicalField, c: PhysicalContext) {
         map.mesh.x[i],
         map.mesh.y[i],
         c.Seed,
-        Math.max(14, map.mesh.contentRadius * 0.34),
+        Math.max(140_000, map.mesh.contentRadius * 0.34),
         2
       ) * 0.1;
     map.Geothermal[i] = round(clamp(boundary + fracture + impact + plume + broad, 0, 1) * 1000);

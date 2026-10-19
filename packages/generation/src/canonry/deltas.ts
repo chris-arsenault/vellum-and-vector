@@ -1,13 +1,15 @@
 // DeltaFormationLayer.cs, Canonry 0f62584c. Float32 intermediates match the reference fan geometry.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import { clamp, units } from "./math";
+import { clamp } from "./math";
 import { sourceToOutletOrder } from "./flowGraph";
 
 function sedimentDelivery(map: PhysicalField): Float64Array {
   const delivery = Float64Array.from(
     { length: map.mesh.count },
-    (_, i) => map.CumulativeFluvialErosion[i] + map.CumulativeGlacialErosion[i]
+    (_, i) =>
+      ((map.CumulativeFluvialErosion[i] + map.CumulativeGlacialErosion[i]) / 1024) *
+      map.mesh.areas[i]
   );
   for (const i of sourceToOutletOrder(map)) {
     const target = map.FlowTargets[i];
@@ -28,7 +30,7 @@ function qualifies(
     map.FlowAccumulation[mouth] >= p.RiverAccumulationThreshold * p.DeltaDischargeMultiplier;
   return (
     major &&
-    delivery[mouth] >= units(p.DeltaMinimumSedimentDelivery) &&
+    delivery[mouth] >= p.DeltaMinimumSedimentDelivery &&
     map.WaveExposure[ocean] <= p.DeltaMaximumWaveEnergy &&
     map.OceanCurrentStrength[ocean] <= p.DeltaMaximumCurrentStrength &&
     map.BathymetricZoneCodes[ocean] !== 4
@@ -75,16 +77,16 @@ function buildFan(map: PhysicalField, c: PhysicalContext, mouth: number, ocean: 
     dx = f(x / length),
     dy = f(y / length);
   const order = map.RiverOrders[mouth],
-    queue = [{ i: ocean, depth: 1, previous: mouth }],
+    queue = [{ i: ocean, depth: map.mesh.spacing, previous: mouth }],
     p = c.Profile;
   markDelta(map, mouth, 1000, order);
   for (let head = 0; head < queue.length; head++) {
     const front = queue[head];
-    if (!receiveDelta(map, mouth, front.i)) continue;
-    const intensity = 1000 - front.depth * p.DeltaIntensityDecay;
+    if (front.depth > p.DeltaMaximumRadius || !receiveDelta(map, mouth, front.i)) continue;
+    const intensity = 1000 - (front.depth / 10_000) * p.DeltaIntensityDecay;
     if (intensity <= map.DeltaIntensity[front.i]) continue;
     markDelta(map, front.i, intensity, order);
-    if (front.depth >= p.DeltaMaximumExpansionSteps) continue;
+    if (front.depth >= p.DeltaMaximumRadius) continue;
     for (let edge = 0; edge < 3; edge++) {
       const j = map.mesh.neighbors[front.i * 3 + edge];
       if (
@@ -93,7 +95,7 @@ function buildFan(map: PhysicalField, c: PhysicalContext, mouth: number, ocean: 
         !pointsIntoFan(map, front.i, j, dx, dy, p.DeltaMinimumForwardAlignment)
       )
         continue;
-      queue.push({ i: j, depth: front.depth + 1, previous: front.i });
+      queue.push({ i: j, depth: front.depth + map.mesh.spacing, previous: front.i });
     }
   }
 }

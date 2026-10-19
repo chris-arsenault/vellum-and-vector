@@ -152,7 +152,8 @@ export function orogenicConstruction(map: PhysicalField, context: PhysicalContex
     for (let i = 0; i < map.mesh.count; i++) {
       const id = map.OrogenicComponentIds[i];
       if (id >= 0 && components[id].code === 1)
-        components[id].totalWeight += constructionWeight(map, context, components[id], frame, i);
+        components[id].totalWeight +=
+          constructionWeight(map, context, components[id], frame, i) * map.mesh.areas[i];
     }
   for (let i = 0; i < map.mesh.count; i++) {
     const id = map.OrogenicComponentIds[i];
