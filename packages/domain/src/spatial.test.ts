@@ -93,6 +93,57 @@ it("reuses exact coverage predicates for rectangular extents, concavities and ho
   }
 });
 
+it("measures batches of clipped cells with the same holes, boundaries and fixed precision", () => {
+  const triangle: Geometry = {
+    type: "Polygon",
+    coordinates: [
+      [
+        [0.123456, 0.234567],
+        [9.876543, 0.234567],
+        [1.234567, 9.876543],
+        [0.123456, 0.234567],
+      ],
+    ],
+  };
+  const islands: Geometry = {
+    type: "MultiPolygon",
+    coordinates: [
+      [
+        [
+          [0, 0],
+          [2, 0],
+          [2, 2],
+          [0, 2],
+          [0, 0],
+        ],
+      ],
+      [
+        [
+          [4, 0],
+          [6, 0],
+          [6, 2],
+          [4, 2],
+          [4, 0],
+        ],
+      ],
+    ],
+  };
+  for (const footprint of [...coverageFootprints, triangle, islands]) {
+    const measure = spatial.intersectionArea(footprint),
+      intersects = spatial.intersectionPredicate(footprint);
+    for (let y = -1; y <= 10; y += 2)
+      for (let x = -1; x <= 10; x += 2) {
+        const box = rectangle([x + 0.0000004, y, x + 2, y + 2]);
+        const clipped = spatial.intersection(box, footprint);
+        expect(measure(box)).toBeCloseTo(clipped ? spatial.area(clipped) : 0, 10);
+        expect(intersects(box)).toBe(spatial.intersects(box, footprint));
+      }
+  }
+  const hole = spatial.intersectionArea(coverageFootprints[1]);
+  expect(hole(rectangle([0, 0, 10, 10]))).toBe(96);
+  expect(hole(rectangle([4, 4, 6, 6]))).toBe(0);
+});
+
 it("preserves local units, floors and directed geometry through transforms", () => {
   const frame = {
     origin: { x: 1e7, y: -1e7, z: 120 },

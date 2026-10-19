@@ -124,6 +124,10 @@ export class Spatial {
   intersects(a: Geometry, b: Geometry): boolean {
     return Boolean(RelateOp.intersects(this.read(a), this.read(b)));
   }
+  intersectionPredicate(footprint: Geometry): (geometry: Geometry) => boolean {
+    const shape = this.read(footprint);
+    return (geometry) => Boolean(RelateOp.intersects(this.read(geometry), shape));
+  }
   distance(a: Geometry, b: Geometry): number {
     return DistanceOp.distance(this.read(a), this.read(b)) as number;
   }
@@ -135,6 +139,11 @@ export class Spatial {
   }
   intersection(a: Geometry, b: Geometry): Geometry | null {
     return this.write(OverlayOp.intersection(this.read(a), this.read(b)) as Shape);
+  }
+  /** Reuse a validated footprint and measure intersections without a GeoJSON round trip. */
+  intersectionArea(footprint: Geometry): (geometry: Geometry) => number {
+    const shape = this.read(footprint);
+    return (geometry) => (OverlayOp.intersection(this.read(geometry), shape) as Shape).getArea();
   }
   difference(a: Geometry, b: Geometry): Geometry | null {
     return this.write(OverlayOp.difference(this.read(a), this.read(b)) as Shape);

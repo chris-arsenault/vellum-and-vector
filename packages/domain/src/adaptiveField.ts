@@ -20,6 +20,7 @@ export interface AdaptiveField extends FieldSamples {
 export function adaptiveMeasures(topology: AdaptiveTopology, footprint: Geometry) {
   const extent = spatial.bounds(footprint);
   const rectangular = spatial.covers(footprint, rectangle(extent));
+  const measure = spatial.intersectionArea(footprint);
   return Float64Array.from(topology.leaves, (_, i) => {
     const box = adaptiveCell(topology, i);
     if (rectangular)
@@ -27,8 +28,7 @@ export function adaptiveMeasures(topology: AdaptiveTopology, footprint: Geometry
         Math.max(0, Math.min(box[2], extent[2]) - Math.max(box[0], extent[0])) *
         Math.max(0, Math.min(box[3], extent[3]) - Math.max(box[1], extent[1]))
       );
-    const clipped = spatial.intersection(rectangle(box), footprint);
-    return clipped ? spatial.area(clipped) : 0;
+    return measure(rectangle(box));
   });
 }
 export function createAdaptiveField(

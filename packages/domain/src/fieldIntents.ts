@@ -277,11 +277,12 @@ function brushField(
   footprint: Area["footprint"]
 ) {
   const bounds = spatial.bounds(footprint),
-    minimumSize = data.radius / 8;
+    minimumSize = data.radius / 8,
+    intersects = spatial.intersectionPredicate(footprint);
   const topology = createAdaptiveTopology(bounds, {
     maximumSize: Math.max(minimumSize, Math.max(bounds[2] - bounds[0], bounds[3] - bounds[1]) / 8),
     minimumSize,
-    refine: (box) => spatial.intersects(rectangle(box), footprint),
+    refine: (box) => intersects(rectangle(box)),
   });
   return createAdaptiveField(
     semanticId(snapshot.world.id, "authored-grid", context.operationId),
