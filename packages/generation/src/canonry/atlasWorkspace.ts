@@ -1,6 +1,7 @@
 import {
   gridSampler,
   interpolateSample,
+  fieldInterpolator,
   point,
   spatial,
   type Grid,
@@ -108,13 +109,9 @@ function inheritChannels(
   for (const binding of atlasChannels) {
     const grid = parent.get(binding.name) ?? surface;
     if (!grid.channels[binding.name]) continue;
+    const valueAt = fieldInterpolator(grid, binding.name, binding.unit === "category");
     for (let i = 0; i < map.mesh.count; i++) {
-      const value = interpolateSample(
-        grid,
-        binding.name,
-        nativePosition(work, i),
-        binding.unit === "category"
-      );
+      const value = valueAt(nativePosition(work, i));
       const native = (value - (binding.offset ?? 0) + (binding.datum ? datum : 0)) / binding.scale;
       map[binding.native][i] =
         map[binding.native] instanceof Int32Array ? Math.round(native) : native;

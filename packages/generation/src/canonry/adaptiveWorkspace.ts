@@ -48,9 +48,12 @@ function remapArray(
   quantity: "category" | "intensive" | "extensive",
   transfer: ReturnType<typeof prepareAdaptiveTransfer>
 ) {
-  const source = Float64Array.from(old.leafToCell, (cell) => values[cell]);
+  const source = new Float64Array(old.count);
+  for (let leaf = 0; leaf < source.length; leaf++) source[leaf] = values[old.leafToCell[leaf]];
   const next = transfer(source, quantity);
-  return Float64Array.from(mesh.cellToLeaf, (leaf) => next[leaf]);
+  const result = new Float64Array(mesh.count);
+  for (let cell = 0; cell < result.length; cell++) result[cell] = next[mesh.cellToLeaf[cell]];
+  return result;
 }
 function remapMagic(
   state: GenerationState,

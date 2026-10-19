@@ -1,4 +1,4 @@
-import { canonryMagicPresets, interpolateSample, type MagicSystem } from "@atlas/domain";
+import { canonryMagicPresets, fieldInterpolator, type MagicSystem } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { nativePosition } from "./atlasWorkspace";
 
@@ -60,13 +60,8 @@ function createMagicField(state: GenerationState, definition: MagicSystem): Magi
   ] as const) {
     const key = magicKey(field, channel);
     if (!state.surface.channels[key]) continue;
-    for (let i = 0; i < count; i++)
-      field[channel][i] = interpolateSample(
-        state.surface,
-        key,
-        nativePosition(state.physical!, i),
-        channel.endsWith("Epoch")
-      );
+    const valueAt = fieldInterpolator(state.surface, key, channel.endsWith("Epoch"));
+    for (let i = 0; i < count; i++) field[channel][i] = valueAt(nativePosition(state.physical!, i));
   }
   return field;
 }

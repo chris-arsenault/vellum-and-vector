@@ -147,9 +147,9 @@ function classify(
   i: number,
   valueAt: ReturnType<typeof physicalSampler>
 ): number {
-  const s = shape(map, i, p.LandformNeighborhoodRadius, valueAt),
-    preserved = retained(map, p, i);
+  const preserved = retained(map, p, i);
   if (preserved !== 0) return preserved;
+  const s = shape(map, i, p.LandformNeighborhoodRadius, valueAt);
   const history = historical(map, p, i, s);
   if (history !== 0) return history;
   if (waterfall(map, p, i)) return L.Waterfall;

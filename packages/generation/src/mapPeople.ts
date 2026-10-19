@@ -160,12 +160,13 @@ export const politicalProcess: MapProcess = {
       });
       if (scores.length) owner[i] = scores.indexOf(Math.min(...scores));
     }
+    const heightAt = fieldInterpolator(grid, "elevation");
     for (const [index, polity] of polities.entries()) {
       context.progress(
         0.3 + (0.65 * index) / polities.length,
         `Building territory and claims for ${polity.name} (${index + 1}/${polities.length})`
       );
-      territory(state, owner, index, polity, polities);
+      territory(state, owner, index, polity, polities, heightAt);
     }
     context.recordCause({
       kind: "domain",
@@ -184,11 +185,11 @@ function territory(
   owner: Int32Array,
   index: number,
   polity: Entity,
-  polities: Entity[]
+  polities: Entity[],
+  heightAt: (position: Position) => number
 ) {
   const grid = state.surface;
   const topology = grid.topology ?? grid;
-  const heightAt = fieldInterpolator(grid, "elevation");
   const center = polity.attributes.center as Position;
   const other = polities
     .filter((p) => p.id !== polity.id)

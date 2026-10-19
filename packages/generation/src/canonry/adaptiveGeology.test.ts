@@ -21,6 +21,8 @@ import { volcanicConstruction } from "./volcanism";
 import { impactCratering, plannedImpacts } from "./impacts";
 import { physicalSampler } from "./physicalMetric";
 import { plateAdvection } from "./advection";
+import { landformClassification } from "./landforms";
+import { Landform } from "./codes";
 
 const bounds: [number, number, number, number] = [-50_000, -50_000, 50_000, 50_000];
 function fixture() {
@@ -42,6 +44,19 @@ function hillsideFixture() {
 }
 const integral = (values: Float64Array, areas: Float64Array) =>
   values.reduce((sum, value, i) => sum + value * areas[i], 0);
+
+it("retains seabed, flooded glacial valleys, lakes and glacial landforms during classification", () => {
+  const map = fixture();
+  const expected = [Landform.Seabed, Landform.Fjord, Landform.Basin, Landform.Moraine];
+  for (let i = 0; i < map.mesh.count; i++) {
+    map.Elevation[i] = map.mesh.x[i] * 1024;
+    const kind = i % 4;
+    map.WaterKindCodes[i] = kind < 2 ? 1 : kind === 2 ? 2 : 0;
+    map.LandformCodes[i] = kind === 1 ? Landform.UValley : kind === 3 ? Landform.Moraine : 0;
+  }
+  landformClassification(map, physicalContext(42, 0, atlasPhysicalProfile()));
+  for (let i = 0; i < map.mesh.count; i++) expect(map.LandformCodes[i]).toBe(expected[i % 4]);
+});
 
 it("samples an immutable physical surface lazily with the same coarse/fine reconstruction", () => {
   const map = fixture(),

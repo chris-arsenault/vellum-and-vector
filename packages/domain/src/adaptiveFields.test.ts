@@ -6,7 +6,7 @@ import {
   createAdaptiveTopology,
 } from "./adaptiveTopology";
 import { reconstructAdaptive, sampleAdaptive } from "./adaptiveReconstruction";
-import { transferAdaptive } from "./adaptiveTransfer";
+import { transferAdaptive, visitAdaptiveOverlap } from "./adaptiveTransfer";
 import { createAdaptiveField, adaptiveFieldSampler, adaptiveIntegral } from "./adaptiveField";
 import { rectangle } from "./spatial";
 import { sampleAdaptivePoint } from "./adaptivePoint";
@@ -42,6 +42,29 @@ it("partitions physical area and shares reciprocal face lengths across different
         Math.abs(tree.levels[tree.leaves[i]] - tree.levels[tree.leaves[j]])
       ).toBeLessThanOrEqual(1);
     }
+  }
+});
+
+it("visits precisely the overlapping cells across split faces and outside the field", () => {
+  const tree = topology();
+  for (const box of [
+    [0, 0, 250, 250],
+    [450, 400, 505, 600],
+    [-10, -10, 0, 0],
+    [990, 990, 1010, 1010],
+  ]) {
+    const visited: number[] = [];
+    visitAdaptiveOverlap(tree, box as [number, number, number, number], (leaf) =>
+      visited.push(leaf)
+    );
+    const expected = Array.from(tree.leaves.keys()).filter((leaf) => {
+      const cell = adaptiveCell(tree, leaf);
+      return (
+        Math.min(cell[2], box[2]) > Math.max(cell[0], box[0]) &&
+        Math.min(cell[3], box[3]) > Math.max(cell[1], box[1])
+      );
+    });
+    expect(visited.sort((a, b) => a - b)).toEqual(expected);
   }
 });
 it("reconstructs rotated planes and stays continuous at coarse/fine interfaces", () => {

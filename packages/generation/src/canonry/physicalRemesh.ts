@@ -68,9 +68,8 @@ function setTransferred(next: PhysicalField, name: string, transferred: Float64A
     target instanceof Float32Array
   ))
     throw new Error(`Missing remesh channel ${name}.`);
-  next.mesh.cellToLeaf.forEach((leaf, cell) => {
-    target[cell] = transferred[leaf];
-  });
+  for (let cell = 0; cell < next.mesh.count; cell++)
+    target[cell] = transferred[next.mesh.cellToLeaf[cell]];
 }
 /** Transfer represented material and history; index-valued diagnostics must be rebuilt. */
 export function remeshPhysical(
@@ -91,7 +90,8 @@ export function remeshPhysical(
       continue;
     }
     if (indices.has(name)) continue;
-    const source = Float64Array.from(old.leafToCell, (cell) => values[cell]);
+    const source = new Float64Array(old.count);
+    for (let leaf = 0; leaf < source.length; leaf++) source[leaf] = values[old.leafToCell[leaf]];
     const transferred = transfer(source, categories.has(name) ? "category" : "intensive");
     setTransferred(next, name, transferred);
   }

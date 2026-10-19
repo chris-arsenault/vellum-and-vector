@@ -9,19 +9,23 @@ import {
 import { adaptiveGradients } from "./adaptiveReconstruction";
 
 type Quantity = "intensive" | "extensive" | "category";
-function overlaps(a: Bounds, b: Bounds) {
-  return a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
-}
 export function visitAdaptiveOverlap(
   topology: AdaptiveTopology,
   bounds: Bounds,
   visit: (leaf: number) => void
 ) {
   const pending = [0];
+  const boxes = topology.boxes;
   while (pending.length) {
     const node = pending.pop()!;
-    const box = Array.from(topology.boxes.subarray(node * 4, node * 4 + 4)) as Bounds;
-    if (!overlaps(box, bounds)) continue;
+    const at = node * 4;
+    if (
+      boxes[at] >= bounds[2] ||
+      boxes[at + 2] <= bounds[0] ||
+      boxes[at + 1] >= bounds[3] ||
+      boxes[at + 3] <= bounds[1]
+    )
+      continue;
     const child = topology.children[node];
     if (child < 0) visit(topology.leafIndex[node]);
     else pending.push(child, child + 1, child + 2, child + 3);
@@ -56,6 +60,16 @@ function limitedGradients(
   return gradients;
 }
 type Overlap = { source: number; area: number; dx: number; dy: number };
+function unchangedCell(items: Overlap[], sourceAreas: Float64Array, targetArea: number) {
+  const first = items[0];
+  return (
+    items.length === 1 &&
+    first.dx === 0 &&
+    first.dy === 0 &&
+    first.area === sourceAreas[first.source] &&
+    first.area === targetArea
+  );
+}
 function transferOverlaps(
   source: AdaptiveTopology,
   target: AdaptiveTopology,
@@ -120,20 +134,34 @@ export function prepareAdaptiveTransfer(source: AdaptiveTopology, target: Adapti
         : values;
     const gradient =
       quantity === "category" ? undefined : limitedGradients(source, density, geometry, changed);
-    return Float64Array.from(target.leaves, (_, i) => {
+    const result = new Float64Array(target.leaves.length);
+    for (let i = 0; i < result.length; i++) {
+      const items = overlaps[i],
+        first = items[0];
+      // Most cells survive a local split unchanged. Preserve those samples
+      // directly instead of integrating their identical footprint again.
+      if (unchangedCell(items, geometry.areas, targetGeometry.areas[i])) {
+        result[i] = values[first.source];
+        continue;
+      }
       let total = 0,
         strongest = -1,
         category = 0;
-      for (const { source: j, area, dx, dy } of overlaps[i]) {
+      for (const { source: j, area, dx, dy } of items) {
         if (gradient) total += (density[j] + gradient.x[j] * dx + gradient.y[j] * dy) * area;
         if (area > strongest) {
           strongest = area;
           category = values[j];
         }
       }
-      if (quantity === "category") return category;
-      return quantity === "extensive" ? total : total / targetGeometry.areas[i];
-    });
+      result[i] =
+        quantity === "category"
+          ? category
+          : quantity === "extensive"
+            ? total
+            : total / targetGeometry.areas[i];
+    }
+    return result;
   };
 }
 /** Conservative overlap integration for nested or differently refined partitions of one extent. */

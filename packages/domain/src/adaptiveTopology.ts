@@ -152,8 +152,9 @@ export function refineAdaptiveWhere(
   return changed ? balanceAdaptiveTopology(source.bounds, nodes) : source;
 }
 export function adaptiveCell(topology: AdaptiveTopology, leaf: number): Bounds {
-  const at = topology.leaves[leaf] * 4;
-  return Array.from(topology.boxes.subarray(at, at + 4)) as Bounds;
+  const at = topology.leaves[leaf] * 4,
+    boxes = topology.boxes;
+  return [boxes[at], boxes[at + 1], boxes[at + 2], boxes[at + 3]];
 }
 export function adaptiveLeafAt(topology: AdaptiveTopology, x: number, y: number): number {
   const [x0, y0, x1, y1] = topology.bounds;

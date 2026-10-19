@@ -3,6 +3,7 @@ import {
   createAdaptiveField,
   createAdaptiveTopology,
   fieldInterpolator,
+  gridPosition,
   point,
   rectangle,
   spatial,
@@ -15,9 +16,10 @@ import { projectNative } from "./atlasProjection";
 import { extractLakes, extractNamedLandforms } from "./geographicRegions";
 import { extractGeologicalEvents } from "./geologicalFeatures";
 import { Landform } from "./codes";
-import { initializeMagic } from "./magicState";
+import { initializeMagic, magicKey } from "./magicState";
+import { advectAtlasMagic } from "./atlasMagic";
 import { refineWorkspace } from "./adaptiveWorkspace";
-import { nativePosition, sampleSurfaceAtNative } from "./atlasWorkspace";
+import { nativePosition, nativeIndexAtSurface, sampleSurfaceAtNative } from "./atlasWorkspace";
 
 // Supply an evolved state directly. Extraction/projection must not require
 // tectonics, climate or epochs to run before their algorithms can be tested.
@@ -116,6 +118,82 @@ it("interpolates feedback when its source and physical topology differ", () => {
     expect(sampleSurfaceAtNative(state, "heat", i)).toBe(
       expected(nativePosition(state.physical!, i))
     );
+});
+
+it.each(["same", "coarser"])(
+  "advects signed magic history from a %s field while retaining coverage",
+  async (sampling) => {
+    const state = fixture(),
+      mesh = state.physical!.map.mesh,
+      name = "magic:placed:stored";
+    if (sampling === "coarser") {
+      const tree = createAdaptiveTopology(mesh.topology!.bounds, {
+        maximumSize: 25000,
+        minimumSize: 25000,
+      });
+      state.surface = createAdaptiveField("coarse-history", state.domain.scope, tree);
+      state.physical!.samples = Int32Array.from(state.surface.active, (_, leaf) => {
+        const p = gridPosition(state.surface, leaf);
+        return nativeIndexAtSurface(state, p.x, p.y);
+      });
+    }
+    const values = Float64Array.from(state.surface.active, (_, leaf) => Math.sin(leaf * 1.3) * 20);
+    state.surface.channels[name] = values;
+    state.surface.units[name] = "celsius";
+    const read = fieldInterpolator(state.surface, name),
+      covered = spatial.pointCoverage(state.surface.scope.footprint);
+    state.physical!.map.AdvectionSourceIndex.set(
+      Int32Array.from(mesh.cellToLeaf, (_, cell) => (cell % 7 ? (cell + 13) % mesh.count : -1))
+    );
+    const expected = Float64Array.from(state.physical!.samples, (cell) => {
+      const source = state.physical!.map.AdvectionSourceIndex[cell];
+      if (source < 0) return 0;
+      const p = nativePosition(state.physical!, source);
+      return covered(p) ? read(p) : 0;
+    });
+    await advectAtlasMagic.apply(state, {
+      scope: state.domain.scope,
+      invocation: [],
+      parameters: {},
+      epochs: [],
+      epochIndices: [],
+      causes: [],
+      recordCause() {},
+      progress() {},
+      random: () => 0.5,
+      cancelled: () => false,
+    });
+    for (let leaf = 0; leaf < expected.length; leaf++)
+      expect(state.surface.channels[name][leaf]).toBeCloseTo(expected[leaf], 9);
+    expect(state.surface.channels[name].some((value) => value < 0)).toBe(true);
+    expect(state.surface.channels[name].some((value) => value > 0)).toBe(true);
+    expect(values).toEqual(
+      Float64Array.from(state.surface.active, (_, leaf) => Math.sin(leaf * 1.3) * 20)
+    );
+  }
+);
+
+it("inherits continuous magic histories and discrete epoch markers in physical cell order", () => {
+  const state = fixture(),
+    work = state.physical!;
+  initializeMagic(state);
+  const field = work.magic!.fields[0],
+    historyKey = magicKey(field, "history"),
+    epochKey = magicKey(field, "firstEpoch");
+  const history = Float64Array.from(work.map.mesh.leafToCell, (_, leaf) => 7 + leaf / 10);
+  const epochs = Float64Array.from(history, (_, leaf) => (leaf % 4) - 1);
+  state.surface.channels[historyKey] = history;
+  state.surface.channels[epochKey] = epochs;
+  state.surface.units[historyKey] = "ratio";
+  state.surface.units[epochKey] = "epoch";
+  work.inherited = true;
+  initializeMagic(state);
+  const inherited = work.magic!.fields[0];
+  for (let cell = 0; cell < work.map.mesh.count; cell++) {
+    const leaf = work.map.mesh.cellToLeaf[cell];
+    expect(inherited.history[cell]).toBeCloseTo(history[leaf], 9);
+    expect(inherited.firstEpoch[cell]).toBe(epochs[leaf]);
+  }
 });
 
 it("extracts two lakes without merging bodies or losing their physical stage", () => {
