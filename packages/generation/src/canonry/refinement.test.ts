@@ -9,6 +9,45 @@ import { physicalSchedule } from "./schedule";
 import { physicalContext } from "./context";
 import { atlasSeaIce } from "./atlasSeaIce";
 import { flowRouting } from "./routing";
+import { oceanConnectivity } from "./ocean";
+import { drainageConditioning } from "./drainageFlood";
+import { drainageGuidance } from "./flowGuidance";
+import { riverNetwork } from "./rivers";
+import { sourceToOutletOrder } from "./flowGraph";
+import { depthRateToDischarge } from "./dimensions";
+
+it("drains an inland rectangular world through its work boundary after sea-level fall", () => {
+  const map = createField(createWorldMesh([0, 0, 100_000, 100_000], 256, 10_000));
+  map.SeaLevelInitialized = true;
+  for (let i = 0; i < map.mesh.count; i++) map.Elevation[i] = units(200 + map.mesh.x[i] / 1000);
+  map.Runoff.fill(500);
+  const context = physicalContext(104729, 0, atlasPhysicalProfile());
+  context.SeaLevelOffset = -100;
+  oceanConnectivity(map, context);
+  expect(map.WaterKindCodes.every((kind) => kind === 0)).toBe(true);
+  drainageConditioning(map, context);
+  drainageGuidance(map, context);
+  flowRouting(map, context);
+  riverNetwork(map, context);
+  expect(sourceToOutletOrder(map)).toHaveLength(map.mesh.count);
+  let exported = 0,
+    supplied = 0;
+  for (let i = 0; i < map.mesh.count; i++) {
+    supplied += depthRateToDischarge(500, map.mesh.areas[i]);
+    if (map.FlowTargets[i] < 0) {
+      expect(map.mesh.boundary[i]).toBe(1);
+      exported += map.FlowAccumulation[i];
+    }
+  }
+  expect(exported).toBeCloseTo(supplied, 8);
+  context.SeaLevelOffset = 220;
+  oceanConnectivity(map, context);
+  drainageConditioning(map, context);
+  expect(map.WaterKindCodes.some((kind) => kind === 1)).toBe(true);
+  expect(map.DrainageParents.every((parent, i) => map.WaterKindCodes[i] === 1 || parent >= 0)).toBe(
+    true
+  );
+});
 
 it("routes a lake spill across an open patch boundary while requiring water in a closed world", () => {
   const map = createField(createMesh(32, 2)),

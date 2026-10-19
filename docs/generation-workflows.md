@@ -1102,3 +1102,13 @@ directed source spans. The existing feature, network, clipping, inspection and
 export paths consume this one geometry. Flow targets, water budgets, erosion
 and authored geometry are unchanged. This removes lattice artifacts; it does
 not invent finer terrain or implement physical meander migration.
+
+### Inland work-area drainage
+
+Rectangular world meshes describe a finite planar work area. If an epoch leaves
+no connected ocean in that area, priority flooding uses its boundary as the
+external drainage outlet. Ocean-connected drainage remains the default whenever
+an ocean is present; subsequent epochs recompute the roots. This preserves sea
+level and terrain instead of creating water to satisfy the solver. The reference
+disk retains its closed-world requirement. This numerical drainage boundary is
+separate from the inherited parent-boundary fields used by refinement.

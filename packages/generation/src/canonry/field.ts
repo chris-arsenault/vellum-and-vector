@@ -210,8 +210,12 @@ export function clearWaterSurface(map: PhysicalField, i: number) {
   map.WaterDepths[i] = 0;
   map.WaterSurfaceElevations[i] = noWaterSurface;
 }
+export const allowsBoundaryDrainage = (map: PhysicalField) =>
+  map.OpenBoundary || map.mesh.openBoundary;
 export const isOpenOutlet = (map: PhysicalField, i: number) =>
-  map.OpenBoundary && Boolean(map.mesh.boundary[i]);
+  Boolean(map.mesh.boundary[i]) &&
+  (map.OpenBoundary ||
+    (map.mesh.openBoundary && map.DrainageParents[i] < 0 && map.DrainageRanks[i] >= 0));
 export function setWaterSurface(map: PhysicalField, i: number, surface: number) {
   const depth = surface - map.Elevation[i];
   if (depth <= 0) throw new Error("Water surface must be above its physical floor.");

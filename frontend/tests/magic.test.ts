@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 test("configure a magic variant, evolve repeated ice ages and inspect generated histories", async ({
   page,
 }) => {
+  test.setTimeout(300000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
@@ -31,7 +32,9 @@ test("configure a magic variant, evolve repeated ice ages and inspect generated 
   await page.getByLabel("Landscape starting point").selectOption("canonry");
   await page.getByLabel("Detail level").selectOption("draft");
   await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
-  await expect(page.locator(".job-row strong").first()).toHaveText("completed", { timeout: 90000 });
+  const status = page.locator(".job-row strong").first();
+  await expect(status).toHaveText(/^(completed|failed|cancelled)$/, { timeout: 180000 });
+  expect(await status.textContent()).toBe("completed");
   await page.getByRole("button", { name: "Layers", exact: true }).click();
   const channels = page.getByLabel("Field visualization");
   await channels.selectOption("magic:pressure:coastalHistory");

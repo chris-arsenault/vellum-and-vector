@@ -3,6 +3,7 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { validateLandscape } from "./surface";
+import { isOpenOutlet } from "./field";
 import { sourceToOutletOrder } from "./flowGraph";
 import { edgeLeadingTo } from "./mesh";
 import { isGrounded } from "./glacierSurface";
@@ -34,7 +35,7 @@ function validateDrainage(map: PhysicalField) {
   for (let i = 0; i < map.mesh.count; i++) {
     const target = map.FlowTargets[i];
     if (target < 0) {
-      if (map.WaterKindCodes[i] === 0 && !(map.OpenBoundary && map.mesh.boundary[i]))
+      if (map.WaterKindCodes[i] === 0 && !isOpenOutlet(map, i))
         throw new Error("Dry triangle has no drainage outlet.");
       continue;
     }

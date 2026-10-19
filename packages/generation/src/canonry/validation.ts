@@ -5,6 +5,7 @@ import { noWaterSurface } from "./math";
 import { sourceToOutletOrder } from "./flowGraph";
 import { isGrounded } from "./glacierSurface";
 import { validateLandscape } from "./surface";
+import { allowsBoundaryDrainage, isOpenOutlet } from "./field";
 
 const range = (value: number, low: number, high: number) => value >= low && value <= high;
 function validateCodes(map: PhysicalField) {
@@ -58,7 +59,7 @@ function validateWater(map: PhysicalField) {
       validateLakeSurface(map, i, surfaces);
     }
   }
-  if (ocean === 0 && !map.OpenBoundary)
+  if (ocean === 0 && !allowsBoundaryDrainage(map))
     throw new Error("Physical geography contains no connected ocean.");
 }
 function validateRivers(map: PhysicalField) {
@@ -66,7 +67,7 @@ function validateRivers(map: PhysicalField) {
     if (map.RiverOrders[i] <= 0) continue;
     const target = map.FlowTargets[i];
     if (
-      (target < 0 && !(map.OpenBoundary && map.mesh.boundary[i])) ||
+      (target < 0 && !isOpenOutlet(map, i)) ||
       (target >= 0 &&
         map.WaterKindCodes[target] !== 2 &&
         map.FlowAccumulation[target] + 1e-9 < map.FlowAccumulation[i])

@@ -99,6 +99,7 @@ export function createWorldMesh(
     edgeX: new Float32Array(count * 3),
     edgeY: new Float32Array(count * 3),
     boundary: new Uint8Array(count),
+    openBoundary: true,
     spacing,
     origin,
     latticeOffset,

@@ -21,6 +21,7 @@ export interface PhysicalMesh {
   edgeX: Float32Array;
   edgeY: Float32Array;
   boundary: Uint8Array;
+  openBoundary: boolean;
   spacing: number;
   areas: Float64Array;
   origin: [number, number];
@@ -84,6 +85,7 @@ export function createMesh(contentCount: number, padding: number): PhysicalMesh 
     edgeX: new Float32Array(count * 3),
     edgeY: new Float32Array(count * 3),
     boundary: new Uint8Array(count),
+    openBoundary: false,
     spacing: 1,
     areas: new Float64Array(count).fill(triangleArea),
     origin: [0, 0],
