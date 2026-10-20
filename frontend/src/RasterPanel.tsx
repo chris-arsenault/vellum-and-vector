@@ -1,5 +1,5 @@
 import { useId } from "react";
-import { naturalSurfaceNames, physicalMaterialNames } from "@atlas/domain";
+import { biomes, naturalSurfaceNames, physicalMaterialNames } from "@atlas/domain";
 import type { EditorState } from "./useEditor";
 import type { FieldStyle, Raster, RasterPresentation, World } from "./types";
 import {
@@ -8,6 +8,7 @@ import {
   fieldRange,
   legendValue,
   palettes,
+  rasterCategories,
 } from "./rasterPresentation";
 
 export function RasterPanel({
@@ -143,6 +144,17 @@ function FieldControls({
     }));
   }
   const data = (editor.raster.data ?? []).filter((part) => part.channel === channel);
+  if (channel === "biome")
+    return (
+      <fieldset className="field-style">
+        <legend>Biomes</legend>
+        <p className="hint">
+          Biomes describe living cover independently of landform. Tree cover, wetland cover and
+          animal biomass can be inspected as separate fields under Biomes and life.
+        </p>
+        <FieldLegend world={world} field={field} data={data} />
+      </fieldset>
+    );
   return (
     <fieldset className="field-style">
       <legend>{fieldLabel(world, channel)}</legend>
@@ -254,6 +266,7 @@ export function FieldLegend({
   data: Raster[];
 }) {
   const id = useId();
+  if (field.channel === "biome") return <BiomeLegend data={data} />;
   const range = fieldRange(data, field);
   const unit = data[0]?.field.units[field.channel] ?? "";
   const number = (value: number) => Number(value.toPrecision(4)).toLocaleString();
@@ -277,6 +290,26 @@ export function FieldLegend({
         <span>{number(legendValue(0.5, range, field.scale))}</span>
         <span>{number(range[1])}</span>
       </div>
+    </figure>
+  );
+}
+function BiomeLegend({ data }: { data: Raster[] }) {
+  const present = new Set(rasterCategories(data));
+  return (
+    <figure className="field-legend">
+      <figcaption>Biomes</figcaption>
+      <ul>
+        {biomes.map((biome, code) =>
+          present.has(code) ? (
+            <li key={biome.name}>
+              <svg width="12" height="12" aria-hidden="true">
+                <rect width="12" height="12" fill={biome.color} />
+              </svg>{" "}
+              {biome.name}
+            </li>
+          ) : null
+        )}
+      </ul>
     </figure>
   );
 }

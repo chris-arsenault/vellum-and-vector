@@ -4,6 +4,7 @@ type Vocabulary = [string, string, string, Layer["representation"], string, stri
 const vocabulary: Vocabulary[] = [
   ["elevation", "Elevation", "physical", "field", "#aaa183", "physical"],
   ["geology", "Geology and landforms", "physical", "field", "#998477", "physical"],
+  ["ecology", "Biomes and life", "physical", "field", "#588860", "physical"],
   ["faults", "Fault traces", "physical", "vector", "#998477", "physical"],
   ["climate", "Climate", "water", "field", "#80a89b", "physical"],
   ["rivers", "Rivers", "water", "network", "#71c4de", "physical"],
@@ -24,6 +25,17 @@ const vocabulary: Vocabulary[] = [
 const fieldFacts: Record<string, string[]> = {
   elevation: ["elevation", "relief"],
   geology: ["geology", "hardness", "fracture", "lithology", "uplift"],
+  ecology: [
+    "ecology",
+    "biome",
+    "treeCover",
+    "grassCover",
+    "wetlandCover",
+    "productivity",
+    "herbivores",
+    "predators",
+    "aquaticFauna",
+  ],
   climate: ["climate", "temperature", "precipitation", "moisture", "windEast", "windNorth"],
   rivers: ["rivers", "flow"],
 };

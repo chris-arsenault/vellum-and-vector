@@ -5,6 +5,7 @@ import { nativeIndexAtSurface } from "./atlasWorkspace";
 import { projectPhysicalMaterial } from "./physicalMaterial";
 import type { AtlasPhysicalWorkspace } from "./atlasWorkspace";
 import { projectedValues } from "./atlasSampling";
+import { ecologyBindings } from "./ecologyState";
 
 const forcingChannels = new Set([
   "elevation",
@@ -15,16 +16,20 @@ const forcingChannels = new Set([
   "water",
   "temperature",
 ]);
-const weatherChannels = new Set([
+// Present weather and life can change without re-evolving the terrain.
+const weatherAndEcologyChannels = new Set([
   "temperature",
   "moisture",
   "rainfall",
   "snowfall",
   "runoff",
   "ice",
+  ...ecologyBindings.map(([name]) => name),
 ]);
 function preserveChannel(state: GenerationState, name: string, preserveTerrain: boolean): boolean {
-  return preserveTerrain && Boolean(state.surface.channels[name]) && !weatherChannels.has(name);
+  return (
+    preserveTerrain && Boolean(state.surface.channels[name]) && !weatherAndEcologyChannels.has(name)
+  );
 }
 function projectChannel(state: GenerationState, binding: ChannelBinding) {
   const work = state.physical!,

@@ -19,7 +19,7 @@ const firePreset = magicSystemSchema.parse({
   source: "geothermal",
   propagation: "fracture",
   phase: "climate",
-  effects: { heat: 0.36, iceMelt: 0.5, rockResistance: 900 },
+  effects: { heat: 0.36, iceMelt: 0.5, rockResistance: 900, fire: 0.8 },
   features: [
     feature("core", "Fire core", 90, [[at("source", 1), at("intensity", 1)]]),
     feature(

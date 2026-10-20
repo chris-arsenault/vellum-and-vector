@@ -1,8 +1,10 @@
 // Canonry PhysicalGeographyField, commit 0f62584c. Plain arrays remain worker-local.
 import type { PhysicalMesh } from "./mesh";
+import { ecologyScalars } from "./ecologyState";
 import { noWaterSurface } from "./math";
 
 const integerFields = [
+  "BiomeCodes",
   "CrustBasePotential",
   "CrustAssemblyIds",
   "CrustAssemblySeparation",
@@ -114,6 +116,7 @@ const elevationFields = [
 ] as const;
 const floatFields = ["RidgeInfluence", "Uplift"] as const;
 const metricFields = [
+  ...ecologyScalars,
   "OceanMarginDistance",
   "OceanDistance",
   "FlowAccumulation",
@@ -152,6 +155,7 @@ export type PhysicalField = Record<(typeof integerFields)[number], Int32Array> &
     SedimentDepositedTotal: number;
     SedimentExportedTotal: number;
     CompletedEpochCount: number;
+    EcologyInitialized: boolean;
     AccumulatedPlateDrift: number;
     LastPlateDriftStep: number;
     DrainageTieDecisionTotal: number;
@@ -181,6 +185,7 @@ export function createField(mesh: PhysicalMesh): PhysicalField {
     SedimentDepositedTotal: 0,
     SedimentExportedTotal: 0,
     CompletedEpochCount: 0,
+    EcologyInitialized: false,
     AccumulatedPlateDrift: 0,
     LastPlateDriftStep: 0,
     DrainageTieDecisionTotal: 0,

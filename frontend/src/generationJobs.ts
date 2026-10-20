@@ -3,6 +3,7 @@ import {
   requireThat,
   profiles,
   validateCoverage,
+  ecologyLabels,
   type DomainSnapshot,
   type FieldRef,
   type Layer,
@@ -271,11 +272,16 @@ const nativeGeologyChannels = new Set([
   "slope",
 ]);
 function channelLayer(channel: string) {
+  if (Object.hasOwn(ecologyLabels, channel)) return "ecology";
   if (nativeHistoryChannels.has(channel) || nativeGeologyChannels.has(channel)) return "geology";
   if (channel === "elevation") return "elevation";
-  if (channel.startsWith("culture:")) return "cultures";
-  if (channel.startsWith("language:")) return "languages";
-  if (channel.startsWith("religion:")) return "religions";
+  const entityLayers: Record<string, string> = {
+    culture: "cultures",
+    language: "languages",
+    religion: "religions",
+  };
+  const entityLayer = entityLayers[channel.split(":")[0]];
+  if (entityLayer) return entityLayer;
   if (channel.startsWith("magic:") || ["heat", "storedHeat", "coastalPressure"].includes(channel))
     return "magic";
   if (

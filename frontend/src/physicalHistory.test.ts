@@ -27,6 +27,14 @@ it("validates physical history and preserves it once a child has inherited its b
       makeCommand(history, "setPhysicalEpochs", { epochs: [epochs[0], epochs[0]] })
     )
   ).toThrow("unique names");
+  expect(() =>
+    commitCommand(
+      initial.id,
+      makeCommand(history, "setPhysicalEpochs", {
+        epochs: [{ ...epochs[0], ecology: { seasonality: 2 } }],
+      })
+    )
+  ).toThrow("finite climate");
   expect(session(initial.id).snapshot.world.version).toBe(history.version);
   const parentId = Object.keys(history.areas)[0];
   const child = commitCommand(

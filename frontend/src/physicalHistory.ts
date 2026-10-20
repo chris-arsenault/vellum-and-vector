@@ -4,6 +4,7 @@ import {
   type DomainSnapshot,
   type IntentContext,
   type Epoch,
+  ecologyEpochSchema,
 } from "@atlas/domain";
 
 export function setPhysicalHistory(
@@ -50,6 +51,7 @@ function validEpoch(epoch: Epoch) {
     Number.isFinite(epoch.temperature) &&
     Number.isFinite(epoch.seaLevel) &&
     validEpochEvents(epoch) &&
+    ecologyEpochSchema.safeParse(epoch.ecology ?? {}).success &&
     [epoch.tectonics, epoch.hydrology, epoch.ice, epoch.coasts].every(
       (value) => Number.isFinite(value) && value >= 0 && value <= 1
     )

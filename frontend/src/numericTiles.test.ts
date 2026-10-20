@@ -5,9 +5,16 @@ import {
   createAdaptiveTopology,
   putChannel,
   rectangle,
+  overlayField,
 } from "@atlas/domain";
 import { numericTileSampler } from "./numericTiles";
-import { defaultFieldStyle, fieldRange, legendValue, scaledValue } from "./rasterPresentation";
+import {
+  defaultFieldStyle,
+  fieldRange,
+  legendValue,
+  scaledValue,
+  rasterCategories,
+} from "./rasterPresentation";
 import { terrainStyle, overlayStyle } from "./rasterStyles";
 import { defaultRasterPresentation } from "./rasterPresentation";
 import { newCompilationContext, buildExpression } from "ol/expr/gpu.js";
@@ -45,6 +52,27 @@ function fixture(channel = "temperature"): Raster {
     bounds: field.bounds,
   };
 }
+
+it("reports composed biome categories rather than hidden base or superseded patch values", () => {
+  const raster = fixture("biome"),
+    patch = fixture("biome").field;
+  raster.field.units.biome = "category";
+  raster.field.channels.biome.fill(10);
+  patch.units.biome = "category";
+  patch.channels.biome.fill(15);
+  overlayField(raster.field, patch);
+  expect(rasterCategories([raster])).toEqual([15]);
+  expect(numericTileSampler(raster)([49, 49, 51, 51], 1)[0]).toBe(15);
+  const restored = structuredClone(patch);
+  restored.scope.footprint = rectangle([0, 0, 40, 100]);
+  restored.channels.biome.fill(7);
+  overlayField(raster.field, restored);
+  expect(rasterCategories([raster])).toEqual([7, 15]);
+  const child = fixture("biome");
+  child.field.channels.biome.fill(6);
+  child.field.units.biome = "category";
+  expect(rasterCategories([raster, child])).toEqual([6]);
+});
 it("retains zero, negative values and their logarithms while masking absent coverage", () => {
   const raster = fixture(),
     sample = numericTileSampler(raster);
@@ -132,6 +160,7 @@ it("compiles terrain and overlay expressions using the real OpenLayers expressio
     terrainStyle(defaultRasterPresentation()),
     overlayStyle(defaultFieldStyle("temperature"), [-10, 30]),
     overlayStyle({ ...defaultFieldStyle("temperature"), scale: "log" }, [-10, 30]),
+    overlayStyle(defaultFieldStyle("biome"), [0, 14]),
   ];
   for (const style of styles) {
     expect(
@@ -152,4 +181,15 @@ it("compiles terrain and overlay expressions using the real OpenLayers expressio
         )
       ).toContain("clamp");
   }
+});
+it("samples biome categories without interpolating fictional intermediate biomes", () => {
+  const raster = fixture("biome");
+  raster.field.units.biome = "category";
+  raster.field.quantities = { biome: "category" };
+  raster.field.channels.biome.set(
+    Float64Array.from({ length: 25 }, (_, i) => (i % 5 < 2 ? 5 : 12))
+  );
+  const sample = numericTileSampler(raster)([0, 0, 100, 100], 32);
+  for (let i = 0; i < sample.length; i += 3)
+    if (sample[i + 1]) expect([5, 12]).toContain(sample[i]);
 });

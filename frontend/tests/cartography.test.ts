@@ -11,7 +11,7 @@ test("choose landscape parameters and physical history before generating", async
   await page.getByRole("button", { name: "Save physical history", exact: true }).click();
   await expect(page.locator(".map-status")).toContainText("Revision 2");
   await page.getByLabel("Landscape starting point").selectOption("continental");
-  await page.getByText("Land, climate & erosion controls", { exact: true }).click();
+  await page.getByText("Land, climate, life & erosion controls", { exact: true }).click();
   await page.getByLabel("Starting cultures", { exact: true }).fill("2");
   await page.getByLabel("Starting polities", { exact: true }).fill("2");
   await page.getByLabel("Baseline temperature · °C", { exact: true }).fill("25");
@@ -27,7 +27,7 @@ test("choose landscape parameters and physical history before generating", async
   await page.getByRole("button", { name: "Draw & edit", exact: true }).click();
   await page.getByRole("button", { name: "Develop", exact: true }).click();
   await page.getByText("Generate or regenerate systems", { exact: true }).click();
-  await page.getByText("Land, climate & erosion controls", { exact: true }).click();
+  await page.getByText("Land, climate, life & erosion controls", { exact: true }).click();
   await expect(page.getByLabel("Baseline temperature · °C", { exact: true })).toHaveValue("25");
   await expect(page.getByLabel("Continental crust fraction", { exact: true })).toHaveValue("0.7");
   await expect(page.getByLabel("Detail level")).toHaveValue("draft");

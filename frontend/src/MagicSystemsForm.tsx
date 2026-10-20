@@ -205,6 +205,14 @@ const effectLabels = {
   iceMelt: "Ice removed per intensity unit · negative values add ice",
   rockResistance: "Rock resistance change at full intensity · negative values weaken rock",
   coastalForcing: "Coastal forcing · multiplier",
+  vegetationGrowth: "Plant growth change at full intensity · −1 to 5",
+  fire: "Vegetation burned at full intensity · 0–1",
+  organicPreservation: "Organic preservation · −3 accelerates decay, 3 slows decay",
+  ecologicalAlteration: "Vegetation alteration · −1 restores, 1 transforms",
+  plantColdTolerance: "Altered vegetation cold tolerance · additional °C",
+  plantDroughtTolerance: "Altered vegetation drought tolerance · 0–1",
+  animalToxicity: "Habitat and forage toxicity · 0–1",
+  seedDispersal: "Seed dispersal change · −1 stops spread",
 };
 const parameterLabels: Record<keyof MagicSystem["parameters"], string> = {
   sourceThreshold: "Minimum source density · 0–1,000",

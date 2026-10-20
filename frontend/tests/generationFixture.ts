@@ -1,12 +1,18 @@
 /* eslint-disable max-lines-per-function -- Playwright serializes the browser fixture as one isolated function. */
 import type { Page } from "@playwright/test";
-import type { DomainSnapshot, Grid } from "@atlas/domain";
+import type { AtlasFeature, DomainSnapshot, Grid } from "@atlas/domain";
 import type { CompletedBoundary } from "@atlas/generation";
 
 /** UI journeys receive small completed fields; algorithms run in the headless suite. */
-export async function installGenerationFixture(page: Page, hold = false, terrain = false) {
+export async function installGenerationFixture(
+  page: Page,
+  hold = false,
+  terrain = false,
+  life = false,
+  ecologicalFeatures: AtlasFeature[] = []
+) {
   await page.addInitScript(
-    ({ hold, terrain }) => {
+    ({ hold, terrain, life, ecologicalFeatures }) => {
       const pending = new Set<() => void>();
       Object.assign(window, {
         completeGenerationFixture() {
@@ -32,6 +38,11 @@ export async function installGenerationFixture(page: Page, hold = false, terrain
               complete = () => {
                 if (complete) pending.delete(complete);
                 if (stopped) return;
+                for (const feature of ecologicalFeatures)
+                  snapshot.world.features[feature.id] = {
+                    ...feature,
+                    areaId: snapshot.scope.areaId,
+                  };
                 const footprint = snapshot.scope.footprint;
                 if (footprint.type !== "Polygon")
                   throw new Error("Fixture expects a polygon scope");
@@ -45,6 +56,10 @@ export async function installGenerationFixture(page: Page, hold = false, terrain
                   Math.max(...ys),
                 ];
                 const size = 16;
+                const biomeAt = (i: number) => {
+                  if (!ecologicalFeatures.length) return i % size < 8 ? 10 : 14;
+                  return i % size < 5 ? 10 : i % size < 11 ? 7 : 15;
+                };
                 const channels: Grid["channels"] = {};
                 for (const name of [
                   "elevation",
@@ -53,6 +68,7 @@ export async function installGenerationFixture(page: Page, hold = false, terrain
                   "water",
                   "naturalSurface",
                   "finalSurface",
+                  ...(life ? ["biome", "treeCover", "broadleafSaplings", "soilWater"] : []),
                   ...snapshot.world.magicSystems!.flatMap((system) => [
                     `magic:${system.id}:history`,
                     `magic:${system.id}:coastalHistory`,
@@ -60,6 +76,10 @@ export async function installGenerationFixture(page: Page, hold = false, terrain
                 ]) {
                   channels[name] = Float64Array.from({ length: size * size }, (_, i) => {
                     if (name === "water") return 0;
+                    if (name === "biome") return biomeAt(i);
+                    if (name === "treeCover") return 0.7;
+                    if (name === "broadleafSaplings") return 0.1;
+                    if (name === "soilWater") return 0.08;
                     if (name !== "elevation" || !terrain) return i % size;
                     const x = (i % size) / (size - 1),
                       y = Math.floor(i / size) / (size - 1);
@@ -78,7 +98,10 @@ export async function installGenerationFixture(page: Page, hold = false, terrain
                   ),
                   channels,
                   units: Object.fromEntries(
-                    Object.keys(channels).map((name) => [name, name === "elevation" ? "m" : "1"])
+                    Object.keys(channels).map((name) => [
+                      name,
+                      name === "elevation" ? "m" : name === "biome" ? "category" : "1",
+                    ])
                   ),
                 };
                 const result: CompletedBoundary = {
@@ -114,7 +137,7 @@ export async function installGenerationFixture(page: Page, hold = false, terrain
         },
       });
     },
-    { hold, terrain }
+    { hold, terrain, life, ecologicalFeatures }
   );
 }
 

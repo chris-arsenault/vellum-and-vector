@@ -33,6 +33,9 @@ function legacy(process: MapProcess): ProcessInvocation {
     version: process.contract.version,
   };
 }
+function ecology(name: string): ProcessInvocation {
+  return { kind: "process", id: `ecology-${name}`, process: `atlas.ecology-${name}`, version: "1" };
+}
 function temperatureForcing(material: boolean): ProcessSequence {
   return [
     invoke("canonry.temperature", { unforced: true }),
@@ -79,6 +82,8 @@ function epochBody(magic: boolean, inherited: boolean): ProcessSequence {
     invoke("canonry.magic-rocks"),
     ...drainage(magic),
     invoke("canonry.refine-water"),
+    ecology("evolve"),
+    ...drainage(magic),
     ...nativeSteps(incisionSteps, magic),
     ...nativeSteps(climateSteps, magic),
     ...drainage(magic),
@@ -90,8 +95,11 @@ function epochBody(magic: boolean, inherited: boolean): ProcessSequence {
     ...drainage(magic, true),
     invoke("canonry.magic-post-glacial"),
     invoke("canonry.magic-history"),
+    ecology("respond"),
+    ...drainage(magic, true),
     invoke("canonry.magic-coast"),
     ...nativeSteps(coastalSteps, magic),
+    ecology("burial"),
     ...(magic ? [legacy(magicStorageProcess)] : []),
     ...nativeSteps([historyStep], magic),
   ];
@@ -110,6 +118,7 @@ export function atlasPhysicalSequence(
     invoke("canonry.magic-initialize"),
   ];
   if (!inherited) result.push(...nativeSteps(initialSteps, magic, true));
+  result.push(ecology("initialize"));
   if (physical)
     result.push({
       kind: "epochs",
@@ -137,6 +146,7 @@ export function atlasPhysicalSequence(
     ...nativeSteps([...iceSteps, ...extractionSteps, validationStep], magic),
     invoke("canonry.magic-post-glacial"),
     ...(!physical ? [invoke("canonry.magic-history")] : []),
+    ecology("present"),
     invoke("canonry.magic-classify"),
     invoke("canonry.project"),
     invoke("canonry.magic-project")

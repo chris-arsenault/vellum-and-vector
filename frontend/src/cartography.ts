@@ -83,7 +83,7 @@ export const drawingTools: Partial<Record<Tool, DrawingTool>> = {
     label: "Draw woodland",
     geometry: "Polygon",
     kind: "forest",
-    layer: "geology",
+    layer: "ecology",
     instruction: "Trace the woodland's extent. Double-click to finish.",
   },
   settlement: {

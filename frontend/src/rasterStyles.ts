@@ -2,6 +2,7 @@ import type { ExpressionValue as Expr } from "ol/expr/expression.js";
 import type { Style } from "ol/layer/WebGLTile.js";
 import type { FieldStyle, RasterPresentation } from "./types";
 import { palettes, scaledValue } from "./rasterPresentation";
+import { biomes } from "@atlas/domain";
 
 const band = (index: number, x = 0, y = 0): Expr => ["band", index, x, y];
 const variable = (name: string): Expr => ["var", name];
@@ -33,7 +34,14 @@ export function overlayStyle(style: FieldStyle, range: number[]): Style {
     color: [
       "case",
       mask,
-      ramp(value, palettes[style.palette], variable("minimum"), variable("maximum")),
+      style.channel === "biome"
+        ? [
+            "match",
+            ["round", band(1)],
+            ...biomes.flatMap((biome, code) => [code, biome.color]),
+            "#d1c8ae",
+          ]
+        : ramp(value, palettes[style.palette], variable("minimum"), variable("maximum")),
       ["color", 0, 0, 0, 0],
     ],
   };

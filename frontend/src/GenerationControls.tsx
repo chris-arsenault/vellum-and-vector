@@ -21,6 +21,8 @@ const settings: {
   { key: "plateDrift", label: "Plate drift · multiplier", min: 0, step: 0.1 },
   { key: "glaciers", label: "Glacial erosion & deposition · multiplier", min: 0, step: 0.1 },
   { key: "coastalErosion", label: "Coastal erosion · multiplier", min: 0, step: 0.1 },
+  { key: "vegetation", label: "Vegetation productivity · multiplier", min: 0, max: 5, step: 0.1 },
+  { key: "grazing", label: "Herbivore pressure · multiplier", min: 0, max: 5, step: 0.1 },
   { key: "cultureCount", label: "Starting cultures", min: 1, step: 1 },
   { key: "polityCount", label: "Starting polities", min: 1, step: 1 },
 ];
@@ -96,7 +98,7 @@ export function GenerationControls({
         </select>
       </label>
       <details>
-        <summary>Land, climate & erosion controls</summary>
+        <summary>Land, climate, life & erosion controls</summary>
         {settings.map((setting) => (
           <label key={setting.key}>
             {setting.label}
@@ -118,6 +120,8 @@ export function GenerationControls({
           These influence formation and erosion; land fraction describes starting crust, not a
           guaranteed final coastline. Local maps retain inherited boundaries. Starting counts apply
           when a region has no located cultures or polities; existing identities are retained.
+          Vegetation and animals evolve over each physical epoch. Wetlands preserve organic matter;
+          coal and oil source potential require burial, heat and geological time.
         </p>
       </details>
       <DetailLevel quality={quality} profile={profile} />

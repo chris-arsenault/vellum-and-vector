@@ -27,7 +27,7 @@ function terrainAt(raster: Raster, locate: AdaptivePointLocator) {
 export function numericTileSampler(raster: Raster) {
   const footprint = new GeoJSON().readGeometry(raster.footprint)!;
   const locate = adaptivePointLocator();
-  const valueAt = fieldInterpolator(raster.field, raster.channel, false, locate);
+  const valueAt = fieldInterpolator(raster.field, raster.channel, categorical(raster), locate);
   const active = activeSampler(raster.field, raster.channel, locate);
   const terrain = raster.channel === "elevation" ? terrainAt(raster, locate) : null;
   const bands = terrain ? 6 : 3;

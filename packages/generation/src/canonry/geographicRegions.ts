@@ -69,7 +69,7 @@ function connectedMembers(
     }
   return members;
 }
-function components(
+export function components(
   state: GenerationState,
   includes: (i: number) => boolean,
   publish: (members: number[], geometry?: Geometry) => void,
@@ -102,7 +102,7 @@ function regionShapes(state: GenerationState, labels: Int32Array) {
   }
   return result;
 }
-function publishPlace(
+export function publishPlace(
   state: GenerationState,
   kind: string,
   name: string,

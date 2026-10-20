@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import type { AtlasFeature } from "@atlas/domain";
+import { rectangle, type AtlasFeature } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { generatedFeature, putGeneratedNetwork } from "../mapFeatures";
 import { retainGeographicIdentities } from "./geographicIdentity";
@@ -34,6 +34,40 @@ function pair() {
   state.domain.world.features[old.id] = old;
   return { state, old, original: structuredClone(state.domain) };
 }
+
+it("retains ecological polygon identity, name and relationships when resampling moves its contour", () => {
+  const state = landscape();
+  state.domain.world.id = "00000000-0000-4000-8000-000000000001";
+  const old = generatedFeature(
+    state,
+    "old-forest",
+    "Named woodland",
+    "forest",
+    "ecology",
+    rectangle([0, 0, 1000, 1000]),
+    { sourceAlgorithm: "atlas-ecology-1", biome: "Temperate forest" }
+  );
+  old.relations = [{ kind: "related", targetId: "a-place" }];
+  state.domain.world.features = { [old.id]: old };
+  const original = structuredClone(state.domain);
+  const next = generatedFeature(
+    state,
+    "new-forest",
+    "New samples",
+    "forest",
+    "ecology",
+    rectangle([1, 0, 1001, 1000]),
+    { sourceAlgorithm: "atlas-ecology-1", biome: "Temperate forest" }
+  );
+  state.domain.world.features = { [next.id]: next };
+  retainGeographicIdentities(state, original, 50, new Set([next.id]));
+  expect(Object.keys(state.domain.world.features)).toEqual([old.id]);
+  expect(state.domain.world.features[old.id]).toMatchObject({
+    name: old.name,
+    relations: old.relations,
+    geometry: next.geometry,
+  });
+});
 
 it("retains semantic identity and metadata when resampling moves and adds vertices", () => {
   const { state, old, original } = pair();

@@ -37,7 +37,8 @@ export function temperature(map: PhysicalField, c: PhysicalContext) {
         heat +
         current +
         map.Warmth[i] +
-        map.ExternalHeatForcing[i],
+        map.ExternalHeatForcing[i] -
+        round(map.Evapotranspiration[i] * 15),
       0,
       1000
     );
@@ -59,7 +60,9 @@ export function moisture(map: PhysicalField, c: PhysicalContext) {
     const weather = round(unitNoise(map.mesh.x[i], map.mesh.y[i], c.Seed, 310_000, 3) * 230);
     const shadow = truncate((map.MoistureBarriers[i] * c.Profile.RainShadowStrength) / 1000);
     const thaw = truncate(Math.max(0, map.Temperature[i] - 260) / 3);
-    map.Moisture[i] = clamp(80 + exposure + weather + thaw - shadow, 0, 1000);
+    const upwind = map.UpwindTargets[i];
+    const recycled = upwind >= 0 ? round(map.Evapotranspiration[upwind] * 180) : 0;
+    map.Moisture[i] = clamp(80 + exposure + weather + thaw + recycled - shadow, 0, 1000);
   }
 }
 function oceanEvaporation(map: PhysicalField, i: number): number {
@@ -91,11 +94,12 @@ export function precipitation(map: PhysicalField, c: PhysicalContext) {
             1000
           );
     const total = clamp(
-      p.PrecipitationBaseline +
+      (p.PrecipitationBaseline +
         truncate((map.Moisture[i] * 680) / 1000) +
         truncate((oceanEvaporation(map, i) * p.CurrentEvaporationStrength) / 1000) +
         truncate((lift * p.OrographicPrecipitationStrength) / 1000) -
-        truncate((map.PrecipitationBarriers[i] * p.RainShadowStrength) / 1000),
+        truncate((map.PrecipitationBarriers[i] * p.RainShadowStrength) / 1000)) *
+        c.RainfallMultiplier,
       0,
       1000
     );
@@ -136,6 +140,19 @@ export function runoff(map: PhysicalField, c: PhysicalContext) {
       0,
       1000
     );
-    map.Runoff[i] = truncate((available * (1000 - loss)) / 1000);
+    const vegetationLoss = Math.min(
+      0.35,
+      map.TreeCover[i] * 0.22 + map.GrassCover[i] * 0.08 + map.WetlandCover[i] * 0.12
+    );
+    const ecologicalLoss = map.EcologyInitialized
+      ? Math.min(
+          available,
+          map.Evapotranspiration[i] * 1000 + available * map.Infiltration[i] * 0.08
+        )
+      : available * vegetationLoss;
+    const evaporation = map.EcologyInitialized
+      ? Math.max((available * loss) / 1000, ecologicalLoss)
+      : (available * loss) / 1000 + ecologicalLoss;
+    map.Runoff[i] = truncate(Math.max(0, available - evaporation));
   }
 }

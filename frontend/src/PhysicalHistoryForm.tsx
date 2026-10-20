@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Epoch, World } from "./types";
 import type { EditorState } from "./useEditor";
 import { physicalHistoryFixed } from "./physicalHistory";
+import { EcologyEpochFields } from "./EcologyEpochFields";
 
 const present: Epoch = {
   id: "Present",
@@ -68,6 +69,33 @@ const histories: Record<string, Epoch[]> = {
       ice: 0.46,
       temperature: 21.5,
       magicActivity: { fire: 1, aurora: 0.76, pressure: 1 },
+    },
+  ],
+  ecological: [
+    {
+      ...present,
+      id: "Wet expansion",
+      temperature: 22,
+      ecology: { rainfall: 1.4, seasonality: 0.15, fire: 0.3 },
+    },
+    {
+      ...present,
+      id: "Dry fire age",
+      temperature: 27,
+      ecology: { rainfall: 0.35, seasonality: 0.9, fire: 3 },
+    },
+    {
+      ...present,
+      id: "Cold retreat",
+      temperature: -8,
+      ice: 0.8,
+      ecology: { rainfall: 0.7, seasonality: 0.65, migration: 1.5 },
+    },
+    {
+      ...present,
+      id: "Refugial recovery",
+      temperature: 18,
+      ecology: { rainfall: 1.1, seasonality: 0.3, recovery: 1.5 },
     },
   ],
 };
@@ -154,6 +182,7 @@ function HistoryPreset({ change }: { change: (epochs: Epoch[]) => void }) {
         <option value="glacial">Glacial past, temperate present</option>
         <option value="cycles">Bombardment & repeated ice ages</option>
         <option value="canonry">Ice Remembers · four Canonry epochs</option>
+        <option value="ecological">Ecological cycles · wet, dry, cold and recovery</option>
       </select>
     </label>
   );
@@ -214,6 +243,7 @@ function EpochFields({
         </label>
       ))}
       <EpochClimate epoch={epoch} change={change} />
+      <EcologyEpochFields epoch={epoch} change={change} />
     </>
   );
 }
@@ -229,6 +259,10 @@ function EpochClimate({ epoch, change }: { epoch: Epoch; change: (epoch: Epoch) 
           onChange={(event) => change({ ...epoch, duration: Number(event.target.value) })}
         />
       </label>
+      <p className="hint">
+        Establishment, migration and succession take time. Ice, drought, disturbance and magical
+        activity can change the communities and seed banks inherited by later epochs.
+      </p>
       {(["impacts", "volcanism"] as const).map((key) => (
         <label key={key}>
           {key === "impacts" ? "Meteor bombardment" : "Volcanic construction"} · multiplier

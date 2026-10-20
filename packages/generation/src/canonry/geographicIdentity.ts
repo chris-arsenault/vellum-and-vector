@@ -150,7 +150,7 @@ function previousCandidates(state: GenerationState, original: DomainSnapshot) {
     if (
       feature.areaId !== state.domain.scope.areaId ||
       feature.attributes.causeId ||
-      feature.attributes.sourceAlgorithm !== "canonry-0f62584c"
+      !["canonry-0f62584c", "atlas-ecology-1"].includes(String(feature.attributes.sourceAlgorithm))
     )
       continue;
     const key = group(feature);

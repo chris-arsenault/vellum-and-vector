@@ -142,7 +142,8 @@ function replaceable(
     !feature.protected &&
     !Object.keys(feature.detail).length &&
     !retained.has(feature.id) &&
-    domains.includes(feature.generationDomain ?? "")
+    (domains.includes(feature.generationDomain ?? "") ||
+      (feature.layerId === "ecology" && domains.includes("magic")))
   );
 }
 export const extractGeographyProcess: MapProcess = {

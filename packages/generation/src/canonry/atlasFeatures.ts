@@ -9,6 +9,7 @@ import { extractLakes, extractNamedLandforms, extractMagicPlaces } from "./geogr
 import { createRiverPaths, riverPath, type RiverPaths } from "./riverPaths";
 import type { PhysicalField } from "./field";
 import { oceanFootprint } from "./geographicContours";
+import { extractEcologicalFeatures } from "./ecologyFeatures";
 
 function riverReach(state: GenerationState, start: number, incoming: Int32Array) {
   const map = state.physical!.map,
@@ -98,6 +99,7 @@ export function extractNativeGeography(state: GenerationState, context: MapProce
   extractLakes(state);
   extractNamedLandforms(state);
   extractMagicPlaces(state);
+  extractEcologicalFeatures(state);
   const work = state.physical!,
     map = work.map,
     paths = createRiverPaths(map),

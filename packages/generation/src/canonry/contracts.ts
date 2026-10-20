@@ -1,5 +1,5 @@
 // Generated metadata comes directly from Canonry's layer contracts; regenerate with make canonry-fixtures.
-import generated from "./contracts.generated.json";
+import generated from "./contracts.generated.json" with { type: "json" };
 import type { NativeStep } from "./sequence";
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";

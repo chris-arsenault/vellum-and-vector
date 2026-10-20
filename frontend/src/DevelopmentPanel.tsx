@@ -90,6 +90,8 @@ const parameterLabels: Record<string, string> = {
   plateDrift: "Plate drift multiplier",
   glaciers: "Glacial erosion & deposition multiplier",
   coastalErosion: "Coastal erosion multiplier",
+  vegetation: "Vegetation productivity multiplier",
+  grazing: "Herbivore pressure multiplier",
   cultureCount: "Starting cultures",
   polityCount: "Starting polities",
 };
@@ -134,7 +136,7 @@ export function DomainChoices({ profile }: { profile: string }) {
   const domains =
     profile === "interior" ? ["built"] : ["physical", "magic", "cultural", "political", "built"];
   const labels: Record<string, string> = {
-    physical: "Land, climate & water",
+    physical: "Land, climate, water & life",
     magic: "Magical effects",
     cultural: "Communities & distributions",
     political: "Territory & claims",
