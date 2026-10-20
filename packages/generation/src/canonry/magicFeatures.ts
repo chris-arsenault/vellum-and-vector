@@ -36,6 +36,18 @@ function conditionReader(
     fracture: map.FractureConductance,
     landform: map.LandformCodes,
     river: map.RiverOrders,
+    biome: map.BiomeCodes,
+    treeCover: map.TreeCover,
+    wetlandCover: map.WetlandCover,
+    peatCarbon: map.PeatCarbon,
+    oilCarbon: map.OilCarbon,
+    alteredCover: map.AlteredCover,
+    ecologicalAlteration: map.EcologicalAlteration,
+    ecologicalToxicity: map.EcologicalToxicity,
+    soilWater: map.SoilWater,
+    soilDepth: map.SoilDepth,
+    grazers: map.Grazers,
+    browsers: map.Browsers,
   };
   if (key === "elevation") return (i: number) => (map.Elevation[i] - map.BaseSeaLevel) / 1024;
   if (key === "slope") return (i: number) => map.Slope[i];

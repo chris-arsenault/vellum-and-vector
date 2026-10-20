@@ -65,6 +65,7 @@ export interface FieldSample {
   values: Record<string, number>;
 }
 export interface Epoch {
+  ecology?: Partial<import("./ecology").EcologyEpoch>;
   duration?: number;
   impacts?: number;
   volcanism?: number;

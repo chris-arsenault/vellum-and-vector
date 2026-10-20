@@ -27,6 +27,18 @@ export const naturalSurfaceNames = [
   "Waterfall",
   "Current channel",
   "Trench",
+  "Grassland",
+  "Savanna",
+  "Woodland",
+  "Temperate forest",
+  "Boreal forest",
+  "Rainforest",
+  "Marsh",
+  "Swamp",
+  "Desert",
+  "Barren",
+  "Altered woodland",
+  "Altered wetland",
 ] as const;
 export const surfaceCode = (name: (typeof naturalSurfaceNames)[number]) =>
   naturalSurfaceNames.indexOf(name);

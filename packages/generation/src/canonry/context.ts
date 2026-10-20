@@ -3,6 +3,7 @@ import type { PhysicalProfile } from "./profile";
 import type { GenerationState, MapProcessContext } from "../process";
 import { atlasEpoch } from "./atlasProfile";
 import { round } from "./math";
+import { ecologyEpochSchema } from "@atlas/domain";
 export interface PhysicalEpoch {
   StableName: string;
   TectonicStrength: number;
@@ -13,6 +14,7 @@ export interface PhysicalEpoch {
   SeaLevelOffset: number;
 }
 export interface PhysicalContext {
+  RainfallMultiplier: number;
   Seed: number;
   EpochStableSeed: number;
   EpochIndex: number;
@@ -48,7 +50,22 @@ export function nativeContext(
   profile.ImpactCraterCount = round(profile.ImpactCraterCount * (definition?.impacts ?? 1));
   for (const key of ["VolcanicConeHeight", "VolcanicApronHeight", "VolcanicCalderaDepth"] as const)
     profile[key] *= definition?.volcanism ?? 1;
-  return physicalContext(seed, salt, profile, epoch, nativeIndex, state.domain.world.epochs.length);
+  const physical = physicalContext(
+    seed,
+    salt,
+    profile,
+    epoch,
+    nativeIndex,
+    state.domain.world.epochs.length
+  );
+  physical.RainfallMultiplier = ecologicalEpoch(state, definition).rainfall;
+  return physical;
+}
+function ecologicalEpoch(
+  state: GenerationState,
+  definition: import("@atlas/domain").Epoch | undefined
+) {
+  return ecologyEpochSchema.parse((definition ?? state.domain.world.epochs.at(-1))?.ecology ?? {});
 }
 export function physicalContext(
   seed: number,
@@ -60,6 +77,7 @@ export function physicalContext(
 ): PhysicalContext {
   return {
     ...(epoch ?? neutral),
+    RainfallMultiplier: 1,
     Seed: seed ^ salt ^ (EpochIndex < 0 ? 0 : Math.imul(EpochIndex + 1, 0x45d9f3b)),
     EpochStableSeed: seed ^ salt,
     EpochIndex,

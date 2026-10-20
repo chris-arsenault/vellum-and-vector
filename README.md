@@ -22,6 +22,16 @@ counts independently of sampling detail. Configure physical epochs and cultural
 history before generation; completed history remains fixed. Chosen generation
 inputs remain available in the session.
 
+Physical epochs evolve competing plant groups, young and mature trees, seed banks,
+soil resources and grazing, browsing, predatory and aquatic animals. Colonization
+and migration follow reachable routes; ice, waterlogging, drought, fire and magic
+change the communities inherited by later epochs. Configure **Ecological regime**
+within physical history, or start with the wet/dry/cold/recovery cycle preset.
+**Biomes and life** exposes the resulting fields and selectable land-biome regions;
+the Biomes overlay uses named categories and is visible by default. Organic deposits
+and their later burial remain downstream consequences. See the
+[ecology model](docs/generation-workflows.md#ecology-and-organic-geology).
+
 Use **Draw a region to develop** to drag a rectangle or trace an outline, adjust
 its vertices and choose a profile. The map previews the selected extent and its
 dimensions. Coordinates are optional precision controls. Double-click a mapped

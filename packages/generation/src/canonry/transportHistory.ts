@@ -2,8 +2,17 @@
 import type { PhysicalField } from "./field";
 import { clamp, truncate, units } from "./math";
 import { weightScale, type TransportPlan } from "./transportPlan";
+import { ecologyCarbon, ecologyMemory, ecologyRatios } from "./ecologyState";
 
 const intensive = [
+  ...ecologyRatios,
+  "ColdAdaptation",
+  "CanopyAge",
+  "Evapotranspiration",
+  "Productivity",
+  "AquaticProductivity",
+  "OrganicBurialDepth",
+  "OrganicMaturity",
   "BedrockElevation",
   "CrustThickness",
   "CrustSupportElevation",
@@ -14,6 +23,17 @@ const intensive = [
   "ImpactHeat",
 ] as const;
 const extensive = [
+  ...ecologyCarbon,
+  ...ecologyMemory,
+  "Grazers",
+  "Browsers",
+  "Herbivores",
+  "Predators",
+  "AquaticFauna",
+  "SoilDepth",
+  "SoilWater",
+  "MineralNutrients",
+  "MigrationFlux",
   "SurfaceRockLoad",
   "SedimentThickness",
   "SedimentSupply",
@@ -136,8 +156,8 @@ function finalize(
   if (arrival <= 0) return fresh;
   if (isExtensive) return sum / weightScale;
   if (boundary === 2 && arrival < weightScale)
-    return truncate((sum + fresh * (weightScale - arrival)) / weightScale);
-  return truncate(sum / arrival);
+    return (sum + fresh * (weightScale - arrival)) / weightScale;
+  return sum / arrival;
 }
 function freshValue(name: (typeof intensive)[number]): number {
   if (name === "BedrockElevation" || name === "CrustSupportElevation") return units(-200);
@@ -172,11 +192,15 @@ function completeTarget(a: Accumulator, map: PhysicalField, target: number, arri
 }
 export function transportHistory(map: PhysicalField, plan: TransportPlan) {
   const a = accumulator(map.mesh.count);
+  const biomes = map.BiomeCodes.slice();
   for (let source = 0; source < map.mesh.count; source++)
     for (let offset = plan.offsets[source]; offset < plan.offsets[source + 1]; offset++) {
       const target = plan.targets[offset];
       if (target >= 0) addSource(a, map, source, target, plan.weights[offset]);
     }
-  for (let target = 0; target < map.mesh.count; target++)
+  for (let target = 0; target < map.mesh.count; target++) {
     completeTarget(a, map, target, plan.arrivals[target]);
+    const source = plan.dominant[target];
+    map.BiomeCodes[target] = source >= 0 ? biomes[source] : 0;
+  }
 }

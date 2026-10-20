@@ -2,6 +2,7 @@ import LineString from "ol/geom/LineString.js";
 import { Circle, Fill, Stroke, Style, Text } from "ol/style.js";
 import type { AtlasFeature, LayerStyle } from "./types";
 import type { Style as SymbolStyle, Symbolizer } from "geostyler-style";
+import { biomes } from "@atlas/domain";
 
 export function defaultSymbolStyle(
   name: string,
@@ -9,6 +10,7 @@ export function defaultSymbolStyle(
   geometries: string[]
 ): SymbolStyle {
   const kinds = new Set(geometries);
+  if (style.layerId === "ecology") kinds.add("Polygon");
   const symbolizers: Symbolizer[] = [];
   if ([...kinds].some((kind) => kind.includes("Polygon")))
     symbolizers.push({
@@ -24,7 +26,22 @@ export function defaultSymbolStyle(
     symbolizers.push({ kind: "Mark", wellKnownName: "circle", color: style.color, radius: 5 });
   if (style.labels)
     symbolizers.push({ kind: "Text", label: "{{name}}", color: style.color, size: 12 });
-  return { name, rules: [{ name: "Default", symbolizers }] };
+  if (style.layerId !== "ecology") return { name, rules: [{ name: "Default", symbolizers }] };
+  return {
+    name,
+    rules: [
+      ...biomes.map((biome) => ({
+        name: biome.name,
+        filter: ["==", "biome", biome.name] as ["==", string, string],
+        symbolizers: symbolizers.map((symbol) => ({
+          ...symbol,
+          color: biome.color,
+          ...(symbol.kind === "Fill" ? { outlineColor: biome.color } : {}),
+        })),
+      })),
+      { name: "Other ecological features", elseRule: true, symbolizers },
+    ],
+  };
 }
 
 export function featureStyle(feature: AtlasFeature, style: LayerStyle, resolution: number) {
@@ -35,32 +52,39 @@ export function featureStyle(feature: AtlasFeature, style: LayerStyle, resolutio
       .includes(style.filter.toLowerCase())
   )
     return [];
+  const color = ecologicalColor(feature) ?? style.color;
   const result = new Style({
     text: style.labels
       ? new Text({
           text: feature.name,
           font: "12px system-ui",
-          fill: new Fill({ color: style.color }),
+          fill: new Fill({ color }),
           stroke: new Stroke({ color: "#203739", width: 3 }),
         })
       : undefined,
     stroke: new Stroke({
-      color: style.color,
-      width:
-        feature.layerId === "geology"
-          ? Math.min(1, 0.4 + 600 / resolution)
-          : physicalStrokeWidth(feature, resolution),
+      color,
+      width: featureStrokeWidth(feature, resolution),
       lineDash:
         feature.kind === "fault" ? [6, 4] : feature.layerId === "claims" ? [7, 5] : undefined,
     }),
-    fill: new Fill({ color: style.color + (feature.layerId === "geology" ? "18" : "45") }),
+    fill: new Fill({ color: color + (feature.layerId === "geology" ? "18" : "64") }),
     image: new Circle({
       radius: feature.layerId === "geology" ? 2 : feature.kind === "settlement" ? 4 : 5,
-      fill: new Fill({ color: style.color }),
+      fill: new Fill({ color }),
       stroke: new Stroke({ color: "#233638", width: 1.5 }),
     }),
   });
-  return profiledLineStyles(feature, result, style.color, resolution);
+  return profiledLineStyles(feature, result, color, resolution);
+}
+function featureStrokeWidth(feature: AtlasFeature, resolution: number) {
+  return feature.layerId === "geology"
+    ? Math.min(1, 0.4 + 600 / resolution)
+    : physicalStrokeWidth(feature, resolution);
+}
+function ecologicalColor(feature: AtlasFeature) {
+  if (feature.layerId !== "ecology") return null;
+  return biomes.find((biome) => biome.name === feature.attributes.biome)?.color;
 }
 function profiledLineStyles(feature: AtlasFeature, base: Style, color: string, resolution: number) {
   const widths = feature.attributes.widths;

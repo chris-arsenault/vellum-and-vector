@@ -1,4 +1,4 @@
-import { naturalSurfaceNames, surfaceCode } from "@atlas/domain";
+import { biomes, naturalSurfaceNames, surfaceCode } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import { Feature, Landform } from "./codes";
@@ -47,6 +47,12 @@ function frozenOcean(map: PhysicalField, i: number): (typeof naturalSurfaceNames
   return null;
 }
 function landClimate(map: PhysicalField, i: number): (typeof naturalSurfaceNames)[number] {
+  const biome = biomes[map.BiomeCodes[i]]?.name;
+  const ecological = naturalSurfaceNames.find((name) => name === biome);
+  if (ecological) return ecological;
+  return legacyLandClimate(map, i);
+}
+function legacyLandClimate(map: PhysicalField, i: number): (typeof naturalSurfaceNames)[number] {
   if (map.Temperature[i] >= 335 && map.Moisture[i] >= 260) return "Open field";
   if (map.Moisture[i] >= 620) return "Wet tundra";
   if (map.Temperature[i] <= 255 && map.Moisture[i] <= 210) return "Polar barrens";

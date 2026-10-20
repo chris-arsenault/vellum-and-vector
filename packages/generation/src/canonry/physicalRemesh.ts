@@ -28,6 +28,7 @@ const indices = new Set([
   "DeltaIntensity",
 ]);
 const categories = new Set([
+  "BiomeCodes",
   "CrustAssemblyIds",
   "CrustSuturePairIds",
   "CrustProvinceIds",

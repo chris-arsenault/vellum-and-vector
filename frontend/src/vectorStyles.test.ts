@@ -1,6 +1,8 @@
 import { expect, it } from "vitest";
 import { Style } from "ol/style.js";
-import { featureStyle } from "./vectorStyles";
+import { featureStyle, defaultSymbolStyle } from "./vectorStyles";
+import { biomes, rectangle } from "@atlas/domain";
+import Parser from "geostyler-openlayers-parser";
 import type { AtlasFeature, LayerStyle } from "./types";
 
 const layer: LayerStyle = {
@@ -63,4 +65,29 @@ it("distinguishes subsurface fault traces from topographic and landform boundari
   const style = styles(fault, 5000)[0];
   expect(style.getStroke()?.getLineDash()).toEqual([6, 4]);
   expect(style.getStroke()?.getWidth()).toBe(1);
+});
+
+it("uses biome colors for ecological polygons and preserves thematic rules in GeoStyler", async () => {
+  const ecology = { ...layer, layerId: "ecology", color: "#588860" };
+  const colors = ["Temperate forest", "Swamp", "Altered woodland", "Grassland"].map((biome) => {
+    const feature = {
+      ...river([]),
+      kind: "forest",
+      layerId: "ecology",
+      geometry: rectangle([0, 0, 100, 100]),
+      attributes: { biome },
+    };
+    const style = featureStyle(feature, ecology, 1000) as Style;
+    expect(style.getStroke()?.getColor()).toBe(biomes.find((b) => b.name === biome)!.color);
+    return style.getFill()?.getColor();
+  });
+  expect(new Set(colors).size).toBe(4);
+  const symbols = defaultSymbolStyle("Biomes", ecology, ["Polygon"]);
+  expect(symbols.rules.find((rule) => rule.name === "Altered woodland")?.filter).toEqual([
+    "==",
+    "biome",
+    "Altered woodland",
+  ]);
+  const parsed = await new Parser().writeStyle(symbols);
+  expect(parsed.errors ?? []).toEqual([]);
 });

@@ -14,6 +14,8 @@ export const atlasParametersSchema = z.object({
   plateDrift: z.number().nonnegative().default(1),
   glaciers: z.number().nonnegative().default(1),
   coastalErosion: z.number().nonnegative().default(1),
+  vegetation: z.number().min(0).max(5).default(1),
+  grazing: z.number().min(0).max(5).default(1),
   cultureCount: z.number().int().min(1).default(3),
   polityCount: z.number().int().min(1).default(3),
 });

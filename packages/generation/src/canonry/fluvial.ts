@@ -53,7 +53,8 @@ function erodeOutlets(map: PhysicalField, c: PhysicalContext) {
 export function surfaceResistance(map: PhysicalField, i: number): number {
   const cover = clamp(map.SedimentThickness[i] / units(25), 0, 1),
     rock = Math.max(1, map.RockResistance[i]);
-  return Math.max(1, rock + (300 - rock) * cover);
+  const roots = 1 + map.TreeCover[i] * 1.2 + map.GrassCover[i] * 0.45 + map.WetlandCover[i] * 0.7;
+  return Math.max(1, (rock + (300 - rock) * cover) * roots);
 }
 function erodeTriangle(
   map: PhysicalField,

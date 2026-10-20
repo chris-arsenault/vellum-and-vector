@@ -27,6 +27,7 @@ import { refineGeologicalCauses, refineWorkspace } from "./adaptiveWorkspace";
 import { adaptiveWaterProcess } from "./adaptiveWater";
 import { adaptiveClimateProcess, adaptiveIceProcess, shoreSupport } from "./adaptiveClimate";
 import { prepareAdaptiveFractures } from "./adaptiveFractures";
+import { ecologyProcesses } from "./ecologyProcesses";
 
 const prefix = (fact: string) => `canonry:${fact}`;
 const contract = (id: string, requires: string[] = [], produces: string[] = []) => ({
@@ -144,6 +145,7 @@ export function atlasNativeProcesses(
           adaptiveIceProcess(input.seed),
         ]),
     ...magicProcesses(input.seed, input.domains.includes("magic")),
+    ...ecologyProcesses(input),
     ...Array.from(implementations.values(), (step) => nativeProcess(step, input.seed)),
   ];
 }

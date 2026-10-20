@@ -72,7 +72,10 @@ export function hillslopeFlux(map: PhysicalField, p: PhysicalProfile) {
   const heights = Float64Array.from(map.Elevation, (v) => v / 1024);
   const stable = Float64Array.from(
     map.RockResistance,
-    (v) => p.MassWastingStableGradient * clamp(0.55 + (v / 1000) * 0.45, 0.55, 1.45)
+    (v, i) =>
+      p.MassWastingStableGradient *
+      clamp(0.55 + (v / 1000) * 0.45, 0.55, 1.45) *
+      (1 + map.TreeCover[i] * 0.2)
   );
   const budget = Float64Array.from(
     mesh.areas,

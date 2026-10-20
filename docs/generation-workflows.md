@@ -1898,3 +1898,91 @@ existing browser terrain/culture/politics/magic authoring workflow passes agains
 the tile renderer (36 seconds; fixture generation). The temporary test server is
 stopped. This does not establish real-world relief fidelity. The complete headless
 world and its display at multiple extents remain required for M7/M8 acceptance.
+
+## Ecology and organic geology
+
+Physical generation now runs atlas ecology processes on the same numerical map as
+climate, drainage, erosion, ice and magic. The biome field describes living cover;
+`landform` continues to describe relief. A plain can carry forest or grassland.
+The **Biomes and life** layer contains cover, productivity, functional animal
+biomass and organic source fields. A categorical Biomes overlay is visible by
+default. Forests, woodland, swamps, marshes, grassland, savanna, desert, tundra and
+barren land also become selectable polygons. Default vector colors follow the
+biome palette. GeoStyler starts with biome-specific rules, so editing symbols
+retains the classification. Categorical legends use composed coverage, including
+authored patches and finer field parts, rather than hidden base samples.
+
+Five functional plant groups compete: grass/shrubs, broadleaf trees, conifers,
+wetland plants and magically altered trees. Woody groups have separate young and
+mature cover. Temperature extremes, drought, waterlogging, light, soil depth and
+available nitrogen affect establishment, growth and mortality. Broadleaf and
+conifer groups have different cold, heat and waterlogging responses. Soil depth,
+water, nutrients, seed banks and disturbance damage persist between epochs.
+Growth changes the community; biome names classify the resulting cover.
+
+Initial worlds receive geographically varied founders. Subsequent establishment
+requires surviving plants, viable seeds or a reachable colonization front.
+Dispersal takes physical travel time and responds to terrain, wind, waterborne
+transport and configured migration strength. Deep water and ice interrupt land
+colonization. Suitable climate alone cannot recreate an extinct forest on an
+isolated island. Grazers, browsers, predators and aquatic consumers migrate toward
+reachable food and refuge before reproduction, starvation, consumption and
+predation alter their biomass. Aquatic populations require connected water and
+production; they do not appear spontaneously in a newly flooded isolated cell.
+
+Erosion and glacial advance strip soil and seed banks. Fire ignition depends on
+fuel, drought and the epoch's fire regime; fire spreads through connected fuel
+with wind and wet barriers affecting travel. Volcanic construction and impacts
+also remove vegetation. Regrowth depends on the remaining substrate and sources.
+Plant litter supports soil development and nutrient availability. Roots and soil
+affect infiltration and evapotranspiration, which feed runoff, local cooling and
+downwind moisture. Cover increases resistance to river erosion and hillslope
+movement. Ecology responds both before incision and after glacial evolution;
+drainage refreshes after each response.
+
+Configure **Ecological regime** inside each physical epoch: rainfall, seasonal
+contrast, productivity, fire, migration and soil recovery. Rainfall scales physical
+precipitation as well as ecological water availability. Seasonal contrast estimates
+winter cold and summer drought. The **Ecological cycles** preset supplies wet
+expansion, a dry fire age, cold retreat and refugial recovery. These controls
+change processes rather than requesting a particular biome. Existing climate,
+ice, hydrology and per-system magical activity also shape each epoch.
+
+Magic can accelerate growth, burn cover, change decomposition, transform existing
+vegetation, or restore altered vegetation. `ecologicalAlteration` creates an altered
+woody group; `plantColdTolerance`, `plantDroughtTolerance` and `animalToxicity`
+leave traits that its seeds can carry beyond the original magical source.
+`seedDispersal` changes migration speed. Toxic altered habitat changes forage and
+animal passage. Magical feature conditions can inspect living cover, soil water,
+alteration, toxicity and animal biomass. Effects use configured system intensity,
+independently of the system's name. Fire's preset includes vegetation burning;
+alteration requires configuring an effect on a system or variant.
+
+A magic-only generation refreshes living fields and ecological polygons while
+retaining existing terrain and completed epochs. Obsolete generated ecological
+regions are replaced; authored/protected features stay authoritative. The shared
+geographic identity matcher associates ecological polygons after resampling, so
+matching regions retain their names and relationships when contours move.
+Protected biome samples also govern polygon classification.
+
+Epoch durations are in years. Analytical cohort responses and graph travel times
+avoid annual iteration over geological ages. Each epoch has two coupled biological
+responses; it does not resolve seasonal weather, every fire, population cycles or
+the full succession sequence inside a long epoch. Coefficients are atlas-scale
+approximations, not calibrated ecosystem predictions. Animal feeding and soil
+nitrogen are coarse resource constraints, not complete energy or nutrient budgets.
+Altered vegetation shares one functional group per cell, so distinct magical
+lineages do not remain separate populations. Authored woodland and sampled fields
+remain geographic authorities. Refinement inherits the existing community without
+replaying its age. Completed causes record biome transitions, fire-affected cover,
+altered canopy, animal biomass and migration. Numerical state follows existing
+material transport, adaptive transfer, inheritance and atomic publication.
+
+Organic geology remains a downstream consequence. Waterlogging preserves litter
+as peat and aquatic organic sediment; actual sediment gain buries it. Erosion,
+burial temperature and geological time change the source pools into coal, oil and
+gas potential. Source transformations conserve represented carbon. Each cell has
+one mixed buried horizon; there is no stratigraphic column, petroleum migration,
+reservoir/trap simulation or recoverable reserve estimate. A forest-to-swamp-to-
+buried-source history is one supported consequence among many ecological histories.
+The model and research rationale are recorded in [ECOLOGY-PLAN.md](ECOLOGY-PLAN.md).

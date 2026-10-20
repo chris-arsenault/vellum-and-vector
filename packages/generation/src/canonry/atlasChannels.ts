@@ -1,5 +1,6 @@
 // Explicit projection from Canonry's fixed-point numerical state into GIS channels.
 import type { PhysicalField } from "./field";
+import { ecologyBindings } from "./ecologyState";
 
 type ArrayName = {
   [K in keyof PhysicalField]: PhysicalField[K] extends ArrayLike<number> ? K : never;
@@ -39,6 +40,7 @@ const metric = (name: string, native: ArrayName, unit: string): ChannelBinding =
 });
 export const atlasChannels: ChannelBinding[] = [
   height("elevation", "Elevation", true),
+  ...ecologyBindings.map(([name, native, unit]) => ({ name, native, unit, scale: 1 })),
   height("bedrock", "BedrockElevation", true),
   height("sediment", "SedimentThickness"),
   height("crustThickness", "CrustThickness"),

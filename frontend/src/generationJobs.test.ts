@@ -61,6 +61,9 @@ it("publishes adaptive world quantities in their geographic layers without raste
     ["riverWidth", "metre"],
     ["riverDepth", "metre"],
     ["catchmentArea", "square-metre"],
+    ["biome", "category"],
+    ["treeCover", "ratio"],
+    ["oilCarbon", "kg-carbon/square-metre"],
   ])
     putChannel(grid, channel, unit, new Float64Array(grid.active.length).fill(1));
   const output = generationSnapshot(
@@ -82,4 +85,7 @@ it("publishes adaptive world quantities in their geographic layers without raste
   );
   expect(output.numerical[rivers.id].topology).toBe(topology);
   expect(output.numerical[rivers.id].channels.riverWidth).toBe(grid.channels.riverWidth);
+  const ecology = output.world.fields.find((field) => field.layerId === "ecology")!;
+  expect(ecology.channels).toEqual(expect.arrayContaining(["biome", "treeCover", "oilCarbon"]));
+  expect(output.numerical[ecology.id].units.oilCarbon).toBe("kg-carbon/square-metre");
 });
