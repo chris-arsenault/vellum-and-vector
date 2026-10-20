@@ -23,7 +23,7 @@ import { atlasPhysicalProfile, atlasQuality } from "./atlasProfile";
 import { atlasChannels, type ChannelBinding } from "./atlasChannels";
 import type { PhysicalProfile } from "./profile";
 import { units } from "./math";
-import { nativeContracts } from "./contracts";
+import { inheritedNativeFacts } from "./inheritedFacts";
 import type { AtlasParameters } from "../atlasParameters";
 
 export interface AtlasPhysicalWorkspace {
@@ -81,6 +81,7 @@ function initializeInheritedMaterial(map: PhysicalField, surface: Grid) {
   map.CrustTypeCodes.set(
     Int32Array.from(map.CrustContinentalFraction, (value) => (value >= 500 ? 2 : 1))
   );
+  if (!surface.channels.geothermal) map.Geothermal.fill(0);
 }
 function inheritNumerical(state: GenerationState, work: AtlasPhysicalWorkspace) {
   const map = work.map,
@@ -99,9 +100,8 @@ function inheritNumerical(state: GenerationState, work: AtlasPhysicalWorkspace) 
     0
   );
   map.SedimentDepositedTotal = map.SedimentProducedTotal;
-  for (const contract of Object.values(nativeContracts))
-    for (const fact of contract.produces) map.AvailableFacts.add(fact);
-  map.AvailableFacts.delete("Validated");
+  for (const fact of inheritedNativeFacts([...Object.keys(surface.channels), ...parent.keys()]))
+    map.AvailableFacts.add(fact);
 }
 function inheritChannels(
   surface: Grid,

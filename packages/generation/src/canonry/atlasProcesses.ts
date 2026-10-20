@@ -1,7 +1,7 @@
 import { requireThat, type DomainSnapshot } from "@atlas/domain";
 import type { GenerationState, MapProcess } from "../process";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
-import { nativeContracts, applyNativeStep } from "./contracts";
+import { applyNativeStep } from "./contracts";
 import { nativeContext } from "./context";
 import { atlasEpoch, atlasQuality } from "./atlasProfile";
 import {
@@ -28,6 +28,9 @@ import { adaptiveWaterProcess } from "./adaptiveWater";
 import { adaptiveClimateProcess, adaptiveIceProcess, shoreSupport } from "./adaptiveClimate";
 import { prepareAdaptiveFractures } from "./adaptiveFractures";
 import { ecologyProcesses } from "./ecologyProcesses";
+import { selectedNativeContract, processEnabled, type ProcessSelection } from "../processSelection";
+import { ecologyBindings } from "./ecologyState";
+import { absentInheritedHistories, inheritedChannelNames } from "./inheritedFacts";
 
 const prefix = (fact: string) => `canonry:${fact}`;
 const contract = (id: string, requires: string[] = [], produces: string[] = []) => ({
@@ -65,9 +68,14 @@ function prepareSpatialStep(
     ? ([name, salt, prepareAdaptiveFractures(state, c)] as const)
     : step;
 }
-function nativeProcess(step: NativeStep, seed: number): MapProcess {
+function nativeProcess(
+  step: NativeStep,
+  seed: number,
+  selection: ProcessSelection,
+  inheritedAbsences: string[]
+): MapProcess {
   const [name] = step,
-    source = nativeContracts[name];
+    source = selectedNativeContract(name, selection, inheritedAbsences);
   return {
     contract: {
       ...contract(
@@ -98,7 +106,7 @@ function nativeProcess(step: NativeStep, seed: number): MapProcess {
           ? [name, source.salt, (map, c) => crustalSupport(map, c, true)]
           : spatialStep;
       if (name === "sea-ice") selected = [name, source.salt, atlasSeaIce];
-      applyNativeStep(map, c, selected);
+      applyNativeStep(map, c, selected, source);
       if (name === "plate-advection") advectMagic(state);
       restoreAuthoring(work);
       if (name === "physical-epoch-history")
@@ -106,7 +114,7 @@ function nativeProcess(step: NativeStep, seed: number): MapProcess {
           kind: "domain",
           process: `canonry.${name}`,
           subjects: [],
-          description: `Epoch ${c.EpochIndex + 1}: advected crust, geological construction, river and glacier erosion, sediment transport and coastal evolution retained their material histories.`,
+          description: `Epoch ${c.EpochIndex + 1}: the selected geological, river, ice and coastal processes retained their material histories. Omitted processes added no new events.`,
         });
     },
     validate: validateWorkspace,
@@ -130,6 +138,12 @@ export function atlasNativeProcesses(
   const implementations = new Map<string, NativeStep>();
   for (const { step } of steps)
     if (!implementations.has(step[0])) implementations.set(step[0], step);
+  const channels = inheritedChannelNames(
+    original,
+    input.areaId,
+    input.domains.includes("physical")
+  );
+  const inheritedAbsences = channels.has("elevation") ? absentInheritedHistories(channels) : [];
   return [
     initializeProcess(input),
     projectProcess(input),
@@ -146,12 +160,14 @@ export function atlasNativeProcesses(
         ]),
     ...magicProcesses(input.seed, input.domains.includes("magic")),
     ...ecologyProcesses(input),
-    ...Array.from(implementations.values(), (step) => nativeProcess(step, input.seed)),
+    ...Array.from(implementations.values(), (step) =>
+      nativeProcess(step, input.seed, input.processes ?? {}, inheritedAbsences)
+    ),
   ];
 }
 function initializeProcess(input: AtlasGenerationInput): MapProcess {
   return {
-    contract: contract("canonry.initialize", [], ["canonry:workspace"]),
+    contract: contract("canonry.initialize", [], ["canonry:workspace", "canonry:SedimentSupply"]),
     apply(state) {
       requireThat(
         input.quality in atlasQuality,
@@ -163,6 +179,7 @@ function initializeProcess(input: AtlasGenerationInput): MapProcess {
         input.quality as keyof typeof atlasQuality,
         input.parameters
       );
+      state.physical.map.AvailableFacts.add("SedimentSupply");
       for (const fact of state.physical.map.AvailableFacts) state.facts.add(prefix(fact));
     },
     validate: validateWorkspace,
@@ -185,9 +202,24 @@ function projectProcess(input: AtlasGenerationInput): MapProcess {
         Boolean(context.parameters.forcingOnly),
         !input.domains.includes("physical")
       );
+      omitUnselectedChannels(state, input);
     },
     validate: validateWorkspace,
   };
+}
+function omitUnselectedChannels(state: GenerationState, input: AtlasGenerationInput) {
+  const selection = input.processes ?? {};
+  const channels = [
+    ...(!processEnabled(selection, "atlas.ecology-evolve")
+      ? ecologyBindings.map(([name]) => name)
+      : []),
+    ...(!processEnabled(selection, "canonry.river-floodplains") ? ["floodplain"] : []),
+    ...(!processEnabled(selection, "canonry.river-delta-formation") ? ["delta"] : []),
+  ];
+  for (const channel of channels) {
+    delete state.surface.channels[channel];
+    delete state.surface.units[channel];
+  }
 }
 function forcingProcess(): MapProcess {
   return {

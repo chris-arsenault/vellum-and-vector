@@ -5,8 +5,6 @@ import { MagicRuleEditor } from "./MagicRuleEditor";
 
 export function MagicSystemsForm({ editor }: { editor: EditorState }) {
   const [systems, setSystems] = useState(editor.world.magicSystems ?? canonryMagicPresets());
-  const change = (updated: MagicSystem) =>
-    setSystems(systems.map((system) => (system.id === updated.id ? updated : system)));
   return (
     <form
       onSubmit={(event) => {
@@ -19,19 +17,42 @@ export function MagicSystemsForm({ editor }: { editor: EditorState }) {
         Fire follows fractures and hardens rock. Aurora drains toward cold and gathers in ice.
         Pressure travels through oceans and changes coasts. Combine or alter these examples below.
       </p>
+      <MagicSystemsEditor systems={systems} change={setSystems} />
+      <button className="primary" disabled={editor.commit.isPending}>
+        Save magical systems
+      </button>
+      <p className="hint">
+        Save, then apply to the present landscape or generate land and magic together to carry their
+        effects through every epoch. Disable a system to leave its place in the configuration while
+        removing its active effects from the next generation.
+      </p>
+    </form>
+  );
+}
+export function MagicSystemsEditor({
+  systems,
+  change,
+}: {
+  systems: MagicSystem[];
+  change: (systems: MagicSystem[]) => void;
+}) {
+  const update = (updated: MagicSystem) =>
+    change(systems.map((system) => (system.id === updated.id ? updated : system)));
+  return (
+    <>
       {systems.map((system) => (
         <details key={system.id}>
           <summary>
             {system.name}
             {system.enabled ? " · active" : " · inactive"}
           </summary>
-          <SystemSettings system={system} change={change} />
-          <MagicRuleEditor system={system} systems={systems} change={change} />
+          <SystemSettings system={system} change={update} />
+          <MagicRuleEditor system={system} systems={systems} change={update} />
           <button
             type="button"
             className="secondary"
             onClick={() =>
-              setSystems([
+              change([
                 ...systems,
                 {
                   ...structuredClone(system),
@@ -45,18 +66,10 @@ export function MagicSystemsForm({ editor }: { editor: EditorState }) {
           </button>
         </details>
       ))}
-      <button type="button" className="quiet" onClick={() => setSystems(canonryMagicPresets())}>
+      <button type="button" className="quiet" onClick={() => change(canonryMagicPresets())}>
         Restore Canonry examples
       </button>
-      <button className="primary" disabled={editor.commit.isPending}>
-        Save magical systems
-      </button>
-      <p className="hint">
-        Save, then apply to the present landscape or generate land and magic together to carry their
-        effects through every epoch. Disable a system to leave its place in the configuration while
-        removing its active effects from the next generation.
-      </p>
-    </form>
+    </>
   );
 }
 function SystemSettings({

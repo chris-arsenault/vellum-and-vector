@@ -53,7 +53,7 @@ export function HumanEraForm({ world, editor }: { world: World; editor: EditorSt
     </form>
   );
 }
-function EraFields({ era, change }: { era: Era; change: (era: Era) => void }) {
+export function EraFields({ era, change }: { era: Era; change: (era: Era) => void }) {
   return (
     <>
       <label>

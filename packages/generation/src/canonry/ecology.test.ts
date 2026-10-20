@@ -10,6 +10,7 @@ import { runoff } from "./climate";
 import { surfaceResistance } from "./fluvial";
 import { physicalContext } from "./context";
 import { atlasPhysicalProfile } from "./atlasProfile";
+import { evolveAnimals } from "./ecologyAnimals";
 
 function fixture() {
   const map = createField(createMesh(32, 0));
@@ -167,6 +168,15 @@ it("grazers suppress cover, predators suppress grazers and aquatic life requires
   evolveVegetation(safe, 100);
   expect(hunted.Herbivores[0]).toBeLessThan(safe.Herbivores[0]);
   expect(safe.AquaticFauna[0]).toBe(0);
+});
+
+it("exhausts tiny grass stocks without negative cover from biomass conversion", () => {
+  const map = fixture();
+  map.GrassCover.fill(4.3e-15);
+  map.Grazers.fill(0.01);
+  evolveAnimals(map, 1, forcing({}));
+  expect(map.GrassCover.every((value) => value === 0)).toBe(true);
+  expect(map.SoilCarbon.every((value) => Number.isFinite(value) && value >= 0)).toBe(true);
 });
 
 it("roots resist erosion and vegetation reduces runoff without changing rainfall", () => {

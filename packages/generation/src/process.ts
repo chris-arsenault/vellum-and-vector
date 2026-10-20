@@ -116,6 +116,7 @@ export interface ProcessConfiguration {
   version: number;
   parameters: ParameterValues;
   sequence: ProcessSequence;
+  inputs?: ParameterValues;
 }
 export interface CompletedBoundary {
   configurationHash: string;
@@ -126,6 +127,9 @@ export interface CompletedBoundary {
 
 export class MapProcessRegistry {
   private readonly entries = new Map<string, MapProcess>();
+  contracts(): MapProcessContract[] {
+    return Array.from(this.entries.values(), (process) => process.contract);
+  }
   register(process: MapProcess): this {
     const key = `${process.contract.id}@${process.contract.version}`;
     requireThat(!this.entries.has(key), "process_identity", `Register ${key} once.`);

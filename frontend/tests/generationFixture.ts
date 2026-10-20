@@ -1,7 +1,7 @@
 /* eslint-disable max-lines-per-function -- Playwright serializes the browser fixture as one isolated function. */
 import type { Page } from "@playwright/test";
 import type { AtlasFeature, DomainSnapshot, Grid } from "@atlas/domain";
-import type { CompletedBoundary } from "@atlas/generation";
+import type { CompletedBoundary, AtlasGenerationInput } from "@atlas/generation";
 
 /** UI journeys receive small completed fields; algorithms run in the headless suite. */
 export async function installGenerationFixture(
@@ -32,7 +32,8 @@ export async function installGenerationFixture(
               stopped = true;
               if (complete) pending.delete(complete);
             },
-            postMessage(message: { snapshot: DomainSnapshot }) {
+            postMessage(message: { snapshot: DomainSnapshot; input: AtlasGenerationInput }) {
+              Object.assign(window, { generationFixtureInput: structuredClone(message.input) });
               // Pin the same input revision that a real worker receives through structured cloning.
               const snapshot = structuredClone(message.snapshot);
               complete = () => {
@@ -68,6 +69,19 @@ export async function installGenerationFixture(
                   "water",
                   "naturalSurface",
                   "finalSurface",
+                  "bedrock",
+                  "sediment",
+                  "rock",
+                  "province",
+                  "continentalFraction",
+                  "fracture",
+                  "geothermal",
+                  "impactExcavation",
+                  "volcanicConstruction",
+                  "glacialErosion",
+                  "glacialDeposition",
+                  "coastalErosion",
+                  "deposition",
                   ...(life ? ["biome", "treeCover", "broadleafSaplings", "soilWater"] : []),
                   ...snapshot.world.magicSystems!.flatMap((system) => [
                     `magic:${system.id}:history`,
@@ -75,7 +89,8 @@ export async function installGenerationFixture(
                   ]),
                 ]) {
                   channels[name] = Float64Array.from({ length: size * size }, (_, i) => {
-                    if (name === "water") return 0;
+                    const physical = physicalFixtureValue(name, i, size);
+                    if (physical !== undefined) return physical;
                     if (name === "biome") return biomeAt(i);
                     if (name === "treeCover") return 0.7;
                     if (name === "broadleafSaplings") return 0.1;
@@ -98,10 +113,7 @@ export async function installGenerationFixture(
                   ),
                   channels,
                   units: Object.fromEntries(
-                    Object.keys(channels).map((name) => [
-                      name,
-                      name === "elevation" ? "m" : name === "biome" ? "category" : "1",
-                    ])
+                    Object.keys(channels).map((name) => [name, fixtureUnit(name)])
                   ),
                 };
                 const result: CompletedBoundary = {
@@ -136,6 +148,59 @@ export async function installGenerationFixture(
           return worker;
         },
       });
+      function fixtureUnit(name: string) {
+        if (
+          [
+            "elevation",
+            "bedrock",
+            "sediment",
+            "soilWater",
+            "impactExcavation",
+            "volcanicConstruction",
+            "glacialErosion",
+            "glacialDeposition",
+            "coastalErosion",
+            "deposition",
+          ].includes(name)
+        )
+          return "metre";
+        if (["biome", "water", "naturalSurface", "finalSurface", "province"].includes(name))
+          return "category";
+        if (
+          [
+            "rock",
+            "continentalFraction",
+            "fracture",
+            "geothermal",
+            "treeCover",
+            "broadleafSaplings",
+          ].includes(name)
+        )
+          return "ratio";
+        if (name === "temperature") return "celsius";
+        if (name === "flow") return "cubic-metre/second";
+        return "1";
+      }
+      function physicalFixtureValue(name: string, i: number, size: number) {
+        const values: Record<string, number> = {
+          water: 0,
+          impactExcavation: 0,
+          volcanicConstruction: 0,
+          glacialErosion: 0,
+          glacialDeposition: 0,
+          coastalErosion: 0,
+          deposition: 0,
+          geothermal: 0,
+          province: 0,
+          rock: 1,
+          continentalFraction: 1,
+          fracture: 1,
+          sediment: 0,
+        };
+        if (name === "bedrock") return i % size;
+        if (Object.hasOwn(values, name)) return values[name];
+        return undefined;
+      }
     },
     { hold, terrain, life, ecologicalFeatures }
   );

@@ -9,6 +9,9 @@ import {
   semanticId,
   requireThat,
   cloneSnapshot,
+  sameValue,
+  type ParameterValues,
+  DomainError,
   type DomainSnapshot,
   type Grid,
 } from "@atlas/domain";
@@ -29,6 +32,19 @@ import { atlasNativeProcesses } from "./canonry/atlasProcesses";
 import { atlasPhysicalSequence } from "./canonry/atlasSequence";
 import { atlasQuality } from "./canonry/atlasProfile";
 import { atlasParametersSchema, type AtlasParameters } from "./atlasParameters";
+import {
+  generationSettingsSchema,
+  worldGenerationSettings,
+  type GenerationSettings,
+} from "./generationSettings";
+import { preflight } from "./preflight";
+import { processConfigurationSchema } from "./configurationSchema";
+import {
+  selectedSequence,
+  selectionDiagnostics,
+  ecologicalMagicDiagnostics,
+} from "./processSelection";
+import { inheritedChannelNames, inheritedNativeFacts } from "./canonry/inheritedFacts";
 
 export interface AtlasGenerationInput {
   areaId: string;
@@ -36,6 +52,9 @@ export interface AtlasGenerationInput {
   quality: string;
   seed: number;
   parameters?: Partial<AtlasParameters>;
+  processes?: Record<string, boolean>;
+  settings?: GenerationSettings;
+  configuration?: ProcessConfiguration;
 }
 const processes = [
   thermalMagicProcess,
@@ -51,22 +70,19 @@ export async function generateAtlas(
   input: AtlasGenerationInput,
   options: Omit<MapRunnerOptions, "seed" | "seedScope"> = {}
 ) {
-  requireThat(
-    input.domains.length &&
-      input.domains.every((d) =>
-        ["physical", "magic", "cultural", "political", "built"].includes(d)
-      ),
-    "generation_domains",
-    "Select at least one generation domain."
-  );
-  requireThat(Number.isInteger(input.seed), "generation_seed", "Use an integer generation seed.");
-  input = { ...input, parameters: atlasParametersSchema.parse(input.parameters ?? {}) };
+  const prepared = prepareAtlasGeneration(source, input);
+  input = prepared.input;
+  source = prepared.source;
+  if (prepared.diagnostics.length)
+    throw new DomainError(
+      "generation_configuration",
+      prepared.diagnostics.map((item) => item.message).join("\n"),
+      prepared.diagnostics
+    );
   options.progress?.(["prepare"], 0, "Sampling inherited geography");
   const initial = initialState(source, input);
-  const registry = [...processes, ...atlasNativeProcesses(input, source)]
-    .reduce((r, process) => r.register(process), new MapProcessRegistry())
-    .register(prepareGeneratedProcess(input.domains));
-  const configuration = atlasConfiguration(source, input);
+  const registry = atlasRegistry(source, input);
+  const configuration = input.configuration!;
   const result = await new MapRunner(configuration, registry).run(initial, {
     ...options,
     seed: String(input.seed),
@@ -78,6 +94,120 @@ export async function generateAtlas(
   // Numerical scratch never leaves the worker or becomes a saved execution state.
   delete result.state.physical;
   return result;
+}
+
+export function atlasRegistry(source: DomainSnapshot, input: AtlasGenerationInput) {
+  return [...processes, ...atlasNativeProcesses(input, source)]
+    .reduce(
+      (registry, process) =>
+        registry.register(profileProcess(process, source.world.areas[input.areaId].profile)),
+      new MapProcessRegistry()
+    )
+    .register(prepareGeneratedProcess(input.domains));
+}
+function profileProcess(process: MapProcess, profile: string): MapProcess {
+  if (process.contract.id !== "built.layout" || ["site", "interior"].includes(profile))
+    return process;
+  return { ...process, contract: { ...process.contract, requires: ["elevation"] } };
+}
+
+export function prepareAtlasGeneration(source: DomainSnapshot, input: AtlasGenerationInput) {
+  source = configuredSource(source, input);
+  checkRunInputs(source, input);
+  input = {
+    ...input,
+    settings: worldGenerationSettings(source.world),
+    parameters: atlasParametersSchema.parse(input.parameters ?? {}),
+    processes: input.processes ?? {},
+  };
+  const configuration = atlasConfiguration(source, input);
+  checkReviewedConfiguration(input, configuration);
+  input = { ...input, configuration };
+  const registry = atlasRegistry(source, input);
+  const diagnostics = selectionDiagnostics(
+    input.processes ?? {},
+    registry.contracts().map((contract) => contract.id)
+  );
+  checkNewSelection(source, input);
+  diagnostics.push(
+    ...ecologicalMagicDiagnostics(
+      input.processes ?? {},
+      input.domains,
+      source.world.magicSystems ?? []
+    )
+  );
+  const inherited = usesInheritedInputs(source, input);
+  const initial = inherited ? inheritedFactsForRun(source, input) : [];
+  diagnostics.push(...preflight(configuration, registry, initial));
+  return { input, source, registry, diagnostics };
+}
+function checkRunInputs(source: DomainSnapshot, input: AtlasGenerationInput) {
+  requireThat(
+    input.domains.length &&
+      input.domains.every((domain) =>
+        ["physical", "magic", "cultural", "political", "built"].includes(domain)
+      ),
+    "generation_domains",
+    "Select at least one generation domain."
+  );
+  requireThat(Number.isInteger(input.seed), "generation_seed", "Use an integer generation seed.");
+  requireThat(
+    input.quality in atlasQuality,
+    "generation_quality",
+    "Choose draft, standard or fine."
+  );
+  if (
+    !input.domains.includes("physical") &&
+    source.world.areas[input.areaId].profile !== "interior"
+  )
+    requireThat(
+      inheritedChannelNames(source, input.areaId, false).has("elevation"),
+      "generation_prerequisite",
+      "Generate physical geography first, or include Land, climate and water in this request."
+    );
+}
+function inheritedFactsForRun(source: DomainSnapshot, input: AtlasGenerationInput) {
+  const channels = inheritedChannelNames(source, input.areaId, input.domains.includes("physical"));
+  return [...channels, ...inheritedNativeFacts(channels).map((fact) => `canonry:${fact}`)];
+}
+function configuredSource(source: DomainSnapshot, input: AtlasGenerationInput) {
+  const settings = generationSettingsSchema.parse(
+    input.settings ?? worldGenerationSettings(source.world)
+  );
+  const area = source.world.areas[input.areaId];
+  requireThat(area, "generation_area", "Choose an existing mapped area.");
+  if (area.parentId || source.world.generations.some((run) => run.domains.includes("physical")))
+    requireThat(
+      sameValue(settings, worldGenerationSettings(source.world)),
+      "completed_history",
+      "Inherited and completed history stays fixed. Configure the new world before its first generation."
+    );
+  return { ...source, world: { ...source.world, ...settings } };
+}
+function checkReviewedConfiguration(
+  input: AtlasGenerationInput,
+  configuration: ProcessConfiguration
+) {
+  if (input.configuration)
+    requireThat(
+      sameValue(processConfigurationSchema.parse(input.configuration), configuration),
+      "generation_configuration",
+      "The reviewed configuration does not match these generation inputs."
+    );
+}
+function usesInheritedInputs(source: DomainSnapshot, input: AtlasGenerationInput) {
+  return (
+    Boolean(source.world.areas[input.areaId].parentId) ||
+    (!input.domains.includes("physical") && source.world.fields.length > 0)
+  );
+}
+function checkNewSelection(source: DomainSnapshot, input: AtlasGenerationInput) {
+  if (Object.values(input.processes ?? {}).some((enabled) => !enabled))
+    requireThat(
+      !source.world.generations.some((run) => run.areaId === input.areaId),
+      "process_selection",
+      "Process omission is available for new worlds and newly created regions. Existing-map regeneration keeps its current process configuration."
+    );
 }
 
 function initialState(source: DomainSnapshot, input: AtlasGenerationInput): GenerationState {
@@ -168,6 +298,28 @@ export function atlasConfiguration(
   source: DomainSnapshot,
   input: AtlasGenerationInput
 ): ProcessConfiguration {
+  const settings = generationSettingsSchema.parse(
+    input.settings ?? worldGenerationSettings(source.world)
+  );
+  source = { ...source, world: { ...source.world, ...settings } };
+  const sequence = configuredSequence(source, input);
+  return {
+    id: `atlas:${source.world.areas[input.areaId].profile}`,
+    version: 3,
+    parameters: {
+      ...atlasParametersSchema.parse(input.parameters ?? {}),
+      magicConfiguration: JSON.stringify(source.world.magicSystems ?? canonryMagicPresets()),
+    },
+    sequence: selectedSequence(sequence, input.processes ?? {}),
+    inputs: {
+      settings: settings as unknown as ParameterValues,
+      seed: input.seed,
+      quality: input.quality,
+      processes: input.processes ?? {},
+    },
+  };
+}
+function configuredSequence(source: DomainSnapshot, input: AtlasGenerationInput): ProcessSequence {
   const sequence: ProcessSequence = [invoke(prepareGeneratedProcess(input.domains))];
   const area = source.world.areas[input.areaId],
     physical = input.domains.includes("physical");
@@ -182,13 +334,5 @@ export function atlasConfiguration(
     "profile_domains",
     "Choose a generation domain supported by this profile."
   );
-  return {
-    id: `atlas:${area.profile}`,
-    version: 3,
-    parameters: {
-      ...atlasParametersSchema.parse(input.parameters ?? {}),
-      magicConfiguration: JSON.stringify(source.world.magicSystems ?? canonryMagicPresets()),
-    },
-    sequence,
-  };
+  return sequence;
 }

@@ -8,9 +8,11 @@ import {
   type FieldRef,
   type Layer,
   type World,
+  type Diagnostic,
 } from "@atlas/domain";
 import {
   atlasParametersSchema,
+  prepareAtlasGeneration,
   type AtlasGenerationInput,
   type CompletedBoundary,
 } from "@atlas/generation";
@@ -24,6 +26,7 @@ interface GenerationJob {
   progress: number;
   error: string | null;
   startedAt: number;
+  diagnostics?: Diagnostic[];
 }
 interface RunningJob {
   job: GenerationJob;
@@ -48,6 +51,13 @@ export function startGeneration(
       input.parameters ?? inheritedGeneration(snapshot.world, input.areaId)?.parameters ?? {}
     ),
   };
+  const prepared = prepareAtlasGeneration(snapshot, input);
+  requireThat(
+    !prepared.diagnostics.length,
+    "generation_configuration",
+    prepared.diagnostics.map((item) => item.message).join("\n")
+  );
+  input = { ...input, ...prepared.input };
   requireThat(
     snapshot.world.version === input.expectedVersion,
     "stale_version",
@@ -103,7 +113,7 @@ export function inheritedGeneration(
 type WorkerResult =
   | { kind: "progress"; path: string[]; fraction: number; message: string }
   | { kind: "completed"; result: CompletedBoundary }
-  | { kind: "failed"; error: string };
+  | { kind: "failed"; error: string; diagnostics?: Diagnostic[] };
 function receive(id: string, message: WorkerResult) {
   const active = running.get(id);
   if (!active) return;
@@ -117,6 +127,7 @@ function receive(id: string, message: WorkerResult) {
     return;
   }
   if (message.kind === "failed") {
+    active.job.diagnostics = message.diagnostics;
     finish(id, "failed", message.error);
     return;
   }
@@ -186,8 +197,8 @@ export function generationSnapshot(
   world.version++;
   publishFields(snapshot, grid, id);
   const area = world.areas[input.areaId];
-  for (const layer of Object.values(world.layers).filter((l) =>
-    input.domains.includes(l.generator ?? "")
+  for (const layer of Object.values(world.layers).filter(
+    (l) => input.domains.includes(l.generator ?? "") && generatedLayer(snapshot, input.areaId, l.id)
   )) {
     const coverage = {
       id: semanticId(world.id, "generated-coverage", `${area.id}:${layer.id}`),
@@ -221,8 +232,17 @@ export function generationSnapshot(
     completedAt: new Date().toISOString(),
     physicalEpochs: structuredClone(world.epochs),
     magicSystems: structuredClone(world.magicSystems ?? []),
+    configuration: input.configuration && { ...input.configuration },
   });
   return snapshot;
+}
+function generatedLayer(snapshot: DomainSnapshot, areaId: string, layerId: string) {
+  return (
+    snapshot.world.fields.some((field) => field.areaId === areaId && field.layerId === layerId) ||
+    Object.values(snapshot.world.features).some(
+      (feature) => feature.areaId === areaId && feature.layerId === layerId
+    )
+  );
 }
 const nativeHistoryChannels = new Set([
   "naturalSurface",

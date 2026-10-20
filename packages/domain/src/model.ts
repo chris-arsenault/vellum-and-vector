@@ -333,6 +333,7 @@ export interface World {
     politicalCapacity: number;
   }[];
   generations: {
+    configuration?: Record<string, unknown>;
     physicalEpochs?: Epoch[];
     magicSystems?: import("./magicSystems").MagicSystem[];
     id: string;

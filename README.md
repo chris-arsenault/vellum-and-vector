@@ -15,12 +15,19 @@ Open product work is tracked in the [backlog](docs/backlog.md).
 
 ## Authoring workflow
 
-Start in **Develop**: generate a landscape from a preset, or edit a blank map by
-hand. Generation controls set continental assemblies, tectonic provinces, crust
-balance, temperature, rainfall, river erosion, sea level and initial community
-counts independently of sampling detail. Configure physical epochs and cultural
-history before generation; completed history remains fixed. Chosen generation
-inputs remain available in the session.
+Start with the new-world wizard: choose the extent and seed, generation domains
+and optional processes, parameters, physical/ecological epochs, human history and
+magic. Review the ordered work and dependency explanations before generating the
+first map. Back navigation retains your draft. **Create world** on the first step
+instead opens an empty world for manual editing.
+
+Process switches change geography; layer visibility only changes display.
+Required climate, drainage, ice-balance and validation work stays in the causal
+sequence. River incision can be omitted while retaining rivers. Glacial erosion
+and deposition are coupled to preserve sediment accounting; deltas require
+floodplain inputs. Ecology's paired responses retain their half-epoch durations.
+Advanced JSON configuration uses a versioned, validated recipe; applying it edits
+the draft without starting generation. Effective run inputs remain in the session.
 
 Physical epochs evolve competing plant groups, young and mature trees, seed banks,
 soil resources and grazing, browsing, predatory and aquatic animals. Colonization
@@ -36,6 +43,10 @@ Use **Draw a region to develop** to drag a rectangle or trace an outline, adjust
 its vertices and choose a profile. The map previews the selected extent and its
 dimensions. Coordinates are optional precision controls. Double-click a mapped
 child area to enter it, or use the atlas tree and geographic breadcrumbs.
+Selecting **Generate local detail** opens the shared wizard for the new area.
+Parent history and crossings remain fixed, and inherited geological construction
+controls are read-only. Manual and intentionally empty areas remain available.
+Existing-map regeneration continues through **Develop**.
 
 Choose **Work on** to get tools for terrain, rivers and lakes, roads, places,
 political boundaries, communities, magic, interiors or a custom layer. Drawing

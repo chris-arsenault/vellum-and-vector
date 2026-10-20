@@ -41,5 +41,6 @@ export const processConfigurationSchema: z.ZodType<ProcessConfiguration> = z
     version: z.number().int().positive(),
     parameters: valueRecordSchema,
     sequence,
+    inputs: valueRecordSchema.optional(),
   })
   .strict();

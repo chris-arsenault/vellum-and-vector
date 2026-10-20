@@ -1,7 +1,11 @@
 import { useGenerate } from "./useAtlas";
 import { ErrorMessage } from "./ErrorMessage";
 import { GenerationControls } from "./GenerationControls";
-import { defaultAtlasParameters, type AtlasParameters } from "@atlas/generation";
+import {
+  defaultAtlasParameters,
+  atlasParameterDefinitions,
+  type AtlasParameters,
+} from "@atlas/generation";
 import type { EditorState } from "./useEditor";
 import type { World } from "./types";
 import { HumanEraForm } from "./HumanEraForm";
@@ -76,25 +80,12 @@ function GenerationInputs({ world }: { world: World }) {
     </details>
   );
 }
-const parameterLabels: Record<string, string> = {
-  continents: "Continental assemblies",
-  provinces: "Tectonic provinces",
-  landFraction: "Continental crust fraction",
-  temperature: "Baseline temperature · °C",
-  rainfall: "Rainfall multiplier",
-  erosion: "River erosion multiplier",
-  seaLevel: "Sea level adjustment · m",
-  impacts: "Meteor impacts",
-  impactSize: "Crater radius multiplier",
-  volcanism: "Volcanic construction multiplier",
-  plateDrift: "Plate drift multiplier",
-  glaciers: "Glacial erosion & deposition multiplier",
-  coastalErosion: "Coastal erosion multiplier",
-  vegetation: "Vegetation productivity multiplier",
-  grazing: "Herbivore pressure multiplier",
-  cultureCount: "Starting cultures",
-  polityCount: "Starting polities",
-};
+const parameterLabels: Record<string, string> = Object.fromEntries(
+  Object.entries(atlasParameterDefinitions).map(([key, definition]) => [
+    key,
+    `${definition.label} · ${definition.unit}`,
+  ])
+);
 function GenerationForm({ world, editor }: { world: World; editor: EditorState }) {
   const generate = useGenerate(world, editor.area.id);
   const previous = inheritedGeneration(world, editor.area.id);

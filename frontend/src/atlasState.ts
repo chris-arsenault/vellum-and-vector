@@ -11,6 +11,7 @@ import {
   type SpatialScope,
   type World,
 } from "@atlas/domain";
+import { generationSettingsSchema, type GenerationSettings } from "@atlas/generation";
 
 export interface SessionWorld {
   snapshot: DomainSnapshot;
@@ -86,7 +87,21 @@ export function indexSnapshot(snapshot: DomainSnapshot): DomainSnapshot {
   return snapshot;
 }
 
-export function createWorld(input: { name: string; seed: number; width: number; height: number }) {
+export interface WorldCreationInput {
+  name: string;
+  seed: number;
+  width: number;
+  height: number;
+  settings?: GenerationSettings;
+}
+export function createWorld(input: WorldCreationInput) {
+  const snapshot = createWorldSnapshot(input);
+  const world = snapshot.world;
+  worlds.set(world.id, { snapshot, history: [], undo: [], causes: {} });
+  changed();
+  return world;
+}
+export function createWorldSnapshot(input: WorldCreationInput, id: string = crypto.randomUUID()) {
   requireThat(
     Number.isFinite(input.width) &&
       input.width > 0 &&
@@ -95,7 +110,6 @@ export function createWorld(input: { name: string; seed: number; width: number; 
     "world_size",
     "World dimensions must be positive finite metres."
   );
-  const id = crypto.randomUUID();
   const blueprint = createWorldBlueprint({
     id,
     name: input.name,
@@ -134,6 +148,7 @@ export function createWorld(input: { name: string; seed: number; width: number; 
       { id: "Settlement", years: 200, physicalEpoch: null, mobility: 1, politicalCapacity: 1 },
     ],
   };
+  if (input.settings) Object.assign(world, generationSettingsSchema.parse(input.settings));
   const snapshot = indexSnapshot({
     world,
     scope: worldScope(world, blueprint.root.id),
@@ -144,11 +159,9 @@ export function createWorld(input: { name: string; seed: number; width: number; 
     coverage: [],
     fieldPatches: [],
   });
-  worlds.set(id, { snapshot, history: [], undo: [], causes: {} });
-  changed();
-  return world;
+  return snapshot;
 }
-function defaultEpochs(): World["epochs"] {
+export function defaultEpochs(): World["epochs"] {
   return [
     {
       id: "Formation",

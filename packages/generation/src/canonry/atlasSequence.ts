@@ -110,7 +110,7 @@ export function atlasPhysicalSequence(
   input: AtlasGenerationInput
 ): ProcessSequence {
   const physical = input.domains.includes("physical"),
-    magic = source.world.magic.some((source) => !source.systemId);
+    magic = hasLocalMagic(source, input);
   const area = source.world.areas[input.areaId],
     inherited = !physical || Boolean(area.parentId && source.world.fields.length);
   const result: ProcessSequence = [
@@ -154,6 +154,9 @@ export function atlasPhysicalSequence(
   if (physical || input.domains.includes("magic")) result.push(invoke("canonry.features"));
   const selected = area.profile === "world" ? fixedSamplingSequence(result) : result;
   return selected.map((step, index) => ({ ...step, id: `${step.id}:${index}` }));
+}
+function hasLocalMagic(source: DomainSnapshot, input: AtlasGenerationInput) {
+  return input.domains.includes("magic") && source.world.magic.some((source) => !source.systemId);
 }
 function fixedSamplingSequence(sequence: ProcessSequence): ProcessSequence {
   const refinements = ["canonry.refine-climate", "canonry.refine-water", "canonry.refine-ice"];

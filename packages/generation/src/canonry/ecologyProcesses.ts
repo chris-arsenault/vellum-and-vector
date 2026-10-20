@@ -101,9 +101,9 @@ function applyWoodlands(state: GenerationState) {
   for (let i = 0; i < map.mesh.count; i++) restore(i);
   composeNativeAuthoring(state.physical!);
 }
-function initialize(state: GenerationState) {
+function initialize(state: GenerationState, seed: number) {
   const map = state.physical!.map;
-  initializeEcology(map, state.domain.world.seed, state.physical!.inherited);
+  initializeEcology(map, seed, state.physical!.inherited);
   for (let i = 0; i < map.mesh.count; i++) {
     map.EcologySediment[i] = map.SedimentThickness[i] / 1024;
     map.EcologyVolcanic[i] = map.VolcanicConstructionHistory[i] / 1024;
@@ -202,14 +202,16 @@ function recordTransitions(state: GenerationState, before: Int32Array, context: 
       .join("; "),
   });
 }
-function validate(state: GenerationState) {
+function validate(state: GenerationState, context: MapProcessContext) {
   const map = state.physical!.map;
-  for (const name of ecologyScalars)
+  for (const name of ecologyScalars) {
+    const invalid = map[name].findIndex((value) => !Number.isFinite(value) || value < 0);
     requireThat(
-      map[name].every((value) => Number.isFinite(value) && value >= 0),
+      invalid < 0,
       "ecology_field",
-      `Ecology ${name} must remain finite and nonnegative.`
+      `Ecology ${name} must remain finite and nonnegative (${context.invocation.join("/")}, cell ${invalid}, value ${map[name][invalid]}).`
     );
+  }
   for (const name of ecologyRatios)
     requireThat(
       map[name].every((value) => value <= 1.000001),
@@ -220,7 +222,7 @@ function validate(state: GenerationState) {
 }
 export function ecologyProcesses(input: AtlasGenerationInput): MapProcess[] {
   const actions: Record<string, (state: GenerationState, context: MapProcessContext) => void> = {
-    initialize,
+    initialize: (state) => initialize(state, input.seed),
     evolve: (state, context) => {
       if (!state.physical!.inherited) state.physical!.map.MigrationFlux.fill(0);
       advance(state, context, input);
@@ -241,14 +243,33 @@ export function ecologyProcesses(input: AtlasGenerationInput): MapProcess[] {
       id: `atlas.ecology-${name}`,
       version: "1",
       parameters: {},
-      requires: ["canonry:workspace"],
-      produces: ["ecology"],
-      invalidates: [],
+      requires: ecologyRequirements(name),
+      produces: ecologyProducts(name),
+      invalidates: ["evolve", "respond"].includes(name) ? ["canonry:Runoff"] : [],
       workspaceOnly: true,
     },
     apply,
     validate,
   }));
+}
+function ecologyRequirements(name: string) {
+  if (name === "initialize") return ["canonry:workspace", "canonry:Elevation"];
+  // Burial consumes the retained response's epoch climate and new coastal
+  // deposition, rather than claiming climate was recomputed after coastal work.
+  if (name === "burial") return ["canonry:workspace", "atlas:ecology-response"];
+  const required = [
+    "canonry:workspace",
+    "atlas:ecology-initialized",
+    "canonry:Temperature",
+    "canonry:Moisture",
+  ];
+  if (["evolve", "respond"].includes(name)) required.push("canonry:FlowRouting");
+  return required;
+}
+function ecologyProducts(name: string) {
+  if (name === "initialize") return ["atlas:ecology-initialized", "ecology"];
+  if (name === "respond") return ["atlas:ecology-response", "ecology"];
+  return ["ecology"];
 }
 function advance(state: GenerationState, context: MapProcessContext, input: AtlasGenerationInput) {
   if (state.physical!.inherited) return;

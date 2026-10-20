@@ -1,5 +1,5 @@
 import { generateAtlas, type AtlasGenerationInput } from "@atlas/generation";
-import type { DomainSnapshot } from "@atlas/domain";
+import { DomainError, type DomainSnapshot } from "@atlas/domain";
 
 self.onmessage = async (
   event: MessageEvent<{ snapshot: DomainSnapshot; input: AtlasGenerationInput }>
@@ -20,6 +20,8 @@ self.onmessage = async (
     self.postMessage({
       kind: "failed",
       error: `${stage}: ${error instanceof Error ? error.message : String(error)}`,
+      diagnostics:
+        error instanceof DomainError && Array.isArray(error.details) ? error.details : [],
     });
   }
 };

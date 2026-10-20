@@ -35,7 +35,7 @@ function consume(
 function eatPlants(map: PhysicalField, i: number, demand: number, browser: boolean) {
   if (!browser) {
     const eaten = Math.min(map.GrassCover[i] * 0.9, demand);
-    map.GrassCover[i] -= eaten / 0.9;
+    map.GrassCover[i] = Math.max(0, map.GrassCover[i] - eaten / 0.9);
     return eaten;
   }
   const edible = map.BroadleafSaplings[i] * 2 + map.ConiferSaplings[i] * 1.6;

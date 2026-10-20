@@ -1,7 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { commitCommand } from "./atlasCommands";
-import { startGeneration } from "./generationJobs";
 import { ErrorMessage } from "./ErrorMessage";
 import { areaInput, type EditorState } from "./useEditor";
 import { makeCommand } from "./useAtlas";
@@ -23,20 +22,11 @@ function useRefinement(world: World, editor: EditorState) {
       const area = Object.values(result.candidate.areas).find((area) => !world.areas[area.id])!;
       cache.setQueryData(["world", world.id], result.candidate);
       editor.enter(area.id);
-      if (input.approach === "procedural")
-        startGeneration(world.id, {
-          operationId: crypto.randomUUID(),
-          expectedVersion: result.candidate.version,
-          areaId: area.id,
-          domains: input.domains,
-          seed: world.seed,
-          quality: "standard",
-        });
-      return result;
+      return { ...result, procedural: input.approach === "procedural" };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       editor.setSelection(null);
-      editor.setPanel("generate");
+      editor.setPanel(result.procedural ? "configure-generation" : "generate");
       void cache.invalidateQueries({ queryKey: ["jobs", world.id] });
     },
   });

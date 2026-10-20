@@ -64,12 +64,21 @@ export function magicProcesses(seed: number, enabled: boolean): MapProcess[] {
       id: `canonry.magic-${id}`,
       version: "0f62584c",
       parameters: {},
-      requires: ["canonry:workspace"],
-      produces: [],
+      requires: magicRequirements(id),
+      produces: [`atlas:magic-${id}`],
       invalidates: [],
       workspaceOnly: id !== "project",
     },
     apply,
     validate: () => [],
   }));
+}
+function magicRequirements(id: string) {
+  if (id === "initialize") return ["canonry:workspace"];
+  const required = ["canonry:workspace", "atlas:magic-initialize"];
+  if (id === "climate") required.push("canonry:Temperature");
+  if (id === "rocks") required.push("atlas:magic-climate");
+  if (id === "coast") required.push("atlas:magic-post-glacial");
+  if (id === "project") required.push("atlas:magic-classify");
+  return required;
 }

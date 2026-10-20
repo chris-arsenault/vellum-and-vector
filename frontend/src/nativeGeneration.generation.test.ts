@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { generateAtlas, type CompletedBoundary } from "@atlas/generation";
+import { generateAtlas, prepareAtlasGeneration, type CompletedBoundary } from "@atlas/generation";
 import {
   gridPosition,
   rectangle,
@@ -104,7 +104,9 @@ it("refines inherited Canonry terrain and retains authored geography and its fix
   }).candidate;
   const area = Object.values(created.areas).find((area) => area.parentId === root)!;
   const inherited = { ...session(world.id).snapshot, scope: worldScope(created, area.id) };
-  const refined = await generateAtlas(inherited, { ...input, areaId: area.id });
+  const prepared = prepareAtlasGeneration(inherited, { ...input, areaId: area.id });
+  expect(prepared.diagnostics).toEqual([]);
+  const refined = await generateAtlas(inherited, prepared.input);
   expect(refined.state.domain.world.areas[area.id].boundary).toEqual(area.boundary);
   expect(refined.state.domain.world.features).toMatchObject(snapshot.world.features);
   expect(refined.state.surface.channels.elevation.every(Number.isFinite)).toBe(true);

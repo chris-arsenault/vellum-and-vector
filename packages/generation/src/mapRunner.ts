@@ -1,10 +1,4 @@
-import {
-  requireThat,
-  resolveParameters,
-  sameValue,
-  cloneSnapshot,
-  type ParameterValues,
-} from "@atlas/domain";
+import { requireThat, sameValue, cloneSnapshot, type ParameterValues } from "@atlas/domain";
 import {
   MapProcessRegistry,
   type CompletedBoundary,
@@ -18,6 +12,7 @@ import { randomStream } from "./random";
 import { sequenceStages, type SequenceStage } from "./sequence";
 import { validateWorkingMap } from "./mapValidation";
 import { composeAuthoredSamples } from "./mapAuthored";
+import { invocationParameters } from "./preflight";
 
 export interface MapRunnerOptions {
   seed: string;
@@ -71,7 +66,7 @@ export class MapRunner {
       this.checkCancelled(options);
       if (stage.kind === "epochStart") {
         causes.push([]);
-        for (const fact of stage.resetFacts!) state.facts.delete(fact);
+        updateFacts(state, stage.resetFacts!, false);
         continue;
       }
       if (stage.kind === "epochEnd") {
@@ -158,15 +153,7 @@ export class MapRunner {
         "stale_fact",
         `${stage.path.join("/")} requires fresh ${fact} in the current map/epoch.`
       );
-    const definitions = process.contract.parameters;
-    const relevant = (values: ParameterValues) =>
-      Object.fromEntries(Object.entries(values).filter(([key]) => Object.hasOwn(definitions, key)));
-    const parameters = resolveParameters(
-      definitions,
-      relevant(this.configuration.parameters),
-      relevant(variables),
-      invocation.parameters ?? {}
-    );
+    const parameters = invocationParameters(process.contract, this.configuration, stage);
     const context = this.context(state, stage, parameters, options, causes);
     options.progress?.(stage.path, 0, `Starting ${process.contract.id}`);
     await process.apply(state, context);
@@ -178,8 +165,8 @@ export class MapRunner {
       "process_output_invalid",
       diagnostics.map((d) => d.message).join(" ")
     );
-    for (const fact of process.contract.invalidates) state.facts.delete(fact);
-    for (const fact of process.contract.produces) state.facts.add(fact);
+    updateFacts(state, process.contract.invalidates, false);
+    updateFacts(state, process.contract.produces, true);
     return !process.contract.workspaceOnly;
   }
   private context(
@@ -209,5 +196,16 @@ export class MapRunner {
       cancelled: () => options.cancelled?.() ?? false,
       progress: (fraction, message) => options.progress?.(stage.path, fraction * 0.9, message),
     };
+  }
+}
+function updateFacts(state: GenerationState, facts: string[], produced: boolean) {
+  for (const fact of facts) {
+    if (produced) state.facts.add(fact);
+    else state.facts.delete(fact);
+    if (state.physical && fact.startsWith("canonry:") && fact !== "canonry:workspace") {
+      const native = fact.slice("canonry:".length);
+      if (produced) state.physical.map.AvailableFacts.add(native);
+      else state.physical.map.AvailableFacts.delete(native);
+    }
   }
 }

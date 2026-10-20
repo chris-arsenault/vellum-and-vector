@@ -140,6 +140,42 @@ or several causal positions in one sequence.
 
 ## Epochs and causal feedback
 
+### Initial-world configuration
+
+The new-world wizard resolves one versioned JSON recipe before creating and
+generating the world. `generationRecipeSchema` validates the seed, quality,
+domains, creator parameters, process switches and complete physical/ecological,
+human and magical settings. `atlasParameterDefinitions` owns creator parameter
+defaults, limits, units and display labels; the existing nested domain schemas
+continue to own ecological and magical settings.
+
+`prepareAtlasGeneration` binds those inputs to the configured causal sequence,
+checks actual registry contracts and produces ordered diagnostics. The reviewed
+configuration travels to the worker and must match the resolved inputs. Complete
+settings participate in configuration identity and remain inspectable in the
+in-memory run record. JSON editing updates only the wizard draft.
+
+Process switches use stable registered IDs. For example, the recipe's `processes`
+object can contain `"canonry.impact-cratering": false` to omit impacts, or
+`"canonry.ancestral-fluvial-erosion": false` to retain drainage/rivers without
+terrain incision. Required support processes cannot be disabled. Glacial erosion
+and deposition must be selected together; delta classification requires its
+floodplain input. `"atlas.ecology-evolve": false` omits the complete coupled
+ecological family, rather than accidentally retaining another age-advancing
+response. Magical ecological effects require that family when magic is enabled.
+
+Native adapters distinguish initialized absent event histories from facts
+produced by an omitted process. Structural water, material, ice and spatial
+validation still runs. Native and outer fact validity update together. Fresh
+regions reuse the wizard with fixed parent histories and supported local
+processes. Inherited facts are identified from supplied channels and initialized
+material, with scope and unit checks, rather than importing every possible fact.
+Authored elevation without geological fields receives inert geothermal input and
+zero absent event histories; applying present magic does not invent past events.
+Existing-map regeneration retains its established entry point and process set.
+
+### Epoch execution
+
 An epoch loop initializes its working map once, then executes the configured body
 for each epoch. Epochs have stable identities, duration where meaningful, parent
 historical context and typed variable assignments. Reusable sequences can contain

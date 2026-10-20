@@ -12,9 +12,14 @@ export interface NativeContract {
   invalidates: string[];
 }
 export const nativeContracts: Record<string, NativeContract> = generated;
-export function applyNativeStep(map: PhysicalField, context: PhysicalContext, step: NativeStep) {
+export function applyNativeStep(
+  map: PhysicalField,
+  context: PhysicalContext,
+  step: NativeStep,
+  effective?: NativeContract
+) {
   const [name, salt, process] = step,
-    contract = nativeContracts[name];
+    contract = effective ?? nativeContracts[name];
   if (!contract || contract.salt !== salt)
     throw new Error(`Unknown Canonry process or salt: ${name}.`);
   for (const fact of contract.requires)

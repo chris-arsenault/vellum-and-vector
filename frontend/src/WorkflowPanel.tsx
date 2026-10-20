@@ -5,11 +5,14 @@ import { FeatureForm } from "./FeatureForm";
 import { MagicForm } from "./MagicForm";
 import { ReconcilePanel } from "./ReconcilePanel";
 import { RefinementPanel } from "./RefinementPanel";
+import { RegionalGeneration } from "./RegionalGeneration";
 import type { EditorState } from "./useEditor";
 import type { World } from "./types";
 
 export function WorkflowPanel({ world, editor }: { world: World; editor: EditorState }) {
   switch (editor.panel) {
+    case "configure-generation":
+      return <RegionalGeneration world={world} editor={editor} />;
     case "reconcile":
       return <ReconcilePanel world={world} editor={editor} />;
     case "more":

@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ErrorMessage } from "./ErrorMessage";
-import { createWorld } from "./atlasState";
+import { createWorld, session } from "./atlasState";
+import { startGeneration } from "./generationJobs";
+import { GenerationWizard } from "./GenerationWizard";
+import { draftPreview, type GenerationDraft } from "./generationDraft";
 import { useWorld, useWorlds } from "./useAtlas";
 import { Editor } from "./Editor";
 import { TemplateStudio } from "./TemplateStudio";
@@ -59,6 +62,7 @@ function Atlas() {
           This session lives in this tab. Reloading or closing it discards your worlds.
         </p>
         <CreateWorld
+          onCancel={world.data ? () => setCreating(false) : undefined}
           onCreate={(id) => {
             setSelected(id);
             setCreating(false);
@@ -94,57 +98,53 @@ function loadingAtlas(
   return worldsPending || (!!selected && worldPending && !creating);
 }
 
-function CreateWorld({ onCreate }: { onCreate: (id: string) => void }) {
+function CreateWorld({
+  onCreate,
+  onCancel,
+}: {
+  onCreate: (id: string) => void;
+  onCancel?: () => void;
+}) {
   const cache = useQueryClient();
   const create = useMutation({
-    mutationFn: (form: FormData) =>
-      Promise.resolve(
-        createWorld({
-          name: String(form.get("name")),
-          seed: Number(form.get("seed")),
-          width: Number(form.get("width")) * 1000,
-          height: Number(form.get("height")) * 1000,
-        })
-      ),
+    mutationFn: async ({ draft, generate }: { draft: GenerationDraft; generate: boolean }) => {
+      if (generate) {
+        const preview = draftPreview(draft);
+        if (preview.diagnostics.length)
+          throw new Error(preview.diagnostics.map((item) => item.message).join("\n"));
+      }
+      const world = createWorld({
+        name: draft.name,
+        width: draft.width,
+        height: draft.height,
+        seed: draft.recipe.seed,
+        settings: draft.recipe.settings,
+      });
+      if (generate)
+        startGeneration(world.id, {
+          ...draft.recipe,
+          areaId: Object.keys(world.areas)[0],
+          operationId: crypto.randomUUID(),
+          expectedVersion: world.version,
+        });
+      return world;
+    },
     onSuccess: (world) => {
       void cache.invalidateQueries({ queryKey: ["worlds"] });
-      cache.setQueryData(["world", world.id], world);
+      cache.setQueryData(["world", world.id], session(world.id).snapshot.world);
       onCreate(world.id);
     },
   });
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        create.mutate(new FormData(event.currentTarget));
+    <GenerationWizard
+      onCancel={onCancel}
+      onGenerate={async (draft) => {
+        await create.mutateAsync({ draft, generate: true });
       }}
-    >
-      <label>
-        World name
-        <input name="name" placeholder="Name your world" required maxLength={100} />
-      </label>
-      <div className="form-row">
-        <label>
-          Width · km
-          <input name="width" type="number" min="1" defaultValue="4000" required />
-        </label>
-        <label>
-          Height · km
-          <input name="height" type="number" min="1" defaultValue="3000" required />
-        </label>
-      </div>
-      <label>
-        Generation seed
-        <input name="seed" type="number" defaultValue="104729" required />
-      </label>
-      <p className="hint">
-        Planar world · east / north / up · metric coordinates · sea-level vertical datum
-      </p>
-      <button className="primary" disabled={create.isPending}>
-        {create.isPending ? "Creating…" : "Create world"}
-      </button>
-      <ErrorMessage error={create.error} />
-    </form>
+      onManual={async (draft) => {
+        await create.mutateAsync({ draft, generate: false });
+      }}
+    />
   );
 }
 

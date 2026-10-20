@@ -166,7 +166,7 @@ export function PhysicalHistoryForm({ world, editor }: { world: World; editor: E
     </form>
   );
 }
-function HistoryPreset({ change }: { change: (epochs: Epoch[]) => void }) {
+export function HistoryPreset({ change }: { change: (epochs: Epoch[]) => void }) {
   return (
     <label>
       History starting point
@@ -187,7 +187,7 @@ function HistoryPreset({ change }: { change: (epochs: Epoch[]) => void }) {
     </label>
   );
 }
-function EpochFields({
+export function EpochFields({
   epoch,
   change,
   systems,
