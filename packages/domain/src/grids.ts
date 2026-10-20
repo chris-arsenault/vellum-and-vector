@@ -20,6 +20,8 @@ export interface FieldSamples {
   channels: Record<string, Float64Array>;
   units: Record<string, string>;
   waterBodies?: WaterBody[] | null;
+  /** Physical ocean extent; resampling elevation must not move its shoreline. */
+  ocean?: Geometry | null;
   quantities?: Record<string, "intensive" | "extensive" | "category">;
 }
 export interface RegularGrid extends FieldSamples {

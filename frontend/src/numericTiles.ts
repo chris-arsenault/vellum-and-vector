@@ -7,35 +7,19 @@ import {
 } from "@atlas/domain";
 import DataTileSource from "ol/source/DataTile.js";
 import GeoJSON from "ol/format/GeoJSON.js";
-import VectorSource from "ol/source/Vector.js";
-import Feature from "ol/Feature.js";
 import type Projection from "ol/proj/Projection.js";
 import { createXYZ } from "ol/tilegrid.js";
 import type { Raster } from "./types";
 import { categorical } from "./rasterTiles";
 import { scaledValue } from "./rasterPresentation";
+import { terrainWater } from "./terrainWater";
 
 function terrainAt(raster: Raster, locate: AdaptivePointLocator) {
-  const lakes = new VectorSource({
-    features: raster.lakes?.map(
-      (lake) =>
-        new Feature({
-          geometry: new GeoJSON().readGeometry(lake.geometry)!,
-          level: lake.level,
-        })
-    ),
-    wrapX: false,
-  });
-  const sea = raster.water?.channels.seaLevel
-    ? fieldInterpolator(raster.water, "seaLevel", false, locate)
-    : () => 0;
+  const waterAt = terrainWater(raster, locate);
   const ice = raster.ice ? fieldInterpolator(raster.ice, "ice", false, locate) : () => 0;
   return (p: Position, height: number) => {
-    const level = sea(p);
-    const lake = lakes
-      .getFeaturesAtCoordinate([p.x, p.y])
-      .some((feature) => height < Number(feature.get("level")));
-    return [height - level, lake ? 2 : Number(height < level), Math.min(1, ice(p))];
+    const water = waterAt(p, height);
+    return [height - water.level, water.kind, Math.min(1, ice(p))];
   };
 }
 

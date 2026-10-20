@@ -5,13 +5,31 @@ import { clamp, units } from "./math";
 import { buildTransportPlan } from "./transportPlan";
 import { transportHistory } from "./transportHistory";
 import { rebuild } from "./surface";
-import { nearestTriangle } from "./mesh";
+import { physicalSampler } from "./physicalMetric";
 
-function movePoint(map: PhysicalField, x: number, y: number, distance: number): [number, number] {
-  const i = nearestTriangle(map.mesh, x, y);
-  return i < 0
-    ? [x, y]
-    : [x + (map.CrustMotionX[i] / 1000) * distance, y + (map.CrustMotionY[i] / 1000) * distance];
+function advectGeometry(map: PhysicalField, distance: number) {
+  const vx = physicalSampler(map.mesh, map.CrustMotionX),
+    vy = physicalSampler(map.mesh, map.CrustMotionY);
+  const move = (x: number, y: number): [number, number] => [
+    x + (vx(x, y) / 1000) * distance,
+    y + (vy(x, y) / 1000) * distance,
+  ];
+  for (const event of map.events)
+    if (event.kind !== "plume") [event.x, event.y] = move(event.x, event.y);
+  for (const fault of map.faults) {
+    const result: [number, number][] = [];
+    fault.coordinates.forEach((b, index) => {
+      if (index === 0) return;
+      const a = fault.coordinates[index - 1],
+        count = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / (map.mesh.spacing / 4));
+      for (let station = 0; station < count; station++) {
+        const fraction = station / count;
+        result.push(move(a[0] + (b[0] - a[0]) * fraction, a[1] + (b[1] - a[1]) * fraction));
+      }
+    });
+    if (fault.coordinates.length) result.push(move(...fault.coordinates.at(-1)!));
+    fault.coordinates = result;
+  }
 }
 
 export function plateAdvection(map: PhysicalField, context: PhysicalContext) {
@@ -22,10 +40,7 @@ export function plateAdvection(map: PhysicalField, context: PhysicalContext) {
   map.ConvergentCrustSurplus.fill(0);
   map.LastPlateDriftStep = step;
   if (step <= 0) return;
-  for (const event of map.events)
-    if (event.kind !== "plume") [event.x, event.y] = movePoint(map, event.x, event.y, step);
-  for (const fault of map.faults)
-    fault.coordinates = fault.coordinates.map(([x, y]) => movePoint(map, x, y, step));
+  advectGeometry(map, step);
   const plan = buildTransportPlan(map, step);
   transportHistory(map, plan);
   for (let i = 0; i < map.mesh.count; i++) {

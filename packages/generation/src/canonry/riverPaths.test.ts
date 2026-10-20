@@ -130,3 +130,22 @@ it("retains dimensional profiles when a curved channel is clipped at a world bou
     expect(values.every((value) => Number.isFinite(value) && value >= 0)).toBe(true);
   }
 });
+
+it("clips a lake inlet to the published water polygon rather than an independently sampled floor", () => {
+  const { map, main, mouth } = network(),
+    paths = createRiverPaths(map),
+    x = map.mesh.x[mouth] - map.mesh.spacing / 4,
+    shape = rectangle([
+      x,
+      map.mesh.y[mouth] - map.mesh.spacing,
+      map.mesh.x[mouth] + map.mesh.spacing,
+      map.mesh.y[mouth] + map.mesh.spacing,
+    ]);
+  map.WaterKindCodes[mouth] = 2;
+  map.WaterBodyIds[mouth] = 7;
+  paths.water = { ocean: null, lakes: new Map([[7, shape]]) };
+  const result = riverPath(map, paths, main);
+  expect(result.geometry.coordinates.at(-1)![0]).toBeCloseTo(x, 5);
+  for (const values of Object.values(result.profiles))
+    expect(values).toHaveLength(result.geometry.coordinates.length);
+});

@@ -20,6 +20,11 @@ test("switch bases and compose independent field styles through the layer contro
   await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
   await page.getByRole("button", { name: "Layers", exact: true }).click();
+  const faults = page.getByRole("checkbox", { name: "Show Fault traces", exact: true });
+  await expect(faults).not.toBeChecked();
+  await faults.click();
+  await expect(faults).toBeChecked();
+  await faults.click();
   await expect(page.getByRole("radio", { name: "Topographic", exact: true })).toBeChecked();
   await page.screenshot({ path: "test-results/gis-layer-browser.png" });
   const topo = await mapImage(page);

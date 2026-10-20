@@ -3,9 +3,8 @@ import GeoJSON from "ol/format/GeoJSON.js";
 import ImageTileSource from "ol/source/ImageTile.js";
 import { createXYZ } from "ol/tilegrid.js";
 import type Projection from "ol/proj/Projection.js";
-import VectorSource from "ol/source/Vector.js";
-import Feature from "ol/Feature.js";
 import type { Raster } from "./types";
+import { terrainWater } from "./terrainWater";
 
 type ColorAt = (position: Position, dx: number, dy: number) => number[];
 
@@ -96,28 +95,14 @@ export function rasterTileSource(
 }
 
 function terrainPainter(raster: Raster, minimum: number, height: (p: Position) => number): ColorAt {
-  const lakes = new VectorSource({
-    features: raster.lakes?.map(
-      (lake) =>
-        new Feature({
-          geometry: new GeoJSON().readGeometry(lake.geometry)!,
-          level: lake.level,
-        })
-    ),
-    wrapX: false,
-  });
-  const levelAt = raster.water?.channels.seaLevel
-    ? fieldInterpolator(raster.water, "seaLevel")
-    : () => 0;
+  const waterAt = terrainWater(raster);
   const iceAt = raster.ice ? fieldInterpolator(raster.ice, "ice") : null;
   return (p, dx, dy) => {
     const value = height(p),
-      seaLevel = levelAt(p),
-      lake = lakes
-        .getFeaturesAtCoordinate([p.x, p.y])
-        .find((feature) => value < Number(feature.get("level"))),
-      water = lake ? 2 : Number(value < seaLevel);
-    let color = water === 2 ? [73, 139, 153] : terrainColor(value - seaLevel, minimum - seaLevel);
+      { level: seaLevel, kind: water } = waterAt(p, value);
+    const relative =
+      water === 1 ? Math.min(-Number.EPSILON, value - seaLevel) : Math.max(0, value - seaLevel);
+    let color = water === 2 ? [73, 139, 153] : terrainColor(relative, minimum - seaLevel);
     if (water !== 2) {
       const east = ((height({ ...p, x: p.x + dx }) - height({ ...p, x: p.x - dx })) * 4) / dx;
       const north = ((height({ ...p, y: p.y + dy }) - height({ ...p, y: p.y - dy })) * 4) / dy;

@@ -100,12 +100,17 @@ export function triangleValue(sample: TriangleSample, values: ArrayLike<number>)
     value += sample.weights[i] * values[sample.cells[i]];
   return value;
 }
-export function* triangleFans(mesh: PhysicalMesh, members: number[], read: (i: number) => number) {
+function triangleSupport(mesh: PhysicalMesh, members: number[]) {
   const support = vertexSupport(mesh),
     cells = new Set(members);
   for (const cell of members)
     for (let corner = 0; corner < 3; corner++)
       for (const i of support.vertices[support.corners[cell * 3 + corner]]) cells.add(i);
+  return cells;
+}
+export function* triangleFans(mesh: PhysicalMesh, members: number[], read: (i: number) => number) {
+  const support = vertexSupport(mesh),
+    cells = triangleSupport(mesh, members);
   const values = new Map<number, [number, number, number]>();
   const vertex = (index: number): [number, number, number] => {
     if (!values.has(index)) {
@@ -139,6 +144,35 @@ export function* triangleFans(mesh: PhysicalMesh, members: number[], read: (i: n
     if (mesh.coords[cell].inverted) boundary.reverse();
     for (let i = 0; i < boundary.length; i++)
       yield [center, boundary[i], boundary[(i + 1) % boundary.length]];
+  }
+}
+/** Exposed mesh edges close contours which continue beyond the world's footprint. */
+export function* triangleBoundary(
+  mesh: PhysicalMesh,
+  read: (i: number) => number,
+  members?: number[]
+) {
+  const support = vertexSupport(mesh),
+    cells = members ? triangleSupport(mesh, members) : new Set(mesh.x.keys());
+  const vertex = (index: number): [number, number, number] => {
+    const members = support.vertices[index],
+      p = support.positions[index];
+    return [p[0], p[1], members.reduce((sum, i) => sum + read(i), 0) / members.length];
+  };
+  for (const cell of cells) {
+    for (let corner = 0; corner < 3; corner++) {
+      const neighbor = faceNeighbor(mesh, cell, (corner + 2) % 3);
+      if (neighbor !== cell && cells.has(neighbor)) continue;
+      const a = vertex(support.corners[cell * 3 + corner]),
+        b = vertex(support.corners[cell * 3 + ((corner + 1) % 3)]),
+        middle: [number, number, number] = [
+          (a[0] + b[0]) / 2,
+          (a[1] + b[1]) / 2,
+          (read(cell) + read(neighbor)) / 2,
+        ];
+      yield mesh.coords[cell].inverted ? [b, middle] : [a, middle];
+      yield mesh.coords[cell].inverted ? [middle, a] : [middle, b];
+    }
   }
 }
 export function triangleSampler(

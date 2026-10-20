@@ -121,6 +121,12 @@ it("uses actual data ranges and an invertible signed log legend", () => {
   for (const value of [-99, 0, 99])
     expect(scaledValue(value, "log")).toBeCloseTo(Math.sign(value) * Math.log1p(Math.abs(value)));
 });
+it("keeps published lake shores when scalar resampling raises the apparent lake floor", () => {
+  const raster = fixture("elevation");
+  raster.field.channels.elevation.fill(150);
+  raster.lakes = [{ geometry: rectangle([20, 20, 80, 80]), level: 100 }];
+  expect(numericTileSampler(raster)([29, 29, 31, 31], 1)[3]).toBe(2);
+});
 it("compiles terrain and overlay expressions using the real OpenLayers expression parser", () => {
   const styles = [
     terrainStyle(defaultRasterPresentation()),

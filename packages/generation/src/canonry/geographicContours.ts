@@ -6,9 +6,65 @@ import {
   rectangle,
   type Bounds,
   linearFieldContour,
+  spatial,
 } from "@atlas/domain";
 import type { GenerationState } from "../process";
-import { triangleSampler, triangleFans } from "./triangleSampling";
+import { triangleSampler, triangleFans, triangleBoundary } from "./triangleSampling";
+import { physicalSampler } from "./physicalMetric";
+
+export function lakeFootprint(
+  state: GenerationState,
+  members: number[],
+  body: number,
+  level: number
+) {
+  const map = state.physical!.map,
+    mesh = map.mesh,
+    floor = physicalSampler(mesh, map.Elevation),
+    connected = membershipSampler(state, (i) => Number(map.WaterBodyIds[i] === body)),
+    wet = (x: number, y: number) => level - floor(x - mesh.origin[0], y - mesh.origin[1]);
+  if (mesh.topology)
+    return geographicContour(
+      state,
+      members,
+      (x, y) => Math.min(wet(x, y), (connected(x, y) - 0.1) * 1e6),
+      0
+    );
+  const footprint = linearFieldContour(
+    triangleFans(mesh, members, (i) => level - map.Elevation[i]),
+    wet,
+    0,
+    triangleBoundary(mesh, (i) => level - map.Elevation[i], members)
+  );
+  const membership = linearFieldContour(
+    triangleFans(mesh, members, (i) => Number(map.WaterBodyIds[i] === body)),
+    connected,
+    0.1,
+    triangleBoundary(mesh, (i) => Number(map.WaterBodyIds[i] === body), members)
+  );
+  return footprint && membership && spatial.intersection(footprint, membership);
+}
+
+export function oceanFootprint(state: GenerationState) {
+  const map = state.physical!.map,
+    mesh = map.mesh,
+    height = physicalSampler(mesh, map.Elevation),
+    at = (x: number, y: number) =>
+      map.EffectiveSeaLevel - height(x - mesh.origin[0], y - mesh.origin[1]);
+  const shape = mesh.topology
+    ? fieldContour(mesh.topology, at, undefined, 0)
+    : linearFieldContour(
+        triangleFans(
+          mesh,
+          Array.from({ length: mesh.count }, (_, i) => i),
+          (i) => map.EffectiveSeaLevel - map.Elevation[i]
+        ),
+        at,
+        0,
+        triangleBoundary(mesh, (i) => map.EffectiveSeaLevel - map.Elevation[i])
+      );
+  return shape && spatial.intersection(shape, state.domain.scope.footprint);
+}
 
 export function membershipSampler(state: GenerationState, includes: (cell: number) => number) {
   const mesh = state.physical!.map.mesh;

@@ -8,6 +8,7 @@ import { extractGeologicalEvents } from "./geologicalFeatures";
 import { extractLakes, extractNamedLandforms, extractMagicPlaces } from "./geographicRegions";
 import { createRiverPaths, riverPath, type RiverPaths } from "./riverPaths";
 import type { PhysicalField } from "./field";
+import { oceanFootprint } from "./geographicContours";
 
 function riverReach(state: GenerationState, start: number, incoming: Int32Array) {
   const map = state.physical!.map,
@@ -92,6 +93,7 @@ function riverInputs(map: PhysicalField) {
   return { incoming, basinDischarge };
 }
 export function extractNativeGeography(state: GenerationState, context: MapProcessContext) {
+  state.surface.ocean = oceanFootprint(state);
   extractGeologicalEvents(state);
   extractLakes(state);
   extractNamedLandforms(state);
@@ -100,6 +102,16 @@ export function extractNativeGeography(state: GenerationState, context: MapProce
     map = work.map,
     paths = createRiverPaths(map),
     { incoming, basinDischarge } = riverInputs(map);
+  paths.water = {
+    ocean: state.surface.ocean,
+    lakes: new Map(
+      Object.values(state.domain.world.features)
+        .filter(
+          (feature) => feature.kind === "lake" && feature.areaId === state.domain.scope.areaId
+        )
+        .map((feature) => [Number(feature.attributes.waterBody), feature.geometry])
+    ),
+  };
   for (let i = 0; i < map.mesh.contentCount; i++) {
     if (map.RiverOrders[i] <= 0 || incoming[i] === 1) continue;
     const discharge = basinDischarge.get(map.DrainageBasinIds[i]) ?? 0;

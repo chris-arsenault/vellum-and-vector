@@ -13,6 +13,9 @@ import UnaryUnionOp from "jsts/org/locationtech/jts/operation/union/UnaryUnionOp
 import IndexedPointInAreaLocator from "jsts/org/locationtech/jts/algorithm/locate/IndexedPointInAreaLocator.js";
 import Location from "jsts/org/locationtech/jts/geom/Location.js";
 import InteriorPointArea from "jsts/org/locationtech/jts/algorithm/InteriorPointArea.js";
+import STRtree from "jsts/org/locationtech/jts/index/strtree/STRtree.js";
+import Envelope from "jsts/org/locationtech/jts/geom/Envelope.js";
+import CoordinatePoint from "jsts/org/locationtech/jts/geom/Coordinate.js";
 import type { Frame, Position } from "./model";
 import { frameSchema, geometrySchema } from "./schemas";
 import { requireThat } from "./errors";
@@ -116,10 +119,17 @@ export class Spatial {
         ? new IndexedPointInAreaLocator(shape)
         : null;
     return (position) => {
-      const probe = this.read(point(position));
-      return locator
-        ? locator.locate(probe.getCoordinates()[0]) !== Location.EXTERIOR
-        : Boolean(RelateOp.covers(shape, probe));
+      if (!locator) return Boolean(RelateOp.covers(shape, this.read(point(position))));
+      requireThat(
+        Number.isFinite(position.x) && Number.isFinite(position.y) && Number.isFinite(position.z),
+        "invalid_geometry",
+        "Point coordinates must be finite."
+      );
+      const probe = new CoordinatePoint(
+        this.model.makePrecise(position.x),
+        this.model.makePrecise(position.y)
+      );
+      return locator.locate(probe) !== Location.EXTERIOR;
     };
   }
   intersects(a: Geometry, b: Geometry): boolean {
@@ -148,6 +158,29 @@ export class Spatial {
   }
   difference(a: Geometry, b: Geometry): Geometry | null {
     return this.write(OverlayOp.difference(this.read(a), this.read(b)) as Shape);
+  }
+  /** Subtract one fixed mask from many features without rebuilding its spatial index. */
+  differenceFrom(mask: Geometry): (geometry: Geometry) => Geometry | null {
+    const shape = this.read(mask),
+      locator = new IndexedPointInAreaLocator(shape),
+      boundary = new STRtree(),
+      coordinates = shape.getCoordinates();
+    for (let i = 1; i < coordinates.length; i++) {
+      const a = coordinates[i - 1],
+        b = coordinates[i];
+      boundary.insert(new Envelope(a.x, b.x, a.y, b.y), {});
+    }
+    return (geometry) => {
+      const candidate = this.read(geometry);
+      // With no mask edge in its envelope the entire candidate is on one side.
+      // Include edges between rings as conservative false positives; exact GIS
+      // subtraction handles every envelope which might cross a boundary.
+      if (boundary.query(candidate.getEnvelopeInternal()).isEmpty()) {
+        const p = candidate.getCoordinates()[0];
+        return locator.locate(p) === Location.EXTERIOR ? geometry : null;
+      }
+      return this.write(OverlayOp.difference(candidate, shape) as Shape);
+    };
   }
   union(a: Geometry, b: Geometry): Geometry {
     return this.write(OverlayOp.union(this.read(a), this.read(b)) as Shape)!;

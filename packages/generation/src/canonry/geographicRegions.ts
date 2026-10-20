@@ -5,13 +5,11 @@ import { generatedFeature, putGenerated } from "../mapFeatures";
 import { nativePosition } from "./atlasWorkspace";
 import { coordinateKey } from "./worldSources";
 import { Landform } from "./codes";
-import { physicalSampler } from "./physicalMetric";
-import { membershipSampler, geographicContour, membershipContour } from "./geographicContours";
+import { lakeFootprint, membershipContour } from "./geographicContours";
 
 export function extractLakes(state: GenerationState) {
   const map = state.physical!.map,
     mesh = map.mesh;
-  const floor = physicalSampler(mesh, map.Elevation);
   const bodies = new Map<number, number[]>();
   // A visible lake can continue into the numerical halo. Trace its complete
   // basin before clipping; truncating its support leaves an open shoreline.
@@ -24,13 +22,7 @@ export function extractLakes(state: GenerationState) {
   for (const [body, members] of bodies) {
     if (!members.some((i) => i < mesh.contentCount)) continue;
     const level = map.WaterSurfaceElevations[members[0]];
-    const connected = membershipSampler(state, (cell) => Number(map.WaterBodyIds[cell] === body));
-    const valueAt = (x: number, y: number) =>
-      Math.min(
-        (level - floor(x - mesh.origin[0], y - mesh.origin[1])) / 1024,
-        (connected(x, y) - 0.1) * 1e6
-      );
-    const contour = geographicContour(state, members, valueAt, 0);
+    const contour = lakeFootprint(state, members, body, level);
     const shape = clipRegion(state, contour);
     if (!shape) continue;
     putGenerated(
@@ -154,6 +146,9 @@ function publishPlace(
 }
 export function extractNamedLandforms(state: GenerationState) {
   const map = state.physical!.map;
+  const dry = state.surface.ocean
+    ? spatial.differenceFrom(state.surface.ocean)
+    : (shape: Geometry) => shape;
   const classes: [string, string, (i: number) => boolean][] = [
     ["peak", "Peak", (i) => map.LandformCodes[i] === Landform.Peak],
     ["cirque", "Cirque", (i) => map.LandformCodes[i] === Landform.Cirque],
@@ -166,7 +161,11 @@ export function extractNamedLandforms(state: GenerationState) {
     components(
       state,
       includes,
-      (members, extent) => publishPlace(state, kind, name, members, "geology", {}, extent),
+      (members, extent) => {
+        const surface = extent && kind !== "fjord" ? dry(extent) : extent;
+        if (extent && !surface) return;
+        publishPlace(state, kind, name, members, "geology", {}, surface ?? undefined);
+      },
       !["peak", "waterfall"].includes(kind)
     );
 }

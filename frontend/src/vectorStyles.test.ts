@@ -58,3 +58,9 @@ it("keeps non-river line symbols and manual river lines usable", () => {
   expect(width({ ...river([10, 10]), kind: "road", attributes: {} }, 5000)).toEqual([2]);
   expect(width({ ...river([10, 10]), attributes: {} }, 5000)[0]).toBeGreaterThan(0);
 });
+it("distinguishes subsurface fault traces from topographic and landform boundaries", () => {
+  const fault = { ...river([10, 10]), kind: "fault", layerId: "faults", attributes: {} };
+  const style = styles(fault, 5000)[0];
+  expect(style.getStroke()?.getLineDash()).toEqual([6, 4]);
+  expect(style.getStroke()?.getWidth()).toBe(1);
+});

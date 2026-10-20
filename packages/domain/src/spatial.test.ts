@@ -52,6 +52,33 @@ const coverageFootprints: Geometry[] = [
   },
 ];
 
+it("subtracts a reused area mask across dry regions, crossings, holes and disconnected features", () => {
+  const probes: Geometry[] = [
+    rectangle([1, 1, 2, 2]),
+    rectangle([4.5, 4.5, 5.5, 5.5]),
+    rectangle([3, 3, 7, 7]),
+    rectangle([20, 20, 30, 30]),
+    rectangle([-1, -1, 11, 11]),
+    {
+      type: "MultiPolygon",
+      coordinates: [
+        (rectangle([1, 1, 2, 2]) as Extract<Geometry, { type: "Polygon" }>).coordinates,
+        (rectangle([20, 20, 30, 30]) as Extract<Geometry, { type: "Polygon" }>).coordinates,
+      ],
+    },
+  ];
+  for (const mask of coverageFootprints) {
+    const subtract = spatial.differenceFrom(mask);
+    for (const probe of probes) {
+      const result = subtract(probe),
+        expected = spatial.difference(probe, mask);
+      expect(result ? spatial.canonical(result) : null).toEqual(
+        expected ? spatial.canonical(expected) : null
+      );
+    }
+  }
+});
+
 it("reuses exact coverage predicates for rectangular extents, concavities and holes", () => {
   const probes: Geometry[] = [
     rectangle([1, 1, 2, 2]),

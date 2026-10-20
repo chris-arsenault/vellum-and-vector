@@ -4,6 +4,7 @@ type Vocabulary = [string, string, string, Layer["representation"], string, stri
 const vocabulary: Vocabulary[] = [
   ["elevation", "Elevation", "physical", "field", "#aaa183", "physical"],
   ["geology", "Geology and landforms", "physical", "field", "#998477", "physical"],
+  ["faults", "Fault traces", "physical", "vector", "#998477", "physical"],
   ["climate", "Climate", "water", "field", "#80a89b", "physical"],
   ["rivers", "Rivers", "water", "network", "#71c4de", "physical"],
   ["lakes", "Lakes", "water", "vector", "#67aabe", "physical"],

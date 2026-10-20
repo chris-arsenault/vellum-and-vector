@@ -64,7 +64,7 @@ function extractFaults(state: GenerationState) {
           fault.id,
           `Fault ${fault.id.split(":").at(-1)}`,
           "fault",
-          "geology",
+          "faults",
           shape,
           { width: fault.width, causeId: fault.id, sourceAlgorithm: "canonry-0f62584c" }
         )

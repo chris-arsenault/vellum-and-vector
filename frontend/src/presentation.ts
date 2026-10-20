@@ -21,7 +21,7 @@ export function defaultStyles(world: World, preset = "physical"): LayerStyle[] {
   };
   return Object.values(world.layers).map((layer) => ({
     layerId: layer.id,
-    visible: families[preset].includes(layer.family),
+    visible: families[preset].includes(layer.family) && layer.id !== "faults",
     opacity: layer.family === "political" ? 0.4 : 0.85,
     color: layer.color,
     minScale: 0,

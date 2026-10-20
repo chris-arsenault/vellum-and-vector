@@ -1,5 +1,7 @@
 import type { PhysicalField } from "./field";
 import { physicalSampler } from "./physicalMetric";
+import { spatial } from "@atlas/domain";
+import type { Geometry } from "geojson";
 
 type Coordinate = [number, number];
 type Station = { point: Coordinate; segment: number; fraction: number };
@@ -8,6 +10,7 @@ export interface RiverPaths {
   y: Float64Array;
   upstream: Int32Array;
   elevationAt?: (x: number, y: number) => number;
+  water?: { ocean: Geometry | null; lakes: Map<number, Geometry> };
 }
 const mix = (a: Coordinate, b: Coordinate, t = 0.5): Coordinate => [
   a[0] + (b[0] - a[0]) * t,
@@ -276,18 +279,17 @@ function clipReceivingWater(
 ) {
   const last = members.at(-1)!;
   if (!paths.elevationAt || map.WaterKindCodes[last] === 0) return stations;
-  const level = map.WaterSurfaceElevations[last];
-  if (!Number.isFinite(level) || paths.elevationAt(...stations.at(-1)!.point) >= level)
-    return stations;
+  const wet = receivingWater(map, paths, last);
+  if (!wet(...stations.at(-1)!.point)) return stations;
   for (let n = stations.length - 2; n >= 0; n--) {
     const a = stations[n],
       b = stations[n + 1];
-    if (paths.elevationAt(...a.point) < level) continue;
+    if (wet(...a.point)) continue;
     let low = 0,
       high = 1;
     while ((high - low) * Math.hypot(b.point[0] - a.point[0], b.point[1] - a.point[1]) > 1e-6) {
       const middle = (low + high) / 2;
-      if (paths.elevationAt(...mix(a.point, b.point, middle)) >= level) low = middle;
+      if (!wet(...mix(a.point, b.point, middle))) low = middle;
       else high = middle;
     }
     const fraction = (low + high) / 2;
@@ -302,6 +304,19 @@ function clipReceivingWater(
     ];
   }
   return stations;
+}
+function receivingWater(map: PhysicalField, paths: RiverPaths, last: number) {
+  const shape =
+    map.WaterKindCodes[last] === 1
+      ? paths.water?.ocean
+      : paths.water?.lakes.get(map.WaterBodyIds[last]);
+  if (shape) {
+    const covers = spatial.pointCoverage(shape);
+    return (x: number, y: number) =>
+      covers({ x: x + map.mesh.origin[0], y: y + map.mesh.origin[1], z: 0 });
+  }
+  const level = map.WaterSurfaceElevations[last];
+  return (x: number, y: number) => Number.isFinite(level) && paths.elevationAt!(x, y) < level;
 }
 
 /** The same continuous channel and longitudinal profiles feed drawing, inspection and export. */

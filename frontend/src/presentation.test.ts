@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { bounds, frameAt, rectangle, lineage } from "./presentation";
+import { bounds, frameAt, rectangle, lineage, defaultStyles } from "./presentation";
+import { createWorld } from "./atlasState";
 import type { World } from "./types";
 
 describe("geographic presentation", () => {
@@ -16,5 +17,12 @@ describe("geographic presentation", () => {
       },
     } as unknown as World;
     expect(lineage(world, "interior").map((a) => a.id)).toEqual(["root", "site", "interior"]);
+  });
+  it("keeps fault traces available as an explicit overlay without mixing them into surface landforms", () => {
+    const world = createWorld({ name: "Geology", seed: 1, width: 100_000, height: 100_000 }),
+      styles = defaultStyles(world);
+    expect(world.layers.faults.name).toBe("Fault traces");
+    expect(styles.find((style) => style.layerId === "faults")?.visible).toBe(false);
+    expect(styles.find((style) => style.layerId === "geology")?.visible).toBe(true);
   });
 });

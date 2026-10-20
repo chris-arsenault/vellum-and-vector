@@ -1848,6 +1848,29 @@ coastal comb, although individual bends can still expose coarse sampling. This
 is a qualification, routing and display correction, not evidence that every
 remaining river-shape limitation is resolved.
 
+Water-boundary repair (`00fb900c-c121-44e3-b8b5-e39e1b1d4cb8`): the fixed
+world's regular scalar grid approximates the physical field between publication
+samples. Reconstructing a second shoreline from that grid moved it away from
+the physical river mouths. Completed fields now carry the physical ocean extent
+as geometry; river clipping and both raster renderers use that boundary. Lake
+inlets and raster water likewise use the published lake polygon. Explicit terrain
+overlays still expose authored islands. Small curved-coast and island cases check
+this through physical generation, scalar publication, field validation and tile
+sampling, including nonzero sea level and intentionally coarse publication.
+Fixed-world lake extraction also intersects floor and body-membership contours
+directly on the physical fans. A local resampling grid had missed a shallow wet
+cell and left one inlet disconnected. The complete Standard check now accounts
+for every terminal reach: 11 ocean mouths, 30 lake inlets and two map-edge outlets.
+
+Geological event and fault coordinates now use the continuous physical motion
+field rather than independent nearest-cell velocities. Fault segments receive
+additional support before movement so their geometry follows the deformation.
+The material transport and epoch schedule remain unchanged. Faults have their
+own optional `Fault traces` layer with a dashed symbol; physical map views leave
+it off by default. Surface landform extents stop at the ocean, while fjords retain
+their marine extent. This separates subsurface geological traces from the
+topographic surface without removing their physical effects or history.
+
 ### Adaptive M7 execution
 
 Sulion expansion `c5d32e35-ec91-45f2-ba6b-d2c4a40021bf` runs against the shared

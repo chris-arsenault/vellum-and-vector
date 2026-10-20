@@ -232,7 +232,8 @@ export type LinearContourSample = [number, number, number];
 export function linearFieldContour(
   triangles: Iterable<LinearContourSample[]>,
   at: Scalar,
-  level = 0.5
+  level = 0.5,
+  boundary: Iterable<LinearContourSample[]> = []
 ): Geometry | null {
   const edges: Edge[] = [];
   for (const triangle of triangles) {
@@ -247,7 +248,25 @@ export function linearFieldContour(
       last = linearCrossing(a, c, level);
     edges.push({ a: count === 1 ? first : last, b: count === 1 ? last : first, used: false });
   }
+  closeLinearBoundary(edges, boundary, level);
   return polygonize(rings(edges.filter((edge) => key(edge.a) !== key(edge.b))), at, level);
+}
+function closeLinearBoundary(
+  edges: Edge[],
+  boundary: Iterable<LinearContourSample[]>,
+  level: number
+) {
+  for (const [a, b] of boundary) {
+    const ia = a[2] > level,
+      ib = b[2] > level;
+    if (!ia && !ib) continue;
+    const crossing = ia === ib ? a : linearCrossing(a, b, level);
+    edges.push({
+      a: (ia ? a : crossing).slice(0, 2) as Point,
+      b: (ib ? b : crossing).slice(0, 2) as Point,
+      used: false,
+    });
+  }
 }
 function linearCrossing(p: LinearContourSample, q: LinearContourSample, level: number): Point {
   // Canonical endpoint order makes a shared edge's crossing bit-identical.

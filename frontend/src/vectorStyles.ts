@@ -47,7 +47,8 @@ export function featureStyle(feature: AtlasFeature, style: LayerStyle, resolutio
     stroke: new Stroke({
       color: style.color,
       width: physicalStrokeWidth(feature, resolution),
-      lineDash: feature.layerId === "claims" ? [7, 5] : undefined,
+      lineDash:
+        feature.kind === "fault" ? [6, 4] : feature.layerId === "claims" ? [7, 5] : undefined,
     }),
     fill: new Fill({ color: style.color + "64" }),
     image: new Circle({
@@ -88,6 +89,7 @@ function profiledLineStyles(feature: AtlasFeature, base: Style, color: string, r
   ];
 }
 function physicalStrokeWidth(feature: AtlasFeature, resolution: number) {
+  if (feature.kind === "fault") return 1;
   if (feature.kind !== "river") return 2;
   return channelStrokeWidth(riverWidth(feature), resolution);
 }
