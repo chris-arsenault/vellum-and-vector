@@ -1,4 +1,4 @@
-import { spatial, point, adaptivePointSampler, fieldContour, contourSupport } from "@atlas/domain";
+import { spatial, point } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
@@ -6,11 +6,11 @@ import { nativePosition } from "./atlasWorkspace";
 import { coordinateKey } from "./worldSources";
 import { Landform } from "./codes";
 import { physicalSampler } from "./physicalMetric";
+import { membershipSampler, geographicContour, membershipContour } from "./geographicContours";
 
 export function extractLakes(state: GenerationState) {
   const map = state.physical!.map,
-    mesh = map.mesh,
-    topology = mesh.topology!;
+    mesh = map.mesh;
   const floor = physicalSampler(mesh, map.Elevation);
   const bodies = new Map<number, number[]>();
   // A visible lake can continue into the numerical halo. Trace its complete
@@ -24,19 +24,13 @@ export function extractLakes(state: GenerationState) {
   for (const [body, members] of bodies) {
     if (!members.some((i) => i < mesh.contentCount)) continue;
     const level = map.WaterSurfaceElevations[members[0]];
-    const connected = adaptivePointSampler(topology, (leaf) =>
-      Number(map.WaterBodyIds[mesh.leafToCell[leaf]] === body)
-    );
+    const connected = membershipSampler(state, (cell) => Number(map.WaterBodyIds[cell] === body));
     const valueAt = (x: number, y: number) =>
       Math.min(
         (level - floor(x - mesh.origin[0], y - mesh.origin[1])) / 1024,
         (connected(x, y) - 0.1) * 1e6
       );
-    const support = contourSupport(
-      topology,
-      members.map((i) => mesh.cellToLeaf[i])
-    );
-    const contour = fieldContour(topology, valueAt, support, 0);
+    const contour = geographicContour(state, members, valueAt, 0);
     const shape = clipRegion(state, contour);
     if (!shape) continue;
     putGenerated(
@@ -100,22 +94,17 @@ function components(
   regions.forEach((members, i) => publish(members, shapes.get(i)));
 }
 function regionShapes(state: GenerationState, labels: Int32Array) {
-  const mesh = state.physical!.map.mesh,
-    topology = mesh.topology!;
   const members = new Map<number, number[]>();
   labels.forEach((label, cell) => {
     if (label < 0) return;
     if (!members.has(label)) members.set(label, []);
-    members.get(label)!.push(mesh.cellToLeaf[cell]);
+    members.get(label)!.push(cell);
   });
   const result = new Map<number, Geometry>();
   for (const [label, leaves] of members) {
-    const valueAt = adaptivePointSampler(topology, (leaf) =>
-      Number(labels[mesh.leafToCell[leaf]] === label)
-    );
     const shape = clipRegion(
       state,
-      fieldContour(topology, valueAt, contourSupport(topology, leaves))
+      membershipContour(state, leaves, (cell) => Number(labels[cell] === label))
     );
     if (shape) result.set(label, shape);
   }

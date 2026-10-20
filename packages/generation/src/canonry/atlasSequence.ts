@@ -142,5 +142,14 @@ export function atlasPhysicalSequence(
     invoke("canonry.magic-project")
   );
   if (physical || input.domains.includes("magic")) result.push(invoke("canonry.features"));
-  return result.map((step, index) => ({ ...step, id: `${step.id}:${index}` }));
+  const selected = area.profile === "world" ? fixedSamplingSequence(result) : result;
+  return selected.map((step, index) => ({ ...step, id: `${step.id}:${index}` }));
+}
+function fixedSamplingSequence(sequence: ProcessSequence): ProcessSequence {
+  const refinements = ["canonry.refine-climate", "canonry.refine-water", "canonry.refine-ice"];
+  return sequence
+    .filter((step) => step.kind !== "process" || !refinements.includes(step.process))
+    .map((step) =>
+      step.kind === "epochs" ? { ...step, body: fixedSamplingSequence(step.body) } : step
+    );
 }

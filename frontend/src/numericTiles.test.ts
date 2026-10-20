@@ -1,5 +1,11 @@
 import { expect, it } from "vitest";
-import { createGrid, putChannel, rectangle } from "@atlas/domain";
+import {
+  createGrid,
+  createAdaptiveField,
+  createAdaptiveTopology,
+  putChannel,
+  rectangle,
+} from "@atlas/domain";
 import { numericTileSampler } from "./numericTiles";
 import { defaultFieldStyle, fieldRange, legendValue, scaledValue } from "./rasterPresentation";
 import { terrainStyle, overlayStyle } from "./rasterStyles";
@@ -74,6 +80,37 @@ it("preserves authored patches, physical sea level, lakes and emergent islands",
   patch.channels.elevation.fill(400);
   raster.field.overlays = [{ grid: patch, channels: ["elevation"] }];
   expect([...numericTileSampler(raster)([49, 49, 51, 51], 1)]).toEqual([400, 1, 200, 0, 0, 2]);
+});
+it("shares adaptive locations across terrain bands while respecting distinct overlay and ice topologies", () => {
+  const raster = fixture("elevation");
+  const field = (id: string, size: number, bounds: [number, number, number, number]) =>
+    createAdaptiveField(
+      id,
+      { ...raster.field.scope, footprint: rectangle(bounds) },
+      createAdaptiveTopology(bounds, { maximumSize: size, minimumSize: size })
+    );
+  raster.field = field("terrain", 25, [0, 0, 100, 100]);
+  putChannel(
+    raster.field,
+    "elevation",
+    "metre",
+    new Float64Array(raster.field.active.length).fill(100)
+  );
+  raster.water = {
+    ...raster.field,
+    channels: { seaLevel: new Float64Array(raster.field.active.length).fill(200) },
+  };
+  raster.ice = field("ice", 50, [0, 0, 100, 100]);
+  putChannel(raster.ice, "ice", "ratio", new Float64Array(raster.ice.active.length).fill(0.25));
+  const patch = field("patch", 5, [45, 45, 55, 55]);
+  putChannel(patch, "elevation", "metre", new Float64Array(patch.active.length).fill(400));
+  raster.field.overlays = [{ grid: patch, channels: ["elevation"] }];
+  const sample = numericTileSampler(raster);
+  expect([...sample([29, 29, 31, 31], 1)]).toEqual([100, 1, -100, 1, 0.25, 2]);
+  expect([...sample([49, 49, 51, 51], 1)]).toEqual([400, 1, 200, 0, 0.25, 2]);
+  expect([...sample([29, 29, 31, 31], 1)]).toEqual([100, 1, -100, 1, 0.25, 2]);
+  patch.active.fill(0);
+  expect([...sample([49, 49, 51, 51], 1)]).toEqual([0, 0, 0, 0, 0, 0]);
 });
 it("uses actual data ranges and an invertible signed log legend", () => {
   const raster = fixture();

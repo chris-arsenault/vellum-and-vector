@@ -1,5 +1,11 @@
 import { adaptiveCell, adaptiveLeafAt, type AdaptiveTopology } from "./adaptiveTopology";
-import { evaluateAdaptiveCell, hermitePatch } from "./adaptiveHermite";
+import {
+  evaluatePreparedAdaptiveCell,
+  prepareAdaptiveCell,
+  hermitePatch,
+  type PreparedAdaptiveCell,
+} from "./adaptiveHermite";
+import { adaptivePatchGeometry, type AdaptiveVertex } from "./adaptivePatchGeometry";
 
 import {
   adaptiveFits,
@@ -7,31 +13,15 @@ import {
   type AdaptiveSamples as Samples,
 } from "./adaptiveFit";
 type Fits = ReturnType<typeof adaptiveFits>;
-function incident(t: AdaptiveTopology, x: number, y: number, epsilon: number) {
-  const leaves = new Set<number>();
-  for (const dx of [-epsilon, epsilon])
-    for (const dy of [-epsilon, epsilon]) {
-      const leaf = adaptiveLeafAt(t, x + dx, y + dy);
-      if (leaf >= 0) leaves.add(leaf);
-    }
-  return [...leaves];
-}
 function corner(
   t: AdaptiveTopology,
   values: Samples,
-  x: number,
-  y: number,
-  epsilon: number,
-  fit: Fits
+  vertex: AdaptiveVertex,
+  fit: Fits,
+  baseValue: (x: number, y: number, epsilon: number) => number
 ): number {
-  const cells = incident(t, x, y, epsilon);
-  const hanging = cells
-    .filter((i) => {
-      const b = adaptiveCell(t, i);
-      return (x > b[0] && x < b[2]) || (y > b[1] && y < b[3]);
-    })
-    .sort((a, b) => t.levels[t.leaves[a]] - t.levels[t.leaves[b]]);
-  if (hanging.length) return constrainedCorner(t, values, hanging[0], x, y, epsilon, fit);
+  const { cells, x, y, coarse } = vertex;
+  if (coarse !== undefined) return constrainedCorner(t, coarse, vertex, fit, baseValue);
   let sum = 0,
     weight = 0;
   for (const i of cells) {
@@ -52,17 +42,16 @@ function corner(
 }
 function constrainedCorner(
   t: AdaptiveTopology,
-  values: Samples,
   i: number,
-  x: number,
-  y: number,
-  epsilon: number,
-  fit: Fits
+  vertex: AdaptiveVertex,
+  fit: Fits,
+  baseValue: (x: number, y: number, epsilon: number) => number
 ) {
+  const { x, y, epsilon } = vertex;
   const b = adaptiveCell(t, i),
     vertical = x === b[0] || x === b[2];
-  const a = corner(t, values, vertical ? x : b[0], vertical ? b[1] : y, epsilon, fit);
-  const z = corner(t, values, vertical ? x : b[2], vertical ? b[3] : y, epsilon, fit);
+  const a = baseValue(vertical ? x : b[0], vertical ? b[1] : y, epsilon);
+  const z = baseValue(vertical ? x : b[2], vertical ? b[3] : y, epsilon);
   const fraction = vertical ? (y - b[1]) / (b[3] - b[1]) : (x - b[0]) / (b[2] - b[0]);
   const length = vertical ? b[3] - b[1] : b[2] - b[0];
   return (
@@ -114,27 +103,25 @@ function unconstrainedVertex(
 }
 /** Shared vertex values and derivatives also constrain fine faces to their coarse patch. */
 export function prepareAdaptivePatches(t: AdaptiveTopology, values: Samples) {
-  const coefficients = new Map<number, Float64Array>();
-  const fit = adaptiveFits(t, values);
-  const vertices = new Map<string, number[]>(),
-    baseValues = new Map<string, number>();
+  const coefficients = new Map<number, PreparedAdaptiveCell>();
+  const fit = adaptiveFits(t, values),
+    geometry = adaptivePatchGeometry(t);
+  const vertices = new Map<number, number[]>(),
+    baseValues = new Map<number, number>();
   const baseValue = (x: number, y: number, epsilon: number) => {
-    const key = `${x}:${y}`;
-    if (!baseValues.has(key)) baseValues.set(key, corner(t, values, x, y, epsilon, fit));
-    return baseValues.get(key)!;
+    const vertex = geometry.vertex(x, y, epsilon);
+    if (!baseValues.has(vertex.id))
+      baseValues.set(vertex.id, corner(t, values, vertex, fit, baseValue));
+    return baseValues.get(vertex.id)!;
   };
-  const vertex = (x: number, y: number, epsilon: number): number[] => {
-    const key = `${x}:${y}`;
-    if (vertices.has(key)) return vertices.get(key)!;
-    const cells = incident(t, x, y, epsilon);
-    const hanging = cells.find((i) => {
-      const b = adaptiveCell(t, i);
-      return (x > b[0] && x < b[2]) || (y > b[1] && y < b[3]);
-    });
+  const vertex = (point: AdaptiveVertex): number[] => {
+    const { id, cells, x, y, epsilon, hanging } = point;
+    const previous = vertices.get(id);
+    if (previous) return previous;
     let result: number[];
     if (hanging !== undefined) {
       const box = adaptiveCell(t, hanging),
-        c = patch(hanging);
+        c = patch(hanging).coefficients;
       const width = box[2] - box[0],
         height = box[3] - box[1];
       const u = (x - box[0]) / width,
@@ -148,45 +135,63 @@ export function prepareAdaptivePatches(t: AdaptiveTopology, values: Samples) {
     } else {
       result = unconstrainedVertex(t, values, cells, { x, y, epsilon }, baseValue, fit);
     }
-    vertices.set(key, result);
+    vertices.set(id, result);
     return result;
   };
-  const patch = (i: number): Float64Array => {
+  const patch = (i: number): PreparedAdaptiveCell => {
     const previous = coefficients.get(i);
     if (previous) return previous;
-    const [x0, y0, x1, y1] = adaptiveCell(t, i),
-      width = x1 - x0,
-      height = y1 - y0;
-    const epsilon = Math.min(width, height) * 1e-6;
+    const { width, height, corners } = geometry.cell(i);
     const c = Float64Array.from(
-      [
-        [x0, y0],
-        [x1, y0],
-        [x0, y1],
-        [x1, y1],
-      ].flatMap(([x, y]) => {
-        const v = vertex(x, y, epsilon);
+      corners.flatMap((point) => {
+        const v = vertex(point);
         return [v[0], v[1] * width, v[2] * height, v[3] * width * height];
       })
     );
-    coefficients.set(i, c);
-    return c;
+    const result = prepareAdaptiveCell(c, read(values, i));
+    coefficients.set(i, result);
+    return result;
   };
   return patch;
 }
 /** A prepared immutable evaluator computes only cells touched by a query or viewport. */
-export function adaptivePointSampler(t: AdaptiveTopology, values: Samples) {
+export function adaptivePointSampler(
+  t: AdaptiveTopology,
+  values: Samples,
+  locate: AdaptivePointLocator = locateAdaptivePoint
+) {
   const patch = prepareAdaptivePatches(t, values);
   return (x: number, y: number) => {
-    const i = adaptiveLeafAt(t, x, y);
-    if (i < 0) return NaN;
-    const [x0, y0, x1, y1] = adaptiveCell(t, i);
-    return evaluateAdaptiveCell(
-      patch(i),
-      read(values, i),
-      (x - x0) / (x1 - x0),
-      (y - y0) / (y1 - y0)
-    );
+    const { leaf, u, v } = locate(t, x, y);
+    return leaf < 0 ? NaN : evaluatePreparedAdaptiveCell(patch(leaf), u, v);
+  };
+}
+
+function locateAdaptivePoint(t: AdaptiveTopology, x: number, y: number) {
+  const leaf = adaptiveLeafAt(t, x, y);
+  if (leaf < 0) return { leaf, u: NaN, v: NaN };
+  const at = t.leaves[leaf] * 4,
+    b = t.boxes;
+  return {
+    leaf,
+    u: (x - b[at]) / (b[at + 2] - b[at]),
+    v: (y - b[at + 1]) / (b[at + 3] - b[at + 1]),
+  };
+}
+export type AdaptivePointLocator = typeof locateAdaptivePoint;
+/** Share only the current point's location across channels using the same topology. */
+export function adaptivePointLocator(): AdaptivePointLocator {
+  let x = NaN,
+    y = NaN;
+  const locations = new Map<AdaptiveTopology, ReturnType<AdaptivePointLocator>>();
+  return (t, px, py) => {
+    if (px !== x || py !== y) {
+      locations.clear();
+      x = px;
+      y = py;
+    }
+    if (!locations.has(t)) locations.set(t, locateAdaptivePoint(t, px, py));
+    return locations.get(t)!;
   };
 }
 export function sampleAdaptivePoint(t: AdaptiveTopology, values: Samples, x: number, y: number) {

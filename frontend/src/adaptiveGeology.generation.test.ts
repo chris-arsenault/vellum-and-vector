@@ -16,7 +16,7 @@ import type { GenerationState, MapProcessContext } from "@atlas/generation";
 
 function scenario() {
   const world = createWorld({
-    name: "Adaptive geology",
+    name: "Fixed world geology",
     seed: 104729,
     width: 4_000_000,
     height: 2_000_000,
@@ -55,13 +55,13 @@ function scenario() {
   };
   return { state, context, apply };
 }
-it("evolves adaptive geology, rivers, sediment and a glacial transition", async () => {
+it("evolves fixed world geology, rivers, sediment and a glacial transition", async () => {
   const { state, context, apply } = scenario();
   await apply("canonry.initialize");
   for (const [name] of initialSteps) await apply(`canonry.${name}`);
   const map = state.physical!.map;
-  expect(map.mesh.topology).toBeDefined();
-  expect(new Set(map.mesh.cellWidth).size).toBeGreaterThan(1);
+  expect(map.mesh.topology).toBeNull();
+  const mesh = map.mesh;
   expect(map.events.some((e) => e.kind === "impact")).toBe(true);
   expect(map.events.some((e) => e.kind === "volcano")).toBe(true);
   expect(map.ImpactExcavation.some((v) => v > 0)).toBe(true);
@@ -71,7 +71,6 @@ it("evolves adaptive geology, rivers, sediment and a glacial transition", async 
   context.parameters.initial = false;
   context.epochIndices = [0];
   for (const [name] of [...climateSteps, ...drainageSteps]) await apply(`canonry.${name}`);
-  await apply("canonry.refine-water");
   for (const [name] of [...incisionSteps, ...climateSteps, ...drainageSteps, sedimentStep])
     await apply(`canonry.${name}`);
   const evolved = state.physical!.map;
@@ -83,11 +82,9 @@ it("evolves adaptive geology, rivers, sediment and a glacial transition", async 
     )
   ).toBeLessThan(evolved.SedimentProducedTotal * 1e-9);
   context.epochIndices = [1];
-  await apply("canonry.refine-climate");
   context.parameters.iceLoad = true;
   for (const [name] of [...climateSteps, ...drainageSteps, ...glaciationSteps]) {
     await apply(`canonry.${name}`);
-    if (name === "ice-flow") await apply("canonry.refine-ice");
   }
   const glacial = state.physical!.map;
   expect(glacial.CumulativeGlacialErosion.some((v) => v > 0)).toBe(true);
@@ -95,11 +92,11 @@ it("evolves adaptive geology, rivers, sediment and a glacial transition", async 
   expect(coldIce).toBeGreaterThan(0);
   context.epochIndices = [2];
   context.parameters.iceLoad = false;
-  await apply("canonry.refine-climate");
   for (const [name] of [...climateSteps, ...drainageSteps, ...iceSteps, ...extractionSteps])
     await apply(`canonry.${name}`);
   const present = state.physical!.map;
   const warmIce = present.IceThickness.reduce((v, h, i) => v + h * present.mesh.areas[i], 0);
   expect(warmIce).toBeLessThan(coldIce);
   expect(present.MaximumIceThickness.some((v) => v > 0)).toBe(true);
+  expect(present.mesh).toBe(mesh);
 }, 600000);

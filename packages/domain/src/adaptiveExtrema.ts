@@ -2,7 +2,7 @@ import type { Geometry } from "geojson";
 import type { AdaptiveField } from "./adaptiveField";
 import { adaptiveCell } from "./adaptiveTopology";
 import { reconstructAdaptive, sampleAdaptive } from "./adaptiveReconstruction";
-import { adaptivePolynomial } from "./adaptiveHermite";
+import { preparedAdaptivePolynomial, type PreparedAdaptiveCell } from "./adaptiveHermite";
 import { visitAdaptiveOverlap } from "./adaptiveTransfer";
 import { geometryParts } from "./composition";
 import { rectangle, spatial, type Bounds } from "./spatial";
@@ -18,20 +18,16 @@ function bernstein(v: number[]) {
 }
 function interval(
   field: AdaptiveField,
-  patches: Float64Array,
-  values: Float64Array,
+  cell: PreparedAdaptiveCell,
   piece: Piece
 ): [number, number] {
-  const c = patches.subarray(piece.i * 16, piece.i * 16 + 16),
-    center = values[piece.i];
   const b = adaptiveCell(field.topology, piece.i),
     p = piece.box;
   const controls = Array.from({ length: 5 }, (_, y) =>
     bernstein(
       Array.from({ length: 5 }, (_, x) =>
-        adaptivePolynomial(
-          c,
-          center,
+        preparedAdaptivePolynomial(
+          cell,
           (p[0] + ((p[2] - p[0]) * x) / 4 - b[0]) / (b[2] - b[0]),
           (p[1] + ((p[3] - p[1]) * y) / 4 - b[1]) / (b[3] - b[1])
         )
@@ -42,10 +38,9 @@ function interval(
     const column = bernstein(controls.map((row) => row[x]));
     for (let y = 0; y < 5; y++) controls[y][x] = column[y];
   }
-  const valuesAtCorners = [c[0], c[4], c[8], c[12]];
   return [
-    Math.max(Math.min(center, ...valuesAtCorners), Math.min(...controls.flat())),
-    Math.min(Math.max(center, ...valuesAtCorners), Math.max(...controls.flat())),
+    Math.max(cell.low, Math.min(...controls.flat())),
+    Math.min(cell.high, Math.max(...controls.flat())),
   ];
 }
 function positions(geometry: Geometry): number[][] {
@@ -117,7 +112,7 @@ export function adaptiveExtrema(
       low = Math.min(low, value);
       high = Math.max(high, value);
     }
-    const [minimum, maximum] = interval(field, surface.patches, values, piece);
+    const [minimum, maximum] = interval(field, surface.cells[piece.i], piece);
     if (minimum >= low - spatial.precision && maximum <= high + spatial.precision) continue;
     if (Math.max(b[2] - b[0], b[3] - b[1]) <= spatial.precision) {
       low = Math.min(low, minimum);

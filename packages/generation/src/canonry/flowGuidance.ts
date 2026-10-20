@@ -53,7 +53,7 @@ function candidateScore(
   );
   const drop = (map.DrainageElevations[source] - map.DrainageElevations[target]) / (1024 * length);
   if (drop <= 0) {
-    const progress = map.DrainageParents[source] === target ? 1 : 0;
+    const progress = clamp(map.DrainageRanks[source] - map.DrainageRanks[target], 0, 20);
     return (
       (alignment * p.DrainageOutletAlignmentWeight) / 10 +
       progress * 0.15 +
@@ -78,6 +78,16 @@ function descentDirection(
   source: number,
   gradient: ReturnType<typeof physicalGradients>
 ): [number, number] {
+  const parent = map.DrainageParents[source];
+  // A flat has no height gradient. Its flood parent carries the least-cost
+  // corridor; looking far along that winding path replaces it with a shortcut.
+  if (
+    parent >= 0 &&
+    map.DrainageElevations[parent] === map.DrainageElevations[source] &&
+    gradient.x[source] === 0 &&
+    gradient.y[source] === 0
+  )
+    return desiredDirection(map, source, parent);
   let x = 0,
     y = 0,
     current = source;

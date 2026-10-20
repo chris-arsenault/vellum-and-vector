@@ -109,14 +109,22 @@ function initialState(source: DomainSnapshot, input: AtlasGenerationInput): Gene
     "Choose an extent with room for interior field samples."
   );
   const id = semanticId(domain.world.id, "surface", `${area.id}:${input.seed}`);
-  const maximumSize = Math.max(extent[2] - extent[0], extent[3] - extent[1]) / size;
+  const aspect = Math.sqrt((extent[2] - extent[0]) / (extent[3] - extent[1]));
   const surface =
-    area.profile === "interior"
-      ? createGrid(id, { ...scope, footprint: interior }, size, size)
-      : createAdaptiveField(
+    area.profile !== "world" && area.profile !== "interior"
+      ? createAdaptiveField(
           id,
           { ...scope, footprint: interior },
-          createAdaptiveTopology(extent, { maximumSize, minimumSize: maximumSize })
+          createAdaptiveTopology(extent, {
+            maximumSize: Math.max(extent[2] - extent[0], extent[3] - extent[1]) / size,
+            minimumSize: Math.max(extent[2] - extent[0], extent[3] - extent[1]) / size,
+          })
+        )
+      : createGrid(
+          id,
+          { ...scope, footprint: interior },
+          area.profile === "interior" ? size : Math.max(2, Math.ceil(size * aspect) + 1),
+          area.profile === "interior" ? size : Math.max(2, Math.ceil(size / aspect) + 1)
         );
   inheritSurface(source, surface, input);
   return { domain, surface, facts: initialFacts(surface), history: [], causes: [] };

@@ -9,9 +9,10 @@ import { reconstructAdaptive, sampleAdaptive } from "./adaptiveReconstruction";
 import { transferAdaptive, visitAdaptiveOverlap } from "./adaptiveTransfer";
 import { createAdaptiveField, adaptiveFieldSampler, adaptiveIntegral } from "./adaptiveField";
 import { rectangle } from "./spatial";
-import { sampleAdaptivePoint } from "./adaptivePoint";
-import { gridSampler } from "./grids";
+import { sampleAdaptivePoint, adaptivePointLocator } from "./adaptivePoint";
+import { gridSampler, fieldInterpolator } from "./grids";
 import { adaptiveExtrema } from "./adaptiveExtrema";
+import { adaptiveFits } from "./adaptiveFit";
 
 const topology = () =>
   createAdaptiveTopology([0, 0, 1000, 1000], {
@@ -224,4 +225,82 @@ it("retains clipped physical measures and discrete category meaning in published
   expect(gridSampler(field, "material")({ x: 499.999, y: 500, z: 0 })).toBe(11);
   expect(adaptiveFieldSampler(field, "material")({ x: 500.001, y: 500 })).toBe(29);
   expect(adaptiveExtrema(field, "material", rectangle([495, 495, 505, 505]))).toEqual([11, 29]);
+});
+
+it("shares fitting geometry while retaining each channel's signed quadratic derivatives", () => {
+  const tree = topology(),
+    geometry = adaptiveGeometry(tree);
+  for (const sign of [1, -3, 0]) {
+    const fit = adaptiveFits(
+      tree,
+      Float64Array.from(geometry.x, (x, i) => {
+        const y = geometry.y[i];
+        return sign * (20 + x * 0.1 + y * 0.2 + x * x * 0.0004 + x * y * 0.0002 + y * y * 0.0003);
+      })
+    );
+    for (let i = 0; i < geometry.x.length; i++) {
+      const expected = [
+        sign * (0.1 + 0.0008 * geometry.x[i] + 0.0002 * geometry.y[i]),
+        sign * (0.2 + 0.0002 * geometry.x[i] + 0.0006 * geometry.y[i]),
+        sign * 0.0004,
+        sign * 0.0002,
+        sign * 0.0003,
+      ];
+      fit(i).forEach((value, k) => expect(value).toBeCloseTo(expected[k], 9));
+    }
+  }
+});
+
+it("retains planar and constant fallbacks when a curvature stencil is singular", () => {
+  for (const size of [1000, 500]) {
+    const tree = createAdaptiveTopology([0, 0, 1000, 1000], {
+        maximumSize: size,
+        minimumSize: size,
+      }),
+      geometry = adaptiveGeometry(tree);
+    const fit = adaptiveFits(
+      tree,
+      Float64Array.from(geometry.x, (x, i) => 2 + 0.3 * x - 0.7 * geometry.y[i])
+    );
+    for (let i = 0; i < geometry.x.length; i++)
+      fit(i).forEach((value, k) =>
+        expect(value).toBeCloseTo(size === 1000 ? 0 : [0.3, -0.7, 0, 0, 0][k], 9)
+      );
+  }
+});
+
+it("shares point lookup without mixing channels, topology identities or discrete samples", () => {
+  const tree = topology(),
+    geometry = adaptiveGeometry(tree),
+    locate = adaptivePointLocator();
+  const field = createAdaptiveField(
+    "shared",
+    {
+      worldId: "world",
+      areaId: "area",
+      spaceId: "surface",
+      crsId: "metres",
+      footprint: rectangle([0, 0, 1000, 1000]),
+      time: "present",
+      revision: 1,
+      resolution: null,
+    },
+    tree
+  );
+  field.channels.elevation = Float64Array.from(geometry.x, (x, i) => x * 0.3 - geometry.y[i] * 0.7);
+  field.channels.temperature = Float64Array.from(field.channels.elevation, (v) => -v * 2);
+  field.channels.rock = Float64Array.from(geometry.x, (x) => (x < 500 ? 11 : 29));
+  field.units = { elevation: "metre", temperature: "celsius", rock: "category" };
+  const at = ["elevation", "temperature", "rock"].map((key) =>
+    fieldInterpolator(field, key, false, locate)
+  );
+  const other = createAdaptiveTopology([0, 0, 1000, 1000], { maximumSize: 500, minimumSize: 500 });
+  for (const x of [0, 499.999, 500, 500.001, 1000, 500, 0]) {
+    const p = { x, y: 500, z: 0 };
+    expect(at[0](p)).toBeCloseTo(x * 0.3 - 350, 8);
+    expect(locate(other, x, 500).leaf).toBe(adaptiveLeafAt(other, x, 500));
+    expect(at[1](p)).toBeCloseTo(-2 * (x * 0.3 - 350), 8);
+    expect(at[2](p)).toBe(x < 500 ? 11 : 29);
+  }
+  expect(locate(tree, -1, 500).leaf).toBe(-1);
 });

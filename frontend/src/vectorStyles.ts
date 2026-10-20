@@ -64,7 +64,7 @@ function profiledLineStyles(feature: AtlasFeature, base: Style, color: string, r
     feature.geometry.type !== "LineString" ||
     !Array.isArray(widths) ||
     widths.length !== feature.geometry.coordinates.length ||
-    physicalStrokeWidth(feature, resolution) <= 1.7
+    (feature.kind === "river" && riverWidth(feature) / resolution <= 1)
   )
     return base;
   base.setStroke(null);
@@ -77,7 +77,11 @@ function profiledLineStyles(feature: AtlasFeature, base: Style, color: string, r
           geometry: new LineString([coordinates[i], coordinate]),
           stroke: new Stroke({
             color,
-            width: Math.max(1.7, (Number(widths[i]) + Number(widths[i + 1])) / (2 * resolution)),
+            width: segmentWidth(
+              feature,
+              (Number(widths[i]) + Number(widths[i + 1])) / 2,
+              resolution
+            ),
           }),
         })
     ),
@@ -85,12 +89,27 @@ function profiledLineStyles(feature: AtlasFeature, base: Style, color: string, r
 }
 function physicalStrokeWidth(feature: AtlasFeature, resolution: number) {
   if (feature.kind !== "river") return 2;
+  return channelStrokeWidth(riverWidth(feature), resolution);
+}
+function riverWidth(feature: AtlasFeature) {
   const samples = feature.attributes.widths;
   const width = Array.isArray(samples)
     ? samples.reduce<number>(
-        (maximum, value) => (typeof value === "number" ? Math.max(maximum, value) : maximum),
+        (maximum, value) =>
+          typeof value === "number" && Number.isFinite(value) ? Math.max(maximum, value) : maximum,
         0
       )
     : Number(feature.attributes.width ?? 0);
-  return Number.isFinite(width) ? Math.max(1.7, width / resolution) : 1.7;
+  return Number.isFinite(width) && width > 0 ? width : 10;
+}
+function channelStrokeWidth(width: number, resolution: number) {
+  // Unresolved rivers retain a width hierarchy. At close zoom the measured
+  // channel width, in metres per pixel, becomes the visible bank-to-bank width.
+  const symbol = 0.35 + 0.35 * Math.log2(1 + width / 10);
+  return Math.max(symbol, width / resolution);
+}
+function segmentWidth(feature: AtlasFeature, width: number, resolution: number) {
+  return feature.kind === "river"
+    ? channelStrokeWidth(width, resolution)
+    : Math.max(1.7, width / resolution);
 }

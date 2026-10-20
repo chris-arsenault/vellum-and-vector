@@ -4,6 +4,7 @@ import type { MagicField } from "./magicState";
 import { magicKey } from "./magicState";
 import { classifyNaturalSurface } from "./naturalSurface";
 import { unitNoise, hashUnit } from "./noise";
+import { projectedValues } from "./atlasSampling";
 
 function conditionReader(
   state: GenerationState,
@@ -152,7 +153,7 @@ export function projectMagic(state: GenerationState) {
       state.surface,
       key,
       unit,
-      Float64Array.from(work.samples, (i) => values[i]),
+      projectedMagicValues(state, values, unit),
       unit === "intensity-square-metre"
         ? "extensive"
         : unit === "category"
@@ -186,4 +187,11 @@ export function projectMagic(state: GenerationState) {
     for (const [id, members] of Object.entries(field.features))
       project(magicKey(field, `feature:${id}`), "category", members);
   }
+}
+function projectedMagicValues(state: GenerationState, values: ArrayLike<number>, unit: string) {
+  const work = state.physical!;
+  if (unit !== "intensity-square-metre" || !work.interpolation)
+    return projectedValues(work, values, unit === "category");
+  const density = Float64Array.from(work.map.mesh.areas, (area, i) => values[i] / area);
+  return projectedValues(work, density).map((value, i) => value * state.surface.measures[i]);
 }

@@ -21,7 +21,7 @@ export function createRiverPaths(map: PhysicalField): RiverPaths {
     x: Float64Array.from(map.mesh.x),
     y: Float64Array.from(map.mesh.y),
     upstream: new Int32Array(map.mesh.count).fill(-1),
-    elevationAt: map.mesh.topology ? physicalSampler(map.mesh, map.Elevation) : undefined,
+    elevationAt: physicalSampler(map.mesh, map.Elevation),
   };
   for (let i = 0; i < map.mesh.count; i++) {
     const target = map.FlowTargets[i];

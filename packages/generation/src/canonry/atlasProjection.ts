@@ -4,6 +4,7 @@ import { atlasChannels, type ChannelBinding } from "./atlasChannels";
 import { nativeIndexAtSurface } from "./atlasWorkspace";
 import { projectPhysicalMaterial } from "./physicalMaterial";
 import type { AtlasPhysicalWorkspace } from "./atlasWorkspace";
+import { projectedValues } from "./atlasSampling";
 
 const forcingChannels = new Set([
   "elevation",
@@ -29,12 +30,16 @@ function projectChannel(state: GenerationState, binding: ChannelBinding) {
   const work = state.physical!,
     map = work.map,
     grid = state.surface;
-  const values = new Float64Array(work.samples.length),
+  const values = projectedValues(
+      work,
+      map[binding.native],
+      binding.unit === "category" || binding.unit === "cell-index"
+    ),
     datum = binding.datum ? map.BaseSeaLevel : 0;
   const scale = binding.scale,
     offset = binding.offset ?? 0;
   for (let i = 0; i < values.length; i++) {
-    const value = map[binding.native][work.samples[i]];
+    const value = values[i];
     values[i] =
       binding.unit === "cell-index"
         ? value < 0
@@ -72,35 +77,33 @@ export function projectNative(
     "metre",
     new Float64Array(work.samples.length).fill(map.BaseSeaLevel / 1024)
   );
-  putChannel(
-    grid,
-    "flow",
-    "cubic-metre/second",
-    Float64Array.from(work.samples, (i) => map.FlowAccumulation[i])
-  );
+  putChannel(grid, "flow", "cubic-metre/second", projectedValues(work, map.FlowAccumulation));
   putChannel(
     grid,
     "drainageElevation",
     "metre",
-    Float64Array.from(work.samples, (i) => (map.DrainageElevations[i] - map.BaseSeaLevel) / 1024)
+    projectedValues(work, map.DrainageElevations).map((value) => (value - map.BaseSeaLevel) / 1024)
   );
   putChannel(
     grid,
     "precipitation",
     "metre/year",
-    Float64Array.from(work.samples, (i) => (map.Rainfall[i] + map.Snowfall[i]) / 1000)
+    projectedValues(
+      work,
+      Float64Array.from(map.Rainfall, (value, i) => (value + map.Snowfall[i]) / 1000)
+    )
   );
   putChannel(
     grid,
     "erosion",
     "metre",
-    Float64Array.from(
-      work.samples,
-      (i) =>
-        (map.CumulativeFluvialErosion[i] +
-          map.CumulativeGlacialErosion[i] +
-          map.CumulativeCoastalErosion[i]) /
-        1024
+    projectedValues(
+      work,
+      Float64Array.from(
+        map.CumulativeFluvialErosion,
+        (value, i) =>
+          (value + map.CumulativeGlacialErosion[i] + map.CumulativeCoastalErosion[i]) / 1024
+      )
     )
   );
   // Keep substrate useful to cave generation without inventing a second geology.
@@ -109,11 +112,13 @@ export function projectNative(
     grid,
     "carbonate",
     "ratio",
-    Float64Array.from(
-      work.samples,
-      (i) =>
-        (map.CrustContinentalFraction[i] / 1000) *
-        (1 - Math.min(1, map.VolcanicConstructionHistory[i] / (1024 * 100)))
+    projectedValues(
+      work,
+      Float64Array.from(
+        map.CrustContinentalFraction,
+        (value, i) =>
+          (value / 1000) * (1 - Math.min(1, map.VolcanicConstructionHistory[i] / (1024 * 100)))
+      )
     )
   );
 }

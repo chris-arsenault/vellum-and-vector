@@ -7,6 +7,7 @@ import { coordinateKey } from "./worldSources";
 import { extractGeologicalEvents } from "./geologicalFeatures";
 import { extractLakes, extractNamedLandforms, extractMagicPlaces } from "./geographicRegions";
 import { createRiverPaths, riverPath, type RiverPaths } from "./riverPaths";
+import type { PhysicalField } from "./field";
 
 function riverReach(state: GenerationState, start: number, incoming: Int32Array) {
   const map = state.physical!.map,
@@ -27,7 +28,13 @@ function lineParts(geometry: Geometry): number[][][] {
   if (geometry.type === "GeometryCollection") return geometry.geometries.flatMap(lineParts);
   return [];
 }
-function publishReach(state: GenerationState, start: number, members: number[], paths: RiverPaths) {
+function publishReach(
+  state: GenerationState,
+  start: number,
+  members: number[],
+  paths: RiverPaths,
+  basinDischarge: number
+) {
   if (members.length < 2) return;
   const work = state.physical!,
     map = work.map,
@@ -65,12 +72,24 @@ function publishReach(state: GenerationState, start: number, members: number[], 
       {
         order: map.RiverOrders[start],
         discharge: discharges[0],
+        basinDischarge,
         ...attributes,
         sourceAlgorithm: "canonry-0f62584c",
       }
     );
     putGeneratedNetwork(state, feature);
   }
+}
+function riverInputs(map: PhysicalField) {
+  const incoming = new Int32Array(map.mesh.count),
+    basinDischarge = new Map<number, number>();
+  for (let i = 0; i < map.mesh.count; i++) {
+    const basin = map.DrainageBasinIds[i];
+    basinDischarge.set(basin, Math.max(basinDischarge.get(basin) ?? 0, map.FlowAccumulation[i]));
+    const j = map.FlowTargets[i];
+    if (map.RiverOrders[i] > 0 && j >= 0 && map.RiverOrders[j] > 0) incoming[j]++;
+  }
+  return { incoming, basinDischarge };
 }
 export function extractNativeGeography(state: GenerationState, context: MapProcessContext) {
   extractGeologicalEvents(state);
@@ -79,17 +98,19 @@ export function extractNativeGeography(state: GenerationState, context: MapProce
   extractMagicPlaces(state);
   const work = state.physical!,
     map = work.map,
-    incoming = new Int32Array(map.mesh.count),
-    paths = createRiverPaths(map);
-  for (let i = 0; i < map.mesh.count; i++) {
-    const j = map.FlowTargets[i];
-    if (map.RiverOrders[i] > 0 && j >= 0 && map.RiverOrders[j] > 0) incoming[j]++;
-  }
+    paths = createRiverPaths(map),
+    { incoming, basinDischarge } = riverInputs(map);
   for (let i = 0; i < map.mesh.contentCount; i++) {
     if (map.RiverOrders[i] <= 0 || incoming[i] === 1) continue;
+    const discharge = basinDischarge.get(map.DrainageBasinIds[i]) ?? 0;
+    if (
+      state.domain.world.areas[state.domain.scope.areaId].profile === "world" &&
+      discharge < work.profile.WorldRiverMinimumBasinDischarge
+    )
+      continue;
     const p = nativePosition(work, i);
     if (!spatial.covers(state.domain.scope.footprint, point(p))) continue;
-    publishReach(state, i, riverReach(state, i, incoming), paths);
+    publishReach(state, i, riverReach(state, i, incoming), paths, discharge);
   }
   context.recordCause({
     kind: "domain",

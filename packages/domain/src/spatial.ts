@@ -12,6 +12,7 @@ import GeometryPrecisionReducer from "jsts/org/locationtech/jts/precision/Geomet
 import UnaryUnionOp from "jsts/org/locationtech/jts/operation/union/UnaryUnionOp.js";
 import IndexedPointInAreaLocator from "jsts/org/locationtech/jts/algorithm/locate/IndexedPointInAreaLocator.js";
 import Location from "jsts/org/locationtech/jts/geom/Location.js";
+import InteriorPointArea from "jsts/org/locationtech/jts/algorithm/InteriorPointArea.js";
 import type { Frame, Position } from "./model";
 import { frameSchema, geometrySchema } from "./schemas";
 import { requireThat } from "./errors";
@@ -167,6 +168,10 @@ export class Spatial {
   bounds(value: Geometry): Bounds {
     const e = this.read(value).getEnvelopeInternal();
     return [e.getMinX(), e.getMinY(), e.getMaxX(), e.getMaxY()];
+  }
+  interiorPosition(value: Geometry): Position {
+    const p = InteriorPointArea.getInteriorPoint(this.read(value));
+    return { x: p.x, y: p.y, z: 0 };
   }
   crossings(value: Geometry, footprint: Geometry): Position[] {
     const result = OverlayOp.intersection(

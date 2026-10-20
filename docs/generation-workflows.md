@@ -11,12 +11,13 @@ boundaries. User requirements and explicitly agreed constraints govern changes
 to the implementation choices described here.
 
 **Current replacement plan — 2026-10-19:**
-[Continuous terrain and adaptive generation](#continuous-terrain-and-adaptive-generation--replacement-plan)
-replaces the fixed microtriangle working topology and whole-area raster display.
-The completed metre conversion remains useful groundwork; its choice to retain
-that topology is historical, not a constraint on this replacement. Current scope
-is top-level world generation and display, preserving existing generator and layer
-semantics. Editor development and lower-level generation are excluded.
+[Fixed sampling replacement](#fixed-sampling-replacement-current-direction-2026-10-19)
+restores a fixed metre-aware triangle workspace while retaining all causal epochs,
+physical processes and configurable magic. Continuous scalar publication and
+OpenLayers tiles retain the display work. The adaptive rewrite's global support
+refinement and remeshing are retired from the active world path because their
+measured cost did not deliver useful map quality. Scope is top-level world
+generation and display; editor development and lower-level generation are excluded.
 
 ## Reference parity requirement
 
@@ -1296,7 +1297,7 @@ corrected plan only after world generation and display work together.
 
 Deployment is outside this request.
 
-### Current execution
+### Adaptive execution (superseded by the fixed sampling replacement)
 
 M0–M8 are complete for top-level world generation and display. The active world
 path uses adaptive SI control volumes, shared curvature-aware Hermite reconstruction,
@@ -1757,6 +1758,95 @@ this is numerical acceleration, with no reduced transport reach, epochs or
 physical activity. This follows the established aggregation/Galerkin mechanism
 described in the [PETSc solver manual](https://petsc.org/main/manual/ksp/).
 The logged coupled run will be repeated after focused operator checks.
+
+### Fixed sampling replacement (current direction, 2026-10-19)
+
+The user rejected the adaptive rewrite's cost and a proposal that reduced the
+multi-epoch generator. Restore one fixed triangle sampling mesh per run. Preserve
+all physical operations, evolving epoch state, metre-aware parameters and the
+three configurable magic systems. Continuous publication and display must read
+the evolved geography rather than expose nearest-cell polygons or add cosmetic
+terrain. Dynamic global refinement is no longer required. The earlier adaptive
+plan below records history, not a requirement for the active generator.
+
+Scope remains top-level world generation and display. There is no backend,
+editor, child-generation or landmark-injection work in this replacement. Runtime
+improvement is measured; it does not authorize budgets or omitted processes.
+
+Sulion root `045cca39-e0ba-4f46-b1be-5d864d9ed1d6`:
+
+1. Restore fixed sampling and continuous publication for the full generator.
+2. Repair demonstrated terrain/drainage defects with focused algorithm cases.
+3. Update detail labels and check complete Draft/Standard worlds and display.
+
+Phase 1 expansion `eea3c53a-63db-4b3a-9d3b-97755d57c92a`:
+construct a fixed workspace and reusable interpolation weights; reconnect every
+process, magic and geographic output; then exercise short complete histories.
+Regular field publication is an implementation choice, not a new product
+requirement. It must preserve categorical reads and continuous physical values.
+
+Phase 2 expansion `07b361f6-6cd6-4588-8986-0fe530a82bb8`: restore Canonry's
+outlet-rank progress comparison on conditioned flats, then inspect evolved terrain
+and geographic extraction. A focused flat-routing case fails with the parent-only
+bonus and passes with rank progress. Profiling the fixed world identified nearest
+triangle search as the largest remaining cost; an exact lattice calculation
+replaces neighborhood scanning inside the numerical boundary. Brute-force nearest
+site comparisons, planar interpolation and cross-face continuity check this choice.
+
+The fixed field shares centre, face and vertex values. Face averages preserve
+connections between adjacent classified cells; vertex averages join incident fans
+without discontinuities or invented extrema. Continuous channels reuse prepared
+weights for publication, while categories retain discrete identities. Retained
+magic inventory is published from density times the destination sample's area.
+Classified-region contours follow these linear fans directly, avoiding adaptive
+root searches on a fixed linear field. Lake contours retain floor/stage and body
+membership, including the numerical halo before clipping to the world.
+
+Existing child generation remains on its prior path; this replacement does not
+redesign it. Focused tests cover metre planes, shared faces, nearest-site lookup,
+connected and disconnected region extraction, publication units and magic
+inventory dimensions. The fixed world geology/glacial transition check takes
+about two seconds of test execution. Full world timing and visual review remain
+separate from the fast algorithm suite.
+
+Phase 3 expansion `3356bd6f-e90e-4aa2-af81-df51c2e0daca`: complete three-epoch
+Draft and Standard worlds with all domains and Fire/Aurora/Pressure; check existing
+authored/inherited compatibility; check labels, display interaction and required
+repository checks. Headless 4,000 × 3,000 km runs with seed 104729 completed in
+41.7 seconds at 435 MiB peak RSS (Draft) and 75.5 seconds at 657 MiB (Standard),
+including final publication. The earlier adaptive Draft with those settings took
+449.1 seconds at 4,315 MiB. These are local Node measurements, with some concurrent
+test load, not browser runtime guarantees. Every run retains the full three-epoch
+schedule and all configured magic. Standard's headless run completes without OOM.
+
+Visual review confirms that relief, water, geological events and river networks
+are present, but coastal drainage still includes excessively parallel stretches
+and Draft cannot resolve small terrain. Fixed sampling addresses the runtime and
+memory failure; it does not establish that those remaining geographic quality
+problems are solved. Do not hide them by pruning rivers to a quota or adding
+display-only terrain. Further quality work must address the physical causes or
+the map's scale-aware presentation explicitly.
+
+River correction (`631863c8-fbac-4df6-8e46-6ad82decf7d5`, 2026-10-20): world
+river vectors now require a basin with at least 350 m³/s annual mean discharge,
+while retaining the qualifying basin's smaller tributaries. This restores a
+distinction between substantial mapped basins and their headwaters. The physical
+25 m³/s basin threshold remains unchanged: raising it also removed smaller
+channels used by waterfall detection. Complete runoff routing, physical channels,
+erosion and landform detection remain independent of world vector qualification.
+River symbols distinguish measured channel widths at continental zoom and use
+the longitudinal physical width profile when zoomed in.
+
+On completely flat terrain, routing uses the immediate flood-parent direction.
+Long-range direction smoothing had cut across the flood's least-resistance
+corridors. Small cases at two sampling densities reproduce that loss and check
+that the selected paths retain those corridors without changing water levels.
+Varying terrain retains lookahead, capture and inherited-valley guidance. The
+same complete Standard world now publishes 193 river reaches rather than 1,481;
+its waterfall and gorge outputs remain present. The overview loses the excessive
+coastal comb, although individual bends can still expose coarse sampling. This
+is a qualification, routing and display correction, not evidence that every
+remaining river-shape limitation is resolved.
 
 ### Adaptive M7 execution
 

@@ -145,6 +145,23 @@ export function triangleIdentity(mesh: PhysicalMesh, i: number): number {
   const p = mesh.coords[i];
   return Math.imul(p.u, 73856093) ^ Math.imul(p.v, 19349663) ^ (p.inverted ? 83492791 : 0);
 }
+function latticeCandidate(mesh: PhysicalMesh, x: number, y: number, inverted: boolean) {
+  const sum = (x - (inverted ? 2 : 1)) / 1.5,
+    difference = (2 * y) / rootThree,
+    u = (sum - difference) / 2,
+    v = (sum + difference) / 2,
+    w = -u - v;
+  let a = round(u),
+    b = round(v);
+  const c = round(w),
+    du = Math.abs(a - u),
+    dv = Math.abs(b - v),
+    dw = Math.abs(c - w);
+  // Cube rounding gives the nearest site on each triangular sublattice.
+  if (du > dv && du > dw) a = -b - c;
+  else if (dv > dw) b = -a - c;
+  return mesh.indexes.get(`${a}:${b}:${Number(inverted)}`);
+}
 export function nearestTriangle(mesh: PhysicalMesh, x: number, y: number): number {
   if (mesh.topology) {
     const leaf = adaptiveLeafAt(mesh.topology, x + mesh.origin[0], y + mesh.origin[1]);
@@ -152,6 +169,23 @@ export function nearestTriangle(mesh: PhysicalMesh, x: number, y: number): numbe
   }
   const latticeX = (x - mesh.latticeOffset[0]) / mesh.spacing,
     latticeY = (y - mesh.latticeOffset[1]) / mesh.spacing;
+  const a = latticeCandidate(mesh, latticeX, latticeY, false),
+    b = latticeCandidate(mesh, latticeX, latticeY, true);
+  if (a !== undefined && b !== undefined)
+    return (mesh.x[a] - x) ** 2 + (mesh.y[a] - y) ** 2 <=
+      (mesh.x[b] - x) ** 2 + (mesh.y[b] - y) ** 2
+      ? a
+      : b;
+  // The clipped outer work boundary can omit a nearest infinite-lattice site.
+  return boundaryTriangle(mesh, x, y, latticeX, latticeY);
+}
+function boundaryTriangle(
+  mesh: PhysicalMesh,
+  x: number,
+  y: number,
+  latticeX: number,
+  latticeY: number
+) {
   let index = -1,
     best = Infinity;
   for (const inverted of [false, true]) {

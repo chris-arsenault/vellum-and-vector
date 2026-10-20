@@ -10,6 +10,22 @@ const topology = () =>
     minimumSize: 15.625,
     refine: ([x, y, right, top]) => x < 530 && right > 450 && y < 800 && top > 100,
   });
+it("reuses shared fan stations within a contour and discards samples between contours", () => {
+  const tree = createAdaptiveTopology([0, 0, 1000, 1000], { maximumSize: 125, minimumSize: 125 });
+  const calls = new Map<string, number>();
+  const value = (x: number, y: number) => {
+    const key = `${x}:${y}`;
+    calls.set(key, (calls.get(key) ?? 0) + 1);
+    return 200 - Math.hypot(x - 500, y - 500);
+  };
+  const island = fieldContour(tree, value, undefined, 0, 0.1)!;
+  expect(calls.get("125:125")).toBe(1);
+  const sea = fieldContour(tree, (x, y) => -value(x, y), undefined, 0, 0.1)!;
+  expect(calls.get("125:125")).toBe(2);
+  expect(spatial.area(island) + spatial.area(sea)).toBeCloseTo(1_000_000, 2);
+  expect(spatial.covers(island, point({ x: 500, y: 500, z: 0 }))).toBe(true);
+  expect(spatial.covers(sea, point({ x: 500, y: 500, z: 0 }))).toBe(false);
+});
 it("traces a continuous oblique shore across coarse/fine interfaces", () => {
   const angle = 0.37;
   const shore = fieldContour(

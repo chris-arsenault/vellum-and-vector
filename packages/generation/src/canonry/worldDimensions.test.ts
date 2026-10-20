@@ -45,7 +45,8 @@ it("represents the actual rectangular world area and metric neighbor distances",
     ]) {
       const i = nearestTriangle(mesh, x, y);
       expect(i).toBeGreaterThanOrEqual(0);
-      expect(Math.hypot(mesh.x[i] - x, mesh.y[i] - y)).toBeLessThan(mesh.spacing);
+      // A triangle vertex is exactly one spacing from its nearest cell centres.
+      expect(Math.hypot(mesh.x[i] - x, mesh.y[i] - y)).toBeLessThanOrEqual(mesh.spacing);
     }
     const i = Math.floor(mesh.contentCount / 2);
     expect(mesh.edgeLength[i * 3]).toBeCloseTo(mesh.spacing, 6);

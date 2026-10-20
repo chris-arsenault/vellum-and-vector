@@ -22,12 +22,11 @@ import { advectAtlasMagic } from "./atlasMagic";
 import { magicProcesses } from "./magicProcesses";
 import { advectMagic } from "./magicState";
 import { retainGeographicIdentities } from "./geographicIdentity";
-import { refineGeologicalCauses } from "./adaptiveWorkspace";
+import { refreshGrounding } from "./glacierSurface";
+import { refineGeologicalCauses, refineWorkspace } from "./adaptiveWorkspace";
 import { adaptiveWaterProcess } from "./adaptiveWater";
 import { adaptiveClimateProcess, adaptiveIceProcess, shoreSupport } from "./adaptiveClimate";
-import { refineWorkspace } from "./adaptiveWorkspace";
 import { prepareAdaptiveFractures } from "./adaptiveFractures";
-import { refreshGrounding } from "./glacierSurface";
 
 const prefix = (fact: string) => `canonry:${fact}`;
 const contract = (id: string, requires: string[] = [], produces: string[] = []) => ({
@@ -57,11 +56,13 @@ function prepareSpatialStep(
   c: ReturnType<typeof nativeContext>,
   step: NativeStep
 ) {
+  if (!state.physical!.map.mesh.topology) return step;
   const [name, salt] = step;
   refineGeologicalCauses(state, c, name);
   if (name === "coastal-detail") refineWorkspace(state, shoreSupport(state, c));
-  if (name === "fracture-network") return [name, salt, prepareAdaptiveFractures(state, c)] as const;
-  return step;
+  return name === "fracture-network"
+    ? ([name, salt, prepareAdaptiveFractures(state, c)] as const)
+    : step;
 }
 function nativeProcess(step: NativeStep, seed: number): MapProcess {
   const [name] = step,
@@ -135,9 +136,13 @@ export function atlasNativeProcesses(
     epochStartProcess(),
     finishProcess(original),
     advectAtlasMagic,
-    adaptiveWaterProcess(input.seed),
-    adaptiveClimateProcess(input.seed),
-    adaptiveIceProcess(input.seed),
+    ...(original.world.areas[input.areaId].profile === "world"
+      ? []
+      : [
+          adaptiveWaterProcess(input.seed),
+          adaptiveClimateProcess(input.seed),
+          adaptiveIceProcess(input.seed),
+        ]),
     ...magicProcesses(input.seed, input.domains.includes("magic")),
     ...Array.from(implementations.values(), (step) => nativeProcess(step, input.seed)),
   ];

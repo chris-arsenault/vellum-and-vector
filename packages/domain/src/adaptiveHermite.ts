@@ -36,7 +36,23 @@ export function adaptivePolynomial(c: Float64Array, center: number, u: number, v
 }
 
 export function evaluateAdaptiveCell(c: Float64Array, center: number, u: number, v: number) {
-  const low = Math.min(center, c[0], c[4], c[8], c[12]);
-  const high = Math.max(center, c[0], c[4], c[8], c[12]);
-  return Math.max(low, Math.min(high, adaptivePolynomial(c, center, u, v)));
+  return evaluatePreparedAdaptiveCell(prepareAdaptiveCell(c, center), u, v);
+}
+
+export function prepareAdaptiveCell(coefficients: Float64Array, center: number) {
+  return {
+    coefficients,
+    correction: center - hermitePatch(coefficients, 0.5, 0.5),
+    low: Math.min(center, coefficients[0], coefficients[4], coefficients[8], coefficients[12]),
+    high: Math.max(center, coefficients[0], coefficients[4], coefficients[8], coefficients[12]),
+  };
+}
+export type PreparedAdaptiveCell = ReturnType<typeof prepareAdaptiveCell>;
+
+export function preparedAdaptivePolynomial(cell: PreparedAdaptiveCell, u: number, v: number) {
+  const bubble = 256 * (u * (1 - u) * v * (1 - v)) ** 2;
+  return hermitePatch(cell.coefficients, u, v) + bubble * cell.correction;
+}
+export function evaluatePreparedAdaptiveCell(cell: PreparedAdaptiveCell, u: number, v: number) {
+  return Math.max(cell.low, Math.min(cell.high, preparedAdaptivePolynomial(cell, u, v)));
 }

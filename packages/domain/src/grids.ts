@@ -5,7 +5,11 @@ import { requireThat } from "./errors";
 import { point, rectangle, spatial, type Bounds } from "./spatial";
 import { adaptiveCell, adaptiveLeafAt, type AdaptiveTopology } from "./adaptiveTopology";
 import type { AdaptiveField } from "./adaptiveField";
-import { sampleAdaptivePoint, adaptivePointSampler } from "./adaptivePoint";
+import {
+  sampleAdaptivePoint,
+  adaptivePointSampler,
+  type AdaptivePointLocator,
+} from "./adaptivePoint";
 
 export interface FieldSamples {
   id: string;
@@ -306,31 +310,38 @@ export function resample(
 export function fieldInterpolator(
   grid: GridSurface,
   channel: string,
-  discrete = false
+  discrete = false,
+  locate?: AdaptivePointLocator
 ): (p: Position) => number {
   const overlays = [...(grid.overlays ?? [])]
     .reverse()
     .filter((overlay) => overlay.channels.includes(channel))
     .map((overlay) => ({
       covered: spatial.pointCoverage(overlay.grid.scope.footprint),
-      at: fieldInterpolator(overlay.grid, channel, discrete),
+      at: fieldInterpolator(overlay.grid, channel, discrete, locate),
     }));
-  const base = baseInterpolator(grid, channel, discrete);
+  const base = baseInterpolator(grid, channel, discrete, locate);
   return (p: Position) => {
     const overlay = overlays.find((candidate) => candidate.covered(p));
     return overlay ? overlay.at(p) : base(p);
   };
 }
-function baseInterpolator(grid: Grid, channel: string, discrete: boolean) {
+function baseInterpolator(
+  grid: Grid,
+  channel: string,
+  discrete: boolean,
+  locate?: AdaptivePointLocator
+) {
   if (!grid.topology) return (p: Position) => rawSample(grid, channel, p, discrete);
   const t = grid.topology,
     values = grid.channels[channel];
   const categorical = discreteChannel(grid, channel, discrete);
-  const surface = categorical ? null : adaptivePointSampler(t, values);
+  const surface = categorical ? null : adaptivePointSampler(t, values, locate);
   return (p: Position) => {
     const x = Math.max(t.bounds[0], Math.min(t.bounds[2], p.x)),
       y = Math.max(t.bounds[1], Math.min(t.bounds[3], p.y));
-    return surface ? surface(x, y) : values[adaptiveLeafAt(t, x, y)];
+    if (surface) return surface(x, y);
+    return values[locate ? locate(t, x, y).leaf : adaptiveLeafAt(t, x, y)];
   };
 }
 export function interpolateSample(

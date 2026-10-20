@@ -170,7 +170,7 @@ it("evolves impacts, repeated ice ages and all three magic systems through share
   expect(published.world.fields.find((field) => field.layerId === "magic")?.channels).toContain(
     "magic:pressure:coastalHistory"
   );
-  expect(grid.topology).toBeDefined();
+  expect(grid.topology).toBeUndefined();
   expect(features.some((feature) => feature.kind === "settlement")).toBe(true);
   expect(features.some((feature) => feature.kind === "sovereignty")).toBe(true);
   await saveDisplayFixture(grid, features);

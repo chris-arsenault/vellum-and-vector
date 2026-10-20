@@ -162,6 +162,9 @@ export const physicalProfile = {
   RiverMinimumAccumulationThreshold: 3,
   RiverBasinHeadwaterFraction: 80,
   RiverMinimumBasinDischarge: 25,
+  // World river vectors require a substantial basin, in annual mean m³/s.
+  // Smaller physical channels still drive erosion, waterfalls and local landforms.
+  WorldRiverMinimumBasinDischarge: 350,
   ChannelReferenceSlope: 0.004,
   ChannelSlopeFloor: 350,
   ChannelSlopeCeiling: 2600,

@@ -114,6 +114,7 @@ function GenerationForm({ world, editor }: { world: World; editor: EditorState }
       <DomainChoices profile={editor.area.profile} />
       <GenerationControls
         key={editor.area.id}
+        profile={editor.area.profile}
         seed={previous?.seed ?? world.seed}
         initial={previous?.parameters}
         quality={previous?.quality}

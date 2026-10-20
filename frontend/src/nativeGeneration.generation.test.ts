@@ -5,11 +5,21 @@ import {
   rectangle,
   sample,
   adaptiveLeafAt,
+  type Grid,
   type DomainSnapshot,
 } from "@atlas/domain";
 import { createWorld, session, worldScope } from "./atlasState";
 import { commitCommand } from "./atlasCommands";
 import { generationSnapshot } from "./generationJobs";
+
+function gridIndexAt(grid: Grid, x: number, y: number) {
+  if (grid.topology) return adaptiveLeafAt(grid.topology, x, y);
+  return (
+    Math.round(((y - grid.bounds[1]) / (grid.bounds[3] - grid.bounds[1])) * (grid.height - 1)) *
+      grid.width +
+    Math.round(((x - grid.bounds[0]) / (grid.bounds[2] - grid.bounds[0])) * (grid.width - 1))
+  );
+}
 
 function publishParent(result: CompletedBoundary, input: Parameters<typeof generationSnapshot>[1]) {
   const snapshot = generationSnapshot(result, input, crypto.randomUUID());
@@ -38,7 +48,7 @@ async function checkThermalFeedback(
   });
   const result = await generateAtlas(magical, { ...input, domains: ["magic"] });
   const grid = result.state.surface,
-    i = adaptiveLeafAt(grid.topology!, 2_000_000, 1_000_000);
+    i = gridIndexAt(grid, 2_000_000, 1_000_000);
   expect(grid.channels.heat[i]).toBeGreaterThan(4);
   expect(grid.channels.temperature[i]).toBeGreaterThan(grid.channels.naturalTemperature[i] + 3);
   expect(grid.channels.elevation[i]).toBeCloseTo(
@@ -100,7 +110,7 @@ it("refines inherited Canonry terrain and retains authored geography and its fix
   expect(refined.state.surface.channels.elevation.every(Number.isFinite)).toBe(true);
   expect(refined.state.surface.scope.footprint).not.toEqual(area.footprint);
   expect(refined.state.domain.fieldPatches).toEqual(inherited.fieldPatches);
-  const middle = adaptiveLeafAt(refined.state.surface.topology!, 11000, 11000);
+  const middle = gridIndexAt(refined.state.surface, 11000, 11000);
   const position = gridPosition(refined.state.surface, middle),
     patch = inherited.fieldPatches[0];
   expect(refined.state.surface.channels.elevation[middle]).toBeCloseTo(

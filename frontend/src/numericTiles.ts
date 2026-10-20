@@ -1,4 +1,10 @@
-import { fieldInterpolator, adaptiveLeafAt, type Position, type GridSurface } from "@atlas/domain";
+import {
+  fieldInterpolator,
+  adaptivePointLocator,
+  type AdaptivePointLocator,
+  type Position,
+  type GridSurface,
+} from "@atlas/domain";
 import DataTileSource from "ol/source/DataTile.js";
 import GeoJSON from "ol/format/GeoJSON.js";
 import VectorSource from "ol/source/Vector.js";
@@ -9,7 +15,7 @@ import type { Raster } from "./types";
 import { categorical } from "./rasterTiles";
 import { scaledValue } from "./rasterPresentation";
 
-function terrainAt(raster: Raster) {
+function terrainAt(raster: Raster, locate: AdaptivePointLocator) {
   const lakes = new VectorSource({
     features: raster.lakes?.map(
       (lake) =>
@@ -21,9 +27,9 @@ function terrainAt(raster: Raster) {
     wrapX: false,
   });
   const sea = raster.water?.channels.seaLevel
-    ? fieldInterpolator(raster.water, "seaLevel")
+    ? fieldInterpolator(raster.water, "seaLevel", false, locate)
     : () => 0;
-  const ice = raster.ice ? fieldInterpolator(raster.ice, "ice") : () => 0;
+  const ice = raster.ice ? fieldInterpolator(raster.ice, "ice", false, locate) : () => 0;
   return (p: Position, height: number) => {
     const level = sea(p);
     const lake = lakes
@@ -36,9 +42,10 @@ function terrainAt(raster: Raster) {
 /** Sampling is shared with geographic reads; pixels never introduce new terrain. */
 export function numericTileSampler(raster: Raster) {
   const footprint = new GeoJSON().readGeometry(raster.footprint)!;
-  const valueAt = fieldInterpolator(raster.field, raster.channel);
-  const active = activeSampler(raster.field, raster.channel);
-  const terrain = raster.channel === "elevation" ? terrainAt(raster) : null;
+  const locate = adaptivePointLocator();
+  const valueAt = fieldInterpolator(raster.field, raster.channel, false, locate);
+  const active = activeSampler(raster.field, raster.channel, locate);
+  const terrain = raster.channel === "elevation" ? terrainAt(raster, locate) : null;
   const bands = terrain ? 6 : 3;
   return (extent: number[], size: number) => {
     const values = new Float32Array(size * size * bands);
@@ -84,19 +91,23 @@ export function numericTileSource(
     },
   });
 }
-function activeSampler(grid: GridSurface, channel: string): (p: Position) => boolean {
+function activeSampler(
+  grid: GridSurface,
+  channel: string,
+  locate: AdaptivePointLocator
+): (p: Position) => boolean {
   const overlays = (grid.overlays ?? [])
     .filter((overlay) => overlay.channels.includes(channel))
     .slice()
     .reverse()
     .map(({ grid }) => ({
       footprint: new GeoJSON().readGeometry(grid.scope.footprint)!,
-      at: activeSampler(grid, channel),
+      at: activeSampler(grid, channel, locate),
     }));
   return (p) => {
     const overlay = overlays.find(({ footprint }) => footprint.intersectsCoordinate([p.x, p.y]));
     if (overlay) return overlay.at(p);
-    if (grid.topology) return grid.active[adaptiveLeafAt(grid.topology, p.x, p.y)] === 1;
+    if (grid.topology) return grid.active[locate(grid.topology, p.x, p.y).leaf] === 1;
     const x = Math.round(
       ((p.x - grid.bounds[0]) / (grid.bounds[2] - grid.bounds[0])) * (grid.width - 1)
     );

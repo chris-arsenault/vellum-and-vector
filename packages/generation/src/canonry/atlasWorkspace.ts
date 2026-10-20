@@ -9,13 +9,16 @@ import {
   createAdaptiveField,
   prepareAdaptiveTransfer,
   resampleChannels,
+  gridPosition,
   rectangle,
 } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { authoredFields } from "../mapAuthored";
 import { createField, type PhysicalField } from "./field";
 import { nearestTriangle } from "./mesh";
+import { createWorldMesh } from "./worldMesh";
 import { createAdaptiveWorldMesh } from "./adaptiveMesh";
+import { triangleSample, type TriangleSample } from "./triangleSampling";
 import { atlasPhysicalProfile, atlasQuality } from "./atlasProfile";
 import { atlasChannels, type ChannelBinding } from "./atlasChannels";
 import type { PhysicalProfile } from "./profile";
@@ -28,6 +31,7 @@ export interface AtlasPhysicalWorkspace {
   map: PhysicalField;
   profile: PhysicalProfile;
   samples: Int32Array;
+  interpolation?: TriangleSample[];
   fixed: { binding: ChannelBinding; values: Float64Array }[];
   inherited: boolean;
   sampling: { maximumSize: number; minimumSize: number; featureSamples: number };
@@ -173,34 +177,25 @@ export function createAtlasWorkspace(
 ): AtlasPhysicalWorkspace {
   const profile = atlasPhysicalProfile(parameters);
   const bounds = state.surface.bounds;
-  // Quadtree splits both axes together. Use the work extent, including its halo,
-  // so a rectangular world does not silently quadruple the requested base density.
   const maximumSize =
     (Math.max(bounds[2] - bounds[0], bounds[3] - bounds[1]) + 2 * profile.BoundaryPadding) /
     Math.sqrt(atlasQuality[quality].baseCells);
   const featureSamples = { draft: 2, standard: 4, fine: 8 }[quality];
   const sampling = { maximumSize, minimumSize: maximumSize / 16, featureSamples };
-  const support = protectedSampling(state, maximumSize, profile.BoundaryPadding);
-  sampling.minimumSize = support.reduce(
-    (size, patch) => Math.min(size, patch.size),
-    sampling.minimumSize
-  );
-  const map = createField(
-    createAdaptiveWorldMesh(
-      bounds,
-      {
-        ...sampling,
-        refine: (box) =>
-          support.some(
-            (patch) =>
-              Math.max(box[2] - box[0], box[3] - box[1]) > patch.size &&
-              spatial.intersects(rectangle(box), patch.footprint)
-          ),
-      },
-      profile.BoundaryPadding,
-      state.domain.scope.footprint
-    )
-  );
+  const covers = spatial.pointCoverage(state.domain.scope.footprint),
+    anchor = spatial.interiorPosition(state.domain.scope.footprint);
+  const fixed = state.domain.world.areas[state.domain.scope.areaId].profile === "world";
+  const mesh = fixed
+    ? createWorldMesh(
+        bounds,
+        atlasQuality[quality].baseCells,
+        profile.BoundaryPadding,
+        (x, y) => covers({ x, y, z: 0 }),
+        spatial.area(state.domain.scope.footprint),
+        [anchor.x, anchor.y]
+      )
+    : createChildMesh(state, sampling, profile.BoundaryPadding);
+  const map = createField(mesh);
   const work: AtlasPhysicalWorkspace = {
     map,
     profile,
@@ -213,6 +208,31 @@ export function createAtlasWorkspace(
   refreshWorkspaceSamples(state, work);
   refreshWorkspaceProtection(state, work);
   return work;
+}
+function createChildMesh(
+  state: GenerationState,
+  sampling: AtlasPhysicalWorkspace["sampling"],
+  padding: number
+) {
+  const support = protectedSampling(state, sampling.maximumSize, padding);
+  sampling.minimumSize = support.reduce(
+    (size, patch) => Math.min(size, patch.size),
+    sampling.minimumSize
+  );
+  return createAdaptiveWorldMesh(
+    state.surface.bounds,
+    {
+      ...sampling,
+      refine: (box) =>
+        support.some(
+          (patch) =>
+            Math.max(box[2] - box[0], box[3] - box[1]) > patch.size &&
+            spatial.intersects(rectangle(box), patch.footprint)
+        ),
+    },
+    padding,
+    state.domain.scope.footprint
+  );
 }
 function protectedSampling(state: GenerationState, size: number, padding: number) {
   const bounds = state.surface.bounds,
@@ -244,6 +264,15 @@ export function refreshWorkspaceSamples(
   work: AtlasPhysicalWorkspace,
   prepared?: ReturnType<typeof prepareAdaptiveTransfer>
 ) {
+  if (!work.map.mesh.topology) {
+    work.interpolation = Array.from(state.surface.active, (_, i) => {
+      const p = gridPosition(state.surface, i),
+        mesh = work.map.mesh;
+      return triangleSample(mesh, p.x - mesh.origin[0], p.y - mesh.origin[1]);
+    });
+    work.samples = Int32Array.from(work.interpolation, (sample) => sample.cell);
+    return;
+  }
   const previous = state.surface,
     topology = work.map.mesh.topology!;
   work.samples = work.map.mesh.leafToCell;

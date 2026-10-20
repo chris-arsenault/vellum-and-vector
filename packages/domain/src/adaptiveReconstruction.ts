@@ -5,7 +5,7 @@ import {
   type AdaptiveTopology,
 } from "./adaptiveTopology";
 import { prepareAdaptivePatches } from "./adaptivePoint";
-import { evaluateAdaptiveCell } from "./adaptiveHermite";
+import { evaluatePreparedAdaptiveCell, type PreparedAdaptiveCell } from "./adaptiveHermite";
 export { evaluateAdaptiveCell } from "./adaptiveHermite";
 
 export interface AdaptiveReconstruction {
@@ -13,6 +13,7 @@ export interface AdaptiveReconstruction {
   values: Float64Array;
   corners: Float64Array;
   patches: Float64Array;
+  cells: PreparedAdaptiveCell[];
 }
 
 /** Weighted least-squares gradients use all physical neighbors, including split faces. */
@@ -57,23 +58,21 @@ export function reconstructAdaptive(
 ): AdaptiveReconstruction {
   const at = prepareAdaptivePatches(topology, values);
   const patches = new Float64Array(values.length * 16),
-    corners = new Float64Array(values.length * 4);
+    corners = new Float64Array(values.length * 4),
+    cells: PreparedAdaptiveCell[] = [];
   for (let i = 0; i < values.length; i++) {
-    const patch = at(i);
+    const cell = at(i),
+      patch = cell.coefficients;
+    cells.push(cell);
     patches.set(patch, i * 16);
     for (let c = 0; c < 4; c++) corners[i * 4 + c] = patch[c * 4];
   }
-  return { topology, values, corners, patches };
+  return { topology, values, corners, patches, cells };
 }
 /** Shared Hermite faces match height and slope; an interior correction retains each sample. */
 export function sampleAdaptive(surface: AdaptiveReconstruction, x: number, y: number): number {
   const i = adaptiveLeafAt(surface.topology, x, y);
   if (i < 0) return NaN;
   const [x0, y0, x1, y1] = adaptiveCell(surface.topology, i);
-  return evaluateAdaptiveCell(
-    surface.patches.subarray(i * 16, i * 16 + 16),
-    surface.values[i],
-    (x - x0) / (x1 - x0),
-    (y - y0) / (y1 - y0)
-  );
+  return evaluatePreparedAdaptiveCell(surface.cells[i], (x - x0) / (x1 - x0), (y - y0) / (y1 - y0));
 }

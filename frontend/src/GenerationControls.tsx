@@ -32,14 +32,44 @@ const presets: Record<string, Partial<AtlasParameters>> = {
   arid: { rainfall: 0.2 },
   canonry: { continents: 5, provinces: 30, landFraction: 0.53, temperature: -17.5, impacts: 7 },
 };
+function DetailLevel({ quality, profile }: { quality: string; profile: string }) {
+  const options =
+    profile === "world"
+      ? [
+          "about 16,000 terrain samples",
+          "about 65,000 terrain samples",
+          "about 262,000 terrain samples",
+        ]
+      : ["coarse adaptive sampling", "medium adaptive sampling", "dense adaptive sampling"];
+  return (
+    <>
+      <label>
+        Detail level
+        <select name="quality" defaultValue={quality}>
+          {["Draft", "Standard", "Fine"].map((name, i) => (
+            <option key={name} value={name.toLowerCase()}>
+              {name} · {options[i]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="hint">
+        Higher detail samples the same physical world more finely.{" "}
+        {profile === "world" && "Sample counts include the surrounding simulation margin."}
+      </p>
+    </>
+  );
+}
 export function GenerationControls({
   seed,
   initial,
   quality = "standard",
+  profile,
 }: {
   seed: number;
   initial?: Record<string, number>;
   quality?: string;
+  profile: string;
 }) {
   const [values, setValues] = useState({ ...defaultAtlasParameters, ...initial });
   const [preset, setPreset] = useState(initial ? "custom" : "balanced");
@@ -90,15 +120,7 @@ export function GenerationControls({
           when a region has no located cultures or polities; existing identities are retained.
         </p>
       </details>
-      <label>
-        Detail level
-        <select name="quality" defaultValue={quality}>
-          <option value="draft">Draft · coarse adaptive sampling</option>
-          <option value="standard">Standard · medium adaptive sampling</option>
-          <option value="fine">Fine · dense adaptive sampling</option>
-        </select>
-      </label>
-      <p className="hint">Higher detail takes longer to sample the same world more finely.</p>
+      <DetailLevel quality={quality} profile={profile} />
       <label>
         Seed
         <input name="seed" type="number" defaultValue={seed} required />
