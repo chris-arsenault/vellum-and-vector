@@ -1,6 +1,6 @@
 # GIS presentation
 
-Current work: [Compact layer controls — 2026-10-20](#compact-layer-controls--2026-10-20).
+Current work: [Overlay workbench — 2026-10-20](#overlay-workbench--2026-10-20).
 The implementation below shipped, but its controls and navigation performance
 did not meet the user's usability expectations. Its completed checks establish
 functional wiring, not acceptance of the map experience. Preserve that history;
@@ -524,4 +524,48 @@ production build, formatting and diff checks pass with the existing warnings.
 Run `ATLAS_PERFORMANCE=1 ATLAS_CONTROLS=1 ATLAS_DPR=2 pnpm --dir frontend test:browser`
 to repeat the real-scene density review without repeating navigation measurements.
 Test-owned servers and containers are stopped. The subsequent user request
+authorizes commit and push of this follow-up; hosted deployment remains unverified.
+
+## Overlay workbench — 2026-10-20
+
+The user accepted the feature hierarchy and requested substantial overlay work.
+Sulion plan: `ca9cd093-7030-4334-8dc2-2fc0c80e12d0`.
+
+Replace the inline flat catalogue with a native, non-modal popover beside the
+Layers panel. Search covers every available channel, including raw keys; common
+fields and selected fields appear by default, while All fields exposes the rest.
+Native disclosure groups organize climate, water, terrain, biomes/life, people,
+magic and advanced fields. Category rows show their unit and selection state.
+Selection represents membership in the map stack, independently of visibility.
+
+Active overlays use compact rows with swatches, units, opacity, ordering, settings
+and removal. Legends mount when expanded. Settings open beneath the selected row,
+without scrolling past the feature tree. Continuous ramps fill their legend width;
+biome categories keep their existing colors and appear in a compact two-column
+key. Numeric ranges use paired inputs. Preserve all existing raster presentation
+state and session views; no rendering or generation algorithm changes are needed.
+Concurrent domain/generation work is outside this repair and remains untouched.
+
+Initial affected Chromium checks pass, including both ecological workflows and
+magic history fields. A new interaction journey covers multiple overlays, hidden
+membership, removal, full-field discovery, Escape dismissal, keyboard expansion,
+categorical legends and the narrow chooser. Existing ecological tests now use
+the actual per-overlay settings rather than a removed field-selector control.
+
+Final review used the saved real Draft scene (2170 features, 127 available fields)
+at 1920 × 1080 CSS pixels and DPR 2. Four collapsed overlays each occupy 29 CSS
+pixels, including their visibility, opacity and ordering controls. The common
+view exposes ten fields in this scene; all 127 remain available through search
+or All fields. Local chooser, stack and inline-style screenshots are retained in
+ignored navigation artifacts. The categorical fixture also shows a compact biome
+key alongside several continuous overlays. No layer-count limit was added.
+
+All 16 Chromium browser journeys pass; the seven affected layer, ecological and
+magic journeys pass in Firefox and WebKit. Fourteen focused numerical/vector
+checks pass. Frontend typecheck, lint for changed code, production builds,
+formatting and diff checks pass; existing chunk-size warnings remain. A saved-view
+check exposed loss of the open settings disclosure during field refresh; the
+existing selected-overlay target now restores that disclosure after remount.
+Repeat the real-scene review with `ATLAS_PERFORMANCE=1 ATLAS_CONTROLS=1 ATLAS_OVERLAYS=1 ATLAS_DPR=2 pnpm --dir frontend test:browser`.
+Test-owned servers and containers are stopped. The user's subsequent request
 authorizes commit and push of this follow-up; hosted deployment remains unverified.

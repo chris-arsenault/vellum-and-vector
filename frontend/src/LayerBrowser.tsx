@@ -1,12 +1,16 @@
-import { useState } from "react";
+import { useId } from "react";
 import type { EditorState } from "./useEditor";
 import type { FieldStyle } from "./types";
-import { defaultFieldStyle, fieldLabel } from "./rasterPresentation";
-import { FieldLegend } from "./RasterPanel";
+import { defaultFieldStyle } from "./rasterPresentation";
+import { OverlayStack, type OverlayActions } from "./OverlayStack";
 import { LayerCatalogue } from "./LayerCatalogue";
 import { FeatureThemes } from "./FeatureThemes";
 
-function overlayActions(editor: EditorState) {
+function overlayActions(
+  editor: EditorState,
+  edit: (target: string) => void,
+  target: string
+): OverlayActions {
   return {
     update: (channel: string, changes: Partial<FieldStyle>) =>
       editor.setRasterView((view) => ({
@@ -24,21 +28,26 @@ function overlayActions(editor: EditorState) {
         [next[index], next[destination]] = [next[destination], next[index]];
         return { ...view, fields: next };
       }),
-    remove: (channel: string) =>
+    remove: (channel: string) => {
       editor.setRasterView((view) => ({
         ...view,
         fields: view.fields.filter((f) => f.channel !== channel),
-      })),
+      }));
+      if (target === `field:${channel}`) edit("");
+    },
   };
 }
 export function LayerBrowser({
   editor,
   edit,
+  target,
 }: {
   editor: EditorState;
   edit: (target: string) => void;
+  target: string;
 }) {
-  const [catalogue, setCatalogue] = useState(false);
+  const catalogue = useId();
+  const actions = overlayActions(editor, edit, target);
   const available = new Set((editor.raster.data ?? []).map((r) => r.channel));
   const fields = editor.rasterView.fields.filter((field) => available.has(field.channel));
   return (
@@ -46,109 +55,20 @@ export function LayerBrowser({
       <BaseChoices editor={editor} edit={edit} />
       <div className="layer-section-title">
         <h3>Overlays</h3>
-        <button
-          className="quiet"
-          aria-expanded={catalogue}
-          onClick={() => setCatalogue(!catalogue)}
-        >
-          {catalogue ? "Done" : "+ Add overlay"}
+        <button className="quiet" popoverTarget={catalogue}>
+          + Add overlay
         </button>
       </div>
-      {catalogue && <LayerCatalogue editor={editor} update={overlayActions(editor).update} />}
-      <div className="active-overlays" aria-label="Visible field legends">
-        {fields.map((field, index) => (
-          <OverlayCard
-            key={field.channel}
-            editor={editor}
-            field={field}
-            index={index}
-            count={fields.length}
-            edit={edit}
-          />
-        ))}
-      </div>
+      <LayerCatalogue
+        id={catalogue}
+        editor={editor}
+        update={actions.update}
+        remove={actions.remove}
+      />
+      <OverlayStack editor={editor} fields={fields} actions={actions} target={target} edit={edit} />
       {!fields.length && <p className="empty-overlays">No overlays</p>}
       <FeatureThemes editor={editor} edit={edit} />
     </section>
-  );
-}
-interface CardProps {
-  editor: EditorState;
-  field: FieldStyle;
-  index: number;
-  count: number;
-  edit: (target: string) => void;
-}
-function OverlayCard({ editor, field, index, count, edit }: CardProps) {
-  const name = fieldLabel(editor.world, field.channel);
-  const actions = overlayActions(editor);
-  return (
-    <article className="overlay-card">
-      <div className="overlay-heading">
-        <label className="check">
-          <input
-            type="checkbox"
-            aria-label={`Show ${name}`}
-            checked={field.visible}
-            onChange={(e) => actions.update(field.channel, { visible: e.target.checked })}
-          />
-          {name}
-        </label>
-        <button
-          className="quiet"
-          aria-label={`Style ${name}`}
-          onClick={() => edit(`field:${field.channel}`)}
-        >
-          Style
-        </button>
-      </div>
-      {field.visible && (
-        <FieldLegend
-          world={editor.world}
-          field={field}
-          data={(editor.raster.data ?? []).filter((r) => r.channel === field.channel)}
-        />
-      )}
-      <div className="overlay-actions">
-        <label>
-          Opacity
-          <input
-            aria-label={`${name} opacity`}
-            type="range"
-            min="0"
-            max="100"
-            value={Math.round(field.opacity * 100)}
-            onChange={(e) =>
-              actions.update(field.channel, { opacity: Number(e.target.value) / 100 })
-            }
-          />
-          <output>{Math.round(field.opacity * 100)}%</output>
-        </label>
-        <button
-          className="quiet"
-          disabled={index === 0}
-          aria-label={`Move ${name} up`}
-          onClick={() => actions.reorder(field.channel, -1)}
-        >
-          ↑
-        </button>
-        <button
-          className="quiet"
-          disabled={index === count - 1}
-          aria-label={`Move ${name} down`}
-          onClick={() => actions.reorder(field.channel, 1)}
-        >
-          ↓
-        </button>
-        <button
-          className="quiet"
-          aria-label={`Remove ${name}`}
-          onClick={() => actions.remove(field.channel)}
-        >
-          ×
-        </button>
-      </div>
-    </article>
   );
 }
 function BaseChoices({ editor, edit }: { editor: EditorState; edit: (target: string) => void }) {

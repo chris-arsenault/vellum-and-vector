@@ -45,7 +45,11 @@ test("save a magic variant and inspect generated history fields", async ({ page 
   await page.getByRole("button", { name: "+ Add overlay", exact: true }).click();
   for (const channel of ["magic:pressure:coastalHistory", "magic:aurora:history", "finalSurface"]) {
     await page.getByLabel("Search overlays").fill(channel);
-    await page.getByLabel("Add map overlays").getByRole("checkbox").first().check();
+    await page
+      .getByLabel("Add map overlays")
+      .getByRole("checkbox", { name: /^Add / })
+      .first()
+      .check();
   }
   await page.getByRole("button", { name: "Done", exact: true }).click();
   await page.getByRole("button", { name: "Style Land cover", exact: true }).click();

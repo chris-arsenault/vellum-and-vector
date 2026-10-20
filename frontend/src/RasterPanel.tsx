@@ -131,32 +131,32 @@ function FieldControls({
   return (
     <fieldset className="field-style">
       <legend>{fieldLabel(world, channel)}</legend>
-      <label>
-        Color ramp
-        <select
-          aria-label="Color ramp"
-          value={field.palette}
-          onChange={(event) => update({ palette: event.target.value as FieldStyle["palette"] })}
-        >
-          {Object.keys(palettes).map((name) => (
-            <option key={name}>{name}</option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Value scale
-        <select
-          aria-label="Value scale"
-          value={field.scale}
-          onChange={(event) => update({ scale: event.target.value as FieldStyle["scale"] })}
-        >
-          <option value="linear">Linear</option>
-          <option value="log">Signed logarithmic</option>
-        </select>
-      </label>
-      <p className="hint">
-        Logarithmic scaling retains zero and negative values. Missing data is transparent.
-      </p>
+      <div className="field-controls">
+        <label>
+          Color ramp
+          <select
+            aria-label="Color ramp"
+            value={field.palette}
+            onChange={(event) => update({ palette: event.target.value as FieldStyle["palette"] })}
+          >
+            {Object.keys(palettes).map((name) => (
+              <option key={name}>{name}</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Value scale
+          <select
+            aria-label="Value scale"
+            title="Signed logarithmic scaling retains zero and negative values. Missing data is transparent."
+            value={field.scale}
+            onChange={(event) => update({ scale: event.target.value as FieldStyle["scale"] })}
+          >
+            <option value="linear">Linear</option>
+            <option value="log">Signed logarithmic</option>
+          </select>
+        </label>
+      </div>
       <RangeControls key={JSON.stringify(field.range)} field={field} data={data} update={update} />
       <FieldLegend world={world} field={field} data={data} />
       <SurfaceCodes world={world} channel={channel} />
@@ -200,6 +200,7 @@ function RangeControls({
   const range = fieldRange(data, field);
   return (
     <form
+      className="range-controls"
       onInput={(event) => {
         const maximum = event.currentTarget.elements.namedItem("maximum") as HTMLInputElement;
         maximum.setCustomValidity("");
@@ -222,10 +223,12 @@ function RangeControls({
         Range maximum
         <input name="maximum" type="number" step="any" required defaultValue={range[1]} />
       </label>
-      <button type="submit">Apply range</button>
-      <button type="button" onClick={() => update({ range: null })}>
-        Use data range
-      </button>
+      <div className="range-actions">
+        <button type="submit">Apply range</button>
+        <button type="button" onClick={() => update({ range: null })}>
+          Use data range
+        </button>
+      </div>
     </form>
   );
 }
@@ -248,7 +251,12 @@ export function FieldLegend({
       <figcaption>
         {fieldLabel(world, field.channel)} <small>{unit}</small>
       </figcaption>
-      <svg viewBox="0 0 200 12" role="img" aria-label={`${field.palette} color ramp`}>
+      <svg
+        viewBox="0 0 200 12"
+        role="img"
+        aria-label={`${field.palette} color ramp`}
+        preserveAspectRatio="none"
+      >
         <defs>
           <linearGradient id={id}>
             {palettes[field.palette].map((color, i, all) => (
@@ -269,7 +277,7 @@ export function FieldLegend({
 function BiomeLegend({ data }: { data: Raster[] }) {
   const present = new Set(rasterCategories(data));
   return (
-    <figure className="field-legend">
+    <figure className="field-legend categorical-legend">
       <figcaption>Biomes</figcaption>
       <ul>
         {biomes.map((biome, code) =>

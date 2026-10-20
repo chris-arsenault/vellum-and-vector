@@ -180,7 +180,8 @@ async function inspectEditor(page: Page) {
   await expect(map).toBeVisible();
   await expect(map).toHaveAttribute("aria-busy", "false");
   await page.getByRole("button", { name: "Layers", exact: true }).click();
-  if (process.env.ATLAS_CONTROLS) await reviewControls(page);
+  if (process.env.ATLAS_OVERLAYS) await reviewOverlays(page);
+  else if (process.env.ATLAS_CONTROLS) await reviewControls(page);
   await page.screenshot({
     path: `.artifacts/navigation/${process.env.ATLAS_RUN ?? "current"}-${process.env.ATLAS_SCENE ?? "draft"}-editor.png`,
   });
@@ -219,4 +220,30 @@ async function reviewControlsOnly(page: Page, errors: string[]) {
   await inspectEditor(page);
   expect(errors).toEqual([]);
   return true;
+}
+async function reviewOverlays(page: Page) {
+  await page.getByRole("button", { name: "+ Add overlay", exact: true }).click();
+  for (const name of ["Temperature", "River flow", "Natural land cover", "Land cover"])
+    await page.getByRole("checkbox", { name: `Add ${name}`, exact: true }).check();
+  await page
+    .getByLabel("Add map overlays")
+    .screenshot({ path: ".artifacts/navigation/overlay-chooser.png" });
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  console.log(
+    JSON.stringify({
+      overlayRows: await page
+        .locator(".overlay-row")
+        .evaluateAll((rows) =>
+          rows.map((r) => ({ name: r.textContent, height: r.getBoundingClientRect().height }))
+        ),
+    })
+  );
+  await page
+    .getByLabel("Map appearance", { exact: true })
+    .screenshot({ path: ".artifacts/navigation/overlay-stack.png" });
+  await page.getByRole("button", { name: "Style Temperature", exact: true }).click();
+  await expect(page.getByLabel("Color ramp", { exact: true })).toBeVisible();
+  await page
+    .getByLabel("Map appearance", { exact: true })
+    .screenshot({ path: ".artifacts/navigation/overlay-style.png" });
 }

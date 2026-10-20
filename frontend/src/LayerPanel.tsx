@@ -37,8 +37,8 @@ export function LayerPanel({ world, editor }: { world: World; editor: EditorStat
           ))}
         </select>
       </label>
-      <LayerBrowser editor={editor} edit={edit} />
-      {target && (
+      <LayerBrowser editor={editor} edit={edit} target={target} />
+      {target && !target.startsWith("field:") && (
         <div className="contextual-style" ref={appearance}>
           <button className="quiet" onClick={() => edit("")}>
             ← Back to map layers

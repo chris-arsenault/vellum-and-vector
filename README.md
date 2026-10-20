@@ -58,12 +58,15 @@ bindings remain available.
 
 Open **Layers** to switch between **Topographic** and **Relief** base maps.
 The compact drawer floats over the map and closes when you finish. **Add overlay**
-opens a searchable catalogue of available fields, grouped by theme; **All fields**
-and **Advanced** retain access to diagnostic channels. Active overlay cards provide
-visibility, opacity, legends and move-up/down buttons. **Features** shows a compact
+opens a separate floating chooser with searchable theme groups. **All fields**
+includes diagnostic channels. Checked fields stay in the overlay stack even when
+hidden; uncheck them in the chooser or use Remove to take them out of the stack.
+Active rows provide visibility, opacity and move-up/down buttons. Expand a row for
+its legend, or use its settings icon to edit the palette, scale and range in place.
+Biome legends show category names and colors. **Features** shows a compact
 hierarchy with counts and color swatches. Collapse groups or filter by name;
 show empty layers when preparing to author them.
-Each layer's **Style** button opens contextual appearance controls. Vector styles
+Each feature layer's **Style** button opens contextual appearance controls. Vector styles
 include common color, width and label settings; **Advanced symbol rules** opens
 GeoStyler. Fields support color ramps, linear or signed logarithmic scaling, and
 display ranges. Missing coverage is transparent, while measured zero remains visible.

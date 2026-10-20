@@ -10,7 +10,7 @@ test("compact layer drawer leaves the map accessible on a narrow screen", async 
   await page.getByRole("button", { name: "Create world", exact: true }).click();
   await page.getByRole("button", { name: "Layers", exact: true }).click();
   await expect(page.getByRole("radio", { name: "Topographic", exact: true })).toBeVisible();
-  await expect(page.locator(".overlay-card")).toHaveCount(0);
+  await expect(page.locator(".overlay-row")).toHaveCount(0);
   const map = await page.getByRole("application", { name: "World map canvas" }).boundingBox();
   const drawer = await page.getByLabel("Map appearance", { exact: true }).boundingBox();
   expect(map!.width).toBeGreaterThan(500);
@@ -26,6 +26,63 @@ async function mapImage(page: Page) {
   const buffer = await page.getByRole("application", { name: "World map canvas" }).screenshot();
   return createHash("sha256").update(buffer).digest("hex");
 }
+test("manage continuous and categorical overlays without expanding the stack", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await installGenerationFixture(page, false, true, true);
+  await page.goto("/");
+  await page.getByLabel("World name").fill("Overlay workbench");
+  await page.getByRole("button", { name: "Create world", exact: true }).click();
+  await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
+  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
+  await page.getByRole("button", { name: "Layers", exact: true }).click();
+  await page.getByRole("button", { name: "+ Add overlay", exact: true }).click();
+  for (const name of [
+    "Temperature",
+    "River flow",
+    "Tree cover",
+    "Land cover",
+    "Natural land cover",
+  ])
+    await page.getByRole("checkbox", { name: `Add ${name}`, exact: true }).check();
+  await page
+    .getByLabel("Add map overlays")
+    .screenshot({ path: "test-results/overlay-chooser.png" });
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(page.locator(".overlay-row")).toHaveCount(6);
+  await expect(page.locator(".overlay-content")).toHaveCount(0);
+  await page.getByRole("checkbox", { name: "Show Temperature", exact: true }).uncheck();
+  await page.getByRole("button", { name: "+ Add overlay", exact: true }).click();
+  await expect(page.getByRole("checkbox", { name: "Add Temperature", exact: true })).toBeChecked();
+  await page.getByRole("checkbox", { name: "Add Temperature", exact: true }).uncheck();
+  await page.getByRole("checkbox", { name: "All fields", exact: true }).check();
+  await expect(
+    page.getByRole("checkbox", { name: "Add Young broadleaf trees", exact: true })
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByLabel("Add map overlays")).not.toBeVisible();
+  await expect(page.getByRole("checkbox", { name: "Show Temperature", exact: true })).toHaveCount(
+    0
+  );
+  const biomes = page
+    .locator(".overlay-row")
+    .filter({ has: page.getByRole("checkbox", { name: "Show Biomes", exact: true }) });
+  await biomes.locator("summary").focus();
+  await page.keyboard.press("Enter");
+  await expect(biomes.locator(".categorical-legend")).toContainText("Temperate forest");
+  await expect(biomes.locator(".categorical-legend")).toContainText("Swamp");
+  await page
+    .getByLabel("Map appearance", { exact: true })
+    .screenshot({ path: "test-results/overlay-stack.png" });
+  await page.setViewportSize({ width: 600, height: 900 });
+  await page.getByRole("button", { name: "+ Add overlay", exact: true }).click();
+  const picker = (await page.getByLabel("Add map overlays").boundingBox())!;
+  expect(picker.x).toBeGreaterThanOrEqual(0);
+  expect(picker.x + picker.width).toBeLessThanOrEqual(600);
+  await page.screenshot({ path: "test-results/overlay-chooser-narrow.png" });
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  expect(errors).toEqual([]);
+});
 test("switch bases and compose independent field styles through the layer control", async ({
   page,
 }) => {
@@ -54,7 +111,7 @@ test("switch bases and compose independent field styles through the layer contro
   await page.getByRole("button", { name: "Done", exact: true }).click();
   await expect(page.getByRole("checkbox", { name: "Show Temperature", exact: true })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: "Show River flow", exact: true })).toBeChecked();
-  await expect(page.getByLabel("Visible field legends").locator("figure")).toHaveCount(2);
+  await showLegends(page);
   const opacity = page.getByRole("slider", { name: "Temperature opacity", exact: true });
   await opacity.focus();
   await page.keyboard.press("ArrowLeft");
@@ -105,6 +162,15 @@ async function checkFaultControl(page: Page) {
   await faults.click();
   await page.getByLabel("Search features").clear();
   await page.getByLabel("Show empty layers").uncheck();
+}
+async function showLegends(page: Page) {
+  for (const name of ["Temperature", "River flow"]) {
+    const row = page
+      .locator(".overlay-row")
+      .filter({ has: page.getByRole("checkbox", { name: `Show ${name}`, exact: true }) });
+    await row.locator("summary").click({ position: { x: 4, y: 12 } });
+  }
+  await expect(page.getByLabel("Visible field legends").locator("figure")).toHaveCount(2);
 }
 async function checkTerrainControl(page: Page) {
   await page.getByRole("button", { name: "Adjust terrain appearance", exact: true }).click();
