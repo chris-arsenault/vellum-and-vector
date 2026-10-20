@@ -52,12 +52,7 @@ export function Editor({ world, worlds, changeWorld, newWorld }: Props) {
           aria-label={tab === "layers" ? "Map appearance" : "World atlas"}
         >
           <header className="drawer-heading">
-            <div>
-              <span className="eyebrow">
-                {tab === "layers" ? "MAKE IT YOUR MAP" : "YOUR WORLD"}
-              </span>
-              <h2>{tab === "layers" ? "Map layers" : "Atlas"}</h2>
-            </div>
+            <h2>{tab === "layers" ? "Map layers" : "Atlas"}</h2>
             <button className="quiet" aria-label="Close map drawer" onClick={() => setTab(null)}>
               ×
             </button>

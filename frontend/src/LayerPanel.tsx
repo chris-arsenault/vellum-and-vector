@@ -25,8 +25,8 @@ export function LayerPanel({ world, editor }: { world: World; editor: EditorStat
   const style = editor.styles.find((style) => style.layerId === vector);
   return (
     <div className="layer-panel">
-      <label>
-        View preset
+      <label className="view-preset">
+        Preset
         <select
           aria-label="View preset"
           defaultValue="physical"

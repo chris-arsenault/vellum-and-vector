@@ -40,6 +40,7 @@ test("switch bases and compose independent field styles through the layer contro
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
   await page.getByRole("button", { name: "Layers", exact: true }).click();
   await checkFaultControl(page);
+  await checkTerrainControl(page);
   await expect(page.getByRole("radio", { name: "Topographic", exact: true })).toBeChecked();
   await page.screenshot({ path: "test-results/gis-layer-browser.png" });
   const topo = await mapImage(page);
@@ -95,7 +96,6 @@ test("switch bases and compose independent field styles through the layer contro
   expect(errors).toEqual([]);
 });
 async function checkFaultControl(page: Page) {
-  await page.locator(".feature-themes > summary").click();
   await page.getByLabel("Show empty layers").check();
   await page.getByLabel("Search features").fill("Fault");
   const faults = page.getByRole("checkbox", { name: "Show Fault traces", exact: true });
@@ -103,7 +103,13 @@ async function checkFaultControl(page: Page) {
   await faults.click();
   await expect(faults).toBeChecked();
   await faults.click();
-  await page.locator(".feature-themes > summary").click();
+  await page.getByLabel("Search features").clear();
+  await page.getByLabel("Show empty layers").uncheck();
+}
+async function checkTerrainControl(page: Page) {
+  await page.getByRole("button", { name: "Adjust terrain appearance", exact: true }).click();
+  await expect(page.getByRole("slider", { name: /Sun azimuth/ })).toBeVisible();
+  await page.getByRole("button", { name: "← Back to map layers", exact: true }).click();
 }
 async function expectFieldOrder(page: Page) {
   const fields = page.locator(".active-overlays").getByRole("checkbox");
@@ -130,7 +136,6 @@ test("edit road symbols with GeoStyler and keep them in a session view", async (
   await canvas.click({ position: { x: 650, y: 500 } });
   const original = await mapImage(page);
   await page.getByRole("button", { name: "Layers", exact: true }).click();
-  await page.locator(".feature-themes > summary").click();
   await page.getByLabel("Search features").fill("Roads");
   await page.getByRole("button", { name: "Style Roads and routes", exact: true }).click();
   await page.getByLabel("Draw order", { exact: true }).selectOption("rivers");

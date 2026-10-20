@@ -50,13 +50,15 @@ Open **Layers** to switch between **Topographic** and **Relief** base maps.
 The compact drawer floats over the map and closes when you finish. **Add overlay**
 opens a searchable catalogue of available fields, grouped by theme; **All fields**
 and **Advanced** retain access to diagnostic channels. Active overlay cards provide
-visibility, opacity, legends and move-up/down buttons. Expand **Features** for
-thematic visibility controls, or show empty layers when preparing to author them.
+visibility, opacity, legends and move-up/down buttons. **Features** shows a compact
+hierarchy with counts and color swatches. Collapse groups or filter by name;
+show empty layers when preparing to author them.
 Each layer's **Style** button opens contextual appearance controls. Vector styles
 include common color, width and label settings; **Advanced symbol rules** opens
 GeoStyler. Fields support color ramps, linear or signed logarithmic scaling, and
 display ranges. Missing coverage is transparent, while measured zero remains visible.
-**Adjust terrain appearance** controls lighting, exaggeration and contour interval.
+The **Adjust terrain appearance** icon beside the base choices controls lighting,
+exaggeration and contour interval.
 These display settings do not change the geography. Satellite appearance is deferred.
 
 **Session map views** retain the base, field overlays and vector styles together

@@ -55,23 +55,20 @@ export function LayerCatalogue({
     .sort((a, b) => fieldLabel(editor.world, a).localeCompare(fieldLabel(editor.world, b)));
   return (
     <section className="overlay-catalogue" aria-label="Add map overlays">
-      <label>
-        Search overlays
+      <div className="catalogue-filters">
         <input
           type="search"
+          aria-label="Search overlays"
           value={search}
-          placeholder="Temperature, population, magic…"
+          placeholder="Find a field…"
           onChange={(e) => setSearch(e.target.value)}
         />
-      </label>
-      <label className="sr-only" htmlFor="overlay-theme">
-        Overlay theme
-      </label>
-      <select id="overlay-theme" value={theme} onChange={(e) => setTheme(e.target.value)}>
-        {themes.map((t) => (
-          <option key={t}>{t}</option>
-        ))}
-      </select>
+        <select aria-label="Overlay theme" value={theme} onChange={(e) => setTheme(e.target.value)}>
+          {themes.map((t) => (
+            <option key={t}>{t}</option>
+          ))}
+        </select>
+      </div>
       <div className="catalogue-results">
         {matches.map((channel) => {
           const field = editor.rasterView.fields.find((f) => f.channel === channel);

@@ -1,6 +1,6 @@
 # GIS presentation
 
-Current work: [Map experience repair — 2026-10-20](#map-experience-repair--2026-10-20).
+Current work: [Compact layer controls — 2026-10-20](#compact-layer-controls--2026-10-20).
 The implementation below shipped, but its controls and navigation performance
 did not meet the user's usability expectations. Its completed checks establish
 functional wiring, not acceptance of the map experience. Preserve that history;
@@ -494,3 +494,34 @@ navigation path without reducing geography. Cold-detail and high-DPI software
 rendering still miss the proposed goals; hardware-accelerated performance remains
 unverified. These limits remain open performance work, rather than functional
 test failures or reasons to claim the intended experience is guaranteed.
+
+## Compact layer controls — 2026-10-20
+
+User feedback identified selector density as the next problem: oversized base
+cards, form spacing and counts on separate lines left only a few visible rows.
+Sulion plan: `34efb232-8c8e-414f-af14-14dc17f39a23`.
+
+Use the existing floating panel with a compact header and preset/base toolbar.
+Feature layers form an initially expanded native disclosure hierarchy, with
+24 px desktop rows, inline counts, color swatches and contextual styling actions.
+Search reveals matching groups. Empty layers remain optional. Scoped CSS resets
+prevent general form/detail styles from adding margins or block-level counts;
+the rest of the editor retains its existing typography and controls. Touch input
+gets larger rows. Overlay search, legends and opacity/order controls are denser.
+
+The real saved Draft scene (2170 features) was reviewed at a 1920 × 1080 CSS
+viewport with DPR 2, producing 3840 × 2160 output. All 18 built-in layer rows fit
+inside the panel without scrolling, including empty layers and expanded groups.
+This is a layout observation, not a runtime cap or a restriction on custom layers.
+Local screenshots remain in ignored navigation artifacts. No rendering,
+generation, geographic identity or storage changes are part of this follow-up.
+
+The 13 Chromium browser journeys pass. The three layer-control journeys pass
+again in Chromium, Firefox and WebKit after the final compact terrain-button
+change, covering terrain settings, narrow layout, overlays, keyboard opacity,
+ordering, advanced symbols and session-view restoration. Typecheck, lint,
+production build, formatting and diff checks pass with the existing warnings.
+Run `ATLAS_PERFORMANCE=1 ATLAS_CONTROLS=1 ATLAS_DPR=2 pnpm --dir frontend test:browser`
+to repeat the real-scene density review without repeating navigation measurements.
+Test-owned servers and containers are stopped. The subsequent user request
+authorizes commit and push of this follow-up; hosted deployment remains unverified.

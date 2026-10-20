@@ -73,6 +73,7 @@ async function observeLongTasks(page: Page) {
 
 test("measure real generated geography without regenerating it", async ({ page, browserName }) => {
   test.setTimeout(240000);
+  if (process.env.ATLAS_CONTROLS) await page.setViewportSize({ width: 1920, height: 1080 });
   const quality = process.env.ATLAS_SCENE ?? "draft";
   const data = deserialize(
     await readFile(`.artifacts/generation/fixed-${quality}.bin`)
@@ -89,6 +90,7 @@ test("measure real generated geography without regenerating it", async ({ page, 
     );
     return window.atlasBenchmark.load(input);
   }, encoded);
+  if (await reviewControlsOnly(page, errors)) return;
   await observeLongTasks(page);
   const measurements = [];
   const profiler = await startProfile(page);
@@ -178,7 +180,43 @@ async function inspectEditor(page: Page) {
   await expect(map).toBeVisible();
   await expect(map).toHaveAttribute("aria-busy", "false");
   await page.getByRole("button", { name: "Layers", exact: true }).click();
+  if (process.env.ATLAS_CONTROLS) await reviewControls(page);
   await page.screenshot({
     path: `.artifacts/navigation/${process.env.ATLAS_RUN ?? "current"}-${process.env.ATLAS_SCENE ?? "draft"}-editor.png`,
   });
+}
+async function reviewControls(page: Page) {
+  await page.getByLabel("Show empty layers").check();
+  const panel = page.getByLabel("Map appearance", { exact: true });
+  const box = (await panel.boundingBox())!;
+  const rows = await page.locator(".feature-row").evaluateAll((elements) =>
+    elements.map((element) => {
+      const rect = element.getBoundingClientRect();
+      return { name: element.textContent, top: rect.top, bottom: rect.bottom, height: rect.height };
+    })
+  );
+  console.log(
+    JSON.stringify({
+      panel: box,
+      visibleRows: rows.filter((row) => row.top >= box.y && row.bottom <= box.y + box.height)
+        .length,
+      totalRows: rows.length,
+      rows,
+    })
+  );
+  await panel.screenshot({ path: ".artifacts/navigation/dense-layer-controls.png" });
+  const water = page
+    .locator(".feature-group")
+    .filter({ has: page.locator("summary", { hasText: "Water" }) });
+  await water.locator("summary").click();
+  await expect(water.getByRole("checkbox").first()).not.toBeVisible();
+  await page.getByLabel("Search features").fill("Rivers");
+  await expect(page.getByRole("checkbox", { name: "Show Rivers", exact: true })).toBeVisible();
+  await page.getByLabel("Search features").clear();
+}
+async function reviewControlsOnly(page: Page, errors: string[]) {
+  if (!process.env.ATLAS_CONTROLS) return false;
+  await inspectEditor(page);
+  expect(errors).toEqual([]);
+  return true;
 }

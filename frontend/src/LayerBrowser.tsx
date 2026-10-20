@@ -67,12 +67,7 @@ export function LayerBrowser({
           />
         ))}
       </div>
-      {!fields.length && (
-        <p className="empty-overlays">
-          Layer temperature, water, people or magic over your terrain. Add an overlay to get
-          started.
-        </p>
-      )}
+      {!fields.length && <p className="empty-overlays">No overlays</p>}
       <FeatureThemes editor={editor} edit={edit} />
     </section>
   );
@@ -179,16 +174,25 @@ function BaseChoices({ editor, edit }: { editor: EditorState; edit: (target: str
               />
               <path className="preview-river" d="M22 0Q15 20 45 33T70 69" />
             </svg>
-            <span>
-              {base === "topographic" ? "Topographic" : "Relief"}
-              <small>{base === "topographic" ? "Contours & terrain" : "Light & landforms"}</small>
-            </span>
+            <span>{base === "topographic" ? "Topographic" : "Relief"}</span>
           </label>
         ))}
+        <button
+          className="quiet terrain-style"
+          aria-label="Adjust terrain appearance"
+          title="Adjust terrain appearance"
+          onClick={() => edit("base:terrain")}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <path
+              d="M2 4H14M2 8H14M2 12H14M5 2V6M11 6V10M7 10V14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            />
+          </svg>
+        </button>
       </div>
-      <button className="quiet terrain-style" onClick={() => edit("base:terrain")}>
-        Adjust terrain appearance
-      </button>
     </fieldset>
   );
 }
