@@ -1,8 +1,7 @@
-import type { GenerationState, MapProcess, MapProcessContext } from "../process";
-import { refineWorkspace, type SamplingSupport } from "./adaptiveWorkspace";
-import { drainageSteps } from "./sequence";
-import { applyNativeStep, nativeContracts } from "./contracts";
-import { nativeContext } from "./context";
+import type { GenerationState, MapProcess } from "../process";
+import { refineWorkspace, remeshInvalidations, type SamplingSupport } from "./adaptiveWorkspace";
+import { physicalFeatureSequence } from "../physicalFeatures";
+import type { ResolvedFeatures } from "../features";
 import { physicalDistance } from "./physicalMetric";
 
 function valleySupport(state: GenerationState) {
@@ -35,17 +34,7 @@ function valleySupport(state: GenerationState) {
   }
   return supports;
 }
-function reconcileWater(state: GenerationState, context: MapProcessContext, seed: number) {
-  const map = state.physical!.map;
-  for (const step of drainageSteps) {
-    const c = nativeContext(state, context, seed, step[1]);
-    applyNativeStep(map, c, step);
-    const contract = nativeContracts[step[0]];
-    for (const fact of contract.invalidates) state.facts.delete(`canonry:${fact}`);
-    for (const fact of contract.produces) state.facts.add(`canonry:${fact}`);
-  }
-}
-export function adaptiveWaterProcess(seed: number): MapProcess {
+export function adaptiveWaterProcess(features: ResolvedFeatures): MapProcess {
   return {
     contract: {
       id: "canonry.refine-water",
@@ -54,12 +43,30 @@ export function adaptiveWaterProcess(seed: number): MapProcess {
       requires: ["canonry:Rivers"],
       produces: [],
       invalidates: [],
+      reconciliation: {
+        invalidates: remeshInvalidations,
+        sequence: [
+          ...physicalFeatureSequence("water.runoff", features),
+          ...physicalFeatureSequence("water.routing", features),
+        ],
+        guarantees: [
+          "Runoff",
+          "Lakes",
+          "LakeOutlets",
+          "DrainageGuidance",
+          "FlowRouting",
+          "Rivers",
+        ].map((product) => `canonry:${product}`),
+      },
       workspaceOnly: true,
     },
-    apply(state, context) {
-      if (!refineWorkspace(state, valleySupport(state))) return;
-      // This repeats spatial reconciliation, never geological time or incision.
-      reconcileWater(state, context, seed);
+    behavior: {
+      kind: "transfer",
+      async transfer(state, context) {
+        if (!refineWorkspace(state, valleySupport(state), "declared")) return;
+        // This repeats spatial reconciliation, never geological time or incision.
+        await context.reconcile!();
+      },
     },
     validate: () => [],
   };

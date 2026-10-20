@@ -117,7 +117,10 @@ function growRegion(
     }
   return included;
 }
-function independentInteraction(rule: MagicField["definition"]["features"][number], owner: string) {
+export function independentInteraction(
+  rule: MagicField["definition"]["features"][number],
+  owner: string
+) {
   const conditions = [...rule.seeds, ...(rule.retains ?? [])].flat();
   const local = new Set([
     "intensity",

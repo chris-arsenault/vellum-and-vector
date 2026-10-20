@@ -1,10 +1,10 @@
 import type { GenerationState, MapProcess } from "../process";
 import type { PhysicalContext } from "./context";
-import { refineWorkspace, type SamplingSupport } from "./adaptiveWorkspace";
+import { refineWorkspace, remeshInvalidations, type SamplingSupport } from "./adaptiveWorkspace";
 import { nativeContext } from "./context";
 import { physicalFace, physicalDistance } from "./physicalMetric";
-import { applyNativeStep } from "./contracts";
-import { iceFlow } from "./iceFlow";
+import { physicalFeatureSequence } from "../physicalFeatures";
+import type { ResolvedFeatures } from "../features";
 
 export function shoreSupport(state: GenerationState, context: PhysicalContext) {
   const work = state.physical!,
@@ -36,7 +36,7 @@ export function shoreSupport(state: GenerationState, context: PhysicalContext) {
     }
   return supports;
 }
-export function adaptiveClimateProcess(seed: number): MapProcess {
+export function adaptiveClimateProcess(): MapProcess {
   return {
     contract: {
       id: "canonry.refine-climate",
@@ -45,11 +45,15 @@ export function adaptiveClimateProcess(seed: number): MapProcess {
       requires: ["canonry:Elevation"],
       produces: [],
       invalidates: [],
+      reconciliation: { invalidates: remeshInvalidations, sequence: [], guarantees: [] },
       workspaceOnly: true,
     },
-    apply(state, context) {
-      const c = nativeContext(state, context, seed, 0);
-      refineWorkspace(state, shoreSupport(state, c));
+    behavior: {
+      kind: "transfer",
+      async transfer(state, context) {
+        const c = nativeContext(state, context, 0);
+        if (refineWorkspace(state, shoreSupport(state, c), "declared")) await context.reconcile!();
+      },
     },
     validate: () => [],
   };
@@ -80,24 +84,30 @@ function iceSupport(state: GenerationState) {
   }
   return supports;
 }
-export function adaptiveIceProcess(seed: number): MapProcess {
+export function adaptiveIceProcess(features: ResolvedFeatures): MapProcess {
   return {
     contract: {
       id: "canonry.refine-ice",
       version: "0f62584c",
       parameters: {},
       requires: ["canonry:IceFlow"],
-      produces: ["canonry:IceFlow"],
-      invalidates: ["canonry:Landforms", "canonry:GlacialMeltwater"],
+      produces: [],
+      invalidates: [],
+      reconciliation: {
+        invalidates: [...remeshInvalidations, "canonry:Landforms"],
+        sequence: physicalFeatureSequence("ice.flow", features),
+        guarantees: ["canonry:IceFlow"],
+      },
       workspaceOnly: true,
     },
-    apply(state, context) {
-      if (!refineWorkspace(state, iceSupport(state))) return;
-      // Thickness has already accumulated for this pass. Transfer its volume,
-      // then rebuild the routing diagnostic without adding another growth step.
-      const c = nativeContext(state, context, seed, 0);
-      applyNativeStep(state.physical!.map, c, ["ice-flow", 0, iceFlow]);
-      state.facts.add("canonry:IceFlow");
+    behavior: {
+      kind: "transfer",
+      async transfer(state, context) {
+        if (!refineWorkspace(state, iceSupport(state), "declared")) return;
+        // Thickness has already accumulated for this pass. Transfer its volume,
+        // then rebuild the routing diagnostic without adding another growth step.
+        await context.reconcile!();
+      },
     },
     validate: () => [],
   };

@@ -65,11 +65,15 @@ function createMagicField(state: GenerationState, definition: MagicSystem): Magi
   }
   return field;
 }
-export function initializeMagic(state: GenerationState, enabled = true) {
+export function initializeMagic(
+  state: GenerationState,
+  enabled = true,
+  definitions = configuredSystems(state)
+) {
   const count = state.physical!.map.mesh.count;
   state.physical!.magic = {
     fields: enabled
-      ? configuredSystems(state).map((system) => createMagicField(state, system))
+      ? structuredClone(definitions).map((system) => createMagicField(state, system))
       : [],
     heat: new Float64Array(count),
     coastal: new Float64Array(count),

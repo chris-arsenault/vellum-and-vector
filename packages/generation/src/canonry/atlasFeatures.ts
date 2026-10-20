@@ -93,19 +93,47 @@ function riverInputs(map: PhysicalField) {
   }
   return { incoming, basinDischarge };
 }
-export function extractNativeGeography(state: GenerationState, context: MapProcessContext) {
+export interface GeographicDeliveries {
+  impacts: boolean;
+  volcanism: boolean;
+  fractures: boolean;
+  lakes: boolean;
+  landforms: boolean;
+  magic: boolean;
+  ecology: boolean;
+  rivers: boolean;
+}
+const allDeliveries: GeographicDeliveries = {
+  impacts: true,
+  volcanism: true,
+  fractures: true,
+  lakes: true,
+  landforms: true,
+  magic: true,
+  ecology: true,
+  rivers: true,
+};
+export function extractNativeGeography(
+  state: GenerationState,
+  context: MapProcessContext,
+  deliveries = allDeliveries
+) {
   state.surface.ocean = oceanFootprint(state);
-  extractGeologicalEvents(state);
-  extractLakes(state);
-  extractNamedLandforms(state);
-  extractMagicPlaces(state);
-  extractEcologicalFeatures(state);
+  extractGeologicalEvents(state, deliveries);
+  if (deliveries.lakes) extractLakes(state);
+  if (deliveries.landforms) extractNamedLandforms(state);
+  if (deliveries.magic) extractMagicPlaces(state);
+  if (deliveries.ecology) extractEcologicalFeatures(state);
+  if (!deliveries.rivers) return;
+  extractRiverGeography(state, context);
+}
+function extractRiverGeography(state: GenerationState, context: MapProcessContext) {
   const work = state.physical!,
     map = work.map,
     paths = createRiverPaths(map),
     { incoming, basinDischarge } = riverInputs(map);
   paths.water = {
-    ocean: state.surface.ocean,
+    ocean: state.surface.ocean ?? null,
     lakes: new Map(
       Object.values(state.domain.world.features)
         .filter(

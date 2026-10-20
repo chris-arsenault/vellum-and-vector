@@ -12,7 +12,7 @@ export function inheritedNativeFacts(channels: Iterable<string>): string[] {
   const bindings: Record<string, string[]> = {
     TectonicProvinces: ["province"],
     ContinentalDomains: ["continentalFraction"],
-    Fractures: ["fracture"],
+    FractureState: ["fracture"],
     Impacts: ["impactExcavation"],
     VolcanicConstruction: ["volcanicConstruction"],
     GlacialEvolution: ["glacialErosion", "glacialDeposition"],
@@ -26,6 +26,7 @@ export function inheritedNativeFacts(channels: Iterable<string>): string[] {
 export function absentInheritedHistories(channels: Iterable<string>) {
   const facts = new Set(inheritedNativeFacts(channels));
   return [
+    "Fractures",
     "Impacts",
     "VolcanicConstruction",
     "GlacialEvolution",

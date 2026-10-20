@@ -78,27 +78,28 @@ it("diagnoses an invalidated fact at its actual causal invocation", () => {
   expect(errors[0].message).toContain("invalidated by terrain");
 });
 
-it("rejects required-step switches and explains selectable dependencies", () => {
+it("translates legacy switches into coupled features and explains dependencies", () => {
   const { source, input } = request();
-  expect(() =>
-    prepareAtlasGeneration(source, { ...input, processes: { "canonry.temperature": false } })
-  ).toThrow("required");
+  const climate = prepareAtlasGeneration(source, {
+    ...input,
+    processes: { "canonry.temperature": false },
+  });
+  expect(climate.diagnostics.some((item) => item.resource === "physical.climate")).toBe(true);
   expect(() =>
     prepareAtlasGeneration(source, { ...input, processes: { misspelled: false } })
-  ).toThrow("Unknown process");
-  const mismatched = prepareAtlasGeneration(source, {
-    ...input,
-    processes: { "canonry.glacial-erosion": false },
-  });
-  expect(mismatched.diagnostics.some((diagnostic) => diagnostic.code === "coupled_processes")).toBe(
-    true
-  );
+  ).toThrow("has no selectable feature");
+  expect(() =>
+    prepareAtlasGeneration(source, {
+      ...input,
+      processes: { "canonry.glacial-erosion": false, "canonry.glacial-deposition": true },
+    })
+  ).toThrow("one feature");
   const delta = prepareAtlasGeneration(source, {
     ...input,
     processes: { "canonry.river-floodplains": false },
   });
   expect(
-    delta.diagnostics.some((diagnostic) => diagnostic.resource === "canonry:Floodplains")
+    delta.diagnostics.some((diagnostic) => diagnostic.resource === "physical.floodplains")
   ).toBe(true);
 });
 
@@ -123,7 +124,11 @@ it("accepts authored elevation with initialized absent histories and rejects mis
   const validation = prepared.registry
     .contracts()
     .find((contract) => contract.id.endsWith("physical-structural-validation"))!;
-  expect(validation.requires).not.toContain("canonry:Impacts");
+  expect(validation.requires).toContain("canonry:Impacts");
+  expect(validation.inputs).toContainEqual({
+    product: "canonry:Impacts",
+    acceptEmptyFrom: "atlas.absent-physical",
+  });
   grid.units.elevation = "ratio";
   expect(() => prepareAtlasGeneration(source, { ...input, domains: ["magic"] })).toThrow(
     "Inherited elevation requires metre"

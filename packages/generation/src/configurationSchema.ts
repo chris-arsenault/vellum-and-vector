@@ -16,6 +16,7 @@ const invocation = z
     kind: z.literal("process"),
     id,
     process: id,
+    feature: id.optional(),
     version: id,
     parameters: valueRecordSchema.optional(),
     when: z.object({ variable: id, equals: scalarSchema }).strict().optional(),

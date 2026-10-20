@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { executeProcessBehavior } from "./processTraits";
 import {
   createGrid,
   gridPosition,
@@ -114,7 +115,7 @@ function apply(
 ) {
   const ctx = context(process, parameters, years);
   ctx.recordCause = (cause) => target.causes!.push(cause);
-  process.apply(target, ctx);
+  executeProcessBehavior(process, target, ctx);
   process.validate(target, ctx);
   for (const fact of process.contract.invalidates) target.facts.delete(fact);
   for (const fact of process.contract.produces) target.facts.add(fact);
@@ -260,5 +261,5 @@ it("reports cancellation before starting a long terrain pass", () => {
   const target = state(),
     ctx = context(initializeTerrainProcess);
   ctx.cancelled = () => true;
-  expect(() => initializeTerrainProcess.apply(target, ctx)).toThrow("cancelled");
+  expect(() => executeProcessBehavior(initializeTerrainProcess, target, ctx)).toThrow("cancelled");
 });

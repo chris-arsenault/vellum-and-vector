@@ -1,7 +1,11 @@
 import { expect, it } from "vitest";
 import { createGrid } from "@atlas/domain";
 import { createWorld, session } from "./atlasState";
-import { atlasNativeProcesses } from "../../packages/generation/src/canonry/atlasProcesses";
+import {
+  ProductLedger,
+  bindNativeFacts,
+  processRequirements,
+} from "../../packages/generation/src/productLedger";
 import {
   initialSteps,
   climateSteps,
@@ -13,6 +17,7 @@ import {
   extractionSteps,
 } from "../../packages/generation/src/canonry/sequence";
 import type { GenerationState, MapProcessContext } from "@atlas/generation";
+import { atlasRegistry, executeProcessBehavior, prepareAtlasGeneration } from "@atlas/generation";
 
 function scenario() {
   const world = createWorld({
@@ -31,11 +36,15 @@ function scenario() {
     history: [],
   };
   const input = { areaId, seed: world.seed, quality: "draft", domains: ["physical"] };
-  const processes = atlasNativeProcesses(input, source);
+  const prepared = prepareAtlasGeneration(source, input);
+  const registry = atlasRegistry(prepared.source, prepared.input);
+  const products = new ProductLedger(state.facts, registry.productDefinitions());
   const context: MapProcessContext = {
     scope,
     invocation: [],
     parameters: { initial: true },
+    inputs: prepared.input.configuration!.inputs,
+    products,
     epochs: [],
     epochIndices: [],
     causes: [],
@@ -46,7 +55,16 @@ function scenario() {
   };
   const apply = async (id: string) => {
     const started = performance.now();
-    processes.find((p) => p.contract.id === id)!.apply(state, context);
+    const process = registry.get(id, "0f62584c");
+    bindNativeFacts(state, products);
+    for (const input of processRequirements(process.contract))
+      expect(products.accepts(input), `${id} requires ${input.product}`).toBe(true);
+    await executeProcessBehavior(process, state, context);
+    bindNativeFacts(state, products);
+    expect(process.validate(state, context).filter((item) => item.severity === "error")).toEqual(
+      []
+    );
+    products.commit(process.contract, id);
     console.log(id, {
       seconds: (performance.now() - started) / 1000,
       cells: state.physical!.map.mesh.count,

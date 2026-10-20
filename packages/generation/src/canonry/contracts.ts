@@ -4,6 +4,7 @@ import type { NativeStep } from "./sequence";
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { validateNativeLayer } from "./layerValidation";
+import { nativeFactsManaged } from "../productLedger";
 
 export interface NativeContract {
   salt: number;
@@ -12,6 +13,10 @@ export interface NativeContract {
   invalidates: string[];
 }
 export const nativeContracts: Record<string, NativeContract> = generated;
+function checkNativeInputs(map: PhysicalField, contract: NativeContract, name: string) {
+  for (const fact of contract.requires)
+    if (!map.AvailableFacts.has(fact)) throw new Error(`${name} requires fresh ${fact}.`);
+}
 export function applyNativeStep(
   map: PhysicalField,
   context: PhysicalContext,
@@ -22,8 +27,8 @@ export function applyNativeStep(
     contract = effective ?? nativeContracts[name];
   if (!contract || contract.salt !== salt)
     throw new Error(`Unknown Canonry process or salt: ${name}.`);
-  for (const fact of contract.requires)
-    if (!map.AvailableFacts.has(fact)) throw new Error(`${name} requires fresh ${fact}.`);
+  const managed = nativeFactsManaged(map.AvailableFacts);
+  if (!managed) checkNativeInputs(map, contract, name);
   try {
     process(map, context);
     validateNativeLayer(map, context, name, contract.produces);
@@ -31,6 +36,8 @@ export function applyNativeStep(
     const detail = cause instanceof Error ? cause.message : String(cause);
     throw new Error(`${name} failed in epoch ${context.EpochIndex + 1}: ${detail}`, { cause });
   }
-  for (const fact of contract.invalidates) map.AvailableFacts.delete(fact);
-  for (const fact of contract.produces) map.AvailableFacts.add(fact);
+  if (!managed) {
+    for (const fact of contract.invalidates) map.AvailableFacts.delete(fact);
+    for (const fact of contract.produces) map.AvailableFacts.add(fact);
+  }
 }

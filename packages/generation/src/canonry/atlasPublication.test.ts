@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { executeProcessBehavior } from "../processTraits";
 import {
   createAdaptiveField,
   createAdaptiveTopology,
@@ -151,7 +152,7 @@ it.each(["same", "coarser"])(
       const p = nativePosition(state.physical!, source);
       return covered(p) ? read(p) : 0;
     });
-    await advectAtlasMagic.apply(state, {
+    await executeProcessBehavior(advectAtlasMagic, state, {
       scope: state.domain.scope,
       invocation: [],
       parameters: {},

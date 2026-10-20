@@ -1,7 +1,11 @@
 /* eslint-disable max-lines-per-function -- Playwright serializes the browser fixture as one isolated function. */
 import type { Page } from "@playwright/test";
 import type { AtlasFeature, DomainSnapshot, Grid } from "@atlas/domain";
-import type { CompletedBoundary, AtlasGenerationInput } from "@atlas/generation";
+import type {
+  CompletedBoundary,
+  AtlasGenerationInput,
+  PublicationDefinition,
+} from "@atlas/generation";
 
 /** UI journeys receive small completed fields; algorithms run in the headless suite. */
 export async function installGenerationFixture(
@@ -36,6 +40,13 @@ export async function installGenerationFixture(
               Object.assign(window, { generationFixtureInput: structuredClone(message.input) });
               // Pin the same input revision that a real worker receives through structured cloning.
               const snapshot = structuredClone(message.snapshot);
+              const publications = message.input.configuration?.inputs
+                ?.publications as unknown as PublicationDefinition[];
+              const fieldPublications = new Map(
+                publications.flatMap((definition) =>
+                  definition.kind === "field" ? [[definition.channel, definition] as const] : []
+                )
+              );
               complete = () => {
                 if (complete) pending.delete(complete);
                 if (stopped) return;
@@ -88,6 +99,10 @@ export async function installGenerationFixture(
                     `magic:${system.id}:coastalHistory`,
                   ]),
                 ]) {
+                  if (!fieldPublications.has(name))
+                    throw new Error(
+                      `Register a publication descriptor for fixture channel ${name}.`
+                    );
                   channels[name] = Float64Array.from({ length: size * size }, (_, i) => {
                     const physical = physicalFixtureValue(name, i, size);
                     if (physical !== undefined) return physical;
@@ -113,7 +128,13 @@ export async function installGenerationFixture(
                   ),
                   channels,
                   units: Object.fromEntries(
-                    Object.keys(channels).map((name) => [name, fixtureUnit(name)])
+                    Object.keys(channels).map((name) => [name, fieldPublications.get(name)!.unit])
+                  ),
+                  quantities: Object.fromEntries(
+                    Object.keys(channels).map((name) => [
+                      name,
+                      fieldPublications.get(name)!.quantity,
+                    ])
                   ),
                 };
                 const result: CompletedBoundary = {
@@ -125,6 +146,7 @@ export async function installGenerationFixture(
                     surface,
                     facts: new Set(Object.keys(channels)),
                     history: [],
+                    publications,
                   },
                 };
                 worker.onmessage?.(
@@ -148,39 +170,6 @@ export async function installGenerationFixture(
           return worker;
         },
       });
-      function fixtureUnit(name: string) {
-        if (
-          [
-            "elevation",
-            "bedrock",
-            "sediment",
-            "soilWater",
-            "impactExcavation",
-            "volcanicConstruction",
-            "glacialErosion",
-            "glacialDeposition",
-            "coastalErosion",
-            "deposition",
-          ].includes(name)
-        )
-          return "metre";
-        if (["biome", "water", "naturalSurface", "finalSurface", "province"].includes(name))
-          return "category";
-        if (
-          [
-            "rock",
-            "continentalFraction",
-            "fracture",
-            "geothermal",
-            "treeCover",
-            "broadleafSaplings",
-          ].includes(name)
-        )
-          return "ratio";
-        if (name === "temperature") return "celsius";
-        if (name === "flow") return "cubic-metre/second";
-        return "1";
-      }
       function physicalFixtureValue(name: string, i: number, size: number) {
         const values: Record<string, number> = {
           water: 0,

@@ -4,6 +4,9 @@ Current execution follows [ADR 0003](adr/0003-frontend-session.md): a browser wo
 uses in-memory inputs and returns complete validated geography. No persistent
 state, restart, recovery, backend or MCP is part of this product phase.
 
+The current module contracts, feature-owned recipes, validity model and output
+registration are described in [Generation modules and recipes](generation-modules.md).
+
 This is the generation direction for Vellum & Vector. The
 [product contract](product-spec.md#10-procedural-generation-domains) defines
 behavior; [ADR 0002](adr/0002-relational-spatial-storage.md) records application

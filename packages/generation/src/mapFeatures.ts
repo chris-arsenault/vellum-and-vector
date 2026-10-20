@@ -109,21 +109,24 @@ export function prepareGeneratedProcess(domains: string[]): MapProcess {
       produces: [],
       invalidates: [],
     },
-    apply(state) {
-      const world = state.domain.world;
-      const contracted = new Set([
-        ...Object.values(world.areas).flatMap(
-          (a) => a.boundary?.crossings.map((c) => c.featureId) ?? []
-        ),
-        ...Object.values(world.features).flatMap((f) => f.relations.map((r) => r.targetId)),
-        ...Object.values(world.connections ?? {}).flatMap((c) => [c.a.featureId, c.b.featureId]),
-      ]);
-      for (const feature of Object.values(world.features)) {
-        if (!replaceable(feature, state.domain.scope.areaId, domains, contracted)) continue;
-        delete world.features[feature.id];
-        for (const reach of Object.values(world.networkReaches ?? {}))
-          if (reach.featureId === feature.id) delete world.networkReaches![reach.id];
-      }
+    behavior: {
+      kind: "initialize",
+      initialize(state) {
+        const world = state.domain.world;
+        const contracted = new Set([
+          ...Object.values(world.areas).flatMap(
+            (a) => a.boundary?.crossings.map((c) => c.featureId) ?? []
+          ),
+          ...Object.values(world.features).flatMap((f) => f.relations.map((r) => r.targetId)),
+          ...Object.values(world.connections ?? {}).flatMap((c) => [c.a.featureId, c.b.featureId]),
+        ]);
+        for (const feature of Object.values(world.features)) {
+          if (!replaceable(feature, state.domain.scope.areaId, domains, contracted)) continue;
+          delete world.features[feature.id];
+          for (const reach of Object.values(world.networkReaches ?? {}))
+            if (reach.featureId === feature.id) delete world.networkReaches![reach.id];
+        }
+      },
     },
     validate() {
       return [];

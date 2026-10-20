@@ -11,10 +11,37 @@ import { authoritativeCanopy, updateTreeCover, normalizeCommunities } from "./ec
 import { plantGroups, livingPlantCarbon } from "./ecologyGroups";
 import { alterEcology } from "./ecologyMagic";
 import { erosionHistory } from "./ecologySoils";
+import { generationBindings } from "../generationBindings";
+import { atlasParametersSchema, type AtlasParameters } from "../atlasParameters";
+import type { Epoch } from "@atlas/domain";
+import type { ProcessBehavior } from "../processTraits";
 
-function forcing(state: GenerationState, input: AtlasGenerationInput, context?: MapProcessContext) {
-  const epoch =
-    state.domain.world.epochs[context?.epochIndices[0] ?? state.domain.world.epochs.length - 1];
+interface EcologyInput {
+  seed: number;
+  parameters: AtlasParameters;
+  epochs: Epoch[];
+  physical: boolean;
+}
+function ecologyInput(input: AtlasGenerationInput, context: MapProcessContext): EcologyInput {
+  if (context.inputs?.features) {
+    const bound = generationBindings(context);
+    return {
+      seed: bound.seed,
+      parameters: bound.parameters,
+      epochs: bound.settings.epochs,
+      physical: bound.domains.includes("physical"),
+    };
+  }
+  return {
+    seed: input.seed,
+    parameters: atlasParametersSchema.parse(input.parameters ?? {}),
+    epochs: input.settings?.epochs ?? [],
+    physical: input.domains.includes("physical"),
+  };
+}
+
+function forcing(state: GenerationState, input: EcologyInput, context?: MapProcessContext) {
+  const epoch = input.epochs[context?.epochIndices[0] ?? input.epochs.length - 1];
   const ecology = ecologyEpochSchema.parse(epoch?.ecology ?? {});
   return (i: number): EcologyForcing => {
     let growth = 0,
@@ -113,11 +140,16 @@ function initialize(state: GenerationState, seed: number) {
   }
   applyWoodlands(state);
 }
-function present(state: GenerationState, input?: AtlasGenerationInput) {
+function present(
+  state: GenerationState,
+  seed: number,
+  input?: EcologyInput,
+  context?: MapProcessContext
+) {
   const map = state.physical!.map;
-  initializeEcology(map, state.domain.world.seed, true);
+  initializeEcology(map, seed, true);
   const restore = coverAuthority(state);
-  const magic = input ? forcing(state, input) : null;
+  const magic = input ? forcing(state, input, context) : null;
   if (magic) alterEcology(map, 0, magic);
   for (let i = 0; i < map.mesh.count; i++) {
     const env = environment(map, i);
@@ -221,24 +253,7 @@ function validate(state: GenerationState, context: MapProcessContext) {
   return [];
 }
 export function ecologyProcesses(input: AtlasGenerationInput): MapProcess[] {
-  const actions: Record<string, (state: GenerationState, context: MapProcessContext) => void> = {
-    initialize: (state) => initialize(state, input.seed),
-    evolve: (state, context) => {
-      if (!state.physical!.inherited) state.physical!.map.MigrationFlux.fill(0);
-      advance(state, context, input);
-    },
-    respond: (state, context) => advance(state, context, input),
-    burial: (state, context) => {
-      evolveBuriedCarbon(
-        state.physical!.map,
-        state.physical!.inherited ? 0 : context.epochs.at(-1)!.duration
-      );
-      present(state);
-      recordEcology(state, context);
-    },
-    present: (state) => present(state, input.domains.includes("physical") ? undefined : input),
-  };
-  return Object.entries(actions).map(([name, apply]) => ({
+  return ["initialize", "evolve", "respond", "burial", "present"].map((name) => ({
     contract: {
       id: `atlas.ecology-${name}`,
       version: "1",
@@ -246,11 +261,46 @@ export function ecologyProcesses(input: AtlasGenerationInput): MapProcess[] {
       requires: ecologyRequirements(name),
       produces: ecologyProducts(name),
       invalidates: ["evolve", "respond"].includes(name) ? ["canonry:Runoff"] : [],
+      products: [{ id: "atlas:ecology-response", lifetime: "epoch", representation: "history" }],
       workspaceOnly: true,
     },
-    apply,
+    behavior: ecologyBehavior(name, input),
     validate,
   }));
+}
+function ecologyBehavior(name: string, input: AtlasGenerationInput): ProcessBehavior {
+  if (name === "initialize")
+    return {
+      kind: "initialize",
+      initialize: (state, context) => initialize(state, ecologyInput(input, context).seed),
+    };
+  if (["evolve", "respond"].includes(name))
+    return {
+      kind: "elapsed",
+      duration: { kind: "epoch", fraction: 0.5 },
+      advance(state, context, years) {
+        if (name === "evolve" && !state.physical!.inherited)
+          state.physical!.map.MigrationFlux.fill(0);
+        advance(state, context, ecologyInput(input, context), years);
+      },
+    };
+  if (name === "burial")
+    return {
+      kind: "elapsed",
+      duration: { kind: "epoch", fraction: 1 },
+      advance(state, context, years) {
+        evolveBuriedCarbon(state.physical!.map, state.physical!.inherited ? 0 : years);
+        present(state, ecologyInput(input, context).seed);
+        recordEcology(state, context);
+      },
+    };
+  return {
+    kind: "model-pass",
+    applyPass(state, context) {
+      const bound = ecologyInput(input, context);
+      present(state, bound.seed, bound.physical ? undefined : bound, context);
+    },
+  };
 }
 function ecologyRequirements(name: string) {
   if (name === "initialize") return ["canonry:workspace", "canonry:Elevation"];
@@ -271,11 +321,15 @@ function ecologyProducts(name: string) {
   if (name === "respond") return ["atlas:ecology-response", "ecology"];
   return ["ecology"];
 }
-function advance(state: GenerationState, context: MapProcessContext, input: AtlasGenerationInput) {
+function advance(
+  state: GenerationState,
+  context: MapProcessContext,
+  input: EcologyInput,
+  years: number
+) {
   if (state.physical!.inherited) return;
   applyWoodlands(state);
-  const years = context.epochs.at(-1)!.duration / 2,
-    f = forcing(state, input, context);
+  const f = forcing(state, input, context);
   const map = state.physical!.map,
     before = map.BiomeCodes.slice();
   evolveVegetation(

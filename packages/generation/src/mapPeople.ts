@@ -10,6 +10,7 @@ import {
 } from "@atlas/domain";
 import { generatedFeature, putGenerated } from "./mapFeatures";
 import type { GenerationState, MapProcess, MapProcessContext } from "./process";
+import { generationBindings } from "./generationBindings";
 
 export function landCells(state: GenerationState) {
   return Array.from(state.surface.active.keys()).filter(
@@ -91,44 +92,47 @@ export const culturalProcess: MapProcess = {
     produces: ["cultures"],
     invalidates: [],
   },
-  apply(state, context) {
-    context.progress(0, "Choosing cultural origins");
-    const origins = centers(state, context, "culture", Number(context.parameters.cultureCount)),
-      grid = state.surface;
-    const eras = state.domain.world.humanEras ?? [];
-    const span = Math.max(grid.bounds[2] - grid.bounds[0], grid.bounds[3] - grid.bounds[1]);
-    const elapsed = eras.reduce((sum, era) => sum + era.years * era.mobility, 0);
-    const spread = span * (0.15 + Math.sqrt(elapsed / 200) * 0.15);
-    for (const origin of origins) {
-      context.progress(
-        (origins.indexOf(origin) / origins.length) * 0.9,
-        `Spreading ${origin.name}`
-      );
-      const center = origin.attributes.center as Position;
-      const values = Float64Array.from(grid.active, (active, i) => {
-        if (!active || grid.channels.elevation[i] <= 0) return 0;
-        const p = gridPosition(grid, i);
-        const distance = Math.hypot(p.x - center.x, p.y - center.y);
-        return Math.exp(-(distance * distance) / (2 * spread * spread)) * suitability(state, i);
+  behavior: {
+    kind: "extract",
+    extract(state, context) {
+      context.progress(0, "Choosing cultural origins");
+      const origins = centers(state, context, "culture", Number(context.parameters.cultureCount)),
+        grid = state.surface;
+      const eras = context.inputs?.features ? generationBindings(context).settings.humanEras : [];
+      const span = Math.max(grid.bounds[2] - grid.bounds[0], grid.bounds[3] - grid.bounds[1]);
+      const elapsed = eras.reduce((sum, era) => sum + era.years * era.mobility, 0);
+      const spread = span * (0.15 + Math.sqrt(elapsed / 200) * 0.15);
+      for (const origin of origins) {
+        context.progress(
+          (origins.indexOf(origin) / origins.length) * 0.9,
+          `Spreading ${origin.name}`
+        );
+        const center = origin.attributes.center as Position;
+        const values = Float64Array.from(grid.active, (active, i) => {
+          if (!active || grid.channels.elevation[i] <= 0) return 0;
+          const p = gridPosition(grid, i);
+          const distance = Math.hypot(p.x - center.x, p.y - center.y);
+          return Math.exp(-(distance * distance) / (2 * spread * spread)) * suitability(state, i);
+        });
+        putChannel(grid, `culture:${origin.id}`, "ratio", values);
+        const marker = generatedFeature(
+          state,
+          `culture-origin:${origin.id}`,
+          `${origin.name} origin`,
+          "culturalOrigin",
+          "cultures",
+          { type: "Point", coordinates: [center.x, center.y] }
+        );
+        marker.relations = [{ targetId: origin.id, kind: "originOf" }];
+        putGenerated(state, marker);
+      }
+      context.recordCause({
+        kind: "domain",
+        process: "human.cultures",
+        subjects: origins.map((o) => o.id),
+        description: `${eras.map((e) => e.id).join(", ") || "Present settlement"}: cultural distributions spread from located origins through suitable terrain. Prevalence can overlap.`,
       });
-      putChannel(grid, `culture:${origin.id}`, "ratio", values);
-      const marker = generatedFeature(
-        state,
-        `culture-origin:${origin.id}`,
-        `${origin.name} origin`,
-        "culturalOrigin",
-        "cultures",
-        { type: "Point", coordinates: [center.x, center.y] }
-      );
-      marker.relations = [{ targetId: origin.id, kind: "originOf" }];
-      putGenerated(state, marker);
-    }
-    context.recordCause({
-      kind: "domain",
-      process: "human.cultures",
-      subjects: origins.map((o) => o.id),
-      description: `${eras.map((e) => e.id).join(", ") || "Present settlement"}: cultural distributions spread from located origins through suitable terrain. Prevalence can overlap.`,
-    });
+    },
   },
   validate() {
     return [];
@@ -146,35 +150,38 @@ export const politicalProcess: MapProcess = {
     produces: ["politics"],
     invalidates: [],
   },
-  apply(state, context) {
-    context.progress(0, "Choosing polity locations");
-    const polities = centers(state, context, "polity", Number(context.parameters.polityCount)),
-      grid = state.surface;
-    const owner = new Int32Array(grid.active.length).fill(-1);
-    context.progress(0.1, `Assigning territory to ${polities.length} polities`);
-    for (const i of landCells(state)) {
-      const p = gridPosition(grid, i);
-      const scores = polities.map((entity) => {
-        const center = entity.attributes.center as Position;
-        return Math.hypot(p.x - center.x, p.y - center.y) * (1.3 - suitability(state, i) * 0.3);
+  behavior: {
+    kind: "extract",
+    extract(state, context) {
+      context.progress(0, "Choosing polity locations");
+      const polities = centers(state, context, "polity", Number(context.parameters.polityCount)),
+        grid = state.surface;
+      const owner = new Int32Array(grid.active.length).fill(-1);
+      context.progress(0.1, `Assigning territory to ${polities.length} polities`);
+      for (const i of landCells(state)) {
+        const p = gridPosition(grid, i);
+        const scores = polities.map((entity) => {
+          const center = entity.attributes.center as Position;
+          return Math.hypot(p.x - center.x, p.y - center.y) * (1.3 - suitability(state, i) * 0.3);
+        });
+        if (scores.length) owner[i] = scores.indexOf(Math.min(...scores));
+      }
+      const heightAt = fieldInterpolator(grid, "elevation");
+      for (const [index, polity] of polities.entries()) {
+        context.progress(
+          0.3 + (0.65 * index) / polities.length,
+          `Building territory and claims for ${polity.name} (${index + 1}/${polities.length})`
+        );
+        territory(state, owner, index, polity, polities, heightAt);
+      }
+      context.recordCause({
+        kind: "domain",
+        process: "human.politics",
+        subjects: polities.map((p) => p.id),
+        description:
+          "Located polities establish sovereign territories from geographic reach. Claims extend beyond control; political identity remains independent of cultural prevalence.",
       });
-      if (scores.length) owner[i] = scores.indexOf(Math.min(...scores));
-    }
-    const heightAt = fieldInterpolator(grid, "elevation");
-    for (const [index, polity] of polities.entries()) {
-      context.progress(
-        0.3 + (0.65 * index) / polities.length,
-        `Building territory and claims for ${polity.name} (${index + 1}/${polities.length})`
-      );
-      territory(state, owner, index, polity, polities, heightAt);
-    }
-    context.recordCause({
-      kind: "domain",
-      process: "human.politics",
-      subjects: polities.map((p) => p.id),
-      description:
-        "Located polities establish sovereign territories from geographic reach. Claims extend beyond control; political identity remains independent of cultural prevalence.",
-    });
+    },
   },
   validate() {
     return [];

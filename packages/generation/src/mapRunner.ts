@@ -1,11 +1,13 @@
 import { requireThat, sameValue, cloneSnapshot, type ParameterValues } from "@atlas/domain";
 import {
   MapProcessRegistry,
+  verifyReconciliationBindings,
   type CompletedBoundary,
   type GenerationState,
   type GenerationCause,
   type MapProcessContext,
   type ProcessConfiguration,
+  type ProcessSequence,
 } from "./process";
 import { planHash } from "./planHash";
 import { randomStream } from "./random";
@@ -13,6 +15,14 @@ import { sequenceStages, type SequenceStage } from "./sequence";
 import { validateWorkingMap } from "./mapValidation";
 import { composeAuthoredSamples } from "./mapAuthored";
 import { invocationParameters } from "./preflight";
+import {
+  ProductLedger,
+  bindNativeFacts,
+  detachNativeFacts,
+  processRequirements,
+} from "./productLedger";
+import { executeProcessBehavior } from "./processTraits";
+import { preparePublicationLayers } from "./publication";
 
 export interface MapRunnerOptions {
   seed: string;
@@ -35,30 +45,23 @@ export class MapRunner {
     private readonly registry: MapProcessRegistry
   ) {
     this.configuration = structuredClone(configuration);
+    verifyReconciliationBindings(this.configuration, registry);
     this.stages = sequenceStages(this.configuration.sequence);
     for (const stage of this.stages)
       if (stage.invocation) registry.get(stage.invocation.process, stage.invocation.version);
   }
   async run(initial: GenerationState, options: MapRunnerOptions): Promise<CompletedBoundary> {
-    const configurationHash = await planHash({
-      configuration: this.configuration,
-      scope: initial.domain.scope,
-      seed: options.seed,
-      seedScope: options.seedScope,
-    });
+    verifyReconciliationBindings(this.configuration, this.registry);
+    const configurationHash = await this.configurationHash(initial, options);
     const state = {
       ...structuredClone({ ...initial, domain: undefined }),
       domain: cloneSnapshot(initial.domain),
     };
     const causes: GenerationCause[][] = [];
-    const validate = () => {
-      validateWorkingMap(state, initial.domain);
-      requireThat(
-        sameValue(state.history.slice(0, initial.history.length), initial.history),
-        "generation_history",
-        "Generation retains completed historical causes while changing the present."
-      );
-    };
+    preparePublicationLayers(state.domain, state.publications ?? [], state.domain.scope.areaId);
+    const products = new ProductLedger(state.facts, this.registry.productDefinitions());
+    bindNativeFacts(state, products);
+    const validate = workingValidator(state, initial);
     composeAuthoredSamples(state, initial.domain);
     options.progress?.(["prepare"], 0, "Validating inherited geography");
     validate();
@@ -66,7 +69,8 @@ export class MapRunner {
       this.checkCancelled(options);
       if (stage.kind === "epochStart") {
         causes.push([]);
-        updateFacts(state, stage.resetFacts!, false);
+        products.enterEpoch(stage.path.join("/"));
+        for (const fact of stage.resetFacts!) products.invalidate(fact, "epoch reset");
         continue;
       }
       if (stage.kind === "epochEnd") {
@@ -90,25 +94,40 @@ export class MapRunner {
           },
           activeCauses(state, causes),
           initial.domain,
-          validate
+          validate,
+          products
         );
       }
       this.checkCancelled(options);
       if (stage.kind === "epochEnd") {
+        products.enterEpoch(stage.path.join("/"));
         validate();
-        await options.saveBoundary?.({
-          configurationHash,
-          kind: "epoch",
-          ancestry: structuredClone(stage.epochs),
-          state,
-        });
+        await observeBoundary(
+          options,
+          {
+            configurationHash,
+            kind: "epoch",
+            ancestry: structuredClone(stage.epochs),
+            state,
+          },
+          products
+        );
       }
     }
     options.progress?.(["finalize"], 0.99, "Validating completed geography");
     validate();
+    detachNativeFacts(state);
     const result: CompletedBoundary = { configurationHash, kind: "final", ancestry: [], state };
     await options.saveBoundary?.(result);
     return result;
+  }
+  private configurationHash(initial: GenerationState, options: MapRunnerOptions) {
+    return planHash({
+      configuration: this.configuration,
+      scope: initial.domain.scope,
+      seed: options.seed,
+      seedScope: options.seedScope,
+    });
   }
   private checkCancelled(options: MapRunnerOptions): void {
     requireThat(!options.cancelled?.(), "generation_cancelled", "Generation was cancelled.");
@@ -119,9 +138,17 @@ export class MapRunner {
     options: MapRunnerOptions,
     causes: GenerationCause[],
     original: GenerationState["domain"],
-    validate: () => void
+    validate: () => void,
+    products: ProductLedger
   ) {
-    const spatialChanged = await this.applyProcess(state, stage, options, causes, original);
+    const spatialChanged = await this.applyProcess(
+      state,
+      stage,
+      options,
+      causes,
+      original,
+      products
+    );
     if (spatialChanged === null) {
       options.progress?.(stage.path, 1, `Skipped ${stage.invocation!.process}`);
       return;
@@ -137,7 +164,8 @@ export class MapRunner {
     stage: SequenceStage,
     options: MapRunnerOptions,
     causes: GenerationCause[],
-    original: GenerationState["domain"]
+    original: GenerationState["domain"],
+    products: ProductLedger
   ) {
     const invocation = stage.invocation!,
       process = this.registry.get(invocation.process, invocation.version),
@@ -147,16 +175,18 @@ export class MapRunner {
       ) as ParameterValues;
     if (invocation.when && variables[invocation.when.variable] !== invocation.when.equals)
       return null;
-    for (const fact of process.contract.requires)
+    bindNativeFacts(state, products);
+    for (const input of processRequirements(process.contract))
       requireThat(
-        state.facts.has(fact),
+        products.accepts(input),
         "stale_fact",
-        `${stage.path.join("/")} requires fresh ${fact} in the current map/epoch.`
+        `${stage.path.join("/")} requires fresh ${input.product} in the current map/epoch.`
       );
     const parameters = invocationParameters(process.contract, this.configuration, stage);
-    const context = this.context(state, stage, parameters, options, causes);
+    const context = this.context(state, stage, parameters, options, causes, products, original);
     options.progress?.(stage.path, 0, `Starting ${process.contract.id}`);
-    await process.apply(state, context);
+    await executeProcessBehavior(process, state, context);
+    bindNativeFacts(state, products);
     options.progress?.(stage.path, 0.95, `Validating ${process.contract.id}`);
     if (!process.contract.workspaceOnly) composeAuthoredSamples(state, original);
     const diagnostics = process.validate(state, context);
@@ -165,8 +195,13 @@ export class MapRunner {
       "process_output_invalid",
       diagnostics.map((d) => d.message).join(" ")
     );
-    updateFacts(state, process.contract.invalidates, false);
-    updateFacts(state, process.contract.produces, true);
+    for (const product of process.contract.reconciliation?.guarantees ?? [])
+      requireThat(
+        products.facts.has(product),
+        "reconciliation_guarantee",
+        `${stage.path.join("/")} must retain fresh ${product} after either reconciliation outcome.`
+      );
+    products.commit(process.contract, stage.path.join("/"));
     return !process.contract.workspaceOnly;
   }
   private context(
@@ -174,8 +209,11 @@ export class MapRunner {
     stage: SequenceStage,
     parameters: ParameterValues,
     options: MapRunnerOptions,
-    causes: GenerationCause[]
+    causes: GenerationCause[],
+    products: ProductLedger,
+    original: GenerationState["domain"]
   ): MapProcessContext {
+    let reconciled = false;
     const varying = randomStream(
         options.seed,
         options.seedScope,
@@ -188,6 +226,32 @@ export class MapRunner {
       scope: structuredClone(state.domain.scope),
       invocation: [...stage.path],
       parameters,
+      inputs: structuredClone(this.configuration.inputs ?? {}),
+      products,
+      reconcile: async () => {
+        const contract = this.registry.get(
+          stage.invocation!.process,
+          stage.invocation!.version
+        ).contract;
+        requireThat(
+          contract.reconciliation && !reconciled,
+          "reconciliation_branch",
+          "Execute a declared reconciliation branch at most once per invocation."
+        );
+        verifyReconciliationBindings(this.configuration, this.registry);
+        reconciled = true;
+        for (const product of contract.reconciliation.invalidates)
+          products.invalidate(product, `${stage.path.join("/")}/reconciliation`);
+        await this.executeNested(
+          state,
+          stage,
+          contract.reconciliation.sequence,
+          options,
+          causes,
+          products,
+          original
+        );
+      },
       epochs: structuredClone(stage.epochs),
       epochIndices: [...stage.epochIndices],
       causes,
@@ -197,15 +261,65 @@ export class MapRunner {
       progress: (fraction, message) => options.progress?.(stage.path, fraction * 0.9, message),
     };
   }
-}
-function updateFacts(state: GenerationState, facts: string[], produced: boolean) {
-  for (const fact of facts) {
-    if (produced) state.facts.add(fact);
-    else state.facts.delete(fact);
-    if (state.physical && fact.startsWith("canonry:") && fact !== "canonry:workspace") {
-      const native = fact.slice("canonry:".length);
-      if (produced) state.physical.map.AvailableFacts.add(native);
-      else state.physical.map.AvailableFacts.delete(native);
+  private async executeNested(
+    state: GenerationState,
+    parent: SequenceStage,
+    sequence: ProcessSequence,
+    options: MapRunnerOptions,
+    causes: GenerationCause[],
+    products: ProductLedger,
+    original: GenerationState["domain"]
+  ) {
+    const stages = sequenceStages(
+      sequence,
+      [...parent.path, "reconciliation"],
+      parent.epochs,
+      parent.epochIndices
+    );
+    requireThat(
+      stages.every((stage) => stage.kind === "process"),
+      "nested_epoch",
+      "Reconciliation subplans cannot replay or introduce an epoch."
+    );
+    for (const stage of stages) {
+      requireThat(
+        !this.registry.get(stage.invocation!.process, stage.invocation!.version).contract
+          .reconciliation,
+        "reconciliation_branch",
+        "Reconciliation subplans contain ordinary operations, not further conditional branches."
+      );
+      this.checkCancelled(options);
+      await this.runProcess(
+        state,
+        stage,
+        options,
+        causes,
+        original,
+        () => validateWorkingMap(state, original),
+        products
+      );
     }
+  }
+}
+function workingValidator(state: GenerationState, initial: GenerationState) {
+  return () => {
+    validateWorkingMap(state, initial.domain);
+    requireThat(
+      sameValue(state.history.slice(0, initial.history.length), initial.history),
+      "generation_history",
+      "Generation retains completed historical causes while changing the present."
+    );
+  };
+}
+async function observeBoundary(
+  options: MapRunnerOptions,
+  boundary: CompletedBoundary,
+  products: ProductLedger
+) {
+  detachNativeFacts(boundary.state);
+  try {
+    await options.saveBoundary?.(boundary);
+  } finally {
+    bindNativeFacts(boundary.state, products);
   }
 }

@@ -56,13 +56,6 @@ export const generationSettingsSchema = z
     } catch (error) {
       context.addIssue({ code: "custom", path: ["magicSystems"], message: String(error) });
     }
-    for (const [i, era] of settings.humanEras.entries())
-      if (era.physicalEpoch && !settings.epochs.some((epoch) => epoch.id === era.physicalEpoch))
-        context.addIssue({
-          code: "custom",
-          path: ["humanEras", i, "physicalEpoch"],
-          message: "Choose an existing physical epoch.",
-        });
   });
 export interface GenerationSettings {
   epochs: Epoch[];

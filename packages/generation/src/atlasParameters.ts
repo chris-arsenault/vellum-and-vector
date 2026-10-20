@@ -167,7 +167,7 @@ export const atlasParameterDefinitions = {
 } satisfies Record<string, AtlasParameterDefinition>;
 
 export type AtlasParameters = Record<keyof typeof atlasParameterDefinitions, number>;
-function parameterSchema(definition: AtlasParameterDefinition) {
+export function parameterSchema(definition: AtlasParameterDefinition) {
   let schema = z.number().finite();
   schema = definition.exclusiveMinimum
     ? schema.gt(definition.minimum)

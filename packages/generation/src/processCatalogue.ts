@@ -1,5 +1,7 @@
 import type { MapProcessContract } from "./process";
+import { atlasGenerationModules } from "./atlasModules";
 
+/** Legacy wizard aliases only. Execution uses feature definitions and contributions. */
 export const optionalProcesses: Record<string, { label: string; group: string; help: string }> = {
   "canonry.impact-cratering": {
     label: "Meteor impacts",
@@ -57,13 +59,16 @@ export interface ProcessDescription {
 }
 export function describeProcess(contract: MapProcessContract): ProcessDescription {
   const option = optionalProcesses[contract.id];
+  const feature = atlasGenerationModules
+    .features()
+    .find((definition) => definition.processes.includes(contract.id));
   return {
     label: option?.label ?? readableName(contract.id),
     group: option?.group ?? processGroup(contract.id),
-    help:
-      option?.help ??
-      `Required to establish or reconcile ${contract.produces.join(", ") || "the shared working state"}.`,
-    selectable: Boolean(option),
+    help: feature
+      ? `An operation of ${feature.label}. Selection and settings belong to that feature.`
+      : `Establishes or reconciles ${contract.produces.join(", ") || "the shared working state"} for its requesting features.`,
+    selectable: Boolean(feature),
     role: temporalRole(contract.id),
   };
 }

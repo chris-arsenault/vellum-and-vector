@@ -13,21 +13,24 @@ export const builtProcess: MapProcess = {
     produces: ["built"],
     invalidates: [],
   },
-  apply(state, context) {
-    context.progress(0, "Laying out settlements and structures");
-    const area = state.domain.world.areas[state.domain.scope.areaId];
-    if (area.profile === "interior") interior(state);
-    else if (area.profile === "site") site(state);
-    else settlements(state, context);
-    context.recordCause({
-      kind: "domain",
-      process: "built.layout",
-      subjects: [],
-      description:
-        area.profile === "interior"
-          ? "Rooms, connecting doors, walls and furnishings occupy this located floor."
-          : "Settlement and structure placement follows the requested area's geography and available habitable land.",
-    });
+  behavior: {
+    kind: "extract",
+    extract(state, context) {
+      context.progress(0, "Laying out settlements and structures");
+      const area = state.domain.world.areas[state.domain.scope.areaId];
+      if (area.profile === "interior") interior(state);
+      else if (area.profile === "site") site(state);
+      else settlements(state, context);
+      context.recordCause({
+        kind: "domain",
+        process: "built.layout",
+        subjects: [],
+        description:
+          area.profile === "interior"
+            ? "Rooms, connecting doors, walls and furnishings occupy this located floor."
+            : "Settlement and structure placement follows the requested area's geography and available habitable land.",
+      });
+    },
   },
   validate() {
     return [];

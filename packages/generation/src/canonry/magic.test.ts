@@ -45,6 +45,16 @@ function scenario() {
   initializeMagic(state);
   return state;
 }
+it("places deep-ocean sources from the requested seed independently of source-world seed", () => {
+  const first = scenario(),
+    second = scenario();
+  second.domain.world.seed = 99999;
+  for (const state of [first, second])
+    locateMagicSources(state, state.physical!.magic!.fields[2], 73);
+  const origins = (state: ReturnType<typeof scenario>) => state.physical!.magic!.fields[2].origins;
+  expect(origins(first)).toHaveLength(1);
+  expect(origins(first)).toEqual(origins(second));
+});
 it("uses configurable fracture transport, heating, melting and rock hardening without preset identity checks", () => {
   const state = scenario(),
     map = state.physical!.map,

@@ -79,11 +79,11 @@ function strongestHeatSource(values: Int32Array, count: number) {
   for (let i = 1; i < count; i++) if (values[i] > values[strongest]) strongest = i;
   return strongest;
 }
-function oceanSource(state: GenerationState, field: MagicField) {
+function oceanSource(state: GenerationState, field: MagicField, seed: number) {
   const map = state.physical!.map;
   let best = -1,
     score = -Infinity;
-  for (const source of worldCandidates(map.mesh, state.domain.world.seed, 2048)) {
+  for (const source of worldCandidates(map.mesh, seed, 2048)) {
     const i = nearestTriangle(map.mesh, source.x, source.y);
     if (i < 0 || i >= map.mesh.contentCount || map.WaterKindCodes[i] !== 1) continue;
     let depth = map.WaterDepths[i];
@@ -148,7 +148,7 @@ export function locateMagicSources(
   const map = state.physical!.map,
     definition = field.definition;
   if (definition.source === "geothermal") geothermalSources(state, field, seed);
-  if (definition.source === "deep-ocean") oceanSource(state, field);
+  if (definition.source === "deep-ocean") oceanSource(state, field, seed);
   if (definition.source === "cold")
     for (let i = 0; i < map.mesh.count; i++)
       field.source[i] = Math.max(

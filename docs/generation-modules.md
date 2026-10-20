@@ -1,0 +1,115 @@
+# Generation modules and recipes
+
+Generation runs in browser memory through the same TypeScript modules in the
+editor and worker. A recipe contains plain data. Process implementations, schemas
+and publication factories stay in the application and are rebound before the
+worker executes the reviewed recipe.
+
+## Capability ownership
+
+`GenerationModule` registers its feature definitions, process factories and output
+definitions together. The application composition root is
+`packages/generation/src/atlasModules.ts`; the registry and executor do not contain
+per-feature execution switches. A module can contribute to an existing physical
+slot or the public `present.products`, `present.people` and
+`present.after-people` slots. A new causal phase requires a deliberate profile
+extension.
+
+`GenerationFeature` describes a delivered capability. It owns numeric parameter
+definitions, an optional Zod schema for nested configuration, dependencies and
+actual operation contributions. Invocation ownership binds that feature's
+settings into the process's declared parameters. The feature is separate from
+`AtlasFeature`, which identifies a located geographic object, and from the domain
+traits used to constrain geography.
+
+Glacial sculpting owns erosion, deposition and glacial relief classification as
+one choice. Volcanism owns plume roots and construction. Coastal evolution owns
+external forcing and natural coastal cutting. River networks remain distinct
+from river incision. Shared routing, ocean geography and load response have
+explicit providers and input contracts.
+
+## Request configuration
+
+The JSON recipe schema accepts version 2 with feature selection and owned settings:
+
+```json
+{
+  "physical.river-incision": { "enabled": false },
+  "physical.glacial-sculpting": { "enabled": true, "settings": { "glaciers": 0.6 } },
+  "ecology.living": { "enabled": true, "settings": { "vegetation": 1.3 } }
+}
+```
+
+This object is the recipe's `features` member. The request also selects its area,
+seed, quality and domains. `prepareAtlasGeneration` resolves and validates the
+complete request before execution. The resulting configuration includes the
+named sequence, effective settings, seed, feature configurations and publication
+descriptors. Sending a different request with the reviewed configuration fails.
+
+Physical history belongs to the lifecycle configuration. Ecology owns its
+per-epoch ecological regimes; configured magic owns its systems and per-epoch
+activity; cultures own their operative eras. The older flat parameters, process
+booleans and world settings are compatibility inputs translated at preparation.
+Conflicting legacy selections for operations of one coupled feature are rejected.
+Unknown feature IDs, unowned parameters and invalid nested configuration fail
+validation.
+
+Disabling a feature either omits its complete behavior or yields a dependency
+diagnostic naming the consumer and missing input. Magical coastal modification
+requires coastal evolution; a pressure field with zero coastal modification does
+not. Legacy human `physicalEpoch` and `politicalCapacity` values remain metadata;
+nondefault values produce a warning because the current human algorithms do not
+simulate their effects.
+
+## Process execution and validity
+
+`ProcessBehavior` supplies executable initialization, model-pass, elapsed,
+transfer, material-transformation, forcing-contributor and extraction interfaces.
+Elapsed behavior receives explicit years. Ecology runs two half-epoch responses,
+then full-duration burial; present classification adds no biological age. Native
+land-ice passes remain repeated state-changing passes. Configured magical history
+advances once per epoch; located-source storage uses elapsed years.
+
+One `ProductLedger` drives prerequisite checks, preflight and execution. Native
+`AvailableFacts` is a runtime view of that ledger. Missing, stale and explicitly
+initialized-empty products differ; each consumer names the initializer whose
+empty result it accepts. Epoch response products expire at epoch boundaries;
+carried material, ice state and histories use separate retained products.
+Explicitly omitted event writers can declare persistent neutral history. An
+ordinary empty computation still becomes stale when invalidated.
+
+The numerical map stays shared and typed. Several mechanisms contribute to the
+same material budget or fracture conductivity without requiring the optional
+fault-network generator. Material transformations check the common sediment
+budget. Conditional regional reconciliation uses the same executor, selection,
+bound settings and ledger; it cannot introduce another epoch or replay ice
+accumulation.
+
+A transfer's `reconciliation` declares its possible invalidations, child sequence
+and guaranteed products. These declarations travel in the reviewed recipe.
+Preflight checks both changed and unchanged outcomes; execution runs only the
+declared child branch and checks its guarantees before committing the outer
+operation's products. Carried lake inventory is separate from outlet topology
+that remeshing invalidates.
+
+## Output publication
+
+A module declares field or geographic publications with complete layer metadata.
+Fields include units and intensive, extensive or categorical quantity semantics.
+Geographic declarations identify supported kinds and network output. Native
+channel conversion remains in `canonry/atlasChannels.ts`; module publication
+definitions select its bindings before final projection.
+
+The candidate publisher validates registered products, installs compatible new
+layers, creates field resources and coverage, and marks generated area layers.
+Unknown channels or geographic outputs fail instead of falling into a default
+layer. Inactive known buffers can remain inherited working inputs without being
+published. Existing compatible layer styling and authored protection remain
+authoritative. The editor publishes the complete candidate only after worker
+completion and the existing world-version check.
+
+The climate sequence retains its existing approximation: configured thermal magic
+adjusts temperature and ice after the native precipitation pass. Precipitation
+from that pass remains retained until the next scheduled climate calculation.
+The refactor changes contracts and composition without adding hidden climate or
+ice passes to erase that approximation.

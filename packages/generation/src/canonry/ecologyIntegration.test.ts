@@ -24,6 +24,7 @@ import { sequenceStages } from "../sequence";
 import { extractEcologicalFeatures } from "./ecologyFeatures";
 import { prepareGeneratedProcess } from "../mapFeatures";
 import { spatial } from "@atlas/domain";
+import { executeProcessBehavior } from "../processTraits";
 
 function fixture() {
   const state = landscape();
@@ -72,7 +73,14 @@ function context(years = 1000) {
 }
 const input = { areaId: "area", quality: "draft", seed: 42, domains: ["physical"] };
 function process(name: string) {
-  return ecologyProcesses(input).find((p) => p.contract.id === `atlas.ecology-${name}`)!;
+  const definition = ecologyProcesses(input).find(
+    (p) => p.contract.id === `atlas.ecology-${name}`
+  )!;
+  return {
+    ...definition,
+    apply: (state: Parameters<typeof executeProcessBehavior>[1], context: MapProcessContext) =>
+      executeProcessBehavior(definition, state, context),
+  };
 }
 
 it("publishes all ecological channels in the same located field and records completed epoch causes", () => {
@@ -149,11 +157,11 @@ it("applies present-day magical fire without replaying epochs or maturing source
   extractEcologicalFeatures(state);
   expect(Object.values(state.domain.world.features).some((f) => f.kind === "forest")).toBe(true);
   const elevation = state.surface.channels.elevation.slice();
-  prepareGeneratedProcess(["magic"]).apply(state, c);
+  executeProcessBehavior(prepareGeneratedProcess(["magic"]), state, c);
   const present = ecologyProcesses({ ...input, domains: ["magic"] }).find(
     (p) => p.contract.id === "atlas.ecology-present"
   )!;
-  present.apply(state, c);
+  executeProcessBehavior(present, state, c);
   expect(map.TreeCover[0]).toBeCloseTo(0.08);
   expect(map.OilCarbon[0]).toBe(0);
   expect(map.BuriedAquaticCarbon[0]).toBe(100);
@@ -294,7 +302,9 @@ it("orders vegetation before incision and organic burial after coastal depositio
   state.domain.world.epochs = [
     { id: "first", tectonics: 1, hydrology: 1, ice: 0, coasts: 1, temperature: 15, seaLevel: 0 },
   ];
-  const stages = sequenceStages(atlasConfiguration(state.domain, input).sequence);
+  const stages = sequenceStages(
+    atlasConfiguration(state.domain, { ...input, domains: ["physical", "magic"] }).sequence
+  );
   const epoch = stages
     .filter((stage) => stage.epochs.length && stage.invocation)
     .map((stage) => stage.invocation!.process);

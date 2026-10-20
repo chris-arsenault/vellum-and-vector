@@ -13,6 +13,7 @@ import { plannedImpacts } from "./impacts";
 import { plumeCenter } from "./volcanism";
 import type { PhysicalMesh } from "./mesh";
 import { refreshGrounding } from "./glacierSurface";
+import { invalidateNativeProducts } from "../productLedger";
 
 export interface SamplingSupport {
   x: number;
@@ -20,6 +21,23 @@ export interface SamplingSupport {
   radius: number;
   size: number;
 }
+/** These diagnostics contain cell/edge indices or depend on reset routing arrays. */
+export const remeshInvalidations = [
+  "FlowRouting",
+  "DrainageConditioning",
+  "DrainageGuidance",
+  "AtmosphericFlow",
+  "IceFlow",
+  "Rivers",
+  "RiverGeometry",
+  "Floodplains",
+  "Deltas",
+  "GlacialMeltwater",
+  "Lakes",
+  "LakeOutlets",
+  "Validated",
+].map((product) => `canonry:${product}`);
+export type RemeshInvalidationPolicy = "standalone" | "declared";
 function supported([x0, y0, x1, y1]: number[], supports: SamplingSupport[]) {
   return supports.some(
     ({ x, y, radius, size }) =>
@@ -91,7 +109,11 @@ function remapMagic(
     );
 }
 /** Refinement precedes construction or an already scheduled global reconciliation. */
-export function refineWorkspace(state: GenerationState, supports: SamplingSupport[]) {
+export function refineWorkspace(
+  state: GenerationState,
+  supports: SamplingSupport[],
+  invalidation: RemeshInvalidationPolicy = "standalone"
+) {
   const work = state.physical!,
     old = work.map.mesh;
   if (!old.topology || !supports.length) return false;
@@ -106,22 +128,12 @@ export function refineWorkspace(state: GenerationState, supports: SamplingSuppor
   const transfer = prepareAdaptiveTransfer(old.topology, topology);
   work.map = remeshPhysical(work.map, topology, state.domain.scope.footprint, transfer);
   refreshGrounding(work.map, work.profile);
-  for (const fact of [
-    "FlowRouting",
-    "DrainageConditioning",
-    "DrainageGuidance",
-    "AtmosphericFlow",
-    "IceFlow",
-    "Rivers",
-    "RiverGeometry",
-    "Floodplains",
-    "Deltas",
-    "GlacialMeltwater",
-    "Validated",
-  ]) {
-    work.map.AvailableFacts.delete(fact);
-    state.facts.delete(`canonry:${fact}`);
-  }
+  if (invalidation === "standalone")
+    invalidateNativeProducts(
+      state,
+      remeshInvalidations.map((product) => product.slice("canonry:".length)),
+      "adaptive topology transfer"
+    );
   remapMagic(state, old, transfer);
   refreshWorkspaceSamples(state, work, transfer);
   refreshWorkspaceProtection(state, work);
@@ -136,7 +148,8 @@ export function refineWorkspace(state: GenerationState, supports: SamplingSuppor
 export function refineGeologicalCauses(
   state: GenerationState,
   context: PhysicalContext,
-  name: string
+  name: string,
+  invalidation: RemeshInvalidationPolicy = "standalone"
 ) {
   const work = state.physical!,
     mesh = work.map.mesh,
@@ -171,5 +184,5 @@ export function refineGeologicalCauses(
         size: (p.VolcanicConeRadius * 0.28) / samples,
       });
     }
-  refineWorkspace(state, supports);
+  return refineWorkspace(state, supports, invalidation);
 }

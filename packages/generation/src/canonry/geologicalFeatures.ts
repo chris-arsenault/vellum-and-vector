@@ -3,11 +3,11 @@ import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
 
 /** Event geometry survives even when a cone or crater spans less than one cell. */
-function extractEvents(state: GenerationState) {
+function extractEvents(state: GenerationState, selected: { impacts: boolean; volcanism: boolean }) {
   const { map } = state.physical!,
     [x0, y0] = map.mesh.origin;
   for (const event of map.events) {
-    if (event.kind === "plume") continue;
+    if (!selectedEvent(event, selected)) continue;
     const center = { x: x0 + event.x, y: y0 + event.y, z: 0 };
     const disk = spatial.buffer(point(center), event.radius);
     const shape = disk && spatial.intersection(disk, state.domain.scope.footprint);
@@ -46,6 +46,13 @@ function extractEvents(state: GenerationState) {
       );
   }
 }
+function selectedEvent(
+  event: NonNullable<GenerationState["physical"]>["map"]["events"][number],
+  selected: { impacts: boolean; volcanism: boolean }
+) {
+  if (event.kind === "plume") return false;
+  return event.kind === "impact" ? selected.impacts : selected.volcanism;
+}
 function extractFaults(state: GenerationState) {
   const { map } = state.physical!,
     [x0, y0] = map.mesh.origin;
@@ -71,7 +78,10 @@ function extractFaults(state: GenerationState) {
       );
   }
 }
-export function extractGeologicalEvents(state: GenerationState) {
-  extractEvents(state);
-  extractFaults(state);
+export function extractGeologicalEvents(
+  state: GenerationState,
+  selected = { impacts: true, volcanism: true, fractures: true }
+) {
+  extractEvents(state, selected);
+  if (selected.fractures) extractFaults(state);
 }

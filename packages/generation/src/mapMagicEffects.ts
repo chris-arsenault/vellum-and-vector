@@ -18,42 +18,45 @@ export const materialMagicProcess: MapProcess = {
     produces: ["magicMaterial"],
     invalidates: [],
   },
-  apply(state, context) {
-    const grid = state.surface;
-    if (!grid.channels.naturalRock)
-      putChannel(grid, "naturalRock", "ratio", grid.channels.rock.slice());
-    grid.channels.rock.set(grid.channels.naturalRock);
-    const pressure = new Float64Array(grid.active.length);
-    for (const source of state.domain.world.magic) {
-      if (
-        source.systemId ||
-        ["heat", "cold"].includes(source.effect) ||
-        (source.spaceId && source.spaceId !== context.scope.spaceId)
-      )
-        continue;
-      const values = Float64Array.from(grid.active, (active, i) =>
-        active ? magicalForcing(state, context, source, i) : 0
-      );
-      const key = `magic:${source.id}`;
-      putChannel(grid, key, "ratio", values);
-      for (let i = 0; i < values.length; i++) {
-        if (source.effect === "erosionResistance")
-          grid.channels.rock[i] = Math.max(
-            0.1,
-            Math.min(1, grid.channels.rock[i] + values[i] / 1000)
-          );
-        if (source.effect === "pressure") pressure[i] += Math.abs(values[i]);
+  behavior: {
+    kind: "forcing-contributor",
+    contribute(state, context) {
+      const grid = state.surface;
+      if (!grid.channels.naturalRock)
+        putChannel(grid, "naturalRock", "ratio", grid.channels.rock.slice());
+      grid.channels.rock.set(grid.channels.naturalRock);
+      const pressure = new Float64Array(grid.active.length);
+      for (const source of state.domain.world.magic) {
+        if (
+          source.systemId ||
+          ["heat", "cold"].includes(source.effect) ||
+          (source.spaceId && source.spaceId !== context.scope.spaceId)
+        )
+          continue;
+        const values = Float64Array.from(grid.active, (active, i) =>
+          active ? magicalForcing(state, context, source, i) : 0
+        );
+        const key = `magic:${source.id}`;
+        putChannel(grid, key, "ratio", values);
+        for (let i = 0; i < values.length; i++) {
+          if (source.effect === "erosionResistance")
+            grid.channels.rock[i] = Math.max(
+              0.1,
+              Math.min(1, grid.channels.rock[i] + values[i] / 1000)
+            );
+          if (source.effect === "pressure") pressure[i] += Math.abs(values[i]);
+        }
+        context.recordCause({
+          kind: "magic",
+          process: "magic.material",
+          sourceId: source.id,
+          activity: 1,
+          forcing: summarizeChannel(grid, key),
+          stored: summarizeChannel(grid, key),
+        });
       }
-      context.recordCause({
-        kind: "magic",
-        process: "magic.material",
-        sourceId: source.id,
-        activity: 1,
-        forcing: summarizeChannel(grid, key),
-        stored: summarizeChannel(grid, key),
-      });
-    }
-    putChannel(grid, "coastalPressure", "ratio", pressure);
+      putChannel(grid, "coastalPressure", "ratio", pressure);
+    },
   },
   validate() {
     return [];

@@ -93,7 +93,9 @@ function WizardStep({ flow, inherited }: { flow: WizardFlow; inherited: boolean 
 }
 function WizardNavigation({ flow, options }: { flow: WizardFlow; options: WizardProps }) {
   const { step, setStep, preview, generate } = flow;
-  const invalid = Boolean(preview.error || preview.result?.diagnostics.length);
+  const invalid = Boolean(
+    preview.error || preview.result?.diagnostics.some((item) => item.severity === "error")
+  );
   return (
     <>
       <div className="generation-navigation">
@@ -233,20 +235,23 @@ function ConfigurationErrors({
   preview: { result: ReturnType<typeof draftPreview> | null; error: unknown };
   correct: () => void;
 }) {
+  const errors = preview.result?.diagnostics.some((item) => item.severity === "error");
   return (
     <>
       <ErrorMessage error={preview.error} />
       {Boolean(preview.result?.diagnostics.length) && (
-        <div role="alert" className="error">
-          <p>Resolve these generation dependencies:</p>
+        <div role={errors ? "alert" : "status"} className={errors ? "error" : "hint"}>
+          <p>{errors ? "Resolve these generation dependencies:" : "Generation notes:"}</p>
           <ul>
             {preview.result!.diagnostics.map((item, i) => (
               <li key={i}>{item.message}</li>
             ))}
           </ul>
-          <button type="button" onClick={correct}>
-            Review process choices
-          </button>
+          {errors && (
+            <button type="button" onClick={correct}>
+              Review process choices
+            </button>
+          )}
         </div>
       )}
     </>

@@ -122,10 +122,14 @@ async function checkMagicPublication(
     sample(snapshot.numerical[elevation.id], "elevation", position),
     8
   );
+  for (const feature of Object.values(magical.world.features))
+    if (["volcano", "caldera"].includes(feature.kind))
+      expect(result.state.domain.world.features[feature.id]).toEqual(feature);
   const published = generationSnapshot(
     result,
     { ...input, domains: ["magic"] },
-    crypto.randomUUID()
+    crypto.randomUUID(),
+    magical
   );
   expect(published.numerical[ecology.id].channels.alteredCover.some((v) => v > 0.2)).toBe(true);
 }

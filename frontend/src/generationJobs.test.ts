@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { createWorld, session } from "./atlasState";
 import { cancelGeneration, listJobs, startGeneration, generationSnapshot } from "./generationJobs";
 import { createAdaptiveField, createAdaptiveTopology, putChannel } from "@atlas/domain";
+import { atlasPublicationDefinitions } from "@atlas/generation";
 
 class TestWorker {
   static latest: TestWorker;
@@ -47,6 +48,26 @@ it("retains the active stage and error when a worker fails", () => {
   cancelGeneration(job.id);
 });
 
+it("starts generation when legacy history produces a nonblocking compatibility warning", () => {
+  vi.stubGlobal("Worker", TestWorker);
+  const world = createWorld({ name: "History warning", seed: 42, width: 10000, height: 10000 });
+  world.humanEras![0].politicalCapacity = 2;
+  const job = startGeneration(world.id, {
+    areaId: Object.keys(world.areas)[0],
+    domains: ["physical", "cultural"],
+    quality: "draft",
+    seed: 42,
+    expectedVersion: world.version,
+    operationId: crypto.randomUUID(),
+  });
+  expect(TestWorker.latest.postMessage).toHaveBeenCalledOnce();
+  expect(listJobs(world.id)[0].status).toBe("running");
+  expect(listJobs(world.id)[0].diagnostics).toContainEqual(
+    expect.objectContaining({ severity: "warning" })
+  );
+  cancelGeneration(job.id);
+});
+
 it("publishes adaptive world quantities in their geographic layers without rasterizing them", () => {
   const world = createWorld({ name: "World fields", seed: 42, width: 10000, height: 10000 });
   const domain = session(world.id).snapshot;
@@ -71,7 +92,16 @@ it("publishes adaptive world quantities in their geographic layers without raste
       kind: "final",
       configurationHash: "world-fields",
       ancestry: [],
-      state: { domain, surface: grid, facts: new Set(["elevation"]), history: [] },
+      state: {
+        domain,
+        surface: grid,
+        facts: new Set(["elevation"]),
+        history: [],
+        publications: atlasPublicationDefinitions(
+          { areaId: domain.scope.areaId, seed: 42, quality: "draft", domains: ["physical"] },
+          world
+        ),
+      },
     },
     { areaId: domain.scope.areaId, seed: 42, quality: "draft", domains: ["physical"] },
     crypto.randomUUID()

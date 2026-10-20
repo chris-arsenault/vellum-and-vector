@@ -3,7 +3,9 @@ import type { PhysicalProfile } from "./profile";
 import type { GenerationState, MapProcessContext } from "../process";
 import { atlasEpoch } from "./atlasProfile";
 import { round } from "./math";
-import { ecologyEpochSchema } from "@atlas/domain";
+import { ecologyEpochSchema, type Epoch } from "@atlas/domain";
+import { generationBindings } from "../generationBindings";
+import type { ProductLedger } from "../productLedger";
 export interface PhysicalEpoch {
   StableName: string;
   TectonicStrength: number;
@@ -14,6 +16,7 @@ export interface PhysicalEpoch {
   SeaLevelOffset: number;
 }
 export interface PhysicalContext {
+  Products?: Pick<ProductLedger, "status">;
   RainfallMultiplier: number;
   Seed: number;
   EpochStableSeed: number;
@@ -36,36 +39,26 @@ const neutral = {
   TemperatureOffset: 0,
   SeaLevelOffset: 0,
 };
-export function nativeContext(
-  state: GenerationState,
-  context: MapProcessContext,
-  seed: number,
-  salt: number
-) {
+export function nativeContext(state: GenerationState, context: MapProcessContext, salt: number) {
+  const { settings, seed } = generationBindings(context);
   const index = context.epochIndices[0],
-    epoch = index === undefined ? null : atlasEpoch(state.domain.world.epochs[index]);
+    epoch = index === undefined ? null : atlasEpoch(settings.epochs[index]);
   const nativeIndex = index ?? (state.physical!.map.CrustSupportInitialized ? -1 : 0);
-  const definition = index === undefined ? undefined : state.domain.world.epochs[index];
-  const profile = { ...state.physical!.profile };
+  const definition = index === undefined ? undefined : settings.epochs[index];
+  const profile = epochProfile(state.physical!.profile, definition);
+  const physical = physicalContext(seed, salt, profile, epoch, nativeIndex, settings.epochs.length);
+  physical.RainfallMultiplier = ecologyEpochSchema.parse(
+    (definition ?? settings.epochs.at(-1))?.ecology ?? {}
+  ).rainfall;
+  physical.Products = context.products;
+  return physical;
+}
+function epochProfile(base: PhysicalProfile, definition: Epoch | undefined) {
+  const profile = { ...base };
   profile.ImpactCraterCount = round(profile.ImpactCraterCount * (definition?.impacts ?? 1));
   for (const key of ["VolcanicConeHeight", "VolcanicApronHeight", "VolcanicCalderaDepth"] as const)
     profile[key] *= definition?.volcanism ?? 1;
-  const physical = physicalContext(
-    seed,
-    salt,
-    profile,
-    epoch,
-    nativeIndex,
-    state.domain.world.epochs.length
-  );
-  physical.RainfallMultiplier = ecologicalEpoch(state, definition).rainfall;
-  return physical;
-}
-function ecologicalEpoch(
-  state: GenerationState,
-  definition: import("@atlas/domain").Epoch | undefined
-) {
-  return ecologyEpochSchema.parse((definition ?? state.domain.world.epochs.at(-1))?.ecology ?? {});
+  return profile;
 }
 export function physicalContext(
   seed: number,

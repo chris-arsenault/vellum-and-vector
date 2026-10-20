@@ -23,10 +23,8 @@ it("generates coherent fresh geography with optional effects omitted and retains
   expect(prepared.diagnostics).toEqual([]);
   const output = await generateAtlas(source, prepared.input);
   expect(output.state.surface.channels.elevation.every(Number.isFinite)).toBe(true);
-  expect(output.state.surface.channels.impactExcavation.every((value) => value === 0)).toBe(true);
-  expect(output.state.surface.channels.volcanicConstruction.every((value) => value === 0)).toBe(
-    true
-  );
+  expect(output.state.surface.channels.impactExcavation).toBeUndefined();
+  expect(output.state.surface.channels.volcanicConstruction).toBeUndefined();
   expect(output.state.surface.channels.biome).toBeUndefined();
   expect(output.state.surface.channels.floodplain).toBeUndefined();
   expect(output.state.history).toHaveLength(1);
@@ -67,5 +65,5 @@ it("applies present magic to authored terrain without inventing geological event
   expect(
     result.state.surface.channels.elevation.every((value) => Math.abs(value - 100) < 0.01)
   ).toBe(true);
-  expect(result.state.surface.channels.impactExcavation.every((value) => value === 0)).toBe(true);
+  expect(result.state.surface.channels.impactExcavation).toBeUndefined();
 }, 120000);

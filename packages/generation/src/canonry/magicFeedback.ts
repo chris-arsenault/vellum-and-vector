@@ -1,6 +1,7 @@
 import type { GenerationState, MapProcessContext } from "../process";
 import { clamp, rockResistance, round } from "./math";
 import { Feature } from "./codes";
+import { generationBindings } from "../generationBindings";
 
 export function magicThermalFeedback(state: GenerationState) {
   const work = state.physical!,
@@ -37,14 +38,15 @@ export function magicRockFeedback(state: GenerationState) {
     map.RockResistance[i] = rockResistance(map.RockResistance[i] + round(delta));
   }
 }
-function coastalEpoch(state: GenerationState, context?: MapProcessContext) {
-  return context?.epochIndices[0] ?? Math.max(0, state.domain.world.epochs.length - 1);
+function coastalEpoch(context?: MapProcessContext) {
+  const count = context?.inputs?.features ? generationBindings(context).settings.epochs.length : 1;
+  return context?.epochIndices[0] ?? Math.max(0, count - 1);
 }
 export function magicCoastalFeedback(state: GenerationState, context?: MapProcessContext) {
   const work = state.physical!,
     magic = work.magic!,
     map = work.map;
-  const epoch = coastalEpoch(state, context);
+  const epoch = coastalEpoch(context);
   for (let i = 0; i < map.mesh.count; i++) {
     let total = 0;
     for (const field of magic.fields) {
@@ -82,7 +84,7 @@ export function magicCoastalFeedback(state: GenerationState, context?: MapProces
 }
 export function retainMagicHistory(state: GenerationState, context: MapProcessContext) {
   const map = state.physical!.map,
-    index = context.epochIndices[0] ?? Math.max(0, state.domain.world.epochs.length - 1);
+    index = coastalEpoch(context);
   for (const field of state.physical!.magic!.fields) {
     const retention = field.definition.history;
     let active = 0,

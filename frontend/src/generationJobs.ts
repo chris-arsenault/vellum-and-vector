@@ -1,18 +1,8 @@
-import {
-  semanticId,
-  requireThat,
-  profiles,
-  validateCoverage,
-  ecologyLabels,
-  type DomainSnapshot,
-  type FieldRef,
-  type Layer,
-  type World,
-  type Diagnostic,
-} from "@atlas/domain";
+import { requireThat, type DomainSnapshot, type World, type Diagnostic } from "@atlas/domain";
 import {
   atlasParametersSchema,
   prepareAtlasGeneration,
+  publishGenerationProducts,
   type AtlasGenerationInput,
   type CompletedBoundary,
 } from "@atlas/generation";
@@ -52,10 +42,11 @@ export function startGeneration(
     ),
   };
   const prepared = prepareAtlasGeneration(snapshot, input);
+  const errors = prepared.diagnostics.filter((diagnostic) => diagnostic.severity === "error");
   requireThat(
-    !prepared.diagnostics.length,
+    !errors.length,
     "generation_configuration",
-    prepared.diagnostics.map((item) => item.message).join("\n")
+    errors.map((item) => item.message).join("\n")
   );
   input = { ...input, ...prepared.input };
   requireThat(
@@ -78,6 +69,7 @@ export function startGeneration(
     progress: 0,
     error: null,
     startedAt: Date.now(),
+    diagnostics: prepared.diagnostics,
   };
   logProgress(
     job,
@@ -139,7 +131,12 @@ function receive(id: string, message: WorkerResult) {
       "generation_conflict",
       "The world was edited during generation. Your edits were kept. Generate again from the current geography."
     );
-    const candidate = generationSnapshot(message.result, active.input, id);
+    const candidate = generationSnapshot(
+      message.result,
+      active.input,
+      id,
+      session(active.job.worldId).snapshot
+    );
     const entry = session(active.job.worldId);
     const areaId = active.input.areaId;
     entry.causes[areaId] = [
@@ -189,38 +186,14 @@ export function cancelGeneration(id: string) {
 export function generationSnapshot(
   result: CompletedBoundary,
   input: AtlasGenerationInput,
-  id: string
+  id: string,
+  original?: DomainSnapshot
 ): DomainSnapshot {
   const snapshot = result.state.domain,
-    world = snapshot.world,
-    grid = result.state.surface;
+    world = snapshot.world;
   world.version++;
-  publishFields(snapshot, grid, id);
+  publishGenerationProducts(result.state, id, original);
   const area = world.areas[input.areaId];
-  for (const layer of Object.values(world.layers).filter(
-    (l) => input.domains.includes(l.generator ?? "") && generatedLayer(snapshot, input.areaId, l.id)
-  )) {
-    const coverage = {
-      id: semanticId(world.id, "generated-coverage", `${area.id}:${layer.id}`),
-      areaId: area.id,
-      spaceId: grid.scope.spaceId,
-      layerId: layer.id,
-      detailRank: profiles.indexOf(area.profile),
-      resolution: grid.scope.resolution ?? null,
-      time: "present",
-      footprint: grid.scope.footprint,
-      state: "generated" as const,
-      resourceId: grid.id,
-      generationId: id,
-    };
-    validateCoverage(
-      world,
-      coverage,
-      snapshot.coverage.filter((c) => c.id !== coverage.id)
-    );
-    snapshot.coverage = [...snapshot.coverage.filter((c) => c.id !== coverage.id), coverage];
-    area.layers[layer.id] = "generated";
-  }
   area.version = world.version;
   world.generations.push({
     id,
@@ -235,156 +208,4 @@ export function generationSnapshot(
     configuration: input.configuration && { ...input.configuration },
   });
   return snapshot;
-}
-function generatedLayer(snapshot: DomainSnapshot, areaId: string, layerId: string) {
-  return (
-    snapshot.world.fields.some((field) => field.areaId === areaId && field.layerId === layerId) ||
-    Object.values(snapshot.world.features).some(
-      (feature) => feature.areaId === areaId && feature.layerId === layerId
-    )
-  );
-}
-const nativeHistoryChannels = new Set([
-  "naturalSurface",
-  "finalSurface",
-  "physicalMaterial",
-  "physicalFeatures",
-  "bathymetry",
-  "volcanicLastActiveEpoch",
-  "geothermalHistory",
-  "tectonicHistory",
-  "coastalForcingHistory",
-]);
-const nativeGeologyChannels = new Set([
-  "bedrock",
-  "sediment",
-  "rock",
-  "naturalRock",
-  "fracture",
-  "province",
-  "crustMotionX",
-  "crustMotionY",
-  "uplift",
-  "carbonate",
-  "erosion",
-  "deposition",
-  "crustThickness",
-  "crustSupport",
-  "rockLoad",
-  "continentalFraction",
-  "crustAge",
-  "sutureStrength",
-  "suturePair",
-  "assembly",
-  "tectonicBoundary",
-  "boundaryPair",
-  "margin",
-  "tectonicStrain",
-  "volcanicConstruction",
-  "impactExcavation",
-  "impactRim",
-  "impactEjecta",
-  "fluvialErosion",
-  "glacialErosion",
-  "coastalErosion",
-  "glacialDeposition",
-  "landform",
-  "slope",
-]);
-function channelLayer(channel: string) {
-  if (Object.hasOwn(ecologyLabels, channel)) return "ecology";
-  if (nativeHistoryChannels.has(channel) || nativeGeologyChannels.has(channel)) return "geology";
-  if (channel === "elevation") return "elevation";
-  const entityLayers: Record<string, string> = {
-    culture: "cultures",
-    language: "languages",
-    religion: "religions",
-  };
-  const entityLayer = entityLayers[channel.split(":")[0]];
-  if (entityLayer) return entityLayer;
-  if (channel.startsWith("magic:") || ["heat", "storedHeat", "coastalPressure"].includes(channel))
-    return "magic";
-  if (
-    [
-      "receiver",
-      "drainageRank",
-      "drainageElevation",
-      "flow",
-      "runoff",
-      "outletFlow",
-      "basin",
-      "water",
-      "waterDepth",
-      "waterLevel",
-      "seaLevel",
-      "depressionDepth",
-      "waterBody",
-      "oceanDistance",
-      "riverOrder",
-      "riverChannel",
-      "riverWidth",
-      "riverDepth",
-      "catchmentArea",
-      "floodplain",
-      "delta",
-      "oceanCurrent",
-      "waveExposure",
-    ].includes(channel)
-  )
-    return "rivers";
-  return "climate";
-}
-function fieldGroups(grid: CompletedBoundary["state"]["surface"]) {
-  const groups = new Map<string, string[]>();
-  for (const channel of Object.keys(grid.channels)) {
-    if (grid.units[channel] === "cell-index") continue;
-    const layer = channelLayer(channel);
-    groups.set(layer, [...(groups.get(layer) ?? []), channel]);
-  }
-  return groups;
-}
-function publishFields(
-  snapshot: DomainSnapshot,
-  grid: CompletedBoundary["state"]["surface"],
-  runId: string
-) {
-  for (const [layerId, channels] of fieldGroups(grid)) {
-    const world = snapshot.world,
-      areaId = grid.scope.areaId;
-    const fieldId = semanticId(world.id, "atlas-field", `${areaId}:${layerId}`);
-    const existing = world.fields.find((field) => field.id === fieldId);
-    if (existing?.state === "authored" || existing?.state === "protected") continue;
-    const resourceId = semanticId(world.id, "atlas-samples", `${runId}:${layerId}`);
-    const field: FieldRef = {
-      id: fieldId,
-      areaId,
-      layerId,
-      algorithm: "atlas-2/canonry-0f62584c",
-      source: { kind: "run", id: runId },
-      samples: grid.active.length,
-      channels,
-      resourceId,
-      state: "generated",
-      footprint: grid.scope.footprint,
-      spaceId: grid.scope.spaceId,
-    };
-    world.fields = [...world.fields.filter((f) => f.id !== fieldId), field];
-    snapshot.numerical[fieldId] = {
-      ...grid,
-      id: resourceId,
-      channels: Object.fromEntries(channels.map((c) => [c, grid.channels[c]])),
-      units: Object.fromEntries(channels.map((c) => [c, grid.units[c]])),
-      overlays: snapshot.numerical[fieldId]?.overlays,
-    };
-    world.layers[layerId].facts = [
-      ...new Set([...(world.layers[layerId].facts ?? []), ...channels]),
-    ];
-    const layer = world.layers[layerId];
-    layer.representations = [
-      ...new Set<NonNullable<Layer["representations"]>[number]>([
-        ...(layer.representations ?? []),
-        "field",
-      ]),
-    ];
-  }
 }

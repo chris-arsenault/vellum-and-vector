@@ -110,7 +110,7 @@ function CreateWorld({
     mutationFn: async ({ draft, generate }: { draft: GenerationDraft; generate: boolean }) => {
       if (generate) {
         const preview = draftPreview(draft);
-        if (preview.diagnostics.length)
+        if (preview.diagnostics.some((item) => item.severity === "error"))
           throw new Error(preview.diagnostics.map((item) => item.message).join("\n"));
       }
       const world = createWorld({

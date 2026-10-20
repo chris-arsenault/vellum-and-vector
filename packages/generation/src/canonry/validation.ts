@@ -8,23 +8,26 @@ import { validateLandscape } from "./surface";
 import { allowsBoundaryDrainage, isOpenOutlet } from "./field";
 
 const range = (value: number, low: number, high: number) => value >= low && value <= high;
-function validateCodes(map: PhysicalField) {
+function validateCodes(map: PhysicalField, unclassified = false) {
   for (let i = 0; i < map.mesh.count; i++) {
     if (
-      !range(map.LandformCodes[i], 1, 17) ||
+      !range(map.LandformCodes[i], unclassified ? 0 : 1, 17) ||
       !range(map.WaterKindCodes[i], 0, 2) ||
       !range(map.BathymetricZoneCodes[i], 0, 4) ||
       (map.FeatureFlags[i] & ~2047) !== 0
     )
       throw new Error("Physical geography contains an invalid primitive code.");
-    if (
-      !range(map.RiverChannelStrength[i], 0, 1000) ||
-      map.RiverChannelOrders[i] < 0 ||
-      !range(map.FloodplainIntensity[i], 0, 1000) ||
-      !range(map.DeltaIntensity[i], 0, 1000)
-    )
-      throw new Error("Physical geography contains an invalid river-geometry value.");
+    validateRiverCodes(map, i);
   }
+}
+function validateRiverCodes(map: PhysicalField, i: number) {
+  if (
+    !range(map.RiverChannelStrength[i], 0, 1000) ||
+    map.RiverChannelOrders[i] < 0 ||
+    !range(map.FloodplainIntensity[i], 0, 1000) ||
+    !range(map.DeltaIntensity[i], 0, 1000)
+  )
+    throw new Error("Physical geography contains an invalid river-geometry value.");
 }
 function validateWaterState(map: PhysicalField, i: number) {
   const dry = map.WaterKindCodes[i] === 0,
@@ -87,7 +90,7 @@ function validateIce(map: PhysicalField, c: PhysicalContext) {
   }
 }
 export function validatePhysical(map: PhysicalField, c: PhysicalContext) {
-  validateCodes(map);
+  validateCodes(map, c.Products?.status("canonry:Landforms") === "empty");
   validateWater(map);
   sourceToOutletOrder(map);
   validateRivers(map);

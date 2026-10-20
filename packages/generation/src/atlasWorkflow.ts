@@ -5,7 +5,6 @@ import {
   createAdaptiveTopology,
   resampleChannels,
   spatial,
-  canonryMagicPresets,
   semanticId,
   requireThat,
   cloneSnapshot,
@@ -23,12 +22,7 @@ import {
   type ProcessConfiguration,
   type ProcessSequence,
 } from "./process";
-import { thermalMagicProcess, magicStorageProcess } from "./mapMagic";
-import { materialMagicProcess } from "./mapMagicEffects";
-import { culturalProcess, politicalProcess } from "./mapPeople";
-import { builtProcess } from "./mapBuilt";
 import { prepareGeneratedProcess } from "./mapFeatures";
-import { atlasNativeProcesses } from "./canonry/atlasProcesses";
 import { atlasPhysicalSequence } from "./canonry/atlasSequence";
 import { atlasQuality } from "./canonry/atlasProfile";
 import { atlasParametersSchema, type AtlasParameters } from "./atlasParameters";
@@ -39,12 +33,16 @@ import {
 } from "./generationSettings";
 import { preflight } from "./preflight";
 import { processConfigurationSchema } from "./configurationSchema";
+import { ecologicalMagicDiagnostics } from "./processSelection";
 import {
-  selectedSequence,
-  selectionDiagnostics,
-  ecologicalMagicDiagnostics,
-} from "./processSelection";
+  resolveGenerationFeatures,
+  type FeatureSelection,
+  type ResolvedFeatures,
+} from "./features";
+import { atlasGenerationModules } from "./atlasModules";
+import { serializableBindings } from "./generationBindings";
 import { inheritedChannelNames, inheritedNativeFacts } from "./canonry/inheritedFacts";
+import { coastalMagicDiagnostics } from "./featureDependencies";
 
 export interface AtlasGenerationInput {
   areaId: string;
@@ -53,17 +51,12 @@ export interface AtlasGenerationInput {
   seed: number;
   parameters?: Partial<AtlasParameters>;
   processes?: Record<string, boolean>;
+  features?: FeatureSelection;
+  resolvedFeatures?: ResolvedFeatures;
   settings?: GenerationSettings;
   configuration?: ProcessConfiguration;
 }
-const processes = [
-  thermalMagicProcess,
-  magicStorageProcess,
-  culturalProcess,
-  politicalProcess,
-  builtProcess,
-  materialMagicProcess,
-];
+export const atlasFeatureDefinitions = atlasGenerationModules.features();
 
 export async function generateAtlas(
   source: DomainSnapshot,
@@ -73,7 +66,7 @@ export async function generateAtlas(
   const prepared = prepareAtlasGeneration(source, input);
   input = prepared.input;
   source = prepared.source;
-  if (prepared.diagnostics.length)
+  if (prepared.diagnostics.some((diagnostic) => diagnostic.severity === "error"))
     throw new DomainError(
       "generation_configuration",
       prepared.diagnostics.map((item) => item.message).join("\n"),
@@ -92,12 +85,15 @@ export async function generateAtlas(
     ]),
   });
   // Numerical scratch never leaves the worker or becomes a saved execution state.
+  result.state.publications = atlasGenerationModules.publications(input, result.state.domain.world);
   delete result.state.physical;
   return result;
 }
 
 export function atlasRegistry(source: DomainSnapshot, input: AtlasGenerationInput) {
-  return [...processes, ...atlasNativeProcesses(input, source)]
+  input = resolveInput(source, input);
+  return atlasGenerationModules
+    .processes(source, input)
     .reduce(
       (registry, process) =>
         registry.register(profileProcess(process, source.world.areas[input.areaId].profile)),
@@ -112,6 +108,10 @@ function profileProcess(process: MapProcess, profile: string): MapProcess {
 }
 
 export function prepareAtlasGeneration(source: DomainSnapshot, input: AtlasGenerationInput) {
+  input = structuredClone(input);
+  const compatibility = humanHistoryDiagnostics(
+    input.settings ?? worldGenerationSettings(source.world)
+  );
   source = configuredSource(source, input);
   checkRunInputs(source, input);
   input = {
@@ -120,26 +120,40 @@ export function prepareAtlasGeneration(source: DomainSnapshot, input: AtlasGener
     parameters: atlasParametersSchema.parse(input.parameters ?? {}),
     processes: input.processes ?? {},
   };
+  input = resolveInput(source, input);
+  source = configuredSource(source, input);
+  const resolvedFeatures = input.resolvedFeatures!;
   const configuration = atlasConfiguration(source, input);
   checkReviewedConfiguration(input, configuration);
   input = { ...input, configuration };
   const registry = atlasRegistry(source, input);
-  const diagnostics = selectionDiagnostics(
-    input.processes ?? {},
-    registry.contracts().map((contract) => contract.id)
-  );
+  const diagnostics = [...resolvedFeatures.diagnostics, ...compatibility];
   checkNewSelection(source, input);
   diagnostics.push(
     ...ecologicalMagicDiagnostics(
-      input.processes ?? {},
-      input.domains,
+      { "atlas.ecology-evolve": resolvedFeatures.selection["ecology.living"].enabled },
+      resolvedFeatures.selection["magic.configured"].enabled
+        ? input.domains
+        : input.domains.filter((domain) => domain !== "magic"),
       source.world.magicSystems ?? []
     )
   );
+  diagnostics.push(...coastalMagicDiagnostics(source, input));
   const inherited = usesInheritedInputs(source, input);
   const initial = inherited ? inheritedFactsForRun(source, input) : [];
   diagnostics.push(...preflight(configuration, registry, initial));
   return { input, source, registry, diagnostics };
+}
+function humanHistoryDiagnostics(settings: GenerationSettings | undefined) {
+  return (settings?.humanEras ?? [])
+    .filter((era) => era.physicalEpoch !== null || era.politicalCapacity !== 1)
+    .map((era) => ({
+      severity: "warning" as const,
+      code: "human_history_compatibility",
+      invocation: "human.cultures",
+      resource: era.id,
+      message: `${era.id}: physicalEpoch and politicalCapacity are retained compatibility metadata; generation uses years and mobility only.`,
+    }));
 }
 function checkRunInputs(source: DomainSnapshot, input: AtlasGenerationInput) {
   requireThat(
@@ -202,7 +216,10 @@ function usesInheritedInputs(source: DomainSnapshot, input: AtlasGenerationInput
   );
 }
 function checkNewSelection(source: DomainSnapshot, input: AtlasGenerationInput) {
-  if (Object.values(input.processes ?? {}).some((enabled) => !enabled))
+  if (
+    Object.values(input.processes ?? {}).some((enabled) => !enabled) ||
+    Object.values(input.features ?? {}).some((feature) => feature.enabled === false)
+  )
     requireThat(
       !source.world.generations.some((run) => run.areaId === input.areaId),
       "process_selection",
@@ -257,7 +274,14 @@ function initialState(source: DomainSnapshot, input: AtlasGenerationInput): Gene
           area.profile === "interior" ? size : Math.max(2, Math.ceil(size / aspect) + 1)
         );
   inheritSurface(source, surface, input);
-  return { domain, surface, facts: initialFacts(surface), history: [], causes: [] };
+  return {
+    domain,
+    surface,
+    facts: initialFacts(surface),
+    history: [],
+    causes: [],
+    publications: atlasGenerationModules.publications(input, domain.world),
+  };
 }
 function inheritSurface(source: DomainSnapshot, target: Grid, input: AtlasGenerationInput) {
   const world = source.world;
@@ -298,25 +322,26 @@ export function atlasConfiguration(
   source: DomainSnapshot,
   input: AtlasGenerationInput
 ): ProcessConfiguration {
-  const settings = generationSettingsSchema.parse(
-    input.settings ?? worldGenerationSettings(source.world)
-  );
+  input = resolveInput(source, input);
+  const settings = input.settings!,
+    features = input.resolvedFeatures!;
   source = { ...source, world: { ...source.world, ...settings } };
   const sequence = configuredSequence(source, input);
   return {
     id: `atlas:${source.world.areas[input.areaId].profile}`,
-    version: 3,
-    parameters: {
-      ...atlasParametersSchema.parse(input.parameters ?? {}),
-      magicConfiguration: JSON.stringify(source.world.magicSystems ?? canonryMagicPresets()),
-    },
-    sequence: selectedSequence(sequence, input.processes ?? {}),
-    inputs: {
-      settings: settings as unknown as ParameterValues,
+    version: 4,
+    parameters: atlasParametersSchema.parse(input.parameters ?? {}),
+    sequence,
+    inputs: serializableBindings({
+      settings,
+      features,
       seed: input.seed,
       quality: input.quality,
-      processes: input.processes ?? {},
-    },
+      publications: atlasGenerationModules.publications(input, source.world),
+      reconciliations: atlasRegistry(source, input).reconciliations(),
+      domains: input.domains,
+      parameters: features.parameters,
+    }),
   };
 }
 function configuredSequence(source: DomainSnapshot, input: AtlasGenerationInput): ProcessSequence {
@@ -326,13 +351,33 @@ function configuredSequence(source: DomainSnapshot, input: AtlasGenerationInput)
   if (area.profile !== "interior" && (physical || input.domains.includes("magic"))) {
     sequence.push(...atlasPhysicalSequence(source, input));
   }
-  if (input.domains.includes("cultural")) sequence.push(invoke(culturalProcess));
-  if (input.domains.includes("political")) sequence.push(invoke(politicalProcess));
-  if (input.domains.includes("built")) sequence.push(invoke(builtProcess));
+  for (const slot of ["present.products", "present.people", "present.after-people"])
+    sequence.push(...atlasGenerationModules.contribute(slot, input.resolvedFeatures!));
   requireThat(
     sequence.length > 1,
     "profile_domains",
     "Choose a generation domain supported by this profile."
   );
   return sequence;
+}
+function resolveInput(source: DomainSnapshot, input: AtlasGenerationInput): AtlasGenerationInput {
+  const suppliedSettings = generationSettingsSchema.parse(
+    input.settings ?? worldGenerationSettings(source.world)
+  );
+  const legacySettings = atlasGenerationModules.prepareSettings(
+    input.features ?? {},
+    suppliedSettings
+  );
+  const resolvedFeatures = resolveGenerationFeatures(
+    atlasFeatureDefinitions,
+    input.features,
+    input.processes,
+    input.parameters,
+    input.domains,
+    legacySettings as unknown as ParameterValues
+  );
+  const settings = generationSettingsSchema.parse(
+    atlasGenerationModules.bindSettings(resolvedFeatures, legacySettings)
+  );
+  return { ...input, settings, resolvedFeatures, parameters: resolvedFeatures.parameters };
 }
