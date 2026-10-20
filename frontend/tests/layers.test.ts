@@ -140,6 +140,8 @@ test("edit road symbols with GeoStyler and keep them in a session view", async (
   await page.getByRole("button", { name: "Style Roads and routes", exact: true }).click();
   await page.getByLabel("Draw order", { exact: true }).selectOption("rivers");
   await page.getByLabel("Line width", { exact: true }).fill("4");
+  await page.getByLabel("Line width", { exact: true }).press("Tab");
+  await expect(page.getByLabel("Line width", { exact: true })).toHaveValue("4");
   await page.getByRole("button", { name: "Advanced symbol rules", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Style Roads and routes", exact: true });
   await expect(dialog.locator(".gs-style").first()).toBeVisible();
