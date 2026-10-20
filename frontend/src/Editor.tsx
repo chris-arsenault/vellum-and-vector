@@ -24,30 +24,56 @@ interface Props {
 }
 export function Editor({ world, worlds, changeWorld, newWorld }: Props) {
   const editor = useEditor(world);
-  const [tab, setTab] = useState("atlas");
+  const [tab, setTab] = useState<string | null>(null);
+  const toggle = (next: string) => setTab(tab === next ? null : next);
   return (
     <div className="app-shell">
       <EditorHeader world={world} worlds={worlds} changeWorld={changeWorld} newWorld={newWorld} />
-      <aside className="left-panel">
-        <nav className="panel-tabs" aria-label="Workspace panels">
-          <button aria-pressed={tab === "atlas"} onClick={() => setTab("atlas")}>
-            Atlas
-          </button>
-          <button aria-pressed={tab === "layers"} onClick={() => setTab("layers")}>
-            Layers
-          </button>
-        </nav>
-        {tab === "atlas" ? (
-          <AtlasTree world={world} current={editor.area.id} enter={editor.enter} />
-        ) : (
-          <LayerPanel world={world} editor={editor} />
-        )}
-        <div className="spatial-reference">
-          <span className="eyebrow">WORLD REFERENCE</span>
-          <p>Planar · metres · east / north / up</p>
-          <small>{world.reference.verticalDatum}</small>
-        </div>
-      </aside>
+      <nav className="map-navigation" aria-label="Workspace panels">
+        <button
+          aria-expanded={tab === "atlas"}
+          aria-controls="map-drawer"
+          onClick={() => toggle("atlas")}
+        >
+          Atlas
+        </button>
+        <button
+          aria-expanded={tab === "layers"}
+          aria-controls="map-drawer"
+          onClick={() => toggle("layers")}
+        >
+          Layers
+        </button>
+      </nav>
+      {tab && (
+        <aside
+          className="left-panel map-drawer"
+          id="map-drawer"
+          aria-label={tab === "layers" ? "Map appearance" : "World atlas"}
+        >
+          <header className="drawer-heading">
+            <div>
+              <span className="eyebrow">
+                {tab === "layers" ? "MAKE IT YOUR MAP" : "YOUR WORLD"}
+              </span>
+              <h2>{tab === "layers" ? "Map layers" : "Atlas"}</h2>
+            </div>
+            <button className="quiet" aria-label="Close map drawer" onClick={() => setTab(null)}>
+              ×
+            </button>
+          </header>
+          {tab === "atlas" ? (
+            <AtlasTree world={world} current={editor.area.id} enter={editor.enter} />
+          ) : (
+            <LayerPanel world={world} editor={editor} />
+          )}
+          <div className="spatial-reference">
+            <span className="eyebrow">WORLD REFERENCE</span>
+            <p>Planar · metres · east / north / up</p>
+            <small>{world.reference.verticalDatum}</small>
+          </div>
+        </aside>
+      )}
       <MapWorkspace world={world} editor={editor} />
       <AuthoringPanel world={world} editor={editor} />
     </div>

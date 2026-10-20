@@ -14,27 +14,28 @@ import { defaults as defaultInteractions } from "ol/interaction/defaults.js";
 import { bounds } from "./presentation";
 import { featureStyle } from "./vectorStyles";
 import type { Area, AtlasFeature, LayerStyle, World } from "./types";
+import { RasterSources } from "./RasterSources";
 
 const format = new GeoJSON();
 export function createMap(target: HTMLElement, reference: World["reference"]) {
   target.tabIndex = 0;
   const extent = bounds(reference.domain);
   const projection = new Projection({ code: reference.id, units: "m", extent });
-  const image = new LayerGroup({ properties: { title: "Base map", openInLayerSwitcher: true } });
+  const rasters = new RasterSources(projection);
+  const image = new LayerGroup({ properties: { title: "Base map" } });
   const overlay = new LayerGroup({
-    properties: { title: "Field overlays", openInLayerSwitcher: true },
+    properties: { title: "Field overlays" },
   });
-  const vectors = new LayerGroup({ properties: { title: "Features", openInLayerSwitcher: true } });
+  const vectors = new LayerGroup({ properties: { title: "Features" } });
   const features = new VectorSource({ wrapX: false });
   const snapFeatures = new Collection<Feature>();
   const featureLayers = new Map<string, VectorLayer>();
   const areas = new VectorLayer({
     source: new VectorSource({ wrapX: false }),
-    properties: { title: "Area boundaries", displayInLayerSwitcher: false },
+    properties: { title: "Area boundaries" },
   });
   const preview = new VectorLayer({
     source: new VectorSource({ wrapX: false }),
-    properties: { displayInLayerSwitcher: false },
     style: new Style({
       stroke: new Stroke({ color: "#f8d589", width: 3, lineDash: [8, 5] }),
       fill: new Fill({ color: "#f8d58933" }),
@@ -51,8 +52,12 @@ export function createMap(target: HTMLElement, reference: World["reference"]) {
     }),
   });
   map.addControl(new ScaleLine({ units: "metric" }));
-  return {
+  map.on("change:target", () => {
+    if (!map.getTarget()) rasters.dispose();
+  });
+  const engine = {
     map,
+    rasters,
     image,
     overlay,
     vectors,
@@ -63,6 +68,8 @@ export function createMap(target: HTMLElement, reference: World["reference"]) {
     preview,
     sync: { applying: false },
   };
+  map.on("moveend", () => syncSnapping(engine));
+  return engine;
 }
 export type MapEngine = ReturnType<typeof createMap>;
 export function applyMapUpdate(engine: MapEngine, update: () => void) {
@@ -85,6 +92,7 @@ function syncVectorLayers(engine: MapEngine, world: World, styles: LayerStyle[])
     if (!layer) {
       layer = new VectorLayer({
         source: new VectorSource({ wrapX: false }),
+        declutter: true,
         properties: { title: world.layers[style.layerId].name, layerId: style.layerId },
       });
       engine.featureLayers.set(style.layerId, layer);
@@ -108,6 +116,8 @@ function syncVectorLayers(engine: MapEngine, world: World, styles: LayerStyle[])
     });
 }
 function applyVectorStyle(layer: VectorLayer, style: LayerStyle) {
+  if (layer.get("presentation") === style) return;
+  layer.set("presentation", style);
   if (!style.symbols) {
     layer.set("symbols", null);
     layer.setStyle((feature, resolution) => featureStyle(feature.get("domain"), style, resolution));
@@ -176,6 +186,7 @@ function syncFeature(engine: MapEngine, feature: AtlasFeature) {
     engine.features.addFeature(ol);
   } else {
     const previous = ol.get("domain") as AtlasFeature;
+    if (previous === feature) return;
     if (previous.layerId !== feature.layerId)
       engine.featureLayers.get(previous.layerId)?.getSource()!.removeFeature(ol);
     if (
@@ -183,8 +194,7 @@ function syncFeature(engine: MapEngine, feature: AtlasFeature) {
       JSON.stringify(feature.geometry)
     )
       ol.setGeometry(format.readGeometry(feature.geometry)!);
-    for (const key of Object.keys(previous.attributes))
-      if (!(key in feature.attributes)) ol.unset(key);
+    removeOldAttributes(ol, previous, feature);
     ol.setProperties({
       ...feature.attributes,
       name: feature.name,
@@ -194,8 +204,20 @@ function syncFeature(engine: MapEngine, feature: AtlasFeature) {
   }
   if (!source.hasFeature(ol)) source.addFeature(ol);
 }
+function removeOldAttributes(ol: Feature, previous: AtlasFeature, feature: AtlasFeature) {
+  for (const key of Object.keys(previous.attributes))
+    if (!(key in feature.attributes)) ol.unset(key);
+}
 function updateAreas(engine: MapEngine, world: World, area: Area) {
   const source = engine.areas.getSource()!;
+  const signature = JSON.stringify([
+    area.id,
+    Object.values(world.areas)
+      .filter((a) => a.parentId === area.id || a.id === area.id)
+      .map((a) => [a.id, a.name, a.footprint]),
+  ]);
+  if (source.get("signature") === signature) return;
+  source.set("signature", signature);
   engine.areas.set("currentArea", area.id);
   source.clear();
   for (const child of Object.values(world.areas).filter(

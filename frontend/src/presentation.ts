@@ -23,7 +23,14 @@ export function defaultStyles(world: World, preset = "physical"): LayerStyle[] {
     layerId: layer.id,
     visible: families[preset].includes(layer.family) && layer.id !== "faults",
     opacity: layer.family === "political" ? 0.4 : 0.85,
-    color: layer.color,
+    color:
+      (
+        { rivers: "#397d99", lakes: "#83b6c5", roads: "#ac8553", geology: "#9b8c70" } as Record<
+          string,
+          string
+        >
+      )[layer.id] ?? layer.color,
+    labels: ["settlements", "pois"].includes(layer.id),
     minScale: 0,
   }));
 }

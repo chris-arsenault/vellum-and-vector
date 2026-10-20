@@ -49,8 +49,7 @@ export function MapCanvas({
     const next = createMap(target.current, reference);
     setEngine(next);
     onEngine(next);
-    next.map.on("pointermove", (event) => showCoordinates(coordinates.current, event.coordinate));
-    next.map.on("moveend", () => reportViewport(next, callbacks.current));
+    observeMap(next, target, coordinates, callbacks);
     return () => {
       next.map.setTarget(undefined);
       next.map.getAllLayers().forEach((layer) => layer.dispose());
@@ -85,6 +84,7 @@ export function MapCanvas({
         ref={target}
         role="application"
         aria-label="World map canvas"
+        aria-busy="true"
         onPointerDown={(event) => event.currentTarget.focus()}
       />
       <FitButton engine={engine} area={area} />
@@ -94,6 +94,19 @@ export function MapCanvas({
       <div className="map-instruction">{toolInstruction(tool)} · Space: pan · Esc: cancel</div>
     </div>
   );
+}
+function observeMap(
+  engine: MapEngine,
+  target: import("react").RefObject<HTMLDivElement | null>,
+  coordinates: import("react").RefObject<HTMLOutputElement | null>,
+  callbacks: import("react").RefObject<MapEvents>
+) {
+  engine.map.on("pointermove", (event) => showCoordinates(coordinates.current, event.coordinate));
+  engine.map.on("moveend", () => reportViewport(engine, callbacks.current));
+  const busy = () => target.current?.setAttribute("aria-busy", "true");
+  engine.map.on("loadstart", busy);
+  engine.map.on("movestart", busy);
+  engine.map.on("rendercomplete", () => target.current?.setAttribute("aria-busy", "false"));
 }
 function reportViewport(engine: MapEngine, events: MapEvents) {
   const size = engine.map.getSize();

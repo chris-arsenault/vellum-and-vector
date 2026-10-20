@@ -159,13 +159,14 @@ test("place, move and reshape features; pan during an unfinished route and cance
   await page.getByLabel("Working layer").selectOption("routes");
   await tool(page, "Draw road").click();
   await page.getByLabel("Feature name").fill("Coast road");
-  await map(page).click({ position: { x: 220, y: 240 } });
+  await map(page).click({ position: { x: 270, y: 240 } });
   const firstVertex = await page.locator(".coordinates").textContent();
   await map(page).click({ position: { x: 330, y: 280 } });
   await page.keyboard.down("Space");
   await drag(page, [380, 300], [410, 330]);
   await page.keyboard.up("Space");
   await map(page).dblclick({ position: { x: 440, y: 340 } });
+  await expect(page.locator(".error")).toHaveCount(0);
   await expect(page.locator(".right-panel h2")).toHaveText("Coast road");
   const road = (await exportMap(page)).features.find(
     (feature: { properties: { name: string } }) => feature.properties.name === "Coast road"

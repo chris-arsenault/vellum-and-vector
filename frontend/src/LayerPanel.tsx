@@ -4,10 +4,23 @@ import type { EditorState } from "./useEditor";
 import { LayerBrowser } from "./LayerBrowser";
 import { RasterPanel } from "./RasterPanel";
 import { defaultRasterPresentation } from "./rasterPresentation";
+import { VectorAppearance } from "./VectorAppearance";
+import { FeatureDrawOrder } from "./FeatureDrawOrder";
 
 const SymbolEditor = lazy(() => import("./SymbolEditor"));
 export function LayerPanel({ world, editor }: { world: World; editor: EditorState }) {
-  const [target, setTarget] = useState("base");
+  const [target, setTarget] = useState("");
+  const [advanced, setAdvanced] = useState(false);
+  const appearance = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!target) return;
+    appearance.current?.scrollIntoView({ block: "nearest" });
+    appearance.current?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
+  }, [target]);
+  const edit = (target: string) => {
+    setTarget(target);
+    setAdvanced(false);
+  };
   const vector = target.startsWith("vector:") ? target.slice(7) : null;
   const style = editor.styles.find((style) => style.layerId === vector);
   return (
@@ -24,46 +37,76 @@ export function LayerPanel({ world, editor }: { world: World; editor: EditorStat
           ))}
         </select>
       </label>
-      <LayerBrowser editor={editor} edit={setTarget} />
-      <RasterPanel world={world} editor={editor} target={target} edit={setTarget} />
-      {style && (
-        <StyleDialog name={world.layers[style.layerId].name} close={() => setTarget("base")}>
-          <Suspense fallback={<p>Loading style editor…</p>}>
-            <SymbolEditor
-              world={world}
-              presentation={style}
-              close={() => setTarget("base")}
-              apply={(symbols) =>
-                editor.setStyles(
-                  editor.styles.map((item) =>
-                    item.layerId === style.layerId ? { ...item, symbols } : item
-                  )
-                )
-              }
-            />
-          </Suspense>
-          <label>
-            Minimum metres per pixel
-            <input
-              type="number"
-              min="0"
-              step="any"
-              value={style.minScale}
-              onChange={(event) =>
-                editor.setStyles(
-                  editor.styles.map((item) =>
-                    item.layerId === style.layerId
-                      ? { ...item, minScale: Number(event.target.value) }
-                      : item
-                  )
-                )
-              }
-            />
-          </label>
-        </StyleDialog>
+      <LayerBrowser editor={editor} edit={edit} />
+      {target && (
+        <div className="contextual-style" ref={appearance}>
+          <button className="quiet" onClick={() => edit("")}>
+            ← Back to map layers
+          </button>
+          <RasterPanel world={world} editor={editor} target={target} />
+          {style && (
+            <>
+              <VectorAppearance
+                editor={editor}
+                presentation={style}
+                advanced={() => setAdvanced(true)}
+              />
+              <FeatureDrawOrder editor={editor} layerId={style.layerId} />
+            </>
+          )}
+        </div>
+      )}
+      {style && advanced && (
+        <AdvancedSymbols editor={editor} presentation={style} close={() => setAdvanced(false)} />
       )}
       <SessionViews world={world} editor={editor} />
     </div>
+  );
+}
+function AdvancedSymbols({
+  editor,
+  presentation,
+  close,
+}: {
+  editor: EditorState;
+  presentation: import("./types").LayerStyle;
+  close: () => void;
+}) {
+  return (
+    <StyleDialog name={editor.world.layers[presentation.layerId].name} close={close}>
+      <Suspense fallback={<p>Loading style editor…</p>}>
+        <SymbolEditor
+          world={editor.world}
+          presentation={presentation}
+          close={close}
+          apply={(symbols) =>
+            editor.setStyles(
+              editor.styles.map((item) =>
+                item.layerId === presentation.layerId ? { ...item, symbols } : item
+              )
+            )
+          }
+        />
+      </Suspense>
+      <label>
+        Minimum metres per pixel
+        <input
+          type="number"
+          min="0"
+          step="any"
+          value={presentation.minScale}
+          onChange={(e) =>
+            editor.setStyles(
+              editor.styles.map((item) =>
+                item.layerId === presentation.layerId
+                  ? { ...item, minScale: Number(e.target.value) }
+                  : item
+              )
+            )
+          }
+        />
+      </label>
+    </StyleDialog>
   );
 }
 function SessionViews({ world, editor }: { world: World; editor: EditorState }) {

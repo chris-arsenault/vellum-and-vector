@@ -47,12 +47,16 @@ and schema tools. Templates can be placed on the map; precise placement and acce
 bindings remain available.
 
 Open **Layers** to switch between **Topographic** and **Relief** base maps.
-The layer tree provides visibility, opacity and drag ordering for feature layers
-and independent field overlays. Search the tree to find a layer. Its style button
-opens GeoStyler for vector symbols or field controls for color ramps, linear or
-signed logarithmic scaling, and display ranges. Visible field legends show units
-and values; missing coverage is transparent, while measured zero remains visible.
-Terrain controls adjust lighting, vertical exaggeration and contour interval.
+The compact drawer floats over the map and closes when you finish. **Add overlay**
+opens a searchable catalogue of available fields, grouped by theme; **All fields**
+and **Advanced** retain access to diagnostic channels. Active overlay cards provide
+visibility, opacity, legends and move-up/down buttons. Expand **Features** for
+thematic visibility controls, or show empty layers when preparing to author them.
+Each layer's **Style** button opens contextual appearance controls. Vector styles
+include common color, width and label settings; **Advanced symbol rules** opens
+GeoStyler. Fields support color ramps, linear or signed logarithmic scaling, and
+display ranges. Missing coverage is transparent, while measured zero remains visible.
+**Adjust terrain appearance** controls lighting, exaggeration and contour interval.
 These display settings do not change the geography. Satellite appearance is deferred.
 
 **Session map views** retain the base, field overlays and vector styles together
@@ -183,6 +187,25 @@ check for interior generation and publication. They test interaction; physical
 history stays headless. Reuse a completed run's ignored terrain artifacts in
 `frontend/.artifacts/generation/` when reviewing display changes instead of
 generating another world. Browser tests clear their own `test-results/` directory.
+
+The opt-in navigation case replays an existing real generated world from ignored
+`frontend/.artifacts/generation/fixed-draft.bin` (or `fixed-standard.bin`). It uses
+actual OpenLayers sources and render events, measuring first frame and settled
+detail separately. It does not run in ordinary CI or add a page to normal builds:
+
+```sh
+ATLAS_PERFORMANCE=1 ATLAS_RUN=review ATLAS_REPEATS=8 pnpm --dir frontend test:browser
+ATLAS_PERFORMANCE=1 ATLAS_SCENE=standard ATLAS_RUN=review pnpm --dir frontend test:browser
+```
+
+Raw measurements and local screenshots go to `frontend/.artifacts/navigation/`.
+Use `ATLAS_DPR=2` for high-DPI coverage and `ATLAS_PROFILE=1` for Chromium CPU
+sampling. `ATLAS_SAMPLING=1` separately times a real terrain tile;
+`ATLAS_REFINEMENT=1` generates and measures a region inherited from the replayed
+world through the normal worker/publication path. `ATLAS_INPUT=1` adds actual wheel
+gestures, including the normal debounce and animation. Record the browser/GPU environment when comparing results; software
+rendering costs differ from a desktop GPU. Navigation measurements directly change
+the view, excluding intentional wheel-zoom animation and debounce time.
 
 ## Deployment
 

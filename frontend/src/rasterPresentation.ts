@@ -5,7 +5,7 @@ export const palettes = {
   viridis: ["#440154", "#3b528b", "#21918c", "#5ec962", "#fde725"],
   magma: ["#000004", "#51127c", "#b73779", "#fc8961", "#fcfdbf"],
   blueRed: ["#2166ac", "#92c5de", "#f7f7f7", "#f4a582", "#b2182b"],
-  terrain: ["#a1b37e", "#8ca472", "#ab9e80", "#c1b49f", "#f1f0e7"],
+  terrain: ["#dae3bd", "#becda5", "#c3c3a8", "#d5ccba", "#f3f1e7"],
 };
 export function defaultRasterPresentation(): RasterPresentation {
   return {
@@ -29,9 +29,16 @@ export function defaultFieldStyle(channel: string): FieldStyle {
 }
 export function fieldLabel(world: World, channel: string) {
   const [kind, id, ...rest] = channel.split(":");
-  if (!id) return channel.replace(/([a-z])([A-Z])/g, "$1 $2");
+  const readable = (name: string) =>
+    name.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, (c) => c.toUpperCase());
+  const names: Record<string, string> = {
+    flow: "River flow",
+    finalSurface: "Land cover",
+    naturalSurface: "Natural land cover",
+  };
+  if (!id) return names[channel] ?? readable(channel);
   const entity = world.entities[id] ?? world.magicSystems?.find((s) => s.id === id);
-  return `${kind} · ${entity?.name ?? id}${rest.length ? ` · ${rest.join(" · ")}` : ""}`;
+  return `${entity?.name ?? readable(id)}${rest.length ? ` · ${readable(rest.join(" · "))}` : ` · ${readable(kind)}`}`;
 }
 export function fieldRange(data: Raster[], style: FieldStyle): [number, number] {
   if (style.range) return style.range;

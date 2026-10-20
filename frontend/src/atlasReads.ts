@@ -5,14 +5,13 @@ import {
   gridSampler,
   requireThat,
   spatial,
-  rectangle,
   type AtlasFeature,
   type World,
 } from "@atlas/domain";
 import type { Geometry } from "geojson";
-import { session } from "./atlasState";
+import { session, type SessionWorld } from "./atlasState";
 import { analyzeNetwork } from "./networkAnalysis";
-import { magicFeatures } from "./magicFeatures";
+import { SceneIndex } from "./SceneIndex";
 
 export function readFeature(id: string, featureId: string, areaId: string): AtlasFeature {
   const world = session(id).snapshot.world;
@@ -27,22 +26,21 @@ export function readFeature(id: string, featureId: string, areaId: string): Atla
   };
 }
 
+const scenes = new WeakMap<SessionWorld, Map<string, SceneIndex>>();
 export function readScene(id: string, areaId: string, extent?: number[]) {
-  const world = session(id).snapshot.world;
-  const area = world.areas[areaId],
-    space = areaSpace(world, areaId);
-  const footprint = extent
-    ? spatial.intersection(area.footprint, rectangle(extent as [number, number, number, number]))
-    : area.footprint;
-  if (!footprint) return [];
-  return [
-    ...Object.values(world.features).flatMap((feature) => {
-      if (areaSpace(world, feature.areaId) !== space) return [];
-      const presented = readFeature(id, feature.id, areaId);
-      return spatial.intersects(presented.geometry, footprint) ? [presented] : [];
-    }),
-    ...magicFeatures(world, areaId, footprint),
-  ];
+  const entry = session(id);
+  let areas = scenes.get(entry);
+  if (!areas) {
+    areas = new Map();
+    scenes.set(entry, areas);
+  }
+  let scene = areas.get(areaId);
+  if (!scene) {
+    scene = new SceneIndex(areaId);
+    areas.set(areaId, scene);
+  }
+  scene.update(entry.snapshot.world);
+  return scene.read(extent);
 }
 
 export function readRaster(id: string, fieldId: string, channel: string): import("./types").Raster {

@@ -14,52 +14,25 @@ export function RasterPanel({
   world,
   editor,
   target,
-  edit,
 }: {
   world: World;
   editor: EditorState;
   target: string;
-  edit: (target: string) => void;
 }) {
-  const data = editor.raster.data ?? [];
-  const channels = [...new Set(data.map((raster) => raster.channel))];
   const channel = target.startsWith("field:") ? target.slice(6) : "";
   function update(changes: Partial<RasterPresentation>) {
     editor.setRasterView((view) => ({ ...view, ...changes }));
   }
+  if (!channel && !target.startsWith("base:")) return null;
   return (
     <section className="raster-panel" aria-label="Raster appearance">
-      <details open={target.startsWith("base:")}>
-        <summary>Terrain shading and contours</summary>
-        <TerrainControls view={editor.rasterView} update={update} />
-      </details>
-      <label>
-        Field style
-        <select
-          aria-label="Field style"
-          value={channel}
-          onChange={(event) => edit(`field:${event.target.value}`)}
-        >
-          <option value="">Use a layer's style button</option>
-          {channels.map((key) => (
-            <option key={key} value={key}>
-              {fieldLabel(world, key)}
-            </option>
-          ))}
-        </select>
-      </label>
+      {!channel && (
+        <>
+          <h3>Terrain appearance</h3>
+          <TerrainControls view={editor.rasterView} update={update} />
+        </>
+      )}
       {channel && <FieldControls key={channel} world={world} editor={editor} channel={channel} />}
-      <div className="field-legends" aria-label="Visible field legends">
-        {editor.rasterView.fields
-          .filter((field) => field.visible)
-          .map((field) => {
-            const parts = data.filter((raster) => raster.channel === field.channel);
-            return parts.length ? (
-              <FieldLegend key={field.channel} world={world} field={field} data={parts} />
-            ) : null;
-          })}
-      </div>
-      {!channels.length && <p className="hint">Generate or author fields to add overlays.</p>}
     </section>
   );
 }

@@ -27,10 +27,10 @@ test("session world, generation, skipped refinement, editing and located templat
   await page.getByRole("button", { name: "Layers", exact: true }).click();
   await page.getByLabel("View preset").selectOption("political");
   await page.getByLabel("View preset").selectOption("cultural");
-  await page.getByRole("button", { name: "Layers", exact: true }).click();
-  await page.getByRole("checkbox", { name: "Show flow", exact: true }).click();
-  await page.getByRole("checkbox", { name: "Show temperature", exact: true }).click();
-  await page.getByRole("button", { name: "Atlas", exact: true }).click();
+  await page.getByRole("button", { name: "+ Add overlay", exact: true }).click();
+  await page.getByRole("checkbox", { name: "Add River flow", exact: true }).check();
+  await page.getByRole("checkbox", { name: "Add Temperature", exact: true }).check();
+  await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
   await createArea(page, "Borderlands", "region", 1000, 1000, 20000, 20000);
   await page.getByLabel("Detail level").scrollIntoViewIfNeeded();
   await page.getByLabel("Detail level").selectOption("draft");
@@ -59,6 +59,7 @@ test("session world, generation, skipped refinement, editing and located templat
   await canvas.click({ position: { x: 350, y: 350 } });
   await expect(page.locator(".job-row")).toHaveCount(3);
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
+  await page.getByRole("button", { name: "Atlas", exact: true }).click();
   await page.locator(".area-row").filter({ hasText: "Tavern plan" }).click();
   await expect(page.locator(".breadcrumbs")).toContainText("Tavern plan");
   await expect(page.locator(".breadcrumbs")).not.toContainText("local");

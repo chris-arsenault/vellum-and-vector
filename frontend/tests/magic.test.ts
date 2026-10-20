@@ -42,10 +42,13 @@ test("save a magic variant and inspect generated history fields", async ({ page 
   const status = page.locator(".job-row strong").first();
   await expect(status).toHaveText("completed");
   await page.getByRole("button", { name: "Layers", exact: true }).click();
-  const channels = page.getByLabel("Field style", { exact: true });
-  await channels.selectOption("magic:pressure:coastalHistory");
-  await channels.selectOption("magic:aurora:history");
-  await channels.selectOption("finalSurface");
+  await page.getByRole("button", { name: "+ Add overlay", exact: true }).click();
+  for (const channel of ["magic:pressure:coastalHistory", "magic:aurora:history", "finalSurface"]) {
+    await page.getByLabel("Search overlays").fill(channel);
+    await page.getByLabel("Add map overlays").getByRole("checkbox").first().check();
+  }
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await page.getByRole("button", { name: "Style Land cover", exact: true }).click();
   await page.getByText("Surface codes", { exact: true }).click();
   await expect(page.locator(".layer-panel")).toContainText("Ice forging · Fire core");
   expect(errors).toEqual([]);

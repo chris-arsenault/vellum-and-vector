@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { DomainError } from "@atlas/domain";
 import { bounds, defaultStyles, frameAt } from "./presentation";
 import { makeCommand, useCommit } from "./useAtlas";
@@ -89,11 +89,12 @@ export function useEditor(world: World) {
   const state = useEditorState(world);
   const { area, savedStyles, viewport, setViewport, setStyles, setChannel } = state;
   const editing = useEditing(world, state);
+  const styles = useMemo(() => completeStyles(world, savedStyles), [world, savedStyles]);
   return {
     ...state,
     ...editing,
     world,
-    styles: completeStyles(world, savedStyles),
+    styles,
     ...useMapData(world, area.id, viewport),
     viewport: setViewport,
     ...useMapActions(world, state, editing),

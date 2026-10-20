@@ -2,7 +2,6 @@ import LayerGroup from "ol/layer/Group.js";
 import WebGLTile from "ol/layer/WebGLTile.js";
 import type { MapEngine } from "./mapEngine";
 import type { Raster, RasterPresentation, World } from "./types";
-import { numericTileSource } from "./numericTiles";
 import { defaultFieldStyle, fieldLabel, fieldRange } from "./rasterPresentation";
 import { overlayStyle, overlayVariables, terrainStyle, terrainVariables } from "./rasterStyles";
 
@@ -12,7 +11,7 @@ function groupFor(parent: LayerGroup, key: string, title: string) {
     .getArray()
     .find((layer) => layer.get("key") === key) as LayerGroup | undefined;
   if (!group) {
-    group = new LayerGroup({ properties: { key, title, openInLayerSwitcher: false } });
+    group = new LayerGroup({ properties: { key, title } });
     parent.getLayers().push(group);
   }
   return group;
@@ -37,15 +36,13 @@ function updateParts(
     if (!layer) {
       layer = new WebGLTile({
         style,
-        properties: { fieldId: raster.id, displayInLayerSwitcher: false },
+        properties: { fieldId: raster.id },
       });
       layers.push(layer);
       layer.set("signature", signature);
     }
-    if (layer.get("raster") !== raster) {
-      layer.setSource(numericTileSource(raster, engine.map.getView().getProjection()));
-      layer.set("raster", raster);
-    }
+    const source = engine.rasters.source(raster);
+    if (layer.getSource() !== source) layer.setSource(source);
     if (layer.get("signature") !== signature) {
       layer.setStyle(style);
       layer.set("signature", signature);
@@ -64,20 +61,17 @@ export function updateRaster(
   base: Raster[],
   view: RasterPresentation
 ) {
-  for (const name of ["relief", "topographic"] as const) {
-    const group = groupFor(engine.image, name, name === "topographic" ? "Topographic" : "Relief");
-    group.set("baseLayer", true);
-    group.setVisible(view.base === name);
-    group.setOpacity(1);
-    updateParts(
-      engine,
-      group,
-      base,
-      { ...terrainStyle(view), variables: terrainVariables({ ...view, base: name }) },
-      "terrain"
-    );
-  }
-  const channels = new Set(data.map((raster) => raster.channel));
+  engine.rasters.begin();
+  updateParts(
+    engine,
+    engine.image,
+    base,
+    { ...terrainStyle(view), variables: terrainVariables(view) },
+    "terrain"
+  );
+  const channels = new Set(
+    view.fields.filter((field) => field.visible).map((field) => field.channel)
+  );
   for (const layer of engine.overlay.getLayers().getArray().slice()) {
     if (channels.has(layer.get("channel"))) continue;
     engine.overlay.getLayers().remove(layer);
@@ -106,6 +100,7 @@ export function updateRaster(
     );
   }
   reorderFields(engine, order);
+  engine.rasters.end();
 }
 function reorderFields(engine: MapEngine, order: string[]) {
   const layers = engine.overlay.getLayers();

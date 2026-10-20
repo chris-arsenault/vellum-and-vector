@@ -1,73 +1,35 @@
-import { useEffect, useRef, useState } from "react";
-import LayerSwitcher from "ol-ext/control/LayerSwitcher.js";
-import type BaseLayer from "ol/layer/Base.js";
-import type LayerGroup from "ol/layer/Group.js";
+import { useState } from "react";
 import type { EditorState } from "./useEditor";
-import { defaultFieldStyle } from "./rasterPresentation";
-import { applyMapUpdate } from "./mapEngine";
+import type { FieldStyle } from "./types";
+import { defaultFieldStyle, fieldLabel } from "./rasterPresentation";
+import { FieldLegend } from "./RasterPanel";
+import { LayerCatalogue } from "./LayerCatalogue";
+import { FeatureThemes } from "./FeatureThemes";
 
-function readControl(editor: EditorState, layer: BaseLayer) {
-  const engine = editor.mapEngine!;
-  if (layer.get("baseLayer")) {
-    const base = engine.image
-      .getLayers()
-      .getArray()
-      .find((item) => item.getVisible());
-    if (base) editor.setRasterView((view) => ({ ...view, base: base.get("key") }));
-  } else if (layer.get("layerId")) {
-    editor.setStyles(
-      editor.styles.map((style) =>
-        style.layerId === layer.get("layerId")
-          ? { ...style, visible: layer.getVisible(), opacity: layer.getOpacity() }
-          : style
-      )
-    );
-  } else if (layer.get("channel")) {
-    const channel = layer.get("channel");
-    editor.setRasterView((view) => ({
-      ...view,
-      fields: engine.overlay
-        .getLayers()
-        .getArray()
-        .slice()
-        .reverse()
-        .map((item) => {
-          const field = view.fields.find((field) => field.channel === item.get("channel")) ?? {
-            ...defaultFieldStyle(item.get("channel")),
-            visible: false,
-          };
-          return field.channel === channel
-            ? { ...field, visible: layer.getVisible(), opacity: layer.getOpacity() }
-            : field;
-        }),
-    }));
-  }
-}
-function readOrder(editor: EditorState) {
-  const engine = editor.mapEngine!;
-  editor.setStyles(
-    engine.vectors
-      .getLayers()
-      .getArray()
-      .slice()
-      .reverse()
-      .map((layer) => editor.styles.find((style) => style.layerId === layer.get("layerId"))!)
-  );
-  editor.setRasterView((view) => ({
-    ...view,
-    fields: engine.overlay
-      .getLayers()
-      .getArray()
-      .slice()
-      .reverse()
-      .map(
-        (layer) =>
-          view.fields.find((field) => field.channel === layer.get("channel")) ?? {
-            ...defaultFieldStyle(layer.get("channel")),
-            visible: layer.getVisible(),
-          }
-      ),
-  }));
+function overlayActions(editor: EditorState) {
+  return {
+    update: (channel: string, changes: Partial<FieldStyle>) =>
+      editor.setRasterView((view) => ({
+        ...view,
+        fields: view.fields.some((f) => f.channel === channel)
+          ? view.fields.map((f) => (f.channel === channel ? { ...f, ...changes } : f))
+          : [...view.fields, { ...defaultFieldStyle(channel), ...changes }],
+      })),
+    reorder: (channel: string, direction: number) =>
+      editor.setRasterView((view) => {
+        const next = [...view.fields],
+          index = next.findIndex((f) => f.channel === channel);
+        const destination = index + direction;
+        if (destination < 0 || destination >= next.length) return view;
+        [next[index], next[destination]] = [next[destination], next[index]];
+        return { ...view, fields: next };
+      }),
+    remove: (channel: string) =>
+      editor.setRasterView((view) => ({
+        ...view,
+        fields: view.fields.filter((f) => f.channel !== channel),
+      })),
+  };
 }
 export function LayerBrowser({
   editor,
@@ -76,113 +38,157 @@ export function LayerBrowser({
   editor: EditorState;
   edit: (target: string) => void;
 }) {
-  const targets = useRef<(HTMLDivElement | null)[]>([]);
-  const current = useRef({ editor, edit });
-  const [search, setSearch] = useState("");
-  useEffect(() => {
-    current.current = { editor, edit };
-  }, [editor, edit]);
-  useEffect(() => {
-    const engine = editor.mapEngine;
-    if (!engine) return;
-    const controls = [engine.image, engine.overlay, engine.vectors].map((group, index) => {
-      const control = makeControl(targets.current[index]!, group, () => current.current);
-      engine.map.addControl(control);
-      return control;
-    });
-    return () =>
-      controls.forEach((control) => {
-        engine.map.removeControl(control);
-        control.dispose();
-      });
-  }, [editor.mapEngine]);
-  useEffect(() => {
-    const engine = editor.mapEngine;
-    if (!engine) return;
-    for (const group of [engine.vectors, engine.overlay])
-      for (const layer of group.getLayers().getArray())
-        layer.set(
-          "displayInLayerSwitcher",
-          String(layer.get("title")).toLowerCase().includes(search.toLowerCase())
-        );
-  }, [editor.mapEngine, editor.raster.data, editor.styles, search]);
+  const [catalogue, setCatalogue] = useState(false);
+  const available = new Set((editor.raster.data ?? []).map((r) => r.channel));
+  const fields = editor.rasterView.fields.filter((field) => available.has(field.channel));
   return (
     <section className="layer-browser" aria-label="Map layers">
-      <label>
-        Search layers
-        <input type="search" value={search} onChange={(event) => setSearch(event.target.value)} />
-      </label>
-      {["Base maps", "Field overlays", "Features"].map((name, index) => (
-        <details key={name} open>
-          <summary>{name}</summary>
-          <div
-            ref={(element) => {
-              targets.current[index] = element;
-            }}
+      <BaseChoices editor={editor} edit={edit} />
+      <div className="layer-section-title">
+        <h3>Overlays</h3>
+        <button
+          className="quiet"
+          aria-expanded={catalogue}
+          onClick={() => setCatalogue(!catalogue)}
+        >
+          {catalogue ? "Done" : "+ Add overlay"}
+        </button>
+      </div>
+      {catalogue && <LayerCatalogue editor={editor} update={overlayActions(editor).update} />}
+      <div className="active-overlays" aria-label="Visible field legends">
+        {fields.map((field, index) => (
+          <OverlayCard
+            key={field.channel}
+            editor={editor}
+            field={field}
+            index={index}
+            count={fields.length}
+            edit={edit}
           />
-        </details>
-      ))}
-      <p className="hint">
-        Drag to reorder. Focus a checkbox and use ← / → for opacity. The style button edits symbols
-        or field colors.
-      </p>
+        ))}
+      </div>
+      {!fields.length && (
+        <p className="empty-overlays">
+          Layer temperature, water, people or magic over your terrain. Add an overlay to get
+          started.
+        </p>
+      )}
+      <FeatureThemes editor={editor} edit={edit} />
     </section>
   );
 }
-function makeControl(
-  target: HTMLElement,
-  group: LayerGroup,
-  current: () => { editor: EditorState; edit: (target: string) => void }
-) {
-  const engine = current().editor.mapEngine!;
-  const rows = new WeakMap<BaseLayer, HTMLLIElement>();
-  const control = new LayerSwitcher({
-    target,
-    layerGroup: group,
-    reordering: group !== engine.image,
-    show_progress: true,
-    oninfo: (layer) =>
-      current().edit(
-        layer.get("layerId")
-          ? `vector:${layer.get("layerId")}`
-          : layer.get("channel")
-            ? `field:${layer.get("channel")}`
-            : `base:${layer.get("key")}`
-      ),
-  });
-  const read = (event: { layer: BaseLayer }) => {
-    if (!engine.sync.applying)
-      applyMapUpdate(engine, () => readControl(current().editor, event.layer));
-  };
-  control.on("layer:visible", read);
-  control.on("layer:opacity", (event) => {
-    const label = rows.get(event.layer)?.querySelector(".layerswitcher-opacity-label");
-    if (label) label.textContent = String(Math.round(event.layer.getOpacity() * 100));
-    read(event);
-  });
-  control.on("reorder-end", () => readOrder(current().editor));
-  control.on("drawlist", (event) => {
-    rows.set(event.layer, event.li);
-    accessibleRow(event.li, event.layer);
-  });
-  return control;
+interface CardProps {
+  editor: EditorState;
+  field: FieldStyle;
+  index: number;
+  count: number;
+  edit: (target: string) => void;
 }
-function accessibleRow(row: HTMLLIElement, layer: BaseLayer) {
-  const visibility = row.querySelector<HTMLInputElement>(":scope > .li-content > input");
-  visibility?.setAttribute(
-    "aria-label",
-    `${layer.get("baseLayer") ? "" : "Show "}${layer.get("title")}`
+function OverlayCard({ editor, field, index, count, edit }: CardProps) {
+  const name = fieldLabel(editor.world, field.channel);
+  const actions = overlayActions(editor);
+  return (
+    <article className="overlay-card">
+      <div className="overlay-heading">
+        <label className="check">
+          <input
+            type="checkbox"
+            aria-label={`Show ${name}`}
+            checked={field.visible}
+            onChange={(e) => actions.update(field.channel, { visible: e.target.checked })}
+          />
+          {name}
+        </label>
+        <button
+          className="quiet"
+          aria-label={`Style ${name}`}
+          onClick={() => edit(`field:${field.channel}`)}
+        >
+          Style
+        </button>
+      </div>
+      {field.visible && (
+        <FieldLegend
+          world={editor.world}
+          field={field}
+          data={(editor.raster.data ?? []).filter((r) => r.channel === field.channel)}
+        />
+      )}
+      <div className="overlay-actions">
+        <label>
+          Opacity
+          <input
+            aria-label={`${name} opacity`}
+            type="range"
+            min="0"
+            max="100"
+            value={Math.round(field.opacity * 100)}
+            onChange={(e) =>
+              actions.update(field.channel, { opacity: Number(e.target.value) / 100 })
+            }
+          />
+          <output>{Math.round(field.opacity * 100)}%</output>
+        </label>
+        <button
+          className="quiet"
+          disabled={index === 0}
+          aria-label={`Move ${name} up`}
+          onClick={() => actions.reorder(field.channel, -1)}
+        >
+          ↑
+        </button>
+        <button
+          className="quiet"
+          disabled={index === count - 1}
+          aria-label={`Move ${name} down`}
+          onClick={() => actions.reorder(field.channel, 1)}
+        >
+          ↓
+        </button>
+        <button
+          className="quiet"
+          aria-label={`Remove ${name}`}
+          onClick={() => actions.remove(field.channel)}
+        >
+          ×
+        </button>
+      </div>
+    </article>
   );
-  const info = row.querySelector<HTMLElement>(".layerInfo");
-  if (!info) return;
-  info.setAttribute("role", "button");
-  info.setAttribute("aria-label", `Style ${layer.get("title")}`);
-  info.title = "Edit style";
-  info.tabIndex = 0;
-  info.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      info.click();
-    }
-  });
+}
+function BaseChoices({ editor, edit }: { editor: EditorState; edit: (target: string) => void }) {
+  return (
+    <fieldset className="base-choices">
+      <legend>Base map</legend>
+      <div className="base-grid">
+        {(["topographic", "relief"] as const).map((base) => (
+          <label className={`base-choice ${base}`} key={base}>
+            <input
+              type="radio"
+              name="base-map"
+              aria-label={base === "topographic" ? "Topographic" : "Relief"}
+              checked={editor.rasterView.base === base}
+              onChange={() => editor.setRasterView((view) => ({ ...view, base }))}
+            />
+            <svg className="base-preview" viewBox="0 0 140 72" aria-hidden="true">
+              <path className="preview-water" d="M0 0H140V72H0Z" />
+              <path className="preview-land" d="M0 0H120Q78 22 108 35T60 72H0Z" />
+              <path
+                className="preview-hill"
+                d="M-10 62Q28 2 62 22T99 8M-5 76Q30 14 58 35T91 25M-12 88Q35 25 56 48T84 41"
+              />
+              <path className="preview-river" d="M22 0Q15 20 45 33T70 69" />
+            </svg>
+            <span>
+              {base === "topographic" ? "Topographic" : "Relief"}
+              <small>{base === "topographic" ? "Contours & terrain" : "Light & landforms"}</small>
+            </span>
+          </label>
+        ))}
+      </div>
+      <button className="quiet terrain-style" onClick={() => edit("base:terrain")}>
+        Adjust terrain appearance
+      </button>
+    </fieldset>
+  );
 }

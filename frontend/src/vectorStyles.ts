@@ -46,13 +46,16 @@ export function featureStyle(feature: AtlasFeature, style: LayerStyle, resolutio
       : undefined,
     stroke: new Stroke({
       color: style.color,
-      width: physicalStrokeWidth(feature, resolution),
+      width:
+        feature.layerId === "geology"
+          ? Math.min(1, 0.4 + 600 / resolution)
+          : physicalStrokeWidth(feature, resolution),
       lineDash:
         feature.kind === "fault" ? [6, 4] : feature.layerId === "claims" ? [7, 5] : undefined,
     }),
-    fill: new Fill({ color: style.color + "64" }),
+    fill: new Fill({ color: style.color + (feature.layerId === "geology" ? "18" : "45") }),
     image: new Circle({
-      radius: feature.kind === "settlement" ? 4 : 5,
+      radius: feature.layerId === "geology" ? 2 : feature.kind === "settlement" ? 4 : 5,
       fill: new Fill({ color: style.color }),
       stroke: new Stroke({ color: "#233638", width: 1.5 }),
     }),

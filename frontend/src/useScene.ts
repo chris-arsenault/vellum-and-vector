@@ -39,10 +39,10 @@ export function useScene(
   extent: number[] | null | undefined = undefined
 ) {
   return useQuery({
-    queryKey: ["scene", world.id, areaId, world.version, extent?.join(",")],
+    queryKey: ["scene", world.id, areaId, world.version],
     enabled: extent !== null,
     placeholderData: (previous, query) => (query?.queryKey[2] === areaId ? previous : undefined),
-    queryFn: () => readScene(world.id, areaId, extent ?? undefined),
+    queryFn: () => readScene(world.id, areaId),
   });
 }
 

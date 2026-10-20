@@ -52,25 +52,26 @@ export function numericTileSampler(raster: Raster) {
 export function numericTileSource(
   raster: Raster,
   projection: Projection,
+  load: (extent: number[], size: number, signal: AbortSignal) => Promise<Float32Array>,
   pixelRatio = globalThis.devicePixelRatio ?? 1
 ) {
   const tileGrid = createXYZ({ extent: projection.getExtent(), tileSize: 256 / pixelRatio });
-  const sample = numericTileSampler(raster);
   return new DataTileSource({
     projection,
     tileGrid,
     tileSize: 256,
     gutter: 1,
-    bandCount: raster.channel === "elevation" ? 6 : 3,
+    bandCount: raster.channel === "elevation" ? 8 : 3,
     interpolate: !categorical(raster),
     transition: 0,
     wrapX: false,
-    loader: (z, x, y) => {
+    loader: (z, x, y, { signal }) => {
       const box = tileGrid.getTileCoordExtent([z, x, y]);
       const resolution = (box[2] - box[0]) / 256;
-      return sample(
+      return load(
         [box[0] - resolution, box[1] - resolution, box[2] + resolution, box[3] + resolution],
-        258
+        258,
+        signal
       );
     },
   });
