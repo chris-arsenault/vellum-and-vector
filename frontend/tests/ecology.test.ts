@@ -39,14 +39,20 @@ test("shows categorical biomes and inspectable ecological fields in the atlas", 
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
   await page.getByRole("button", { name: "Layers", exact: true }).click();
   await expect(page.getByRole("checkbox", { name: "Show Biomes", exact: true })).toBeChecked();
-  await page.getByLabel("Field style", { exact: true }).selectOption("biome");
+  await page.getByRole("button", { name: "Style Biomes", exact: true }).click();
   await expect(page.locator(".field-style")).toContainText("Temperate forest");
   await expect(page.locator(".field-style")).toContainText("Swamp");
   await expect(page.getByLabel("Color ramp", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "+ Add overlay", exact: true }).click();
+  await page.getByLabel("Search overlays").fill("broadleafSaplings");
+  await page.getByRole("checkbox", { name: "Add Young broadleaf trees", exact: true }).check();
+  await page.getByLabel("Search overlays").fill("treeCover");
+  await page.getByRole("checkbox", { name: "Add Tree cover", exact: true }).check();
+  await page.getByRole("button", { name: "Done", exact: true }).click();
   await expect(
     page.getByRole("checkbox", { name: "Show Young broadleaf trees", exact: true })
   ).toBeVisible();
-  await page.getByLabel("Field style", { exact: true }).selectOption("treeCover");
+  await page.getByRole("button", { name: "Style Tree cover", exact: true }).click();
   await expect(page.locator(".field-style legend")).toHaveText("Tree cover");
   await page.screenshot({ path: "test-results/ecological-atlas.png" });
   expect(errors).toEqual([]);
@@ -79,6 +85,8 @@ test("selects, protects, exports and refines extracted ecological polygons with 
   await expect.poll(() => imageHash(page)).not.toBe(visible);
   await ecology.click();
   await expect(ecology).toBeChecked();
+  await page.getByRole("button", { name: "Layers", exact: true }).click();
+  await expect(page.getByRole("complementary", { name: "Map appearance" })).toHaveCount(0);
   await page.screenshot({ path: "test-results/ecological-vectors-wide.png" });
   const box = (await canvas.boundingBox())!;
   await canvas.click({ position: { x: box.width * 0.2, y: box.height / 2 } });
