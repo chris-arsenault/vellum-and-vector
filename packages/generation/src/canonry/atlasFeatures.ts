@@ -10,8 +10,16 @@ import { createRiverPaths, riverPath, type RiverPaths } from "./riverPaths";
 import type { PhysicalField } from "./field";
 import { oceanFootprint } from "./geographicContours";
 import { extractEcologicalFeatures } from "./ecologyFeatures";
+import { publishMacroFeatures } from "./macroPublication";
 
-function riverReach(state: GenerationState, start: number, incoming: Int32Array) {
+function riverReach(
+  state: GenerationState,
+  start: number,
+  incoming: Int32Array,
+  paths: RiverPaths
+) {
+  const composed = paths.reaches?.get(start)?.members;
+  if (composed) return composed;
   const map = state.physical!.map,
     members = [start];
   let i = start;
@@ -94,26 +102,24 @@ function riverInputs(map: PhysicalField) {
   return { incoming, basinDischarge };
 }
 export function extractNativeGeography(state: GenerationState, context: MapProcessContext) {
-  state.surface.ocean = oceanFootprint(state);
+  setOcean(state);
+  context.progress(0.05, "Publishing geological structures and water bodies");
   extractGeologicalEvents(state);
+  context.progress(0.1, "Publishing lakes");
   extractLakes(state);
+  context.progress(0.15, "Publishing named landforms");
   extractNamedLandforms(state);
+  context.progress(0.22, "Publishing composed passes, summits and gorges");
+  publishMacroFeatures(state);
+  context.progress(0.3, "Publishing magical regions");
   extractMagicPlaces(state);
+  context.progress(0.55, "Publishing ecological regions");
   extractEcologicalFeatures(state);
+  context.progress(0.75, "Publishing connected river reaches");
   const work = state.physical!,
     map = work.map,
-    paths = createRiverPaths(map),
+    paths = geographyRiverPaths(state),
     { incoming, basinDischarge } = riverInputs(map);
-  paths.water = {
-    ocean: state.surface.ocean,
-    lakes: new Map(
-      Object.values(state.domain.world.features)
-        .filter(
-          (feature) => feature.kind === "lake" && feature.areaId === state.domain.scope.areaId
-        )
-        .map((feature) => [Number(feature.attributes.waterBody), feature.geometry])
-    ),
-  };
   for (let i = 0; i < map.mesh.contentCount; i++) {
     if (map.RiverOrders[i] <= 0 || incoming[i] === 1) continue;
     const discharge = basinDischarge.get(map.DrainageBasinIds[i]) ?? 0;
@@ -124,7 +130,7 @@ export function extractNativeGeography(state: GenerationState, context: MapProce
       continue;
     const p = nativePosition(work, i);
     if (!spatial.covers(state.domain.scope.footprint, point(p))) continue;
-    publishReach(state, i, riverReach(state, i, incoming), paths, discharge);
+    publishReach(state, i, riverReach(state, i, incoming, paths), paths, discharge);
   }
   context.recordCause({
     kind: "domain",
@@ -133,4 +139,22 @@ export function extractNativeGeography(state: GenerationState, context: MapProce
     description:
       "River reaches follow Canonry's water-budget lakes, capture drainage and Strahler network; raster channels retain crust, erosion, ice and landform history.",
   });
+}
+function geographyRiverPaths(state: GenerationState) {
+  const work = state.physical!,
+    paths = work.finishing?.rivers ?? createRiverPaths(work.map);
+  paths.water = {
+    ocean: state.surface.ocean ?? null,
+    lakes: new Map(
+      Object.values(state.domain.world.features)
+        .filter(
+          (feature) => feature.kind === "lake" && feature.areaId === state.domain.scope.areaId
+        )
+        .map((feature) => [Number(feature.attributes.waterBody), feature.geometry])
+    ),
+  };
+  return paths;
+}
+function setOcean(state: GenerationState) {
+  state.surface.ocean = state.physical!.finishing?.ocean ?? oceanFootprint(state);
 }

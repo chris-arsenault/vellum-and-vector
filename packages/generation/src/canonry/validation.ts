@@ -43,7 +43,9 @@ function validateLakeSurface(map: PhysicalField, i: number, surfaces: Map<number
     map.WaterDepths[i] <= 0 ||
     (surfaces.has(body) && surfaces.get(body) !== surface)
   )
-    throw new Error("Lake triangle lacks a consistent water surface.");
+    throw new Error(
+      `Lake cell ${i} has body ${body}, surface ${surface}, depth ${map.WaterDepths[i]}; the body's previous surface was ${surfaces.get(body)}.`
+    );
   surfaces.set(body, surface);
 }
 function validateWater(map: PhysicalField) {

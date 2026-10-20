@@ -116,6 +116,7 @@ const elevationFields = [
 ] as const;
 const floatFields = ["RidgeInfluence", "Uplift"] as const;
 const metricFields = [
+  "ReefCover",
   ...ecologyScalars,
   "OceanMarginDistance",
   "OceanDistance",

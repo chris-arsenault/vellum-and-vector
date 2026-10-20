@@ -27,11 +27,12 @@ export function terrainWater(raster: Raster, locate?: AdaptivePointLocator) {
     .filter((overlay) => overlay.channels.includes("elevation"))
     .map((overlay) => spatial.pointCoverage(overlay.grid.scope.footprint));
   return (p: Position, height: number) => {
-    const level = sea(p),
+    const seaLevel = sea(p),
       edited = edits.some((covers) => covers(p)),
       lake = lakes
         .getFeaturesAtCoordinate([p.x, p.y])
-        .some((lake) => !edited || height < Number(lake.get("level")));
+        .find((lake) => !edited || height < Number(lake.get("level"))),
+      level = lake ? Number(lake.get("level")) : seaLevel;
     const wet = ocean === undefined || edited ? height < level : marine(p);
     return { level, kind: lake ? 2 : Number(wet) };
   };

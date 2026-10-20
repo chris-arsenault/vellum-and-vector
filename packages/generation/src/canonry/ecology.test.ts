@@ -10,6 +10,7 @@ import { runoff } from "./climate";
 import { surfaceResistance } from "./fluvial";
 import { physicalContext } from "./context";
 import { atlasPhysicalProfile } from "./atlasProfile";
+import { evolveAnimals } from "./ecologyAnimals";
 
 function fixture() {
   const map = createField(createMesh(32, 0));
@@ -33,6 +34,15 @@ const forcing = (values: Partial<typeof neutralEcology>) => () => ({
 });
 const total = (map: ReturnType<typeof fixture>, i = 0) =>
   ecologyCarbon.reduce((sum, name) => sum + map[name][i], 0);
+
+it("exhausts a grazed grass budget without producing negative cover", () => {
+  const map = fixture();
+  map.GrassCover.fill(5 / 997);
+  map.Productivity.fill(100);
+  map.Grazers.fill(1);
+  evolveAnimals(map, 1, () => neutralEcology);
+  expect(map.GrassCover.every((value) => value === 0)).toBe(true);
+});
 
 it("grows pioneer grass before forest and supports trophic groups without species", () => {
   const young = fixture(),

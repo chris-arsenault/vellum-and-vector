@@ -11,6 +11,7 @@ import {
   cloneSnapshot,
   type DomainSnapshot,
   type Grid,
+  type GridSurface,
 } from "@atlas/domain";
 import { MapRunner, type MapRunnerOptions } from "./mapRunner";
 import {
@@ -80,7 +81,7 @@ export async function generateAtlas(
   return result;
 }
 
-function initialState(source: DomainSnapshot, input: AtlasGenerationInput): GenerationState {
+export function initialState(source: DomainSnapshot, input: AtlasGenerationInput): GenerationState {
   const domain = cloneSnapshot(source),
     area = domain.world.areas[input.areaId];
   requireThat(area, "generation_area", "Choose an existing mapped area.");
@@ -129,7 +130,7 @@ function initialState(source: DomainSnapshot, input: AtlasGenerationInput): Gene
   inheritSurface(source, surface, input);
   return { domain, surface, facts: initialFacts(surface), history: [], causes: [] };
 }
-function inheritSurface(source: DomainSnapshot, target: Grid, input: AtlasGenerationInput) {
+function inheritSurface(source: DomainSnapshot, target: GridSurface, input: AtlasGenerationInput) {
   const world = source.world;
   const available = world.fields.filter(
     (f) =>
@@ -141,6 +142,18 @@ function inheritSurface(source: DomainSnapshot, target: Grid, input: AtlasGenera
   for (const field of available) {
     const grid = source.numerical[field.id];
     resampleChannels(grid, target);
+  }
+  if (!input.domains.includes("physical") && world.areas[input.areaId].profile === "world") {
+    target.overlays = available.filter((field) => ["elevation", "geology", "rivers"].includes(field.layerId))
+      .map((field) => {
+        const grid = source.numerical[field.id];
+        return {grid, channels: Object.keys(grid.channels).filter((name) => name !== "ice")};
+      });
+    const water = available.map((field) => source.numerical[field.id]).find((g) => g.ocean || g.waterBodies?.length);
+    if (water) {
+      target.ocean = water.ocean;
+      target.waterBodies = water.waterBodies;
+    }
   }
   requireThat(
     input.domains.includes("physical") ||

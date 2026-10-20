@@ -23,10 +23,21 @@ export function fieldExtrema(
   if (remaining) {
     const range = rawFieldExtrema(base, channel, remaining);
     if (range) ranges.push(range);
+    ranges.push(...detailExtrema(base, channel, remaining));
   }
   return ranges.length
     ? ranges.reduce(([low, high], [a, b]) => [Math.min(low, a), Math.max(high, b)])
     : null;
+}
+function detailExtrema(grid: Grid, channel: string, region: Geometry): [number, number][] {
+  const covered = spatial.pointCoverage(region),
+    ranges: [number, number][] = [];
+  const detail = grid.detail, values = detail?.channels[channel];
+  if (!detail || !values) return ranges;
+  for (let i = 0; i < values.length; i++)
+    if (covered({x: detail.positions[i * 2], y: detail.positions[i * 2 + 1], z: 0}))
+      ranges.push([values[i], values[i]]);
+  return ranges;
 }
 
 function traces(geometry: Geometry): number[][][] {

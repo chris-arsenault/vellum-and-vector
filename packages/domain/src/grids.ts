@@ -5,6 +5,8 @@ import { requireThat } from "./errors";
 import { point, rectangle, spatial, type Bounds } from "./spatial";
 import { adaptiveCell, adaptiveLeafAt, type AdaptiveTopology } from "./adaptiveTopology";
 import type { AdaptiveField } from "./adaptiveField";
+import { waterFieldInterpolator } from "./waterSampling";
+import { sampledDetailReader, type SampledDetail } from "./sampledDetail";
 import {
   sampleAdaptivePoint,
   adaptivePointSampler,
@@ -23,6 +25,7 @@ export interface FieldSamples {
   /** Physical ocean extent; resampling elevation must not move its shoreline. */
   ocean?: Geometry | null;
   quantities?: Record<string, "intensive" | "extensive" | "category">;
+  detail?: SampledDetail;
 }
 export interface RegularGrid extends FieldSamples {
   width: number;
@@ -322,11 +325,24 @@ export function fieldInterpolator(
       covered: spatial.pointCoverage(overlay.grid.scope.footprint),
       at: fieldInterpolator(overlay.grid, channel, discrete, locate),
     }));
-  const base = baseInterpolator(grid, channel, discrete, locate);
+  const coarse = waterFieldInterpolator(
+    grid,
+    channel,
+    (name) => numericInterpolator(grid, name, name === channel ? discrete : false, locate),
+  );
   return (p: Position) => {
     const overlay = overlays.find((candidate) => candidate.covered(p));
-    return overlay ? overlay.at(p) : base(p);
+    return overlay ? overlay.at(p) : coarse(p);
   };
+}
+function numericInterpolator(grid: Grid, channel: string, discrete: boolean, locate?: AdaptivePointLocator) {
+  const base = baseInterpolator(grid, channel, discrete, locate);
+  const detail =
+    grid.detail &&
+    (grid.detail.channels[channel] || (channel === "slope" && grid.detail.channels.elevation))
+      ? sampledDetailReader(grid.detail, channel, discreteChannel(grid, channel, discrete))
+      : null;
+  return (p: Position) => detail?.(p) ?? base(p);
 }
 function baseInterpolator(
   grid: Grid,

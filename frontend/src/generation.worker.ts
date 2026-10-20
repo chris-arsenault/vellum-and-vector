@@ -14,7 +14,7 @@ self.onmessage = async (
     });
     stage = "Sending completed geography to the editor";
     self.postMessage({ kind: "progress", path: ["finalize"], fraction: 0.995, message: stage });
-    self.postMessage({ kind: "completed", result });
+    self.postMessage({ kind: "completed", result }, {transfer: resultBuffers(result)});
   } catch (error) {
     console.error(`[atlas generation] Failed during ${stage}`, error);
     self.postMessage({
@@ -23,3 +23,16 @@ self.onmessage = async (
     });
   }
 };
+
+function resultBuffers(result: unknown): ArrayBuffer[] {
+  const buffers = new Set<ArrayBuffer>(), visited = new Set<object>();
+  const visit = (value: unknown) => {
+    if (!value || typeof value !== "object" || visited.has(value)) return;
+    visited.add(value);
+    if (ArrayBuffer.isView(value)) {
+      if (value.buffer instanceof ArrayBuffer) buffers.add(value.buffer);
+    } else for (const child of Object.values(value)) visit(child);
+  };
+  visit(result);
+  return [...buffers];
+}

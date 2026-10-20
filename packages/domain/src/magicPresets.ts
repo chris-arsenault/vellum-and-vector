@@ -7,10 +7,18 @@ const ocean = oneOf("water", [1]);
 const feature = (
   id: string,
   name: string,
+  role: NonNullable<MagicFeatureRule["composition"]>["role"],
   priority: number,
   seeds: MagicCondition[][],
   retains?: MagicCondition[][]
-): MagicFeatureRule => ({ id, name, priority, seeds, ...(retains ? { retains } : {}) });
+): MagicFeatureRule => ({
+  id,
+  name,
+  priority,
+  seeds,
+  composition: { role, scale: role === "source" ? 18_000 : 45_000 },
+  ...(retains ? { retains } : {}),
+});
 
 // Canonry IceRemembers' three systems are data passed to the same process contracts.
 const firePreset = magicSystemSchema.parse({
@@ -21,10 +29,11 @@ const firePreset = magicSystemSchema.parse({
   phase: "climate",
   effects: { heat: 0.36, iceMelt: 0.5, rockResistance: 900, fire: 0.8 },
   features: [
-    feature("core", "Fire core", 90, [[at("source", 1), at("intensity", 1)]]),
+    feature("core", "Fire core", "source", 90, [[at("source", 1), at("intensity", 1)]]),
     feature(
       "vein",
       "Thermal vein",
+      "corridor",
       20,
       [[land, at("intensity", 320), at("fracture", 430)]],
       [[land, at("intensity", 230), at("fracture", 320)]]
@@ -32,6 +41,7 @@ const firePreset = magicSystemSchema.parse({
     feature(
       "spring",
       "Hot spring",
+      "source",
       70,
       [
         ...[oneOf("water", [2]), at("river", 1), at("moisture", 650)].map((wet) => [
@@ -53,6 +63,7 @@ const firePreset = magicSystemSchema.parse({
     feature(
       "vent",
       "Hydrothermal vent",
+      "source",
       65,
       [
         [ocean, at("intensity", 430)],
@@ -66,6 +77,7 @@ const firePreset = magicSystemSchema.parse({
     feature(
       "basalt",
       "Basalt flat",
+      "region",
       25,
       [[land, at("intensity", 560), { field: "slope", max: 0.0045 }]],
       [[land, at("intensity", 470), { field: "slope", max: 0.006 }]]
@@ -73,6 +85,7 @@ const firePreset = magicSystemSchema.parse({
     feature(
       "halo",
       "Thawed halo",
+      "front",
       10,
       [[land, at("intensity", 210), at("temperature", 250)]],
       [
@@ -98,6 +111,7 @@ const auroraPreset = magicSystemSchema.parse({
     feature(
       "field",
       "Aurora field",
+      "region",
       40,
       [[at("intensity", 470), at("ice", 260)]],
       [[at("intensity", 380), at("ice", 180)]]
@@ -105,6 +119,7 @@ const auroraPreset = magicSystemSchema.parse({
     feature(
       "well",
       "Light well",
+      "source",
       80,
       [[at("intensity", 680), oneOf("landform", [10, 4])]],
       [[at("intensity", 590), oneOf("landform", [10, 4, 3])]]
@@ -112,6 +127,7 @@ const auroraPreset = magicSystemSchema.parse({
     feature(
       "prism",
       "Frost prism",
+      "source",
       45,
       [[at("intensity", 510), oneOf("landform", [6, 5])]],
       [
@@ -125,6 +141,7 @@ const auroraPreset = magicSystemSchema.parse({
     feature(
       "melt",
       "Melt line",
+      "front",
       15,
       [
         [
@@ -151,22 +168,32 @@ const pressurePreset = magicSystemSchema.parse({
   phase: "post-glacial",
   effects: { coastalForcing: 1 },
   features: [
-    feature("locus", "Deep pressure locus", 95, [[at("source", 1)]]),
-    feature("crush", "Crush zone", 60, [[at("intensity", 360)]], [[at("intensity", 270)]]),
-    feature("wake", "Ancient wake", 55, [[at("wake", 1)]]),
+    feature("locus", "Deep pressure locus", "source", 95, [[at("source", 1)]]),
+    feature(
+      "crush",
+      "Crush zone",
+      "region",
+      60,
+      [[at("intensity", 360)]],
+      [[at("intensity", 270)]]
+    ),
+    feature("wake", "Ancient wake", "corridor", 55, [[at("wake", 1)]]),
     feature(
       "lattice",
       "Interference lattice",
+      "corridor",
       35,
       [[at("intensity", 185), at("noise", 0.34)]],
       [[at("intensity", 95), at("noise", 0.28)]]
     ),
-    feature("rogue", "Rogue wave impact", 50, [[at("rogue", 1)]]),
-    feature("war", "Thermal war rim", 100, [[at("system:fire", 260), at("system:aurora", 340)]]),
-    feature("steam", "Steam fracture", 110, [
+    feature("rogue", "Rogue wave impact", "front", 50, [[at("rogue", 1)]]),
+    feature("war", "Thermal war rim", "interaction", 100, [
+      [at("system:fire", 260), at("system:aurora", 340)],
+    ]),
+    feature("steam", "Steam fracture", "corridor", 110, [
       [at("system:fire", 390), at("intensity", 420), at("fracture", 520)],
     ]),
-    feature("breach", "Pressure aurora breach", 120, [
+    feature("breach", "Pressure aurora breach", "interaction", 120, [
       [at("intensity", 390), at("system:aurora", 430), ocean, at("ice", 220)],
     ]),
   ],

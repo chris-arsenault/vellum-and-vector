@@ -20,7 +20,9 @@ export function authoredFields(original: DomainSnapshot) {
       resolution: original.numerical[field.id]?.scope.resolution,
     }));
   const patches = original.fieldPatches.map((patch) => ({
-    source: original.numerical[patch.fieldId] ?? original.numerical[patch.resourceId],
+    source: original.numerical[patch.resourceId] ?? original.numerical[patch.fieldId]?.overlays?.find(
+      (overlay) => overlay.grid.id === patch.resourceId
+    )?.grid ?? original.numerical[patch.fieldId],
     channels: patch.channels,
     footprint: patch.footprint,
     spaceId: patch.spaceId,

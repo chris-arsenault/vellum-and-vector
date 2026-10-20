@@ -83,7 +83,12 @@ export function membershipContour(
     valueAt = membershipSampler(state, includes);
   if (mesh.topology || members.some((i) => mesh.boundary[i]))
     return geographicContour(state, members, valueAt);
-  return linearFieldContour(triangleFans(mesh, members, includes), valueAt);
+  return linearFieldContour(
+    triangleFans(mesh, members, includes),
+    valueAt,
+    0.5,
+    triangleBoundary(mesh, includes, members)
+  );
 }
 export function geographicContour(
   state: GenerationState,

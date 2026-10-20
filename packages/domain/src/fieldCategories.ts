@@ -38,6 +38,20 @@ function collectSamples(
     if (!grid.active[i] || !Number.isFinite(code) || result.has(code)) continue;
     if (whole || overlapsCell(grid, i, footprint)) result.add(code);
   }
+  collectDetailCategories(grid, channel, footprint, whole, result);
+}
+function collectDetailCategories(
+  grid: GridSurface,
+  channel: string,
+  footprint: Geometry,
+  whole: boolean,
+  result: Set<number>
+) {
+  const detail = grid.detail;
+  if (!detail) return;
+  const covered = spatial.pointCoverage(footprint);
+  for (const [i, code] of (detail.channels[channel] ?? []).entries())
+    if (whole || covered({x: detail.positions[i * 2], y: detail.positions[i * 2 + 1], z: 0})) result.add(code);
 }
 function overlapsCell(grid: GridSurface, i: number, footprint: Geometry) {
   const clipped = spatial.intersection(rectangle(gridCellBounds(grid, i)), footprint);

@@ -10,8 +10,33 @@ import {
   type Position,
 } from "@atlas/domain";
 import { landscape, configuration, invoke, options, registry } from "./mapFixtures";
-import { culturalProcess, politicalProcess } from "./mapPeople";
+import { culturalProcess, landCells, politicalProcess } from "./mapPeople";
 import { MapRunner } from "./mapRunner";
+
+it("keeps human locations outside a finished lake even when the old water samples were dry", () => {
+  const state = landscape(),
+    grid = createGrid("lake-shore", state.domain.scope, 5, 5);
+  state.surface = grid;
+  putChannel(grid, "elevation", "metre", new Float64Array(25).fill(100));
+  putChannel(grid, "water", "category", new Float64Array(25));
+  const p = gridPosition(grid, 12);
+  grid.waterBodies = [
+    {
+      id: "2",
+      footprint: rectangle([p.x - 1, p.y - 1, p.x + 1, p.y + 1]),
+      fixedLevel: 120,
+      spill: 120,
+      slices: [],
+      volume: 0,
+      outlet: null,
+      outletFrom: null,
+      suspended: 0,
+      outletPath: null,
+    },
+  ];
+  expect(landCells(state)).not.toContain(12);
+  expect(landCells(state)).toContain(11);
+});
 
 it.each([384, 768])(
   "finishes cultures and politics on a narrow island at %i samples per side",

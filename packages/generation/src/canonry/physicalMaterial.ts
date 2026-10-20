@@ -18,6 +18,7 @@ function exposedMaterial(map: PhysicalField, i: number): number {
   return map.Moisture[i] >= 330 ? 3 : 2;
 }
 function oceanMaterial(map: PhysicalField, i: number): number {
+  if (map.ReefCover[i] > 0.5) return 8;
   if (map.BathymetricZoneCodes[i] === 4) return 7;
   if (map.WaterDepths[i] <= 125 * 1024 && map.Temperature[i] >= 300 && map.Geothermal[i] >= 150)
     return 8;

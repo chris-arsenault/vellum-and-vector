@@ -161,9 +161,13 @@ function classify(
     return L.Gorge;
   return relief(map, p, i, s);
 }
-export function landformClassification(map: PhysicalField, c: PhysicalContext) {
-  measureSlopes(map);
-  const valueAt = physicalSampler(map.mesh, map.Elevation);
+export function landformClassification(
+  map: PhysicalField,
+  c: PhysicalContext,
+  sample?: ReturnType<typeof physicalSampler>
+) {
+  if (!sample) measureSlopes(map);
+  const valueAt = sample ?? physicalSampler(map.mesh, map.Elevation);
   for (let i = 0; i < map.mesh.count; i++)
     map.LandformCodes[i] = classify(map, c.Profile, i, valueAt);
 }

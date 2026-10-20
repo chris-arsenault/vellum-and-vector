@@ -12,9 +12,21 @@ import { generatedFeature, putGenerated } from "./mapFeatures";
 import type { GenerationState, MapProcess, MapProcessContext } from "./process";
 
 export function landCells(state: GenerationState) {
+  const grid = state.surface,
+    wet = wetCell(state);
   return Array.from(state.surface.active.keys()).filter(
-    (i) => state.surface.active[i] && state.surface.channels.elevation?.[i] > 0
+    (i) =>
+      state.surface.active[i] &&
+      state.surface.channels.elevation?.[i] > 0 &&
+      !wet(i) &&
+      (grid.channels.ice?.[i] ?? 0) < 0.3
   );
+}
+function wetCell(state: GenerationState) {
+  const grid = state.surface;
+  if (!grid.channels.water) return () => false;
+  const water = fieldInterpolator(grid, "water", true);
+  return (i: number) => Boolean(water(gridPosition(grid, i)));
 }
 export function suitability(state: GenerationState, i: number) {
   const grid = state.surface;

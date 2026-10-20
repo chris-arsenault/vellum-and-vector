@@ -23,13 +23,16 @@ export function rasterLimits(data: Raster[]): number[] {
       limits[0] = Math.min(limits[0], value);
       limits[1] = Math.max(limits[1], value);
     });
+    for (const value of field.detail?.channels[channel] ?? []) {
+      limits[0] = Math.min(limits[0], value);
+      limits[1] = Math.max(limits[1], value);
+    }
     for (const overlay of field.overlays ?? [])
       if (overlay.channels.includes(channel)) include(overlay.grid, channel);
   };
   for (const raster of data) include(raster.field, raster.channel);
   return Number.isFinite(limits[0]) ? limits : [0, 1];
 }
-
 /** Pixels query committed geography. Tile boundaries do not bound derivative reads. */
 export function tilePainter(
   raster: Raster,

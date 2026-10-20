@@ -1,4 +1,4 @@
-import { gridPosition, putChannel } from "@atlas/domain";
+import { fieldInterpolator, gridPosition, putChannel } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { atlasChannels, type ChannelBinding } from "./atlasChannels";
 import { nativeIndexAtSurface } from "./atlasWorkspace";
@@ -6,6 +6,11 @@ import { projectPhysicalMaterial } from "./physicalMaterial";
 import type { AtlasPhysicalWorkspace } from "./atlasWorkspace";
 import { projectedValues } from "./atlasSampling";
 import { ecologyBindings } from "./ecologyState";
+import { finalWaterBodies } from "./macroWater";
+import { sampleFinishedLandscape, reconcileSampledWater } from "./macroSampling";
+import { finishedElevation } from "./macroTerrain";
+import { spatial } from "@atlas/domain";
+import { authoredFields } from "../mapAuthored";
 
 const forcingChannels = new Set([
   "elevation",
@@ -60,6 +65,57 @@ function projectChannels(state: GenerationState, forcingOnly = false, preserveTe
     if (preserveChannel(state, binding.name, preserveTerrain)) continue;
     projectChannel(state, binding);
   }
+}
+function projectFinishedSamples(state: GenerationState) {
+  const work = state.physical!,
+    finishing = work.finishing;
+  if (!finishing) return;
+  const grid = state.surface;
+  grid.ocean = finishing.ocean;
+  grid.waterBodies = finalWaterBodies(work);
+  if (!finishing.field) {
+    const protects = (finishing.exclusions?.elevation ?? []).map((g) => spatial.pointCoverage(g));
+    finishing.field = sampleFinishedLandscape(
+      finishing.baseSurface!,
+      finishing.profiles,
+      grid,
+      (p) => protects.some((covered) => covered(p))
+    );
+  }
+  const field = finishing.field;
+  const authored = authoredFields(state.domain)
+    .filter(
+      (authority) =>
+        authority.source && (!authority.spaceId || authority.spaceId === grid.scope.spaceId)
+    )
+    .map((authority) => ({
+      grid: {
+        ...authority.source!,
+        scope: {
+          ...authority.source!.scope,
+          footprint: authority.footprint ?? authority.source!.scope.footprint,
+        },
+      },
+      channels: authority.channels ?? Object.keys(authority.source!.channels),
+    }));
+  if (authored.length) {
+    field.overlays = authored;
+    reconcileSampledWater(field, grid);
+  }
+  grid.overlays = [{ grid: field, channels: Object.keys(field.channels) }];
+  // Current human algorithms consume these exact working nodes. Publication
+  // omits these coarse channel copies once those consumers finish.
+  for (const name of Object.keys(field.channels)) {
+    const at = fieldInterpolator(field, name);
+    putChannel(
+      grid,
+      name,
+      field.units[name],
+      Float64Array.from(grid.active, (_, i) => at(gridPosition(grid, i))),
+      field.quantities?.[name]
+    );
+  }
+  if (finishing.rivers) finishing.rivers.elevationAt = finishedElevation(work);
 }
 export function projectNative(
   state: GenerationState,
@@ -126,6 +182,7 @@ export function projectNative(
       )
     )
   );
+  projectFinishedSamples(state);
 }
 function projectWaterLevels(state: GenerationState, work: AtlasPhysicalWorkspace) {
   const map = work.map;

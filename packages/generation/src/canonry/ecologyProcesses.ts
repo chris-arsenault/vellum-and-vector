@@ -204,12 +204,14 @@ function recordTransitions(state: GenerationState, before: Int32Array, context: 
 }
 function validate(state: GenerationState) {
   const map = state.physical!.map;
-  for (const name of ecologyScalars)
+  for (const name of ecologyScalars) {
+    const invalid = map[name].findIndex((value) => !Number.isFinite(value) || value < 0);
     requireThat(
-      map[name].every((value) => Number.isFinite(value) && value >= 0),
+      invalid < 0,
       "ecology_field",
-      `Ecology ${name} must remain finite and nonnegative.`
+      `Ecology ${name} must remain finite and nonnegative; cell ${invalid} contains ${map[name][invalid]}.`
     );
+  }
   for (const name of ecologyRatios)
     requireThat(
       map[name].every((value) => value <= 1.000001),

@@ -22,7 +22,9 @@ export function extractLakes(state: GenerationState) {
   for (const [body, members] of bodies) {
     if (!members.some((i) => i < mesh.contentCount)) continue;
     const level = map.WaterSurfaceElevations[members[0]];
-    const contour = lakeFootprint(state, members, body, level);
+    const contour =
+      state.physical!.finishing?.lakes.get(body)?.footprint ??
+      lakeFootprint(state, members, body, level);
     const shape = clipRegion(state, contour);
     if (!shape) continue;
     putGenerated(
@@ -158,16 +160,17 @@ export function extractNamedLandforms(state: GenerationState) {
     ["gorge", "Gorge", (i) => map.LandformCodes[i] === Landform.Gorge],
   ];
   for (const [kind, name, includes] of classes)
-    components(
-      state,
-      includes,
-      (members, extent) => {
-        const surface = extent && kind !== "fjord" ? dry(extent) : extent;
-        if (extent && !surface) return;
-        publishPlace(state, kind, name, members, "geology", {}, surface ?? undefined);
-      },
-      !["peak", "waterfall"].includes(kind)
-    );
+    if (!(state.physical!.finishing && ["waterfall", "gorge"].includes(kind)))
+      components(
+        state,
+        includes,
+        (members, extent) => {
+          const surface = extent && kind !== "fjord" ? dry(extent) : extent;
+          if (extent && !surface) return;
+          publishPlace(state, kind, name, members, "geology", {}, surface ?? undefined);
+        },
+        !["peak", "waterfall"].includes(kind)
+      );
 }
 export function extractMagicPlaces(state: GenerationState) {
   const magic = state.physical!.magic;

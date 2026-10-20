@@ -10,6 +10,7 @@ import {
   areaSpace,
   type DomainSnapshot,
   type Grid,
+  type GridSurface,
   type AtlasFeature,
 } from "@atlas/domain";
 import type { GenerationState } from "./process";
@@ -40,7 +41,7 @@ function validateScope(state: GenerationState, original: DomainSnapshot) {
     "generation_context",
     "Generation retains the pinned world, located context and spatial reference."
   );
-  gridSchema.parse(state.surface);
+  validateSampledSurface(state.surface);
   requireThat(
     state.surface.scope.worldId === scope.worldId &&
       state.surface.scope.spaceId === scope.spaceId &&
@@ -52,6 +53,11 @@ function validateScope(state: GenerationState, original: DomainSnapshot) {
     "generation_scope",
     "Generation retains the pinned context and write extent."
   );
+}
+function validateSampledSurface(surface: GridSurface) {
+  const {overlays, ...field} = surface;
+  gridSchema.parse(field);
+  for (const overlay of overlays ?? []) validateSampledSurface(overlay.grid);
 }
 
 function validateInterfaces(state: GenerationState, original: DomainSnapshot, changed: string[]) {

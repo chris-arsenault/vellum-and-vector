@@ -71,7 +71,7 @@ function conditionReader(
   const array = values[key];
   return (i: number) => array?.[i] ?? 0;
 }
-function matcher(
+export function magicMatcher(
   state: GenerationState,
   field: MagicField,
   groups: MagicCondition[][],
@@ -101,8 +101,8 @@ function growRegion(
   const map = state.physical!.map;
   const included = new Uint8Array(map.mesh.count),
     queue: number[] = [];
-  const isSeed = matcher(state, field, rule.seeds, seed),
-    retains = matcher(state, field, rule.retains ?? rule.seeds, seed);
+  const isSeed = magicMatcher(state, field, rule.seeds, seed),
+    retains = magicMatcher(state, field, rule.retains ?? rule.seeds, seed);
   for (let i = 0; i < map.mesh.count; i++)
     if (isSeed(i)) {
       included[i] = 1;
@@ -139,22 +139,32 @@ function independentInteraction(rule: MagicField["definition"]["features"][numbe
 export function classifyMagicFeatures(state: GenerationState, seed = state.domain.world.seed) {
   classifyNaturalSurface(state);
   const magic = state.physical!.magic!;
-  const priority = new Float64Array(magic.finalSurface.length).fill(-Infinity);
-  let code = 100;
   for (const field of magic.fields) {
     field.features = {};
     for (const rule of field.definition.features) {
-      const surfaceCode = code++;
       if (!field.definition.enabled && !independentInteraction(rule, field.definition.id)) continue;
       const members = growRegion(state, field, rule, seed);
       field.features[rule.id] = members;
+    }
+  }
+  paintMagicFeatures(state);
+}
+export function paintMagicFeatures(state: GenerationState) {
+  const magic = state.physical!.magic!,
+    priority = new Float64Array(magic.finalSurface.length).fill(-Infinity);
+  magic.finalSurface.set(magic.naturalSurface);
+  let code = 100;
+  for (const field of magic.fields)
+    for (const rule of field.definition.features) {
+      const surfaceCode = code++,
+        members = field.features[rule.id];
+      if (!members) continue;
       for (let i = 0; i < members.length; i++)
         if (members[i] && rule.priority > priority[i]) {
           magic.finalSurface[i] = surfaceCode;
           priority[i] = rule.priority;
         }
     }
-  }
 }
 export function projectMagic(state: GenerationState) {
   const work = state.physical!,

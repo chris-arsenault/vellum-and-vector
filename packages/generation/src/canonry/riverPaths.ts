@@ -6,6 +6,10 @@ import type { Geometry } from "geojson";
 type Coordinate = [number, number];
 type Station = { point: Coordinate; segment: number; fraction: number };
 export interface RiverPaths {
+  reaches?: Map<
+    number,
+    { points: Coordinate[]; positions: number[]; members?: number[]; forms?: number[] }
+  >;
   x: Float64Array;
   y: Float64Array;
   upstream: Int32Array;
@@ -322,7 +326,13 @@ function receivingWater(map: PhysicalField, paths: RiverPaths, last: number) {
 /** The same continuous channel and longitudinal profiles feed drawing, inspection and export. */
 export function riverPath(map: PhysicalField, paths: RiverPaths, members: number[]) {
   let stations: Station[] = [{ point: position(paths, members[0]), segment: 0, fraction: 0 }];
-  for (let segment = 0; segment < members.length - 1; segment++) {
+  const composed = paths.reaches?.get(members[0]);
+  if (composed)
+    stations = composed.points.map((point, n) => {
+      const segment = Math.min(members.length - 2, Math.floor(composed.positions[n]));
+      return { point, segment, fraction: composed.positions[n] - segment };
+    });
+  for (let segment = 0; !composed && segment < members.length - 1; segment++) {
     const i = members[segment],
       j = members[segment + 1];
     if (map.mesh.topology) {

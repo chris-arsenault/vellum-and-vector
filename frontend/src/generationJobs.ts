@@ -4,6 +4,7 @@ import {
   profiles,
   validateCoverage,
   ecologyLabels,
+  selectSampledDetail,
   type DomainSnapshot,
   type FieldRef,
   type Layer,
@@ -236,6 +237,7 @@ const nativeHistoryChannels = new Set([
   "coastalForcingHistory",
 ]);
 const nativeGeologyChannels = new Set([
+  "reefCover",
   "bedrock",
   "sediment",
   "rock",
@@ -314,9 +316,12 @@ function channelLayer(channel: string) {
     return "rivers";
   return "climate";
 }
-function fieldGroups(grid: CompletedBoundary["state"]["surface"]) {
+function fieldGroups(
+  grid: CompletedBoundary["state"]["surface"],
+  selected = Object.keys(grid.channels)
+) {
   const groups = new Map<string, string[]>();
-  for (const channel of Object.keys(grid.channels)) {
+  for (const channel of selected) {
     if (grid.units[channel] === "cell-index") continue;
     const layer = channelLayer(channel);
     groups.set(layer, [...(groups.get(layer) ?? []), channel]);
@@ -328,43 +333,70 @@ function publishFields(
   grid: CompletedBoundary["state"]["surface"],
   runId: string
 ) {
-  for (const [layerId, channels] of fieldGroups(grid)) {
-    const world = snapshot.world,
-      areaId = grid.scope.areaId;
-    const fieldId = semanticId(world.id, "atlas-field", `${areaId}:${layerId}`);
-    const existing = world.fields.find((field) => field.id === fieldId);
-    if (existing?.state === "authored" || existing?.state === "protected") continue;
-    const resourceId = semanticId(world.id, "atlas-samples", `${runId}:${layerId}`);
-    const field: FieldRef = {
-      id: fieldId,
-      areaId,
-      layerId,
-      algorithm: "atlas-2/canonry-0f62584c",
-      source: { kind: "run", id: runId },
-      samples: grid.active.length,
-      channels,
-      resourceId,
-      state: "generated",
-      footprint: grid.scope.footprint,
-      spaceId: grid.scope.spaceId,
-    };
-    world.fields = [...world.fields.filter((f) => f.id !== fieldId), field];
-    snapshot.numerical[fieldId] = {
-      ...grid,
-      id: resourceId,
-      channels: Object.fromEntries(channels.map((c) => [c, grid.channels[c]])),
-      units: Object.fromEntries(channels.map((c) => [c, grid.units[c]])),
-      overlays: snapshot.numerical[fieldId]?.overlays,
-    };
-    world.layers[layerId].facts = [
-      ...new Set([...(world.layers[layerId].facts ?? []), ...channels]),
-    ];
-    const layer = world.layers[layerId];
-    layer.representations = [
-      ...new Set<NonNullable<Layer["representations"]>[number]>([
-        ...(layer.representations ?? []),
-        "field",
-      ]),
-    ];
-  }
+  const {overlays, ...coarse} = grid, refined = overlays ?? [],
+    replaced = new Set(refined.flatMap((part) => part.channels)),
+    parts = [
+      { grid: coarse, channels: Object.keys(grid.channels).filter((name) => !replaced.has(name)) },
+      ...refined,
+    ],
+    seen = new Set<string>();
+  for (const part of parts)
+    for (const [layerId, channels] of fieldGroups(part.grid, part.channels)) {
+      const suffix = seen.has(layerId) ? ":finished" : "";
+      seen.add(layerId);
+      publishField(snapshot, part.grid, runId, layerId, channels, suffix);
+    }
+}
+function publishField(
+  snapshot: DomainSnapshot,
+  grid: CompletedBoundary["state"]["surface"],
+  runId: string,
+  layerId: string,
+  channels: string[],
+  suffix: string
+) {
+  const world = snapshot.world,
+    areaId = grid.scope.areaId;
+  const fieldId = semanticId(world.id, "atlas-field", `${areaId}:${layerId}${suffix}`);
+  if (
+    world.fields.some(
+      (f) =>
+        f.areaId === areaId &&
+        f.layerId === layerId &&
+        (f.state === "authored" || f.state === "protected")
+    )
+  )
+    return;
+  const resourceId = semanticId(world.id, "atlas-samples", `${runId}:${layerId}${suffix}`);
+  const field: FieldRef = {
+    id: fieldId,
+    areaId,
+    layerId,
+    algorithm: "atlas-2/canonry-0f62584c",
+    source: { kind: "run", id: runId },
+    samples: grid.active.length,
+    channels,
+    resourceId,
+    state: "generated",
+    footprint: grid.scope.footprint,
+    spaceId: grid.scope.spaceId,
+  };
+  world.fields = [...world.fields.filter((f) => f.id !== fieldId), field];
+  snapshot.numerical[fieldId] = {
+    ...grid,
+    id: resourceId,
+    channels: Object.fromEntries(channels.map((c) => [c, grid.channels[c]])),
+    units: Object.fromEntries(channels.map((c) => [c, grid.units[c]])),
+    quantities: Object.fromEntries(channels.map((c) => [c, grid.quantities?.[c] ?? "intensive"])),
+    detail: selectSampledDetail(grid.detail, channels),
+    overlays: grid.overlays ?? snapshot.numerical[fieldId]?.overlays,
+  };
+  world.layers[layerId].facts = [...new Set([...(world.layers[layerId].facts ?? []), ...channels])];
+  const layer = world.layers[layerId];
+  layer.representations = [
+    ...new Set<NonNullable<Layer["representations"]>[number]>([
+      ...(layer.representations ?? []),
+      "field",
+    ]),
+  ];
 }

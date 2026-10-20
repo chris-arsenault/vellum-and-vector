@@ -45,6 +45,27 @@ const fieldSchema = z
     quantities: z.record(identifier, z.enum(["intensive", "extensive", "category"])).optional(),
     waterBodies: z.array(bodySchema).nullable().optional(),
     ocean: geometrySchema.nullable().optional(),
+    detail: z
+      .object({
+        positions: channel,
+        elements: z.instanceof(Uint32Array),
+        channels: z.record(identifier, channel),
+      })
+      .superRefine((detail, context) => {
+        if (
+          detail.positions.length % 2 ||
+          detail.elements.length % 4 ||
+          detail.elements.some((index) => index >= detail.positions.length / 2) ||
+          Object.values(detail.channels).some(
+            (values) => values.length !== detail.positions.length / 2
+          )
+        )
+          context.addIssue({
+            code: "custom",
+            message: "Detail elements require four positions and four channel values.",
+          });
+      })
+      .optional(),
   })
   .strict();
 export const gridSchema: z.ZodType<Grid> = z

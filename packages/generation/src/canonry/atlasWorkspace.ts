@@ -27,6 +27,7 @@ import { nativeContracts } from "./contracts";
 import type { AtlasParameters } from "../atlasParameters";
 
 export interface AtlasPhysicalWorkspace {
+  finishing?: import("./macroTerrain").LandscapeFinishing;
   magic?: import("./magicState").MagicWorkspace;
   map: PhysicalField;
   profile: PhysicalProfile;

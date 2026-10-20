@@ -25,6 +25,7 @@ function oceanSurface(map: PhysicalField, i: number): (typeof naturalSurfaceName
   return [2, 3].includes(map.BathymetricZoneCodes[i]) ? "Shelf" : "Ocean";
 }
 function specialOcean(map: PhysicalField, i: number): (typeof naturalSurfaceNames)[number] | null {
+  if (map.ReefCover[i] > 0.5) return "Reef";
   if (map.DeltaIntensity[i] > 0) return "Delta";
   if (map.LandformCodes[i] === Landform.Fjord) return "Fjord";
   const shallow = [2, 3].includes(map.BathymetricZoneCodes[i]);

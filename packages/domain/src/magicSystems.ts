@@ -17,6 +17,12 @@ export const magicFeatureSchema = z.object({
   priority: finite.default(1),
   seeds: z.array(z.array(condition).min(1)).min(1),
   retains: z.array(z.array(condition).min(1)).optional(),
+  composition: z
+    .object({
+      role: z.enum(["source", "corridor", "region", "front", "interaction"]),
+      scale: positive,
+    })
+    .optional(),
 });
 export const magicSystemSchema = z.object({
   id: z.string().min(1),

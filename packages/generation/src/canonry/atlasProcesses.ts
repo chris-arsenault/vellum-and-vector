@@ -27,6 +27,7 @@ import { refineGeologicalCauses, refineWorkspace } from "./adaptiveWorkspace";
 import { adaptiveWaterProcess } from "./adaptiveWater";
 import { adaptiveClimateProcess, adaptiveIceProcess, shoreSupport } from "./adaptiveClimate";
 import { prepareAdaptiveFractures } from "./adaptiveFractures";
+import { macroLandscapeProcess } from "./macroProcess";
 import { ecologyProcesses } from "./ecologyProcesses";
 
 const prefix = (fact: string) => `canonry:${fact}`;
@@ -136,6 +137,7 @@ export function atlasNativeProcesses(
     forcingProcess(),
     epochStartProcess(),
     finishProcess(original),
+    macroLandscapeProcess(input.seed),
     advectAtlasMagic,
     ...(original.world.areas[input.areaId].profile === "world"
       ? []

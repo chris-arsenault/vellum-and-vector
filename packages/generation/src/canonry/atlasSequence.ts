@@ -148,12 +148,16 @@ export function atlasPhysicalSequence(
     ...(!physical ? [invoke("canonry.magic-history")] : []),
     ecology("present"),
     invoke("canonry.magic-classify"),
+    ...finishingSteps(physical, area.profile),
     invoke("canonry.project"),
     invoke("canonry.magic-project")
   );
   if (physical || input.domains.includes("magic")) result.push(invoke("canonry.features"));
   const selected = area.profile === "world" ? fixedSamplingSequence(result) : result;
   return selected.map((step, index) => ({ ...step, id: `${step.id}:${index}` }));
+}
+function finishingSteps(physical: boolean, profile: string): ProcessSequence {
+  return physical && profile === "world" ? [invoke("canonry.landscape-finalize")] : [];
 }
 function fixedSamplingSequence(sequence: ProcessSequence): ProcessSequence {
   const refinements = ["canonry.refine-climate", "canonry.refine-water", "canonry.refine-ice"];

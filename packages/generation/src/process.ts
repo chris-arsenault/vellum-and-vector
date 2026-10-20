@@ -1,7 +1,7 @@
 import type {
   Diagnostic,
   DomainSnapshot,
-  Grid,
+  GridSurface,
   ParameterDefinitions,
   ParameterValues,
   SpatialScope,
@@ -11,7 +11,7 @@ import { requireThat } from "@atlas/domain";
 export interface GenerationState {
   physical?: import("./canonry/atlasWorkspace").AtlasPhysicalWorkspace;
   domain: DomainSnapshot;
-  surface: Grid;
+  surface: GridSurface;
   facts: Set<string>;
   history: EpochHistory[];
   causes?: GenerationCause[];

@@ -19,6 +19,35 @@ refinement and remeshing are retired from the active world path because their
 measured cost did not deliver useful map quality. Scope is top-level world
 generation and display; editor development and lower-level generation are excluded.
 
+## World landscape finishing
+
+World generation runs `canonry.landscape-finalize` after the configured epochs
+and present classifications, before field/feature publication and human geography.
+It composes crest and valley connections, summit hierarchy, surviving geological
+events, shorelines, river curves, inherited glacial/depositional regions, reefs,
+magic structures and biological mosaics. Terrain and affected fields follow those
+compositions. No additional erosion, growth, migration or burial epoch is run.
+
+The final field combines the evolved sampled base with compact metre-scale
+profiles. Regional construction and bathymetry use relative adjustments with
+smooth footprint transitions; channel beds and supported drops retain explicit
+longitudinal controls. `landscapeBase` carries the shared base through layer
+splitting; `landscape` carries the profiles and authored footprint exclusions.
+Sampled channels expose final values to existing numerical consumers. Queries,
+OpenLayers workers and exports use the same composed geography. Magic-only world
+generation retains that terrain metadata rather than flattening subcell features.
+
+Magic feature rules declare a shared `composition` role and metre scale: source,
+corridor, region, front or interaction. Presets demonstrate those roles without
+preset-name dispatch. Finishing carries inherited dates and existing storage;
+biological remapping carries communities, cohorts, traits and surface resources.
+Fauna redistribution stays within occupied reachable habitat and preserves
+represented biomass. Existing migration flux and buried maturity remain history.
+
+The implementation plan and feature inventory are in
+[FEATURE-FINALIZATION-PLAN.md](FEATURE-FINALIZATION-PLAN.md). Landmark injection
+and lower-level generation remain separate work.
+
 ## Reference parity requirement
 
 The user's explicit requirement is **semantic algorithm parity**, not numerical

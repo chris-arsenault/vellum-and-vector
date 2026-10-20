@@ -40,6 +40,7 @@ const metric = (name: string, native: ArrayName, unit: string): ChannelBinding =
 });
 export const atlasChannels: ChannelBinding[] = [
   height("elevation", "Elevation", true),
+  metric("reefCover", "ReefCover", "ratio"),
   ...ecologyBindings.map(([name, native, unit]) => ({ name, native, unit, scale: 1 })),
   height("bedrock", "BedrockElevation", true),
   height("sediment", "SedimentThickness"),
