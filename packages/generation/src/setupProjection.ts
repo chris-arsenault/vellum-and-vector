@@ -1,24 +1,21 @@
-import { type Diagnostic, type ParameterValues, type Profile } from "@atlas/domain";
+import { type Profile } from "@atlas/domain";
 import { atlasFeatureDefinitions, type prepareAtlasGeneration } from "./atlasWorkflow";
-import { atlasGenerationModules } from "./generationModules";
 import { activeLocatedSources } from "./featureDependencies";
 import type { GenerationFeature } from "./features";
-import type {
-  GenerationSetup,
-  SetupFeature,
-  SetupInvocation,
-  SetupSetting,
-} from "./generationPresentation";
+import type { GenerationSetup, SetupFeature, SetupSetting } from "./generationPresentation";
 import { inheritedChannelNames } from "./canonry/inheritedFacts";
 import { sequenceStages, type SequenceStage } from "./sequence";
-import { processRequirements } from "./productLedger";
-import { elapsedYears } from "./processTraits";
-import { invocationParameters } from "./preflight";
 import type { PublicationDefinition } from "./publication";
-import type { MapProcessContract } from "./process";
 
 type Prepared = ReturnType<typeof prepareAtlasGeneration>;
-const stages = ["world", "land", "environment", "magic", "people"];
+type SetupContext = GenerationSetup["context"] & { channels: string[] };
+interface ScheduledInvocation {
+  id: string;
+  process: string;
+  version: string;
+  feature: string | null;
+  scheduled: boolean;
+}
 
 /** A read-only view of the request already resolved and checked by the engine. */
 export function projectGenerationSetup(
@@ -29,46 +26,27 @@ export function projectGenerationSetup(
     area = source.world.areas[input.areaId];
   const channels = [...inheritedChannelNames(source, area.id, input.domains.includes("physical"))];
   const context = {
-    profile: area.profile,
     inherited:
       Boolean(area.parentId) || (!input.domains.includes("physical") && channels.length > 0),
     channels,
     locatedSources: activeLocatedSources(source, input).length,
   };
-  const invocations = inspectSequence(prepared, definitions, context.inherited);
+  const invocations = inspectSequence(prepared, definitions);
   const publications = (input.configuration!.inputs?.publications ??
     []) as unknown as PublicationDefinition[];
   const features = definitions.map((feature) =>
     projectFeature(feature, prepared, context, invocations, publications, definitions)
   );
-  features.sort(
-    (a, b) =>
-      stages.indexOf(a.presentation.stage) - stages.indexOf(b.presentation.stage) ||
-      a.presentation.order - b.presentation.order ||
-      a.id.localeCompare(b.id)
-  );
   return {
-    context,
+    context: { inherited: context.inherited, locatedSources: context.locatedSources },
     features,
-    invocations,
-    sharedInvocations: invocations.filter((invocation) => invocation.feature === null),
-    publications: structuredClone(
-      publications.filter(
-        (item) => item.publish !== false && publicationInContext(item, area.profile, definitions)
-      )
-    ),
-    diagnostics: structuredClone(prepared.diagnostics),
   };
 }
-function inspectSequence(
-  prepared: Prepared,
-  definitions: readonly GenerationFeature[],
-  inherited: boolean
-) {
-  const result: SetupInvocation[] = [];
+function inspectSequence(prepared: Prepared, definitions: readonly GenerationFeature[]) {
+  const result: ScheduledInvocation[] = [];
   for (const stage of sequenceStages(prepared.input.configuration!.sequence)) {
     if (!stage.invocation) continue;
-    const invocation = inspectInvocation(prepared, definitions, stage, inherited, false);
+    const invocation = inspectInvocation(definitions, stage);
     result.push(invocation);
     const contract = prepared.registry.get(
       stage.invocation.process,
@@ -82,45 +60,24 @@ function inspectSequence(
       stage.epochIndices
     )) {
       if (!child.invocation) continue;
-      const occurrence = inspectInvocation(prepared, definitions, child, inherited, true);
+      const occurrence = inspectInvocation(definitions, child);
       result.push({ ...occurrence, scheduled: invocation.scheduled && occurrence.scheduled });
     }
   }
   return result;
 }
 function inspectInvocation(
-  prepared: Prepared,
   definitions: readonly GenerationFeature[],
-  stage: SequenceStage,
-  inherited: boolean,
-  reconciliation: boolean
-): SetupInvocation {
+  stage: SequenceStage
+): ScheduledInvocation {
   const invocation = stage.invocation!,
-    process = prepared.registry.get(invocation.process, invocation.version),
     owner = invocationOwner(invocation.feature, invocation.process, definitions);
   return {
-    key: JSON.stringify([stage.epochs.map((epoch) => epoch.id), stage.path]),
     id: invocation.id,
-    path: [...stage.path],
     process: invocation.process,
     version: invocation.version,
     feature: owner?.id ?? null,
-    epochs: stage.epochs.map(({ id, duration }) => ({ id, duration })),
-    behavior: process.behavior.kind,
-    ...invocationDuration(process.behavior, stage, owner, inherited),
-    parameters: structuredClone(boundParameters(process.contract, prepared, stage)),
-    inputs: structuredClone(processRequirements(process.contract)),
-    outputs: [...process.contract.produces],
-    invalidates: [...process.contract.invalidates],
-    conditional: reconciliation || Boolean(invocation.when),
-    reconciliation,
     scheduled: isScheduled(stage),
-    reconciliationContract: process.contract.reconciliation
-      ? {
-          invalidates: [...process.contract.reconciliation.invalidates],
-          guarantees: [...process.contract.reconciliation.guarantees],
-        }
-      : undefined,
   };
 }
 function invocationOwner(
@@ -132,56 +89,17 @@ function invocationOwner(
     ? definitions.find((feature) => feature.id === id)
     : definitions.find((feature) => feature.processes.includes(process));
 }
-function boundParameters(
-  contract: MapProcessContract,
-  prepared: Prepared,
-  stage: SequenceStage
-): ParameterValues {
-  try {
-    return invocationParameters(contract, prepared.input.configuration!, stage);
-  } catch {
-    return stage.invocation!.parameters ?? {};
-  }
-}
-function invocationDuration(
-  behavior: import("./processTraits").ProcessBehavior | undefined,
-  stage: SequenceStage,
-  owner: GenerationFeature | undefined,
-  inherited: boolean
-) {
-  const duration = boundDuration(behavior, stage),
-    preservesAge =
-      inherited && owner?.presentation?.inheritedElapsed === "preserve-age" && duration !== null;
-  return {
-    durationYears: preservesAge ? 0 : duration,
-    boundDurationYears: duration,
-    durationNote: preservesAge
-      ? "Inherited ecology retains its age; this bound response adds no biological time."
-      : null,
-  };
-}
 function isScheduled(stage: SequenceStage) {
   const when = stage.invocation!.when;
   if (!when) return true;
   const variables = Object.assign({}, ...stage.epochs.map((epoch) => epoch.variables));
   return variables[when.variable] === when.equals;
 }
-function boundDuration(
-  behavior: import("./processTraits").ProcessBehavior | undefined,
-  stage: SequenceStage
-) {
-  if (behavior?.kind !== "elapsed") return null;
-  try {
-    return elapsedYears(behavior.duration, stage);
-  } catch {
-    return null;
-  }
-}
 function projectFeature(
   feature: GenerationFeature,
   prepared: Prepared,
-  context: GenerationSetup["context"],
-  allInvocations: SetupInvocation[],
+  context: SetupContext,
+  allInvocations: ScheduledInvocation[],
   allPublications: PublicationDefinition[],
   definitions: readonly GenerationFeature[]
 ): SetupFeature {
@@ -203,14 +121,7 @@ function projectFeature(
   return {
     id: feature.id,
     label: feature.label,
-    presentation: structuredClone(
-      feature.presentation ?? {
-        stage: "world",
-        family: "Additional capabilities",
-        summary: feature.label,
-        order: 1000,
-      }
-    ),
+    epochControls: structuredClone(feature.applicability?.epochControls ?? []),
     enabled: bound.enabled,
     ...status,
     settings: Object.entries(feature.settings).map(([key, definition]) =>
@@ -219,7 +130,6 @@ function projectFeature(
         key,
         definition,
         bound.settings[key],
-        status,
         context,
         allInvocations,
         prepared,
@@ -232,29 +142,8 @@ function projectFeature(
       bound.enabled &&
       Boolean(feature.configuration) &&
       (feature.configurationPresentation?.applicability === "any" || !historyFixed),
-    requires: declaredRequirements(feature, prepared),
-    requiredBy: atlasDependents(feature, prepared, definitions),
-    invocations,
-    publications: structuredClone(publications),
-    diagnostics: featureDiagnostics(feature, prepared, invocations),
+    invocationIds: invocations.map((item) => item.id),
   };
-}
-function publicationInContext(
-  item: PublicationDefinition,
-  profile: Profile,
-  definitions: readonly GenerationFeature[]
-) {
-  if (!item.layer.profiles.includes(profile)) return false;
-  return (
-    !item.owners?.length ||
-    item.owners.some((owner) =>
-      featurePublicationInContext(
-        item,
-        profile,
-        definitions.find((feature) => feature.id === owner)
-      )
-    )
-  );
 }
 function featurePublicationInContext(
   item: PublicationDefinition,
@@ -262,19 +151,19 @@ function featurePublicationInContext(
   feature?: GenerationFeature
 ) {
   const supported =
-    feature?.presentation?.publicationProfiles?.[item.layer.id] ?? item.layer.profiles;
+    feature?.applicability?.publicationProfiles?.[item.layer.id] ?? item.layer.profiles;
   return supported.includes(profile);
 }
 function featureStatus(
   feature: GenerationFeature,
   enabled: boolean,
-  context: GenerationSetup["context"],
-  invocations: SetupInvocation[],
+  context: SetupContext,
+  invocations: ScheduledInvocation[],
   publications: PublicationDefinition[]
 ): Pick<SetupFeature, "status" | "reason"> {
   if (!enabled)
     return { status: "off", reason: "Off in this request; configured values are retained." };
-  if (feature.presentation?.requiresLocatedSources && context.locatedSources === 0)
+  if (feature.applicability?.requiresLocatedSources && context.locatedSources === 0)
     return {
       status: "unavailable",
       reason:
@@ -300,13 +189,12 @@ function projectSetting(
   key: string,
   definition: SetupSetting["definition"],
   value: number,
-  status: Pick<SetupFeature, "status" | "reason">,
-  context: GenerationSetup["context"],
-  invocations: SetupInvocation[],
+  context: SetupContext,
+  invocations: ScheduledInvocation[],
   prepared: Prepared,
   definitions: readonly GenerationFeature[]
 ): SetupSetting {
-  const declared = feature.presentation?.settingConsumers?.[key];
+  const declared = feature.applicability?.settingConsumers?.[key];
   const consumers = invocations.filter(
     (item) =>
       item.scheduled &&
@@ -315,7 +203,7 @@ function projectSetting(
         : item.feature === feature.id &&
           Object.hasOwn(prepared.registry.get(item.process, item.version).contract.parameters, key))
   );
-  const inherited = context.inherited && feature.presentation?.initialOnlySettings?.includes(key);
+  const inherited = context.inherited && feature.applicability?.initialOnlySettings?.includes(key);
   const active = consumers.length > 0 && !inherited;
   return {
     owner: feature.id,
@@ -324,8 +212,6 @@ function projectSetting(
     definition: structuredClone(definition),
     value,
     active,
-    reason: settingReason(active, Boolean(inherited), status),
-    consumers: consumers.map((item) => item.path.join("/")),
   };
 }
 function settingControlFeature(
@@ -338,58 +224,4 @@ function settingControlFeature(
     consumers.every((process) => feature.processes.includes(process))
   );
   return candidates.length === 1 ? candidates[0].id : owner.id;
-}
-function settingReason(active: boolean, inherited: boolean, status: Pick<SetupFeature, "reason">) {
-  if (active) return null;
-  if (inherited) return "This setting is not reapplied to inherited geography.";
-  return status.reason ?? "No scheduled operation consumes this setting in this context.";
-}
-function atlasDependents(
-  feature: GenerationFeature,
-  prepared: Prepared,
-  definitions: readonly GenerationFeature[]
-) {
-  return definitions
-    .filter(
-      (candidate) =>
-        declaredRequirements(candidate, prepared).includes(feature.id) &&
-        prepared.input.resolvedFeatures!.selection[candidate.id]?.enabled
-    )
-    .map((candidate) => candidate.id);
-}
-function declaredRequirements(feature: GenerationFeature, prepared: Prepared) {
-  return [
-    ...new Set(
-      atlasGenerationModules
-        .requirements(feature.id, {
-          source: prepared.source,
-          input: prepared.input,
-          resolved: prepared.input.resolvedFeatures!,
-        })
-        .map((requirement) => requirement.feature)
-    ),
-  ];
-}
-function featureDiagnostics(
-  feature: GenerationFeature,
-  prepared: Prepared,
-  invocations: SetupInvocation[]
-): Diagnostic[] {
-  const products = new Set(
-    feature.processes.flatMap((id) =>
-      prepared.registry
-        .contracts()
-        .filter((contract) => contract.id === id)
-        .flatMap((contract) => contract.produces)
-    )
-  );
-  return structuredClone(
-    prepared.diagnostics.filter(
-      (diagnostic) =>
-        diagnostic.invocation === feature.id ||
-        diagnostic.resource === feature.id ||
-        products.has(diagnostic.resource ?? "") ||
-        invocations.some((item) => diagnostic.invocation?.includes(item.id))
-    )
-  );
 }

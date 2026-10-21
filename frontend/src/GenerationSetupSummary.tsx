@@ -1,5 +1,5 @@
-import { useSyncExternalStore } from "react";
 import { ErrorMessage } from "./ErrorMessage";
+import type { Diagnostic } from "@atlas/domain";
 import {
   diagnosticFeature,
   diagnosticField,
@@ -10,62 +10,21 @@ import { useWorkflowFields } from "./workflowFieldState";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 
 export function GenerationSetupSummary({ flow }: { flow: GenerationWorkflow }) {
-  const wide = useSyncExternalStore(subscribeWidth, wideSnapshot);
-  const layers = [
-    ...new Map(flow.setup?.publications.map((item) => [item.layer.id, item.layer.name])).values(),
-  ];
   return (
     <aside className="setup-summary" aria-label="Setup summary">
-      <details key={String(wide)} open={wide} className="setup-summary-disclosure">
-        <summary>Setup summary</summary>
-        <h3>{flow.draft.name || "Untitled world"}</h3>
-        <dl>
-          <div>
-            <dt>Extent</dt>
-            <dd>
-              {flow.draft.width / 1000} × {flow.draft.height / 1000} km
-            </dd>
-          </div>
-          <div>
-            <dt>Detail</dt>
-            <dd>{flow.draft.recipe.quality}</dd>
-          </div>
-          <div>
-            <dt>Seed</dt>
-            <dd>{flow.draft.recipe.seed}</dd>
-          </div>
-          <div>
-            <dt>Context</dt>
-            <dd>{flow.setup?.context.inherited ? "Inherited geography" : "Initial generation"}</dd>
-          </div>
-        </dl>
-        <h4>Planned output layers</h4>
-        {flow.approach === "blank" ? (
-          <p>Empty atlas for manual authoring.</p>
-        ) : (
-          <ul>
-            {layers.map((name) => (
-              <li key={name}>{name}</li>
-            ))}
-          </ul>
-        )}
-        {flow.approach === "procedural" && (
-          <button type="button" className="setup-link" onClick={() => flow.setStage("review")}>
-            Review all choices
-          </button>
-        )}
-      </details>
+      <h3>{flow.draft.name || "New world"}</h3>
+      <p>
+        {flow.draft.width / 1000} × {flow.draft.height / 1000} km
+      </p>
+      <p>
+        {flow.draft.recipe.quality} detail · seed {flow.draft.recipe.seed}
+      </p>
+      {flow.setup?.context.inherited && (
+        <p>Parent geography and completed history are inherited.</p>
+      )}
       <SetupIssues flow={flow} />
     </aside>
   );
-}
-function wideSnapshot() {
-  return window.matchMedia("(min-width: 1101px)").matches;
-}
-function subscribeWidth(changed: () => void) {
-  const media = window.matchMedia("(min-width: 1101px)");
-  media.addEventListener("change", changed);
-  return () => media.removeEventListener("change", changed);
 }
 export function SetupIssues({ flow }: { flow: GenerationWorkflow }) {
   const fields = useWorkflowFields();
@@ -120,24 +79,39 @@ export function SetupIssues({ flow }: { flow: GenerationWorkflow }) {
         </div>
       )}
       <UnfinishedFields flow={flow} />
-      {diagnostics.map((item, i) => {
-        const owner = diagnosticFeature(flow, item);
-        return (
-          <div key={i} role={item.severity === "error" ? "alert" : "status"}>
-            <p>{diagnosticText(flow, item)}</p>
-            {owner && (
-              <button
-                type="button"
-                className="setup-link"
-                onClick={() => flow.locate(owner.id, diagnosticField(flow, item))}
-              >
-                Edit {owner.label}
-              </button>
-            )}
-          </div>
-        );
-      })}
+      {diagnostics.map((item, i) => (
+        <SetupDiagnostic key={i} flow={flow} item={item} />
+      ))}
     </section>
+  );
+}
+function SetupDiagnostic({ flow, item }: { flow: GenerationWorkflow; item: Diagnostic }) {
+  const owner = diagnosticFeature(flow, item);
+  const missing = flow.setup?.features.find(
+    (feature) => feature.id === item.resource && !feature.enabled
+  );
+  return (
+    <div role={item.severity === "error" ? "alert" : "status"}>
+      <p>{diagnosticText(flow, item)}</p>
+      {owner && (
+        <button
+          type="button"
+          className="setup-link"
+          onClick={() => flow.locate(owner.id, diagnosticField(flow, item))}
+        >
+          Edit {owner.label}
+        </button>
+      )}
+      {missing && (
+        <button
+          type="button"
+          className="setup-link"
+          onClick={() => flow.feature(missing.id, { enabled: true })}
+        >
+          Enable {missing.label}
+        </button>
+      )}
+    </div>
   );
 }
 function UnfinishedFields({ flow }: { flow: GenerationWorkflow }) {

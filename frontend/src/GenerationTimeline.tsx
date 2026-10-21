@@ -7,6 +7,7 @@ import { NumberField } from "./WorkflowFields";
 import { WorkflowCommittedName } from "./WorkflowCommittedName";
 import { HistoryPreset } from "./PhysicalHistoryForm";
 import { ErrorMessage } from "./ErrorMessage";
+import { SetupDisclosure } from "./SetupDisclosure";
 import { epochFieldPrefix, selectedDraftEpoch } from "./generationEpochFields";
 import { draftEpochBindings } from "./generationEpochBindings";
 import {
@@ -53,10 +54,12 @@ export function GenerationTimeline({ flow }: { flow: GenerationWorkflow }) {
         </span>
       </div>
       {editable ? (
-        <details>
-          <summary>Edit shared history</summary>
+        <SetupDisclosure
+          title="Edit shared history"
+          initiallyOpen={flow.targetField?.startsWith("feature.physical.lifecycle.epochs.")}
+        >
           <ClockEditor flow={flow} selected={selected} />
-        </details>
+        </SetupDisclosure>
       ) : (
         <p className="hint">
           {flow.setup?.context.inherited ||

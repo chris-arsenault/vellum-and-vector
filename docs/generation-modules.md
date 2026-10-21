@@ -84,14 +84,28 @@ not. Legacy human `physicalEpoch` and `politicalCapacity` values remain metadata
 nondefault values produce a warning because the current human algorithms do not
 simulate their effects.
 
-## Setup presentation
+## Cartographic setup
 
-Module-owned `FeaturePresentation` assigns a decision stage, family, order and
-explanation. Numeric controls come from the feature's existing definitions;
-consumer metadata explains whether a value affects the current profile. Coupled
-mechanisms share one feature panel. A scalar extension receives its panel through
-the registry without another alias or switch table. Rich nested configuration
-uses bounded editors for clocks, ecology, magic and cultures.
+A feature can register curated `cartography` descriptors. Each control supplies
+a geographic question and a small set of choices whose patches compose existing
+feature selections and owned settings. For example, River plains enables networks,
+floodplains and deltas while omitting incision. No generator is introduced by a
+choice. Controls are discovered from the module registry; adding a raw setting
+does not automatically add a primary wizard decision.
+
+The wizard progresses through map brief, land, landscape, people and review.
+Independent controls preserve unrelated settings. Matching compares only a
+choice's declared inputs; other combinations appear as Custom. Initial-only
+controls and choices are omitted for inherited regions. Source activity scales
+existing configured systems while preserving effects, interaction rules and
+shared epoch activity. Labels describe inputs and influences rather than
+guaranteed geographic coverage.
+
+Exact numeric settings and rich clocks, ecology, magic and culture configuration
+remain reachable through one focused advanced editor. Closed rich disclosures
+do not mount their forms. There is no full capability catalogue or execution
+contract inspector in the wizard. The former stage/family/order/summary metadata
+and unused occurrence/publication display copies were removed.
 
 `frontend/src/generationFeatureAdapters.ts` registers a specialized editor,
 changed-value summary and field mapping together. Adding a nested form does not
@@ -102,18 +116,21 @@ An invalid draft keeps editable selection current while discarding executable
 occurrences; launch remains blocked. Changing source/propagation reconciles raw
 numeric buffers so hidden controls cannot retain unreachable errors.
 
-Projected scalar descriptors distinguish their canonical `owner` from the
+`FeatureApplicability` retains functional scalar consumers, epoch bindings,
+initial-only fields and inherited-source availability. Projected scalar
+descriptors distinguish their canonical `owner` from the
 `controlFeature` whose operations consume them. Sea-level baseline is presented
 with Ocean geography while retaining its existing compatibility ownership. Linked
 epoch views likewise share one clock value; physical rainfall is editable with
 climate even when living ecology is off because precipitation consumes that value.
 
 `projectGenerationSetup` reads the prepared request and registry. It exposes
-selected/off/inherited/unavailable capabilities, actual occurrences, operational
-traits, elapsed bindings, dependencies, diagnostics and publication descriptors.
-The projection never selects or executes processes. Execution inspection retains
-causal sequence order, including shared operations and declared reconciliation.
-Decision-stage order is independent of execution order.
+context and feature applicability, editable settings/configuration and invocation
+IDs used to locate real diagnostics. The prepared request remains the authority
+for execution, dependency diagnostics and publications. The setup projection
+never selects or executes processes and does not copy the execution tree into
+the UI. Review shows curated choices, shared history and optional changed values;
+normalized recipe JSON remains available on demand.
 
 The UI draft normalizes compatibility inputs to feature ownership. Epoch rename,
 insertion, deletion and reorder update the single physical clock and keyed

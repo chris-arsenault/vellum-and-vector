@@ -5,9 +5,9 @@ import {
   newGenerationDraft,
   normalizeGenerationDraft,
   prepareDraft,
-  updateFeature,
   setFeatureSetting,
 } from "./generationDraft";
+import { applyCartographicChoice, cartographicControls } from "./cartographicDraft";
 import {
   draftEpochs,
   replaceDraftEpochs,
@@ -29,8 +29,15 @@ it("generates an owned workflow recipe and refines a region without replaying it
   draft = replaceDraftEpochs(draft, [{ ...draftEpochs(draft)[0], duration: 2500 }]);
   draft = renameDraftEpoch(draft, "Formation", "First landscape");
   draft = updateEcologyEpoch(draft, "First landscape", { migration: 1.4 });
-  draft = updateFeature(draft, "physical.impacts", { enabled: false });
-  draft = updateFeature(draft, "physical.river-incision", { enabled: false });
+  for (const [id, value] of [
+    ["event-geography", "volcanic"],
+    ["river-terrain", "plains"],
+  ])
+    draft = applyCartographicChoice(
+      draft,
+      cartographicControls().find((item) => item.id === id)!,
+      value
+    );
   draft = setFeatureSetting(draft, "physical.volcanism", "volcanism", 0.8);
   const reviewed = prepareDraft(draft);
   expect(reviewed.diagnostics.filter((item) => item.severity === "error")).toEqual([]);

@@ -51,7 +51,7 @@ it("keeps shared tectonic modulation reachable for mountains when plate evolutio
 it("reads control descriptors from the projected feature without an identity-based UI table", () => {
   const view = projectGenerationSetup(prepareDraft(newGenerationDraft()));
   const climate = view.features.find((feature) => feature.id === "physical.climate")!;
-  const control = climate.presentation.epochControls!.find((entry) => entry.key === "rainfall")!;
+  const control = climate.epochControls.find((entry) => entry.key === "rainfall")!;
   expect(control).toMatchObject({ label: "Epoch rainfall", unit: "multiplier", min: 0, max: 5 });
   control.label = "Projected rainfall response";
   expect(physicalEpochControls(climate).find((entry) => entry.key === "rainfall")!.label).toBe(

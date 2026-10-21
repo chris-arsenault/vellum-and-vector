@@ -47,8 +47,7 @@ it("keeps unrelated feature selection and controls current while a nested name i
       .find((entry) => entry.id === "physical.impacts")!
       .settings.every((setting) => setting.active)
   ).toBe(true);
-  expect(view.invocations).toEqual([]);
-  expect(view.publications).toEqual([]);
+  expect(view.features.every((feature) => feature.invocationIds.length === 0)).toBe(true);
 });
 
 it("coordinates an additional epoch participant and retains unrelated nested configuration", () => {

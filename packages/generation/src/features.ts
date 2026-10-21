@@ -7,7 +7,8 @@ import {
   type AtlasParameters,
 } from "./atlasParameters";
 import type { ProcessSequence } from "./process";
-import type { FeaturePresentation } from "./generationPresentation";
+import type { FeatureApplicability } from "./generationPresentation";
+import type { CartographicControl } from "./cartographicControls";
 import type { ConfigurationPresentation } from "./generationPresentation";
 import type { GenerationSettings } from "./generationSettings";
 import type { AtlasGenerationInput } from "./atlasWorkflow";
@@ -42,7 +43,8 @@ export interface FeatureConfigurationBinding {
 export interface GenerationFeature {
   id: string;
   label: string;
-  presentation?: FeaturePresentation;
+  applicability?: FeatureApplicability;
+  cartography?: readonly CartographicControl[];
   domains: string[];
   defaultEnabled: boolean;
   settings: Record<string, AtlasParameterDefinition>;

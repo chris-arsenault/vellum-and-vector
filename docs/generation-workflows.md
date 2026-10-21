@@ -166,10 +166,15 @@ they are capabilities rather than a permanent bulk of required support processes
 The older `processes` object remains a compatibility input. The resolver maps its
 operation IDs to feature ownership and rejects conflicting coupled selections.
 
-Module presentation metadata places each capability in a decision stage and
-family. `projectGenerationSetup` exposes actual scheduled traits, owned controls,
-inherited restrictions, dependencies and publication bindings. One canonical
-draft owns shared epochs, ecology regimes, configured magic and cultural eras.
+Feature-owned cartographic descriptors compose existing settings and selections
+into curated choices for land, landscape and human geography. Independent
+choices preserve unrelated inputs; advanced departures appear as Custom. Exact
+controls and rich history/system editors remain available on request, with closed
+forms unmounted. The former feature catalogue, stage/family metadata and full
+execution inspector are removed. `projectGenerationSetup` supplies editable
+controls, inherited restrictions and diagnostic owner IDs without copying the
+execution contract into the UI. One canonical draft owns shared epochs, ecology
+regimes, configured magic and cultural eras.
 Review and worker launch use the same source identity and prepared configuration.
 Invalid input and unapplied JSON stay visible and block launch. See
 [generation modules](generation-modules.md) for the interfaces.

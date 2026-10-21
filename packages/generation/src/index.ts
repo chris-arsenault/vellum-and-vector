@@ -25,4 +25,5 @@ export * from "./canonry/atlasPublications";
 export * from "./generationModules";
 export * from "./atlasModules";
 export * from "./generationPresentation";
+export * from "./cartographicControls";
 export * from "./setupProjection";

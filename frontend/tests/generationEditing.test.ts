@@ -1,11 +1,13 @@
 import { expect, test, type Page } from "@playwright/test";
 import { installGenerationFixture } from "./generationFixture";
+import { tuneGeneration, sharedHistory, recipeEditor } from "./generationSetup";
 
 const stage = (page: Page, name: RegExp) =>
   page.getByRole("navigation", { name: "Generation steps" }).getByRole("button", { name });
 const epoch = (page: Page) => page.getByRole("combobox", { name: "Selected epoch", exact: true });
 
 async function history(page: Page) {
+  await sharedHistory(page);
   const details = page
     .locator("details")
     .filter({ has: page.getByText("Edit shared history", { exact: true }) });
@@ -22,16 +24,16 @@ test("navigates unfinished epoch fields to their owner and discards only replace
   page,
 }) => {
   await begin(page, "Field navigation");
-  await stage(page, /Land & materials/).click();
+  await tuneGeneration(page, "Volcanic geography");
   await page.getByLabel("Volcanic construction · multiplier", { exact: true }).fill("");
-  await stage(page, /Water, climate & life/).click();
+  await tuneGeneration(page, "Climate");
   await epoch(page).selectOption("Cold age");
   const temperature = page.locator(
     'input[name="feature.physical.lifecycle.epochs.Cold%20age.temperature"]'
   );
   await temperature.fill("");
   await expect(temperature).toHaveAccessibleName("Epoch temperature shift · °C");
-  await stage(page, /World/).click();
+  await tuneGeneration(page, "Formation history");
   await epoch(page).selectOption("Formation");
   await page
     .locator(".setup-issues p")
@@ -41,9 +43,16 @@ test("navigates unfinished epoch fields to their owner and discards only replace
   await expect(epoch(page)).toHaveValue("Cold age");
   await expect(temperature).toBeFocused();
   await expect(temperature).toHaveValue("");
-  await stage(page, /World/).click();
   await history(page);
   await page.getByLabel("Epoch duration · years", { exact: true }).fill("");
+  await stage(page, /Review & generate/).click();
+  await page
+    .locator(".setup-issues p")
+    .filter({ hasText: "Epoch duration" })
+    .getByRole("button", { name: "Edit field" })
+    .click();
+  await expect(page.getByLabel("Epoch duration · years", { exact: true })).toBeFocused();
+  await expect(page.getByLabel("Epoch duration · years", { exact: true })).toHaveValue("");
   await page.getByLabel("History starting point").selectOption("ecological");
   await expect(page.locator(".setup-issues")).not.toContainText("Epoch temperature shift");
   await expect(page.locator(".setup-issues")).not.toContainText("Epoch duration");
@@ -65,7 +74,7 @@ test("removes variant activity errors on restore while preserving unfinished act
   page,
 }) => {
   await begin(page, "System activity edits");
-  await stage(page, /Magic & influences/).click();
+  await tuneGeneration(page, "Configured magical systems");
   const fire = page
     .locator("details")
     .filter({ has: page.locator("summary", { hasText: /^Fire · active$/ }) })
@@ -97,11 +106,12 @@ test("removes variant activity errors on restore while preserving unfinished act
 
 test("keeps physical rainfall editable when living ecology is disabled", async ({ page }) => {
   await begin(page, "Physical rainfall");
-  await stage(page, /Magic & influences/).click();
+  await tuneGeneration(page, "Configured magical systems");
   await page.getByRole("checkbox", { name: "Configured magical systems", exact: true }).uncheck();
-  await stage(page, /Water, climate & life/).click();
+  await tuneGeneration(page, "Living ecology");
   await page.getByRole("checkbox", { name: "Living ecology", exact: true }).uncheck();
-  const climate = page.getByRole("article", { name: "Climate", exact: true });
+  await tuneGeneration(page, "Climate");
+  const climate = page.locator(".setup-tuning");
   const rainfall = climate.getByLabel("Epoch rainfall · multiplier", { exact: true });
   await expect(rainfall).toBeEnabled();
   await rainfall.fill("1.9");
@@ -128,22 +138,26 @@ test("edits shared tectonic activity through active consumers and ocean levels w
   page,
 }) => {
   await begin(page, "Shared physical controls");
-  await stage(page, /Land & materials/).click();
+  await tuneGeneration(page, "Tectonic evolution");
   await page.getByRole("checkbox", { name: "Tectonic evolution", exact: true }).uncheck();
-  const mountains = page.getByRole("article", { name: "Mountain construction", exact: true });
+  await tuneGeneration(page, "Mountain construction");
+  const mountains = page.locator(".setup-tuning");
   const tectonics = mountains.getByLabel("Epoch tectonic activity · multiplier", { exact: true });
   await expect(tectonics).toBeEnabled();
   await tectonics.fill("0.2");
-  const fractures = page.getByRole("article", { name: "Fault and fracture network", exact: true });
+  await tuneGeneration(page, "Fault and fracture network");
+  const fractures = page.locator(".setup-tuning");
   await expect(
     fractures.getByLabel("Epoch tectonic activity · multiplier", { exact: true })
   ).toHaveValue("0.2");
-  await stage(page, /Water, climate & life/).click();
+  await tuneGeneration(page, "Climate");
   await page.getByRole("checkbox", { name: "Climate", exact: true }).uncheck();
-  const ocean = page.getByRole("article", { name: "Ocean and bathymetric geography", exact: true });
+  await tuneGeneration(page, "Ocean and bathymetric geography");
+  const ocean = page.locator(".setup-tuning");
   await expect(ocean.getByLabel("Sea level adjustment · m", { exact: true })).toBeEnabled();
   await ocean.getByLabel("Sea level adjustment · m", { exact: true }).fill("30");
   await ocean.getByLabel("Epoch sea level offset · m", { exact: true }).fill("12");
+  await tuneGeneration(page, "Climate");
   await page.getByRole("checkbox", { name: "Climate", exact: true }).check();
   await stage(page, /Review & generate/).click();
   await expect(page.getByRole("button", { name: "Generate world", exact: true })).toBeEnabled();
@@ -166,33 +180,7 @@ test("edits shared tectonic activity through active consumers and ocean levels w
   expect(input.features["physical.tectonic-history"].enabled).toBe(false);
 });
 
-async function inspectExecution(page: Page) {
-  await stage(page, /Review & generate/).focus();
-  await page.keyboard.press("Enter");
-  await page.getByText("Execution details", { exact: true }).click();
-  const phase = page
-    .locator(".setup-execution-phase")
-    .filter({ has: page.locator("summary", { hasText: /^Assembly · / }) })
-    .first();
-  await phase.locator("summary").first().click();
-  const elapsed = phase
-    .locator(".setup-execution-row")
-    .filter({ has: page.locator(".setup-execution-trait", { hasText: "Elapsed response" }) })
-    .first();
-  await expect(elapsed.locator(".setup-execution-time")).toHaveText("500 years");
-  await expect(
-    phase.locator(".setup-execution-time", { hasText: "Per pass" }).first()
-  ).toBeVisible();
-  await elapsed.locator("summary").first().click();
-  await expect(elapsed.getByRole("heading", { name: "Inputs", exact: true })).toBeVisible();
-  await expect(elapsed.getByRole("heading", { name: "Produces", exact: true })).toBeVisible();
-  await page.screenshot({ path: "test-results/artifacts/m4-execution-narrow.png" });
-  await page.setViewportSize({ width: 1500, height: 1000 });
-  await elapsed.scrollIntoViewIfNeeded();
-  await page.screenshot({ path: "test-results/artifacts/m4-execution-desktop.png" });
-}
-
-test("commits and discards epoch names by keyboard and keeps long history and execution inspection reachable", async ({
+test("commits and discards epoch names by keyboard and keeps long-history review and editing reachable", async ({
   page,
 }) => {
   await begin(page, "Keyboard history");
@@ -215,5 +203,21 @@ test("commits and discards epoch names by keyboard and keeps long history and ex
   await expect(page.locator(".setup-actions")).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: "test-results/artifacts/m4-history-keyboard-narrow.png" });
-  await inspectExecution(page);
+  await stage(page, /Review & generate/).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Execution details", { exact: true })).toHaveCount(0);
+  const field = await recipeEditor(page);
+  const recipe = JSON.parse(await field.inputValue());
+  expect(recipe.features["physical.lifecycle"].configuration.epochs).toHaveLength(8);
+  expect(recipe.features["physical.lifecycle"].configuration.epochs[0].id).toBe("Assembly");
+  test.info().annotations.push({
+    type: "eight-epoch review DOM elements",
+    description: String(await page.locator("*").count()),
+  });
+  await page.getByText("Advanced JSON configuration", { exact: true }).click();
+  await expect(page.locator(".setup-actions")).toBeInViewport();
+  await page.screenshot({ path: "test-results/artifacts/curated-long-history-narrow.png" });
+  await page.setViewportSize({ width: 1500, height: 1000 });
+  await tuneGeneration(page, "Climate");
+  await expect(page.getByLabel("Baseline temperature · °C", { exact: true })).toBeEnabled();
 });

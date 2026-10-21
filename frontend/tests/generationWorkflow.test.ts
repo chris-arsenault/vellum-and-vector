@@ -2,14 +2,13 @@ import { expect, test, type Page } from "@playwright/test";
 import type { DomainSnapshot } from "@atlas/domain";
 import type { AtlasGenerationInput } from "@atlas/generation";
 import { installGenerationFixture } from "./generationFixture";
+import { tuneGeneration } from "./generationSetup";
 
 const rail = (page: Page) => page.getByRole("navigation", { name: "Generation steps" });
-const land = (page: Page) => rail(page).getByRole("button", { name: /Land & materials/ });
-const environment = (page: Page) =>
-  rail(page).getByRole("button", { name: /Water, climate & life/ });
+const land = (page: Page) => rail(page).getByRole("button", { name: /Land$/ });
+const environment = (page: Page) => rail(page).getByRole("button", { name: /Landscape$/ });
 const review = (page: Page) => rail(page).getByRole("button", { name: /Review & generate/ });
-const volcanic = (page: Page) =>
-  page.getByRole("article", { name: "Volcanic geography", exact: true });
+const volcanic = (page: Page) => page.locator(".setup-tuning");
 const strength = (page: Page) => volcanic(page).getByLabel("Volcanic construction · multiplier");
 
 test("selects and tunes geographic capabilities together and sends those choices to the worker", async ({
@@ -21,6 +20,7 @@ test("selects and tunes geographic capabilities together and sends those choices
   await page.getByLabel("Detail level").selectOption("draft");
   await page.screenshot({ path: "test-results/artifacts/m1-world-desktop.png" });
   await land(page).click();
+  await tuneGeneration(page, "Volcanic geography");
   await expect(
     volcanic(page).getByRole("checkbox", { name: "Volcanic geography", exact: true })
   ).toBeChecked();
@@ -30,22 +30,22 @@ test("selects and tunes geographic capabilities together and sends those choices
   await expect(strength(page)).toBeDisabled();
   await volcanic(page).getByRole("checkbox", { name: "Volcanic geography", exact: true }).check();
   await expect(strength(page)).toBeEnabled();
+  await tuneGeneration(page, "Impact geography");
   await page.getByRole("checkbox", { name: "Impact geography", exact: true }).uncheck();
-  await volcanic(page).getByText("Dependencies & outputs", { exact: true }).click();
+  await page.getByRole("button", { name: "Close adjustments", exact: true }).click();
   await page.screenshot({ path: "test-results/artifacts/m1-land-desktop.png" });
   await environment(page).click();
-  await expect(page.getByRole("checkbox", { name: "Glacial sculpting", exact: true })).toHaveCount(
-    1
-  );
+  await expect(page.getByLabel("Glacial influence", { exact: true })).toHaveCount(1);
   await expect(page.getByRole("checkbox", { name: /Glacial (erosion|deposition)/i })).toHaveCount(
     0
   );
-  await page.getByRole("checkbox", { name: "River incision", exact: true }).uncheck();
-  await expect(page.getByRole("checkbox", { name: "River networks", exact: true })).toBeChecked();
+  await page.getByLabel("River terrain", { exact: true }).selectOption("plains");
   await expect(page.locator(".setup-actions")).toBeInViewport();
   await page.screenshot({ path: "test-results/artifacts/m1-environment-desktop.png" });
   await page.getByRole("button", { name: "Back", exact: true }).click();
+  await tuneGeneration(page, "Volcanic geography");
   await expect(strength(page)).toHaveValue("1.7");
+  await tuneGeneration(page, "Impact geography");
   await expect(
     page.getByRole("checkbox", { name: "Impact geography", exact: true })
   ).not.toBeChecked();
@@ -79,15 +79,17 @@ test("retains unfinished numeric text across stage navigation and blocks generat
   await page.goto("/");
   await page.getByLabel("World name", { exact: true }).fill("Unfinished settings");
   await land(page).click();
+  await tuneGeneration(page, "Volcanic geography");
   await strength(page).fill("1.7");
   await strength(page).fill("");
   await expect(strength(page)).toHaveAttribute("aria-invalid", "true");
   await environment(page).click();
-  await expect(land(page)).toContainText("Needs attention");
+  await expect(page.locator(".setup-issues")).toContainText("Volcanic construction");
   await review(page).click();
   await expect(page.getByRole("button", { name: "Generate world", exact: true })).toBeDisabled();
   await expect.poll(() => page.evaluate(() => "generationFixtureInput" in window)).toBe(false);
   await land(page).click();
+  await tuneGeneration(page, "Volcanic geography");
   await expect(strength(page)).toHaveValue("");
   await strength(page).fill("1.8");
   await expect(strength(page)).toHaveAttribute("aria-invalid", "false");
@@ -103,20 +105,18 @@ test("keeps the workflow reachable on a narrow screen and supports keyboard stag
   await page.getByLabel("World name", { exact: true }).fill("Pocket atlas");
   await land(page).focus();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading", { name: "Land & materials", exact: true })).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Land", exact: true })).toBeFocused();
+  await tuneGeneration(page, "Volcanic geography");
   await strength(page).fill("1.7");
+  await page.getByRole("button", { name: "Close adjustments", exact: true }).click();
   await expect(page.locator(".setup-actions")).toBeInViewport();
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
     .toBe(true);
   await page.screenshot({ path: "test-results/artifacts/m1-land-narrow.png" });
   await environment(page).click();
-  await page
-    .getByRole("checkbox", { name: "Glacial sculpting", exact: true })
-    .scrollIntoViewIfNeeded();
-  await expect(
-    page.getByRole("checkbox", { name: "Glacial sculpting", exact: true })
-  ).toBeInViewport();
+  await page.getByLabel("Glacial influence", { exact: true }).scrollIntoViewIfNeeded();
+  await expect(page.getByLabel("Glacial influence", { exact: true })).toBeInViewport();
   await expect(page.locator(".setup-actions")).toBeInViewport();
   await page.screenshot({ path: "test-results/artifacts/m1-environment-narrow.png" });
 });
@@ -136,7 +136,9 @@ test("creates a blank atlas independently of an entirely disabled generation con
   await field.fill(JSON.stringify(recipe));
   await page.getByRole("button", { name: "Apply configuration", exact: true }).click();
   await expect(page.getByRole("button", { name: "Generate world", exact: true })).toBeDisabled();
-  await rail(page).getByRole("button", { name: /World/ }).click();
+  await rail(page)
+    .getByRole("button", { name: /Map brief/ })
+    .click();
   await page.getByRole("radio", { name: "Blank world", exact: true }).check();
   await expect(page.getByRole("button", { name: "Create world", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Create world", exact: true }).click();

@@ -20,12 +20,14 @@ export function epochFieldPrefix(owner: string, id: string) {
   return `feature.${owner}.epochs.${encodeURIComponent(id).replaceAll(".", "%2E")}.`;
 }
 
-export function physicalEpochControls(feature: string | Pick<SetupFeature, "id" | "presentation">) {
-  const presentation =
+export function physicalEpochControls(
+  feature: string | Pick<SetupFeature, "id" | "epochControls">
+) {
+  const controls =
     typeof feature === "string"
-      ? atlasFeatureDefinitions.find((entry) => entry.id === feature)?.presentation
-      : feature.presentation;
-  return presentation?.epochControls ?? [];
+      ? atlasFeatureDefinitions.find((entry) => entry.id === feature)?.applicability?.epochControls
+      : feature.epochControls;
+  return controls ?? [];
 }
 export function epochControlValue(epoch: Epoch, control: EpochControl) {
   if (control.key === "rainfall") return epoch.ecology?.rainfall ?? 1;

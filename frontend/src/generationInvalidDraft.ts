@@ -19,10 +19,6 @@ export function projectInvalidDraft(
   };
   return {
     ...previous,
-    invocations: [],
-    sharedInvocations: [],
-    publications: [],
-    diagnostics: [],
     features: previous.features.map((feature) => {
       const definition = atlasFeatureDefinitions.find((entry) => entry.id === feature.id)!;
       return {
@@ -37,7 +33,7 @@ export function projectInvalidDraft(
         reason:
           feature.status === "inherited"
             ? feature.reason
-            : "Resolve the invalid configuration to inspect its execution.",
+            : "Resolve the invalid configuration before generating.",
         configuration: draft.recipe.features?.[feature.id]?.configuration,
         configurationEditable:
           enabled(feature.id) &&
@@ -48,11 +44,9 @@ export function projectInvalidDraft(
           value: draft.recipe.features?.[setting.owner]?.settings?.[setting.key] ?? setting.value,
           active:
             enabled(setting.controlFeature) &&
-            !(historyFixed && definition.presentation?.initialOnlySettings?.includes(setting.key)),
+            !(historyFixed && definition.applicability?.initialOnlySettings?.includes(setting.key)),
         })),
-        invocations: [],
-        publications: [],
-        diagnostics: [],
+        invocationIds: [],
       };
     }),
   };

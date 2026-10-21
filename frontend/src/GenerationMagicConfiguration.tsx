@@ -50,7 +50,7 @@ export function GenerationMagicConfiguration({
   return (
     <fieldset className="setup-magic-configuration" disabled={!feature.configurationEditable}>
       <legend>Systems, sources and effects</legend>
-      <MagicSystemsEditor systems={systems} change={changeSystems} />
+      <MagicSystemsEditor systems={systems} change={changeSystems} focusField={flow.targetField} />
       <h4>{epoch.id} · magical activity</h4>
       <div className="setup-setting-grid">
         {systems.map((system) => (

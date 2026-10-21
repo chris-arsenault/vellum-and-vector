@@ -9,7 +9,8 @@ import {
 import type { ProcessInvocation, ProcessSequence } from "./process";
 import { physicalInputContract } from "./physicalInputs";
 import { atlasGenerationModules } from "./generationModules";
-import { physicalPresentation } from "./physicalPresentation";
+import { physicalApplicability } from "./physicalApplicability";
+import { physicalCartography } from "./physicalCartography";
 import { clockConfiguration } from "./featureConfiguration";
 import type { GenerationSlot } from "./generationSlots";
 export { acceptedEmptyByConsumer } from "./physicalInputs";
@@ -23,7 +24,6 @@ type FeatureOptions = {
   configuration?: Partial<GenerationFeature>;
   when?(slot: string, context?: FeatureContributionContext): boolean;
 };
-const initializer = "atlas.absent-physical";
 
 function definition(
   id: string,
@@ -38,7 +38,8 @@ function definition(
   return {
     id,
     label,
-    presentation: physicalPresentation[id],
+    applicability: physicalApplicability[id],
+    cartography: physicalCartography[id] ? [physicalCartography[id]] : [],
     domains: options.inherited ? ["physical", "magic"] : ["physical"],
     defaultEnabled: true,
     settings: Object.fromEntries(
@@ -50,7 +51,7 @@ function definition(
     requires: options.requires ?? [],
     absent: (options.absent ?? []).map((product) => ({
       product: `canonry:${product}`,
-      initializer,
+      initializer: "atlas.absent-physical",
     })),
     contribute(slot, _configuration, context) {
       if (options.when && !options.when(slot, context)) return [];

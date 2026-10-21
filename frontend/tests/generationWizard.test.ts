@@ -1,18 +1,18 @@
 import { expect, test, type Page } from "@playwright/test";
 import { installGenerationFixture } from "./generationFixture";
+import { tuneGeneration, sharedHistory } from "./generationSetup";
 
 const steps = (page: Page) => page.getByRole("navigation", { name: "Generation steps" });
 const stage = (page: Page, name: RegExp) => steps(page).getByRole("button", { name });
 
 async function configureFirstHistory(page: Page) {
-  await stage(page, /World/).click();
-  await page.getByText("Edit shared history", { exact: true }).click();
+  await sharedHistory(page);
   await page.getByLabel("History starting point").selectOption("ecological");
   await expect(page.getByRole("combobox", { name: "Selected epoch", exact: true })).toHaveValue(
     "Wet expansion"
   );
   await page.getByLabel("Epoch duration · years", { exact: true }).fill("5000");
-  await stage(page, /Water, climate & life/).click();
+  await tuneGeneration(page, "Living ecology");
   await page.getByLabel(/Seasonal climate contrast/).fill("0.7");
 }
 
@@ -67,25 +67,26 @@ test("configures a first world, preserves choices, explains dependencies and sen
   await page.getByLabel("World name").fill("Wizard world");
   await page.getByLabel("Generation seed", { exact: true }).fill("73");
   await page.getByLabel("Detail level").selectOption("draft");
-  await stage(page, /Land & materials/).click();
+  await tuneGeneration(page, "Impact geography");
   await page.getByRole("checkbox", { name: "Impact geography", exact: true }).uncheck();
-  await stage(page, /Water, climate & life/).click();
+  await tuneGeneration(page, "Floodplains");
   await page.getByRole("checkbox", { name: "Floodplains", exact: true }).uncheck();
   await expect(page.locator(".setup-issues")).toContainText("Floodplains");
+  await tuneGeneration(page, "Deltas");
   await page.getByRole("checkbox", { name: "Deltas", exact: true }).uncheck();
   await expect(page.locator(".setup-issues")).toHaveCount(0);
+  await tuneGeneration(page, "Climate");
   await page.getByLabel("Baseline temperature · °C", { exact: true }).fill("21");
   await page.getByRole("button", { name: "Back", exact: true }).click();
+  await tuneGeneration(page, "Impact geography");
   await expect(
     page.getByRole("checkbox", { name: "Impact geography", exact: true })
   ).not.toBeChecked();
-  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await tuneGeneration(page, "Climate");
   await expect(page.getByLabel("Baseline temperature · °C", { exact: true })).toHaveValue("21");
   await configureFirstHistory(page);
   await stage(page, /Review & generate/).click();
-  await expect(
-    page.getByRole("region", { name: "History and outputs", exact: true })
-  ).toContainText("4 shared physical epochs");
+  await expect(page.locator(".setup-review-context")).toContainText("Wet expansion");
   await page.getByText("Advanced JSON configuration", { exact: true }).click();
   const recipe = JSON.parse(
     await page.getByLabel("Generation configuration", { exact: true }).inputValue()
@@ -134,13 +135,21 @@ test("procedural refinement configures a new region with fixed parent history", 
   await expect(dialog).toContainText("locked crossings");
   await expect(dialog.getByLabel("History starting point")).toHaveCount(0);
   await dialog.getByLabel("Detail level").selectOption("draft");
-  await stage(page, /Land & materials/).click();
+  await expect(stage(page, /Land$/)).toHaveCount(0);
+  await stage(page, /Landscape$/).click();
+  const rivers = dialog.getByLabel("River terrain", { exact: true });
+  await expect(rivers.locator('option[value="incised"]')).toHaveCount(0);
+  await rivers.selectOption("plains");
+  await page.getByRole("button", { name: "Influences", exact: true }).click();
+  await expect(dialog.getByLabel("Fire source activity", { exact: true })).toBeDisabled();
+  await tuneGeneration(page, "Impact geography");
   await expect(
     dialog.getByRole("checkbox", { name: "Impact geography", exact: true })
   ).toBeVisible();
   await expect(
     dialog.getByRole("checkbox", { name: "Impact geography", exact: true })
   ).toBeDisabled();
+  await tuneGeneration(page, "Continental foundation");
   await expect(dialog.getByLabel("Continental assemblies · count", { exact: true })).toBeDisabled();
   await page.screenshot({ path: "test-results/artifacts/m3-region-desktop.png" });
   await page.setViewportSize({ width: 390, height: 844 });
@@ -190,10 +199,7 @@ test("cancels a new-world draft and returns to the current world without applyin
   await page.getByRole("button", { name: "Create world", exact: true }).click();
   await page.getByRole("button", { name: "+ New world", exact: true }).click();
   await page.getByLabel("World name").fill("Abandoned draft");
-  await page
-    .getByRole("navigation", { name: "Generation steps" })
-    .getByRole("button", { name: /Land & materials/ })
-    .click();
+  await tuneGeneration(page, "Impact geography");
   await page.getByRole("checkbox", { name: "Impact geography", exact: true }).uncheck();
   await page.getByRole("button", { name: "Cancel setup", exact: true }).click();
   await expect(page.getByRole("application", { name: "World map canvas" })).toBeVisible();

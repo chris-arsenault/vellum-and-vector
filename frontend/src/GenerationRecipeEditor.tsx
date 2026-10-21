@@ -3,8 +3,16 @@ import { normalizeGenerationRecipe, prepareDraft } from "./generationDraft";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 import { useWorkflowFields } from "./workflowFieldState";
 import { ErrorMessage } from "./ErrorMessage";
+import { SetupDisclosure } from "./SetupDisclosure";
 
 export function GenerationRecipeEditor({ flow }: { flow: GenerationWorkflow }) {
+  return (
+    <SetupDisclosure title="Advanced JSON configuration" className="setup-json">
+      <RecipeEditor flow={flow} />
+    </SetupDisclosure>
+  );
+}
+function RecipeEditor({ flow }: { flow: GenerationWorkflow }) {
   const [error, setError] = useState<unknown>(null);
   const [notice, setNotice] = useState("");
   const fields = useWorkflowFields();
@@ -26,8 +34,7 @@ export function GenerationRecipeEditor({ flow }: { flow: GenerationWorkflow }) {
     }
   };
   return (
-    <details className="setup-json">
-      <summary>Advanced JSON configuration</summary>
+    <div>
       <p className="hint">
         Feature selections own parameters and nested configuration. Compatibility fields are derived
         from those values. Applying updates the draft without starting generation.
@@ -61,7 +68,7 @@ export function GenerationRecipeEditor({ flow }: { flow: GenerationWorkflow }) {
       </div>
       {notice && <p role="status">{notice}</p>}
       <ErrorMessage error={error} />
-    </details>
+    </div>
   );
 }
 function exportRecipe(flow: GenerationWorkflow) {

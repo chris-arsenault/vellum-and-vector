@@ -6,7 +6,6 @@ import { landscape, source as locatedSource } from "./mapFixtures";
 import { projectGenerationSetup } from "./setupProjection";
 import type { FeatureSelection } from "./features";
 import type { GenerationModule } from "./generationModules";
-import { sequenceStages } from "./sequence";
 import { z } from "zod";
 
 function world() {
@@ -41,68 +40,21 @@ function feature(view: ReturnType<typeof projectGenerationSetup>, id: string) {
   return view.features.find((item) => item.id === id)!;
 }
 
-it("places every current capability once and projects its actual operations and output bindings", () => {
+it("projects each capability's operative controls and diagnostic ownership without a display catalogue", () => {
   const resolved = prepared(),
     view = projectGenerationSetup(resolved);
   expect(resolved.diagnostics).toEqual([]);
   expect(view.features).toHaveLength(32);
   expect(new Set(view.features.map((item) => item.id)).size).toBe(32);
-  expect(atlasFeatureDefinitions.every((item) => item.presentation)).toBe(true);
-  expect(new Set(view.features.map((item) => item.presentation.stage))).toEqual(
-    new Set(["world", "land", "environment", "magic", "people"])
-  );
+  expect(
+    atlasFeatureDefinitions.flatMap((item) => item.cartography ?? []).map((item) => item.id)
+  ).toContain("river-terrain");
   const sculpting = feature(view, "physical.glacial-sculpting");
-  expect(sculpting.invocations.map((item) => item.process)).toEqual([
-    "canonry.glacial-erosion",
-    "canonry.glacial-deposition",
-    "canonry.glacial-landforms",
+  expect(sculpting.invocationIds).toEqual([
+    expect.stringContaining("glacial-erosion"),
+    expect.stringContaining("glacial-deposition"),
+    expect.stringContaining("glacial-landforms"),
   ]);
-  expect(sculpting.invocations[0].behavior).toBe("material-transformation");
-  expect(sculpting.invocations[0].inputs.map((item) => item.product)).toContain("canonry:LandIce");
-  expect(
-    sculpting.publications.some(
-      (item) => item.kind === "field" && item.channel === "glacialErosion"
-    )
-  ).toBe(true);
-  expect(feature(view, "water.routing").requiredBy).toContain("physical.river-networks");
-  expect(
-    feature(view, "built.layout").publications.some((item) => item.layer.id === "settlements")
-  ).toBe(true);
-  expect(
-    feature(view, "built.layout").publications.some((item) => item.layer.id === "structures")
-  ).toBe(false);
-});
-
-it("retains occurrence identity and separates elapsed responses from present classification", () => {
-  const state = world();
-  state.domain.world.epochs.push({ ...state.domain.world.epochs[0], id: "Later", duration: 2000 });
-  const view = projectGenerationSetup(
-    prepareAtlasGeneration(state.domain, {
-      areaId: "area",
-      seed: 73,
-      quality: "draft",
-      domains: ["physical"],
-    })
-  );
-  const ecology = feature(view, "ecology.living").invocations;
-  expect(ecology.find((item) => item.process === "atlas.ecology-evolve")).toMatchObject({
-    behavior: "elapsed",
-    durationYears: 500,
-    boundDurationYears: 500,
-    epochs: [{ id: "Formation", duration: 1000 }],
-  });
-  expect(ecology.find((item) => item.process === "atlas.ecology-respond")?.durationYears).toBe(500);
-  expect(ecology.find((item) => item.process === "atlas.ecology-present")).toMatchObject({
-    behavior: "model-pass",
-    durationYears: null,
-  });
-  const ice = feature(view, "physical.land-ice").invocations.filter(
-    (item) => item.process === "canonry.land-ice-mass-balance"
-  );
-  expect(ice.length).toBeGreaterThan(1);
-  expect(new Set(ice.map((item) => item.key)).size).toBe(ice.length);
-  expect(new Set(ice.map((item) => item.path.join("/"))).size).toBeLessThan(ice.length);
-  expect(ice.every((item) => item.durationYears === null)).toBe(true);
 });
 
 it("keeps disabled choices and owned values visible without classifying them as unavailable", () => {
@@ -112,7 +64,7 @@ it("keeps disabled choices and owned values visible without classifying them as 
   const panel = feature(projectGenerationSetup(resolved), "physical.glacial-sculpting");
   expect(panel.status).toBe("off");
   expect(panel.settings[0]).toMatchObject({ key: "glaciers", value: 2.7, active: false });
-  expect(panel.invocations).toEqual([]);
+  expect(panel.invocationIds).toEqual([]);
   expect(resolved.input.resolvedFeatures!.selection[panel.id].settings.glaciers).toBe(2.7);
 });
 
@@ -130,9 +82,7 @@ it("places the shared sea-level control with its scheduled ocean consumer while 
     controlFeature: "ocean.geography",
     active: true,
     value: 125,
-    reason: null,
   });
-  expect(seaLevel.consumers.length).toBeGreaterThan(0);
   expect(climate.settings.find((setting) => setting.key === "temperature")?.active).toBe(false);
   expect(resolved.input.parameters?.seaLevel).toBe(125);
   expect(resolved.input.configuration!.inputs?.parameters).toMatchObject({ seaLevel: 125 });
@@ -193,34 +143,6 @@ it("uses actual regional consumers and inherited fields rather than blanket geol
   });
   expect(feature(view, "ecology.living").configurationEditable).toBe(false);
   expect(feature(view, "ecology.living").settings.every((item) => !item.active)).toBe(true);
-  const response = view.invocations.find((item) => item.process === "atlas.ecology-evolve")!;
-  expect(response).toMatchObject({ durationYears: 0, boundDurationYears: 500 });
-  expect(response.durationNote).toContain("retains its age");
-  const child = view.invocations.find((item) => item.reconciliation)!;
-  expect(child.conditional).toBe(true);
-  expect(child.path).toContain("reconciliation");
-  expect(
-    view.invocations.some((item) =>
-      item.reconciliationContract?.guarantees.includes("canonry:IceFlow")
-    )
-  ).toBe(true);
-});
-
-it("marks reconciliation children skipped when their parent's condition does not match", () => {
-  const resolved = region();
-  for (const stage of sequenceStages(resolved.input.configuration!.sequence))
-    if (stage.invocation?.process === "canonry.refine-water")
-      stage.invocation.when = { variable: "requestedRepair", equals: true };
-  const view = projectGenerationSetup(resolved),
-    parent = view.invocations.find((item) => item.process === "canonry.refine-water")!,
-    children = view.invocations.filter(
-      (item) => item.reconciliation && parent.path.every((part, index) => item.path[index] === part)
-    );
-  expect(children.length).toBeGreaterThan(0);
-  expect(children.every((item) => !item.scheduled)).toBe(true);
-  expect(view.invocations.find((item) => item.process === "canonry.refine-water")?.scheduled).toBe(
-    false
-  );
 });
 
 it("reports only located sources affecting this extent and does not imply that setup creates sources", () => {
@@ -306,30 +228,21 @@ it("projects an independently registered scalar feature, prerequisites, diagnost
     const before = structuredClone(resolved.input.configuration),
       view = projectGenerationSetup(resolved);
     const panel = feature(view, "test.projection-survey");
-    expect(panel.presentation).toMatchObject({ stage: "world", family: "Additional capabilities" });
     expect(panel.settings[0]).toMatchObject({
       owner: panel.id,
       controlFeature: panel.id,
       value: 0.3,
       active: true,
     });
-    expect(panel.requires).toEqual(["water.routing"]);
-    expect(panel.invocations[0]).toMatchObject({
-      feature: panel.id,
-      behavior: "extract",
-      parameters: { threshold: 0.3 },
-      outputs: ["test:survey"],
-    });
-    expect(panel.publications[0].layer.id).toBe("survey");
-    expect(feature(view, "water.routing").requiredBy).toContain(panel.id);
+    expect(panel.invocationIds).toContainEqual(expect.stringContaining("measure"));
     panel.settings[0].value = 0.9;
-    panel.invocations[0].inputs[0].product = "changed-view";
+    panel.invocationIds[0] = "changed-view";
     expect(resolved.input.configuration).toEqual(before);
-    const conflict = projectGenerationSetup(prepared({ "water.routing": { enabled: false } }));
-    expect(feature(conflict, panel.id).diagnostics).toContainEqual(
+    const conflict = prepared({ "water.routing": { enabled: false } });
+    expect(conflict.diagnostics).toContainEqual(
       expect.objectContaining({ code: "feature_dependency", resource: "water.routing" })
     );
-    expect(feature(conflict, "water.routing").diagnostics).toContainEqual(
+    expect(conflict.diagnostics).toContainEqual(
       expect.objectContaining({ code: "feature_dependency", invocation: panel.id })
     );
   } finally {
@@ -361,13 +274,13 @@ it("uses declared nested applicability and conditional prerequisites in inherite
   } finally {
     atlasGenerationModules.unregister(module.id);
   }
-  const view = projectGenerationSetup(
-    prepared({
-      "magic.configured": {
-        configuration: { magicSystems: JSON.parse(JSON.stringify(canonryMagicPresets())) },
-      },
-    })
+  const resolved = prepared({
+    "physical.coastal-evolution": { enabled: false },
+    "magic.configured": {
+      configuration: { magicSystems: JSON.parse(JSON.stringify(canonryMagicPresets())) },
+    },
+  });
+  expect(resolved.diagnostics).toContainEqual(
+    expect.objectContaining({ code: "feature_dependency", resource: "physical.coastal-evolution" })
   );
-  expect(feature(view, "magic.configured").requires).toContain("physical.coastal-evolution");
-  expect(feature(view, "physical.coastal-evolution").requiredBy).toContain("magic.configured");
 });

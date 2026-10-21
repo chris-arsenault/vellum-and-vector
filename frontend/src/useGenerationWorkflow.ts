@@ -3,10 +3,10 @@ import {
   projectGenerationSetup,
   type FeatureSelection,
   type GenerationSetup,
-  type GenerationSetupStage,
 } from "@atlas/generation";
 import type { DomainSnapshot } from "@atlas/domain";
 import { projectInvalidDraft } from "./generationInvalidDraft";
+import { cartographicFeatureStage } from "./cartographicDraft";
 import {
   draftPreview,
   newGenerationDraft,
@@ -15,7 +15,7 @@ import {
   type GenerationDraft,
 } from "./generationDraft";
 
-export type WorkflowStage = GenerationSetupStage | "review";
+export type WorkflowStage = "world" | "land" | "environment" | "people" | "review";
 export type PreparedSetup = ReturnType<typeof draftPreview>;
 export interface GenerationWorkflowOptions {
   initial?: GenerationDraft;
@@ -59,11 +59,17 @@ export function useGenerationWorkflow(options: GenerationWorkflowOptions) {
       options
     )
   );
-  const [stage, setStage] = useState<WorkflowStage>("world");
+  const [stage, setStageState] = useState<WorkflowStage>("world");
+  const [influences, setInfluences] = useState(false);
+  const setStage = (stage: WorkflowStage) => {
+    setStageState(stage);
+    setInfluences(false);
+  };
   const [baseline] = useState(view);
   const [target, setTarget] = useState<string | null>(null);
   const [targetField, setTargetField] = useState<string | undefined>();
   const [targetRevision, setTargetRevision] = useState(0);
+  const [tuning, setTuning] = useState<string | null>(null);
   const [epoch, setEpoch] = useState("");
   const [approach, setApproach] = useState<"procedural" | "blank">("procedural");
   const [json, setJson] = useState<{ text: string; dirty: boolean }>({ text: "", dirty: false });
@@ -76,7 +82,9 @@ export function useGenerationWorkflow(options: GenerationWorkflowOptions) {
     if (target) {
       const epoch = field?.match(/^feature\..+\.epochs\.([^.]+)\./)?.[1];
       if (epoch) setEpoch(decodeURIComponent(epoch));
-      setStage(target.presentation.stage);
+      const section = cartographicFeatureStage(id);
+      setStage(options.source && section === "land" ? "environment" : section);
+      setTuning(id);
       setTarget(id);
       setTargetField(field);
       setTargetRevision((value) => value + 1);
@@ -89,8 +97,16 @@ export function useGenerationWorkflow(options: GenerationWorkflowOptions) {
     target,
     targetField,
     targetRevision,
+    tuning,
+    setTuning,
     stage,
     setStage,
+    influences,
+    showInfluences() {
+      setStage("environment");
+      setTuning(null);
+      setInfluences(true);
+    },
     epoch,
     setEpoch,
     approach,

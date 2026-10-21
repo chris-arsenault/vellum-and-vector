@@ -1,14 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 import { installGenerationFixture } from "./generationFixture";
+import { tuneGeneration } from "./generationSetup";
 
 async function magic(page: Page) {
   await installGenerationFixture(page);
   await page.goto("/");
   await page.getByLabel("World name").fill("Contract atlas");
-  await page
-    .getByRole("navigation", { name: "Generation steps" })
-    .getByRole("button", { name: /Magic & influences/ })
-    .click();
+  await tuneGeneration(page, "Configured magical systems");
   const fire = page
     .locator("details")
     .filter({ has: page.locator("summary", { hasText: /^Fire · active$/ }) })
@@ -20,10 +18,7 @@ async function magic(page: Page) {
 test("an invalid system name does not freeze unrelated generation switches", async ({ page }) => {
   const fire = await magic(page);
   await fire.getByLabel("System name", { exact: true }).fill("");
-  await page
-    .getByRole("navigation", { name: "Generation steps" })
-    .getByRole("button", { name: /Land & materials/ })
-    .click();
+  await tuneGeneration(page, "Impact geography");
   const impacts = page.getByRole("checkbox", { name: "Impact geography", exact: true });
   await impacts.uncheck();
   await expect(impacts).not.toBeChecked();

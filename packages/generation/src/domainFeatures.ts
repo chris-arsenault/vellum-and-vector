@@ -1,4 +1,5 @@
 import { atlasParameterDefinitions } from "./atlasParameters";
+import { domainCartography } from "./domainCartography";
 import type { GenerationFeature } from "./features";
 import type { MapProcess, ProcessSequence } from "./process";
 import { culturalProcess, politicalProcess } from "./mapPeople";
@@ -38,19 +39,14 @@ function present(process: MapProcess, slot: string): ProcessSequence {
 export const domainFeatureDefinitions: GenerationFeature[] = [
   {
     id: "ecology.living",
+    cartography: [domainCartography["ecology.living"]],
     ...ecologyConfiguration,
     label: "Living ecology",
-    presentation: {
-      stage: "environment",
-      family: "Living ecology",
-      order: 150,
-      summary:
-        "Establish living communities, advance ecological responses through the shared epochs and classify the present without adding age.",
+    applicability: {
       settingConsumers: {
         vegetation: ["atlas.ecology-evolve", "atlas.ecology-respond"],
         grazing: ["atlas.ecology-evolve", "atlas.ecology-respond"],
       },
-      inheritedElapsed: "preserve-age",
       initialOnlySettings: ["vegetation", "grazing"],
     },
     domains: ["physical", "magic"],
@@ -72,15 +68,9 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
   },
   {
     id: "magic.configured",
+    cartography: [domainCartography["magic.configured"]],
     ...magicConfiguration,
     label: "Configured magical systems",
-    presentation: {
-      stage: "magic",
-      family: "Causal influences",
-      order: 10,
-      summary:
-        "Configure sources, propagation, physical and ecological effects, classification rules and activity on the shared epochs.",
-    },
     domains: ["magic"],
     defaultEnabled: true,
     settings: {},
@@ -108,12 +98,7 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
   {
     id: "magic.local",
     label: "Located magical sources",
-    presentation: {
-      stage: "magic",
-      family: "Causal influences",
-      order: 20,
-      summary:
-        "Apply existing located sources to climate and material; this choice does not create new sources.",
+    applicability: {
       requiresLocatedSources: true,
     },
     domains: ["magic"],
@@ -128,15 +113,9 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
   },
   {
     id: "human.cultures",
+    cartography: [domainCartography["human.cultures"]],
     ...culturalConfiguration,
     label: "Cultural distributions",
-    presentation: {
-      stage: "people",
-      family: "Distributions and places",
-      order: 10,
-      summary:
-        "Seed cultures and evolve their distributions using cultural duration, mobility and the physical setting.",
-    },
     domains: ["cultural"],
     defaultEnabled: true,
     settings: { cultureCount: atlasParameterDefinitions.cultureCount },
@@ -147,13 +126,8 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
   },
   {
     id: "human.politics",
+    cartography: [domainCartography["human.politics"]],
     label: "Political territories",
-    presentation: {
-      stage: "people",
-      family: "Distributions and places",
-      order: 20,
-      summary: "Generate political territories independently of the cultural distribution choice.",
-    },
     domains: ["political"],
     defaultEnabled: true,
     settings: { polityCount: atlasParameterDefinitions.polityCount },
@@ -164,13 +138,9 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
   },
   {
     id: "built.layout",
+    cartography: [domainCartography["built.layout"]],
     label: "Built geography",
-    presentation: {
-      stage: "people",
-      family: "Distributions and places",
-      order: 30,
-      summary:
-        "Produce settlements and roads at broad scales, buildings at sites, and rooms and connections within interiors.",
+    applicability: {
       publicationProfiles: {
         settlements: ["world", "region", "local"],
         roads: ["world", "region", "local"],

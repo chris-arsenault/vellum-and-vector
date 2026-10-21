@@ -6,6 +6,7 @@ import { NumberField as NumberSetting } from "./WorkflowFields";
 import { useWorkflowFields } from "./workflowFieldState";
 import { magicControlKeys, removedMagicParameterFields } from "./generationMagicControls";
 import { magicSourceOptions, magicPropagationOptions } from "@atlas/generation";
+import { SetupDisclosure } from "./SetupDisclosure";
 
 export function MagicSystemsForm({ editor }: { editor: EditorState }) {
   const [systems, setSystems] = useState(editor.world.magicSystems ?? canonryMagicPresets());
@@ -36,9 +37,11 @@ export function MagicSystemsForm({ editor }: { editor: EditorState }) {
 export function MagicSystemsEditor({
   systems,
   change,
+  focusField,
 }: {
   systems: MagicSystem[];
   change: (systems: MagicSystem[]) => void;
+  focusField?: string;
 }) {
   const { clear, clearExact } = useWorkflowFields();
   const update = (updated: MagicSystem) => {
@@ -49,11 +52,11 @@ export function MagicSystemsEditor({
   return (
     <>
       {systems.map((system) => (
-        <details key={system.id}>
-          <summary>
-            {system.name}
-            {system.enabled ? " · active" : " · inactive"}
-          </summary>
+        <SetupDisclosure
+          key={system.id}
+          initiallyOpen={focusField?.startsWith("magic." + system.id + ".")}
+          title={system.name + (system.enabled ? " · active" : " · inactive")}
+        >
           <SystemSettings system={system} change={update} />
           <MagicRuleEditor system={system} systems={systems} change={update} />
           <button
@@ -72,7 +75,7 @@ export function MagicSystemsEditor({
           >
             Make a variant
           </button>
-        </details>
+        </SetupDisclosure>
       ))}
       <button
         type="button"

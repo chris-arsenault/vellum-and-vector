@@ -3,6 +3,13 @@
 Planning date: 2026-10-20. Engine baseline: `8deeeda`, pushed to `origin/main`.
 Sulion plan: `20a0d5a5-6b61-444a-ba05-135bba1608b7`.
 
+**Product acceptance withdrawn — 2026-10-21:** The user rejected this delivered
+interface as a configuration editor wrapped in wizard navigation. The completion
+notes below describe implementation and checks, not accepted workflow quality.
+[Cartographer generation wizard](CARTOGRAPHER-WIZARD-PLAN.md) supersedes this
+plan's interaction design and product acceptance claim. Its implementation is
+pending; retain the feature-contract and engine work described separately.
+
 The subsequent interface review and corrective implementation are tracked in
 [generation contract consolidation](GENERATION-CONTRACTS-PLAN.md). That work fixes
 invalid-draft and hidden-field errors and replaces duplicated editor/summary and

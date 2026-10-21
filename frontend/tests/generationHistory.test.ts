@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { AtlasGenerationInput } from "@atlas/generation";
 import { installGenerationFixture } from "./generationFixture";
+import { tuneGeneration, advancedChanges } from "./generationSetup";
 
 const steps = (page: Page) => page.getByRole("navigation", { name: "Generation steps" });
 const stage = (page: Page, name: RegExp) => steps(page).getByRole("button", { name });
@@ -8,6 +9,7 @@ const selectedEpoch = (page: Page) =>
   page.getByRole("combobox", { name: "Selected epoch", exact: true });
 
 async function openHistory(page: Page) {
+  await tuneGeneration(page, "Formation history");
   const details = page
     .locator("details")
     .filter({ has: page.getByText("Edit shared history", { exact: true }) });
@@ -26,15 +28,14 @@ async function initialHistory(page: Page) {
   await openHistory(page);
   await page.getByLabel("History starting point").selectOption("ecological");
   await page.getByLabel("Epoch duration · years", { exact: true }).fill("2500");
-  await stage(page, /Water, climate & life/).click();
+  await tuneGeneration(page, "Living ecology");
   await expect(selectedEpoch(page)).toHaveValue("Wet expansion");
   await page.getByLabel(/Seasonal climate contrast/).fill("0.7");
   await page.getByLabel(/Migration and dispersal/).fill("2.3");
-  await stage(page, /Magic & influences/).click();
+  await tuneGeneration(page, "Configured magical systems");
   await page.getByLabel("Pressure epoch activity · multiplier", { exact: true }).fill("0.4");
 }
 async function restructureHistory(page: Page) {
-  await stage(page, /World/).click();
   await openHistory(page);
   await expect(page.getByLabel("Epoch duration · years", { exact: true })).toHaveValue("2500");
   await page.getByLabel("Epoch name", { exact: true }).fill("Wet assembly");
@@ -56,8 +57,9 @@ async function restructureHistory(page: Page) {
 }
 
 async function assertReviewedHistory(page: Page) {
+  await advancedChanges(page);
   const feature = (name: string) =>
-    page.locator(".setup-review-choices > li").filter({
+    page.locator(".setup-review-changes li").filter({
       has: page.getByRole("button", { name, exact: true }),
     });
   await expect(feature("Formation history")).toContainText("Wet assembly");
@@ -89,11 +91,11 @@ test("shares epoch duration and preserves keyed ecology and magic through struct
   await initialHistory(page);
   await restructureHistory(page);
   await page.screenshot({ path: "test-results/artifacts/m2-shared-history-desktop.png" });
-  await stage(page, /Water, climate & life/).click();
+  await tuneGeneration(page, "Living ecology");
   await expect(selectedEpoch(page)).toHaveValue("Wet assembly");
   await expect(page.getByLabel(/Seasonal climate contrast/)).toHaveValue("0.7");
   await expect(page.getByLabel(/Migration and dispersal/)).toHaveValue("2.3");
-  await stage(page, /Magic & influences/).click();
+  await tuneGeneration(page, "Configured magical systems");
   await expect(
     page.getByLabel("Pressure epoch activity · multiplier", { exact: true })
   ).toHaveValue("0.4");
@@ -149,14 +151,14 @@ test("links a coastal conflict to the actual Pressure effect and accepts zero fo
   await installGenerationFixture(page);
   await page.goto("/");
   await page.getByLabel("World name").fill("Pressure and coasts");
-  await stage(page, /Water, climate & life/).click();
-  const coast = page.getByRole("checkbox", { name: "Coastal evolution", exact: true });
-  await coast.uncheck();
-  const panel = page.getByRole("article", { name: "Coastal evolution", exact: true });
+  await stage(page, /Landscape$/).click();
+  const coast = page.getByLabel("Coastal change", { exact: true });
+  await coast.selectOption("off");
+  const panel = page.locator(".setup-issues");
   await expect(panel).toContainText("Magical coastal modification");
   await panel.getByRole("button", { name: "Enable Coastal evolution", exact: true }).click();
-  await expect(coast).toBeChecked();
-  await coast.uncheck();
+  await expect(coast).toHaveValue("ordinary");
+  await coast.selectOption("off");
   await panel.getByRole("button", { name: "Edit Configured magical systems", exact: true }).click();
   const forcing = page.locator('input[name="magic.pressure.effects.coastalForcing"]');
   await expect(forcing).toBeVisible();
@@ -166,11 +168,12 @@ test("links a coastal conflict to the actual Pressure effect and accepts zero fo
     page.getByRole("checkbox", { name: "Configured magical systems", exact: true })
   ).toBeChecked();
   await expect(page.locator(".setup-issues")).toHaveCount(0);
-  await stage(page, /Water, climate & life/).click();
-  await expect(coast).not.toBeChecked();
+  await stage(page, /Landscape$/).click();
+  await expect(coast).toHaveValue("off");
   await stage(page, /Review & generate/).click();
+  await advancedChanges(page);
   await expect(
-    page.locator(".setup-review-choices > li").filter({
+    page.locator(".setup-review-changes li").filter({
       has: page.getByRole("button", { name: "Configured magical systems", exact: true }),
     })
   ).toContainText("coastal forcing 0×");
@@ -196,7 +199,7 @@ test("preserves dirty JSON across stages, applies owned values atomically and re
   await stage(page, /Review & generate/).click();
   let field = await openRecipe(page);
   await field.fill("{ unfinished");
-  await stage(page, /Land & materials/).click();
+  await tuneGeneration(page, "Volcanic geography");
   await page.getByLabel("Volcanic construction · multiplier", { exact: true }).fill("1.9");
   await stage(page, /Review & generate/).click();
   field = await openRecipe(page);
@@ -217,7 +220,7 @@ test("preserves dirty JSON across stages, applies owned values atomically and re
   const normalized = JSON.parse(await field.inputValue());
   expect(normalized.parameters.volcanism).toBe(0.4);
   await expect.poll(() => page.evaluate(() => "generationFixtureInput" in window)).toBe(false);
-  await stage(page, /Land & materials/).click();
+  await tuneGeneration(page, "Volcanic geography");
   await expect(page.getByLabel("Volcanic construction · multiplier", { exact: true })).toHaveValue(
     "0.4"
   );
@@ -232,18 +235,17 @@ test("keeps cultures and politics independent and configures operative cultural 
   await page.goto("/");
   await page.getByLabel("World name").fill("People and places");
   await stage(page, /People & places/).click();
-  const cultures = page.getByRole("checkbox", { name: "Cultural distributions", exact: true }),
-    politics = page.getByRole("checkbox", { name: "Political territories", exact: true });
-  await cultures.check();
+  await page.getByLabel("Cultural geography", { exact: true }).selectOption("few");
+  await tuneGeneration(page, "Cultural distributions");
+  const cultures = page.getByRole("checkbox", { name: "Cultural distributions", exact: true });
   await page.getByLabel("Starting cultures · count", { exact: true }).fill("2");
   await page.getByLabel("Cultural duration · years", { exact: true }).fill("1200");
   await page.getByLabel("Cultural mobility · multiplier", { exact: true }).fill("1.7");
   await page.getByLabel("Era name", { exact: true }).fill("River spread");
   await page.getByRole("button", { name: "Apply era name", exact: true }).click();
-  await politics.check();
-  await page.getByLabel("Starting polities · count", { exact: true }).fill("3");
+  await page.getByLabel("Political geography", { exact: true }).selectOption("few");
   await cultures.uncheck();
-  await expect(politics).toBeChecked();
+  await expect(page.getByLabel("Political geography", { exact: true })).toHaveValue("few");
   await cultures.check();
   await expect(page.getByLabel("Cultural duration · years", { exact: true })).toHaveValue("1200");
   await expect(page.getByLabel("Cultural mobility · multiplier", { exact: true })).toHaveValue(
@@ -252,7 +254,8 @@ test("keeps cultures and politics independent and configures operative cultural 
   await expect(page.getByLabel("Physical epoch", { exact: true })).toHaveCount(0);
   await expect(page.getByLabel("Political capacity", { exact: true })).toHaveCount(0);
   await stage(page, /Review & generate/).click();
-  const reviewed = page.locator(".setup-review-choices > li").filter({
+  await advancedChanges(page);
+  const reviewed = page.locator(".setup-review-changes li").filter({
     has: page.getByRole("button", { name: "Cultural distributions", exact: true }),
   });
   await expect(reviewed).toContainText("River spread");
