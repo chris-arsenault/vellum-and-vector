@@ -81,16 +81,18 @@ it("carries physical ice flux, scour, deposition and retreat history through a w
   map.Snowfall.fill(700);
   for (let i = 0; i < mesh.count; i++) {
     map.Elevation[i] = map.BedrockElevation[i] = (1000 - mesh.x[i] / 1000) * 1024;
-    // Distinct physical balances avoid a whole tied temperature band at the cutoff.
-    map.Temperature[i] = Math.round(260 + mesh.x[i] / 4000 + mesh.y[i] / 7000);
+    // A cold west and warm east: ice extent follows the mass balance across them.
+    map.Temperature[i] = Math.round(260 + mesh.x[i] / 1000 + mesh.y[i] / 7000);
   }
   landIce(map, c);
   const frozen = map.IceThickness.reduce(
     (area, thickness, i) => area + (thickness > 0 ? mesh.areas[i] : 0),
     0
   );
-  expect(frozen / 40_000_000_000).toBeGreaterThanOrEqual(0.14);
-  expect(frozen / 40_000_000_000).toBeLessThan(0.2);
+  expect(frozen / 40_000_000_000).toBeGreaterThan(0.1);
+  expect(frozen / 40_000_000_000).toBeLessThan(0.9);
+  for (let i = 0; i < mesh.count; i++)
+    expect(map.IceThickness[i] > 0).toBe(map.IceBalance[i] >= c.Profile.MinimumIceBalance);
   iceFlow(map, c);
   const discharged = map.IceFlux.reduce(
     (sum, flux, i) => sum + (map.IceFlowTargets[i] < 0 ? flux : 0),

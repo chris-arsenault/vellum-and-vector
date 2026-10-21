@@ -132,6 +132,33 @@ it("spreads fire through connected dry fuel and stops it at a water barrier", ()
   expect(blocked.BroadleafCover[far]).toBe(0.7);
 });
 
+it("lets a strong headwind hold back fire that a gentle wind allows to spread", () => {
+  const gentle = corridor(),
+    strong = corridor();
+  for (const [map, speed] of [
+    [gentle, 3.5],
+    [strong, 14],
+  ] as const) {
+    map.BroadleafCover.fill(0.7);
+    map.TreeCover.fill(0.7);
+    map.Moisture.fill(100);
+    map.Rainfall.fill(100);
+    map.SoilWater.fill(0);
+    // Wind blows toward the fire's origin, against its spread.
+    map.WindX.fill(-1000);
+    map.WindSpeed.fill(speed);
+    disturbEcology(
+      map,
+      100,
+      (i) => ({ ...neutralEcology, fireRegime: 0, fire: xAt(map, i) < 1000 ? 0.9 : 0 }),
+      42
+    );
+  }
+  const far = Array.from(gentle.mesh.x.keys()).find((i) => xAt(gentle, i) > 16_000)!;
+  expect(gentle.BroadleafCover[far]).toBeLessThan(0.7);
+  expect(strong.BroadleafCover[far]).toBe(0.7);
+});
+
 it("carries altered vegetation and inherited traits beyond a vanished magical source", () => {
   const map = corridor();
   source(map);

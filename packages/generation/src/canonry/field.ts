@@ -42,6 +42,10 @@ const integerFields = [
   "OceanCurrentY",
   "OceanCurrentStrength",
   "OceanCurrentHeat",
+  // Signed sea-surface departure from latitude equilibrium, native climate units.
+  "SeaSurfaceAnomaly",
+  // Per-mille coastal upwelling of cold, nutrient-rich water.
+  "Upwelling",
   "WaveExposure",
   "Rainfall",
   "Snowfall",
@@ -119,6 +123,13 @@ const metricFields = [
   ...ecologyScalars,
   "OceanMarginDistance",
   "OceanDistance",
+  // Seasonal temperature half-range in °C; zero until temperature first runs.
+  "Seasonality",
+  // Surface wind speed in m/s; WindX/WindY carry its direction.
+  "WindSpeed",
+  // Per-mille precipitation from the downwind air columns, before the epoch
+  // multiplier and the rain/snow split.
+  "ColumnPrecipitation",
   "FlowAccumulation",
   "CatchmentArea",
   "RiverWidth",

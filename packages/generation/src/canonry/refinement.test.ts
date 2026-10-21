@@ -7,7 +7,6 @@ import { units } from "./math";
 import { nativeContracts, applyNativeStep } from "./contracts";
 import { physicalSchedule } from "./schedule";
 import { physicalContext } from "./context";
-import { atlasSeaIce } from "./atlasSeaIce";
 import { flowRouting } from "./routing";
 import { oceanConnectivity } from "./ocean";
 import { drainageConditioning } from "./drainageFlood";
@@ -101,7 +100,7 @@ it.each(["inland", "ocean"])(
       applyNativeStep(
         map,
         physicalContext(104729, salt, profile, instruction.epoch, instruction.index, 1),
-        [name, salt, name === "sea-ice" ? atlasSeaIce : implementation]
+        [name, salt, implementation]
       );
     }
     expect(map.AvailableFacts.has("Validated")).toBe(true);

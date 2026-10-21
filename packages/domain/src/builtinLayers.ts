@@ -36,7 +36,15 @@ const fieldFacts: Record<string, string[]> = {
     "predators",
     "aquaticFauna",
   ],
-  climate: ["climate", "temperature", "precipitation", "moisture", "windEast", "windNorth"],
+  climate: [
+    "climate",
+    "temperature",
+    "precipitation",
+    "moisture",
+    "windEast",
+    "windNorth",
+    "windSpeed",
+  ],
   rivers: ["rivers", "flow"],
 };
 export function builtinLayers(): Layer[] {

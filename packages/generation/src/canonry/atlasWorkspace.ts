@@ -176,6 +176,8 @@ export function createAtlasWorkspace(
   parameters: Partial<AtlasParameters> = {}
 ): AtlasPhysicalWorkspace {
   const profile = atlasPhysicalProfile(parameters);
+  const frame = spatial.bounds(state.domain.world.reference.domain);
+  profile.WorldExtentY = [frame[1], frame[3]];
   const bounds = state.surface.bounds;
   const maximumSize =
     (Math.max(bounds[2] - bounds[0], bounds[3] - bounds[1]) + 2 * profile.BoundaryPadding) /

@@ -234,7 +234,7 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
       ],
     },
     {
-      settings: ["temperature", "rainfall", "seaLevel"],
+      settings: ["temperature", "rainfall", "seaLevel", "southLatitude", "northLatitude"],
       requires: ["ocean.geography"],
       inherited: true,
       when: (slot, context) => slot !== "climate.refinement" || isRefinement(context),

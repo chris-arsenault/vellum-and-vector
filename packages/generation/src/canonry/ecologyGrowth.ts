@@ -21,13 +21,15 @@ function proposal(
 ) {
   const group = arrival.group,
     previous = plantCover(map, group, i);
-  const available = previous > 0 ? years : Math.max(0, years - arrival.front.time[i]);
+  // Below the fronts' presence threshold a group is locally extinct and must arrive again.
+  const available = previous > 0.00001 ? years : Math.max(0, years - arrival.front.time[i]);
   const seed = available > 0 ? 0.001 * Math.max(map[group.seed][i], 0.01) : 0;
   const suitable = groupSuitability(map, group, i, f);
   const browsing = group.juvenile ? map.Browsers[i] * 0.7 : map.Grazers[i] * 2;
   const toxicity = group.id === "altered" ? 0 : map.EcologicalToxicity[i] * 0.02;
   const fire = map.FireActivity[i] * f.fireRegime * (group.id === "grass" ? 0.003 : 0.025);
-  const mortality = 1 / group.lifespan + (1 - suitable) / 100 + browsing + toxicity + fire;
+  const flood = map.FloodFrequency[i] * group.floodSensitivity;
+  const mortality = 1 / group.lifespan + (1 - suitable) / 100 + browsing + toxicity + fire + flood;
   const rate =
     (2 / group.maturity) * suitable * Math.max(0, 1 + f.growth) * f.productivity - mortality;
   const cover = logistic(Math.max(previous, seed), rate, available, suitable);
@@ -133,7 +135,10 @@ export function growCommunities(
       Math.max(0, 1 + f.growth);
     const light = Math.exp(-e.depth / 100),
       wet = e.water > 0 || e.wetness > 0.5;
-    map.AquaticProductivity[i] = wet && !e.frozen ? 0.18 * e.warmth * light * f.productivity : 0;
+    // Upwelling returns deep nutrients to the sunlit surface.
+    const nutrients = 1 + (1.5 * map.Upwelling[i]) / 1000;
+    map.AquaticProductivity[i] =
+      wet && !e.frozen ? 0.18 * e.warmth * light * nutrients * f.productivity : 0;
   }
 }
 function canopyAge(map: PhysicalField, i: number, years: number, proposals: Proposal[]) {

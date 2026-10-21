@@ -228,5 +228,7 @@ physical model for those effects.
 The climate sequence retains its existing approximation: configured thermal magic
 adjusts temperature and ice after the native precipitation pass. Precipitation
 from that pass remains retained until the next scheduled climate calculation.
+At that calculation, the moisture-transport step carries part of each cell's
+external heat forcing downwind with the air.
 The refactor changes contracts and composition without adding hidden climate or
 ice passes to erase that approximation.

@@ -4,59 +4,12 @@ import type { PhysicalContext } from "./context";
 import { clamp, round, toUnits, truncate } from "./math";
 import { unitNoise } from "./noise";
 import { prepareMetricSmoother } from "./metricSmoothing";
-import { physicalDistance, physicalGradients, physicalFace } from "./physicalMetric";
+import { physicalDistance } from "./physicalMetric";
+import { gyreDirections, intensifyWesternBoundaries, seaSurfaceAnomaly } from "./oceanGyres";
 
 function normalized(x: number, y: number): [number, number] {
   const length = Math.sqrt(x * x + y * y);
   return length < 0.000001 ? [0, 0] : [round((x / length) * 1000), round((y / length) * 1000)];
-}
-function basinInfluence(map: PhysicalField, i: number): [number, number] {
-  let x = 0,
-    y = 0;
-  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-    const offset = i * map.mesh.stride + edge,
-      j = map.mesh.neighbors[offset];
-    if (j < 0) continue;
-    const face = physicalFace(map.mesh, i, edge);
-    const support = face.length / (2 * (map.mesh.cellWidth[i] + map.mesh.cellHeight[i]));
-    const dx = face.nx * support * 4,
-      dy = face.ny * support * 4;
-    if (map.WaterKindCodes[j] !== 1) {
-      x -= dx * 1.4;
-      y -= dy * 1.4;
-      continue;
-    }
-    const gain = clamp(
-      (map.WaterDepths[j] - map.WaterDepths[i]) / (1024 * map.mesh.edgeLength[offset] * 0.024),
-      -1,
-      1
-    );
-    x += dx * gain;
-    y += dy * gain;
-  }
-  return [x, y];
-}
-function seedDirections(map: PhysicalField, c: PhysicalContext) {
-  const scale = Math.max(180_000, map.mesh.contentRadius * 0.46);
-  const potential = Float64Array.from({ length: map.mesh.count }, (_, i) =>
-    unitNoise(map.mesh.x[i], map.mesh.y[i], c.Seed, scale, 3)
-  );
-  const gradient = physicalGradients(map.mesh, potential);
-  for (let i = 0; i < map.mesh.count; i++) {
-    if (map.WaterKindCodes[i] !== 1) continue;
-    const gx = gradient.x[i] * 10_000,
-      gy = gradient.y[i] * 10_000;
-    const x = map.mesh.x[i],
-      y = map.mesh.y[i],
-      f = Math.fround;
-    const radius = Math.max(1, Math.sqrt(f(f(x * x) + f(y * y))));
-    const sign = potential[i] >= 0.5 ? 1 : -1,
-      [bx, by] = basinInfluence(map, i);
-    [map.OceanCurrentX[i], map.OceanCurrentY[i]] = normalized(
-      gy * 3.4 + (-y / radius) * sign * 0.48 + bx * 0.88,
-      -gx * 3.4 + (x / radius) * sign * 0.48 + by * 0.88
-    );
-  }
 }
 function smoothDirections(map: PhysicalField, length: number) {
   const ocean = Uint8Array.from(map.WaterKindCodes, (kind) => Number(kind === 1));
@@ -196,10 +149,12 @@ export function oceanCurrents(map: PhysicalField, c: PhysicalContext) {
     "WaveExposure",
   ] as const)
     map[name].fill(0);
-  seedDirections(map, c);
+  const western = gyreDirections(map, c);
   smoothDirections(map, c.Profile.OceanCurrentSmoothingLength);
   measureStrength(map, c);
+  intensifyWesternBoundaries(map, c, western);
   const upstream = upstreamNeighbors(map);
+  seaSurfaceAnomaly(map, c, upstream);
   transportOceanHeat(
     map,
     c.Profile.OceanCurrentHeatDistance,

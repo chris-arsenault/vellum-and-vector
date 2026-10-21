@@ -17,7 +17,6 @@ import { crustalSupport } from "./support";
 import { reconcileWater } from "./field";
 import { clamp, rockResistance, round } from "./math";
 import type { NativeStep } from "./sequence";
-import { atlasSeaIce } from "./atlasSeaIce";
 import { advectMagic } from "./magicState";
 import { retainGeographicIdentities } from "./geographicIdentity";
 import { refreshGrounding } from "./glacierSurface";
@@ -131,11 +130,10 @@ function nativeProcess(
       const map = work.map;
       restoreAuthoring(work);
       if (name === "temperature" && context.parameters.unforced) map.ExternalHeatForcing.fill(0);
-      let selected: NativeStep =
+      const selected: NativeStep =
         context.parameters.iceLoad && name === "crustal-support"
           ? [name, source.salt, (map, c) => crustalSupport(map, c, true)]
           : spatialStep;
-      if (name === "sea-ice") selected = [name, source.salt, atlasSeaIce];
       applyNativeStep(map, c, selected, source);
       if (name === "plate-advection") advectMagic(state);
       restoreAuthoring(work);

@@ -2,6 +2,9 @@ import { biomeCode as B } from "@atlas/domain";
 import type { PhysicalField } from "./field";
 
 export const unit = (value: number) => Math.max(0, Math.min(1, value));
+/** Wind speed relative to a 7 m/s reference; maps before atmospheric flow use the reference. */
+export const windStrength = (map: PhysicalField, i: number) =>
+  map.WindSpeed[i] > 0 ? map.WindSpeed[i] / 7 : 1;
 export const approach = (value: number, target: number, years: number, time: number) =>
   target + (value - target) * Math.exp(-years / time);
 export interface EcologyForcing {
@@ -47,8 +50,15 @@ export function environment(map: PhysicalField, i: number, forcing = neutralEcol
     map.Moisture[i] / 1000,
     rain / Math.max(0.15, 0.35 + temperature * 0.018)
   );
-  const summer = temperature + forcing.seasonality * 25;
-  const winter = temperature - forcing.seasonality * 25;
+  // Climate supplies each cell's seasonal half-range; the epoch's seasonality
+  // scales it, with the neutral 0.3 leaving it unchanged. Before climate has
+  // run, the former uniform 7.5 °C half-range at neutral seasonality applies.
+  const range =
+    map.Seasonality[i] > 0
+      ? (map.Seasonality[i] * forcing.seasonality) / neutralEcology.seasonality
+      : forcing.seasonality * 25;
+  const summer = temperature + range;
+  const winter = temperature - range;
   const drought = unit(1 - moisture * (1 - forcing.seasonality * 0.55) - map.SoilWater[i]);
   const flat = unit(1 - map.Slope[i] / 0.015);
   const drainage = unit((map.DrainageElevations[i] - map.Elevation[i]) / (3 * 1024));

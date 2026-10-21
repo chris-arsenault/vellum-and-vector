@@ -1,9 +1,31 @@
 import type { PhysicalField } from "./field";
 import { ecologicalFront } from "./ecologyMovement";
 import { plantGroups, livingPlantCarbon } from "./ecologyGroups";
-import { environment, unit, type EcologyForcing } from "./ecologyEnvironment";
+import { environment, unit, windStrength, type EcologyForcing } from "./ecologyEnvironment";
 import { unitNoise } from "./noise";
 
+/**
+ * Floods along floodplains and deltas, more often where the seasons and runoff
+ * are strong. The epoch's floods kill young plants and part of the mature
+ * cover by each group's sensitivity, scour seed and leave nutrients behind;
+ * growth then carries the per-year flood mortality.
+ */
+export function floodEcology(map: PhysicalField, years: number) {
+  for (let i = 0; i < map.mesh.count; i++) {
+    const plain = Math.max(map.FloodplainIntensity[i], map.DeltaIntensity[i]) / 1000;
+    const seasons = 0.3 + 0.7 * unit(map.Seasonality[i] / 15);
+    const severity = map.WaterKindCodes[i] === 0 ? plain * seasons * unit(map.Runoff[i] / 400) : 0;
+    map.FloodFrequency[i] = 0.5 * severity;
+    if (severity === 0 || years <= 0) continue;
+    const flooded = severity * -Math.expm1(-years * map.FloodFrequency[i]);
+    for (const group of plantGroups) {
+      map[group.cover][i] *= 1 - flooded * Math.min(1, group.floodSensitivity * 2);
+      if (group.juvenile) map[group.juvenile][i] *= 1 - flooded;
+      map[group.seed][i] *= 1 - flooded * 0.5;
+    }
+    map.MineralNutrients[i] += flooded * 0.02;
+  }
+}
 /** Connected fuel and prevailing wind carry fire; inundated and ice-covered ground interrupt it. */
 export function disturbEcology(
   map: PhysicalField,
@@ -46,9 +68,10 @@ function fireTravel(map: PhysicalField, fuel: Float64Array, i: number, edge: num
   const distance = map.mesh.edgeLength[i * map.mesh.stride + edge];
   const wetness = environment(map, j).wetness;
   const wind =
-    ((map.mesh.x[j] - map.mesh.x[i]) * map.WindX[i] +
+    (((map.mesh.x[j] - map.mesh.x[i]) * map.WindX[i] +
       (map.mesh.y[j] - map.mesh.y[i]) * map.WindY[i]) /
-    Math.max(1, distance * 1000);
+      Math.max(1, distance * 1000)) *
+    windStrength(map, i);
   return (
     (distance / (15_000 * Math.max(0.1, fuel[j]) * Math.max(0.1, 1 + wind))) * (1 + wetness * 20)
   );

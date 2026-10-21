@@ -47,6 +47,7 @@ export const ecologyLiving = [
   "ColdAdaptation",
   "CanopyAge",
   "MigrationFlux",
+  "FloodFrequency",
   "Evapotranspiration",
 ] as const;
 export const ecologyScalars = [
@@ -105,6 +106,7 @@ export const ecologyBindings = [
   ["grazers", "Grazers", "kg-carbon/square-metre"],
   ["browsers", "Browsers", "kg-carbon/square-metre"],
   ["migrationFlux", "MigrationFlux", "kg-carbon/square-metre"],
+  ["floodFrequency", "FloodFrequency", "per-year"],
   ["canopyAge", "CanopyAge", "year"],
   ["infiltration", "Infiltration", "ratio"],
   ["evapotranspiration", "Evapotranspiration", "metre/year"],

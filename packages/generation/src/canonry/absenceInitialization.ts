@@ -38,6 +38,8 @@ const neutralBuffers: Record<string, BufferName[]> = {
     "OceanCurrentY",
     "OceanCurrentHeat",
     "OceanCurrentStrength",
+    "SeaSurfaceAnomaly",
+    "Upwelling",
     "WaveExposure",
   ],
   Warmth: ["Warmth"],

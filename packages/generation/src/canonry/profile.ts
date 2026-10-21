@@ -55,9 +55,25 @@ export const physicalProfile = {
   SedimentRockWeakness: 900,
   SoftSedimentDepth: 45,
   FjordMinimumGlacialErosion: 2,
-  CirculationBands: 5,
+  // Hadley, Ferrel and polar cells between the equator and each pole.
+  CirculationCellsPerHemisphere: 3,
   CirculationCellTurn: 700,
   CirculationWander: 550,
+  CirculationWanderScale: 420_000,
+  // Surface wind: mid-cell belt speeds (m/s), falling toward calm cell
+  // boundaries, then shaped by terrain smoothed over WindTerrainLength.
+  WindSpeedTrades: 7,
+  WindSpeedWesterlies: 9,
+  WindSpeedPolar: 5,
+  WindLandRoughness: 0.75,
+  WindTerrainLength: 40_000,
+  WindBlockingHeight: 1500,
+  WindBlockingSlope: 0.01,
+  WindBlockingMaximum: 0.6,
+  WindExposureRelief: 600,
+  WindShelterHeight: 1000,
+  WindGapReach: 25_000,
+  WindGapRelief: 300,
   ElevationVariationScale: 250_000,
   ElevationVariationStrength: 0.12,
   InteriorReliefStrength: 0.2,
@@ -192,10 +208,22 @@ export const physicalProfile = {
   DeltaIntensityDecay: 240,
   DeltaMinimumForwardAlignment: 80,
   DeltaMaximumRadius: 30_000,
+  // Degrees at the world's south and north edges. WorldExtentY is the world
+  // frame's [south, north] in metres; null places the map at the mid latitude.
+  LatitudeSouth: 10,
+  LatitudeNorth: 70,
+  WorldExtentY: null as [number, number] | null,
+  // Global mean at sea level; annual-mean insolation adds a second Legendre
+  // term, -range × P2(sin latitude), which averages to zero over a sphere.
   TemperatureBaseline: 285,
-  ElevationTemperatureLapse: 140,
-  OceanModerationDistance: 700_000,
-  OceanModerationStrength: 125,
+  InsolationTemperatureRange: 280,
+  ElevationTemperatureLapse: 65,
+  // Seasonal half-range in °C: equatorial floor plus polar growth with sin²
+  // latitude, reduced toward the coast over the continentality distance.
+  SeasonalityEquator: 1.5,
+  SeasonalityPolar: 22,
+  MaritimeSeasonality: 0.35,
+  ContinentalityDistance: 1_000_000,
   WarmthPocketCount: 15,
   WarmthPocketMinRadius: 100_000,
   WarmthPocketMaxRadius: 280_000,
@@ -204,8 +232,15 @@ export const physicalProfile = {
   HeartWarmthRadius: 280_000,
   HeartWarmthStrength: 310,
   GeothermalTemperatureStrength: 310,
-  OceanMoistureDistance: 900_000,
   OceanCurrentSmoothingLength: 25_000,
+  // Boundary currents act within a few multiples of this distance from the
+  // coast; western boundaries strengthen by up to the given share.
+  GyreCoastalLength: 200_000,
+  GyreBoundaryStrength: 0.8,
+  // Surface water carries its source temperature, relaxing toward the local
+  // equilibrium over this distance; full upwelling cools by UpwellingCooling.
+  SeaSurfaceRelaxation: 1_200_000,
+  UpwellingCooling: 60,
   OceanCurrentHeatDistance: 100_000,
   // Scalar heat-intensity units lost over the configured transport interval.
   OceanCurrentHeatCooling: 50,
@@ -213,12 +248,37 @@ export const physicalProfile = {
   OceanCurrentMinimumStrength: 110,
   OceanCurrentTemperatureStrength: 150,
   OceanCurrentWarmthStrength: 120,
-  CurrentEvaporationStrength: 180,
   PrecipitationBaseline: 40,
-  OrographicPrecipitationStrength: 220,
-  RainShadowStrength: 260,
+  // Downwind air columns (precipitation per-mille, 1000 ≈ 1 m/year). Over the
+  // sea a column approaches OceanColumnHumidity of saturation, which grows by
+  // ColumnSaturationGrowth per °C from ColumnSaturation at 20 °C. Over land it
+  // rains out over ColumnRainLength and loses 1 − exp(−rise/OrographicLiftHeight)
+  // to uplift; heat, maritime character and magical heat decay over their lengths.
+  ColumnSaturation: 700,
+  ColumnSaturationGrowth: 0.045,
+  OceanColumnHumidity: 0.85,
+  BoundaryColumnHumidity: 0.5,
+  SeaEvaporationLength: 400_000,
+  SeaExchangeLength: 300_000,
+  ColumnRainLength: 1_000_000,
+  ColumnRainEfficiency: 0.8,
+  OrographicLiftHeight: 4000,
+  AirHeatLength: 1_000_000,
+  MaritimeLength: 800_000,
+  MagicHeatAirLength: 300_000,
+  MagicHeatAirShare: 0.5,
+  // Pressure belts scale column rainout: convergence and the storm track raise
+  // it, subtropical and polar subsidence lower it, never below MinimumRainout.
+  EquatorialConvergence: 1.2,
+  StormTrackStrength: 0.9,
+  SubtropicalSubsidence: 0.75,
+  PolarSubsidence: 0.5,
+  MinimumRainout: 0.15,
   SnowTemperatureThreshold: 300,
   SnowTemperatureTransition: 100,
+  // Annual-mean surface temperature, after current and wave resistance, below
+  // which open ocean carries sea ice.
+  SeaIceFormationTemperature: 270,
   SeaIceCurrentResistance: 220,
   SeaIceWaveResistance: 180,
   SeaIceSuitabilityVariation: 150,
@@ -262,8 +322,6 @@ export const physicalProfile = {
   FractureConductanceFloor: 25,
   QualityTargets: {
     OceanCoverage: { target: 0.52, minimum: 0.38, maximum: 0.66 },
-    LandIceCoverage: { target: 0.14, minimum: 0.04, maximum: 0.24 },
-    SeaIceCoverage: { target: 0.42, minimum: 0.1, maximum: 0.74 },
     InlandLakeBodyCount: { minimum: 2, maximum: 80 },
   },
 };

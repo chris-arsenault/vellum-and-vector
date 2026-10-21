@@ -78,6 +78,24 @@ export const atlasParameterDefinitions = {
     step: 10,
     group: "climate",
   },
+  southLatitude: {
+    label: "South edge latitude",
+    unit: "°",
+    minimum: -90,
+    maximum: 90,
+    default: 10,
+    step: 1,
+    group: "climate",
+  },
+  northLatitude: {
+    label: "North edge latitude",
+    unit: "°",
+    minimum: -90,
+    maximum: 90,
+    default: 70,
+    step: 1,
+    group: "climate",
+  },
   impacts: {
     label: "Meteor impacts",
     unit: "history budget",
@@ -185,7 +203,11 @@ export const atlasParametersSchema = z
       ])
     ) as Record<keyof AtlasParameters, z.ZodDefault<z.ZodNumber>>
   )
-  .strict();
+  .strict()
+  .refine((parameters) => parameters.northLatitude >= parameters.southLatitude, {
+    path: ["northLatitude"],
+    message: "The north edge cannot lie south of the south edge.",
+  });
 export const defaultAtlasParameters: AtlasParameters = atlasParametersSchema.parse({});
 const parameterProcesses: Partial<Record<keyof AtlasParameters, string>> = {
   impacts: "canonry.impact-cratering",

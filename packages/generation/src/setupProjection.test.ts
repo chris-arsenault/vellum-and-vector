@@ -141,6 +141,8 @@ it("uses actual regional consumers and inherited fields rather than blanket geol
     controlFeature: "ocean.geography",
     active: false,
   });
+  for (const key of ["southLatitude", "northLatitude"])
+    expect(climate.settings.find((item) => item.key === key)?.active).toBe(false);
   expect(feature(view, "ecology.living").configurationEditable).toBe(false);
   expect(feature(view, "ecology.living").settings.every((item) => !item.active)).toBe(true);
 });

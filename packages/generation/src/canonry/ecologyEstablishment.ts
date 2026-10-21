@@ -2,7 +2,8 @@ import type { PhysicalField } from "./field";
 import { unitNoise } from "./noise";
 import { plantGroups, groupSuitability, type PlantGroup } from "./ecologyGroups";
 import { ecologicalFront, type EcologicalFront } from "./ecologyMovement";
-import type { EcologyForcing } from "./ecologyEnvironment";
+import { windStrength, type EcologyForcing } from "./ecologyEnvironment";
+import { crossingTime, waterDistance, type Crossing } from "./ecologyCrossing";
 
 export function initializeEcology(map: PhysicalField, seed = 42, inherited = false) {
   if (map.EcologyInitialized) return;
@@ -60,6 +61,12 @@ export function dispersePlants(
     const starts = Float64Array.from(map[group.seed], (bank, i) =>
       bank + map[group.cover][i] > 0.00001 ? 0 : Infinity
     );
+    // Propagules also cross the sea, arriving later the farther they must travel.
+    const crossing = group.crossing as Crossing;
+    const landed = waterDistance(map, (i) => starts[i] === 0, crossing.carrier, crossing.reach * 6);
+    for (let i = 0; i < starts.length; i++)
+      if (Number.isFinite(landed[i]))
+        starts[i] = Math.min(starts[i], crossingTime(crossing, landed[i]));
     const admits = (i: number) =>
       group.id === "altered"
         ? map.WaterKindCodes[i] !== 1 && map.WaterDepths[i] < 1.5 * 1024 && map.IceThickness[i] < 1
@@ -82,9 +89,10 @@ function seedTravel(
   const at = i * map.mesh.stride + edge,
     distance = map.mesh.edgeLength[at];
   const along =
-    ((map.mesh.x[j] - map.mesh.x[i]) * map.WindX[i] +
+    (((map.mesh.x[j] - map.mesh.x[i]) * map.WindX[i] +
       (map.mesh.y[j] - map.mesh.y[i]) * map.WindY[i]) /
-    Math.max(1, distance * 1000);
+      Math.max(1, distance * 1000)) *
+    windStrength(map, i);
   const waterborne = group.id === "wetland" && map.FlowTargets[i] === j ? 3 : 1;
   const speed =
     group.spread *

@@ -14,6 +14,8 @@ export const plantGroups = [
     nitrogen: 45,
     shade: 0.15,
     waterlogging: 0.65,
+    crossing: { carrier: "wind", reach: 400_000, interval: 20 },
+    floodSensitivity: 0.05,
   },
   {
     id: "broadleaf",
@@ -27,6 +29,8 @@ export const plantGroups = [
     nitrogen: 90,
     shade: 0.65,
     waterlogging: 0.35,
+    crossing: { carrier: "current", reach: 250_000, interval: 20 },
+    floodSensitivity: 0.2,
   },
   {
     id: "conifer",
@@ -40,6 +44,8 @@ export const plantGroups = [
     nitrogen: 110,
     shade: 0.5,
     waterlogging: 0.85,
+    crossing: { carrier: "current", reach: 150_000, interval: 20 },
+    floodSensitivity: 0.3,
   },
   {
     id: "wetland",
@@ -53,6 +59,8 @@ export const plantGroups = [
     nitrogen: 55,
     shade: 0.5,
     waterlogging: 0,
+    crossing: { carrier: "wind", reach: 300_000, interval: 20 },
+    floodSensitivity: 0,
   },
   {
     id: "altered",
@@ -66,6 +74,8 @@ export const plantGroups = [
     nitrogen: 100,
     shade: 0.6,
     waterlogging: 0.35,
+    crossing: { carrier: "current", reach: 200_000, interval: 20 },
+    floodSensitivity: 0.2,
   },
 ] as const;
 export type PlantGroup = (typeof plantGroups)[number];

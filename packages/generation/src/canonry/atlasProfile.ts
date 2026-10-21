@@ -15,8 +15,10 @@ export function atlasPhysicalProfile(parameters: Partial<AtlasParameters> = {}):
   profile.TectonicProvinceCount = settings.provinces;
   profile.ContinentalCrustFraction = settings.landFraction;
   profile.TemperatureBaseline = 300 + settings.temperature * 10;
+  profile.LatitudeSouth = settings.southLatitude;
+  profile.LatitudeNorth = settings.northLatitude;
   profile.PrecipitationBaseline *= settings.rainfall;
-  profile.OrographicPrecipitationStrength *= settings.rainfall;
+  profile.ColumnRainEfficiency *= settings.rainfall;
   profile.FluvialErosionStrength *= settings.erosion;
   profile.SeaLevel = settings.seaLevel / profile.ElevationScale;
   profile.ImpactCraterCount = settings.impacts;
@@ -31,7 +33,6 @@ export function atlasPhysicalProfile(parameters: Partial<AtlasParameters> = {}):
   profile.CoastalErosionStrength *= settings.coastalErosion;
   profile.HeartWarmthStrength = 0;
   profile.WarmthPocketCount = 0;
-  profile.QualityTargets.LandIceCoverage.target = 0.14;
   return profile;
 }
 // Atlas temperatures are Celsius; the native snow threshold (300) represents

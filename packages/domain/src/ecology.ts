@@ -78,6 +78,7 @@ export const ecologyLabels: Record<string, string> = {
   grazers: "Grazing animal biomass",
   browsers: "Browsing animal biomass",
   migrationFlux: "Animal migration",
+  floodFrequency: "Flood frequency",
   canopyAge: "Mean canopy age",
   infiltration: "Infiltrated precipitation fraction",
   evapotranspiration: "Ecological evapotranspiration",

@@ -47,8 +47,11 @@ export const physicalApplicability: Record<string, FeatureApplicability> = {
       temperature: ["canonry.temperature"],
       rainfall: ["canonry.precipitation"],
       seaLevel: ["canonry.ocean-connectivity"],
+      southLatitude: ["canonry.temperature", "canonry.atmospheric-flow"],
+      northLatitude: ["canonry.temperature", "canonry.atmospheric-flow"],
     },
-    initialOnlySettings: ["seaLevel"],
+    // Latitude belongs to the world frame; regions read their parent's edges.
+    initialOnlySettings: ["seaLevel", "southLatitude", "northLatitude"],
     epochControls: [
       { key: "temperature", label: "Epoch temperature shift", unit: "°C" },
       { key: "rainfall", label: "Epoch rainfall", unit: "multiplier", min: 0, max: 5 },

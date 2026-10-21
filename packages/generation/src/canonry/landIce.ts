@@ -45,10 +45,13 @@ function dryLandBalance(map: PhysicalField, c: PhysicalContext, cutoff: number) 
         c.GlaciationStrength) /
         1000
     );
-    map.IceThickness[i] =
-      balance >= cutoff
-        ? clamp(map.IceThickness[i] + growth, p.GlacierThicknessThreshold, 1000)
-        : Math.max(0, map.IceThickness[i] - p.IceAblationStep);
+    const sustained = balance >= cutoff && (map.IceThickness[i] > 0 || growth > 0);
+    map.IceThickness[i] = sustained
+      ? clamp(map.IceThickness[i] + growth, p.GlacierThicknessThreshold, 1000)
+      : balance >= cutoff
+        ? 0
+        : // Melting scales with the deficit, so warm climates clear relict ice quickly.
+          Math.max(0, map.IceThickness[i] - Math.max(p.IceAblationStep, cutoff - balance));
     map.MaximumIceThickness[i] = Math.max(map.MaximumIceThickness[i], map.IceThickness[i]);
   }
 }
@@ -101,34 +104,21 @@ function advanceLakes(map: PhysicalField, c: PhysicalContext) {
 }
 export function landIce(map: PhysicalField, c: PhysicalContext) {
   map.IceBalance.fill(0);
-  const balances: { balance: number; area: number }[] = [];
+  let land = 0;
   for (let i = 0; i < map.mesh.count; i++) {
     if (!canCarryIce(map, i)) {
       map.IceThickness[i] = 0;
       continue;
     }
-    const balance = massBalance(map, c.Profile, i);
-    map.IceBalance[i] = balance;
-    if (map.WaterKindCodes[i] === 0 && map.mesh.contentAreas[i] > 0)
-      balances.push({ balance, area: map.mesh.contentAreas[i] });
+    map.IceBalance[i] = massBalance(map, c.Profile, i);
+    if (map.WaterKindCodes[i] === 0 && map.mesh.contentAreas[i] > 0) land++;
   }
-  if (balances.length === 0) {
+  if (land === 0) {
     advanceLakes(map, c);
     return;
   }
-  const target =
-    (balances.reduce((sum, value) => sum + value.area, 0) *
-      c.Profile.QualityTargets.LandIceCoverage.target *
-      c.GlaciationStrength) /
-    1000;
-  balances.sort((a, b) => b.balance - a.balance);
-  let covered = 0,
-    cutoff = 2147483647;
-  for (const cell of balances) {
-    if (covered >= target) break;
-    covered += cell.area;
-    cutoff = Math.max(c.Profile.MinimumIceBalance, cell.balance);
-  }
-  dryLandBalance(map, c, cutoff);
+  // Positive mass balance sustains ice and extent follows climate rather than
+  // a requested coverage. Epoch glaciation scales only how fast ice grows.
+  dryLandBalance(map, c, c.Profile.MinimumIceBalance);
   advanceLakes(map, c);
 }

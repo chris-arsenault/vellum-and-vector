@@ -30,19 +30,8 @@ export function seaIce(map: PhysicalField, c: PhysicalContext) {
     );
     map.SeaIceSuitability[i] = value;
   }
-  const eligible = ocean
-    .filter((i) => map.Temperature[i] <= p.IceMarginTemperature)
-    .sort((a, b) => map.SeaIceSuitability[b] - map.SeaIceSuitability[a] || a - b);
-  const target =
-    ocean.reduce((area, i) => area + map.mesh.contentAreas[i], 0) *
-    p.QualityTargets.SeaIceCoverage.target;
-  let area = 0,
-    cutoff = Infinity;
-  for (const i of eligible) {
-    if (area >= target) break;
-    area += map.mesh.contentAreas[i];
-    cutoff = map.SeaIceSuitability[i];
-  }
+  // Ice extent follows the cold itself rather than a requested coverage share.
+  const cutoff = 1000 - p.SeaIceFormationTemperature;
   for (const i of ocean) {
     const cold = map.SeaIceSuitability[i];
     if (cold < cutoff || map.Temperature[i] > p.IceMarginTemperature) continue;

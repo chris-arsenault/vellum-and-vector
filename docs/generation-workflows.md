@@ -305,8 +305,8 @@ adapts them for the atlas rather than copying the game's frozen-world setting:
   climate units per degree. Epoch temperature settings remain Celsius and sea
   levels remain metres relative to the world's calibrated sea datum.
 - The game's central warmth source and mandatory scattered warmth pockets are
-  disabled. User-configured sources provide magical forcing. Sea-ice coverage
-  is bounded by the ocean cold enough to freeze under the authored climate.
+  disabled. User-configured sources provide magical forcing. Land and sea ice
+  form where the latitude climate is cold enough, without coverage quotas.
 - Magical storage follows the native dominant source mapping when crust moves.
   Thermal forcing refreshes with climate; material feedback and elapsed storage
   advance once per epoch.
@@ -601,7 +601,7 @@ are described after the table. Exact numerical equivalence is not required.
 | RiverChannelGeometry        | `channelGeometry.ts::riverChannelGeometry`                     |
 | RiverNetwork                | `rivers.ts::riverNetwork`                                      |
 | Runoff                      | `climate.ts::runoff`                                           |
-| SeaIce                      | `seaIce.ts::seaIce`; atlas selects `atlasSeaIce.ts` instead    |
+| SeaIce                      | `seaIce.ts::seaIce`                                            |
 | SedimentTransport           | `fluvial.ts::sedimentTransport`                                |
 | TectonicEpoch               | `margins.ts::tectonicEpoch`                                    |
 | TectonicMargin              | `margins.ts::tectonicMargins`                                  |
@@ -619,10 +619,30 @@ their numerical comparisons are not the user's parity criterion or a prerequisit
 for adapting these operations to metres.
 
 For world generation, the atlas preserves the multi-epoch physical sequence.
-Its declared differences include profile/density scaling, different climate and
-land-ice targets, disabled central warmth/pockets, per-epoch impact and volcanic
-controls, authored-sample restoration and the sea-ice wrapper. Regional generation
+Its declared differences include profile/density scaling, disabled central
+warmth/pockets, per-epoch impact and volcanic controls, authored-sample
+restoration and the latitude climate described below. Regional generation
 additionally skips the 23 initial-geology and 21 per-epoch geology invocations.
+
+#### Latitude climate
+
+The climate steps keep Canonry's names, order and feature ownership. Their
+bodies implement a latitude-organised climate in place of the reference's
+radial frozen-world climate.
+
+| Step                                  | Atlas operation                                                                                                                                                                                                                                                |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ocean-currents`                      | Belt-driven drift turned along coasts into gyres (`oceanGyres.ts`). Western boundaries are intensified. Upwelling forms on subtropical eastern boundaries. A sea-surface anomaly is carried along the current from its source latitudes.                       |
+| `temperature`                         | Global mean + epoch offset − 28 °C × P2(sin latitude) − 6.5 °C/km lapse, plus geothermal, current, sea-surface anomaly and external heat. A seasonal half-range grows with latitude and continentality.                                                        |
+| `atmospheric-flow`                    | Hadley, Ferrel and polar cells by latitude, with terrain deflection, belt speed, crest exposure, lee shelter and gap channelling (`windTerrain.ts`).                                                                                                           |
+| `moisture-transport`                  | Air columns marched downwind in one ordered pass (`airColumn.ts`). They gather moisture over the sea and rain out with distance and uplift; pressure-belt rainout comes from `belts.ts`. Marine heat, maritime character and magical heat travel with the air. |
+| `precipitation`                       | Column precipitation with the epoch multiplier, split into rain and snow by the share of a sinusoidal year below freezing.                                                                                                                                     |
+| `land-ice-mass-balance` and `sea-ice` | Ice extent follows mass balance and cold rather than a coverage quota. Epoch glaciation scales growth. Melting scales with the deficit.                                                                                                                        |
+
+Latitude is linear in world northing between the `southLatitude` and
+`northLatitude` climate settings (defaults 10° and 70°). Regions inherit these
+settings and read latitude from world coordinates, so they reproduce their
+parent's belts. A numerical patch without a world frame sits at the mid latitude.
 Open-boundary drainage and inherited fields are atlas extensions. These are
 specific changes to execution and inputs, not missing meteor or ice-age modules.
 Per-layer validation is consolidated in `layerValidation.ts`; it is not a literal
@@ -1973,18 +1993,34 @@ Growth changes the community; biome names classify the resulting cover.
 
 Initial worlds receive geographically varied founders. Subsequent establishment
 requires surviving plants, viable seeds or a reachable colonization front.
-Dispersal takes physical travel time and responds to terrain, wind, waterborne
-transport and configured migration strength. Deep water and ice interrupt land
-colonization. Suitable climate alone cannot recreate an extinct forest on an
-isolated island. Grazers, browsers, predators and aquatic consumers migrate toward
-reachable food and refuge before reproduction, starvation, consumption and
-predation alter their biomass. Aquatic populations require connected water and
-production; they do not appear spontaneously in a newly flooded isolated cell.
+Dispersal takes physical travel time and responds to terrain, wind speed and
+direction, waterborne transport and configured migration strength. Ice
+interrupts colonization.
+
+Propagules also cross the sea (`ecologyCrossing.ts`). Grass and wetland groups
+travel with the wind; tree and altered groups raft on currents. Arrival waits
+`interval × exp(effective distance / reach)`, where the carrier shortens
+distances downwind or down-current and islands act as stepping stones. Nearby
+downwind islands colonize within decades, upwind and remote islands much later,
+and a very remote island gains grass long before trees. Suitable climate alone
+cannot recreate an extinct forest on an isolated island that no crossing reaches.
+
+Grazers, browsers, predators and aquatic consumers migrate toward reachable food
+and refuge before reproduction, starvation, consumption and predation alter
+their biomass. Terrestrial animals occasionally found a small population on
+unoccupied land with forage across the sea. Aquatic populations require connected
+water and production; they do not appear spontaneously in a newly flooded
+isolated cell.
 
 Erosion and glacial advance strip soil and seed banks. Fire ignition depends on
 fuel, drought and the epoch's fire regime; fire spreads through connected fuel
-with wind and wet barriers affecting travel. Volcanic construction and impacts
-also remove vegetation. Regrowth depends on the remaining substrate and sources.
+with wind speed and wet barriers affecting travel. Floodplains and deltas flood
+more often with stronger seasons and runoff. Floods kill young plants and part of
+the mature cover by group sensitivity, scour seed and leave nutrients, and their
+yearly frequency adds growth mortality, so flooded ground favours wetland and
+grass. Below the fronts' presence threshold a group is locally extinct and
+returns only by dispersal. Volcanic construction and impacts also remove
+vegetation. Regrowth depends on the remaining substrate and sources.
 Plant litter supports soil development and nutrient availability. Roots and soil
 affect infiltration and evapotranspiration, which feed runoff, local cooling and
 downwind moisture. Cover increases resistance to river erosion and hillslope

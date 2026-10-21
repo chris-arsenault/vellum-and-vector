@@ -3,7 +3,7 @@ import { classifyBiome, neutralEcology, type EcologyForcing } from "./ecologyEnv
 import { initializeEcology, dispersePlants } from "./ecologyEstablishment";
 import { evolveSoils } from "./ecologySoils";
 import { alterEcology } from "./ecologyMagic";
-import { disturbEcology } from "./ecologyDisturbance";
+import { disturbEcology, floodEcology } from "./ecologyDisturbance";
 import { growCommunities, updateTreeCover, normalizeCommunities } from "./ecologyGrowth";
 import { evolveAnimals } from "./ecologyAnimals";
 
@@ -20,6 +20,7 @@ export function evolveVegetation(
     evolveSoils(map, years, forcing);
     alterEcology(map, years, forcing);
     disturbEcology(map, years, forcing, seed);
+    floodEcology(map, years);
     const arrivals = dispersePlants(map, years, forcing);
     growCommunities(map, years, arrivals, forcing, restore);
     evolveAnimals(map, years, forcing);

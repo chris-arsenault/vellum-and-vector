@@ -42,8 +42,18 @@ export function evolveSoils(
       years,
       1 / Math.max(1e-8, weathering)
     );
-    map.MineralNutrients[i] +=
-      -Math.expm1(-years / 100) * (0.005 + map.SoilCarbon[i] / 80) * f.recovery;
+    // Weathering and organic recycling restore available nutrients toward the
+    // founders' level over centuries, so scoured or burned ground re-fertilises
+    // in proportion to elapsed time; cold slows it.
+    const fertility = 0.08 + map.SoilCarbon[i] / 80,
+      replenishment = env.warmth * f.recovery;
+    if (replenishment > 0 && map.MineralNutrients[i] < fertility)
+      map.MineralNutrients[i] = approach(
+        map.MineralNutrients[i],
+        fertility,
+        years,
+        300 / replenishment
+      );
     soilWater(map, i, years, f);
     map.EcologyErosion[i] = erosionHistory(map, i);
     map.EcologyIce[i] = map.IceThickness[i];
