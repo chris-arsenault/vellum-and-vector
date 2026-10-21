@@ -101,6 +101,7 @@ async function createWorld(page: Page, width = 1, height = 1) {
   await page.getByLabel("World name").fill("Cartographer's desk");
   await page.getByLabel("Width · km").fill(String(width));
   await page.getByLabel("Height · km").fill(String(height));
+  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
   await page.getByRole("button", { name: "Create world", exact: true }).click();
   await expect(map(page)).toBeVisible();
 }

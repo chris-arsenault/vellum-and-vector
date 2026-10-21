@@ -4,6 +4,7 @@ import { featureContribution, type GenerationFeature, type ResolvedFeatures } fr
 import type { ProcessInvocation, ProcessSequence } from "./process";
 import { physicalInputContract } from "./physicalInputs";
 import { atlasGenerationModules } from "./generationModules";
+import { physicalPresentation } from "./physicalPresentation";
 export { acceptedEmptyByConsumer } from "./physicalInputs";
 
 type Operations = Record<string, (string | [string, ParameterValues])[]>;
@@ -28,6 +29,7 @@ function definition(
   return {
     id,
     label,
+    presentation: physicalPresentation[id],
     domains: options.inherited ? ["physical", "magic"] : ["physical"],
     defaultEnabled: true,
     settings: Object.fromEntries(
@@ -337,7 +339,7 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
   ),
   definition(
     "physical.lifecycle",
-    "Physical history and structural validation",
+    "Formation history",
     {
       "epoch.history": ["physical-epoch-history"],
       "present.validation": ["physical-structural-validation"],

@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { bounds } from "./presentation";
 import {
   generationRecipeSchema,
@@ -8,6 +10,7 @@ import { session } from "./atlasState";
 import { GenerationWizard } from "./GenerationWizard";
 import { inheritedGeneration, startGeneration } from "./generationJobs";
 import type { GenerationDraft } from "./generationDraft";
+import type { PreparedSetup } from "./useGenerationWorkflow";
 import type { EditorState } from "./useEditor";
 import type { World } from "./types";
 
@@ -36,29 +39,47 @@ export function RegionalGeneration({ world, editor }: { world: World; editor: Ed
       settings: worldGenerationSettings(world),
     }),
   };
-  const generate = (draft: GenerationDraft) => {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const element = dialog.current!;
+    element.showModal();
+    return () => element.close();
+  }, []);
+  const generate = (_draft: GenerationDraft, prepared: PreparedSetup) => {
     startGeneration(world.id, {
-      ...draft.recipe,
-      areaId: area.id,
+      ...prepared.input,
       operationId: crypto.randomUUID(),
-      expectedVersion: world.version,
+      expectedVersion: prepared.source.world.version,
     });
     editor.setPanel("generate");
   };
-  return (
-    <>
-      <p className="callout">
-        {area.boundary?.crossings.length ?? 0} locked crossings · parent history and authored
-        geography remain authoritative.
-      </p>
-      <GenerationWizard
-        key={area.id}
-        initial={initial}
-        source={session(world.id).snapshot}
-        areaId={area.id}
-        onGenerate={generate}
-        onCancel={() => editor.setPanel("generate")}
-      />
-    </>
+  return createPortal(
+    <dialog
+      ref={dialog}
+      className="setup-region-dialog"
+      aria-label="Generate region"
+      onCancel={(event) => {
+        event.preventDefault();
+        editor.setPanel("generate");
+      }}
+    >
+      <div className="setup-region-shell">
+        <header className="setup-page-header">
+          <div>
+            <h1>Generate {area.name}</h1>
+          </div>
+          <p className="hint">Parent history and authored geography remain authoritative.</p>
+        </header>
+        <GenerationWizard
+          key={area.id}
+          initial={initial}
+          source={session(world.id).snapshot}
+          areaId={area.id}
+          onGenerate={generate}
+          onCancel={() => editor.setPanel("generate")}
+        />
+      </div>
+    </dialog>,
+    document.body
   );
 }

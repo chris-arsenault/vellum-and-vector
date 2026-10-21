@@ -68,7 +68,7 @@ async function transformMaterial(
   await behavior.transform(state, context);
   behavior.balance(state, context);
 }
-function elapsedYears(binding: DurationBinding, context: Pick<MapProcessContext, "epochs">) {
+export function elapsedYears(binding: DurationBinding, context: Pick<MapProcessContext, "epochs">) {
   const years =
     binding.kind === "years"
       ? binding.years

@@ -7,6 +7,7 @@ test("compact layer drawer leaves the map accessible on a narrow screen", async 
   await page.setViewportSize({ width: 600, height: 900 });
   await page.goto("/");
   await page.getByLabel("World name").fill("Narrow map");
+  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
   await page.getByRole("button", { name: "Create world", exact: true }).click();
   await page.getByRole("button", { name: "Layers", exact: true }).click();
   await expect(page.getByRole("radio", { name: "Topographic", exact: true })).toBeVisible();
@@ -32,6 +33,7 @@ test("manage continuous and categorical overlays without expanding the stack", a
   await installGenerationFixture(page, false, true, true);
   await page.goto("/");
   await page.getByLabel("World name").fill("Overlay workbench");
+  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
   await page.getByRole("button", { name: "Create world", exact: true }).click();
   await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
@@ -91,6 +93,7 @@ test("switch bases and compose independent field styles through the layer contro
   await installGenerationFixture(page, false, true);
   await page.goto("/");
   await page.getByLabel("World name").fill("GIS layer composition");
+  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
   await page.getByRole("button", { name: "Create world", exact: true }).click();
   await page.getByLabel("Detail level").selectOption("draft");
   await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
@@ -188,6 +191,7 @@ test("edit road symbols with GeoStyler and keep them in a session view", async (
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
   await page.getByLabel("World name").fill("Vector styles");
+  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
   await page.getByRole("button", { name: "Create world", exact: true }).click();
   await page.getByRole("button", { name: "Edit this map by hand", exact: true }).click();
   await page.getByLabel("Working layer").selectOption("routes");

@@ -2,19 +2,31 @@ import {
   generationRecipeSchema,
   defaultAtlasParameters,
   prepareAtlasGeneration,
+  atlasFeatureDefinitions,
+  atlasGenerationModules,
+  generationSettingsSchema,
+  resolveGenerationFeatures,
+  type FeatureSelection,
   type GenerationRecipe,
 } from "@atlas/generation";
-import { canonryMagicPresets, type DomainSnapshot } from "@atlas/domain";
-import { createWorldSnapshot, defaultEpochs } from "./atlasState";
+import {
+  canonryMagicPresets,
+  requireThat,
+  type DomainSnapshot,
+  type ParameterValues,
+} from "@atlas/domain";
+import { createWorldSnapshot, defaultEpochs, worldScope } from "./atlasState";
 
 export interface GenerationDraft {
+  worldId?: string;
   name: string;
   width: number;
   height: number;
   recipe: GenerationRecipe;
 }
 export function newGenerationDraft(): GenerationDraft {
-  return {
+  return normalizeGenerationDraft({
+    worldId: crypto.randomUUID(),
     name: "",
     width: 4_000_000,
     height: 3_000_000,
@@ -33,15 +45,102 @@ export function newGenerationDraft(): GenerationDraft {
         magicSystems: canonryMagicPresets(),
       },
     }),
+  });
+}
+
+/** Import compatibility once; subsequent edits belong to feature selections. */
+export function normalizeGenerationRecipe(value: unknown): GenerationRecipe {
+  const recipe = generationRecipeSchema.parse(value);
+  const legacy = atlasGenerationModules.prepareSettings(recipe.features ?? {}, recipe.settings);
+  // Preserve selection intent while domains gate the prepared request separately.
+  const domains = [...new Set(atlasFeatureDefinitions.flatMap((feature) => feature.domains))];
+  const resolved = resolveGenerationFeatures(
+    atlasFeatureDefinitions,
+    recipe.features,
+    recipe.processes,
+    recipe.parameters,
+    domains,
+    legacy as unknown as ParameterValues
+  );
+  return {
+    ...recipe,
+    schemaVersion: 2,
+    features: resolved.selection,
+    parameters: resolved.parameters,
+    processes: {},
+    settings: generationSettingsSchema.parse(atlasGenerationModules.bindSettings(resolved, legacy)),
   };
 }
-export function draftPreview(draft: GenerationDraft, source?: DomainSnapshot, areaId?: string) {
-  const recipe = generationRecipeSchema.parse(draft.recipe);
-  const snapshot =
-    source ??
-    createWorldSnapshot(
-      { ...draft, name: draft.name || "New world", seed: recipe.seed, settings: recipe.settings },
-      "00000000-0000-4000-8000-000000000001"
-    );
+
+export function normalizeGenerationDraft(
+  draft: GenerationDraft,
+  source?: DomainSnapshot
+): GenerationDraft {
+  return {
+    ...draft,
+    worldId: source?.world.id ?? draft.worldId ?? crypto.randomUUID(),
+    recipe: normalizeGenerationRecipe(draft.recipe),
+  };
+}
+
+export function updateFeature(
+  draft: GenerationDraft,
+  id: string,
+  patch: FeatureSelection[string]
+): GenerationDraft {
+  const normalized =
+    draft.recipe.schemaVersion === 2 && draft.recipe.features
+      ? draft
+      : normalizeGenerationDraft(draft);
+  const definition = atlasFeatureDefinitions.find((feature) => feature.id === id);
+  requireThat(definition, "unknown_feature", `Unknown generation feature ${id}.`);
+  const previous = normalized.recipe.features![id];
+  const next = { ...previous, ...patch, settings: { ...previous.settings, ...patch.settings } };
+  if (patch.configuration !== undefined)
+    next.configuration = { ...previous.configuration, ...patch.configuration };
+  const domains = [...normalized.recipe.domains];
+  if (patch.enabled && !domains.some((domain) => definition.domains.includes(domain)))
+    domains.push(definition.domains[0] as GenerationRecipe["domains"][number]);
+  return {
+    ...normalized,
+    recipe: {
+      ...normalized.recipe,
+      domains,
+      features: {
+        ...normalized.recipe.features,
+        [id]: next,
+      },
+    },
+  };
+}
+
+export function setFeatureSetting(draft: GenerationDraft, id: string, key: string, value: number) {
+  return updateFeature(draft, id, { settings: { [key]: value } });
+}
+
+export function updateDraftDomains(draft: GenerationDraft, domains: GenerationRecipe["domains"]) {
+  return normalizeGenerationDraft({ ...draft, recipe: { ...draft.recipe, domains } });
+}
+
+export function prepareDraft(draft: GenerationDraft, source?: DomainSnapshot, areaId?: string) {
+  const recipe = normalizeGenerationRecipe(draft.recipe);
+  requireThat(
+    source || draft.worldId,
+    "draft_identity",
+    "Normalize the world draft before reviewing it."
+  );
+  const snapshot = source
+    ? { ...source, scope: worldScope(source.world, areaId ?? source.scope.areaId) }
+    : draftWorldSnapshot(draft);
   return prepareAtlasGeneration(snapshot, { ...recipe, areaId: areaId ?? snapshot.scope.areaId });
 }
+/** Blank creation installs valid world data without composing a generation request. */
+export function draftWorldSnapshot(draft: GenerationDraft) {
+  const recipe = normalizeGenerationRecipe(draft.recipe);
+  requireThat(draft.worldId, "draft_identity", "Normalize the world draft before creating it.");
+  return createWorldSnapshot(
+    { ...draft, name: draft.name || "New world", seed: recipe.seed, settings: recipe.settings },
+    draft.worldId
+  );
+}
+export const draftPreview = prepareDraft;

@@ -8,11 +8,13 @@ import {
 } from "./atlasParameters";
 import type { ProcessSequence } from "./process";
 import type { ProductDefinition } from "./productLedger";
+import type { FeaturePresentation } from "./generationPresentation";
 
 /** A creator capability owns its settings, operations and delivered products. */
 export interface GenerationFeature {
   id: string;
   label: string;
+  presentation?: FeaturePresentation;
   domains: string[];
   defaultEnabled: boolean;
   settings: Record<string, AtlasParameterDefinition>;

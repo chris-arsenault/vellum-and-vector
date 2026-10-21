@@ -9,6 +9,7 @@ test("save a magic variant and inspect generated history fields", async ({ page 
   await page.getByLabel("World name").fill("Magic histories");
   await page.getByLabel("Width · km").fill("100");
   await page.getByLabel("Height · km").fill("100");
+  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
   await page.getByRole("button", { name: "Create world", exact: true }).click();
   await page.getByText("Configure physical history", { exact: true }).click();
   await page.getByLabel("History starting point").selectOption("cycles");

@@ -1,259 +1,202 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
-import type { DomainSnapshot } from "@atlas/domain";
-import type { GenerationRecipe } from "@atlas/generation";
-import { draftPreview, newGenerationDraft, type GenerationDraft } from "./generationDraft";
-import { GenerationProcesses } from "./GenerationProcesses";
-import { GenerationParameters } from "./GenerationParameters";
-import { GenerationHistory } from "./GenerationHistory";
-import { GenerationReview } from "./GenerationReview";
 import { ErrorMessage } from "./ErrorMessage";
+import { GenerationFeaturePanel } from "./GenerationFeaturePanel";
+import { GenerationWorldStep } from "./GenerationWorldStep";
+import { GenerationSetupSummary } from "./GenerationSetupSummary";
+import { GenerationReview } from "./GenerationReview";
+import { RegionGenerationContext } from "./RegionGenerationContext";
+import { GenerationTimeline } from "./GenerationTimeline";
+import { GenerationFeatureConfiguration } from "./GenerationFeatureConfiguration";
+import { WorkflowFieldProvider } from "./WorkflowFields";
+import { useWorkflowFields } from "./workflowFieldState";
+import { workflowStages, stageStatus } from "./generationWorkflowPresentation";
+import {
+  useGenerationWorkflow,
+  type GenerationWorkflow,
+  type GenerationWorkflowOptions,
+} from "./useGenerationWorkflow";
 import "./generationWizard.css";
 
-interface WizardProps {
-  initial?: GenerationDraft;
-  source?: DomainSnapshot;
-  areaId?: string;
-  onGenerate: (draft: GenerationDraft) => void | Promise<void>;
-  onManual?: (draft: GenerationDraft) => void | Promise<void>;
-  onCancel?: () => void;
+export function GenerationWizard(options: GenerationWorkflowOptions) {
+  return (
+    <WorkflowFieldProvider>
+      <SetupWorkspace options={options} />
+    </WorkflowFieldProvider>
+  );
 }
-const steps = ["World", "Processes", "Parameters", "History and magic", "Review"];
-function useWizard(props: WizardProps) {
-  const [draft, setDraft] = useState(props.initial ?? newGenerationDraft);
-  const [step, setStep] = useState(0);
-  const preview = useMemo(() => {
-    try {
-      return { result: draftPreview(draft, props.source, props.areaId), error: null };
-    } catch (error) {
-      return { result: null, error };
-    }
-  }, [draft, props.source, props.areaId]);
-  const generate = useMutation({
-    mutationFn: async (manual: boolean) => {
-      if (manual) await props.onManual?.(draft);
-      else await props.onGenerate(draft);
-    },
-  });
-  return { draft, setDraft, step, setStep, preview, generate };
-}
-type WizardFlow = ReturnType<typeof useWizard>;
-export function GenerationWizard(props: WizardProps) {
-  const flow = useWizard(props);
-  const { step, setStep, preview, generate } = flow;
+function SetupWorkspace({ options }: { options: GenerationWorkflowOptions }) {
+  const flow = useGenerationWorkflow(options),
+    fields = useWorkflowFields();
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     heading.current?.focus();
-  }, [step]);
+  }, [flow.stage]);
+  useEffect(() => {
+    if (!flow.target) return;
+    const target = document.getElementById(`setup-${flow.target}`);
+    const input = flow.targetField
+      ? document.getElementsByName(flow.targetField)[0]
+      : target?.querySelector<HTMLInputElement>("input");
+    for (let parent = input?.parentElement; parent; parent = parent.parentElement)
+      if (parent instanceof HTMLDetailsElement) parent.open = true;
+    (input ?? target)?.scrollIntoView({ block: "nearest" });
+    (input as HTMLElement | null)?.focus();
+  }, [flow.target, flow.targetField, flow.targetRevision, flow.stage]);
+  const generate = useMutation({
+    mutationFn: async () => {
+      if (!flow.draft.name.trim()) throw new Error("Name the mapped area before creating it.");
+      if (Object.keys(fields.errors).length)
+        throw new Error("Correct or discard unfinished field edits.");
+      if (flow.json.dirty) throw new Error("Apply or discard the JSON edits before generating.");
+      if (flow.approach === "blank" && options.onManual) return options.onManual(flow.draft);
+      if (!flow.prepared || flow.prepared.diagnostics.some((item) => item.severity === "error"))
+        throw new Error("Resolve the generation dependencies before generating.");
+      await options.onGenerate(flow.draft, flow.prepared);
+    },
+  });
+  const stage = workflowStages.find((item) => item.id === flow.stage)!;
   return (
-    <section className="generation-wizard" aria-label="Generation wizard">
-      <ol className="generation-steps" aria-label="Generation steps">
-        {steps.map((title, index) => (
-          <li key={title} aria-current={index === step ? "step" : undefined}>
-            {index + 1}. {title}
-          </li>
-        ))}
-      </ol>
-      <h2 ref={heading} tabIndex={-1}>
-        {steps[step]}
-      </h2>
+    <section className="generation-wizard setup-workspace" aria-label="Generation wizard">
       <form
+        className="setup-form"
         onSubmit={(event) => {
           event.preventDefault();
-          if (step < 4) setStep(step + 1);
-          else generate.mutate(false);
+          if (flow.stage === "review" || flow.approach === "blank") generate.mutate();
+          else
+            flow.setStage(
+              workflowStages[workflowStages.findIndex((item) => item.id === flow.stage) + 1].id
+            );
         }}
       >
-        <div className="generation-step">
-          <WizardStep flow={flow} inherited={Boolean(props.source)} />
+        <div className="setup-body">
+          <StageRail flow={flow} />
+          <section className="setup-content" aria-labelledby="setup-stage-title">
+            <header className="stage-heading">
+              <h2 id="setup-stage-title" ref={heading} tabIndex={-1}>
+                {stage.title}
+              </h2>
+              <p>{stage.question}</p>
+            </header>
+            {options.source && options.areaId && (
+              <RegionGenerationContext world={options.source.world} areaId={options.areaId} />
+            )}
+            {flow.stage !== "review" && flow.approach === "procedural" && (
+              <GenerationTimeline flow={flow} />
+            )}
+            {flow.stage === "world" ? (
+              <GenerationWorldStep flow={flow}>
+                {flow.approach === "procedural" && <CapabilityStage flow={flow} />}
+              </GenerationWorldStep>
+            ) : (
+              <StageContent flow={flow} />
+            )}
+            <ErrorMessage error={generate.error} />
+          </section>
+          <GenerationSetupSummary flow={flow} />
         </div>
-        <ConfigurationErrors preview={preview} correct={() => setStep(1)} />
-        <WizardNavigation flow={flow} options={props} />
-        <ErrorMessage error={generate.error} />
+        <SetupActions flow={flow} pending={generate.isPending} />
       </form>
     </section>
   );
 }
-function WizardStep({ flow, inherited }: { flow: WizardFlow; inherited: boolean }) {
-  const { draft, setDraft, preview } = flow;
-  const change = (recipe: GenerationRecipe) => setDraft({ ...draft, recipe });
-  const context = { recipe: draft.recipe, change, inherited };
-  switch (flow.step) {
-    case 0:
-      return <WorldStep draft={draft} change={setDraft} inherited={inherited} />;
-    case 1:
-      return <GenerationProcesses {...context} preview={preview.result} />;
-    case 2:
-      return <GenerationParameters {...context} />;
-    case 3:
-      return <GenerationHistory {...context} />;
-    default:
-      return <GenerationReview recipe={draft.recipe} change={change} preview={preview.result} />;
-  }
-}
-function WizardNavigation({ flow, options }: { flow: WizardFlow; options: WizardProps }) {
-  const { step, setStep, preview, generate } = flow;
-  const invalid = Boolean(
-    preview.error || preview.result?.diagnostics.some((item) => item.severity === "error")
+function StageRail({ flow }: { flow: GenerationWorkflow }) {
+  const { errors } = useWorkflowFields();
+  return (
+    <nav className="setup-rail" aria-label="Generation steps">
+      <p className="eyebrow">{flow.options.source ? "Refine mapped area" : "New atlas"}</p>
+      <ol>
+        {workflowStages.map((stage, index) => (
+          <li key={stage.id}>
+            <button
+              type="button"
+              aria-current={flow.stage === stage.id ? "step" : undefined}
+              disabled={flow.approach === "blank" && stage.id !== "world"}
+              onClick={() => flow.setStage(stage.id)}
+            >
+              <span className="setup-stage-number">{String(index + 1).padStart(2, "0")}</span>
+              <span>
+                {stage.title}
+                <small>{stageStatus(flow, stage.id, errors)}</small>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ol>
+      <p className="hint">Start from defaults. Open any stage to adjust its geography.</p>
+    </nav>
   );
+}
+function StageContent({ flow }: { flow: GenerationWorkflow }) {
+  if (flow.stage === "review") return <GenerationReview flow={flow} />;
+  return <CapabilityStage flow={flow} />;
+}
+function CapabilityStage({ flow }: { flow: GenerationWorkflow }) {
+  const features =
+    flow.setup?.features.filter((feature) => feature.presentation.stage === flow.stage) ?? [];
+  const families = [...new Set(features.map((feature) => feature.presentation.family))];
   return (
     <>
-      <div className="generation-navigation">
-        {step > 0 && (
-          <button type="button" onClick={() => setStep(step - 1)}>
+      {families.map((family) => (
+        <section className="setup-family" key={family} aria-label={family}>
+          <h3>{family}</h3>
+          {features
+            .filter((feature) => feature.presentation.family === family)
+            .map((feature) => (
+              <GenerationFeaturePanel key={feature.id} flow={flow} feature={feature}>
+                <GenerationFeatureConfiguration flow={flow} feature={feature} />
+              </GenerationFeaturePanel>
+            ))}
+        </section>
+      ))}
+    </>
+  );
+}
+function SetupActions({ flow, pending }: { flow: GenerationWorkflow; pending: boolean }) {
+  const { errors } = useWorkflowFields(),
+    index = workflowStages.findIndex((item) => item.id === flow.stage);
+  const final = flow.stage === "review" || flow.approach === "blank";
+  const invalid = blockingIssues(flow, errors);
+  const label = finalActionLabel(flow);
+  return (
+    <footer className="setup-actions">
+      <SetupExitActions flow={flow} />
+      <div>
+        {index > 0 && (
+          <button type="button" onClick={() => flow.setStage(workflowStages[index - 1].id)}>
             Back
           </button>
         )}
-        <button className="primary" disabled={generate.isPending || (step === 4 && invalid)}>
-          {step === 4 ? (options.source ? "Generate region" : "Generate world") : "Next"}
+        {flow.stage === "world" && flow.approach === "procedural" && (
+          <button type="button" onClick={() => flow.setStage("review")}>
+            Use defaults & review
+          </button>
+        )}
+        <button className="primary" disabled={pending || (final && invalid)}>
+          {pending ? "Starting…" : final ? label : "Next"}
         </button>
-        <AlternativeActions flow={flow} options={options} />
       </div>
-      {step === 0 && options.onManual && (
-        <p className="hint">
-          Next configures procedural generation. Create world starts an empty world for manual
-          editing.
-        </p>
-      )}
-    </>
+    </footer>
   );
 }
-function AlternativeActions({ flow, options }: { flow: WizardFlow; options: WizardProps }) {
-  const manual = flow.step === 0 && Boolean(options.onManual);
+function blockingIssues(flow: GenerationWorkflow, errors: Record<string, string>) {
+  if (!flow.draft.name.trim() || Object.keys(errors).length > 0 || flow.json.dirty) return true;
+  if (flow.approach === "blank") return false;
+  return !flow.prepared || flow.prepared.diagnostics.some((item) => item.severity === "error");
+}
+function finalActionLabel(flow: GenerationWorkflow) {
+  if (flow.approach === "blank") return "Create world";
+  return flow.options.source ? "Generate region" : "Generate world";
+}
+function SetupExitActions({ flow }: { flow: GenerationWorkflow }) {
   return (
-    <>
-      {manual && (
-        <button
-          type="button"
-          disabled={!flow.draft.name.trim() || flow.generate.isPending}
-          onClick={() => flow.generate.mutate(true)}
-        >
-          Create world
-        </button>
-      )}
-      {options.onCancel && (
-        <button type="button" onClick={options.onCancel}>
+    <div>
+      {flow.options.onCancel && (
+        <button type="button" onClick={flow.options.onCancel}>
           Cancel setup
         </button>
       )}
-    </>
-  );
-}
-function WorldStep({
-  draft,
-  change,
-  inherited,
-}: {
-  draft: GenerationDraft;
-  change: (draft: GenerationDraft) => void;
-  inherited: boolean;
-}) {
-  return (
-    <>
-      <label>
-        {inherited ? "Mapped area" : "World name"}
-        <input
-          name="name"
-          required
-          value={draft.name}
-          readOnly={inherited}
-          onChange={(event) => change({ ...draft, name: event.target.value })}
-        />
-      </label>
-      <WorldExtent draft={draft} change={change} inherited={inherited} />
-      <label>
-        Generation seed
-        <input
-          name="seed"
-          type="number"
-          required
-          value={draft.recipe.seed}
-          onChange={(event) =>
-            change({ ...draft, recipe: { ...draft.recipe, seed: Number(event.target.value) } })
-          }
-        />
-      </label>
-      <label>
-        Detail level
-        <select
-          value={draft.recipe.quality}
-          onChange={(event) =>
-            change({
-              ...draft,
-              recipe: {
-                ...draft.recipe,
-                quality: event.target.value as GenerationRecipe["quality"],
-              },
-            })
-          }
-        >
-          <option value="draft">Draft</option>
-          <option value="standard">Standard</option>
-          <option value="fine">Fine</option>
-        </select>
-      </label>
-      <p className="hint">
-        Planar metres · higher detail samples the same world more finely. Every selected historical
-        mechanism still runs.
-      </p>
-    </>
-  );
-}
-function WorldExtent({
-  draft,
-  change,
-  inherited,
-}: {
-  draft: GenerationDraft;
-  change: (draft: GenerationDraft) => void;
-  inherited: boolean;
-}) {
-  return (
-    <fieldset disabled={inherited}>
-      <legend>Geographic extent</legend>
-      <div className="form-row">
-        {(["width", "height"] as const).map((key) => (
-          <label key={key}>
-            {key === "width" ? "Width · km" : "Height · km"}
-            <input
-              name={key}
-              type="number"
-              min="1"
-              value={draft[key] / 1000}
-              onChange={(event) => change({ ...draft, [key]: Number(event.target.value) * 1000 })}
-            />
-          </label>
-        ))}
-      </div>
-    </fieldset>
-  );
-}
-function ConfigurationErrors({
-  preview,
-  correct,
-}: {
-  preview: { result: ReturnType<typeof draftPreview> | null; error: unknown };
-  correct: () => void;
-}) {
-  const errors = preview.result?.diagnostics.some((item) => item.severity === "error");
-  return (
-    <>
-      <ErrorMessage error={preview.error} />
-      {Boolean(preview.result?.diagnostics.length) && (
-        <div role={errors ? "alert" : "status"} className={errors ? "error" : "hint"}>
-          <p>{errors ? "Resolve these generation dependencies:" : "Generation notes:"}</p>
-          <ul>
-            {preview.result!.diagnostics.map((item, i) => (
-              <li key={i}>{item.message}</li>
-            ))}
-          </ul>
-          {errors && (
-            <button type="button" onClick={correct}>
-              Review process choices
-            </button>
-          )}
-        </div>
-      )}
-    </>
+      {!flow.options.source && <small>This session stays in this tab.</small>}
+    </div>
   );
 }

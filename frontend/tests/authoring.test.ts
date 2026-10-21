@@ -9,6 +9,7 @@ test("typed survey features, located people and spatial analysis share the edito
   await page.getByLabel("World name").fill("Survey authoring");
   await page.getByLabel("Width · km").fill("1");
   await page.getByLabel("Height · km").fill("1");
+  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
   await page.getByRole("button", { name: "Create world", exact: true }).click();
   await expect(page.getByRole("application", { name: "World map canvas" })).toBeVisible();
   await page.getByRole("button", { name: "Library", exact: true }).click();

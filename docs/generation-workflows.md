@@ -147,7 +147,7 @@ or several causal positions in one sequence.
 
 The new-world wizard resolves one versioned JSON recipe before creating and
 generating the world. `generationRecipeSchema` validates the seed, quality,
-domains, creator parameters, process switches and complete physical/ecological,
+domains, feature-owned parameters and complete physical/ecological,
 human and magical settings. `atlasParameterDefinitions` owns creator parameter
 defaults, limits, units and display labels; the existing nested domain schemas
 continue to own ecological and magical settings.
@@ -158,14 +158,21 @@ configuration travels to the worker and must match the resolved inputs. Complete
 settings participate in configuration identity and remain inspectable in the
 in-memory run record. JSON editing updates only the wizard draft.
 
-Process switches use stable registered IDs. For example, the recipe's `processes`
-object can contain `"canonry.impact-cratering": false` to omit impacts, or
-`"canonry.ancestral-fluvial-erosion": false` to retain drainage/rivers without
-terrain incision. Required support processes cannot be disabled. Glacial erosion
-and deposition must be selected together; delta classification requires its
-floodplain input. `"atlas.ecology-evolve": false` omits the complete coupled
-ecological family, rather than accidentally retaining another age-advancing
-response. Magical ecological effects require that family when magic is enabled.
+The workflow edits version 2 `features`: `physical.impacts` omits the impact
+capability, `physical.river-incision` omits cutting while retaining river output,
+and `physical.glacial-sculpting` owns erosion, deposition and glacial relief
+together. Shared routing, ocean and material providers have explicit dependencies;
+they are capabilities rather than a permanent bulk of required support processes.
+The older `processes` object remains a compatibility input. The resolver maps its
+operation IDs to feature ownership and rejects conflicting coupled selections.
+
+Module presentation metadata places each capability in a decision stage and
+family. `projectGenerationSetup` exposes actual scheduled traits, owned controls,
+inherited restrictions, dependencies and publication bindings. One canonical
+draft owns shared epochs, ecology regimes, configured magic and cultural eras.
+Review and worker launch use the same source identity and prepared configuration.
+Invalid input and unapplied JSON stay visible and block launch. See
+[generation modules](generation-modules.md) for the interfaces.
 
 Native adapters distinguish initialized absent event histories from facts
 produced by an omitted process. Structural water, material, ice and spatial

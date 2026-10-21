@@ -15,25 +15,29 @@ Open product work is tracked in the [backlog](docs/backlog.md).
 
 ## Authoring workflow
 
-Start with the new-world wizard: choose the extent and seed, generation domains
-and optional processes, parameters, physical/ecological epochs, human history and
-magic. Review the ordered work and dependency explanations before generating the
-first map. Back navigation retains your draft. **Create world** on the first step
-instead opens an empty world for manual editing.
+Start with the generation workflow: define the world, then choose land and
+materials, water/climate/life, magical influences, and people/places. Each feature
+has its switch and operative settings together. Direct navigation preserves the
+draft; **Use defaults & review** skips ahead when the defaults suit the map.
+Select **Blank world** to create an empty atlas for manual editing.
 
-Process switches change geography; layer visibility only changes display.
-Required climate, drainage, ice-balance and validation work stays in the causal
-sequence. River incision can be omitted while retaining rivers. Glacial erosion
-and deposition are coupled to preserve sediment accounting; deltas require
-floodplain inputs. Ecology's paired responses retain their half-epoch durations.
-Advanced JSON configuration uses a versioned, validated recipe; applying it edits
-the draft without starting generation. Effective run inputs remain in the session.
+Feature choices change geography; layer visibility changes display. Coupled
+operations such as glacial sculpting appear as one choice. Rivers and incision
+remain independent. Dependency messages link to their providers and offer explicit
+repairs. One shared epoch selector connects physical, ecological and magical
+controls. Review shows resolved choices and output layers; execution traits and
+causal order sit behind **Execution details**.
+
+Advanced JSON configuration edits the same feature-owned recipe. Applying JSON
+regenerates compatibility fields without starting generation. Invalid field text
+and unapplied JSON block launch. Effective run inputs remain in the session.
 
 Physical epochs evolve competing plant groups, young and mature trees, seed banks,
 soil resources and grazing, browsing, predatory and aquatic animals. Colonization
 and migration follow reachable routes; ice, waterlogging, drought, fire and magic
 change the communities inherited by later epochs. Configure **Ecological regime**
-within physical history, or start with the wet/dry/cold/recovery cycle preset.
+beside Living ecology for the selected shared epoch, or start with the
+wet/dry/cold/recovery cycle preset in **Edit shared history**.
 **Biomes and life** exposes the resulting fields and selectable land-biome regions;
 the Biomes overlay uses named categories and is visible by default. Organic deposits
 and their later burial remain downstream consequences. See the
@@ -43,7 +47,8 @@ Use **Draw a region to develop** to drag a rectangle or trace an outline, adjust
 its vertices and choose a profile. The map previews the selected extent and its
 dimensions. Coordinates are optional precision controls. Double-click a mapped
 child area to enter it, or use the atlas tree and geographic breadcrumbs.
-Selecting **Generate local detail** opens the shared wizard for the new area.
+Selecting **Generate local detail** opens the shared workflow in a full workspace
+dialog for the new area, with parent context and effective spatial traits.
 Parent history and crossings remain fixed, and inherited geological construction
 controls are read-only. Manual and intentionally empty areas remain available.
 Existing-map regeneration continues through **Develop**.

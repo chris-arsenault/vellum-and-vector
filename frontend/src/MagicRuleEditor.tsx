@@ -4,6 +4,8 @@ import {
   type MagicFeatureRule,
   type MagicSystem,
 } from "@atlas/domain";
+import { CodeField, NumberField } from "./WorkflowFields";
+import { useWorkflowFields } from "./workflowFieldState";
 
 export function MagicRuleEditor({
   system,
@@ -14,6 +16,7 @@ export function MagicRuleEditor({
   systems: MagicSystem[];
   change: (next: MagicSystem) => void;
 }) {
+  const { clear } = useWorkflowFields();
   const update = (index: number, rule: MagicFeatureRule) =>
     change({
       ...system,
@@ -31,12 +34,14 @@ export function MagicRuleEditor({
       {system.features.map((rule, index) => (
         <FeatureRuleEditor
           key={rule.id}
+          fieldKey={`magic.${system.id}.rules.${rule.id}`}
           rule={rule}
           systems={systems}
           change={(updated) => update(index, updated)}
-          remove={() =>
-            change({ ...system, features: system.features.filter((_, i) => i !== index) })
-          }
+          remove={() => {
+            clear(`magic.${system.id}.rules.${rule.id}.`);
+            change({ ...system, features: system.features.filter((_, i) => i !== index) });
+          }}
         />
       ))}
       <button
@@ -63,11 +68,13 @@ export function MagicRuleEditor({
   );
 }
 function FeatureRuleEditor({
+  fieldKey,
   rule,
   systems,
   change,
   remove,
 }: {
+  fieldKey: string;
   rule: MagicFeatureRule;
   systems: MagicSystem[];
   change: (rule: MagicFeatureRule) => void;
@@ -83,21 +90,21 @@ function FeatureRuleEditor({
           onChange={(event) => change({ ...rule, name: event.target.value })}
         />
       </label>
-      <label>
-        Map surface priority
-        <input
-          type="number"
-          value={rule.priority}
-          onChange={(event) => change({ ...rule, priority: Number(event.target.value) })}
-        />
-      </label>
+      <NumberField
+        fieldKey={`${fieldKey}.priority`}
+        label="Map surface priority"
+        value={rule.priority}
+        change={(priority) => change({ ...rule, priority })}
+      />
       <ConditionGroups
+        fieldKey={`${fieldKey}.seeds`}
         label="Seed conditions"
         groups={rule.seeds}
         systems={systems}
         change={(seeds) => change({ ...rule, seeds })}
       />
       <ConditionGroups
+        fieldKey={`${fieldKey}.retains`}
         label="Retention conditions"
         groups={rule.retains ?? rule.seeds}
         systems={systems}
@@ -110,18 +117,28 @@ function FeatureRuleEditor({
   );
 }
 function ConditionGroups({
+  fieldKey,
   label,
   groups,
   systems,
   change,
 }: {
+  fieldKey: string;
   label: string;
   groups: MagicCondition[][];
   systems: MagicSystem[];
   change: (groups: MagicCondition[][]) => void;
 }) {
+  const { removeIndex } = useWorkflowFields();
   const update = (index: number, group: MagicCondition[]) =>
     change(groups.map((current, i) => (i === index ? group : current)));
+  const removeCondition = (group: number, index: number) => {
+    removeIndex(`${fieldKey}.${group}`, index);
+    update(
+      group,
+      groups[group].filter((_, i) => i !== index)
+    );
+  };
   return (
     <fieldset>
       <legend>{label}</legend>
@@ -131,6 +148,7 @@ function ConditionGroups({
           {group.map((test, i) => (
             <ConditionInput
               key={i}
+              fieldKey={`${fieldKey}.${index}.${i}`}
               test={test}
               systems={systems}
               change={(next) =>
@@ -139,15 +157,7 @@ function ConditionGroups({
                   group.map((current, n) => (n === i ? next : current))
                 )
               }
-              remove={
-                group.length > 1
-                  ? () =>
-                      update(
-                        index,
-                        group.filter((_, n) => n !== i)
-                      )
-                  : undefined
-              }
+              remove={group.length > 1 ? () => removeCondition(index, i) : undefined}
             />
           ))}
           <button
@@ -161,7 +171,10 @@ function ConditionGroups({
             <button
               type="button"
               className="quiet"
-              onClick={() => change(groups.filter((_, n) => n !== index))}
+              onClick={() => {
+                removeIndex(fieldKey, index);
+                change(groups.filter((_, n) => n !== index));
+              }}
             >
               Remove alternative
             </button>
@@ -179,11 +192,13 @@ function ConditionGroups({
   );
 }
 function ConditionInput({
+  fieldKey,
   test,
   systems,
   change,
   remove,
 }: {
+  fieldKey: string;
   test: MagicCondition;
   systems: MagicSystem[];
   change: (test: MagicCondition) => void;
@@ -207,31 +222,31 @@ function ConditionInput({
           ))}
         </select>
       </label>
-      <label>
-        At least
-        <input
-          type="number"
-          step="any"
-          value={test.min ?? ""}
-          onChange={(event) => change(optionalCondition(test, "min", event.target.value))}
-        />
-      </label>
-      <label>
-        At most
-        <input
-          type="number"
-          step="any"
-          value={test.max ?? ""}
-          onChange={(event) => change(optionalCondition(test, "max", event.target.value))}
-        />
-      </label>
-      <label>
-        One of these codes · comma separated
-        <input
-          value={test.values?.join(",") ?? ""}
-          onChange={(event) => change(optionalCondition(test, "values", event.target.value))}
-        />
-      </label>
+      <NumberField
+        fieldKey={`${fieldKey}.min`}
+        label="At least"
+        optional
+        value={test.min}
+        change={(min) => change(optionalBound(test, "min", min))}
+      />
+      <NumberField
+        fieldKey={`${fieldKey}.max`}
+        label="At most"
+        optional
+        value={test.max}
+        change={(max) => change(optionalBound(test, "max", max))}
+      />
+      <CodeField
+        fieldKey={`${fieldKey}.values`}
+        label="One of these codes · comma separated"
+        value={test.values}
+        change={(values) => {
+          const next = { ...test };
+          if (values === undefined) delete next.values;
+          else next.values = values;
+          change(next);
+        }}
+      />
       {remove && (
         <button type="button" className="quiet" onClick={remove}>
           Remove condition
@@ -240,10 +255,9 @@ function ConditionInput({
     </div>
   );
 }
-function optionalCondition(test: MagicCondition, key: "min" | "max" | "values", value: string) {
+function optionalBound(test: MagicCondition, key: "min" | "max", value: number | undefined) {
   const next = { ...test };
-  if (!value) delete next[key];
-  else if (key === "values") next.values = value.split(",").map(Number);
-  else next[key] = Number(value);
+  if (value === undefined) delete next[key];
+  else next[key] = value;
   return next;
 }

@@ -37,7 +37,10 @@ export async function installGenerationFixture(
               if (complete) pending.delete(complete);
             },
             postMessage(message: { snapshot: DomainSnapshot; input: AtlasGenerationInput }) {
-              Object.assign(window, { generationFixtureInput: structuredClone(message.input) });
+              Object.assign(window, {
+                generationFixtureInput: structuredClone(message.input),
+                generationFixtureSnapshot: structuredClone(message.snapshot),
+              });
               // Pin the same input revision that a real worker receives through structured cloning.
               const snapshot = structuredClone(message.snapshot);
               const publications = message.input.configuration?.inputs

@@ -5,7 +5,13 @@ clarified that generation architecture is the purpose of this work. The earlier
 completion claim below does not establish that architecture as complete. The
 [backend architecture redesign](#backend-architecture-redesign--2026-10-20)
 supersedes the earlier UI layout and configuration implementation recommendations.
-UI redesign is deferred. Earlier execution notes remain as history of `ab2ccf6`.
+Earlier execution notes remain as history of `ab2ccf6`.
+
+The subsequent UI planning request is recorded in
+[Generation setup workflow](GENERATION-WORKFLOW-PLAN.md). Its execution replaces
+the earlier wizard with feature-owned controls and shared chronology; that plan
+records current implementation and acceptance state and supersedes this document's
+earlier UI recommendations.
 
 Execution authorized for all milestones on 2026-10-20. Initial generation is the
 priority, with a smaller regional follow-on. Local implementation and validation
@@ -14,8 +20,8 @@ are in scope; publication and deployment are not requested.
 The backend redesign's D0 and M0–M4 milestones are complete. The active engine
 uses feature-owned configuration, executable process traits, one product ledger,
 declared conditional reconciliation and module-owned publication. Current usage
-is documented in [generation modules](generation-modules.md). UI redesign remains
-deferred; the earlier wizard is still a compatibility caller.
+is documented in [generation modules](generation-modules.md). The new workflow
+uses version 2 feature ownership; legacy flat inputs remain import compatibility.
 
 ## Outcome and requirements
 

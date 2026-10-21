@@ -8,6 +8,7 @@ test("editing, undo, cancellation and independent worlds work without services",
 }) => {
   await page.goto("/");
   await page.getByLabel("World name").fill("First world");
+  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
   await page.getByRole("button", { name: "Create world", exact: true }).click();
   await page
     .getByRole("toolbar", { name: "Map tools" })
@@ -31,6 +32,7 @@ test("editing, undo, cancellation and independent worlds work without services",
   await expect(page.locator(".map-status")).toContainText("0 world features");
   await page.getByRole("button", { name: "+ New world", exact: true }).click();
   await page.getByLabel("World name").fill("Second world");
+  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
   await page.getByRole("button", { name: "Create world", exact: true }).click();
   await expect(page.getByLabel("World", { exact: true })).toContainText("First world");
   await expect(page.getByLabel("World", { exact: true })).toHaveValue(/.+/);
@@ -40,6 +42,7 @@ test("editing, undo, cancellation and independent worlds work without services",
 test("manual edits made during generation survive its outdated result", async ({ page }) => {
   await page.goto("/");
   await page.getByLabel("World name").fill("Editable while generating");
+  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
   await page.getByRole("button", { name: "Create world", exact: true }).click();
   await page.getByLabel("Detail level").selectOption("draft");
   await page.getByRole("button", { name: "Generate selected domains" }).click();

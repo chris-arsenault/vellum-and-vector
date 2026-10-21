@@ -2,6 +2,9 @@ import { useState } from "react";
 import { canonryMagicPresets, type MagicSystem } from "@atlas/domain";
 import type { EditorState } from "./useEditor";
 import { MagicRuleEditor } from "./MagicRuleEditor";
+import { NumberField as NumberSetting } from "./WorkflowFields";
+import { useWorkflowFields } from "./workflowFieldState";
+import { magicControlKeys } from "./generationMagicControls";
 
 export function MagicSystemsForm({ editor }: { editor: EditorState }) {
   const [systems, setSystems] = useState(editor.world.magicSystems ?? canonryMagicPresets());
@@ -36,6 +39,7 @@ export function MagicSystemsEditor({
   systems: MagicSystem[];
   change: (systems: MagicSystem[]) => void;
 }) {
+  const { clear } = useWorkflowFields();
   const update = (updated: MagicSystem) =>
     change(systems.map((system) => (system.id === updated.id ? updated : system)));
   return (
@@ -66,7 +70,14 @@ export function MagicSystemsEditor({
           </button>
         </details>
       ))}
-      <button type="button" className="quiet" onClick={() => change(canonryMagicPresets())}>
+      <button
+        type="button"
+        className="quiet"
+        onClick={() => {
+          clear("magic.");
+          change(canonryMagicPresets());
+        }}
+      >
         Restore Canonry examples
       </button>
     </>
@@ -99,6 +110,7 @@ function SystemSettings({
       </label>
       <SystemPropagation system={system} change={change} />
       <NumberSetting
+        fieldKey={`magic.${system.id}.strength`}
         label="Activity multiplier"
         value={system.strength}
         min={0}
@@ -178,6 +190,7 @@ function SystemFeedback({
         {(Object.keys(effectLabels) as (keyof MagicSystem["effects"])[]).map((key) => (
           <NumberSetting
             key={key}
+            fieldKey={`magic.${system.id}.effects.${key}`}
             label={effectLabels[key]}
             value={system.effects[key]}
             change={(value) => change({ ...system, effects: { ...system.effects, [key]: value } })}
@@ -187,6 +200,7 @@ function SystemFeedback({
       <details>
         <summary>History & material storage</summary>
         <NumberSetting
+          fieldKey={`magic.${system.id}.history.retention`}
           label="Retained storage per epoch · fraction"
           min={0}
           max={1}
@@ -194,6 +208,7 @@ function SystemFeedback({
           change={(retention) => change({ ...system, history: { ...system.history, retention } })}
         />
         <NumberSetting
+          fieldKey={`magic.${system.id}.history.storage`}
           label="Activity stored per epoch · multiplier"
           min={0}
           value={system.history.storage}
@@ -258,60 +273,17 @@ function PropagationSettings({
   system: MagicSystem;
   change: (next: MagicSystem) => void;
 }) {
-  const keys: (keyof MagicSystem["parameters"])[] =
-    system.propagation === "ocean-rays"
-      ? [
-          "rayCount",
-          "rayDistance",
-          "coastalRayDistance",
-          "wakeDistance",
-          "beamWidth",
-          "coastalSources",
-          "coastalSourceDistance",
-          "wakeSources",
-          "coastalThreshold",
-          "waveAmplification",
-          "currentAmplification",
-        ]
-      : system.propagation === "cold-drainage"
-        ? ["baseInput", "logScale", "iceRetention", "coldRetentionDistance", "accumulationArea"]
-        : ["sourceSpacing", "baseCost", "conductanceDivisor"];
-  keys.push("featureNoiseScale");
-  if (system.source === "geothermal") keys.push("maximumSources", "sourceThreshold");
-  return keys.map((key) => (
+  return magicControlKeys(system).map((key) => (
     <NumberSetting
       key={key}
+      fieldKey={`magic.${system.id}.parameters.${key}`}
       label={parameterLabels[key]}
       value={system.parameters[key]}
       min={0}
+      step={
+        ["maximumSources", "rayCount", "coastalSources", "wakeSources"].includes(key) ? 1 : "any"
+      }
       change={(value) => change({ ...system, parameters: { ...system.parameters, [key]: value } })}
     />
   ));
-}
-function NumberSetting({
-  label,
-  value,
-  change,
-  min,
-  max,
-}: {
-  label: string;
-  value: number;
-  change: (value: number) => void;
-  min?: number;
-  max?: number;
-}) {
-  return (
-    <label>
-      {label}
-      <input
-        type="number"
-        step="any"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(event) => change(Number(event.target.value))}
-      />
-    </label>
-  );
 }

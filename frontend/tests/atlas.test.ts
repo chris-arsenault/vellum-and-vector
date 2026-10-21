@@ -16,6 +16,7 @@ test("session world, generation, skipped refinement, editing and located templat
   await page.getByLabel("World name").fill("Test atlas");
   await page.getByLabel("Width · km").fill("100");
   await page.getByLabel("Height · km").fill("100");
+  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
   await page.getByRole("button", { name: "Create world", exact: true }).click();
   await expect(page.getByRole("application", { name: "World map canvas" })).toBeVisible();
   await page.getByLabel("Detail level").selectOption("draft");

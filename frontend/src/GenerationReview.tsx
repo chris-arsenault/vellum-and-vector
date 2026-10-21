@@ -1,132 +1,127 @@
-import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import {
-  generationRecipeSchema,
-  describeProcess,
-  atlasParameterDefinitions,
-  type AtlasParameters,
-  type GenerationRecipe,
-} from "@atlas/generation";
-import { sequenceStages, type SequenceStage } from "../../packages/generation/src/sequence";
-import type { draftPreview } from "./generationDraft";
-import { ErrorMessage } from "./ErrorMessage";
+import type { SetupFeature } from "@atlas/generation";
+import type { GenerationWorkflow } from "./useGenerationWorkflow";
+import { workflowStages, featureControlSettings } from "./generationWorkflowPresentation";
+import { GenerationConfigurationSummary } from "./GenerationConfigurationSummary";
+import { GenerationRecipeEditor } from "./GenerationRecipeEditor";
+import { GenerationExecutionInspector } from "./GenerationExecutionInspector";
 
-export function GenerationReview({
-  preview,
-  recipe,
-  change,
-}: {
-  preview: ReturnType<typeof draftPreview> | null;
-  recipe: GenerationRecipe;
-  change: (recipe: GenerationRecipe) => void;
-}) {
-  const stages = preview
-    ? sequenceStages(preview.input.configuration!.sequence).filter((stage) => stage.invocation)
-    : [];
-  const phases = causalGroups(stages);
+export function GenerationReview({ flow }: { flow: GenerationWorkflow }) {
   return (
     <>
       <p>
-        {recipe.quality} detail · seed {recipe.seed} · {recipe.domains.join(", ")}
+        <strong>{flow.draft.name || "Untitled world"}</strong> · {flow.draft.width / 1000} ×{" "}
+        {flow.draft.height / 1000} km · {flow.draft.recipe.quality} detail · seed{" "}
+        {flow.draft.recipe.seed}
       </p>
-      <p>
-        {recipe.settings.epochs.length} physical epochs · {stages.length} process invocations.
-        Required refreshes remain in causal order.
-      </p>
-      {phases.map((phase, index) => (
-        <details key={index}>
-          <summary>{phase.label}</summary>
-          <ol className="generation-stage-list">
-            {phase.stages.map((stage, i) => {
-              const contract = preview!.registry.get(
-                stage.invocation!.process,
-                stage.invocation!.version
-              ).contract;
-              return (
-                <li key={i}>
-                  {describeProcess(contract).label}{" "}
-                  <small>· {describeProcess(contract).role}</small>
-                </li>
-              );
-            })}
-          </ol>
-        </details>
-      ))}
-      <EffectiveParameters recipe={recipe} />
-      <RecipeEditor recipe={recipe} change={change} />
+      {!flow.prepared && (
+        <p role="alert">Repair the configuration before reviewing its outcomes.</p>
+      )}
+      {flow.prepared && (
+        <>
+          <div className="setup-review-grid">
+            {workflowStages
+              .filter((stage) => stage.id !== "review")
+              .map((stage) => (
+                <ReviewFamily key={stage.id} flow={flow} stage={stage} />
+              ))}
+          </div>
+          <ReviewHistory flow={flow} />
+        </>
+      )}
+      <GenerationExecutionInspector flow={flow} />
+      <GenerationRecipeEditor flow={flow} />
     </>
   );
 }
-function EffectiveParameters({ recipe }: { recipe: GenerationRecipe }) {
+function ReviewHistory({ flow }: { flow: GenerationWorkflow }) {
+  const settings = flow.prepared?.input.settings;
+  const layers = [...new Set(flow.setup?.publications.map((item) => item.layer.name))];
   return (
-    <details>
-      <summary>Effective creator parameters</summary>
-      <dl>
-        {Object.entries(recipe.parameters).map(([key, value]) => {
-          const definition = atlasParameterDefinitions[key as keyof AtlasParameters];
-          return (
-            <div key={key}>
-              <dt>{definition.label}</dt>
-              <dd>
-                {value} {definition.unit} ·{" "}
-                {value === definition.default ? "Profile default" : "Configured value"}
-              </dd>
-            </div>
-          );
-        })}
-      </dl>
-      <p className="hint">
-        Inactive settings are retained in the configuration for inspection. Only enabled processes
-        consume them.
+    <section aria-label="History and outputs">
+      <h3>History and outputs</h3>
+      <p>
+        {settings?.epochs.length ?? 0} shared physical epochs
+        {flow.setup?.context.inherited ? " · completed history is inherited" : ""}. Model passes do
+        not add elapsed time. Present ecological classification adds no age.
       </p>
-    </details>
+      <ul>
+        {settings?.epochs.map((epoch) => (
+          <li key={epoch.id}>
+            {epoch.id} · {(epoch.duration ?? 1000).toLocaleString()} years
+          </li>
+        ))}
+      </ul>
+      <p>Output layers: {layers.join(", ") || "None selected"}.</p>
+      <p className="hint">
+        These choices control generated geography. Layer visibility is adjusted in the map editor.
+      </p>
+    </section>
   );
 }
-function causalGroups(stages: SequenceStage[]) {
-  const groups: { label: string; stages: SequenceStage[] }[] = [];
-  let encounteredEpoch = false;
-  for (const stage of stages) {
-    if (stage.epochs.length) encounteredEpoch = true;
-    const label =
-      stage.epochs[0]?.id ?? (encounteredEpoch ? "Present and publication" : "Initial formation");
-    if (groups.at(-1)?.label === label) groups.at(-1)!.stages.push(stage);
-    else groups.push({ label, stages: [stage] });
-  }
-  return groups;
-}
-function RecipeEditor({
-  recipe,
-  change,
+function ReviewFamily({
+  flow,
+  stage,
 }: {
-  recipe: GenerationRecipe;
-  change: (recipe: GenerationRecipe) => void;
+  flow: GenerationWorkflow;
+  stage: (typeof workflowStages)[number];
 }) {
-  const [text, setText] = useState(() => JSON.stringify(recipe, null, 2));
-  const apply = useMutation({
-    mutationFn: async () => {
-      const parsed = generationRecipeSchema.parse(JSON.parse(text));
-      change(parsed);
-    },
-  });
+  const features =
+    flow.setup?.features.filter((feature) => feature.presentation.stage === stage.id) ?? [];
+  const selected = features.filter((feature) => feature.enabled);
+  const off = features.filter((feature) => !feature.enabled);
   return (
-    <details>
-      <summary>Advanced JSON configuration</summary>
-      <p>
-        Versioned parameters and process choices for this run. Applying JSON updates the draft; it
-        does not start generation.
-      </p>
-      <label htmlFor="generation-configuration">Generation configuration</label>
-      <textarea
-        id="generation-configuration"
-        rows={16}
-        spellCheck={false}
-        value={text}
-        onChange={(event) => setText(event.target.value)}
-      />
-      <button type="button" onClick={() => apply.mutate()}>
-        Apply configuration
-      </button>
-      <ErrorMessage error={apply.error} />
-    </details>
+    <section aria-label={`${stage.title} choices`}>
+      <h3>{stage.title}</h3>
+      <ul className="setup-review-choices">
+        {selected.map((feature) => (
+          <ReviewFeature key={feature.id} flow={flow} feature={feature} />
+        ))}
+      </ul>
+      {off.length > 0 && (
+        <details>
+          <summary>Omitted geography · {off.length}</summary>
+          <ul>
+            {off.map((feature) => (
+              <li key={feature.id}>
+                <EditFeature flow={flow} feature={feature} />
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </section>
+  );
+}
+function ReviewFeature({ flow, feature }: { flow: GenerationWorkflow; feature: SetupFeature }) {
+  const active = featureControlSettings(flow, feature.id).filter((setting) => setting.active);
+  return (
+    <li>
+      <EditFeature flow={flow} feature={feature} />
+      {feature.status !== "active" && (
+        <small> · {feature.status === "inherited" ? "Inherited" : "No active contribution"}</small>
+      )}
+      {active.length > 0 && (
+        <dl>
+          {active.map((setting) => (
+            <div key={setting.key}>
+              <dt>{setting.definition.label}</dt>
+              <dd>
+                {setting.value} {setting.definition.unit}
+                {setting.value !== setting.definition.default && " · changed from default"}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      <GenerationConfigurationSummary flow={flow} feature={feature} />
+      {feature.reason && <p className="hint">{feature.reason}</p>}
+    </li>
+  );
+}
+function EditFeature({ flow, feature }: { flow: GenerationWorkflow; feature: SetupFeature }) {
+  return (
+    <button type="button" className="setup-link" onClick={() => flow.locate(feature.id)}>
+      {feature.label}
+    </button>
   );
 }

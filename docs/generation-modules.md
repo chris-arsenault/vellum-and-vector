@@ -61,6 +61,37 @@ not. Legacy human `physicalEpoch` and `politicalCapacity` values remain metadata
 nondefault values produce a warning because the current human algorithms do not
 simulate their effects.
 
+## Setup presentation
+
+Module-owned `FeaturePresentation` assigns a decision stage, family, order and
+explanation. Numeric controls come from the feature's existing definitions;
+consumer metadata explains whether a value affects the current profile. Coupled
+mechanisms share one feature panel. A scalar extension receives its panel through
+the registry without another alias or switch table. Rich nested configuration
+uses bounded editors for clocks, ecology, magic and cultures.
+
+Projected scalar descriptors distinguish their canonical `owner` from the
+`controlFeature` whose operations consume them. Sea-level baseline is presented
+with Ocean geography while retaining its existing compatibility ownership. Linked
+epoch views likewise share one clock value; physical rainfall is editable with
+climate even when living ecology is off because precipitation consumes that value.
+
+`projectGenerationSetup` reads the prepared request and registry. It exposes
+selected/off/inherited/unavailable capabilities, actual occurrences, operational
+traits, elapsed bindings, dependencies, diagnostics and publication descriptors.
+The projection never selects or executes processes. Execution inspection retains
+causal sequence order, including shared operations and declared reconciliation.
+Decision-stage order is independent of execution order.
+
+The UI draft normalizes compatibility inputs to feature ownership. Epoch rename,
+insertion, deletion and reorder update the single physical clock and keyed
+ecological/magical configurations together. Form and JSON edits use that draft;
+JSON exports normalized compatibility fields and reports regeneration when owned
+values supersede them. Temporary invalid text is separate from committed numeric
+values and blocks launch. Review uses prepared values; installing a new world
+uses its reviewed draft snapshot and stable identity. Region setup uses the full
+source snapshot, inherited definitions and the reviewed source version.
+
 ## Process execution and validity
 
 `ProcessBehavior` supplies executable initialization, model-pass, elapsed,

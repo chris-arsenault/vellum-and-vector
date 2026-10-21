@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ErrorMessage } from "./ErrorMessage";
-import { createWorld, session } from "./atlasState";
+import { registerWorldSnapshot, session } from "./atlasState";
 import { startGeneration } from "./generationJobs";
 import { GenerationWizard } from "./GenerationWizard";
-import { draftPreview, type GenerationDraft } from "./generationDraft";
+import { draftPreview, draftWorldSnapshot, type GenerationDraft } from "./generationDraft";
 import { useWorld, useWorlds } from "./useAtlas";
 import { Editor } from "./Editor";
 import { TemplateStudio } from "./TemplateStudio";
@@ -52,36 +52,27 @@ function Atlas() {
       />
     );
   return (
-    <main className="welcome">
-      <div className="welcome-card">
-        <Brand />
-        <p className="eyebrow">A geographically connected world</p>
-        <h1>Create your world.</h1>
-        <p>Start with its geography. Develop regions, places and interiors as you need them.</p>
-        <p className="callout">
+    <main className="setup-page">
+      <header className="setup-page-header">
+        <div>
+          <Brand />
+          <h1>New world</h1>
+        </div>
+        <p className="hint">
           This session lives in this tab. Reloading or closing it discards your worlds.
         </p>
-        <CreateWorld
-          onCancel={world.data ? () => setCreating(false) : undefined}
-          onCreate={(id) => {
-            setSelected(id);
-            setCreating(false);
-          }}
-        />
         <button className="secondary" onClick={() => setLibrary(true)}>
           Independent template library
         </button>
-        {creating && (
-          <button className="quiet" onClick={() => setCreating(false)}>
-            Return to atlas
-          </button>
-        )}
-        <ErrorMessage error={worlds.error ?? world.error} />
-      </div>
-      <div className="welcome-grid" aria-hidden="true">
-        <div className="welcome-circle" />
-        <span>WORLD · REGION · LOCAL · SITE · INTERIOR</span>
-      </div>
+      </header>
+      <CreateWorld
+        onCancel={world.data ? () => setCreating(false) : undefined}
+        onCreate={(id) => {
+          setSelected(id);
+          setCreating(false);
+        }}
+      />
+      <ErrorMessage error={worlds.error ?? world.error} />
     </main>
   );
 }
@@ -107,23 +98,22 @@ function CreateWorld({
 }) {
   const cache = useQueryClient();
   const create = useMutation({
-    mutationFn: async ({ draft, generate }: { draft: GenerationDraft; generate: boolean }) => {
-      if (generate) {
-        const preview = draftPreview(draft);
-        if (preview.diagnostics.some((item) => item.severity === "error"))
-          throw new Error(preview.diagnostics.map((item) => item.message).join("\n"));
-      }
-      const world = createWorld({
-        name: draft.name,
-        width: draft.width,
-        height: draft.height,
-        seed: draft.recipe.seed,
-        settings: draft.recipe.settings,
-      });
-      if (generate)
+    mutationFn: async ({
+      draft,
+      generate,
+      prepared,
+    }: {
+      draft: GenerationDraft;
+      generate: boolean;
+      prepared?: ReturnType<typeof draftPreview>;
+    }) => {
+      const reviewed = generate ? (prepared ?? draftPreview(draft)) : undefined;
+      if (reviewed?.diagnostics.some((item) => item.severity === "error"))
+        throw new Error(reviewed.diagnostics.map((item) => item.message).join("\n"));
+      const world = registerWorldSnapshot(reviewed?.source ?? draftWorldSnapshot(draft));
+      if (reviewed)
         startGeneration(world.id, {
-          ...draft.recipe,
-          areaId: Object.keys(world.areas)[0],
+          ...reviewed.input,
           operationId: crypto.randomUUID(),
           expectedVersion: world.version,
         });
@@ -138,8 +128,8 @@ function CreateWorld({
   return (
     <GenerationWizard
       onCancel={onCancel}
-      onGenerate={async (draft) => {
-        await create.mutateAsync({ draft, generate: true });
+      onGenerate={async (draft, prepared) => {
+        await create.mutateAsync({ draft, prepared, generate: true });
       }}
       onManual={async (draft) => {
         await create.mutateAsync({ draft, generate: false });

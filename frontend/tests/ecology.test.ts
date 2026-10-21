@@ -15,6 +15,7 @@ test("shows categorical biomes and inspectable ecological fields in the atlas", 
   await installGenerationFixture(page, false, true, true);
   await page.goto("/");
   await page.getByLabel("World name").fill("Living atlas");
+  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
   await page.getByRole("button", { name: "Create world", exact: true }).click();
   await page.getByText("Configure physical history", { exact: true }).click();
   await page.getByLabel("History starting point").selectOption("ecological");
@@ -70,6 +71,7 @@ test("selects, protects, exports and refines extracted ecological polygons with 
   await page.getByLabel("World name").fill("Ecological GIS");
   await page.getByLabel("Width · km").fill("4");
   await page.getByLabel("Height · km").fill("1");
+  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
   await page.getByRole("button", { name: "Create world", exact: true }).click();
   await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");

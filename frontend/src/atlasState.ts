@@ -95,8 +95,15 @@ export interface WorldCreationInput {
   settings?: GenerationSettings;
 }
 export function createWorld(input: WorldCreationInput) {
-  const snapshot = createWorldSnapshot(input);
+  return registerWorldSnapshot(createWorldSnapshot(input));
+}
+export function registerWorldSnapshot(snapshot: DomainSnapshot) {
   const world = snapshot.world;
+  requireThat(
+    !worlds.has(world.id),
+    "existing_world",
+    "This world is already registered in the session."
+  );
   worlds.set(world.id, { snapshot, history: [], undo: [], causes: {} });
   changed();
   return world;
