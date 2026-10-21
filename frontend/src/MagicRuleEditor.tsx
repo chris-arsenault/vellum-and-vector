@@ -209,6 +209,7 @@ function ConditionInput({
       <label>
         Field
         <select
+          name={`${fieldKey}.field`}
           value={test.field}
           onChange={(event) => change({ ...test, field: event.target.value })}
         >

@@ -60,6 +60,7 @@ function surveyModule() {
       },
     },
     processes: ["test.survey.measure"],
+    slots: ["present.products"],
     contribute: () => [
       {
         kind: "process",

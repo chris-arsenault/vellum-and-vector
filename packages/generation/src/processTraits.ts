@@ -23,7 +23,7 @@ export type ProcessBehavior =
   | {
       kind: "material-transformation";
       transform: Operation;
-      balance(state: GenerationState, context: MapProcessContext): void;
+      balance: Operation;
     };
 
 /** Dispatches operational interfaces; it never infers time from world settings. */
@@ -33,10 +33,6 @@ export function executeProcessBehavior(
   context: MapProcessContext
 ) {
   const behavior = process.behavior;
-  if (!behavior) {
-    requireThat(process.apply, "process_behavior", `Bind an operation for ${process.contract.id}.`);
-    return process.apply(state, context);
-  }
   switch (behavior.kind) {
     case "initialize":
       return behavior.initialize(state, context);
@@ -66,7 +62,7 @@ async function transformMaterial(
   context: MapProcessContext
 ) {
   await behavior.transform(state, context);
-  behavior.balance(state, context);
+  await behavior.balance(state, context);
 }
 export function elapsedYears(binding: DurationBinding, context: Pick<MapProcessContext, "epochs">) {
   const years =

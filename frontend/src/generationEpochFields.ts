@@ -2,6 +2,12 @@ import { requireThat, type Epoch } from "@atlas/domain";
 import { draftEpochs, updatePhysicalEpoch, updateEcologyEpoch } from "./generationDraftEpochs";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 import type { GenerationDraft } from "./generationDraft";
+import {
+  atlasFeatureDefinitions,
+  type EpochControl,
+  type EpochValueKey,
+  type SetupFeature,
+} from "@atlas/generation";
 
 export function selectedDraftEpoch(flow: Pick<GenerationWorkflow, "draft" | "epoch">) {
   const epochs = draftEpochs(flow.draft);
@@ -14,55 +20,12 @@ export function epochFieldPrefix(owner: string, id: string) {
   return `feature.${owner}.epochs.${encodeURIComponent(id).replaceAll(".", "%2E")}.`;
 }
 
-type EpochValueKey =
-  | "tectonics"
-  | "hydrology"
-  | "ice"
-  | "coasts"
-  | "impacts"
-  | "volcanism"
-  | "temperature"
-  | "rainfall"
-  | "seaLevel";
-export interface EpochControl {
-  key: EpochValueKey;
-  label: string;
-  unit: string;
-  min?: number;
-  max?: number;
-}
-const strength = (key: EpochValueKey, label: string): EpochControl => ({
-  key,
-  label,
-  unit: "multiplier",
-  min: 0,
-  max: 1,
-});
-const controls: Record<string, EpochControl[]> = {
-  "physical.tectonic-history": [strength("tectonics", "Epoch tectonic activity")],
-  "physical.mountains": [strength("tectonics", "Epoch tectonic activity")],
-  "physical.fractures": [strength("tectonics", "Epoch tectonic activity")],
-  "ocean.geography": [{ key: "seaLevel", label: "Epoch sea level offset", unit: "m" }],
-  "physical.volcanism": [
-    { key: "volcanism", label: "Epoch volcanic activity", unit: "multiplier", min: 0 },
-  ],
-  "physical.impacts": [
-    { key: "impacts", label: "Epoch impact activity", unit: "multiplier", min: 0 },
-  ],
-  "physical.climate": [
-    { key: "temperature", label: "Epoch temperature shift", unit: "°C" },
-    { key: "rainfall", label: "Epoch rainfall", unit: "multiplier", min: 0, max: 5 },
-  ],
-  "physical.river-incision": [strength("hydrology", "Epoch hydrological activity")],
-  "physical.land-ice": [
-    strength("ice", "Epoch glacial activity"),
-    strength("hydrology", "Epoch hydrological activity"),
-  ],
-  "physical.glacial-sculpting": [strength("ice", "Epoch glacial activity")],
-  "physical.coastal-evolution": [strength("coasts", "Epoch coastal activity")],
-};
-export function physicalEpochControls(id: string) {
-  return controls[id] ?? [];
+export function physicalEpochControls(feature: string | Pick<SetupFeature, "id" | "presentation">) {
+  const presentation =
+    typeof feature === "string"
+      ? atlasFeatureDefinitions.find((entry) => entry.id === feature)?.presentation
+      : feature.presentation;
+  return presentation?.epochControls ?? [];
 }
 export function epochControlValue(epoch: Epoch, control: EpochControl) {
   if (control.key === "rainfall") return epoch.ecology?.rainfall ?? 1;

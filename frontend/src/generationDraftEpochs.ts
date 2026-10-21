@@ -5,9 +5,10 @@ import {
   type MagicSystem,
   type ParameterValues,
 } from "@atlas/domain";
-import { generationEpochSchema, generationSettingsSchema } from "@atlas/generation";
+import { generationEpochSchema } from "@atlas/generation";
 import { defaultEpochs } from "./atlasState";
 import { normalizeGenerationDraft, updateFeature, type GenerationDraft } from "./generationDraft";
+import { draftEpochBindings, sharedClock, rebindDraftEpochs } from "./generationEpochBindings";
 
 type PhysicalEpochPatch = Partial<Omit<Epoch, "id" | "ecology" | "magicActivity">>;
 
@@ -24,56 +25,48 @@ function physicalEpoch({ ecology: _ecology, magicActivity: _magic, ...physical }
 
 /** A derived view of the shared clock and its feature-owned regimes. */
 export function draftEpochs(draft: GenerationDraft): Epoch[] {
-  const epochs = configuration(draft, "physical.lifecycle").epochs as unknown as Epoch[];
-  const ecology = configuration(draft, "ecology.living").epochs as Record<string, EcologyEpoch>;
-  const activity = configuration(draft, "magic.configured").activity as Record<
-    string,
-    Record<string, number>
-  >;
-  return epochs.map((epoch) => ({
-    ...structuredClone(epoch),
-    ecology: structuredClone(ecology[epoch.id] ?? {}),
-    magicActivity: { ...activity[epoch.id] },
-  }));
-}
-
-export function replaceDraftEpochs(draft: GenerationDraft, epochs: Epoch[]): GenerationDraft {
-  const normalized = normalizeGenerationDraft(draft);
-  const parsed = generationSettingsSchema.parse({ ...normalized.recipe.settings, epochs });
-  const features = normalized.recipe.features!;
-  return normalizeGenerationDraft({
-    ...normalized,
-    recipe: {
-      ...normalized.recipe,
-      features: {
-        ...features,
-        "physical.lifecycle": {
-          ...features["physical.lifecycle"],
-          configuration: {
-            epochs: parsed.epochs.map(physicalEpoch),
-          },
-        },
-        "ecology.living": {
-          ...features["ecology.living"],
-          configuration: {
-            epochs: Object.fromEntries(parsed.epochs.map((epoch) => [epoch.id, epoch.ecology!])),
-          },
-        },
-        "magic.configured": {
-          ...features["magic.configured"],
-          configuration: {
-            ...features["magic.configured"].configuration,
-            activity: Object.fromEntries(
-              parsed.epochs.map((epoch) => [epoch.id, epoch.magicActivity!])
-            ),
-          },
-        },
-      },
-    },
+  const selection = draft.recipe.features ?? normalizeGenerationDraft(draft).recipe.features!;
+  return sharedClock(selection).map((epoch) => {
+    const combined = structuredClone(epoch);
+    for (const binding of draftEpochBindings()) {
+      if (!binding.extension) continue;
+      const records = selection[binding.id].configuration![binding.path] as Record<
+        string,
+        ParameterValues
+      >;
+      Object.assign(combined, { [binding.extension]: structuredClone(records[epoch.id] ?? {}) });
+    }
+    return combined;
   });
 }
 
-function changeEpoch(draft: GenerationDraft, id: string, change: (epoch: Epoch) => Epoch) {
+export function replaceDraftEpochs(
+  draft: GenerationDraft,
+  epochs: Epoch[],
+  identities: Record<string, string> = {}
+): GenerationDraft {
+  const normalized = draft.recipe.features ? draft : normalizeGenerationDraft(draft);
+  const parsed = generationEpochSchema.array().min(1).parse(epochs);
+  requireThat(
+    new Set(parsed.map((epoch) => epoch.id)).size === parsed.length,
+    "draft_epoch",
+    "Use unique history names."
+  );
+  return {
+    ...normalized,
+    recipe: {
+      ...normalized.recipe,
+      features: rebindDraftEpochs(normalized.recipe.features!, parsed, identities),
+    },
+  };
+}
+
+function changeEpoch(
+  draft: GenerationDraft,
+  id: string,
+  change: (epoch: Epoch) => Epoch,
+  identities: Record<string, string> = {}
+) {
   const epochs = draftEpochs(draft);
   requireThat(
     epochs.some((epoch) => epoch.id === id),
@@ -82,7 +75,8 @@ function changeEpoch(draft: GenerationDraft, id: string, change: (epoch: Epoch) 
   );
   return replaceDraftEpochs(
     draft,
-    epochs.map((epoch) => (epoch.id === id ? change(epoch) : epoch))
+    epochs.map((epoch) => (epoch.id === id ? change(epoch) : epoch)),
+    identities
   );
 }
 
@@ -103,7 +97,8 @@ export function updatePhysicalEpoch(draft: GenerationDraft, id: string, patch: P
 }
 
 export function renameDraftEpoch(draft: GenerationDraft, id: string, nextId: string) {
-  return changeEpoch(draft, id, (epoch) => ({ ...epoch, id: nextId }));
+  const target = nextId.trim();
+  return changeEpoch(draft, id, (epoch) => ({ ...epoch, id: target }), { [target]: id });
 }
 
 export function insertDraftEpoch(draft: GenerationDraft, index: number, id: string) {

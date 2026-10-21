@@ -5,6 +5,7 @@ import { clamp, round } from "./math";
 import { hashUnit } from "./noise";
 import { edgeLeadingTo, triangleIdentity } from "./mesh";
 import { oceanPropagation } from "./magicOcean";
+import type { MagicSystem } from "@atlas/domain";
 
 function fracturePropagation(state: GenerationState, field: MagicField, activity: number) {
   const map = state.physical!.map,
@@ -98,6 +99,54 @@ function radialPropagation(state: GenerationState, field: MagicField) {
     }
   }
 }
+interface PropagationStrategy {
+  label: string;
+  requires: string[];
+  parameters: (keyof MagicSystem["parameters"])[];
+  usesSourceRadius?: boolean;
+  scaleResult: boolean;
+  propagate(state: GenerationState, field: MagicField, seed: number, activity: number): void;
+}
+export const magicPropagationStrategies: Record<MagicSystem["propagation"], PropagationStrategy> = {
+  fracture: {
+    label: "Through connected fractures",
+    requires: ["canonry:FractureState"],
+    parameters: ["baseCost", "conductanceDivisor"],
+    scaleResult: false,
+    propagate: (state, field, _seed, activity) => fracturePropagation(state, field, activity),
+  },
+  "cold-drainage": {
+    label: "Toward colder neighbors, retained in ice",
+    requires: ["canonry:Temperature", "canonry:IceState"],
+    parameters: ["logScale", "iceRetention", "coldRetentionDistance", "accumulationArea"],
+    scaleResult: true,
+    propagate: coldPropagation,
+  },
+  "ocean-rays": {
+    label: "Ocean rays, reflections & wakes",
+    requires: ["canonry:Ocean", "canonry:Bathymetry"],
+    parameters: [
+      "rayCount",
+      "rayDistance",
+      "coastalRayDistance",
+      "wakeDistance",
+      "beamWidth",
+      "coastalSources",
+      "coastalSourceDistance",
+      "wakeSources",
+    ],
+    scaleResult: false,
+    propagate: oceanPropagation,
+  },
+  radial: {
+    label: "Radial falloff",
+    requires: [],
+    parameters: [],
+    usesSourceRadius: true,
+    scaleResult: true,
+    propagate: radialPropagation,
+  },
+};
 export function propagateMagic(
   state: GenerationState,
   field: MagicField,
@@ -113,14 +162,9 @@ export function propagateMagic(
     field.origins = [];
     field.radii.fill(0);
   }
-  const strategy = field.definition.propagation;
-  if (activity > 0) {
-    if (strategy === "fracture") fracturePropagation(state, field, activity);
-    if (strategy === "cold-drainage") coldPropagation(state, field, seed);
-    if (strategy === "ocean-rays") oceanPropagation(state, field, seed, activity);
-    if (strategy === "radial") radialPropagation(state, field);
-  }
-  const scalar = strategy === "cold-drainage" || strategy === "radial" ? activity : 1;
+  const strategy = magicPropagationStrategies[field.definition.propagation];
+  if (activity > 0) strategy.propagate(state, field, seed, activity);
+  const scalar = strategy.scaleResult ? activity : 1;
   for (let i = 0; i < field.intensity.length; i++) {
     field.intensity[i] = clamp(round(field.intensity[i] * scalar + field.stored[i]), 0, 1000);
     field.wake[i] *= Number(field.intensity[i] > 0);

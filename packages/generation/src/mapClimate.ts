@@ -40,30 +40,33 @@ export const temperatureProcess: MapProcess = {
       "ice",
     ],
   },
-  apply(state, context) {
-    const grid = state.surface,
-      elevation = requireChannel(grid, "elevation", "metre"),
-      heat = requireChannel(grid, "heat", "celsius"),
-      temperature = new Float64Array(elevation.length),
-      natural = new Float64Array(elevation.length);
-    for (let i = 0; i < elevation.length; i++) {
-      natural[i] =
-        Number(context.parameters.temperature) +
-        Number(context.parameters.temperatureOffset) -
-        Math.max(0, elevation[i] - Number(context.parameters.seaLevel)) *
-          Number(context.parameters.lapseRate);
-      temperature[i] = natural[i] + heat[i];
-    }
-    putChannel(grid, "naturalTemperature", "celsius", natural);
-    putChannel(grid, "temperature", "celsius", temperature);
-    context.recordCause({
-      kind: "climate",
-      process: "climate.temperature",
-      fields: {
-        naturalTemperature: summarizeChannel(grid, "naturalTemperature"),
-        temperature: summarizeChannel(grid, "temperature"),
-      },
-    });
+  behavior: {
+    kind: "model-pass",
+    applyPass(state, context) {
+      const grid = state.surface,
+        elevation = requireChannel(grid, "elevation", "metre"),
+        heat = requireChannel(grid, "heat", "celsius"),
+        temperature = new Float64Array(elevation.length),
+        natural = new Float64Array(elevation.length);
+      for (let i = 0; i < elevation.length; i++) {
+        natural[i] =
+          Number(context.parameters.temperature) +
+          Number(context.parameters.temperatureOffset) -
+          Math.max(0, elevation[i] - Number(context.parameters.seaLevel)) *
+            Number(context.parameters.lapseRate);
+        temperature[i] = natural[i] + heat[i];
+      }
+      putChannel(grid, "naturalTemperature", "celsius", natural);
+      putChannel(grid, "temperature", "celsius", temperature);
+      context.recordCause({
+        kind: "climate",
+        process: "climate.temperature",
+        fields: {
+          naturalTemperature: summarizeChannel(grid, "naturalTemperature"),
+          temperature: summarizeChannel(grid, "temperature"),
+        },
+      });
+    },
   },
   validate(state) {
     requireChannel(state.surface, "temperature", "celsius");
@@ -140,58 +143,61 @@ export const precipitationProcess: MapProcess = {
     produces: ["precipitation", "snowfall", "rainfall", "moisture"],
     invalidates: ["drainage", "runoff", "flow", "lakes", "ice"],
   },
-  apply(state, context) {
-    const grid = state.surface,
-      elevation = requireChannel(grid, "elevation", "metre"),
-      temperature = requireChannel(grid, "temperature", "celsius"),
-      precipitation = new Float64Array(elevation.length),
-      snowfall = new Float64Array(elevation.length),
-      rainfall = new Float64Array(elevation.length),
-      moisture = new Float64Array(elevation.length);
-    for (const path of airPaths(grid, String(context.parameters.wind))) {
-      let previous = -1;
-      for (const i of path) {
-        const connected = previous >= 0 && neighbors(grid, i).includes(previous),
-          incoming = connected ? moisture[previous] : Number(context.parameters.incomingMoisture),
-          ocean = elevation[i] <= Number(context.parameters.seaLevel),
-          evaporation = ocean
-            ? Number(context.parameters.evaporation) *
-              Math.max(0, Math.min(2, (temperature[i] + 20) / 40))
-            : 0,
-          lift = connected ? Math.max(0, elevation[i] - elevation[previous]) : 0,
-          fraction = Math.min(
-            1,
-            Number(context.parameters.condensation) +
-              lift * Number(context.parameters.orographicCondensation)
-          ),
-          available = incoming + evaporation,
-          snowFraction = Math.max(
-            0,
-            Math.min(
+  behavior: {
+    kind: "model-pass",
+    applyPass(state, context) {
+      const grid = state.surface,
+        elevation = requireChannel(grid, "elevation", "metre"),
+        temperature = requireChannel(grid, "temperature", "celsius"),
+        precipitation = new Float64Array(elevation.length),
+        snowfall = new Float64Array(elevation.length),
+        rainfall = new Float64Array(elevation.length),
+        moisture = new Float64Array(elevation.length);
+      for (const path of airPaths(grid, String(context.parameters.wind))) {
+        let previous = -1;
+        for (const i of path) {
+          const connected = previous >= 0 && neighbors(grid, i).includes(previous),
+            incoming = connected ? moisture[previous] : Number(context.parameters.incomingMoisture),
+            ocean = elevation[i] <= Number(context.parameters.seaLevel),
+            evaporation = ocean
+              ? Number(context.parameters.evaporation) *
+                Math.max(0, Math.min(2, (temperature[i] + 20) / 40))
+              : 0,
+            lift = connected ? Math.max(0, elevation[i] - elevation[previous]) : 0,
+            fraction = Math.min(
               1,
-              (Number(context.parameters.snowTemperature) +
-                Number(context.parameters.snowTransition) / 2 -
-                temperature[i]) /
-                Number(context.parameters.snowTransition)
-            )
-          );
-        precipitation[i] = available * fraction;
-        moisture[i] = available - precipitation[i];
-        snowfall[i] = precipitation[i] * snowFraction;
-        rainfall[i] = precipitation[i] - snowfall[i];
-        previous = i;
+              Number(context.parameters.condensation) +
+                lift * Number(context.parameters.orographicCondensation)
+            ),
+            available = incoming + evaporation,
+            snowFraction = Math.max(
+              0,
+              Math.min(
+                1,
+                (Number(context.parameters.snowTemperature) +
+                  Number(context.parameters.snowTransition) / 2 -
+                  temperature[i]) /
+                  Number(context.parameters.snowTransition)
+              )
+            );
+          precipitation[i] = available * fraction;
+          moisture[i] = available - precipitation[i];
+          snowfall[i] = precipitation[i] * snowFraction;
+          rainfall[i] = precipitation[i] - snowfall[i];
+          previous = i;
+        }
       }
-    }
-    for (const [name, values] of Object.entries({ precipitation, snowfall, rainfall, moisture }))
-      putChannel(grid, name, "metre/year", values);
-    context.recordCause({
-      kind: "climate",
-      process: "climate.precipitation",
-      fields: {
-        precipitation: summarizeChannel(grid, "precipitation"),
-        snowfall: summarizeChannel(grid, "snowfall"),
-      },
-    });
+      for (const [name, values] of Object.entries({ precipitation, snowfall, rainfall, moisture }))
+        putChannel(grid, name, "metre/year", values);
+      context.recordCause({
+        kind: "climate",
+        process: "climate.precipitation",
+        fields: {
+          precipitation: summarizeChannel(grid, "precipitation"),
+          snowfall: summarizeChannel(grid, "snowfall"),
+        },
+      });
+    },
   },
   validate(state) {
     for (const name of ["precipitation", "snowfall", "rainfall", "moisture"])
@@ -221,55 +227,58 @@ export const iceBalanceProcess: MapProcess = {
     produces: ["ice", "meltwater"],
     invalidates: ["drainage", "runoff", "flow", "lakes"],
   },
-  apply(state, context) {
-    requireThat(
-      context.epochs.length > 0,
-      "ice_epoch",
-      "Advance ice in an explicit epoch; present reconciliation must not invent elapsed time."
-    );
-    requireThat(
-      !context.causes.some((cause) => cause.kind === "ice"),
-      "ice_epoch_advance",
-      "Ice balance advances once per epoch; refresh climate without advancing ice again."
-    );
-    const grid = state.surface,
-      temperature = requireChannel(grid, "temperature", "celsius"),
-      snowfall = requireChannel(grid, "snowfall", "metre/year"),
-      ice = grid.channels.ice
-        ? requireChannel(grid, "ice", "metre")
-        : new Float64Array(grid.active.length),
-      maximum = grid.channels.maximumIce
-        ? requireChannel(grid, "maximumIce", "metre")
-        : new Float64Array(grid.active.length),
-      meltwater = new Float64Array(grid.active.length),
-      accumulation = new Float64Array(grid.active.length),
-      years = context.epochs.at(-1)!.duration;
-    requireThat(
-      snowfall.every((value) => value >= 0) && ice.every((value) => value >= 0),
-      "ice_input",
-      "Snowfall and inherited ice remain nonnegative."
-    );
-    for (let i = 0; i < ice.length; i++) {
-      maximum[i] = Math.max(maximum[i], ice[i]);
-      accumulation[i] = snowfall[i] * years;
-      meltwater[i] = Math.min(
-        ice[i] + accumulation[i],
-        Math.max(0, temperature[i]) * Number(context.parameters.meltFactor) * years
+  behavior: {
+    kind: "elapsed",
+    duration: { kind: "epoch", fraction: 1 },
+    advance(state, context, years) {
+      requireThat(
+        context.epochs.length > 0,
+        "ice_epoch",
+        "Advance ice in an explicit epoch; present reconciliation must not invent elapsed time."
       );
-      ice[i] = Math.max(0, ice[i] + accumulation[i] - meltwater[i]);
-      maximum[i] = Math.max(maximum[i], ice[i]);
-    }
-    putChannel(grid, "ice", "metre", ice);
-    putChannel(grid, "maximumIce", "metre", maximum);
-    putChannel(grid, "meltwater", "metre", meltwater);
-    context.recordCause({
-      kind: "ice",
-      process: "ice.balance",
-      accumulation: integratedDepth(grid, accumulation),
-      meltwater: integratedDepth(grid, meltwater),
-      remaining: integratedDepth(grid, ice),
-      unit: "cubic-metre",
-    });
+      requireThat(
+        !context.causes.some((cause) => cause.kind === "ice"),
+        "ice_epoch_advance",
+        "Ice balance advances once per epoch; refresh climate without advancing ice again."
+      );
+      const grid = state.surface,
+        temperature = requireChannel(grid, "temperature", "celsius"),
+        snowfall = requireChannel(grid, "snowfall", "metre/year"),
+        ice = grid.channels.ice
+          ? requireChannel(grid, "ice", "metre")
+          : new Float64Array(grid.active.length),
+        maximum = grid.channels.maximumIce
+          ? requireChannel(grid, "maximumIce", "metre")
+          : new Float64Array(grid.active.length),
+        meltwater = new Float64Array(grid.active.length),
+        accumulation = new Float64Array(grid.active.length);
+      requireThat(
+        snowfall.every((value) => value >= 0) && ice.every((value) => value >= 0),
+        "ice_input",
+        "Snowfall and inherited ice remain nonnegative."
+      );
+      for (let i = 0; i < ice.length; i++) {
+        maximum[i] = Math.max(maximum[i], ice[i]);
+        accumulation[i] = snowfall[i] * years;
+        meltwater[i] = Math.min(
+          ice[i] + accumulation[i],
+          Math.max(0, temperature[i]) * Number(context.parameters.meltFactor) * years
+        );
+        ice[i] = Math.max(0, ice[i] + accumulation[i] - meltwater[i]);
+        maximum[i] = Math.max(maximum[i], ice[i]);
+      }
+      putChannel(grid, "ice", "metre", ice);
+      putChannel(grid, "maximumIce", "metre", maximum);
+      putChannel(grid, "meltwater", "metre", meltwater);
+      context.recordCause({
+        kind: "ice",
+        process: "ice.balance",
+        accumulation: integratedDepth(grid, accumulation),
+        meltwater: integratedDepth(grid, meltwater),
+        remaining: integratedDepth(grid, ice),
+        unit: "cubic-metre",
+      });
+    },
   },
   validate(state) {
     for (const name of ["ice", "maximumIce", "meltwater"])
@@ -303,9 +312,12 @@ export const resetForcingProcess: MapProcess = {
       "meltwater",
     ],
   },
-  apply(state) {
-    putChannel(state.surface, "heat", "celsius", new Float64Array(state.surface.active.length));
-    if (state.surface.channels.meltwater) state.surface.channels.meltwater.fill(0);
+  behavior: {
+    kind: "initialize",
+    initialize(state) {
+      putChannel(state.surface, "heat", "celsius", new Float64Array(state.surface.active.length));
+      if (state.surface.channels.meltwater) state.surface.channels.meltwater.fill(0);
+    },
   },
   validate() {
     return [];

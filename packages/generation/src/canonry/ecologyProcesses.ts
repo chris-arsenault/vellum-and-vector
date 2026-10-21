@@ -1,4 +1,11 @@
-import { areaSpace, biomes, spatial, requireThat, ecologyEpochSchema } from "@atlas/domain";
+import {
+  areaSpace,
+  biomes,
+  spatial,
+  requireThat,
+  ecologyEpochSchema,
+  type MagicSystem,
+} from "@atlas/domain";
 import type { GenerationState, MapProcess, MapProcessContext } from "../process";
 import { composeNativeAuthoring, nativePosition } from "./atlasWorkspace";
 import { environment, classifyBiome, unit, type EcologyForcing } from "./ecologyEnvironment";
@@ -40,46 +47,51 @@ function ecologyInput(input: AtlasGenerationInput, context: MapProcessContext): 
   };
 }
 
+export const ecologicalMagicEffectBindings = {
+  vegetationGrowth: "growth",
+  fire: "fire",
+  organicPreservation: "preservation",
+  ecologicalAlteration: "alteration",
+  plantColdTolerance: "coldTolerance",
+  plantDroughtTolerance: "droughtTolerance",
+  animalToxicity: "toxicity",
+  seedDispersal: "dispersal",
+} as const satisfies Partial<Record<keyof MagicSystem["effects"], keyof EcologyForcing>>;
+export const ecologicalMagicEffects = Object.keys(
+  ecologicalMagicEffectBindings
+) as (keyof typeof ecologicalMagicEffectBindings)[];
+
+function magicalEcologyForcing(state: GenerationState, i: number) {
+  const result = {
+    growth: 0,
+    fire: 0,
+    preservation: 0,
+    alteration: 0,
+    coldTolerance: 0,
+    droughtTolerance: 0,
+    toxicity: 0,
+    dispersal: 0,
+  };
+  for (const field of state.physical!.magic?.fields ?? []) {
+    if (!field.definition.enabled) continue;
+    const intensity = field.intensity[i] / 1000;
+    for (const effect of ecologicalMagicEffects)
+      result[ecologicalMagicEffectBindings[effect]] += intensity * field.definition.effects[effect];
+  }
+  return result;
+}
 function forcing(state: GenerationState, input: EcologyInput, context?: MapProcessContext) {
   const epoch = input.epochs[context?.epochIndices[0] ?? input.epochs.length - 1];
   const ecology = ecologyEpochSchema.parse(epoch?.ecology ?? {});
   return (i: number): EcologyForcing => {
-    let growth = 0,
-      fire = 0,
-      preservation = 0,
-      alteration = 0,
-      coldTolerance = 0,
-      droughtTolerance = 0,
-      toxicity = 0,
-      dispersal = 0;
-    for (const field of state.physical!.magic?.fields ?? []) {
-      if (!field.definition.enabled) continue;
-      const intensity = field.intensity[i] / 1000,
-        effects = field.definition.effects;
-      growth += intensity * effects.vegetationGrowth;
-      fire += intensity * effects.fire;
-      preservation += intensity * effects.organicPreservation;
-      alteration += intensity * effects.ecologicalAlteration;
-      coldTolerance += intensity * effects.plantColdTolerance;
-      droughtTolerance += intensity * effects.plantDroughtTolerance;
-      toxicity += intensity * effects.animalToxicity;
-      dispersal += intensity * effects.seedDispersal;
-    }
     return {
-      growth,
-      fire,
-      preservation,
+      ...magicalEcologyForcing(state, i),
       productivity: (input.parameters?.vegetation ?? 1) * ecology.productivity,
       grazing: input.parameters?.grazing ?? 1,
       seasonality: ecology.seasonality,
       migration: ecology.migration,
       recovery: ecology.recovery,
       fireRegime: ecology.fire,
-      alteration,
-      coldTolerance,
-      droughtTolerance,
-      toxicity,
-      dispersal,
     };
   };
 }

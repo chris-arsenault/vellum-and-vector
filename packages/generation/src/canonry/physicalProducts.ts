@@ -44,7 +44,12 @@ const definitions: Record<
     composition: "exclusive",
   },
   Precipitation: { representation: "field", unit: "millimetre/year", composition: "exclusive" },
-  Runoff: { representation: "field", unit: "millimetre/year", composition: "exclusive" },
+  // Rain/snow runoff establishes the rate; the meltwater pass adds its contribution.
+  Runoff: { representation: "field", unit: "millimetre/year", composition: "shared-state" },
+  // These products include setup plus subsequent transformations of the same workspace.
+  TectonicProvinces: { composition: "shared-state" },
+  TectonicMargins: { composition: "shared-state" },
+  CrustalSupport: { composition: "shared-state" },
   GlacialMeltwater: { representation: "field", unit: "millimetre/year", composition: "exclusive" },
   LandIce: { representation: "field", unit: "metre", composition: "shared-state" },
   LakeState: { representation: "field", composition: "shared-state" },

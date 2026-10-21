@@ -22,6 +22,19 @@ settings into the process's declared parameters. The feature is separate from
 `AtlasFeature`, which identifies a located geographic object, and from the domain
 traits used to constrain geography.
 
+Each feature declares its supported `slots` from `generationSlots.ts` and returns
+its operations from `contribute`. Contributions outside the feature's declared
+process list fail. The profile owns causal positions; feature implementations own
+what they contribute there. Ecology, configured magic and located magic use this
+same path. Before/after model-pass slots supply explicit process/context bindings
+for interleaving influences without a feature switch in the sequence builder.
+
+`conditionalRequires` derives requirements from the resolved configuration and
+actual source context. A requirement can carry a configuration-relative
+`Diagnostic.field` path. Preparation, dependency repair and field navigation use
+those declarations. Independent interaction rules in disabled magic containers
+participate in dependency discovery because they also participate in execution.
+
 Glacial sculpting owns erosion, deposition and glacial relief classification as
 one choice. Volcanism owns plume roots and construction. Coastal evolution owns
 external forcing and natural coastal cutting. River networks remain distinct
@@ -54,6 +67,16 @@ Conflicting legacy selections for operations of one coupled feature are rejected
 Unknown feature IDs, unowned parameters and invalid nested configuration fail
 validation.
 
+An optional feature-owned `configurationBinding` projects nested values into the
+existing world-settings representation. It returns a patch over declared
+`fields`; `epochFields` permits changing only named fields of existing epochs,
+preserving every other value and the clock's identity/order. Adapters receive
+clones, and undeclared patches fail. The clock owns epoch insertion/removal;
+ecology owns ecological regimes and magic owns activity. New modules can keep
+their configuration entirely in resolved feature bindings without adding world
+settings. Selection-only catalog calls need no world history; execution
+preparation binds complete configuration before composing a recipe.
+
 Disabling a feature either omits its complete behavior or yields a dependency
 diagnostic naming the consumer and missing input. Magical coastal modification
 requires coastal evolution; a pressure field with zero coastal modification does
@@ -69,6 +92,15 @@ consumer metadata explains whether a value affects the current profile. Coupled
 mechanisms share one feature panel. A scalar extension receives its panel through
 the registry without another alias or switch table. Rich nested configuration
 uses bounded editors for clocks, ecology, magic and cultures.
+
+`frontend/src/generationFeatureAdapters.ts` registers a specialized editor,
+changed-value summary and field mapping together. Adding a nested form does not
+require separate editor and review dispatch tables. Configuration applicability
+and clock/record epoch participation are declared on the generation feature and
+projected into setup. Epoch changes preserve unrelated feature configuration.
+An invalid draft keeps editable selection current while discarding executable
+occurrences; launch remains blocked. Changing source/propagation reconciles raw
+numeric buffers so hidden controls cannot retain unreachable errors.
 
 Projected scalar descriptors distinguish their canonical `owner` from the
 `controlFeature` whose operations consume them. Sea-level baseline is presented
@@ -101,6 +133,11 @@ then full-duration burial; present classification adds no biological age. Native
 land-ice passes remain repeated state-changing passes. Configured magical history
 advances once per epoch; located-source storage uses elapsed years.
 
+Every process must bind a behavior; the legacy `apply` fallback is removed.
+Material transformation awaits both transformation and balance, including
+asynchronous failure. Behaviors remain trusted operations over shared mutable
+state, rather than a runtime capability sandbox.
+
 One `ProductLedger` drives prerequisite checks, preflight and execution. Native
 `AvailableFacts` is a runtime view of that ledger. Missing, stale and explicitly
 initialized-empty products differ; each consumer names the initializer whose
@@ -108,6 +145,16 @@ empty result it accepts. Epoch response products expire at epoch boundaries;
 carried material, ice state and histories use separate retained products.
 Explicitly omitted event writers can declare persistent neutral history. An
 ordinary empty computation still becomes stale when invalidated.
+
+Process product definitions are the provider authority. Distinct processes
+cannot both produce an exclusive product; repeated invocations of one provider
+remain legal. Shared-state/additive products explicitly permit multiple writers.
+Preflight and runtime enforce the same rule. Retained products use separate
+identities; there is no unused `freshness` option or second feature-level delivery
+list. Declarations remain implementation obligations: the ledger does not infer
+numerical correctness from channel allocation. The forcing-only projector has
+its own contract and does not claim flow or drainage; full projection declares
+only the selected output aliases it actually creates.
 
 The numerical map stays shared and typed. Several mechanisms contribute to the
 same material budget or fracture conductivity without requiring the optional
@@ -138,6 +185,28 @@ layer. Inactive known buffers can remain inherited working inputs without being
 published. Existing compatible layer styling and authored protection remain
 authoritative. The editor publishes the complete candidate only after worker
 completion and the existing world-version check.
+
+Configured magic's source/propagation declarations hold their operations,
+requirements, applicable parameters and displayed choices together. Adding a
+built-in strategy extends its domain schema and strategy declaration. Magic field
+descriptors supply unit, quantity, initial value, carried lifetime and publication
+to allocation, remeshing, advection, inheritance and projection; those adapters
+no longer infer semantics from field-name suffixes.
+
+A separate stateful system can register its own module, configuration, existing
+causal-slot contributions and outputs. This does not automatically make it a
+built-in `MagicSystem` or add a new causal phase. The extension acceptance fixture
+executes an extensive inventory through two epochs, changes its configuration,
+disables it and publishes a new layer. A separate bundled worker runs the complete
+recipe using the production worker handler and real structured-clone messages;
+the Node test bridge supplies the browser messaging API, while browser journeys
+exercise the actual browser worker.
+
+Located-source heat, cold, coastal pressure and erosion resistance have physical
+consumers. Uplift, gravity, fertility and luminous sources currently publish
+intensity only. Their existing definitions remain valid; authoring and preparation
+explicitly identify the missing physical feedback. This refactor adds no new
+physical model for those effects.
 
 The climate sequence retains its existing approximation: configured thermal magic
 adjusts temperature and ice after the native precipitation pass. Precipitation

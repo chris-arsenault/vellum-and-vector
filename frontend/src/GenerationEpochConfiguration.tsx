@@ -18,7 +18,7 @@ export function GenerationEpochConfiguration({
   flow: GenerationWorkflow;
   feature: SetupFeature;
 }) {
-  const controls = physicalEpochControls(feature.id),
+  const controls = physicalEpochControls(feature),
     epoch = selectedDraftEpoch(flow);
   if (!controls.length) return null;
   const clock = flow.setup?.features.find((entry) => entry.id === "physical.lifecycle");

@@ -13,6 +13,7 @@ import { drainageSteps, glacialRunoffStep } from "./canonry/sequence";
 import { atlasEpoch } from "./canonry/atlasProfile";
 import { GenerationModuleRegistry, type GenerationModule } from "./generationModules";
 import { atlasGenerationModules } from "./atlasModules";
+import { worldGenerationSettings } from "./generationSettings";
 
 it("translates legacy glacier choices into one whole feature and rejects a contradictory pair", () => {
   const disabled = resolveGenerationFeatures(
@@ -21,7 +22,10 @@ it("translates legacy glacier choices into one whole feature and rejects a contr
     {
       "canonry.glacial-erosion": false,
       "canonry.glacial-deposition": false,
-    }
+    },
+    {},
+    ["physical"],
+    worldGenerationSettings(source().world) as unknown as import("@atlas/domain").ParameterValues
   );
   expect(disabled.selection["physical.glacial-sculpting"].enabled).toBe(false);
   expect(physicalFeatureSequence("epoch.sculpting", disabled)).toEqual([]);
@@ -116,8 +120,9 @@ const survey: GenerationFeature = {
     },
   },
   processes: ["test.measure"],
+  slots: ["present.products"],
   contribute: (slot) =>
-    slot === "present.survey"
+    slot === "present.products"
       ? [{ kind: "process", id: "survey.measure", process: "test.measure", version: "1" }]
       : [],
 };
@@ -152,7 +157,7 @@ it("registers and executes a feature-owned setting absent from the legacy parame
     id: "test.survey",
     version: 1,
     parameters: resolved.selection["test.survey"].settings,
-    sequence: survey.contribute("present.survey"),
+    sequence: survey.contribute("present.products"),
   };
   const result = await new MapRunner(configuration, registry).run(landscape(), {
     seed: "73",
@@ -176,12 +181,12 @@ it("namespaces equal module-local invocation identities by feature and causal sl
   const other = { ...survey, id: "test.other-survey" };
   const resolved = resolveGenerationFeatures([survey, other]);
   const sequence = [
-    ...featureContribution(survey, "present.survey", resolved),
-    ...featureContribution(other, "present.survey", resolved),
+    ...featureContribution(survey, "present.products", resolved),
+    ...featureContribution(other, "present.products", resolved),
   ];
   expect(sequenceStages(sequence).map((stage) => stage.path)).toEqual([
-    ["test.survey/present.survey/survey.measure"],
-    ["test.other-survey/present.survey/survey.measure"],
+    ["test.survey/present.products/survey.measure"],
+    ["test.other-survey/present.products/survey.measure"],
   ]);
   expect(sequence.map((node) => node.kind === "process" && node.feature)).toEqual([
     "test.survey",
@@ -216,6 +221,7 @@ function randomModule(id: string): GenerationModule {
         defaultEnabled: true,
         settings: {},
         processes: [`${id}.measure`],
+        slots: ["present.products"],
         contribute: (slot) =>
           slot === "present.products"
             ? [{ kind: "process", id: "measure", process: `${id}.measure`, version: "1" }]
@@ -250,12 +256,30 @@ function randomModule(id: string): GenerationModule {
   };
 }
 
+function withProduct(
+  module: GenerationModule,
+  composition: "exclusive" | "additive" | "shared-state"
+) {
+  const factory = module.processes!;
+  return {
+    ...module,
+    processes: (snapshot: Parameters<typeof factory>[0], input: Parameters<typeof factory>[1]) =>
+      factory(snapshot, input).map((process) => ({
+        ...process,
+        contract: {
+          ...process.contract,
+          produces: [...process.contract.produces, "test:exclusive-product"],
+          products: [{ id: "test:exclusive-product", lifetime: "run" as const, composition }],
+        },
+      })),
+  };
+}
+
 it("rejects two exclusive feature providers before starting generation", async () => {
-  const modules = [randomModule("test.exclusive-a"), randomModule("test.exclusive-b")];
+  const modules = [randomModule("test.exclusive-a"), randomModule("test.exclusive-b")].map(
+    (module) => withProduct(module, "exclusive")
+  );
   for (const module of modules) {
-    module.features[0].deliveries = [
-      { id: "test:exclusive-product", lifetime: "run", composition: "exclusive" },
-    ];
     atlasGenerationModules.register(module);
   }
   try {
@@ -267,12 +291,12 @@ it("rejects two exclusive feature providers before starting generation", async (
         severity: "error",
         code: "product_writer",
         resource: "test:exclusive-product",
-        invocation: "test.exclusive-b",
+        invocation: expect.stringContaining("test.exclusive-b"),
       })
     );
     let progressCalls = 0;
     await expect(generateAtlas(domain, input, { progress: () => progressCalls++ })).rejects.toThrow(
-      "both exclusively deliver test:exclusive-product"
+      "both exclusively produce test:exclusive-product"
     );
     expect(progressCalls).toBe(0);
     expect(domain.world.fields).toEqual([]);
@@ -285,14 +309,21 @@ it("rejects two exclusive feature providers before starting generation", async (
 it.each(["additive", "shared-state"] as const)(
   "accepts multiple feature contributors for a %s product",
   (composition) => {
-    const definitions = [randomModule("test.a"), randomModule("test.b")].flatMap(
-      (module) => module.features
+    const modules = [randomModule("test.a"), randomModule("test.b")].map((module) =>
+      withProduct(module, composition)
     );
-    for (const feature of definitions)
-      feature.deliveries = [{ id: "test:material", lifetime: "run", composition }];
-    const resolved = resolveGenerationFeatures(definitions);
-    expect(resolved.diagnostics).toEqual([]);
-    expect(Object.values(resolved.selection).every((selection) => selection.enabled)).toBe(true);
+    for (const module of modules) atlasGenerationModules.register(module);
+    try {
+      const prepared = prepareAtlasGeneration(source(), {
+        areaId: "area",
+        seed: 73,
+        quality: "draft",
+        domains: ["physical"],
+      });
+      expect(prepared.diagnostics).toEqual([]);
+    } finally {
+      for (const module of modules) atlasGenerationModules.unregister(module.id);
+    }
   }
 );
 

@@ -1,4 +1,11 @@
-import { requireThat, type DomainSnapshot, type World } from "@atlas/domain";
+import {
+  requireThat,
+  sameValue,
+  type DomainSnapshot,
+  type World,
+  type Diagnostic,
+  type ParameterValues,
+} from "@atlas/domain";
 import type { AtlasGenerationInput } from "./atlasWorkflow";
 import type { GenerationSettings } from "./generationSettings";
 import {
@@ -6,9 +13,12 @@ import {
   type FeatureSelection,
   type GenerationFeature,
   type ResolvedFeatures,
+  type FeatureContributionContext,
+  type FeatureRequirement,
 } from "./features";
 import type { MapProcess, ProcessSequence } from "./process";
 import type { PublicationDefinition } from "./publication";
+import { generationSlots, type GenerationSlot } from "./generationSlots";
 
 /** Static application modules are imported identically by browser and worker. */
 export interface GenerationModule {
@@ -16,8 +26,6 @@ export interface GenerationModule {
   features: GenerationFeature[];
   processes?(source: DomainSnapshot, input: AtlasGenerationInput): MapProcess[];
   publications?(input: AtlasGenerationInput, world: World): PublicationDefinition[];
-  bindSettings?(features: ResolvedFeatures, legacy: GenerationSettings): GenerationSettings;
-  prepareSettings?(selected: FeatureSelection, legacy: GenerationSettings): GenerationSettings;
 }
 export class GenerationModuleRegistry {
   private readonly modules = new Map<string, GenerationModule>();
@@ -27,6 +35,12 @@ export class GenerationModuleRegistry {
     const ids = new Set(this.features().map((feature) => feature.id));
     for (const feature of module.features) {
       requireThat(!ids.has(feature.id), "feature_identity", `Register ${feature.id} once.`);
+      for (const slot of feature.slots)
+        requireThat(
+          generationSlots.includes(slot),
+          "generation_slot",
+          `Unknown causal slot ${slot} on ${feature.id}.`
+        );
       ids.add(feature.id);
     }
     this.modules.set(module.id, module);
@@ -50,20 +64,96 @@ export class GenerationModuleRegistry {
       (module) => module.publications?.(input, world) ?? []
     );
   }
-  contribute(slot: string, resolved: ResolvedFeatures): ProcessSequence {
-    return this.features().flatMap((feature) => featureContribution(feature, slot, resolved));
+  contribute(
+    slot: string,
+    resolved: ResolvedFeatures,
+    context?: FeatureContributionContext
+  ): ProcessSequence {
+    requireThat(
+      generationSlots.includes(slot as GenerationSlot),
+      "generation_slot",
+      `Unknown causal slot ${slot}.`
+    );
+    return this.features().flatMap((feature) =>
+      featureContribution(feature, slot, resolved, context)
+    );
   }
   bindSettings(features: ResolvedFeatures, legacy: GenerationSettings) {
-    return [...this.modules.values()].reduce(
-      (settings, module) => module.bindSettings?.(features, settings) ?? settings,
+    return this.features().reduce(
+      (settings, feature) =>
+        bindConfiguration(feature, features.selection[feature.id]?.configuration, settings, "bind"),
       structuredClone(legacy)
     );
   }
   prepareSettings(selected: FeatureSelection, legacy: GenerationSettings) {
-    return [...this.modules.values()].reduce(
-      (settings, module) => module.prepareSettings?.(selected, settings) ?? settings,
+    return this.features().reduce(
+      (settings, feature) =>
+        bindConfiguration(feature, selected[feature.id]?.configuration, settings, "prepare"),
       structuredClone(legacy)
     );
   }
+  requirements(id: string, context: FeatureContributionContext): FeatureRequirement[] {
+    const feature = this.features().find((item) => item.id === id);
+    requireThat(feature, "unknown_feature", `Unknown generation feature ${id}.`);
+    return [
+      ...(feature.requires ?? []).map((required) => ({ feature: required })),
+      ...(feature.conditionalRequires?.(context.resolved.selection[id]?.configuration, context) ??
+        []),
+    ];
+  }
+  dependencyDiagnostics(context: FeatureContributionContext): Diagnostic[] {
+    return this.features().flatMap((feature) => {
+      if (!context.resolved.selection[feature.id]?.enabled) return [];
+      const missing = this.requirements(feature.id, context).filter(
+        (required) => !context.resolved.selection[required.feature]?.enabled
+      );
+      return [
+        ...missing.map((required) => ({
+          severity: "error" as const,
+          code: "feature_dependency",
+          invocation: feature.id,
+          resource: required.feature,
+          field: required.field,
+          message:
+            required.message ??
+            `${feature.label} requires ${required.feature}. Enable it or disable ${feature.id}.`,
+        })),
+        ...(feature.diagnostics?.(context.resolved.selection[feature.id]?.configuration, context) ??
+          []),
+      ];
+    });
+  }
+}
+
+function bindConfiguration(
+  feature: GenerationFeature,
+  configuration: ParameterValues | undefined,
+  settings: GenerationSettings,
+  operation: "prepare" | "bind"
+) {
+  const binding = feature.configurationBinding,
+    apply = binding?.[operation];
+  if (!binding || !apply || !configuration) return settings;
+  const patch = apply(structuredClone(configuration), structuredClone(settings));
+  for (const key of Object.keys(patch))
+    requireThat(
+      binding.fields.includes(key as keyof GenerationSettings) ||
+        (key === "epochs" && validEpochPatch(binding.epochFields, patch.epochs!, settings.epochs)),
+      "feature_configuration_ownership",
+      `${feature.id} cannot configure unowned setting ${key}.`
+    );
+  return { ...settings, ...patch };
+}
+function validEpochPatch(
+  fields: readonly string[] | undefined,
+  next: GenerationSettings["epochs"],
+  previous: GenerationSettings["epochs"]
+) {
+  if (!fields?.length) return false;
+  const unowned = (epochs: GenerationSettings["epochs"]) =>
+    epochs.map((epoch) =>
+      Object.fromEntries(Object.entries(epoch).filter(([key]) => !fields.includes(key)))
+    );
+  return sameValue(unowned(next), unowned(previous));
 }
 export const atlasGenerationModules = new GenerationModuleRegistry();

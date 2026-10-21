@@ -5,6 +5,7 @@ import { clamp, round } from "./math";
 import { worldCandidates } from "./worldSources";
 import type { PhysicalField } from "./field";
 import { hashUnit } from "./noise";
+import type { MagicSystem } from "@atlas/domain";
 
 function isHeatMaximum(map: PhysicalField, start: number, radius: number) {
   const { mesh, HeatSourceDensity: density } = map;
@@ -136,6 +137,52 @@ function placedSources(state: GenerationState, field: MagicField, epochIndex: nu
     }
   }
 }
+function coldSources(state: GenerationState, field: MagicField) {
+  const map = state.physical!.map;
+  for (let i = 0; i < map.mesh.count; i++)
+    field.source[i] = Math.max(
+      0,
+      field.definition.parameters.baseInput -
+        map.Temperature[i] +
+        Math.max(0, map.Elevation[i] / 1024) / 10
+    );
+}
+interface SourceStrategy {
+  label: string;
+  requires: string[];
+  parameters: (keyof MagicSystem["parameters"])[];
+  radiusParameter?: keyof MagicSystem["parameters"];
+  locate(state: GenerationState, field: MagicField, seed: number): void;
+}
+/** The operation and its contract/applicability share one strategy declaration. */
+export const magicSourceStrategies: Record<MagicSystem["source"], SourceStrategy> = {
+  geothermal: {
+    label: "Geothermal maxima & placed cores",
+    requires: ["canonry:Geothermal"],
+    parameters: ["maximumSources", "sourceThreshold", "sourceSpacing"],
+    radiusParameter: "sourceSpacing",
+    locate: geothermalSources,
+  },
+  cold: {
+    label: "Cold terrain & high ground",
+    requires: ["canonry:Temperature", "canonry:Elevation"],
+    parameters: ["baseInput"],
+    locate: coldSources,
+  },
+  "deep-ocean": {
+    label: "Deep ocean locus",
+    requires: ["canonry:Ocean", "canonry:Bathymetry"],
+    parameters: [],
+    radiusParameter: "beamWidth",
+    locate: oceanSource,
+  },
+  placed: {
+    label: "Only sources placed on the map",
+    requires: [],
+    parameters: [],
+    locate: () => undefined,
+  },
+};
 export function locateMagicSources(
   state: GenerationState,
   field: MagicField,
@@ -145,17 +192,6 @@ export function locateMagicSources(
   field.source.fill(0);
   field.radii.fill(0);
   field.origins = [];
-  const map = state.physical!.map,
-    definition = field.definition;
-  if (definition.source === "geothermal") geothermalSources(state, field, seed);
-  if (definition.source === "deep-ocean") oceanSource(state, field, seed);
-  if (definition.source === "cold")
-    for (let i = 0; i < map.mesh.count; i++)
-      field.source[i] = Math.max(
-        0,
-        definition.parameters.baseInput -
-          map.Temperature[i] +
-          Math.max(0, map.Elevation[i] / 1024) / 10
-      );
+  magicSourceStrategies[field.definition.source].locate(state, field, seed);
   placedSources(state, field, epochIndex);
 }

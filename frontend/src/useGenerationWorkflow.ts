@@ -6,6 +6,7 @@ import {
   type GenerationSetupStage,
 } from "@atlas/generation";
 import type { DomainSnapshot } from "@atlas/domain";
+import { projectInvalidDraft } from "./generationInvalidDraft";
 import {
   draftPreview,
   newGenerationDraft,
@@ -40,7 +41,15 @@ function resolveDraft(
     return { draft, prepared, setup: projectGenerationSetup(prepared), error: null };
   } catch (error) {
     // Keep the editors reachable while an invalid nested configuration is repaired.
-    return { draft, prepared: null, setup: previous, error };
+    const historyFixed =
+      Boolean(previous?.context.inherited) ||
+      Boolean(options.source?.world.generations.some((run) => run.domains.includes("physical")));
+    return {
+      draft,
+      prepared: null,
+      setup: projectInvalidDraft(draft, previous, historyFixed),
+      error,
+    };
   }
 }
 export function useGenerationWorkflow(options: GenerationWorkflowOptions) {
@@ -65,6 +74,8 @@ export function useGenerationWorkflow(options: GenerationWorkflowOptions) {
   const locate = (id: string, field?: string) => {
     const target = view.setup?.features.find((entry) => entry.id === id);
     if (target) {
+      const epoch = field?.match(/^feature\..+\.epochs\.([^.]+)\./)?.[1];
+      if (epoch) setEpoch(decodeURIComponent(epoch));
       setStage(target.presentation.stage);
       setTarget(id);
       setTargetField(field);

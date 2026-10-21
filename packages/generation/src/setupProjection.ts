@@ -1,12 +1,7 @@
-import {
-  areaSpace,
-  point,
-  spatial,
-  type Diagnostic,
-  type ParameterValues,
-  type Profile,
-} from "@atlas/domain";
+import { type Diagnostic, type ParameterValues, type Profile } from "@atlas/domain";
 import { atlasFeatureDefinitions, type prepareAtlasGeneration } from "./atlasWorkflow";
+import { atlasGenerationModules } from "./generationModules";
+import { activeLocatedSources } from "./featureDependencies";
 import type { GenerationFeature } from "./features";
 import type {
   GenerationSetup,
@@ -38,7 +33,7 @@ export function projectGenerationSetup(
     inherited:
       Boolean(area.parentId) || (!input.domains.includes("physical") && channels.length > 0),
     channels,
-    locatedSources: locatedSources(prepared),
+    locatedSources: activeLocatedSources(source, input).length,
   };
   const invocations = inspectSequence(prepared, definitions, context.inherited);
   const publications = (input.configuration!.inputs?.publications ??
@@ -111,7 +106,7 @@ function inspectInvocation(
     version: invocation.version,
     feature: owner?.id ?? null,
     epochs: stage.epochs.map(({ id, duration }) => ({ id, duration })),
-    behavior: process.behavior?.kind ?? "legacy",
+    behavior: process.behavior.kind,
     ...invocationDuration(process.behavior, stage, owner, inherited),
     parameters: structuredClone(boundParameters(process.contract, prepared, stage)),
     inputs: structuredClone(processRequirements(process.contract)),
@@ -232,8 +227,12 @@ function projectFeature(
       )
     ),
     configuration: structuredClone(bound.configuration),
-    configurationEditable: bound.enabled && Boolean(feature.configuration) && !historyFixed,
-    requires: [...(feature.requires ?? [])],
+    configurationPresentation: structuredClone(feature.configurationPresentation),
+    configurationEditable:
+      bound.enabled &&
+      Boolean(feature.configuration) &&
+      (feature.configurationPresentation?.applicability === "any" || !historyFixed),
+    requires: declaredRequirements(feature, prepared),
     requiredBy: atlasDependents(feature, prepared, definitions),
     invocations,
     publications: structuredClone(publications),
@@ -353,10 +352,23 @@ function atlasDependents(
   return definitions
     .filter(
       (candidate) =>
-        candidate.requires?.includes(feature.id) &&
+        declaredRequirements(candidate, prepared).includes(feature.id) &&
         prepared.input.resolvedFeatures!.selection[candidate.id]?.enabled
     )
     .map((candidate) => candidate.id);
+}
+function declaredRequirements(feature: GenerationFeature, prepared: Prepared) {
+  return [
+    ...new Set(
+      atlasGenerationModules
+        .requirements(feature.id, {
+          source: prepared.source,
+          input: prepared.input,
+          resolved: prepared.input.resolvedFeatures!,
+        })
+        .map((requirement) => requirement.feature)
+    ),
+  ];
 }
 function featureDiagnostics(
   feature: GenerationFeature,
@@ -380,16 +392,4 @@ function featureDiagnostics(
         invocations.some((item) => diagnostic.invocation?.includes(item.id))
     )
   );
-}
-function locatedSources(prepared: Prepared) {
-  const { source, input } = prepared,
-    area = source.world.areas[input.areaId],
-    space = areaSpace(source.world, area.id);
-  return source.world.magic.filter((magic) => {
-    if (magic.systemId || (magic.spaceId && magic.spaceId !== space)) return false;
-    const footprint = magic.scope
-      ? spatial.intersection(magic.scope, area.footprint)
-      : area.footprint;
-    return footprint !== null && spatial.distance(point(magic.source), footprint) < magic.radius;
-  }).length;
 }

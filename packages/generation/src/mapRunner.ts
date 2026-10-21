@@ -183,6 +183,7 @@ export class MapRunner {
         `${stage.path.join("/")} requires fresh ${input.product} in the current map/epoch.`
       );
     const parameters = invocationParameters(process.contract, this.configuration, stage);
+    products.checkProviders(process.contract);
     const context = this.context(state, stage, parameters, options, causes, products, original);
     options.progress?.(stage.path, 0, `Starting ${process.contract.id}`);
     await executeProcessBehavior(process, state, context);

@@ -1,4 +1,10 @@
-import { areaSpace, point, spatial, type MagicSystem } from "@atlas/domain";
+import {
+  areaSpace,
+  point,
+  spatial,
+  locatedMagicEffectDefinitions,
+  type MagicSystem,
+} from "@atlas/domain";
 import type { SetupFeature } from "@atlas/generation";
 import { MagicSystemsEditor } from "./MagicSystemsForm";
 import { NumberField } from "./WorkflowFields";
@@ -109,7 +115,7 @@ export function GenerationLocatedSources({ flow }: { flow: GenerationWorkflow })
         {sources.map((source) => (
           <tr key={source.id}>
             <th scope="row">{source.name}</th>
-            <td>{source.effect}</td>
+            <td>{locatedEffectLabel(source.effect)}</td>
             <td>{source.radius / 1000} km</td>
             <td>{source.propagation}</td>
           </tr>
@@ -117,4 +123,9 @@ export function GenerationLocatedSources({ flow }: { flow: GenerationWorkflow })
       </tbody>
     </table>
   );
+}
+function locatedEffectLabel(effect: string) {
+  const definition =
+    locatedMagicEffectDefinitions[effect as keyof typeof locatedMagicEffectDefinitions];
+  return `${definition?.label ?? effect}${definition?.physicalFeedback ? "" : " · intensity only; physical feedback not simulated"}`;
 }

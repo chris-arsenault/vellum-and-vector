@@ -1,21 +1,16 @@
 import { canonryMagicPresets, fieldInterpolator, type MagicSystem } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { nativePosition } from "./atlasWorkspace";
+import {
+  carriedMagicChannels,
+  magicChannels,
+  magicFieldDefinitions,
+  type MagicChannel,
+} from "./magicFieldDefinitions";
 
-export interface MagicField {
+export interface MagicField extends Record<MagicChannel, Float64Array> {
   definition: MagicSystem;
   origins: { id: string; x: number; y: number; radius: number; strength: number }[];
-  intensity: Float64Array;
-  source: Float64Array;
-  wake: Float64Array;
-  rogue: Float64Array;
-  history: Float64Array;
-  firstEpoch: Float64Array;
-  stored: Float64Array;
-  retained: Float64Array;
-  radii: Float64Array;
-  coastalHistory: Float64Array;
-  coastalFirstEpoch: Float64Array;
   features: Record<string, Uint8Array>;
 }
 export interface MagicWorkspace {
@@ -33,34 +28,24 @@ export const magicKey = (field: MagicField, channel: string) =>
 
 function createMagicField(state: GenerationState, definition: MagicSystem): MagicField {
   const count = state.physical!.map.mesh.count;
-  const array = () => new Float64Array(count);
+  const channels = {} as Record<MagicChannel, Float64Array>;
+  for (const channel of magicChannels)
+    channels[channel] = new Float64Array(count).fill(magicFieldDefinitions[channel].initial);
   const field: MagicField = {
+    ...channels,
     definition,
     origins: [],
-    intensity: array(),
-    source: array(),
-    wake: array(),
-    rogue: array(),
-    history: array(),
-    firstEpoch: array().fill(-1),
-    stored: array(),
-    retained: array(),
-    radii: array(),
-    coastalHistory: array(),
-    coastalFirstEpoch: array().fill(-1),
     features: {},
   };
   if (!state.physical!.inherited) return field;
-  for (const channel of [
-    "history",
-    "firstEpoch",
-    "stored",
-    "coastalHistory",
-    "coastalFirstEpoch",
-  ] as const) {
+  for (const channel of carriedMagicChannels) {
     const key = magicKey(field, channel);
     if (!state.surface.channels[key]) continue;
-    const valueAt = fieldInterpolator(state.surface, key, channel.endsWith("Epoch"));
+    const valueAt = fieldInterpolator(
+      state.surface,
+      key,
+      magicFieldDefinitions[channel].quantity === "category"
+    );
     for (let i = 0; i < count; i++) field[channel][i] = valueAt(nativePosition(state.physical!, i));
   }
   return field;
@@ -85,17 +70,11 @@ export function advectMagic(state: GenerationState) {
   const work = state.physical!;
   for (const field of work.magic?.fields ?? []) {
     if (!field.definition.history.advect) continue;
-    for (const channel of [
-      "history",
-      "firstEpoch",
-      "stored",
-      "coastalHistory",
-      "coastalFirstEpoch",
-    ] as const) {
+    for (const channel of carriedMagicChannels) {
       const previous = field[channel].slice();
       for (let i = 0; i < work.map.mesh.count; i++) {
         const source = work.map.AdvectionSourceIndex[i];
-        field[channel][i] = source >= 0 ? previous[source] : channel.endsWith("Epoch") ? -1 : 0;
+        field[channel][i] = source >= 0 ? previous[source] : magicFieldDefinitions[channel].initial;
       }
     }
   }

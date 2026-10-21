@@ -8,6 +8,7 @@ import { spatial, point } from "./spatial";
 import type { World } from "./model";
 import { registerMagicSystemIntents } from "./magicSystemIntents";
 import { rasterPresentationSchema, symbolStyleSchema } from "./viewSchemas";
+import { locatedMagicEffects } from "./magicEffects";
 
 const magicSchema = z.object({
   systemId: z.string().min(1).optional(),
@@ -17,16 +18,7 @@ const magicSchema = z.object({
   radius: finite.positive(),
   strength: finite,
   propagation: z.enum(["radial", "fracture", "cold", "ocean", "advect"]),
-  effect: z.enum([
-    "heat",
-    "cold",
-    "pressure",
-    "uplift",
-    "erosionResistance",
-    "gravity",
-    "fertility",
-    "luminous",
-  ]),
+  effect: z.enum(locatedMagicEffects),
   decay: finite.min(0).max(1),
   storage: finite.nonnegative(),
   dependsOn: z.array(uuid).nullable().default(null),

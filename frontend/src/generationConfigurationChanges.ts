@@ -1,23 +1,9 @@
 import { defaultEcologyEpoch, sameValue, type EcologyEpoch, type Epoch } from "@atlas/domain";
 import type { GenerationSettings } from "@atlas/generation";
-import { magicConfigurationChanges } from "./generationMagicChanges";
 
 export interface ConfigurationChange {
   label: string;
   value: string;
-}
-export function generationConfigurationChanges(
-  feature: string,
-  current: GenerationSettings,
-  previous: GenerationSettings
-): ConfigurationChange[] {
-  if (feature === "physical.lifecycle") return physicalChanges(current.epochs, previous.epochs);
-  if (feature === "physical.climate")
-    return ecologyChanges(current.epochs, previous.epochs, ["rainfall"]);
-  if (feature === "ecology.living") return ecologyChanges(current.epochs, previous.epochs);
-  if (feature === "magic.configured") return magicConfigurationChanges(current, previous);
-  if (feature === "human.cultures") return culturalChanges(current.humanEras, previous.humanEras);
-  return [];
 }
 
 const physicalFields: {
@@ -35,7 +21,7 @@ const physicalFields: {
   { key: "impacts", label: "impact activity", unit: "×" },
   { key: "volcanism", label: "volcanic activity", unit: "×" },
 ];
-function physicalChanges(current: Epoch[], previous: Epoch[]) {
+export function physicalChanges(current: Epoch[], previous: Epoch[]) {
   const changes: ConfigurationChange[] = [];
   if (
     !sameValue(
@@ -67,7 +53,7 @@ const ecologyLabels: Record<keyof EcologyEpoch, string> = {
   migration: "migration and dispersal",
   recovery: "soil recovery",
 };
-function ecologyChanges(current: Epoch[], previous: Epoch[], only?: (keyof EcologyEpoch)[]) {
+export function ecologyChanges(current: Epoch[], previous: Epoch[], only?: (keyof EcologyEpoch)[]) {
   const changes: ConfigurationChange[] = [];
   const keys = only ?? (Object.keys(ecologyLabels) as (keyof EcologyEpoch)[]);
   for (const epoch of current) {
@@ -87,7 +73,7 @@ function ecologyChanges(current: Epoch[], previous: Epoch[], only?: (keyof Ecolo
   return changes;
 }
 
-function culturalChanges(
+export function culturalChanges(
   current: GenerationSettings["humanEras"],
   previous: GenerationSettings["humanEras"]
 ) {

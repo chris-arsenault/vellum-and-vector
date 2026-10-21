@@ -3,6 +3,25 @@ import type { GenerationFeature } from "./features";
 import type { MapProcess, ProcessSequence } from "./process";
 import { culturalProcess, politicalProcess } from "./mapPeople";
 import { builtProcess } from "./mapBuilt";
+import {
+  ecologyConfiguration,
+  magicConfiguration,
+  culturalConfiguration,
+} from "./featureConfiguration";
+import {
+  ecologyOperations,
+  configuredMagicOperations,
+  localMagicSlots,
+  localMagicProcesses,
+  localMagicContribution,
+  operation,
+} from "./domainContributions";
+import type { GenerationSlot } from "./generationSlots";
+import {
+  configuredMagicRequirements,
+  locatedMagicRequirements,
+  locatedMagicWarnings,
+} from "./featureDependencies";
 
 function present(process: MapProcess, slot: string): ProcessSequence {
   return slot === "present.people"
@@ -19,6 +38,7 @@ function present(process: MapProcess, slot: string): ProcessSequence {
 export const domainFeatureDefinitions: GenerationFeature[] = [
   {
     id: "ecology.living",
+    ...ecologyConfiguration,
     label: "Living ecology",
     presentation: {
       stage: "environment",
@@ -39,14 +59,20 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
       vegetation: atlasParameterDefinitions.vegetation,
       grazing: atlasParameterDefinitions.grazing,
     },
+    legacyParameters: ["vegetation", "grazing"],
     processes: ["initialize", "evolve", "respond", "burial", "present"].map(
       (name) => `atlas.ecology-${name}`
     ),
     requires: ["physical.climate"],
-    contribute: () => [],
+    slots: Object.keys(ecologyOperations) as GenerationSlot[],
+    contribute: (slot) =>
+      ecologyOperations[slot as GenerationSlot]
+        ? [operation(`atlas.ecology-${ecologyOperations[slot as GenerationSlot]}`, "1")]
+        : [],
   },
   {
     id: "magic.configured",
+    ...magicConfiguration,
     label: "Configured magical systems",
     presentation: {
       stage: "magic",
@@ -68,7 +94,16 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
       "classify",
       "project",
     ].map((name) => `canonry.magic-${name}`),
-    contribute: () => [],
+    slots: Object.keys(configuredMagicOperations) as GenerationSlot[],
+    contribute: (slot) =>
+      configuredMagicOperations[slot as GenerationSlot]
+        ? [operation(`canonry.magic-${configuredMagicOperations[slot as GenerationSlot]}`)]
+        : [],
+    conditionalRequires: (_configuration, context) =>
+      configuredMagicRequirements(
+        context.input.settings?.magicSystems ?? [],
+        context.input.domains.includes("physical")
+      ),
   },
   {
     id: "magic.local",
@@ -84,11 +119,16 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
     domains: ["magic"],
     defaultEnabled: true,
     settings: {},
-    processes: ["magic.thermal", "magic.material", "magic.advanceStorage", "magic.advection"],
-    contribute: () => [],
+    processes: localMagicProcesses,
+    slots: localMagicSlots,
+    contribute: (slot, _configuration, context) => localMagicContribution(slot, context),
+    conditionalRequires: (_configuration, context) =>
+      locatedMagicRequirements(context.source, context.input),
+    diagnostics: (_configuration, context) => locatedMagicWarnings(context.source, context.input),
   },
   {
     id: "human.cultures",
+    ...culturalConfiguration,
     label: "Cultural distributions",
     presentation: {
       stage: "people",
@@ -100,7 +140,9 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
     domains: ["cultural"],
     defaultEnabled: true,
     settings: { cultureCount: atlasParameterDefinitions.cultureCount },
+    legacyParameters: ["cultureCount"],
     processes: [culturalProcess.contract.id],
+    slots: ["present.people"],
     contribute: (slot) => present(culturalProcess, slot),
   },
   {
@@ -115,7 +157,9 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
     domains: ["political"],
     defaultEnabled: true,
     settings: { polityCount: atlasParameterDefinitions.polityCount },
+    legacyParameters: ["polityCount"],
     processes: [politicalProcess.contract.id],
+    slots: ["present.people"],
     contribute: (slot) => present(politicalProcess, slot),
   },
   {
@@ -137,6 +181,7 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
     defaultEnabled: true,
     settings: {},
     processes: [builtProcess.contract.id],
+    slots: ["present.people"],
     contribute: (slot) => present(builtProcess, slot),
   },
 ];

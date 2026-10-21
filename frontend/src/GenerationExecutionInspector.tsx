@@ -123,11 +123,10 @@ function ExecutionContract({ invocation }: { invocation: SetupInvocation }) {
   );
 }
 function inputLabel(input: ProductRequirement) {
-  const freshness = input.freshness === "carried" ? " (carried state)" : "";
   const empty = input.acceptEmptyFrom
     ? `; accepts initialized empty from ${input.acceptEmptyFrom}`
     : "";
-  return `${input.product}${freshness}${empty}`;
+  return `${input.product}${empty}`;
 }
 function ProductList({ title, values }: { title: string; values: string[] }) {
   return (

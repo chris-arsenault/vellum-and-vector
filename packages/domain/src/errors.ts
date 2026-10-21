@@ -19,4 +19,5 @@ export interface Diagnostic {
   severity: "error" | "warning";
   invocation: string | null;
   resource: string | null;
+  field?: { feature: string; path: (string | number)[] };
 }

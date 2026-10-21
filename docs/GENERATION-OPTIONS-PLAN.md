@@ -13,6 +13,13 @@ the earlier wizard with feature-owned controls and shared chronology; that plan
 records current implementation and acceptance state and supersedes this document's
 earlier UI recommendations.
 
+The 2026-10-21 interface review found gaps in the engine completion claim below.
+The corrective contract work is tracked in
+[generation contract consolidation](GENERATION-CONTRACTS-PLAN.md). Current API
+guarantees and deliberate boundaries are described in
+[generation modules](generation-modules.md); earlier execution notes retain their
+historical scope.
+
 Execution authorized for all milestones on 2026-10-20. Initial generation is the
 priority, with a smaller regional follow-on. Local implementation and validation
 are in scope; publication and deployment are not requested.

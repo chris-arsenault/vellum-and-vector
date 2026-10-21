@@ -13,6 +13,7 @@ import {
   physicalEpochControls,
 } from "./generationEpochFields";
 import { draftEpochs } from "./generationDraftEpochs";
+import { projectGenerationSetup } from "@atlas/generation";
 
 it("edits temperature as the actual native offset relative to the shared 15-degree reference", () => {
   const original = setFeatureSetting(newGenerationDraft(), "physical.climate", "temperature", 24);
@@ -45,4 +46,18 @@ it("keeps shared tectonic modulation reachable for mountains when plate evolutio
   expect(prepared.input.resolvedFeatures!.selection["physical.mountains"].enabled).toBe(true);
   expect(prepared.diagnostics).toEqual([]);
   expect(atlasEpoch(prepared.source.world.epochs[0]).TectonicStrength).toBe(350);
+});
+
+it("reads control descriptors from the projected feature without an identity-based UI table", () => {
+  const view = projectGenerationSetup(prepareDraft(newGenerationDraft()));
+  const climate = view.features.find((feature) => feature.id === "physical.climate")!;
+  const control = climate.presentation.epochControls!.find((entry) => entry.key === "rainfall")!;
+  expect(control).toMatchObject({ label: "Epoch rainfall", unit: "multiplier", min: 0, max: 5 });
+  control.label = "Projected rainfall response";
+  expect(physicalEpochControls(climate).find((entry) => entry.key === "rainfall")!.label).toBe(
+    "Projected rainfall response"
+  );
+  expect(
+    physicalEpochControls("physical.climate").find((entry) => entry.key === "rainfall")!.label
+  ).toBe("Epoch rainfall");
 });

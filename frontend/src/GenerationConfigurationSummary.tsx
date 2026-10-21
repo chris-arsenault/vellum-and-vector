@@ -1,6 +1,6 @@
 import type { SetupFeature } from "@atlas/generation";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
-import { generationConfigurationChanges } from "./generationConfigurationChanges";
+import { generationFeatureAdapter } from "./generationFeatureAdapters";
 
 /** Review uses the same resolved settings that will be sent to the worker. */
 export function GenerationConfigurationSummary({
@@ -13,7 +13,15 @@ export function GenerationConfigurationSummary({
   const current = flow.prepared?.input.settings,
     previous = flow.baseline.prepared?.input.settings;
   if (!current || !previous) return null;
-  const changes = generationConfigurationChanges(feature.id, current, previous);
+  const adapter = generationFeatureAdapter(feature.id);
+  if (!adapter?.summarize) return null;
+  const original = flow.baseline.setup?.features.find((entry) => entry.id === feature.id);
+  const changes = adapter.summarize({
+    current: feature.configuration,
+    previous: original?.configuration,
+    settings: current,
+    baseline: previous,
+  });
   if (!changes.length) return null;
   return (
     <dl className="setup-review-configuration">

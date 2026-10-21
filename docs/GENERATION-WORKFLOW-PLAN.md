@@ -3,6 +3,11 @@
 Planning date: 2026-10-20. Engine baseline: `8deeeda`, pushed to `origin/main`.
 Sulion plan: `20a0d5a5-6b61-444a-ba05-135bba1608b7`.
 
+The subsequent interface review and corrective implementation are tracked in
+[generation contract consolidation](GENERATION-CONTRACTS-PLAN.md). That work fixes
+invalid-draft and hidden-field errors and replaces duplicated editor/summary and
+epoch coordination dispatch with registered adapters and declared participation.
+
 ## Outcome and authority
 
 Replace the existing wizard with a compact cartographic workspace that guides a

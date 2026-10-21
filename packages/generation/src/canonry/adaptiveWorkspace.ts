@@ -14,6 +14,12 @@ import { plumeCenter } from "./volcanism";
 import type { PhysicalMesh } from "./mesh";
 import { refreshGrounding } from "./glacierSurface";
 import { invalidateNativeProducts } from "../productLedger";
+import {
+  magicChannels,
+  magicFieldDefinitions,
+  magicWorkspaceChannels,
+  magicWorkspaceDefinitions,
+} from "./magicFieldDefinitions";
 
 export interface SamplingSupport {
   x: number;
@@ -82,29 +88,26 @@ function remapMagic(
     magic = work.magic;
   if (!magic) return;
   for (const field of magic.fields) {
-    for (const [key, value] of Object.entries(field)) {
-      if (!(value instanceof Float64Array)) continue;
-      Object.assign(field, {
-        [key]: remapArray(
-          old,
-          work.map.mesh,
-          value,
-          key.endsWith("Epoch") ? "category" : key === "retained" ? "extensive" : "intensive",
-          transfer
-        ),
-      });
+    for (const key of magicChannels) {
+      field[key] = remapArray(
+        old,
+        work.map.mesh,
+        field[key],
+        magicFieldDefinitions[key].quantity,
+        transfer
+      );
     }
     for (const [key, values] of Object.entries(field.features))
       field.features[key] = Uint8Array.from(
         remapArray(old, work.map.mesh, values, "category", transfer)
       );
   }
-  for (const key of ["heat", "coastal", "naturalSurface", "finalSurface"] as const)
+  for (const key of magicWorkspaceChannels)
     magic[key] = remapArray(
       old,
       work.map.mesh,
       magic[key],
-      key.endsWith("Surface") ? "category" : "intensive",
+      magicWorkspaceDefinitions[key].quantity,
       transfer
     );
 }

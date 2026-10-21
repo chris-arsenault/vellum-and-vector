@@ -10,7 +10,13 @@ import { atlasPhysicalProfile } from "./canonry/atlasProfile";
 import { applyNativeStep, nativeContracts } from "./canonry/contracts";
 import { oceanConnectivity } from "./canonry/ocean";
 
-function process(id: string, apply: NonNullable<MapProcess["apply"]> = () => {}): MapProcess {
+function process(
+  id: string,
+  apply: (
+    state: GenerationState,
+    context: import("./process").MapProcessContext
+  ) => void | Promise<void> = () => {}
+): MapProcess {
   return {
     contract: {
       id,
@@ -29,7 +35,6 @@ it("distinguishes named initialized emptiness from produced, missing and stale p
   const ledger = new ProductLedger(new Set());
   const input = {
     product: "impacts",
-    freshness: "carried" as const,
     acceptEmptyFrom: "empty-impacts",
   };
   expect(ledger.status("impacts")).toBe("missing");
@@ -193,4 +198,63 @@ it("runs conditional reconciliation through the same executor, inputs and ledger
     expect(result.state.facts.has("routing")).toBe(true);
   }
   expect(paths).toEqual([["water-refinement", "reconciliation", "reconcile-water"]]);
+});
+
+function provider(id: string, composition: "exclusive" | "shared-state" = "exclusive") {
+  const writer = process(id);
+  writer.contract.produces = ["measured"];
+  writer.contract.products = [{ id: "measured", lifetime: "run", composition }];
+  return writer;
+}
+it("rejects distinct exclusive providers in preflight and before the second runtime operation", async () => {
+  const first = provider("first"),
+    second = provider("second");
+  let called = false;
+  second.behavior = {
+    kind: "model-pass",
+    applyPass() {
+      called = true;
+    },
+  };
+  const registry = new MapProcessRegistry().register(first).register(second);
+  const plan = configuration([invoke(first), invoke(second)]);
+  expect(preflight(plan, registry)).toEqual([
+    expect.objectContaining({ message: expect.stringContaining("exclusively produce measured") }),
+  ]);
+  await expect(new MapRunner(plan, registry).run(landscape(), options)).rejects.toThrow(
+    "exclusively produce measured"
+  );
+  expect(called).toBe(false);
+});
+it("allows repeated occurrences of one exclusive provider and distinct shared-state writers", async () => {
+  const only = provider("only");
+  const same = new MapProcessRegistry().register(only);
+  const repeated = configuration([invoke(only, "first"), invoke(only, "second")]);
+  expect(preflight(repeated, same)).toEqual([]);
+  await expect(new MapRunner(repeated, same).run(landscape(), options)).resolves.toBeDefined();
+  const first = provider("first", "shared-state"),
+    second = provider("second", "shared-state");
+  const shared = new MapProcessRegistry().register(first).register(second);
+  const plan = configuration([invoke(first), invoke(second)]);
+  expect(preflight(plan, shared)).toEqual([]);
+  await expect(new MapRunner(plan, shared).run(landscape(), options)).resolves.toBeDefined();
+});
+it("does not count a conditional exclusive provider that cannot execute in this recipe", async () => {
+  const first = provider("first"),
+    second = provider("second");
+  const registry = new MapProcessRegistry().register(first).register(second);
+  const plan = configuration([
+    {
+      kind: "epochs",
+      id: "history",
+      resetFacts: [],
+      epochs: [epoch("one", 1, { provider: "first" })],
+      body: [
+        { ...invoke(first), when: { variable: "provider", equals: "first" } },
+        { ...invoke(second), when: { variable: "provider", equals: "second" } },
+      ],
+    },
+  ]);
+  expect(preflight(plan, registry)).toEqual([]);
+  await expect(new MapRunner(plan, registry).run(landscape(), options)).resolves.toBeDefined();
 });

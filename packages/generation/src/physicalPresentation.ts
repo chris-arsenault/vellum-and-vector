@@ -1,14 +1,27 @@
-import type { FeaturePresentation, GenerationSetupStage } from "./generationPresentation";
+import type {
+  FeaturePresentation,
+  GenerationSetupStage,
+  EpochControl,
+  EpochValueKey,
+} from "./generationPresentation";
 
 function describe(
   stage: GenerationSetupStage,
   family: string,
   order: number,
   summary: string,
-  settingConsumers?: Record<string, readonly string[]>
+  settingConsumers?: Record<string, readonly string[]>,
+  epochControls?: EpochControl[]
 ): FeaturePresentation {
-  return { stage, family, order, summary, settingConsumers };
+  return { stage, family, order, summary, settingConsumers, epochControls };
 }
+const strength = (key: EpochValueKey, label: string): EpochControl => ({
+  key,
+  label,
+  unit: "multiplier",
+  min: 0,
+  max: 1,
+});
 /** Descriptive ownership beside the physical module; these entries never select operations. */
 export const physicalPresentation: Record<string, FeaturePresentation> = {
   "physical.lifecycle": describe(
@@ -33,20 +46,24 @@ export const physicalPresentation: Record<string, FeaturePresentation> = {
     "Continental construction",
     20,
     "Move the crust and evolve tectonic activity through the shared epochs.",
-    { plateDrift: ["canonry.plate-advection"] }
+    { plateDrift: ["canonry.plate-advection"] },
+    [strength("tectonics", "Epoch tectonic activity")]
   ),
   "physical.mountains": describe(
     "land",
     "Continental construction",
     30,
-    "Build mountain relief from tectonic structure and retain its construction history."
+    "Build mountain relief from tectonic structure and retain its construction history.",
+    undefined,
+    [strength("tectonics", "Epoch tectonic activity")]
   ),
   "physical.volcanism": describe(
     "land",
     "Event geography",
     40,
     "Establish mantle roots and construct volcanic cones, aprons and calderas as one capability.",
-    { volcanism: ["canonry.volcanic-construction"] }
+    { volcanism: ["canonry.volcanic-construction"] },
+    [{ key: "volcanism", label: "Epoch volcanic activity", unit: "multiplier", min: 0 }]
   ),
   "physical.impacts": describe(
     "land",
@@ -56,7 +73,8 @@ export const physicalPresentation: Record<string, FeaturePresentation> = {
     {
       impacts: ["canonry.impact-cratering"],
       impactSize: ["canonry.impact-cratering"],
-    }
+    },
+    [{ key: "impacts", label: "Epoch impact activity", unit: "multiplier", min: 0 }]
   ),
   "physical.hillslopes": describe(
     "land",
@@ -80,7 +98,9 @@ export const physicalPresentation: Record<string, FeaturePresentation> = {
     "land",
     "Structure and relief",
     90,
-    "Construct the fault network; impacts and volcanism can also contribute to shared fracture conductance."
+    "Construct the fault network; impacts and volcanism can also contribute to shared fracture conductance.",
+    undefined,
+    [strength("tectonics", "Epoch tectonic activity")]
   ),
   "physical.geothermal": describe(
     "land",
@@ -98,7 +118,9 @@ export const physicalPresentation: Record<string, FeaturePresentation> = {
     "environment",
     "Ocean and shores",
     10,
-    "Resolve connected ocean, distance from ocean, bathymetry, landmasses and shelf groups."
+    "Resolve connected ocean, distance from ocean, bathymetry, landmasses and shelf groups.",
+    undefined,
+    [{ key: "seaLevel", label: "Epoch sea level offset", unit: "m" }]
   ),
   "physical.ocean-circulation": describe(
     "environment",
@@ -119,7 +141,8 @@ export const physicalPresentation: Record<string, FeaturePresentation> = {
     "Combine natural and external coastal forcing with coastal erosion and deposition.",
     {
       coastalErosion: ["canonry.coastal-erosion-and-deposition"],
-    }
+    },
+    [strength("coasts", "Epoch coastal activity")]
   ),
   "physical.climate": {
     ...describe(
@@ -134,6 +157,10 @@ export const physicalPresentation: Record<string, FeaturePresentation> = {
       }
     ),
     initialOnlySettings: ["seaLevel"],
+    epochControls: [
+      { key: "temperature", label: "Epoch temperature shift", unit: "°C" },
+      { key: "rainfall", label: "Epoch rainfall", unit: "multiplier", min: 0, max: 5 },
+    ],
   },
   "water.routing": describe(
     "environment",
@@ -152,7 +179,8 @@ export const physicalPresentation: Record<string, FeaturePresentation> = {
     "River systems",
     80,
     "Cut river valleys through material; network output remains an independent choice.",
-    { erosion: ["canonry.ancestral-fluvial-erosion"] }
+    { erosion: ["canonry.ancestral-fluvial-erosion"] },
+    [strength("hydrology", "Epoch hydrological activity")]
   ),
   "material.fluvial-transport": describe(
     "environment",
@@ -176,14 +204,20 @@ export const physicalPresentation: Record<string, FeaturePresentation> = {
     "environment",
     "Ice",
     120,
-    "Calculate ice mass balance, ice flow and meltwater; repeated model passes retain their existing causal order."
+    "Calculate ice mass balance, ice flow and meltwater; repeated model passes retain their existing causal order.",
+    undefined,
+    [
+      strength("ice", "Epoch glacial activity"),
+      strength("hydrology", "Epoch hydrological activity"),
+    ]
   ),
   "physical.glacial-sculpting": describe(
     "environment",
     "Ice",
     130,
     "Combine glacial erosion, deposition and glacial relief into one sculpting capability.",
-    { glaciers: ["canonry.glacial-erosion", "canonry.glacial-deposition"] }
+    { glaciers: ["canonry.glacial-erosion", "canonry.glacial-deposition"] },
+    [strength("ice", "Epoch glacial activity")]
   ),
   "physical.sea-ice": describe(
     "environment",

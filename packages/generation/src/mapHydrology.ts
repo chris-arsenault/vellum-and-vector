@@ -37,11 +37,14 @@ export const drainageProcess: MapProcess = {
       meltwaterYears: { type: "number", unit: "year", required: false, default: 1, minimum: 0.001 },
     },
   },
-  apply(state, context) {
-    const level = Number(context.parameters.seaLevel),
-      graph = conditionDrainage(state.surface, level, context);
-    routeRunoff(state, graph, context);
-    writeDrainage(state.surface, graph, level);
+  behavior: {
+    kind: "model-pass",
+    applyPass(state, context) {
+      const level = Number(context.parameters.seaLevel),
+        graph = conditionDrainage(state.surface, level, context);
+      routeRunoff(state, graph, context);
+      writeDrainage(state.surface, graph, level);
+    },
   },
   validate(state) {
     validateDrainage(state.surface);
@@ -120,38 +123,42 @@ export const erosionProcess: MapProcess = {
       },
     },
   },
-  apply(state, context) {
-    validateDrainage(state.surface);
-    for (const channel of ["bedrock", "sediment"]) requireChannel(state.surface, channel, "metre");
-    requireChannel(state.surface, "rock", "ratio");
-    const grid = state.surface,
-      mobile = movableTerrain(state),
-      years = epochYears(context);
-    const moving = new Float64Array(grid.active.length),
-      eroded = new Float64Array(grid.active.length),
-      deposited = new Float64Array(grid.active.length);
-    const order = Array.from(grid.active.keys())
-      .filter((i) => grid.active[i])
-      .sort((a, b) => grid.channels.drainageRank[b] - grid.channels.drainageRank[a]);
-    let exported = 0;
-    for (let n = 0; n < order.length; n++) {
-      checkProgress(
-        context,
-        n,
-        order.length,
-        "Eroding material and depositing downstream sediment"
-      );
-      const i = order[n],
-        target = grid.channels.receiver[i];
-      const supply = removeMaterial(grid, i, target, mobile[i] === 1, years, context);
-      eroded[i] = supply;
-      const load = moving[i] + supply;
-      const retained = depositMaterial(grid, i, target, load, mobile[i] === 1, years, context);
-      deposited[i] = retained;
-      if (target >= 0) moving[target] += load - retained;
-      else exported += load - retained;
-    }
-    recordTransport(grid, eroded, deposited, exported, context);
+  behavior: {
+    kind: "model-pass",
+    applyPass(state, context) {
+      validateDrainage(state.surface);
+      for (const channel of ["bedrock", "sediment"])
+        requireChannel(state.surface, channel, "metre");
+      requireChannel(state.surface, "rock", "ratio");
+      const grid = state.surface,
+        mobile = movableTerrain(state),
+        years = epochYears(context);
+      const moving = new Float64Array(grid.active.length),
+        eroded = new Float64Array(grid.active.length),
+        deposited = new Float64Array(grid.active.length);
+      const order = Array.from(grid.active.keys())
+        .filter((i) => grid.active[i])
+        .sort((a, b) => grid.channels.drainageRank[b] - grid.channels.drainageRank[a]);
+      let exported = 0;
+      for (let n = 0; n < order.length; n++) {
+        checkProgress(
+          context,
+          n,
+          order.length,
+          "Eroding material and depositing downstream sediment"
+        );
+        const i = order[n],
+          target = grid.channels.receiver[i];
+        const supply = removeMaterial(grid, i, target, mobile[i] === 1, years, context);
+        eroded[i] = supply;
+        const load = moving[i] + supply;
+        const retained = depositMaterial(grid, i, target, load, mobile[i] === 1, years, context);
+        deposited[i] = retained;
+        if (target >= 0) moving[target] += load - retained;
+        else exported += load - retained;
+      }
+      recordTransport(grid, eroded, deposited, exported, context);
+    },
   },
   validate(state) {
     requireChannel(state.surface, "bedrock", "metre");

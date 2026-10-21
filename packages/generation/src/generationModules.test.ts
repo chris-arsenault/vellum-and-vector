@@ -35,6 +35,7 @@ const survey: GenerationModule = {
         .strict(),
       configurationFromLegacy: () => ({ multiplier: 1, title: "Default survey" }),
       processes: ["test.survey.measure"],
+      slots: ["present.products", "epoch.incision"],
       contribute: (slot, configuration) =>
         ["present.products", "epoch.incision"].includes(slot)
           ? [

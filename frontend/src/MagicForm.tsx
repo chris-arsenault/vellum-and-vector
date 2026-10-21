@@ -5,6 +5,7 @@ import type { EditorState } from "./useEditor";
 import { magicFeatures } from "./magicFeatures";
 import { inheritedGeneration } from "./generationJobs";
 import { MagicSystemsForm } from "./MagicSystemsForm";
+import { locatedMagicEffects, locatedMagicEffectDefinitions } from "@atlas/domain";
 
 export function MagicForm({ editor }: { editor: EditorState }) {
   const generate = useGenerate(editor.world, editor.area.id);
@@ -223,10 +224,13 @@ function SourceEffect({ effect }: { effect?: string }) {
     <label>
       Environmental effect
       <select name="effect" defaultValue={effect ?? "heat"}>
-        <option value="heat">Heating · strength in °C</option>
-        <option value="cold">Cooling · strength in °C</option>
-        <option value="erosionResistance">Rock hardening · strength / 1,000</option>
-        <option value="pressure">Coastal forcing · relative strength</option>
+        {locatedMagicEffects.map((id) => (
+          <option key={id} value={id}>
+            {locatedMagicEffectDefinitions[id].label}
+            {!locatedMagicEffectDefinitions[id].physicalFeedback &&
+              " · intensity only; physical feedback not simulated"}
+          </option>
+        ))}
       </select>
     </label>
   );

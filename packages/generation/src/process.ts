@@ -106,8 +106,7 @@ export interface MapProcessContext {
 }
 export interface MapProcess {
   contract: MapProcessContract;
-  behavior?: ProcessBehavior;
-  apply?(state: GenerationState, context: MapProcessContext): void | Promise<void>;
+  behavior: ProcessBehavior;
   validate(state: GenerationState, context: MapProcessContext): Diagnostic[];
 }
 export type ProcessSequence = (ProcessInvocation | EpochSequence)[];
@@ -168,11 +167,7 @@ export class MapProcessRegistry {
   register(process: MapProcess): this {
     const key = `${process.contract.id}@${process.contract.version}`;
     requireThat(!this.entries.has(key), "process_identity", `Register ${key} once.`);
-    requireThat(
-      process.behavior || process.apply,
-      "process_behavior",
-      `Bind an operation for ${key}.`
-    );
+    requireThat(process.behavior, "process_behavior", `Bind an operation for ${key}.`);
     this.entries.set(key, process);
     return this;
   }

@@ -30,7 +30,7 @@ import type { ResolvedFeatures } from "../features";
 import { generationBindings } from "../generationBindings";
 import { absenceInitialization } from "./absenceInitialization";
 import { physicalProduct, nativeBehavior } from "./physicalProducts";
-import { selectedAtlasChannels } from "./atlasPublications";
+import { atlasPublicationDefinitions, selectedAtlasChannels } from "./atlasPublications";
 import {
   absentInheritedHistories,
   inheritedChannelNames,
@@ -189,7 +189,8 @@ export function atlasNativeProcesses(
       inheritedAbsences,
       inheritedNativeFacts(channels)
     ),
-    projectProcess(),
+    projectProcess(input),
+    projectProcess(input, true),
     forcingProcess(),
     epochStartProcess(),
     finishProcess(original),
@@ -248,27 +249,36 @@ function initializeProcess(): MapProcess {
     validate: validateWorkspace,
   };
 }
-function projectProcess(): MapProcess {
+function projectProcess(input: AtlasGenerationInput, forcingOnly = false): MapProcess {
+  const channels = new Set(selectedAtlasChannels(input.resolvedFeatures!).map(({ name }) => name));
+  const projected = atlasPublicationDefinitions(input)
+    .filter((definition) => definition.kind === "field" && definition.publish !== false)
+    .map((definition) => (definition.kind === "field" ? definition.channel : ""));
+  const outputs = forcingOnly
+    ? ["elevation", "geology", "fracture", "naturalTemperature", "naturalRock"]
+    : [
+        ...(channels.has("elevation") ? ["elevation"] : []),
+        ...(["bedrock", "rock", "sediment"].every((name) => channels.has(name)) ? ["geology"] : []),
+        ...(channels.has("fracture") ? ["fracture"] : []),
+        ...(projected.includes("flow") ? ["flow"] : []),
+      ];
   return {
     contract: {
       ...contract(
-        "canonry.project",
+        forcingOnly ? "canonry.project-forcing" : "canonry.project",
         ["canonry:workspace"],
-        ["elevation", "geology", "fracture", "drainage", "flow"]
+        outputs
       ),
       workspaceOnly: false,
-      parameters: { forcingOnly: { type: "boolean", unit: null, required: false, default: false } },
     },
     behavior: {
       kind: "extract",
       extract(state, context) {
         projectNative(
           state,
-          Boolean(context.parameters.forcingOnly),
+          forcingOnly,
           !generationBindings(context).domains.includes("physical"),
-          context.parameters.forcingOnly
-            ? undefined
-            : selectedAtlasChannels(generationBindings(context).features),
+          forcingOnly ? undefined : selectedAtlasChannels(generationBindings(context).features),
           new Set(
             (state.publications ?? []).flatMap((definition) =>
               definition.kind === "field" && definition.publish !== false

@@ -7,6 +7,11 @@ import type { FieldPublicationDefinition, PublicationDefinition } from "../publi
 import { atlasChannels, type ChannelBinding } from "./atlasChannels";
 import { ecologyBindings } from "./ecologyState";
 import { independentInteraction } from "./magicFeatures";
+import {
+  magicFieldDefinitions,
+  publishedMagicChannels,
+  type MagicChannel,
+} from "./magicFieldDefinitions";
 
 type Ownership = readonly [
   owner: string | readonly string[],
@@ -173,16 +178,12 @@ const derived: readonly [channel: string, unit: string, layer: string, owners: s
   ["coastalPressure", "ratio", "magic", ["magic.local"]],
 ];
 
-function configuredChannel(system: string, channel: string, publish: boolean) {
-  const unit = channel.endsWith("Epoch")
-    ? "category"
-    : channel === "retained"
-      ? "intensity-square-metre"
-      : "relative-intensity";
-  const definition = field(`magic:${system}:${channel}`, unit, "magic", publish, [
+function configuredChannel(system: string, channel: MagicChannel, publish: boolean) {
+  const metadata = magicFieldDefinitions[channel];
+  const definition = field(`magic:${system}:${channel}`, metadata.unit, "magic", publish, [
     "magic.configured",
   ]);
-  if (channel === "retained") definition.quantity = "extensive";
+  definition.quantity = metadata.quantity;
   return definition;
 }
 
@@ -190,18 +191,7 @@ function configuredMagic(input: AtlasGenerationInput, features: ResolvedFeatures
   const definitions: PublicationDefinition[] = [];
   for (const system of input.settings?.magicSystems ?? []) {
     const publish = enabled(features, "magic.configured") && system.enabled;
-    for (const channel of [
-      "intensity",
-      "history",
-      "firstEpoch",
-      "stored",
-      "retained",
-      "coastalHistory",
-      "coastalFirstEpoch",
-      "source",
-      "wake",
-      "rogue",
-    ]) {
+    for (const channel of publishedMagicChannels) {
       definitions.push(configuredChannel(system.id, channel, publish));
     }
     for (const rule of system.features)

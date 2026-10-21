@@ -6,7 +6,23 @@ import {
   updatePhysicalEpoch,
 } from "./generationDraftEpochs";
 import { updateHumanEra } from "./generationHumanEras";
-import { generationConfigurationChanges } from "./generationConfigurationChanges";
+import { generationFeatureAdapter } from "./generationFeatureAdapters";
+import type { GenerationSettings } from "@atlas/generation";
+
+function generationConfigurationChanges(
+  feature: string,
+  current: GenerationSettings,
+  previous: GenerationSettings
+) {
+  return (
+    generationFeatureAdapter(feature)?.summarize?.({
+      current: {},
+      previous: {},
+      settings: current,
+      baseline: previous,
+    }) ?? []
+  );
+}
 
 it("omits unchanged nested configuration and shows physical shifts in their displayed units", () => {
   const draft = newGenerationDraft(),

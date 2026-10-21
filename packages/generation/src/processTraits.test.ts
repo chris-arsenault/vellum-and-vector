@@ -2,6 +2,9 @@ import { expect, it } from "vitest";
 import { landscape, epoch } from "./mapFixtures";
 import type { MapProcessContext, MapProcess } from "./process";
 import { executeProcessBehavior, type ProcessBehavior } from "./processTraits";
+import { MapRunner } from "./mapRunner";
+import { MapProcessRegistry } from "./process";
+import { configuration, invoke, options } from "./mapFixtures";
 
 function context(): MapProcessContext {
   return {
@@ -28,9 +31,6 @@ function definition(behavior: ProcessBehavior): MapProcess {
       invalidates: [],
     },
     behavior,
-    apply() {
-      throw new Error("Do not execute the legacy adapter when behavior exists.");
-    },
     validate: () => [],
   };
 }
@@ -114,4 +114,60 @@ it("executes forcing contributions and checks material balance after the transfo
     ctx
   );
   expect(calls).toEqual(["forcing", "material", "balance"]);
+});
+
+it("awaits asynchronous material balance before validating or exposing products", async () => {
+  const calls: string[] = [];
+  const process = definition({
+    kind: "material-transformation",
+    transform() {
+      calls.push("transform");
+    },
+    async balance() {
+      await Promise.resolve();
+      calls.push("balance");
+    },
+  });
+  process.contract.produces = ["balanced"];
+  process.validate = (state) => {
+    expect(state.facts.has("balanced")).toBe(false);
+    calls.push("validate");
+    return [];
+  };
+  const result = await new MapRunner(
+    configuration([invoke(process)]),
+    new MapProcessRegistry().register(process)
+  ).run(landscape(), options);
+  expect(calls).toEqual(["transform", "balance", "validate"]);
+  expect(result.state.facts.has("balanced")).toBe(true);
+});
+
+it("rejects failed asynchronous balance before validation and final delivery", async () => {
+  let validated = false;
+  let delivered = false;
+  const process = definition({
+    kind: "material-transformation",
+    transform() {},
+    async balance() {
+      await Promise.resolve();
+      throw new Error("Unbalanced transported material");
+    },
+  });
+  process.validate = () => {
+    validated = true;
+    return [];
+  };
+  await expect(
+    new MapRunner(configuration([invoke(process)]), new MapProcessRegistry().register(process)).run(
+      landscape(),
+      {
+        ...options,
+        async saveBoundary() {
+          delivered = true;
+        },
+      }
+    )
+  ).rejects.toThrow("Unbalanced transported material");
+  expect(validated).toBe(false);
+  expect(delivered).toBe(false);
 });

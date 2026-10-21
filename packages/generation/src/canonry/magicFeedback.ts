@@ -2,6 +2,13 @@ import type { GenerationState, MapProcessContext } from "../process";
 import { clamp, rockResistance, round } from "./math";
 import { Feature } from "./codes";
 import { generationBindings } from "../generationBindings";
+import type { MagicSystem } from "@atlas/domain";
+
+export const coastalMagicParameters: (keyof MagicSystem["parameters"])[] = [
+  "coastalThreshold",
+  "waveAmplification",
+  "currentAmplification",
+];
 
 export function magicThermalFeedback(state: GenerationState) {
   const work = state.physical!,

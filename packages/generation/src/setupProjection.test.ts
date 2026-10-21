@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { builtinLayers, putChannel, rectangle } from "@atlas/domain";
+import { builtinLayers, putChannel, rectangle, canonryMagicPresets } from "@atlas/domain";
 import { atlasFeatureDefinitions, prepareAtlasGeneration } from "./atlasWorkflow";
 import { atlasGenerationModules } from "./atlasModules";
 import { landscape, source as locatedSource } from "./mapFixtures";
@@ -7,6 +7,7 @@ import { projectGenerationSetup } from "./setupProjection";
 import type { FeatureSelection } from "./features";
 import type { GenerationModule } from "./generationModules";
 import { sequenceStages } from "./sequence";
+import { z } from "zod";
 
 function world() {
   const state = landscape();
@@ -211,8 +212,9 @@ it("marks reconciliation children skipped when their parent's condition does not
     if (stage.invocation?.process === "canonry.refine-water")
       stage.invocation.when = { variable: "requestedRepair", equals: true };
   const view = projectGenerationSetup(resolved),
+    parent = view.invocations.find((item) => item.process === "canonry.refine-water")!,
     children = view.invocations.filter(
-      (item) => item.reconciliation && item.path.includes("canonry.refine-water")
+      (item) => item.reconciliation && parent.path.every((part, index) => item.path[index] === part)
     );
   expect(children.length).toBeGreaterThan(0);
   expect(children.every((item) => !item.scheduled)).toBe(true);
@@ -261,6 +263,7 @@ const survey: GenerationModule = {
       },
       requires: ["water.routing"],
       processes: ["test.measure"],
+      slots: ["present.products"],
       contribute: (slot) =>
         slot === "present.products"
           ? [{ kind: "process", id: "measure", process: "test.measure", version: "1" }]
@@ -332,4 +335,39 @@ it("projects an independently registered scalar feature, prerequisites, diagnost
   } finally {
     atlasGenerationModules.unregister(survey.id);
   }
+});
+
+it("uses declared nested applicability and conditional prerequisites in inherited setup", () => {
+  const module: GenerationModule = {
+    ...survey,
+    features: [
+      {
+        ...survey.features[0],
+        configuration: z.object({ threshold: z.number() }),
+        configurationFromLegacy: () => ({ threshold: 0.5 }),
+        configurationPresentation: { applicability: "any" },
+      },
+    ],
+  };
+  atlasGenerationModules.register(module);
+  try {
+    const view = projectGenerationSetup(region());
+    expect(feature(view, survey.id)).toMatchObject({
+      configuration: { threshold: 0.5 },
+      configurationPresentation: { applicability: "any" },
+      configurationEditable: true,
+    });
+    expect(feature(view, "physical.lifecycle").configurationEditable).toBe(false);
+  } finally {
+    atlasGenerationModules.unregister(module.id);
+  }
+  const view = projectGenerationSetup(
+    prepared({
+      "magic.configured": {
+        configuration: { magicSystems: JSON.parse(JSON.stringify(canonryMagicPresets())) },
+      },
+    })
+  );
+  expect(feature(view, "magic.configured").requires).toContain("physical.coastal-evolution");
+  expect(feature(view, "physical.coastal-evolution").requiredBy).toContain("magic.configured");
 });

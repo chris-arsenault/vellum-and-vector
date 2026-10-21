@@ -4,7 +4,8 @@ import type { EditorState } from "./useEditor";
 import { MagicRuleEditor } from "./MagicRuleEditor";
 import { NumberField as NumberSetting } from "./WorkflowFields";
 import { useWorkflowFields } from "./workflowFieldState";
-import { magicControlKeys } from "./generationMagicControls";
+import { magicControlKeys, removedMagicParameterFields } from "./generationMagicControls";
+import { magicSourceOptions, magicPropagationOptions } from "@atlas/generation";
 
 export function MagicSystemsForm({ editor }: { editor: EditorState }) {
   const [systems, setSystems] = useState(editor.world.magicSystems ?? canonryMagicPresets());
@@ -39,9 +40,12 @@ export function MagicSystemsEditor({
   systems: MagicSystem[];
   change: (systems: MagicSystem[]) => void;
 }) {
-  const { clear } = useWorkflowFields();
-  const update = (updated: MagicSystem) =>
+  const { clear, clearExact } = useWorkflowFields();
+  const update = (updated: MagicSystem) => {
+    const previous = systems.find((system) => system.id === updated.id)!;
+    for (const key of removedMagicParameterFields(previous, updated)) clearExact(key);
     change(systems.map((system) => (system.id === updated.id ? updated : system)));
+  };
   return (
     <>
       {systems.map((system) => (
@@ -141,10 +145,11 @@ function SystemPropagation({
             change({ ...system, source: event.target.value as MagicSystem["source"] })
           }
         >
-          <option value="geothermal">Geothermal maxima & placed cores</option>
-          <option value="cold">Cold terrain & high ground</option>
-          <option value="deep-ocean">Deep ocean locus</option>
-          <option value="placed">Only sources placed on the map</option>
+          {magicSourceOptions.map(({ value, label }) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
         </select>
       </label>
       <label>
@@ -155,10 +160,11 @@ function SystemPropagation({
             change({ ...system, propagation: event.target.value as MagicSystem["propagation"] })
           }
         >
-          <option value="fracture">Through connected fractures</option>
-          <option value="cold-drainage">Toward colder neighbors, retained in ice</option>
-          <option value="ocean-rays">Ocean rays, reflections & wakes</option>
-          <option value="radial">Radial falloff</option>
+          {magicPropagationOptions.map(({ value, label }) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
         </select>
       </label>
       <label>

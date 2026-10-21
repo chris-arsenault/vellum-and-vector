@@ -5,6 +5,31 @@ import type { PublicationDefinition } from "./publication";
 import type { ProcessBehavior } from "./processTraits";
 
 export type GenerationSetupStage = "world" | "land" | "environment" | "magic" | "people";
+export type EpochValueKey =
+  | "tectonics"
+  | "hydrology"
+  | "ice"
+  | "coasts"
+  | "impacts"
+  | "volcanism"
+  | "temperature"
+  | "rainfall"
+  | "seaLevel";
+export interface EpochControl {
+  key: EpochValueKey;
+  label: string;
+  unit: string;
+  min?: number;
+  max?: number;
+}
+export interface ConfigurationPresentation {
+  applicability: "initial" | "any";
+  epochs?: {
+    path: string;
+    shape: "clock" | "record";
+    extension?: "ecology" | "magicActivity";
+  };
+}
 /** Describes controls; process composition and preflight retain execution authority. */
 export interface FeaturePresentation {
   stage: GenerationSetupStage;
@@ -12,6 +37,7 @@ export interface FeaturePresentation {
   summary: string;
   order: number;
   settingConsumers?: Record<string, readonly string[]>;
+  epochControls?: EpochControl[];
   initialOnlySettings?: readonly string[];
   inheritedElapsed?: "preserve-age";
   requiresLocatedSources?: boolean;
@@ -35,7 +61,7 @@ export interface SetupInvocation {
   version: string;
   feature: string | null;
   epochs: { id: string; duration: number }[];
-  behavior: ProcessBehavior["kind"] | "legacy";
+  behavior: ProcessBehavior["kind"];
   durationYears: number | null;
   boundDurationYears: number | null;
   durationNote: string | null;
@@ -57,6 +83,7 @@ export interface SetupFeature {
   reason: string | null;
   settings: SetupSetting[];
   configuration?: ParameterValues;
+  configurationPresentation?: ConfigurationPresentation;
   configurationEditable: boolean;
   requires: string[];
   requiredBy: string[];

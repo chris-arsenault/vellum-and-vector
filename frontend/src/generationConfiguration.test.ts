@@ -54,7 +54,7 @@ it("diagnoses an invalidated fact at its actual causal invocation", () => {
     invalidates: string[]
   ): MapProcess => ({
     contract: { id, version: "1", parameters: {}, requires, produces, invalidates },
-    apply() {},
+    behavior: { kind: "model-pass", applyPass() {} },
     validate: () => [],
   });
   const registry = new MapProcessRegistry()

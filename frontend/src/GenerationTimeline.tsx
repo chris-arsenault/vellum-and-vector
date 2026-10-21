@@ -8,6 +8,7 @@ import { WorkflowCommittedName } from "./WorkflowCommittedName";
 import { HistoryPreset } from "./PhysicalHistoryForm";
 import { ErrorMessage } from "./ErrorMessage";
 import { epochFieldPrefix, selectedDraftEpoch } from "./generationEpochFields";
+import { draftEpochBindings } from "./generationEpochBindings";
 import {
   draftEpochs,
   renameDraftEpoch,
@@ -17,6 +18,15 @@ import {
   replaceDraftEpochs,
   updatePhysicalEpoch,
 } from "./generationDraftEpochs";
+
+export function GenerationClockInstructions() {
+  return (
+    <p className="hint">
+      Use the shared history above to edit epoch names, order and durations. Each feature configures
+      its response to that same history.
+    </p>
+  );
+}
 
 export function GenerationTimeline({ flow }: { flow: GenerationWorkflow }) {
   const epochs = draftEpochs(flow.draft),
@@ -75,8 +85,7 @@ function useClockEditor(flow: GenerationWorkflow, selected: Epoch) {
     }
   };
   const clearEpoch = (id: string) => {
-    for (const owner of ["physical.lifecycle", "ecology.living", "magic.configured"])
-      clear(epochFieldPrefix(owner, id));
+    for (const binding of draftEpochBindings()) clear(epochFieldPrefix(binding.id, id));
   };
   const rename = (id: string) => {
     if (id === selected.id) return;
@@ -84,7 +93,7 @@ function useClockEditor(flow: GenerationWorkflow, selected: Epoch) {
     if (epochs.some((epoch) => epoch.id === id && epoch.id !== selected.id))
       throw new Error("An epoch already uses that name.");
     const next = renameDraftEpoch(flow.draft, selected.id, id);
-    for (const owner of ["physical.lifecycle", "ecology.living", "magic.configured"]) {
+    for (const { id: owner } of draftEpochBindings()) {
       const previous = epochFieldPrefix(owner, selected.id),
         target = epochFieldPrefix(owner, id);
       for (const [key, entry] of Object.entries(fields?.entries ?? {}))

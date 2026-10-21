@@ -1,4 +1,4 @@
-import { requireThat } from "@atlas/domain";
+import { DomainError, requireThat } from "@atlas/domain";
 import type { GenerationState, MapProcessContract } from "./process";
 
 export interface ProductDefinition<K extends string = string> {
@@ -17,7 +17,6 @@ export interface EmptyProductInitialization {
 }
 export interface ProductRequirement {
   product: string;
-  freshness?: "current" | "carried";
   acceptEmptyFrom?: string;
 }
 export type ProductStatus = "missing" | "stale" | "empty" | "available";
@@ -28,6 +27,7 @@ export class ProductLedger {
   private readonly empty = new Map<string, string>();
   private readonly invariantEmpty = new Set<string>();
   private readonly invalidators = new Map<string, string>();
+  private readonly providers = new Map<string, string>();
   constructor(
     readonly facts: Set<string>,
     definitions: ProductDefinition[] = []
@@ -70,10 +70,12 @@ export class ProductLedger {
     for (const [product, initializer] of this.empty) branch.empty.set(product, initializer);
     for (const product of this.invariantEmpty) branch.invariantEmpty.add(product);
     for (const [product, by] of this.invalidators) branch.invalidators.set(product, by);
+    for (const [product, provider] of this.providers) branch.providers.set(product, provider);
     return branch;
   }
   /** Keep only validity established on both outcomes of a conditional repair. */
   join(branch: ProductLedger, by: string) {
+    for (const [product, provider] of branch.providers) this.providers.set(product, provider);
     const products = new Set([
       ...this.facts,
       ...branch.facts,
@@ -122,9 +124,27 @@ export class ProductLedger {
       if (definition.lifetime === "epoch") this.invalidate(definition.id, `${path} epoch boundary`);
   }
   commit(contract: MapProcessContract, by: string) {
+    this.checkProviders(contract);
+    const provider = `${contract.id}@${contract.version}`;
+    for (const product of contract.produces)
+      if (this.definitions.get(product)?.composition === "exclusive")
+        this.providers.set(product, provider);
     for (const product of contract.invalidates) this.invalidate(product, by);
     for (const input of contract.initializes ?? []) this.initializeEmpty(input);
     for (const product of contract.produces) this.produce(product);
+  }
+  checkProviders(contract: MapProcessContract) {
+    const provider = `${contract.id}@${contract.version}`;
+    for (const product of contract.produces) {
+      if (this.definitions.get(product)?.composition !== "exclusive") continue;
+      const previous = this.providers.get(product);
+      if (previous !== undefined && previous !== provider)
+        throw new DomainError(
+          "product_writer",
+          `${previous} and ${provider} both exclusively produce ${product}. Select one provider.`,
+          product
+        );
+    }
   }
 }
 

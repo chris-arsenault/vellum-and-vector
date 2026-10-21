@@ -1,10 +1,17 @@
 import type { ParameterValues } from "@atlas/domain";
 import { atlasParameterDefinitions, type AtlasParameters } from "./atlasParameters";
-import { featureContribution, type GenerationFeature, type ResolvedFeatures } from "./features";
+import {
+  featureContribution,
+  type GenerationFeature,
+  type ResolvedFeatures,
+  type FeatureContributionContext,
+} from "./features";
 import type { ProcessInvocation, ProcessSequence } from "./process";
 import { physicalInputContract } from "./physicalInputs";
 import { atlasGenerationModules } from "./generationModules";
 import { physicalPresentation } from "./physicalPresentation";
+import { clockConfiguration } from "./featureConfiguration";
+import type { GenerationSlot } from "./generationSlots";
 export { acceptedEmptyByConsumer } from "./physicalInputs";
 
 type Operations = Record<string, (string | [string, ParameterValues])[]>;
@@ -13,6 +20,8 @@ type FeatureOptions = {
   requires?: string[];
   absent?: string[];
   inherited?: boolean;
+  configuration?: Partial<GenerationFeature>;
+  when?(slot: string, context?: FeatureContributionContext): boolean;
 };
 const initializer = "atlas.absent-physical";
 
@@ -37,12 +46,14 @@ function definition(
     ),
     legacyParameters: options.settings ?? [],
     processes: [...new Set(processes)],
+    slots: Object.keys(operations) as GenerationSlot[],
     requires: options.requires ?? [],
     absent: (options.absent ?? []).map((product) => ({
       product: `canonry:${product}`,
       initializer,
     })),
-    contribute(slot) {
+    contribute(slot, _configuration, context) {
+      if (options.when && !options.when(slot, context)) return [];
       return (operations[slot] ?? []).map((entry): ProcessInvocation => {
         const [name, parameters] = typeof entry === "string" ? [entry, {}] : entry;
         return {
@@ -54,6 +65,7 @@ function definition(
         };
       });
     },
+    ...options.configuration,
   };
 }
 
@@ -83,6 +95,9 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
       settings: ["continents", "provinces", "landFraction"],
       inherited: true,
       requires: ["physical.lifecycle"],
+      when: (slot, context) =>
+        !slot.startsWith("epoch.crust.") ||
+        Boolean(context?.resolved.selection["physical.tectonic-history"]?.enabled),
     }
   ),
   definition(
@@ -132,7 +147,12 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
       "material.hillslopes": ["mass-wasting"],
       "epoch.after-incision.hillslopes": ["post-fluvial-mass-wasting"],
     },
-    { requires: ["physical.foundation"] }
+    {
+      requires: ["physical.foundation"],
+      when: (slot, context) =>
+        slot !== "epoch.after-incision.hillslopes" ||
+        Boolean(context?.resolved.selection["physical.river-incision"]?.enabled),
+    }
   ),
   definition(
     "material.load-response",
@@ -204,6 +224,7 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
     "physical.climate",
     "Climate",
     {
+      "climate.refinement": ["refine-climate"],
       "climate.atmosphere": [
         "temperature",
         "atmospheric-flow",
@@ -215,12 +236,14 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
       settings: ["temperature", "rainfall", "seaLevel"],
       requires: ["ocean.geography"],
       inherited: true,
+      when: (slot, context) => slot !== "climate.refinement" || isRefinement(context),
     }
   ),
   definition(
     "water.routing",
     "Water balance and routing",
     {
+      "water.refinement": ["refine-water"],
       "water.runoff": ["runoff"],
       "water.routing": [
         "drainage-conditioning",
@@ -230,7 +253,11 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
         "river-network",
       ],
     },
-    { requires: ["physical.climate", "ocean.geography"], inherited: true }
+    {
+      requires: ["physical.climate", "ocean.geography"],
+      inherited: true,
+      when: (slot, context) => slot !== "water.refinement" || isRefinement(context),
+    }
   ),
   definition(
     "physical.river-incision",
@@ -256,6 +283,7 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
     "physical.land-ice",
     "Land ice and meltwater",
     {
+      "after.model-pass": ["refine-ice"],
       "ice.model": ["land-ice-mass-balance", "ice-flow"],
       "ice.flow": ["ice-flow"],
       "ice.meltwater": ["glacial-meltwater"],
@@ -265,6 +293,11 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
       requires: ["physical.climate", "water.routing", "material.load-response"],
       absent: ["LandIce", "IceFlow", "GlacialMeltwater"],
       inherited: true,
+      when: (slot, context) =>
+        slot !== "after.model-pass" ||
+        (isRefinement(context) &&
+          Boolean(context?.iceLoad) &&
+          context?.process === "canonry.ice-flow"),
     }
   ),
   definition(
@@ -344,17 +377,25 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
       "epoch.history": ["physical-epoch-history"],
       "present.validation": ["physical-structural-validation"],
     },
-    { inherited: true }
+    { inherited: true, configuration: clockConfiguration }
   ),
 ];
 
+function isRefinement(context?: FeatureContributionContext) {
+  return Boolean(context && context.source.world.areas[context.input.areaId].profile !== "world");
+}
+
 /** Support identity is the profile slot, independent of requesting features. */
-export function physicalFeatureSequence(slot: string, resolved: ResolvedFeatures): ProcessSequence {
+export function physicalFeatureSequence(
+  slot: string,
+  resolved: ResolvedFeatures,
+  context?: FeatureContributionContext
+): ProcessSequence {
   const registered = atlasGenerationModules.features();
   const definitions = registered.length ? registered : physicalFeatureDefinitions;
   return definitions
     .filter((feature) => resolved.selection[feature.id])
-    .flatMap((feature) => featureContribution(feature, slot, resolved));
+    .flatMap((feature) => featureContribution(feature, slot, resolved, context));
 }
 
 export function nativeFeatureContract(

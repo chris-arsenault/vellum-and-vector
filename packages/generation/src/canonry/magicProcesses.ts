@@ -1,14 +1,14 @@
 import type { GenerationState, MapProcess, MapProcessContext } from "../process";
 import { initializeMagic, systemSeed } from "./magicState";
-import { locateMagicSources } from "./magicSources";
-import { propagateMagic } from "./magicPropagation";
+import { locateMagicSources, magicSourceStrategies } from "./magicSources";
+import { propagateMagic, magicPropagationStrategies } from "./magicPropagation";
 import {
   magicThermalFeedback,
   magicRockFeedback,
   magicCoastalFeedback,
   retainMagicHistory,
 } from "./magicFeedback";
-import { classifyMagicFeatures, projectMagic } from "./magicFeatures";
+import { classifyMagicFeatures, effectiveMagicRules, projectMagic } from "./magicFeatures";
 import { generationBindings } from "../generationBindings";
 import type { ProcessBehavior } from "../processTraits";
 import { ecologyLabels, type MagicSystem } from "@atlas/domain";
@@ -77,7 +77,10 @@ export function magicProcesses(systems: MagicSystem[] = []): MapProcess[] {
     validate: () => [],
   }));
 }
-function magicBehavior(id: string, operation: NonNullable<MapProcess["apply"]>): ProcessBehavior {
+function magicBehavior(
+  id: string,
+  operation: (state: GenerationState, context: MapProcessContext) => void
+): ProcessBehavior {
   if (id === "initialize") return { kind: "initialize", initialize: operation };
   if (id === "project") return { kind: "extract", extract: operation };
   if (["climate", "rocks", "coast"].includes(id))
@@ -99,18 +102,13 @@ function environmentalRequirements(id: string, systems: MagicSystem[]) {
     return selected.filter((system) => system.phase === id).flatMap(systemRequirements);
   if (id === "coast" && selected.some((system) => system.effects.coastalForcing !== 0))
     return ["canonry:Ocean", "canonry:OceanCurrents"];
-  return id === "classify" ? selected.flatMap(conditionRequirements) : [];
+  return id === "classify" ? systems.flatMap(conditionRequirements) : [];
 }
 function systemRequirements(system: MagicSystem) {
-  const required: string[] = [];
-  if (system.source === "geothermal") required.push("canonry:Geothermal");
-  if (system.source === "deep-ocean" || system.propagation === "ocean-rays")
-    required.push("canonry:Ocean", "canonry:Bathymetry");
-  if (system.source === "cold") required.push("canonry:Temperature", "canonry:Elevation");
-  if (system.propagation === "fracture") required.push("canonry:FractureState");
-  if (system.propagation === "cold-drainage")
-    required.push("canonry:Temperature", "canonry:IceState");
-  return required;
+  return [
+    ...magicSourceStrategies[system.source].requires,
+    ...magicPropagationStrategies[system.propagation].requires,
+  ];
 }
 function conditionRequirements(system: MagicSystem) {
   const fields: Record<string, string[]> = {
@@ -125,7 +123,7 @@ function conditionRequirements(system: MagicSystem) {
     landform: ["canonry:Landforms"],
     river: ["canonry:Rivers"],
   };
-  return system.features
+  return effectiveMagicRules(system)
     .flatMap((rule) => [...rule.seeds, ...(rule.retains ?? [])].flat())
     .flatMap((condition) =>
       Object.hasOwn(ecologyLabels, condition.field) ? ["ecology"] : (fields[condition.field] ?? [])

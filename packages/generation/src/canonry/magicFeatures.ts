@@ -5,6 +5,11 @@ import { magicKey } from "./magicState";
 import { classifyNaturalSurface } from "./naturalSurface";
 import { unitNoise, hashUnit } from "./noise";
 import { projectedValues } from "./atlasSampling";
+import {
+  magicChannels,
+  magicFieldDefinitions,
+  publishedMagicChannels,
+} from "./magicFieldDefinitions";
 
 function conditionReader(
   state: GenerationState,
@@ -122,21 +127,15 @@ export function independentInteraction(
   owner: string
 ) {
   const conditions = [...rule.seeds, ...(rule.retains ?? [])].flat();
-  const local = new Set([
-    "intensity",
-    "history",
-    "source",
-    "wake",
-    "rogue",
-    "stored",
-    "coastalHistory",
-    "firstEpoch",
-    "coastalFirstEpoch",
-    `system:${owner}`,
-  ]);
+  const local = new Set<string>([...magicChannels, `system:${owner}`]);
   return (
     conditions.some((test) => test.field.startsWith("system:")) &&
     conditions.every((test) => !local.has(test.field))
+  );
+}
+export function effectiveMagicRules(system: MagicField["definition"]) {
+  return system.features.filter(
+    (rule) => system.enabled || independentInteraction(rule, system.id)
   );
 }
 export function classifyMagicFeatures(state: GenerationState, seed = state.domain.world.seed) {
@@ -146,9 +145,10 @@ export function classifyMagicFeatures(state: GenerationState, seed = state.domai
   let code = 100;
   for (const field of magic.fields) {
     field.features = {};
+    const effective = new Set(effectiveMagicRules(field.definition));
     for (const rule of field.definition.features) {
       const surfaceCode = code++;
-      if (!field.definition.enabled && !independentInteraction(rule, field.definition.id)) continue;
+      if (!effective.has(rule)) continue;
       const members = growRegion(state, field, rule, seed);
       field.features[rule.id] = members;
       for (let i = 0; i < members.length; i++)
@@ -163,50 +163,35 @@ export function projectMagic(state: GenerationState) {
   const work = state.physical!,
     magic = work.magic;
   if (!magic) return;
-  const project = (key: string, unit: string, values: ArrayLike<number>) =>
-    putChannel(
-      state.surface,
-      key,
-      unit,
-      projectedMagicValues(state, values, unit),
-      unit === "intensity-square-metre"
-        ? "extensive"
-        : unit === "category"
-          ? "category"
-          : "intensive"
-    );
-  project("naturalSurface", "category", magic.naturalSurface);
-  project("finalSurface", "category", magic.finalSurface);
+  const project = (
+    key: string,
+    unit: string,
+    values: ArrayLike<number>,
+    quantity: "intensive" | "extensive" | "category"
+  ) =>
+    putChannel(state.surface, key, unit, projectedMagicValues(state, values, quantity), quantity);
+  project("naturalSurface", "category", magic.naturalSurface, "category");
+  project("finalSurface", "category", magic.finalSurface, "category");
   for (const field of magic.fields) {
-    for (const channel of [
-      "intensity",
-      "history",
-      "firstEpoch",
-      "stored",
-      "retained",
-      "coastalHistory",
-      "coastalFirstEpoch",
-      "source",
-      "wake",
-      "rogue",
-    ] as const)
+    for (const channel of publishedMagicChannels)
       project(
         magicKey(field, channel),
-        channel.endsWith("Epoch")
-          ? "category"
-          : channel === "retained"
-            ? "intensity-square-metre"
-            : "relative-intensity",
-        field[channel]
+        magicFieldDefinitions[channel].unit,
+        field[channel],
+        magicFieldDefinitions[channel].quantity
       );
     for (const [id, members] of Object.entries(field.features))
-      project(magicKey(field, `feature:${id}`), "category", members);
+      project(magicKey(field, `feature:${id}`), "category", members, "category");
   }
 }
-function projectedMagicValues(state: GenerationState, values: ArrayLike<number>, unit: string) {
+function projectedMagicValues(
+  state: GenerationState,
+  values: ArrayLike<number>,
+  quantity: "intensive" | "extensive" | "category"
+) {
   const work = state.physical!;
-  if (unit !== "intensity-square-metre" || !work.interpolation)
-    return projectedValues(work, values, unit === "category");
+  if (quantity !== "extensive" || !work.interpolation)
+    return projectedValues(work, values, quantity === "category");
   const density = Float64Array.from(work.map.mesh.areas, (area, i) => values[i] / area);
   return projectedValues(work, density).map((value, i) => value * state.surface.measures[i]);
 }

@@ -158,57 +158,60 @@ export const extractGeographyProcess: MapProcess = {
     produces: ["geographicFeatures"],
     invalidates: [],
   },
-  apply(state, context) {
-    const grid = state.surface,
-      flow = grid.channels.flow;
-    const maximum = flow.reduce(
-      (a, b, i) => (grid.channels.elevation[i] > 0 ? Math.max(a, b) : a),
-      0
-    );
-    const threshold = maximum * 0.075;
-    for (let i = 0; i < grid.active.length; i++) {
-      if (!grid.active[i] || flow[i] <= threshold || grid.channels.elevation[i] <= 0) continue;
-      const receiver = grid.channels.receiver[i];
-      if (receiver < 0) continue;
-      const a = gridPosition(grid, i),
-        b = gridPosition(grid, receiver);
-      const feature = generatedFeature(
-        state,
-        `river:${i}`,
-        `River reach ${i + 1}`,
-        "river",
-        "rivers",
-        {
-          type: "LineString",
-          coordinates: [
-            [a.x, a.y],
-            [b.x, b.y],
-          ],
-        },
-        {
-          elevations: [
-            grid.channels.drainageElevation[i],
-            grid.channels.drainageElevation[receiver],
-          ],
-          discharges: [flow[i], flow[receiver]],
-          discharge: flow[i],
-        }
+  behavior: {
+    kind: "extract",
+    extract(state, context) {
+      const grid = state.surface,
+        flow = grid.channels.flow;
+      const maximum = flow.reduce(
+        (a, b, i) => (grid.channels.elevation[i] > 0 ? Math.max(a, b) : a),
+        0
       );
-      // New tributaries do not invent crossings at a child's fixed interface.
-      if (
-        state.domain.world.areas[state.domain.scope.areaId].boundary &&
-        spatial.crossings(feature.geometry, state.domain.scope.footprint).length
-      )
-        continue;
-      putGeneratedNetwork(state, feature);
-    }
-    context.recordCause({
-      kind: "domain",
-      process: "physical.features",
-      subjects: [],
-      description:
-        "River reaches follow the acyclic conditioned drainage graph and accumulated runoff.",
-    });
+      const threshold = maximum * 0.075;
+      for (let i = 0; i < grid.active.length; i++) {
+        if (!grid.active[i] || flow[i] <= threshold || grid.channels.elevation[i] <= 0) continue;
+        const receiver = grid.channels.receiver[i];
+        if (receiver < 0) continue;
+        const a = gridPosition(grid, i),
+          b = gridPosition(grid, receiver);
+        const feature = generatedFeature(
+          state,
+          `river:${i}`,
+          `River reach ${i + 1}`,
+          "river",
+          "rivers",
+          {
+            type: "LineString",
+            coordinates: [
+              [a.x, a.y],
+              [b.x, b.y],
+            ],
+          },
+          {
+            elevations: [
+              grid.channels.drainageElevation[i],
+              grid.channels.drainageElevation[receiver],
+            ],
+            discharges: [flow[i], flow[receiver]],
+            discharge: flow[i],
+          }
+        );
+        // New tributaries do not invent crossings at a child's fixed interface.
+        if (
+          state.domain.world.areas[state.domain.scope.areaId].boundary &&
+          spatial.crossings(feature.geometry, state.domain.scope.footprint).length
+        )
+          continue;
+        putGeneratedNetwork(state, feature);
+      }
+      context.recordCause({
+        kind: "domain",
+        process: "physical.features",
+        subjects: [],
+        description:
+          "River reaches follow the acyclic conditioned drainage graph and accumulated runoff.",
+      });
+    },
   },
   validate() {
     return [];

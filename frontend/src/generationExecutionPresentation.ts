@@ -63,5 +63,4 @@ export const executionTraits: Record<SetupInvocation["behavior"], string> = {
   extract: "Extract geography",
   "forcing-contributor": "Forcing contributor",
   "material-transformation": "Material transformation",
-  legacy: "Legacy operation",
 };

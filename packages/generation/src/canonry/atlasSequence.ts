@@ -1,50 +1,19 @@
 import type { DomainSnapshot } from "@atlas/domain";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
-import type { MapProcess, ProcessInvocation, ProcessSequence } from "../process";
-import { thermalMagicProcess, magicStorageProcess } from "../mapMagic";
-import { materialMagicProcess } from "../mapMagicEffects";
-import { advectAtlasMagic } from "./atlasMagic";
-import { resolveGenerationFeatures, type ResolvedFeatures } from "../features";
+import type { ProcessInvocation, ProcessSequence } from "../process";
+import { resolveGenerationFeatures, type FeatureContributionContext } from "../features";
 import { physicalFeatureDefinitions, physicalFeatureSequence } from "../physicalFeatures";
 import { nativeContracts } from "./contracts";
+import { atlasGenerationModules } from "../generationModules";
+import { worldGenerationSettings } from "../generationSettings";
 
-interface Composition {
-  features: ResolvedFeatures;
-  localMagic: boolean;
-  configuredMagic: boolean;
-  ecology: boolean;
-  refinement: boolean;
-}
+type Composition = FeatureContributionContext;
 
 function invoke(id: string, parameters: ProcessInvocation["parameters"] = {}): ProcessInvocation {
   return { kind: "process", id, process: id, version: "0f62584c", parameters };
 }
-function legacy(process: MapProcess): ProcessInvocation {
-  return {
-    kind: "process",
-    id: process.contract.id,
-    process: process.contract.id,
-    version: process.contract.version,
-  };
-}
-function ecology(name: string): ProcessInvocation {
-  return { kind: "process", id: `ecology-${name}`, process: `atlas.ecology-${name}`, version: "1" };
-}
-function temperatureForcing(material: boolean): ProcessSequence {
-  return [
-    invoke("canonry.temperature", { unforced: true }),
-    invoke("canonry.project", { forcingOnly: true }),
-    legacy(thermalMagicProcess),
-    ...(material ? [legacy(materialMagicProcess)] : []),
-    invoke("canonry.forcing"),
-  ];
-}
-function afterNativeStep(name: string, context: Composition, iceLoad: boolean): ProcessSequence {
-  const result: ProcessSequence = [];
-  if (context.refinement && iceLoad && name === "ice-flow")
-    result.push(invoke("canonry.refine-ice"));
-  if (context.localMagic && name === "plate-advection") result.push(legacy(advectAtlasMagic));
-  return result;
+function contributions(slot: string, context: Composition): ProcessSequence {
+  return atlasGenerationModules.contribute(slot, context.resolved, context);
 }
 function nativeGroup(
   slot: string,
@@ -53,15 +22,16 @@ function nativeGroup(
   options: { initial?: boolean; iceLoad?: boolean; material?: boolean } = {}
 ): ProcessSequence {
   const body: ProcessSequence = [];
-  for (const step of physicalFeatureSequence(slot, context.features)) {
+  const bound = { ...context, ...options };
+  for (const step of physicalFeatureSequence(slot, context.resolved, bound)) {
     if (step.kind !== "process") throw new Error("A physical contribution must name model passes.");
     const name = step.process.slice("canonry.".length);
     if (!isNativePass(step, name)) {
       body.push(step);
       continue;
     }
-    if (context.localMagic && name === "temperature")
-      body.push(...named(temperatureForcing(Boolean(options.material)), "local-forcing"));
+    const hooks = { ...bound, process: step.process };
+    body.push(...contributions("before.model-pass", hooks));
     body.push({
       ...step,
       parameters: {
@@ -70,7 +40,7 @@ function nativeGroup(
         ...step.parameters,
       },
     });
-    body.push(...afterNativeStep(name, context, Boolean(options.iceLoad)));
+    body.push(...contributions("after.model-pass", hooks));
   }
   return named(body, `${occurrence}/${slot}`);
 }
@@ -85,10 +55,7 @@ function named(sequence: ProcessSequence, occurrence: string): ProcessSequence {
   return sequence.map((step) => ({ ...step, id: `${occurrence}/${step.id}` }));
 }
 function climate(occurrence: string, context: Composition, material = false): ProcessSequence {
-  const result =
-    context.refinement && context.features.selection["physical.climate"].enabled
-      ? named([invoke("canonry.refine-climate")], occurrence)
-      : [];
+  const result = named(contributions("climate.refinement", context), occurrence);
   for (const slot of ["climate.ocean", "climate.circulation", "climate.atmosphere"])
     result.push(...nativeGroup(slot, occurrence, context, { material }));
   return result;
@@ -115,14 +82,10 @@ function geology(context: Composition, initial: boolean): ProcessSequence {
   const slots = initial
     ? ["formation.foundation", "formation.mountains", "formation.volcanism", "formation.impacts"]
     : [
-        ...(context.features.selection["physical.tectonic-history"].enabled
-          ? [
-              "epoch.advection",
-              "epoch.crust.provinces",
-              "epoch.crust.activity",
-              "epoch.crust.structure",
-            ]
-          : []),
+        "epoch.advection",
+        "epoch.crust.provinces",
+        "epoch.crust.activity",
+        "epoch.crust.structure",
         "epoch.mountains",
         "epoch.volcanism",
         "epoch.impacts",
@@ -140,27 +103,19 @@ function geology(context: Composition, initial: boolean): ProcessSequence {
     ),
   ];
 }
-function magicStage(name: string, context: Composition): ProcessSequence {
-  return context.configuredMagic ? [invoke(`canonry.magic-${name}`)] : [];
-}
-function ecologyStage(name: string, context: Composition): ProcessSequence {
-  return context.ecology ? [ecology(name)] : [];
-}
 function epochBody(context: Composition, inherited: boolean): ProcessSequence {
   return [
     invoke("canonry.begin-epoch"),
     ...(!inherited ? geology(context, false) : []),
     ...climate("epoch.initial-climate", context, true),
-    ...magicStage("climate", context),
-    ...magicStage("rocks", context),
+    ...contributions("epoch.climate-forcing", context),
+    ...contributions("epoch.material-forcing", context),
     ...drainage("epoch.initial-water", context),
-    ...(context.refinement ? [invoke("canonry.refine-water")] : []),
-    ...ecologyStage("evolve", context),
+    ...contributions("water.refinement", context),
+    ...contributions("epoch.ecology-evolve", context),
     ...drainage("epoch.after-ecology-water", context),
     ...nativeGroup("epoch.incision", "epoch", context),
-    ...(context.features.selection["physical.river-incision"].enabled
-      ? nativeGroup("epoch.after-incision.hillslopes", "epoch", context)
-      : []),
+    ...nativeGroup("epoch.after-incision.hillslopes", "epoch", context),
     ...climate("epoch.after-incision-climate", context),
     ...drainage("epoch.after-incision-water", context),
     ...nativeGroup("epoch.sediment", "epoch", context),
@@ -172,14 +127,14 @@ function epochBody(context: Composition, inherited: boolean): ProcessSequence {
     ...nativeGroup("ice.model", "epoch.post-glacial", context),
     ...nativeGroup("ice.meltwater", "epoch.post-glacial", context),
     ...drainage("epoch.meltwater", context, true),
-    ...magicStage("post-glacial", context),
-    ...magicStage("history", context),
-    ...ecologyStage("respond", context),
+    ...contributions("epoch.post-glacial-forcing", context),
+    ...contributions("epoch.influence-history", context),
+    ...contributions("epoch.ecology-respond", context),
     ...drainage("epoch.after-response-water", context, true),
-    ...magicStage("coast", context),
+    ...contributions("epoch.coastal-forcing", context),
     ...nativeGroup("epoch.coasts", "epoch", context),
-    ...ecologyStage("burial", context),
-    ...(context.localMagic ? [legacy(magicStorageProcess)] : []),
+    ...contributions("epoch.ecology-burial", context),
+    ...contributions("epoch.storage", context),
     ...nativeGroup("epoch.history", "epoch", context),
   ];
 }
@@ -199,10 +154,10 @@ export function atlasPhysicalSequence(
       process: "atlas.absent-physical",
       version: "1",
     },
-    invoke("canonry.magic-initialize"),
+    ...contributions("initialize.influences", context),
   ];
   if (!inherited) result.push(...geology(context, true));
-  result.push(...ecologyStage("initialize", context));
+  result.push(...contributions("initialize.ecology", context));
   if (physical)
     result.push({
       kind: "epochs",
@@ -222,20 +177,20 @@ export function atlasPhysicalSequence(
     });
   result.push(
     ...climate("present.climate", context, !physical),
-    ...magicStage("climate", context),
-    ...(!physical ? magicStage("rocks", context) : []),
+    ...contributions("present.climate-forcing", context),
+    ...(!physical ? contributions("present.material-forcing", context) : []),
     ...drainage("present.initial-water", context),
     ...nativeGroup("ice.model", "present.initial-ice", context),
     ...nativeGroup("ice.meltwater", "present", context),
     ...drainage("present.meltwater", context, true),
     ...nativeGroup("ice.model", "present.final-ice", context),
     ...presentExtraction(context),
-    ...magicStage("post-glacial", context),
-    ...(!physical ? magicStage("history", context) : []),
-    ...ecologyStage("present", context),
-    ...magicStage("classify", context),
+    ...contributions("present.post-glacial-forcing", context),
+    ...(!physical ? contributions("present.influence-history", context) : []),
+    ...contributions("present.ecology", context),
+    ...contributions("present.classify", context),
     invoke("canonry.project"),
-    ...magicStage("project", context)
+    ...contributions("present.project", context)
   );
   if (physical || input.domains.includes("magic")) result.push(invoke("canonry.features"));
   return result;
@@ -259,15 +214,13 @@ function composition(source: DomainSnapshot, input: AtlasGenerationInput): Compo
       input.features,
       input.processes,
       input.parameters,
-      input.domains
+      input.domains,
+      (input.settings ??
+        worldGenerationSettings(source.world)) as unknown as import("@atlas/domain").ParameterValues
     );
-  const enabled = (id: string) =>
-    features.selection[id]?.enabled ?? input.domains.includes("magic");
   return {
-    features,
-    localMagic: enabled("magic.local") && source.world.magic.some((source) => !source.systemId),
-    configuredMagic: enabled("magic.configured"),
-    ecology: features.selection["ecology.living"]?.enabled ?? true,
-    refinement: source.world.areas[input.areaId].profile !== "world",
+    source,
+    input,
+    resolved: features,
   };
 }

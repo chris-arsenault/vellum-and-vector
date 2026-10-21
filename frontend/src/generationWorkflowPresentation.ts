@@ -3,6 +3,7 @@ import type { SetupFeature } from "@atlas/generation";
 import { updateFeature } from "./generationDraft";
 import type { GenerationWorkflow, WorkflowStage } from "./useGenerationWorkflow";
 import { physicalEpochControls } from "./generationEpochFields";
+import { adapterFieldOwner, configurationFieldKey } from "./generationFeatureAdapters";
 
 export const workflowStages: { id: WorkflowStage; title: string; question: string }[] = [
   { id: "world", title: "World", question: "Define the extent, detail and starting conditions." },
@@ -57,6 +58,7 @@ export function enablePrerequisites(flow: GenerationWorkflow, feature: SetupFeat
 }
 export function diagnosticFeature(flow: GenerationWorkflow, item: Diagnostic) {
   return (
+    flow.setup?.features.find((feature) => feature.id === item.field?.feature) ??
     flow.setup?.features.find((feature) => feature.id === item.invocation) ??
     flow.setup?.features.find((feature) => feature.id === item.resource) ??
     flow.setup?.features.find((feature) =>
@@ -65,24 +67,14 @@ export function diagnosticFeature(flow: GenerationWorkflow, item: Diagnostic) {
   );
 }
 export function diagnosticField(flow: GenerationWorkflow, item: Diagnostic) {
-  if (item.invocation !== "magic.configured" || item.resource !== "physical.coastal-evolution")
-    return undefined;
-  const systems = flow.draft.recipe.features?.["magic.configured"].configuration?.magicSystems;
-  if (!Array.isArray(systems)) return undefined;
-  const system = systems.find(
-    (value) =>
-      typeof value === "object" &&
-      value !== null &&
-      "enabled" in value &&
-      value.enabled &&
-      "effects" in value &&
-      typeof value.effects === "object" &&
-      value.effects !== null &&
-      "coastalForcing" in value.effects &&
-      value.effects.coastalForcing !== 0
-  );
-  return system && typeof system === "object" && "id" in system
-    ? `magic.${system.id}.effects.coastalForcing`
+  const field = item.field;
+  if (!field) return undefined;
+  const feature = flow.setup?.features.find((entry) => entry.id === field.feature);
+  return feature
+    ? configurationFieldKey(
+        { ...feature, configuration: flow.draft.recipe.features?.[feature.id]?.configuration },
+        field.path
+      )
     : undefined;
 }
 export function diagnosticText(flow: GenerationWorkflow, item: Diagnostic) {
@@ -138,7 +130,7 @@ function fieldStage(flow: GenerationWorkflow, key: string): WorkflowStage {
   return workflowFieldFeature(flow, key)?.presentation.stage ?? "world";
 }
 export function workflowFieldFeature(flow: GenerationWorkflow, key: string) {
-  const known = knownFieldOwner(key);
+  const known = adapterFieldOwner(key);
   if (known) return flow.setup?.features.find((feature) => feature.id === known);
   const physical = key.match(/^feature\.physical\.lifecycle\.epochs\.[^.]+\.(.+)$/);
   if (physical) {
@@ -146,12 +138,6 @@ export function workflowFieldFeature(flow: GenerationWorkflow, key: string) {
     if (owner) return owner;
   }
   return scalarFieldFeature(flow, key);
-}
-function knownFieldOwner(key: string) {
-  if (key.startsWith("feature.ecology.living.epochs.") && key.endsWith(".rainfall"))
-    return "physical.climate";
-  if (key.startsWith("magic.")) return "magic.configured";
-  if (key.startsWith("human.")) return "human.cultures";
 }
 function scalarFieldFeature(flow: GenerationWorkflow, key: string) {
   const owner = flow.setup?.features.find((feature) => key.startsWith(`feature.${feature.id}.`));
@@ -168,7 +154,7 @@ export function locateWorkflowField(flow: GenerationWorkflow, key: string) {
 function physicalFieldFeature(flow: GenerationWorkflow, field: string) {
   const consumers =
     flow.setup?.features.filter((feature) =>
-      physicalEpochControls(feature.id).some((control) => control.key === field)
+      physicalEpochControls(feature).some((control) => control.key === field)
     ) ?? [];
   return consumers.find((feature) => feature.enabled) ?? consumers[0];
 }

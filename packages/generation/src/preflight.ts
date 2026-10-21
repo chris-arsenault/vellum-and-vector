@@ -1,4 +1,9 @@
-import { resolveParameters, type Diagnostic, type ParameterValues } from "@atlas/domain";
+import {
+  DomainError,
+  resolveParameters,
+  type Diagnostic,
+  type ParameterValues,
+} from "@atlas/domain";
 import {
   verifyReconciliationBindings,
   type MapProcessContract,
@@ -146,11 +151,14 @@ function checkGuarantees(
       });
 }
 function configurationError(error: unknown, path: string): Diagnostic {
+  const product =
+    error instanceof DomainError && error.code === "product_writer" ? error.details : null;
+  const resource = typeof product === "string" ? product : null;
   return {
-    code: "generation_configuration",
+    code: resource ? "product_writer" : "generation_configuration",
     severity: "error",
     invocation: path,
-    resource: null,
+    resource,
     message: error instanceof Error ? error.message : String(error),
   };
 }

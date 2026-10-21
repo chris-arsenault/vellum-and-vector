@@ -7,8 +7,36 @@ import {
   type AtlasParameters,
 } from "./atlasParameters";
 import type { ProcessSequence } from "./process";
-import type { ProductDefinition } from "./productLedger";
 import type { FeaturePresentation } from "./generationPresentation";
+import type { ConfigurationPresentation } from "./generationPresentation";
+import type { GenerationSettings } from "./generationSettings";
+import type { AtlasGenerationInput } from "./atlasWorkflow";
+import type { DomainSnapshot } from "@atlas/domain";
+import type { GenerationSlot } from "./generationSlots";
+
+export interface FeatureRequirement {
+  feature: string;
+  field?: Diagnostic["field"];
+  message?: string;
+}
+export interface FeatureContributionContext {
+  source: DomainSnapshot;
+  input: AtlasGenerationInput;
+  resolved: ResolvedFeatures;
+  initial?: boolean;
+  iceLoad?: boolean;
+  material?: boolean;
+  process?: string;
+}
+export interface FeatureConfigurationBinding {
+  fields: (keyof GenerationSettings)[];
+  epochFields?: (keyof GenerationSettings["epochs"][number])[];
+  prepare?(
+    configuration: ParameterValues,
+    settings: GenerationSettings
+  ): Partial<GenerationSettings>;
+  bind(configuration: ParameterValues, settings: GenerationSettings): Partial<GenerationSettings>;
+}
 
 /** A creator capability owns its settings, operations and delivered products. */
 export interface GenerationFeature {
@@ -21,11 +49,25 @@ export interface GenerationFeature {
   legacyParameters?: (keyof AtlasParameters)[];
   configuration?: z.ZodType<ParameterValues>;
   configurationFromLegacy?(settings: ParameterValues): ParameterValues;
+  configurationBinding?: FeatureConfigurationBinding;
+  configurationPresentation?: ConfigurationPresentation;
   processes: string[];
   requires?: string[];
-  deliveries?: ProductDefinition[];
+  conditionalRequires?(
+    configuration: ParameterValues | undefined,
+    context: FeatureContributionContext
+  ): FeatureRequirement[];
+  diagnostics?(
+    configuration: ParameterValues | undefined,
+    context: FeatureContributionContext
+  ): Diagnostic[];
   absent?: { product: string; initializer: string }[];
-  contribute(slot: string, configuration?: ParameterValues): ProcessSequence;
+  slots: readonly GenerationSlot[];
+  contribute(
+    slot: string,
+    configuration?: ParameterValues,
+    context?: FeatureContributionContext
+  ): ProcessSequence;
 }
 export type FeatureSelection = Record<
   string,
@@ -57,7 +99,7 @@ export function resolveGenerationFeatures(
   legacy: Record<string, boolean> = {},
   parameters: Partial<AtlasParameters> = {},
   domains: string[] = ["physical"],
-  legacySettings: ParameterValues = {}
+  legacySettings?: ParameterValues
 ): ResolvedFeatures {
   const draft = featureSelectionSchema.parse(selected);
   const byId = new Map(definitions.map((definition) => [definition.id, definition]));
@@ -84,7 +126,6 @@ export function resolveGenerationFeatures(
     selection[definition.id] = bound;
   }
   const diagnostics = dependencyDiagnostics(definitions, selection);
-  diagnostics.push(...writerDiagnostics(definitions, selection));
   return { selection, parameters: effective, diagnostics };
 }
 function resolveFeature(
@@ -93,7 +134,7 @@ function resolveFeature(
   translated: Record<string, boolean>,
   effective: AtlasParameters,
   domains: string[],
-  legacy: ParameterValues
+  legacy: ParameterValues | undefined
 ) {
   return {
     enabled:
@@ -106,7 +147,7 @@ function resolveFeature(
 function resolveConfiguration(
   feature: GenerationFeature,
   draft: ParameterValues | undefined,
-  legacy: ParameterValues
+  legacy: ParameterValues | undefined
 ) {
   requireThat(
     !draft || feature.configuration,
@@ -114,7 +155,11 @@ function resolveConfiguration(
     `${feature.id} has no nested configuration.`
   );
   if (!feature.configuration) return undefined;
-  return feature.configuration.parse({ ...feature.configurationFromLegacy?.(legacy), ...draft });
+  // Catalog/publication callers can inspect selection without binding a world.
+  // Preparation always supplies the complete settings before execution.
+  if (legacy === undefined && draft === undefined) return undefined;
+  const defaults = legacy === undefined ? {} : feature.configurationFromLegacy?.(legacy);
+  return feature.configuration.parse({ ...defaults, ...draft });
 }
 function resolveSettings(
   feature: GenerationFeature,
@@ -185,38 +230,21 @@ export function featureEnabled(features: ResolvedFeatures, id: string) {
 export function featureContribution(
   feature: GenerationFeature,
   slot: string,
-  resolved: ResolvedFeatures
+  resolved: ResolvedFeatures,
+  context?: FeatureContributionContext
 ): ProcessSequence {
-  if (!featureEnabled(resolved, feature.id)) return [];
+  if (!featureEnabled(resolved, feature.id) || !feature.slots.includes(slot as GenerationSlot))
+    return [];
   const bind = (sequence: ProcessSequence): ProcessSequence =>
-    sequence.map((node) =>
-      node.kind === "process"
-        ? { ...node, id: `${feature.id}/${slot}/${node.id}`, feature: feature.id }
-        : { ...node, id: `${feature.id}/${slot}/${node.id}`, body: bind(node.body) }
-    );
-  return bind(feature.contribute(slot, resolved.selection[feature.id].configuration));
-}
-function writerDiagnostics(
-  definitions: GenerationFeature[],
-  selection: ResolvedFeatures["selection"]
-) {
-  const owners = new Map<string, string>();
-  const errors: Diagnostic[] = [];
-  for (const feature of definitions) {
-    if (!selection[feature.id].enabled) continue;
-    for (const product of feature.deliveries ?? []) {
-      if (product.composition !== "exclusive") continue;
-      const previous = owners.get(product.id);
-      if (previous)
-        errors.push({
-          severity: "error",
-          code: "product_writer",
-          invocation: feature.id,
-          resource: product.id,
-          message: `${previous} and ${feature.id} both exclusively deliver ${product.id}. Select one provider.`,
-        });
-      owners.set(product.id, feature.id);
-    }
-  }
-  return errors;
+    sequence.map((node) => {
+      if (node.kind === "epochs")
+        return { ...node, id: `${feature.id}/${slot}/${node.id}`, body: bind(node.body) };
+      requireThat(
+        feature.processes.includes(node.process),
+        "feature_process",
+        `${feature.id} cannot contribute unowned process ${node.process}.`
+      );
+      return { ...node, id: `${feature.id}/${slot}/${node.id}`, feature: feature.id };
+    });
+  return bind(feature.contribute(slot, resolved.selection[feature.id].configuration, context));
 }

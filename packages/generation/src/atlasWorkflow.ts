@@ -33,7 +33,6 @@ import {
 } from "./generationSettings";
 import { preflight } from "./preflight";
 import { processConfigurationSchema } from "./configurationSchema";
-import { ecologicalMagicDiagnostics } from "./processSelection";
 import {
   resolveGenerationFeatures,
   type FeatureSelection,
@@ -42,7 +41,6 @@ import {
 import { atlasGenerationModules } from "./atlasModules";
 import { serializableBindings } from "./generationBindings";
 import { inheritedChannelNames, inheritedNativeFacts } from "./canonry/inheritedFacts";
-import { coastalMagicDiagnostics } from "./featureDependencies";
 
 export interface AtlasGenerationInput {
   areaId: string;
@@ -94,17 +92,8 @@ export function atlasRegistry(source: DomainSnapshot, input: AtlasGenerationInpu
   input = resolveInput(source, input);
   return atlasGenerationModules
     .processes(source, input)
-    .reduce(
-      (registry, process) =>
-        registry.register(profileProcess(process, source.world.areas[input.areaId].profile)),
-      new MapProcessRegistry()
-    )
+    .reduce((registry, process) => registry.register(process), new MapProcessRegistry())
     .register(prepareGeneratedProcess(input.domains));
-}
-function profileProcess(process: MapProcess, profile: string): MapProcess {
-  if (process.contract.id !== "built.layout" || ["site", "interior"].includes(profile))
-    return process;
-  return { ...process, contract: { ...process.contract, requires: ["elevation"] } };
 }
 
 export function prepareAtlasGeneration(source: DomainSnapshot, input: AtlasGenerationInput) {
@@ -127,18 +116,14 @@ export function prepareAtlasGeneration(source: DomainSnapshot, input: AtlasGener
   checkReviewedConfiguration(input, configuration);
   input = { ...input, configuration };
   const registry = atlasRegistry(source, input);
-  const diagnostics = [...resolvedFeatures.diagnostics, ...compatibility];
+  const diagnostics = [
+    ...resolvedFeatures.diagnostics.filter((item) => item.code !== "feature_dependency"),
+    ...compatibility,
+  ];
   checkNewSelection(source, input);
   diagnostics.push(
-    ...ecologicalMagicDiagnostics(
-      { "atlas.ecology-evolve": resolvedFeatures.selection["ecology.living"].enabled },
-      resolvedFeatures.selection["magic.configured"].enabled
-        ? input.domains
-        : input.domains.filter((domain) => domain !== "magic"),
-      source.world.magicSystems ?? []
-    )
+    ...atlasGenerationModules.dependencyDiagnostics({ source, input, resolved: resolvedFeatures })
   );
-  diagnostics.push(...coastalMagicDiagnostics(source, input));
   const inherited = usesInheritedInputs(source, input);
   const initial = inherited ? inheritedFactsForRun(source, input) : [];
   diagnostics.push(...preflight(configuration, registry, initial));
@@ -352,7 +337,13 @@ function configuredSequence(source: DomainSnapshot, input: AtlasGenerationInput)
     sequence.push(...atlasPhysicalSequence(source, input));
   }
   for (const slot of ["present.products", "present.people", "present.after-people"])
-    sequence.push(...atlasGenerationModules.contribute(slot, input.resolvedFeatures!));
+    sequence.push(
+      ...atlasGenerationModules.contribute(slot, input.resolvedFeatures!, {
+        source,
+        input,
+        resolved: input.resolvedFeatures!,
+      })
+    );
   requireThat(
     sequence.length > 1,
     "profile_domains",

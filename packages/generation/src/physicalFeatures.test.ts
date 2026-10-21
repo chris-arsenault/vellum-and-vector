@@ -42,7 +42,11 @@ function prepareOmission(id: string) {
 
 it("assigns every reference operation to exactly one feature implementation", () => {
   const processes = physicalFeatureDefinitions.flatMap((feature) => feature.processes);
-  expect([...processes].sort()).toEqual(
+  const reference = processes.filter((id) =>
+    Object.hasOwn(nativeContracts, id.slice("canonry.".length))
+  );
+  expect(new Set(processes).size).toBe(processes.length);
+  expect(reference.sort()).toEqual(
     Object.keys(nativeContracts)
       .map((name) => `canonry.${name}`)
       .sort()

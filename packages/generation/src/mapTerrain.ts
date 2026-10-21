@@ -52,40 +52,43 @@ export const initializeTerrainProcess: MapProcess = {
       },
     },
   },
-  apply(state, context) {
-    const grid = state.surface,
-      seed = Math.floor(context.random(true) * 4294967296);
-    const plates = provinces(grid, context),
-      fields = initialFields(grid);
-    const scale = Math.max(grid.bounds[2] - grid.bounds[0], grid.bounds[3] - grid.bounds[1]);
-    for (let i = 0; i < grid.active.length; i++) {
-      checkProgress(context, i, grid.active.length, "Assembling persistent crustal provinces");
-      if (!grid.active[i]) continue;
-      initializeCell(grid, i, plates, fields, seed, scale, context);
-    }
-    for (const [name, values] of Object.entries(fields))
-      if (!grid.channels[name]) putChannel(grid, name, channelUnit(name), values);
-    const ids = plates.map((_plate, i) =>
-      semanticId(context.scope.worldId, "geological-province", String(i + 1))
-    );
-    for (const [i, id] of ids.entries()) {
-      if (state.domain.world.entities[id]) continue;
-      state.domain.world.entities[id] = {
-        id,
-        name: `Crustal province ${i + 1}`,
-        kind: "geologicalProvince",
-        state: "generated",
-        attributes: { province: i + 1, center: { x: plates[i].x, y: plates[i].y, z: 0 } },
-        relations: [],
-      };
-    }
-    context.recordCause({
-      kind: "domain",
-      process: "physical.initialize",
-      subjects: ids,
-      description:
-        "Crustal province buoyancy, convergent margins and nested spatial relief initialized the material surface.",
-    });
+  behavior: {
+    kind: "initialize",
+    initialize(state, context) {
+      const grid = state.surface,
+        seed = Math.floor(context.random(true) * 4294967296);
+      const plates = provinces(grid, context),
+        fields = initialFields(grid);
+      const scale = Math.max(grid.bounds[2] - grid.bounds[0], grid.bounds[3] - grid.bounds[1]);
+      for (let i = 0; i < grid.active.length; i++) {
+        checkProgress(context, i, grid.active.length, "Assembling persistent crustal provinces");
+        if (!grid.active[i]) continue;
+        initializeCell(grid, i, plates, fields, seed, scale, context);
+      }
+      for (const [name, values] of Object.entries(fields))
+        if (!grid.channels[name]) putChannel(grid, name, channelUnit(name), values);
+      const ids = plates.map((_plate, i) =>
+        semanticId(context.scope.worldId, "geological-province", String(i + 1))
+      );
+      for (const [i, id] of ids.entries()) {
+        if (state.domain.world.entities[id]) continue;
+        state.domain.world.entities[id] = {
+          id,
+          name: `Crustal province ${i + 1}`,
+          kind: "geologicalProvince",
+          state: "generated",
+          attributes: { province: i + 1, center: { x: plates[i].x, y: plates[i].y, z: 0 } },
+          relations: [],
+        };
+      }
+      context.recordCause({
+        kind: "domain",
+        process: "physical.initialize",
+        subjects: ids,
+        description:
+          "Crustal province buoyancy, convergent margins and nested spatial relief initialized the material surface.",
+      });
+    },
   },
   validate(state) {
     return validateTerrain(state);
@@ -205,47 +208,50 @@ export const tectonicsProcess: MapProcess = {
     produces: ["elevation", "geology", "fracture"],
     invalidates,
   },
-  apply(state, context) {
-    const grid = state.surface,
-      elevation = requireChannel(grid, "elevation", "metre");
-    const bedrock = requireChannel(grid, "bedrock", "metre"),
-      sediment = requireChannel(grid, "sediment", "metre");
-    const motionX = requireChannel(grid, "crustMotionX", "metre/year"),
-      motionY = requireChannel(grid, "crustMotionY", "metre/year");
-    const mobile = movableTerrain(state),
-      links = adjacency(grid, false),
-      years = epochYears(context);
-    const activity = Number(context.parameters.activity),
-      rate = Number(context.parameters.upliftRate);
-    const uplift = new Float64Array(elevation.length),
-      fracture = requireChannel(grid, "fracture", "ratio");
-    if (context.parameters.advection) advect(state, mobile, years * activity, motionX, motionY);
-    for (let i = 0; i < elevation.length; i++) {
-      checkProgress(context, i, elevation.length, "Evolving crust motion and accumulated uplift");
-      if (!mobile[i]) continue;
-      const closure =
-        links[i].reduce((sum, j) => {
-          const a = gridPosition(grid, i),
-            b = gridPosition(grid, j),
-            length = cellDistance(grid, i, j);
-          return (
-            sum +
-            ((motionX[i] - motionX[j]) * (b.x - a.x) + (motionY[i] - motionY[j]) * (b.y - a.y)) /
-              Math.max(1, length)
-          );
-        }, 0) / Math.max(1, links[i].length);
-      uplift[i] = rate * Math.tanh(closure / 0.01) * activity;
-      bedrock[i] += uplift[i] * years;
-      elevation[i] = bedrock[i] + sediment[i];
-      fracture[i] = Math.min(1, fracture[i] + Math.abs(closure) * years * 0.0001);
-    }
-    putChannel(grid, "uplift", "metre/year", uplift);
-    context.recordCause({
-      kind: "domain",
-      process: "physical.tectonics",
-      subjects: [grid.id],
-      description: `Persistent crust advected and accumulated material uplift over ${years} years; existing sediment and masked authoring were retained.`,
-    });
+  behavior: {
+    kind: "model-pass",
+    applyPass(state, context) {
+      const grid = state.surface,
+        elevation = requireChannel(grid, "elevation", "metre");
+      const bedrock = requireChannel(grid, "bedrock", "metre"),
+        sediment = requireChannel(grid, "sediment", "metre");
+      const motionX = requireChannel(grid, "crustMotionX", "metre/year"),
+        motionY = requireChannel(grid, "crustMotionY", "metre/year");
+      const mobile = movableTerrain(state),
+        links = adjacency(grid, false),
+        years = epochYears(context);
+      const activity = Number(context.parameters.activity),
+        rate = Number(context.parameters.upliftRate);
+      const uplift = new Float64Array(elevation.length),
+        fracture = requireChannel(grid, "fracture", "ratio");
+      if (context.parameters.advection) advect(state, mobile, years * activity, motionX, motionY);
+      for (let i = 0; i < elevation.length; i++) {
+        checkProgress(context, i, elevation.length, "Evolving crust motion and accumulated uplift");
+        if (!mobile[i]) continue;
+        const closure =
+          links[i].reduce((sum, j) => {
+            const a = gridPosition(grid, i),
+              b = gridPosition(grid, j),
+              length = cellDistance(grid, i, j);
+            return (
+              sum +
+              ((motionX[i] - motionX[j]) * (b.x - a.x) + (motionY[i] - motionY[j]) * (b.y - a.y)) /
+                Math.max(1, length)
+            );
+          }, 0) / Math.max(1, links[i].length);
+        uplift[i] = rate * Math.tanh(closure / 0.01) * activity;
+        bedrock[i] += uplift[i] * years;
+        elevation[i] = bedrock[i] + sediment[i];
+        fracture[i] = Math.min(1, fracture[i] + Math.abs(closure) * years * 0.0001);
+      }
+      putChannel(grid, "uplift", "metre/year", uplift);
+      context.recordCause({
+        kind: "domain",
+        process: "physical.tectonics",
+        subjects: [grid.id],
+        description: `Persistent crust advected and accumulated material uplift over ${years} years; existing sediment and masked authoring were retained.`,
+      });
+    },
   },
   validate(state) {
     return validateTerrain(state);

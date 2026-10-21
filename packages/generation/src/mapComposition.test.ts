@@ -23,8 +23,11 @@ const flatten: MapProcess = {
     produces: ["elevation"],
     invalidates: ["temperature", "precipitation"],
   },
-  apply(state) {
-    state.surface.channels.elevation.fill(0);
+  behavior: {
+    kind: "model-pass",
+    applyPass(state) {
+      state.surface.channels.elevation.fill(0);
+    },
   },
   validate() {
     return [];
@@ -102,8 +105,11 @@ it("rejects incompatible authored units and changes to exact authored patch reso
   const corrupt: MapProcess = {
     ...flatten,
     contract: { ...flatten.contract, id: "terrain.corrupt" },
-    apply(state) {
-      state.domain.numerical["authored-ridge"].channels.elevation[0] = 1;
+    behavior: {
+      kind: "model-pass",
+      applyPass(state) {
+        state.domain.numerical["authored-ridge"].channels.elevation[0] = 1;
+      },
     },
   };
   await expect(
@@ -120,48 +126,51 @@ const highPoint: MapProcess = {
     produces: ["peak"],
     invalidates: [],
   },
-  apply(state, context) {
-    const elevation = state.surface.channels.elevation,
-      i = elevation.reduce(
-        (highest, value, index) => (value > elevation[highest] ? index : highest),
-        0
-      ),
-      position = gridPosition(state.surface, i),
-      geometry = { type: "Point" as const, coordinates: [position.x, position.y, elevation[i]] },
-      old = state.domain.world.features.ridge;
-    if (old)
-      old.detail[context.scope.areaId] = {
-        geometry,
-        state: "generated",
-        protected: false,
-        needsReconciliation: false,
-        attributes: null,
-        actor: "generation",
-        generationId: null,
-      };
-    else
-      state.domain.world.features.ridge = {
-        id: "ridge",
-        name: "Ridge summit",
-        kind: "peak",
-        layerId: "physical",
-        areaId: context.scope.areaId,
-        geometry,
-        detail: {},
-        attributes: {},
-        relations: [],
-        state: "generated",
-        protected: false,
-        actor: "generation",
-        generationId: null,
-        causes: [],
-      };
-    context.recordCause({
-      kind: "domain",
-      process: "gis.highPoint",
-      subjects: ["ridge"],
-      description: "Summit derived from the working elevation field.",
-    });
+  behavior: {
+    kind: "extract",
+    extract(state, context) {
+      const elevation = state.surface.channels.elevation,
+        i = elevation.reduce(
+          (highest, value, index) => (value > elevation[highest] ? index : highest),
+          0
+        ),
+        position = gridPosition(state.surface, i),
+        geometry = { type: "Point" as const, coordinates: [position.x, position.y, elevation[i]] },
+        old = state.domain.world.features.ridge;
+      if (old)
+        old.detail[context.scope.areaId] = {
+          geometry,
+          state: "generated",
+          protected: false,
+          needsReconciliation: false,
+          attributes: null,
+          actor: "generation",
+          generationId: null,
+        };
+      else
+        state.domain.world.features.ridge = {
+          id: "ridge",
+          name: "Ridge summit",
+          kind: "peak",
+          layerId: "physical",
+          areaId: context.scope.areaId,
+          geometry,
+          detail: {},
+          attributes: {},
+          relations: [],
+          state: "generated",
+          protected: false,
+          actor: "generation",
+          generationId: null,
+          causes: [],
+        };
+      context.recordCause({
+        kind: "domain",
+        process: "gis.highPoint",
+        subjects: ["ridge"],
+        description: "Summit derived from the working elevation field.",
+      });
+    },
   },
   validate() {
     return [];
@@ -215,8 +224,11 @@ it("rejects overwriting authored vectors and completed history before a boundary
   const overwrite: MapProcess = {
     ...flatten,
     contract: { ...flatten.contract, id: "gis.overwrite" },
-    apply(state) {
-      state.domain.world.features.ridge.name = "Replacement";
+    behavior: {
+      kind: "model-pass",
+      applyPass(state) {
+        state.domain.world.features.ridge.name = "Replacement";
+      },
     },
   };
   await expect(
@@ -226,8 +238,11 @@ it("rejects overwriting authored vectors and completed history before a boundary
   const rewriteHistory: MapProcess = {
     ...flatten,
     contract: { ...flatten.contract, id: "history.rewrite" },
-    apply(state) {
-      state.history = [];
+    behavior: {
+      kind: "model-pass",
+      applyPass(state) {
+        state.history = [];
+      },
     },
   };
   let exposed = false;
