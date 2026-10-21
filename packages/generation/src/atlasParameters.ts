@@ -9,6 +9,8 @@ export interface AtlasParameterDefinition {
   step: number;
   integer?: boolean;
   exclusiveMinimum?: boolean;
+  /** Named values for a categorical setting, shown as a choice instead of a number. */
+  choices?: readonly { value: number; label: string }[];
   group: "geology" | "climate" | "water" | "ecology" | "human";
 }
 
@@ -94,6 +96,34 @@ export const atlasParameterDefinitions = {
     maximum: 90,
     default: 70,
     step: 1,
+    group: "climate",
+  },
+  latitudeProjection: {
+    label: "Latitude projection",
+    unit: "choice",
+    minimum: 0,
+    maximum: 1,
+    default: 1,
+    step: 1,
+    integer: true,
+    choices: [
+      { value: 0, label: "Even degrees (equirectangular)" },
+      { value: 1, label: "Equal area" },
+    ],
+    group: "climate",
+  },
+  wrapLongitude: {
+    label: "East–west wrap for climate",
+    unit: "choice",
+    minimum: 0,
+    maximum: 1,
+    default: 0,
+    step: 1,
+    integer: true,
+    choices: [
+      { value: 0, label: "Edges stay open" },
+      { value: 1, label: "Air and ocean wrap" },
+    ],
     group: "climate",
   },
   impacts: {
@@ -185,6 +215,23 @@ export const atlasParameterDefinitions = {
 } satisfies Record<string, AtlasParameterDefinition>;
 
 export type AtlasParameters = Record<keyof typeof atlasParameterDefinitions, number>;
+/**
+ * Named anchors of the continuous `rainfall` setting. Each is fitted to its
+ * own outcome on the default worlds rather than scaled from Mixed: Dry keeps
+ * deserts and steppe everywhere, Mixed is Earth-like and Wet is wetter than Earth.
+ */
+export const rainfallRegimes = {
+  dry: { label: "Dry", rainfall: 0.07 },
+  mixed: { label: "Mixed", rainfall: 1 },
+  wet: { label: "Wet", rainfall: 2 },
+} as const;
+/** World-frame settings: chosen once for a world and inherited by its regions. */
+export const latitudeFrameSettings = [
+  "southLatitude",
+  "northLatitude",
+  "latitudeProjection",
+  "wrapLongitude",
+] as const;
 export function parameterSchema(definition: AtlasParameterDefinition) {
   let schema = z.number().finite();
   schema = definition.exclusiveMinimum
@@ -244,7 +291,8 @@ export const atlasPresets: Record<string, { label: string; parameters: Partial<A
     islands: { label: "Island world", parameters: { continents: 12, landFraction: 0.25 } },
     continental: { label: "Broad continents", parameters: { continents: 2, landFraction: 0.7 } },
     cold: { label: "Cold world", parameters: { temperature: -5 } },
-    arid: { label: "Arid world", parameters: { rainfall: 0.2 } },
+    arid: { label: "Arid world", parameters: { rainfall: rainfallRegimes.dry.rainfall } },
+    wet: { label: "Wet world", parameters: { rainfall: rainfallRegimes.wet.rainfall } },
     canonry: {
       label: "Ice Remembers · cold magical world",
       parameters: {

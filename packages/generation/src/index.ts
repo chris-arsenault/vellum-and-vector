@@ -22,6 +22,7 @@ export * from "./productLedger";
 export * from "./processTraits";
 export * from "./publication";
 export * from "./canonry/atlasPublications";
+export { atlasLatitude } from "./canonry/atlasProfile";
 export * from "./generationModules";
 export * from "./atlasModules";
 export * from "./generationPresentation";

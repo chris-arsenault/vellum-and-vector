@@ -14,7 +14,8 @@ it("generates forests and ecological history through the real atlas pipeline and
   const regimes = [
     { name: "Wet expansion", temperature: 22, rain: 1.4, season: 0.15, fire: 0.3, ice: 0 },
     { name: "Dry fire period", temperature: 28, rain: 0.3, season: 0.85, fire: 3, ice: 0 },
-    { name: "Cold retreat", temperature: -8, rain: 0.7, season: 0.65, fire: 0.2, ice: 0.8 },
+    // A global mean of 2 °C glaciates the poleward land and leaves warm-edge refugia.
+    { name: "Cold retreat", temperature: 2, rain: 0.7, season: 0.65, fire: 0.2, ice: 0.8 },
     { name: "Recovery", temperature: 20, rain: 1.2, season: 0.3, fire: 0.5, ice: 0 },
   ];
   world.epochs = regimes.map((regime) => ({

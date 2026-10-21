@@ -6,6 +6,7 @@ import { unitNoise } from "./noise";
 import { prepareMetricSmoother } from "./metricSmoothing";
 import { physicalDistance } from "./physicalMetric";
 import { gyreDirections, intensifyWesternBoundaries, seaSurfaceAnomaly } from "./oceanGyres";
+import { linkDistance, wrapLinks } from "./longitudeWrap";
 
 function normalized(x: number, y: number): [number, number] {
   const length = Math.sqrt(x * x + y * y);
@@ -86,7 +87,8 @@ function upstreamHeat(
   targets: Int32Array,
   start: number,
   reach: number,
-  cooling: number
+  cooling: number,
+  linkLength: (i: number, j: number) => number
 ) {
   let current = start,
     traveled = 0,
@@ -95,7 +97,7 @@ function upstreamHeat(
   while (traveled < reach) {
     const next = targets[current];
     if (next < 0 || visited.has(next)) break;
-    const segment = physicalDistance(map.mesh, current, next);
+    const segment = linkLength(current, next);
     const distance = Math.min(segment, reach - traveled);
     const mixed = source[current] + ((source[next] - source[current]) * distance) / segment;
     traveled += distance;
@@ -110,15 +112,23 @@ export function transportOceanHeat(
   map: PhysicalField,
   reach: number,
   cooling: number,
-  targets: Int32Array
+  targets: Int32Array,
+  linkLength = (i: number, j: number) => physicalDistance(map.mesh, i, j)
 ) {
   const source = heatSources(map);
   if (reach <= 0) return;
   for (let i = 0; i < map.mesh.count; i++)
     if (map.WaterKindCodes[i] === 1)
-      map.OceanCurrentHeat[i] = round(upstreamHeat(map, source, targets, i, reach, cooling));
+      map.OceanCurrentHeat[i] = round(
+        upstreamHeat(map, source, targets, i, reach, cooling, linkLength)
+      );
 }
-function waveExposure(map: PhysicalField, steps: number, targets: Int32Array) {
+function waveExposure(
+  map: PhysicalField,
+  steps: number,
+  targets: Int32Array,
+  linkLength: (i: number, j: number) => number
+) {
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes[i] !== 1) continue;
     let fetch = 0,
@@ -129,7 +139,7 @@ function waveExposure(map: PhysicalField, steps: number, targets: Int32Array) {
       const next = targets[current];
       if (next < 0 || next === previous || visited.has(next)) break;
       visited.add(next);
-      fetch += physicalDistance(map.mesh, current, next);
+      fetch += linkLength(current, next);
       previous = current;
       current = next;
     }
@@ -154,12 +164,15 @@ export function oceanCurrents(map: PhysicalField, c: PhysicalContext) {
   measureStrength(map, c);
   intensifyWesternBoundaries(map, c, western);
   const upstream = upstreamNeighbors(map);
+  wrapLinks(map, c.Profile, upstream, (k) => map.WaterKindCodes[k] === 1);
+  const linkLength = linkDistance(map, c.Profile);
   seaSurfaceAnomaly(map, c, upstream);
   transportOceanHeat(
     map,
     c.Profile.OceanCurrentHeatDistance,
     c.Profile.OceanCurrentHeatCooling,
-    upstream
+    upstream,
+    linkLength
   );
-  waveExposure(map, c.Profile.OceanCurrentFetchDistance, upstream);
+  waveExposure(map, c.Profile.OceanCurrentFetchDistance, upstream, linkLength);
 }

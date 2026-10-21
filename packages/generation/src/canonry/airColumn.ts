@@ -2,7 +2,8 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
 import { toUnits } from "./math";
-import { physicalDistance } from "./physicalMetric";
+import { smoothMetric } from "./metricSmoothing";
+import { linkDistance, wrappedEdges } from "./longitudeWrap";
 
 /** Saturation moisture of a column at a native temperature (ten units per °C, 0 °C at 300). */
 export function saturation(p: PhysicalProfile, temperature: number) {
@@ -63,40 +64,74 @@ export function marchAirColumns(
     airHeat = new Float64Array(n),
     marine = new Float64Array(n),
     maritime = new Float64Array(n),
-    magic = new Float64Array(n);
-  const { order, boundary } = sourceOrder(map.UpwindTargets);
-  for (const i of order) {
-    const u = boundary[i] ? -1 : map.UpwindTargets[i];
+    magic = new Float64Array(n),
+    carried = new Float64Array(n);
+  const { order, boundary } = sourceOrder(map.UpwindTargets),
+    distance = linkDistance(map, p);
+  // Wrapped air closes loops around the world; a second pass lets each loop's
+  // break read the air that arrived around it instead of a boundary column.
+  const passes = wrappedEdges(map, p) ? 2 : 1;
+  for (let pass = 0; pass < passes; pass++)
+    for (const i of order) {
+      const u = boundary[i] && pass === 0 ? -1 : map.UpwindTargets[i];
+      advance(i, u);
+    }
+  spreadAcrossWind(map, p, carried, airHeat);
+  return { moisture, precipitation, airHeat, maritime };
+
+  function advance(i: number, u: number) {
     const target = saturation(p, map.Temperature[i]) * p.OceanColumnHumidity;
-    const d = u < 0 ? 0 : physicalDistance(map.mesh, u, i);
+    const d = u < 0 ? 0 : distance(u, i);
     const arriving: Air =
       u < 0
-        ? {
-            q: target * (ocean(map, i) ? 1 : p.BoundaryColumnHumidity),
-            heat: 0,
-            sea: Number(ocean(map, i)),
-            orographic: 0,
-          }
+        ? boundaryAir(map, p, i, target)
         : { q: moisture[u], heat: marine[u], sea: maritime[u], orographic: 0 };
     const air = ocean(map, i)
       ? overSea(map, p, i, arriving, d, target)
       : overLand(map, p, i, u, arriving, d, rainout(i));
-    // Magic heat already in the air arrives decayed; this cell's forcing joins it downwind.
-    const carried = u < 0 ? 0 : magic[u] * Math.exp(-d / p.MagicHeatAirLength);
+    // Air relaxes toward a share of the forcing beneath it over MagicHeatAirLength,
+    // so carried heat depends on distance travelled, not on how many cells it crosses.
+    const keep = Math.exp(-(u < 0 ? Math.sqrt(map.mesh.areas[i]) : d) / p.MagicHeatAirLength);
+    carried[i] = u < 0 ? 0 : magic[u] * keep;
     moisture[i] = Math.max(0, air.q);
-    precipitation[i] = p.ColumnRainEfficiency * (rainout(i) * moisture[i] + air.orographic);
+    // Subsiding air under the subtropical and polar highs also caps uplift rain.
+    const belt = rainout(i);
+    precipitation[i] =
+      p.ColumnRainEfficiency * (belt * moisture[i] + Math.min(1, belt) * air.orographic);
     marine[i] = air.heat;
-    airHeat[i] = air.heat + carried;
+    airHeat[i] = air.heat;
     maritime[i] = air.sea;
-    magic[i] = carried + map.ExternalHeatForcing[i] * p.MagicHeatAirShare;
+    magic[i] = carried[i] + map.ExternalHeatForcing[i] * p.MagicHeatAirShare * (1 - keep);
   }
-  return { moisture, precipitation, airHeat, maritime };
+}
+/**
+ * Columns march independently; spreading the carried magical heat across the
+ * wind keeps a single source from drawing a straight streak.
+ */
+function spreadAcrossWind(
+  map: PhysicalField,
+  p: PhysicalProfile,
+  carried: Float64Array,
+  airHeat: Float64Array
+) {
+  if (!carried.some((value) => value !== 0)) return;
+  const spread = smoothMetric(map.mesh, carried, p.MagicHeatAirSpread);
+  for (let i = 0; i < airHeat.length; i++) airHeat[i] += spread[i];
 }
 interface Air {
   q: number;
   heat: number;
   sea: number;
   orographic: number;
+}
+/** Air entering at a column's start: saturated over sea, partly humid over land. */
+function boundaryAir(map: PhysicalField, p: PhysicalProfile, i: number, target: number): Air {
+  return {
+    q: target * (ocean(map, i) ? 1 : p.BoundaryColumnHumidity),
+    heat: 0,
+    sea: Number(ocean(map, i)),
+    orographic: 0,
+  };
 }
 function overSea(
   map: PhysicalField,

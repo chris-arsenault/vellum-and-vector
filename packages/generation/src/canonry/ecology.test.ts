@@ -52,7 +52,8 @@ it("distinguishes dry grassland/desert, boreal forest, rainforest and ice", () =
     [450, 200, 300, "Grassland"],
     [500, 30, 30, "Desert"],
     [350, 700, 800, "Boreal forest"],
-    [560, 950, 1000, "Rainforest"],
+    // Rainforest needs tropical rain, about twice its evaporative demand of 1.5 m.
+    [560, 950, 2000, "Rainforest"],
     [100, 700, 800, "Ice"],
   ] as const;
   for (const [temperature, moisture, rain, name] of cases) {

@@ -105,6 +105,6 @@ export function glacialRunoff(map: PhysicalField, c: PhysicalContext) {
         : clamp(
             map.Runoff[i] + truncate((map.GlacialMeltwater[i] * c.HydrologyStrength) / 1000),
             0,
-            1000
+            c.Profile.PrecipitationCeiling
           );
 }

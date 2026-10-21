@@ -11,6 +11,48 @@ const settings = Object.entries(atlasParameterDefinitions).map(([key, value]) =>
   const definition: AtlasParameterDefinition = value;
   return { ...definition, key: key as keyof AtlasParameters };
 });
+/** A categorical setting is a choice; every other setting is a number. */
+function SettingField({
+  setting,
+  value,
+  change,
+}: {
+  setting: (typeof settings)[number];
+  value: number;
+  change(value: number): void;
+}) {
+  if (setting.choices)
+    return (
+      <label>
+        {setting.label}
+        <select
+          name={setting.key}
+          value={value}
+          onChange={(event) => change(Number(event.target.value))}
+        >
+          {setting.choices.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  return (
+    <label>
+      {setting.label} · {setting.unit}
+      <input
+        name={setting.key}
+        type="number"
+        min={setting.exclusiveMinimum ? setting.step : setting.minimum}
+        max={setting.maximum}
+        step={setting.step}
+        value={value}
+        onChange={(event) => change(Number(event.target.value))}
+      />
+    </label>
+  );
+}
 function DetailLevel({ quality, profile }: { quality: string; profile: string }) {
   const options =
     profile === "world"
@@ -79,21 +121,15 @@ export function GenerationControls({
       <details>
         <summary>Land, climate, life & erosion controls</summary>
         {settings.map((setting) => (
-          <label key={setting.key}>
-            {setting.label} · {setting.unit}
-            <input
-              name={setting.key}
-              type="number"
-              min={setting.exclusiveMinimum ? setting.step : setting.minimum}
-              max={setting.maximum}
-              step={setting.step}
-              value={values[setting.key]}
-              onChange={(event) => {
-                setPreset("custom");
-                setValues({ ...values, [setting.key]: Number(event.target.value) });
-              }}
-            />
-          </label>
+          <SettingField
+            key={setting.key}
+            setting={setting}
+            value={values[setting.key]}
+            change={(value) => {
+              setPreset("custom");
+              setValues({ ...values, [setting.key]: value });
+            }}
+          />
         ))}
         <p className="hint">
           These influence formation and erosion; land fraction describes starting crust, not a

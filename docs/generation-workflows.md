@@ -307,6 +307,10 @@ adapts them for the atlas rather than copying the game's frozen-world setting:
 - The game's central warmth source and mandatory scattered warmth pockets are
   disabled. User-configured sources provide magical forcing. Land and sea ice
   form where the latitude climate is cold enough, without coverage quotas.
+- Each mantle plume's head moves 56–80 km per epoch along one heading, and that
+  epoch's cone forms at the new head. Older cones go dormant and leave a chain.
+  Fracture conductance moves with the plates, and 60 % of its excess over the
+  floor heals each later epoch, so cooled conduits stop venting.
 - Magical storage follows the native dominant source mapping when crust moves.
   Thermal forcing refreshes with climate; material feedback and elapsed storage
   advance once per epoch.
@@ -620,8 +624,8 @@ for adapting these operations to metres.
 
 For world generation, the atlas preserves the multi-epoch physical sequence.
 Its declared differences include profile/density scaling, disabled central
-warmth/pockets, per-epoch impact and volcanic controls, authored-sample
-restoration and the latitude climate described below. Regional generation
+warmth/pockets, per-epoch impact and volcanic controls, hotspot tracks with
+fracture healing, authored-sample restoration and the latitude climate described below. Regional generation
 additionally skips the 23 initial-geology and 21 per-epoch geology invocations.
 
 #### Latitude climate
@@ -630,19 +634,41 @@ The climate steps keep Canonry's names, order and feature ownership. Their
 bodies implement a latitude-organised climate in place of the reference's
 radial frozen-world climate.
 
-| Step                                  | Atlas operation                                                                                                                                                                                                                                                |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ocean-currents`                      | Belt-driven drift turned along coasts into gyres (`oceanGyres.ts`). Western boundaries are intensified. Upwelling forms on subtropical eastern boundaries. A sea-surface anomaly is carried along the current from its source latitudes.                       |
-| `temperature`                         | Global mean + epoch offset − 28 °C × P2(sin latitude) − 6.5 °C/km lapse, plus geothermal, current, sea-surface anomaly and external heat. A seasonal half-range grows with latitude and continentality.                                                        |
-| `atmospheric-flow`                    | Hadley, Ferrel and polar cells by latitude, with terrain deflection, belt speed, crest exposure, lee shelter and gap channelling (`windTerrain.ts`).                                                                                                           |
-| `moisture-transport`                  | Air columns marched downwind in one ordered pass (`airColumn.ts`). They gather moisture over the sea and rain out with distance and uplift; pressure-belt rainout comes from `belts.ts`. Marine heat, maritime character and magical heat travel with the air. |
-| `precipitation`                       | Column precipitation with the epoch multiplier, split into rain and snow by the share of a sinusoidal year below freezing.                                                                                                                                     |
-| `land-ice-mass-balance` and `sea-ice` | Ice extent follows mass balance and cold rather than a coverage quota. Epoch glaciation scales growth. Melting scales with the deficit.                                                                                                                        |
+| Step                                  | Atlas operation                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ocean-currents`                      | Belt-driven drift turned along coasts into gyres (`oceanGyres.ts`). Western boundaries are intensified. Upwelling forms on subtropical eastern boundaries. A sea-surface anomaly is carried along the current from its source latitudes. Eddy mixing over 250 km applies only where opposing drifts meet, so a cell boundary forms a front instead of a step.                             |
+| `temperature`                         | Global mean + epoch offset − 28 °C × P2(sin latitude) − 6.5 °C/km lapse, plus sea-surface anomaly and external heat. Crustal heat warms only geothermal vents, by up to about 3 °C. Hydrothermal heat carried by currents feeds sea ice and reefs, not air temperature. A seasonal half-range grows with latitude and continentality.                                                     |
+| `atmospheric-flow`                    | Hadley, Ferrel and polar cells by latitude, with terrain deflection, belt speed, crest exposure, lee shelter and gap channelling (`windTerrain.ts`).                                                                                                                                                                                                                                      |
+| `moisture-transport`                  | Air columns marched downwind in one ordered pass (`airColumn.ts`). They gather moisture over the sea and rain out with distance and uplift; pressure-belt rainout comes from `belts.ts`. Marine heat, maritime character and magical heat travel with the air. Air relaxes toward half the magical forcing beneath it over 300 km of travel, and that heat spreads 60 km across the wind. |
+| `precipitation`                       | Column precipitation with the epoch multiplier, in mm/year up to a 4 m ceiling, split into rain and snow by the share of a sinusoidal year below freezing. The equatorial convergence spreads over 15° to stand in for the rain belt's seasonal migration; subtropical subsidence dries 20–35° and also caps uplift rain there.                                                           |
+| `land-ice-mass-balance` and `sea-ice` | Ice extent follows mass balance and cold rather than a coverage quota. Epoch glaciation scales growth. Melting scales with the deficit. Current, wave exposure and local variation move the sea-ice edge by a few degrees only, so polar seas well below freezing freeze.                                                                                                                 |
 
-Latitude is linear in world northing between the `southLatitude` and
-`northLatitude` climate settings (defaults 10° and 70°). Regions inherit these
-settings and read latitude from world coordinates, so they reproduce their
-parent's belts. A numerical patch without a world frame sits at the mid latitude.
+**World frame.** Four initial-only climate settings, inherited by regions, place
+the map between equator and poles independently of its size:
+
+- `southLatitude` and `northLatitude` (defaults 10° and 70°);
+- `latitudeProjection`: equal area (default; sin latitude is linear in northing,
+  so high latitudes take less map height) or even degrees;
+- `wrapLongitude`: when the map spans the world's width, air columns and ocean
+  currents leaving one edge re-enter at the other, and transport distances take
+  the short way round. Terrain, plates, rivers and the editor stay planar, and a
+  region of a wrapping world keeps open edges.
+
+The setup's Latitude frame choice offers a northern band (10° to 70°), two
+hemispheres (70°S to 70°N) and a full globe (pole to pole, wrapping). Physical
+transport lengths stay in map kilometres; only the front-mixing width is capped
+at 6° of latitude, so a small full-globe map keeps distinct belts. A numerical
+patch without a world frame sits at the mid latitude.
+
+**Rainfall regimes.** The `rainfall` setting scales moisture supply (column
+saturation and the precipitation baseline), not rain output. Its Dry (0.07),
+Mixed (1) and Wet (2) anchors live in one table, `rainfallRegimes`, read by the
+setup choice and the Arid and Wet world presets. Each anchor is fitted to its own
+outcome: Dry stays desert and steppe and no wetter than the former arid preset;
+Mixed gives about 2 m at the equator, 1–1.6 m on tropical margins, under 0.35 m
+in the dry belt and about 1 m on westerly coasts; Wet is at least 1.4 times Mixed
+everywhere. Ecology reads plant water as the aridity index, precipitation over
+potential evaporation (0.3 + 0.045 m/year per °C), not column humidity.
 Open-boundary drainage and inherited fields are atlas extensions. These are
 specific changes to execution and inputs, not missing meteor or ice-age modules.
 Per-layer validation is consolidated in `layerValidation.ts`; it is not a literal

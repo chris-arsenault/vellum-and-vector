@@ -49,6 +49,7 @@ const extensive = [
   "TectonicActivityHistory",
 ] as const;
 const maxima = [
+  "FractureConductance",
   "GeothermalHistory",
   "WaveExposureHistory",
   "MaximumIceThickness",

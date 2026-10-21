@@ -31,6 +31,13 @@ const scalars: Record<string, IntegerName[]> = {
   Floodplains: ["FloodplainIntensity"],
   Deltas: ["DeltaIntensity"],
 };
+/** Water rates in mm/year, bounded by the precipitation ceiling rather than per-mille. */
+const waterRates = new Set<IntegerName>(["Rainfall", "Snowfall", "Runoff"]);
+function validateScalars(map: PhysicalField, c: PhysicalContext, produces: string[]) {
+  for (const fact of produces)
+    for (const channel of scalars[fact] ?? [])
+      scalar(map, channel, 0, waterRates.has(channel) ? c.Profile.PrecipitationCeiling : 1000);
+}
 function validateDrainage(map: PhysicalField) {
   for (let i = 0; i < map.mesh.count; i++) {
     const target = map.FlowTargets[i];
@@ -90,7 +97,7 @@ export function validateNativeLayer(
   name: string,
   produces: string[]
 ) {
-  for (const fact of produces) for (const channel of scalars[fact] ?? []) scalar(map, channel);
+  validateScalars(map, c, produces);
   if (map.CrustSupportInitialized) validateLandscape(map);
   if (name === "flow-routing") validateDrainage(map);
   if (name === "river-channel-geometry") validateChannels(map);

@@ -9,7 +9,7 @@ import {
 import type { ProcessInvocation, ProcessSequence } from "./process";
 import { physicalInputContract } from "./physicalInputs";
 import { atlasGenerationModules } from "./generationModules";
-import { physicalApplicability } from "./physicalApplicability";
+import { physicalApplicability, climateSettings } from "./physicalApplicability";
 import { physicalCartography } from "./physicalCartography";
 import { clockConfiguration } from "./featureConfiguration";
 import type { GenerationSlot } from "./generationSlots";
@@ -39,7 +39,7 @@ function definition(
     id,
     label,
     applicability: physicalApplicability[id],
-    cartography: physicalCartography[id] ? [physicalCartography[id]] : [],
+    cartography: [physicalCartography[id] ?? []].flat(),
     domains: options.inherited ? ["physical", "magic"] : ["physical"],
     defaultEnabled: true,
     settings: Object.fromEntries(
@@ -234,7 +234,7 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
       ],
     },
     {
-      settings: ["temperature", "rainfall", "seaLevel", "southLatitude", "northLatitude"],
+      settings: [...climateSettings],
       requires: ["ocean.geography"],
       inherited: true,
       when: (slot, context) => slot !== "climate.refinement" || isRefinement(context),

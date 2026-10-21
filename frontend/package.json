@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:generation": "vitest run --config vitest.generation.config.ts",
+    "test:scale": "vitest run --config vitest.scale.config.ts",
     "test:browser": "sh -c 'if [ \"$BROWSER\" = firefox ] && [ \"$(uname)\" = Linux ]; then exec xvfb-run -a playwright test --headed \"$@\"; else exec playwright test \"$@\"; fi' --",
     "format": "prettier --write src *.ts *.json index.html"
   },

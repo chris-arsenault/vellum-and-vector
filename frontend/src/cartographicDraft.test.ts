@@ -1,5 +1,9 @@
 import { expect, it } from "vitest";
-import { atlasGenerationModules, type CartographicControl } from "@atlas/generation";
+import {
+  atlasGenerationModules,
+  rainfallRegimes,
+  type CartographicControl,
+} from "@atlas/generation";
 import {
   newGenerationDraft,
   prepareDraft,
@@ -54,7 +58,31 @@ it("keeps independent axes stable and displays Custom only for an affected contr
   expect(cartographicValue(draft, control("thermal-climate"))).toBe("custom");
   expect(cartographicValue(draft, control("rainfall-regime"))).toBe("dry");
   draft = applyCartographicChoice(draft, control("thermal-climate"), "cold");
-  expect(draft.recipe.features?.["physical.climate"].settings?.rainfall).toBe(0.2);
+  expect(draft.recipe.features?.["physical.climate"].settings?.rainfall).toBe(
+    rainfallRegimes.dry.rainfall
+  );
+});
+it("chooses a latitude frame without touching temperature, rainfall or world size", () => {
+  const frame = control("latitude-frame");
+  expect(cartographicValue(newGenerationDraft(), frame)).toBe("northern-band");
+  let draft = applyCartographicChoice(newGenerationDraft(), control("thermal-climate"), "warm");
+  draft = applyCartographicChoice(draft, frame, "globe");
+  const settings = draft.recipe.features?.["physical.climate"].settings;
+  expect(settings).toMatchObject({
+    southLatitude: -90,
+    northLatitude: 90,
+    latitudeProjection: 1,
+    wrapLongitude: 1,
+  });
+  expect(cartographicValue(draft, control("thermal-climate"))).toBe("warm");
+  draft = applyCartographicChoice(draft, frame, "hemispheres");
+  expect(draft.recipe.features?.["physical.climate"].settings).toMatchObject({
+    southLatitude: -70,
+    northLatitude: 70,
+    wrapLongitude: 0,
+  });
+  draft = setFeatureSetting(draft, "physical.climate", "northLatitude", 60);
+  expect(cartographicValue(draft, frame)).toBe("custom");
 });
 it("applies land arrangements without resetting event strengths or shared history", () => {
   const original = setFeatureSetting(newGenerationDraft(), "physical.volcanism", "volcanism", 0.6);

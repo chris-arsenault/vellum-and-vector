@@ -178,6 +178,7 @@ export function createAtlasWorkspace(
   const profile = atlasPhysicalProfile(parameters);
   const frame = spatial.bounds(state.domain.world.reference.domain);
   profile.WorldExtentY = [frame[1], frame[3]];
+  profile.WorldExtentX = [frame[0], frame[2]];
   const bounds = state.surface.bounds;
   const maximumSize =
     (Math.max(bounds[2] - bounds[0], bounds[3] - bounds[1]) + 2 * profile.BoundaryPadding) /

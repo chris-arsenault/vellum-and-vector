@@ -7,6 +7,7 @@ import { fractalNoise } from "./noise";
 import { latitudeAt } from "./latitude";
 import { deflectWind, windSpeed, windTerrain } from "./windTerrain";
 import { physicalDistance } from "./physicalMetric";
+import { wrapLinks } from "./longitudeWrap";
 
 export function alignedNeighbor(map: PhysicalField, i: number, dx: number, dy: number): number {
   let best = -1,
@@ -106,6 +107,7 @@ export function atmosphericFlow(map: PhysicalField, c: PhysicalContext) {
     map.WindY[i] = round(y * 1000);
     map.UpwindTargets[i] = alignedNeighbor(map, i, -x, -y);
   }
+  wrapLinks(map, p, map.UpwindTargets);
   for (let i = 0; i < map.mesh.count; i++) {
     const barrier = traceAirMass(map, p.ElevationScale, i);
     map.WindSpeed[i] = windSpeed(map, terrain, p, i, beltSpeed(p, latitudeAt(p, map, i)), barrier);

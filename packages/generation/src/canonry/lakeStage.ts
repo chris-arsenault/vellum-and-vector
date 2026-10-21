@@ -61,7 +61,11 @@ function directInput(map: PhysicalField, p: PhysicalProfile, i: number): number 
     0,
     1000
   );
-  return clamp(map.Rainfall[i] + truncate((map.Snowfall[i] * melt) / 1000), 0, 1000);
+  return clamp(
+    map.Rainfall[i] + truncate((map.Snowfall[i] * melt) / 1000),
+    0,
+    p.PrecipitationCeiling
+  );
 }
 function basinCells(map: PhysicalField, p: PhysicalProfile, component: Depression) {
   return component.members

@@ -1,0 +1,119 @@
+import { expect, it } from "vitest";
+import { createWorldMesh } from "./worldMesh";
+import { createField } from "./field";
+import { atlasPhysicalProfile } from "./atlasProfile";
+import { physicalContext } from "./context";
+import { precipitation, runoff, temperature } from "./climate";
+import { glacialRunoff } from "./glacialEvolution";
+import { floodEcology } from "./ecologyDisturbance";
+import { warmthSources } from "./warmth";
+import { seaIce } from "./seaIce";
+import { atlasPresets, rainfallRegimes } from "../atlasParameters";
+import { physicalCartography } from "../physicalCartography";
+import type { CartographicControl } from "../cartographicControls";
+import { units } from "./math";
+
+// Flat lowland and open sea at one latitude, with given crustal and current heat.
+function surface(geothermal: number, currentHeat: number) {
+  const map = createField(createWorldMesh([-200_000, -200_000, 200_000, 200_000], 400, 20_000));
+  const c = physicalContext(7, 0, atlasPhysicalProfile());
+  for (let i = 0; i < map.mesh.count; i++) {
+    const sea = map.mesh.x[i] < 0;
+    map.WaterKindCodes[i] = sea ? 1 : 0;
+    map.Elevation[i] = units(sea ? -2000 : 50);
+    map.Geothermal[i] = geothermal;
+    map.OceanCurrentHeat[i] = sea ? currentHeat : 0;
+    map.OceanCurrentStrength[i] = sea ? 800 : 0;
+  }
+  warmthSources(map, c);
+  temperature(map, c);
+  return map;
+}
+const spread = (a: ArrayLike<number>, b: ArrayLike<number>) =>
+  Math.max(...Array.from(a, (value, i) => Math.abs(value - b[i])));
+
+it("leaves ridge and fracture heat out of surface temperature", () => {
+  // A plate-boundary ridge below vent intensity carrying hydrothermal heat on its current.
+  expect(spread(surface(600, 540).Temperature, surface(0, 60).Temperature)).toBe(0);
+});
+
+it("warms vents and active volcanoes by a few degrees at most", () => {
+  const warming = spread(surface(1000, 60).Temperature, surface(0, 60).Temperature);
+  expect(warming).toBeGreaterThan(0);
+  expect(warming).toBeLessThanOrEqual(30);
+});
+
+it("freezes an exposed polar sea that averages well below freezing", () => {
+  const frozen = (celsius: number) => {
+    const map = createField(createWorldMesh([0, 0, 200_000, 200_000], 200, 20_000));
+    const c = physicalContext(7, 0, atlasPhysicalProfile());
+    for (let i = 0; i < map.mesh.count; i++) {
+      map.WaterKindCodes[i] = 1;
+      map.Temperature[i] = 300 + celsius * 10;
+      // Strong current, full wave fetch and background hydrothermal heat.
+      map.OceanCurrentStrength[i] = 1000;
+      map.WaveExposure[i] = 1000;
+      map.OceanCurrentHeat[i] = 60;
+    }
+    seaIce(map, c);
+    const cells = Array.from({ length: map.mesh.contentCount }, (_, i) => i);
+    return cells.filter((i) => map.IceThickness[i] > 0).length / cells.length;
+  };
+  expect(frozen(-12)).toBe(1);
+  expect(frozen(2)).toBe(0);
+});
+
+it("keeps tropical rain above a metre and clips only at the precipitation ceiling", () => {
+  const rain = (column: number) => {
+    const map = surface(0, 60);
+    const c = physicalContext(7, 0, atlasPhysicalProfile());
+    map.ColumnPrecipitation.fill(column);
+    map.Temperature.fill(550);
+    map.Seasonality.fill(5);
+    precipitation(map, c);
+    return map.Rainfall[0] + map.Snowfall[0];
+  };
+  const p = atlasPhysicalProfile();
+  expect(rain(2400)).toBe(p.PrecipitationBaseline + 2400);
+  expect(rain(9000)).toBe(p.PrecipitationCeiling);
+});
+
+it("passes tropical rain to rivers and floods without a one-metre clip", () => {
+  const c = physicalContext(7, 0, atlasPhysicalProfile());
+  const land = (rain: number) => {
+    const map = surface(0, 60);
+    map.Rainfall.fill(rain);
+    map.Temperature.fill(550);
+    map.Seasonality.fill(10);
+    map.FloodplainIntensity.fill(1000);
+    runoff(map, c);
+    return map;
+  };
+  const wet = land(3000);
+  const i = Array.from(wet.WaterKindCodes).indexOf(0);
+  // Warm, wet land loses part of its rain and runs the rest off, above a metre.
+  expect(wet.Runoff[i]).toBeGreaterThan(1000);
+  expect(wet.Runoff[i]).toBeLessThan(3000);
+  wet.GlacialMeltwater.fill(5000);
+  glacialRunoff(wet, c);
+  expect(wet.Runoff[i]).toBe(c.Profile.PrecipitationCeiling);
+  floodEcology(wet, 1000);
+  expect(Math.max(...wet.FloodFrequency)).toBeLessThanOrEqual(0.5);
+});
+
+it("carries the rainfall setting as moisture supply, from one regime table", () => {
+  const base = atlasPhysicalProfile(),
+    wet = atlasPhysicalProfile({ rainfall: 2 });
+  expect(wet.ColumnSaturation).toBe(base.ColumnSaturation * 2);
+  expect(wet.ColumnRainEfficiency).toBe(base.ColumnRainEfficiency);
+  const regime = physicalCartography["water.routing"] as CartographicControl;
+  expect(
+    regime.choices.map((item) => item.features["physical.climate"].settings?.rainfall)
+  ).toEqual(Object.values(rainfallRegimes).map((item) => item.rainfall));
+  expect(atlasPresets.arid.parameters.rainfall).toBe(rainfallRegimes.dry.rainfall);
+  expect(atlasPresets.wet.parameters.rainfall).toBe(rainfallRegimes.wet.rainfall);
+});
+
+it("paints no Canonry warmth pockets on an atlas map", () => {
+  expect(surface(0, 60).Warmth.every((value) => value === 0)).toBe(true);
+});

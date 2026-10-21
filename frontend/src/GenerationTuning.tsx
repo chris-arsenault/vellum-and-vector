@@ -52,6 +52,47 @@ export function GenerationTuning({ flow }: { flow: GenerationWorkflow }) {
     </section>
   );
 }
+/** A categorical setting is a choice; every other setting keeps its validated number field. */
+function SettingControl({
+  flow,
+  setting: { key, owner, definition, value, active },
+}: {
+  flow: GenerationWorkflow;
+  setting: ReturnType<typeof featureControlSettings>[number];
+}) {
+  const current = flow.draft.recipe.features?.[owner]?.settings?.[key] ?? value,
+    change = (next: number) => flow.change(setFeatureSetting(flow.draft, owner, key, next));
+  if (definition.choices)
+    return (
+      <label>
+        {definition.label}
+        <select
+          value={current}
+          disabled={!active}
+          onChange={(event) => change(Number(event.target.value))}
+        >
+          {definition.choices.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  return (
+    <NumberField
+      fieldKey={"feature." + owner + "." + key}
+      label={definition.label}
+      unit={definition.unit}
+      value={current}
+      min={definition.exclusiveMinimum ? Number.MIN_VALUE : definition.minimum}
+      max={definition.maximum}
+      step={definition.integer ? 1 : "any"}
+      disabled={!active}
+      change={change}
+    />
+  );
+}
 function FeatureTuning({ flow, feature }: { flow: GenerationWorkflow; feature: SetupFeature }) {
   const fields = useWorkflowFields();
   return (
@@ -70,22 +111,9 @@ function FeatureTuning({ flow, feature }: { flow: GenerationWorkflow; feature: S
       </label>
       {feature.reason && <p className="hint">{feature.reason}</p>}
       <div className="setup-setting-grid">
-        {featureControlSettings(flow, feature.id).map(
-          ({ key, owner, definition, value, active }) => (
-            <NumberField
-              key={owner + "." + key}
-              fieldKey={"feature." + owner + "." + key}
-              label={definition.label}
-              unit={definition.unit}
-              value={flow.draft.recipe.features?.[owner]?.settings?.[key] ?? value}
-              min={definition.exclusiveMinimum ? Number.MIN_VALUE : definition.minimum}
-              max={definition.maximum}
-              step={definition.integer ? 1 : "any"}
-              disabled={!active}
-              change={(next) => flow.change(setFeatureSetting(flow.draft, owner, key, next))}
-            />
-          )
-        )}
+        {featureControlSettings(flow, feature.id).map((setting) => (
+          <SettingControl key={setting.owner + "." + setting.key} flow={flow} setting={setting} />
+        ))}
       </div>
       <GenerationFeatureConfiguration flow={flow} feature={feature} />
       {generationFeatureAdapter(feature.id)?.Editor && (

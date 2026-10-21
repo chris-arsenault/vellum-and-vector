@@ -130,13 +130,24 @@ function growBranch(
 function candidateScore(map: PhysicalField, i: number) {
   return map.TectonicStrain[i] * 0.48 + map.Uplift[i] * 310 + map.RidgeInfluence[i] * 120;
 }
+/**
+ * Initial maps start from the conductance floor; each later epoch, older
+ * fractures and cooled volcanic conduits heal toward it before new ones open.
+ */
+function prepareFractures(map: PhysicalField, c: PhysicalContext) {
+  const p = c.Profile,
+    keep = c.IsEvolutionEpoch ? p.FractureRetentionPerEpoch / 1000 : 1;
+  for (let i = 0; i < map.mesh.count; i++)
+    map.FractureConductance[i] = Math.max(
+      p.FractureConductanceFloor,
+      round(
+        p.FractureConductanceFloor +
+          (map.FractureConductance[i] - p.FractureConductanceFloor) * keep
+      )
+    );
+}
 export function fractureNetwork(map: PhysicalField, c: PhysicalContext) {
-  if (!c.IsEvolutionEpoch)
-    for (let i = 0; i < map.mesh.count; i++)
-      map.FractureConductance[i] = Math.max(
-        map.FractureConductance[i],
-        c.Profile.FractureConductanceFloor
-      );
+  prepareFractures(map, c);
   const count =
     c.TectonicStrength === 0
       ? 0
@@ -177,12 +188,7 @@ export function applyPlannedFractures(
   c: PhysicalContext,
   faults: PhysicalField["faults"]
 ) {
-  if (!c.IsEvolutionEpoch)
-    for (let i = 0; i < map.mesh.count; i++)
-      map.FractureConductance[i] = Math.max(
-        map.FractureConductance[i],
-        c.Profile.FractureConductanceFloor
-      );
+  prepareFractures(map, c);
   faults.forEach((fault, branch) => {
     let distance = 0;
     fault.coordinates.forEach((point, index) => {

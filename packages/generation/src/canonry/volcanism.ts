@@ -6,16 +6,27 @@ import { hashUnit } from "./noise";
 import { Feature } from "./codes";
 import { rebuild } from "./surface";
 
+/**
+ * The plume head after `sequence` epochs. The crust moves over a fixed plume,
+ * so in the map frame the head tracks steadily along one heading per plume,
+ * leaving older cones behind as a chain.
+ */
 export function plumeCenter(
   context: PhysicalContext,
   root: { x: number; y: number; id: string },
   sequence: number
 ): [number, number] {
-  const id = Number(root.id.split(":").at(-1));
-  const angle = hashUnit(0x51f3, id, sequence) * Math.PI * 2;
-  const distance =
-    context.Profile.MantlePlumeDriftPerEpoch * (0.35 + hashUnit(0x2c87, id, sequence) * 0.65);
-  return [root.x + Math.cos(angle) * distance, root.y + Math.sin(angle) * distance];
+  const id = Number(root.id.split(":").at(-1)),
+    heading = hashUnit(0x51f3, id, 0) * Math.PI * 2;
+  let [x, y] = [root.x, root.y];
+  for (let step = 1; step <= sequence; step++) {
+    const angle = heading + (hashUnit(0x6a1d, id, step) - 0.5) * 0.5;
+    const distance =
+      context.Profile.MantlePlumeDriftPerEpoch * (0.7 + hashUnit(0x2c87, id, step) * 0.3);
+    x += Math.cos(angle) * distance;
+    y += Math.sin(angle) * distance;
+  }
+  return [x, y];
 }
 function physicalFeatures(
   map: PhysicalField,

@@ -11,7 +11,8 @@ function landscape(height: (x: number, y: number) => number) {
   const map = createField(createWorldMesh([-200_000, -200_000, 200_000, 200_000], 6400, 40_000));
   for (let i = 0; i < map.mesh.count; i++)
     map.Elevation[i] = units(100 + height(map.mesh.x[i], map.mesh.y[i]));
-  const c = physicalContext(42, 0, atlasPhysicalProfile());
+  // Without a world frame the map sits at the mid latitude: 40° with even degrees.
+  const c = physicalContext(42, 0, atlasPhysicalProfile({ latitudeProjection: 0 }));
   c.Profile.CirculationWander = 0;
   atmosphericFlow(map, c);
   return map;

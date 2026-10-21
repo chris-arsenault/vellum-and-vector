@@ -16,9 +16,9 @@ export function beltRainout(p: PhysicalProfile, latitude: number) {
   const gradient = Math.abs(Math.sin((2 * distance * Math.PI) / 180));
   const factor =
     1 +
-    p.EquatorialConvergence * bell(distance, spread) +
+    p.EquatorialConvergence * bell(distance, p.EquatorialConvergenceWidth) +
     p.StormTrackStrength * gradient * bell(distance - (5 * width) / 3, spread * 1.5) -
-    p.SubtropicalSubsidence * bell(distance - width, spread) -
+    p.SubtropicalSubsidence * bell(distance - width, p.SubtropicalSubsidenceWidth) -
     p.PolarSubsidence * bell(distance - 3 * width, spread);
   return Math.max(p.MinimumRainout, factor);
 }

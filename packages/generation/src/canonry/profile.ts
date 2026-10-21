@@ -210,9 +210,14 @@ export const physicalProfile = {
   DeltaMaximumRadius: 30_000,
   // Degrees at the world's south and north edges. WorldExtentY is the world
   // frame's [south, north] in metres; null places the map at the mid latitude.
+  // Projection 1 is equal-area (sin latitude linear in northing), 0 is linear.
+  // WorldExtentX bounds the east–west wrap; WrapLongitude 1 joins its edges.
   LatitudeSouth: 10,
   LatitudeNorth: 70,
+  LatitudeProjection: 1,
+  WrapLongitude: 0,
   WorldExtentY: null as [number, number] | null,
+  WorldExtentX: null as [number, number] | null,
   // Global mean at sea level; annual-mean insolation adds a second Legendre
   // term, -range × P2(sin latitude), which averages to zero over a sphere.
   TemperatureBaseline: 285,
@@ -231,6 +236,8 @@ export const physicalProfile = {
   WarmthPocketMaxStrength: 390,
   HeartWarmthRadius: 280_000,
   HeartWarmthStrength: 310,
+  // Geothermal intensity above the threshold warms the surface at this rate.
+  GeothermalSurfaceThreshold: 0,
   GeothermalTemperatureStrength: 310,
   OceanCurrentSmoothingLength: 25_000,
   // Boundary currents act within a few multiples of this distance from the
@@ -241,6 +248,10 @@ export const physicalProfile = {
   // equilibrium over this distance; full upwelling cools by UpwellingCooling.
   SeaSurfaceRelaxation: 1_200_000,
   UpwellingCooling: 60,
+  // Eddy mixing length where opposing drifts meet, turning steps into fronts;
+  // never more than SeaSurfaceMixingDegrees of latitude on a compressed map.
+  SeaSurfaceMixing: 250_000,
+  SeaSurfaceMixingDegrees: 6,
   OceanCurrentHeatDistance: 100_000,
   // Scalar heat-intensity units lost over the configured transport interval.
   OceanCurrentHeatCooling: 50,
@@ -249,12 +260,16 @@ export const physicalProfile = {
   OceanCurrentTemperatureStrength: 150,
   OceanCurrentWarmthStrength: 120,
   PrecipitationBaseline: 40,
-  // Downwind air columns (precipitation per-mille, 1000 ≈ 1 m/year). Over the
+  // Precipitation and runoff are millimetres per year, up to this ceiling.
+  PrecipitationCeiling: 4000,
+  // Downwind air columns (precipitation in mm/year). Over the
   // sea a column approaches OceanColumnHumidity of saturation, which grows by
   // ColumnSaturationGrowth per °C from ColumnSaturation at 20 °C. Over land it
   // rains out over ColumnRainLength and loses 1 − exp(−rise/OrographicLiftHeight)
   // to uplift; heat, maritime character and magical heat decay over their lengths.
-  ColumnSaturation: 700,
+  // Air relaxes toward MagicHeatAirShare of the magical forcing beneath it and
+  // spreads that heat across the wind over MagicHeatAirSpread.
+  ColumnSaturation: 1650,
   ColumnSaturationGrowth: 0.045,
   OceanColumnHumidity: 0.85,
   BoundaryColumnHumidity: 0.5,
@@ -267,13 +282,18 @@ export const physicalProfile = {
   MaritimeLength: 800_000,
   MagicHeatAirLength: 300_000,
   MagicHeatAirShare: 0.5,
+  MagicHeatAirSpread: 60_000,
   // Pressure belts scale column rainout: convergence and the storm track raise
   // it, subtropical and polar subsidence lower it, never below MinimumRainout.
+  // The equatorial convergence spreads over EquatorialConvergenceWidth degrees,
+  // standing in for the seasonal migration of the rain belt.
   EquatorialConvergence: 1.2,
-  StormTrackStrength: 0.9,
-  SubtropicalSubsidence: 0.75,
-  PolarSubsidence: 0.5,
-  MinimumRainout: 0.15,
+  EquatorialConvergenceWidth: 15,
+  StormTrackStrength: 1.2,
+  SubtropicalSubsidence: 1.1,
+  SubtropicalSubsidenceWidth: 10,
+  PolarSubsidence: 0.7,
+  MinimumRainout: 0.08,
   SnowTemperatureThreshold: 300,
   SnowTemperatureTransition: 100,
   // Annual-mean surface temperature, after current and wave resistance, below
@@ -308,6 +328,7 @@ export const physicalProfile = {
   MantlePlumeStrength: 940,
   MantlePlumeMinimumShare: 260,
   MantlePlumeStrengthExponent: 1700,
+  // Hotspot track length per epoch; each epoch's cone forms at the new head.
   MantlePlumeDriftPerEpoch: 80_000,
   VolcanicConeRadius: 8_000,
   VolcanicConeHeight: 1_200,
@@ -320,6 +341,8 @@ export const physicalProfile = {
   FractureMinimumSpacing: 180_000,
   FractureWidth: 10_000,
   FractureConductanceFloor: 25,
+  // Share of conductance above the floor that survives each later epoch.
+  FractureRetentionPerEpoch: 400,
   QualityTargets: {
     OceanCoverage: { target: 0.52, minimum: 0.38, maximum: 0.66 },
     InlandLakeBodyCount: { minimum: 2, maximum: 80 },

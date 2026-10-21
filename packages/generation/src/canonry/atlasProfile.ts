@@ -2,6 +2,7 @@ import type { Epoch } from "@atlas/domain";
 import { physicalProfile, type PhysicalProfile } from "./profile";
 import { clamp, round } from "./math";
 import { atlasParametersSchema, type AtlasParameters } from "../atlasParameters";
+import { latitudeAtY } from "./latitude";
 
 export const atlasQuality = {
   draft: { baseCells: 16384 },
@@ -17,8 +18,12 @@ export function atlasPhysicalProfile(parameters: Partial<AtlasParameters> = {}):
   profile.TemperatureBaseline = 300 + settings.temperature * 10;
   profile.LatitudeSouth = settings.southLatitude;
   profile.LatitudeNorth = settings.northLatitude;
+  profile.LatitudeProjection = settings.latitudeProjection;
+  profile.WrapLongitude = settings.wrapLongitude;
+  // Rainfall sets moisture supply: how much water the air holds before belts and
+  // relief decide where it falls.
   profile.PrecipitationBaseline *= settings.rainfall;
-  profile.ColumnRainEfficiency *= settings.rainfall;
+  profile.ColumnSaturation *= settings.rainfall;
   profile.FluvialErosionStrength *= settings.erosion;
   profile.SeaLevel = settings.seaLevel / profile.ElevationScale;
   profile.ImpactCraterCount = settings.impacts;
@@ -33,7 +38,29 @@ export function atlasPhysicalProfile(parameters: Partial<AtlasParameters> = {}):
   profile.CoastalErosionStrength *= settings.coastalErosion;
   profile.HeartWarmthStrength = 0;
   profile.WarmthPocketCount = 0;
+  // Latitude and the sea-surface anomaly set surface temperature. Crustal heat
+  // warms only vents and active volcanoes, by up to about 3 °C; hydrothermal
+  // heat carried by currents stays a sea-ice and reef input.
+  profile.GeothermalSurfaceThreshold = profile.GeothermalVentThreshold;
+  profile.GeothermalTemperatureStrength = 100;
+  profile.OceanCurrentTemperatureStrength = 0;
+  profile.OceanCurrentWarmthStrength = 0;
+  // Exposure and local variation shift the sea-ice edge by a few degrees; they
+  // cannot keep a polar ocean that averages well below freezing open.
+  profile.SeaIceCurrentResistance = 20;
+  profile.SeaIceWaveResistance = 20;
+  profile.SeaIceSuitabilityVariation = 30;
   return profile;
+}
+/** Latitude of a world northing under the given settings and world frame [south, north]. */
+export function atlasLatitude(
+  parameters: Partial<AtlasParameters>,
+  extentY: [number, number],
+  worldY: number
+) {
+  const profile = atlasPhysicalProfile(parameters);
+  profile.WorldExtentY = extentY;
+  return latitudeAtY(profile, worldY);
 }
 // Atlas temperatures are Celsius; the native snow threshold (300) represents
 // zero Celsius, with ten native climate units per degree. Epoch settings are

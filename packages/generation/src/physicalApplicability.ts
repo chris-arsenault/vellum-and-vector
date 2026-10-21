@@ -1,4 +1,13 @@
 import type { FeatureApplicability, EpochControl, EpochValueKey } from "./generationPresentation";
+import { latitudeFrameSettings } from "./atlasParameters";
+
+/** Settings owned by `physical.climate`: baseline climate plus the world frame. */
+export const climateSettings = [
+  "temperature",
+  "rainfall",
+  "seaLevel",
+  ...latitudeFrameSettings,
+] as const;
 
 const strength = (key: EpochValueKey, label: string): EpochControl => ({
   key,
@@ -49,9 +58,11 @@ export const physicalApplicability: Record<string, FeatureApplicability> = {
       seaLevel: ["canonry.ocean-connectivity"],
       southLatitude: ["canonry.temperature", "canonry.atmospheric-flow"],
       northLatitude: ["canonry.temperature", "canonry.atmospheric-flow"],
+      latitudeProjection: ["canonry.temperature", "canonry.atmospheric-flow"],
+      wrapLongitude: ["canonry.moisture-transport", "canonry.ocean-currents"],
     },
-    // Latitude belongs to the world frame; regions read their parent's edges.
-    initialOnlySettings: ["seaLevel", "southLatitude", "northLatitude"],
+    // Latitude belongs to the world frame; regions read their parent's frame.
+    initialOnlySettings: ["seaLevel", ...latitudeFrameSettings],
     epochControls: [
       { key: "temperature", label: "Epoch temperature shift", unit: "°C" },
       { key: "rainfall", label: "Epoch rainfall", unit: "multiplier", min: 0, max: 5 },

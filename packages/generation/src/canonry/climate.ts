@@ -36,7 +36,12 @@ export function temperature(map: PhysicalField, c: PhysicalContext) {
         ? 0
         : map.OceanDistance[i] / p.ContinentalityDistance
     );
-    const heat = truncate((map.Geothermal[i] * p.GeothermalTemperatureStrength) / 1000);
+    // Only heat above the surface threshold (vents, active volcanoes) warms the air.
+    const heat = truncate(
+      (Math.max(0, map.Geothermal[i] - p.GeothermalSurfaceThreshold) *
+        p.GeothermalTemperatureStrength) /
+        1000
+    );
     const current = truncate(
       (truncate((map.OceanCurrentHeat[i] * map.OceanCurrentStrength[i]) / 1000) *
         p.OceanCurrentTemperatureStrength) /
@@ -93,7 +98,7 @@ export function precipitation(map: PhysicalField, c: PhysicalContext) {
     const total = clamp(
       truncate((p.PrecipitationBaseline + map.ColumnPrecipitation[i]) * c.RainfallMultiplier),
       0,
-      1000
+      p.PrecipitationCeiling
     );
     const snow = snowShare(p, map.Temperature[i], map.Seasonality[i] * 10);
     map.Snowfall[i] = truncate((total * snow) / 1000);
@@ -115,7 +120,11 @@ export function runoff(map: PhysicalField, c: PhysicalContext) {
       0,
       1000
     );
-    const available = clamp(map.Rainfall[i] + truncate((map.Snowfall[i] * melt) / 1000), 0, 1000);
+    const available = clamp(
+      map.Rainfall[i] + truncate((map.Snowfall[i] * melt) / 1000),
+      0,
+      p.PrecipitationCeiling
+    );
     const loss = clamp(
       p.RunoffMinimumLossPerMille +
         truncate((map.Temperature[i] * p.RunoffTemperatureLossPerMille) / 1000),

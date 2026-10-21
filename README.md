@@ -21,6 +21,13 @@ has its switch and operative settings together. Direct navigation preserves the
 draft; **Use defaults & review** skips ahead when the defaults suit the map.
 Select **Blank world** to create an empty atlas for manual editing.
 
+World size and latitude are independent. **Latitude frame** places any map as a
+northern band (10° to 70°), two hemispheres or a full globe; latitudes use an
+equal-area spacing, and a full globe wraps air and ocean east to west. **Rainfall
+regime** chooses Dry, Mixed (Earth-like) or Wet worlds; the raw `rainfall`
+setting scales moisture supply between those anchors. See
+[latitude climate](docs/generation-workflows.md#latitude-climate).
+
 Feature choices change geography; layer visibility changes display. Coupled
 operations such as glacial sculpting appear as one choice. Rivers and incision
 remain independent. Dependency messages link to their providers and offer explicit
@@ -210,8 +217,10 @@ pnpm --dir frontend test src/rasterTiles.test.ts
 When a complete-world check exposes a defect, reproduce it with a small algorithm
 or boundary test and fix that case before another integration run. Full generation
 is integration and geographic review evidence, not the feedback loop for small
-changes. Select the relevant file with `pnpm test:generation <file>`; the expensive
-world and quality comparisons are opt-in and excluded from default CI.
+changes. Select the relevant file with `pnpm test:generation <file>`. The suite
+generates draft-quality worlds, three files at a time. The Standard and Fine
+world-scale comparison takes more than ten minutes; it runs only through
+`pnpm test:scale`. Neither suite is part of default CI.
 
 Browser workflow tests use small completed-field fixtures, with one real worker
 check for interior generation and publication. They test interaction; physical

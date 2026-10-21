@@ -1,4 +1,5 @@
 import { choice, type CartographicControl } from "./cartographicControls";
+import { rainfallRegimes } from "./atlasParameters";
 
 const river = (mapped: boolean, incision: boolean, plains: boolean) => ({
   "physical.river-networks": { enabled: mapped },
@@ -17,7 +18,28 @@ const ice = (enabled: boolean, sculpting: boolean, strength = 1) => ({
   },
 });
 
-export const physicalCartography: Record<string, CartographicControl> = {
+/** Latitude frames; each fills only the frame settings and leaves the world size alone. */
+const frame = (south: number, north: number, wrapLongitude: number) => ({
+  "physical.climate": {
+    enabled: true,
+    settings: { southLatitude: south, northLatitude: north, latitudeProjection: 1, wrapLongitude },
+  },
+});
+const latitudeFrame: CartographicControl = {
+  id: "latitude-frame",
+  label: "Latitude frame",
+  section: "environment",
+  initialOnly: true,
+  explanation:
+    "Where the map sits between equator and poles, independent of its size. Latitudes use an equal-area spacing; a full globe wraps air and ocean east to west.",
+  choices: [
+    choice("northern-band", "Northern band · 10° to 70°", frame(10, 70, 0)),
+    choice("hemispheres", "Two hemispheres · 70°S to 70°N", frame(-70, 70, 0)),
+    choice("globe", "Full globe · pole to pole", frame(-90, 90, 1)),
+  ],
+};
+
+export const physicalCartography: Record<string, CartographicControl | CartographicControl[]> = {
   "physical.foundation": {
     id: "land-arrangement",
     label: "Land arrangement",
@@ -79,26 +101,29 @@ export const physicalCartography: Record<string, CartographicControl> = {
       }),
     ],
   },
-  "physical.climate": {
-    id: "thermal-climate",
-    label: "Thermal climate",
-    section: "environment",
-    explanation:
-      "Baseline conditions; elevation, circulation, history and influences still shape local temperatures.",
-    choices: [-5, 15, 30].map((temperature, index) =>
-      choice(["cold", "temperate", "warm"][index], ["Cold", "Temperate", "Warm"][index], {
-        "physical.climate": { enabled: true, settings: { temperature } },
-      })
-    ),
-  },
+  "physical.climate": [
+    latitudeFrame,
+    {
+      id: "thermal-climate",
+      label: "Thermal climate",
+      section: "environment",
+      explanation:
+        "Baseline conditions; elevation, circulation, history and influences still shape local temperatures.",
+      choices: [-5, 15, 30].map((temperature, index) =>
+        choice(["cold", "temperate", "warm"][index], ["Cold", "Temperate", "Warm"][index], {
+          "physical.climate": { enabled: true, settings: { temperature } },
+        })
+      ),
+    },
+  ],
   "water.routing": {
     id: "rainfall-regime",
     label: "Rainfall regime",
     section: "environment",
     explanation: "A rainfall influence, not uniform moisture or a prescribed biome map.",
-    choices: [0.2, 1, 2].map((rainfall, index) =>
-      choice(["dry", "mixed", "wet"][index], ["Dry", "Mixed", "Wet"][index], {
-        "physical.climate": { enabled: true, settings: { rainfall } },
+    choices: Object.entries(rainfallRegimes).map(([id, regime]) =>
+      choice(id, regime.label, {
+        "physical.climate": { enabled: true, settings: { rainfall: regime.rainfall } },
       })
     ),
   },

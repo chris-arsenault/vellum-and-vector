@@ -39,6 +39,8 @@ export const neutralEcology: EcologyForcing = {
   toxicity: 0,
   dispersal: 0,
 };
+/** Potential evaporation in m/year at a mean temperature in °C, never below 0.25. */
+export const potentialEvaporation = (celsius: number) => Math.max(0.25, 0.3 + 0.045 * celsius);
 export function environment(map: PhysicalField, i: number, forcing = neutralEcology) {
   const temperature = map.Temperature[i] / 10 - 30;
   const depth = map.WaterDepths[i] / 1024;
@@ -46,10 +48,10 @@ export function environment(map: PhysicalField, i: number, forcing = neutralEcol
   const frozen = map.IceThickness[i] > 1;
   const warmth = unit((temperature + 8) / 18) * unit((52 - temperature) / 18);
   const rain = (map.Rainfall[i] + map.Snowfall[i]) / 1000;
-  const moisture = Math.min(
-    map.Moisture[i] / 1000,
-    rain / Math.max(0.15, 0.35 + temperature * 0.018)
-  );
+  // Plant water is the aridity index: precipitation over evaporative demand,
+  // about 1.4 m/year at 25 °C. Column humidity is not surface humidity: heavy
+  // rainout drains the column exactly where plants have most water.
+  const moisture = Math.min(1, rain / potentialEvaporation(temperature));
   // Climate supplies each cell's seasonal half-range; the epoch's seasonality
   // scales it, with the neutral 0.3 leaving it unchanged. Before climate has
   // run, the former uniform 7.5 °C half-range at neutral seasonality applies.
