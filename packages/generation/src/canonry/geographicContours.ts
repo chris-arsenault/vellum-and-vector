@@ -45,23 +45,27 @@ export function lakeFootprint(
   return footprint && membership && spatial.intersection(footprint, membership);
 }
 
+/** Only ocean-connected cells are sea; enclosed basins below sea level stay dry, as in generation. */
 export function oceanFootprint(state: GenerationState) {
   const map = state.physical!.map,
     mesh = map.mesh,
-    height = physicalSampler(mesh, map.Elevation),
-    at = (x: number, y: number) =>
-      map.EffectiveSeaLevel - height(x - mesh.origin[0], y - mesh.origin[1]);
+    depths = Float64Array.from(map.Elevation, (elevation, i) => {
+      const depth = map.EffectiveSeaLevel - elevation;
+      return map.WaterKindCodes[i] === 1 ? depth : -Math.abs(depth);
+    }),
+    depth = physicalSampler(mesh, depths),
+    at = (x: number, y: number) => depth(x - mesh.origin[0], y - mesh.origin[1]);
   const shape = mesh.topology
     ? fieldContour(mesh.topology, at, undefined, 0)
     : linearFieldContour(
         triangleFans(
           mesh,
           Array.from({ length: mesh.count }, (_, i) => i),
-          (i) => map.EffectiveSeaLevel - map.Elevation[i]
+          (i) => depths[i]
         ),
         at,
         0,
-        triangleBoundary(mesh, (i) => map.EffectiveSeaLevel - map.Elevation[i])
+        triangleBoundary(mesh, (i) => depths[i])
       );
   return shape && spatial.intersection(shape, state.domain.scope.footprint);
 }

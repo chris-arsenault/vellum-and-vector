@@ -43,7 +43,13 @@ function relax(map: PhysicalField, paths: RiverPaths) {
   for (let i = 0; i < map.mesh.count; i++) {
     const previous = paths.upstream[i],
       next = map.FlowTargets[i];
-    if (previous < 0 || next < 0 || map.RiverOrders[i] <= 0 || map.WaterKindCodes[i] !== 0)
+    if (
+      previous < 0 ||
+      next < 0 ||
+      map.RiverOrders[i] <= 0 ||
+      map.WaterKindCodes[i] !== 0 ||
+      bordersWater(map, i)
+    )
       continue;
     const dx = (x[previous] + x[next] + 2 * x[i]) / 4 - map.mesh.x[i],
       dy = (y[previous] + y[next] + 2 * y[i]) / 4 - map.mesh.y[i];
@@ -58,6 +64,14 @@ function relax(map: PhysicalField, paths: RiverPaths) {
     paths.x[i] = map.mesh.x[i] + dx * factor;
     paths.y[i] = map.mesh.y[i] + dy * factor;
   }
+}
+/** A shore cell's centre is its only point guaranteed dry in the published water geometry. */
+function bordersWater(map: PhysicalField, i: number) {
+  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
+    if (j >= 0 && map.WaterKindCodes[j] !== 0) return true;
+  }
+  return false;
 }
 function tangent(map: PhysicalField, paths: RiverPaths, i: number): Coordinate {
   const previous = paths.upstream[i],
@@ -271,20 +285,21 @@ function profile(
       scale
   );
 }
+/** The mouth is generation's last land cell to receiving water edge; only that segment can enter water. */
 function clipReceivingWater(
   map: PhysicalField,
   paths: RiverPaths,
   members: number[],
   stations: Station[]
 ) {
-  const last = members.at(-1)!;
-  if (!paths.elevationAt || map.WaterKindCodes[last] === 0) return stations;
-  const wet = receivingWater(map, paths, last);
-  if (!wet(...stations.at(-1)!.point)) return stations;
-  for (let n = stations.length - 2; n >= 0; n--) {
+  const receiving = members.findIndex((i) => map.WaterKindCodes[i] !== 0);
+  if (!paths.elevationAt || receiving < 1) return stations;
+  const wet = receivingWater(map, paths, members[receiving]),
+    final = receiving - 1;
+  for (let n = 0; n < stations.length - 1; n++) {
     const a = stations[n],
       b = stations[n + 1];
-    if (wet(...a.point)) continue;
+    if (b.segment < final || !wet(...b.point)) continue;
     let low = 0,
       high = 1;
     while ((high - low) * Math.hypot(b.point[0] - a.point[0], b.point[1] - a.point[1]) > 1e-6) {
