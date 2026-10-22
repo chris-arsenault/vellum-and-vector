@@ -5,6 +5,7 @@ import {
   createAdaptiveTopology,
   fieldInterpolator,
   gridPosition,
+  overlayField,
   point,
   rectangle,
   spatial,
@@ -141,6 +142,7 @@ it.each(["same", "coarser"])(
     const values = Float64Array.from(state.surface.active, (_, leaf) => Math.sin(leaf * 1.3) * 20);
     state.surface.channels[name] = values;
     state.surface.units[name] = "celsius";
+    overlayField(state.surface, structuredClone(state.surface), [name], true);
     const read = fieldInterpolator(state.surface, name),
       covered = spatial.pointCoverage(state.surface.scope.footprint);
     state.physical!.map.AdvectionSourceIndex.set(
@@ -166,6 +168,9 @@ it.each(["same", "coarser"])(
     });
     for (let leaf = 0; leaf < expected.length; leaf++)
       expect(state.surface.channels[name][leaf]).toBeCloseTo(expected[leaf], 9);
+    const moved = fieldInterpolator(state.surface, name);
+    for (let leaf = 0; leaf < expected.length; leaf++)
+      expect(moved(gridPosition(state.surface, leaf))).toBeCloseTo(expected[leaf], 9);
     expect(state.surface.channels[name].some((value) => value < 0)).toBe(true);
     expect(state.surface.channels[name].some((value) => value > 0)).toBe(true);
     expect(values).toEqual(

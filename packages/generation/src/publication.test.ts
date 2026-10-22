@@ -1,5 +1,14 @@
 import { expect, it } from "vitest";
-import { putChannel, type Layer } from "@atlas/domain";
+import { composeAuthoredSamples, validateAuthoredInputs } from "./mapAuthored";
+import {
+  putChannel,
+  replaceChannel,
+  overlayField,
+  fieldInterpolator,
+  createGrid,
+  rectangle,
+  type Layer,
+} from "@atlas/domain";
 import { landscape } from "./mapFixtures";
 import { MapRunner } from "./mapRunner";
 import { MapProcessRegistry, type MapProcess } from "./process";
@@ -41,6 +50,85 @@ function initial() {
   state.publications = [structuredClone(output)];
   return state;
 }
+it("retains unchanged composed inputs but does not resurrect them after replacement", () => {
+  const state = initial(),
+    n = state.surface.active.length;
+  putChannel(state.surface, "surveyAccuracy", "ratio", new Float64Array(n).fill(0.25));
+  const inherited = structuredClone(state.surface);
+  state.surface.channels.surveyAccuracy.fill(0);
+  overlayField(state.surface, inherited, ["surveyAccuracy"], true);
+  publishGenerationProducts(state, "first");
+  const id = state.domain.world.fields[0].id;
+  const p = { x: state.surface.bounds[0], y: state.surface.bounds[1], z: 0 };
+  expect(fieldInterpolator(state.domain.numerical[id], "surveyAccuracy")(p)).toBe(0.25);
+  replaceChannel(state.surface, "surveyAccuracy", "ratio", new Float64Array(n).fill(0.9));
+  publishGenerationProducts(state, "second");
+  expect(fieldInterpolator(state.domain.numerical[id], "surveyAccuracy")(p)).toBe(0.9);
+  const authored = structuredClone(inherited);
+  authored.channels.surveyAccuracy.fill(0.7);
+  overlayField(state.domain.numerical[id], authored, ["surveyAccuracy"]);
+  publishGenerationProducts(state, "third");
+  expect(fieldInterpolator(state.domain.numerical[id], "surveyAccuracy")(p)).toBe(0.7);
+});
+
+it("keeps a protected parent patch between child samples in fresh published fields", () => {
+  const state = initial(),
+    name = "surveyAccuracy";
+  putChannel(state.surface, name, "ratio", new Float64Array(10).fill(1));
+  const parent = structuredClone(state.surface),
+    patch = createGrid(
+      "tiny-authored-resource",
+      { ...parent.scope, footprint: rectangle([1999, 499, 2001, 501]) },
+      3,
+      3
+    );
+  putChannel(patch, name, "ratio", new Float64Array(9).fill(99));
+  overlayField(parent, patch, [name]);
+  state.domain.numerical[parent.id] = parent;
+  state.domain.numerical[patch.id] = patch;
+  state.domain.fieldPatches = [
+    {
+      id: "tiny-authored-patch",
+      areaId: "area",
+      fieldId: parent.id,
+      resourceId: patch.id,
+      channels: [name],
+      footprint: patch.scope.footprint,
+      spaceId: patch.scope.spaceId,
+      protected: true,
+      actor: "creator",
+      createdVersion: 1,
+    },
+  ];
+  state.surface.scope = { ...state.surface.scope, areaId: "child" };
+  state.domain.scope = state.surface.scope;
+  state.domain.world.areas.child = {
+    ...state.domain.world.areas.area,
+    id: "child",
+    parentId: "area",
+    profile: "region",
+  };
+  const original = structuredClone(state.domain),
+    inside = { x: 2000, y: 500, z: 0 },
+    outside = { x: 2100, y: 500, z: 0 };
+  overlayField(state.surface, parent, [name], true);
+  expect(fieldInterpolator(state.surface, name)(inside)).toBe(99);
+  replaceChannel(state.surface, name, "ratio", new Float64Array(10).fill(2));
+  composeAuthoredSamples(state, original);
+  composeAuthoredSamples(state, original);
+  expect("overlays" in state.surface && state.surface.overlays).toHaveLength(1);
+  expect(state.surface.channels[name].every((value) => value === 2)).toBe(true);
+  expect(fieldInterpolator(state.surface, name)(inside)).toBe(99);
+  expect(fieldInterpolator(state.surface, name)(outside)).toBe(2);
+  validateAuthoredInputs(state, original);
+  publishGenerationProducts(state, "child-replacement");
+  const field = state.domain.world.fields.find((candidate) => candidate.areaId === "child")!;
+  expect(field).toBeDefined();
+  const published = fieldInterpolator(state.domain.numerical[field.id], name);
+  expect(published(inside)).toBe(99);
+  expect(published(outside)).toBe(2);
+  expect(fieldInterpolator(original.numerical[parent.id], name)(inside)).toBe(99);
+});
 
 function surveyModule() {
   const feature: GenerationFeature = {

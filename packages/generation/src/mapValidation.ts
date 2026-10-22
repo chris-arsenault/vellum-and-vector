@@ -1,5 +1,5 @@
 import {
-  gridSchema,
+  gridSurfaceSchema,
   requireThat,
   sameValue,
   spatial,
@@ -40,7 +40,7 @@ function validateScope(state: GenerationState, original: DomainSnapshot) {
     "generation_context",
     "Generation retains the pinned world, located context and spatial reference."
   );
-  gridSchema.parse(state.surface);
+  gridSurfaceSchema.parse(state.surface);
   requireThat(
     state.surface.scope.worldId === scope.worldId &&
       state.surface.scope.spaceId === scope.spaceId &&

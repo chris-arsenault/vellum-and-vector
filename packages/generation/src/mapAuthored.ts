@@ -1,6 +1,7 @@
 import {
   gridPosition,
   gridSampler,
+  overlayField,
   requireThat,
   sameValue,
   spatial,
@@ -13,6 +14,7 @@ export function authoredFields(original: DomainSnapshot) {
   const fields = original.world.fields
     .filter((field) => field.state === "authored" || field.state === "protected")
     .map((field) => ({
+      id: field.id,
       source: original.numerical[field.id],
       channels: field.channels,
       footprint: field.footprint,
@@ -20,6 +22,7 @@ export function authoredFields(original: DomainSnapshot) {
       resolution: original.numerical[field.id]?.scope.resolution,
     }));
   const patches = original.fieldPatches.map((patch) => ({
+    id: patch.id,
     source: original.numerical[patch.fieldId] ?? original.numerical[patch.resourceId],
     channels: patch.channels,
     footprint: patch.footprint,
@@ -50,13 +53,27 @@ export function composeAuthoredSamples(state: GenerationState, original: DomainS
     );
     if (source.scope.spaceId !== grid.scope.spaceId || source.scope.crsId !== grid.scope.crsId)
       continue;
-    composeSamples(
-      state,
-      source,
-      authority.channels ?? Object.keys(source.channels),
-      authority.footprint ?? source.scope.footprint
-    );
+    const channels = authority.channels ?? Object.keys(source.channels),
+      footprint = authority.footprint ?? source.scope.footprint;
+    composeSamples(state, source, channels, footprint);
+    composeExactAuthority(grid, authority.id, source, channels, footprint);
   }
+}
+
+function composeExactAuthority(
+  grid: GridSurface,
+  id: string,
+  source: GridSurface,
+  channels: string[],
+  extent: GridSurface["scope"]["footprint"]
+) {
+  const footprint = spatial.intersection(extent, source.scope.footprint),
+    present = channels.filter((channel) => Object.hasOwn(grid.channels, channel));
+  if (!footprint || !present.length) return;
+  // A child may have no samples inside a small authored patch. Retain its
+  // exact geography as well as its contributions to numerical samples.
+  grid.overlays = grid.overlays?.filter((overlay) => overlay.grid.id !== id);
+  overlayField(grid, { ...source, id, scope: { ...source.scope, footprint } }, present);
 }
 
 function composeSamples(

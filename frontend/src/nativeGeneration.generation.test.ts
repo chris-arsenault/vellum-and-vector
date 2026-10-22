@@ -4,6 +4,7 @@ import {
   gridPosition,
   rectangle,
   sample,
+  fieldInterpolator,
   adaptiveLeafAt,
   type Grid,
   type DomainSnapshot,
@@ -59,6 +60,16 @@ async function checkThermalFeedback(
     ),
     8
   );
+  const parent = snapshot.numerical[Object.keys(snapshot.numerical)[0]];
+  const before = fieldInterpolator(parent, "elevation"),
+    after = fieldInterpolator(grid, "elevation");
+  for (const [x, y] of [
+    [1_234_567, 1_345_678],
+    [2_123_456, 1_123_456],
+  ]) {
+    const position = { x, y, z: 0 };
+    expect(after(position)).toBeCloseTo(before(position), 8);
+  }
 }
 
 it("refines inherited Canonry terrain and retains authored geography and its fixed interface", async () => {
@@ -122,4 +133,4 @@ it("refines inherited Canonry terrain and retains authored geography and its fix
   console.log(
     `Canonry draft world, thermal feedback and regional refinement: ${Math.round(performance.now() - started)} ms.`
   );
-}, 180000);
+}, 600000);

@@ -1,6 +1,6 @@
 // Canonry MagicAdvectionLayer's dominant material-source mapping, adapted to
 // user-configured signed thermal histories on the atlas's GIS grid.
-import { fieldInterpolator, putChannel, spatial } from "@atlas/domain";
+import { fieldInterpolator, replaceChannel, spatial } from "@atlas/domain";
 import type { MapProcess } from "../process";
 import { nativePosition } from "./atlasWorkspace";
 
@@ -37,7 +37,7 @@ export const advectAtlasMagic: MapProcess = {
               ? previous.channels[name][work.map.mesh.cellToLeaf[source]]
               : valueAt(p);
         }
-        putChannel(grid, name, grid.units[name], moved);
+        replaceChannel(grid, name, grid.units[name], moved);
       }
     },
   },

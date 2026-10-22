@@ -1,4 +1,4 @@
-import { putChannel } from "@atlas/domain";
+import { putChannel, replaceChannel } from "@atlas/domain";
 import { magicalForcing } from "./mapMagic";
 import { summarizeChannel } from "./mapFields";
 import type { MapProcess } from "./process";
@@ -37,7 +37,7 @@ export const materialMagicProcess: MapProcess = {
           active ? magicalForcing(state, context, source, i) : 0
         );
         const key = `magic:${source.id}`;
-        putChannel(grid, key, "ratio", values);
+        replaceChannel(grid, key, "ratio", values);
         for (let i = 0; i < values.length; i++) {
           if (source.effect === "erosionResistance")
             grid.channels.rock[i] = Math.max(
@@ -55,7 +55,8 @@ export const materialMagicProcess: MapProcess = {
           stored: summarizeChannel(grid, key),
         });
       }
-      putChannel(grid, "coastalPressure", "ratio", pressure);
+      replaceChannel(grid, "rock", "ratio", grid.channels.rock);
+      replaceChannel(grid, "coastalPressure", "ratio", pressure);
     },
   },
   validate() {

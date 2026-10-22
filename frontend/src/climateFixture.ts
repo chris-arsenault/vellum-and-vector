@@ -1,6 +1,7 @@
 // Shared generation-test support: a default-sized world, its latitudes and
 // land-area zonal profiles. Imported only by `*.generation.test.ts` files.
 import { mkdirSync, writeFileSync } from "node:fs";
+import { serialize } from "node:v8";
 import { atlasLatitude, generateAtlas, type AtlasParameters } from "@atlas/generation";
 import { biomes, gridPosition, type Grid } from "@atlas/domain";
 import { createWorld, session } from "./atlasState";
@@ -120,6 +121,13 @@ export async function generateProfile(
     parameters: { ...parameters, southLatitude: south, northLatitude: north },
   });
   const profile = zonalProfile(result.state.surface, south, north);
+  if (process.env.ATLAS_KEEP_FIELDS) {
+    mkdirSync(".artifacts/generation", { recursive: true });
+    writeFileSync(
+      `.artifacts/generation/climate-${name.replaceAll(/[^a-z0-9]/gi, "-")}.bin`,
+      serialize(result.state.surface)
+    );
+  }
   // Retained for inspection in the ignored test output directory.
   mkdirSync("test-results", { recursive: true });
   writeFileSync(

@@ -19,6 +19,7 @@ import {
 } from "../../packages/generation/src/canonry/geographicContours";
 import { nearestTriangle } from "../../packages/generation/src/canonry/mesh";
 import { physicalSampler } from "../../packages/generation/src/canonry/physicalMetric";
+import { extractNativeGeography } from "../../packages/generation/src/canonry/atlasFeatures";
 import { createRiverPaths, riverPath } from "../../packages/generation/src/canonry/riverPaths";
 import { numericTileSampler } from "./numericTiles";
 import { tilePainter } from "./rasterTiles";
@@ -84,11 +85,15 @@ it.each(["plane", "coast", "island"] as const)(
         expect(covers(p)).toBe(wet);
         expect(sample([x - 0.5, y - 0.5, x + 0.5, y + 0.5], 1)[3]).toBe(Number(wet));
       }
-    if (pattern === "plane") expect(spatial.area(ocean)).toBeCloseTo(20_000_000_000, 1);
+    if (pattern === "plane")
+      for (const y of [-90_000, -30_000, 30_000, 90_000]) {
+        expect(covers({ x: -0.2, y, z: 0 })).toBe(true);
+        expect(covers({ x: 0.2, y, z: 0 })).toBe(false);
+      }
   }
 );
 
-it("meets the shared coastline even where resampled elevation puts the mouth inland", () => {
+it("meets the same smooth coastline and elevation after coarse publication", () => {
   const { state, map, raster } = fixture("coast"),
     mesh = map.mesh,
     paths = createRiverPaths(map),
@@ -98,7 +103,7 @@ it("meets the shared coastline even where resampled elevation puts the mouth inl
     sea = fieldInterpolator(state.surface, "seaLevel"),
     sample = numericTileSampler(raster),
     paint = tilePainter(raster, [-2000, 2000]);
-  let exposedMouths = 0;
+  let mouths = 0;
   for (let i = 0; i < mesh.contentCount; i++) {
     if (map.WaterKindCodes[i]) continue;
     const j = Array.from(mesh.neighbors.slice(i * 3, i * 3 + 3)).find(
@@ -118,11 +123,12 @@ it("meets the shared coastline even where resampled elevation puts the mouth inl
     expect(sample([x - 0.5, y - 0.5, x + 0.5, y + 0.5], 1)[3]).toBe(1);
     const pixel = paint([x - 0.5, y - 0.5, x + 0.5, y + 0.5], 1);
     expect(pixel[2]).toBeGreaterThan(pixel[0]);
-    if (height(p) - sea(p) > 1) exposedMouths++;
+    expect(Math.abs(height(p) - sea(p))).toBeLessThan(2);
+    mouths++;
     for (const values of Object.values(result.profiles))
       expect(values).toHaveLength(result.geometry.coordinates.length);
   }
-  expect(exposedMouths).toBeGreaterThan(0);
+  expect(mouths).toBeGreaterThan(0);
 });
 
 it("retains a shallow lake inlet smaller than the local contour grid", () => {
@@ -150,6 +156,27 @@ it("retains a shallow lake inlet smaller than the local contour grid", () => {
   expect(
     numericTileSampler(raster)(
       [mesh.x[i] - 0.5, mesh.y[i] - 0.5, mesh.x[i] + 0.5, mesh.y[i] + 0.5],
+      1
+    )[3]
+  ).toBe(2);
+  projectNative(state);
+  extractNativeGeography(state, {} as Parameters<typeof extractNativeGeography>[1], {
+    impacts: false,
+    volcanism: false,
+    fractures: false,
+    lakes: false,
+    landforms: false,
+    magic: false,
+    ecology: false,
+    rivers: false,
+  });
+  expect(Object.values(state.domain.world.features).some((f) => f.kind === "lake")).toBe(false);
+  raster.lakes = [];
+  const position = { x: mesh.x[i], y: mesh.y[i], z: 0 };
+  expect(fieldInterpolator(state.surface, "water")(position)).toBe(2);
+  expect(
+    numericTileSampler(raster)(
+      [position.x - 0.5, position.y - 0.5, position.x + 0.5, position.y + 0.5],
       1
     )[3]
   ).toBe(2);

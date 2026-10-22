@@ -137,6 +137,7 @@ it("extends the real atlas recipe, runtime and new-layer publication by register
       domains: ["physical"],
       parameters: { temperature: 17 },
       features: {
+        "ecology.living": { enabled: false },
         "test.survey": {
           settings: { temperature: 0.4 },
           configuration: { multiplier: 3, title: "Requested" },

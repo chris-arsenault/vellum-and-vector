@@ -7,9 +7,10 @@ import { coordinateKey } from "./worldSources";
 import { Landform } from "./codes";
 import { lakeFootprint, membershipContour } from "./geographicContours";
 
-export function extractLakes(state: GenerationState) {
+export function extractLakes(state: GenerationState, publish = true) {
   const map = state.physical!.map,
     mesh = map.mesh;
+  const lakes: { id: number; footprint: Geometry; level: number }[] = [];
   const bodies = new Map<number, number[]>();
   // A visible lake can continue into the numerical halo. Trace its complete
   // basin before clipping; truncating its support leaves an open shoreline.
@@ -25,6 +26,8 @@ export function extractLakes(state: GenerationState) {
     const contour = lakeFootprint(state, members, body, level);
     const shape = clipRegion(state, contour);
     if (!shape) continue;
+    lakes.push({ id: body, footprint: shape, level: (level - map.BaseSeaLevel) / 1024 });
+    if (!publish) continue;
     putGenerated(
       state,
       generatedFeature(
@@ -46,6 +49,7 @@ export function extractLakes(state: GenerationState) {
       )
     );
   }
+  return lakes;
 }
 function clipRegion(state: GenerationState, shape: Geometry | null) {
   return shape && spatial.intersection(shape, state.domain.scope.footprint);
@@ -109,7 +113,8 @@ export function publishPlace(
   members: number[],
   layer: string,
   attributes: Record<string, unknown> = {},
-  extent?: Geometry
+  extent?: Geometry,
+  component?: string
 ) {
   const work = state.physical!,
     map = work.map;
@@ -127,7 +132,7 @@ export function publishPlace(
     state,
     generatedFeature(
       state,
-      `${kind}:${identity}`,
+      `${kind}:${identity}${component === undefined ? "" : `:${component}`}`,
       `${name} ${Math.round(position.x / 1000)} ${Math.round(position.y / 1000)}`,
       kind,
       layer,

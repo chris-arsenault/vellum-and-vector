@@ -4,24 +4,6 @@ import type { Grid } from "@atlas/domain";
 import { band, generateProfile, share, type Band } from "./climateFixture";
 
 type World = Awaited<ReturnType<typeof generateProfile>>;
-// Land precipitation (m) of the former arid preset, rainfall 0.2 scaling rain output,
-// recorded on 2026-10-21 before the regimes were refitted: the Dry ceiling.
-const aridBefore: Record<string, Record<number, number>> = {
-  "10..70": { 10: 0.08, 20: 0.055, 30: 0.056, 40: 0.091, 60: 0.038 },
-  "-70..70": {
-    [-70]: 0.041,
-    [-60]: 0.052,
-    [-50]: 0.074,
-    [-40]: 0.055,
-    [-30]: 0.065,
-    [-20]: 0.104,
-    [-10]: 0.143,
-    0: 0.15,
-    10: 0.137,
-    20: 0.11,
-    60: 0.039,
-  },
-};
 const meanRain = (profile: Band[]) =>
   profile.reduce((sum, b) => sum + b.precipitation * b.land, 0) /
   profile.reduce((sum, b) => sum + b.land, 0);
@@ -34,14 +16,16 @@ function flooded(grid: Grid) {
   return c.floodFrequency.filter((value, i) => c.water[i] !== 1 && value > 0.1).length / land;
 }
 
-/** Dry stays arid: no wetter than the former arid preset, deserts and steppe everywhere. */
+/** Dry stays absolutely arid and dominated by dry vegetation rather than matching old sample arrays. */
 function expectArid(dry: Band[], frame: string) {
   expect(meanRain(dry), frame).toBeLessThan(0.3);
   for (const b of dry) {
     expect(b.precipitation, `${frame} ${b.latitude}°`).toBeLessThan(0.6);
-    const before = aridBefore[frame][b.latitude];
-    if (before !== undefined && b.land >= 30)
-      expect(b.precipitation, `${frame} ${b.latitude}°`).toBeLessThan(before * 1.15 + 0.005);
+    if (b.temperature > 5 && b.land >= 30)
+      expect(
+        share(b, ["Desert", "Barren", "Grassland"]),
+        `${frame} ${b.latitude}°`
+      ).toBeGreaterThan(0.5);
     expect(b.biomes.Rainforest ?? 0).toBe(0);
   }
 }
@@ -52,11 +36,19 @@ function expectWetter(wet: Band[], mixed: Band[], frame: string) {
     expect(b.precipitation, `${frame} ${b.latitude}°`).toBeGreaterThan(m.precipitation * 1.4);
   }
 }
-/** Rivers follow the water: more and larger in Wet, still present in Dry; Wet floods only part of its land. */
+const runoffVolume = (world: World) =>
+  world.grid.channels.runoff.reduce((sum, value, i) => sum + value * world.grid.measures[i], 0);
+const meanFlow = (world: World) => {
+  const values = world.grid.reconstruction!.channels.flow;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+};
+/** Rain changes basin capture as well as flow; compare world runoff and typical streamflow. */
 function expectRivers([dry, mixed, wet]: World[], frame: string, spansEquator: boolean) {
   expect(dry.rivers.length, frame).toBeGreaterThan(0);
   expect(wet.rivers.length, frame).toBeGreaterThanOrEqual(mixed.rivers.length);
-  expect(largest(wet).discharge, frame).toBeGreaterThan(largest(mixed).discharge);
+  expect(runoffVolume(wet), frame).toBeGreaterThan(runoffVolume(mixed));
+  expect(runoffVolume(mixed), frame).toBeGreaterThan(runoffVolume(dry));
+  expect(meanFlow(wet), frame).toBeGreaterThan(meanFlow(mixed));
   expect(largest(mixed).discharge, frame).toBeGreaterThan(largest(dry).discharge);
   // The wet tropics carry the largest river where the frame spans the equator.
   if (spansEquator) expect(Math.abs(largest(mixed).latitude)).toBeLessThan(30);

@@ -2,6 +2,7 @@ import {
   gridPosition,
   point,
   putChannel,
+  replaceChannel,
   spatial,
   requireThat,
   type ParameterDefinitions,
@@ -124,9 +125,9 @@ export const thermalMagicProcess: MapProcess = {
           heat[i] += forcing[i] + memory[i];
           stored[i] += memory[i];
         }
-        putChannel(grid, forcingKey, "celsius", forcing);
+        replaceChannel(grid, forcingKey, "celsius", forcing);
         putChannel(grid, key, "celsius", memory);
-        putChannel(
+        replaceChannel(
           grid,
           `magic:${source.id}`,
           "celsius",
@@ -141,8 +142,8 @@ export const thermalMagicProcess: MapProcess = {
           stored: summarizeChannel(grid, key),
         });
       }
-      putChannel(grid, "heat", "celsius", heat);
-      putChannel(grid, "storedHeat", "celsius", stored);
+      replaceChannel(grid, "heat", "celsius", heat);
+      replaceChannel(grid, "storedHeat", "celsius", stored);
     },
   },
   validate(state) {
@@ -208,7 +209,7 @@ export const magicStorageProcess: MapProcess = {
             years === 0 ? 0 : source.decay === 0 ? years : -Math.expm1(-rate * years) / rate;
         for (let i = 0; i < memory.length; i++)
           memory[i] = memory[i] * retention + forcing[i] * source.storage * loadingYears;
-        putChannel(grid, key, "celsius", memory);
+        replaceChannel(grid, key, "celsius", memory);
         context.recordCause({
           kind: "magic",
           process: "magic.advanceStorage",

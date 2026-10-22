@@ -1,6 +1,8 @@
 import { expect, it } from "vitest";
 import { createAdaptiveTopology, adaptiveGeometry } from "./adaptiveTopology";
-import { fieldContour, contourSupport } from "./fieldContours";
+import { fieldContour, contourSupport, sampledFieldContour } from "./fieldContours";
+import type { SampleEnclosure } from "./smoothSamples";
+import type { Bounds } from "./spatial";
 import { adaptivePointSampler } from "./adaptivePoint";
 import { point, rectangle, spatial } from "./spatial";
 
@@ -10,6 +12,117 @@ const topology = () =>
     minimumSize: 15.625,
     refine: ([x, y, right, top]) => x < 530 && right > 450 && y < 800 && top > 100,
   });
+function sampledRectangle(
+  at: (x: number, y: number) => number,
+  enclose: (box: Bounds) => SampleEnclosure
+) {
+  return sampledFieldContour(
+    [
+      [
+        [0, 0, 0],
+        [1000, 0, 0],
+        [1000, 1000, 0],
+      ],
+      [
+        [0, 0, 0],
+        [1000, 1000, 0],
+        [0, 1000, 0],
+      ],
+    ],
+    at,
+    0,
+    [
+      [
+        [0, 0, 0],
+        [1000, 0, 0],
+      ],
+      [
+        [1000, 0, 0],
+        [1000, 1000, 0],
+      ],
+      [
+        [1000, 1000, 0],
+        [0, 1000, 0],
+      ],
+      [
+        [0, 1000, 0],
+        [0, 0, 0],
+      ],
+    ],
+    1,
+    enclose
+  )!;
+}
+it.each([-1, 1])(
+  "closes the original outside boundary after sign-only support retires: %s",
+  (value) => {
+    const shape = sampledRectangle(
+      () => value,
+      () => ({
+        range: [value, value],
+        gradient: [
+          [0, 0],
+          [0, 0],
+        ],
+      })
+    );
+    if (value < 0) expect(shape).toBeNull();
+    else expect(spatial.area(shape)).toBe(1e6);
+  }
+);
+it("discovers a closed patch with no positive original triangle vertices", () => {
+  const squareRange = (a: number, b: number) => [
+    a * b <= 0 ? 0 : Math.min(a * a, b * b),
+    Math.max(a * a, b * b),
+  ];
+  const at = (x: number, y: number) => 10000 - (x - 350) ** 2 - (y - 460) ** 2;
+  const shape = sampledRectangle(at, (box) => {
+    const x = squareRange(box[0] - 350, box[2] - 350),
+      y = squareRange(box[1] - 460, box[3] - 460);
+    return {
+      range: [10000 - x[1] - y[1], 10000 - x[0] - y[0]],
+      gradient: [
+        [-2 * (box[2] - 350), -2 * (box[0] - 350)],
+        [-2 * (box[3] - 460), -2 * (box[1] - 460)],
+      ],
+    };
+  });
+  expect(spatial.pointCoverage(shape)({ x: 350, y: 460, z: 0 })).toBe(true);
+  // A one-metre positional tolerance bounds the polygon by these two circles.
+  expect(spatial.area(shape)).toBeGreaterThan(Math.PI * 99 ** 2);
+  expect(spatial.area(shape)).toBeLessThan(Math.PI * 101 ** 2);
+});
+it("bounds a curved threshold even when a single midpoint lies on its endpoint chord", () => {
+  const trig = (a: number, b: number, phase = 0) => {
+    const values = [Math.sin(a + phase), Math.sin(b + phase)];
+    for (
+      let k = Math.ceil((a + phase - Math.PI / 2) / Math.PI);
+      k <= Math.floor((b + phase - Math.PI / 2) / Math.PI);
+      k++
+    )
+      values.push(k % 2 === 0 ? 1 : -1);
+    return [Math.min(...values), Math.max(...values)];
+  };
+  const frequency = (2 * Math.PI) / 1000,
+    at = (x: number, y: number) => 450 + 200 * Math.sin(frequency * y) - x;
+  const shape = sampledRectangle(at, (box) => {
+    const sin = trig(frequency * box[1], frequency * box[3]),
+      cos = trig(frequency * box[1], frequency * box[3], Math.PI / 2);
+    return {
+      range: [450 + 200 * sin[0] - box[2], 450 + 200 * sin[1] - box[0]],
+      gradient: [
+        [-1, -1],
+        [200 * frequency * cos[0], 200 * frequency * cos[1]],
+      ],
+    };
+  });
+  const covers = spatial.pointCoverage(shape);
+  for (let y = 13; y < 1000; y += 17)
+    for (let x = 19; x < 1000; x += 23) {
+      if (Math.abs(at(x, y)) < 2) continue;
+      expect(covers({ x, y, z: 0 }), `${x},${y}`).toBe(at(x, y) > 0);
+    }
+});
 it("reuses shared fan stations within a contour and discards samples between contours", () => {
   const tree = createAdaptiveTopology([0, 0, 1000, 1000], { maximumSize: 125, minimumSize: 125 });
   const calls = new Map<string, number>();

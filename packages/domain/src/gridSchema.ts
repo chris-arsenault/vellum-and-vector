@@ -9,6 +9,8 @@ import {
 } from "./schemas";
 import type { Grid } from "./grids";
 import { adaptiveTopologySchema } from "./adaptiveSchema";
+import { biomeInputs } from "./biomeField";
+import type { WaterSamples } from "./waterField";
 
 const channel = z
   .instanceof(Float64Array)
@@ -45,8 +47,70 @@ const fieldSchema = z
     quantities: z.record(identifier, z.enum(["intensive", "extensive", "category"])).optional(),
     waterBodies: z.array(bodySchema).nullable().optional(),
     ocean: geometrySchema.nullable().optional(),
+    reconstruction: z
+      .object({
+        support: z.object({
+          x: channel,
+          y: channel,
+          origin: z.tuple([finite, finite]),
+          spacing: finite.positive(),
+        }),
+        channels: z.record(identifier, channel),
+        categories: z.record(identifier, channel).optional(),
+        water: z
+          .object({
+            elevation: channel,
+            bodyIds: channel,
+            seaLevel: finite,
+            lakes: z.array(z.object({ id: finite, footprint: geometrySchema, level: finite })),
+          })
+          .optional(),
+        biome: z
+          .object({
+            values: z.record(identifier, channel),
+            seaLevel: finite,
+            lakes: z.array(z.object({ footprint: geometrySchema, level: finite })),
+            protectedMask: z.instanceof(Uint8Array),
+            protectedCodes: channel,
+            codes: z.array(z.number().int().nonnegative()),
+          })
+          .optional(),
+      })
+      .superRefine((source, context) => {
+        const count = source.support.x.length;
+        if (
+          !count ||
+          source.support.y.length !== count ||
+          Object.values({ ...source.channels, ...source.categories, ...source.biome?.values }).some(
+            (values) => values.length !== count
+          )
+        )
+          context.addIssue({
+            code: "custom",
+            message: "Reconstruction channels require shared finite sample support.",
+          });
+        if (
+          source.biome &&
+          (source.biome.protectedCodes.length !== count ||
+            source.biome.protectedMask.length !== count ||
+            [...biomeInputs, "elevation"].some((name) => !source.biome!.values[name]))
+        )
+          context.addIssue({
+            code: "custom",
+            message: "Biome reconstruction requires complete environment and protection samples.",
+          });
+        if (!waterCountsMatch(source.water, count))
+          context.addIssue({
+            code: "custom",
+            message: "Water reconstruction requires matching floor and identity samples.",
+          });
+      })
+      .optional(),
   })
   .strict();
+function waterCountsMatch(water: WaterSamples | undefined, count: number) {
+  return !water || (water.elevation.length === count && water.bodyIds.length === count);
+}
 export const gridSchema: z.ZodType<Grid> = z
   .union([
     fieldSchema.extend({ width: z.number().int().min(2), height: z.number().int().min(2) }),

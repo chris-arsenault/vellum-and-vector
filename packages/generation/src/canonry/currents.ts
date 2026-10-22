@@ -166,7 +166,7 @@ export function oceanCurrents(map: PhysicalField, c: PhysicalContext) {
   const upstream = upstreamNeighbors(map);
   wrapLinks(map, c.Profile, upstream, (k) => map.WaterKindCodes[k] === 1);
   const linkLength = linkDistance(map, c.Profile);
-  seaSurfaceAnomaly(map, c, upstream);
+  seaSurfaceAnomaly(map, c);
   transportOceanHeat(
     map,
     c.Profile.OceanCurrentHeatDistance,

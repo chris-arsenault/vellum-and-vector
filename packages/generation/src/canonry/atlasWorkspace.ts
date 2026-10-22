@@ -331,3 +331,8 @@ export function nativeIndexAtSurface(state: GenerationState, x: number, y: numbe
   const work = state.physical!;
   return nearestTriangle(work.map.mesh, x - work.map.mesh.origin[0], y - work.map.mesh.origin[1]);
 }
+/** Prepare once per forcing pass; channel mutations are visible on the next pass. */
+export function nativeSurfaceSampler(state: GenerationState, name: string) {
+  const at = fieldInterpolator(state.surface, name);
+  return (i: number) => at(nativePosition(state.physical!, i));
+}

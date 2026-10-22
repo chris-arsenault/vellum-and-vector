@@ -13,14 +13,17 @@ behavior; [ADR 0002](adr/0002-relational-spatial-storage.md) records application
 boundaries. User requirements and explicitly agreed constraints govern changes
 to the implementation choices described here.
 
-**Current replacement plan — 2026-10-19:**
-[Fixed sampling replacement](#fixed-sampling-replacement-current-direction-2026-10-19)
-restores a fixed metre-aware triangle workspace while retaining all causal epochs,
-physical processes and configurable magic. Continuous scalar publication and
-OpenLayers tiles retain the display work. The adaptive rewrite's global support
-refinement and remeshing are retired from the active world path because their
-measured cost did not deliver useful map quality. Scope is top-level world
-generation and display; editor development and lower-level generation are excluded.
+**Current corrective plan — 2026-10-21:**
+[Continuous causal geography](#continuous-causal-geography--corrective-plan-2026-10-21)
+addresses mesh-shaped fields and boundaries inside generation, shared field
+representation and map consumers. Retain fixed world sampling, causal epochs,
+the current water and latitude-climate mechanisms, ecology and configurable magic.
+Processes create and evolve the geography; smooth reconstruction defines it
+between numerical samples during generation and display. Final cosmetic shaping
+does not satisfy this plan. Global adaptive refinement remains retired. Scope is
+top-level world generation and display, with existing-consumer compatibility;
+editor development and lower-level generator redesign are excluded. Implementation
+of all corrective milestones was authorized on 2026-10-21.
 
 ## Reference parity requirement
 
@@ -1222,6 +1225,10 @@ separate from the inherited parent-boundary fields used by refinement.
 
 ## Continuous terrain and adaptive generation — replacement plan
 
+Historical plan: its adaptive implementation was superseded by fixed sampling.
+The [current corrective plan](#continuous-causal-geography--corrective-plan-2026-10-21)
+governs further work; the execution direction below records the earlier scope.
+
 State: execute the complete **top-level world generation and display** replacement.
 The user's 2026-10-19 scope correction supersedes the earlier agent expansion into
 editors and lower-level map generation. Sulion root:
@@ -1856,7 +1863,473 @@ physical activity. This follows the established aggregation/Galerkin mechanism
 described in the [PETSc solver manual](https://petsc.org/main/manual/ksp/).
 The logged coupled run will be repeated after focused operator checks.
 
+## Continuous causal geography — corrective plan, 2026-10-21
+
+Planning revision requested after the mesh-bound vegetation diagnosis and review
+of water-boundary repair `b455ba5`, latitude climate `3b5f87f` and latitude/rainfall
+calibration `8c49645`. This section is the working plan for the correction. It
+supersedes linear-fan publication as a sufficient completion criterion, while
+retaining the fixed world mesh and the causal processes. The subsequent user
+request on 2026-10-21 authorizes execution of all milestones. Commit, push and
+deployment remain outside the request.
+
+### Outcome and agreed boundaries
+
+Generate coherent landscapes whose slopes and natural boundaries vary smoothly
+between numerical samples. Woodland, wetland, shore and landform shapes must not
+expose sample rectangles or triangle fans. Retain physically meaningful sharp
+features such as scarps, crater rims and waterfalls. Raster display, selectable
+geometry and spatial queries must describe the same generated geography at
+overview and close inspection; zoom changes depiction, not world history.
+
+User requirements, clarified in this conversation on 2026-10-20–21:
+
+- The mesh supports computation; it does not prescribe visible geographic shapes.
+- Correct the algorithms and representation responsible for mesh dependence.
+  Spline-rounding completed cell polygons is insufficient.
+- Mountains remain consequences of tectonics and subsequent evolution. Keep
+  erosion, water, ice, climate, ecology and configured magic responsible for
+  creating and changing geography. Any explicit ridge, valley or boundary control
+  must derive from those causes or evolved state and remain coupled to later
+  processes; it cannot independently place replacement landforms.
+- Preserve the recent water and climate behavior reviewed below.
+
+Retain the browser-memory/Web Worker boundary, planar metre CRS, deterministic
+generation, feature-owned recipes and validity contracts, causal epoch order,
+authored protections, completed history, stable identities and atomic publication.
+Existing child generation, edits and exports need compatibility where they read
+changed world outputs. This is not editor or child-generator redesign. Do not
+resume the canceled macro-finishing plan, introduce placed landscape primitives,
+restore global adaptive refinement, or add backend, persistence or recovery.
+Numerical equality with Canonry or previous atlas arrays is not an acceptance
+target. Physical meaning, useful geography and causal behavior are.
+
+### Current baseline and reuse map
+
+Source reviewed at `8c49645`; the working tree was clean before this plan edit.
+
+| Area                        | Existing mechanism and required treatment                                                                                                                                                                                                                                                                                                                                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Field representation        | `triangleSampling.ts` joins values with linear fans; `atlasSampling.ts`/`atlasProjection.ts` publish into a regular grid; domain `grids.ts` uses bilinear scalars and nearest categories. These are the representation gaps. Existing domain `adaptivePoint.ts`/`adaptiveHermite.ts` provide reusable spline mathematics to evaluate, not a reason to restore adaptive world topology.                                                |
+| Causal process composition  | `atlasSequence.ts`, `physicalFeatures.ts`, registered generation modules and native process contracts own repeated evolution and invalidation. Integrate through these mechanisms rather than add a second world engine or final shaping pass.                                                                                                                                                                                        |
+| Water                       | `geographicContours.ts`, `riverPaths.ts` and frontend `terrainWater.ts` share physical receiving-water geometry across river mouths and rendering. Preserve shallow inlets, body membership, levels, sea datum, outlets and authored islands. The contours remain piecewise linear, and published elevation can disagree with that physical shoreline.                                                                                |
+| Climate and oceans          | `latitude.ts`, `atmosphere.ts`, `windTerrain.ts`, `airColumn.ts`, `oceanGyres.ts`, `currents.ts`, `longitudeWrap.ts` and `climate.ts` now implement latitude frames, wind/terrain interaction, advective heat/moisture, rainout, currents, fronts and climate-only wrap. Preserve these operations. Air and ocean transport still select single source neighbors; material directional bias needs measurement rather than assumption. |
+| Ecology and classifications | `ecologyEnvironment.ts` derives plant water from precipitation over potential evaporation, with local seasonality. Growth, crossings, fire and floods evolve populations and cover. `ecologyFeatures.ts` still extracts binary membership from sample biome codes. Replace that boundary authority while preserving those ecological processes and history.                                                                           |
+| Publication and consumers   | `atlasPublications.ts`, domain field queries, `numericTiles.ts`, `terrainWater.ts` and existing vector consumers must share the generated representation and boundaries, including selected-feature publication, authored overlays and inherited reads.                                                                                                                                                                               |
+
+The completed climate plans, [CLIMATE-PLAN.md](CLIMATE-PLAN.md) and
+[LATITUDE-RAIN-PLAN.md](LATITUDE-RAIN-PLAN.md), establish the current mechanisms,
+not work to repeat. Preserve equal-area/even-degree latitude frames, hemisphere
+behavior, climate-only east–west wrap, subtropical dry belts, equatorial and
+storm-track rain, and distinct Dry/Mixed/Wet moisture-supply settings. Keep the
+current rain/snow, runoff, lake-input and glacial consumers of precipitation above
+1 m/year, plus temperature-driven ice, upwelling productivity, magical heat
+transport, island colonisation and flood disturbance. Do not restore column
+humidity as the limiter on plant water availability.
+
+### Implementation choices and open technical decisions
+
+These are agent-derived choices, revisable while preserving the requirements:
+
+- Retain typed numerical arrays and fixed world sampling. Start with shared local
+  spline reconstruction of values and derivatives, available to processes as well
+  as queries. Choose the exact spline and support in M0 from existing code and
+  coupled fixtures. Do not introduce a general field framework ahead of its users.
+- Rebuild or invalidate prepared reconstruction when processes change its inputs,
+  using existing lifecycle and validity mechanisms. Publication may prepare
+  immutable coefficients but must not introduce new geography.
+- Fit the evolved state and respect physical constraints, authored boundaries and
+  meaningful extrema. Smoothness is not permission to blur relief or add terrain
+  detail absent from causal generation. Derivatives should join across artificial
+  support boundaries where the represented phenomenon is smooth.
+- Derive natural classifications at world positions from reconstructed cover and
+  environmental quantities, keeping category IDs discrete. Use one boundary
+  definition for category queries, polygon extraction and thematic display.
+  Preserve water-body identity and topology separately from scalar interpolation;
+  do not interpolate lake IDs, drainage targets or political/cultural labels.
+- Evaluate single-neighbor transport with rotated flow/range fixtures and more
+  than one sample density. If it causes material lattice bias, replace the
+  responsible source selection with directional transport over shared field
+  support. Choose the smallest scheme preserving rainout, heat, water and physical
+  travel semantics. Smooth textures alone cannot satisfy a failed algorithm case.
+
+Provisional assumptions: existing arrays and recipe contracts can carry this
+representation without a second engine (M0); local reconstruction and prepared
+support can keep generation and tile costs practical (M0/M5); single-neighbor
+transport may be a material source of directional artifacts (M2). The last is an
+identified risk, not a reproduced visual defect. Technical decisions belong to
+the implementer and are resolved with evidence in the named milestone. No
+user-owned choice currently blocks the plan.
+
+### Corrective milestones
+
+#### M0 — Shared smooth field representation
+
+Scope: choose the local spline/support and shared value/gradient evaluation for
+evolved samples, including physical and published consumers. Establish how
+mutations invalidate reconstruction and how authored coverage takes precedence.
+
+Acceptance: coupled terrain, shoreline, climate and vegetation fixtures show
+smooth variation and derivative agreement across numerical boundaries, preserve
+physical features and discrete identities, and give the same values to generation
+and queries. The proposed representation must survive an actual process mutation;
+a display-only sampler is insufficient. This is a foundation, not product closure.
+
+Evidence: small planes, curved relief, coast/lake and cover transitions, authored
+patch cases, one causal update, and measured preparation/query cost. Resolve the
+exact spline choice here before expanding subsequent implementation steps.
+
+##### M0 execution
+
+Expansion `d42d3faf-4470-4445-a5ab-76016a5d9501`:
+
+1. Add compact local Hermite interpolation over fixed samples in the domain.
+   Blend sample values and fitted local slopes with compact cardinal weights,
+   retaining exact samples, affine fields and joined derivatives. This avoids
+   adopting adaptive topology merely to obtain smooth interpolation. Verify with
+   curved fields across support boundaries, affine planes and sample mutations.
+2. Wire physical samplers and projected fields to the same evaluator. Published
+   fields retain typed source support and selected channel values, so regular
+   summary grids cannot redefine the field. Validate serialization and field
+   splitting; a fresh process sampler sees the altered arrays without a global
+   mutable cache.
+3. Verify shared physical/query reads, derivative continuity, categorical
+   separation, authored overlay precedence and a publication round trip. Keep
+   slope reconstruction local; no new landscape shaping or elapsed epochs.
+
+#### M1 — Causal terrain and water integration [depends on M0]
+
+Scope: integrate shared geography with tectonics, deformation, volcanism, impacts,
+erosion, deposition, drainage, ice, coasts and their configured magical feedback.
+Retain existing numerical operations where they correctly model sampled physics;
+repair operations that wrongly treat a cell boundary as a physical boundary.
+
+Acceptance: evolved relief feeds later slope, drainage and erosion calculations.
+Sea and lake edges, floors/stages, body identity, river profiles, junctions and
+receiving connections agree. Preserve shallow inlets, nonzero sea level, contracted
+crossings and authored islands. Derived feature controls, if needed, follow
+process-produced geography rather than prescribe new mountains or channels.
+
+Evidence: focused coupled process sequences and water-boundary regressions at
+different sample densities; physical dimensions, routing and relevant material/
+water accounting. Curve fits must not cross unrelated basins or alter outlets.
+
+##### M1 execution
+
+Expansion `a69d92f9-4b2f-4fd8-9cc3-beb58ed6d4f1`: trace nonlinear field crossings
+on the physical sample/fan support, including exact sample sites so a shallow
+lake inlet cannot disappear between contour-grid stations. Existing advection,
+landform neighborhoods, river profiles and wind-gap reads use the shared physical
+sampler. Preserve the numerical erosion/drainage operators and their material
+accounting. Correct lake rendering to use the receiving lake's own level.
+The old test requiring publication to put some mouths inland is replaced with
+agreement between mouth, shoreline and shared elevation after coarse publication.
+
+#### M2 — Climate and ocean operators [depends on M1]
+
+Scope: make terrain deflection, uplift rainout, heat/moisture transport and ocean
+boundary/front calculations consume shared geography. Measure single-source
+direction bias and change demonstrated failures within existing process ownership.
+
+Acceptance: retain latitude/hemisphere behavior, rain shadows, inland drying,
+seasonality, currents/upwelling, physical fronts, temperature-driven ice and magic
+heat coupling. Climate wrap carries air and ocean quantities across the seam;
+terrain and rivers remain planar. Dry stays dry while Wet gains rainfall and
+runoff. Sampling orientation must not dictate artificial rain or heat corridors.
+
+Evidence: rotated and coarse/fine ridge/transport fixtures, front and seam checks,
+and the existing climate/rainfall-regime cases. Establish relevant source, sink
+and transport accounting without claiming conservation from appearance alone.
+No general circulation model or new weather simulation is required.
+
+##### M2 execution
+
+Compare the prescribed flow heading with source displacement on the fixed lattice.
+Single most-aligned faces quantize that heading. Replace source selection for air
+columns and sea-surface heat with interpolation between upstream samples that
+bracket the actual direction. Solve the resulting coupled stationary columns to
+their native-unit tolerance, retaining physical source/sink lengths and climate
+wrap. This is a spatial climate solve, not extra elapsed epochs. Existing fetch,
+barrier and network topology may retain discrete links where appropriate. Verify
+directional reproduction, rain shadows, magic heat, fronts and wrapped seams.
+
+Directional evidence reproduces more than 0.3 sample spacings of transverse error
+with a single face; interpolated sources reproduce the prescribed direction.
+Western-boundary warming changes from the former sample-path amplitude (the
+old test required 3 °C; the new solve gives about 2.2 °C). Its check now verifies
+positive warming caused by latitude-dependent heat transport, including a
+zero-latitude-gradient control, rather than preserving the old amplitude. Rainout
+and ocean heat relaxation remain measured over physical travel distance.
+
+#### M3 — Ecology and natural-region boundaries [depends on M2]
+
+Scope: derive ecological boundaries from evolved continuous cover, precipitation,
+temperature, seasonal range, soil water and inundation. Apply the same principle
+to affected natural landform and configured magic classifications, preserving
+their domain rules rather than interpolating category numbers.
+
+Acceptance: woodland, wetland and other natural regions no longer trace binary
+sample masks. Point classifications, thematic fills and selectable geometry agree.
+Growth, competition, dispersal, island crossings, fire, floods, cohorts and stored
+history retain their causal effects. Fitting a boundary does not create biomass,
+advance time, mature a forest or erase a clearing. Protected inputs remain valid.
+
+Evidence: continuous cover/environment transitions and classified boundaries,
+land/water/ice exclusion, island colonisation, disturbance and ecological history
+cases. Preserve plant-water aridity semantics and distinguish physical climate
+from ecological seasonal/rainfall forcing.
+
+##### M3 execution
+
+Share the biome decision rules in the domain and evaluate them on reconstructed
+environment and evolved cover at world positions. Publication retains the
+classification inputs, protected sample overrides and receiving-water geometry.
+Ecological polygons trace that same classification rather than contouring stored
+biome IDs. Keep population evolution and ecological time unchanged. Existing
+natural landform/magic membership contours use the shared smooth support; no
+category IDs are numerically blended. Verify category transitions between samples,
+point/polygon agreement, protected inputs, island crossings and disturbances.
+
+#### M4 — Publication and map consumers [depends on M1, M2, M3]
+
+Scope: carry shared reconstruction through feature-owned field publication,
+browser worker delivery, queries, vector extraction, numerical tiles and existing
+consumer composition. Preserve current human geography and selected-generation
+contracts; make compatibility changes only where changed world data requires them.
+
+Acceptance: no second shoreline or independent vegetation boundary appears after
+publication. Queries, visible fills, selected shapes and existing exports agree.
+Pan/zoom samples existing geography without changing its identity or history.
+Authored patches, existing child reads, cancellation and atomic publication work.
+
+Evidence: publication round trips, tile seams, multi-resolution field/vector
+comparisons and focused browser journeys using small fixtures. Do not replace
+these checks with larger textures or independent polygon smoothing.
+
+##### M4 execution
+
+Keep typed reconstruction support and only the published scalar/category channels
+when splitting layers. Carry the physical sea/lake boundaries and levels alongside
+the shared floor so water identity/depth queries agree with tiles and receiving
+rivers. Classify categorical tiles at their pixel positions; disable numeric ID
+interpolation. Include intermediate ecological categories in the legend and
+extract them even where a transition lies wholly between original sample sites.
+Validate schema lengths, worker round trips, authored precedence and selected
+feature publication. Prepared numerical slopes are local to the queried support,
+avoiding a full-world slope fit for every small region or forcing query.
+
+The worker/module integration checks exposed mixed polygon/line collections when
+an ecological boundary touched the world edge. Publication now retains polygonal
+land portions after clipping, preserving the write-scope validation. Source field
+range checks conservatively include the local slope-fitting support, so a peak
+between regular publication nodes is not lost to constraint validation.
+
+#### M5 — Integrated geographic acceptance [depends on M4]
+
+Scope: inspect representative generated worlds at overview and close extents,
+including relief, shores/lakes/rivers, vegetation transitions, climate gradients
+and configured magic together. Reuse completed output within the local test
+session so visual checks do not repeatedly rerun full histories.
+
+Acceptance: no visible sample rectangles or repeating triangular facets in smooth
+natural geography; physically justified sharp features remain. Layers agree and
+the complete causal history still produces useful geography. Record remaining
+sampling limits honestly. Measure representative generation, memory and map costs;
+do not add runtime caps, feature quotas or recovery machinery to guarantee them.
+
+Evidence: focused domain/consumer checks, representative Draft generation and locally
+inspected map views, followed by appropriate repository checks. Reuse existing
+world scenarios for climate frames and rainfall regimes; avoid a combinatorial
+matrix. Standard/Fine scale runs remain opt-in on user request. Numerical tests
+alone cannot establish the visual outcome. Keep artifacts in ignored local
+test-results directories; no separate report or hosted publication.
+
+##### M5 execution
+
+Generate the default 4,000 × 3,000 km Draft with all three physical epochs and
+physical, magic, cultural, political and built domains. Keep its typed field and
+features in ignored `.artifacts/generation/fixed-continuous-draft.bin`, validate
+published layers against the shared field and reuse it in the existing local
+OpenLayers performance page for overview and close inspection. Run the existing
+climate/rainfall scenarios and repository gates; diagnose actual failures without
+relaxing physical or authored protections. Standard/Fine scale runs remain
+unrequested. Record measured time/memory and visual limits, not a claim of
+numerical equivalence or a guaranteed performance target.
+
+The first local overview and forest close-up removed rectangular biome fills but
+showed polygon chords at close zoom. Fixed-support contour approximation now uses
+10 m chord error with roots finer than that error, rather than 100 m chords and
+sub-micrometre roots. This changes approximation of the same field, not geographic
+causes. The first all-domain run completed generation in about 109 s, including
+61 s in feature extraction; repeated ecological station classifications are now
+shared across classes before the final measurement.
+
+Integrated review also exposed two representation constraints: nonnegative cover
+must remain inside its local source range, including roundoff near zero; grounded
+historical ice flux must stay below total historical flux. The reconstruction now
+bounds scalar evaluation by local data and bounds reconstructed grounded flux by
+total flux, retaining its own source extrema. Physical/ecological validators remain strict. Lake field geometry
+is retained independently of whether lake vectors were selected for delivery.
+Derived erosion/carbonate fields retain physical support without computing a
+disabled product.
+
+Local Chromium journeys pass with the 10 m boundaries. Representative
+258-pixel biome sampling fell from 733–858 ms to 377–571 ms by requesting inputs
+only when the shared decision rule needs them. On the software SwiftShader GPU,
+the final initial map completion took 14.8 s and uncached close pans took
+13.9–28.6 s; the return to overview took 1.8 s and cached layer changes took
+0.11–0.13 s. Earlier initial loads ranged from 8–10 s, illustrating variability.
+Those uncached costs remain substantial. Final browser heap was about 793 MB;
+these are environment-specific measurements, not targets
+or runtime limits. Isolating terrain and vectors located the thin line in tile
+presentation. Tiles now compute derivatives with a surrounding sample halo, then
+upload the interior through ordinary data tiles; the isolated terrain review no
+longer shows that gap. Adjacent uploads retain the expected plane heights and
+edge slopes. The editor retains its ordinary vector renderer and direct feature
+editing. Cold navigation remains a material cost.
+
+Unchanged inherited intensive/category fields retain their composed source until
+a process explicitly replaces that channel. Replacements clear stale scalar,
+category and dependent water reconstruction. Publication retains authored
+overlays while preventing superseded inherited inputs from reappearing on later
+runs. Extensive inventories retain the existing density/area conversion instead
+of inheriting an intensive evaluator. The working-map validator now validates
+composed fields recursively, with the strict numerical schema plus matching
+world, reference, channels and units; it does not discard overlays to validate.
+
+Climate review retains the existing rainfall magnitudes, belt order, poleward
+cooling, hemisphere symmetry, wrap and temperature-driven ice checks. Several old
+seed-specific proxies needed revision after inspecting complete output: a
+tropical band contains five sampled glacier-toe points (0.28% of its land), so
+ice concentration is compared with the cold pole rather than requiring literal
+zero; the two-hemisphere ocean retains an 8 °C equator-to-midlatitude contrast,
+so the test checks the direction of that contrast rather than a 10 °C cutoff;
+Wet's largest basin changes with erosion/capture, so the regime check compares
+total runoff and mean streamflow as well as river count. In the inspected
+northern frame, Wet runoff rises from 1.58 to 2.87 trillion m³/year and mean
+native streamflow from 133 to 174 m³/s, while the single largest basin falls
+from 6,185 to 4,808 m³/s. These are changed geography, not numerical parity claims.
+The polar-front check now tests converging temperature differences over shrinking
+physical intervals across the actual field, rather than comparing one-degree
+bins with changing ocean coverage. Dry retains its absolute 0.3 m land-mean and
+0.6 m band ceilings, no rainforest and predominantly dry warm-land biomes. Its
+old per-band seed array is no longer an acceptance target: for example, a polar
+band changes from 5.2 to 6.8 cm/year while remaining arid. No climate parameter
+was changed to force the old arrays to match.
+The multi-generation ecology and inherited-world functional tests now allow
+ten minutes for their complete sequences; measured generation costs are reported
+separately, and no product runtime cap or performance guarantee is added.
+
+The final complete 4,000 × 3,000 km Draft produced 1,571 geographic features in
+118.8 s, with 1,390 MiB peak generation-process RSS and all three causal epochs.
+Feature extraction took 65.2 s at the finer boundary approximation. All five
+domains, configured magic histories, shared published field reads and complete
+composed-field schema checks passed. `make ci` passes with 92 files and 520 tests;
+the existing lint warnings remain. All 40 normal Chromium editor journeys pass,
+including translation/reshape, ecological selection, protection, exports,
+regional refinement, cancellation and edits made during generation. The existing
+climate cases cover both hemispheres, full-globe wrap, polar worlds, presets,
+magic heat and ice, and both Dry/Mixed/Wet latitude frames. No Standard/Fine scale
+run or deployment was requested.
+
+### Corrective plan state and Sulion mapping
+
+Root `2d1eaf21-d157-42cb-b584-016d52f25026` links to this section. Its M0–M5
+completion claim was superseded by the independent review and repair below. M5's expansion is
+`8accca28-d78b-4620-ac1f-7b25888bc436`, with bounds/performance prerequisite
+`e3c9331c-dcbd-467d-ad0e-b3881db4af2c`, coupled climate review
+`ddcb72d0-468d-45ed-adec-ad79ae09db93` and inherited-field repair
+`0b532865-7f43-4978-9623-376535d45f66`. Cold software-GPU navigation remains the
+measured limitation above. No commit, push or deployment is included.
+
+| Phase         | Sulion phase ID                        |
+| ------------- | -------------------------------------- |
+| Plan revision | `9643a89e-ae8b-4b46-a681-b447826e98bb` |
+| M0            | `0df42546-7814-4dd8-9ee1-8fe9da167911` |
+| M1            | `7f8baa25-1912-437b-8714-41d541a63f3b` |
+| M2            | `5228da14-70a2-473e-8485-39b5ef45882a` |
+| M3            | `0b622273-5260-4505-b5ed-2738fcfd6589` |
+| M4            | `48cdb323-1cc7-426a-add0-b64c6d9e7394` |
+| M5            | `028e207b-e84f-4b03-a832-1b321dd6b2d4` |
+
+Review evidence from the preceding read-only turn: 35 focused climate/ocean/
+crossing tests and 14 water-boundary/numeric-tile tests passed at `8c49645`.
+Those baseline tests preserved useful behavior but did not establish smooth
+derivatives, orientation independence or raster/polygon agreement. Execution now
+includes a complete all-domain Draft and local overview/close map review.
+Standard/Fine scale runs remain unrequested.
+
+### Continuous geography repair, 2026-10-22
+
+Independent review reproduced six defects after the initial corrective work:
+support-boundary scalar jumps, omitted intermediate biomes, colliding ecological
+feature identities, stale inherited culture fields, out-of-scope constraint
+extrema, and inherited lakes missing from terrain tiles. Repair plan
+`1423c25b-b505-4acf-9492-dd597662ff72` covers these corrections. It retains the
+causal processes and fixed numerical mesh; it does not add landscape primitives
+or a cosmetic finishing pass.
+
+Scalar reconstruction limits each source jet over its fixed support before
+blending, rather than clamping against a changing query neighborhood. Exact
+affine fields retain their fitted slopes. Constraint extrema evaluate and bound
+the composed field inside the constrained geometry, including coupled grounded
+ice flux, with derivative intervals to refine nonlinear extrema efficiently.
+Neighboring support values are bounds for the solve, not proof of a violation.
+
+The biome classifier is one decision tree shared by point reads and geographic
+extraction. Extraction traces each primitive threshold and composes its positive
+and negative regions in decision order. This preserves intermediate categories
+without requiring a sample already classified into each one. Existing ocean and
+lake polygons remain authoritative; lake depth uses the body's stage and shared
+floor. Ecological component identity includes biome and component occurrence
+under its representative, so distinct polygons cannot overwrite one another.
+
+Contour extraction bounds the reconstructed threshold expression, combining the
+existing channel values and fitted jets without fitting a different field.
+Conforming local support refinement discovers interior components and repeated
+edge crossings. Range and derivative intervals establish topology; adaptive
+quarter-point probes spaced along each candidate contour chord approximate its
+curve at 10 metres. This positional approximation is empirical, not a formal
+global curve-error certificate. A formal plane-error bound caused excessive
+refinement and worker timeouts, so it was removed. These temporary contour
+triangles neither change the process mesh nor evolve the physical model.
+Each decision traces only support which can intersect its current region.
+Directed edge enclosures use source distances and fitted jets along the actual
+segment, avoiding false crossings inferred from a larger bounding rectangle.
+Queries crossing a numerical-support clamp retain the conservative box fallback.
+Weight bounds sum excluded sources with prefix/suffix sums; subtracting a dominant
+near-station weight can erase the other contributions. The existing midpoint
+field value centers those bounds, avoiding unnecessary cancellation against a
+distant source when the local expression is small. Mixed evaluated vertices
+remain available for tracing even if floating point bounds disagree at a threshold.
+Support triangles proven to lie entirely on one side retire as the solve proceeds,
+releasing unused edge checks and station samples. Only the original support boundary
+closes the output; retirement does not create artificial geographic boundaries.
+Continuous partition output already includes the water decisions and world
+footprint, so publication does not subtract the ocean again; fallback sampled
+components retain that clipping. This preserves shallow lake vegetation where
+explicit lake geography overrides the ocean mask.
+
+Complete culture-channel replacement supersedes inherited inputs through the
+existing replacement operation. The same replacement applies to recomputed
+local magic forcing, material effects and advected or advanced storage. Thermal
+refresh reads retained storage without advancing it; elapsed storage alone
+replaces that history after integrating the source. Terrain reads physical water through inherited
+composition and applies explicit lake vectors at their locations, retaining
+shared physical lakes elsewhere. Inherited terrain is not an authored edit;
+authored terrain patches continue to expose emergent islands.
+
+Regenerated child fields retain scoped authored overlays at their original
+resolution as well as copying their effective values into process samples.
+This preserves small protected patches between child nodes when regenerated
+channels supersede inherited generated values. Repeated process composition
+replaces the same authority overlay rather than accumulating copies.
+
 ### Fixed sampling replacement (current direction, 2026-10-19)
+
+Historical execution record for the completed fixed-sampling restoration. Its
+mesh and causal scope remain applicable; the corrective plan above replaces its
+linear-fan representation and publication acceptance for further work.
 
 The user rejected the adaptive rewrite's cost and a proposal that reduced the
 multi-epoch generator. Restore one fixed triangle sampling mesh per run. Preserve

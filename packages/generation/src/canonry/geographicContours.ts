@@ -5,11 +5,11 @@ import {
   fieldContour,
   rectangle,
   type Bounds,
-  linearFieldContour,
+  sampledFieldContour,
   spatial,
 } from "@atlas/domain";
 import type { GenerationState } from "../process";
-import { triangleSampler, triangleFans, triangleBoundary } from "./triangleSampling";
+import { triangleFans, triangleBoundary } from "./triangleSampling";
 import { physicalSampler } from "./physicalMetric";
 
 export function lakeFootprint(
@@ -30,13 +30,13 @@ export function lakeFootprint(
       (x, y) => Math.min(wet(x, y), (connected(x, y) - 0.1) * 1e6),
       0
     );
-  const footprint = linearFieldContour(
+  const footprint = sampledFieldContour(
     triangleFans(mesh, members, (i) => level - map.Elevation[i]),
     wet,
     0,
     triangleBoundary(mesh, (i) => level - map.Elevation[i], members)
   );
-  const membership = linearFieldContour(
+  const membership = sampledFieldContour(
     triangleFans(mesh, members, (i) => Number(map.WaterBodyIds[i] === body)),
     connected,
     0.1,
@@ -53,7 +53,7 @@ export function oceanFootprint(state: GenerationState) {
       map.EffectiveSeaLevel - height(x - mesh.origin[0], y - mesh.origin[1]);
   const shape = mesh.topology
     ? fieldContour(mesh.topology, at, undefined, 0)
-    : linearFieldContour(
+    : sampledFieldContour(
         triangleFans(
           mesh,
           Array.from({ length: mesh.count }, (_, i) => i),
@@ -70,7 +70,10 @@ export function membershipSampler(state: GenerationState, includes: (cell: numbe
   const mesh = state.physical!.map.mesh;
   if (mesh.topology)
     return adaptivePointSampler(mesh.topology, (leaf) => includes(mesh.leafToCell[leaf]));
-  const sample = triangleSampler(mesh, includes);
+  const sample = physicalSampler(
+    mesh,
+    Float64Array.from({ length: mesh.count }, (_, i) => includes(i))
+  );
   return (x: number, y: number) => sample(x - mesh.origin[0], y - mesh.origin[1]);
 }
 /** Trace the physical field locally, including its complete interpolation support. */
@@ -83,7 +86,12 @@ export function membershipContour(
     valueAt = membershipSampler(state, includes);
   if (mesh.topology || members.some((i) => mesh.boundary[i]))
     return geographicContour(state, members, valueAt);
-  return linearFieldContour(triangleFans(mesh, members, includes), valueAt);
+  return sampledFieldContour(
+    triangleFans(mesh, members, includes),
+    valueAt,
+    0.5,
+    triangleBoundary(mesh, includes, members)
+  );
 }
 export function geographicContour(
   state: GenerationState,

@@ -60,7 +60,6 @@ export function numericTileSource(
     projection,
     tileGrid,
     tileSize: 256,
-    gutter: 1,
     bandCount: raster.channel === "elevation" ? 8 : 3,
     interpolate: !categorical(raster),
     transition: 0,
@@ -72,9 +71,20 @@ export function numericTileSource(
         [box[0] - resolution, box[1] - resolution, box[2] + resolution, box[3] + resolution],
         258,
         signal
-      );
+      ).then((values) => tileInterior(values, 258));
     },
   });
+}
+/** Derivatives use the surrounding samples; ordinary data tiles receive the interior. */
+export function tileInterior(values: Float32Array, size: number) {
+  const width = size - 2,
+    bands = values.length / (size * size),
+    result = new Float32Array(width * width * bands);
+  for (let row = 0; row < width; row++) {
+    const start = ((row + 1) * size + 1) * bands;
+    result.set(values.subarray(start, start + width * bands), row * width * bands);
+  }
+  return result;
 }
 function activeSampler(
   grid: GridSurface,
