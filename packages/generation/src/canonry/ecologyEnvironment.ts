@@ -1,4 +1,4 @@
-import { classifyBiomePoint } from "@atlas/domain";
+import { biomeCode as B } from "@atlas/domain";
 import type { PhysicalField } from "./field";
 
 export const unit = (value: number) => Math.max(0, Math.min(1, value));
@@ -85,19 +85,21 @@ export function environment(map: PhysicalField, i: number, forcing = neutralEcol
 }
 export type EcologyEnvironment = ReturnType<typeof environment>;
 export function classifyBiome(map: PhysicalField, i: number, env = environment(map, i)) {
-  return classifyBiomePoint({
-    temperature: env.temperature,
-    water: env.water,
-    depth: env.depth,
-    ice: map.IceThickness[i],
-    wetness: env.wetness,
-    moisture: env.moisture,
-    trees: map.TreeCover[i],
-    grass: map.GrassCover[i],
-    wetland: map.WetlandCover[i],
-    altered: map.AlteredCover[i],
-    juvenileAltered: map.AlteredSaplings[i],
-    conifer: map.ConiferCover[i],
-    broadleaf: map.BroadleafCover[i],
-  });
+  if (env.frozen) return B("Ice");
+  if (env.water === 1) return B("Ocean");
+  if (env.submerged) return B("Freshwater");
+  if (map.AlteredCover[i] + map.AlteredSaplings[i] > 0.2)
+    return B(env.wetness > 0.5 ? "Altered wetland" : "Altered woodland");
+  if (env.wetness > 0.5) return B(map.TreeCover[i] > 0.2 ? "Swamp" : "Marsh");
+  if (env.temperature < 2) return B("Tundra");
+  return coverBiome(map, i, env);
+}
+function coverBiome(map: PhysicalField, i: number, env: EcologyEnvironment) {
+  const trees = map.TreeCover[i],
+    cover = trees + map.GrassCover[i] + map.WetlandCover[i];
+  if (cover < 0.12) return B(env.moisture < 0.25 ? "Desert" : "Barren");
+  if (trees < 0.15) return B("Grassland");
+  if (trees < 0.4) return B(env.temperature > 18 ? "Savanna" : "Woodland");
+  if (map.ConiferCover[i] > map.BroadleafCover[i] || env.temperature < 8) return B("Boreal forest");
+  return B(env.temperature > 22 && env.moisture > 0.7 ? "Rainforest" : "Temperate forest");
 }

@@ -1,6 +1,6 @@
 import {
   gridPosition,
-  replaceChannel,
+  putChannel,
   semanticId,
   spatial,
   fieldContour,
@@ -114,7 +114,7 @@ export const culturalProcess: MapProcess = {
           const distance = Math.hypot(p.x - center.x, p.y - center.y);
           return Math.exp(-(distance * distance) / (2 * spread * spread)) * suitability(state, i);
         });
-        replaceChannel(grid, `culture:${origin.id}`, "ratio", values);
+        putChannel(grid, `culture:${origin.id}`, "ratio", values);
         const marker = generatedFeature(
           state,
           `culture-origin:${origin.id}`,

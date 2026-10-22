@@ -73,7 +73,7 @@ it("generates forests and ecological history through the real atlas pipeline and
   expect(ecology.channels).toContain("migrationFlux");
   expect(published.numerical[ecology.id].quantities?.biome).toBe("category");
   await checkMagicPublication(published, input);
-}, 600_000);
+}, 120_000);
 
 async function checkMagicPublication(
   snapshot: DomainSnapshot,

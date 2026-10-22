@@ -2,7 +2,6 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { deserialize } from "node:v8";
 import { test, expect, type Page } from "@playwright/test";
 import type { PerformanceScene } from "./performancePage";
-import { spatial } from "@atlas/domain";
 test.use({ deviceScaleFactor: Number(process.env.ATLAS_DPR ?? 1) });
 async function observeTransfers(page: Page) {
   await page.addInitScript(() => {
@@ -91,7 +90,6 @@ test("measure real generated geography without regenerating it", async ({ page, 
     );
     return window.atlasBenchmark.load(input);
   }, encoded);
-  if (process.env.ATLAS_VISUAL) await captureGeography(page, data);
   if (await reviewControlsOnly(page, errors)) return;
   await observeLongTasks(page);
   const measurements = [];
@@ -147,23 +145,6 @@ test("measure real generated geography without regenerating it", async ({ page, 
   await inspectEditor(page);
   expect(errors).toEqual([]);
 });
-async function captureGeography(page: Page, data: PerformanceScene) {
-  await mkdir(".artifacts/navigation", { recursive: true });
-  await page.screenshot({ path: ".artifacts/navigation/continuous-overview.png" });
-  for (const kind of ["forest", "lake"]) {
-    const feature = Object.values(data.features).find((f) => f.kind === kind);
-    expect(feature, `Generated ${kind} for close inspection`).toBeDefined();
-    const bounds = spatial.bounds(feature!.geometry);
-    await page.evaluate(
-      ({ center, resolution }) => window.atlasBenchmark.navigate(center, resolution),
-      {
-        center: [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2],
-        resolution: Math.max(bounds[2] - bounds[0], bounds[3] - bounds[1]) / 600,
-      }
-    );
-    await page.screenshot({ path: `.artifacts/navigation/continuous-${kind}.png` });
-  }
-}
 async function measureInput(page: Page) {
   if (!process.env.ATLAS_INPUT) return;
   const gestures = [];

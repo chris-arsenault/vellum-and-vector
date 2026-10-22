@@ -1,11 +1,10 @@
-import { replaceChannel, type MagicCondition } from "@atlas/domain";
+import { putChannel, type MagicCondition } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import type { MagicField } from "./magicState";
 import { magicKey } from "./magicState";
 import { classifyNaturalSurface } from "./naturalSurface";
 import { unitNoise, hashUnit } from "./noise";
 import { projectedValues } from "./atlasSampling";
-import { physicalSupport } from "./physicalSupport";
 import {
   magicChannels,
   magicFieldDefinitions,
@@ -169,21 +168,8 @@ export function projectMagic(state: GenerationState) {
     unit: string,
     values: ArrayLike<number>,
     quantity: "intensive" | "extensive" | "category"
-  ) => {
-    replaceChannel(
-      state.surface,
-      key,
-      unit,
-      projectedMagicValues(state, values, quantity),
-      quantity
-    );
-    if (work.map.mesh.topology || quantity === "extensive") return;
-    state.surface.reconstruction ??= { support: physicalSupport(work.map.mesh), channels: {} };
-    if (quantity === "category") {
-      state.surface.reconstruction.categories ??= {};
-      state.surface.reconstruction.categories[key] = Float64Array.from(values);
-    } else state.surface.reconstruction.channels[key] = Float64Array.from(values);
-  };
+  ) =>
+    putChannel(state.surface, key, unit, projectedMagicValues(state, values, quantity), quantity);
   project("naturalSurface", "category", magic.naturalSurface, "category");
   project("finalSurface", "category", magic.finalSurface, "category");
   for (const field of magic.fields) {

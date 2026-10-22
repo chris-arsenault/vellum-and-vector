@@ -9,7 +9,6 @@ import {
   type DomainSnapshot,
   type AtlasFeature,
   type Grid,
-  type GridSurface,
   type Layer,
 } from "@atlas/domain";
 import type { GenerationState } from "./process";
@@ -258,7 +257,7 @@ function publishFields(
 
 function publishField(
   snapshot: DomainSnapshot,
-  grid: GridSurface,
+  grid: Grid,
   layerId: string,
   channels: string[],
   fieldId: string,
@@ -286,23 +285,6 @@ function publishField(
     ...grid,
     id: resourceId,
     channels: Object.fromEntries(channels.map((channel) => [channel, grid.channels[channel]])),
-    reconstruction: grid.reconstruction && {
-      support: grid.reconstruction.support,
-      water: grid.reconstruction.water,
-      biome: channels.includes("biome") ? grid.reconstruction.biome : undefined,
-      categories:
-        grid.reconstruction.categories &&
-        Object.fromEntries(
-          channels
-            .filter((name) => grid.reconstruction!.categories![name])
-            .map((name) => [name, grid.reconstruction!.categories![name]])
-        ),
-      channels: Object.fromEntries(
-        channels
-          .filter((name) => grid.reconstruction!.channels[name])
-          .map((name) => [name, grid.reconstruction!.channels[name]])
-      ),
-    },
     units: Object.fromEntries(channels.map((channel) => [channel, grid.units[channel]])),
     quantities: Object.fromEntries(
       channels.map((channel) => [
@@ -311,24 +293,9 @@ function publishField(
           (grid.units[channel] === "category" ? "category" : "intensive"),
       ])
     ),
-    overlays: publicationOverlays(grid, snapshot.numerical[fieldId], channels),
+    overlays: snapshot.numerical[fieldId]?.overlays,
   };
   world.layers[layerId].facts = [...new Set([...(world.layers[layerId].facts ?? []), ...channels])];
-}
-function publicationOverlays(
-  grid: GridSurface,
-  previous: GridSurface | undefined,
-  channels: string[]
-) {
-  return [
-    ...(grid.overlays ?? []),
-    ...(previous?.overlays ?? []).filter((overlay) => !overlay.inherited),
-  ]
-    .map((overlay) => ({
-      ...overlay,
-      channels: overlay.channels.filter((channel) => channels.includes(channel)),
-    }))
-    .filter((overlay) => overlay.channels.length);
 }
 
 function publishCoverage(snapshot: DomainSnapshot, grid: Grid, layerId: string, runId: string) {

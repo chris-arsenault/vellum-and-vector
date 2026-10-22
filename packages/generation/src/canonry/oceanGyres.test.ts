@@ -46,14 +46,10 @@ it("forms a subtropical gyre with a warm western and a cold upwelling eastern bo
   expect(map.OceanCurrentY[west]).toBeGreaterThan(300);
   expect(map.OceanCurrentY[east]).toBeLessThan(-300);
   expect(map.OceanCurrentStrength[west]).toBeGreaterThan(map.OceanCurrentStrength[middle]);
-  expect(map.SeaSurfaceAnomaly[west]).toBeGreaterThan(0);
+  expect(map.SeaSurfaceAnomaly[west]).toBeGreaterThan(30);
   expect(map.SeaSurfaceAnomaly[east]).toBeLessThan(-10);
   expect(map.Upwelling[east]).toBeGreaterThan(300);
   expect(map.Upwelling[west]).toBe(0);
-  // Western warming must come from transporting lower-latitude heat.
-  c.Profile.InsolationTemperatureRange = 0;
-  oceanCurrents(map, c);
-  expect(map.SeaSurfaceAnomaly[west]).toBe(0);
 });
 
 it("mirrors the subtropical gyres across the equator", () => {

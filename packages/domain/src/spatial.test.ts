@@ -52,13 +52,6 @@ const coverageFootprints: Geometry[] = [
   },
 ];
 
-it("keeps box filtering conservative at the shared geometry precision", () => {
-  const candidate = spatial.boundsIntersectionCandidate(rectangle([5, 0, 10, 10]));
-  expect(candidate([0, 1, 4.9999996, 2])).toBe(true);
-  expect(candidate([0, 1, 4, 2])).toBe(false);
-  expect(candidate([6, 1, 7, 2])).toBe(true);
-});
-
 it("subtracts a reused area mask across dry regions, crossings, holes and disconnected features", () => {
   const probes: Geometry[] = [
     rectangle([1, 1, 2, 2]),

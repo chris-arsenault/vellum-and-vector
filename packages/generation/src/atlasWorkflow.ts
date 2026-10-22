@@ -4,7 +4,6 @@ import {
   createAdaptiveField,
   createAdaptiveTopology,
   resampleChannels,
-  overlayField,
   spatial,
   semanticId,
   requireThat,
@@ -281,12 +280,6 @@ function inheritSurface(source: DomainSnapshot, target: Grid, input: AtlasGenera
   for (const field of available) {
     const grid = source.numerical[field.id];
     resampleChannels(grid, target);
-    overlayField(
-      target,
-      grid,
-      Object.keys(grid.channels).filter((name) => grid.quantities?.[name] !== "extensive"),
-      true
-    );
   }
   requireThat(
     input.domains.includes("physical") ||

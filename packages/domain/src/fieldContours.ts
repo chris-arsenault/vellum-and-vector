@@ -8,9 +8,6 @@ import InteriorPointArea from "jsts/org/locationtech/jts/algorithm/InteriorPoint
 import { adaptiveCell, adaptiveLeafAt, type AdaptiveTopology } from "./adaptiveTopology";
 import { spatial, type Bounds } from "./spatial";
 import type { RegularGrid } from "./grids";
-import { refineContourTriangles, arcError } from "./contourRefinement";
-import type { SampleEnclosure } from "./smoothSamples";
-import type { EncloseSegment } from "./sampleSegmentBounds";
 
 type Point = [number, number];
 type Edge = { a: Point; b: Point; used: boolean };
@@ -27,8 +24,7 @@ function crossing(
   b: Point,
   va: number,
   vb: number,
-  level: number,
-  tolerance = 1e-7
+  level: number
 ): Point {
   if (va === level) return a;
   if (vb === level) return b;
@@ -36,12 +32,7 @@ function crossing(
     high = 1;
   const inside = va > level;
   const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
-  const fraction = (level - va) / (vb - va),
-    estimate = mix(a, b, fraction);
-  const estimated = valueAt(...estimate);
-  if (Math.abs(estimated - level) <= Number.EPSILON * Math.max(1, Math.abs(va), Math.abs(vb)) * 8)
-    return estimate;
-  while ((high - low) * length > tolerance) {
+  while ((high - low) * length > 1e-7) {
     const middle = (low + high) / 2,
       point = mix(a, b, middle),
       value = valueAt(...point);
@@ -51,7 +42,7 @@ function crossing(
   }
   return mix(a, b, (low + high) / 2);
 }
-function prepareQueries(at: Scalar, level: number, tolerance = 1e-7) {
+function prepareQueries(at: Scalar, level: number) {
   const stations = new Map<number, Map<number, number>>(),
     crossings = new Map<string, Point>();
   const sample: Scalar = (x, y) => {
@@ -73,18 +64,13 @@ function prepareQueries(at: Scalar, level: number, tolerance = 1e-7) {
       id = `${key(a)}>${key(b)}`;
     const previous = crossings.get(id);
     if (previous) return previous;
-    const result = crossing(at, a, b, sample(...a), sample(...b), level, tolerance);
+    const result = crossing(at, a, b, sample(...a), sample(...b), level);
     crossings.set(id, result);
     return result;
   };
   // Only stations and completed crossings survive a root solve. Bisection probes
   // are local to that solve and do not accumulate across the entire map.
-  const forget = (x: number, y: number) => {
-    const column = stations.get(x);
-    column?.delete(y);
-    if (column?.size === 0) stations.delete(x);
-  };
-  return { sample: Object.assign(sample, { forget }), cross, clear: () => stations.clear() };
+  return { sample, cross };
 }
 function boundary(box: Bounds, adjacent: Bounds[]) {
   const [x0, y0, x1, y1] = box,
@@ -122,8 +108,7 @@ function traceTriangle(
   level: number,
   tolerance: number,
   edges: Edge[],
-  cross: Crossing,
-  bounded = false
+  cross: Crossing
 ) {
   const pending = [vertices];
   while (pending.length) {
@@ -142,7 +127,12 @@ function traceTriangle(
       at(...middle) > level === inside[(isolated + 1) % 3] &&
       Math.hypot(c[0] - b[0], c[1] - b[1]) > tolerance
     ) {
-      const error = arcError(a, b, c, first, last, at, cross, level, bounded);
+      const p = cross(a, middle),
+        dx = last[0] - first[0],
+        dy = last[1] - first[1];
+      const error =
+        Math.abs(dx * (p[1] - first[1]) - dy * (p[0] - first[0])) /
+        Math.max(1e-30, Math.hypot(dx, dy));
       if (error > tolerance) {
         pending.push([a, middle, c], [a, b, middle]);
         continue;
@@ -238,62 +228,6 @@ function polygonize(boundaries: Point[][], at: Scalar, level: number): Geometry 
   return writer.write(result) as Geometry;
 }
 export type LinearContourSample = [number, number, number];
-/** Trace a smooth field on fixed support, including its exact sample sites. */
-export function sampledFieldContour(
-  triangles: Iterable<LinearContourSample[]>,
-  at: Scalar,
-  level = 0.5,
-  boundary: Iterable<LinearContourSample[]> = [],
-  tolerance = 10,
-  enclose?: (box: Bounds) => SampleEnclosure,
-  segment?: EncloseSegment
-): Geometry | null {
-  const edges: Edge[] = [],
-    { sample, cross, clear } = prepareQueries(
-      at,
-      level,
-      Math.max(spatial.precision, Math.min(1, tolerance / 100))
-    );
-  const positions = function* () {
-    for (const triangle of triangles) yield triangle.map(([x, y]) => [x, y] as Point);
-  };
-  const refined = enclose
-    ? refineContourTriangles(positions(), sample, enclose, level, tolerance, segment)
-    : null;
-  if (refined) clear();
-  for (const triangle of refined?.triangles ?? positions())
-    traceTriangle(triangle, sample, level, tolerance, edges, cross, Boolean(refined));
-  const outer = function* () {
-    for (const [first, last] of boundary) {
-      if (refined)
-        for (const [a, b] of refined.boundary([first[0], first[1]], [last[0], last[1]]))
-          yield [
-            [...a, 0],
-            [...b, 0],
-          ] as LinearContourSample[];
-      else yield [first, last];
-    }
-  };
-  closeSmoothBoundary(edges, outer(), sample, cross, level);
-  return polygonize(rings(edges.filter((edge) => key(edge.a) !== key(edge.b))), sample, level);
-}
-function closeSmoothBoundary(
-  edges: Edge[],
-  boundary: Iterable<LinearContourSample[]>,
-  sample: Scalar,
-  cross: Crossing,
-  level: number
-) {
-  for (const [first, last] of boundary) {
-    const a: Point = [first[0], first[1]],
-      b: Point = [last[0], last[1]];
-    const ia = sample(...a) > level,
-      ib = sample(...b) > level;
-    if (!ia && !ib) continue;
-    const p = ia === ib ? a : cross(a, b);
-    edges.push({ a: ia ? a : p, b: ib ? b : p, used: false });
-  }
-}
 /** Exact crossings of a piecewise linear sampled field need no root search. */
 export function linearFieldContour(
   triangles: Iterable<LinearContourSample[]>,

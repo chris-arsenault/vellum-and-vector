@@ -1,6 +1,6 @@
 import type { PhysicalMesh } from "./mesh";
-import { adaptivePointSampler, smoothSampleInterpolator } from "@atlas/domain";
-import { physicalSupport } from "./physicalSupport";
+import { adaptivePointSampler } from "@atlas/domain";
+import { triangleSampler } from "./triangleSampling";
 
 export const physicalDistance = (mesh: PhysicalMesh, i: number, j: number) =>
   Math.hypot(mesh.x[j] - mesh.x[i], mesh.y[j] - mesh.y[i]);
@@ -71,10 +71,7 @@ export function cellTravel(mesh: PhysicalMesh, i: number, dx: number, dy: number
   );
 }
 export function physicalSampler(mesh: PhysicalMesh, values: ArrayLike<number>) {
-  if (!mesh.topology) {
-    const at = smoothSampleInterpolator(physicalSupport(mesh), values);
-    return (x: number, y: number) => at(x + mesh.origin[0], y + mesh.origin[1]);
-  }
+  if (!mesh.topology) return triangleSampler(mesh, values);
   const at = adaptivePointSampler(
     mesh.topology,
     Float64Array.from(mesh.leafToCell, (cell) => values[cell])

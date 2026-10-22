@@ -139,29 +139,6 @@ export class Spatial {
     const shape = this.read(footprint);
     return (geometry) => Boolean(RelateOp.intersects(this.read(geometry), shape));
   }
-  /** Conservative box overlap, retaining every box which might cross a polygon. */
-  boundsIntersectionCandidate(footprint: Geometry): (box: Bounds) => boolean {
-    const shape = this.read(footprint),
-      locator = new IndexedPointInAreaLocator(shape),
-      boundary = new STRtree(),
-      coordinates = shape.getCoordinates();
-    for (let i = 1; i < coordinates.length; i++) {
-      const a = coordinates[i - 1],
-        b = coordinates[i];
-      boundary.insert(new Envelope(a.x, b.x, a.y, b.y), {});
-    }
-    return (box) =>
-      !boundary
-        .query(
-          new Envelope(
-            box[0] - this.precision,
-            box[2] + this.precision,
-            box[1] - this.precision,
-            box[3] + this.precision
-          )
-        )
-        .isEmpty() || locator.locate(new CoordinatePoint(box[0], box[1])) !== Location.EXTERIOR;
-  }
   distance(a: Geometry, b: Geometry): number {
     return DistanceOp.distance(this.read(a), this.read(b)) as number;
   }

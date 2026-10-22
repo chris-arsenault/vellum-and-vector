@@ -3,7 +3,7 @@ import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
 import { toUnits } from "./math";
 import { smoothMetric } from "./metricSmoothing";
-import { directionalSources } from "./directionalSources";
+import { linkDistance, wrappedEdges } from "./longitudeWrap";
 
 /** Saturation moisture of a column at a native temperature (ten units per °C, 0 °C at 300). */
 export function saturation(p: PhysicalProfile, temperature: number) {
@@ -66,53 +66,33 @@ export function marchAirColumns(
     maritime = new Float64Array(n),
     magic = new Float64Array(n),
     carried = new Float64Array(n);
-  const source = directionalSources(map, p, map.WindX, map.WindY);
-  const { order } = sourceOrder(source.primary);
-  for (let i = 0; i < n; i++) {
-    moisture[i] =
-      saturation(p, map.Temperature[i]) *
-      p.OceanColumnHumidity *
-      (ocean(map, i) ? 1 : p.BoundaryColumnHumidity);
-    maritime[i] = Number(ocean(map, i));
-  }
-  // Stationary annual-mean columns: iteration changes no elapsed world time.
-  let change: number;
-  do {
-    change = 0;
+  const { order, boundary } = sourceOrder(map.UpwindTargets),
+    distance = linkDistance(map, p);
+  // Wrapped air closes loops around the world; a second pass lets each loop's
+  // break read the air that arrived around it instead of a boundary column.
+  const passes = wrappedEdges(map, p) ? 2 : 1;
+  for (let pass = 0; pass < passes; pass++)
     for (const i of order) {
-      const before = [moisture[i], marine[i], maritime[i], magic[i]];
-      advance(i);
-      change = Math.max(
-        change,
-        Math.abs(moisture[i] - before[0]),
-        Math.abs(marine[i] - before[1]),
-        Math.abs(maritime[i] - before[2]),
-        Math.abs(magic[i] - before[3])
-      );
+      const u = boundary[i] && pass === 0 ? -1 : map.UpwindTargets[i];
+      advance(i, u);
     }
-  } while (change > 0.05);
   spreadAcrossWind(map, p, carried, airHeat);
   return { moisture, precipitation, airHeat, maritime };
 
-  function advance(i: number) {
+  function advance(i: number, u: number) {
     const target = saturation(p, map.Temperature[i]) * p.OceanColumnHumidity;
-    const links = source.links[i],
-      d = source.distance[i];
-    const upstream = (values: ArrayLike<number>) =>
-      links.reduce((sum, link) => sum + link.weight * values[link.i], 0);
-    const arriving: Air = !links.length
-      ? boundaryAir(map, p, i, target)
-      : { q: upstream(moisture), heat: upstream(marine), sea: upstream(maritime), orographic: 0 };
-    const upwindHeight = links.reduce((sum, link) => sum + link.weight * height(map, link.i), 0);
+    const d = u < 0 ? 0 : distance(u, i);
+    const arriving: Air =
+      u < 0
+        ? boundaryAir(map, p, i, target)
+        : { q: moisture[u], heat: marine[u], sea: maritime[u], orographic: 0 };
     const air = ocean(map, i)
       ? overSea(map, p, i, arriving, d, target)
-      : overLand(map, p, i, links.length ? upwindHeight : height(map, i), arriving, d, rainout(i));
+      : overLand(map, p, i, u, arriving, d, rainout(i));
     // Air relaxes toward a share of the forcing beneath it over MagicHeatAirLength,
     // so carried heat depends on distance travelled, not on how many cells it crosses.
-    const keep = Math.exp(
-      -(links.length ? d : Math.sqrt(map.mesh.areas[i])) / p.MagicHeatAirLength
-    );
-    carried[i] = links.length ? upstream(magic) * keep : 0;
+    const keep = Math.exp(-(u < 0 ? Math.sqrt(map.mesh.areas[i]) : d) / p.MagicHeatAirLength);
+    carried[i] = u < 0 ? 0 : magic[u] * keep;
     moisture[i] = Math.max(0, air.q);
     // Subsiding air under the subtropical and polar highs also caps uplift rain.
     const belt = rainout(i);
@@ -174,12 +154,12 @@ function overLand(
   map: PhysicalField,
   p: PhysicalProfile,
   i: number,
-  upwindHeight: number,
+  u: number,
   air: Air,
   d: number,
   rainout: number
 ): Air {
-  const rise = Math.max(0, height(map, i) - upwindHeight);
+  const rise = u < 0 ? 0 : Math.max(0, height(map, i) - height(map, u));
   const lifted = air.q * (1 - Math.exp(-rise / p.OrographicLiftHeight));
   const depletion = 1 - Math.exp((-d * rainout) / p.ColumnRainLength);
   return {

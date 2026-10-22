@@ -120,46 +120,27 @@ export function extractNativeGeography(
 ) {
   state.surface.ocean = oceanFootprint(state);
   extractGeologicalEvents(state, deliveries);
-  const lakes = extractLakes(state, deliveries.lakes);
-  const source = state.surface.reconstruction;
-  if (source) {
-    const map = state.physical!.map;
-    source.water = {
-      elevation: Float64Array.from(map.Elevation, (value) => (value - map.BaseSeaLevel) / 1024),
-      bodyIds: Float64Array.from(map.WaterBodyIds),
-      seaLevel: (map.EffectiveSeaLevel - map.BaseSeaLevel) / 1024,
-      lakes,
-    };
-    if (source.biome) source.biome.lakes = lakes;
-  }
+  if (deliveries.lakes) extractLakes(state);
   if (deliveries.landforms) extractNamedLandforms(state);
   if (deliveries.magic) extractMagicPlaces(state);
   if (deliveries.ecology) extractEcologicalFeatures(state);
   if (!deliveries.rivers) return;
-  extractRiverGeography(state, context, lakes);
+  extractRiverGeography(state, context);
 }
-function extractRiverGeography(
-  state: GenerationState,
-  context: MapProcessContext,
-  lakes: { id: number; footprint: Geometry }[]
-) {
+function extractRiverGeography(state: GenerationState, context: MapProcessContext) {
   const work = state.physical!,
     map = work.map,
     paths = createRiverPaths(map),
     { incoming, basinDischarge } = riverInputs(map);
   paths.water = {
     ocean: state.surface.ocean ?? null,
-    lakes: new Map([
-      ...Object.values(state.domain.world.features)
+    lakes: new Map(
+      Object.values(state.domain.world.features)
         .filter(
           (feature) => feature.kind === "lake" && feature.areaId === state.domain.scope.areaId
         )
-        .map((feature): [number, Geometry] => [
-          Number(feature.attributes.waterBody),
-          feature.geometry,
-        ]),
-      ...lakes.map((lake): [number, Geometry] => [lake.id, lake.footprint]),
-    ]),
+        .map((feature) => [Number(feature.attributes.waterBody), feature.geometry])
+    ),
   };
   for (let i = 0; i < map.mesh.contentCount; i++) {
     if (map.RiverOrders[i] <= 0 || incoming[i] === 1) continue;

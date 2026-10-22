@@ -5,10 +5,6 @@ import { requireThat } from "./errors";
 import { point, rectangle, spatial, type Bounds } from "./spatial";
 import { adaptiveCell, adaptiveLeafAt, type AdaptiveTopology } from "./adaptiveTopology";
 import type { AdaptiveField } from "./adaptiveField";
-import { smoothCategoryInterpolator, type ReconstructedField } from "./smoothSamples";
-import { biomeFieldInterpolator } from "./biomeField";
-import { waterFieldInterpolator } from "./waterField";
-import { scalarReconstruction } from "./scalarReconstruction";
 import {
   sampleAdaptivePoint,
   adaptivePointSampler,
@@ -16,7 +12,6 @@ import {
 } from "./adaptivePoint";
 
 export interface FieldSamples {
-  reconstruction?: ReconstructedField;
   id: string;
   scope: SpatialScope;
   bounds: Bounds;
@@ -35,9 +30,7 @@ export interface RegularGrid extends FieldSamples {
   topology?: never;
 }
 export type Grid = RegularGrid | AdaptiveField;
-export type GridSurface = Grid & {
-  overlays?: { grid: GridSurface; channels: string[]; inherited?: boolean }[];
-};
+export type GridSurface = Grid & { overlays?: { grid: GridSurface; channels: string[] }[] };
 
 export interface WaterBody {
   id: string;
@@ -336,33 +329,6 @@ export function fieldInterpolator(
   };
 }
 function baseInterpolator(
-  grid: Grid,
-  channel: string,
-  discrete: boolean,
-  locate?: AdaptivePointLocator
-) {
-  const reconstructed = reconstructedInterpolator(grid, channel, discrete);
-  if (reconstructed) return reconstructed;
-  return numericalInterpolator(grid, channel, discrete, locate);
-}
-function reconstructedInterpolator(grid: Grid, channel: string, discrete: boolean) {
-  const source = grid.reconstruction;
-  if (!source) return null;
-  if (source.water && ["water", "waterBody", "waterLevel", "waterDepth"].includes(channel)) {
-    const at = waterFieldInterpolator(source.support, source.water, grid.ocean, channel);
-    return (p: Position) => at(p.x, p.y);
-  }
-  if (channel === "biome" && source.biome) {
-    const at = biomeFieldInterpolator(source.support, source.biome, grid.ocean);
-    return (p: Position) => at(p.x, p.y);
-  }
-  if (source.categories?.[channel]) {
-    const at = smoothCategoryInterpolator(source.support, source.categories[channel]);
-    return (p: Position) => at(p.x, p.y);
-  }
-  return scalarReconstruction(source, channel, discreteChannel(grid, channel, discrete));
-}
-function numericalInterpolator(
   grid: Grid,
   channel: string,
   discrete: boolean,

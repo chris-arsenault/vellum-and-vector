@@ -9,7 +9,7 @@ import { PriorityQueue } from "./priorityQueue";
 import { physicalGradients } from "./physicalMetric";
 import { sourceOrder } from "./airColumn";
 import { smoothMetric } from "./metricSmoothing";
-import { directionalSources } from "./directionalSources";
+import { linkDistance } from "./longitudeWrap";
 
 const unit = (value: number) => Math.min(1, Math.max(0, value));
 
@@ -143,9 +143,9 @@ function equilibrium(map: PhysicalField, c: PhysicalContext, i: number) {
  * Surface water carries the temperature of where it came from, relaxing toward
  * the local equilibrium with distance; upwelling brings up cold water.
  */
-export function seaSurfaceAnomaly(map: PhysicalField, c: PhysicalContext) {
+export function seaSurfaceAnomaly(map: PhysicalField, c: PhysicalContext, upstream: Int32Array) {
   const p = c.Profile,
-    mixed = mixFronts(map, p, carriedAnomaly(map, c));
+    mixed = mixFronts(map, p, carriedAnomaly(map, c, upstream));
   for (let i = 0; i < map.mesh.count; i++)
     map.SeaSurfaceAnomaly[i] =
       map.WaterKindCodes[i] === 1
@@ -153,39 +153,32 @@ export function seaSurfaceAnomaly(map: PhysicalField, c: PhysicalContext) {
         : 0;
 }
 /** Departure of carried water from the local equilibrium, scaled by transport. */
-function carriedAnomaly(map: PhysicalField, c: PhysicalContext) {
+function carriedAnomaly(map: PhysicalField, c: PhysicalContext, upstream: Int32Array) {
   const p = c.Profile,
     n = map.mesh.count;
-  // Relax the incoming temperature over physical travel, independent of cell count.
+  // Exponentially weighted upstream averages, accumulated in one pass from
+  // each current's source: total = own + decay × upstream total.
   const sums = new Float64Array(n),
+    weights = new Float64Array(n),
     carried = new Float64Array(n),
-    source = directionalSources(
-      map,
-      p,
-      map.OceanCurrentX,
-      map.OceanCurrentY,
-      (i) => map.WaterKindCodes[i] === 1
-    ),
-    { order } = sourceOrder(source.primary);
-  for (let i = 0; i < n; i++) {
-    sums[i] = equilibrium(map, c, i);
-  }
-  let change: number;
-  do {
-    change = 0;
+    distance = linkDistance(map, p),
+    { order, boundary } = sourceOrder(upstream);
+  // Gyres are closed loops: the second pass lets each loop's break read the
+  // first pass's upstream value, so heat carries around the circuit.
+  for (const pass of [0, 1])
     for (const i of order) {
       if (map.WaterKindCodes[i] !== 1) continue;
-      const links = source.links[i],
+      const u = boundary[i] && pass === 0 ? -1 : upstream[i],
         local = equilibrium(map, c, i);
-      const decay = links.length ? Math.exp(-source.distance[i] / p.SeaSurfaceRelaxation) : 0;
-      const prior = carried[i];
-      const arriving = links.reduce((sum, link) => sum + link.weight * sums[link.i], 0);
-      sums[i] = local + decay * (arriving - local);
+      const decay =
+        u < 0 || map.WaterKindCodes[u] !== 1
+          ? 0
+          : Math.exp(-distance(u, i) / p.SeaSurfaceRelaxation);
+      sums[i] = local + (decay ? decay * sums[u] : 0);
+      weights[i] = 1 + (decay ? decay * weights[u] : 0);
       const transport = Math.min(1, map.OceanCurrentStrength[i] / 600);
-      carried[i] = (sums[i] - local) * transport;
-      change = Math.max(change, Math.abs(carried[i] - prior));
+      carried[i] = (sums[i] / weights[i] - local) * transport;
     }
-  } while (change > 0.05);
   return carried;
 }
 /**

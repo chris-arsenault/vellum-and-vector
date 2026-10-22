@@ -235,9 +235,6 @@ export function statefulInventoryRequest(deposition = 2) {
     quality: "draft",
     domains: ["physical"],
     features: {
-      // This fixture accepts module rebinding and carried inventory. Complete
-      // causal ecology and selectable regions have separate world acceptance.
-      "ecology.living": { enabled: false },
       [inventoryFeature]: {
         enabled: true,
         settings: { deposition },

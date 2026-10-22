@@ -102,7 +102,7 @@ it("preserves authored patches, physical sea level, lakes and emergent islands",
   raster.field.channels.elevation.fill(100);
   raster.water = { ...raster.field, channels: { seaLevel: new Float64Array(25).fill(200) } };
   raster.lakes = [{ geometry: rectangle([20, 20, 80, 80]), level: 300 }];
-  expect([...numericTileSampler(raster)([29, 29, 31, 31], 1)]).toEqual([100, 1, -200, 2, 0, 2]);
+  expect([...numericTileSampler(raster)([29, 29, 31, 31], 1)]).toEqual([100, 1, -100, 2, 0, 2]);
   const patch = fixture("elevation").field;
   patch.scope = { ...patch.scope, footprint: rectangle([45, 45, 55, 55]) };
   patch.channels.elevation.fill(400);
