@@ -151,14 +151,14 @@ test("links a coastal conflict to the actual Pressure effect and accepts zero fo
   await installGenerationFixture(page);
   await page.goto("/");
   await page.getByLabel("World name").fill("Pressure and coasts");
-  await stage(page, /Landscape$/).click();
-  const coast = page.getByLabel("Coastal change", { exact: true });
-  await coast.selectOption("off");
+  await tuneGeneration(page, "Coastal evolution");
+  const coast = page.getByRole("checkbox", { name: "Coastal evolution", exact: true });
+  await coast.uncheck();
   const panel = page.locator(".setup-issues");
   await expect(panel).toContainText("Magical coastal modification");
   await panel.getByRole("button", { name: "Enable Coastal evolution", exact: true }).click();
-  await expect(coast).toHaveValue("ordinary");
-  await coast.selectOption("off");
+  await expect(coast).toBeChecked();
+  await coast.uncheck();
   await panel.getByRole("button", { name: "Edit Configured magical systems", exact: true }).click();
   const forcing = page.locator('input[name="magic.pressure.effects.coastalForcing"]');
   await expect(forcing).toBeVisible();
@@ -168,8 +168,8 @@ test("links a coastal conflict to the actual Pressure effect and accepts zero fo
     page.getByRole("checkbox", { name: "Configured magical systems", exact: true })
   ).toBeChecked();
   await expect(page.locator(".setup-issues")).toHaveCount(0);
-  await stage(page, /Landscape$/).click();
-  await expect(coast).toHaveValue("off");
+  await tuneGeneration(page, "Coastal evolution");
+  await expect(coast).not.toBeChecked();
   await stage(page, /Review & generate/).click();
   await advancedChanges(page);
   await expect(
@@ -235,7 +235,8 @@ test("keeps cultures and politics independent and configures operative cultural 
   await page.goto("/");
   await page.getByLabel("World name").fill("People and places");
   await stage(page, /People & places/).click();
-  await page.getByLabel("Cultural geography", { exact: true }).selectOption("few");
+  await page.getByRole("checkbox", { name: "Cultures", exact: true }).check();
+  await page.getByLabel("Cultural pattern", { exact: true }).selectOption("distinct");
   await tuneGeneration(page, "Cultural distributions");
   const cultures = page.getByRole("checkbox", { name: "Cultural distributions", exact: true });
   await page.getByLabel("Starting cultures · count", { exact: true }).fill("2");
@@ -243,9 +244,10 @@ test("keeps cultures and politics independent and configures operative cultural 
   await page.getByLabel("Cultural mobility · multiplier", { exact: true }).fill("1.7");
   await page.getByLabel("Era name", { exact: true }).fill("River spread");
   await page.getByRole("button", { name: "Apply era name", exact: true }).click();
-  await page.getByLabel("Political geography", { exact: true }).selectOption("few");
+  await page.getByRole("checkbox", { name: "Political territories", exact: true }).check();
+  await page.getByLabel("Political pattern", { exact: true }).selectOption("broad");
   await cultures.uncheck();
-  await expect(page.getByLabel("Political geography", { exact: true })).toHaveValue("few");
+  await expect(page.getByLabel("Political pattern", { exact: true })).toHaveValue("broad");
   await cultures.check();
   await expect(page.getByLabel("Cultural duration · years", { exact: true })).toHaveValue("1200");
   await expect(page.getByLabel("Cultural mobility · multiplier", { exact: true })).toHaveValue(

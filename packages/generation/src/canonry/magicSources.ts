@@ -192,6 +192,7 @@ export function locateMagicSources(
   field.source.fill(0);
   field.radii.fill(0);
   field.origins = [];
+  if (!field.definition.enabled) return;
   magicSourceStrategies[field.definition.source].locate(state, field, seed);
   placedSources(state, field, epochIndex);
 }

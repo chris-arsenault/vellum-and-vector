@@ -13,6 +13,7 @@ import { physicalApplicability, climateSettings } from "./physicalApplicability"
 import { physicalCartography } from "./physicalCartography";
 import { clockConfiguration } from "./featureConfiguration";
 import type { GenerationSlot } from "./generationSlots";
+import { physicalProfileConfiguration } from "./physicalProfileConfiguration";
 export { acceptedEmptyByConsumer } from "./physicalInputs";
 
 type Operations = Record<string, (string | [string, ParameterValues])[]>;
@@ -31,10 +32,9 @@ function definition(
   operations: Operations,
   options: FeatureOptions = {}
 ): GenerationFeature {
-  const entries = Object.values(operations).flat();
-  const processes = entries.map(
-    (entry) => `canonry.${typeof entry === "string" ? entry : entry[0]}`
-  );
+  const processes = Object.values(operations)
+    .flat()
+    .map((entry) => `canonry.${typeof entry === "string" ? entry : entry[0]}`);
   return {
     id,
     label,
@@ -66,7 +66,7 @@ function definition(
         };
       });
     },
-    ...options.configuration,
+    ...(options.configuration ?? physicalProfileConfiguration(id)),
   };
 }
 

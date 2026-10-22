@@ -37,7 +37,7 @@ function createMagicField(state: GenerationState, definition: MagicSystem): Magi
     origins: [],
     features: {},
   };
-  if (!state.physical!.inherited) return field;
+  if (!definition.enabled || !state.physical!.inherited) return field;
   for (const channel of carriedMagicChannels) {
     const key = magicKey(field, channel);
     if (!state.surface.channels[key]) continue;
@@ -69,7 +69,7 @@ export function initializeMagic(
 export function advectMagic(state: GenerationState) {
   const work = state.physical!;
   for (const field of work.magic?.fields ?? []) {
-    if (!field.definition.history.advect) continue;
+    if (!field.definition.enabled || !field.definition.history.advect) continue;
     for (const channel of carriedMagicChannels) {
       const previous = field[channel].slice();
       for (let i = 0; i < work.map.mesh.count; i++) {

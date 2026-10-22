@@ -5,7 +5,12 @@ import {
   type MagicSystem,
   type ParameterValues,
 } from "@atlas/domain";
-import { generationEpochSchema } from "@atlas/generation";
+import {
+  generationEpochSchema,
+  terrainEpochs,
+  landscapeEpoch,
+  type TerrainHistory,
+} from "@atlas/generation";
 import { defaultEpochs } from "./atlasState";
 import { normalizeGenerationDraft, updateFeature, type GenerationDraft } from "./generationDraft";
 import { draftEpochBindings, sharedClock, rebindDraftEpochs } from "./generationEpochBindings";
@@ -26,7 +31,7 @@ function physicalEpoch({ ecology: _ecology, magicActivity: _magic, ...physical }
 /** A derived view of the shared clock and its feature-owned regimes. */
 export function draftEpochs(draft: GenerationDraft): Epoch[] {
   const selection = draft.recipe.features ?? normalizeGenerationDraft(draft).recipe.features!;
-  return sharedClock(selection).map((epoch) => {
+  const epochs = sharedClock(selection).map((epoch) => {
     const combined = structuredClone(epoch);
     for (const binding of draftEpochBindings()) {
       if (!binding.extension) continue;
@@ -38,6 +43,21 @@ export function draftEpochs(draft: GenerationDraft): Epoch[] {
     }
     return combined;
   });
+  const history = selection["physical.lifecycle"].configuration!.history as TerrainHistory | null;
+  const physical = history
+    ? terrainEpochs(epochs, history, selection["physical.climate"].settings!.temperature)
+    : epochs;
+  const ecology = selection["ecology.living"].configuration!;
+  return physical.map((epoch, index) => ({
+    ...epoch,
+    ecology: landscapeEpoch(
+      epoch.ecology as EcologyEpoch,
+      ecology.landscape as EcologyEpoch | undefined,
+      Boolean(ecology.glaciated),
+      index,
+      epochs.length
+    ),
+  }));
 }
 
 export function replaceDraftEpochs(
@@ -52,11 +72,17 @@ export function replaceDraftEpochs(
     "draft_epoch",
     "Use unique history names."
   );
+  const features = rebindDraftEpochs(normalized.recipe.features!, parsed, identities);
+  if (!Object.keys(identities).length) {
+    features["physical.lifecycle"].configuration!.history = null;
+    features["ecology.living"].configuration!.landscape = null;
+    features["ecology.living"].configuration!.glaciated = false;
+  }
   return {
     ...normalized,
     recipe: {
       ...normalized.recipe,
-      features: rebindDraftEpochs(normalized.recipe.features!, parsed, identities),
+      features,
     },
   };
 }
@@ -89,6 +115,7 @@ export function updatePhysicalEpoch(draft: GenerationDraft, id: string, patch: P
   );
   return updateFeature(draft, "physical.lifecycle", {
     configuration: {
+      history: null,
       epochs: epochs.map((epoch) =>
         physicalEpoch(epoch.id === id ? { ...epoch, ...patch } : epoch)
       ),
@@ -148,9 +175,13 @@ export function updateEcologyEpoch(
     "draft_epoch",
     `Choose an existing epoch: ${id}.`
   );
-  const epochs = configuration(draft, "ecology.living").epochs as Record<string, EcologyEpoch>;
+  const epochs = Object.fromEntries(
+    draftEpochs(draft).map((epoch) => [epoch.id, epoch.ecology ?? {}])
+  );
   return updateFeature(draft, "ecology.living", {
     configuration: {
+      landscape: null,
+      glaciated: false,
       epochs: { ...epochs, [id]: { ...epochs[id], ...patch } },
     },
   });

@@ -7,6 +7,17 @@ state, restart, recovery, backend or MCP is part of this product phase.
 The current module contracts, feature-owned recipes, validity model and output
 registration are described in [Generation modules and recipes](generation-modules.md).
 
+The working [generation control mappings](generation-control-mappings.md) record
+the 2026-10-22 implementation: physical and living map outcomes, independent cultural
+and political patterns, and distinct Fire, Aurora and Pressure controls. They
+follow the magic source authority and product contract above. Global magic
+imprint, identical per-system ecological menus and fixed decision totals are
+withdrawn. All three systems support independent inclusion; contributor-level
+omission checks close the coastal-feedback leak. The document records executable
+coefficient vectors, bounded geographic calibration and the distinction between
+implemented geography and the separate proposed social mechanisms. Wizard
+ordering and layout are unchanged.
+
 This is the generation direction for Vellum & Vector. The
 [product contract](product-spec.md#10-procedural-generation-domains) defines
 behavior; [ADR 0002](adr/0002-relational-spatial-storage.md) records application

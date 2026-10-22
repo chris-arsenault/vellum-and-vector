@@ -19,6 +19,7 @@ import {
 import type { MapProcess, ProcessSequence } from "./process";
 import type { PublicationDefinition } from "./publication";
 import { generationSlots, type GenerationSlot } from "./generationSlots";
+import type { AtlasParameters } from "./atlasParameters";
 
 /** Static application modules are imported identically by browser and worker. */
 export interface GenerationModule {
@@ -81,7 +82,13 @@ export class GenerationModuleRegistry {
   bindSettings(features: ResolvedFeatures, legacy: GenerationSettings) {
     return this.features().reduce(
       (settings, feature) =>
-        bindConfiguration(feature, features.selection[feature.id]?.configuration, settings, "bind"),
+        bindConfiguration(
+          feature,
+          features.selection[feature.id]?.configuration,
+          settings,
+          "bind",
+          features.parameters
+        ),
       structuredClone(legacy)
     );
   }
@@ -129,12 +136,16 @@ function bindConfiguration(
   feature: GenerationFeature,
   configuration: ParameterValues | undefined,
   settings: GenerationSettings,
-  operation: "prepare" | "bind"
+  operation: "prepare" | "bind",
+  parameters?: AtlasParameters
 ) {
   const binding = feature.configurationBinding,
     apply = binding?.[operation];
   if (!binding || !apply || !configuration) return settings;
-  const patch = apply(structuredClone(configuration), structuredClone(settings));
+  const patch =
+    operation === "bind"
+      ? binding.bind(structuredClone(configuration), structuredClone(settings), parameters!)
+      : binding.prepare!(structuredClone(configuration), structuredClone(settings));
   for (const key of Object.keys(patch))
     requireThat(
       binding.fields.includes(key as keyof GenerationSettings) ||

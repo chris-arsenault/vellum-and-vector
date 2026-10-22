@@ -35,11 +35,11 @@ test("selects and tunes geographic capabilities together and sends those choices
   await page.getByRole("button", { name: "Close adjustments", exact: true }).click();
   await page.screenshot({ path: "test-results/artifacts/m1-land-desktop.png" });
   await environment(page).click();
-  await expect(page.getByLabel("Glacial influence", { exact: true })).toHaveCount(1);
+  await expect(page.getByLabel("Living landscape", { exact: true })).toHaveCount(1);
   await expect(page.getByRole("checkbox", { name: /Glacial (erosion|deposition)/i })).toHaveCount(
     0
   );
-  await page.getByLabel("River terrain", { exact: true }).selectOption("plains");
+  await page.getByLabel("Living landscape", { exact: true }).selectOption("humid");
   await expect(page.locator(".setup-actions")).toBeInViewport();
   await page.screenshot({ path: "test-results/artifacts/m1-environment-desktop.png" });
   await page.getByRole("button", { name: "Back", exact: true }).click();
@@ -64,7 +64,7 @@ test("selects and tunes geographic capabilities together and sends those choices
     settings: { volcanism: 1.7 },
   });
   expect(request.input.features?.["physical.impacts"].enabled).toBe(false);
-  expect(request.input.features?.["physical.river-incision"].enabled).toBe(false);
+  expect(request.input.features?.["physical.river-incision"].enabled).toBe(true);
   expect(request.input.features?.["physical.river-networks"].enabled).toBe(true);
   expect(request.input.areaId).toBe(request.snapshot.scope.areaId);
   expect(request.snapshot.world.id).toBe(
@@ -115,8 +115,8 @@ test("keeps the workflow reachable on a narrow screen and supports keyboard stag
     .toBe(true);
   await page.screenshot({ path: "test-results/artifacts/m1-land-narrow.png" });
   await environment(page).click();
-  await page.getByLabel("Glacial influence", { exact: true }).scrollIntoViewIfNeeded();
-  await expect(page.getByLabel("Glacial influence", { exact: true })).toBeInViewport();
+  await page.getByLabel("Living landscape", { exact: true }).scrollIntoViewIfNeeded();
+  await expect(page.getByLabel("Living landscape", { exact: true })).toBeInViewport();
   await expect(page.locator(".setup-actions")).toBeInViewport();
   await page.screenshot({ path: "test-results/artifacts/m1-environment-narrow.png" });
 });

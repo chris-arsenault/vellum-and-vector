@@ -20,6 +20,7 @@ import { createWorldMesh } from "./worldMesh";
 import { createAdaptiveWorldMesh } from "./adaptiveMesh";
 import { triangleSample, type TriangleSample } from "./triangleSampling";
 import { atlasPhysicalProfile, atlasQuality } from "./atlasProfile";
+import type { PhysicalProfileOverrides } from "../physicalProfileConfiguration";
 import { atlasChannels, type ChannelBinding } from "./atlasChannels";
 import type { PhysicalProfile } from "./profile";
 import { units } from "./math";
@@ -173,9 +174,10 @@ function fixedAuthoring(state: GenerationState, work: AtlasPhysicalWorkspace) {
 export function createAtlasWorkspace(
   state: GenerationState,
   quality: keyof typeof atlasQuality,
-  parameters: Partial<AtlasParameters> = {}
+  parameters: Partial<AtlasParameters> = {},
+  overrides: PhysicalProfileOverrides = {}
 ): AtlasPhysicalWorkspace {
-  const profile = atlasPhysicalProfile(parameters);
+  const profile = atlasPhysicalProfile(parameters, overrides);
   const frame = spatial.bounds(state.domain.world.reference.domain);
   profile.WorldExtentY = [frame[1], frame[3]];
   profile.WorldExtentX = [frame[0], frame[2]];

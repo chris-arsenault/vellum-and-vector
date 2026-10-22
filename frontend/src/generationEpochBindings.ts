@@ -41,9 +41,11 @@ export function rebindDraftEpochs(
         : Object.fromEntries(
             epochs.map((epoch) => [
               epoch.id,
-              binding.extension
-                ? (epoch[binding.extension] ?? {})
-                : (records[identities[epoch.id] ?? epoch.id] ?? {}),
+              Object.keys(identities).length
+                ? (records[identities[epoch.id] ?? epoch.id] ?? {})
+                : binding.extension
+                  ? (epoch[binding.extension] ?? {})
+                  : (records[identities[epoch.id] ?? epoch.id] ?? {}),
             ])
           );
     next[binding.id] = {

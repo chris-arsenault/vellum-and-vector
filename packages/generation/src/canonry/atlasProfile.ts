@@ -3,13 +3,17 @@ import { physicalProfile, type PhysicalProfile } from "./profile";
 import { clamp, round } from "./math";
 import { atlasParametersSchema, type AtlasParameters } from "../atlasParameters";
 import { latitudeAtY } from "./latitude";
+import type { PhysicalProfileOverrides } from "../physicalProfileConfiguration";
 
 export const atlasQuality = {
   draft: { baseCells: 16384 },
   standard: { baseCells: 65536 },
   fine: { baseCells: 262144 },
 };
-export function atlasPhysicalProfile(parameters: Partial<AtlasParameters> = {}): PhysicalProfile {
+export function atlasPhysicalProfile(
+  parameters: Partial<AtlasParameters> = {},
+  overrides: PhysicalProfileOverrides = {}
+): PhysicalProfile {
   const settings = atlasParametersSchema.parse(parameters);
   const profile = structuredClone(physicalProfile);
   profile.ContinentalAssemblyCount = settings.continents;
@@ -50,7 +54,7 @@ export function atlasPhysicalProfile(parameters: Partial<AtlasParameters> = {}):
   profile.SeaIceCurrentResistance = 20;
   profile.SeaIceWaveResistance = 20;
   profile.SeaIceSuitabilityVariation = 30;
-  return profile;
+  return Object.assign(profile, overrides);
 }
 /** Latitude of a world northing under the given settings and world frame [south, north]. */
 export function atlasLatitude(

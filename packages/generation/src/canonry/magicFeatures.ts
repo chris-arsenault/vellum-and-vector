@@ -19,10 +19,10 @@ function conditionReader(
 ) {
   const { map, magic } = state.physical!;
   const key = test.field;
-  if (key.startsWith("system:"))
-    return (i: number) =>
-      magic!.fields.find((candidate) => candidate.definition.id === key.slice(7))?.intensity[i] ??
-      0;
+  if (key.startsWith("system:")) {
+    const participant = magic!.fields.find((candidate) => candidate.definition.id === key.slice(7));
+    return (i: number) => (participant?.definition.enabled ? participant.intensity[i] : NaN);
+  }
   const values: Record<string, ArrayLike<number>> = {
     intensity: field.intensity,
     history: field.history,

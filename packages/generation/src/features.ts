@@ -36,7 +36,11 @@ export interface FeatureConfigurationBinding {
     configuration: ParameterValues,
     settings: GenerationSettings
   ): Partial<GenerationSettings>;
-  bind(configuration: ParameterValues, settings: GenerationSettings): Partial<GenerationSettings>;
+  bind(
+    configuration: ParameterValues,
+    settings: GenerationSettings,
+    parameters: AtlasParameters
+  ): Partial<GenerationSettings>;
 }
 
 /** A creator capability owns its settings, operations and delivered products. */

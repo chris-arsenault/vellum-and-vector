@@ -19,6 +19,7 @@ export function magicThermalFeedback(state: GenerationState) {
     let heat = 0,
       melt = 0;
     for (const field of magic.fields) {
+      if (!field.definition.enabled) continue;
       const effects = field.definition.effects;
       heat += field.intensity[i] * effects.heat;
       melt += field.intensity[i] * effects.iceMelt;
@@ -40,7 +41,7 @@ export function magicRockFeedback(state: GenerationState) {
     map = work.map;
   for (let i = 0; i < map.mesh.count; i++) {
     let delta = 0;
-    for (const field of work.magic!.fields)
+    for (const field of work.magic!.fields.filter((field) => field.definition.enabled))
       delta += (field.intensity[i] / 1000) * field.definition.effects.rockResistance;
     map.RockResistance[i] = rockResistance(map.RockResistance[i] + round(delta));
   }
@@ -54,9 +55,10 @@ export function magicCoastalFeedback(state: GenerationState, context?: MapProces
     magic = work.magic!,
     map = work.map;
   const epoch = coastalEpoch(context);
+  const fields = magic.fields.filter((field) => field.definition.enabled);
   for (let i = 0; i < map.mesh.count; i++) {
     let total = 0;
-    for (const field of magic.fields) {
+    for (const field of fields) {
       const multiplier = field.definition.effects.coastalForcing;
       if (!multiplier || map.WaterKindCodes[i] !== 0) continue;
       let pressure = 0,
@@ -93,6 +95,7 @@ export function retainMagicHistory(state: GenerationState, context: MapProcessCo
   const map = state.physical!.map,
     index = coastalEpoch(context);
   for (const field of state.physical!.magic!.fields) {
+    if (!field.definition.enabled) continue;
     const retention = field.definition.history;
     let active = 0,
       maximum = 0;

@@ -10,15 +10,39 @@ import { useWorkflowFields } from "./workflowFieldState";
 import { discardFeatureFieldEdits } from "./generationFieldEdits";
 
 export function CartographicDecisions({ flow }: { flow: GenerationWorkflow }) {
-  const controls = visibleCartographicControls(Boolean(flow.options.source)).filter(
-    (item) => item.section === flow.stage
+  const controls = visibleCartographicControls(Boolean(flow.options.source), flow.draft).filter(
+    (item) => item.section === flow.stage && !item.system
   );
   return (
     <div className="cartographic-decisions">
+      {flow.stage === "people" && <PeopleContent flow={flow} />}
       {controls.map((control) => (
         <CartographicDecision key={control.id} flow={flow} control={control} />
       ))}
     </div>
+  );
+}
+
+function PeopleContent({ flow }: { flow: GenerationWorkflow }) {
+  const content = [
+    { id: "human.cultures", label: "Cultures" },
+    { id: "human.politics", label: "Political territories" },
+    { id: "built.layout", label: "Settlements and routes" },
+  ];
+  return (
+    <fieldset>
+      <legend>Include in this map</legend>
+      {content.map(({ id, label }) => (
+        <label key={id} className="check">
+          <input
+            type="checkbox"
+            checked={Boolean(flow.setup?.features.find((feature) => feature.id === id)?.enabled)}
+            onChange={(event) => flow.feature(id, { enabled: event.target.checked })}
+          />
+          {label}
+        </label>
+      ))}
+    </fieldset>
   );
 }
 export function CartographicDecision({
@@ -33,6 +57,7 @@ export function CartographicDecision({
   const unfinished = cartographicFieldPending(control, fields.errors);
   const value = unfinished ? "custom" : cartographicValue(flow.draft, control);
   const change = (value: string) => {
+    for (const field of control.fields ?? []) fields.clearExact(field);
     const choice = control.choices.find((item) => item.id === value)!;
     for (const [id, patch] of Object.entries(choice.features)) {
       if (patch.enabled === false) discardFeatureFieldEdits(flow, id, fields);
@@ -52,7 +77,7 @@ export function CartographicDecision({
           onChange={(event) => change(event.target.value)}
         >
           <option value="custom" disabled>
-            Custom
+            {control.system ? "Authored recipe" : "Custom"}
           </option>
           {control.choices.map((item) => (
             <option key={item.id} value={item.id}>
@@ -62,14 +87,16 @@ export function CartographicDecision({
         </select>
       </label>
       <p>{control.explanation}</p>
-      <button
-        type="button"
-        className="setup-link"
-        aria-label={"Adjust " + control.label.toLowerCase()}
-        onClick={() => flow.locate(affected[0])}
-      >
-        Adjust
-      </button>
+      {!control.system && (
+        <button
+          type="button"
+          className="setup-link"
+          aria-label={"Adjust " + control.label.toLowerCase()}
+          onClick={() => flow.locate(affected[0])}
+        >
+          Adjust
+        </button>
+      )}
     </article>
   );
 }

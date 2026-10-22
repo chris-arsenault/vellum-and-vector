@@ -1,5 +1,6 @@
 import { atlasParameterDefinitions } from "./atlasParameters";
 import { domainCartography } from "./domainCartography";
+import { magicCartography } from "./magicCartography";
 import type { GenerationFeature } from "./features";
 import type { MapProcess, ProcessSequence } from "./process";
 import { culturalProcess, politicalProcess } from "./mapPeople";
@@ -68,7 +69,7 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
   },
   {
     id: "magic.configured",
-    cartography: [domainCartography["magic.configured"]],
+    cartography: magicCartography,
     ...magicConfiguration,
     label: "Configured magical systems",
     domains: ["magic"],
@@ -138,7 +139,6 @@ export const domainFeatureDefinitions: GenerationFeature[] = [
   },
   {
     id: "built.layout",
-    cartography: [domainCartography["built.layout"]],
     label: "Built geography",
     applicability: {
       publicationProfiles: {

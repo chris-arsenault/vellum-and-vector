@@ -30,8 +30,8 @@ it("generates an owned workflow recipe and refines a region without replaying it
   draft = renameDraftEpoch(draft, "Formation", "First landscape");
   draft = updateEcologyEpoch(draft, "First landscape", { migration: 1.4 });
   for (const [id, value] of [
-    ["event-geography", "volcanic"],
-    ["river-terrain", "plains"],
+    ["landmarks", "scattered"],
+    ["terrain", "plains"],
   ])
     draft = applyCartographicChoice(
       draft,

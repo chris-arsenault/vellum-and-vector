@@ -48,7 +48,7 @@ it("projects each capability's operative controls and diagnostic ownership witho
   expect(new Set(view.features.map((item) => item.id)).size).toBe(32);
   expect(
     atlasFeatureDefinitions.flatMap((item) => item.cartography ?? []).map((item) => item.id)
-  ).toContain("river-terrain");
+  ).toContain("terrain");
   const sculpting = feature(view, "physical.glacial-sculpting");
   expect(sculpting.invocationIds).toEqual([
     expect.stringContaining("glacial-erosion"),

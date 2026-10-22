@@ -157,6 +157,13 @@ export function propagateMagic(
   field.wake.fill(0);
   field.rogue.fill(0);
   field.retained.fill(0);
+  if (!field.definition.enabled) {
+    field.source.fill(0);
+    field.stored.fill(0);
+    field.radii.fill(0);
+    field.origins = [];
+    return;
+  }
   if (activity <= 0) {
     field.source.fill(0);
     field.origins = [];

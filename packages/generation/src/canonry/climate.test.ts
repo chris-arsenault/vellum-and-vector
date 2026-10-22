@@ -9,8 +9,7 @@ import { floodEcology } from "./ecologyDisturbance";
 import { warmthSources } from "./warmth";
 import { seaIce } from "./seaIce";
 import { atlasPresets, rainfallRegimes } from "../atlasParameters";
-import { physicalCartography } from "../physicalCartography";
-import type { CartographicControl } from "../cartographicControls";
+import { domainCartography } from "../domainCartography";
 import { units } from "./math";
 
 // Flat lowland and open sea at one latitude, with given crustal and current heat.
@@ -106,10 +105,15 @@ it("carries the rainfall setting as moisture supply, from one regime table", () 
     wet = atlasPhysicalProfile({ rainfall: 2 });
   expect(wet.ColumnSaturation).toBe(base.ColumnSaturation * 2);
   expect(wet.ColumnRainEfficiency).toBe(base.ColumnRainEfficiency);
-  const regime = physicalCartography["water.routing"] as CartographicControl;
+  const regime = domainCartography["ecology.living"];
   expect(
     regime.choices.map((item) => item.features["physical.climate"].settings?.rainfall)
-  ).toEqual(Object.values(rainfallRegimes).map((item) => item.rainfall));
+  ).toEqual([
+    rainfallRegimes.dry.rainfall,
+    rainfallRegimes.mixed.rainfall,
+    rainfallRegimes.mixed.rainfall,
+    rainfallRegimes.wet.rainfall,
+  ]);
   expect(atlasPresets.arid.parameters.rainfall).toBe(rainfallRegimes.dry.rainfall);
   expect(atlasPresets.wet.parameters.rainfall).toBe(rainfallRegimes.wet.rainfall);
 });

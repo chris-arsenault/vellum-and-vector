@@ -27,4 +27,5 @@ export * from "./generationModules";
 export * from "./atlasModules";
 export * from "./generationPresentation";
 export * from "./cartographicControls";
+export * from "./cartographicHistory";
 export * from "./setupProjection";

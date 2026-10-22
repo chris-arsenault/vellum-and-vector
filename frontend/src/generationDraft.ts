@@ -6,6 +6,7 @@ import {
   atlasGenerationModules,
   generationSettingsSchema,
   resolveGenerationFeatures,
+  applyCartographicSelection,
   type FeatureSelection,
   type GenerationRecipe,
 } from "@atlas/generation";
@@ -25,7 +26,7 @@ export interface GenerationDraft {
   recipe: GenerationRecipe;
 }
 export function newGenerationDraft(): GenerationDraft {
-  return normalizeGenerationDraft({
+  const draft = normalizeGenerationDraft({
     worldId: crypto.randomUUID(),
     name: "",
     width: 4_000_000,
@@ -46,6 +47,13 @@ export function newGenerationDraft(): GenerationDraft {
       },
     }),
   });
+  let features = draft.recipe.features!;
+  for (const feature of atlasGenerationModules.features())
+    for (const control of feature.cartography ?? []) {
+      const reference = control.choices.find((choice) => choice.id === control.defaultChoice);
+      if (reference) features = applyCartographicSelection(features, reference);
+    }
+  return normalizeGenerationDraft({ ...draft, recipe: { ...draft.recipe, features } });
 }
 
 /** Import compatibility once; subsequent edits belong to feature selections. */

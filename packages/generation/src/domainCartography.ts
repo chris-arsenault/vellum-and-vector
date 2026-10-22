@@ -1,78 +1,68 @@
+import { ecologyEpochSchema } from "@atlas/domain";
 import { choice, type CartographicControl } from "./cartographicControls";
 
 export const domainCartography: Record<string, CartographicControl> = {
-  "magic.configured": {
-    id: "configured-influences",
-    label: "Configured influences",
-    section: "environment",
-    explanation:
-      "Include the configured systems and their interactions in the shared generation history.",
-    choices: [
-      choice("off", "Omitted", { "magic.configured": { enabled: false } }),
-      choice("on", "Configured systems", { "magic.configured": { enabled: true } }),
-    ],
-  },
   "ecology.living": {
-    id: "living-cover",
-    label: "Living cover",
+    id: "living-landscape",
+    label: "Living landscape",
     section: "environment",
     initialOnly: true,
+    defaultChoice: "mosaic",
     explanation:
-      "Living communities respond to climate and history; productivity and grazing jointly influence their development.",
-    choices: [
-      choice("off", "Omitted", { "ecology.living": { enabled: false } }),
-      choice("sparse", "Lower productivity", {
-        "ecology.living": { enabled: true, settings: { vegetation: 0.4, grazing: 1.5 } },
-      }),
-      choice("productive", "Ordinary productivity", {
-        "ecology.living": { enabled: true, settings: { vegetation: 1, grazing: 1 } },
-      }),
-      choice("high", "Higher productivity", {
-        "ecology.living": { enabled: true, settings: { vegetation: 1.8, grazing: 0.6 } },
-      }),
-    ],
+      "Vegetation, seasonal stress, fire and browsing respond together to water and climate. Isolated or recently disturbed ground still needs time to recover.",
+    choices: ["Dry and sparse", "Seasonally open country", "Wooded mosaic", "Humid woodland"].map(
+      (label, index) =>
+        choice(["dry", "open", "mosaic", "humid"][index], label, {
+          "physical.climate": { settings: { rainfall: [0.07, 1, 1, 2][index] } },
+          "ecology.living": {
+            settings: {
+              vegetation: [0.8, 0.9, 1.5, 2.5][index],
+              grazing: [0.8, 1.4, 0.5, 0.1][index],
+            },
+            configuration: {
+              landscape: ecologyEpochSchema.parse({
+                seasonality: [0.3, 0.65, 0.3, 0.2][index],
+                fire: [0.5, 2, 1, 0.35][index],
+                recovery: [1, 1, 2, 3][index],
+              }),
+            },
+          },
+        })
+    ),
   },
   "human.cultures": {
-    id: "cultural-geography",
-    label: "Cultural geography",
+    id: "cultural-pattern",
+    label: "Cultural pattern",
     section: "people",
+    initialOnly: true,
+    defaultChoice: "overlapping",
     explanation:
-      "Starting cultures and their distributions; these do not define political borders. Existing regional identities are retained.",
-    choices: [
-      choice("none", "Omitted", { "human.cultures": { enabled: false } }),
-      choice("few", "Few starting cultures", {
-        "human.cultures": { enabled: true, settings: { cultureCount: 3 } },
-      }),
-      choice("many", "Many starting cultures", {
-        "human.cultures": { enabled: true, settings: { cultureCount: 8 } },
-      }),
-    ],
+      "Distinct concentrations or broader overlapping prevalence. These fields do not prescribe political borders or simulate migration routes.",
+    choices: ["Distinct centers", "Overlapping regions", "Broad mixture"].map((label, index) =>
+      choice(["distinct", "overlapping", "mixed"][index], label, {
+        "human.cultures": {
+          settings: { cultureCount: [3, 6, 9][index] },
+          configuration: {
+            eras: [
+              { id: "Settlement", years: [50, 200, 800][index], mobility: [0.25, 1, 1.5][index] },
+            ],
+          },
+        },
+      })
+    ),
   },
   "human.politics": {
-    id: "political-geography",
-    label: "Political geography",
+    id: "political-pattern",
+    label: "Political pattern",
     section: "people",
+    defaultChoice: "regional",
     explanation:
-      "Starting polities, independently of cultures. Existing regional identities are retained.",
-    choices: [
-      choice("none", "Omitted", { "human.politics": { enabled: false } }),
-      choice("few", "Few starting polities", {
-        "human.politics": { enabled: true, settings: { polityCount: 3 } },
-      }),
-      choice("many", "Many starting polities", {
-        "human.politics": { enabled: true, settings: { polityCount: 10 } },
-      }),
-    ],
-  },
-  "built.layout": {
-    id: "places-and-routes",
-    label: "Places and routes",
-    section: "people",
-    explanation:
-      "Settlements and roads at world and region scale; finer profiles use their existing layout behavior.",
-    choices: [
-      choice("off", "Omitted", { "built.layout": { enabled: false } }),
-      choice("on", "Generate places and connections", { "built.layout": { enabled: true } }),
-    ],
+      "The scale and density of territorial partitions, independently of cultural prevalence.",
+    choices: ["Broad territories", "Regional states", "Many small territories"].map(
+      (label, index) =>
+        choice(["broad", "regional", "small"][index], label, {
+          "human.politics": { settings: { polityCount: [3, 7, 14][index] } },
+        })
+    ),
   },
 };

@@ -1,4 +1,5 @@
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
+import type { CartographicControl } from "@atlas/generation";
 import {
   cartographicValue,
   visibleCartographicControls,
@@ -8,10 +9,9 @@ import { useWorkflowFields } from "./workflowFieldState";
 import { GenerationConfigurationSummary } from "./GenerationConfigurationSummary";
 import { GenerationRecipeEditor } from "./GenerationRecipeEditor";
 import { SetupDisclosure } from "./SetupDisclosure";
+import type { MagicSystem } from "@atlas/domain";
 
 export function GenerationReview({ flow }: { flow: GenerationWorkflow }) {
-  const fields = useWorkflowFields();
-  const controls = visibleCartographicControls(Boolean(flow.options.source));
   const changed =
     flow.setup?.features.filter(
       (feature) =>
@@ -25,31 +25,7 @@ export function GenerationReview({ flow }: { flow: GenerationWorkflow }) {
         {flow.draft.height / 1000} km · {flow.draft.recipe.quality} detail · seed{" "}
         {flow.draft.recipe.seed}
       </p>
-      <dl className="cartographic-review">
-        {controls.map((control) => {
-          const value = cartographicFieldPending(control, fields.errors)
-            ? "custom"
-            : cartographicValue(flow.draft, control);
-          return (
-            <div key={control.id}>
-              <dt>{control.label}</dt>
-              <dd>
-                {control.choices.find((choice) => choice.id === value)?.label ?? "Custom"}
-                <button
-                  type="button"
-                  className="setup-link"
-                  onClick={() => {
-                    flow.setTuning(null);
-                    flow.setStage(control.section);
-                  }}
-                >
-                  Change {control.label.toLowerCase()}
-                </button>
-              </dd>
-            </div>
-          );
-        })}
-      </dl>
+      <ReviewDecisions flow={flow} />
       <ReviewContext flow={flow} />
       {changed.length > 0 && (
         <SetupDisclosure title="Advanced changes" className="setup-review-changes">
@@ -82,6 +58,56 @@ export function GenerationReview({ flow }: { flow: GenerationWorkflow }) {
       )}
       <GenerationRecipeEditor flow={flow} />
     </>
+  );
+}
+
+function ReviewDecisions({ flow }: { flow: GenerationWorkflow }) {
+  const controls = visibleCartographicControls(Boolean(flow.options.source), flow.draft);
+  return (
+    <dl className="cartographic-review">
+      {controls.map((control) => (
+        <ReviewDecision key={control.id} flow={flow} control={control} />
+      ))}
+    </dl>
+  );
+}
+function ReviewDecision({
+  flow,
+  control,
+}: {
+  flow: GenerationWorkflow;
+  control: CartographicControl;
+}) {
+  const fields = useWorkflowFields();
+  const value = cartographicFieldPending(control, fields.errors)
+    ? "custom"
+    : cartographicValue(flow.draft, control);
+  const systems = flow.draft.recipe.features!["magic.configured"].configuration!
+    .magicSystems as unknown as MagicSystem[];
+  const system = systems.find((entry) => entry.id === control.system);
+  const label = control.system ? `${system?.name}: ${control.label}` : control.label;
+  const outcome =
+    system && !system.enabled
+      ? "Absent"
+      : (control.choices.find((choice) => choice.id === value)?.label ?? "Authored recipe");
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>
+        {outcome}
+        <button
+          type="button"
+          className="setup-link"
+          onClick={() => {
+            flow.setTuning(null);
+            if (control.system) flow.showInfluences();
+            else flow.setStage(control.section);
+          }}
+        >
+          Change {control.label.toLowerCase()}
+        </button>
+      </dd>
+    </div>
   );
 }
 function ReviewContext({ flow }: { flow: GenerationWorkflow }) {

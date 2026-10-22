@@ -2,6 +2,7 @@ import {
   atlasGenerationModules,
   controlFeatures,
   matchCartographicChoice,
+  mergeCartographicConfiguration,
   type CartographicControl,
   type FeatureSelection,
 } from "@atlas/generation";
@@ -11,13 +12,32 @@ import { updateFeature, type GenerationDraft } from "./generationDraft";
 export function cartographicControls() {
   return atlasGenerationModules.features().flatMap((feature) => feature.cartography ?? []);
 }
-export function visibleCartographicControls(inherited: boolean) {
+export function visibleCartographicControls(inherited: boolean, draft?: GenerationDraft) {
   return cartographicControls()
     .filter((control) => !inherited || !control.initialOnly)
+    .filter((control) => !draft || controlAvailable(draft, control))
     .map((control) => ({
       ...control,
       choices: control.choices.filter((choice) => !inherited || !choice.initialOnly),
     }));
+}
+
+function controlAvailable(draft: GenerationDraft, control: CartographicControl) {
+  const owner = atlasGenerationModules
+    .features()
+    .find((feature) => feature.cartography?.some((entry) => entry.id === control.id))!;
+  if (
+    !draft.recipe.features![owner.id]?.enabled ||
+    !owner.domains.some((domain) =>
+      draft.recipe.domains.includes(domain as GenerationDraft["recipe"]["domains"][number])
+    )
+  )
+    return false;
+  if (!control.system) return true;
+  const systems = draft.recipe.features![owner.id].configuration!.magicSystems as unknown as {
+    id: string;
+  }[];
+  return systems.some((system) => system.id === control.system);
 }
 
 export function cartographicValue(draft: GenerationDraft, control: CartographicControl) {
@@ -41,6 +61,7 @@ export function cartographicFieldPending(
   control: CartographicControl,
   errors: Record<string, string>
 ) {
+  if (control.fields?.some((field) => errors[field])) return true;
   return control.choices.some((choice) =>
     Object.entries(choice.features).some(
       ([id, patch]) =>
@@ -58,8 +79,16 @@ export function applyCartographicChoice(
   const selected = control.choices.find((item) => item.id === value);
   requireThat(selected, "cartographic_choice", "Choose a supported cartographic option.");
   let next = draft;
-  for (const [id, patch] of Object.entries(selected.features))
-    next = updateFeature(next, id, patch);
+  const patches = selected.resolve?.(draft.recipe.features!) ?? selected.features;
+  for (const [id, patch] of Object.entries(patches)) {
+    const merged = { ...patch };
+    if (patch.configuration !== undefined)
+      merged.configuration = mergeCartographicConfiguration(
+        next.recipe.features![id].configuration!,
+        patch.configuration
+      );
+    next = updateFeature(next, id, merged);
+  }
   const visited = new Set<string>();
   const requireFeature = (id: string) => {
     if (visited.has(id)) return;
@@ -71,8 +100,7 @@ export function applyCartographicChoice(
       requireFeature(prerequisite);
     }
   };
-  for (const [id, patch] of Object.entries(selected.features))
-    if (patch.enabled) requireFeature(id);
+  for (const [id, patch] of Object.entries(patches)) if (patch.enabled) requireFeature(id);
   return next;
 }
 

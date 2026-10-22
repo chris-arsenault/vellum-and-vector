@@ -1,11 +1,10 @@
 import { expect, it } from "vitest";
-import {
-  atlasGenerationModules,
-  rainfallRegimes,
-  type CartographicControl,
-} from "@atlas/generation";
+import { canonryMagicPresets, type MagicSystem } from "@atlas/domain";
+import { configuredPhysicalProfile } from "../../packages/generation/src/physicalProfileConfiguration";
+import { atlasPhysicalProfile } from "../../packages/generation/src/canonry/atlasProfile";
 import {
   newGenerationDraft,
+  normalizeGenerationRecipe,
   prepareDraft,
   setFeatureSetting,
   updateFeature,
@@ -14,131 +13,177 @@ import {
   applyCartographicChoice,
   cartographicControls,
   cartographicValue,
-  cartographicFieldPending,
 } from "./cartographicDraft";
+import { setDraftMagicSystems, draftEpochs, renameDraftEpoch } from "./generationDraftEpochs";
 
-function control(id: string) {
-  return cartographicControls().find((item) => item.id === id)!;
-}
-it("prepares every curated choice through the real schemas and dependency checker", () => {
-  const base = updateFeature(newGenerationDraft(), "magic.configured", { enabled: false });
+const control = (id: string) => cartographicControls().find((control) => control.id === id)!;
+const choose = (draft: ReturnType<typeof newGenerationDraft>, id: string, value: string) =>
+  applyCartographicChoice(draft, control(id), value);
+
+it("prepares every curated outcome through schemas, process dependencies and native profile bindings", () => {
+  const base = newGenerationDraft();
   for (const definition of cartographicControls())
     for (const choice of definition.choices) {
       const draft = applyCartographicChoice(base, definition, choice.id);
       const prepared = prepareDraft(draft);
       expect(
         prepared.diagnostics.filter((item) => item.severity === "error"),
-        definition.id + ":" + choice.id
+        `${definition.id}:${choice.id}`
       ).toEqual([]);
       expect(cartographicValue(draft, definition)).toBe(choice.id);
     }
 });
-it("composes river geography without forcing incision or changing climate and identity", () => {
-  const original = setFeatureSetting(newGenerationDraft(), "physical.climate", "temperature", 23);
-  const draft = applyCartographicChoice(original, control("river-terrain"), "plains");
+
+it("uses meaningful reference choices while preserving the authored magic recipes", () => {
+  const draft = newGenerationDraft();
+  for (const definition of cartographicControls().filter((entry) => entry.defaultChoice))
+    expect(cartographicValue(draft, definition)).toBe(definition.defaultChoice);
+  expect(prepareDraft(draft).input.settings!.magicSystems).toEqual(canonryMagicPresets());
+});
+
+it("rejects unowned coefficients and invalid physical coefficient dimensions at the recipe boundary", () => {
+  for (const [owner, key, value] of [
+    ["physical.coastal-construction", "CoastalDetailScale", 0],
+    ["physical.volcanism", "MantlePlumeCount", 1.5],
+    ["physical.impacts", "ImpactPrimordialShare", 1001],
+    ["physical.foundation", "ContinentalAssemblySeparationDepth", 2],
+    ["physical.foundation", "DeltaMaximumRadius", 4000],
+  ] as const)
+    expect(() =>
+      prepareDraft(
+        updateFeature(newGenerationDraft(), owner, { configuration: { profile: { [key]: value } } })
+      )
+    ).toThrow();
+});
+
+it("composes terrain, shore, climate and ecological history independently of selection order", () => {
+  const choices = [
+    ["land-and-sea", "islands"],
+    ["terrain", "glacial"],
+    ["shoreline", "inlets"],
+    ["warmth", "warmer"],
+    ["living-landscape", "humid"],
+  ];
+  const base = newGenerationDraft();
+  const forward = choices.reduce((draft, [id, value]) => choose(draft, id, value), base);
+  const reverse = [...choices]
+    .reverse()
+    .reduce((draft, [id, value]) => choose(draft, id, value), base);
+  const first = normalizeGenerationRecipe(forward.recipe),
+    second = normalizeGenerationRecipe(reverse.recipe);
+  expect(first).toEqual(second);
+  expect(first.settings.epochs.map((epoch) => epoch.id)).toEqual([
+    "Formation",
+    "Cold age",
+    "Present",
+  ]);
+  expect(first.settings.epochs[1]).toMatchObject({
+    temperature: -20,
+    seaLevel: -60,
+    ice: 1,
+    ecology: { seasonality: 0.2, rainfall: 0.8, productivity: 0.4, migration: 0.5, recovery: 1.5 },
+  });
+  expect(first.settings.epochs[1].ecology!.fire).toBeCloseTo(0.07);
+  expect(first.settings.epochs[2]).toMatchObject({
+    duration: 200,
+    temperature: 15,
+    ecology: { productivity: 1.2, migration: 1.5, recovery: 4.5, fire: 0.35 },
+  });
+  expect(first.parameters).toMatchObject({
+    temperature: 23,
+    seaLevel: 60,
+    rainfall: 2,
+    vegetation: 2.5,
+  });
+  // Repeated normalization cannot multiply either baseline or history again.
+  expect(normalizeGenerationRecipe(first)).toEqual(first);
+});
+
+it("passes all owned native coefficients into the actual physical profile, preserving other decisions", () => {
+  let draft = choose(newGenerationDraft(), "terrain", "ranges");
+  draft = choose(draft, "land-and-sea", "islands");
+  draft = choose(draft, "shoreline", "flats");
   const prepared = prepareDraft(draft);
-  expect(draft.worldId).toBe(original.worldId);
-  expect(draft.recipe.features?.["physical.climate"].settings?.temperature).toBe(23);
-  expect(cartographicValue(draft, control("river-terrain"))).toBe("plains");
-  expect(prepared.diagnostics.filter((item) => item.severity === "error")).toEqual([]);
-  const stages = JSON.stringify(prepared.input.configuration!.sequence);
-  expect(stages).toContain("river-floodplains");
-  expect(stages).toContain("river-delta-formation");
-  expect(stages).not.toContain("ancestral-fluvial-erosion");
-});
-it("keeps independent axes stable and displays Custom only for an affected control", () => {
-  const errors = { "feature.physical.climate.temperature": "Enter a number." };
-  expect(cartographicFieldPending(control("thermal-climate"), errors)).toBe(true);
-  expect(cartographicFieldPending(control("rainfall-regime"), errors)).toBe(false);
-  let draft = applyCartographicChoice(newGenerationDraft(), control("thermal-climate"), "warm");
-  draft = applyCartographicChoice(draft, control("rainfall-regime"), "dry");
-  expect(cartographicValue(draft, control("thermal-climate"))).toBe("warm");
-  expect(cartographicValue(draft, control("rainfall-regime"))).toBe("dry");
-  draft = setFeatureSetting(draft, "physical.climate", "temperature", 24);
-  expect(cartographicValue(draft, control("thermal-climate"))).toBe("custom");
-  expect(cartographicValue(draft, control("rainfall-regime"))).toBe("dry");
-  draft = applyCartographicChoice(draft, control("thermal-climate"), "cold");
-  expect(draft.recipe.features?.["physical.climate"].settings?.rainfall).toBe(
-    rainfallRegimes.dry.rainfall
+  const profile = atlasPhysicalProfile(
+    prepared.input.parameters,
+    configuredPhysicalProfile(prepared.input.resolvedFeatures!)
   );
+  expect(profile).toMatchObject({
+    ContinentalAssemblyCount: 10,
+    ContinentalWarpStrength: 260_000,
+    InteriorReliefStrength: 0.25,
+    InitialOrogenicConstructionStep: 3600,
+    FluvialEquilibriumGradient: 0.0004,
+    FloodplainMaximumWidth: 8_000,
+    CoastalDepositionReach: 35_000,
+    DeltaMaximumRadius: 45_000,
+    CoastalDetailPassiveAmplitude: 62 * 0.35,
+  });
+  expect(cartographicValue(draft, control("terrain"))).toBe("ranges");
+  expect(cartographicValue(draft, control("land-and-sea"))).toBe("islands");
+  draft = setFeatureSetting(draft, "physical.climate", "temperature", 22);
+  expect(cartographicValue(draft, control("warmth"))).toBe("custom");
+  expect(cartographicValue(draft, control("terrain"))).toBe("ranges");
 });
-it("chooses a latitude frame without touching temperature, rainfall or world size", () => {
-  const frame = control("latitude-frame");
-  expect(cartographicValue(newGenerationDraft(), frame)).toBe("northern-band");
-  let draft = applyCartographicChoice(newGenerationDraft(), control("thermal-climate"), "warm");
-  draft = applyCartographicChoice(draft, frame, "globe");
-  const settings = draft.recipe.features?.["physical.climate"].settings;
-  expect(settings).toMatchObject({
-    southLatitude: -90,
-    northLatitude: 90,
-    latitudeProjection: 1,
-    wrapLongitude: 1,
-  });
-  expect(cartographicValue(draft, control("thermal-climate"))).toBe("warm");
-  draft = applyCartographicChoice(draft, frame, "hemispheres");
-  expect(draft.recipe.features?.["physical.climate"].settings).toMatchObject({
-    southLatitude: -70,
-    northLatitude: 70,
-    wrapLongitude: 0,
-  });
-  draft = setFeatureSetting(draft, "physical.climate", "northLatitude", 60);
-  expect(cartographicValue(draft, frame)).toBe("custom");
-});
-it("applies land arrangements without resetting event strengths or shared history", () => {
-  const original = setFeatureSetting(newGenerationDraft(), "physical.volcanism", "volcanism", 0.6);
-  const draft = applyCartographicChoice(original, control("land-arrangement"), "islands");
-  expect(draft.recipe.features!["physical.foundation"].settings).toMatchObject({
-    continents: 12,
-    landFraction: 0.25,
-  });
-  expect(draft.recipe.features!["physical.volcanism"].settings!.volcanism).toBe(0.6);
-  expect(draft.recipe.features!["physical.lifecycle"]).toEqual(
-    original.recipe.features!["physical.lifecycle"]
+
+it("keeps renamed clock identities, other systems and authored activity when applying curated outcomes", () => {
+  let draft = renameDraftEpoch(newGenerationDraft(), "Cold age", "Long winter");
+  const before = draftEpochs(draft);
+  draft = choose(draft, "terrain", "glacial");
+  expect(prepareDraft(draft).input.settings!.epochs.map((epoch) => epoch.id)).toEqual(
+    before.map((epoch) => epoch.id)
   );
-  expect(original.recipe.features!["physical.foundation"].settings!.continents).toBe(4);
-});
-it("preserves disabled strength for subsequent advanced edits and leaves cultures independent", () => {
-  let draft = setFeatureSetting(
-    newGenerationDraft(),
-    "physical.glacial-sculpting",
-    "glaciers",
-    2.7
-  );
-  draft = applyCartographicChoice(draft, control("glacial-influence"), "ice");
-  expect(draft.recipe.features?.["physical.glacial-sculpting"].settings?.glaciers).toBe(2.7);
-  expect(draft.recipe.features?.["physical.land-ice"].enabled).toBe(true);
-  draft = applyCartographicChoice(draft, control("cultural-geography"), "many");
-  expect(cartographicValue(draft, control("political-geography"))).toBe("none");
-  expect(prepareDraft(draft).input.parameters?.cultureCount).toBe(8);
-});
-it("discovers curated descriptors from a separately registered feature without primary raw-field promotion", () => {
-  const descriptor: CartographicControl = {
-    id: "test.custom-intent",
-    label: "Survey intent",
-    section: "environment",
-    explanation: "Test registration",
-    choices: [{ id: "off", label: "Omitted", features: { "test.intent": { enabled: false } } }],
-  };
-  atlasGenerationModules.register({
-    id: "test.intent-module",
-    features: [
-      {
-        id: "test.intent",
-        label: "Survey",
-        domains: ["physical"],
-        defaultEnabled: false,
-        settings: {},
-        processes: [],
-        slots: [],
-        contribute: () => [],
-        cartography: [descriptor],
-      },
-    ],
+  const systems = canonryMagicPresets();
+  systems[2].enabled = false;
+  systems[0].history.storage = 0.3;
+  draft = setDraftMagicSystems(draft, systems);
+  draft = choose(draft, "fire.reach", "2");
+  draft = choose(draft, "aurora.capture", "0");
+  const configured = normalizeGenerationRecipe(draft.recipe).settings.magicSystems;
+  expect(configured[2]).toEqual(systems[2]);
+  expect(configured[0].history).toEqual(systems[0].history);
+  expect(configured[0].parameters).toMatchObject({ baseCost: 2, conductanceDivisor: 40 });
+  expect(configured[1].parameters).toMatchObject({
+    iceRetention: 600,
+    coldRetentionDistance: 4_000,
   });
-  try {
-    expect(cartographicControls()).toContain(descriptor);
-    expect(cartographicValue(newGenerationDraft(), descriptor)).toBe("off");
-  } finally {
-    atlasGenerationModules.unregister("test.intent-module");
+  expect(configured.map((entry) => entry.id)).toEqual(["fire", "aurora", "pressure"]);
+});
+
+it("prepares all eight magic inclusion combinations without silently reactivating omitted systems", () => {
+  for (let mask = 0; mask < 8; mask++) {
+    const systems = canonryMagicPresets().map((system, index) => ({
+      ...system,
+      enabled: Boolean(mask & (1 << index)),
+    }));
+    const draft = setDraftMagicSystems(newGenerationDraft(), systems);
+    const prepared = prepareDraft(draft);
+    expect(
+      prepared.diagnostics.filter((entry) => entry.severity === "error"),
+      String(mask)
+    ).toEqual([]);
+    expect(prepared.input.settings!.magicSystems).toEqual(systems);
+    expect(prepared.input.resolvedFeatures!.selection["physical.ocean-circulation"].enabled).toBe(
+      true
+    );
+    expect(prepared.input.resolvedFeatures!.selection["physical.land-ice"].enabled).toBe(true);
   }
+});
+
+it("keeps curated controls free of process-enable vectors and universal magical identity menus", () => {
+  for (const definition of cartographicControls())
+    for (const choice of definition.choices)
+      expect(Object.values(choice.features).every((feature) => feature.enabled === undefined)).toBe(
+        true
+      );
+  const magic = cartographicControls().filter((entry) => entry.system);
+  expect(magic.filter((entry) => entry.system === "fire")).toHaveLength(4);
+  expect(magic.filter((entry) => entry.system === "aurora")).toHaveLength(3);
+  expect(magic.filter((entry) => entry.system === "pressure")).toHaveLength(4);
+  expect(
+    (
+      newGenerationDraft().recipe.features!["magic.configured"].configuration!
+        .magicSystems as unknown as MagicSystem[]
+    ).every((entry) => entry.effects.ecologicalAlteration === 0)
+  ).toBe(true);
 });

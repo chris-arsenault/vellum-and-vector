@@ -4,6 +4,7 @@ import type { AtlasGenerationInput } from "../atlasWorkflow";
 import { applyNativeStep } from "./contracts";
 import { nativeContext } from "./context";
 import { atlasEpoch, atlasQuality } from "./atlasProfile";
+import { configuredPhysicalProfile } from "../physicalProfileConfiguration";
 import {
   composeNativeAuthoring,
   createAtlasWorkspace,
@@ -239,7 +240,8 @@ function initializeProcess(): MapProcess {
         state.physical = createAtlasWorkspace(
           state,
           bound.quality as keyof typeof atlasQuality,
-          bound.parameters
+          bound.parameters,
+          configuredPhysicalProfile(bound.features)
         );
         state.physical.map.AvailableFacts.add("SedimentSupply");
       },

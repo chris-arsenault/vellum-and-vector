@@ -137,11 +137,11 @@ test("procedural refinement configures a new region with fixed parent history", 
   await dialog.getByLabel("Detail level").selectOption("draft");
   await expect(stage(page, /Land$/)).toHaveCount(0);
   await stage(page, /Landscape$/).click();
-  const rivers = dialog.getByLabel("River terrain", { exact: true });
-  await expect(rivers.locator('option[value="incised"]')).toHaveCount(0);
-  await rivers.selectOption("plains");
+  await expect(dialog.getByLabel("Terrain", { exact: true })).toHaveCount(0);
+  await expect(dialog.getByLabel("Living landscape", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Influences", exact: true }).click();
-  await expect(dialog.getByLabel("Fire source activity", { exact: true })).toBeDisabled();
+  await expect(dialog.getByLabel("Include Fire", { exact: true })).toBeDisabled();
+  await expect(dialog.getByLabel("Thermal reach", { exact: true })).toBeDisabled();
   await tuneGeneration(page, "Impact geography");
   await expect(
     dialog.getByRole("checkbox", { name: "Impact geography", exact: true })

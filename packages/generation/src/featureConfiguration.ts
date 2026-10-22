@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ecologyEpochSchema, requireThat, type ParameterValues } from "@atlas/domain";
 import type { GenerationFeature } from "./features";
+import { terrainHistorySchema, terrainEpochs, landscapeEpoch } from "./cartographicHistory";
 import {
   generationEpochSchema,
   generationSettingsSchema,
@@ -9,9 +10,18 @@ import {
 } from "./generationSettings";
 
 const physicalEpoch = generationEpochSchema.omit({ ecology: true, magicActivity: true });
-const clockSchema = z.object({ epochs: z.array(physicalEpoch).min(1) }).strict();
+const clockSchema = z
+  .object({
+    epochs: z.array(physicalEpoch).min(1),
+    history: terrainHistorySchema.nullable().optional(),
+  })
+  .strict();
 const ecologySchema = z
-  .object({ epochs: z.record(z.string(), ecologyEpochSchema.strict()) })
+  .object({
+    epochs: z.record(z.string(), ecologyEpochSchema.strict()),
+    landscape: ecologyEpochSchema.strict().nullable().optional(),
+    glaciated: z.boolean().default(false),
+  })
   .strict();
 const magicSchema = z
   .object({
@@ -61,7 +71,15 @@ export const clockConfiguration: Configuration = {
     fields: ["epochs"],
     prepare: (configuration, settings) =>
       projectClock({ epochs: settings.epochs.map(physicalOnly), ...configuration }, settings),
-    bind: projectClock,
+    bind(configuration, settings, parameters) {
+      const bound = clockSchema.parse(configuration);
+      const projected = projectClock(configuration, settings);
+      return {
+        epochs: bound.history
+          ? terrainEpochs(projected.epochs, bound.history, parameters.temperature)
+          : projected.epochs,
+      };
+    },
   },
 };
 export const ecologyConfiguration: Configuration = {
@@ -85,9 +103,15 @@ export const ecologyConfiguration: Configuration = {
       const bound = ecologySchema.parse(configuration);
       checkEpochs(Object.keys(bound.epochs), settings);
       return {
-        epochs: settings.epochs.map((epoch) => ({
+        epochs: settings.epochs.map((epoch, index) => ({
           ...epoch,
-          ecology: bound.epochs[epoch.id] ?? epoch.ecology,
+          ecology: landscapeEpoch(
+            ecologyEpochSchema.parse(bound.epochs[epoch.id] ?? epoch.ecology ?? {}),
+            bound.landscape ?? undefined,
+            bound.glaciated,
+            index,
+            settings.epochs.length
+          ),
         })),
       };
     },
