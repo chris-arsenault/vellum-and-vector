@@ -61,6 +61,7 @@ it("derives selectable woodland and category reads from cover between samples", 
     (f) => f.attributes.biome === "Temperate forest"
   );
   expect(forest.length).toBeGreaterThan(0);
+  const forestCoverage = forest.map((f) => spatial.pointCoverage(f.geometry));
   let woodland = 0;
   for (let y = 31; y < 1000; y += 71)
     for (let x = 51; x < 4000; x += 83) {
@@ -69,9 +70,7 @@ it("derives selectable woodland and category reads from cover between samples", 
       if (Math.abs(cover - 0.4) < 0.03) continue;
       const expected = cover >= 0.4;
       expect(read(p) === biomeCode("Temperate forest")).toBe(expected);
-      expect(
-        forest.some((f) => spatial.covers(f.geometry, { type: "Point", coordinates: [x, y] }))
-      ).toBe(expected);
+      expect(forestCoverage.some((covers) => covers(p))).toBe(expected);
       if (cover >= 0.15 && cover < 0.4) woodland++;
     }
   expect(woodland).toBeGreaterThan(0);
@@ -163,17 +162,19 @@ it.each([0.5, 1])(
       forest = features.filter((f) => f.attributes.biome === "Temperate forest");
     expect(woodland.length).toBeGreaterThan(0);
     expect(forest.length).toBeGreaterThan(0);
+    // Reuse indexed predicates instead of reparsing each polygon at every probe.
+    const regions = [
+      [biomeCode("Woodland"), woodland.map((f) => spatial.pointCoverage(f.geometry))],
+      [biomeCode("Temperate forest"), forest.map((f) => spatial.pointCoverage(f.geometry))],
+    ] as const;
     for (let y = 21; y < 1000; y += 67)
       for (let x = 21; x < 4000; x += 21) {
         const p = { x, y, z: 0 },
           treeCover = trees(p);
         if (Math.min(Math.abs(treeCover - 0.15), Math.abs(treeCover - 0.4)) < 0.02) continue;
-        for (const [code, shapes] of [
-          [biomeCode("Woodland"), woodland],
-          [biomeCode("Temperate forest"), forest],
-        ] as const)
+        for (const [code, coverage] of regions)
           expect(
-            shapes.some((f) => spatial.covers(f.geometry, { type: "Point", coordinates: [x, y] })),
+            coverage.some((covers) => covers(p)),
             `${code} at ${x},${y}`
           ).toBe(read(p) === code);
       }
