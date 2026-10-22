@@ -79,7 +79,7 @@ it("retains an authored patch smaller than a base cell when drawing a close view
     original = tilePainter(raster, [0, 1000]);
   const patch = fixture().field;
   patch.scope = { ...patch.scope, footprint: rectangle([480, 480, 520, 520]) };
-  patch.channels.elevation.fill(900);
+  putChannel(patch, "elevation", "metre", new Float64Array(patch.active.length).fill(900));
   raster.field.overlays = [{ grid: patch, channels: ["elevation"] }];
   const edited = tilePainter(raster, [0, 1000]);
   expect(edited([490, 490, 510, 510], 16)).not.toEqual(original([490, 490, 510, 510], 16));
@@ -101,11 +101,16 @@ it("shades dry coastal terrain from its height rather than a nearest-cell water 
 
 it("fills only the lake polygon below its physical stage and leaves an emergent island dry", () => {
   const raster = fixture();
-  raster.field.channels.elevation.fill(400);
+  putChannel(
+    raster.field,
+    "elevation",
+    "metre",
+    new Float64Array(raster.field.active.length).fill(400)
+  );
   raster.lakes = [{ geometry: rectangle([200, 200, 800, 800]), level: 500 }];
   const island = fixture().field;
   island.scope = { ...island.scope, footprint: rectangle([450, 450, 550, 550]) };
-  island.channels.elevation.fill(600);
+  putChannel(island, "elevation", "metre", new Float64Array(island.active.length).fill(600));
   raster.field.overlays = [{ grid: island, channels: ["elevation"] }];
   const paint = tilePainter(raster, [0, 1000]);
   const wet = [73, 139, 153, 255];
@@ -116,16 +121,32 @@ it("fills only the lake polygon below its physical stage and leaves an emergent 
 
 it("colors sea and exposed coast relative to the current sea level rather than zero datum", () => {
   const raster = fixture();
-  raster.field.channels.elevation.fill(100);
+  putChannel(
+    raster.field,
+    "elevation",
+    "metre",
+    new Float64Array(raster.field.active.length).fill(100)
+  );
   raster.water = {
     ...raster.field,
     channels: { seaLevel: new Float64Array(raster.field.active.length).fill(200) },
     units: { seaLevel: "metre" },
   };
+  putChannel(raster.water, "seaLevel", "metre", raster.water.channels.seaLevel);
   const submerged = tilePainter(raster, [-1000, 1000])([400, 400, 600, 600], 1);
   expect(submerged[2]).toBeGreaterThan(submerged[0]);
-  raster.field.channels.elevation.fill(-50);
-  raster.water.channels.seaLevel.fill(-100);
+  putChannel(
+    raster.field,
+    "elevation",
+    "metre",
+    new Float64Array(raster.field.active.length).fill(-50)
+  );
+  putChannel(
+    raster.water,
+    "seaLevel",
+    "metre",
+    new Float64Array(raster.water.active.length).fill(-100)
+  );
   const exposed = tilePainter(raster, [-1000, 1000])([400, 400, 600, 600], 1);
   expect(exposed[0]).toBeGreaterThan(exposed[2]);
 });
@@ -150,8 +171,18 @@ it("shows submerged relief instead of flattening every ocean feature to a depth 
   const sloped = fixture(),
     flat = fixture();
   const geometry = adaptiveGeometry(sloped.field.topology!);
-  sloped.field.channels.elevation.set(Float64Array.from(geometry.x, (x) => -600 + x * 0.2));
-  flat.field.channels.elevation.fill(-500);
+  putChannel(
+    sloped.field,
+    "elevation",
+    "metre",
+    Float64Array.from(geometry.x, (x) => -600 + x * 0.2)
+  );
+  putChannel(
+    flat.field,
+    "elevation",
+    "metre",
+    new Float64Array(flat.field.active.length).fill(-500)
+  );
   expect(tilePainter(sloped, [-1000, 0])([490, 490, 510, 510], 1)).not.toEqual(
     tilePainter(flat, [-1000, 0])([490, 490, 510, 510], 1)
   );

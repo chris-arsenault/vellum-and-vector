@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { preparePhysicalChannels } from "./continuousState";
 import {
   createGrid,
   fieldInterpolator,
@@ -14,7 +15,7 @@ import { atlasPhysicalProfile } from "./atlasProfile";
 import { refreshWorkspaceSamples } from "./atlasWorkspace";
 import { projectNative } from "./atlasProjection";
 import { classifyBiome } from "./ecologyEnvironment";
-import { extractEcologicalFeatures } from "./ecologyFeatures";
+import { extractEcologicalFeatures, prepareEcologicalRegions } from "./ecologyFeatures";
 
 function ecologicalFixture(
   trees: (x: number, y: number) => number,
@@ -45,8 +46,10 @@ function ecologicalFixture(
   configure(map);
   for (let i = 0; i < map.mesh.count; i++) map.BiomeCodes[i] = classifyBiome(map, i);
   refreshWorkspaceSamples(state, state.physical);
+  preparePhysicalChannels(map, []);
   projectNative(state);
   geography(state);
+  prepareEcologicalRegions(state);
   extractEcologicalFeatures(state);
   return state;
 }
@@ -112,11 +115,12 @@ it.each([
       () => 0.8,
       undefined,
       (state) => {
-        const source = state.surface.reconstruction!;
+        const source = state.surface.geography!;
         if (ocean) state.surface.ocean = rectangle([0, 0, 4000, 1000]);
         source.water = {
-          elevation: source.channels.elevation,
-          bodyIds: new Float64Array(source.support.x.length).fill(2),
+          elevation: source.biome!.values.elevation,
+          ...source.biome!.prepared.elevation,
+          bodyIds: new Float64Array(state.surface.active.length).fill(2),
           seaLevel: 0,
           lakes: [
             {

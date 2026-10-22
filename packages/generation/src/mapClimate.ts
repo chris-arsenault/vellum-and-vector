@@ -79,7 +79,7 @@ export const temperatureProcess: MapProcess = {
 // reaches the lee side depleted. These are rates, not an elapsed-time advance.
 function* airPaths(grid: Grid, wind: string): Generator<number[]> {
   requireThat(
-    !grid.topology,
+    !grid.topology && !grid.mesh,
     "prototype_grid",
     "Use the Canonry workflow for adaptive physical geography."
   );

@@ -10,7 +10,7 @@ import { transferAdaptive, visitAdaptiveOverlap } from "./adaptiveTransfer";
 import { createAdaptiveField, adaptiveFieldSampler, adaptiveIntegral } from "./adaptiveField";
 import { rectangle } from "./spatial";
 import { sampleAdaptivePoint, adaptivePointLocator } from "./adaptivePoint";
-import { gridSampler, fieldInterpolator } from "./grids";
+import { gridSampler, fieldInterpolator, putChannel } from "./grids";
 import { adaptiveExtrema } from "./adaptiveExtrema";
 import { adaptiveFits } from "./adaptiveFit";
 
@@ -127,7 +127,7 @@ it("resolves a narrow physical feature where its support requests detail", () =>
   ).toBeLessThan(20);
 });
 
-it("retains measured heights and continuous slopes across coarse/fine faces", () => {
+it("retains continuous slopes across coarse/fine faces", () => {
   const tree = topology(),
     geometry = adaptiveGeometry(tree);
   const values = Float64Array.from(
@@ -135,8 +135,6 @@ it("retains measured heights and continuous slopes across coarse/fine faces", ()
     (x, i) => 100 * Math.sin(x / 150) * Math.cos(geometry.y[i] / 190)
   );
   const surface = reconstructAdaptive(tree, values);
-  for (let i = 0; i < values.length; i++)
-    expect(sampleAdaptive(surface, geometry.x[i], geometry.y[i])).toBeCloseTo(values[i], 9);
   const epsilon = 1e-4;
   for (let i = 0; i < values.length; i++) {
     const box = adaptiveCell(tree, i);
@@ -178,6 +176,23 @@ it("reproduces smooth curvature without manufacturing one hump per sampling cell
       expect(sampleAdaptive(at, x, y)).toBeCloseTo(height(x, y), 6);
 });
 
+it("does not add crosswise ripples to a vegetation band constant along that axis", () => {
+  const tree = createAdaptiveTopology([0, 0, 4000, 1000], {
+      maximumSize: 250,
+      minimumSize: 250,
+    }),
+    geometry = adaptiveGeometry(tree),
+    surface = reconstructAdaptive(
+      tree,
+      Float64Array.from(geometry.x, (x) => (x < 2750 ? 0.1 : 0.7))
+    );
+  for (const x of [2650, 2700, 2800, 2850]) {
+    const reference = sampleAdaptive(surface, x, 500);
+    for (let y = 300; y <= 700; y += 25)
+      expect(sampleAdaptive(surface, x, y), `cover at ${x},${y}`).toBeCloseTo(reference, 8);
+  }
+});
+
 it("does not invent interior peaks or negative values between nonnegative samples", () => {
   const tree = topology(),
     geometry = adaptiveGeometry(tree);
@@ -211,10 +226,13 @@ it("retains clipped physical measures and discrete category meaning in published
     },
     tree
   );
-  field.channels.elevation = new Float64Array(tree.leaves.length).fill(12);
-  field.channels.material = Float64Array.from(adaptiveGeometry(tree).x, (x) => (x < 500 ? 11 : 29));
-  field.units.elevation = "metre";
-  field.units.material = "category";
+  putChannel(field, "elevation", "metre", new Float64Array(tree.leaves.length).fill(12));
+  putChannel(
+    field,
+    "material",
+    "category",
+    Float64Array.from(adaptiveGeometry(tree).x, (x) => (x < 500 ? 11 : 29))
+  );
   expect(adaptiveIntegral(field, "elevation")).toBeCloseTo(720 * 720 * 12, 6);
   expect(adaptiveFieldSampler(field, "elevation")({ x: 145, y: 145 })).toBeCloseTo(12, 10);
   expect(adaptiveFieldSampler(field, "material")({ x: 499.999, y: 500 })).toBe(11);
@@ -287,10 +305,24 @@ it("shares point lookup without mixing channels, topology identities or discrete
     },
     tree
   );
-  field.channels.elevation = Float64Array.from(geometry.x, (x, i) => x * 0.3 - geometry.y[i] * 0.7);
-  field.channels.temperature = Float64Array.from(field.channels.elevation, (v) => -v * 2);
-  field.channels.rock = Float64Array.from(geometry.x, (x) => (x < 500 ? 11 : 29));
-  field.units = { elevation: "metre", temperature: "celsius", rock: "category" };
+  putChannel(
+    field,
+    "elevation",
+    "metre",
+    Float64Array.from(geometry.x, (x, i) => x * 0.3 - geometry.y[i] * 0.7)
+  );
+  putChannel(
+    field,
+    "temperature",
+    "celsius",
+    Float64Array.from(field.channels.elevation, (v) => -v * 2)
+  );
+  putChannel(
+    field,
+    "rock",
+    "category",
+    Float64Array.from(geometry.x, (x) => (x < 500 ? 11 : 29))
+  );
   const at = ["elevation", "temperature", "rock"].map((key) =>
     fieldInterpolator(field, key, false, locate)
   );

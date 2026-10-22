@@ -102,6 +102,7 @@ function activeSampler(
   return (p) => {
     const overlay = overlays.find(({ footprint }) => footprint.intersectsCoordinate([p.x, p.y]));
     if (overlay) return overlay.at(p);
+    if (grid.mesh) return true;
     if (grid.topology) return grid.active[locate(grid.topology, p.x, p.y).leaf] === 1;
     const x = Math.round(
       ((p.x - grid.bounds[0]) / (grid.bounds[2] - grid.bounds[0])) * (grid.width - 1)

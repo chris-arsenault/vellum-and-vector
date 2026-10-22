@@ -2,9 +2,10 @@ import type { GenerationState, MapProcess } from "../process";
 import type { ResolvedFeatures } from "../features";
 import { physicalFeatureDefinitions } from "../physicalFeatures";
 import type { PhysicalField } from "./field";
+import { preparePhysicalChannels } from "./continuousState";
 
 type BufferName = {
-  [K in keyof PhysicalField]: PhysicalField[K] extends { fill(value: number): unknown } ? K : never;
+  [K in keyof PhysicalField]-?: PhysicalField[K] extends { fill(value: number): unknown } ? K : never;
 }[keyof PhysicalField];
 /** Explicit neutral histories; these are not claims that the omitted models ran. */
 const neutralBuffers: Record<string, BufferName[]> = {
@@ -83,6 +84,11 @@ export function absenceInitialization(
         initializeAbsent(state, absent);
       },
     },
+    prepareFields: (state) =>
+      preparePhysicalChannels(state.physical!.map, [
+        ...[...absent].flatMap((product) => neutralBuffers[product.slice(8)] ?? []),
+        ...(absent.has("canonry:SeaIce") ? ["IceThickness" as const] : []),
+      ]),
     validate: () => [],
   };
 }

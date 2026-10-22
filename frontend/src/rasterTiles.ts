@@ -1,4 +1,4 @@
-import { fieldInterpolator, type GridSurface, type Position } from "@atlas/domain";
+import { fieldInterpolator, channelValue, type GridSurface, type Position } from "@atlas/domain";
 import GeoJSON from "ol/format/GeoJSON.js";
 import ImageTileSource from "ol/source/ImageTile.js";
 import { createXYZ } from "ol/tilegrid.js";
@@ -19,6 +19,7 @@ export function rasterLimits(data: Raster[]): number[] {
   const limits = [Infinity, -Infinity];
   const include = (field: GridSurface, channel: string) => {
     field.channels[channel]?.forEach((value, i) => {
+      value = channelValue(field, channel, i);
       if (!field.active[i] || !Number.isFinite(value)) return;
       limits[0] = Math.min(limits[0], value);
       limits[1] = Math.max(limits[1], value);

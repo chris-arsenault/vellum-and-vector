@@ -1,4 +1,4 @@
-import { putChannel, replaceChannel } from "@atlas/domain";
+import { putChannel, replaceChannel, channelValues } from "@atlas/domain";
 import { magicalForcing } from "./mapMagic";
 import { summarizeChannel } from "./mapFields";
 import type { MapProcess } from "./process";
@@ -23,8 +23,8 @@ export const materialMagicProcess: MapProcess = {
     contribute(state, context) {
       const grid = state.surface;
       if (!grid.channels.naturalRock)
-        putChannel(grid, "naturalRock", "ratio", grid.channels.rock.slice());
-      grid.channels.rock.set(grid.channels.naturalRock);
+        putChannel(grid, "naturalRock", "ratio", channelValues(grid, "rock").slice());
+      const rock = channelValues(grid, "naturalRock").slice();
       const pressure = new Float64Array(grid.active.length);
       for (const source of state.domain.world.magic) {
         if (
@@ -40,10 +40,7 @@ export const materialMagicProcess: MapProcess = {
         replaceChannel(grid, key, "ratio", values);
         for (let i = 0; i < values.length; i++) {
           if (source.effect === "erosionResistance")
-            grid.channels.rock[i] = Math.max(
-              0.1,
-              Math.min(1, grid.channels.rock[i] + values[i] / 1000)
-            );
+            rock[i] = Math.max(0.1, Math.min(1, rock[i] + values[i] / 1000));
           if (source.effect === "pressure") pressure[i] += Math.abs(values[i]);
         }
         context.recordCause({
@@ -55,7 +52,7 @@ export const materialMagicProcess: MapProcess = {
           stored: summarizeChannel(grid, key),
         });
       }
-      replaceChannel(grid, "rock", "ratio", grid.channels.rock);
+      replaceChannel(grid, "rock", "ratio", rock);
       replaceChannel(grid, "coastalPressure", "ratio", pressure);
     },
   },

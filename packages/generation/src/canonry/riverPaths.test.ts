@@ -4,6 +4,9 @@ import { createWorldMesh } from "./worldMesh";
 import { createField } from "./field";
 import { nearestTriangle } from "./mesh";
 import { createRiverPaths, riverPath } from "./riverPaths";
+import { preparePhysicalChannels } from "./continuousState";
+import { prepareRiverPaths } from "./riverChannelPaths";
+import { channelCorridor } from "./channelCorridor";
 
 function network() {
   const map = createField(createWorldMesh([-100_000, -100_000, 100_000, 100_000], 1024, 0));
@@ -45,8 +48,24 @@ function network() {
   const mouth = main.at(-1)!;
   map.WaterKindCodes[mouth] = 1;
   map.RiverOrders[mouth] = 0;
+  preparePhysicalChannels(map, []);
+  prepareRiverPaths(map);
   return { map, main, branch, join, mouth };
 }
+
+it("keeps local valley refinement bounded on a constant cross-slope", () => {
+  const { map } = network(), mesh = map.mesh;
+  for (let i = 0; i < mesh.count; i++) map.Elevation[i] = 10 * mesh.x[i] - 20 * mesh.y[i];
+  preparePhysicalChannels(map, ["Elevation"]);
+  for (let i = 0; i < mesh.count; i++) {
+    const j = map.FlowTargets[i];
+    if (j < 0) continue;
+    const stations = channelCorridor(map, i, j, [mesh.x[i], mesh.y[i]], [mesh.x[j], mesh.y[j]]);
+    const path = stations.map((station) => station.point);
+    // A plane has no winding valley to justify repeatedly crossing a cell.
+    expect(length(path)).toBeLessThan(2 * map.mesh.spacing);
+  }
+});
 function turns(coordinates: number[][]) {
   return coordinates.slice(1, -1).map((b, i) => {
     const a = coordinates[i],

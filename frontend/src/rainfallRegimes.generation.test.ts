@@ -39,7 +39,7 @@ function expectWetter(wet: Band[], mixed: Band[], frame: string) {
 const runoffVolume = (world: World) =>
   world.grid.channels.runoff.reduce((sum, value, i) => sum + value * world.grid.measures[i], 0);
 const meanFlow = (world: World) => {
-  const values = world.grid.reconstruction!.channels.flow;
+  const values = world.grid.channels.flow;
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 };
 /** Rain changes basin capture as well as flow; compare world runoff and typical streamflow. */

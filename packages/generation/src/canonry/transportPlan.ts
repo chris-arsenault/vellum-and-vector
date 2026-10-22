@@ -3,6 +3,7 @@ import type { PhysicalField } from "./field";
 import { nearestTriangle } from "./mesh";
 import { clamp, round } from "./math";
 import { adaptiveCell, visitAdaptiveOverlap, type Bounds } from "@atlas/domain";
+import { provinceTransport } from "./provinceTransport";
 
 export const weightScale = 1_000_000;
 export interface TransportPlan {
@@ -75,7 +76,9 @@ function scatterVolume(map: PhysicalField, plan: Builder, source: number, x: num
   });
 }
 export function buildTransportPlan(map: PhysicalField, step: number): TransportPlan {
+  if (!map.provinces) throw new Error("Material transport requires the causal province partition.");
   const count = map.mesh.count;
+  const transport = provinceTransport(map, step);
   const plan: Builder = {
     offsets: new Int32Array(count + 1),
     targets: [],
@@ -86,12 +89,21 @@ export function buildTransportPlan(map: PhysicalField, step: number): TransportP
   };
   for (let i = 0; i < count; i++) {
     plan.offsets[i] = plan.targets.length;
+    if (transport.contributions) {
+      for (const { target, fraction } of transport.contributions(i))
+        add(map, plan, i, target, fraction * weightScale);
+      continue;
+    }
+    const delta = transport.displacementAt(
+      map.mesh.x[i] + map.mesh.origin[0],
+      map.mesh.y[i] + map.mesh.origin[1]
+    );
     (map.mesh.topology ? scatterVolume : scatter)(
       map,
       plan,
       i,
-      map.mesh.x[i] + (map.CrustMotionX[i] / 1000) * step,
-      map.mesh.y[i] + (map.CrustMotionY[i] / 1000) * step
+      map.mesh.x[i] + delta[0],
+      map.mesh.y[i] + delta[1]
     );
   }
   plan.offsets[count] = plan.targets.length;

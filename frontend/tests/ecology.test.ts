@@ -62,9 +62,9 @@ test("shows categorical biomes and inspectable ecological fields in the atlas", 
 test("selects, protects, exports and refines extracted ecological polygons with thematic display", async ({
   page,
 }) => {
-  const features = ecologicalPolygons(),
+  const { features, surface } = ecologicalPolygons(),
     forest = features.find((f) => f.attributes.biome === "Temperate forest")!;
-  await installGenerationFixture(page, false, false, true, features);
+  await installGenerationFixture(page, false, false, true, features, surface);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
@@ -80,6 +80,13 @@ test("selects, protects, exports and refines extracted ecological polygons with 
   await page.getByRole("checkbox", { name: "Show Biomes", exact: true }).click();
   await expect(page.getByRole("checkbox", { name: "Show Biomes", exact: true })).not.toBeChecked();
   const canvas = page.getByRole("application", { name: "World map canvas" });
+  await page.getByRole("button", { name: "+ Add overlay", exact: true }).click();
+  await page.getByLabel("Search overlays").fill("treeCover");
+  await page.getByRole("checkbox", { name: "Add Tree cover", exact: true }).check();
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(canvas).toHaveAttribute("aria-busy", "false");
+  await page.screenshot({ path: "test-results/ecological-generated-cover.png" });
+  await page.getByRole("checkbox", { name: "Show Tree cover", exact: true }).uncheck();
   const visible = await imageHash(page);
   const ecology = page.getByRole("checkbox", { name: "Show Biomes and life", exact: true });
   await ecology.click();

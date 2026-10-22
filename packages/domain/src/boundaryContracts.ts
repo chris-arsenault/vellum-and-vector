@@ -70,12 +70,14 @@ function sampleDivisions(fields: Grid[], a: number[], b: number[]): number {
   const spacings = fields
     .filter((g) => spatial.intersects(g.scope.footprint, segment))
     .map((g) =>
-      g.topology
-        ? adaptiveBoundarySpacing(g, segment)
-        : Math.min(
-            (g.bounds[2] - g.bounds[0]) / (g.width - 1),
-            (g.bounds[3] - g.bounds[1]) / (g.height - 1)
-          )
+      g.mesh
+        ? g.mesh.spacing
+        : g.topology
+          ? adaptiveBoundarySpacing(g, segment)
+          : Math.min(
+              (g.bounds[2] - g.bounds[0]) / (g.width - 1),
+              (g.bounds[3] - g.bounds[1]) / (g.height - 1)
+            )
     );
   return spacings.length ? Math.max(1, Math.ceil(length / Math.min(...spacings))) : 1;
 }

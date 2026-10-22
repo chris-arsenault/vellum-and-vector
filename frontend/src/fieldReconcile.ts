@@ -4,6 +4,7 @@ import {
   intentSchema,
   requireThat,
   applyFieldBrush,
+  channelValues,
   type BrushInput,
   type DomainSnapshot,
   type IntentContext,
@@ -50,13 +51,15 @@ export function reconcileBrush(
           areaId: field.areaId,
           layerId: field.layerId,
           footprint: grid.scope.footprint,
-          ...(grid.topology
-            ? { topology: grid.topology }
-            : { width: grid.width, height: grid.height }),
+          ...(grid.mesh
+            ? { sampled: { mesh: grid.mesh, active: grid.active, measures: grid.measures } }
+            : grid.topology
+              ? { topology: grid.topology }
+              : { width: grid.width, height: grid.height }),
           channels: Object.fromEntries(
             Object.entries(grid.channels).map(([name, values]) => [
               name,
-              { unit: grid.units[name], values: Array.from(values) },
+              { unit: grid.units[name], values: Array.from(channelValues(grid, name)) },
             ])
           ),
         },

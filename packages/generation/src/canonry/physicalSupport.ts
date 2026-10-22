@@ -6,8 +6,8 @@ export function physicalSupport(mesh: PhysicalMesh): SampleSupport {
   let support = supports.get(mesh);
   if (!support) {
     support = {
-      x: Float64Array.from(mesh.x),
-      y: Float64Array.from(mesh.y),
+      x: mesh.x instanceof Float64Array ? mesh.x : Float64Array.from(mesh.x),
+      y: mesh.y instanceof Float64Array ? mesh.y : Float64Array.from(mesh.y),
       origin: mesh.origin,
       spacing: mesh.spacing,
     };

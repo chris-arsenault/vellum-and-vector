@@ -1,4 +1,4 @@
-import { gridPosition, spatial, rectangle, type Position } from "@atlas/domain";
+import { gridPosition, spatial, rectangle, channelValue, type Position } from "@atlas/domain";
 import { generatedFeature, putGenerated, putGeneratedNetwork } from "./mapFeatures";
 import { findRoute } from "./mapRouting";
 import { landCells, suitability } from "./mapPeople";
@@ -56,7 +56,7 @@ function settlements(state: GenerationState, context: MapProcessContext) {
         "settlement",
         "settlements",
         { type: "Point", coordinates: [p.x, p.y] },
-        { elevation: grid.channels.elevation[i] }
+        { elevation: channelValue(grid, "elevation", i) }
       )
     );
     points.push(p);

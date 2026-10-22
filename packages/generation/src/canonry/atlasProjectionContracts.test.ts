@@ -12,6 +12,8 @@ import { atlasPublicationDefinitions } from "./atlasPublications";
 import { createField } from "./field";
 import { createMesh } from "./mesh";
 import { atlasPhysicalProfile } from "./atlasProfile";
+import { preparePhysicalChannels } from "./continuousState";
+import { refreshWorkspaceSamples } from "./atlasWorkspace";
 
 function fixture(disabled: string[] = []) {
   const state = landscape();
@@ -47,6 +49,8 @@ function fixture(disabled: string[] = []) {
     inherited: false,
     sampling: { maximumSize: 1000, minimumSize: 1000, featureSamples: 2 },
   };
+  refreshWorkspaceSamples(state, state.physical);
+  preparePhysicalChannels(map, []);
   const registry = new MapProcessRegistry();
   for (const process of atlasNativeProcesses(input, state.domain)) registry.register(process);
   const inputs = {

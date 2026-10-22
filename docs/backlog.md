@@ -67,18 +67,22 @@ with no backend, persistence or MCP; preserve the existing backend source.
       typing coordinates and dimensions into text boxes. Keep numeric entry available
       as an optional precision control.
 
-- [x] **7. Implement customizable magic.** Complete the magical generation and
-      authoring workflow, including defining a world's magical systems, placing and
-      shaping sources, and configuring their rules and interactions. Support the
-      applicable propagation, storage, decay and epoch behavior, with causal effects
-      on physical geography and visible explanations of those effects. Existing
-      forcing processes do not by themselves complete this capability.
+- [ ] **7. Preserve the three authored magic systems.** Per the user's 2026-10-22
+      clarification, treat Fire, Aurora and Pressure as first-class world effects
+      and processes: physical motivations, media, propagation, feedback and
+      interference. Adapt social uses without importing named setting lore.
+      Retain source shaping and system-specific controls, and leave future magic
+      systems open through shared process contracts. See [the product contract](product-spec.md#103-magical-generation--fire-aurora-and-pressure)
+      and [society feedback plan](SOCIETY-GENERATION-PLAN.md#society-environment-and-magic-feedback).
 
       Implemented automatic and placed sources, fracture transport, cold drainage
       and ice retention, ocean rays and wakes, heat/ice/rock/coastal feedback,
       advected history, configurable feature regions and cross-system interactions.
-      Fire, Aurora and Pressure are editable examples of the same vocabulary.
-      Variants, per-epoch activity, storage and source timing use that configuration.
+      Those mechanisms currently use declarative definitions, per-epoch activity,
+      storage and source timing. That implementation does not establish fire-core
+      extraction/consumption, crystal practices, Pressure diving or practitioner
+      costs. The revised requirement remains open; this documentation update
+      implements none of those social operations.
 
 - [x] **8. Expose meaningful generation parameters beyond detail level.** Provide
       understandable controls for the applicable physical, magical, cultural and

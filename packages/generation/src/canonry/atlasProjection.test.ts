@@ -8,6 +8,9 @@ import { createField } from "./field";
 import { createMesh } from "./mesh";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { Landform } from "./codes";
+import { preparePhysicalChannels } from "./continuousState";
+import { refreshWorkspaceSamples } from "./atlasWorkspace";
+import { channelValue, channelValues } from "@atlas/domain";
 
 function fixture(selected: FeatureSelection = {}) {
   const state = landscape(),
@@ -34,6 +37,12 @@ function fixture(selected: FeatureSelection = {}) {
     inherited: false,
     sampling: { maximumSize: 1000, minimumSize: 1000, featureSamples: 2 },
   };
+  refreshWorkspaceSamples(state, state.physical);
+  preparePhysicalChannels(map, []);
+  // Publication receives material classification from its generation producer.
+  map.continuous!.geography = {
+    categories: { physicalMaterial: { fallback: 0, entries: [] } },
+  };
   const definitions = atlasPublicationDefinitions({
     areaId: state.domain.scope.areaId,
     domains: ["physical"],
@@ -59,7 +68,7 @@ it("does not classify physical material when the landform feature is disabled", 
   projectNative(state, false, false, bindings, channels);
   expect(state.surface.channels.physicalMaterial).toBeUndefined();
   expect(state.surface.channels.landform).toBeUndefined();
-  expect(state.surface.channels.elevation[0]).toBe(100);
+  expect(channelValue(state.surface, "elevation", 0)).toBe(100);
 });
 
 it("does not compute a composite erosion product when all its owners are disabled", () => {
@@ -87,9 +96,9 @@ it("retains the existing numerical output and quantity semantics for selected de
   projectNative(legacy, false, false, bindings);
   projectNative(state, false, false, bindings, channels);
   expect(state.surface).toEqual(legacy.surface);
-  expect(state.surface.channels.erosion[0]).toBe(6);
+  expect(channelValue(state.surface, "erosion", 0)).toBe(6);
   expect(state.surface.channels.physicalMaterial[0]).toBe(0);
-  expect(state.surface.channels.precipitation[0]).toBe(4);
+  expect(channelValue(state.surface, "precipitation", 0)).toBe(4);
   expect(state.surface.channels.waterLevel[0]).toBe(2);
   expect(state.surface.quantities?.waterLevel).toBe("category");
   expect(state.surface.units.precipitation).toBe("metre/year");
@@ -99,8 +108,10 @@ it("retains the existing numerical output and quantity semantics for selected de
 it("keeps declared internal forcing inputs available independently of final publication", () => {
   const { state } = fixture();
   projectNative(state, true, false, undefined, new Set());
-  expect(state.surface.channels.naturalTemperature).toEqual(state.surface.channels.temperature);
-  expect(state.surface.channels.naturalRock).toEqual(state.surface.channels.rock);
+  expect(channelValues(state.surface, "naturalTemperature")).toEqual(
+    channelValues(state.surface, "temperature")
+  );
+  expect(channelValues(state.surface, "naturalRock")).toEqual(channelValues(state.surface, "rock"));
   expect(state.surface.channels.physicalMaterial).toBeUndefined();
   expect(state.surface.channels.erosion).toBeUndefined();
 });

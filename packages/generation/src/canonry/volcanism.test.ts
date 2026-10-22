@@ -94,6 +94,13 @@ it("carries fractures with the moving plate", () => {
     map.CrustMotionX[i] = 1000;
     map.FractureConductance[i] = Math.abs(map.mesh.x[i]) < 15_000 ? 900 : 25;
   }
+  map.provinces = {
+    origin: [...map.mesh.origin],
+    seed: 7,
+    scale: 100_000,
+    strength: 0,
+    sites: [{ x: 0, y: 0, priority: 0, assembly: 1, motionX: 1, motionY: 0 }],
+  };
   plateAdvection(map, physicalContext(7, 0, p, quiet, 0, 1));
   const at = (x: number) => map.FractureConductance[nearestTriangle(map.mesh, x, 0)];
   expect(at(100_000)).toBeGreaterThan(800);

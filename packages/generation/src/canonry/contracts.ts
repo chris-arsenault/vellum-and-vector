@@ -5,6 +5,8 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { validateNativeLayer } from "./layerValidation";
 import { nativeFactsManaged } from "../productLedger";
+import { preparePhysicalChannels } from "./continuousState";
+import { physicalWrites } from "./physicalWrites";
 
 export interface NativeContract {
   salt: number;
@@ -27,10 +29,12 @@ export function applyNativeStep(
     contract = effective ?? nativeContracts[name];
   if (!contract || contract.salt !== salt)
     throw new Error(`Unknown Canonry process or salt: ${name}.`);
+  if (!physicalWrites[name]) throw new Error(`Declare physical field writes for ${name}.`);
   const managed = nativeFactsManaged(map.AvailableFacts);
   if (!managed) checkNativeInputs(map, contract, name);
   try {
     process(map, context);
+    preparePhysicalChannels(map, physicalWrites[name]);
     validateNativeLayer(map, context, name, contract.produces);
   } catch (cause) {
     const detail = cause instanceof Error ? cause.message : String(cause);

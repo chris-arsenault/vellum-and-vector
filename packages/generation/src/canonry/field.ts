@@ -5,6 +5,8 @@ import { noWaterSurface } from "./math";
 
 const integerFields = [
   "BiomeCodes",
+  "NaturalSurfaceCodes",
+  "FinalSurfaceCodes",
   "CrustBasePotential",
   "CrustAssemblyIds",
   "CrustAssemblySeparation",
@@ -121,6 +123,20 @@ const elevationFields = [
 const floatFields = ["RidgeInfluence", "Uplift"] as const;
 const metricFields = [
   ...ecologyScalars,
+  "EcologicalMoisture",
+  "EcologicalWetness",
+  "Precipitation",
+  "TotalErosion",
+  "Carbonate",
+  "SeaLevel",
+  "SeaDatum",
+  "GlacialHeadRelief",
+  "GlacialFormationDepth",
+  "LandformHigher",
+  "LandformLower",
+  "LandformProminence",
+  "WaterfallDrop",
+  "TectonicNormalMotion",
   "OceanMarginDistance",
   "OceanDistance",
   // Seasonal temperature half-range in °C; zero until temperature first runs.
@@ -140,10 +156,71 @@ const metricFields = [
   "IceThickness",
   "MaximumIceThickness",
 ] as const;
+export const continuousScalarNames = [
+  ...elevationFields,
+  ...floatFields,
+  ...metricFields,
+  "CrustBasePotential",
+  "CrustAssemblySeparation",
+  "CrustCollisionIntensity",
+  "CrustSutureStrength",
+  "RockResistance",
+  "CrustMotionX",
+  "CrustMotionY",
+  "CrustContinentalFraction",
+  "CrustAge",
+  "ContinentalPotential",
+  "Temperature",
+  "WindX",
+  "WindY",
+  "MoistureBarriers",
+  "PrecipitationBarriers",
+  "TectonicStrain",
+  "InitialTectonicStrain",
+  "TectonicTangentX",
+  "TectonicTangentY",
+  "OrogenicSystemProminence",
+  "OceanCurrentX",
+  "OceanCurrentY",
+  "OceanCurrentStrength",
+  "OceanCurrentHeat",
+  "SeaSurfaceAnomaly",
+  "Upwelling",
+  "WaveExposure",
+  "Rainfall",
+  "Snowfall",
+  "SeaIceSuitability",
+  "TectonicActivityHistory",
+  "WaveExposureHistory",
+  "GeothermalHistory",
+  "ImpactHeat",
+  "GlacialMeltwater",
+  "ExternalHeatForcing",
+  "ExternalCoastalForcing",
+  "ExternalCoastalForcingHistory",
+  "Moisture",
+  "Geothermal",
+  "MantlePlumeRootStrength",
+  "VolcanicActivity",
+  "RiverChannelStrength",
+  "FloodplainIntensity",
+  "DeltaIntensity",
+  "IceBalance",
+  "FractureConductance",
+  "HeatSourceDensity",
+  "Runoff",
+  "Warmth",
+] as const;
 export type PhysicalField = Record<(typeof integerFields)[number], Int32Array> &
   Record<(typeof elevationFields)[number], Float64Array> &
   Record<(typeof metricFields)[number], Float64Array> &
   Record<(typeof floatFields)[number], Float32Array> & {
+    continuous: import("./continuousState").ContinuousPhysicalState | null;
+    riverPaths: import("./riverChannelPaths").ChannelPaths | null;
+    provinces: import("./provinceGeography").ProvincePartition | null;
+    inheritedMotion?: import("./motionOwnership").MotionInput[];
+    authoredMotion?: import("./motionOwnership").MotionInput[];
+    motionDetail?: number;
     mesh: PhysicalMesh;
     events: {
       id: string;
@@ -154,8 +231,15 @@ export type PhysicalField = Record<(typeof integerFields)[number], Int32Array> &
       epoch: number;
       strength: number;
       caldera?: boolean;
+      footprint?: import("geojson").Geometry | null;
+      calderaFootprint?: import("geojson").Geometry | null;
     }[];
-    faults: { id: string; coordinates: [number, number][]; width: number }[];
+    faults: {
+      id: string;
+      coordinates: [number, number][];
+      parts?: [number, number][][];
+      width: number;
+    }[];
     AvailableFacts: Set<string>;
     EffectiveSeaLevel: number;
     BaseSeaLevel: number;
@@ -183,6 +267,9 @@ export function createField(mesh: PhysicalMesh): PhysicalField {
   };
   const field = {
     ...arrays,
+    continuous: null,
+    riverPaths: null,
+    provinces: null,
     mesh,
     events: [] as PhysicalField["events"],
     faults: [] as PhysicalField["faults"],

@@ -286,22 +286,42 @@ function publishField(
     ...grid,
     id: resourceId,
     channels: Object.fromEntries(channels.map((channel) => [channel, grid.channels[channel]])),
-    reconstruction: grid.reconstruction && {
-      support: grid.reconstruction.support,
-      water: grid.reconstruction.water,
-      biome: channels.includes("biome") ? grid.reconstruction.biome : undefined,
-      categories:
-        grid.reconstruction.categories &&
-        Object.fromEntries(
-          channels
-            .filter((name) => grid.reconstruction!.categories![name])
-            .map((name) => [name, grid.reconstruction!.categories![name]])
-        ),
-      channels: Object.fromEntries(
+    prepared: grid.prepared && {
+      support: grid.prepared.support,
+      coefficients: Object.fromEntries(
         channels
-          .filter((name) => grid.reconstruction!.channels[name])
-          .map((name) => [name, grid.reconstruction!.channels[name]])
+          .filter((name) => grid.prepared!.coefficients[name])
+          .map((name) => [name, grid.prepared!.coefficients[name]])
       ),
+      adaptive: Object.fromEntries(
+        channels
+          .filter((name) => grid.prepared!.adaptive?.[name])
+          .map((name) => [name, grid.prepared!.adaptive![name]])
+      ),
+      transforms: Object.fromEntries(
+        channels
+          .filter((name) => grid.prepared!.transforms[name])
+          .map((name) => [name, grid.prepared!.transforms[name]])
+      ),
+    },
+    geography: grid.geography && {
+      provinces:
+        grid.geography.provinces &&
+        Object.fromEntries(
+          Object.entries(grid.geography.provinces).filter(([name]) => channels.includes(name))
+        ),
+      water: grid.geography.water,
+      biome: channels.includes("biome") ? grid.geography.biome : undefined,
+      categories:
+        grid.geography.categories &&
+        Object.fromEntries(
+          Object.entries(grid.geography.categories).filter(([name]) => channels.includes(name))
+        ),
+      occurrences:
+        grid.geography.occurrences &&
+        Object.fromEntries(
+          Object.entries(grid.geography.occurrences).filter(([name]) => channels.includes(name))
+        ),
     },
     units: Object.fromEntries(channels.map((channel) => [channel, grid.units[channel]])),
     quantities: Object.fromEntries(

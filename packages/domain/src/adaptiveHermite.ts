@@ -1,3 +1,8 @@
+import {
+  prepareBernsteinPatch,
+  bernsteinPatchValue,
+  bernsteinPatchInterval,
+} from "./bernsteinPatch";
 // Tensor-product cubic Hermite data: value, du, dv and mixed derivative duv at each corner.
 const basis = (t: number) => [
   2 * t ** 3 - 3 * t * t + 1,
@@ -29,10 +34,9 @@ export function hermitePatch(c: Float64Array, u: number, v: number, du = false, 
   return value;
 }
 
-/** The sample correction and its first derivatives vanish on every cell face. */
-export function adaptivePolynomial(c: Float64Array, center: number, u: number, v: number) {
-  const bubble = 256 * (u * (1 - u) * v * (1 - v)) ** 2;
-  return hermitePatch(c, u, v) + bubble * (center - hermitePatch(c, 0.5, 0.5));
+/** Samples control the shared spline without adding a separate hump inside each cell. */
+export function adaptivePolynomial(c: Float64Array, _center: number, u: number, v: number) {
+  return hermitePatch(c, u, v);
 }
 
 export function evaluateAdaptiveCell(c: Float64Array, center: number, u: number, v: number) {
@@ -40,9 +44,11 @@ export function evaluateAdaptiveCell(c: Float64Array, center: number, u: number,
 }
 
 export function prepareAdaptiveCell(coefficients: Float64Array, center: number) {
+  const correction = 0;
   return {
     coefficients,
-    correction: center - hermitePatch(coefficients, 0.5, 0.5),
+    correction,
+    bernstein: prepareBernsteinPatch(coefficients, correction),
     low: Math.min(center, coefficients[0], coefficients[4], coefficients[8], coefficients[12]),
     high: Math.max(center, coefficients[0], coefficients[4], coefficients[8], coefficients[12]),
   };
@@ -50,9 +56,23 @@ export function prepareAdaptiveCell(coefficients: Float64Array, center: number) 
 export type PreparedAdaptiveCell = ReturnType<typeof prepareAdaptiveCell>;
 
 export function preparedAdaptivePolynomial(cell: PreparedAdaptiveCell, u: number, v: number) {
-  const bubble = 256 * (u * (1 - u) * v * (1 - v)) ** 2;
-  return hermitePatch(cell.coefficients, u, v) + bubble * cell.correction;
+  return bernsteinPatchValue(cell.bernstein, u, v);
 }
-export function evaluatePreparedAdaptiveCell(cell: PreparedAdaptiveCell, u: number, v: number) {
+export function preparedAdaptiveDerivative(
+  cell: PreparedAdaptiveCell,
+  u: number,
+  v: number,
+  axis: 0 | 1
+) {
+  return bernsteinPatchInterval(cell.bernstein, [u, v, u, v], axis)[0];
+}
+export function evaluatePreparedAdaptiveCell(
+  cell: PreparedAdaptiveCell,
+  u: number,
+  v: number,
+  positiveSupport = false
+) {
+  if (cell.low === cell.high) return cell.low;
+  if (positiveSupport && cell.low === 0) return preparedAdaptivePolynomial(cell, u, v);
   return Math.max(cell.low, Math.min(cell.high, preparedAdaptivePolynomial(cell, u, v)));
 }

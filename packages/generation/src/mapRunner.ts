@@ -190,6 +190,7 @@ export class MapRunner {
     bindNativeFacts(state, products);
     options.progress?.(stage.path, 0.95, `Validating ${process.contract.id}`);
     if (!process.contract.workspaceOnly) composeAuthoredSamples(state, original);
+    process.prepareFields?.(state);
     const diagnostics = process.validate(state, context);
     requireThat(
       diagnostics.every((d) => d.severity !== "error"),

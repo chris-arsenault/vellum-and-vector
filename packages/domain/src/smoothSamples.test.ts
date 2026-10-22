@@ -1,16 +1,12 @@
 import { expect, it } from "vitest";
-import {
-  smoothSampleInterpolator,
-  smoothCategoryInterpolator,
-  type SampleSupport,
-} from "./smoothSamples";
-import { createGrid, fieldInterpolator, putChannel } from "./grids";
+import { smoothSampleInterpolator, type SampleSupport } from "./smoothSamples";
+import { createGrid, fieldInterpolator, putChannel, type Grid } from "./grids";
 import { gridSchema } from "./gridSchema";
 import { gridSurfaceSchema } from "./gridSurfaceSchema";
 import { rectangle } from "./spatial";
 import { overlayField, replaceChannel } from "./fieldComposition";
 import { fieldExtrema } from "./fieldExtrema";
-import { scalarReconstruction } from "./scalarReconstruction";
+import { prepareGridChannel, preparedChannel } from "./preparedField";
 import { validateFieldTraits } from "./traits";
 import { weightEnclosure } from "./smoothSampleBounds";
 import type { Area } from "./model";
@@ -21,6 +17,10 @@ const support: SampleSupport = {
   origin: [2_000_000, 3_000_000],
   spacing: 1,
 };
+function prepare(grid: Grid) {
+  grid.prepared ??= { support, coefficients: {}, transforms: {} };
+  for (const name of Object.keys(grid.channels)) prepareGridChannel(grid, name);
+}
 it("retains other sources when one compact weight can dominate the enclosure", () => {
   for (const high of [1e30, Infinity]) {
     const terms = [
@@ -157,27 +157,28 @@ it("retains physical support through cloning and lets authored patches replace i
       revision: 1,
       resolution: 5,
     },
-    3,
-    3
+    11,
+    11
   );
-  putChannel(grid, "elevation", "metre", new Float64Array(9));
   const values = Float64Array.from(support.x, (x, i) => 3 * x - support.y[i]);
-  grid.reconstruction = { support, channels: { elevation: values } };
+  putChannel(grid, "elevation", "metre", values);
+  prepare(grid);
   const peak = structuredClone(grid);
-  peak.reconstruction!.channels.elevation.fill(0);
-  peak.reconstruction!.channels.elevation[48] = 100;
+  peak.channels.elevation.fill(0);
+  peak.channels.elevation[48] = 100;
+  prepare(peak);
   expect(fieldExtrema(peak, "elevation", peak.scope.footprint)![1]).toBe(100);
   const copy = gridSchema.parse(structuredClone(grid));
   const position = { x: 2e6 + 4.3, y: 3e6 + 5.8, z: 0 };
   expect(fieldInterpolator(copy, "elevation")(position)).toBeCloseTo(7.1, 8);
   const total = Float64Array.from(support.x, (x, i) => 100 + 90 * Math.sin(x + support.y[i]));
-  copy.reconstruction!.channels.maximumIceFlux = total;
-  copy.reconstruction!.channels.maximumGroundedIceFlux = Float64Array.from(
-    total,
-    (value, i) => value * ((i % 5) / 4)
+  putChannel(copy, "maximumIceFlux", "cubic-metre/year", total);
+  putChannel(
+    copy,
+    "maximumGroundedIceFlux",
+    "cubic-metre/year",
+    Float64Array.from(total, (value, i) => value * ((i % 5) / 4))
   );
-  for (const name of ["maximumIceFlux", "maximumGroundedIceFlux"])
-    putChannel(copy, name, "cubic-metre/year", new Float64Array(9));
   const ice = fieldInterpolator(copy, "maximumIceFlux");
   const grounded = fieldInterpolator(copy, "maximumGroundedIceFlux");
   for (let x = 0.1; x < 10; x += 0.17) {
@@ -194,23 +195,16 @@ it("retains physical support through cloning and lets authored patches replace i
       expect(value).toBeLessThanOrEqual(range[1] + 1e-5);
     }
   const patch = structuredClone(copy);
-  patch.reconstruction = undefined;
   patch.channels.elevation.fill(99);
+  prepare(patch);
   overlayField(copy, patch);
   expect(() => gridSurfaceSchema.parse(copy)).not.toThrow();
   const invalid = gridSurfaceSchema.parse(structuredClone(copy));
   invalid.overlays![0].grid.units.elevation = "celsius";
   expect(() => gridSurfaceSchema.parse(invalid)).toThrow();
   expect(fieldInterpolator(copy, "elevation")(position)).toBe(99);
-  replaceChannel(copy, "elevation", "metre", new Float64Array(9).fill(23));
+  replaceChannel(copy, "elevation", "metre", new Float64Array(121).fill(23));
   expect(fieldInterpolator(copy, "elevation")(position)).toBe(23);
-});
-it("keeps natural category identities while locating their transition between physical samples", () => {
-  const codes = Float64Array.from(support.x, (x, i) => (x * x + support.y[i] ** 2 < 40 ? 2 : 91));
-  const at = smoothCategoryInterpolator(support, codes);
-  expect(at(2e6 + 1, 3e6 + 1)).toBe(2);
-  expect(at(2e6 + 9, 3e6 + 9)).toBe(91);
-  for (let x = 0.1; x < 10; x += 0.13) expect([2, 91]).toContain(at(2e6 + x, 3e6 + 3.7));
 });
 it("does not invent a grounded-flux peak when total flux and grounded fraction vary oppositely", () => {
   const source = {
@@ -220,7 +214,25 @@ it("does not invent a grounded-flux peak when total flux and grounded fraction v
       maximumGroundedIceFlux: Float64Array.from(support.x, (x) => (x < 5 ? 10 : 18)),
     },
   };
-  const at = scalarReconstruction(source, "maximumGroundedIceFlux", false)!;
+  const grid = createGrid(
+    "flux",
+    {
+      worldId: "world",
+      areaId: "area",
+      spaceId: "surface",
+      crsId: "metres",
+      footprint: rectangle([2e6, 3e6, 2e6 + 10, 3e6 + 10]),
+      time: "present",
+      revision: 1,
+      resolution: 1,
+    },
+    11,
+    11
+  );
+  for (const [name, values] of Object.entries(source.channels))
+    putChannel(grid, name, "cubic-metre/year", values);
+  prepare(grid);
+  const at = preparedChannel(grid, "maximumGroundedIceFlux");
   expect(at({ x: 2e6 + 4.5, y: 3e6 + 5.1, z: 0 })).toBeLessThanOrEqual(18);
 });
 
@@ -237,7 +249,7 @@ it("validates scoped constraints against the field inside their footprint", () =
   };
   const grid = createGrid("scoped", scope, 11, 11);
   putChannel(grid, "elevation", "metre", support.x);
-  grid.reconstruction = { support, channels: { elevation: support.x } };
+  prepare(grid);
   const region = rectangle([2e6 + 4, 3e6 + 4, 2e6 + 4.1, 3e6 + 4.1]);
   const range = fieldExtrema(grid, "elevation", region)!;
   expect(range[0]).toBeCloseTo(4, 6);
@@ -289,7 +301,7 @@ it("encloses nonlinear field values and finds scoped extrema without including r
     11
   );
   putChannel(grid, "elevation", "metre", values);
-  grid.reconstruction = { support, channels: { elevation: values } };
+  prepare(grid);
   const region = rectangle([2e6 + 3.1, 3e6 + 3.1, 2e6 + 6.9, 3e6 + 6.9]),
     range = fieldExtrema(grid, "elevation", region)!;
   const point = { type: "Point" as const, coordinates: [2e6 + 4.1, 3e6 + 4.2] };

@@ -1,5 +1,6 @@
 import { putChannel, type Grid, type GridSurface } from "./grids";
 import { requireThat } from "./errors";
+import type { NumericValues, PreparedChannelData } from "./preparedField";
 
 export function overlayField(
   base: GridSurface,
@@ -38,11 +39,18 @@ export function replaceChannel(
   grid: GridSurface,
   name: string,
   unit: string,
-  values: Float64Array,
-  quantity: "intensive" | "extensive" | "category" = unit === "category" ? "category" : "intensive"
+  values: NumericValues,
+  quantity: "intensive" | "extensive" | "category" = unit === "category" ? "category" : "intensive",
+  prepared?: PreparedChannelData
 ) {
-  putChannel(grid, name, unit, values, quantity);
-  clearReconstruction(grid, name);
+  if (grid.geography) {
+    if (grid.geography.categories) delete grid.geography.categories[name];
+    if (grid.geography.occurrences) delete grid.geography.occurrences[name];
+    if (name === "biome") delete grid.geography.biome;
+    if (["elevation", "water", "waterBody", "waterLevel", "waterDepth"].includes(name))
+      delete grid.geography.water;
+  }
+  putChannel(grid, name, unit, values, quantity, prepared);
   if (!grid.overlays) return;
   grid.overlays = grid.overlays
     .map((overlay) => ({
@@ -51,13 +59,4 @@ export function replaceChannel(
     }))
     .filter((overlay) => overlay.channels.length);
   if (!grid.overlays.length) delete grid.overlays;
-}
-function clearReconstruction(grid: GridSurface, name: string) {
-  const source = grid.reconstruction;
-  if (!source) return;
-  delete source.channels[name];
-  if (source.categories) delete source.categories[name];
-  if (name === "biome") delete source.biome;
-  if (["elevation", "water", "waterBody", "waterLevel", "waterDepth"].includes(name))
-    delete source.water;
 }

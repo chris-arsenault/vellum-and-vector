@@ -9,10 +9,11 @@ import {
   adaptiveLeafAt,
   type AdaptiveTopology,
 } from "./adaptiveTopology";
-import { reconstructAdaptive, sampleAdaptive } from "./adaptiveReconstruction";
+import { preparedChannel } from "./preparedField";
 
 /** Generated fields retain adaptive physical samples instead of a mandatory uniform raster. */
 export interface AdaptiveField extends FieldSamples {
+  mesh?: never;
   width?: never;
   height?: never;
   topology: AdaptiveTopology;
@@ -73,12 +74,12 @@ export function adaptiveFieldSampler(field: AdaptiveField, channel: string, disc
     discrete ||
     ["category", "cell-index"].includes(field.units[channel]) ||
     ["category", "extensive"].includes(field.quantities?.[channel] ?? "");
-  const reconstructed = categorical ? null : reconstructAdaptive(field.topology, values);
+  const at = categorical ? null : preparedChannel(field, channel);
   return (p: { x: number; y: number }): number => {
     if (!covers({ x: p.x, y: p.y, z: 0 })) return NaN;
     const i = adaptiveLeafAt(field.topology, p.x, p.y);
     if (i < 0 || !field.active[i]) return NaN;
-    return reconstructed ? sampleAdaptive(reconstructed, p.x, p.y) : values[i];
+    return at ? at({ ...p, z: 0 }) : values[i];
   };
 }
 export function adaptiveIntegral(field: AdaptiveField, channel: string) {

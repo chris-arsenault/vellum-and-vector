@@ -5,10 +5,15 @@ import {
   requireThat,
   sameValue,
   spatial,
+  prepareGridChannel,
   type DomainSnapshot,
   type GridSurface,
 } from "@atlas/domain";
 import type { GenerationState } from "./process";
+import { preparePhysicalChannels, type PhysicalArrayName } from "./canonry/continuousState";
+import { reconcileWater } from "./canonry/field";
+import { waterWrites } from "./canonry/physicalWrites";
+import { prepareRiverPaths } from "./canonry/riverChannelPaths";
 
 export function authoredFields(original: DomainSnapshot) {
   const fields = original.world.fields
@@ -93,10 +98,36 @@ function composeSamples(
     const covers = spatial.pointCoverage(footprint),
       sourceCovers = spatial.pointCoverage(source.scope.footprint),
       valueAt = gridSampler(source, channel);
+    let mutated = false;
     for (let i = 0; i < grid.active.length; i++) {
       const position = gridPosition(grid, i);
-      if (covers(position) && sourceCovers(position)) grid.channels[channel][i] = valueAt(position);
+      if (covers(position) && sourceCovers(position)) {
+        const transform = grid.prepared?.transforms[channel] ?? { scale: 1, offset: 0 };
+        const previous = grid.channels[channel][i];
+        grid.channels[channel][i] = (valueAt(position) - transform.offset) / transform.scale;
+        mutated ||= grid.channels[channel][i] !== previous;
+      }
     }
+    if (!mutated) continue;
+    const map = state.physical?.map;
+    const native =
+      map &&
+      ((Object.keys(map) as (keyof typeof map)[]).find(
+        (name) => map[name] === grid.channels[channel]
+      ) as PhysicalArrayName | undefined);
+    if (map && native) {
+      const hadPaths = Boolean(map.riverPaths);
+      const changed: PhysicalArrayName[] = [native];
+      if (native === "Elevation") {
+        for (let i = 0; i < map.mesh.count; i++) {
+          map.BedrockElevation[i] = map.Elevation[i] - map.SedimentThickness[i];
+          reconcileWater(map, i);
+        }
+        changed.push("BedrockElevation", ...waterWrites);
+      }
+      preparePhysicalChannels(map, changed);
+      if (hadPaths && !map.riverPaths) prepareRiverPaths(map);
+    } else prepareGridChannel(grid, channel, { transform: grid.prepared?.transforms[channel] });
   }
 }
 

@@ -188,6 +188,7 @@ export function atlasPhysicalSequence(
     ...contributions("present.post-glacial-forcing", context),
     ...(!physical ? contributions("present.influence-history", context) : []),
     ...contributions("present.ecology", context),
+    invoke("canonry.surface-classification"),
     ...contributions("present.classify", context),
     invoke("canonry.project"),
     ...contributions("present.project", context)

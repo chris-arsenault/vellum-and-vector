@@ -7,6 +7,13 @@ discards state and stops generation. [ADR 0003](adr/0003-frontend-session.md)
 supersedes this document's backend, durable-job, recovery and service requirements
 for current work. Geographic authoring behavior remains the product direction.
 
+**Magic direction — clarified 2026-10-22:** Fire, Aurora and Pressure are
+first-class world effects and processes with distinct physical motivations.
+Use Canonry as a mechanism reference without importing its named setting lore.
+Future magic systems remain open; extensibility must preserve the current three's
+specific behavior. Source placement, system-specific settings and shaping remain;
+see section 10.3 and [magic source authority](../AGENTS.md#magic-source-authority).
+
 ## Product, Domain, and Generation Design — Implementation-Agent Handoff
 
 **Status:** Consolidated design baseline (v0.1)  
@@ -55,7 +62,7 @@ The requirements and invariants below supersede architectural suggestions from e
 - Use a **finite, genre-neutral set of creation levels**; levels are neither arbitrarily recursive nor an infinite zoom ladder. A user can skip intermediary creation levels.
 - Leave large parts of the world ungenerated or under-detailed indefinitely.
 - Support procedural generation at most levels and direct editing at all appropriate levels. The balance should shift toward manual creation at small scales.
-- Preserve Canonry's causal geographic and magical generation, including multi-epoch historical effects, while making magical systems user-configurable.
+- Preserve Canonry's causal geography and the distinct Fire, Aurora and Pressure systems, including historical effects and system-specific creator controls.
 - Make physical consistency the default. Traits and inherited constraints limit refinement; exceptions must have explicit authored or supernatural causes.
 - Support political, cultural, and arbitrary future GIS overlays, with independent generation and editing capabilities.
 - Support reusable standalone **templates**, later inserted into geographically anchored maps.
@@ -283,12 +290,12 @@ Political and cultural map content should be available at every creation level w
 
 ### 8.1 Trait classes
 
-| Class                  | Meaning                                                              | Examples                                                             |
-| ---------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| **Hard constraint**    | Enforced generation/edit bound unless an authorized exception exists | Maximum relief, frozen river crossing, coastal outlet requirement    |
-| **Soft tendency**      | Shapes likelihood/strength; not an invariant                         | Forested, volcanically active, river-rich                            |
-| **Derived trait**      | Computed from generated or authored data                             | Glaciated, densely inhabited, drought-prone                          |
-| **Exception/override** | Explicit reason to violate an inherited/default constraint           | Gravity inversion, magically maintained oasis, artificial river lift |
+| Class                  | Meaning                                                              | Examples                                                              |
+| ---------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| **Hard constraint**    | Enforced generation/edit bound unless an authorized exception exists | Maximum relief, frozen river crossing, coastal outlet requirement     |
+| **Soft tendency**      | Shapes likelihood/strength; not an invariant                         | Forested, volcanically active, river-rich                             |
+| **Derived trait**      | Computed from generated or authored data                             | Glaciated, densely inhabited, drought-prone                           |
+| **Exception/override** | Explicit reason to violate an inherited/default constraint           | Fire-heated refuge within a cold region, maintained ice-free crossing |
 
 Traits should be typed, parameterizable, and scale-aware. A coarse `flat` constraint generally means a bound on regional relief/grade, not mathematically zero micro-relief at interior scale. `Cold` implies a climate envelope with permissible local variation, not identical temperature everywhere.
 
@@ -349,7 +356,7 @@ For continuous fields, a boundary may require a profile/gradient or neighboring 
 
 **Allowed by explicit reconciliation:** User elects to redirect the river across the region boundary. System shows the affected upstream/downstream reaches, areas, road crossings, and political boundaries that follow the waterway, and requires an explicit higher-impact change.
 
-**Allowed with supernatural cause:** River ascends an otherwise impassable grade inside a defined gravity/magic field whose rule accounts for the behavior, without breaking contracted external connectivity.
+**Allowed with supernatural cause:** Captured Fire maintains an ice-free river crossing inside an otherwise frozen region. Its heat and meltwater affect downstream processes while contracted external connectivity remains valid.
 
 ### 9.5 Reconciling impacts
 
@@ -388,19 +395,52 @@ Preserve the concepts and, where suitable, adapt the algorithms for:
 
 **Do not assume Canonry already supports arbitrary selected-region refinement.** Its current latent-world geography is generated globally, then exposed and summarized at different rendering/gameplay resolutions. Sparse _generation_ with stable child boundaries is new work.
 
-### 10.3 Magical generation — generalized from Canonry
+### 10.3 Magical generation — Fire, Aurora and Pressure
 
-Canonry's Fire, Aurora, and Pressure systems demonstrate mechanisms to retain:
+These are three distinct authored systems, not examples of interchangeable
+source/effect combinations. Read Canonry's [lore bible, section 7](../../the-canonry-game/docs/lore/lore-bible.md#7-the-three-fires--magic-system)
+and [physical generation design, sections 8–11](../../the-canonry-game/docs/design/physical-microgeography-worldgen.md#8-fracture-network-and-fire),
+alongside the corresponding implementations. Lore explains motivations;
+implementation establishes which geographic mechanisms exist. Named gods,
+peoples, artifacts, places and events are reference context, not atlas content
+requirements. Social applications below are setting-independent adaptations.
 
-- **Fire:** Source cores, preferential propagation along fractures, temperature and ice feedback, rock hardening that affects subsequent erosion.
-- **Aurora:** Routing toward colder terrain, accumulation/storage in ice, landscape effects and historical persistence.
-- **Pressure:** Deep-ocean sources and propagation through ocean/bathymetry, wave/coastal forcing, ancient wake history.
-- **Interactions:** Nonexclusive sources and effects producing combined phenomena, while retaining the underlying physical state.
-- **Historical advection:** Magical history can move with evolving geology; uplifted land can carry effects accumulated while it was seafloor.
+- **Captured Fire:** Fire-cores are mineral stores of geothermal energy, mined
+  from veins and released by cracking. Geographic Fire follows fracture
+  conductance, heats terrain, melts ice and hardens rock. Society uses cores for
+  heating, forging, cutting and excavation; release can rupture structures and
+  injure practitioners. Extraction, access and depletion have social consequences.
+- **Aurora-light:** Aurora accumulates toward colder terrain and is retained in
+  thick ice; its geological influence weakens rock. Aurora-crystals collect and
+  store charge for slow perception, distant seeing, preservation and ice-memory
+  reading. Cognitive strain is a proposed cost of sustained practice. It is not an offensive
+  beam, generic fertility source or interchangeable fuel for Fire.
+- **Pressure-depth:** A deep-ocean pressure locus drives geographic pressure
+  propagation. Ocean paths, reflection and overlapping rays produce crush zones,
+  coastal stress and wake/rogue-impact history. Practitioners descend into deep
+  water, carrying charge for subsonic communication and directed force.
+  Depth tolerance constrains access; costs of sustained practice remain an
+  adaptation proposal. The source's named deity and current are not required.
+- **Interference:** The disciplines do not combine cleanly. Preserve Fire/Aurora
+  interference, dissipation of carried Pressure near Aurora-crystals, and
+  destructive Fire/Pressure contact. Geographic thermal war rims, steam fractures
+  and Pressure/Aurora breaches retain their separate causes and physical substrate.
+- **History:** Retain and advect geographic consequences where geology moves
+  them. Numerical activity history is distinct from the lore's readable ice-memory.
 
-**New product capability:** Users define magical systems through composable source definitions, propagation behavior, storage/decay, spatial fields, interactions, environmental feedback, historical effects, and exceptions to ordinary physical rules. The initial public authoring surface should use a bounded, declarative vocabulary of generation behaviors rather than arbitrary user-executed code. Custom algorithm extensions may be added later.
+Creators place and shape sources, works and conditions of these systems and
+adjust meaningful system-specific parameters. Future magic systems may add their
+own world effects and processes through the shared generation structure. The
+current three must remain first-class implementations with their own state,
+causal feedback and interactions. This does not require building a universal
+spell editor or speculative extension framework now. Do not import the reference
+game's named lore or global ice age, or erase established mechanisms to make
+every system fit one generic vocabulary.
 
-Magic must feed physical processes at the correct causal stage; a magical layer is not limited to a renderer-only color override.
+Magic feeds physical processes at the correct causal stage. Society can change
+access, extraction, use and local physical conditions, and those changes feed
+back into the appropriate system. The [society plan](SOCIETY-GENERATION-PLAN.md)
+separates proposed social operations from implemented geographic behavior.
 
 ### 10.4 Cultural generation — new independent axis
 
@@ -548,7 +588,7 @@ Suggested performance target—not a previously approved SLA—is perceptibly im
 
 **River change:** Inspect existing watershed → draw/describe internal meander → validate invariant inlet/outlet and flow → preview local adjustments and invalidations → commit without changing adjacent region boundaries.
 
-**Magical exception:** Add a gravity-altering source with explicit bounds/rules → preview impacts on water/elevation/terrain → commit resulting allowed exception while keeping contracted external connections.
+**Magical exception:** Establish captured-Fire heating at a frozen crossing → preview thaw, water and Aurora-reservoir changes → apply the change while keeping contracted external connections.
 
 ---
 
@@ -605,16 +645,16 @@ Canonry's full-generation pipeline was designed for globally constructed fields 
 
 ### 15.3 Decision table for implementation agents
 
-| Decision                        | Product constraint                                | Recommended starting point                                                   | Must be proven before committing                                             |
-| ------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| World geometry                  | Exact spatial reference at all levels             | Planar world first; abstract for globe/wrapping                              | Transformation validity, area/distance correctness, future CRS extensibility |
-| Authoritative features          | Persistent IDs, geometry, queries, overlays       | GIS vector model, likely spatial DB                                          | Cross-scale feature identity; custom world CRS and local coordinates         |
-| Generated fields                | Causal simulation, multiple resolutions           | Adapt Canonry field model plus tiled/coarse/fine artifacts                   | Edge/halo consistency, generation costs, versioned output                    |
-| Region ownership                | No conflicting detail in overlaps                 | Explicit nonoverlapping materialization ownership; overlapping views allowed | Correct handling of arbitrarily drawn selection and existing generated areas |
-| Political/cultural spatial data | Overlap, claims, diffusion                        | Polygons + fields + relations rather than exclusive polygons                 | Query and visualization of many-to-many coverage                             |
-| Local site/interior geometry    | Small-unit precision and world anchoring          | Local frames with GIS anchor plus vertical metadata                          | Invertible transforms, valid entrances, cross-map connections                |
-| Long jobs                       | Minutes/hour acceptable with transparent progress | Persisted server jobs with stage reporting and cancel                        | Consistent results, no partial published state, resource/cost controls       |
-| Generation customizability      | User-defined magic; predictable reproducibility   | Declarative rule/behavior registry first                                     | Dependency validation, safety, causal feedback, deterministic result         |
+| Decision                        | Product constraint                                  | Recommended starting point                                                   | Must be proven before committing                                             |
+| ------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| World geometry                  | Exact spatial reference at all levels               | Planar world first; abstract for globe/wrapping                              | Transformation validity, area/distance correctness, future CRS extensibility |
+| Authoritative features          | Persistent IDs, geometry, queries, overlays         | GIS vector model, likely spatial DB                                          | Cross-scale feature identity; custom world CRS and local coordinates         |
+| Generated fields                | Causal simulation, multiple resolutions             | Adapt Canonry field model plus tiled/coarse/fine artifacts                   | Edge/halo consistency, generation costs, versioned output                    |
+| Region ownership                | No conflicting detail in overlaps                   | Explicit nonoverlapping materialization ownership; overlapping views allowed | Correct handling of arbitrarily drawn selection and existing generated areas |
+| Political/cultural spatial data | Overlap, claims, diffusion                          | Polygons + fields + relations rather than exclusive polygons                 | Query and visualization of many-to-many coverage                             |
+| Local site/interior geometry    | Small-unit precision and world anchoring            | Local frames with GIS anchor plus vertical metadata                          | Invertible transforms, valid entrances, cross-map connections                |
+| Long jobs                       | Minutes/hour acceptable with transparent progress   | Persisted server jobs with stage reporting and cancel                        | Consistent results, no partial published state, resource/cost controls       |
+| Magic shaping                   | Authored Fire, Aurora and Pressure; reproducibility | System-specific controls over existing process contracts                     | Distinct media, costs, interference and causal geographic feedback           |
 
 If a decision cannot be resolved by a narrow prototype or documented trade-off, record it as an architecture decision rather than burying it in code.
 
@@ -623,7 +663,7 @@ If a decision cannot be resolved by a narrow prototype or documented trade-off, 
 1. **Spatial foundation:** World reference, mapped area hierarchy, local frames, vector/field layer registry, geometry operations, persistence, basic web map and layer viewer. Test transforms and authoritative feature identity.
 2. **Physical generation + first refinement:** Reuse Canonry physical/history core, coarse world result, Region refinement with locked physical/hydrological crossings, user-selectable quality and long-running jobs.
 3. **Editing and regeneration:** Manual terrain/feature editing, semantic feature operations, authored protections, per-domain invalidation, previews, undo, explicit reconciliation.
-4. **Magic authoring:** Generalized declarative sources, propagation, environmental consequences, cross-epoch historical forcing and user exceptions.
+4. **Magic authoring:** Shape Fire, Aurora and Pressure sources, works and conditions, preserving their distinct propagation, physical consequences, social uses and historical effects.
 5. **Political/cultural axes:** World/Region generators, population/cultural fields, polities/claims/control, historical inheritance, layer presets and scale-specific refinement.
 6. **Local/site/interior and templates:** Settlement/network layouts, cave and construction histories, vertical coordinates, building interiors and template instantiation.
 7. **Agent integration and expansion:** Expose existing domain service through MCP, propose/preview/commit flows, generalized custom GIS layers/import-export, broader content coverage.
@@ -648,7 +688,7 @@ The following are target-product requirements. `Core` means foundational to the 
 | LYR-03  | Arbitrary user-defined GIS-compatible layers can be created without new generators.                          | Core                    |
 | LYR-04  | Map views provide layer combinations, styling, visibility, and scale-dependent presentation.                 | Core                    |
 | GEN-01  | Causal, deterministic multi-epoch physical world generation preserves Canonry's major processes.             | Core                    |
-| GEN-02  | User-authored magical systems can affect physical geography and history through composable rules.            | Core                    |
+| GEN-02  | Fire, Aurora and Pressure retain their distinct mechanisms and affect geography, society and history.        | Core                    |
 | GEN-03  | Independent cultural and political generators exist at applicable creation profiles.                         | Core                    |
 | GEN-04  | Generators can operate on selected areas/domains and respect parent constraints and protected edits.         | Core                    |
 | GEN-05  | Generation quality is configurable; jobs expose progress/failure and may run for up to an hour.              | Core                    |
@@ -680,7 +720,7 @@ A parent river crosses a mapped area at known endpoints with specified direction
 
 ### Scenario C — Trait inheritance and magical exception
 
-A Region inherits `flat | cold`. Its child produces low relief and consistent climate. Inserting a geothermal or gravity-altering magical field creates a localized, causally explainable exception. The final map retains natural fields, magical intensities, effects, and identifiable history rather than merely replacing its biome color.
+A Region inherits `flat | cold`. Its child produces low relief and consistent climate. Captured-Fire heating creates a localized thaw, changing water and Aurora retention. The final map retains natural fields, separate magical influences, effects and identifiable history rather than merely replacing its biome color.
 
 ### Scenario D — Historical inheritance at a cave
 
@@ -727,7 +767,7 @@ These issues need engineering decisions/prototypes, but **do not block the produ
 2. **Numerical refinement strategy:** How Canonry's globally connected microtriangle graph is adapted to selected child extents/halos and possibly other geometry; verify drainage, erosion and glacial boundary correctness.
 3. **Authority across varying detail:** How coarse parent constraint geometry, high-resolution child geometry, cross-area patches, and cartographic generalization are stored and reconciled.
 4. **GIS persistence split:** Which data live in a spatial database versus raster/tile/object storage versus generator artifacts; evaluate costs and query/edit patterns.
-5. **Declarative magic expressiveness:** Define the actual authoring vocabulary, dependency cycle rules, exception semantics and safe evaluation limits.
+5. **Magic fidelity and social use:** Represent fire-core extraction and release, Aurora crystal/ice-memory practices, depth-dependent Pressure use and their distinct costs and interference at atlas scale. Distinguish lore-supported additions from existing implementations.
 6. **Political/cultural generation fidelity:** Select plausible initial algorithms and scale-dependent state without inventing a full agent-based history simulation.
 7. **Large-region resource budget:** Implement deterministic job execution, reproducible intermediate state, bounded resource use, cancel/restart, stage reporting, and failure recovery.
 8. **Cartographic styling:** Establish presentation presets/symbols/generalization independently of geographic truth; exact visual styles and hand-drawing palettes are deferred.

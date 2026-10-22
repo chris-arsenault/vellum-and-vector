@@ -6,6 +6,7 @@ import { units, truncate } from "./math";
 import { Landform as L } from "./codes";
 import { measureSlopes } from "./geography";
 import { physicalSampler } from "./physicalMetric";
+import { preparePhysicalChannels, physicalFieldReader } from "./continuousState";
 
 function shape(
   map: PhysicalField,
@@ -76,6 +77,15 @@ function hasDrop(map: PhysicalField, p: PhysicalProfile, i: number): boolean {
     units(p.WaterfallMinimumDrop)
   );
 }
+function waterfallDrop(map: PhysicalField, p: PhysicalProfile, i: number): number {
+  const target = map.FlowTargets[i];
+  if (target < 0) return 0;
+  const distance = Math.hypot(
+    map.mesh.x[i] - map.mesh.x[target],
+    map.mesh.y[i] - map.mesh.y[target]
+  );
+  return ((map.Elevation[i] - map.Elevation[target]) / distance) * p.WaterfallEvaluationLength;
+}
 function waterfall(map: PhysicalField, p: PhysicalProfile, i: number): boolean {
   if (map.RiverOrders[i] <= 0) return false;
   if (hasDrop(map, p, i)) return true;
@@ -145,11 +155,10 @@ function classify(
   map: PhysicalField,
   p: PhysicalProfile,
   i: number,
-  valueAt: ReturnType<typeof physicalSampler>
+  s: ReturnType<typeof shape>
 ): number {
   const preserved = retained(map, p, i);
   if (preserved !== 0) return preserved;
-  const s = shape(map, i, p.LandformNeighborhoodRadius, valueAt);
   const history = historical(map, p, i, s);
   if (history !== 0) return history;
   if (waterfall(map, p, i)) return L.Waterfall;
@@ -163,7 +172,20 @@ function classify(
 }
 export function landformClassification(map: PhysicalField, c: PhysicalContext) {
   measureSlopes(map);
-  const valueAt = physicalSampler(map.mesh, map.Elevation);
-  for (let i = 0; i < map.mesh.count; i++)
-    map.LandformCodes[i] = classify(map, c.Profile, i, valueAt);
+  preparePhysicalChannels(map, ["Elevation", "Slope"]);
+  const valueAt = physicalFieldReader(map, "Elevation");
+  for (let i = 0; i < map.mesh.count; i++) {
+    const local = shape(map, i, c.Profile.LandformNeighborhoodRadius, valueAt);
+    map.LandformHigher[i] = local.higher;
+    map.LandformLower[i] = local.lower;
+    map.LandformProminence[i] = map.Elevation[i] - local.highest;
+    let drop = waterfallDrop(map, c.Profile, i);
+    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
+      if (j >= 0 && map.RiverOrders[j] >= map.RiverOrders[i])
+        drop = Math.max(drop, waterfallDrop(map, c.Profile, j));
+    }
+    map.WaterfallDrop[i] = drop;
+    map.LandformCodes[i] = classify(map, c.Profile, i, local);
+  }
 }

@@ -1,6 +1,8 @@
 import type { Bounds } from "./spatial";
 import type { SampleEnclosure } from "./smoothSamples";
 import { projectedEnclosure, type EncloseSegment } from "./sampleSegmentBounds";
+import Orientation from "jsts/org/locationtech/jts/algorithm/Orientation.js";
+import Coordinate from "jsts/org/locationtech/jts/geom/Coordinate.js";
 
 type Point = [number, number];
 type Triangle = { vertices: Point[]; active: boolean; selected?: number };
@@ -84,8 +86,9 @@ function uncertainEdge(
     bv = at(...b) - level,
     data = segment ? segment(a, b) : projectedEnclosure(enclose(bounds([a, b])), a, b);
   if (av > 0 === bv > 0 && (av > 0 ? data.range[0] > level : data.range[1] <= level)) return false;
-  // A nonfinite enclosure cannot establish strict monotonicity.
-  return !(data.derivative[0] > 0 || data.derivative[1] < 0);
+  // Non-strict monotonicity also excludes a second sign change. In particular,
+  // a constant edge on the threshold does not need recursive subdivision.
+  return !(data.derivative[0] >= 0 || data.derivative[1] <= 0);
 }
 function splitEdge(
   vertices: Point[],
@@ -111,9 +114,10 @@ function splitEdge(
     return edgeChecks.get(id);
   });
   if (ambiguous) return edges[0].i;
-  // Without additional edge crossings, an interior closed component needs a
-  // stationary point. A gradient rectangle excluding zero rules that out.
-  const stationary = data.gradient.every(([low, high]) => low <= 0 && high >= 0);
+  // A closed interior component requires reversal in both coordinate directions.
+  // A non-strictly monotone component still reaches the boundary; clamped zero
+  // plateaus do not justify refining the entire plateau down to contour tolerance.
+  const stationary = data.gradient.every(([low, high]) => low < 0 && high > 0);
   return stationary ? edges[0].i : -1;
 }
 function rangeVerdict(data: SampleEnclosure, vertices: Point[], at: Scalar, level: number) {
@@ -182,6 +186,8 @@ export function refineContourTriangles(
     edgeChecks = new Map<string, boolean>(),
     pending: Triangle[] = [];
   const register = (vertices: Point[]) => {
+    const [a, b, c] = vertices.map((p) => new Coordinate(...p));
+    if (Orientation.index(a, b, c) === 0) return;
     const triangle = { vertices, active: true };
     active.add(triangle);
     pending.push(triangle);

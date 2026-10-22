@@ -22,6 +22,7 @@ import { generationBindings } from "../generationBindings";
 import { atlasParametersSchema, type AtlasParameters } from "../atlasParameters";
 import type { Epoch } from "@atlas/domain";
 import type { ProcessBehavior } from "../processTraits";
+import { preparePhysicalChannels } from "./continuousState";
 
 interface EcologyInput {
   seed: number;
@@ -277,6 +278,7 @@ export function ecologyProcesses(input: AtlasGenerationInput): MapProcess[] {
       workspaceOnly: true,
     },
     behavior: ecologyBehavior(name, input),
+    prepareFields: (state) => preparePhysicalChannels(state.physical!.map, ecologyScalars),
     validate,
   }));
 }

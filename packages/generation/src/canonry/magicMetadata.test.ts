@@ -1,5 +1,10 @@
 import { expect, it } from "vitest";
-import { createAdaptiveField, createAdaptiveTopology, magicSystemSchema } from "@atlas/domain";
+import {
+  createAdaptiveField,
+  createAdaptiveTopology,
+  magicSystemSchema,
+  rectangle,
+} from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { prepareAtlasGeneration } from "../atlasWorkflow";
 import { publishGenerationProducts } from "../publication";
@@ -10,6 +15,8 @@ import { createField } from "./field";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { advectMagic, initializeMagic } from "./magicState";
 import { projectMagic } from "./magicFeatures";
+import { prepareMagicFields } from "./magicContinuous";
+import { refreshWorkspaceSamples } from "./atlasWorkspace";
 import { refineWorkspace } from "./adaptiveWorkspace";
 import { magicFieldDefinitions, publishedMagicChannels } from "./magicFieldDefinitions";
 import { atlasPublicationDefinitions } from "./atlasPublications";
@@ -106,6 +113,8 @@ it("projects and publishes each declared magic channel with its actual quantity 
   field.intensity.fill(300);
   field.retained.set(Float64Array.from(state.physical!.map.mesh.areas, (area) => area * 5));
   field.firstEpoch.fill(2);
+  prepareMagicFields(state, "sources");
+  refreshWorkspaceSamples(state, state.physical!);
   projectMagic(state);
   const prepared = prepareAtlasGeneration(state.domain, {
     areaId: "area",
@@ -148,8 +157,11 @@ it("inherits only carried activity and resets newly formed crust from declared i
     initial = state.physical!.magic!.fields[0];
   initial.history.fill(7);
   initial.firstEpoch.fill(2);
+  initial.occurrences = { firstEpoch: [{ epoch: 2, footprint: rectangle([0, 0, 4000, 1000]) }] };
   initial.stored.fill(9);
   initial.intensity.fill(300);
+  prepareMagicFields(state, "sources");
+  refreshWorkspaceSamples(state, state.physical!);
   projectMagic(state);
   state.physical!.inherited = true;
   initializeMagic(state);
@@ -158,8 +170,16 @@ it("inherits only carried activity and resets newly formed crust from declared i
   expect(inherited.stored.every((value) => value === 9)).toBe(true);
   expect(inherited.firstEpoch.every((value) => value === 2)).toBe(true);
   expect(inherited.intensity.every((value) => value === 0)).toBe(true);
-  state.physical!.map.AdvectionSourceIndex.fill(-1);
-  state.physical!.map.AdvectionSourceIndex[1] = 0;
+  const map = state.physical!.map;
+  map.LastPlateDriftStep = 1000;
+  map.provinces = {
+    origin: [...map.mesh.origin],
+    seed: 1,
+    scale: 1000,
+    strength: 0,
+    sites: [{ x: 0, y: 0, priority: 0, assembly: 1, motionX: 1, motionY: 0 }],
+  };
+  prepareMagicFields(state, "advection");
   advectMagic(state);
   expect(inherited.history[0]).toBe(0);
   expect(inherited.firstEpoch[0]).toBe(-1);

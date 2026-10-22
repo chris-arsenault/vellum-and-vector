@@ -210,11 +210,20 @@ descriptors supply unit, quantity, initial value, carried lifetime and publicati
 to allocation, remeshing, advection, inheritance and projection; those adapters
 no longer infer semantics from field-name suffixes.
 
-A separate stateful system can register its own module, configuration, existing
-causal-slot contributions and outputs. This does not automatically make it a
-built-in `MagicSystem` or add a new causal phase. The extension acceptance fixture
-executes an extensive inventory through two epochs, changes its configuration,
-disables it and publishes a new layer. A separate bundled worker runs the complete
+These are current implementation mechanics. Per the user's 2026-10-22
+clarification, Fire, Aurora and Pressure are first-class world processes;
+system-specific code is permitted and future systems remain open. Read
+[magic source authority](../AGENTS.md#magic-source-authority) and
+[the product contract](product-spec.md#103-magical-generation--fire-aurora-and-pressure).
+Future systems can add their own state, causal operations and publications using
+the shared contracts. Extension must not reduce the current three to generic
+effects or import Canonry's named setting lore. No speculative extension framework
+or universal spell-composition language is required for the current work.
+
+An existing module-composition fixture executes an extensive inventory through
+two epochs, changes its configuration, disables it and publishes a new layer.
+It tests the shared runner, not completeness of the three magic systems.
+A separate bundled worker runs the complete
 recipe using the production worker handler and real structured-clone messages;
 the Node test bridge supplies the browser messaging API, while browser journeys
 exercise the actual browser worker.

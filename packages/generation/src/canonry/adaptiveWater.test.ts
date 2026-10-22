@@ -16,6 +16,9 @@ import { depthRateToDischarge } from "./dimensions";
 import { fluvialErosion, sedimentTransport } from "./fluvial";
 import { landformClassification } from "./landforms";
 import { Landform } from "./codes";
+import { preparePhysicalChannels } from "./continuousState";
+import { prepareRiverPaths } from "./riverChannelPaths";
+import { channelCorridor } from "./channelCorridor";
 
 const bounds: [number, number, number, number] = [-100_000, -100_000, 100_000, 100_000];
 function fixture() {
@@ -53,6 +56,12 @@ it("curves across coarse/fine portals while remaining inside the connected drain
     map.DrainageElevations[i] = (1000 - n * 10) * 1024;
     map.RiverWidth[i] = 30 + n;
   });
+  // A curved valley supplies an actual off-sample path, including fine/coarse crossings.
+  for (let i = 0; i < mesh.count; i++)
+    map.Elevation[i] =
+      ((mesh.y[i] + mesh.x[i] * 0.65 + 15000 * Math.sin(mesh.x[i] / 50000)) / 1000) ** 2;
+  preparePhysicalChannels(map, []);
+  prepareRiverPaths(map);
   const paths = createRiverPaths(map),
     { geometry, profiles } = riverPath(map, paths, members);
   const allowed = new Set(members);
@@ -81,6 +90,42 @@ it("curves across coarse/fine portals while remaining inside the connected drain
   );
 });
 
+it("keeps whole connecting chords inside the routed cells at an unequal adaptive corner", () => {
+  const topology = createAdaptiveTopology([0, 0, 1000, 1000], {
+    maximumSize: 500,
+    minimumSize: 250,
+    refine: ([x, y]) => x < 500 && y < 500,
+  });
+  const map = createField(adaptivePhysicalMesh(topology, rectangle([0, 0, 1000, 1000]))),
+    mesh = map.mesh;
+  const route = [
+    [375, 125],
+    [750, 250],
+    [750, 750],
+  ].map(([x, y]) => nearestTriangle(mesh, x - mesh.origin[0], y - mesh.origin[1]));
+  for (let i = 0; i < mesh.count; i++) {
+    map.Elevation[i] = mesh.x[i] ** 2 + mesh.y[i] ** 2;
+    map.DrainageElevations[i] = 1000 - mesh.y[i] - mesh.origin[1];
+  }
+  route.forEach((i, n) => {
+    map.FlowTargets[i] = route[n + 1] ?? -1;
+    map.RiverOrders[i] = 1;
+  });
+  preparePhysicalChannels(map, []);
+  for (const i of route.slice(0, -1)) {
+    const j = map.FlowTargets[i], allowed = new Set([i, j]),
+      stations = channelCorridor(map, i, j, [mesh.x[i], mesh.y[i]], [mesh.x[j], mesh.y[j]]);
+    for (let n = 1; n < stations.length; n++) {
+      const a = stations[n - 1].point,
+        b = stations[n].point;
+      for (let t = 0; t <= 1; t += 0.01)
+        expect(
+          allowed.has(nearestTriangle(mesh, a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])))
+        ).toBe(true);
+    }
+  }
+});
+
 it("ends a river at the receiving water level on the same continuous terrain", () => {
   const map = fixture(),
     mesh = map.mesh;
@@ -97,6 +142,9 @@ it("ends a river at the receiving water level on the same continuous terrain", (
     map.RiverOrders[i] = map.WaterKindCodes[i] ? 0 : 1;
     map.FlowAccumulation[i] = 100;
   });
+  preparePhysicalChannels(map, []);
+  drainageConditioning(map, physicalContext(13, 0, atlasPhysicalProfile()));
+  prepareRiverPaths(map);
   const { geometry, profiles } = riverPath(map, createRiverPaths(map), members);
   expect(geometry.coordinates.at(-1)![0]).toBeCloseTo(0, 4);
   for (const values of Object.values(profiles))

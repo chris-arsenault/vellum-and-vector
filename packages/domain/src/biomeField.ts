@@ -2,12 +2,8 @@ import type { Geometry } from "geojson";
 import { biomeCode as B } from "./ecology";
 import { spatial, type Bounds } from "./spatial";
 import type { EncloseSegment } from "./sampleSegmentBounds";
-import {
-  smoothSampleInterpolator,
-  sampleStations,
-  type SampleSupport,
-  type SampleEnclosure,
-} from "./smoothSamples";
+import { type SampleSupport, type SampleEnclosure } from "./smoothSamples";
+import { preparedValue, type PreparedChannelData, type NumericValues } from "./preparedField";
 
 export const biomeInputs = [
   "temperature",
@@ -26,11 +22,13 @@ export const biomeInputs = [
 ] as const;
 export type BiomePoint = Record<(typeof biomeInputs)[number], number>;
 export interface BiomeSamples {
-  values: Record<string, Float64Array>;
+  values: Record<string, NumericValues>;
+  prepared: Record<string, PreparedChannelData>;
   seaLevel: number;
   lakes: { footprint: Geometry; level: number }[];
   protectedMask: Uint8Array;
-  protectedCodes: Float64Array;
+  protectedCodes: NumericValues;
+  protectedRegions?: { code: number; footprint: Geometry }[];
   codes: number[];
 }
 type BiomeRule =
@@ -153,16 +151,17 @@ export function biomeFieldInterpolator(
   ocean: Geometry | null | undefined
 ) {
   const pointAt = biomePointReader(support, biome, ocean),
-    protectedAt = protectedBiomeReader(support, biome);
+    protectedAt = protectedBiomeReader(biome);
   const read = (x: number, y: number) => protectedAt(x, y) ?? classifyBiomePoint(pointAt(x, y));
   let partition: BiomeFieldRule | undefined;
   return Object.defineProperty(read, "partition", {
     get: () => {
       if (partition !== undefined) return partition;
       partition = biomePartition(biomeRule, biome, ocean, pointAt);
-      for (const code of new Set(biome.protectedCodes.filter((_, i) => biome.protectedMask[i])))
+      for (const { code, footprint } of biome.protectedRegions ?? [])
         partition = {
-          test: (x: number, y: number) => (protectedAt(x, y) === code ? 1 : -1),
+          test: () => 1,
+          region: footprint,
           yes: code,
           no: partition,
         };
@@ -177,9 +176,11 @@ function biomePointReader(
   ocean: Geometry | null | undefined
 ) {
   const reads = Object.fromEntries(
-    biomeInputs.map((name) => [name, smoothSampleInterpolator(support, biome.values[name])])
+    biomeInputs
+      .filter((name) => name !== "water" && name !== "depth")
+      .map((name) => [name, preparedValue(support, biome.values[name], biome.prepared[name])])
   );
-  const elevation = smoothSampleInterpolator(support, biome.values.elevation);
+  const elevation = preparedValue(support, biome.values.elevation, biome.prepared.elevation);
   const marine = ocean ? spatial.pointCoverage(ocean) : null;
   const lakes = biome.lakes.map((lake) => ({
     ...lake,
@@ -231,30 +232,58 @@ function biomePointReader(
       }
       return { field: reads[name], weight: weight! };
     });
-    const values = Float64Array.from(support.x, (_, i) =>
-      terms.reduce((sum, t) => sum + t.weight * t.field.sourceValues[i], offset)
-    );
-    return smoothSampleInterpolator(support, values, (i) => {
-      const result: [number, number] = [0, 0];
-      for (const t of terms) {
-        const jet = t.field.jet(i);
-        result[0] += t.weight * jet[0];
-        result[1] += t.weight * jet[1];
-      }
-      return result;
+    const read = (x: number, y: number) =>
+      terms.reduce((sum, t) => sum + t.weight * t.field(x, y), offset);
+    return Object.assign(read, {
+      segment: ((a, b) => {
+        const result = {
+          range: [offset, offset] as [number, number],
+          derivative: [0, 0] as [number, number],
+        };
+        for (const term of terms) {
+          const value = term.field.segment(a, b);
+          for (const [target, source] of [
+            [result.range, value.range],
+            [result.derivative, value.derivative],
+          ]) {
+            target[0] += Math.min(term.weight * source[0], term.weight * source[1]);
+            target[1] += Math.max(term.weight * source[0], term.weight * source[1]);
+          }
+        }
+        return result;
+      }) as EncloseSegment,
+      enclose: (box: Bounds): SampleEnclosure => {
+        const result: SampleEnclosure = {
+          range: [offset, offset],
+          gradient: [
+            [0, 0],
+            [0, 0],
+          ],
+        };
+        for (const term of terms) {
+          const value = term.field.enclose(box);
+          for (const [target, source] of [
+            [result.range, value.range],
+            [result.gradient[0], value.gradient[0]],
+            [result.gradient[1], value.gradient[1]],
+          ]) {
+            target[0] += Math.min(term.weight * source[0], term.weight * source[1]);
+            target[1] += Math.max(term.weight * source[0], term.weight * source[1]);
+          }
+        }
+        return result;
+      },
     });
   };
   return Object.assign(at, { floor: elevation, combine });
 }
 
-function protectedBiomeReader(support: SampleSupport, biome: BiomeSamples) {
-  if (!biome.protectedMask.some(Boolean)) return () => null;
-  const stations = sampleStations(support);
+function protectedBiomeReader(biome: BiomeSamples) {
+  const regions = [...(biome.protectedRegions ?? [])]
+    .reverse()
+    .map((entry) => ({ code: entry.code, covers: spatial.pointCoverage(entry.footprint) }));
   return (x: number, y: number) => {
-    const nearest = stations(x, y).reduce((a, b) =>
-      a.dx * a.dx + a.dy * a.dy <= b.dx * b.dx + b.dy * b.dy ? a : b
-    );
-    return biome.protectedMask[nearest.i] ? biome.protectedCodes[nearest.i] : null;
+    return regions.find((entry) => entry.covers({ x, y, z: 0 }))?.code ?? null;
   };
 }
 
@@ -267,10 +296,7 @@ function biomePartition(
   const lakeShape = biome.lakes.length
     ? spatial.unionAll(biome.lakes.map((lake) => lake.footprint))
     : null;
-  const expressions = new Map<
-    BiomeRule,
-    Map<number | null, ReturnType<typeof smoothSampleInterpolator>>
-  >();
+  const expressions = new Map<BiomeRule, Map<number | null, ReturnType<typeof pointAt.combine>>>();
   const expression = (rule: Exclude<BiomeRule, number>, level: number | null) => {
     const stage = Object.hasOwn(rule.weights, "depth") ? level : null,
       cache = expressions.get(rule) ?? new Map();
@@ -298,8 +324,8 @@ function biomePartition(
       },
       yes: fieldRule(rule.yes, level),
       no: fieldRule(rule.no, level),
-      enclose: (box) => expression(rule, level).enclose(box, undefined, 0),
-      segment: (a, b) => expression(rule, level).segment(a, b, 0),
+      enclose: (box) => expression(rule, level).enclose(box),
+      segment: (a, b) => expression(rule, level).segment(a, b),
     };
     if (rule.water === "ocean") {
       delete result.segment;

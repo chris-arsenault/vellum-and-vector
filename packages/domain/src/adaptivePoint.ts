@@ -167,6 +167,36 @@ export function adaptivePointSampler(
   };
 }
 
+/** Generation materializes every patch before delivering this serializable field. */
+export function prepareAdaptiveCoefficients(t: AdaptiveTopology, values: Samples) {
+  const first = read(values, 0);
+  let constant = true;
+  for (let i = 1; i < t.leaves.length; i++)
+    if (read(values, i) !== first) {
+      constant = false;
+      break;
+    }
+  if (constant) {
+    const coefficients = new Float64Array(16);
+    for (let corner = 0; corner < 4; corner++) coefficients[corner * 4] = first;
+    const cell = prepareAdaptiveCell(coefficients, first);
+    return { topology: t, cells: Array.from(t.leaves, () => cell) };
+  }
+  const patch = prepareAdaptivePatches(t, values);
+  return { topology: t, cells: Array.from(t.leaves, (_, i) => patch(i)) };
+}
+export type PreparedAdaptiveCoefficients = ReturnType<typeof prepareAdaptiveCoefficients>;
+export function preparedAdaptiveInterpolator(
+  field: PreparedAdaptiveCoefficients,
+  locate: AdaptivePointLocator = locateAdaptivePoint,
+  positiveSupport = false
+) {
+  return (x: number, y: number) => {
+    const { leaf, u, v } = locate(field.topology, x, y);
+    return leaf < 0 ? NaN : evaluatePreparedAdaptiveCell(field.cells[leaf], u, v, positiveSupport);
+  };
+}
+
 function locateAdaptivePoint(t: AdaptiveTopology, x: number, y: number) {
   const leaf = adaptiveLeafAt(t, x, y);
   if (leaf < 0) return { leaf, u: NaN, v: NaN };

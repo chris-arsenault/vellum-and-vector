@@ -52,7 +52,7 @@ function terrainEdits(grid: GridSurface): ((p: Position) => boolean)[] {
   );
 }
 function composedWater(grid: GridSurface): (p: Position) => { level: number; kind: number } | null {
-  const source = grid.reconstruction?.water;
+  const source = grid.geography?.water;
   const kind = source ? fieldInterpolator({ ...grid, overlays: undefined }, "water") : null,
     level = source ? fieldInterpolator({ ...grid, overlays: undefined }, "waterLevel") : null;
   const overlays = [...(grid.overlays ?? [])]
@@ -75,7 +75,7 @@ function composedWater(grid: GridSurface): (p: Position) => { level: number; kin
 }
 function lakeSurfaces(raster: Raster) {
   if (raster.lakes?.length) return raster.lakes;
-  return raster.field.reconstruction?.water?.lakes.map((lake) => ({
+  return raster.field.geography?.water?.lakes.map((lake) => ({
     geometry: lake.footprint,
     level: lake.level,
   }));

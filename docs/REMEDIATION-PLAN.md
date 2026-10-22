@@ -103,7 +103,7 @@ Use typed relational ownership, references and constraints for these families:
 | Numerical state   | Immutable grids/mesh metadata, independently addressable typed channels and masks, sampled authored changes, physical/human history, causal links and parent historical mappings |
 | Workflows         | Effective process configuration, invocation/process identities, declared order and typed settings; relational records for user-authored configuration                            |
 | Profiles and time | Profile defaults, world/area specializations, ordered epoch schedules and typed variables, retained material/magical consequences                                                |
-| Execution         | Saved requests/configuration/inputs, allowed outputs, durable job status/progress, deterministic restart, geographic artifacts and provenance                                     |
+| Execution         | Saved requests/configuration/inputs, allowed outputs, durable job status/progress, deterministic restart, geographic artifacts and provenance                                    |
 | Authoring history | Object revisions, operation identities/actors/read-write references, affected scopes, invalidations, history and undo references                                                 |
 | Templates         | Owner-scoped immutable definitions, local spaces/units, entities/content/access requirements, versioned workflow recipes, instances and definition-to-instance identity mappings |
 
@@ -135,7 +135,7 @@ Magic changes the facts consumed by subsequent physical processes at their causa
 position. Check fact validity and refresh affected results in the configured order.
 
 The process catalog must preserve the physical mechanisms in specification
-section 10.2, generalized magic in 10.3, independent human processes in 10.4–10.6
+section 10.2, the authored Fire/Aurora/Pressure systems in 10.3, independent human processes in 10.4–10.6
 and inherited history in section 11. Region, cave and interior generation use
 profile-specific compositions of the same runtime. Completed history remains
 fixed while ordinary editing changes present state.

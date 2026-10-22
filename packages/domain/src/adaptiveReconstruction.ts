@@ -10,7 +10,7 @@ export { evaluateAdaptiveCell } from "./adaptiveHermite";
 
 export interface AdaptiveReconstruction {
   topology: AdaptiveTopology;
-  values: Float64Array;
+  values: ArrayLike<number>;
   corners: Float64Array;
   patches: Float64Array;
   cells: PreparedAdaptiveCell[];
@@ -54,7 +54,7 @@ export function adaptiveGradients(
 }
 export function reconstructAdaptive(
   topology: AdaptiveTopology,
-  values: Float64Array
+  values: ArrayLike<number>
 ): AdaptiveReconstruction {
   const at = prepareAdaptivePatches(topology, values);
   const patches = new Float64Array(values.length * 16),
@@ -69,7 +69,7 @@ export function reconstructAdaptive(
   }
   return { topology, values, corners, patches, cells };
 }
-/** Shared Hermite faces match height and slope; an interior correction retains each sample. */
+/** Shared Hermite faces match height and slope without cell-local sample corrections. */
 export function sampleAdaptive(surface: AdaptiveReconstruction, x: number, y: number): number {
   const i = adaptiveLeafAt(surface.topology, x, y);
   if (i < 0) return NaN;

@@ -4,6 +4,7 @@ import {
   spatial,
   biomeFieldInterpolator,
   sampledFieldContour,
+  fieldContour,
   geometryParts,
   type BiomeFieldRule,
 } from "@atlas/domain";
@@ -11,19 +12,18 @@ import type { Geometry } from "geojson";
 import { ecologicalSupport } from "./ecologicalSupport";
 import { nativePosition } from "./atlasWorkspace";
 import type { GenerationState } from "../process";
-import { components, publishPlace } from "./geographicRegions";
+import { publishPlace } from "./geographicRegions";
+import { polygonRegion } from "./causalRegions";
 
 /** Located woodland and wetland regions use the same spatial publication as landforms. */
 export function extractEcologicalFeatures(state: GenerationState) {
   const map = state.physical!.map;
-  const source = state.surface.reconstruction;
-  prepareEcologicalWater(state);
-  const at = source?.biome
-    ? biomeFieldInterpolator(source.support, source.biome, state.surface.ocean)
-    : null;
-  const regions = at ? partitionRegions(state, at.partition) : null;
-  if (source?.biome) source.biome.codes = [];
-  const dry = ecologicalDryMask(state, regions !== null);
+  const source = state.surface.geography;
+  if (!source?.biome || !state.surface.mesh)
+    throw new Error("Prepare and publish ecological fields before extracting their regions.");
+  const prepared = source.categories?.biome;
+  if (!prepared) throw new Error("Classify ecological geography before feature extraction.");
+  const regions = new Map(prepared.entries.map((entry) => [entry.code, entry.footprint]));
   const kinds = [
     ["Barren", "barren"],
     ["Desert", "desert"],
@@ -43,8 +43,7 @@ export function extractEcologicalFeatures(state: GenerationState) {
     const code = biomeCode(name);
     const publish = (members: number[], geometry?: Geometry, component = 0) => {
       if (!geometry) return;
-      const extent = ecologicalExtent(geometry, state, dry, regions !== null);
-      if (!extent) return;
+      const extent = geometry;
       if (source?.biome && !source.biome.codes.includes(code)) source.biome.codes.push(code);
       const area = members.reduce((sum, i) => sum + map.mesh.areas[i], 0);
       const average = (values: Float64Array) =>
@@ -71,24 +70,30 @@ export function extractEcologicalFeatures(state: GenerationState) {
         `${code}:${component}`
       );
     };
-    publishRegions(state, code, regions?.get(code) ?? null, publish, regions !== null);
+    publishRegions(state, regions.get(code) ?? null, publish);
   }
 }
-function ecologicalDryMask(state: GenerationState, continuous: boolean) {
-  return !continuous && state.surface.ocean
-    ? spatial.differenceFrom(state.surface.ocean)
-    : (shape: Geometry) => shape;
+/** Producer classification; extraction only consumes these completed regions. */
+export function prepareEcologicalRegions(state: GenerationState) {
+  const source = state.surface.geography!;
+  if (!source.biome) throw new Error("Prepare ecological fields before classification.");
+  source.biome.lakes = source.water?.lakes ?? [];
+  const regions = partitionRegions(
+    state,
+    biomeFieldInterpolator(
+      state.physical!.map.continuous!.support,
+      source.biome,
+      state.surface.ocean
+    ).partition
+  );
+  (source.categories ??= {}).biome = {
+    fallback: 0,
+    entries: [...regions].map(([code, footprint]) => ({ code, footprint })),
+  };
+  source.biome.codes = [...regions.keys()];
+  return regions;
 }
-function prepareEcologicalWater(state: GenerationState) {
-  const source = state.surface.reconstruction;
-  if (!source?.biome) return;
-  source.biome.lakes =
-    source.water?.lakes ??
-    Object.values(state.domain.world.features)
-      .filter((f) => f.areaId === state.domain.scope.areaId && f.kind === "lake")
-      .map((f) => ({ footprint: f.geometry, level: Number(f.attributes.waterLevel) }));
-}
-function partitionRegions(state: GenerationState, root: BiomeFieldRule) {
+export function partitionRegions(state: GenerationState, root: BiomeFieldRule) {
   const mesh = state.physical!.map.mesh,
     members = Array.from({ length: mesh.contentCount }, (_, i) => i),
     parts = new Map<number, Geometry[]>();
@@ -111,8 +116,8 @@ function partitionRegions(state: GenerationState, root: BiomeFieldRule) {
         mesh.y[i] + mesh.origin[1] <= bounds[3] + halo
     );
     const positive = traceRegion(mesh, local, region, rule);
-    const yes = positive && spatial.intersection(region, positive),
-      no = positive ? spatial.difference(region, positive) : region;
+    const yes = polygonRegion(positive && spatial.intersection(region, positive)),
+      no = polygonRegion(positive ? spatial.difference(region, positive) : region);
     if (yes) visit(rule.yes, yes);
     if (no) visit(rule.no, no);
   };
@@ -132,6 +137,19 @@ function traceRegion(
 ) {
   let positive = rule.region;
   if (positive === undefined) {
+    if (mesh.topology) {
+      positive = fieldContour(
+        mesh.topology,
+        rule.test,
+        undefined,
+        0,
+        10,
+        rule.enclose,
+        rule.segment,
+        region
+      );
+      return positive && rule.exclude ? spatial.difference(positive, rule.exclude) : positive;
+    }
     const support = ecologicalSupport(mesh, local, region);
     positive = sampledFieldContour(
       support.triangles,
@@ -145,37 +163,12 @@ function traceRegion(
   }
   return positive && rule.exclude ? spatial.difference(positive, rule.exclude) : positive;
 }
-function ecologicalExtent(
-  geometry: Geometry,
-  state: GenerationState,
-  dry: (shape: Geometry) => Geometry | null,
-  continuous: boolean
-): Geometry | null {
-  if (continuous) return geometry;
-  const clipped = spatial.intersection(geometry, state.domain.scope.footprint);
-  if (!clipped) return null;
-  const polygons = geometryParts(clipped)
-    .filter((part) => part.type === "Polygon")
-    .flatMap((part) => {
-      const land = dry(part);
-      return land ? geometryParts(land).filter((p) => p.type === "Polygon") : [];
-    });
-  return polygons.length
-    ? { type: "MultiPolygon", coordinates: polygons.map((p) => p.coordinates) }
-    : null;
-}
 function publishRegions(
   state: GenerationState,
-  code: number,
   shape: Geometry | null,
-  publish: (members: number[], geometry?: Geometry, component?: number) => void,
-  continuous: boolean
+  publish: (members: number[], geometry?: Geometry, component?: number) => void
 ) {
   const map = state.physical!.map;
-  if (!continuous) {
-    components(state, (i) => map.BiomeCodes[i] === code, publish, true);
-    return;
-  }
   const members = Array.from({ length: map.mesh.contentCount }, (_, i) => i);
   if (!members.length) return;
   if (!shape) return;

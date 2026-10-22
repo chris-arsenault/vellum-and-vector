@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { canonryMagicPresets, rectangle } from "@atlas/domain";
+import { canonryMagicPresets, rectangle, preparedValue } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import type { MapProcessContext } from "../process";
 import { createAdaptiveWorldMesh } from "./adaptiveMesh";
@@ -14,6 +14,8 @@ import { classifyMagicFeatures, projectMagic } from "./magicFeatures";
 import { Feature } from "./codes";
 import { traceOceanBeam } from "./magicBeams";
 import { nearestTriangle } from "./mesh";
+import { prepareMagicFields } from "./magicContinuous";
+import { refreshWorkspaceSamples } from "./atlasWorkspace";
 
 function scenario(samples = 4096) {
   const state = landscape();
@@ -27,6 +29,7 @@ function scenario(samples = 4096) {
     )
   );
   state.domain.world.magicSystems = canonryMagicPresets();
+  state.domain.scope.footprint = rectangle([0, 0, 2_000_000, 1_000_000]);
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
@@ -139,6 +142,8 @@ it("records hot source chambers and removes inactive source cores", () => {
   expect(map.FeatureFlags.some((value) => Boolean(value & Feature.MagmaChamber))).toBe(true);
   propagateMagic(state, field, 42, 0);
   magicThermalFeedback(state);
+  refreshWorkspaceSamples(state, state.physical!);
+  prepareMagicFields(state, "advection");
   classifyMagicFeatures(state);
   expect(
     map.FeatureFlags.some((value) => Boolean(value & (Feature.FireCore | Feature.MagmaChamber)))
@@ -191,18 +196,41 @@ it("keeps first coastal occurrence with advected coastal history and resets new 
   for (let i = 0; i < map.mesh.count; i++) map.WaterKindCodes[i] = map.mesh.x[i] < 0 ? 1 : 0;
   field.intensity.fill(500);
   magicCoastalFeedback(state, context(state, 0));
+  prepareMagicFields(state, "coast");
   const source = field.coastalHistory.findIndex((value) => value > 0);
   expect(source).toBeGreaterThanOrEqual(0);
   magicCoastalFeedback(state, context(state, 2));
   expect(field.coastalFirstEpoch[source]).toBe(0);
-  map.AdvectionSourceIndex.fill(-1);
-  map.AdvectionSourceIndex[0] = source;
-  const history = field.coastalHistory[source];
+  const minX = Math.min(...map.mesh.x),
+    maxX = Math.max(...map.mesh.x);
+  const target = map.mesh.x.findIndex((x, i) => x === minX && map.mesh.y[i] === map.mesh.y[source]);
+  const fresh = map.mesh.x.findIndex((x, i) => x === maxX && map.mesh.y[i] === map.mesh.y[source]);
+  expect(target).toBeGreaterThanOrEqual(0);
+  expect(fresh).toBeGreaterThanOrEqual(0);
+  map.LastPlateDriftStep = map.mesh.x[source] - map.mesh.x[target];
+  map.provinces = {
+    origin: [...map.mesh.origin],
+    seed: 1,
+    scale: 100_000,
+    strength: 0,
+    sites: [{ x: 0, y: 0, priority: 0, assembly: 1, motionX: -1, motionY: 0 }],
+  };
+  prepareMagicFields(state, "coast");
+  const historyAt = preparedValue(map.continuous!.support, field.coastalHistory, {
+    coefficients: field.coefficients?.coastalHistory,
+    adaptive: field.adaptive?.coastalHistory,
+  });
+  const history = historyAt(
+    map.mesh.x[source] + map.mesh.origin[0],
+    map.mesh.y[source] + map.mesh.origin[1]
+  );
   advectMagic(state);
-  expect(field.coastalHistory[0]).toBe(history);
-  expect(field.coastalFirstEpoch[0]).toBe(0);
-  expect(field.coastalHistory[1]).toBe(0);
-  expect(field.coastalFirstEpoch[1]).toBe(-1);
+  expect(field.coastalHistory[target]).toBe(history);
+  expect(field.coastalFirstEpoch[target]).toBe(0);
+  expect(field.coastalHistory[fresh]).toBe(0);
+  expect(field.coastalFirstEpoch[fresh]).toBe(-1);
+  refreshWorkspaceSamples(state, state.physical!);
+  prepareMagicFields(state, "advection");
   projectMagic(state);
   expect(state.surface.units["magic:pressure:coastalFirstEpoch"]).toBe("category");
 });
@@ -228,6 +256,8 @@ it("keeps an independently configured interaction when its container system is d
       ],
     },
   ];
+  refreshWorkspaceSamples(state, state.physical!);
+  prepareMagicFields(state, "advection");
   classifyMagicFeatures(state);
   expect(owner.features.collision.every((value) => value === 1)).toBe(true);
 });

@@ -3,7 +3,8 @@ import { createAdaptiveTopology, adaptiveGeometry } from "./adaptiveTopology";
 import { fieldContour, contourSupport, sampledFieldContour } from "./fieldContours";
 import type { SampleEnclosure } from "./smoothSamples";
 import type { Bounds } from "./spatial";
-import { adaptivePointSampler } from "./adaptivePoint";
+import { adaptivePointSampler, prepareAdaptiveCoefficients } from "./adaptivePoint";
+import { preparedValue } from "./preparedField";
 import { point, rectangle, spatial } from "./spatial";
 
 const topology = () =>
@@ -252,8 +253,12 @@ it.each(Array.from({ length: 16 }, (_, i) => i))(
     const labels = Float64Array.from(geometry.x, (x, i) =>
       Number(Math.sin(x / 45 + phase) * Math.cos(geometry.y[i] / 37 - phase) > 0.1)
     );
-    const at = adaptivePointSampler(tree, labels);
-    const shape = fieldContour(tree, at, undefined, 0.5, 0.1)!;
+    const at = preparedValue(
+      { x: geometry.x, y: geometry.y, origin: [0, 0], spacing: 125 },
+      labels,
+      { adaptive: prepareAdaptiveCoefficients(tree, labels) }
+    );
+    const shape = fieldContour(tree, at, undefined, 0.5, 0.1, at.enclose, at.segment)!;
     expect(spatial.area(shape)).toBeGreaterThan(0);
     expect(spatial.covers(rectangle([0, 0, 1000, 1000]), shape)).toBe(true);
     const covers = spatial.pointCoverage(shape);

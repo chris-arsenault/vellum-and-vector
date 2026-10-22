@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { canonryMagicPresets, magicSystemSchema } from "@atlas/domain";
+import { canonryMagicPresets, magicSystemSchema, rectangle } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { createAdaptiveWorldMesh } from "./adaptiveMesh";
 import { createField } from "./field";
@@ -9,6 +9,8 @@ import { locateMagicSources } from "./magicSources";
 import { propagateMagic } from "./magicPropagation";
 import { magicThermalFeedback, magicRockFeedback, magicCoastalFeedback } from "./magicFeedback";
 import { classifyMagicFeatures } from "./magicFeatures";
+import { prepareMagicFields } from "./magicContinuous";
+import { refreshWorkspaceSamples } from "./atlasWorkspace";
 
 function scenario() {
   const state = landscape(),
@@ -24,6 +26,7 @@ function scenario() {
       )
     );
   state.domain.world.magicSystems = canonryMagicPresets();
+  state.domain.scope.footprint = rectangle([-100_000, -100_000, 100_000, 100_000]);
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
@@ -112,9 +115,22 @@ it("keeps pressure rays in oceans, forces coasts and advects old activity onto u
   field.history.set(field.intensity);
   field.firstEpoch.fill(0);
   const oldOcean = field.intensity.findIndex((value) => value > 0);
-  const land = map.WaterKindCodes.findIndex((value) => value === 0);
-  map.AdvectionSourceIndex.fill(-1);
-  map.AdvectionSourceIndex[land] = oldOcean;
+  const land = map.WaterKindCodes.findIndex(
+    (value, i) => value === 0 && map.mesh.y[i] === map.mesh.y[oldOcean]
+  );
+  expect(land).toBeGreaterThanOrEqual(0);
+  map.LastPlateDriftStep = map.mesh.x[land] - map.mesh.x[oldOcean];
+  map.provinces = {
+    origin: [...map.mesh.origin],
+    seed: 1,
+    scale: 100_000,
+    strength: 0,
+    sites: [{ x: 0, y: 0, priority: 0, assembly: 1, motionX: 1, motionY: 0 }],
+  };
+  field.occurrences = {
+    firstEpoch: [{ epoch: 0, footprint: rectangle([-100_000, -100_000, 100_000, 100_000]) }],
+  };
+  prepareMagicFields(state, "advection");
   const activity = field.history[oldOcean];
   advectMagic(state);
   expect(field.history[land]).toBe(activity);
@@ -125,6 +141,8 @@ it("classifies nonexclusive interactions from editable conditions on multiple sy
   const state = scenario(),
     magic = state.physical!.magic!;
   for (const field of magic.fields) field.intensity.fill(500);
+  refreshWorkspaceSamples(state, state.physical!);
+  prepareMagicFields(state, "advection");
   classifyMagicFeatures(state, 42);
   const pressure = magic.fields[2];
   expect(pressure.features.war.every((value) => value === 1)).toBe(true);

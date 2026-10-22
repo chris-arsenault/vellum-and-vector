@@ -13,10 +13,16 @@ export async function installGenerationFixture(
   hold = false,
   terrain = false,
   life = false,
-  ecologicalFeatures: AtlasFeature[] = []
+  ecologicalFeatures: AtlasFeature[] = [],
+  preparedSurface?: Grid
 ) {
+  const encodedSurface = JSON.stringify(preparedSurface, (_key, value: unknown) =>
+    ArrayBuffer.isView(value)
+      ? { typed: value.constructor.name, values: Array.from(value as unknown as ArrayLike<number>) }
+      : value
+  );
   await page.addInitScript(
-    ({ hold, terrain, life, ecologicalFeatures }) => {
+    ({ hold, terrain, life, ecologicalFeatures, encodedSurface }) => {
       const pending = new Set<() => void>();
       Object.assign(window, {
         completeGenerationFixture() {
@@ -140,13 +146,24 @@ export async function installGenerationFixture(
                     ])
                   ),
                 };
+                const completedSurface: Grid = encodedSurface
+                  ? JSON.parse(encodedSurface, (_key, value) =>
+                      value?.typed
+                        ? Reflect.construct(Reflect.get(window, value.typed), [value.values])
+                        : value
+                    )
+                  : surface;
+                completedSurface.scope = {
+                  ...snapshot.scope,
+                  resolution: completedSurface.scope.resolution,
+                };
                 const result: CompletedBoundary = {
                   kind: "final",
                   configurationHash: "browser-fixture",
                   ancestry: [],
                   state: {
                     domain: snapshot,
-                    surface,
+                    surface: completedSurface,
                     facts: new Set(Object.keys(channels)),
                     history: [],
                     publications,
@@ -194,7 +211,7 @@ export async function installGenerationFixture(
         return undefined;
       }
     },
-    { hold, terrain, life, ecologicalFeatures }
+    { hold, terrain, life, ecologicalFeatures, encodedSurface }
   );
 }
 

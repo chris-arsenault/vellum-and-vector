@@ -10,6 +10,9 @@ import { landscape } from "../mapFixtures";
 import { extractNativeGeography } from "./atlasFeatures";
 import { riverChannelGeometry } from "./channelGeometry";
 import type { MapProcessContext } from "../process";
+import { refreshWorkspaceSamples } from "./atlasWorkspace";
+import { classifyNaturalSurface } from "./naturalSurface";
+import { projectNative } from "./atlasProjection";
 
 function index(map: PhysicalField, u: number, v: number, inverted: boolean) {
   return map.mesh.indexes.get(`${u}:${v}:${Number(inverted)}`)!;
@@ -67,6 +70,9 @@ function publish(map: PhysicalField, profileName: Profile = "world") {
     inherited: false,
     sampling: { maximumSize: map.mesh.spacing, minimumSize: map.mesh.spacing, featureSamples: 2 },
   };
+  refreshWorkspaceSamples(state, state.physical);
+  classifyNaturalSurface(state);
+  projectNative(state);
   const context: MapProcessContext = {
     scope: state.domain.scope,
     invocation: [],

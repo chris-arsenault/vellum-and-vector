@@ -6,14 +6,17 @@ import {
   rectangle,
   point,
   spatial,
+  channelValue,
 } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { createAtlasWorkspace } from "./atlasWorkspace";
 import { projectNative } from "./atlasProjection";
 import { initializeMagic } from "./magicState";
 import { projectMagic } from "./magicFeatures";
-import { membershipContour, membershipSampler } from "./geographicContours";
+import { physicalContour } from "./geographicContours";
 import { nearestTriangle } from "./mesh";
+import { preparePhysicalChannels, physicalFieldReader } from "./continuousState";
+import { prepareMagicFields } from "./magicContinuous";
 
 it("publishes a fixed triangle world as continuous metre channels and discrete material/magic fields", () => {
   const state = landscape();
@@ -31,23 +34,21 @@ it("publishes a fixed triangle world as continuous metre channels and discrete m
   initializeMagic(state);
   work.magic!.fields[0].intensity.fill(700);
   work.magic!.fields[0].retained.set(Float64Array.from(mesh.areas, (area) => area * 7));
+  preparePhysicalChannels(work.map, ["Elevation", "BedrockElevation", "SedimentThickness"]);
+  prepareMagicFields(state, "advection");
   projectNative(state);
   projectMagic(state);
   for (let i = 0; i < state.surface.active.length; i++) {
     const p = gridPosition(state.surface, i);
-    expect(state.surface.channels.elevation[i]).toBeCloseTo(
+    expect(channelValue(state.surface, "elevation", i)).toBeCloseTo(
       500 + (p.x - mesh.origin[0]) * 0.002,
       7
     );
-    expect(state.surface.channels.bedrock[i] + state.surface.channels.sediment[i]).toBeCloseTo(
-      state.surface.channels.elevation[i],
-      7
-    );
+    expect(
+      channelValue(state.surface, "bedrock", i) + channelValue(state.surface, "sediment", i)
+    ).toBeCloseTo(channelValue(state.surface, "elevation", i), 7);
     expect(Number.isInteger(state.surface.channels.province[i])).toBe(true);
-    expect(state.surface.channels["magic:fire:retained"][i]).toBeCloseTo(
-      state.surface.measures[i] * 7,
-      5
-    );
+    expect(state.surface.channels["magic:fire:retained"][i]).toBeCloseTo(mesh.areas[i] * 7, 5);
   }
   const at = fieldInterpolator(state.surface, "elevation");
   const p = gridPosition(state.surface, 42);
@@ -55,7 +56,7 @@ it("publishes a fixed triangle world as continuous metre channels and discrete m
   expect(Object.keys(state.surface.channels).some((name) => name.startsWith("magic:"))).toBe(true);
 });
 
-it("keeps adjacent classified regions connected across faces and separates distant regions", () => {
+it("keeps connected quantitative regions across faces and separates distant regions", () => {
   const state = landscape();
   state.domain.scope.footprint = rectangle([0, 0, 200_000, 200_000]);
   state.surface = createGrid("regions", state.domain.scope, 32, 32);
@@ -64,17 +65,30 @@ it("keeps adjacent classified regions connected across faces and separates dista
     a = nearestTriangle(mesh, 0, 0),
     b = mesh.neighbors[a * 3],
     distant = nearestTriangle(mesh, 60_000, 60_000),
-    members = [a, b, distant],
-    includes = (cell: number) => Number(members.includes(cell)),
-    at = membershipSampler(state, includes),
-    shape = membershipContour(state, members, includes)!;
+    members = [a, b, distant];
+  const map = state.physical.map;
+  for (let i = 0; i < mesh.count; i++)
+    map.Geothermal[i] = Math.round(
+      1000 *
+        Math.max(
+          ...members.map((j) =>
+            Math.exp(
+              -((mesh.x[i] - mesh.x[j]) ** 2 + (mesh.y[i] - mesh.y[j]) ** 2) / mesh.spacing ** 2
+            )
+          )
+        )
+    );
+  preparePhysicalChannels(map, ["Geothermal"]);
+  const read = physicalFieldReader(map, "Geothermal");
+  const at = (x: number, y: number) => read(x - mesh.origin[0], y - mesh.origin[1]) - 500;
+  const shape = physicalContour(state, at)!;
   expect(shape.type).toBe("MultiPolygon");
   const p = {
     x: mesh.origin[0] + (mesh.x[a] + mesh.x[b]) / 2,
     y: mesh.origin[1] + (mesh.y[a] + mesh.y[b]) / 2,
     z: 0,
   };
-  expect(at(p.x, p.y)).toBeGreaterThan(0.5);
+  expect(at(p.x, p.y)).toBeGreaterThan(0);
   expect(spatial.covers(shape, point(p))).toBe(true);
   for (const cell of members)
     expect(

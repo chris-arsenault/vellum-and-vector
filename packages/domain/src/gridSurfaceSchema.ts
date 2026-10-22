@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { gridSchema } from "./gridSchema";
 import type { GridSurface } from "./grids";
-import { identifier } from "./schemas";
+import { identifier, type ResourceType } from "./schemas";
 
 /** Validate each numerical field and the references/units of its composed inputs. */
 export const gridSurfaceSchema: z.ZodType<GridSurface> = z.lazy(() =>
@@ -48,3 +48,10 @@ export const gridSurfaceSchema: z.ZodType<GridSurface> = z.lazy(() =>
       return grid;
     })
 );
+
+export const gridType: ResourceType<GridSurface> = {
+  id: "atlas.grid",
+  version: 1,
+  kind: "field",
+  schema: gridSurfaceSchema,
+};

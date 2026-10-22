@@ -8,7 +8,6 @@ import { extractGeologicalEvents } from "./geologicalFeatures";
 import { extractLakes, extractNamedLandforms, extractMagicPlaces } from "./geographicRegions";
 import { createRiverPaths, riverPath, type RiverPaths } from "./riverPaths";
 import type { PhysicalField } from "./field";
-import { oceanFootprint } from "./geographicContours";
 import { extractEcologicalFeatures } from "./ecologyFeatures";
 
 function riverReach(state: GenerationState, start: number, incoming: Int32Array) {
@@ -118,15 +117,22 @@ export function extractNativeGeography(
   context: MapProcessContext,
   deliveries = allDeliveries
 ) {
-  state.surface.ocean = oceanFootprint(state);
+  const prepared = state.physical!.map.continuous?.geography;
+  if (!prepared?.water || !prepared.categories)
+    throw new Error("Classify natural geography before feature extraction.");
+  state.surface.ocean = state.physical!.map.continuous!.ocean;
   extractGeologicalEvents(state, deliveries);
-  const lakes = extractLakes(state, deliveries.lakes);
-  const source = state.surface.reconstruction;
-  if (source) {
+  const lakes = prepared.water.lakes;
+  if (deliveries.lakes) extractLakes(state, true, lakes);
+  const source = (state.surface.geography ??= {});
+  {
     const map = state.physical!.map;
     source.water = {
-      elevation: Float64Array.from(map.Elevation, (value) => (value - map.BaseSeaLevel) / 1024),
-      bodyIds: Float64Array.from(map.WaterBodyIds),
+      elevation: map.Elevation,
+      bodyIds: map.WaterBodyIds,
+      coefficients: map.continuous!.coefficients.Elevation,
+      adaptive: map.continuous!.adaptive.Elevation,
+      transform: { scale: 1 / 1024, offset: -map.BaseSeaLevel / 1024 },
       seaLevel: (map.EffectiveSeaLevel - map.BaseSeaLevel) / 1024,
       lakes,
     };

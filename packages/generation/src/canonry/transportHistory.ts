@@ -193,7 +193,6 @@ function completeTarget(a: Accumulator, map: PhysicalField, target: number, arri
 }
 export function transportHistory(map: PhysicalField, plan: TransportPlan) {
   const a = accumulator(map.mesh.count);
-  const biomes = map.BiomeCodes.slice();
   for (let source = 0; source < map.mesh.count; source++)
     for (let offset = plan.offsets[source]; offset < plan.offsets[source + 1]; offset++) {
       const target = plan.targets[offset];
@@ -201,7 +200,5 @@ export function transportHistory(map: PhysicalField, plan: TransportPlan) {
     }
   for (let target = 0; target < map.mesh.count; target++) {
     completeTarget(a, map, target, plan.arrivals[target]);
-    const source = plan.dominant[target];
-    map.BiomeCodes[target] = source >= 0 ? biomes[source] : 0;
   }
 }

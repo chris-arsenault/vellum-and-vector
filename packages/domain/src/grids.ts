@@ -5,24 +5,36 @@ import { requireThat } from "./errors";
 import { point, rectangle, spatial, type Bounds } from "./spatial";
 import { adaptiveCell, adaptiveLeafAt, type AdaptiveTopology } from "./adaptiveTopology";
 import type { AdaptiveField } from "./adaptiveField";
-import { smoothCategoryInterpolator, type ReconstructedField } from "./smoothSamples";
-import { biomeFieldInterpolator } from "./biomeField";
-import { waterFieldInterpolator } from "./waterField";
-import { scalarReconstruction } from "./scalarReconstruction";
+import { baseInterpolator, discreteChannel } from "./fieldReaders";
+import { nearestFieldSample, type SampledGrid } from "./sampledGrid";
 import {
-  sampleAdaptivePoint,
-  adaptivePointSampler,
-  type AdaptivePointLocator,
-} from "./adaptivePoint";
+  channelValue,
+  preparedChannel,
+  prepareGridChannel,
+  type PreparedChannelData,
+  type NumericValues,
+  type PreparedField,
+} from "./preparedField";
+import { type AdaptivePointLocator } from "./adaptivePoint";
 
 export interface FieldSamples {
-  reconstruction?: ReconstructedField;
+  prepared?: PreparedField;
+  geography?: {
+    provinces?: Record<string, import("./tectonicField").ProvinceField>;
+    biome?: import("./biomeField").BiomeSamples;
+    water?: import("./waterField").WaterSamples;
+    occurrences?: Record<string, { epoch: number; footprint: Geometry }[]>;
+    categories?: Record<
+      string,
+      { fallback: number; entries: { code: number; footprint: Geometry }[] }
+    >;
+  };
   id: string;
   scope: SpatialScope;
   bounds: Bounds;
   active: Uint8Array;
   measures: Float64Array;
-  channels: Record<string, Float64Array>;
+  channels: Record<string, NumericValues>;
   units: Record<string, string>;
   waterBodies?: WaterBody[] | null;
   /** Physical ocean extent; resampling elevation must not move its shoreline. */
@@ -30,11 +42,12 @@ export interface FieldSamples {
   quantities?: Record<string, "intensive" | "extensive" | "category">;
 }
 export interface RegularGrid extends FieldSamples {
+  mesh?: never;
   width: number;
   height: number;
   topology?: never;
 }
-export type Grid = RegularGrid | AdaptiveField;
+export type Grid = RegularGrid | AdaptiveField | SampledGrid;
 export type GridSurface = Grid & {
   overlays?: { grid: GridSurface; channels: string[]; inherited?: boolean }[];
 };
@@ -53,6 +66,12 @@ export interface WaterBody {
 }
 
 export function gridPosition(grid: Grid, index: number): Position {
+  if (grid.mesh)
+    return {
+      x: grid.mesh.x[index] + grid.mesh.origin[0],
+      y: grid.mesh.y[index] + grid.mesh.origin[1],
+      z: 0,
+    };
   if (grid.topology) {
     const [x0, y0, x1, y1] = adaptiveCell(grid.topology, index);
     return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, z: 0 };
@@ -66,6 +85,8 @@ export function gridPosition(grid: Grid, index: number): Position {
 }
 
 export function gridCellBounds(grid: Grid, index: number): Bounds {
+  if (grid.mesh)
+    return Array.from(grid.mesh.cellBounds.subarray(index * 4, index * 4 + 4)) as Bounds;
   if (grid.topology) return adaptiveCell(grid.topology, index);
   const p = gridPosition(grid, index);
   const [x0, y0, x1, y1] = grid.bounds;
@@ -159,6 +180,22 @@ export function neighbors(
   diagonal = false,
   covers = (geometry: Geometry) => spatial.covers(grid.scope.footprint, geometry)
 ): number[] {
+  if (grid.mesh)
+    return Array.from(
+      grid.mesh.neighbors.subarray(grid.mesh.offsets[index], grid.mesh.offsets[index + 1])
+    )
+      .filter((i) => grid.active[i] === 1)
+      .filter((i) => {
+        const a = gridPosition(grid, index),
+          b = gridPosition(grid, i);
+        return covers({
+          type: "LineString",
+          coordinates: [
+            [a.x, a.y],
+            [b.x, b.y],
+          ],
+        });
+      });
   if (grid.topology) return adaptiveNeighbors(grid, index, covers);
   const x = index % grid.width,
     y = Math.floor(index / grid.width);
@@ -200,8 +237,9 @@ export function putChannel(
   grid: Grid,
   name: string,
   unit: string,
-  values: Float64Array,
-  quantity: "intensive" | "extensive" | "category" = unit === "category" ? "category" : "intensive"
+  values: NumericValues,
+  quantity: "intensive" | "extensive" | "category" = unit === "category" ? "category" : "intensive",
+  prepared?: PreparedChannelData
 ): void {
   requireThat(
     values.length === grid.active.length && values.every(Number.isFinite),
@@ -211,6 +249,7 @@ export function putChannel(
   grid.channels[name] = values;
   grid.units[name] = unit;
   (grid.quantities ??= {})[name] = quantity;
+  prepareGridChannel(grid, name, prepared);
 }
 
 export function sample(grid: GridSurface, channel: string, p: Position, discrete = false): number {
@@ -256,15 +295,16 @@ export function gridSampler(
 function rawSample(grid: Grid, channel: string, p: Position, discrete = false): number {
   const values = grid.channels[channel];
   requireThat(values, "missing_channel", `Field channel ${channel} is unavailable.`);
+  if (grid.mesh) return channelValue(grid, channel, nearestFieldSample(grid.mesh, p));
   if (grid.topology) {
     const [x0, y0, x1, y1] = grid.topology.bounds;
     const x = Math.max(x0, Math.min(x1, p.x)),
       y = Math.max(y0, Math.min(y1, p.y));
     const i = adaptiveLeafAt(grid.topology, x, y);
     if (i < 0) return NaN;
-    return discreteChannel(grid, channel, discrete)
-      ? values[i]
-      : sampleAdaptivePoint(grid.topology, values, x, y);
+    if (!discreteChannel(grid, channel, discrete))
+      return preparedChannel(grid, channel)({ x, y, z: 0 });
+    return values[i];
   }
   const [x0, y0, x1, y1] = grid.bounds;
   const gx = Math.max(0, Math.min(grid.width - 1, ((p.x - x0) / (x1 - x0)) * (grid.width - 1)));
@@ -281,17 +321,10 @@ function rawSample(grid: Grid, channel: string, p: Position, discrete = false): 
     ty * ((1 - tx) * values[i + grid.width] + tx * values[i + grid.width + 1])
   );
 }
-function discreteChannel(grid: Grid, channel: string, discrete: boolean) {
-  return (
-    discrete ||
-    ["category", "cell-index"].includes(grid.units[channel]) ||
-    ["category", "extensive"].includes(grid.quantities?.[channel] ?? "")
-  );
-}
 
 export function resample(
   source: GridSurface,
-  target: Grid,
+  target: GridSurface,
   channel: string,
   discrete = false
 ): void {
@@ -306,13 +339,22 @@ export function resample(
     "Parent coverage must contain the refined field."
   );
   const valueAt = fieldInterpolator(source, channel, discrete);
+  const province = source.geography?.provinces?.[channel];
   putChannel(
     target,
     channel,
     source.units[channel],
     Float64Array.from(target.active, (_active, i) => valueAt(gridPosition(target, i))),
-    source.quantities?.[channel]
+    source.quantities?.[channel],
+    province ? { province } : undefined
   );
+  if (province && source.overlays?.some((overlay) => overlay.channels.includes(channel)))
+    target.overlays = [
+      ...(target.overlays ?? []),
+      ...(source.overlays ?? [])
+        .filter((overlay) => overlay.channels.includes(channel))
+        .map((overlay) => ({ ...overlay, channels: [channel] })),
+    ];
 }
 
 /** Prepared base polynomial, including numerical-halo extension; public reads use gridSampler. */
@@ -329,55 +371,10 @@ export function fieldInterpolator(
       covered: spatial.pointCoverage(overlay.grid.scope.footprint),
       at: fieldInterpolator(overlay.grid, channel, discrete, locate),
     }));
-  const base = baseInterpolator(grid, channel, discrete, locate);
+  const base = baseInterpolator(grid, channel, discrete, rawSample, locate);
   return (p: Position) => {
     const overlay = overlays.find((candidate) => candidate.covered(p));
     return overlay ? overlay.at(p) : base(p);
-  };
-}
-function baseInterpolator(
-  grid: Grid,
-  channel: string,
-  discrete: boolean,
-  locate?: AdaptivePointLocator
-) {
-  const reconstructed = reconstructedInterpolator(grid, channel, discrete);
-  if (reconstructed) return reconstructed;
-  return numericalInterpolator(grid, channel, discrete, locate);
-}
-function reconstructedInterpolator(grid: Grid, channel: string, discrete: boolean) {
-  const source = grid.reconstruction;
-  if (!source) return null;
-  if (source.water && ["water", "waterBody", "waterLevel", "waterDepth"].includes(channel)) {
-    const at = waterFieldInterpolator(source.support, source.water, grid.ocean, channel);
-    return (p: Position) => at(p.x, p.y);
-  }
-  if (channel === "biome" && source.biome) {
-    const at = biomeFieldInterpolator(source.support, source.biome, grid.ocean);
-    return (p: Position) => at(p.x, p.y);
-  }
-  if (source.categories?.[channel]) {
-    const at = smoothCategoryInterpolator(source.support, source.categories[channel]);
-    return (p: Position) => at(p.x, p.y);
-  }
-  return scalarReconstruction(source, channel, discreteChannel(grid, channel, discrete));
-}
-function numericalInterpolator(
-  grid: Grid,
-  channel: string,
-  discrete: boolean,
-  locate?: AdaptivePointLocator
-) {
-  if (!grid.topology) return (p: Position) => rawSample(grid, channel, p, discrete);
-  const t = grid.topology,
-    values = grid.channels[channel];
-  const categorical = discreteChannel(grid, channel, discrete);
-  const surface = categorical ? null : adaptivePointSampler(t, values, locate);
-  return (p: Position) => {
-    const x = Math.max(t.bounds[0], Math.min(t.bounds[2], p.x)),
-      y = Math.max(t.bounds[1], Math.min(t.bounds[3], p.y));
-    if (surface) return surface(x, y);
-    return values[locate ? locate(t, x, y).leaf : adaptiveLeafAt(t, x, y)];
   };
 }
 export function interpolateSample(

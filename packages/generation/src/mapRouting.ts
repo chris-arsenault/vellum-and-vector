@@ -3,6 +3,7 @@ import {
   neighbors,
   requireThat,
   spatial,
+  channelValue,
   type Grid,
   type Position,
 } from "@atlas/domain";
@@ -88,21 +89,19 @@ export function findRoute(grid: Grid, from: Position, to: Position, kind: string
   return [];
 }
 function routeCost(grid: Grid, from: number, to: number, kind: string) {
-  const heights =
-    kind === "river"
-      ? (grid.channels.drainageElevation ?? grid.channels.elevation)
-      : grid.channels.elevation;
+  const height =
+    kind === "river" && grid.channels.drainageElevation ? "drainageElevation" : "elevation";
   const a = gridPosition(grid, from),
     b = gridPosition(grid, to),
     distance = Math.hypot(a.x - b.x, a.y - b.y);
-  const rise = heights[to] - heights[from];
+  const rise = channelValue(grid, height, to) - channelValue(grid, height, from);
   if (kind === "river")
     return rise > 1e-6 ? Infinity : distance * (1 + 1 / (1 + (grid.channels.flow?.[to] ?? 0)));
   if (kind === "road" && oceanCell(grid, to)) return Infinity;
   return distance * (1 + (Math.abs(rise) / Math.max(1, distance)) * 20);
 }
 function oceanCell(grid: Grid, index: number) {
-  return grid.channels.water?.[index] === 1 || grid.channels.elevation[index] < 0;
+  return grid.channels.water?.[index] === 1 || channelValue(grid, "elevation", index) < 0;
 }
 function routePoints(
   grid: Grid,

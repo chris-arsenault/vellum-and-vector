@@ -14,6 +14,8 @@ import { plumeCenter } from "./volcanism";
 import type { PhysicalMesh } from "./mesh";
 import { refreshGrounding } from "./glacierSurface";
 import { invalidateNativeProducts } from "../productLedger";
+import { preparePhysicalChannels } from "./continuousState";
+import { prepareMagicFields } from "./magicContinuous";
 import {
   magicChannels,
   magicFieldDefinitions,
@@ -102,7 +104,8 @@ function remapMagic(
         remapArray(old, work.map.mesh, values, "category", transfer)
       );
   }
-  for (const key of magicWorkspaceChannels)
+  for (const key of magicWorkspaceChannels) {
+    if (key === "naturalSurface" || key === "finalSurface") continue;
     magic[key] = remapArray(
       old,
       work.map.mesh,
@@ -110,6 +113,9 @@ function remapMagic(
       magicWorkspaceDefinitions[key].quantity,
       transfer
     );
+  }
+  magic.naturalSurface = work.map.NaturalSurfaceCodes;
+  magic.finalSurface = work.map.FinalSurfaceCodes;
 }
 /** Refinement precedes construction or an already scheduled global reconciliation. */
 export function refineWorkspace(
@@ -138,7 +144,9 @@ export function refineWorkspace(
       "adaptive topology transfer"
     );
   remapMagic(state, old, transfer);
-  refreshWorkspaceSamples(state, work, transfer);
+  preparePhysicalChannels(work.map, []);
+  prepareMagicFields(state, "remesh");
+  refreshWorkspaceSamples(state, work);
   refreshWorkspaceProtection(state, work);
   console.log("Adaptive terrain refinement", {
     from: old.count,

@@ -152,9 +152,15 @@ it("initializes deterministic provinces, material and spatially correlated terra
   const z = first.surface.channels.elevation;
   expect(Math.max(...z) - Math.min(...z)).toBeGreaterThan(1000);
   const near =
-    z.slice(0, -1).reduce((sum, v, i) => sum + Math.abs(v - z[i + 1]), 0) / (z.length - 1);
+    Float64Array.from(z)
+      .slice(0, -1)
+      .reduce((sum, v, i) => sum + Math.abs(v - z[i + 1]), 0) /
+    (z.length - 1);
   const far =
-    z.slice(0, -100).reduce((sum, v, i) => sum + Math.abs(v - z[i + 100]), 0) / (z.length - 100);
+    Float64Array.from(z)
+      .slice(0, -100)
+      .reduce((sum, v, i) => sum + Math.abs(v - z[i + 100]), 0) /
+    (z.length - 100);
   expect(near).toBeLessThan(far);
   expect(new Set(first.surface.channels.province).size).toBeGreaterThan(2);
   expect(

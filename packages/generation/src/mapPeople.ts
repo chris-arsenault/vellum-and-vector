@@ -5,6 +5,7 @@ import {
   spatial,
   fieldContour,
   fieldInterpolator,
+  channelValue,
   type Entity,
   type Position,
 } from "@atlas/domain";
@@ -14,16 +15,19 @@ import { generationBindings } from "./generationBindings";
 
 export function landCells(state: GenerationState) {
   return Array.from(state.surface.active.keys()).filter(
-    (i) => state.surface.active[i] && state.surface.channels.elevation?.[i] > 0
+    (i) =>
+      state.surface.active[i] &&
+      state.surface.channels.elevation &&
+      channelValue(state.surface, "elevation", i) > 0
   );
 }
 export function suitability(state: GenerationState, i: number) {
   const grid = state.surface;
-  const temperature = grid.channels.temperature?.[i] ?? 15;
-  const rain = grid.channels.rainfall?.[i] ?? 0.5;
+  const temperature = grid.channels.temperature ? channelValue(grid, "temperature", i) : 15;
+  const rain = grid.channels.rainfall ? channelValue(grid, "rainfall", i) : 0.5;
   return (
     (Math.exp(-Math.abs(temperature - 16) / 20) * (0.2 + Math.min(1, rain))) /
-    (1 + Math.max(0, grid.channels.elevation[i]) / 1500)
+    (1 + Math.max(0, channelValue(grid, "elevation", i)) / 1500)
   );
 }
 export function centers(
@@ -109,7 +113,7 @@ export const culturalProcess: MapProcess = {
         );
         const center = origin.attributes.center as Position;
         const values = Float64Array.from(grid.active, (active, i) => {
-          if (!active || grid.channels.elevation[i] <= 0) return 0;
+          if (!active || channelValue(grid, "elevation", i) <= 0) return 0;
           const p = gridPosition(grid, i);
           const distance = Math.hypot(p.x - center.x, p.y - center.y);
           return Math.exp(-(distance * distance) / (2 * spread * spread)) * suitability(state, i);

@@ -277,7 +277,7 @@ function advect(
     ];
   const source = Object.fromEntries(channels.map((key) => [key, grid.channels[key].slice()]));
   requireThat(
-    !grid.topology,
+    !grid.topology && !grid.mesh,
     "prototype_grid",
     "Use the Canonry workflow for adaptive physical geography."
   );

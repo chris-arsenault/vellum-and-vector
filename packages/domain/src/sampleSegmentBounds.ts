@@ -6,7 +6,7 @@ export interface SegmentEnclosure {
   range: [number, number];
   derivative: [number, number];
 }
-export type EncloseSegment = (a: Point, b: Point) => SegmentEnclosure;
+export type EncloseSegment = (a: Point, b: Point, level?: number) => SegmentEnclosure;
 export function createSegmentReader(
   support: SampleSupport,
   values: ArrayLike<number>,
@@ -25,7 +25,12 @@ export function createSegmentReader(
     ];
     if (box[0] < extent[0] || box[1] < extent[1] || box[2] > extent[2] || box[3] > extent[3])
       return projectedEnclosure(enclose(box, undefined, level), a, b);
-    return sampleSegmentBounds(support, values, jet, read, a, b, candidates(box), level);
+    const result = sampleSegmentBounds(support, values, jet, read, a, b, candidates(box), level);
+    if (result.derivative.every(Number.isFinite)) return result;
+    // A segment through a cardinal sample has singular unnormalised weights.
+    // The box evaluator cancels that common anchor before differentiating.
+    const bounded = projectedEnclosure(enclose(box, undefined, level), a, b);
+    return { range: result.range, derivative: bounded.derivative };
   };
 }
 

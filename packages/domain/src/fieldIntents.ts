@@ -5,8 +5,9 @@ import { uuid } from "./authoringSchemas";
 import { intentChanges, intentReads, type IntentContext, type IntentRegistry } from "./intent";
 import type { DomainSnapshot, ChangeSet } from "./operations";
 import type { Area } from "./model";
-import { createGrid, putChannel, resample, type Grid } from "./grids";
-import { gridType } from "./gridSchema";
+import { createGrid, resample, type Grid } from "./grids";
+import { replaceChannel } from "./fieldComposition";
+import { gridType } from "./gridSurfaceSchema";
 import { spatial, point } from "./spatial";
 import { rectangle } from "./spatial";
 import { createAdaptiveField } from "./adaptiveField";
@@ -19,6 +20,7 @@ import { validateAuthoredField, fieldFact } from "./fieldValidation";
 import { layerSupports } from "./builtinLayers";
 import { invalidateFacts, upsertArea } from "./authoringBasics";
 import { authoredFieldCoverage } from "./fieldOwnership";
+import { fieldMeshSchema } from "./preparedSchema";
 
 const channelSchema = z.object({
   unit: z.string().min(1),
@@ -33,15 +35,24 @@ export const createFieldSchema = z
     width: z.number().int().min(2).optional(),
     height: z.number().int().min(2).optional(),
     topology: adaptiveTopologySchema.optional(),
+    sampled: z
+      .object({
+        mesh: fieldMeshSchema,
+        active: z.instanceof(Uint8Array),
+        measures: z.instanceof(Float64Array),
+      })
+      .optional(),
     channels: z.record(z.string().min(1), channelSchema),
     parentFieldId: uuid.optional(),
   })
   .refine(
     (data) =>
-      data.topology
-        ? data.width === undefined && data.height === undefined
-        : data.width !== undefined && data.height !== undefined,
-    "A field uses adaptive topology or regular dimensions."
+      data.sampled
+        ? !data.topology && data.width === undefined && data.height === undefined
+        : data.topology
+          ? data.width === undefined && data.height === undefined
+          : data.width !== undefined && data.height !== undefined,
+    "A field uses process support, adaptive topology or regular dimensions."
   );
 const sculptSchema = z.object({
   fieldId: uuid,
@@ -164,6 +175,16 @@ export function createField(
 function authoredGrid(data: CreateField, context: IntentContext, snapshot: DomainSnapshot) {
   const id = semanticId(snapshot.world.id, "authored-grid", context.operationId);
   const scope = { ...context.scope, footprint: data.footprint };
+  if (data.sampled)
+    return {
+      id,
+      scope,
+      bounds: spatial.bounds(data.footprint),
+      ...data.sampled,
+      channels: {},
+      units: {},
+      quantities: {},
+    } satisfies Grid;
   return data.topology
     ? createAdaptiveField(id, scope, data.topology)
     : createGrid(id, scope, data.width!, data.height!);
@@ -179,7 +200,7 @@ function populateChannels(data: CreateField, snapshot: DomainSnapshot, grid: Gri
     for (const name of Object.keys(parent.channels)) resample(parent, grid, name);
   }
   for (const [name, channel] of Object.entries(data.channels))
-    putChannel(
+    replaceChannel(
       grid,
       name,
       channel.unit,

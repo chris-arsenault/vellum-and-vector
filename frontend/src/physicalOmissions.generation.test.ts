@@ -96,7 +96,7 @@ it.each(supportedOmissions)(
 function assertAbsentGeography(
   id: string,
   features: ReturnType<typeof source>["world"]["features"],
-  channels: Record<string, Float64Array>
+  channels: Record<string, ArrayLike<number>>
 ) {
   const kinds: Record<string, string[]> = {
     "physical.impacts": ["crater"],
@@ -116,5 +116,6 @@ function assertAbsentGeography(
     []
   );
   for (const channel of buffers[id] ?? [])
-    if (channels[channel]) expect(channels[channel].every((value) => value === 0)).toBe(true);
+    if (channels[channel])
+      expect(Array.from(channels[channel]).every((value) => value === 0)).toBe(true);
 }

@@ -5,34 +5,41 @@ import {
   point,
   spatial,
   type Grid,
+  type GridSurface,
   type Position,
-  createAdaptiveField,
-  prepareAdaptiveTransfer,
-  resampleChannels,
-  gridPosition,
   rectangle,
 } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { authoredFields } from "../mapAuthored";
-import { createField, type PhysicalField } from "./field";
+import { createField, reconcileWater, type PhysicalField } from "./field";
 import { nearestTriangle } from "./mesh";
 import { createWorldMesh } from "./worldMesh";
 import { createAdaptiveWorldMesh } from "./adaptiveMesh";
-import { triangleSample, type TriangleSample } from "./triangleSampling";
 import { atlasPhysicalProfile, atlasQuality } from "./atlasProfile";
 import { atlasChannels, type ChannelBinding } from "./atlasChannels";
 import type { PhysicalProfile } from "./profile";
 import { units } from "./math";
 import { inheritedNativeFacts } from "./inheritedFacts";
 import type { AtlasParameters } from "../atlasParameters";
+import { preparePhysicalChannels } from "./continuousState";
+import { waterWrites } from "./physicalWrites";
+import { continuousSurface } from "./continuousSurface";
+import { projectEcologySupport } from "./ecologyPublication";
+import { prepareRiverPaths } from "./riverChannelPaths";
+import { prepareProvinceRegions } from "./provinceGeography";
+import type { MotionChannel, MotionInput } from "./motionOwnership";
 
 export interface AtlasPhysicalWorkspace {
   magic?: import("./magicState").MagicWorkspace;
   map: PhysicalField;
   profile: PhysicalProfile;
   samples: Int32Array;
-  interpolation?: TriangleSample[];
-  fixed: { binding: ChannelBinding; values: Float64Array }[];
+  fixed: {
+    binding: ChannelBinding;
+    values: Float64Array;
+    source?: GridSurface;
+    footprint?: Grid["scope"]["footprint"];
+  }[];
   inherited: boolean;
   sampling: { maximumSize: number; minimumSize: number; featureSamples: number };
 }
@@ -93,6 +100,17 @@ function inheritNumerical(state: GenerationState, work: AtlasPhysicalWorkspace) 
   map.EffectiveSeaLevel = map.BaseSeaLevel;
   map.SeaLevelInitialized = true;
   inheritChannels(surface, work, parent, datum);
+  map.inheritedMotion = (["crustMotionX", "crustMotionY"] as const).flatMap((channel) => {
+    const source = parent.get(channel) ?? surface;
+    return source.channels[channel] ? [{ channel, source, footprint: source.scope.footprint }] : [];
+  });
+  map.provinces = structuredClone(
+    (parent.get("province") ?? parent.get("crustMotionX") ?? surface).geography?.provinces?.province
+      ?.partition ??
+      (parent.get("crustMotionX") ?? surface).geography?.provinces?.crustMotionX?.partition ??
+      null
+  );
+  if (map.provinces) prepareProvinceRegions(map);
   map.CrustSupportInitialized = true;
   initializeInheritedMaterial(map, surface);
   map.SedimentProducedTotal = map.CumulativeDeposition.reduce(
@@ -166,7 +184,12 @@ function fixedAuthoring(state: GenerationState, work: AtlasPhysicalWorkspace) {
         authority.footprint ?? source.scope.footprint,
         binding
       );
-      work.fixed.push({ binding, values });
+      work.fixed.push({
+        binding,
+        values,
+        source,
+        footprint: authority.footprint ?? source.scope.footprint,
+      });
     }
   }
 }
@@ -210,6 +233,7 @@ export function createAtlasWorkspace(
   if (work.inherited) inheritNumerical(state, work);
   refreshWorkspaceSamples(state, work);
   refreshWorkspaceProtection(state, work);
+  preparePhysicalChannels(work.map, []);
   return work;
 }
 function createChildMesh(
@@ -262,69 +286,51 @@ function protectedSampling(state: GenerationState, size: number, padding: number
     });
   return supports;
 }
-export function refreshWorkspaceSamples(
-  state: GenerationState,
-  work: AtlasPhysicalWorkspace,
-  prepared?: ReturnType<typeof prepareAdaptiveTransfer>
-) {
-  if (!work.map.mesh.topology) {
-    work.interpolation = Array.from(state.surface.active, (_, i) => {
-      const p = gridPosition(state.surface, i),
-        mesh = work.map.mesh;
-      return triangleSample(mesh, p.x - mesh.origin[0], p.y - mesh.origin[1]);
-    });
-    work.samples = Int32Array.from(work.interpolation, (sample) => sample.cell);
-    return;
-  }
-  const previous = state.surface,
-    topology = work.map.mesh.topology!;
-  work.samples = work.map.mesh.leafToCell;
-  if (previous.topology === topology) return;
-  const next = createAdaptiveField(previous.id, previous.scope, topology);
-  if (!Object.keys(previous.channels).length) {
-    state.surface = next;
-    return;
-  }
-  if (previous.topology?.bounds.every((value, i) => value === topology.bounds[i])) {
-    const transfer = prepared ?? prepareAdaptiveTransfer(previous.topology, topology);
-    for (const [name, values] of Object.entries(previous.channels)) {
-      next.channels[name] = transfer(values, channelQuantity(previous, name));
-      next.units[name] = previous.units[name];
-      (next.quantities ??= {})[name] = channelQuantity(previous, name);
-    }
-  } else resampleChannels(previous, next);
-  state.surface = next;
-}
-function channelQuantity(grid: Grid, name: string) {
-  return (
-    grid.quantities?.[name] ??
-    (["category", "cell-index"].includes(grid.units[name]) ? "category" : "intensive")
-  );
+export function refreshWorkspaceSamples(state: GenerationState, work: AtlasPhysicalWorkspace) {
+  if (state.surface.mesh?.x === work.map.mesh.x) return;
+  preparePhysicalChannels(work.map, []);
+  work.samples = Int32Array.from({ length: work.map.mesh.count }, (_, i) => i);
+  state.surface = continuousSurface(state.surface, work);
 }
 export function refreshWorkspaceProtection(state: GenerationState, work: AtlasPhysicalWorkspace) {
   work.fixed = [];
   fixedInheritedBoundary(state, work);
   fixedAuthoring(state, work);
+  work.map.motionDetail = work.sampling.featureSamples;
+  work.map.authoredMotion = work.fixed.flatMap(({ binding, source, footprint }): MotionInput[] =>
+    source && footprint && ["crustMotionX", "crustMotionY"].includes(binding.name)
+      ? [{ channel: binding.name as MotionChannel, source, footprint }]
+      : []
+  );
+  if (state.surface.geography?.biome) {
+    const lakes = state.surface.geography.biome.lakes;
+    projectEcologySupport(work, state.surface);
+    state.surface.geography.biome!.lakes = lakes;
+  }
 }
 export function composeNativeAuthoring(work: AtlasPhysicalWorkspace) {
   const map = work.map;
+  const hadPaths = Boolean(map.riverPaths);
+  const changed = new Set<import("./continuousState").PhysicalArrayName>();
   for (const { binding, values } of work.fixed)
     for (let i = 0; i < values.length; i++) {
       if (!Number.isFinite(values[i])) continue;
       const value = values[i] + (binding.datum ? map.BaseSeaLevel : 0);
+      if (map[binding.native][i] === value) continue;
       map[binding.native][i] = value;
+      changed.add(binding.native);
       if (binding.native === "Elevation") {
         map.BedrockElevation[i] = value - map.SedimentThickness[i];
         map.Elevation[i] = map.BedrockElevation[i] + map.SedimentThickness[i];
+        reconcileWater(map, i);
+        for (const name of ["BedrockElevation", ...waterWrites] as const) changed.add(name);
       }
     }
+  if (changed.size) preparePhysicalChannels(map, changed);
+  if (hadPaths && !map.riverPaths) prepareRiverPaths(map);
 }
 export function sampleSurfaceAtNative(state: GenerationState, name: string, i: number): number {
   const work = state.physical!;
-  // Publication and physical feedback share these exact cell centres. Reading
-  // their stored samples avoids rebuilding a Hermite evaluator for every cell.
-  if (state.surface.topology === work.map.mesh.topology && state.surface.topology)
-    return state.surface.channels[name][work.map.mesh.cellToLeaf[i]];
   return interpolateSample(state.surface, name, nativePosition(work, i));
 }
 export function nativeIndexAtSurface(state: GenerationState, x: number, y: number) {

@@ -14,7 +14,6 @@ import { projectNative } from "./atlasProjection";
 import { extractNativeGeography } from "./atlasFeatures";
 import { physicalSchedule } from "./schedule";
 import { crustalSupport } from "./support";
-import { reconcileWater } from "./field";
 import { clamp, rockResistance, round } from "./math";
 import type { NativeStep } from "./sequence";
 import { advectMagic } from "./magicState";
@@ -28,6 +27,9 @@ import { nativeFeatureContract } from "../physicalFeatures";
 import type { ResolvedFeatures } from "../features";
 import { generationBindings } from "../generationBindings";
 import { absenceInitialization } from "./absenceInitialization";
+import { prepareMagicFields } from "./magicContinuous";
+import { preparePhysicalChannels } from "./continuousState";
+import { classifyNaturalSurface } from "./naturalSurface";
 import { physicalProduct, nativeBehavior } from "./physicalProducts";
 import { atlasPublicationDefinitions, selectedAtlasChannels } from "./atlasPublications";
 import {
@@ -57,11 +59,6 @@ function validateWorkspace(state: GenerationState) {
 }
 function restoreAuthoring(work: AtlasPhysicalWorkspace) {
   composeNativeAuthoring(work);
-  for (const { binding, values } of work.fixed) {
-    if (binding.native !== "Elevation") continue;
-    for (let i = 0; i < values.length; i++)
-      if (Number.isFinite(values[i])) reconcileWater(work.map, i);
-  }
   refreshGrounding(work.map, work.profile);
 }
 function prepareSpatialStep(
@@ -129,13 +126,19 @@ function nativeProcess(
       if (oldMesh !== work.map.mesh) await context.reconcile!();
       const map = work.map;
       restoreAuthoring(work);
-      if (name === "temperature" && context.parameters.unforced) map.ExternalHeatForcing.fill(0);
+      if (name === "temperature" && context.parameters.unforced) {
+        map.ExternalHeatForcing.fill(0);
+        preparePhysicalChannels(map, ["ExternalHeatForcing"]);
+      }
       const selected: NativeStep =
         context.parameters.iceLoad && name === "crustal-support"
           ? [name, source.salt, (map, c) => crustalSupport(map, c, true)]
           : spatialStep;
       applyNativeStep(map, c, selected, source);
-      if (name === "plate-advection") advectMagic(state);
+      if (name === "plate-advection") {
+        advectMagic(state);
+        prepareMagicFields(state, "advection");
+      }
       restoreAuthoring(work);
       if (name === "physical-epoch-history")
         context.recordCause({
@@ -189,6 +192,15 @@ export function atlasNativeProcesses(
     ),
     projectProcess(input),
     projectProcess(input, true),
+    {
+      contract: contract(
+        "canonry.surface-classification",
+        ["canonry:workspace"],
+        ["canonry:NaturalGeography"]
+      ),
+      behavior: { kind: "model-pass", applyPass: classifyNaturalSurface },
+      validate: validateWorkspace,
+    },
     forcingProcess(),
     epochStartProcess(),
     finishProcess(original),
@@ -293,6 +305,12 @@ function projectProcess(input: AtlasGenerationInput, forcingOnly = false): MapPr
 function forcingProcess(): MapProcess {
   return {
     contract: contract("canonry.forcing", ["canonry:workspace"]),
+    prepareFields: (state) =>
+      preparePhysicalChannels(state.physical!.map, [
+        "ExternalHeatForcing",
+        "RockResistance",
+        "ExternalCoastalForcing",
+      ]),
     behavior: {
       kind: "forcing-contributor",
       contribute(state) {
@@ -329,6 +347,12 @@ function sampleCoastalPressure(state: GenerationState, i: number, at: (i: number
 function epochStartProcess(): MapProcess {
   return {
     contract: contract("canonry.begin-epoch", ["canonry:workspace"]),
+    prepareFields: (state) =>
+      preparePhysicalChannels(state.physical!.map, [
+        "ExternalHeatForcing",
+        "ExternalCoastalForcing",
+        "GlacialMeltwater",
+      ]),
     behavior: {
       kind: "initialize",
       initialize(state) {

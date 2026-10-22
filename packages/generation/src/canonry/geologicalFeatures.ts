@@ -9,7 +9,8 @@ function extractEvents(state: GenerationState, selected: { impacts: boolean; vol
   for (const event of map.events) {
     if (!selectedEvent(event, selected)) continue;
     const center = { x: x0 + event.x, y: y0 + event.y, z: 0 };
-    const disk = spatial.buffer(point(center), event.radius);
+    const disk =
+      event.footprint === undefined ? spatial.buffer(point(center), event.radius) : event.footprint;
     const shape = disk && spatial.intersection(disk, state.domain.scope.footprint);
     if (!shape) continue;
     const kind = event.kind === "impact" ? "crater" : "volcano";
@@ -34,7 +35,10 @@ function extractEvents(state: GenerationState, selected: { impacts: boolean; vol
       )
     );
     if (!event.caldera) continue;
-    const bowl = spatial.buffer(point(center), event.radius * 0.28);
+    const bowl =
+      event.calderaFootprint === undefined
+        ? spatial.buffer(point(center), event.radius * 0.28)
+        : event.calderaFootprint;
     const caldera = bowl && spatial.intersection(bowl, state.domain.scope.footprint);
     if (caldera)
       putGenerated(
@@ -57,10 +61,11 @@ function extractFaults(state: GenerationState) {
   const { map } = state.physical!,
     [x0, y0] = map.mesh.origin;
   for (const fault of map.faults) {
-    if (fault.coordinates.length < 2) continue;
+    const parts = (fault.parts ?? [fault.coordinates]).filter((part) => part.length >= 2);
+    if (!parts.length) continue;
     const line = {
-      type: "LineString" as const,
-      coordinates: fault.coordinates.map(([x, y]) => [x + x0, y + y0]),
+      type: "MultiLineString" as const,
+      coordinates: parts.map((part) => part.map(([x, y]) => [x + x0, y + y0])),
     };
     const shape = spatial.intersection(line, state.domain.scope.footprint);
     if (shape)

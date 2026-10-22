@@ -1,13 +1,22 @@
-import { spatial, point } from "@atlas/domain";
+import { spatial, point, geometryParts, categoryRegions } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
 import { nativePosition } from "./atlasWorkspace";
 import { coordinateKey } from "./worldSources";
 import { Landform } from "./codes";
-import { lakeFootprint, membershipContour } from "./geographicContours";
+import { lakeFootprint } from "./geographicContours";
+import { regionShape, regionTracer, type CausalRegion } from "./causalRegions";
+import { categoryRegion } from "./categoryGeography";
+import { magicKey } from "./magicState";
+import { physicalFieldReader } from "./continuousState";
+import { nearestTriangle } from "./mesh";
 
-export function extractLakes(state: GenerationState, publish = true) {
+export function extractLakes(
+  state: GenerationState,
+  publish = true,
+  prepared?: { id: number; footprint: Geometry; level: number }[]
+) {
   const map = state.physical!.map,
     mesh = map.mesh;
   const lakes: { id: number; footprint: Geometry; level: number }[] = [];
@@ -23,7 +32,9 @@ export function extractLakes(state: GenerationState, publish = true) {
   for (const [body, members] of bodies) {
     if (!members.some((i) => i < mesh.contentCount)) continue;
     const level = map.WaterSurfaceElevations[members[0]];
-    const contour = lakeFootprint(state, members, body, level);
+    const contour = prepared
+      ? (prepared.find((lake) => lake.id === body)?.footprint ?? null)
+      : lakeFootprint(state, members, body, level);
     const shape = clipRegion(state, contour);
     if (!shape) continue;
     lakes.push({ id: body, footprint: shape, level: (level - map.BaseSeaLevel) / 1024 });
@@ -76,8 +87,7 @@ function connectedMembers(
 export function components(
   state: GenerationState,
   includes: (i: number) => boolean,
-  publish: (members: number[], geometry?: Geometry) => void,
-  polygonal = false
+  publish: (members: number[], geometry?: Geometry) => void
 ) {
   const map = state.physical!.map,
     visited = new Int32Array(map.mesh.contentCount).fill(-1),
@@ -86,25 +96,38 @@ export function components(
     if (visited[i] >= 0 || !includes(i)) continue;
     regions.push(connectedMembers(state, visited, includes, i, regions.length));
   }
-  const shapes = polygonal ? regionShapes(state, visited) : new Map<number, Geometry>();
-  regions.forEach((members, i) => publish(members, shapes.get(i)));
+  regions.forEach((members) => publish(members));
 }
-function regionShapes(state: GenerationState, labels: Int32Array) {
-  const members = new Map<number, number[]>();
-  labels.forEach((label, cell) => {
-    if (label < 0) return;
-    if (!members.has(label)) members.set(label, []);
-    members.get(label)!.push(cell);
-  });
-  const result = new Map<number, Geometry>();
-  for (const [label, leaves] of members) {
-    const shape = clipRegion(
-      state,
-      membershipContour(state, leaves, (cell) => Number(labels[cell] === label))
+function predicateRegions(
+  state: GenerationState,
+  region: CausalRegion,
+  publish: (members: number[], extent: Geometry, component: number) => void,
+  trace = regionTracer(state),
+  seed?: Geometry | null
+) {
+  if (seed === null) return;
+  const shape = trace(region);
+  if (!shape) return;
+  const map = state.physical!.map;
+  let component = 0;
+  for (const part of geometryParts(shape)) {
+    if (part.type !== "Polygon") continue;
+    if (seed) {
+      const reached = spatial.intersection(seed, part);
+      if (!reached || spatial.area(reached) <= 0) continue;
+    }
+    const covers = spatial.pointCoverage(part);
+    const owned = Array.from({ length: map.mesh.contentCount }, (_, i) => i).filter((i) =>
+      covers(nativePosition(state.physical!, i))
     );
-    if (shape) result.set(label, shape);
+    const clipped = clipRegion(state, part);
+    if (!clipped) continue;
+    if (!owned.length) {
+      const p = spatial.interiorPosition(clipped);
+      owned.push(nearestTriangle(map.mesh, p.x - map.mesh.origin[0], p.y - map.mesh.origin[1]));
+    }
+    publish(owned, clipped, component++);
   }
-  return result;
 }
 export function publishPlace(
   state: GenerationState,
@@ -114,7 +137,8 @@ export function publishPlace(
   layer: string,
   attributes: Record<string, unknown> = {},
   extent?: Geometry,
-  component?: string
+  component?: string,
+  pointOnly = false
 ) {
   const work = state.physical!,
     map = work.map;
@@ -124,9 +148,13 @@ export function publishPlace(
     if (!covers(nativePosition(work, i))) continue;
     if (representative < 0 || map.Elevation[i] > map.Elevation[representative]) representative = i;
   }
-  if (representative < 0) return;
-  const position = nativePosition(work, representative),
-    geometry = extent ?? point(position);
+  if (representative < 0 && !extent) return;
+  const candidate = representative < 0 ? null : nativePosition(work, representative);
+  const position =
+      extent && (!candidate || !spatial.pointCoverage(extent)(candidate))
+        ? spatial.interiorPosition(extent)
+        : candidate!,
+    geometry = !pointOnly && extent ? extent : point(position);
   const identity = coordinateKey(position.x, position.y);
   putGenerated(
     state,
@@ -143,47 +171,64 @@ export function publishPlace(
           ? spatial.area(extent)
           : members.reduce((sum, i) => sum + map.mesh.areas[i], 0),
         representative: position,
-        elevation: (map.Elevation[representative] - map.BaseSeaLevel) / 1024,
+        elevation:
+          (physicalFieldReader(map, "Elevation")(
+            position.x - map.mesh.origin[0],
+            position.y - map.mesh.origin[1]
+          ) -
+            map.BaseSeaLevel) /
+          1024,
         ...attributes,
       }
     )
   );
 }
 export function extractNamedLandforms(state: GenerationState) {
-  const map = state.physical!.map;
+  const trace = regionTracer(state);
+  const regions = categoryRegions(state.surface, "landform");
   const dry = state.surface.ocean
     ? spatial.differenceFrom(state.surface.ocean)
     : (shape: Geometry) => shape;
-  const classes: [string, string, (i: number) => boolean][] = [
-    ["peak", "Peak", (i) => map.LandformCodes[i] === Landform.Peak],
-    ["cirque", "Cirque", (i) => map.LandformCodes[i] === Landform.Cirque],
-    ["fjord", "Fjord", (i) => map.LandformCodes[i] === Landform.Fjord],
-    ["moraine", "Moraine", (i) => map.LandformCodes[i] === Landform.Moraine],
-    ["waterfall", "Waterfall", (i) => map.LandformCodes[i] === Landform.Waterfall],
-    ["gorge", "Gorge", (i) => map.LandformCodes[i] === Landform.Gorge],
+  const classes: [string, string, number][] = [
+    ["peak", "Peak", Landform.Peak],
+    ["cirque", "Cirque", Landform.Cirque],
+    ["fjord", "Fjord", Landform.Fjord],
+    ["moraine", "Moraine", Landform.Moraine],
+    ["waterfall", "Waterfall", Landform.Waterfall],
+    ["gorge", "Gorge", Landform.Gorge],
   ];
-  for (const [kind, name, includes] of classes)
-    components(
-      state,
-      includes,
-      (members, extent) => {
-        const surface = extent && kind !== "fjord" ? dry(extent) : extent;
-        if (extent && !surface) return;
-        publishPlace(state, kind, name, members, "geology", {}, surface ?? undefined);
-      },
-      !["peak", "waterfall"].includes(kind)
-    );
+  for (const [kind, name, code] of classes) {
+    const publish = (members: number[], extent?: Geometry, component?: number) => {
+      const surface = extent && kind !== "fjord" ? dry(extent) : extent;
+      if (extent && !surface) return;
+      publishPlace(
+        state,
+        kind,
+        name,
+        members,
+        "geology",
+        {},
+        surface ?? undefined,
+        component?.toString(),
+        ["peak", "waterfall"].includes(kind)
+      );
+    };
+    predicateRegions(state, regionShape(regions.get(code) ?? null), publish, trace);
+  }
 }
 export function extractMagicPlaces(state: GenerationState) {
   const magic = state.physical!.magic;
+  const trace = regionTracer(state);
   for (const field of magic?.fields ?? [])
     for (const rule of field.definition.features) {
       const members = field.features[rule.id];
       if (!members) continue;
-      components(
+      predicateRegions(
         state,
-        (i) => Boolean(members[i]),
-        (region, extent) =>
+        regionShape(
+          categoryRegion(state, magicKey(field, `feature:${rule.id}`), (code) => code === 1)
+        ),
+        (region, extent, component) =>
           publishPlace(
             state,
             `${field.definition.id}:${rule.id}`,
@@ -200,9 +245,10 @@ export function extractMagicPlaces(state: GenerationState) {
                   0
                 ) / region.reduce((sum, i) => sum + state.physical!.map.mesh.areas[i], 0),
             },
-            extent
+            extent,
+            component.toString()
           ),
-        true
+        trace
       );
     }
 }

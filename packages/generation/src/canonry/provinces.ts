@@ -4,6 +4,7 @@ import type { PhysicalField } from "./field";
 import { clamp, round } from "./math";
 import { fractalNoise } from "./noise";
 import { createProvinceSites, type ProvinceSite } from "./provinceSites";
+import { defineProvincePartition, prepareProvinceRegions } from "./provinceGeography";
 
 interface Selection {
   nearest: number;
@@ -85,11 +86,13 @@ function assignBoundary(
       "TectonicBoundaryPairIds",
       "TectonicTangentX",
       "TectonicTangentY",
+      "TectonicNormalMotion",
     ] as const)
       map[name][i] = 0;
     return;
   }
   const relative = relativeMotion(sites, s);
+  map.TectonicNormalMotion[i] = relative;
   map.TectonicBoundaryCodes[i] =
     relative < -p.TectonicConvergenceThreshold
       ? 1
@@ -172,9 +175,11 @@ function assignTriangle(
 }
 export function tectonicProvinces(map: PhysicalField, context: PhysicalContext) {
   const sites = createProvinceSites(map, context);
+  defineProvincePartition(map, context, sites);
   for (let i = 0; i < map.mesh.count; i++) assignTriangle(map, context, sites, i);
   map.InitialTectonicBoundaryCodes.set(map.TectonicBoundaryCodes);
   map.InitialTectonicStrain.set(map.TectonicStrain);
+  prepareProvinceRegions(map);
 }
 export function continentalDomains(map: PhysicalField, context: PhysicalContext) {
   for (let i = 0; i < map.mesh.count; i++) {

@@ -7,6 +7,7 @@ import { drainageConditioning } from "./drainageFlood";
 import { resolveLandTargets } from "./flowGuidance";
 import { contributingArea, sourceToOutletOrder } from "./flowGraph";
 import { cellTravel, physicalDistance } from "./physicalMetric";
+import { preparePhysicalChannels } from "./continuousState";
 
 function recordCut(map: PhysicalField, i: number, requested: number) {
   const amount = erode(map, i, requested);
@@ -90,6 +91,7 @@ export function fluvialErosion(map: PhysicalField, c: PhysicalContext) {
       : Math.max(1, truncate((c.Profile.FluvialErosionIterations * c.HydrologyStrength) / 1000));
   for (let iteration = 0; iteration < iterations; iteration++) {
     const pass = { ...c, Seed: c.Seed ^ iteration };
+    preparePhysicalChannels(map, ["Elevation"]);
     drainageConditioning(map, pass);
     const targets = resolveLandTargets(map, pass),
       area = contributingArea(targets, map.mesh.areas);

@@ -4,8 +4,32 @@ Current execution follows [ADR 0003](adr/0003-frontend-session.md): a browser wo
 uses in-memory inputs and returns complete validated geography. No persistent
 state, restart, recovery, backend or MCP is part of this product phase.
 
+**Magic clarification — 2026-10-22:** Fire, Aurora and Pressure are first-class
+world effects and processes. Preserve their physical motivations, media,
+feedback and interference without importing named setting lore. Read
+[product specification 10.3](product-spec.md#103-magical-generation--fire-aurora-and-pressure)
+and [magic source authority](../AGENTS.md#magic-source-authority) before extending
+them. Future magic systems remain open through the shared process structure;
+extension must preserve the current three's specific behavior. The representation described in the
+implementation history below remains existing code, not a requirement to express
+every behavior through a generic vocabulary or avoid system-specific operations.
+The [society plan](SOCIETY-GENERATION-PLAN.md#society-environment-and-magic-feedback)
+records the proposed social feedback and the distinctions between lore,
+implemented geography and new work.
+
 The current module contracts, feature-owned recipes, validity model and output
 registration are described in [Generation modules and recipes](generation-modules.md).
+
+The working [generation control mappings](generation-control-mappings.md) record
+the 2026-10-22 proposal: physical and living map outcomes, independent cultural
+and political patterns, and distinct Fire, Aurora and Pressure controls. They
+follow the magic source authority and product contract above. Global magic
+imprint, identical per-system ecological menus and fixed decision totals are
+withdrawn. The plan requires safe independent inclusion of all three systems,
+records the coastal-feedback omission gap and an unresolved focused-test timeout,
+and separates implemented geography from proposed social mechanisms. Its
+groupings and coefficients remain proposals; updating it does not authorize
+implementation or redesign the workflow.
 
 This is the generation direction for Vellum & Vector. The
 [product contract](product-spec.md#10-procedural-generation-domains) defines
@@ -223,10 +247,12 @@ Profiles provide changed forcing for each epoch, for example:
 | Glacial period |                     -10 |                  -30 |                    0.3 |                    1.5 |
 | Present        |                       0 |                    0 |                    0.6 |                    0.4 |
 
-User-authored magical definitions configure sources, propagation, storage/decay,
-interactions and effects in these processes. Keep natural background, applied
-forcing and retained consequences distinguishable. Magic changes the physical
-facts consumed downstream.
+Fire, Aurora and Pressure settings shape their sources, activity and retained
+consequences. Preserve fracture-carried geothermal Fire, coldward Aurora
+accumulation and ice retention, and the deep-ocean Pressure locus with ocean
+propagation and coastal stress. Keep natural background, applied forcing and
+retained consequences distinguishable. Magic changes physical facts consumed
+downstream; these fields do not by themselves implement social use or its costs.
 
 Child history starts from the applicable retained parent historical state and
 forcing. Advance finer local processes through corresponding epochs while
@@ -368,10 +394,12 @@ outside the current execution path.
 
 ## Completion work
 
-The implementation follows Sulion plan `01c3a7d3-a35c-425c-b4c1-b9640d8bd670`.
+The implementation history below follows Sulion plan `01c3a7d3-a35c-425c-b4c1-b9640d8bd670`.
+Its generalized magic design is superseded by the 2026-10-22 correction above;
+the implementation descriptions remain evidence of what was built.
 The requested outcome is complete Canonry physical and magical generation in the
 browser, including configurable epochs, impacts, glacial history and the Fire,
-Aurora and Pressure examples. Backend and persistence remain outside this work.
+Aurora and Pressure systems. Backend and persistence remain outside this work.
 The completed implementation milestones below establish process coverage, not
 complete reference fidelity or satisfactory geographic output. The subsequent
 investigation found generation, projection and display gaps documented below.
@@ -387,12 +415,14 @@ investigation found generation, projection and display gaps documented below.
    existing generation and magic surfaces, expose natural/final geography and
    history channels, run focused generation checks and ordinary CI.
 
-Implementation choices: use the existing shared mesh and process runner; keep
-working arrays transient. A configurable system has a bounded vocabulary rather
-than executable user code. The reference's game-specific names and thresholds
-are presets, not branches on system names. Existing manually placed effects
-remain usable. Reference numerical scaling is retained during this port; metre
-native algorithm conversion remains a separate backlog item. Cultural and built
+Implementation choices at that stage: the shared mesh and process runner used
+transient arrays and represented the three systems through a bounded declarative
+vocabulary. The earlier rule treating their identities as presets and forbidding
+branches on system names is withdrawn. Preserve shared process contracts where
+useful, and implement specific behavior where the authored systems require it.
+Existing manually placed effects remain usable; this documentation correction
+does not migrate runtime data. The numerical-scaling notes here describe the
+initial port; later sections record metre conversion. Cultural and built
 generation are atlas processes rather than missing Canonry physical layers.
 
 At each milestone, evidence is the resulting geography and focused behavioral
@@ -410,8 +440,8 @@ local-source storage; it does not turn the geological model into a yearly solver
 maxima, cold/high terrain, deep-ocean basins or authored map sources. Propagation
 strategies port Fire's priority-queue fracture transport, Aurora's coldward
 accumulation and ice retention, and Pressure's standing rays, coastal rays and
-wandering wakes. Radial propagation supports located variants. There are no
-branches on system identities. Presets specify their feedback, feature thresholds,
+wandering wakes. Radial propagation supports located variants in the current
+implementation. Definitions currently specify feedback, feature thresholds,
 hysteresis and interactions, including thermal war rims, steam fractures and
 pressure/Aurora breaches. Configurations participate in the generation hash.
 

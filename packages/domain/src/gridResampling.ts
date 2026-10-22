@@ -1,7 +1,8 @@
 import { resample, putChannel, type Grid, type GridSurface } from "./grids";
+import { prepareGridChannel } from "./preparedField";
 
 function densityField(source: GridSurface, name: string): GridSurface {
-  return {
+  const result: GridSurface = {
     ...source,
     channels: {
       ...source.channels,
@@ -10,11 +11,21 @@ function densityField(source: GridSurface, name: string): GridSurface {
       ),
     },
     quantities: { ...source.quantities, [name]: "intensive" },
+    prepared: source.prepared
+      ? {
+          ...source.prepared,
+          coefficients: { ...source.prepared.coefficients },
+          transforms: { ...source.prepared.transforms },
+          adaptive: { ...source.prepared.adaptive },
+        }
+      : undefined,
     overlays: source.overlays?.map((overlay) => ({
       ...overlay,
       grid: overlay.channels.includes(name) ? densityField(overlay.grid, name) : overlay.grid,
     })),
   };
+  prepareGridChannel(result, name);
+  return result;
 }
 /** Compose each channel at the target's own physical samples, retaining patch precedence. */
 export function resampleChannels(

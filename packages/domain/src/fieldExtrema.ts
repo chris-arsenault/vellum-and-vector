@@ -1,11 +1,12 @@
 import type { Geometry } from "geojson";
 import type { Grid, GridSurface } from "./grids";
-import { interpolateSample } from "./grids";
+import { interpolateSample, gridCellBounds } from "./grids";
+import { channelValue, preparedChannel } from "./preparedField";
 import { spatial, rectangle, type Bounds } from "./spatial";
 import { geometryParts } from "./composition";
 import { requireThat } from "./errors";
-import { adaptiveExtrema } from "./adaptiveExtrema";
-import { scalarReconstruction } from "./scalarReconstruction";
+import { adaptiveExtrema, preparedAdaptiveExtrema } from "./adaptiveExtrema";
+import { provinceEntries } from "./tectonicField";
 
 export function fieldExtrema(
   grid: GridSurface,
@@ -80,8 +81,34 @@ function rawFieldExtrema(
 ): [number, number] | null {
   const region = spatial.intersection(grid.scope.footprint, footprint);
   if (!region) return null;
-  if (grid.reconstruction?.channels[channel]) return reconstructedExtrema(grid, channel, region);
+  const provinces = provinceEntries(grid.geography?.provinces, channel);
+  if (provinces) {
+    const values = provinces
+      .filter((entry) => spatial.intersects(entry.footprint, region))
+      .map((entry) => entry.value);
+    return values.length ? [Math.min(...values), Math.max(...values)] : [0, 0];
+  }
+  if (grid.prepared?.adaptive?.[channel]) {
+    const range = preparedAdaptiveExtrema(grid.prepared.adaptive[channel], region);
+    const transform = grid.prepared.transforms[channel] ?? { scale: 1, offset: 0 };
+    if (!range) return null;
+    const values = range.map((v) => v * transform.scale + transform.offset);
+    return [Math.min(...values), Math.max(...values)];
+  }
+  if (grid.prepared?.coefficients[channel]) return reconstructedExtrema(grid, channel, region);
   if (grid.topology) return adaptiveExtrema(grid, channel, region);
+  if (grid.mesh) {
+    let low = Infinity,
+      high = -Infinity;
+    for (let i = 0; i < grid.active.length; i++) {
+      if (!grid.active[i] || !spatial.intersects(region, rectangle(gridCellBounds(grid, i))))
+        continue;
+      const value = channelValue(grid, channel, i);
+      low = Math.min(low, value);
+      high = Math.max(high, value);
+    }
+    return finiteRange(low, high);
+  }
   const [x0, y0, x1, y1] = grid.bounds,
     dx = (x1 - x0) / (grid.width - 1),
     dy = (y1 - y0) / (grid.height - 1),
@@ -112,11 +139,11 @@ function reconstructedExtrema(
   channel: string,
   region: Geometry
 ): [number, number] | null {
-  const source = grid.reconstruction!,
-    values = source.channels[channel];
+  const source = grid.prepared!,
+    values = grid.channels[channel];
   const support = source.support,
     bounds = spatial.bounds(region),
-    at = scalarReconstruction(source, channel, false)!,
+    at = preparedChannel(grid, channel),
     covers = spatial.pointCoverage(region),
     candidates = Array.from(values.keys()).filter((i) => withinSupport(grid, i, bounds));
   let low = Infinity,
@@ -166,7 +193,7 @@ function reconstructionProbes(
   return points;
 }
 function withinSupport(grid: Grid, i: number, box: Bounds) {
-  const support = grid.reconstruction!.support,
+  const support = grid.prepared!.support,
     halo = support.spacing * 2.5,
     x = support.x[i] + support.origin[0],
     y = support.y[i] + support.origin[1];

@@ -8,7 +8,16 @@ import type { GridSurface } from "@atlas/domain";
 function sameGrid(a?: GridSurface, b?: GridSurface): boolean {
   if (a === b) return true;
   if (!a || !b) return false;
-  const inputs = ["active", "bounds", "topology", "ocean", "overlays", "reconstruction"] as const;
+  const inputs = [
+    "active",
+    "bounds",
+    "topology",
+    "mesh",
+    "prepared",
+    "geography",
+    "ocean",
+    "overlays",
+  ] as const;
   const channels = Object.keys(a.channels);
   return (
     inputs.every((key) => a[key] === b[key]) &&

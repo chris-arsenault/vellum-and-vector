@@ -5,6 +5,8 @@ import { clamp, toUnits, truncate, units } from "./math";
 import { edgeLeadingTo } from "./mesh";
 import { channelDimensions } from "./dimensions";
 import { physicalDistance } from "./physicalMetric";
+import { preparePhysicalChannels } from "./continuousState";
+import { prepareRiverPaths } from "./riverChannelPaths";
 
 function normalize(x: number, y: number): [number, number] {
   const length = Math.max(0.000001, Math.sqrt(x * x + y * y));
@@ -180,4 +182,6 @@ export function riverChannelGeometry(map: PhysicalField, c: PhysicalContext) {
     }
   }
   extendSpines(map);
+  preparePhysicalChannels(map, ["DrainageElevations", "RiverWidth", "RiverDepth"]);
+  prepareRiverPaths(map);
 }

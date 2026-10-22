@@ -1,10 +1,12 @@
 import type { Geometry } from "geojson";
 import { spatial } from "./spatial";
-import { smoothSampleInterpolator, sampleStations, type SampleSupport } from "./smoothSamples";
+import { type SampleSupport } from "./smoothSamples";
+import { nearestFieldSample } from "./sampledGrid";
+import { preparedValue, type NumericValues, type PreparedChannelData } from "./preparedField";
 
-export interface WaterSamples {
-  elevation: Float64Array;
-  bodyIds: Float64Array;
+export interface WaterSamples extends PreparedChannelData {
+  elevation: NumericValues;
+  bodyIds: NumericValues;
   seaLevel: number;
   lakes: { id: number; footprint: Geometry; level: number }[];
 }
@@ -15,8 +17,8 @@ export function waterFieldInterpolator(
   ocean: Geometry | null | undefined,
   channel: string
 ) {
-  const floor = smoothSampleInterpolator(support, source.elevation),
-    stations = sampleStations(support);
+  const floor =
+    channel === "waterDepth" ? preparedValue(support, source.elevation, source) : () => 0;
   const sea = ocean ? spatial.pointCoverage(ocean) : () => false;
   const lakes = source.lakes.map((body) => ({
     ...body,
@@ -31,9 +33,6 @@ export function waterFieldInterpolator(
     if (channel === "waterLevel") return level;
     if (channel === "waterDepth") return kind ? Math.max(0, level - floor(x, y)) : 0;
     if (lake) return lake.id;
-    const nearest = stations(x, y).reduce((a, b) =>
-      a.dx * a.dx + a.dy * a.dy <= b.dx * b.dx + b.dy * b.dy ? a : b
-    );
-    return kind ? source.bodyIds[nearest.i] : 0;
+    return kind ? source.bodyIds[nearestFieldSample(support, point)] : 0;
   };
 }

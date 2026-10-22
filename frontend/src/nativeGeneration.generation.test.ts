@@ -6,6 +6,7 @@ import {
   sample,
   fieldInterpolator,
   adaptiveLeafAt,
+  nearestFieldSample,
   type Grid,
   type DomainSnapshot,
 } from "@atlas/domain";
@@ -14,6 +15,7 @@ import { commitCommand } from "./atlasCommands";
 import { generationSnapshot } from "./generationJobs";
 
 function gridIndexAt(grid: Grid, x: number, y: number) {
+  if (grid.mesh) return nearestFieldSample(grid.mesh, { x, y, z: 0 });
   if (grid.topology) return adaptiveLeafAt(grid.topology, x, y);
   return (
     Math.round(((y - grid.bounds[1]) / (grid.bounds[3] - grid.bounds[1])) * (grid.height - 1)) *

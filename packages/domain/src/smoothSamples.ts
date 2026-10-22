@@ -9,12 +9,15 @@ export interface SampleSupport {
   origin: [number, number];
   spacing: number;
 }
-export interface ReconstructedField {
-  support: SampleSupport;
-  channels: Record<string, Float64Array>;
-  biome?: BiomeSamples;
-  categories?: Record<string, Float64Array>;
-  water?: import("./waterField").WaterSamples;
+/** Serializable first derivatives owned by the producer of the nodal values. */
+export interface SampleJets {
+  dx: ArrayLike<number>;
+  dy: ArrayLike<number>;
+  affine: boolean;
+}
+export interface SampleCoefficients extends SampleJets {
+  dx: Float64Array;
+  dy: Float64Array;
 }
 export interface SampleEnclosure {
   range: [number, number];
@@ -70,11 +73,19 @@ export function sampleStations(support: SampleSupport, cardinal = true) {
     for (let row = bottom; row <= top; row++)
       for (let col = left; col <= right; col++)
         for (const i of bins[row * width + col]) {
+          // A world-to-local subtraction need not invert the addition exactly.
+          // Preserve cardinal values at the published world coordinates too.
+          if (
+            cardinal &&
+            worldX === support.x[i] + support.origin[0] &&
+            worldY === support.y[i] + support.origin[1]
+          )
+            return [{ i, dx: 0, dy: 0, weight: 1 }];
           const dx = x - support.x[i],
             dy = y - support.y[i],
             r2 = dx * dx + dy * dy;
-          if (cardinal && r2 < spacing * spacing * 1e-22) return [{ i, dx: 0, dy: 0, weight: 1 }];
-          if (r2 < spacing * spacing * 1e-22) continue;
+          if (cardinal && r2 === 0) return [{ i, dx: 0, dy: 0, weight: 1 }];
+          if (r2 === 0) continue;
           if (r2 < radius2) result.push({ i, dx, dy, weight: (1 - r2 / radius2) ** 4 / r2 });
         }
     return result;
@@ -85,9 +96,13 @@ export function sampleStations(support: SampleSupport, cardinal = true) {
   queries.set(support, entries);
   return cached;
 }
-function supportCandidates(support: SampleSupport, box: Bounds) {
+export function supportCandidates(
+  support: SampleSupport,
+  box: Bounds,
+  radius = 2.5 * support.spacing
+) {
+  if (!indexes.has(support)) indexes.set(support, prepareIndex(support));
   const index = indexes.get(support)!,
-    radius = 2.5 * support.spacing,
     x0 = Math.max(index.west, Math.min(index.east, box[0] - support.origin[0])),
     x1 = Math.max(index.west, Math.min(index.east, box[2] - support.origin[0])),
     y0 = Math.max(index.south, Math.min(index.north, box[1] - support.origin[1])),
@@ -115,15 +130,21 @@ function memoizeStation(query: (x: number, y: number) => Station[]) {
   };
 }
 
-function sampleSlopes(support: SampleSupport, values: ArrayLike<number>) {
+export function prepareSampleCoefficients(
+  support: SampleSupport,
+  values: ArrayLike<number>,
+  slopes?: (i: number) => [number, number]
+): SampleCoefficients {
   const at = sampleStations(support, false),
     count = support.x.length;
-  const gx = new Float64Array(count).fill(NaN),
+  const gx = new Float64Array(count),
     gy = new Float64Array(count);
+  if (slopes) {
+    for (let i = 0; i < count; i++) [gx[i], gy[i]] = slopes(i);
+    return { dx: gx, dy: gy, affine: false };
+  }
   let affine: boolean | undefined;
-  const prepare = (i: number) => {
-    if (Number.isFinite(gx[i])) return;
-    gx[i] = 0;
+  for (let i = 0; i < count; i++) {
     const px = support.x[i] + support.origin[0],
       py = support.y[i] + support.origin[1];
     let xx = 0,
@@ -151,9 +172,14 @@ function sampleSlopes(support: SampleSupport, values: ArrayLike<number>) {
     // An affine patch within a curved field still needs limiting: its jet can
     // otherwise extend below zero into neighboring, flat cover samples.
     affine ??= affineSamples(support, values, gx[i], gy[i], i);
-    if (!affine) limitSlope(support, values, gx, gy, at, i);
-  };
-  return { gx, gy, prepare, affine: () => affine === true };
+    if (affine) {
+      gx.fill(gx[i]);
+      gy.fill(gy[i]);
+      break;
+    }
+    limitSlope(support, values, gx, gy, at, i);
+  }
+  return { dx: gx, dy: gy, affine: affine === true };
 }
 
 function affineSamples(
@@ -168,7 +194,7 @@ function affineSamples(
       values[origin] +
       gx * (support.x[i] - support.x[origin]) +
       gy * (support.y[i] - support.y[origin]);
-    const scale = Math.max(Math.abs(values[i]), Math.abs(values[origin]), Math.abs(predicted));
+    const scale = Math.max(1, Math.abs(values[i]), Math.abs(values[origin]), Math.abs(predicted));
     if (Math.abs(predicted - values[i]) > Number.EPSILON * 64 * scale) return false;
   }
   return true;
@@ -191,26 +217,41 @@ function limitSlope(
     high = Math.max(high, values[j]);
   }
   const reach = Math.hypot(gx[i], gy[i]) * support.spacing * 2.5;
-  const scale = reach > 0 ? Math.min(1, Math.min(values[i] - low, high - values[i]) / reach) : 1;
+  let scale = reach > 0 ? Math.min(1, Math.min(values[i] - low, high - values[i]) / reach) : 1;
+  // Round inward: a limited nonnegative jet must not acquire a negative fringe
+  // from a multiplication rounded just beyond its support-wide bound.
+  if (scale < 1) scale *= 1 - Number.EPSILON * 4;
   gx[i] *= scale;
   gy[i] *= scale;
 }
 
-/** Prepare per process/input revision; geometry is cached, mutable channel values are not. */
+/** Producer operation. Consumers receive coefficients and use preparedSampleInterpolator. */
 export function smoothSampleInterpolator(
   support: SampleSupport,
   values: ArrayLike<number>,
   slopes?: (i: number) => [number, number]
 ) {
+  return preparedSampleInterpolator(
+    support,
+    values,
+    prepareSampleCoefficients(support, values, slopes)
+  );
+}
+
+/** Pure evaluation: never estimates or limits derivatives, including on first use. */
+export function preparedSampleInterpolator(
+  support: SampleSupport,
+  values: ArrayLike<number>,
+  coefficients: SampleJets
+) {
   const at = sampleStations(support),
-    { gx, gy, prepare, affine } = slopes
-      ? suppliedSlopes(values.length, slopes)
-      : sampleSlopes(support, values);
+    { dx: gx, dy: gy } = coefficients;
+  if (gx.length !== values.length || gy.length !== values.length)
+    throw new Error("Prepared derivatives must match the field's nodal coefficients.");
   const read = (x: number, y: number) => {
     let sum = 0,
       total = 0;
     for (const { i, dx, dy, weight } of at(x, y)) {
-      prepare(i);
       sum += weight * (values[i] + gx[i] * dx + gy[i] * dy);
       total += weight;
     }
@@ -219,8 +260,7 @@ export function smoothSampleInterpolator(
   const enclose = (box: Bounds, candidates = supportCandidates(support, box), level?: number) => {
     const x = (box[0] + box[2]) / 2,
       y = (box[1] + box[3]) / 2;
-    prepare(0);
-    if (affine()) {
+    if (coefficients.affine) {
       const i = at(x, y)[0].i,
         index = indexes.get(support)!,
         corners = [
@@ -229,7 +269,6 @@ export function smoothSampleInterpolator(
           read(box[2], box[3]),
           read(box[0], box[3]),
         ];
-      prepare(i);
       return {
         range: [Math.min(...corners), Math.max(...corners)],
         gradient: [
@@ -242,14 +281,12 @@ export function smoothSampleInterpolator(
         ],
       } as SampleEnclosure;
     }
-    return interpolationBounds(support, values, gx, gy, prepare, read, box, candidates, level);
+    return interpolationBounds(support, values, gx, gy, read, box, candidates, level);
   };
-  const jet = (i: number): [number, number] => {
-    prepare(i);
-    return [gx[i], gy[i]];
-  };
+  const jet = (i: number): [number, number] => [gx[i], gy[i]];
   return Object.assign(read, {
     sourceValues: values,
+    coefficients,
     jet,
     enclose,
     segment: createSegmentReader(
@@ -273,26 +310,12 @@ function worldSupportBounds(support: SampleSupport): Bounds {
     index.north + support.origin[1],
   ];
 }
-function suppliedSlopes(count: number, at: (i: number) => [number, number]) {
-  const gx = new Float64Array(count).fill(NaN),
-    gy = new Float64Array(count);
-  return {
-    gx,
-    gy,
-    affine: () => false,
-    prepare: (i: number) => {
-      if (!Number.isFinite(gx[i])) [gx[i], gy[i]] = at(i);
-    },
-  };
-}
-
 /** Interval enclosure of the same weighted jets, tightened by subdividing the query box. */
 function interpolationBounds(
   support: SampleSupport,
   values: ArrayLike<number>,
-  gx: Float64Array,
-  gy: Float64Array,
-  prepare: (i: number) => void,
+  gx: ArrayLike<number>,
+  gy: ArrayLike<number>,
   read: (x: number, y: number) => number,
   box: Bounds,
   candidates: number[],
@@ -315,7 +338,6 @@ function interpolationBounds(
       dy1 = y1 - support.y[i];
     const near = Math.max(0, dx0, -dx1) ** 2 + Math.max(0, dy0, -dy1) ** 2;
     if (near >= radius2) return [];
-    prepare(i);
     const far = Math.max(dx0 * dx0, dx1 * dx1) + Math.max(dy0 * dy0, dy1 * dy1);
     const xs = [gx[i] * dx0, gx[i] * dx1],
       ys = [gy[i] * dy0, gy[i] * dy1];
@@ -358,21 +380,3 @@ function unboundedEnclosure(range: [number, number]): SampleEnclosure {
     ],
   };
 }
-/** Labels compete through smooth membership weights; numeric IDs are never interpolated. */
-export function smoothCategoryInterpolator(support: SampleSupport, codes: ArrayLike<number>) {
-  const at = sampleStations(support);
-  return (x: number, y: number) => {
-    const weights = new Map<number, number>();
-    for (const { i, weight } of at(x, y))
-      weights.set(codes[i], (weights.get(codes[i]) ?? 0) + weight);
-    let code = 0,
-      maximum = -Infinity;
-    for (const [candidate, weight] of weights)
-      if (weight > maximum || (weight === maximum && candidate < code)) {
-        code = candidate;
-        maximum = weight;
-      }
-    return code;
-  };
-}
-import type { BiomeSamples } from "./biomeField";

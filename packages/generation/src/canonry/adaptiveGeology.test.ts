@@ -232,6 +232,13 @@ it("advects entire material footprints across coarse/fine faces", () => {
     )
   );
   const before = integral(map.SedimentThickness, map.mesh.areas);
+  map.provinces = {
+    origin: [...map.mesh.origin],
+    seed: 7,
+    scale: 100_000,
+    strength: 0,
+    sites: [{ x: 0, y: 0, priority: 0, assembly: 1, motionX: 1, motionY: 0 }],
+  };
   const plan = buildTransportPlan(map, 2000);
   transportHistory(map, plan);
   expect(integral(map.SedimentThickness, map.mesh.areas)).toBeCloseTo(before, -2);
@@ -318,6 +325,13 @@ it.each(["volcano", "crater"])(
     p.PlateDriftDecay = 1000;
     const event = map.events.find((e) => e.kind != "plume")!;
     const previous = event.x;
+    map.provinces = {
+      origin: [...map.mesh.origin],
+      seed: 7,
+      scale: 100_000,
+      strength: 0,
+      sites: [{ x: 0, y: 0, priority: 0, assembly: 1, motionX: 1, motionY: 0 }],
+    };
     plateAdvection(map, context);
     expect(event.x).toBe(previous + 250);
     const moved = physicalSampler(map.mesh, map.Elevation);

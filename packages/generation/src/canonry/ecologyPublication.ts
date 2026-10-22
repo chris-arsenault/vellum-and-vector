@@ -1,7 +1,7 @@
-import { biomeInputs, type BiomePoint, type BiomeSamples, type Grid } from "@atlas/domain";
+import { categoryRegions, type BiomePoint, type BiomeSamples, type Grid } from "@atlas/domain";
 import type { AtlasPhysicalWorkspace } from "./atlasWorkspace";
 import { environment } from "./ecologyEnvironment";
-import { physicalSupport } from "./physicalSupport";
+import type { PhysicalArrayName } from "./continuousState";
 
 export function ecologyPoint(work: AtlasPhysicalWorkspace, i: number): BiomePoint {
   const m = work.map,
@@ -23,33 +23,52 @@ export function ecologyPoint(work: AtlasPhysicalWorkspace, i: number): BiomePoin
   };
 }
 export function projectEcologySupport(work: AtlasPhysicalWorkspace, grid: Grid) {
-  if (work.map.mesh.topology || !grid.channels.biome) return;
+  if (!grid.channels.biome) return;
   const map = work.map,
     n = map.mesh.count;
   const biome: BiomeSamples = {
     values: {},
+    prepared: {},
     seaLevel: (map.EffectiveSeaLevel - map.BaseSeaLevel) / 1024,
     lakes: [],
     protectedMask: new Uint8Array(n),
-    protectedCodes: Float64Array.from(map.BiomeCodes),
+    protectedCodes: map.BiomeCodes,
     codes: [],
+    protectedRegions: [],
   };
-  for (const name of biomeInputs) biome.values[name] = new Float64Array(n);
-  for (let i = 0; i < n; i++) {
-    const p = ecologyPoint(work, i);
-    for (const name of biomeInputs) biome.values[name][i] = p[name];
+  const inputs: Record<string, [PhysicalArrayName, number, number]> = {
+    temperature: ["Temperature", 0.1, -30],
+    elevation: ["Elevation", 1 / 1024, -map.BaseSeaLevel / 1024],
+    water: ["WaterKindCodes", 1, 0],
+    depth: ["WaterDepths", 1 / 1024, 0],
+    ice: ["IceThickness", 1, 0],
+    wetness: ["EcologicalWetness", 1, 0],
+    moisture: ["EcologicalMoisture", 1, 0],
+    trees: ["TreeCover", 1, 0],
+    grass: ["GrassCover", 1, 0],
+    wetland: ["WetlandCover", 1, 0],
+    altered: ["AlteredCover", 1, 0],
+    juvenileAltered: ["AlteredSaplings", 1, 0],
+    conifer: ["ConiferCover", 1, 0],
+    broadleaf: ["BroadleafCover", 1, 0],
+  };
+  for (const [name, [native, scale, offset]] of Object.entries(inputs)) {
+    biome.values[name] = map[native];
+    biome.prepared[name] = {
+      coefficients: map.continuous!.coefficients[native],
+      adaptive: map.continuous!.adaptive[native],
+      transform: { scale, offset },
+    };
   }
-  biome.values.elevation = Float64Array.from(
-    map.Elevation,
-    (value) => (value - map.BaseSeaLevel) / 1024
-  );
   protectBiome(work, biome);
-  grid.reconstruction ??= { support: physicalSupport(map.mesh), channels: {} };
-  grid.reconstruction.biome = biome;
+  (grid.geography ??= {}).biome = biome;
 }
 function protectBiome(work: AtlasPhysicalWorkspace, biome: BiomeSamples) {
   for (const fixed of work.fixed) {
     if (fixed.binding.native !== "BiomeCodes") continue;
+    if (fixed.source)
+      for (const [code, footprint] of categoryRegions(fixed.source, "biome", fixed.footprint))
+        biome.protectedRegions!.push({ code, footprint });
     for (let i = 0; i < fixed.values.length; i++)
       if (Number.isFinite(fixed.values[i])) biome.protectedMask[i] = 1;
   }

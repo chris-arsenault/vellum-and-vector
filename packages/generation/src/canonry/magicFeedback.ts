@@ -54,6 +54,7 @@ export function magicCoastalFeedback(state: GenerationState, context?: MapProces
     magic = work.magic!,
     map = work.map;
   const epoch = coastalEpoch(context);
+  for (const field of magic.fields) (field.pendingOccurrences ??= {}).coastalFirstEpoch = epoch;
   for (let i = 0; i < map.mesh.count; i++) {
     let total = 0;
     for (const field of magic.fields) {
@@ -93,6 +94,7 @@ export function retainMagicHistory(state: GenerationState, context: MapProcessCo
   const map = state.physical!.map,
     index = coastalEpoch(context);
   for (const field of state.physical!.magic!.fields) {
+    (field.pendingOccurrences ??= {}).firstEpoch = index;
     const retention = field.definition.history;
     let active = 0,
       maximum = 0;

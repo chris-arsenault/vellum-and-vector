@@ -1,128 +1,25 @@
-import { replaceChannel, type MagicCondition } from "@atlas/domain";
+import {
+  replaceChannel,
+  geometryParts,
+  spatial,
+  putChannel,
+  type PreparedChannelData,
+} from "@atlas/domain";
+import type { Geometry } from "geojson";
 import type { GenerationState } from "../process";
 import type { MagicField } from "./magicState";
 import { magicKey } from "./magicState";
 import { classifyNaturalSurface } from "./naturalSurface";
-import { unitNoise, hashUnit } from "./noise";
 import { projectedValues } from "./atlasSampling";
-import { physicalSupport } from "./physicalSupport";
 import {
   magicChannels,
   magicFieldDefinitions,
   publishedMagicChannels,
 } from "./magicFieldDefinitions";
+import { magicRegionCompiler } from "./magicRegionField";
+import { any, regionTracer } from "./causalRegions";
+import { sampleCategory } from "./categoryGeography";
 
-function conditionReader(
-  state: GenerationState,
-  field: MagicField,
-  test: MagicCondition,
-  seed: number
-) {
-  const { map, magic } = state.physical!;
-  const key = test.field;
-  if (key.startsWith("system:"))
-    return (i: number) =>
-      magic!.fields.find((candidate) => candidate.definition.id === key.slice(7))?.intensity[i] ??
-      0;
-  const values: Record<string, ArrayLike<number>> = {
-    intensity: field.intensity,
-    history: field.history,
-    source: field.source,
-    wake: field.wake,
-    rogue: field.rogue,
-    stored: field.stored,
-    coastalHistory: field.coastalHistory,
-    firstEpoch: field.firstEpoch,
-    coastalFirstEpoch: field.coastalFirstEpoch,
-    temperature: map.Temperature,
-    ice: map.IceThickness,
-    water: map.WaterKindCodes,
-    moisture: map.Moisture,
-    geothermal: map.Geothermal,
-    fracture: map.FractureConductance,
-    landform: map.LandformCodes,
-    river: map.RiverOrders,
-    biome: map.BiomeCodes,
-    treeCover: map.TreeCover,
-    wetlandCover: map.WetlandCover,
-    peatCarbon: map.PeatCarbon,
-    oilCarbon: map.OilCarbon,
-    alteredCover: map.AlteredCover,
-    ecologicalAlteration: map.EcologicalAlteration,
-    ecologicalToxicity: map.EcologicalToxicity,
-    soilWater: map.SoilWater,
-    soilDepth: map.SoilDepth,
-    grazers: map.Grazers,
-    browsers: map.Browsers,
-  };
-  if (key === "elevation") return (i: number) => (map.Elevation[i] - map.BaseSeaLevel) / 1024;
-  if (key === "slope") return (i: number) => map.Slope[i];
-  if (key === "noise")
-    return (i: number) =>
-      unitNoise(
-        map.mesh.x[i],
-        map.mesh.y[i],
-        test.salt ?? 0x621d,
-        field.definition.parameters.featureNoiseScale,
-        1
-      );
-  if (key === "scatter")
-    return (i: number) =>
-      hashUnit(
-        seed ^ (test.salt ?? 0),
-        Math.floor(map.mesh.x[i] / field.definition.parameters.featureNoiseScale),
-        Math.floor(map.mesh.y[i] / field.definition.parameters.featureNoiseScale) ^
-          (test.index ?? 0)
-      );
-  const array = values[key];
-  return (i: number) => array?.[i] ?? 0;
-}
-function matcher(
-  state: GenerationState,
-  field: MagicField,
-  groups: MagicCondition[][],
-  seed: number
-) {
-  const conditions = groups.map((group) =>
-    group.map((test) => {
-      const read = conditionReader(state, field, test, seed);
-      return (i: number) => {
-        const value = read(i);
-        return (
-          value >= (test.min ?? -Infinity) &&
-          value <= (test.max ?? Infinity) &&
-          (!test.values || test.values.includes(value))
-        );
-      };
-    })
-  );
-  return (i: number) => conditions.some((group) => group.every((includes) => includes(i)));
-}
-function growRegion(
-  state: GenerationState,
-  field: MagicField,
-  rule: MagicField["definition"]["features"][number],
-  seed: number
-) {
-  const map = state.physical!.map;
-  const included = new Uint8Array(map.mesh.count),
-    queue: number[] = [];
-  const isSeed = matcher(state, field, rule.seeds, seed),
-    retains = matcher(state, field, rule.retains ?? rule.seeds, seed);
-  for (let i = 0; i < map.mesh.count; i++)
-    if (isSeed(i)) {
-      included[i] = 1;
-      queue.push(i);
-    }
-  for (let head = 0; head < queue.length; head++)
-    for (let edge = 0; edge < map.mesh.degree[queue[head]]; edge++) {
-      const j = map.mesh.neighbors[queue[head] * map.mesh.stride + edge];
-      if (j < 0 || included[j] || !retains(j)) continue;
-      included[j] = 1;
-      queue.push(j);
-    }
-  return included;
-}
 export function independentInteraction(
   rule: MagicField["definition"]["features"][number],
   owner: string
@@ -140,9 +37,13 @@ export function effectiveMagicRules(system: MagicField["definition"]) {
   );
 }
 export function classifyMagicFeatures(state: GenerationState, seed = state.domain.world.seed) {
-  classifyNaturalSurface(state);
+  if (!state.physical!.map.continuous?.geography) classifyNaturalSurface(state);
   const magic = state.physical!.magic!;
-  const priority = new Float64Array(magic.finalSurface.length).fill(-Infinity);
+  magic.classificationSeed = seed;
+  const categories = state.surface.geography!.categories!;
+  const compile = magicRegionCompiler(state),
+    trace = regionTracer(state);
+  const overlays: { code: number; footprint: Geometry; priority: number }[] = [];
   let code = 100;
   for (const field of magic.fields) {
     field.features = {};
@@ -150,39 +51,56 @@ export function classifyMagicFeatures(state: GenerationState, seed = state.domai
     for (const rule of field.definition.features) {
       const surfaceCode = code++;
       if (!effective.has(rule)) continue;
-      const members = growRegion(state, field, rule, seed);
+      const seedRegion = compile(field, rule.seeds),
+        seeds = trace(seedRegion);
+      const retained = seeds && trace(any(seedRegion, compile(field, rule.retains ?? rule.seeds)));
+      const seedOverlap = seeds && spatial.intersectionArea(seeds);
+      const parts = retained
+        ? geometryParts(retained).filter((part) => {
+            if (part.type !== "Polygon") return false;
+            return seedOverlap!(part) > 0;
+          })
+        : [];
+      const members = new Uint8Array(magic.finalSurface.length),
+        key = magicKey(field, `feature:${rule.id}`);
       field.features[rule.id] = members;
-      for (let i = 0; i < members.length; i++)
-        if (members[i] && rule.priority > priority[i]) {
-          magic.finalSurface[i] = surfaceCode;
-          priority[i] = rule.priority;
-        }
+      categories[key] = {
+        fallback: 0,
+        entries: parts.map((footprint) => ({ code: 1, footprint })),
+      };
+      putChannel(state.surface, key, "category", members, "category");
+      sampleCategory(state, key, members);
+      overlays.push(
+        ...parts.map((footprint) => ({ code: surfaceCode, footprint, priority: rule.priority }))
+      );
     }
   }
+  // Stable ordering preserves the first configured rule when priorities tie.
+  overlays.sort((a, b) => b.priority - a.priority);
+  const natural = categories.naturalSurface;
+  categories.finalSurface = {
+    fallback: natural.fallback,
+    entries: [...overlays.map(({ code, footprint }) => ({ code, footprint })), ...natural.entries],
+  };
+  putChannel(state.surface, "finalSurface", "category", magic.finalSurface, "category");
+  sampleCategory(state, "finalSurface", magic.finalSurface);
 }
 export function projectMagic(state: GenerationState) {
   const work = state.physical!,
     magic = work.magic;
   if (!magic) return;
+  const geography = work.map.continuous?.geography;
+  const categories = geography?.categories && { ...geography.categories };
   const project = (
     key: string,
     unit: string,
     values: ArrayLike<number>,
-    quantity: "intensive" | "extensive" | "category"
+    quantity: "intensive" | "extensive" | "category",
+    prepared?: PreparedChannelData
   ) => {
-    replaceChannel(
-      state.surface,
-      key,
-      unit,
-      projectedMagicValues(state, values, quantity),
-      quantity
-    );
-    if (work.map.mesh.topology || quantity === "extensive") return;
-    state.surface.reconstruction ??= { support: physicalSupport(work.map.mesh), channels: {} };
-    if (quantity === "category") {
-      state.surface.reconstruction.categories ??= {};
-      state.surface.reconstruction.categories[key] = Float64Array.from(values);
-    } else state.surface.reconstruction.channels[key] = Float64Array.from(values);
+    if (quantity === "intensive" && !prepared?.coefficients && !prepared?.adaptive)
+      throw new Error(`Prepare ${key} before publication.`);
+    replaceChannel(state.surface, key, unit, projectedValues(values), quantity, prepared);
   };
   project("naturalSurface", "category", magic.naturalSurface, "category");
   project("finalSurface", "category", magic.finalSurface, "category");
@@ -192,20 +110,13 @@ export function projectMagic(state: GenerationState) {
         magicKey(field, channel),
         magicFieldDefinitions[channel].unit,
         field[channel],
-        magicFieldDefinitions[channel].quantity
+        magicFieldDefinitions[channel].quantity,
+        { coefficients: field.coefficients?.[channel], adaptive: field.adaptive?.[channel] }
       );
     for (const [id, members] of Object.entries(field.features))
       project(magicKey(field, `feature:${id}`), "category", members, "category");
+    for (const [name, entries] of Object.entries(field.occurrences ?? {}))
+      ((state.surface.geography ??= {}).occurrences ??= {})[magicKey(field, name)] = entries;
   }
-}
-function projectedMagicValues(
-  state: GenerationState,
-  values: ArrayLike<number>,
-  quantity: "intensive" | "extensive" | "category"
-) {
-  const work = state.physical!;
-  if (quantity !== "extensive" || !work.interpolation)
-    return projectedValues(work, values, quantity === "category");
-  const density = Float64Array.from(work.map.mesh.areas, (area, i) => values[i] / area);
-  return projectedValues(work, density).map((value, i) => value * state.surface.measures[i]);
+  if (categories) (state.surface.geography ??= {}).categories = categories;
 }

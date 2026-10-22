@@ -93,14 +93,24 @@ export function derivativeEnclosure(
   center: number,
   halfSize: Interval
 ): SampleEnclosure {
-  if (terms.some((t) => !Number.isFinite(t.weightHigh)) || !terms.some((t) => t.weightLow > 0))
+  if (terms.every((t) => t.low === range[0] && t.high === range[0] && t.gx === 0 && t.gy === 0))
     return {
       range,
       gradient: [
-        [-Infinity, Infinity],
-        [-Infinity, Infinity],
+        [0, 0],
+        [0, 0],
       ],
     };
+  if (terms.some((t) => !Number.isFinite(t.weightHigh)) || !terms.some((t) => t.weightLow > 0))
+    return (
+      cardinalEnclosure(terms, range, radius2) ?? {
+        range,
+        gradient: [
+          [-Infinity, Infinity],
+          [-Infinity, Infinity],
+        ],
+      }
+    );
   const gx = weightedDerivative(
       terms,
       range,
@@ -126,4 +136,51 @@ export function derivativeEnclosure(
     ],
     gradient: [gx, gy],
   };
+}
+
+/** Divide the cardinal rational basis by its singular anchor weight. The
+ * resulting ratios and their derivatives remain finite, including at the node. */
+function cardinalEnclosure(
+  terms: Term[],
+  range: Interval,
+  radius2: number
+): SampleEnclosure | null {
+  const anchor = terms.reduce((a, b) => (a.far < b.far ? a : b));
+  if (anchor.far >= radius2 || terms.some((t) => t !== anchor && t.near === 0)) return null;
+  const inverse = (s: number) => s / (1 - s / radius2) ** 4;
+  const inverseDerivative = (s: number) => (1 + (3 * s) / radius2) / (1 - s / radius2) ** 5;
+  const reciprocal: Interval = [inverse(anchor.near), inverse(anchor.far)];
+  const reciprocalSlope: Interval = [
+    2 * inverseDerivative(anchor.near),
+    2 * inverseDerivative(anchor.far),
+  ];
+  const ratios = terms.map((t) =>
+    t === anchor ? ([1, 1] as Interval) : multiply([t.weightLow, t.weightHigh], reciprocal)
+  );
+  const denominator: Interval = [
+    ratios.reduce((s, r) => s + r[0], 0),
+    ratios.reduce((s, r) => s + r[1], 0),
+  ];
+  const gradient = (axis: "dx" | "dy", slope: "gx" | "gy"): Interval => {
+    const dr = multiply(reciprocalSlope, anchor[axis]);
+    let low = 0,
+      high = 0;
+    terms.forEach((t, i) => {
+      const jet = multiply(ratios[i], [t[slope], t[slope]]);
+      let contribution: Interval = [0, 0];
+      if (t !== anchor) {
+        const dw = multiply(
+          [2 * weightDerivative(t.near, radius2), 2 * weightDerivative(t.far, radius2)],
+          t[axis]
+        );
+        const a = multiply(dw, reciprocal),
+          b = multiply([t.weightLow, t.weightHigh], dr);
+        contribution = multiply([a[0] + b[0], a[1] + b[1]], [t.low - range[1], t.high - range[0]]);
+      }
+      low += jet[0] + contribution[0];
+      high += jet[1] + contribution[1];
+    });
+    return multiply([low, high], [1 / denominator[1], 1 / denominator[0]]);
+  };
+  return { range, gradient: [gradient("dx", "gx"), gradient("dy", "gy")] };
 }

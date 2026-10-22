@@ -20,13 +20,10 @@ it("publishes the complete causal Draft world with shared continuous field suppo
     quality: "draft",
     domains: ["physical", "magic", "cultural", "political", "built"],
   };
-  const start = performance.now();
-  let stage = start;
   const result = await generateAtlas(source, input, {
     progress(path, _fraction, message) {
-      if (message.startsWith("Starting ")) stage = performance.now();
-      if (message.startsWith("Completed ") && performance.now() - stage > 1000)
-        console.log(path.join("/"), ((performance.now() - stage) / 1000).toFixed(2), "s");
+      if (message.startsWith("Starting ") || message.startsWith("Completed "))
+        console.log(path.join("/"), message);
     },
   });
   const grid = result.state.surface,
@@ -38,7 +35,7 @@ it("publishes the complete causal Draft world with shared continuous field suppo
     serialize({ grid, features })
   );
   expect(result.state.history).toHaveLength(source.world.epochs.length);
-  expect(grid.reconstruction?.biome).toBeDefined();
+  expect(grid.geography?.biome).toBeDefined();
   for (const kind of ["river", "lake", "forest", "settlement", "sovereignty"])
     expect(
       Object.values(features).some((f) => f.kind === kind),
@@ -53,7 +50,7 @@ it("publishes the complete causal Draft world with shared continuous field suppo
   for (const field of published.world.fields) {
     const data = published.numerical[field.id];
     expect(() => gridSurfaceSchema.parse(data)).not.toThrow();
-    if (field.channels?.includes("water")) expect(data.reconstruction?.water).toBeDefined();
+    if (field.channels?.includes("water")) expect(data.geography?.water).toBeDefined();
     for (const channel of field.channels ?? []) {
       const p = { x: 1_234_567, y: 1_345_678, z: 0 };
       expect(fieldInterpolator(data, channel)(p)).toBeCloseTo(
@@ -64,10 +61,8 @@ it("publishes the complete causal Draft world with shared continuous field suppo
   }
   console.log(
     JSON.stringify({
-      seconds: (performance.now() - start) / 1000,
-      peakRssMiB: process.resourceUsage().maxRSS / 1024,
       features: Object.keys(features).length,
-      classificationCodes: grid.reconstruction!.biome!.codes,
+      classificationCodes: grid.geography!.biome!.codes,
     })
   );
 }, 600_000);

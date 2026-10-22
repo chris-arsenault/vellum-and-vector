@@ -1,4 +1,5 @@
 export * from "./model";
+export { provinceEntries, type ProvincePartition, type ProvinceField } from "./tectonicField";
 export * from "./magicSystems";
 export * from "./magicEffects";
 export * from "./magicPresets";
@@ -64,4 +65,10 @@ export * from "./adaptivePoint";
 export * from "./fieldContours";
 export * from "./snapshot";
 export * from "./smoothSamples";
+export { sampleCombination } from "./sampleCombination";
+export * from "./sampledGrid";
+export * from "./preparedField";
 export * from "./biomeField";
+export type { EncloseSegment } from "./sampleSegmentBounds";
+export { samplePositiveSupport } from "./samplePositiveSupport";
+export { categoryRegions } from "./categoryRegions";

@@ -1,47 +1,62 @@
 import type { Geometry } from "geojson";
 import type { AdaptiveField } from "./adaptiveField";
-import { adaptiveCell } from "./adaptiveTopology";
-import { reconstructAdaptive, sampleAdaptive } from "./adaptiveReconstruction";
-import { preparedAdaptivePolynomial, type PreparedAdaptiveCell } from "./adaptiveHermite";
+import { adaptiveCell, type AdaptiveTopology } from "./adaptiveTopology";
+import { preparedAdaptiveInterpolator, type PreparedAdaptiveCoefficients } from "./adaptivePoint";
+import type { PreparedAdaptiveCell } from "./adaptiveHermite";
+import { bernsteinPatchInterval } from "./bernsteinPatch";
 import { visitAdaptiveOverlap } from "./adaptiveTransfer";
 import { geometryParts } from "./composition";
 import { rectangle, spatial, type Bounds } from "./spatial";
 
 type Piece = { box: Bounds; region: Geometry; i: number };
-function bernstein(v: number[]) {
-  const a = 256 * v[1] - 81 * v[0] - v[4],
-    b = 16 * v[2] - v[0] - v[4],
-    c = 256 * v[3] - v[0] - 81 * v[4];
-  const sum = (a + c - 18 * b) / 48,
-    difference = (a - c) / 96;
-  return [v[0], (sum + difference) / 2, (b - 4 * sum) / 6, (sum - difference) / 2, v[4]];
-}
-function interval(
-  field: AdaptiveField,
+export function adaptiveInterval(
+  topology: AdaptiveTopology,
   cell: PreparedAdaptiveCell,
-  piece: Piece
+  piece: Pick<Piece, "box" | "i">,
+  positiveSupport = false
 ): [number, number] {
-  const b = adaptiveCell(field.topology, piece.i),
+  if (cell.low === cell.high) return [cell.low, cell.high];
+  const bounds = polynomialInterval(topology, cell, piece);
+  if (positiveSupport && cell.low === 0) return bounds;
+  const clamp = (value: number) => Math.max(cell.low, Math.min(cell.high, value));
+  return [clamp(bounds[0]), clamp(bounds[1])];
+}
+export function adaptiveGradientInterval(
+  topology: AdaptiveTopology,
+  cell: PreparedAdaptiveCell,
+  piece: Pick<Piece, "box" | "i">,
+  axis: 0 | 1,
+  positiveSupport = false
+): [number, number] {
+  if (cell.low === cell.high) return [0, 0];
+  if (positiveSupport && cell.low === 0) return polynomialInterval(topology, cell, piece, axis);
+  const value = polynomialInterval(topology, cell, piece);
+  if (value[1] <= cell.low || value[0] >= cell.high || cell.low === cell.high) return [0, 0];
+  const bounds = polynomialInterval(topology, cell, piece, axis);
+  return value[0] < cell.low || value[1] > cell.high
+    ? [Math.min(0, bounds[0]), Math.max(0, bounds[1])]
+    : bounds;
+}
+function polynomialInterval(
+  topology: AdaptiveTopology,
+  cell: PreparedAdaptiveCell,
+  piece: Pick<Piece, "box" | "i">,
+  derivative?: 0 | 1
+): [number, number] {
+  const b = adaptiveCell(topology, piece.i),
     p = piece.box;
-  const controls = Array.from({ length: 5 }, (_, y) =>
-    bernstein(
-      Array.from({ length: 5 }, (_, x) =>
-        preparedAdaptivePolynomial(
-          cell,
-          (p[0] + ((p[2] - p[0]) * x) / 4 - b[0]) / (b[2] - b[0]),
-          (p[1] + ((p[3] - p[1]) * y) / 4 - b[1]) / (b[3] - b[1])
-        )
-      )
-    )
+  const interval = bernsteinPatchInterval(
+    cell.bernstein,
+    [
+      (p[0] - b[0]) / (b[2] - b[0]),
+      (p[1] - b[1]) / (b[3] - b[1]),
+      (p[2] - b[0]) / (b[2] - b[0]),
+      (p[3] - b[1]) / (b[3] - b[1]),
+    ],
+    derivative
   );
-  for (let x = 0; x < 5; x++) {
-    const column = bernstein(controls.map((row) => row[x]));
-    for (let y = 0; y < 5; y++) controls[y][x] = column[y];
-  }
-  return [
-    Math.max(cell.low, Math.min(...controls.flat())),
-    Math.min(cell.high, Math.max(...controls.flat())),
-  ];
+  const scale = derivative === undefined ? 1 : b[derivative + 2] - b[derivative];
+  return [interval[0] / scale, interval[1] / scale];
 }
 function positions(geometry: Geometry): number[][] {
   return geometryParts(geometry).flatMap((g) => {
@@ -77,47 +92,52 @@ export function adaptiveExtrema(
   channel: string,
   region: Geometry
 ): [number, number] | null {
-  const values = field.channels[channel],
-    surface = reconstructAdaptive(field.topology, values);
-  const discrete = discreteChannel(field, channel);
+  const values = field.channels[channel];
+  if (!discreteChannel(field, channel)) {
+    const prepared = field.prepared?.adaptive?.[channel];
+    if (!prepared) throw new Error(`Prepare ${channel} before reading its extrema.`);
+    return preparedAdaptiveExtrema(prepared, region);
+  }
   let low = Infinity,
     high = -Infinity;
-  const pending: Piece[] = [];
   visitAdaptiveOverlap(field.topology, spatial.bounds(region), (i) => {
     const box = adaptiveCell(field.topology, i),
       shape = rectangle(box);
     if (!spatial.intersects(region, shape)) return;
-    if (discrete) {
-      low = Math.min(low, values[i]);
-      high = Math.max(high, values[i]);
-      return;
-    }
-    if (spatial.covers(region, shape)) {
-      const c = surface.corners.subarray(i * 4, i * 4 + 4);
-      low = Math.min(low, values[i], ...c);
-      high = Math.max(high, values[i], ...c);
-    } else {
-      const clipped = spatial.intersection(region, shape);
-      if (clipped) pending.push({ i, box, region: clipped });
-    }
+    low = Math.min(low, values[i]);
+    high = Math.max(high, values[i]);
   });
+  return low === Infinity ? null : [low, high];
+}
+
+/** Extrema of delivered patches; no fitting or copied numerical field. */
+export function preparedAdaptiveExtrema(field: PreparedAdaptiveCoefficients, region: Geometry) {
+  const at = preparedAdaptiveInterpolator(field),
+    pending: Piece[] = [];
+  visitAdaptiveOverlap(field.topology, spatial.bounds(region), (i) => {
+    const box = adaptiveCell(field.topology, i),
+      clipped = spatial.intersection(region, rectangle(box));
+    if (clipped) pending.push({ i, box, region: clipped });
+  });
+  let low = Infinity,
+    high = -Infinity;
   while (pending.length) {
     const piece = pending.pop()!,
-      b = piece.box;
+      box = piece.box;
     const points = positions(piece.region),
-      middle = { x: (b[0] + b[2]) / 2, y: (b[1] + b[3]) / 2, z: 0 };
-    if (spatial.pointCoverage(piece.region)(middle)) points.push([middle.x, middle.y]);
+      center = { x: (box[0] + box[2]) / 2, y: (box[1] + box[3]) / 2, z: 0 };
+    if (spatial.pointCoverage(piece.region)(center)) points.push([center.x, center.y]);
     for (const [x, y] of points) {
-      const value = sampleAdaptive(surface, x, y);
+      const value = at(x, y);
       low = Math.min(low, value);
       high = Math.max(high, value);
     }
-    const [minimum, maximum] = interval(field, surface.cells[piece.i], piece);
+    const [minimum, maximum] = adaptiveInterval(field.topology, field.cells[piece.i], piece);
     if (minimum >= low - spatial.precision && maximum <= high + spatial.precision) continue;
-    if (Math.max(b[2] - b[0], b[3] - b[1]) <= spatial.precision) {
+    if (Math.max(box[2] - box[0], box[3] - box[1]) <= spatial.precision) {
       low = Math.min(low, minimum);
       high = Math.max(high, maximum);
     } else pending.push(...split(piece));
   }
-  return low === Infinity ? null : [low, high];
+  return low === Infinity ? null : ([low, high] as [number, number]);
 }

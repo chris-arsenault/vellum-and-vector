@@ -1,4 +1,4 @@
-import type { Geometry, Position as Coordinate } from "geojson";
+import type { Geometry, LineString, Position as Coordinate } from "geojson";
 import GeoJSONReader from "jsts/org/locationtech/jts/io/GeoJSONReader.js";
 import GeoJSONWriter from "jsts/org/locationtech/jts/io/GeoJSONWriter.js";
 import GeometryFactory from "jsts/org/locationtech/jts/geom/GeometryFactory.js";
@@ -8,7 +8,11 @@ import RelateOp from "jsts/org/locationtech/jts/operation/relate/RelateOp.js";
 import OverlayOp from "jsts/org/locationtech/jts/operation/overlay/OverlayOp.js";
 import DistanceOp from "jsts/org/locationtech/jts/operation/distance/DistanceOp.js";
 import BufferOp from "jsts/org/locationtech/jts/operation/buffer/BufferOp.js";
+import VariableBuffer from "jsts/org/locationtech/jts/operation/buffer/VariableBuffer.js";
+import CoordinatePrecisionReducerFilter from "jsts/org/locationtech/jts/precision/CoordinatePrecisionReducerFilter.js";
 import GeometryPrecisionReducer from "jsts/org/locationtech/jts/precision/GeometryPrecisionReducer.js";
+import ConvexHull from "jsts/org/locationtech/jts/algorithm/ConvexHull.js";
+import RectangleLineIntersector from "jsts/org/locationtech/jts/algorithm/RectangleLineIntersector.js";
 import UnaryUnionOp from "jsts/org/locationtech/jts/operation/union/UnaryUnionOp.js";
 import IndexedPointInAreaLocator from "jsts/org/locationtech/jts/algorithm/locate/IndexedPointInAreaLocator.js";
 import Location from "jsts/org/locationtech/jts/geom/Location.js";
@@ -19,6 +23,7 @@ import CoordinatePoint from "jsts/org/locationtech/jts/geom/Coordinate.js";
 import type { Frame, Position } from "./model";
 import { frameSchema, geometrySchema } from "./schemas";
 import { requireThat } from "./errors";
+import { polygonOverlay, partitionPolygon, nodedPolygonOverlay } from "./polygonOverlay";
 
 interface Shape {
   isRectangle(): boolean;
@@ -26,6 +31,8 @@ interface Shape {
   normalize(): void;
   getGeometryType(): string;
   getBoundary(): Shape;
+  getNumGeometries(): number;
+  getGeometryN(index: number): Shape;
   getCoordinates(): { x: number; y: number; z: number }[];
   getArea(): number;
   getLength(): number;
@@ -51,7 +58,10 @@ export class Spatial {
       "Precision must be positive."
     );
     this.model = new PrecisionModel(1 / precision);
-    this.reader = new GeoJSONReader(new GeometryFactory(this.model, 0));
+    // Quantize complete geometries at the API boundary. Fixed-precision edge
+    // intersections in the legacy JSTS overlay can move a crossing off its
+    // segment without renoding adjacent edges; overlay arithmetic stays floating.
+    this.reader = new GeoJSONReader(new GeometryFactory());
   }
 
   read(value: Geometry): Shape {
@@ -71,8 +81,30 @@ export class Spatial {
   }
 
   private write(shape: Shape): Geometry | null {
+    if (shape.getGeometryType() === "GeometryCollection") {
+      const geometries = Array.from({ length: shape.getNumGeometries() }, (_, i) =>
+        this.write(shape.getGeometryN(i))
+      ).filter((part): part is Geometry => part !== null);
+      return geometries.length ? { type: "GeometryCollection", geometries } : null;
+    }
+    const original = shape;
+    shape = GeometryPrecisionReducer.reduce(shape, this.model) as Shape;
     if (shape.isEmpty()) return null;
-    if (["Polygon", "MultiPolygon"].includes(shape.getGeometryType())) shape.normalize();
+    if (["Polygon", "MultiPolygon"].includes(shape.getGeometryType())) {
+      if (!IsValidOp.isValid(shape)) {
+        // Reduction can create touching slivers even from a valid overlay.
+        // Re-node its boundary at the same declared precision before delivery.
+        const noded = nodedPolygonOverlay(original, original, this.model, "union") as Shape | null;
+        if (!noded) return null;
+        shape = GeometryPrecisionReducer.reduce(noded, this.model) as Shape;
+        requireThat(
+          IsValidOp.isValid(shape),
+          "invalid_geometry",
+          "Polygon output must be topologically valid."
+        );
+      }
+      shape.normalize();
+    }
     const coordinates = shape.getCoordinates();
     let index = 0;
     const restoreZeroZ = (geometry: Geometry): Geometry =>
@@ -91,6 +123,10 @@ export class Spatial {
 
   canonical(value: Geometry): Geometry {
     return this.write(this.read(value))!;
+  }
+
+  convexHull(value: Geometry): Geometry {
+    return this.write(new ConvexHull(this.read(value)).getConvexHull() as Shape)!;
   }
 
   covers(a: Geometry, b: Geometry): boolean {
@@ -144,23 +180,30 @@ export class Spatial {
     const shape = this.read(footprint),
       locator = new IndexedPointInAreaLocator(shape),
       boundary = new STRtree(),
-      coordinates = shape.getCoordinates();
-    for (let i = 1; i < coordinates.length; i++) {
-      const a = coordinates[i - 1],
-        b = coordinates[i];
-      boundary.insert(new Envelope(a.x, b.x, a.y, b.y), {});
+      rings = shape.getBoundary();
+    for (let ring = 0; ring < rings.getNumGeometries(); ring++) {
+      const coordinates = rings.getGeometryN(ring).getCoordinates();
+      for (let i = 1; i < coordinates.length; i++) {
+        const a = coordinates[i - 1],
+          b = coordinates[i];
+        boundary.insert(new Envelope(a.x, b.x, a.y, b.y), [a, b]);
+      }
     }
-    return (box) =>
-      !boundary
-        .query(
-          new Envelope(
-            box[0] - this.precision,
-            box[2] + this.precision,
-            box[1] - this.precision,
-            box[3] + this.precision
-          )
-        )
-        .isEmpty() || locator.locate(new CoordinatePoint(box[0], box[1])) !== Location.EXTERIOR;
+    return (box) => {
+      const envelope = new Envelope(
+          box[0] - this.precision,
+          box[2] + this.precision,
+          box[1] - this.precision,
+          box[3] + this.precision
+        ),
+        intersector = new RectangleLineIntersector(envelope),
+        candidates = boundary.query(envelope).iterator();
+      while (candidates.hasNext()) {
+        const [a, b] = candidates.next();
+        if (intersector.intersects(a, b)) return true;
+      }
+      return locator.locate(new CoordinatePoint(box[0], box[1])) !== Location.EXTERIOR;
+    };
   }
   distance(a: Geometry, b: Geometry): number {
     return DistanceOp.distance(this.read(a), this.read(b)) as number;
@@ -172,15 +215,30 @@ export class Spatial {
     return this.read(value).getLength();
   }
   intersection(a: Geometry, b: Geometry): Geometry | null {
-    return this.write(OverlayOp.intersection(this.read(a), this.read(b)) as Shape);
+    const result = polygonOverlay(
+      this.read(a),
+      this.read(b),
+      this.model,
+      "intersection"
+    ) as Shape | null;
+    return result ? this.write(result) : null;
   }
   /** Reuse a validated footprint and measure intersections without a GeoJSON round trip. */
   intersectionArea(footprint: Geometry): (geometry: Geometry) => number {
     const shape = this.read(footprint);
-    return (geometry) => (OverlayOp.intersection(this.read(geometry), shape) as Shape).getArea();
+    return (geometry) => {
+      const result = polygonOverlay(this.read(geometry), shape, this.model, "intersection");
+      return result ? (GeometryPrecisionReducer.reduce(result, this.model) as Shape).getArea() : 0;
+    };
   }
   difference(a: Geometry, b: Geometry): Geometry | null {
-    return this.write(OverlayOp.difference(this.read(a), this.read(b)) as Shape);
+    const result = polygonOverlay(
+      this.read(a),
+      this.read(b),
+      this.model,
+      "difference"
+    ) as Shape | null;
+    return result ? this.write(result) : null;
   }
   /** Subtract one fixed mask from many features without rebuilding its spatial index. */
   differenceFrom(mask: Geometry): (geometry: Geometry) => Geometry | null {
@@ -202,11 +260,12 @@ export class Spatial {
         const p = candidate.getCoordinates()[0];
         return locator.locate(p) === Location.EXTERIOR ? geometry : null;
       }
-      return this.write(OverlayOp.difference(candidate, shape) as Shape);
+      const result = polygonOverlay(candidate, shape, this.model, "difference") as Shape | null;
+      return result ? this.write(result) : null;
     };
   }
   union(a: Geometry, b: Geometry): Geometry {
-    return this.write(OverlayOp.union(this.read(a), this.read(b)) as Shape)!;
+    return this.write(polygonOverlay(this.read(a), this.read(b), this.model, "union") as Shape)!;
   }
   unionAll(geometries: Geometry[]): Geometry {
     requireThat(geometries.length > 0, "invalid_geometry", "Union requires at least one geometry.");
@@ -217,9 +276,30 @@ export class Spatial {
   nodeLines(value: Geometry): Geometry {
     return this.write(UnaryUnionOp.union(this.read(value)) as Shape)!;
   }
+  partition(footprint: Geometry, sections: LineString[]): Geometry[] {
+    return partitionPolygon(
+      this.read(footprint),
+      sections.map((section) => this.read(section)),
+      this.model
+    ).map((face: Shape) => this.write(face)!);
+  }
   buffer(value: Geometry, metres: number): Geometry | null {
     requireThat(Number.isFinite(metres), "invalid_distance", "Buffer distance must be finite.");
     return this.write(BufferOp.bufferOp(this.read(value), metres) as Shape);
+  }
+  variableBuffer(value: LineString, radii: number[]): Geometry | null {
+    requireThat(
+      radii.length === value.coordinates.length &&
+        radii.every((radius) => Number.isFinite(radius) && radius >= 0),
+      "invalid_distance",
+      "Each line station requires a finite nonnegative radius."
+    );
+    const line = this.reader.read(geometrySchema.parse(value));
+    // Keep duplicate vertices: each one owns its corresponding physical radius.
+    // VariableBuffer handles coincident disks; normal geometry reduction would
+    // remove coordinates without removing the matching radius entries.
+    line.apply(new CoordinatePrecisionReducerFilter(this.model));
+    return this.write(VariableBuffer.buffer(line, radii) as Shape);
   }
   bounds(value: Geometry): Bounds {
     const e = this.read(value).getEnvelopeInternal();
@@ -241,6 +321,14 @@ export class Spatial {
 }
 
 export const spatial = new Spatial();
+/** Prepared index over immutable bounds, backed by the shared JSTS STRtree. */
+export function boundsIndex<T>(entries: Iterable<{ bounds: Bounds; value: T }>) {
+  const tree = new STRtree();
+  for (const { bounds: b, value } of entries)
+    tree.insert(new Envelope(b[0], b[2], b[1], b[3]), value);
+  tree.build();
+  return (b: Bounds): T[] => tree.query(new Envelope(b[0], b[2], b[1], b[3])).toArray();
+}
 export const point = (p: Position): Geometry => ({
   type: "Point",
   coordinates: [p.x, p.y],

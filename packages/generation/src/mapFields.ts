@@ -1,4 +1,4 @@
-import { requireThat, type Grid } from "@atlas/domain";
+import { requireThat, channelValues, type Grid } from "@atlas/domain";
 import type { FieldSummary } from "./process";
 
 export function requireChannel(grid: Grid, name: string, unit: string): Float64Array {
@@ -11,7 +11,7 @@ export function requireChannel(grid: Grid, name: string, unit: string): Float64A
     "physical_channel",
     `${name} requires finite ${unit} samples on the working grid.`
   );
-  return values;
+  return channelValues(grid, name);
 }
 
 export function summarizeChannel(grid: Grid, name: string): FieldSummary {

@@ -1,16 +1,13 @@
 import type { Geometry } from "geojson";
-import GeoJSONReader from "jsts/org/locationtech/jts/io/GeoJSONReader.js";
-import GeoJSONWriter from "jsts/org/locationtech/jts/io/GeoJSONWriter.js";
-import GeometryFactory from "jsts/org/locationtech/jts/geom/GeometryFactory.js";
-import Polygonizer from "jsts/org/locationtech/jts/operation/polygonize/Polygonizer.js";
-import UnaryUnionOp from "jsts/org/locationtech/jts/operation/union/UnaryUnionOp.js";
-import InteriorPointArea from "jsts/org/locationtech/jts/algorithm/InteriorPointArea.js";
+import { polygonize } from "./contourPolygons";
 import { adaptiveCell, adaptiveLeafAt, type AdaptiveTopology } from "./adaptiveTopology";
 import { spatial, type Bounds } from "./spatial";
 import type { RegularGrid } from "./grids";
+import type { SampledGrid } from "./sampledGrid";
 import { refineContourTriangles, arcError } from "./contourRefinement";
 import type { SampleEnclosure } from "./smoothSamples";
 import type { EncloseSegment } from "./sampleSegmentBounds";
+import { anchoredTriangles, anchoredBoundary } from "./contourAnchors";
 
 type Point = [number, number];
 type Edge = { a: Point; b: Point; used: boolean };
@@ -28,30 +25,42 @@ function crossing(
   va: number,
   vb: number,
   level: number,
-  tolerance = 1e-7
+  tolerance = 1e-7,
+  roots?: Set<string>
 ): Point {
-  if (va === level) return a;
-  if (vb === level) return b;
+  if (va === level && roots?.has(key(a))) return a;
+  if (vb === level && roots?.has(key(b))) return b;
   let low = 0,
-    high = 1;
+    high = 1,
+    lowValue = va - level,
+    highValue = vb - level;
   const inside = va > level;
   const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const isBoundary = (t: number) =>
+    valueAt(...mix(a, b, Math.max(0, t - tolerance / length))) > level !==
+    valueAt(...mix(a, b, Math.min(1, t + tolerance / length))) > level;
   const fraction = (level - va) / (vb - va),
     estimate = mix(a, b, fraction);
-  const estimated = valueAt(...estimate);
-  if (Math.abs(estimated - level) <= Number.EPSILON * Math.max(1, Math.abs(va), Math.abs(vb)) * 8)
-    return estimate;
+  if (isBoundary(fraction)) return estimate;
   while ((high - low) * length > tolerance) {
-    const middle = (low + high) / 2,
+    // Safeguarded interpolation retains a shrinking bracket even at plateaus,
+    // while curved polynomial crossings converge without repeated bisection.
+    const ratio = Math.max(0.1, Math.min(0.9, -lowValue / (highValue - lowValue)));
+    const middle = low + (high - low) * ratio,
       point = mix(a, b, middle),
       value = valueAt(...point);
-    if (value === level) return point;
-    if (value > level === inside) low = middle;
-    else high = middle;
+    if (value === level && isBoundary(middle)) return point;
+    if (value > level === inside) {
+      low = middle;
+      lowValue = value - level;
+    } else {
+      high = middle;
+      highValue = value - level;
+    }
   }
   return mix(a, b, (low + high) / 2);
 }
-function prepareQueries(at: Scalar, level: number, tolerance = 1e-7) {
+function prepareQueries(at: Scalar, level: number, tolerance = 1e-7, roots?: Set<string>) {
   const stations = new Map<number, Map<number, number>>(),
     crossings = new Map<string, Point>();
   const sample: Scalar = (x, y) => {
@@ -73,7 +82,7 @@ function prepareQueries(at: Scalar, level: number, tolerance = 1e-7) {
       id = `${key(a)}>${key(b)}`;
     const previous = crossings.get(id);
     if (previous) return previous;
-    const result = crossing(at, a, b, sample(...a), sample(...b), level, tolerance);
+    const result = crossing(at, a, b, sample(...a), sample(...b), level, tolerance, roots);
     crossings.set(id, result);
     return result;
   };
@@ -181,7 +190,9 @@ function rings(edges: Edge[]): Point[][] {
       if (!points.has(id))
         points.set(
           id,
-          edge[side].map((v) => Math.round(v / spatial.precision) * spatial.precision) as Point
+          edge[side].map(
+            (v) => Math.round(v * (1 / spatial.precision)) / (1 / spatial.precision)
+          ) as Point
         );
       edge[side] = points.get(id)!;
     }
@@ -217,26 +228,6 @@ function turn(incoming: Edge, outgoing: Edge) {
     v = outgoing.b[1] - outgoing.a[1];
   return Math.atan2(x * v - y * u, x * u + y * v);
 }
-function polygonize(boundaries: Point[][], at: Scalar, level: number): Geometry | null {
-  if (!boundaries.length) return null;
-  const reader = new GeoJSONReader(new GeometryFactory()),
-    writer = new GeoJSONWriter();
-  const lines = reader.read({ type: "MultiLineString", coordinates: boundaries });
-  // Exact-level plateaus can make closed walks touch or retrace an outer edge.
-  // Node that linework before assembling faces, using the existing GIS engine.
-  const polygonizer = new Polygonizer();
-  polygonizer.add(UnaryUnionOp.union(lines));
-  const polygons: Geometry[] = [];
-  for (const polygon of polygonizer.getPolygons().toArray()) {
-    const probe = InteriorPointArea.getInteriorPoint(polygon);
-    if (at(probe.x, probe.y) > level) polygons.push(writer.write(polygon) as Geometry);
-  }
-  if (!polygons.length) return null;
-  const result = UnaryUnionOp.union(
-    reader.read({ type: "GeometryCollection", geometries: polygons })
-  );
-  return writer.write(result) as Geometry;
-}
 export type LinearContourSample = [number, number, number];
 /** Trace a smooth field on fixed support, including its exact sample sites. */
 export function sampledFieldContour(
@@ -246,32 +237,47 @@ export function sampledFieldContour(
   boundary: Iterable<LinearContourSample[]> = [],
   tolerance = 10,
   enclose?: (box: Bounds) => SampleEnclosure,
-  segment?: EncloseSegment
+  segment?: EncloseSegment,
+  roots: Point[] = []
 ): Geometry | null {
+  const rootKeys = new Set(roots.map(key)),
+    field = roots.length
+      ? (x: number, y: number) => (rootKeys.has(key([x, y])) ? level : at(x, y))
+      : at;
   const edges: Edge[] = [],
-    { sample, cross, clear } = prepareQueries(
-      at,
-      level,
-      Math.max(spatial.precision, Math.min(1, tolerance / 100))
-    );
+    { sample, cross, clear } = prepareQueries(field, level, spatial.precision, rootKeys);
   const positions = function* () {
     for (const triangle of triangles) yield triangle.map(([x, y]) => [x, y] as Point);
   };
   const refined = enclose
-    ? refineContourTriangles(positions(), sample, enclose, level, tolerance, segment)
+    ? refineContourTriangles(
+        anchoredTriangles(positions(), roots),
+        sample,
+        enclose,
+        level,
+        tolerance,
+        segment
+      )
     : null;
   if (refined) clear();
-  for (const triangle of refined?.triangles ?? positions())
+  for (const triangle of refined?.triangles ?? anchoredTriangles(positions(), roots))
     traceTriangle(triangle, sample, level, tolerance, edges, cross, Boolean(refined));
   const outer = function* () {
-    for (const [first, last] of boundary) {
+    const points = function* () {
+      for (const edge of boundary) yield edge.map(([x, y]) => [x, y] as Point);
+    };
+    for (const [first, last] of anchoredBoundary(points(), roots)) {
       if (refined)
         for (const [a, b] of refined.boundary([first[0], first[1]], [last[0], last[1]]))
           yield [
             [...a, 0],
             [...b, 0],
           ] as LinearContourSample[];
-      else yield [first, last];
+      else
+        yield [
+          [...first, 0],
+          [...last, 0],
+        ] as LinearContourSample[];
     }
   };
   closeSmoothBoundary(edges, outer(), sample, cross, level);
@@ -341,12 +347,77 @@ function linearCrossing(p: LinearContourSample, q: LinearContourSample, level: n
 }
 /** Shared face stations keep contours joined; refine curves inside conforming cell fans. */
 export function fieldContour(
-  source: AdaptiveTopology | RegularGrid,
+  source: AdaptiveTopology | RegularGrid | SampledGrid,
   at: Scalar,
   selected?: Iterable<number>,
   level = 0.5,
-  tolerance = 100
+  tolerance = 100,
+  enclose?: (box: Bounds) => SampleEnclosure,
+  segment?: EncloseSegment,
+  scope?: Geometry,
+  roots: Point[] = []
 ): Geometry | null {
+  if ("mesh" in source && source.mesh?.adaptive)
+    return fieldContour(
+      source.mesh.adaptive.topology,
+      at,
+      selected,
+      level,
+      tolerance,
+      enclose,
+      segment,
+      scope,
+      roots
+    );
+  if (enclose || scope || roots.length) {
+    const triangles: LinearContourSample[][] = [],
+      outer = new Map<string, LinearContourSample[]>();
+    const intersects = scope && spatial.boundsIntersectionCandidate(scope);
+    for (const box of contourBoxes(source, selected)) {
+      const center: LinearContourSample = [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2, 0];
+      const adjacent: Bounds[] = [];
+      if ("leaves" in source) {
+        const leaf = adaptiveLeafAt(source, center[0], center[1]);
+        for (let edge = source.offsets[leaf]; edge < source.offsets[leaf + 1]; edge++)
+          adjacent.push(adaptiveCell(source, source.neighbors[edge]));
+      }
+      const points = boundary(box, adjacent);
+      for (let i = 0; i < points.length; i++) {
+        const a = points[i],
+          b = points[(i + 1) % points.length];
+        const triangle: LinearContourSample[] = [center, [...a, 0], [...b, 0]];
+        if (
+          intersects &&
+          !intersects([
+            Math.min(center[0], a[0], b[0]),
+            Math.min(center[1], a[1], b[1]),
+            Math.max(center[0], a[0], b[0]),
+            Math.max(center[1], a[1], b[1]),
+          ])
+        )
+          continue;
+        triangles.push(triangle);
+        triangle.forEach((p, i) => {
+          const q = triangle[(i + 1) % 3],
+            first = key([p[0], p[1]]),
+            last = key([q[0], q[1]]),
+            id = first < last ? `${first}>${last}` : `${last}>${first}`;
+          if (outer.has(id)) outer.delete(id);
+          else outer.set(id, [p, q]);
+        });
+      }
+    }
+    return sampledFieldContour(
+      triangles,
+      at,
+      level,
+      outer.values(),
+      tolerance,
+      enclose,
+      segment,
+      roots
+    );
+  }
   const edges: Edge[] = [];
   const { sample, cross } = prepareQueries(at, level);
   for (const box of contourBoxes(source, selected)) {
@@ -367,16 +438,21 @@ export function fieldContour(
   }
   return polygonize(rings(edges.filter((edge) => key(edge.a) !== key(edge.b))), sample, level);
 }
-function* contourBoxes(source: AdaptiveTopology | RegularGrid, leaves?: Iterable<number>) {
+function* contourBoxes(
+  source: AdaptiveTopology | RegularGrid | SampledGrid,
+  leaves?: Iterable<number>
+) {
   if ("leaves" in source) {
     for (const leaf of leaves ?? source.leaves.keys()) yield adaptiveCell(source, leaf);
     return;
   }
   const [x0, y0, x1, y1] = source.bounds,
-    dx = (x1 - x0) / (source.width - 1),
-    dy = (y1 - y0) / (source.height - 1);
-  for (let y = 0; y < source.height - 1; y++)
-    for (let x = 0; x < source.width - 1; x++)
+    width = source.mesh ? Math.ceil((x1 - x0) / source.mesh.spacing) + 1 : source.width,
+    height = source.mesh ? Math.ceil((y1 - y0) / source.mesh.spacing) + 1 : source.height,
+    dx = (x1 - x0) / (width - 1),
+    dy = (y1 - y0) / (height - 1);
+  for (let y = 0; y < height - 1; y++)
+    for (let x = 0; x < width - 1; x++)
       yield [x0 + x * dx, y0 + y * dy, x0 + (x + 1) * dx, y0 + (y + 1) * dy] as Bounds;
 }
 /** Reconstruction uses incident-cell gradients, so include their complete three-face stencil. */

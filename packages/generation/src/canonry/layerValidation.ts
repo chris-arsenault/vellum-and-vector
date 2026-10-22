@@ -9,7 +9,7 @@ import { edgeLeadingTo } from "./mesh";
 import { isGrounded } from "./glacierSurface";
 
 type IntegerName = {
-  [K in keyof PhysicalField]: PhysicalField[K] extends Int32Array ? K : never;
+  [K in keyof PhysicalField]-?: PhysicalField[K] extends Int32Array ? K : never;
 }[keyof PhysicalField];
 function scalar(map: PhysicalField, name: IntegerName, low = 0, high = 1000) {
   for (const value of map[name])

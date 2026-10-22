@@ -1,5 +1,6 @@
 import type { Position } from "./model";
 import { gridPosition, neighbors, fieldInterpolator, type Grid, type GridSurface } from "./grids";
+import { channelValues, prepareGridChannel } from "./preparedField";
 
 export interface BrushInput {
   center: Position;
@@ -11,7 +12,7 @@ export interface BrushInput {
   falloff: "linear" | "smooth" | "constant";
 }
 export function applyFieldBrush(data: BrushInput, source: GridSurface, grid: Grid) {
-  const values = grid.channels[data.channel],
+  const values = channelValues(grid, data.channel).slice(),
     valueAt = fieldInterpolator(source, data.channel);
   for (let i = 0; i < values.length; i++) {
     const distance = strokeDistance(gridPosition(grid, i), data.stroke ?? [data.center]);
@@ -21,6 +22,14 @@ export function applyFieldBrush(data: BrushInput, source: GridSurface, grid: Gri
         data.falloff === "constant" ? 1 : data.falloff === "linear" ? t : t * t * (3 - 2 * t);
     values[i] = brushValue(data, grid, valueAt, i, weight);
   }
+  grid.channels[data.channel] = values;
+  clearGeography(grid, data.channel);
+  prepareGridChannel(grid, data.channel);
+}
+function clearGeography(grid: Grid, channel: string) {
+  if (grid.geography?.categories) delete grid.geography.categories[channel];
+  if (grid.geography?.occurrences) delete grid.geography.occurrences[channel];
+  if (channel === "biome" && grid.geography) delete grid.geography.biome;
 }
 function brushValue(
   data: BrushInput,

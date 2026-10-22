@@ -1,13 +1,12 @@
-import { gridPosition, replaceChannel, fieldInterpolator } from "@atlas/domain";
+import { gridPosition, replaceChannel, type NumericValues } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { atlasChannels, type ChannelBinding } from "./atlasChannels";
 import { nativeIndexAtSurface } from "./atlasWorkspace";
 import { projectPhysicalMaterial } from "./physicalMaterial";
-import type { AtlasPhysicalWorkspace } from "./atlasWorkspace";
-import { projectedValues } from "./atlasSampling";
 import { ecologyBindings } from "./ecologyState";
-import { physicalSupport } from "./physicalSupport";
 import { projectEcologySupport } from "./ecologyPublication";
+import { derivedBindings } from "./derivedFields";
+import { provinceBinding, retainInheritedMotion } from "./motionPublication";
 
 const forcingChannels = new Set([
   "elevation",
@@ -18,7 +17,6 @@ const forcingChannels = new Set([
   "water",
   "temperature",
 ]);
-// Present weather and life can change without re-evolving the terrain.
 const weatherAndEcologyChannels = new Set([
   "temperature",
   "moisture",
@@ -28,68 +26,30 @@ const weatherAndEcologyChannels = new Set([
   "ice",
   ...ecologyBindings.map(([name]) => name),
 ]);
-function preserveChannel(state: GenerationState, name: string, preserveTerrain: boolean): boolean {
-  return (
-    preserveTerrain && Boolean(state.surface.channels[name]) && !weatherAndEcologyChannels.has(name)
-  );
-}
 function projectChannel(state: GenerationState, binding: ChannelBinding) {
-  const work = state.physical!,
-    map = work.map,
-    grid = state.surface;
-  const values = projectedValues(
-      work,
-      map[binding.native],
-      binding.unit === "category" || binding.unit === "cell-index"
-    ),
-    datum = binding.datum ? map.BaseSeaLevel : 0;
-  const scale = binding.scale,
-    offset = binding.offset ?? 0;
-  for (let i = 0; i < values.length; i++) {
-    const value = values[i];
-    values[i] =
-      binding.unit === "cell-index"
-        ? value < 0
-          ? -1
-          : map.mesh.cellToLeaf[value]
-        : (value - datum) * scale + offset;
-  }
-  replaceChannel(grid, binding.name, binding.unit, values);
-  projectReconstruction(state, binding, datum);
-}
-function projectReconstruction(state: GenerationState, binding: ChannelBinding, datum: number) {
   const map = state.physical!.map,
-    grid = state.surface;
-  const scale = binding.scale,
-    offset = binding.offset ?? 0;
+    field = map.continuous!,
+    province = provinceBinding(map, binding.name),
+    quantity = ["category", "cell-index"].includes(binding.unit) ? "category" : "intensive";
   if (
-    !map.mesh.topology &&
-    ["landform", "margin", "tectonicBoundary", "bathymetry", "groundedIce"].includes(binding.name)
-  ) {
-    grid.reconstruction ??= { support: physicalSupport(map.mesh), channels: {} };
-    grid.reconstruction.categories ??= {};
-    grid.reconstruction.categories[binding.name] = Float64Array.from(map[binding.native]);
-  }
-  if (!map.mesh.topology && binding.unit !== "category" && binding.unit !== "cell-index") {
-    grid.reconstruction ??= { support: physicalSupport(map.mesh), channels: {} };
-    grid.reconstruction.channels[binding.name] = Float64Array.from(
-      map[binding.native],
-      (value) => (value - datum) * scale + offset
-    );
-  }
+    quantity === "intensive" &&
+    !province &&
+    !field.coefficients[binding.native] &&
+    !field.adaptive[binding.native]
+  )
+    throw new Error(`Prepare ${binding.native} before publishing ${binding.name}.`);
+  replaceChannel(state.surface, binding.name, binding.unit, map[binding.native], quantity, {
+    province,
+    coefficients: field.coefficients[binding.native],
+    adaptive: field.adaptive[binding.native],
+    transform: {
+      scale: binding.scale,
+      offset: (binding.offset ?? 0) - (binding.datum ? map.BaseSeaLevel * binding.scale : 0),
+    },
+  });
+  retainInheritedMotion(map, state.surface, binding.name);
 }
-function projectChannels(
-  state: GenerationState,
-  forcingOnly = false,
-  preserveTerrain = false,
-  bindings = atlasChannels
-) {
-  for (const binding of bindings) {
-    if (forcingOnly && !forcingChannels.has(binding.name)) continue;
-    if (preserveChannel(state, binding.name, preserveTerrain)) continue;
-    projectChannel(state, binding);
-  }
-}
+/** Publish affine views of the process-owned coefficients, without a resampling map. */
 export function projectNative(
   state: GenerationState,
   forcingOnly = false,
@@ -97,117 +57,75 @@ export function projectNative(
   bindings = atlasChannels,
   selectedChannels?: ReadonlySet<string>
 ) {
-  const grid = state.surface;
-  projectChannels(state, forcingOnly, preserveTerrain, bindings);
-  if (!forcingOnly && !preserveTerrain && grid.reconstruction?.channels.maximumGroundedIceFlux) {
-    const flux = fieldInterpolator(grid, "maximumGroundedIceFlux");
-    grid.channels.maximumGroundedIceFlux = Float64Array.from(grid.active, (_, i) =>
-      flux(gridPosition(grid, i))
-    );
+  const grid = state.surface,
+    map = state.physical!.map;
+  const owned = map.continuous?.geography;
+  const geography = owned && { ...owned, categories: owned.categories && { ...owned.categories } };
+  if (!map.continuous)
+    throw new Error("Prepare physical fields in the producer before publication.");
+  for (const binding of bindings) {
+    if (forcingOnly && !forcingChannels.has(binding.name)) continue;
+    if (
+      preserveTerrain &&
+      grid.channels[binding.name] &&
+      !weatherAndEcologyChannels.has(binding.name)
+    )
+      continue;
+    projectChannel(state, binding);
   }
   if (forcingOnly) {
-    replaceChannel(grid, "naturalTemperature", "celsius", grid.channels.temperature.slice());
-    replaceChannel(grid, "naturalRock", "ratio", grid.channels.rock.slice());
+    for (const [name, source] of [
+      ["naturalTemperature", "temperature"],
+      ["naturalRock", "rock"],
+    ])
+      replaceChannel(
+        grid,
+        name,
+        grid.units[source],
+        grid.channels[source].slice(),
+        "intensive",
+        structuredClone({
+          coefficients: grid.prepared!.coefficients[source],
+          adaptive: grid.prepared!.adaptive?.[source],
+          transform: grid.prepared!.transforms[source],
+        })
+      );
     return;
   }
   const emit = (
     name: string,
     unit: string,
-    values: () => Float64Array,
+    values: () => NumericValues,
     quantity: "category" | "intensive" = "intensive"
   ) => {
     if (!selectedChannels || selectedChannels.has(name))
       replaceChannel(grid, name, unit, values(), quantity);
   };
-  projectWaterLevels(state.physical!, emit);
-  projectDerivedClimate(state, emit);
-  projectDerivedMaterial(state, emit, selectedChannels);
-  projectEcologySupport(state.physical!, grid);
-}
-type DerivedEmitter = (
-  name: string,
-  unit: string,
-  values: () => Float64Array,
-  quantity?: "category" | "intensive"
-) => void;
-
-function projectDerivedClimate(state: GenerationState, emit: DerivedEmitter) {
-  const work = state.physical!,
-    map = work.map;
-  emit("seaDatum", "metre", () =>
-    new Float64Array(work.samples.length).fill(map.BaseSeaLevel / 1024)
-  );
-  emit("flow", "cubic-metre/second", () => projectedValues(work, map.FlowAccumulation));
-  emit("drainageElevation", "metre", () =>
-    projectedValues(work, map.DrainageElevations).map((value) => (value - map.BaseSeaLevel) / 1024)
-  );
-  emit("precipitation", "metre/year", () =>
-    projectedValues(
-      work,
-      Float64Array.from(map.Rainfall, (value, i) => (value + map.Snowfall[i]) / 1000)
-    )
-  );
-  if (state.surface.reconstruction) {
-    const channels = state.surface.reconstruction.channels;
-    channels.flow = Float64Array.from(map.FlowAccumulation);
-    channels.drainageElevation = Float64Array.from(
-      map.DrainageElevations,
-      (value) => (value - map.BaseSeaLevel) / 1024
-    );
-    channels.precipitation = Float64Array.from(
-      map.Rainfall,
-      (value, i) => (value + map.Snowfall[i]) / 1000
-    );
-  }
-}
-function projectDerivedMaterial(
-  state: GenerationState,
-  emit: DerivedEmitter,
-  selectedChannels?: ReadonlySet<string>
-) {
-  const work = state.physical!,
-    map = work.map;
-  if (!selectedChannels || selectedChannels.has("erosion")) {
-    const erosion = Float64Array.from(
-      map.CumulativeFluvialErosion,
-      (value, i) =>
-        (value + map.CumulativeGlacialErosion[i] + map.CumulativeCoastalErosion[i]) / 1024
-    );
-    emit("erosion", "metre", () => projectedValues(work, erosion));
-    if (state.surface.reconstruction) state.surface.reconstruction.channels.erosion = erosion;
-  }
-  // Keep substrate useful to cave generation without inventing a second geology.
-  if (!selectedChannels || selectedChannels.has("physicalMaterial")) projectPhysicalMaterial(state);
-  if (!selectedChannels || selectedChannels.has("carbonate")) {
-    const carbonate = Float64Array.from(
-      map.CrustContinentalFraction,
-      (value, i) =>
-        (value / 1000) * (1 - Math.min(1, map.VolcanicConstructionHistory[i] / (1024 * 100)))
-    );
-    emit("carbonate", "ratio", () => projectedValues(work, carbonate));
-    if (state.surface.reconstruction) state.surface.reconstruction.channels.carbonate = carbonate;
-  }
-}
-function projectWaterLevels(work: AtlasPhysicalWorkspace, emit: DerivedEmitter) {
-  const map = work.map;
   emit(
     "waterLevel",
     "metre",
     () =>
       Float64Array.from(
-        work.samples,
-        (i) =>
-          ((map.WaterKindCodes[i] ? map.WaterSurfaceElevations[i] : map.EffectiveSeaLevel) -
-            map.BaseSeaLevel) /
-          1024
+        map.WaterKindCodes,
+        (kind, i) =>
+          ((kind ? map.WaterSurfaceElevations[i] : map.EffectiveSeaLevel) - map.BaseSeaLevel) / 1024
       ),
     "category"
   );
-  emit("seaLevel", "metre", () =>
-    new Float64Array(work.samples.length).fill((map.EffectiveSeaLevel - map.BaseSeaLevel) / 1024)
-  );
+  for (const binding of derivedBindings)
+    if (!selectedChannels || selectedChannels.has(binding.name)) projectChannel(state, binding);
+  if (!selectedChannels || selectedChannels.has("physicalMaterial")) projectPhysicalMaterial(state);
+  projectEcologySupport(state.physical!, grid);
+  if (geography) {
+    replaceChannel(grid, "naturalSurface", "category", map.NaturalSurfaceCodes, "category");
+    replaceChannel(grid, "finalSurface", "category", map.FinalSurfaceCodes, "category");
+    grid.geography = { ...grid.geography, ...geography, provinces: grid.geography?.provinces };
+    map.continuous!.geography = grid.geography;
+    grid.ocean = map.continuous!.ocean;
+  }
 }
 export function nativeAtSurfacePosition(state: GenerationState, i: number): number {
+  if (state.surface.mesh) return i;
   const p = gridPosition(state.surface, i);
   return nativeIndexAtSurface(state, p.x, p.y);
 }

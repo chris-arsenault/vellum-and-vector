@@ -1,7 +1,13 @@
 import { expect, it } from "vitest";
 import { createWorldSnapshot } from "./atlasState";
 import { generateAtlas, publishGenerationProducts } from "@atlas/generation";
-import { createGrid, putChannel, fieldInterpolator, rectangle } from "@atlas/domain";
+import {
+  createGrid,
+  putChannel,
+  fieldInterpolator,
+  rectangle,
+  prepareSampleCoefficients,
+} from "@atlas/domain";
 import { numericTileSampler } from "./numericTiles";
 
 function inheritedWorld() {
@@ -80,16 +86,24 @@ it("renders inherited physical lakes without requiring lake vector publication",
       new Float64Array(10).fill(value)
     );
   domain.world.fields[0].channels = Object.keys(grid.channels);
-  grid.reconstruction = {
+  grid.prepared = {
     support: {
       x: Float64Array.from({ length: 10 }, (_, i) => (i % 5) * 1000),
       y: Float64Array.from({ length: 10 }, (_, i) => Math.floor(i / 5) * 1000),
       origin: [0, 0],
       spacing: 1000,
     },
-    channels: { elevation: grid.channels.elevation },
+    coefficients: {},
+    transforms: {},
+  };
+  grid.prepared.coefficients.elevation = prepareSampleCoefficients(
+    grid.prepared.support,
+    grid.channels.elevation
+  );
+  grid.geography = {
     water: {
       elevation: grid.channels.elevation,
+      coefficients: grid.prepared.coefficients.elevation,
       bodyIds: new Float64Array(10).fill(1),
       seaLevel: 0,
       lakes: [{ id: 1, footprint: rectangle([1000, 200, 3000, 800]), level: 200 }],

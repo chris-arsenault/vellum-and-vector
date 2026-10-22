@@ -59,6 +59,52 @@ it("keeps box filtering conservative at the shared geometry precision", () => {
   expect(candidate([6, 1, 7, 2])).toBe(true);
 });
 
+it("filters gaps between polygons, holes and diagonal boundary envelopes", () => {
+  const islands: Geometry = {
+    type: "MultiPolygon",
+    coordinates: [
+      [
+        [
+          [0, 0],
+          [1, 0],
+          [1, 1],
+          [0, 1],
+          [0, 0],
+        ],
+      ],
+      [
+        [
+          [100, 100],
+          [101, 100],
+          [101, 101],
+          [100, 101],
+          [100, 100],
+        ],
+      ],
+    ],
+  };
+  const candidate = spatial.boundsIntersectionCandidate(islands);
+  expect(candidate([49, 49, 51, 51])).toBe(false);
+  expect(candidate([-1, -1, 102, 102])).toBe(true);
+  expect(candidate([0.2, 0.2, 0.8, 0.8])).toBe(true);
+  const hole = spatial.boundsIntersectionCandidate(coverageFootprints[1]);
+  expect(hole([4.2, 4.2, 5.8, 5.8])).toBe(false);
+  expect(hole([3.9, 4.2, 4.1, 5.8])).toBe(true);
+  const diagonal = spatial.boundsIntersectionCandidate({
+    type: "Polygon",
+    coordinates: [
+      [
+        [0, 0],
+        [100, 100],
+        [0, 100],
+        [0, 0],
+      ],
+    ],
+  });
+  expect(diagonal([70, 20, 80, 30])).toBe(false);
+  expect(diagonal([49, 49, 51, 51])).toBe(true);
+});
+
 it("subtracts a reused area mask across dry regions, crossings, holes and disconnected features", () => {
   const probes: Geometry[] = [
     rectangle([1, 1, 2, 2]),

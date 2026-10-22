@@ -5,6 +5,7 @@ import {
   replaceChannel,
   spatial,
   requireThat,
+  channelValue,
   type ParameterDefinitions,
   type World,
 } from "@atlas/domain";
@@ -73,17 +74,21 @@ function propagationWeight(state: GenerationState, source: Source, i: number) {
   const grid = state.surface;
   switch (source.propagation) {
     case "fracture":
-      return 0.1 + 0.9 * (grid.channels.fracture?.[i] ?? 0);
+      return 0.1 + 0.9 * (grid.channels.fracture ? channelValue(grid, "fracture", i) : 0);
     case "cold":
       return Math.max(
         0,
         Math.min(
           1,
-          (20 - (grid.channels.temperature?.[i] ?? 15 - grid.channels.elevation[i] * 0.0065)) / 30
+          (20 -
+            (grid.channels.temperature
+              ? channelValue(grid, "temperature", i)
+              : 15 - channelValue(grid, "elevation", i) * 0.0065)) /
+            30
         )
       );
     case "ocean":
-      return grid.channels.elevation[i] < 0 ? 1 : 0;
+      return channelValue(grid, "elevation", i) < 0 ? 1 : 0;
     default:
       return 1;
   }

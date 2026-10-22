@@ -28,6 +28,8 @@ const indices = new Set([
   "DeltaIntensity",
 ]);
 const categories = new Set([
+  "NaturalSurfaceCodes",
+  "FinalSurfaceCodes",
   "BiomeCodes",
   "CrustAssemblyIds",
   "CrustSuturePairIds",
@@ -87,7 +89,7 @@ export function remeshPhysical(
   const transfer = prepared ?? prepareAdaptiveTransfer(old.topology, topology);
   for (const [name, values] of Object.entries(map)) {
     if (!ArrayBuffer.isView(values)) {
-      if (name !== "mesh") Object.assign(next, { [name]: values });
+      if (name !== "mesh" && name !== "riverPaths") Object.assign(next, { [name]: values });
       continue;
     }
     if (indices.has(name)) continue;

@@ -12,6 +12,7 @@ import { classifyMagicFeatures, effectiveMagicRules, projectMagic } from "./magi
 import { generationBindings } from "../generationBindings";
 import type { ProcessBehavior } from "../processTraits";
 import { ecologyLabels, type MagicSystem } from "@atlas/domain";
+import { prepareMagicFields } from "./magicContinuous";
 
 function evaluateMagic(
   state: GenerationState,
@@ -74,6 +75,7 @@ export function magicProcesses(systems: MagicSystem[] = []): MapProcess[] {
       workspaceOnly: id !== "project",
     },
     behavior: magicBehavior(id, apply),
+    prepareFields: (state) => prepareMagicFields(state, id),
     validate: () => [],
   }));
 }

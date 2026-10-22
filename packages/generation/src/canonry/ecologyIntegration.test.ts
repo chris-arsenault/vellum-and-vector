@@ -5,6 +5,8 @@ import {
   createAdaptiveTopology,
   refineAdaptiveWhere,
   rectangle,
+  createGrid,
+  putChannel,
   magicSystemSchema,
 } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
@@ -21,10 +23,12 @@ import { transportHistory } from "./transportHistory";
 import { buildTransportPlan } from "./transportPlan";
 import { atlasConfiguration } from "../atlasWorkflow";
 import { sequenceStages } from "../sequence";
-import { extractEcologicalFeatures } from "./ecologyFeatures";
+import { extractEcologicalFeatures, prepareEcologicalRegions } from "./ecologyFeatures";
 import { prepareGeneratedProcess } from "../mapFeatures";
 import { spatial } from "@atlas/domain";
 import { executeProcessBehavior } from "../processTraits";
+import { refreshWorkspaceSamples } from "./atlasWorkspace";
+import { preparePhysicalChannels } from "./continuousState";
 
 function fixture() {
   const state = landscape();
@@ -34,6 +38,7 @@ function fixture() {
   });
   state.surface = createAdaptiveField("ecology", state.domain.scope, topology);
   const map = createField(adaptivePhysicalMesh(topology, state.domain.scope.footprint));
+  map.BaseSeaLevel = map.EffectiveSeaLevel = 0;
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
@@ -52,6 +57,7 @@ function fixture() {
   map.Slope.fill(0.02);
   map.BroadleafSeed.fill(0.08);
   map.ConiferSeed.fill(0.08);
+  refreshWorkspaceSamples(state, state.physical);
   state.domain.world.layers = Object.fromEntries(builtinLayers().map((layer) => [layer.id, layer]));
   return state;
 }
@@ -78,8 +84,11 @@ function process(name: string) {
   )!;
   return {
     ...definition,
-    apply: (state: Parameters<typeof executeProcessBehavior>[1], context: MapProcessContext) =>
-      executeProcessBehavior(definition, state, context),
+    apply: (state: Parameters<typeof executeProcessBehavior>[1], context: MapProcessContext) => {
+      const result = executeProcessBehavior(definition, state, context);
+      definition.prepareFields?.(state);
+      return result;
+    },
   };
 }
 
@@ -95,10 +104,7 @@ it("publishes all ecological channels in the same located field and records comp
   for (const [name, native, unit] of ecologyBindings) {
     expect(state.surface.units[name]).toBe(unit);
     for (let leaf = 0; leaf < state.surface.active.length; leaf++)
-      expect(state.surface.channels[name][leaf]).toBeCloseTo(
-        state.physical!.map[native][state.physical!.map.mesh.leafToCell[leaf]],
-        8
-      );
+      expect(state.surface.channels[name][leaf]).toBeCloseTo(state.physical!.map[native][leaf], 8);
   }
   expect(
     c.causes.some(
@@ -152,8 +158,10 @@ it("applies present-day magical fire without replaying epochs or maturing source
   map.BiomeCodes.fill(10);
   map.BuriedAquaticCarbon.fill(100);
   map.OrganicBurialDepth.fill(3000);
+  preparePhysicalChannels(map, ["TreeCover", "BroadleafCover"]);
   state.domain.world.id = "2f6e0134-6017-4e80-9196-052a12218500";
   projectNative(state);
+  prepareEcologicalRegions(state);
   extractEcologicalFeatures(state);
   expect(Object.values(state.domain.world.features).some((f) => f.kind === "forest")).toBe(true);
   const elevation = state.surface.channels.elevation.slice();
@@ -162,11 +170,13 @@ it("applies present-day magical fire without replaying epochs or maturing source
     (p) => p.contract.id === "atlas.ecology-present"
   )!;
   executeProcessBehavior(present, state, c);
+  present.prepareFields?.(state);
   expect(map.TreeCover[0]).toBeCloseTo(0.08);
   expect(map.OilCarbon[0]).toBe(0);
   expect(map.BuriedAquaticCarbon[0]).toBe(100);
-  map.Elevation.fill(200 * 1024); // A magic-only projection retains the existing terrain.
+  expect(map.Elevation).toEqual(elevation);
   projectNative(state, false, true);
+  prepareEcologicalRegions(state);
   extractEcologicalFeatures(state);
   expect(state.surface.channels.elevation).toEqual(elevation);
   expect(state.surface.channels.treeCover[0]).toBeCloseTo(0.08);
@@ -284,6 +294,13 @@ it("carries organic carbon with advecting crust without integer truncation of ve
   map.PeatCarbon.fill(12.5);
   map.CrustMotionX.fill(1000);
   const before = map.PeatCarbon.reduce((sum, v, i) => sum + v * map.mesh.areas[i], 0);
+  map.provinces = {
+    origin: [...map.mesh.origin],
+    seed: 7,
+    scale: 100_000,
+    strength: 0,
+    sites: [{ x: 0, y: 0, priority: 0, assembly: 1, motionX: 1, motionY: 0 }],
+  };
   const plan = buildTransportPlan(map, 100);
   let exported = 0;
   for (let i = 0; i < map.mesh.count; i++) {
@@ -330,6 +347,8 @@ it("creates located forest polygons with deterministic identities and keeps auth
   process("evolve").apply(state, c);
   process("respond").apply(state, c);
   process("present").apply(state, c);
+  projectNative(state);
+  prepareEcologicalRegions(state);
   extractEcologicalFeatures(state);
   const forests = Object.values(state.domain.world.features).filter(
     (feature) => feature.kind === "forest"
@@ -353,15 +372,21 @@ it("publishes selectable open-land biome polygons through the same scoped featur
   const state = fixture();
   state.domain.world.id = "2f6e0134-6017-4e80-9196-052a12218500";
   const map = state.physical!.map;
-  for (const [code, name] of [
-    [4, "Barren"],
-    [5, "Desert"],
-    [6, "Tundra"],
-    [7, "Grassland"],
-    [8, "Savanna"],
+  for (const [name, temperature, rain, grass, trees] of [
+    ["Barren", 450, 800, 0, 0],
+    ["Desert", 450, 0, 0, 0],
+    ["Tundra", 300, 800, 0.3, 0],
+    ["Grassland", 450, 800, 0.3, 0],
+    ["Savanna", 550, 800, 0.3, 0.2],
   ] as const) {
     state.domain.world.features = {};
-    map.BiomeCodes.fill(code);
+    map.Temperature.fill(temperature);
+    map.Rainfall.fill(rain);
+    map.GrassCover.fill(grass);
+    map.TreeCover.fill(trees);
+    preparePhysicalChannels(map, ["Temperature", "Rainfall", "GrassCover", "TreeCover"]);
+    projectNative(state);
+    prepareEcologicalRegions(state);
     extractEcologicalFeatures(state);
     const features = Object.values(state.domain.world.features);
     expect(features.length).toBeGreaterThan(0);
@@ -379,12 +404,17 @@ it("keeps protected biome samples authoritative for both polygons and published 
   const state = fixture();
   state.domain.world.id = "2f6e0134-6017-4e80-9196-052a12218500";
   state.physical!.map.TreeCover.fill(0.8);
+  const authored = createGrid("protected-biome", state.domain.scope, 2, 2);
+  putChannel(authored, "biome", "category", new Float64Array(4).fill(7), "category");
   state.physical!.fixed.push({
     binding: { name: "biome", native: "BiomeCodes", unit: "category", scale: 1 },
     values: new Float64Array(state.physical!.map.mesh.count).fill(7),
+    source: authored,
+    footprint: state.domain.scope.footprint,
   });
   process("present").apply(state, context());
   projectNative(state);
+  prepareEcologicalRegions(state);
   extractEcologicalFeatures(state);
   expect(state.surface.channels.biome.every((v) => v === 7)).toBe(true);
   const features = Object.values(state.domain.world.features);

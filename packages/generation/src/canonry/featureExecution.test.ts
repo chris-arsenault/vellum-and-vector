@@ -23,6 +23,7 @@ import { units } from "./math";
 import { validateLandscape } from "./surface";
 import { extractNativeGeography } from "./atlasFeatures";
 import { preflight } from "../preflight";
+import { refreshWorkspaceSamples } from "./atlasWorkspace";
 
 const worldId = "2f6e0134-6017-4e80-9196-052a12218500";
 
@@ -56,6 +57,7 @@ function numericalState(map: PhysicalField, extent: [number, number, number, num
     inherited: false,
     sampling: { maximumSize: map.mesh.spacing, minimumSize: map.mesh.spacing, featureSamples: 2 },
   };
+  refreshWorkspaceSamples(state, state.physical);
   state.facts.clear();
   return state;
 }
@@ -249,7 +251,7 @@ it("publishes a dimensional river network without performing terrain incision", 
     before = initial.physical!.map.Elevation.slice();
   const output = await runPhysical(
     initial,
-    ["river-network", "river-channel-geometry", "fixture.extract-rivers"],
+    ["river-network", "river-channel-geometry", "surface-classification", "fixture.extract-rivers"],
     ["Elevation", "Lakes", "Runoff", "FlowRouting"]
   );
   const map = output.state.physical!.map,

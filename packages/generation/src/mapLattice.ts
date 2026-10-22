@@ -33,6 +33,15 @@ export function cellDistance(grid: Grid, a: number, b: number): number {
 }
 
 export function boundaryCell(grid: Grid, i: number): boolean {
+  if (grid.mesh) {
+    const mesh = grid.mesh;
+    return (
+      mesh.offsets[i] === mesh.offsets[i + 1] ||
+      Array.from(mesh.neighbors.subarray(mesh.offsets[i], mesh.offsets[i + 1])).some(
+        (j) => !grid.active[j]
+      )
+    );
+  }
   if (grid.topology) {
     const b = gridCellBounds(grid, i),
       t = grid.topology;

@@ -9,6 +9,7 @@ import {
 } from "@atlas/domain";
 import { landscape } from "../../packages/generation/src/mapFixtures";
 import { createField } from "../../packages/generation/src/canonry/field";
+import { preparePhysicalChannels } from "../../packages/generation/src/canonry/continuousState";
 import { createWorldMesh } from "../../packages/generation/src/canonry/worldMesh";
 import { atlasPhysicalProfile } from "../../packages/generation/src/canonry/atlasProfile";
 import { refreshWorkspaceSamples } from "../../packages/generation/src/canonry/atlasWorkspace";
@@ -21,6 +22,8 @@ import { nearestTriangle } from "../../packages/generation/src/canonry/mesh";
 import { physicalSampler } from "../../packages/generation/src/canonry/physicalMetric";
 import { extractNativeGeography } from "../../packages/generation/src/canonry/atlasFeatures";
 import { createRiverPaths, riverPath } from "../../packages/generation/src/canonry/riverPaths";
+import { prepareRiverPaths } from "../../packages/generation/src/canonry/riverChannelPaths";
+import { classifyNaturalSurface } from "../../packages/generation/src/canonry/naturalSurface";
 import { numericTileSampler } from "./numericTiles";
 import { tilePainter } from "./rasterTiles";
 import type { Raster } from "./types";
@@ -96,8 +99,17 @@ it.each(["plane", "coast", "island"] as const)(
 it("meets the same smooth coastline and elevation after coarse publication", () => {
   const { state, map, raster } = fixture("coast"),
     mesh = map.mesh,
-    paths = createRiverPaths(map),
     ocean = state.surface.ocean!;
+  for (let i = 0; i < mesh.contentCount; i++) {
+    if (map.WaterKindCodes[i]) continue;
+    map.FlowTargets[i] =
+      Array.from(mesh.neighbors.slice(i * 3, i * 3 + 3)).find(
+        (j) => j >= 0 && map.WaterKindCodes[j] === 1
+      ) ?? -1;
+    if (map.FlowTargets[i] >= 0) map.RiverOrders[i] = 1;
+  }
+  prepareRiverPaths(map);
+  const paths = createRiverPaths(map);
   paths.water = { ocean, lakes: new Map() };
   const height = fieldInterpolator(state.surface, "elevation"),
     sea = fieldInterpolator(state.surface, "seaLevel"),
@@ -143,11 +155,15 @@ it("retains a shallow lake inlet smaller than the local contour grid", () => {
   map.WaterBodyIds.fill(0);
   map.WaterBodyIds[i] = 7;
   map.WaterSurfaceElevations[i] = level;
+  preparePhysicalChannels(map, ["Elevation", "WaterKindCodes", "WaterSurfaceElevations"]);
   const shape = lakeFootprint(state, [i], 7, level)!;
   expect(shape).toBeTruthy();
   expect(spatial.pointCoverage(shape)({ x: mesh.x[i], y: mesh.y[i], z: 0 })).toBe(true);
-  const j = mesh.neighbors[i * 3],
-    paths = createRiverPaths(map);
+  const j = mesh.neighbors[i * 3];
+  map.FlowTargets[j] = i;
+  map.RiverOrders[j] = 1;
+  prepareRiverPaths(map);
+  const paths = createRiverPaths(map);
   paths.water = { ocean: null, lakes: new Map([[7, shape]]) };
   const end = riverPath(map, paths, [j, i]).geometry.coordinates.at(-1)!,
     p = { x: end[0], y: end[1], z: 0 };
@@ -159,6 +175,7 @@ it("retains a shallow lake inlet smaller than the local contour grid", () => {
       1
     )[3]
   ).toBe(2);
+  classifyNaturalSurface(state);
   projectNative(state);
   extractNativeGeography(state, {} as Parameters<typeof extractNativeGeography>[1], {
     impacts: false,

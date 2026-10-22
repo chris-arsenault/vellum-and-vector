@@ -107,6 +107,8 @@ export interface MapProcessContext {
 export interface MapProcess {
   contract: MapProcessContract;
   behavior: ProcessBehavior;
+  /** Commit continuous coefficients after this operation and authored composition. */
+  prepareFields?(state: GenerationState): void;
   validate(state: GenerationState, context: MapProcessContext): Diagnostic[];
 }
 export type ProcessSequence = (ProcessInvocation | EpochSequence)[];

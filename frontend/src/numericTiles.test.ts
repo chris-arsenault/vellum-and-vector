@@ -128,6 +128,7 @@ it("shares adaptive locations across terrain bands while respecting distinct ove
     ...raster.field,
     channels: { seaLevel: new Float64Array(raster.field.active.length).fill(200) },
   };
+  putChannel(raster.water, "seaLevel", "metre", raster.water.channels.seaLevel);
   raster.ice = field("ice", 50, [0, 0, 100, 100]);
   putChannel(raster.ice, "ice", "ratio", new Float64Array(raster.ice.active.length).fill(0.25));
   const patch = field("patch", 5, [45, 45, 55, 55]);
