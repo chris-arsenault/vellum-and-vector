@@ -4,6 +4,7 @@ import { ecologicalPolygons } from "./ecologyFixture";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import type { Page } from "@playwright/test";
+import { spatial } from "@atlas/domain";
 
 test.use({ actionTimeout: 15000 });
 
@@ -57,8 +58,7 @@ test("keeps ecological fields as opt-in overlays beside named biome regions", as
 test("selects, protects, exports and refines extracted ecological polygons with thematic display", async ({
   page,
 }) => {
-  const features = ecologicalPolygons(),
-    forest = features.find((f) => f.attributes.biome === "Temperate forest")!;
+  const features = ecologicalPolygons();
   await installGenerationFixture(page, false, false, true, features);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -84,7 +84,20 @@ test("selects, protects, exports and refines extracted ecological polygons with 
   await expect(page.getByRole("complementary", { name: "Map appearance" })).toHaveCount(0);
   await page.screenshot({ path: "test-results/ecological-vectors-wide.png" });
   const box = (await canvas.boundingBox())!;
-  await canvas.click({ position: { x: box.width * 0.2, y: box.height / 2 } });
+  const position = { x: box.width * 0.2, y: box.height * 0.47 };
+  await canvas.hover({ position });
+  const coordinates = page.locator(".coordinates");
+  await expect(coordinates).toHaveText(/^-?[\d.]+ E · -?[\d.]+ N · m$/);
+  const [x, y] = (await coordinates.textContent())!.match(/-?[\d.]+/g)!.map(Number);
+  // Region partitioning can produce several forests; identify the one under the cursor.
+  const forests = features.filter(
+    (feature) =>
+      feature.attributes.biome === "Temperate forest" &&
+      spatial.pointCoverage(feature.geometry)({ x, y, z: 0 })
+  );
+  expect(forests).toHaveLength(1);
+  const forest = forests[0];
+  await canvas.click({ position });
   await expect(page.locator(".right-panel h2")).toHaveText(forest.name);
   await page.getByText("Properties & relationships", { exact: true }).click();
   await expect(page.getByLabel("biome", { exact: true })).toHaveValue("Temperate forest");
