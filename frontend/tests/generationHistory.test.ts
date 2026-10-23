@@ -242,6 +242,7 @@ test("keeps cultures and politics independent and configures operative cultural 
   await page.getByLabel("Starting cultures · count", { exact: true }).fill("2");
   await page.getByLabel("Cultural duration · years", { exact: true }).fill("1200");
   await page.getByLabel("Cultural mobility · multiplier", { exact: true }).fill("1.7");
+  await page.getByLabel("Political capacity · multiplier", { exact: true }).fill("0.6");
   await page.getByLabel("Era name", { exact: true }).fill("River spread");
   await page.getByRole("button", { name: "Apply era name", exact: true }).click();
   await page.getByRole("checkbox", { name: "Political territories", exact: true }).check();
@@ -253,8 +254,10 @@ test("keeps cultures and politics independent and configures operative cultural 
   await expect(page.getByLabel("Cultural mobility · multiplier", { exact: true })).toHaveValue(
     "1.7"
   );
-  await expect(page.getByLabel("Physical epoch", { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel("Political capacity", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Physical regime", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Political capacity · multiplier", { exact: true })).toHaveValue(
+    "0.6"
+  );
   await stage(page, /Review & generate/).click();
   await advancedChanges(page);
   const reviewed = page.locator(".setup-review-changes li").filter({
@@ -266,7 +269,7 @@ test("keeps cultures and politics independent and configures operative cultural 
   const field = await openRecipe(page),
     recipe = JSON.parse(await field.inputValue());
   expect(recipe.features["human.cultures"].configuration.eras).toEqual([
-    { id: "River spread", years: 1200, mobility: 1.7 },
+    { id: "River spread", years: 1200, mobility: 1.7, politicalCapacity: 0.6 },
   ]);
   await page.getByRole("button", { name: "Generate world", exact: true }).click();
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
@@ -279,9 +282,7 @@ test("keeps cultures and politics independent and configures operative cultural 
   expect(input.parameters).toMatchObject({ cultureCount: 2, polityCount: 3 });
 });
 
-test("keeps compatibility metadata warnings visible without blocking generation", async ({
-  page,
-}) => {
+test("imports legacy human-era capacity as an operative value", async ({ page }) => {
   await installGenerationFixture(page);
   await page.goto("/");
   await page.getByLabel("World name").fill("Imported history warning");
@@ -291,7 +292,7 @@ test("keeps compatibility metadata warnings visible without blocking generation"
   recipe.settings.humanEras[0].politicalCapacity = 2;
   await field.fill(JSON.stringify(recipe));
   await page.getByRole("button", { name: "Apply configuration", exact: true }).click();
-  await expect(page.locator(".setup-issues")).toContainText("politicalCapacity");
+  await expect(page.locator(".setup-issues")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Generate world", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Generate world", exact: true }).click();
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");

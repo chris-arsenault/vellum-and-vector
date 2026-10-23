@@ -4,6 +4,7 @@ import {
   type Epoch,
   type MagicSystem,
   type ParameterValues,
+  type World,
 } from "@atlas/domain";
 import {
   generationEpochSchema,
@@ -73,6 +74,20 @@ export function replaceDraftEpochs(
     "Use unique history names."
   );
   const features = rebindDraftEpochs(normalized.recipe.features!, parsed, identities);
+  const cultures = features["human.cultures"];
+  const eras = cultures.configuration!.eras as unknown as NonNullable<World["humanEras"]>;
+  features["human.cultures"] = {
+    ...cultures,
+    configuration: {
+      ...cultures.configuration,
+      eras: eras.map((era) => ({
+        ...era,
+        physicalEpoch:
+          parsed.find((epoch) => (identities[epoch.id] ?? epoch.id) === era.physicalEpoch)?.id ??
+          null,
+      })),
+    },
+  };
   if (!Object.keys(identities).length) {
     features["physical.lifecycle"].configuration!.history = null;
     features["ecology.living"].configuration!.landscape = null;

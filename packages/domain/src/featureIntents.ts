@@ -18,6 +18,7 @@ import { updateNetworkTopology } from "./networkTopology";
 import { validateGeometryWriteScopes } from "./geometryWriteScopes";
 import { fieldFact } from "./fieldValidation";
 import { lineParts } from "./lineStations";
+import { editSocietyFeature } from "./societyEditing";
 
 export const featureEditSchema = z.object({ areaId: uuid, feature: featureInputSchema });
 export type FeatureEdit = z.infer<typeof featureEditSchema>;
@@ -155,6 +156,7 @@ export function evaluateFeature(
   if (!options.reconcileOwnBoundary)
     validateCrossings(snapshot, area, feature, geometry, attributes);
   const changes = intentChanges(context, snapshot);
+  editSocietyFeature(snapshot, changes, feature, area.id);
   if (!previous || previous.areaId === area.id)
     changes.writes.push({ kind: "feature", value: feature });
   else {

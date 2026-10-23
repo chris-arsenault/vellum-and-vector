@@ -146,6 +146,15 @@ export function solveStage(
   return { component, surface, members, depth, overflow };
 }
 export function qualifies(map: PhysicalField, p: PhysicalProfile, lake: SupportedLake): boolean {
+  if (
+    map.EngineeredDams &&
+    lake.members.some((i) => {
+      for (let edge = 0; edge < map.mesh.degree[i]; edge++)
+        if (map.EngineeredDams!.has(map.mesh.neighbors[i * map.mesh.stride + edge])) return true;
+      return false;
+    })
+  )
+    return lake.depth > 0;
   const area = lake.members.reduce((sum, i) => sum + map.mesh.areas[i], 0);
   if (area < p.MinimumLakeArea || lake.depth < units(p.LakeDepthThreshold)) return false;
   const set = new Set(lake.members);

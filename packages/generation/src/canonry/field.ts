@@ -145,6 +145,8 @@ export type PhysicalField = Record<(typeof integerFields)[number], Int32Array> &
   Record<(typeof metricFields)[number], Float64Array> &
   Record<(typeof floatFields)[number], Float32Array> & {
     mesh: PhysicalMesh;
+    /** Present engineered barriers; natural-lake size filters do not erase their reservoirs. */
+    EngineeredDams: Set<number>;
     events: {
       id: string;
       kind: "impact" | "plume" | "volcano";
@@ -187,6 +189,7 @@ export function createField(mesh: PhysicalMesh): PhysicalField {
     events: [] as PhysicalField["events"],
     faults: [] as PhysicalField["faults"],
     AvailableFacts: new Set<string>(),
+    EngineeredDams: new Set<number>(),
     EffectiveSeaLevel: 0,
     BaseSeaLevel: 0,
     SeaLevelInitialized: false,

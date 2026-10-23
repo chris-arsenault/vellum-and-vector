@@ -86,7 +86,7 @@ it("shows actual magical source/effect/activity values, including zero coastal f
   });
 });
 
-it("shows operative cultural edits without presenting compatibility metadata as an effect", () => {
+it("shows duration, mobility, political capacity and physical regime as operative changes", () => {
   const draft = newGenerationDraft(),
     baseline = prepareDraft(draft).input.settings!;
   const changed = prepareDraft(updateHumanEra(draft, 0, { years: 375, mobility: 1.2 })).input
@@ -94,6 +94,9 @@ it("shows operative cultural edits without presenting compatibility metadata as 
   changed.humanEras[0].physicalEpoch = "Cold age";
   changed.humanEras[0].politicalCapacity = 7;
   expect(generationConfigurationChanges("human.cultures", changed, baseline)).toEqual([
-    { label: "Settlement", value: "duration 375 years; mobility 1.2×" },
+    {
+      label: "Settlement",
+      value: "duration 375 years; mobility 1.2×; political capacity 7×; physical regime Cold age",
+    },
   ]);
 });

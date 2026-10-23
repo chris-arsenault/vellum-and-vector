@@ -30,7 +30,14 @@ const magicSchema = z
   })
   .strict();
 const culturalSchema = z
-  .object({ eras: z.array(humanEraSchema.omit({ physicalEpoch: true, politicalCapacity: true })) })
+  .object({
+    eras: z.array(
+      humanEraSchema.extend({
+        physicalEpoch: z.string().nullable().optional(),
+        politicalCapacity: z.number().finite().nonnegative().optional(),
+      })
+    ),
+  })
   .strict();
 const legacy = (settings: ParameterValues) => generationSettingsSchema.parse(settings);
 type Configuration = Pick<
@@ -156,7 +163,7 @@ export const magicConfiguration: Configuration = {
 export const culturalConfiguration: Configuration = {
   configuration: culturalSchema,
   configurationFromLegacy: (settings) => ({
-    eras: legacy(settings).humanEras.map(({ id, years, mobility }) => ({ id, years, mobility })),
+    eras: legacy(settings).humanEras.map((era) => ({ ...era })),
   }),
   configurationPresentation: { applicability: "initial" },
   configurationBinding: {
@@ -167,9 +174,13 @@ export const culturalConfiguration: Configuration = {
         humanEras: bound.eras.map((era) => ({
           ...era,
           physicalEpoch:
-            settings.humanEras.find((item) => item.id === era.id)?.physicalEpoch ?? null,
+            era.physicalEpoch !== undefined
+              ? era.physicalEpoch
+              : (settings.humanEras.find((item) => item.id === era.id)?.physicalEpoch ?? null),
           politicalCapacity:
-            settings.humanEras.find((item) => item.id === era.id)?.politicalCapacity ?? 1,
+            era.politicalCapacity ??
+            settings.humanEras.find((item) => item.id === era.id)?.politicalCapacity ??
+            1,
         })),
       };
     },

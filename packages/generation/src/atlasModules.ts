@@ -10,6 +10,8 @@ import { materialMagicProcess } from "./mapMagicEffects";
 import { culturalProcess, politicalProcess } from "./mapPeople";
 import { builtProcess } from "./mapBuilt";
 import { atlasPublicationDefinitions } from "./canonry/atlasPublications";
+import { populationProcesses } from "./societyProcesses";
+import { societyPublications } from "./societyPublication";
 
 function domainModule(id: string, processes: GenerationModule["processes"]): GenerationModule {
   return {
@@ -21,6 +23,12 @@ function domainModule(id: string, processes: GenerationModule["processes"]): Gen
 }
 
 /** Static registration is shared by editor and worker; behavior belongs to features. */
+atlasGenerationModules.register({
+  id: "human.population",
+  features: [],
+  processes: () => populationProcesses,
+  publications: societyPublications,
+});
 atlasGenerationModules.register({
   id: "atlas.physical",
   features: physicalFeatureDefinitions,

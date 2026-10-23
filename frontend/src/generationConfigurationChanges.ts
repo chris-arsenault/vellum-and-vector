@@ -90,10 +90,20 @@ export function culturalChanges(
     });
   for (const era of current) {
     const before = previous.find((entry) => entry.id === era.id);
-    const values = [];
-    if (era.years !== before?.years) values.push(`duration ${era.years} years`);
-    if (era.mobility !== before?.mobility) values.push(`mobility ${era.mobility}×`);
+    const values = eraChanges(era, before);
     if (values.length) changes.push({ label: era.id, value: values.join("; ") });
   }
   return changes;
+}
+function eraChanges(
+  era: GenerationSettings["humanEras"][number],
+  before?: GenerationSettings["humanEras"][number]
+) {
+  const fields = [
+    { key: "years" as const, value: `duration ${era.years} years` },
+    { key: "mobility" as const, value: `mobility ${era.mobility}×` },
+    { key: "politicalCapacity" as const, value: `political capacity ${era.politicalCapacity}×` },
+    { key: "physicalEpoch" as const, value: `physical regime ${era.physicalEpoch ?? "present"}` },
+  ];
+  return fields.filter(({ key }) => era[key] !== before?.[key]).map(({ value }) => value);
 }

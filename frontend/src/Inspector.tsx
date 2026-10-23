@@ -3,6 +3,10 @@ import { AttributeEditor } from "./AttributeEditor";
 import { RelationshipEditor } from "./RelationshipEditor";
 import type { AtlasFeature, World } from "./types";
 import type { EditorState } from "./useEditor";
+import { SocietyInspection } from "./SocietyInspection";
+import { SocietyGroupEditor } from "./SocietyGroupEditor";
+import { SocietyWorkForm } from "./SocietyWorkForm";
+import type { PopulationGroup } from "@atlas/domain";
 
 export function Inspector({ world, editor }: { world: World; editor: EditorState }) {
   const feature =
@@ -56,7 +60,14 @@ function FeatureInspection({
         </button>
       )}
       <FeatureIdentity feature={feature} world={world} />
-      <FeatureEditor key={feature.id} feature={feature} editor={editor} world={world} />
+      <SocietyInspection world={world} feature={feature} areaId={editor.area.id} />
+      <SocietyWorkForm feature={feature} editor={editor} />
+      <FeatureEditor
+        key={`${feature.id}:${editor.area.id}`}
+        feature={feature}
+        editor={editor}
+        world={world}
+      />
       {feature.geometry.type === "Point" && (
         <button className="secondary" onClick={() => editor.refinePoi(feature)}>
           Refine this place
@@ -144,6 +155,19 @@ function FeatureEditor({
       </label>
       <details>
         <summary>Properties & relationships</summary>
+        {feature.kind === "settlement" && Array.isArray(attributes.groups) && (
+          <SocietyGroupEditor
+            world={world}
+            groups={attributes.groups as PopulationGroup[]}
+            change={(groups) =>
+              setAttributes({
+                ...attributes,
+                groups,
+                population: groups.reduce((sum, g) => sum + g.count, 0),
+              })
+            }
+          />
+        )}
         <AttributeEditor
           values={attributes}
           schema={world.layers[feature.layerId].schema}

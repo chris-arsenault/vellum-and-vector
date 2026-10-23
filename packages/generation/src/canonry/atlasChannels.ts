@@ -3,7 +3,7 @@ import type { PhysicalField } from "./field";
 import { ecologyBindings } from "./ecologyState";
 
 type ArrayName = {
-  [K in keyof PhysicalField]: PhysicalField[K] extends ArrayLike<number> ? K : never;
+  [K in keyof PhysicalField]-?: PhysicalField[K] extends ArrayLike<number> ? K : never;
 }[keyof PhysicalField];
 export interface ChannelBinding {
   name: string;

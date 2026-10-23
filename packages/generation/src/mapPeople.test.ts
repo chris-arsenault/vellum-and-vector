@@ -45,7 +45,7 @@ it.each([384, 768])(
       Object.values(result.state.domain.world.entities)
         .map((entity) => entity.kind)
         .sort()
-    ).toEqual(["culture", "polity"]);
+    ).toEqual(["culture", "language", "people", "polity", "religion"]);
     const sovereignty = Object.values(result.state.domain.world.features).find(
       (feature) => feature.kind === "sovereignty"
     )!;

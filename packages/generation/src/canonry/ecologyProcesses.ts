@@ -337,9 +337,10 @@ function advance(
   state: GenerationState,
   context: MapProcessContext,
   input: EcologyInput,
-  years: number
+  years: number,
+  newHumanTime = false
 ) {
-  if (state.physical!.inherited) return;
+  if (state.physical!.inherited && !newHumanTime) return;
   applyWoodlands(state);
   const f = forcing(state, input, context);
   const map = state.physical!.map,
@@ -354,4 +355,28 @@ function advance(
   applyWoodlands(state);
   accumulateOrganicMatter(map, years, f);
   recordTransitions(state, before, context);
+}
+
+/** New elapsed human time is distinct from spatial refinement of completed history. */
+export function advanceHumanEcology(
+  state: GenerationState,
+  context: MapProcessContext,
+  years: number
+) {
+  const bound = generationBindings(context);
+  const era = context.epochs.at(-1);
+  const named = bound.settings.epochs.findIndex((e) => e.id === era?.parentEpoch);
+  const index = named >= 0 ? named : bound.settings.epochs.length - 1;
+  advance(
+    state,
+    { ...context, epochIndices: [index] },
+    {
+      seed: bound.seed,
+      parameters: bound.parameters,
+      epochs: bound.settings.epochs,
+      physical: false,
+    },
+    years,
+    true
+  );
 }

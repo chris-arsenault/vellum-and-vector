@@ -1,8 +1,8 @@
-import { gridPosition, spatial, rectangle, type Position } from "@atlas/domain";
-import { generatedFeature, putGenerated, putGeneratedNetwork } from "./mapFeatures";
-import { findRoute } from "./mapRouting";
-import { landCells, suitability } from "./mapPeople";
+import { spatial, rectangle } from "@atlas/domain";
+import { generatedFeature, putGenerated } from "./mapFeatures";
 import type { GenerationState, MapProcess, MapProcessContext } from "./process";
+import { publishSettlements } from "./societyPublication";
+import { initializePopulation } from "./societyPopulation";
 
 export const builtProcess: MapProcess = {
   contract: {
@@ -37,50 +37,8 @@ export const builtProcess: MapProcess = {
   },
 };
 function settlements(state: GenerationState, context: MapProcessContext) {
-  const cells = landCells(state)
-    .map((i) => ({ i, value: suitability(state, i) * (0.8 + context.random() * 0.2) }))
-    .sort((a, b) => b.value - a.value);
-  const points: Position[] = [];
-  const grid = state.surface;
-  const distance = Math.min(grid.bounds[2] - grid.bounds[0], grid.bounds[3] - grid.bounds[1]) / 6;
-  for (const { i } of cells) {
-    const p = gridPosition(grid, i);
-    if (points.some((a) => Math.hypot(a.x - p.x, a.y - p.y) < distance)) continue;
-    const name = `${["Alder", "Stone", "Willow", "High", "Grey", "West", "Green", "North"][points.length]}${["haven", "ford", "mere", "watch"][Math.floor(context.random() * 4)]}`;
-    putGenerated(
-      state,
-      generatedFeature(
-        state,
-        `settlement:${points.length}`,
-        name,
-        "settlement",
-        "settlements",
-        { type: "Point", coordinates: [p.x, p.y] },
-        { elevation: grid.channels.elevation[i] }
-      )
-    );
-    points.push(p);
-    if (points.length === 8) break;
-  }
-  for (let i = 1; i < points.length; i++) {
-    context.progress((i / points.length) * 0.9, `Routing road ${i}/${points.length - 1}`);
-    const target = points
-      .slice(0, i)
-      .sort(
-        (a, b) =>
-          Math.hypot(a.x - points[i].x, a.y - points[i].y) -
-          Math.hypot(b.x - points[i].x, b.y - points[i].y)
-      )[0];
-    const path = findRoute(grid, points[i], target, "road");
-    if (!path.length) continue;
-    putGeneratedNetwork(
-      state,
-      generatedFeature(state, `road:${i}`, `Road ${i}`, "road", "roads", {
-        type: "LineString",
-        coordinates: path.map((p) => [p.x, p.y]),
-      })
-    );
-  }
+  if (!state.society) initializePopulation(state, context);
+  publishSettlements(state, context);
 }
 function site(state: GenerationState) {
   const [x0, y0, x1, y1] = state.surface.bounds;

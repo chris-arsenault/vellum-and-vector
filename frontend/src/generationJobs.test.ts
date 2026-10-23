@@ -48,7 +48,7 @@ it("retains the active stage and error when a worker fails", () => {
   cancelGeneration(job.id);
 });
 
-it("starts generation when legacy history produces a nonblocking compatibility warning", () => {
+it("starts generation with operative political capacity without a compatibility warning", () => {
   vi.stubGlobal("Worker", TestWorker);
   const world = createWorld({ name: "History warning", seed: 42, width: 10000, height: 10000 });
   world.humanEras![0].politicalCapacity = 2;
@@ -62,7 +62,7 @@ it("starts generation when legacy history produces a nonblocking compatibility w
   });
   expect(TestWorker.latest.postMessage).toHaveBeenCalledOnce();
   expect(listJobs(world.id)[0].status).toBe("running");
-  expect(listJobs(world.id)[0].diagnostics).toContainEqual(
+  expect(listJobs(world.id)[0].diagnostics).not.toContainEqual(
     expect.objectContaining({ severity: "warning" })
   );
   cancelGeneration(job.id);

@@ -34,13 +34,18 @@ with no backend, persistence or MCP; preserve the existing backend source.
       current creation profile, layer and selection. Forms and record inspectors
       support those workflows rather than defining the product's navigation.
 
-- [ ] **3. Design and implement substantial political and cultural generators.**
+- [x] **3. Design and implement substantial political and cultural generators.**
       Develop both domains beyond their initial implementations, with explicit
       geographic and historical causes and meaningful creator controls. Preserve
       overlapping cultural prevalence, languages, religions and communities.
       Distinguish political sovereignty, administration, claims, disputes and actual
       control. Keep cultures and polities independent, with stable identities and
       coherent regional refinement.
+
+      Delivered as bounded aggregate society generation: population and migration,
+      joint affiliations and diffusion, political reach/collapse/recovery, present
+      authoring and inherited refinement. See the [society plan](SOCIETY-GENERATION-PLAN.md).
+      Four-pillar integration and balance remain separate, undesigned work.
 
 - [x] **4. Fix map interaction behavior.** Reported symptom: attempts to interact
       with the map pan it instead of performing the selected action. Make selection,
@@ -79,10 +84,10 @@ with no backend, persistence or MCP; preserve the existing backend source.
       and ice retention, ocean rays and wakes, heat/ice/rock/coastal feedback,
       advected history, configurable feature regions and cross-system interactions.
       Those mechanisms currently use declarative definitions, per-epoch activity,
-      storage and source timing. That implementation does not establish fire-core
-      extraction/consumption, crystal practices, Pressure diving or practitioner
-      costs. The revised requirement remains open; this documentation update
-      implements none of those social operations.
+      storage and source timing. Society now retains finite core extraction/use,
+      crystal charge and reader access, depth-limited Pressure practice, and
+      aggregate injuries/strain. This does not close the wider magic/ecology gaps
+      in item 10 or establish four-pillar balance.
 
 - [x] **8. Expose meaningful generation parameters beyond detail level.** Provide
       understandable controls for the applicable physical, magical, cultural and
@@ -131,6 +136,14 @@ with no backend, persistence or MCP; preserve the existing backend source.
       "Wildwood-altered woodland" say that magic changed something without
       saying what. Replace it with effects and names that follow the
       responsible system's rules.
+
+      **Sequencing correction, 2026-10-23:** complete the
+      [society generation plan](SOCIETY-GENERATION-PLAN.md) through M4, including
+      E1's society/environmental feedback, before this item. Address it in the
+      separately designed society–magic–physical–geology discussion, alongside
+      the other cross-system gaps. The latest user correction explicitly excludes
+      this work from society delivery. B1 was stopped before runtime changes;
+      its goals and design require separate agreement.
 
 The [product contract](product-spec.md) supplies the geographic and authoring
 requirements. [ADR 0003](adr/0003-frontend-session.md) defines the current execution

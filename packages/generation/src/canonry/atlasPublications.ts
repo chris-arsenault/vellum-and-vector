@@ -247,11 +247,12 @@ function geographicPublications(
       "ecology",
       ["altered", "ember", "thaw", "wetland", "forest", "grassland", "barren"],
     ],
-    ["human.cultures", "cultures", ["culturalOrigin"]],
+    ["human.cultures", "cultures", ["culturalOrigin", "institution"]],
     ["human.politics", "sovereignty", ["sovereignty"]],
     ["human.politics", "control", ["control"]],
+    ["human.politics", "administration", ["jurisdiction"]],
     ["human.politics", "claims", ["claim"]],
-    ["built.layout", "settlements", ["settlement"]],
+    ["built.layout", "settlements", ["settlement", "societyWork", "societyEvent"]],
     ["built.layout", "roads", ["road"], true],
     ["built.layout", "structures", ["building", "room", "door", "furniture", "wall"]],
   ];
@@ -305,16 +306,49 @@ export function atlasPublicationDefinitions(
     ...locatedMagic(world, features),
     ...geographicPublications(features, input),
   ];
+  // Society can change existing environmental products without rerunning their geological history.
+  const human = ["human.cultures", "human.politics", "built.layout"].some((id) =>
+    enabled(features, id)
+  );
+  if (human && world) enableInheritedEnvironment(publications, world);
   for (const entity of Object.values(world?.entities ?? {}))
-    if (entity.kind === "culture")
+    if (["culture", "language", "religion"].includes(entity.kind))
       publications.push(
-        field(`culture:${entity.id}`, "ratio", "cultures", enabled(features, "human.cultures"), [
-          "human.cultures",
-        ])
+        field(
+          `${entity.kind}:${entity.id}`,
+          "ratio",
+          (
+            { culture: "cultures", language: "languages", religion: "religions" } as Record<
+              string,
+              string
+            >
+          )[entity.kind],
+          enabled(features, "human.cultures"),
+          ["human.cultures"]
+        )
       );
   return owners
     ? publications.filter((definition) =>
         definition.owners?.some((owner) => owners.includes(owner))
       )
     : publications;
+}
+function enableInheritedEnvironment(publications: PublicationDefinition[], world: World) {
+  for (const definition of publications) {
+    if (
+      definition.kind === "field" &&
+      world.fields.some((f) => f.channels?.includes(definition.channel))
+    )
+      definition.publish = true;
+    if (
+      definition.kind === "geography" &&
+      ["rivers", "lakes", "ecology"].includes(definition.layer.id) &&
+      world.fields.some(
+        (f) =>
+          f.layerId === definition.layer.id ||
+          (definition.layer.id === "lakes" && f.layerId === "rivers")
+      )
+    )
+      definition.publish = true;
+  }
 }

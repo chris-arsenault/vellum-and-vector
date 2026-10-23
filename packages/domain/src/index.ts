@@ -63,3 +63,6 @@ export * from "./adaptiveField";
 export * from "./adaptivePoint";
 export * from "./fieldContours";
 export * from "./snapshot";
+export * from "./society";
+export * from "./societyEditing";
+export * from "./drainageRefinement";

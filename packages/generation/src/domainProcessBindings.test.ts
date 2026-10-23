@@ -185,7 +185,14 @@ it("cultural spread consumes bound human history while legacy world history cann
       .filter(([key]) => key.startsWith("culture:"))
       .map(([, value]) => [...value]);
   expect(values(first)).toEqual(values(second));
-  expect(values(first)).toHaveLength(1);
+  expect(values(first).length).toBeGreaterThan(0);
+  const longer = fixture(),
+    longerContext = context(longer),
+    history = bindings();
+  history.settings.humanEras[0].years = 500;
+  longerContext.inputs = serializableBindings(history);
+  await executeProcessBehavior(culturalProcess, longer, longerContext);
+  expect(values(longer).length).toBeGreaterThan(values(first).length);
 });
 it("configured rule dependencies follow their actual environmental readers", () => {
   const systems = [

@@ -4,9 +4,9 @@ import type { EditorState } from "./useEditor";
 type Era = NonNullable<World["humanEras"]>[number];
 export function HumanEraForm({ world, editor }: { world: World; editor: EditorState }) {
   const [eras, setEras] = useState(world.humanEras ?? []);
-  const fixed = world.generations.some((g) =>
-    g.domains.some((d) => d === "cultural" || d === "political")
-  );
+  const fixed =
+    Object.values(world.societies ?? {}).some((s) => s.history.length > 0) ||
+    world.generations.some((g) => g.domains.some((d) => d === "cultural" || d === "political"));
   return (
     <form
       onSubmit={(event) => {
@@ -16,8 +16,8 @@ export function HumanEraForm({ world, editor }: { world: World; editor: EditorSt
     >
       <h3>Human history</h3>
       <p className="hint">
-        Years and mobility control cultural spread through suitable terrain. Completed histories
-        stay fixed during ordinary edits.
+        Years, mobility and political capacity shape population, contact and control. Completed
+        histories stay fixed during ordinary edits.
       </p>
       {eras.map((era, index) => (
         <fieldset key={index} disabled={fixed}>
@@ -60,7 +60,7 @@ export function EraFields({ era, change }: { era: Era; change: (era: Era) => voi
         Name
         <input value={era.id} required onChange={(e) => change({ ...era, id: e.target.value })} />
       </label>
-      {(["years", "mobility"] as const).map((key) => (
+      {(["years", "mobility", "politicalCapacity"] as const).map((key) => (
         <label key={key}>
           {eraLabels[key]}
           <input
@@ -75,4 +75,4 @@ export function EraFields({ era, change }: { era: Era; change: (era: Era) => voi
     </>
   );
 }
-const eraLabels = { years: "Years", mobility: "Mobility" };
+const eraLabels = { years: "Years", mobility: "Mobility", politicalCapacity: "Political capacity" };

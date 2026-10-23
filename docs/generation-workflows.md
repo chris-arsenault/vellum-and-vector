@@ -14,8 +14,24 @@ extension must preserve the current three's specific behavior. The representatio
 implementation history below remains existing code, not a requirement to express
 every behavior through a generic vocabulary or avoid system-specific operations.
 The [society plan](SOCIETY-GENERATION-PLAN.md#society-environment-and-magic-feedback)
-records the proposed social feedback and the distinctions between lore,
-implemented geography and new work.
+records the bounded society implementation and distinguishes source motivations,
+implemented social operations and deferred four-pillar work.
+
+**Society delivery — 2026-10-23:** `world.societies[areaId]` retains aggregate
+communities, joint population groups, connections, completed eras, political
+relationships, works, events and magic practice resources. Registered human-era
+processes evolve population and migration, cultural contact, works/practices and
+political reach. Culture, language and religious membership remain separate from
+sovereignty, administration, control and claims. Settlements and roads consume
+that state instead of the former capped placeholder selection.
+
+Present edits synchronize residents and works with the retained society records.
+Refinement subdivides population catchments and retains completed history and
+feature identities; it does not rerun old eras. The inspector exposes population
+composition, support and practice resources, while generation controls supply era
+duration, mobility and political capacity. Existing geographic inputs and focused
+work refreshes support this subsystem. Wider magic/ecology repair, cross-pillar
+design and balance are explicitly deferred, including backlog item 10.
 
 The current module contracts, feature-owned recipes, validity model and output
 registration are described in [Generation modules and recipes](generation-modules.md).
@@ -385,8 +401,9 @@ completed causes by area, and uses direct shared domain validation for edits.
 World generation, located refinement, manual editing, templates, cancellation and
 undo have browser journeys. The physical kernel is a source-traceable port;
 atlas profile settings, GIS projection and user-configurable magic are explicit
-adaptations. The cultural, political and built catalogs remain initial atlas
-implementations. Earlier SQL migration and backend source are historical material
+adaptations. The cultural, political and macro-settlement generators now use the
+aggregate society state described above; site/interior layouts retain their
+existing processes. Earlier SQL migration and backend source are historical material
 outside the current execution path.
 
 ## Completion work

@@ -9,7 +9,9 @@ import {
   removeHumanEra,
   renameHumanEra,
   updateHumanEra,
+  type OperativeEra,
 } from "./generationHumanEras";
+import { draftEpochs } from "./generationDraftEpochs";
 
 export function GenerationCultureConfiguration({
   flow,
@@ -33,10 +35,10 @@ export function GenerationCultureConfiguration({
         </p>
       ) : (
         <fieldset disabled={!feature.configurationEditable}>
-          <legend>Cultural spread</legend>
+          <legend>Human eras</legend>
           <small className="hint">
-            Years and mobility govern cultural spread through suitable geography. Political
-            territory remains a separate choice.
+            Human eras advance population, cultural contact, works and political reach. Domain
+            selection controls which identities and territories are generated.
           </small>
           {eras.map((era, index) => (
             <div className="setup-human-era" key={index}>
@@ -65,6 +67,7 @@ export function GenerationCultureConfiguration({
                     flow.change(updateHumanEra(flow.draft, index, { mobility }))
                   }
                 />
+                <EraConditions flow={flow} era={era} index={index} />
               </div>
               <button
                 type="button"
@@ -82,29 +85,49 @@ export function GenerationCultureConfiguration({
           </button>
         </fieldset>
       )}
-      <LegacyMetadata flow={flow} />
     </>
   );
 }
-function LegacyMetadata({ flow }: { flow: GenerationWorkflow }) {
-  const eras = flow.draft.recipe.settings.humanEras;
-  const retained = eras.filter((era) => era.physicalEpoch !== null || era.politicalCapacity !== 1);
-  if (!retained.length) return null;
+function EraConditions({
+  flow,
+  era,
+  index,
+}: {
+  flow: GenerationWorkflow;
+  era: OperativeEra;
+  index: number;
+}) {
   return (
-    <details className="setup-legacy-metadata">
-      <summary>Imported history metadata</summary>
-      <p className="hint">
-        Physical epoch references and political capacity are retained for compatibility. They do not
-        control cultural or political generation.
-      </p>
-      <ul>
-        {retained.map((era) => (
-          <li key={era.id}>
-            {era.id}: physical epoch {era.physicalEpoch ?? "none"}; political capacity{" "}
-            {era.politicalCapacity}.
-          </li>
-        ))}
-      </ul>
-    </details>
+    <>
+      <NumberField
+        label="Political capacity"
+        unit="multiplier"
+        fieldKey={`human.eras.${index}.politicalCapacity`}
+        value={era.politicalCapacity ?? 1}
+        min={0}
+        change={(politicalCapacity) =>
+          flow.change(updateHumanEra(flow.draft, index, { politicalCapacity }))
+        }
+      />
+      <label>
+        Physical regime
+        <select
+          aria-label="Physical regime"
+          value={era.physicalEpoch ?? ""}
+          onChange={(e) =>
+            flow.change(
+              updateHumanEra(flow.draft, index, { physicalEpoch: e.target.value || null })
+            )
+          }
+        >
+          <option value="">Present conditions</option>
+          {draftEpochs(flow.draft).map((e) => (
+            <option value={e.id} key={e.id}>
+              {e.id}
+            </option>
+          ))}
+        </select>
+      </label>
+    </>
   );
 }

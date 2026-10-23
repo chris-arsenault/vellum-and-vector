@@ -13,6 +13,7 @@ import { profiles, type Area } from "./model";
 import { semanticId } from "./identity";
 import { validateCoverage, type MaterializedCoverage } from "./coverage";
 import { addLocatedAccess } from "./locatedAccess";
+import { refinedDrainageFeatures } from "./drainageRefinement";
 
 type AreaInput = z.infer<typeof createAreaSchema>;
 function areaRequirements(data: AreaInput, context: IntentContext) {
@@ -38,10 +39,20 @@ function areaRequirements(data: AreaInput, context: IntentContext) {
 function evaluateArea(data: AreaInput, context: IntentContext, snapshot: DomainSnapshot) {
   const area = areaCandidate(data, context, snapshot);
   validateContextFeature(data, snapshot, area);
-  area.boundary = establishBoundary(snapshot, area);
+  const rivers = data.approach === "blank" ? [] : refinedDrainageFeatures(snapshot, area);
+  const inherited = {
+    ...snapshot,
+    world: {
+      ...snapshot.world,
+      areas: { ...snapshot.world.areas, [area.id]: area },
+      features: { ...snapshot.world.features, ...Object.fromEntries(rivers.map((f) => [f.id, f])) },
+    },
+  };
+  area.boundary = establishBoundary(inherited, area);
   validateBoundaryTraits(area);
   const changes = intentChanges(context, snapshot);
   upsertArea(changes, area);
+  for (const river of rivers) changes.writes.push({ kind: "feature", value: river });
   if (data.approach === "blank")
     for (const layerId of data.layers) {
       const candidate = { ...snapshot.world, areas: { ...snapshot.world.areas, [area.id]: area } };

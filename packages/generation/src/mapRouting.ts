@@ -11,7 +11,7 @@ interface Step {
   cell: number;
   cost: number;
 }
-class RouteHeap {
+export class RouteHeap {
   private readonly items: Step[] = [];
   push(item: Step) {
     const items = this.items;

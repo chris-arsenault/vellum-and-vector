@@ -41,6 +41,7 @@ import {
 import { atlasGenerationModules } from "./atlasModules";
 import { serializableBindings } from "./generationBindings";
 import { inheritedChannelNames, inheritedNativeFacts } from "./canonry/inheritedFacts";
+import { societySequence } from "./societyProcesses";
 
 export interface AtlasGenerationInput {
   areaId: string;
@@ -85,6 +86,7 @@ export async function generateAtlas(
   // Numerical scratch never leaves the worker or becomes a saved execution state.
   result.state.publications = atlasGenerationModules.publications(input, result.state.domain.world);
   delete result.state.physical;
+  delete result.state.society;
   return result;
 }
 
@@ -98,9 +100,6 @@ export function atlasRegistry(source: DomainSnapshot, input: AtlasGenerationInpu
 
 export function prepareAtlasGeneration(source: DomainSnapshot, input: AtlasGenerationInput) {
   input = structuredClone(input);
-  const compatibility = humanHistoryDiagnostics(
-    input.settings ?? worldGenerationSettings(source.world)
-  );
   source = configuredSource(source, input);
   checkRunInputs(source, input);
   input = {
@@ -118,7 +117,6 @@ export function prepareAtlasGeneration(source: DomainSnapshot, input: AtlasGener
   const registry = atlasRegistry(source, input);
   const diagnostics = [
     ...resolvedFeatures.diagnostics.filter((item) => item.code !== "feature_dependency"),
-    ...compatibility,
   ];
   checkNewSelection(source, input);
   diagnostics.push(
@@ -128,17 +126,6 @@ export function prepareAtlasGeneration(source: DomainSnapshot, input: AtlasGener
   const initial = inherited ? inheritedFactsForRun(source, input) : [];
   diagnostics.push(...preflight(configuration, registry, initial));
   return { input, source, registry, diagnostics };
-}
-function humanHistoryDiagnostics(settings: GenerationSettings | undefined) {
-  return (settings?.humanEras ?? [])
-    .filter((era) => era.physicalEpoch !== null || era.politicalCapacity !== 1)
-    .map((era) => ({
-      severity: "warning" as const,
-      code: "human_history_compatibility",
-      invocation: "human.cultures",
-      resource: era.id,
-      message: `${era.id}: physicalEpoch and politicalCapacity are retained compatibility metadata; generation uses years and mobility only.`,
-    }));
 }
 function checkRunInputs(source: DomainSnapshot, input: AtlasGenerationInput) {
   requireThat(
@@ -336,7 +323,15 @@ function configuredSequence(source: DomainSnapshot, input: AtlasGenerationInput)
   if (area.profile !== "interior" && (physical || input.domains.includes("magic"))) {
     sequence.push(...atlasPhysicalSequence(source, input));
   }
-  for (const slot of ["present.products", "present.people", "present.after-people"])
+  for (const slot of ["present.products", "present.people", "present.after-people"]) {
+    if (
+      slot === "present.people" &&
+      !["site", "interior"].includes(area.profile) &&
+      ["human.cultures", "human.politics", "built.layout"].some(
+        (id) => input.resolvedFeatures!.selection[id]?.enabled
+      )
+    )
+      sequence.push(...societySequence(input));
     sequence.push(
       ...atlasGenerationModules.contribute(slot, input.resolvedFeatures!, {
         source,
@@ -344,6 +339,7 @@ function configuredSequence(source: DomainSnapshot, input: AtlasGenerationInput)
         resolved: input.resolvedFeatures!,
       })
     );
+  }
   requireThat(
     sequence.length > 1,
     "profile_domains",

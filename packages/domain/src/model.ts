@@ -284,6 +284,7 @@ export interface NetworkReach {
   endFlow: number | null;
 }
 export interface World {
+  societies?: Record<string, import("./society").SocietyRegion>;
   magicSystems?: import("./magicSystems").MagicSystem[];
   featureCount?: number;
   id: string;

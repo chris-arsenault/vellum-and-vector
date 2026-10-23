@@ -16,6 +16,7 @@ import type {
 } from "./productLedger";
 
 export interface GenerationState {
+  society?: import("./societyGeography").SocietyWorkspace;
   physical?: import("./canonry/atlasWorkspace").AtlasPhysicalWorkspace;
   domain: DomainSnapshot;
   surface: Grid;

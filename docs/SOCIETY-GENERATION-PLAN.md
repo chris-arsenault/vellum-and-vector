@@ -1,12 +1,129 @@
 # Society generation — working design
 
-Status: workshop open; aggregate generator boundary and two-way environmental
-feedback accepted; magic fidelity corrected, 2026-10-22.
-This request authorizes plan and instruction revision, not generator implementation.
+Status: bounded society implementation complete, 2026-10-23. M1–M4 and E1 are
+delivered. B1 is deferred and excluded from this delivery.
 This document holds the design, research, open decisions and proposed milestones.
 
 Sulion root: `e74959cf-4d0a-491a-b247-40fe6316d698`.
-Current milestone: M0, workshop the society model.
+Society delivery is closed; future four-pillar work requires separate design.
+
+### Scope correction — 2026-10-23
+
+The user explicitly directed delivery of society in a bounded context and rejected
+starting four-pillar integration without its own design and goals. The earlier
+claim that “execute all phases” authorized B1 was incorrect. B1 investigation
+stopped before runtime changes; its execution expansion has been withdrawn.
+Do not redesign or balance geology, physical generation, magic or ecology to finish
+society. Backlog item 10 remains open for separately scoped work.
+
+## Execution decisions — 2026-10-23
+
+The instruction to execute all phases supersedes the earlier planning-only notes.
+The following implementation choices resolve the workshop recommendations within
+the accepted requirements; they remain revisable from implementation evidence.
+
+- D1/D2: use located population groups with explicit demographic and affiliation
+  combinations, including optional environmental traits. Counts refer to people;
+  language/religious membership can overlap without adding people. Starting
+  communities and environmental works are located authoring inputs. Present edits
+  retain completed history; historical anchors are explicit causes.
+- D3/D6: use existing ecological quantities, water/channel access and terrain
+  connections. Human eras supply elapsed time, mobility and political capacity.
+  Processes share state and retain causes through the existing worker runner.
+- D4/D5: culture, language, faith and practices have independent identities;
+  contact changes affiliation without requiring migration. Political reach,
+  sovereignty, administration and claims remain distinct from those identities.
+- D7: finer areas inherit represented people and their identities; refinement
+  does not replay completed human eras. Located works retain geographic anchors.
+- D8: implement the source-backed Fire core, Aurora crystal/memory and Pressure
+  deep-access operations described below, with aggregate access, use and costs.
+  These mechanisms do not import setting names or prescribe cultures' beliefs.
+
+### M1 execution expansion
+
+1. Add typed population state, ecological support and conservative movement over
+   terrain connections. Reuse sampled geography and the retained channel network.
+2. Wire initialization and elapsed population processes into the shared sequence;
+   publish populated settlements with supporting conditions and history.
+3. Verify accounting, blocked movement, authored starts, determinism and worker
+   publication. Existing baseline: 11 people/process-binding tests passed.
+
+Primary files: domain society types; generation society support, population and
+publication modules; atlas workflow/module registration; focused generation tests.
+Remaining milestones will be expanded at their start, preserving their full scope.
+
+M1 expansion: `763c0c8e-abb2-4dd0-a892-d96bf909d826`, completed.
+Evidence: nine population/module checks pass, including accounting, water-separated
+communities, protected authored population, history retention and atlas publication;
+TypeScript and focused lint passed. Settlement counts now follow populated
+geography instead of the previous eight-place limit. Whole-world calibration
+remains B1 work.
+
+### M2 execution expansion
+
+1. Initialize independent cultural, language and religious identities in the
+   population groups; carry all affiliations through migration. Add elapsed
+   contact diffusion and geographic divergence without autonomous actors.
+2. Publish prevalence fields and located institutions through existing bindings;
+   preserve population totals and independent cultural/political selection.
+3. Verify connected/isolated communities, multilingual membership, identity
+   continuity and generated workflow publication. Primary files: society cultural
+   processes/publication, human feature registration and focused tests.
+
+M2 expansion: `f317b4d7-22d5-4556-8653-bd30f1424aec`, completed. Eight
+cultural/process-binding checks and fourteen population/people/workflow checks
+pass, including joint multilingual membership, isolation/ancestry and combined
+cultural/built publication. Specific magical social practices follow in E1.
+
+### E1 execution expansion
+
+1. Represent located works and their maintained condition; apply water, terrain,
+   land-use and animal effects to process state and refresh affected dependencies.
+   Reuse physical routing, water boundaries and ecology at new human-era elapsed time.
+2. Implement separate finite core supply/use, crystal charge/readers/memory access,
+   and depth-limited Pressure practice; refresh their physical pathways and derive
+   distinct triggered hazards, casualties, displacement and damaged works.
+3. Publish inspectable works and consequences; check downstream water, ecological
+   response, protected geography, finite resources, distinct interactions and
+   retention of completed history. Broad magic/ecology repair stays in B1.
+
+### M3 execution expansion
+
+1. Carry polity seats, support, claims, sovereignty and effective control between
+   human eras. Geographic reach uses the same traversable community graph as migration.
+2. Let loss of support and damaged seats reduce control and produce successor
+   identities; preserve populations, cultures and older claims. Recover viable ruins
+   through surviving connections. Institutions modify aggregate reach and support.
+3. Publish separate sovereignty, administration, control and claims; verify a stable
+   case, disruption and recovery, then restore politics to the full-world test.
+
+These mechanisms are implementation choices within M3, not new actor simulation requirements.
+
+### M4 execution expansion
+
+1. Reuse present society records on reruns; subdivide parent catchments by area
+   during refinement, preserving joint groups and ancestry. Refinement does not
+   run human eras again. Surface retained minor channels within child extents.
+2. Synchronize settlement edits with domain society state. Provide readable
+   composition, support, magic resources and historical causes in the inspector;
+   expose era political capacity and physical regime alongside duration/mobility.
+3. Verify protection, independent domain selection, inherited totals, and browser
+   authoring. Located works/events and group attributes use existing feature editing.
+
+### Bounded delivery
+
+Population, affiliations, politics, works, events and practice resources live in
+`world.societies`, indexed by area. The society processes consume the existing
+geographic fields and retained drainage, carry aggregate state through human eras,
+and publish settlements, routes, institutions and distinct political territories.
+E1's focused refreshes support society-owned works; they are not a redesign of the
+environmental generators or evidence of balanced interaction among all four pillars.
+
+Present edits update retained society state without rerunning completed eras.
+Child-area generation inherits people by catchment overlap and retains identities
+and history. Era configuration, population groups, works and inspection use the
+existing browser authoring workflow. Defaults and optional shaping remain the entry
+points; there is no actor simulation or continuously advancing history.
 
 ## Outcome and authority
 
@@ -79,9 +196,32 @@ two-way feedback proposal while rejecting its generic treatment of magic.
   processes; future extensions must not flatten their behavior. Do not build a
   speculative extension framework as a prerequisite for the current systems.
 
-The concrete operations and milestone checks below are proposals implementing
-this direction. The user has not authorized generator implementation or a full
-economic, practitioner or historical actor simulation.
+The concrete operations and milestone checks below originated as proposals
+implementing this direction. Society implementation was subsequently authorized;
+a full economic, practitioner or historical actor simulation remains excluded.
+
+### Accepted sequencing correction — 2026-10-23
+
+Complete society generation before addressing backlog item 10 or the other
+cross-system gaps. The user reversed the review's proposed prerequisite order:
+establish a functioning society pillar alongside magic, physical processes and
+geology, then perform their interconnection and balance pass.
+
+- Deliver M0 → M1 → M2 → E1 → M3 → M4. B1 requires separate design and authorization.
+- E1 remains part of society completion. Dams, passes, coastal works, land use,
+  hunting/conservation, environmental hazards and distinct Fire, Aurora and
+  Pressure interactions are not postponed to B1.
+- [Backlog item 10](backlog.md), including the wider magic/ecology rework and
+  ecological disturbance/default-quality gaps, belongs to the subsequent
+  four-pillar pass. It is not a prerequisite for M1 or E1.
+- Society should consume existing environmental state and implement the feedback
+  it needs. Do not conceal environmental defects with compensating population
+  multipliers or treat favorable society-only examples as proof of final balance.
+  Useful society defaults remain required; whole-world balance is evaluated in B1.
+
+This sequence supersedes the earlier review recommendation to repair the wider
+ecology/magic gaps first. The later execution request covers society; the latest
+scope correction explicitly excludes starting B1.
 
 ### Existing product boundaries
 
@@ -101,7 +241,7 @@ economic, practitioner or historical actor simulation.
 - One world owns entities and geography across scales. A culture is not a state;
   a political jurisdiction is not a generation patch.
 
-## Current implementation and reuse
+## Pre-implementation inventory and reuse
 
 Read during the 2026-10-22 research and plan setup:
 
@@ -122,10 +262,32 @@ against the current frontend and differ from the inspected active generators.
 Preserve it as a possible source of mechanisms to inspect; do not revive its
 backend architecture or assume its completed status establishes current behavior.
 
-Concurrent continuous-field work is changing domain and generation files,
-including the human generators. This plan owns only this document. Re-read those
-interfaces before implementation; do not freeze their current sampled storage
-shape into the society design or alter another task's plan.
+The continuous-field redesign previously described here was rolled back in
+`5f89906`. Current generation uses sampled process state and contour/river
+extraction; do not depend on the abandoned prepared-field interfaces or make
+their replacement a society prerequisite. Re-read current interfaces before
+implementation without freezing their storage shape into society concepts.
+
+### Biome, drainage and coastline review — 2026-10-23
+
+The following findings inform the proposed integration details in M1, E1 and M4.
+They do not add a separate environmental remediation milestone before society.
+
+| Current evidence                                                                                                                                                                                                                                                                           | Implication for society                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `965fd7f`: [biome rules](../packages/generation/src/canonry/ecologyBiomes.ts) and [feature extraction](../packages/generation/src/canonry/ecologyFeatures.ts) derive named regions from cover/environmental quantities and omit small patches.                                             | M1 derives supporting capacity, livelihoods and movement from ecological quantities, soils, water and animals. A missing biome polygon does not mean empty or unusable land. E1 changes ecological state before republishing descriptive regions.                          |
+| `9f35037`: [retained drainage](../packages/domain/src/drainage.ts) and [river extraction](../packages/generation/src/canonry/atlasFeatures.ts) keep all generated channel reaches, including those filtered out of mapped rivers, with downstream links, discharge and catchment profiles. | M1/E1 use the channel network for water access and downstream consequences. It is not every runoff cell or a substitute for the hydrological processes. M4 must implement inheritance from this network; its presence alone does not establish working refinement.         |
+| `666ef99`: [flow guidance](../packages/generation/src/canonry/flowGuidance.ts) changes downhill routing; [river paths](../packages/generation/src/canonry/riverPaths.ts) separately relax and curve mapped channels.                                                                       | Locate works against mapped geography and associate them with physical flow/topology. Moving a curve does not dam or divert water. Reach links are array indices, so works need geographic associations that survive regeneration and refinement rather than bare indices. |
+| `39fcd5c` and `965fd7f`: [water footprints](../packages/generation/src/canonry/geographicContours.ts), river-mouth clipping and biome exclusions use generated water boundaries. Ocean membership distinguishes connected water from enclosed low ground.                                  | E1 refreshes water connectivity, shorelines, mouths and ecological exclusions together after works. Harbor access depends on connected water, not elevation below sea level alone. Preserve consistent boundaries across presentation and process consumers.               |
+| [Ecology advancement](../packages/generation/src/canonry/ecologyProcesses.ts) skips inherited physical workspaces.                                                                                                                                                                         | E1 needs an explicit path for newly elapsed human-era ecological response. Reuse the process mechanisms while preserving the distinction between advancing time and refining completed history; removing the guard wholesale would replay effects.                         |
+
+Backlog item 10 records ecological quality problems observed in a Draft world.
+The review did not reproduce those measurements or establish the absence of all
+indirect magic effects; existing disturbance algorithms do not establish useful
+default behavior either. Preserve those issues for B1. During society development,
+use representative controlled environmental inputs where needed to distinguish
+society behavior from known input defects, and disclose limitations in generated
+worlds. Do not tune society around the defects or declare the later balance done.
 
 ## Research and implications
 
@@ -499,10 +661,12 @@ mandatory creator workflow, or a return to autonomous historical simulation.
 
 ## Proposed milestones
 
-M1–M4 and E1 are a decomposition for discussion, not an execution commitment.
+M1–M4 and E1 describe the authorized society delivery.
 Their acceptance examples and checks are agent-derived and may change while the
 user requirements remain intact. Authoring and inspection accompany each slice;
 M4 integrates them rather than postponing all UI work until the end.
+The user has fixed their priority ahead of B1 and backlog item 10. B1 is deferred;
+its goals and design must be established separately after society delivery.
 
 ### M0 — Workshop the society model
 
@@ -520,6 +684,9 @@ Scope: shared aggregate demographic state, population-supporting conditions,
 growth/decline, accessible movement and settlement history, with automatic initial
 generation, optional starting-condition authoring and inspection. Locate land use,
 resource dependencies and candidate works so E1 can evolve their consequences.
+Use underlying ecological quantities and the retained channel network, including
+unmapped tributaries; biome names and visible river filtering are presentation
+choices, not the authority for supporting conditions.
 
 Acceptance: changes in access or livelihood conditions affect movement and
 settlement; population changes distinguish aggregate growth/decline from migration,
@@ -551,6 +718,11 @@ practices, and Pressure deep-access and coastal interactions. Use the
 source-backed mechanisms above; develop social costs and resource limitations at
 aggregate scale. Add disturbance footprints and consequences for settlements,
 people and routes. Authoring and inspection accompany the processes.
+Associate works with both their located geometry and affected physical network.
+Refresh connected water, shorelines, mouths and ecological exclusions consistently;
+advance ecology for new human-era time without replaying inherited history.
+This society feedback is in scope before backlog item 10; comprehensive repair
+and balancing of magic/ecology and other environmental gaps remains B1 work.
 
 Acceptance: interventions change actual geography; affected physical and magical
 conditions feed back into society; destroyed settlements leave history and
@@ -564,6 +736,9 @@ Evidence: the worked examples above plus each system's distinct social use and
 cost, including a Pressure-diving access limit and an Aurora knowledge benefit.
 Compare protected/unprotected and maintained/abandoned works, inspect upstream
 and downstream effects, and check defaults across representative environments.
+Include a dam on an unmapped tributary, a harbor whose access depends on water
+connectivity, and land clearance followed by ecological response. Separate these
+society checks from later whole-world ecological calibration.
 These are proposed checks, not fixed event quotas or numerical performance caps.
 
 ### M3 — Politics, collapse and recovery [depends on M1, M2, E1]
@@ -588,6 +763,9 @@ Scope: coupled history, agreed historical shaping operations, present editing,
 authored protection, independent domain selection and regional/local refinement.
 Include intervention footprints, affected catchments/coasts, magical works,
 damaged sites and their inherited causes across scales.
+Consume retained drainage during refinement, allowing smaller channels to become
+visible while works and crossings retain their geographic associations. Verify
+this behavior explicitly rather than assuming stored reach metadata implements it.
 
 Acceptance: creators can understand and alter social geography through the existing
 atlas; ordinary edits preserve completed history; refinement retains identities,
@@ -597,36 +775,33 @@ default generation across representative seeds/geographies, and runtime
 measurements. Inspect geography and causal explanations, not only numerical
 validity. Report limitations without inventing caps or demanding user tuning.
 
+### B1 — Deferred four-pillar work [outside this delivery]
+
+The user intends to consider society, magic, physical processes and geology
+together later. That work has no agreed detailed design or completion criteria.
+Backlog item 10 and the earlier biome/drainage observations are inputs to that
+future discussion, not authorization to repair or calibrate other pillars now.
+The attempted B1 execution branch was canceled at the user's correction.
+
 ## Sulion mapping and resume
 
 | Milestone | Phase ID                               | State                      |
 | --------- | -------------------------------------- | -------------------------- |
-| M0        | `850ad3a1-3f86-4ee3-9e73-27a4867563f0` | In progress: workshop open |
-| M1        | `ae74e167-7dc0-44f2-9179-894d78745040` | Pending                    |
-| M2        | `cc7a4cc1-51aa-42e1-aa58-dce686b90122` | Pending                    |
-| E1        | `0732178d-7533-4d02-b1ca-d27561a584ed` | Pending                    |
-| M3        | `75d063b0-3759-4481-9741-e0ad0ac484d1` | Pending                    |
-| M4        | `3ff0f2c9-b569-434b-94df-8b3547d04db3` | Pending                    |
+| M0        | `850ad3a1-3f86-4ee3-9e73-27a4867563f0` | Completed |
+| M1        | `ae74e167-7dc0-44f2-9179-894d78745040` | Completed |
+| M2        | `cc7a4cc1-51aa-42e1-aa58-dce686b90122` | Completed |
+| E1        | `0732178d-7533-4d02-b1ca-d27561a584ed` | Completed |
+| M3        | `75d063b0-3759-4481-9741-e0ad0ac484d1` | Completed |
+| M4        | `3ff0f2c9-b569-434b-94df-8b3547d04db3` | Completed |
+| B1        | `fc6a9e64-e3e4-4d6b-a19b-f7f3411c51c4` | Deferred; excluded |
 
-Completed: initial research, comparison with representative existing process
-implementations, and revision of this plan to the accepted aggregate generator
-boundary; two-way environmental feedback and source-grounded Fire/Aurora/Pressure
-social mechanisms are now recorded. Project guidance preserves first-class magic
-processes without named lore and leaves future systems open. No society implementation or runtime validation has been
-performed as part of these planning requests. Specific algorithms, schemas and controls
-remain proposals; the generator abstraction and default-first direction are agreed.
-
-Next workshop: D1 and D8, creator shaping and system-specific social use. Use a
-Fire-dependent pass, an Aurora repository and a Pressure-exposed harbor to
-establish what the creator specifies, what generation chooses, and what later
-edits change. Preserve the current systems' concrete world effects while refining
-their social adaptations, costs and controls; future systems remain possible.
-Then refine demographic scope and the first connected history example within the
-agreed process boundary. Do not reopen detailed actor/economy simulation as a
-prerequisite for those decisions.
+Society implementation is in the domain `society` modules and generation
+`society*` processes, with browser controls in `Society*` components and human-era
+configuration. Focused checks cover population conservation, diffusion, political
+collapse/recovery, works, practices, authoring and refinement. These establish the
+bounded society behavior; they do not establish four-pillar balance.
 
 On resume, read `sulion plan current` and this document. If needed, attach the root
 with `sulion plan attach e74959cf-4d0a-491a-b247-40fe6316d698`.
-Keep this root open while the design is being workshopped. Expand an implementation
-milestone only when execution is requested; re-read then-current source and the
-applicable platform/language standards before choosing file-level changes.
+The root closes with society delivered and B1 skipped. Future four-pillar work
+needs a separate scoped plan based on the user's goals.

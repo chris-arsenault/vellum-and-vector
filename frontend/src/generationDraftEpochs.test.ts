@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
-import { newGenerationDraft, normalizeGenerationDraft, prepareDraft } from "./generationDraft";
+import { newGenerationDraft, prepareDraft } from "./generationDraft";
+import { draftHumanEras, updateHumanEra } from "./generationHumanEras";
 import {
   deleteDraftEpoch,
   draftEpochs,
@@ -66,14 +67,20 @@ it("inserts defaults, preserves values when reordering and removes orphan regime
   expect(prepareDraft(draft).diagnostics).toEqual([]);
 });
 
-it("preserves compatibility-only human metadata through structural history edits", () => {
-  let draft = newGenerationDraft();
-  draft.recipe.settings.humanEras[0].politicalCapacity = 3;
-  draft.recipe.settings.humanEras[0].physicalEpoch = "Formation";
-  draft = normalizeGenerationDraft(draft);
-  const before = structuredClone(draft.recipe.settings.humanEras);
+it("rebinds human regime references through renaming and deletion without changing the original", () => {
+  let draft = updateHumanEra(newGenerationDraft(), 0, {
+    politicalCapacity: 3,
+    physicalEpoch: "Formation",
+  });
+  const original = structuredClone(draft);
   draft = renameDraftEpoch(draft, "Formation", "Assembly");
-  expect(draft.recipe.settings.humanEras).toEqual(before);
+  expect(draftHumanEras(draft)[0]).toMatchObject({
+    physicalEpoch: "Assembly",
+    politicalCapacity: 3,
+  });
+  expect(draftHumanEras(original)[0].physicalEpoch).toBe("Formation");
+  draft = deleteDraftEpoch(draft, "Assembly");
+  expect(prepareDraft(draft).source.world.humanEras![0].physicalEpoch).toBeNull();
 });
 
 it("rejects duplicate names or deleting the last epoch without mutating the draft", () => {
