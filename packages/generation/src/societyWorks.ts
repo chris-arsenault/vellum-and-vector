@@ -221,7 +221,8 @@ function applyWork(state: GenerationState, work: SocietyWork, years: number) {
     if (work.kind === "irrigation") irrigate(state, i, amount, edit);
     if (work.kind === "clearance") clearLand(state, i, amount, years, edit);
     if (work.kind === "hunting")
-      edit("herbivores", v("herbivores") * Math.exp((-amount * years) / 150));
+      for (const animal of ["herbivores", "grazers", "browsers"])
+        edit(animal, v(animal) * Math.exp((-amount * years) / 150));
     if (work.kind === "conservation") conserve(state, i, amount, years, edit);
   }
   work.applied = target;

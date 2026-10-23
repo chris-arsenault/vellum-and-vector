@@ -10,7 +10,9 @@ import { createRiverPaths, riverPath, type RiverPaths } from "./riverPaths";
 import type { PhysicalField } from "./field";
 import { oceanFootprint } from "./geographicContours";
 import { extractEcologicalFeatures } from "./ecologyFeatures";
+import { extractReliefFeatures, extractValleys } from "./reliefFeatures";
 import { physicalDistance } from "./physicalMetric";
+import { extractOceans } from "./oceanFeatures";
 
 function riverReach(state: GenerationState, start: number, incoming: Int32Array) {
   const map = state.physical!.map,
@@ -154,6 +156,7 @@ function riverInputs(map: PhysicalField) {
   return { incoming, basinDischarge };
 }
 export interface GeographicDeliveries {
+  oceans: boolean;
   impacts: boolean;
   volcanism: boolean;
   fractures: boolean;
@@ -164,6 +167,7 @@ export interface GeographicDeliveries {
   rivers: boolean;
 }
 const allDeliveries: GeographicDeliveries = {
+  oceans: true,
   impacts: true,
   volcanism: true,
   fractures: true,
@@ -179,15 +183,23 @@ export function extractNativeGeography(
   deliveries = allDeliveries
 ) {
   state.surface.ocean = oceanFootprint(state);
+  if (deliveries.oceans) extractOceans(state);
   extractGeologicalEvents(state, deliveries);
   if (deliveries.lakes) extractLakes(state);
-  if (deliveries.landforms) extractNamedLandforms(state);
+  if (deliveries.landforms) {
+    extractNamedLandforms(state);
+    extractReliefFeatures(state);
+  }
   if (deliveries.magic) extractMagicPlaces(state);
   if (deliveries.ecology) extractEcologicalFeatures(state);
-  if (deliveries.rivers) extractRiverGeography(state, context);
+  if (deliveries.rivers) extractRiverGeography(state, context, deliveries.landforms);
   else delete state.domain.world.drainage?.[state.domain.scope.areaId];
 }
-function extractRiverGeography(state: GenerationState, context: MapProcessContext) {
+function extractRiverGeography(
+  state: GenerationState,
+  context: MapProcessContext,
+  valleys: boolean
+) {
   const work = state.physical!,
     map = work.map,
     paths = createRiverPaths(map),
@@ -212,6 +224,11 @@ function extractRiverGeography(state: GenerationState, context: MapProcessContex
     if (shortHeadwater(work, incoming, members)) continue;
     reach.featureIds = publishReach(state, start, members, paths, discharge);
   }
+  if (valleys)
+    extractValleys(
+      state,
+      reaches.map(({ members, reach }) => ({ members, featureIds: reach.featureIds }))
+    );
   state.domain.world.drainage = {
     ...state.domain.world.drainage,
     [state.domain.scope.areaId]: {

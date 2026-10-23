@@ -122,7 +122,7 @@ function applyImpact(
 ) {
   const center = nearestTriangle(map.mesh, source.x, source.y);
   map.FeatureFlags[center] |= Feature.ImpactCenter;
-  const scale = radius / Math.max(radius, p.ImpactMaximumRadius);
+  const scale = (radius / Math.max(radius, p.ImpactMaximumRadius)) ** 0.3;
   const depth = Math.max(1, round(((p.ElevationScale * p.ImpactDepthRatio) / 1000) * scale));
   const rim = Math.max(1, round(((p.ElevationScale * p.ImpactRimHeightRatio) / 1000) * scale));
   const share = 1 - clamp(map.WaterDepths[center] / units(p.ImpactOceanShockDepth), 0, 1);

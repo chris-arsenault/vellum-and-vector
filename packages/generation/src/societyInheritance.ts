@@ -1,4 +1,10 @@
-import { mergePopulation, spatial, type SocietyRegion, type SocietyCommunity } from "@atlas/domain";
+import {
+  mergePopulation,
+  population,
+  spatial,
+  type SocietyRegion,
+  type SocietyCommunity,
+} from "@atlas/domain";
 import type { GenerationState } from "./process";
 import { refreshSocietyConnections, refreshSocietySupport } from "./societyGeography";
 import { territoryShape } from "./societyPoliticalPublication";
@@ -38,11 +44,14 @@ function refineSociety(state: GenerationState, prior: SocietyRegion) {
     if (!origin.footprint) continue;
     const area = spatial.area(origin.footprint);
     if (area <= 0) continue;
+    const home = region.communities.find(
+      (c) => c.footprint && spatial.pointCoverage(c.footprint)(origin.position)
+    );
     for (const c of region.communities) {
       if (!c.footprint || !spatial.intersects(origin.footprint, c.footprint)) continue;
       const overlap = spatial.intersection(origin.footprint, c.footprint);
       if (!overlap) continue;
-      const fraction = spatial.area(overlap) / area;
+      const fraction = inheritedFraction(origin, c === home, spatial.area(overlap) / area);
       c.groups = mergePopulation([
         ...c.groups,
         ...origin.groups.map((g) => ({ ...g, count: g.count * fraction })),
@@ -52,8 +61,7 @@ function refineSociety(state: GenerationState, prior: SocietyRegion) {
       );
       c.parentCommunity = origin.id;
       c.protected ||= origin.protected;
-      c.founded = origin.founded;
-      carryIdentity(c, origin);
+      if (c === home) carryIdentity(c, origin);
     }
   }
   region.history = structuredClone(prior.history);
@@ -74,12 +82,19 @@ function refineSociety(state: GenerationState, prior: SocietyRegion) {
   inheritPolitics(region, prior);
   refreshSocietyConnections(state);
 }
+function inheritedFraction(origin: SocietyCommunity, located: boolean, areaFraction: number) {
+  const total = population(origin),
+    urban = origin.settlement?.population ?? 0;
+  return ((total - urban) * areaFraction + (located ? urban : 0)) / Math.max(1, total);
+}
 function carryIdentity(c: SocietyCommunity, origin: SocietyCommunity) {
-  if (!spatial.pointCoverage(c.footprint!)(origin.position)) return;
   c.id = origin.id;
   c.name = origin.name;
   c.position = origin.position;
   c.status = origin.status;
+  c.founded = origin.founded;
+  c.settlement = structuredClone(origin.settlement);
+  c.history = structuredClone(origin.history);
 }
 function inheritPolitics(region: SocietyRegion, prior: SocietyRegion) {
   if (!prior.politics) return;

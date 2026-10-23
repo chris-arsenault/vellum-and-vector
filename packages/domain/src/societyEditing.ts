@@ -119,19 +119,45 @@ function editCommunity(
 ) {
   const old = snapshot.world.features[feature.id];
   const attributes = old?.detail[areaId]?.attributes ?? old?.attributes;
-  if (!sameValue(attributes?.groups, feature.attributes.groups))
-    c.groups = populationGroupsSchema.parse(feature.attributes.groups);
-  else if (feature.attributes.population !== undefined)
-    resizePopulation(c, Number(feature.attributes.population));
+  editResidentCounts(c, feature, attributes);
   c.name = feature.name;
   c.protected = feature.protected;
   if (feature.geometry.type === "Point")
     c.position = { x: feature.geometry.coordinates[0], y: feature.geometry.coordinates[1], z: 0 };
-  feature.attributes = { ...feature.attributes, population: population(c), groups: c.groups };
+  const urban = c.settlement?.population ?? population(c);
+  feature.attributes = {
+    ...feature.attributes,
+    population: urban,
+    settlementPopulation: urban,
+    communityPopulation: population(c),
+    ruralPopulation: population(c) - urban,
+    groups: c.groups,
+  };
   updateCommunityStatus(c);
   c.causes.push(
     "Present population or settlement edited by the creator; completed history retained."
   );
+}
+function editResidentCounts(
+  c: SocietyCommunity,
+  feature: AtlasFeature,
+  attributes?: Record<string, unknown>
+) {
+  const before = population(c);
+  if (!sameValue(attributes?.groups, feature.attributes.groups)) {
+    c.groups = populationGroupsSchema.parse(feature.attributes.groups);
+    if (c.settlement)
+      c.settlement.population = before > 0 ? (c.settlement.population * population(c)) / before : 0;
+  } else if (feature.attributes.population !== undefined) {
+    const count = Number(feature.attributes.population);
+    requireThat(
+      Number.isFinite(count) && count >= 0,
+      "population",
+      "Population must be finite and nonnegative."
+    );
+    resizePopulation(c, c.settlement ? before - c.settlement.population + count : count);
+    if (c.settlement) c.settlement.population = count;
+  }
 }
 function resizePopulation(c: SocietyCommunity, count: number) {
   const before = population(c);
@@ -149,6 +175,8 @@ function resizePopulation(c: SocietyCommunity, count: number) {
   if (before === 0 && count > 0) c.groups[0].count = count;
 }
 function updateCommunityStatus(c: SocietyCommunity) {
-  if (population(c) === 0) c.status = "abandoned";
+  const residents = c.settlement?.population ?? population(c);
+  if (c.settlement) c.settlement.peak = Math.max(c.settlement.peak, residents);
+  if (residents === 0) c.status = "abandoned";
   else if (c.status === "abandoned") c.status = "inhabited";
 }

@@ -6,6 +6,7 @@ import type { GenerationState, MapProcess, MapProcessContext } from "./process";
 import { generationBindings } from "./generationBindings";
 import { initializeCultures, diffuseCultures } from "./societyCulture";
 import { publishCultures } from "./societyCulturePublication";
+import { atlasName, geographicNamingCulture } from "./atlasNaming";
 
 export function landCells(state: GenerationState) {
   const covers = spatial.pointCoverage(state.domain.scope.footprint);
@@ -65,12 +66,23 @@ export function centers(
   }
   return selected.map((i, index) => {
     const id = semanticId(state.domain.world.id, kind, `${state.domain.scope.areaId}:${index}`);
+    const position = gridPosition(state.surface, i);
+    const named = atlasName(state.domain.world, {
+      key: id,
+      kind: kind === "culture" ? "culture" : "polity",
+      position,
+      term: "Commonwealth",
+    });
     const entity: Entity = {
       id,
       kind,
-      name: `${kind === "culture" ? "Culture" : "Polity"} ${index + 1}`,
+      name: named.name,
       state: "generated",
-      attributes: { center: gridPosition(state.surface, i), initialPopulation: 1000 },
+      attributes: {
+        center: position,
+        initialPopulation: 1000,
+        namingCulture: geographicNamingCulture(state.domain.world, position).id,
+      },
       relations: [],
     };
     state.domain.world.entities[id] = entity;

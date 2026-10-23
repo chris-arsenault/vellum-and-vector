@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import type { AtlasFeature } from "@atlas/domain";
+import type { AtlasFeature, PopulationGroup, SocietyRegion } from "@atlas/domain";
 import { readFile } from "node:fs/promises";
 import { installGenerationFixture } from "./generationFixture";
 
@@ -13,7 +13,9 @@ function settlementFeature(): AtlasFeature {
     geometry: { type: "Point", coordinates: [2000, 500] },
     attributes: {
       communityId: "town",
-      population: 1000,
+      population: 200,
+      communityPopulation: 1000,
+      ruralPopulation: 800,
       groups: [
         {
           people: "residents",
@@ -34,11 +36,74 @@ function settlementFeature(): AtlasFeature {
     causes: [],
   };
 }
+function societyState(feature: AtlasFeature): SocietyRegion {
+  return {
+    areaId: "fixture",
+    spaceId: "surface",
+    connections: [],
+    works: [],
+    events: [],
+    magic: [],
+    history: [
+      {
+        id: "Settlement",
+        years: 20,
+        before: 900,
+        after: 1000,
+        births: 150,
+        deaths: 50,
+        migrated: 0,
+        cycles: 2,
+        causes: [],
+      },
+    ],
+    communities: [
+      {
+        id: "town",
+        name: feature.name,
+        position: { x: 2000, y: 500, z: 0 },
+        areaKm2: 4,
+        groups: feature.attributes.groups as PopulationGroup[],
+        support: {
+          capacity: 1500,
+          farming: 1000,
+          grazing: 300,
+          gathering: 100,
+          fishing: 100,
+          water: 1,
+        },
+        founded: "Settlement, year 10",
+        status: "inhabited",
+        protected: false,
+        causes: [],
+        settlement: { population: 200, peak: 200, recoveryYears: 0 },
+        history: [
+          {
+            era: "Settlement",
+            year: 10,
+            population: 900,
+            capacity: 1200,
+            settlementPopulation: 150,
+            status: "inhabited",
+          },
+          {
+            era: "Settlement",
+            year: 20,
+            population: 1000,
+            capacity: 1500,
+            settlementPopulation: 200,
+            status: "inhabited",
+          },
+        ],
+      },
+    ],
+  };
+}
 test("authors population groups and places a located work through the inspector", async ({
   page,
 }) => {
   const settlement = settlementFeature();
-  await installGenerationFixture(page, false, false, false, [settlement]);
+  await installGenerationFixture(page, false, false, false, [settlement], societyState(settlement));
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
@@ -54,6 +119,11 @@ test("authors population groups and places a located work through the inspector"
   const box = (await canvas.boundingBox())!;
   await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
   await expect(page.locator(".right-panel h2")).toHaveText("River town");
+  await expect(page.getByText("200 settlement residents", { exact: false })).toBeVisible();
+  await expect(page.getByText("800 rural residents", { exact: false })).toBeVisible();
+  await page.getByText("Local population history", { exact: true }).click();
+  await expect(page.getByRole("cell", { name: "Settlement / 10", exact: true })).toBeVisible();
+  await expect(page.getByRole("cell", { name: "Settlement / 20", exact: true })).toBeVisible();
   await page.getByText("Properties & relationships", { exact: true }).click();
   await page.getByLabel("People in group 1", { exact: true }).fill("1200");
   await page
@@ -70,7 +140,9 @@ test("authors population groups and places a located work through the inspector"
   expect(
     exported.features.find((f: { id: string }) => f.id === settlement.id).properties
   ).toMatchObject({
-    population: 1200,
+    population: 240,
+    communityPopulation: 1200,
+    ruralPopulation: 960,
     groups: [{ count: 1200, practices: ["conservation", "cultivation"] }],
   });
   expect(

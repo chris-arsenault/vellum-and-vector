@@ -5,6 +5,7 @@ import type { MapProcessContext } from "./process";
 import { initializePopulation, evolvePopulation, populationTotal } from "./societyPopulation";
 import { retainSocietyFootprints } from "./societyInheritance";
 import { publishSettlements } from "./societyPublication";
+import { evolveSociety } from "./societyEvolution";
 function societyFixture() {
   const state = landscape();
   state.domain.world.id = "bc07dcd0-7cba-46b1-8e56-5f7829dde8cb";
@@ -28,10 +29,10 @@ function societyFixture() {
   return { state, context };
 }
 
-it("refines joint populations by inherited catchment area without replaying eras", () => {
+it("refines rural catchments and located settlements without replaying eras", async () => {
   const { state, context } = societyFixture();
   initializePopulation(state, context);
-  evolvePopulation(state, context, 200);
+  await evolveSociety(state, context, 200);
   retainSocietyFootprints(state);
   const original = structuredClone(state.domain.world.societies!.area);
   publishSettlements(state, context);
@@ -44,8 +45,10 @@ it("refines joint populations by inherited catchment area without replaying eras
     return (
       sum +
       (overlap
-        ? (c.groups.reduce((n, g) => n + g.count, 0) * spatial.area(overlap)) /
-          spatial.area(c.footprint!)
+        ? ((c.groups.reduce((n, g) => n + g.count, 0) - (c.settlement?.population ?? 0)) *
+            spatial.area(overlap)) /
+            spatial.area(c.footprint!) +
+          (spatial.pointCoverage(footprint)(c.position) ? (c.settlement?.population ?? 0) : 0)
         : 0)
     );
   }, 0);

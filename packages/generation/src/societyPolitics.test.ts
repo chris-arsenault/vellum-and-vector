@@ -37,7 +37,7 @@ it("keeps stable reach and preserves residents and claims through collapse and s
   const groups = structuredClone(region.communities.map((c) => c.groups));
   const claims = [...politics.polities[0].claims];
   context.epochs = [epoch("Disruption", 200, { politicalCapacity: 0 })];
-  evolvePolitics(state, context, 200);
+  for (let cycle = 0; cycle < 20; cycle++) evolvePolitics(state, context, 10);
   expect(politics.polities[0].status).toBe("collapsed");
   expect(politics.polities[0].claims).toEqual(claims);
   expect(region.communities.map((c) => c.groups)).toEqual(groups);

@@ -63,6 +63,29 @@ const length = (coordinates: number[][]) =>
     .slice(1)
     .reduce((sum, p, i) => sum + Math.hypot(p[0] - coordinates[i][0], p[1] - coordinates[i][1]), 0);
 
+it("turns a mouth into shallow water toward the deeper water beside it", () => {
+  const { map, main, mouth } = network();
+  const ending = () => {
+    const line = riverPath(map, createRiverPaths(map), main).geometry.coordinates,
+      [a, b] = line.slice(-2);
+    return [b[0] - a[0], b[1] - a[1]];
+  };
+  map.WaterDepths[mouth] = 0.03 * 1024;
+  const straight = ending();
+  // The open water lies beside the mouth, off the river's line of approach.
+  let side = -1;
+  for (let edge = 0; edge < map.mesh.degree[mouth]; edge++) {
+    const j = map.mesh.neighbors[mouth * map.mesh.stride + edge];
+    if (j >= 0 && Math.abs(map.mesh.y[j] - map.mesh.y[mouth]) > 1) side = j;
+  }
+  map.WaterKindCodes[side] = 1;
+  map.WaterDepths[side] = 40 * 1024;
+  const turned = ending(),
+    toward = Math.sign(map.mesh.y[side] - map.mesh.y[mouth]),
+    lean = ([x, y]: number[]) => (toward * y) / Math.hypot(x, y);
+  expect(lean(turned) - lean(straight)).toBeGreaterThan(0.15);
+});
+
 it("removes the repeated 60-degree mesh staircase rather than only inserting vertices", () => {
   const { map, main } = network(),
     paths = createRiverPaths(map);

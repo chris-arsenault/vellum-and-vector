@@ -111,6 +111,7 @@ export function applySocietyEvent(state: GenerationState, event: SocietyEvent) {
     );
     const casualties = population(c) * severity * 0.2;
     for (const g of c.groups) g.count *= 1 - severity * 0.2;
+    if (c.settlement) c.settlement.population *= (1 - severity * 0.2) * (1 - severity * 0.6);
     event.casualties += casualties;
     event.displaced += relocateSurvivors(state, c, severity * 0.6);
     event.communities.push(c.id);
@@ -142,7 +143,11 @@ export function resolveSocietyHazards(
     for (const exposure of exposures(state, c)) {
       if (context.random() >= 1 - Math.exp(-exposure.rate * years)) continue;
       const event: SocietyEvent = {
-        id: semanticId(state.domain.world.id, "society-event", `${era}:${c.id}:${exposure.kind}`),
+        id: semanticId(
+          state.domain.world.id,
+          "society-event",
+          `${era}:${state.society!.cycle?.index ?? 0}:${c.id}:${exposure.kind}`
+        ),
         era,
         kind: exposure.kind,
         position: c.position,

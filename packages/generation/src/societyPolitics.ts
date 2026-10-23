@@ -4,6 +4,7 @@ import { centers } from "./mapPeople";
 import { initializePopulation, nearestCommunity } from "./societyPopulation";
 import { communityReach } from "./societyContact";
 import { generationBindings } from "./generationBindings";
+import { namingCulture } from "./atlasNaming";
 
 export function initializePolitics(state: GenerationState, context: MapProcessContext) {
   if (!state.society) initializePopulation(state, context);
@@ -93,18 +94,34 @@ function controlCommunities(state: GenerationState, scores: Float64Array[], year
     politics = region.politics!;
   politics.control = {};
   politics.contested = {};
+  politics.tenure ??= {};
   for (const [i, c] of region.communities.entries()) {
     const rank = politics.polities
       .map((p, j) => ({ p, score: scores[j][i] }))
       .sort((a, b) => b.score - a.score);
     const first = rank[0];
-    if (!first || first.score < 0.12 || population(c) < 1) continue;
+    if (!first || first.score < 0.12 || population(c) < 1) {
+      delete politics.tenure[c.id];
+      continue;
+    }
     politics.control[c.id] = first.p.id;
     if (rank[1]?.score > first.score * 0.8)
       politics.contested[c.id] = rank.slice(0, 2).map((r) => r.p.id);
-    if (years >= 100 && first.score > 0.45 && !politics.contested[c.id])
-      consolidate(state, first.p, c.id);
+    retainControl(state, c.id, first, years);
   }
+}
+function retainControl(
+  state: GenerationState,
+  id: string,
+  first: { p: SocietyPolity; score: number },
+  years: number
+) {
+  const politics = state.society!.region.politics!;
+  const previous = politics.tenure![id];
+  const tenure = previous?.polity === first.p.id ? previous.years + years : years;
+  politics.tenure![id] = { polity: first.p.id, years: tenure };
+  if (tenure >= 100 && first.score > 0.45 && !politics.contested[id])
+    consolidate(state, first.p, id);
 }
 function consolidate(state: GenerationState, polity: SocietyPolity, id: string) {
   state.society!.region.politics!.sovereignty[id] = polity.id;
@@ -121,7 +138,10 @@ function successor(state: GenerationState, parent: SocietyPolity, community: str
     kind: "polity",
     name: `${c.name} commonwealth`,
     state: "generated",
-    attributes: { center: c.position },
+    attributes: {
+      center: c.position,
+      namingCulture: namingCulture(state.domain.world, c.position).id,
+    },
     relations: [{ targetId: parent.id, kind: "derivedFrom" }],
   };
   state.domain.world.entities[id] = entity;
@@ -139,6 +159,7 @@ function successor(state: GenerationState, parent: SocietyPolity, community: str
 function recordPoliticalChanges(state: GenerationState, years: number, era: string) {
   const region = state.society!.region,
     politics = region.politics!;
+  politics.isolation ??= {};
   for (const p of [...politics.polities]) {
     const controlled = Object.keys(politics.control).filter((id) => politics.control[id] === p.id);
     const status = !controlled.length
@@ -150,7 +171,8 @@ function recordPoliticalChanges(state: GenerationState, years: number, era: stri
     p.status = status;
     p.causes.push(cause);
     politics.history.push({ era, polity: p.id, status, communities: controlled, cause });
-    if (status === "active" || years < 100) continue;
+    politics.isolation[p.id] = status === "active" ? 0 : (politics.isolation[p.id] ?? 0) + years;
+    if (politics.isolation[p.id] < 100) continue;
     const independent = region.communities.filter(
       (c) => politics.sovereignty[c.id] === p.id && !politics.control[c.id] && c.status !== "ruined"
     );
@@ -173,7 +195,7 @@ export function evolvePolitics(state: GenerationState, context: MapProcessContex
   );
   const era = context.epochs.at(-1)?.id ?? "Settlement";
   recordPoliticalChanges(state, years, era);
-  recoverCommunities(state, years, era);
+  if (!state.society!.cycle) recoverCommunities(state, years, era);
   context.recordCause({
     kind: "domain",
     process: "human.political-change",
@@ -182,6 +204,7 @@ export function evolvePolitics(state: GenerationState, context: MapProcessContex
   });
 }
 function applyPoliticalAnchors(state: GenerationState, era: string) {
+  if (state.society!.cycle && state.society!.cycle.index > 0) return;
   const politics = state.society!.region.politics!;
   for (const f of Object.values(state.domain.world.features)) {
     if (

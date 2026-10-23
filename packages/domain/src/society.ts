@@ -31,6 +31,18 @@ export interface SocietyCommunity {
   causes: string[];
   footprint?: Geometry;
   parentCommunity?: string;
+  /** Concentrated residents are part of groups, never an additional population. */
+  settlement?: { population: number; peak: number; recoveryYears: number };
+  isolationYears?: number;
+  history?: SocietyOccupation[];
+}
+export interface SocietyOccupation {
+  era: string;
+  year: number;
+  population: number;
+  capacity: number;
+  settlementPopulation: number;
+  status: SocietyCommunity["status"];
 }
 export interface SocietyConnection {
   from: string;
@@ -48,6 +60,7 @@ export interface SocietyEraRecord {
   migrated: number;
   after: number;
   causes: string[];
+  cycles?: number;
 }
 export interface SocietyRegion {
   areaId: string;
@@ -73,6 +86,8 @@ export interface SocietyPolitics {
   sovereignty: Record<string, string>;
   control: Record<string, string>;
   contested: Record<string, string[]>;
+  tenure?: Record<string, { polity: string; years: number }>;
+  isolation?: Record<string, number>;
   history: { era: string; polity: string; status: string; communities: string[]; cause: string }[];
 }
 export type SocietyWorkKind =

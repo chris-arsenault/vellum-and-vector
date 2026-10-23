@@ -11,6 +11,7 @@ import type { GenerationState, MapProcess, MapProcessContext } from "./process";
 import { centers } from "./mapPeople";
 import { initializePopulation, nearestCommunity } from "./societyPopulation";
 import { communityReach } from "./societyContact";
+import { atlasName, namingCulture } from "./atlasNaming";
 
 export function culturalIdentity(
   state: GenerationState,
@@ -25,7 +26,9 @@ export function culturalIdentity(
     kind,
     name,
     state: "generated",
-    attributes: {},
+    attributes: parent
+      ? { namingCulture: state.domain.world.entities[parent]?.attributes.namingCulture }
+      : {},
     relations: parent ? [{ targetId: parent, kind: "derivedFrom" }] : [],
   };
   return id;
@@ -34,6 +37,16 @@ function originReach(state: GenerationState, origin: Entity) {
   const p = origin.attributes.center as Position;
   const nearest = nearestCommunity(state, p.x, p.y);
   return communityReach(state.society!.region, state.society!.region.communities.indexOf(nearest));
+}
+function nameFoundingCommunity(state: GenerationState, c: SocietyCommunity, culture: string) {
+  const authored = c.causes.some((cause) => cause.startsWith("Authored starting community"));
+  if (state.society!.inherited || c.protected || authored) return;
+  c.name = atlasName(state.domain.world, {
+    key: c.id,
+    kind: "settlement",
+    position: c.position,
+    culture,
+  }).name;
 }
 export function initializeCultures(state: GenerationState, context: MapProcessContext) {
   if (!state.society) initializePopulation(state, context);
@@ -52,6 +65,11 @@ export function initializeCultures(state: GenerationState, context: MapProcessCo
       founders = [state.domain.world.entities[id]];
       founders[0].attributes.center = c.position;
     }
+    for (const origin of founders)
+      origin.attributes.namingCulture ??= namingCulture(
+        state.domain.world,
+        origin.attributes.center as Position
+      ).id;
     c.groups = mergePopulation(
       c.groups.flatMap((group) =>
         group.culture
@@ -70,6 +88,7 @@ export function initializeCultures(state: GenerationState, context: MapProcessCo
             }))
       )
     );
+    nameFoundingCommunity(state, c, founders[0].id);
   }
 }
 function dominantMembership(
@@ -104,6 +123,7 @@ function strongestContacts(state: GenerationState) {
   for (const link of connections) {
     const a = byId.get(link.from)!,
       b = byId.get(link.to)!;
+    if (population(communities[a]) < 1 || population(communities[b]) < 1) continue;
     const strength = Math.exp(-link.travelCost / 150000);
     if (strength > contacts[a].strength) contacts[a] = { index: b, strength };
     if (strength > contacts[b].strength) contacts[b] = { index: a, strength };
@@ -139,9 +159,10 @@ export function diffuseCultures(state: GenerationState, context: MapProcessConte
     if (c.protected || population(c) === 0) continue;
     const contact = contacts[i];
     if (contact.index < 0 || contact.strength < 0.1) {
-      diverge(state, c, years);
+      accumulateIsolation(state, c, years);
       continue;
     }
+    c.isolationYears = 0;
     const fraction = 1 - Math.exp((-years * contact.strength) / 400);
     c.groups = adopt(before[i], before[contact.index], fraction);
   }
@@ -152,6 +173,10 @@ export function diffuseCultures(state: GenerationState, context: MapProcessConte
     description:
       "Languages, traditions and practices spread through contact without adding or moving people; isolated communities can retain and develop local identities.",
   });
+}
+function accumulateIsolation(state: GenerationState, c: SocietyCommunity, years: number) {
+  c.isolationYears = (c.isolationYears ?? 0) + years;
+  diverge(state, c, c.isolationYears);
 }
 export const cultureInitialize: MapProcess = {
   contract: {

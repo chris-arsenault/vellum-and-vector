@@ -22,6 +22,7 @@ import { impactCratering, plannedImpacts } from "./impacts";
 import { physicalSampler } from "./physicalMetric";
 import { plateAdvection } from "./advection";
 import { landformClassification } from "./landforms";
+import { glacialLandforms } from "./glacialLandforms";
 import { Landform } from "./codes";
 
 const bounds: [number, number, number, number] = [-50_000, -50_000, 50_000, 50_000];
@@ -48,14 +49,49 @@ const integral = (values: Float64Array, areas: Float64Array) =>
 it("retains seabed, flooded glacial valleys, lakes and glacial landforms during classification", () => {
   const map = fixture();
   const expected = [Landform.Seabed, Landform.Fjord, Landform.Basin, Landform.Moraine];
-  for (let i = 0; i < map.mesh.count; i++) {
-    map.Elevation[i] = map.mesh.x[i] * 1024;
-    const kind = i % 4;
-    map.WaterKindCodes[i] = kind < 2 ? 1 : kind === 2 ? 2 : 0;
-    map.LandformCodes[i] = kind === 1 ? Landform.UValley : kind === 3 ? Landform.Moraine : 0;
-  }
+  const marks = () => {
+    for (let i = 0; i < map.mesh.count; i++) {
+      const kind = i % 4;
+      map.WaterKindCodes[i] = kind < 2 ? 1 : kind === 2 ? 2 : 0;
+      map.LandformCodes[i] = kind === 1 ? Landform.UValley : kind === 3 ? Landform.Moraine : 0;
+    }
+  };
+  // A shallow trough along y = 0: land rises on both flanks within a fjord's half-width, and
+  // no summit is prominent enough to be a peak.
+  for (let i = 0; i < map.mesh.count; i++)
+    map.Elevation[i] = ((Math.abs(map.mesh.y[i]) - 2000) * 1024) / 1000;
+  marks();
   landformClassification(map, physicalContext(42, 0, atlasPhysicalProfile()));
   for (let i = 0; i < map.mesh.count; i++) expect(map.LandformCodes[i]).toBe(expected[i % 4]);
+  // Scoured open shelf with no flanking land is seabed.
+  map.Elevation.fill(-500 * 1024);
+  marks();
+  landformClassification(map, physicalContext(42, 0, atlasPhysicalProfile()));
+  for (let i = 1; i < map.mesh.count; i += 4) expect(map.LandformCodes[i]).toBe(Landform.Seabed);
+});
+
+it("keeps glacial landforms to terminus till, deep troughs and mountain ice heads", () => {
+  const map = fixture(),
+    p = atlasPhysicalProfile(),
+    till = map.mesh.contentCount >> 1;
+  for (let i = 0; i < map.mesh.count; i++) {
+    map.Elevation[i] = 500 * 1024;
+    map.MaximumGroundedIceFlux[i] = p.GlacierFluxThreshold;
+    // A level ice-sheet plateau, river and slope deposition everywhere, shallow scour.
+    map.MaximumIceThickness[i] = 840;
+    map.CumulativeDeposition[i] = 20 * 1024;
+    map.CumulativeGlacialErosion[i] = 2 * 1024;
+    map.RiverOrders[i] = 1;
+  }
+  map.CumulativeGlacialDeposition[till] = 12 * 1024;
+  glacialLandforms(map, physicalContext(42, 0, p));
+  for (let i = 0; i < map.mesh.count; i++)
+    expect(map.LandformCodes[i]).toBe(i === till ? Landform.Moraine : 0);
+  map.CumulativeGlacialErosion.fill(p.UValleyMinimumGlacialErosion * 1024);
+  glacialLandforms(map, physicalContext(42, 0, p));
+  expect(map.LandformCodes.filter((code) => code === Landform.UValley)).toHaveLength(
+    map.mesh.count - 1
+  );
 });
 
 it("samples an immutable physical surface lazily with the same coarse/fine reconstruction", () => {
@@ -274,6 +310,9 @@ it.each(["volcano", "crater"])(
     p.ImpactCraterCount = 1;
     p.ImpactPrimordialShare = 1000;
     p.ImpactMinimumRadius = p.ImpactMaximumRadius = 8000;
+    // The default depth and rim scaling for an 8 km crater beside 180 km ones.
+    p.ImpactDepthRatio = Math.round(p.ImpactDepthRatio * (8 / 180) ** 0.3);
+    p.ImpactRimHeightRatio = Math.round(p.ImpactRimHeightRatio * (8 / 180) ** 0.3);
     const context = physicalContext(42, 0, p);
     const base = createField(
       adaptivePhysicalMesh(

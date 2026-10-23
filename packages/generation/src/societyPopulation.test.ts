@@ -15,6 +15,7 @@ import { prepareAtlasGeneration } from "./atlasWorkflow";
 import { atlasGenerationModules } from "./atlasModules";
 import { publishGenerationProducts } from "./publication";
 import { generatedFeature } from "./mapFeatures";
+import { evolveSociety } from "./societyEvolution";
 
 export function societyFixture() {
   const state = landscape();
@@ -38,20 +39,27 @@ export function societyFixture() {
   };
   return { state, context };
 }
-it("accounts for population change and publishes communities from their people", () => {
+it("accounts for population change and publishes occupied settlements separately from rural people", async () => {
   const { state, context } = societyFixture();
   initializePopulation(state, context);
-  evolvePopulation(state, context, 200);
+  await evolveSociety(state, context, 200);
   const record = state.society!.region.history[0];
   expect(record.before + record.births - record.deaths).toBeCloseTo(record.after, 6);
   publishSettlements(state, context);
   const settlements = Object.values(state.domain.world.features).filter(
     (f) => f.kind === "settlement"
   );
-  expect(settlements).toHaveLength(state.society!.region.communities.length);
-  expect(settlements.reduce((sum, f) => sum + Number(f.attributes.population), 0)).toBeCloseTo(
-    record.after,
-    6
+  expect(settlements.length).toBeGreaterThan(0);
+  expect(settlements).toHaveLength(
+    state.society!.region.communities.filter((c) => c.founded).length
+  );
+  for (const f of settlements)
+    expect(Number(f.attributes.population) + Number(f.attributes.ruralPopulation)).toBeCloseTo(
+      Number(f.attributes.communityPopulation),
+      6
+    );
+  expect(settlements.reduce((sum, f) => sum + Number(f.attributes.population), 0)).toBeLessThan(
+    record.after
   );
 });
 it("transfers joint affiliations conservatively and leaves protected people fixed", () => {

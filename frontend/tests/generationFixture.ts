@@ -1,6 +1,6 @@
 /* eslint-disable max-lines-per-function -- Playwright serializes the browser fixture as one isolated function. */
 import type { Page } from "@playwright/test";
-import type { AtlasFeature, DomainSnapshot, Grid } from "@atlas/domain";
+import type { AtlasFeature, DomainSnapshot, Grid, SocietyRegion } from "@atlas/domain";
 import type {
   CompletedBoundary,
   AtlasGenerationInput,
@@ -13,10 +13,11 @@ export async function installGenerationFixture(
   hold = false,
   terrain = false,
   life = false,
-  ecologicalFeatures: AtlasFeature[] = []
+  ecologicalFeatures: AtlasFeature[] = [],
+  society?: SocietyRegion
 ) {
   await page.addInitScript(
-    ({ hold, terrain, life, ecologicalFeatures }) => {
+    ({ hold, terrain, life, ecologicalFeatures, society }) => {
       const pending = new Set<() => void>();
       Object.assign(window, {
         completeGenerationFixture() {
@@ -53,6 +54,10 @@ export async function installGenerationFixture(
               complete = () => {
                 if (complete) pending.delete(complete);
                 if (stopped) return;
+                if (society)
+                  snapshot.world.societies = {
+                    [snapshot.scope.areaId]: { ...society, areaId: snapshot.scope.areaId },
+                  };
                 for (const feature of ecologicalFeatures)
                   snapshot.world.features[feature.id] = {
                     ...feature,
@@ -194,7 +199,7 @@ export async function installGenerationFixture(
         return undefined;
       }
     },
-    { hold, terrain, life, ecologicalFeatures }
+    { hold, terrain, life, ecologicalFeatures, society }
   );
 }
 

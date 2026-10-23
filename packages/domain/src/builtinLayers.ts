@@ -9,6 +9,7 @@ const vocabulary: Vocabulary[] = [
   ["climate", "Climate", "water", "field", "#80a89b", "physical"],
   ["rivers", "Rivers", "water", "network", "#71c4de", "physical"],
   ["lakes", "Lakes", "water", "vector", "#67aabe", "physical"],
+  ["oceans", "Oceans and seas", "water", "vector", "#397d99", "physical"],
   ["magic", "Magical influences", "magic", "field", "#c199ee", "magic"],
   ["roads", "Roads and routes", "transport", "network", "#d9b779", "built"],
   ["settlements", "Settlements", "built", "vector", "#f2dab0", "built"],

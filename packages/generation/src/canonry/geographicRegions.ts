@@ -5,7 +5,16 @@ import { generatedFeature, putGenerated } from "../mapFeatures";
 import { nativePosition } from "./atlasWorkspace";
 import { coordinateKey } from "./worldSources";
 import { Landform } from "./codes";
-import { lakeFootprint, membershipContour } from "./geographicContours";
+import {
+  combinedContour,
+  fillSmallHoles,
+  lakeFootprint,
+  membershipContour,
+} from "./geographicContours";
+import { landArea, largestRegionShare, partitionRegion } from "./regionPartition";
+
+/** Largest enclosed gap, in square metres, that a landform or magic region absorbs. */
+const smallHole = 2_000_000_000;
 
 export function extractLakes(state: GenerationState) {
   const map = state.physical!.map,
@@ -73,17 +82,46 @@ export function components(
   state: GenerationState,
   includes: (i: number) => boolean,
   publish: (members: number[], geometry?: Geometry) => void,
-  polygonal = false
+  polygonal = false,
+  maximum = Infinity
 ) {
   const map = state.physical!.map,
     visited = new Int32Array(map.mesh.contentCount).fill(-1),
     regions: number[][] = [];
   for (let i = 0; i < visited.length; i++) {
     if (visited[i] >= 0 || !includes(i)) continue;
-    regions.push(connectedMembers(state, visited, includes, i, regions.length));
+    const members = connectedMembers(state, visited, includes, i, regions.length);
+    // Oversized regions split along drainage divides; each piece is its own label.
+    for (const piece of partitionRegion(state, members, maximum)) {
+      piece.forEach((cell) => (visited[cell] = regions.length));
+      regions.push(piece);
+    }
   }
   const shapes = polygonal ? regionShapes(state, visited) : new Map<number, Geometry>();
   regions.forEach((members, i) => publish(members, shapes.get(i)));
+}
+/**
+ * A region's outline at half membership. Where pieces of a split region touch, the outline
+ * follows the region's share less its largest neighbour's, so three pieces meeting at a point
+ * all reach zero there and the pieces tile without gaps.
+ */
+function labelContour(state: GenerationState, labels: Int32Array, label: number, leaves: number[]) {
+  const mesh = state.physical!.map.mesh,
+    touching = new Set<number>();
+  for (const i of leaves)
+    for (let edge = 0; edge < mesh.degree[i]; edge++) {
+      const other = labels[mesh.neighbors[i * mesh.stride + edge]];
+      if (other >= 0 && other !== label) touching.add(other);
+    }
+  if (!touching.size)
+    return membershipContour(state, leaves, (cell) => Number(labels[cell] === label));
+  const terms = [label, ...touching].map(
+    (value) => (cell: number) => Number(labels[cell] === value)
+  );
+  return combinedContour(state, leaves, terms, ([own, ...others]) => {
+    const shared = others.reduce((sum, value) => sum + value, 0);
+    return own - Math.max(0.5 * (1 - shared), ...others);
+  });
 }
 function regionShapes(state: GenerationState, labels: Int32Array) {
   const members = new Map<number, number[]>();
@@ -92,11 +130,21 @@ function regionShapes(state: GenerationState, labels: Int32Array) {
     if (!members.has(label)) members.set(label, []);
     members.get(label)!.push(cell);
   });
-  const result = new Map<number, Geometry>();
+  const result = new Map<number, Geometry>(),
+    water = state.physical!.map.WaterKindCodes;
   for (const [label, leaves] of members) {
+    const outline = labelContour(state, labels, label, leaves),
+      wet = water[leaves[0]] !== 0;
+    // Enclosed gaps of the same medium join the region; islands and lakes stay open.
     const shape = clipRegion(
       state,
-      membershipContour(state, leaves, (cell) => Number(labels[cell] === label))
+      outline &&
+        fillSmallHoles(
+          state,
+          outline,
+          smallHole,
+          (cell) => (water[cell] !== 0) !== wet || (labels[cell] >= 0 && labels[cell] !== label)
+        )
     );
     if (shape) result.set(label, shape);
   }
@@ -125,23 +173,14 @@ export function publishPlace(
   const identity = coordinateKey(position.x, position.y);
   putGenerated(
     state,
-    generatedFeature(
-      state,
-      `${kind}:${identity}`,
-      `${name} ${Math.round(position.x / 1000)} ${Math.round(position.y / 1000)}`,
-      kind,
-      layer,
-      geometry,
-      {
-        sourceAlgorithm: "canonry-0f62584c",
-        area: extent
-          ? spatial.area(extent)
-          : members.reduce((sum, i) => sum + map.mesh.areas[i], 0),
-        representative: position,
-        elevation: (map.Elevation[representative] - map.BaseSeaLevel) / 1024,
-        ...attributes,
-      }
-    )
+    generatedFeature(state, `${kind}:${identity}`, name, kind, layer, geometry, {
+      sourceAlgorithm: "canonry-0f62584c",
+      area: extent ? spatial.area(extent) : members.reduce((sum, i) => sum + map.mesh.areas[i], 0),
+      representative: position,
+      placeType: name,
+      elevation: (map.Elevation[representative] - map.BaseSeaLevel) / 1024,
+      ...attributes,
+    })
   );
 }
 export function extractNamedLandforms(state: GenerationState) {
@@ -150,13 +189,13 @@ export function extractNamedLandforms(state: GenerationState) {
     ? spatial.differenceFrom(state.surface.ocean)
     : (shape: Geometry) => shape;
   const classes: [string, string, (i: number) => boolean][] = [
-    ["peak", "Peak", (i) => map.LandformCodes[i] === Landform.Peak],
     ["cirque", "Cirque", (i) => map.LandformCodes[i] === Landform.Cirque],
     ["fjord", "Fjord", (i) => map.LandformCodes[i] === Landform.Fjord],
     ["moraine", "Moraine", (i) => map.LandformCodes[i] === Landform.Moraine],
     ["waterfall", "Waterfall", (i) => map.LandformCodes[i] === Landform.Waterfall],
     ["gorge", "Gorge", (i) => map.LandformCodes[i] === Landform.Gorge],
   ];
+  const maximum = largestRegionShare * landArea(state);
   for (const [kind, name, includes] of classes)
     components(
       state,
@@ -166,7 +205,8 @@ export function extractNamedLandforms(state: GenerationState) {
         if (extent && !surface) return;
         publishPlace(state, kind, name, members, "geology", {}, surface ?? undefined);
       },
-      !["peak", "waterfall"].includes(kind)
+      kind !== "waterfall",
+      kind === "fjord" ? Infinity : maximum
     );
 }
 export function extractMagicPlaces(state: GenerationState) {

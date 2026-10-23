@@ -14,7 +14,8 @@ import { adaptivePhysicalMesh } from "./adaptiveMesh";
 import { createField } from "./field";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { projectNative } from "./atlasProjection";
-import { extractLakes, extractNamedLandforms } from "./geographicRegions";
+import { extractLakes } from "./geographicRegions";
+import { extractReliefFeatures } from "./reliefFeatures";
 import { extractGeologicalEvents } from "./geologicalFeatures";
 import { Landform } from "./codes";
 import { initializeMagic, magicKey } from "./magicState";
@@ -254,12 +255,12 @@ it("closes a lake crossing the world boundary by tracing its complete numerical 
   expect(spatial.covers(lake.geometry, point({ x: 2_050_000, y: 3_085_001, z: 0 }))).toBe(false);
 });
 
-it("publishes subcell geological events in world coordinates without resizing their footprint", () => {
+it("publishes subcell volcanic events in world coordinates without resizing their footprint", () => {
   const state = fixture(),
     map = state.physical!.map;
   map.events.push({
-    id: "impact:small",
-    kind: "impact",
+    id: "volcano:small",
+    kind: "volcano",
     x: 0,
     y: 0,
     radius: 400,
@@ -267,12 +268,38 @@ it("publishes subcell geological events in world coordinates without resizing th
     strength: 700,
   });
   extractGeologicalEvents(state);
+  const cone = Object.values(state.domain.world.features)[0];
+  expect(cone.kind).toBe("volcano");
+  expect(cone.attributes.radius).toBe(400);
+  expect(cone.attributes.epoch).toBe(2);
+  expect(spatial.bounds(cone.geometry)).toEqual([2_049_600, 3_049_600, 2_050_400, 3_050_400]);
+  expect(spatial.area(cone.geometry) / (Math.PI * 400 ** 2)).toBeCloseTo(1, 1);
+});
+
+it("maps an impact crater only while its rim stands above the floor and plain", () => {
+  const state = fixture(),
+    map = state.physical!.map,
+    radius = 15_000;
+  map.events.push({
+    id: "impact:old",
+    kind: "impact",
+    x: 0,
+    y: 0,
+    radius,
+    epoch: 0,
+    strength: 1000,
+  });
+  extractGeologicalEvents(state);
+  expect(Object.values(state.domain.world.features)).toHaveLength(0);
+  const plain = map.Elevation[0];
+  for (let i = 0; i < map.mesh.count; i++) {
+    const distance = Math.hypot(map.mesh.x[i], map.mesh.y[i]) / radius;
+    map.Elevation[i] = plain + Math.max(0, 1 - Math.abs(distance - 1) / 0.4) * 300 * 1024;
+  }
+  extractGeologicalEvents(state);
   const crater = Object.values(state.domain.world.features)[0];
   expect(crater.kind).toBe("crater");
-  expect(crater.attributes.radius).toBe(400);
-  expect(crater.attributes.epoch).toBe(2);
-  expect(spatial.bounds(crater.geometry)).toEqual([2_049_600, 3_049_600, 2_050_400, 3_050_400]);
-  expect(spatial.area(crater.geometry) / (Math.PI * 400 ** 2)).toBeCloseTo(1, 1);
+  expect(crater.attributes.relief).toBeGreaterThan(100);
 });
 
 it("extracts classified terrain places and preserves an authored result on repetition", () => {
@@ -283,14 +310,15 @@ it("extracts classified terrain places and preserves an authored result on repet
       map.LandformCodes[i] = Landform.Peak;
       map.Elevation[i] = (2000 + map.mesh.x[i] / 100) * 1024;
     }
-  extractNamedLandforms(state);
+  extractReliefFeatures(state);
   const peak = Object.values(state.domain.world.features)[0];
   expect(peak.kind).toBe("peak");
   expect(peak.geometry.type).toBe("Point");
   expect(Number(peak.attributes.elevation)).toBeGreaterThan(1900);
+  expect(Number(peak.attributes.prominence)).toBeGreaterThan(1900);
   peak.state = "authored";
   peak.name = "Authored summit";
-  extractNamedLandforms(state);
+  extractReliefFeatures(state);
   expect(Object.values(state.domain.world.features)).toHaveLength(1);
   expect(state.domain.world.features[peak.id].name).toBe("Authored summit");
 });

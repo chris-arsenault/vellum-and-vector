@@ -8,6 +8,7 @@ import { politicsInitialize, politicsChange } from "./societyPolitics";
 import { retainSocietyFootprints } from "./societyInheritance";
 import { applyPresentWorks } from "./societyWorks";
 import { refreshSocietyEnvironment } from "./societyEnvironment";
+import { societyEvolution } from "./societyEvolution";
 
 function validatePopulation(state: GenerationState): Diagnostic[] {
   const communities = state.society?.region.communities ?? [];
@@ -91,6 +92,7 @@ export const populationProcesses = [
   politicsInitialize,
   politicsChange,
   ...societyFeedbackProcesses,
+  societyEvolution,
 ];
 export const societyPresent: MapProcess = {
   contract: {
@@ -139,10 +141,10 @@ export function societySequence(input: AtlasGenerationInput): ProcessSequence {
               variables: { mobility: e.mobility, politicalCapacity: e.politicalCapacity },
             })),
             body: [
-              invoke(populationProcess),
-              ...(cultural ? [invoke(cultureContact)] : []),
-              ...societyFeedbackProcesses.map(invoke),
-              ...(political ? [invoke(politicsChange)] : []),
+              {
+                ...invoke(societyEvolution),
+                parameters: { cultural: !!cultural, political: !!political },
+              },
             ],
           },
         ]

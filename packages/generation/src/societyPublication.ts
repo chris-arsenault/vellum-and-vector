@@ -31,8 +31,8 @@ export function publishSettlements(state: GenerationState, context: MapProcessCo
   publishSocietyWorks(state);
   for (const c of region.communities) {
     const people = population(c),
-      urban = people * 0.12;
-    if (people < 1) c.status = "abandoned";
+      urban = Math.min(people, c.settlement?.population ?? 0);
+    if (!c.founded) continue;
     const feature = generatedFeature(
       state,
       `community:${c.id}`,
@@ -42,7 +42,8 @@ export function publishSettlements(state: GenerationState, context: MapProcessCo
       { type: "Point", coordinates: [c.position.x, c.position.y] },
       {
         communityId: c.id,
-        population: people,
+        population: urban,
+        communityPopulation: people,
         settlementPopulation: urban,
         ruralPopulation: people - urban,
         groups: c.groups,
@@ -59,7 +60,7 @@ export function publishSettlements(state: GenerationState, context: MapProcessCo
   for (const [i, link] of region.connections.entries()) {
     const a = communities.get(link.from)!,
       b = communities.get(link.to)!;
-    if (population(a) < 100 || population(b) < 100) continue;
+    if (!connectedSettlements(a, b)) continue;
     context.progress(
       i / Math.max(1, region.connections.length),
       "Connecting inhabited communities"
@@ -79,6 +80,12 @@ export function publishSettlements(state: GenerationState, context: MapProcessCo
       )
     );
   }
+}
+function connectedSettlements(
+  a: import("@atlas/domain").SocietyCommunity,
+  b: import("@atlas/domain").SocietyCommunity
+) {
+  return a.founded && b.founded && a.status === "inhabited" && b.status === "inhabited";
 }
 function putCommunity(state: GenerationState, feature: AtlasFeature, communityId: string) {
   const world = state.domain.world;

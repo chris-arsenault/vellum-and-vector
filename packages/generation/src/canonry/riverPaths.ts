@@ -73,9 +73,31 @@ function bordersWater(map: PhysicalField, i: number) {
   }
   return false;
 }
+/**
+ * The deepest neighbouring cell of the same water body, deeper than `i`. A mouth into
+ * shallow water heads on toward it, so the channel enters open water rather than skimming
+ * the shore where the water is only a sliver deep.
+ */
+function openWater(map: PhysicalField, i: number) {
+  let best = -1;
+  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
+    if (
+      j < 0 ||
+      map.WaterKindCodes[j] !== map.WaterKindCodes[i] ||
+      map.WaterBodyIds[j] !== map.WaterBodyIds[i]
+    )
+      continue;
+    if (map.WaterDepths[j] > (best < 0 ? map.WaterDepths[i] : map.WaterDepths[best])) best = j;
+  }
+  return best;
+}
 function tangent(map: PhysicalField, paths: RiverPaths, i: number): Coordinate {
   const previous = paths.upstream[i],
-    next = map.FlowTargets[i];
+    next =
+      map.FlowTargets[i] < 0 && map.WaterKindCodes[i] !== 0
+        ? openWater(map, i)
+        : map.FlowTargets[i];
   const a = position(paths, previous < 0 ? i : previous),
     b = position(paths, next < 0 ? i : next);
   return [b[0] - a[0], b[1] - a[1]];

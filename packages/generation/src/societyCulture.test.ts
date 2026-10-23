@@ -4,6 +4,7 @@ import { landscape, epoch } from "./mapFixtures";
 import { initializeCultures, diffuseCultures } from "./societyCulture";
 import { publishCultures } from "./societyCulturePublication";
 import type { MapProcessContext } from "./process";
+import { initializePopulation } from "./societyPopulation";
 
 function fixture() {
   const state = landscape();
@@ -22,6 +23,8 @@ function fixture() {
     cancelled: () => false,
     progress() {},
   };
+  initializePopulation(state, context);
+  for (const c of state.society!.region.communities) c.groups[0].count = 1000;
   initializeCultures(state, context);
   return { state, context };
 }
@@ -42,7 +45,7 @@ it("retains ancestry when isolated communities diverge", () => {
   state.society!.region.connections = [];
   const parent = c.groups[0].culture,
     before = population(c);
-  diffuseCultures(state, context, 500);
+  for (let cycle = 0; cycle < 50; cycle++) diffuseCultures(state, context, 10);
   expect(c.groups[0].culture).not.toBe(parent);
   expect(state.domain.world.entities[c.groups[0].culture!].relations).toContainEqual({
     targetId: parent,

@@ -3,6 +3,7 @@ import {
   type AtlasFeature,
   type World,
   type SocietyMagicPractice,
+  type SocietyCommunity,
 } from "@atlas/domain";
 
 export function SocietyInspection({
@@ -18,13 +19,18 @@ export function SocietyInspection({
   const community = region?.communities.find((c) => c.id === feature.attributes.communityId);
   if (!region || !community) return null;
   const practice = region.magic.find((p) => p.communityId === community.id);
+  const urban = community.settlement?.population ?? 0;
   const label = (id: string | null) => (id ? (world.entities[id]?.name ?? id) : "Unspecified");
   return (
     <details open>
       <summary>People and livelihoods</summary>
       <p>
-        {Math.round(population(community)).toLocaleString()} people · {community.status} ·{" "}
-        {Math.round(community.areaKm2).toLocaleString()} km²
+        {Math.round(urban).toLocaleString()} settlement residents · {community.status}
+      </p>
+      <p>
+        {Math.round(population(community) - urban).toLocaleString()} rural residents in the
+        surrounding {Math.round(community.areaKm2).toLocaleString()} km². Composition below includes
+        both.
       </p>
       <table>
         <thead>
@@ -53,6 +59,7 @@ export function SocietyInspection({
         {Math.round(community.support.fishing)}.
       </p>
       {practice && <PracticeInspection practice={practice} />}
+      <OccupationHistory community={community} />
       <details>
         <summary>Completed human eras</summary>
         <ul>
@@ -60,11 +67,43 @@ export function SocietyInspection({
             <li key={i}>
               {era.id}: {Math.round(era.before).toLocaleString()} →{" "}
               {Math.round(era.after).toLocaleString()} residents across the recorded region;{" "}
-              {Math.round(era.migrated).toLocaleString()} migrated. {era.causes.join(" ")}
+              {Math.round(era.migrated).toLocaleString()} migrated across {era.cycles ?? 1} feedback
+              cycles. {era.causes.join(" ")}
             </li>
           ))}
         </ul>
       </details>
+    </details>
+  );
+}
+function OccupationHistory({ community }: { community: SocietyCommunity }) {
+  return (
+    <details>
+      <summary>Local population history</summary>
+      <table>
+        <thead>
+          <tr>
+            <th>Era / year</th>
+            <th>Residents</th>
+            <th>Local support</th>
+            <th>Settlement</th>
+            <th>Occupation</th>
+          </tr>
+        </thead>
+        <tbody>
+          {community.history?.map((step, i) => (
+            <tr key={i}>
+              <td>
+                {step.era} / {Math.round(step.year)}
+              </td>
+              <td>{Math.round(step.population).toLocaleString()}</td>
+              <td>{Math.round(step.capacity).toLocaleString()}</td>
+              <td>{Math.round(step.settlementPopulation).toLocaleString()}</td>
+              <td>{step.status}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </details>
   );
 }

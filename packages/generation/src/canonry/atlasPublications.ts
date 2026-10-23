@@ -240,7 +240,12 @@ function geographicPublications(
     ["physical.volcanism", "geology", ["volcano", "caldera"]],
     ["physical.fractures", "faults", ["fault"]],
     ["water.routing", "lakes", ["lake"]],
-    ["physical.landforms", "geology", ["peak", "cirque", "fjord", "moraine", "waterfall", "gorge"]],
+    ["ocean.geography", "oceans", ["ocean"]],
+    [
+      "physical.landforms",
+      "geology",
+      ["peak", "range", "valley", "cirque", "fjord", "moraine", "waterfall", "gorge"],
+    ],
     ["physical.river-networks", "rivers", ["river"], true],
     [
       "ecology.living",

@@ -32,6 +32,11 @@ function fixture() {
   };
   initializePopulation(state, context);
   evolvePopulation(state, context, 100);
+  const c = state.society!.region.communities[0];
+  c.groups[0].count = 10000;
+  c.founded = "Authored fixture";
+  c.status = "inhabited";
+  c.settlement = { population: 1000, peak: 1000, recoveryYears: 0 };
   publishSettlements(state, context);
   return { state, context };
 }
@@ -42,6 +47,7 @@ it("edits present residents and protection while retaining completed history", (
     Object.values(snapshot.world.features).find((f) => f.kind === "settlement")!
   );
   const history = structuredClone(state.society!.region.history);
+  const rural = Number(feature.attributes.ruralPopulation);
   feature.attributes.population = 1234;
   feature.protected = true;
   const changes: ChangeSet = {
@@ -59,7 +65,8 @@ it("edits present residents and protection while retaining completed history", (
   changes.writes.push({ kind: "feature", value: feature });
   const result = projectChanges(snapshot, changes).world.societies!.area;
   const c = result.communities.find((c) => c.id === feature.attributes.communityId)!;
-  expect(c.groups.reduce((sum, g) => sum + g.count, 0)).toBeCloseTo(1234, 8);
+  expect(c.settlement!.population).toBe(1234);
+  expect(c.groups.reduce((sum, g) => sum + g.count, 0)).toBeCloseTo(1234 + rural, 8);
   expect(c.protected).toBe(true);
   expect(result.history).toEqual(history);
   feature.attributes.groups = [
@@ -124,6 +131,8 @@ it("edits a child settlement population without replacing the parent population 
   snapshot.world.societies!.child = child;
   const c = child.communities.find((c) => c.id === feature.attributes.communityId)!;
   c.groups = c.groups.map((g) => ({ ...g, count: g.count / 2 }));
+  c.settlement!.population /= 2;
+  const rural = c.groups.reduce((sum, g) => sum + g.count, 0) - c.settlement!.population;
   snapshot.world.features[feature.id].detail.child = {
     id: "detail",
     geometry: feature.geometry,
@@ -156,7 +165,11 @@ it("edits a child settlement population without replacing the parent population 
     result
       .societies!.child.communities.find((c) => c.id === feature.attributes.communityId)!
       .groups.reduce((sum, g) => sum + g.count, 0)
-  ).toBeCloseTo(432, 8);
+  ).toBeCloseTo(432 + rural, 8);
+  expect(
+    result.societies!.child.communities.find((c) => c.id === feature.attributes.communityId)!
+      .settlement!.population
+  ).toBe(432);
   expect(result.societies!.area).toEqual(parent);
   expect(result.societies!.child.history).toEqual(parent.history);
 });

@@ -6,6 +6,7 @@ import {
   type RegularGrid,
 } from "@atlas/domain";
 import type { GenerationState, MapProcess } from "./process";
+import { nameGeographicFeature } from "./atlasNaming";
 
 export function generatedFeature(
   state: GenerationState,
@@ -17,13 +18,14 @@ export function generatedFeature(
   attributes: Record<string, unknown> = {}
 ): AtlasFeature {
   const id = semanticId(state.domain.world.id, `generated:${state.domain.scope.areaId}`, key);
+  const named = nameGeographicFeature(state.domain.world, key, kind, geometry, attributes);
   return {
     id,
-    name,
+    name: named?.name ?? name,
     kind,
     layerId,
     geometry,
-    attributes,
+    attributes: named ? { ...attributes, ...namingAttributes(named) } : attributes,
     areaId: state.domain.scope.areaId,
     detail: {},
     relations: [],
@@ -36,6 +38,13 @@ export function generatedFeature(
       `Generated from ${key} in ${state.domain.world.areas[state.domain.scope.areaId].name}.`,
     ],
   };
+}
+function namingAttributes({
+  name: _name,
+  ...attributes
+}: NonNullable<ReturnType<typeof nameGeographicFeature>>) {
+  void _name;
+  return attributes;
 }
 export function putGenerated(state: GenerationState, feature: AtlasFeature) {
   const previous = state.domain.world.features[feature.id];

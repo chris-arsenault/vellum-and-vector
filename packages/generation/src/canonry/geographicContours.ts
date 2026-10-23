@@ -8,6 +8,7 @@ import {
   linearFieldContour,
   spatial,
 } from "@atlas/domain";
+import type { Geometry, Position } from "geojson";
 import type { GenerationState } from "../process";
 import { triangleSampler, triangleFans, triangleBoundary } from "./triangleSampling";
 import { physicalSampler } from "./physicalMetric";
@@ -124,6 +125,41 @@ function* combinedFans(
       combine(triangles.map((triangle) => triangle.value![corner][2])),
     ]);
   }
+}
+/**
+ * Close interior rings smaller than `maximum` square metres that hold no `blocks` cell, such as
+ * water or another region's members, so a feature absorbs the small gaps it encloses.
+ */
+export function fillSmallHoles(
+  state: GenerationState,
+  shape: Geometry,
+  maximum: number,
+  blocks: (cell: number) => boolean
+): Geometry {
+  const polygons =
+    shape.type === "Polygon"
+      ? [shape.coordinates]
+      : shape.type === "MultiPolygon"
+        ? shape.coordinates
+        : null;
+  if (!polygons) return shape;
+  const mesh = state.physical!.map.mesh,
+    blocked: [number, number][] = [];
+  for (let i = 0; i < mesh.count; i++)
+    if (blocks(i)) blocked.push([mesh.x[i] + mesh.origin[0], mesh.y[i] + mesh.origin[1]]);
+  const keep = (ring: Position[]) => {
+    const hole: Geometry = { type: "Polygon", coordinates: [ring] };
+    if (spatial.area(hole) >= maximum) return true;
+    const [x0, y0, x1, y1] = spatial.bounds(hole),
+      covers = spatial.pointCoverage(hole);
+    return blocked.some(
+      ([x, y]) => x >= x0 && x <= x1 && y >= y0 && y <= y1 && covers({ x, y, z: 0 })
+    );
+  };
+  const filled = polygons.map(([outer, ...holes]) => [outer, ...holes.filter(keep)]);
+  return shape.type === "Polygon"
+    ? { type: "Polygon", coordinates: filled[0] }
+    : { type: "MultiPolygon", coordinates: filled };
 }
 export function geographicContour(
   state: GenerationState,

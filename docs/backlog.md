@@ -45,6 +45,10 @@ with no backend, persistence or MCP; preserve the existing backend source.
       Delivered as bounded aggregate society generation: population and migration,
       joint affiliations and diffusion, political reach/collapse/recovery, present
       authoring and inherited refinement. See the [society plan](SOCIETY-GENERATION-PLAN.md).
+      The subsequent population correction replaces whole-era single-pass updates
+      with repeated environmental feedback and settlement establishment,
+      abandonment and recovery. Local histories distinguish settlement residents
+      from rural catchment populations; unoccupied catchments are not towns.
       Four-pillar integration and balance remain separate, undesigned work.
 
 - [x] **4. Fix map interaction behavior.** Reported symptom: attempts to interact

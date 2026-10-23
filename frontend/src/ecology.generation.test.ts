@@ -60,6 +60,7 @@ it("generates forests and ecological history through the real atlas pipeline and
   expect(
     Object.values(result.state.domain.world.features).some((feature) => feature.kind === "forest")
   ).toBe(true);
+  checkGeographicNames(result.state.domain.world);
   expect(result.state.history).toHaveLength(4);
   for (const epoch of result.state.history)
     expect(
@@ -74,6 +75,23 @@ it("generates forests and ecological history through the real atlas pipeline and
   expect(published.numerical[ecology.id].quantities?.biome).toBe("category");
   await checkMagicPublication(published, input);
 }, 120_000);
+
+function checkGeographicNames(world: DomainSnapshot["world"]) {
+  const namedBiomes = Object.values(world.features).filter(
+    (feature) => feature.layerId === "ecology" && feature.attributes.biome
+  );
+  expect(namedBiomes.length).toBeGreaterThan(0);
+  for (const feature of namedBiomes) {
+    expect(feature.attributes.namingKind).toBe("biome");
+    expect(feature.attributes.namingSubkind).toBe(feature.attributes.biome);
+    expect(feature.name).not.toMatch(/\d|markov:|slot:/);
+  }
+  expect(
+    Object.values(world.features).some(
+      (feature) => feature.kind === "ocean" && feature.name.endsWith(" Ocean")
+    )
+  ).toBe(true);
+}
 
 async function checkMagicPublication(
   snapshot: DomainSnapshot,

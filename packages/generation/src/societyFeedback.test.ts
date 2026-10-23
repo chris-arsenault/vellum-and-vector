@@ -33,6 +33,10 @@ function fixture() {
     progress() {},
   };
   initializePopulation(state, context);
+  for (const c of state.society!.region.communities) {
+    c.groups[0].count = 1000;
+    c.status = "inhabited";
+  }
   return { state, context, set };
 }
 it("changes real vegetation and hunting quantities, while conservation restores supported fauna", () => {

@@ -55,6 +55,8 @@ export const physicalProfile = {
   SedimentRockWeakness: 900,
   SoftSedimentDepth: 45,
   FjordMinimumGlacialErosion: 2,
+  // Metres from a fjord's axis to the land on both of its flanks.
+  FjordMaximumHalfWidth: 15_000,
   // Hadley, Ferrel and polar cells between the equator and each pole.
   CirculationCellsPerHemisphere: 3,
   CirculationCellTurn: 700,
@@ -128,8 +130,12 @@ export const physicalProfile = {
   ImpactMinimumRadius: 50_000,
   ImpactMaximumRadius: 180_000,
   ImpactMinimumSpacing: 220_000,
-  ImpactDepthRatio: 280,
-  ImpactRimHeightRatio: 90,
+  // Per mille of ElevationScale at the largest radius; smaller craters keep (r/max)^0.3 of it,
+  // the complex-crater depth/diameter scaling.
+  ImpactDepthRatio: 1200,
+  ImpactRimHeightRatio: 450,
+  // Metres a crater's rim must still stand above its floor and surroundings to be mapped.
+  ImpactVisibleRelief: 100,
   ImpactEjectaFraction: 520,
   ImpactFractureStrength: 760,
   ImpactThermalRadiusThreshold: 120_000,
@@ -145,6 +151,10 @@ export const physicalProfile = {
   MaximumGlacialDepositionPerPass: 20,
   AncestralValleyMinimumErosion: 5,
   OutwashMinimumGlacialDeposition: 6,
+  // Metres of terminus till that build a moraine under a flowing glacier's margin.
+  MoraineMinimumGlacialDeposition: 10,
+  // Metres of glacial erosion that carve a drainage line into a U-shaped trough.
+  UValleyMinimumGlacialErosion: 8,
   ImpactLandformMinimumExcavation: 18,
   ImpactLandformMinimumRimUplift: 8,
   InheritedRidgeActivityThreshold: 60,
@@ -315,7 +325,20 @@ export const physicalProfile = {
   LandformNeighborhoodRadius: 10_000,
   GorgeMinimumSlope: 0.009,
   GorgeMinimumIncision: 12,
-  PeakProminenceThreshold: 16,
+  // Metres a summit rises above the highest col joining it to higher ground, or the sea.
+  PeakMinimumProminence: 300,
+  // Mountain land: above the first height, or above the second with this much local relief.
+  MountainElevation: 1000,
+  HillElevation: 500,
+  MountainLocalRelief: 300,
+  // Metres from a cell to the terrain that measures its local relief and valley flanks.
+  ReliefRadius: 15_000,
+  // A river corridor whose flanks stand this many metres above it is a named valley.
+  ValleyMinimumDepth: 100,
+  // Metres of continuous incised river before a valley is named.
+  ValleyMinimumLength: 40_000,
+  // Square metres of mountain land below which a range is left unnamed.
+  RangeMinimumArea: 2_000_000_000,
   CliffSlopeThreshold: 0.012,
   PlainSlopeThreshold: 0.003,
   IceTemperatureThreshold: 285,

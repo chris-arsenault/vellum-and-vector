@@ -1,11 +1,58 @@
 # Society generation — working design
 
-Status: bounded society implementation complete, 2026-10-23. M1–M4 and E1 are
-delivered. B1 is deferred and excluded from this delivery.
+Status: bounded society feedback repair implemented, 2026-10-23. The earlier
+M1–M4 completion claim did not establish the agreed iterative behavior; the
+correction below supersedes it. B1 remains deferred and excluded from delivery.
 This document holds the design, research, open decisions and proposed milestones.
 
 Sulion root: `e74959cf-4d0a-491a-b247-40fe6316d698`.
-Society delivery is closed; future four-pillar work requires separate design.
+Repair plan: `1f6ee3d8-9ece-42d5-b31b-55477d263691`. Future four-pillar work
+requires separate design.
+
+### User correction — population evolution, 2026-10-23
+
+The user rejected uniform settlement placement and population as an incorrect
+implementation of the agreed model. Populations must evolve through repeated
+interactions with their surroundings. Cosmetic variation in settlement placement
+or population does not fulfill that requirement. The previous implementation
+advanced an entire era's growth and migration once before environmental feedback;
+the default single era never returned those consequences to population evolution.
+Its accounting and publication checks were insufficient evidence of completion.
+
+The repair retains the agreed aggregate boundary. Numerical catchments represent
+support and possible movement destinations; they are not mandatory towns. Sparse
+starting populations occupy suitable country. Each era repeats population change,
+conservative migration, contact, works, distinct magical use, environmental
+response, hazards, settlement occupation and political change. The changed state
+feeds the next cycle, including finite resource exhaustion and changed access.
+
+Current implementation choices, not additional user requirements:
+
+- Use steps of at most ten years to resolve feedback within a human era. Divide
+  the supplied duration exactly; do not repeat the whole era per step. Accumulate
+  isolation, control tenure and political disruption across steps. Keep authored
+  events once-only and allow separate generated disturbances in subsequent steps.
+- Locate numerical catchments according to support and map scale, independently
+  of requested culture or polity counts. Settlement concentration responds to
+  local livelihoods, population density and reachable neighboring population.
+  Establishment, abandonment and recovery retain identity and founding history.
+- Settlement residents are a subset of the joint demographic groups. Publish
+  actual settlement population separately from rural and catchment totals. Never
+  publish an unoccupied candidate as a town. Refinement allocates rural residents
+  by overlap and retains concentrated residents at their settlement location.
+- Retain local population, support and occupation at each cycle for inspection.
+  Aggregate births, deaths and transfers into one record per configured era.
+  Completed history and protected facts remain intact on edits and refinement.
+- Reuse environmental operations for new human time. Read current numerical river
+  state during feedback; defer cartographic extraction until the era's end.
+  Do not redesign or balance the other pillars to complete this repair.
+
+Acceptance must include causal trajectories: a finite heat supply can support
+growth and its exhaustion can cause decline in the same era; migration establishes
+reachable places while barriers prevent settlement; loss and recovery of support
+can abandon and reoccupy the same place. Check representative default maps and
+their size distributions as well as conservation, determinism and authoring.
+These are scenarios to verify mechanisms, not mandatory events in every world.
 
 ### Scope correction — 2026-10-23
 
@@ -55,9 +102,10 @@ Remaining milestones will be expanded at their start, preserving their full scop
 M1 expansion: `763c0c8e-abb2-4dd0-a892-d96bf909d826`, completed.
 Evidence: nine population/module checks pass, including accounting, water-separated
 communities, protected authored population, history retention and atlas publication;
-TypeScript and focused lint passed. Settlement counts now follow populated
-geography instead of the previous eight-place limit. Whole-world calibration
-remains B1 work.
+TypeScript and focused lint passed. Settlement counts followed initialized
+catchments instead of the previous eight-place limit. That did not establish
+the required settlement evolution. Useful society defaults and causal feedback
+belong to society delivery; cross-pillar redesign and balance remain B1 work.
 
 ### M2 execution expansion
 
@@ -798,10 +846,12 @@ The attempted B1 execution branch was canceled at the user's correction.
 Society implementation is in the domain `society` modules and generation
 `society*` processes, with browser controls in `Society*` components and human-era
 configuration. Focused checks cover population conservation, diffusion, political
-collapse/recovery, works, practices, authoring and refinement. These establish the
-bounded society behavior; they do not establish four-pillar balance.
+collapse/recovery, works, practices, authoring and refinement. Those component
+checks did not establish the agreed population dynamics. The repair above adds
+causal trajectories and representative output checks; four-pillar balance remains
+outside this delivery.
 
 On resume, read `sulion plan current` and this document. If needed, attach the root
-with `sulion plan attach e74959cf-4d0a-491a-b247-40fe6316d698`.
-The root closes with society delivered and B1 skipped. Future four-pillar work
+with `sulion plan attach 1f6ee3d8-9ece-42d5-b31b-55477d263691`.
+The older root records the initial delivery and B1 exclusion. Future four-pillar work
 needs a separate scoped plan based on the user's goals.

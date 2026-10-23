@@ -76,13 +76,14 @@ function refreshWater(state: GenerationState, context: MapProcessContext) {
 export function refreshSocietyEnvironment(
   state: GenerationState,
   context: MapProcessContext,
-  years: number
+  years: number,
+  publish = true
 ) {
   const society = state.society!;
   if ((society.inherited && !society.changed.size) || !context.inputs?.features) return;
   const available = new Set(Object.keys(state.surface.channels));
   ensureEnvironmentalWorkspace(state, context, available);
-  if (state.physical) refreshNative(state, context, years, available);
+  if (state.physical) refreshNative(state, context, years, available, publish);
   // Keep scalar units registered when an authored work operates on an inherited field.
   for (const name of society.changed) {
     const values = state.surface.channels[name];
@@ -103,7 +104,8 @@ function refreshNative(
   state: GenerationState,
   context: MapProcessContext,
   years: number,
-  available: Set<string>
+  available: Set<string>,
+  publish: boolean
 ) {
   synchronizeNative(state);
   if (available.has("water") && state.society!.changed.has("elevation"))
@@ -118,7 +120,8 @@ function refreshNative(
     atlasChannels.filter((b) => available.has(b.name)),
     available
   );
-  publishEnvironmentalChanges(state, context, available);
+  // Numerical feedback runs every cycle; GIS extraction is only needed at publication.
+  if (publish) publishEnvironmentalChanges(state, context, available);
 }
 function ensureEnvironmentalWorkspace(
   state: GenerationState,
@@ -163,6 +166,7 @@ function publishEnvironmentalChanges(
   }
   const drainage = world.drainage?.[area];
   extractNativeGeography(state, context, {
+    oceans: false,
     impacts: false,
     volcanism: false,
     fractures: false,

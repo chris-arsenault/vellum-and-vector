@@ -2,7 +2,7 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { Landform } from "./codes";
-import { truncate } from "./math";
+import { truncate, units } from "./math";
 import { physicalSampler } from "./physicalMetric";
 
 function cirqueHead(
@@ -13,10 +13,11 @@ function cirqueHead(
   valueAt: ReturnType<typeof physicalSampler>
 ): boolean {
   if (map.MaximumIceThickness[i] < threshold) return false;
+  // Strictly thicker than all around: a level ice-sheet plateau has no cirque heads.
   for (let direction = 0; direction < 16; direction++) {
     const angle = (direction * Math.PI) / 8;
     if (
-      valueAt(map.mesh.x[i] + Math.cos(angle) * radius, map.mesh.y[i] + Math.sin(angle) * radius) >
+      valueAt(map.mesh.x[i] + Math.cos(angle) * radius, map.mesh.y[i] + Math.sin(angle) * radius) >=
       map.MaximumIceThickness[i]
     )
       return false;
@@ -33,12 +34,14 @@ export function glacialLandforms(map: PhysicalField, c: PhysicalContext) {
     )
       continue;
     if (
-      map.CumulativeGlacialErosion[i] > 0 &&
+      map.CumulativeGlacialErosion[i] >= units(c.Profile.UValleyMinimumGlacialErosion) &&
       (map.RiverOrders[i] > 0 ||
         map.FlowAccumulation[i] >= truncate(c.Profile.RiverAccumulationThreshold / 2))
     )
       map.LandformCodes[i] = Landform.UValley;
+    // Cirques are mountain landforms: bowls at the heads of valley glaciers.
     if (
+      map.Elevation[i] - map.EffectiveSeaLevel >= units(c.Profile.MountainElevation) &&
       cirqueHead(
         map,
         i,
@@ -48,10 +51,9 @@ export function glacialLandforms(map: PhysicalField, c: PhysicalContext) {
       )
     )
       map.LandformCodes[i] = Landform.Cirque;
-    if (
-      map.CumulativeDeposition[i] > 0 &&
-      map.MaximumGroundedIceFlux[i] >= c.Profile.GlacierFluxThreshold
-    )
+    // Moraines are till ridges left where ice termini stood: glacial deposition only, not the
+    // river and slope deposition that covers most formerly glaciated land.
+    if (map.CumulativeGlacialDeposition[i] >= units(c.Profile.MoraineMinimumGlacialDeposition))
       map.LandformCodes[i] = Landform.Moraine;
   }
 }

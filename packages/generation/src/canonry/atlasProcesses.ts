@@ -358,6 +358,7 @@ function finishProcess(original: DomainSnapshot): MapProcess {
         const selected = generationBindings(context).features.selection;
         const enabled = (id: string) => selected[id].enabled;
         extractNativeGeography(state, context, {
+          oceans: enabled("ocean.geography"),
           impacts: enabled("physical.impacts"),
           volcanism: enabled("physical.volcanism"),
           fractures: enabled("physical.fractures"),

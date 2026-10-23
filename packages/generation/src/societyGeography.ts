@@ -10,7 +10,7 @@ import {
 import type { GenerationState, MapProcessContext } from "./process";
 import { RouteHeap } from "./mapRouting";
 import { channelAccess, dryLand, emptySupport, supportAt } from "./societySupport";
-import { generationBindings } from "./generationBindings";
+import { atlasName } from "./atlasNaming";
 
 export interface SocietyWorkspace {
   region: SocietyRegion;
@@ -19,6 +19,7 @@ export interface SocietyWorkspace {
   river: Float64Array;
   inherited: boolean;
   changed: Set<string>;
+  cycle?: { index: number; elapsed: number; final: boolean };
 }
 function landEdges(state: GenerationState) {
   const grid = state.surface,
@@ -42,9 +43,12 @@ function seedCells(state: GenerationState, river: Float64Array, context: MapProc
   const grid = state.surface;
   const ranked = Array.from(grid.active.keys())
     .filter((i) => dryLand(state, i))
-    .map((i) => ({ i, score: supportAt(state, i, river[i]).capacity }))
-    .sort((a, b) => b.score - a.score || a.i - b.i);
-  const spacing = communitySpacing(state, context);
+    .map((i) => {
+      const support = supportAt(state, i, river[i]);
+      return { i, score: -Math.log(Math.max(1e-12, context.random())) / (1 + support.capacity) };
+    })
+    .sort((a, b) => a.score - b.score || a.i - b.i);
+  const spacing = communitySpacing(state);
   const buckets = new Map<string, number[]>(),
     selected: number[] = [];
   for (const { i } of ranked) {
@@ -57,7 +61,10 @@ function seedCells(state: GenerationState, river: Float64Array, context: MapProc
     if (
       near.some((j) => {
         const q = gridPosition(grid, j);
-        return Math.hypot(p.x - q.x, p.y - q.y) < spacing;
+        const density = supportAt(state, i, river[i]).capacity;
+        const other = supportAt(state, j, river[j]).capacity;
+        const radius = spacing * (0.35 + 0.65 / (1 + Math.min(density, other) / 8));
+        return Math.hypot(p.x - q.x, p.y - q.y) < radius;
       })
     )
       continue;
@@ -67,21 +74,14 @@ function seedCells(state: GenerationState, river: Float64Array, context: MapProc
   }
   return selected;
 }
-function communitySpacing(state: GenerationState, context: MapProcessContext) {
+function communitySpacing(state: GenerationState) {
   const grid = state.surface;
   const nominal = { world: 100000, region: 25000, local: 2500, site: 250, interior: 25 }[
     state.domain.world.areas[state.domain.scope.areaId].profile
   ];
-  const parameters = context.inputs?.features
-    ? generationBindings(context).parameters
-    : context.parameters;
-  const origins = Math.max(
-    Number(parameters.cultureCount ?? 1),
-    Number(parameters.polityCount ?? 1)
-  );
   return Math.min(
     nominal,
-    Math.max(grid.bounds[2] - grid.bounds[0], grid.bounds[3] - grid.bounds[1]) / (origins * 2)
+    Math.max(grid.bounds[2] - grid.bounds[0], grid.bounds[3] - grid.bounds[1]) / 3
   );
 }
 function assignCells(state: GenerationState, seeds: number[], edges: SocietyWorkspace["edges"]) {
@@ -122,21 +122,22 @@ function assignCells(state: GenerationState, seeds: number[], edges: SocietyWork
     }
   return { owner, distances };
 }
-function community(state: GenerationState, cell: number, index: number): SocietyCommunity {
+function community(state: GenerationState, cell: number): SocietyCommunity {
   const p = gridPosition(state.surface, cell);
+  const key = `${state.domain.scope.areaId}:${p.x}:${p.y}`;
   return {
-    id: semanticId(
-      state.domain.world.id,
-      "community",
-      `${state.domain.scope.areaId}:${p.x}:${p.y}`
-    ),
-    name: `${["Alder", "Stone", "Willow", "High", "Grey", "West", "Green", "North"][index % 8]}${["haven", "ford", "mere", "watch"][Math.floor(index / 8) % 4]} ${Math.floor(index / 32) + 1}`,
+    id: semanticId(state.domain.world.id, "community", key),
+    name: atlasName(state.domain.world, {
+      key: `community:${key}`,
+      kind: "settlement",
+      position: p,
+    }).name,
     position: p,
     areaKm2: 0,
     groups: [],
     support: emptySupport(),
-    founded: "Settlement",
-    status: "inhabited",
+    founded: "",
+    status: "abandoned",
     protected: false,
     causes: [],
   };
@@ -147,7 +148,7 @@ export function createSocietyGeography(state: GenerationState, context: MapProce
     edges = landEdges(state),
     seeds = seedCells(state, river, context);
   const { owner, distances } = assignCells(state, seeds, edges);
-  const communities = seeds.map((cell, index) => community(state, cell, index));
+  const communities = seeds.map((cell) => community(state, cell));
   const region: SocietyRegion = {
     areaId: state.domain.scope.areaId,
     spaceId: state.domain.scope.spaceId,
@@ -212,7 +213,7 @@ export function refreshSocietyConnections(state: GenerationState) {
   work.edges = landEdges(state);
   const { owner, distances } = assignCells(state, seeds, work.edges);
   for (let index = communities.length; index < seeds.length; index++)
-    communities.push(community(state, seeds[index], index));
+    communities.push(community(state, seeds[index]));
   work.owner = owner;
   work.region.connections = connectionsFor(communities, owner, distances, work.edges);
 }

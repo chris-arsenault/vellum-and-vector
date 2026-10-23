@@ -119,7 +119,10 @@ function auroraUse(
   const use = Math.min(p.charge, p.readers * years * 0.02);
   p.charge -= use;
   p.strain = p.strain * Math.exp(-years / 20) + use / Math.max(1, p.readers * 100);
-  p.memoryAccess = Math.min(1, p.memoryAccess * retained + use / Math.max(1, population(c)));
+  p.memoryAccess = Math.min(
+    1,
+    p.memoryAccess * Math.exp((-years * (1 - retained)) / 200) + use / Math.max(1, population(c))
+  );
   const work = workFor(state, c, "aurora-archive");
   work.causes = [
     `Cold memory-bearing ice and ${p.crystals.toFixed(1)} crystals support ${p.readers.toFixed(1)} readers; access is limited by charge and cognitive strain.`,
@@ -146,12 +149,15 @@ function pressureUse(
   const enabled = ocean && depth >= 50 && depth <= p.depthLimit;
   const intensity = enabled ? magicAt(state, "ocean-rays", at) : 0;
   p.divers = intensity > 0 ? (population(c) * 0.002) / (1 + p.strain) : 0;
-  p.pressureCharge = Math.max(0, p.pressureCharge * Math.exp(-years / 5) + intensity * p.divers);
+  p.pressureCharge = Math.max(
+    0,
+    p.pressureCharge * Math.exp(-years / 5) + intensity * p.divers * (1 - Math.exp(-years / 5))
+  );
   // Carried Pressure dissipates near Aurora crystals rather than combining into a spell.
   p.pressureCharge *= Math.exp(-p.crystals / 10);
   if (p.divers <= 0) return;
   p.strain += p.pressureCharge / Math.max(1, p.divers * 10);
-  const spent = p.pressureCharge * 0.6;
+  const spent = p.pressureCharge * (1 - Math.exp(-years / 10));
   p.pressureCharge -= spent;
   p.pressureUsed += spent;
   p.maritimeContact = spent / Math.max(1, p.divers);
@@ -181,14 +187,17 @@ function accessibleDive(state: GenerationState, c: SocietyCommunity, limit: numb
   }
   return best;
 }
-function distributeCores(state: GenerationState) {
+function distributeCores(state: GenerationState, years: number) {
   const region = state.society!.region,
     practices = new Map(region.magic.map((p) => [p.communityId, p]));
   for (const link of region.connections) {
     const a = practices.get(link.from),
       b = practices.get(link.to);
     if (!a || !b) continue;
-    const surplus = (a.coreSupply - b.coreSupply) * 0.25 * Math.exp(-link.travelCost / 200000);
+    const surplus =
+      (a.coreSupply - b.coreSupply) *
+      (1 - Math.exp(-years / 35)) *
+      Math.exp(-link.travelCost / 200000);
     a.coreSupply -= surplus;
     b.coreSupply += surplus;
   }
@@ -206,7 +215,7 @@ export function useSocietyMagic(state: GenerationState, context: MapProcessConte
     auroraUse(state, c, p, years);
     pressureUse(state, c, p, years);
   }
-  distributeCores(state);
+  distributeCores(state, years);
   context.recordCause({
     kind: "domain",
     process: "human.magic-use",

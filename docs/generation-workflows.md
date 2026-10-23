@@ -468,10 +468,30 @@ surface. An inland refinement has no fabricated pressure locus. A warm present
 may have no active Aurora while preserving its glacial activity history.
 
 The atlas publishes lakes as geographic polygons and extracts named peaks,
-craters, volcanoes, calderas, cirques, fjords, moraines, gorges, waterfalls and
-magical landmark regions alongside its river network. Landmark points identify
-connected regions; numerical masks retain their full extent. Completed session
-generations retain epoch and magical definitions when current settings change.
+mountain ranges, valleys, craters, volcanoes, calderas, cirques, fjords,
+moraines, gorges, waterfalls and magical landmark regions alongside its river
+network. Landmark points identify connected regions; numerical masks retain
+their full extent. Completed session generations retain epoch and magical
+definitions when current settings change.
+
+Named relief reads the final surface. Peaks are summits with at least
+`PeakMinimumProminence` of topographic prominence. Ranges are connected land
+above `MountainElevation`, or above `HillElevation` with `MountainLocalRelief`
+across `ReliefRadius`. Valleys are runs of published rivers whose flanks stand
+`ValleyMinimumDepth` above the channel for `ValleyMinimumLength`. A fjord is a
+glacially eroded ocean cell with land on opposite flanks within
+`FjordMaximumHalfWidth`; scoured open shelf is seabed. Moraines are terminus
+till of at least `MoraineMinimumGlacialDeposition`; U-valleys are drainage
+lines with `UValleyMinimumGlacialErosion`; cirques are strict ice-thickness
+maxima on mountain land, so a level ice-sheet plateau has none. A crater is mapped only
+while its rim stands `ImpactVisibleRelief` above both its floor and the
+surrounding plain.
+
+Regions larger than a few times their least named size split along catchment
+units: river reaches between confluences with the catchments draining into
+them, so pieces meet at drainage divides. Pieces of one region tile it exactly.
+Enclosed gaps smaller than a region's least named size join it unless they hold
+water or another named region.
 
 ## Generation and display findings (2026-10-18)
 
@@ -2124,6 +2144,30 @@ regions are replaced; authored/protected features stay authoritative. The shared
 geographic identity matcher associates ecological polygons after resampling, so
 matching regions retain their names and relationships when contours move.
 Protected biome samples also govern polygon classification.
+
+Names use the standalone `@atlas/name-forge` runtime in `packages/name-forge`.
+The atlas owns its configuration in `packages/generation/src/namingCultures.ts`:
+five spelling traditions loosely inspired by English, Italian/Iberian, Nordic,
+Arabic and Japanese place names. Character Markov chains trained on place names
+provide most settlement names, with occasional curated compounds. Geographic
+names combine a generated stem with an English geographic descriptor. These
+corpora and grammars are independent of Ice Remembers' naming configuration.
+
+The naming vocabulary describes GIS features: `biome` with the classified biome
+type as its subkind, `ocean`, `river`, `lake`, `landform`, `settlement`, `polity`,
+`culture` and configured magical places. Existing ecological feature kinds such
+as `forest` and `wetland` retain their rendering and geometry contracts; the naming
+adapter maps them to `biome` and carries `attributes.biome` as the naming subkind.
+The shared sea outline also publishes named ocean polygons on the Oceans and seas
+layer. Naming does not alter classification, physical geometry or feature IDs.
+
+Names depend on the world seed and stable geographic key, using a separate random
+stream. Seeded geographic naming traditions cover physical geography even without
+society generation. Generated cultures carry a naming tradition; their founding
+communities use it, while inherited and authored community names survive subsequent
+generation. The existing geographic identity matcher preserves established names
+when contours move. All models are trained in memory from bundled samples, so
+generation in the Web Worker requires no model fetch or filesystem access.
 
 Epoch durations are in years. Analytical cohort responses and graph travel times
 avoid annual iteration over geological ages. Each epoch has two coupled biological

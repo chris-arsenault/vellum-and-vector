@@ -1,5 +1,6 @@
 import { gridPosition, type SocietySupport } from "@atlas/domain";
 import type { GenerationState } from "./process";
+import { nativePosition } from "./canonry/atlasWorkspace";
 
 export const emptySupport = (): SocietySupport => ({
   farming: 0,
@@ -24,13 +25,13 @@ export function supportAt(state: GenerationState, i: number, river: number): Soc
   const moisture = Math.max(0, Math.min(1, value("moisture", value("rainfall", 0.5))));
   const soil = Math.min(1, value("soilDepth", 0.3) / 0.5);
   const slope = value("slope");
-  const water = Math.max(moisture, river);
+  const water = Math.min(1, Math.max(moisture, river, storedSoilWater(state, i)));
   const grass = value("grassCover", 0.2);
   const trees = value("treeCover", 0.2);
   const productivity = Math.max(0, value("productivity", 0.1));
-  const farming = 35 * growing * soil * water * Math.exp(-slope * 12);
+  const farming = 35 * growing * soil * water * Math.exp(-slope * 12) * (1 - 0.8 * trees);
   const grazing = 5 * grass * growing;
-  const gathering = 2 * trees * Math.min(1, productivity * 3);
+  const gathering = 2 * trees * Math.min(1, productivity * 3) + 2 * value("herbivores");
   const fishing = river * (0.5 + 4 * value("aquaticFauna"));
   return {
     farming,
@@ -41,13 +42,22 @@ export function supportAt(state: GenerationState, i: number, river: number): Soc
     capacity: (farming + grazing + gathering + fishing) * (1 - Math.min(1, value("ice"))),
   };
 }
+function storedSoilWater(state: GenerationState, i: number) {
+  const depth = societyValue(state, "soilDepth", i, 0.3);
+  const carbon = Math.min(1, societyValue(state, "soilCarbon", i) / 30);
+  const capacity = depth * (0.12 + carbon * 0.15);
+  return societyValue(state, "soilWater", i) / Math.max(0.01, capacity);
+}
 
 /** Sample every retained channel, including reaches omitted from visible cartography. */
 export function channelAccess(state: GenerationState) {
   const grid = state.surface,
     result = new Float64Array(grid.active.length);
   const size = Math.max(1000, grid.scope.resolution ?? 1000);
-  const buckets = channelBuckets(state, size);
+  const buckets =
+    state.physical && state.society?.cycle
+      ? liveChannelBuckets(state.physical, size)
+      : channelBuckets(state, size);
   for (let i = 0; i < result.length; i++) {
     const p = gridPosition(grid, i),
       x = Math.floor(p.x / size),
@@ -73,6 +83,18 @@ function channelBuckets(state: GenerationState, size: number) {
         bucket.push([p[0], p[1], reach.discharges[j] ?? 0]);
         buckets.set(key, bucket);
       }
+  }
+  return buckets;
+}
+function liveChannelBuckets(work: NonNullable<GenerationState["physical"]>, size: number) {
+  const buckets = new Map<string, [number, number, number][]>();
+  for (let i = 0; i < work.map.mesh.count; i++) {
+    if (work.map.RiverOrders[i] <= 0) continue;
+    const p = nativePosition(work, i);
+    const key = `${Math.floor(p.x / size)}:${Math.floor(p.y / size)}`;
+    const bucket = buckets.get(key) ?? [];
+    bucket.push([p.x, p.y, work.map.FlowAccumulation[i]]);
+    buckets.set(key, bucket);
   }
   return buckets;
 }

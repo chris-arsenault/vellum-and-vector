@@ -11,6 +11,7 @@ import type { GenerationState, MapProcessContext } from "./process";
 import { createSocietyGeography, refreshSocietySupport } from "./societyGeography";
 import { societyAncestor, inheritSociety } from "./societyInheritance";
 import { peopleTrait } from "./societyTraits";
+import { startingPopulations } from "./societySettlements";
 
 export function initializePopulation(state: GenerationState, context: MapProcessContext) {
   const prior = societyAncestor(state);
@@ -28,7 +29,8 @@ export function initializePopulation(state: GenerationState, context: MapProcess
     inheritSociety(state, prior);
     work.inherited = true;
   } else {
-    for (const c of work.region.communities)
+    const starts = startingPopulations(state, context);
+    for (const [i, c] of work.region.communities.entries())
       c.groups = [
         {
           people,
@@ -36,7 +38,7 @@ export function initializePopulation(state: GenerationState, context: MapProcess
           languages: [],
           religions: [],
           practices: [],
-          count: c.support.capacity * (0.25 + context.random() * 0.2),
+          count: starts[i],
         },
       ];
     applyStartingCommunities(state);
@@ -67,15 +69,18 @@ function applyStartingCommunities(state: GenerationState) {
       "population",
       "Population must be finite and nonnegative."
     );
-    const groups = f.attributes.groups as PopulationGroup[] | undefined;
-    c.groups = groups
-      ? populationGroupsSchema.parse(groups)
-      : c.groups.map((g) => ({ ...g, count }));
+    c.groups = startingGroups(f.attributes.groups, c.groups, count);
     c.name = f.name;
     c.position = { x: f.geometry.coordinates[0], y: f.geometry.coordinates[1], z: 0 };
     c.protected = f.protected;
+    c.founded = "Authored starting community";
+    c.status = count > 0 ? "inhabited" : "abandoned";
+    c.settlement = { population: count, peak: count, recoveryYears: 0 };
     c.causes.push(`Authored starting community ${f.id}.`);
   }
+}
+function startingGroups(groups: unknown, defaults: PopulationGroup[], count: number) {
+  return groups ? populationGroupsSchema.parse(groups) : defaults.map((g) => ({ ...g, count }));
 }
 export function populationTotal(state: GenerationState) {
   return state.society!.region.communities.reduce((sum, c) => sum + population(c), 0);
@@ -108,7 +113,16 @@ export function evolvePopulation(
   record.causes.push(
     "Population responds to food, fresh water and terrain; migrants carry their joint affiliations along traversable connections."
   );
-  work.region.history.push(record);
+  record.cycles = 1;
+  const prior = work.region.history.at(-1);
+  if (work.cycle && work.cycle.index > 0 && prior) {
+    prior.years += years;
+    prior.births += record.births;
+    prior.deaths += record.deaths;
+    prior.migrated += record.migrated;
+    prior.after = record.after;
+    prior.cycles = (prior.cycles ?? 0) + 1;
+  } else work.region.history.push(record);
   context.recordCause({
     kind: "domain",
     process: "human.population",

@@ -1,8 +1,10 @@
 import { biomes, spatial } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { components, publishPlace } from "./geographicRegions";
-import { combinedContour } from "./geographicContours";
+import type { Geometry } from "geojson";
+import { combinedContour, fillSmallHoles } from "./geographicContours";
 import { biomeRules, type BiomeRule, type BiomeSummary } from "./ecologyBiomes";
+import { largestRegionFactor, landArea, partitionRegion } from "./regionPartition";
 
 type Term = (i: number) => number;
 const families: Record<string, string> = {
@@ -125,13 +127,6 @@ function ruleQuantity(
   const at = (i: number) => combine(terms.map((term) => term(i)));
   return { terms, combine, at };
 }
-function landArea(state: GenerationState) {
-  const map = state.physical!.map;
-  let area = 0;
-  for (let i = 0; i < map.mesh.contentCount; i++)
-    if (map.WaterKindCodes[i] === 0) area += map.mesh.contentAreas[i];
-  return area;
-}
 /**
  * Named biomes are large contiguous regions of one rule, outlined in generation from the cover
  * or magic quantity that defines them. Continuous cover remains the ecological representation.
@@ -140,36 +135,84 @@ export function extractEcologicalFeatures(state: GenerationState) {
   const map = state.physical!.map,
     biome = biomeRules(state),
     water = waterTerms(state),
-    land = landArea(state);
+    land = landArea(state),
+    // Published pieces by cell; another piece inside a gap keeps its own outline.
+    claimed = new Int32Array(map.mesh.count).fill(-1);
+  let serial = 0;
   biome.rules.forEach((rule, index) => {
-    const quantity = ruleQuantity(state, biome.rules, index, water);
+    const quantity = ruleQuantity(state, biome.rules, index, water),
+      minimum = rule.share * land;
     const inside = new Float64Array(map.mesh.count).map((_, i) => quantity.at(i));
     components(
       state,
       (i) => inside[i] > 0,
       (members) => {
         const area = members.reduce((sum, i) => sum + map.mesh.contentAreas[i], 0);
-        if (area < rule.share * land) return;
-        publishBiome(state, rule, members, quantity, summarize(state, members, biome));
+        if (area < minimum) return;
+        // A region beyond a few times the least named size splits along drainage divides.
+        const pieces = partitionRegion(state, members, minimum * largestRegionFactor);
+        pieces.forEach((piece, n) => piece.forEach((i) => (claimed[i] = serial + n)));
+        pieces.forEach((piece, n) => {
+          const own = serial + n;
+          const blocks = (i: number) =>
+            map.WaterKindCodes[i] !== 0 ||
+            map.IceThickness[i] >= 1 ||
+            (claimed[i] >= 0 && claimed[i] !== own);
+          const sibling = (label: number) => label >= serial && label < serial + pieces.length;
+          publishBiome(
+            state,
+            rule,
+            piece,
+            pieceTerms(state, claimed, piece, own, sibling),
+            quantity,
+            {
+              region: summarize(state, piece, biome),
+              fill: (shape) => fillSmallHoles(state, shape, minimum, blocks),
+            }
+          );
+        });
+        serial += pieces.length;
       }
     );
   });
+}
+/**
+ * Indicators of a piece and of each sibling piece it touches. Combined at every sample as the
+ * piece's share less the largest sibling share, they meet at zero along shared midlines and at
+ * the points where three pieces meet, so pieces tile their region without gaps or overlap.
+ */
+function pieceTerms(
+  state: GenerationState,
+  claimed: Int32Array,
+  piece: number[],
+  own: number,
+  sibling: (label: number) => boolean
+) {
+  const mesh = state.physical!.map.mesh,
+    siblings = new Set<number>();
+  for (const i of piece)
+    for (let edge = 0; edge < mesh.degree[i]; edge++) {
+      const j = mesh.neighbors[i * mesh.stride + edge];
+      if (j >= 0 && claimed[j] !== own && sibling(claimed[j])) siblings.add(claimed[j]);
+    }
+  return [own, ...siblings].map((label) => (i: number) => Number(claimed[i] === label));
 }
 function publishBiome(
   state: GenerationState,
   rule: BiomeRule,
   members: number[],
+  pieces: ((cell: number) => number)[],
   quantity: ReturnType<typeof ruleQuantity>,
-  region: BiomeSummary
+  { region, fill }: { region: BiomeSummary; fill: (shape: Geometry) => Geometry }
 ) {
-  const set = new Set(members),
-    shape = combinedContour(
-      state,
-      members,
-      [...quantity.terms, (i) => Number(set.has(i))],
-      (values) => Math.min(quantity.combine(values.slice(0, -1)), values.at(-1)! - 0.1)
-    );
-  const extent = shape && spatial.intersection(shape, state.domain.scope.footprint);
+  // Outside every piece the share floor of 0.1 leaves the cover quantity to draw the outline.
+  const count = quantity.terms.length,
+    shape = combinedContour(state, members, [...quantity.terms, ...pieces], (values) => {
+      const [own, ...others] = values.slice(count);
+      return Math.min(quantity.combine(values.slice(0, count)), own - Math.max(0.1, ...others));
+    });
+  // A gap smaller than this rule's least named region could never be named on its own.
+  const extent = shape && spatial.intersection(fill(shape), state.domain.scope.footprint);
   if (!extent) return;
   const name = rule.name(region);
   publishPlace(
