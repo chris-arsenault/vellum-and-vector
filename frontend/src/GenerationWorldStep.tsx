@@ -69,7 +69,7 @@ export function GenerationWorldStep({ flow }: { flow: GenerationWorkflow }) {
       </p>
       {flow.approach === "procedural" && (
         <p className="brief-next">
-          Choose land, landscape and human geography, or review the current defaults.
+          Choose land, landscape, magic and human geography, or review the current defaults.
         </p>
       )}
     </>

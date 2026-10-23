@@ -139,7 +139,8 @@ test("procedural refinement configures a new region with fixed parent history", 
   await stage(page, /Landscape$/).click();
   await expect(dialog.getByLabel("Terrain", { exact: true })).toHaveCount(0);
   await expect(dialog.getByLabel("Living landscape", { exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Influences", exact: true }).click();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(stage(page, /Magic$/)).toHaveAttribute("aria-current", "step");
   await expect(dialog.getByLabel("Include Fire", { exact: true })).toBeDisabled();
   await expect(dialog.getByLabel("Thermal reach", { exact: true })).toBeDisabled();
   await tuneGeneration(page, "Impact geography");

@@ -12,6 +12,11 @@ export const workflowStages: { id: WorkflowStage; title: string; question: strin
     question: "Set the climate and the character of water, ice and life.",
   },
   {
+    id: "magic",
+    title: "Magic",
+    question: "Choose which magic systems shape the map and their geographic effects.",
+  },
+  {
     id: "people",
     title: "People & places",
     question: "Choose cultural, political and built geography independently.",

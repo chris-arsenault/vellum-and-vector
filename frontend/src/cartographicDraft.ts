@@ -105,8 +105,6 @@ export function applyCartographicChoice(
 }
 
 export function cartographicFeatureStage(id: string) {
-  return (
-    cartographicControls().find((control) => controlFeatures(control).includes(id))?.section ??
-    "environment"
-  );
+  const control = cartographicControls().find((control) => controlFeatures(control).includes(id));
+  return control?.system ? "magic" : (control?.section ?? "environment");
 }

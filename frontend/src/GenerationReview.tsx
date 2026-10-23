@@ -100,8 +100,7 @@ function ReviewDecision({
           className="setup-link"
           onClick={() => {
             flow.setTuning(null);
-            if (control.system) flow.showInfluences();
-            else flow.setStage(control.section);
+            flow.setStage(control.system ? "magic" : control.section);
           }}
         >
           Change {control.label.toLowerCase()}
@@ -114,7 +113,7 @@ function ReviewContext({ flow }: { flow: GenerationWorkflow }) {
   const settings = flow.prepared?.input.settings;
   return (
     <section className="setup-review-context">
-      <h3>History and influences</h3>
+      <h3>History and magic</h3>
       <p>
         {settings?.epochs
           .map((epoch) => epoch.id + " · " + epoch.duration?.toLocaleString() + " years")
@@ -126,8 +125,15 @@ function ReviewContext({ flow }: { flow: GenerationWorkflow }) {
           : "The selected systems act within this shared history."}
       </p>
       <p>{influenceSummary(flow)}</p>
-      <button type="button" className="setup-link" onClick={flow.showInfluences}>
-        Change influences
+      <button
+        type="button"
+        className="setup-link"
+        onClick={() => {
+          flow.setTuning(null);
+          flow.setStage("magic");
+        }}
+      >
+        Change magic
       </button>
     </section>
   );

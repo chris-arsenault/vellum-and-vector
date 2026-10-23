@@ -6,7 +6,7 @@ import { setDraftMagicSystems } from "./generationDraftEpochs";
 import { updateFeature } from "./generationDraft";
 import { useWorkflowFields } from "./workflowFieldState";
 
-export function GenerationInfluences({ flow }: { flow: GenerationWorkflow }) {
+export function GenerationMagicStep({ flow }: { flow: GenerationWorkflow }) {
   const systems = flow.draft.recipe.features!["magic.configured"].configuration!
     .magicSystems as unknown as MagicSystem[];
   return (
@@ -14,9 +14,6 @@ export function GenerationInfluences({ flow }: { flow: GenerationWorkflow }) {
       {systems.map((system) => (
         <SystemOutcomes key={system.id} flow={flow} system={system} systems={systems} />
       ))}
-      <button type="button" onClick={() => flow.setStage("environment")}>
-        Return to landscape
-      </button>
     </section>
   );
 }

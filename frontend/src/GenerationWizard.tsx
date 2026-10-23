@@ -7,7 +7,7 @@ import { GenerationReview } from "./GenerationReview";
 import { RegionGenerationContext } from "./RegionGenerationContext";
 import { CartographicDecisions } from "./CartographicDecisions";
 import { GenerationTuning } from "./GenerationTuning";
-import { GenerationInfluences } from "./GenerationInfluences";
+import { GenerationMagicStep } from "./GenerationMagicStep";
 import { WorkflowFieldProvider } from "./WorkflowFields";
 import { useWorkflowFields } from "./workflowFieldState";
 import { workflowStages } from "./generationWorkflowPresentation";
@@ -99,9 +99,6 @@ function StageRail({ flow }: { flow: GenerationWorkflow }) {
           </li>
         ))}
       </ol>
-      <button type="button" className="setup-link" onClick={flow.showInfluences}>
-        Influences
-      </button>
       <button
         type="button"
         className="setup-link"
@@ -114,9 +111,7 @@ function StageRail({ flow }: { flow: GenerationWorkflow }) {
 }
 function SetupContent({ flow, error }: { flow: GenerationWorkflow; error: unknown }) {
   const heading = useSetupFocus(flow);
-  const stage = flow.influences
-    ? { title: "Influences", question: "Choose the activity of the systems that shape this world." }
-    : workflowStages.find((item) => item.id === flow.stage)!;
+  const stage = workflowStages.find((item) => item.id === flow.stage)!;
   return (
     <section className="setup-content" aria-labelledby="setup-stage-title">
       <header className="stage-heading">
@@ -135,7 +130,7 @@ function SetupContent({ flow, error }: { flow: GenerationWorkflow; error: unknow
   );
 }
 function StageContent({ flow }: { flow: GenerationWorkflow }) {
-  if (flow.influences) return <GenerationInfluences flow={flow} />;
+  if (flow.stage === "magic") return <GenerationMagicStep flow={flow} />;
   if (flow.stage === "world") return <GenerationWorldStep flow={flow} />;
   if (flow.stage === "review") return <GenerationReview flow={flow} />;
   return <CartographicDecisions flow={flow} />;
@@ -144,7 +139,7 @@ function useSetupFocus(flow: GenerationWorkflow) {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
     heading.current?.focus();
-  }, [flow.stage, flow.influences]);
+  }, [flow.stage]);
   useEffect(() => {
     if (!flow.target) return;
     const target = document.getElementById("setup-" + flow.target);

@@ -75,6 +75,64 @@ test("accepts the curated reference through keyboard navigation without raw conf
   await expect(page.getByRole("application", { name: "World map canvas" })).toBeVisible();
 });
 
+test("walks through magic outcomes with Next and Back and returns from review to the same step", async ({
+  page,
+}) => {
+  await installGenerationFixture(page);
+  await page.goto("/");
+  await page.getByLabel("World name", { exact: true }).fill("Sequential atlas");
+  const next = page.getByRole("button", { name: "Next", exact: true });
+  const back = page.getByRole("button", { name: "Back", exact: true });
+  await next.click();
+  await expect(page.getByRole("heading", { name: "Land", exact: true })).toBeFocused();
+  await next.click();
+  await expect(page.getByRole("heading", { name: "Landscape", exact: true })).toBeFocused();
+  await next.click();
+  await expect(page.getByRole("heading", { name: "Magic", exact: true })).toBeFocused();
+  await expect(setupStep(page, /Magic$/)).toHaveAttribute("aria-current", "step");
+  const magic = page.getByRole("region", { name: "Magical geography", exact: true });
+  await expect(
+    magic.getByRole("group", { name: "Fire", exact: true }).getByRole("combobox")
+  ).toHaveCount(4);
+  await expect(
+    magic.getByRole("group", { name: "Aurora", exact: true }).getByRole("combobox")
+  ).toHaveCount(3);
+  await expect(
+    magic.getByRole("group", { name: "Pressure", exact: true }).getByRole("combobox")
+  ).toHaveCount(4);
+  await page.getByLabel("Thermal reach", { exact: true }).selectOption("2");
+  await page.getByLabel("Ice-capture pattern", { exact: true }).selectOption("0");
+  await page.getByLabel("Coastal stress", { exact: true }).selectOption("2");
+  await back.click();
+  await expect(page.getByRole("heading", { name: "Landscape", exact: true })).toBeFocused();
+  await next.click();
+  await expect(page.getByLabel("Thermal reach", { exact: true })).toHaveValue("2");
+  await expect(page.getByLabel("Ice-capture pattern", { exact: true })).toHaveValue("0");
+  await expect(page.getByLabel("Coastal stress", { exact: true })).toHaveValue("2");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByLabel("Coastal stress", { exact: true }).scrollIntoViewIfNeeded();
+  await expect(page.getByLabel("Coastal stress", { exact: true })).toBeInViewport();
+  await expect(page.locator(".setup-actions")).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await next.click();
+  await expect(page.getByRole("heading", { name: "People & places", exact: true })).toBeFocused();
+  await back.click();
+  await expect(page.getByRole("heading", { name: "Magic", exact: true })).toBeFocused();
+  await next.click();
+  await next.click();
+  await expect(page.getByRole("heading", { name: "Review & generate", exact: true })).toBeFocused();
+  await expect(page.locator(".cartographic-review")).toContainText("Across regions");
+  await expect(page.locator(".cartographic-review")).toContainText("Local reservoirs");
+  await expect(page.locator(".cartographic-review")).toContainText("Severe");
+  await page.getByRole("button", { name: "Change thermal reach", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Magic", exact: true })).toBeFocused();
+  await expect(page.getByLabel("Thermal reach", { exact: true })).toHaveValue("2");
+  await next.click();
+  await next.click();
+  await page.getByRole("button", { name: "Generate world", exact: true }).click();
+  await expect(page.getByRole("application", { name: "World map canvas" })).toBeVisible();
+});
+
 test("keeps distinct magic outcomes and independent inclusion while retaining authored history", async ({
   page,
 }) => {
@@ -86,7 +144,7 @@ test("keeps distinct magic outcomes and independent inclusion while retaining au
   original.features["magic.configured"].enabled = false;
   await recipe.fill(JSON.stringify(original));
   await page.getByRole("button", { name: "Apply configuration", exact: true }).click();
-  await page.getByRole("button", { name: "Influences", exact: true }).click();
+  await setupStep(page, /Magic$/).click();
   await expect(page.getByLabel("Include Fire", { exact: true })).not.toBeChecked();
   await page.getByLabel("Include Fire", { exact: true }).check();
   await expect(page.getByLabel("Include Aurora", { exact: true })).not.toBeChecked();
