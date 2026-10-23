@@ -252,12 +252,19 @@ function geographicPublications(
       "ecology",
       ["altered", "ember", "thaw", "wetland", "forest", "grassland", "barren"],
     ],
-    ["human.cultures", "cultures", ["culturalOrigin", "institution"]],
+    ["human.cultures", "cultures", ["culturalOrigin"]],
+    ["human.cultures", "institutions", ["institution"]],
     ["human.politics", "sovereignty", ["sovereignty"]],
     ["human.politics", "control", ["control"]],
     ["human.politics", "administration", ["jurisdiction"]],
     ["human.politics", "claims", ["claim"]],
-    ["built.layout", "settlements", ["settlement", "societyWork", "societyEvent"]],
+    ["built.layout", "settlements", ["settlement"]],
+    ["built.layout", "ruins", ["settlement"]],
+    ["built.layout", "waterworks", ["dam", "irrigation"]],
+    ["built.layout", "transportSites", ["pass", "harbor"]],
+    ["built.layout", "landUse", ["clearance", "hunting", "conservation"]],
+    ["built.layout", "magicPractices", ["fire-forge", "aurora-archive", "pressure-diving"]],
+    ["built.layout", "historicalEvents", ["societyEvent"]],
     ["built.layout", "roads", ["road"], true],
     ["built.layout", "structures", ["building", "room", "door", "furniture", "wall"]],
   ];
@@ -281,6 +288,22 @@ function geographicPublications(
   return result;
 }
 
+function identityPublications(world: World | undefined, features: ResolvedFeatures) {
+  const targets: Record<string, string> = {
+    culture: "cultures",
+    language: "languages",
+    religion: "religions",
+  };
+  return Object.values(world?.entities ?? {}).flatMap((entity) => {
+    const target = targets[entity.kind];
+    if (!target) return [];
+    const channels = [`${entity.kind}:${entity.id}`];
+    if (entity.kind === "language") channels.push(`languageUse:${entity.id}`);
+    return channels.map((channel) =>
+      field(channel, "ratio", target, enabled(features, "human.cultures"), ["human.cultures"])
+    );
+  });
+}
 /** Atlas modules declare concrete output bindings; generic publication knows no channel names. */
 export function atlasPublicationDefinitions(
   input: AtlasGenerationInput,
@@ -310,28 +333,13 @@ export function atlasPublicationDefinitions(
     ...configuredMagic(input, features),
     ...locatedMagic(world, features),
     ...geographicPublications(features, input),
+    ...identityPublications(world, features),
   ];
   // Society can change existing environmental products without rerunning their geological history.
   const human = ["human.cultures", "human.politics", "built.layout"].some((id) =>
     enabled(features, id)
   );
   if (human && world) enableInheritedEnvironment(publications, world);
-  for (const entity of Object.values(world?.entities ?? {}))
-    if (["culture", "language", "religion"].includes(entity.kind))
-      publications.push(
-        field(
-          `${entity.kind}:${entity.id}`,
-          "ratio",
-          (
-            { culture: "cultures", language: "languages", religion: "religions" } as Record<
-              string,
-              string
-            >
-          )[entity.kind],
-          enabled(features, "human.cultures"),
-          ["human.cultures"]
-        )
-      );
   return owners
     ? publications.filter((definition) =>
         definition.owners?.some((owner) => owners.includes(owner))

@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import {
   builtinLayers,
   createAdaptiveField,
@@ -21,9 +21,11 @@ import { defaultAtlasParameters } from "./atlasParameters";
 import { serializableBindings } from "./generationBindings";
 import { generationSettingsSchema } from "./generationSettings";
 import { initializePopulation } from "./societyPopulation";
-import { applySocietyWorks, makeWork } from "./societyWorks";
+import { applySocietyWorks, changeSample, makeWork } from "./societyWorks";
 import { refreshSocietyEnvironment } from "./societyEnvironment";
 import type { MapProcessContext } from "./process";
+import { initializeMagic } from "./canonry/magicState";
+import * as propagation from "./canonry/magicPropagation";
 
 // The fixture assembles a complete native water pipeline and its atlas bindings.
 // eslint-disable-next-line max-lines-per-function
@@ -125,4 +127,62 @@ it("refreshes a dam reservoir and downstream routing without advancing geologica
   for (const [i, water] of state.surface.channels.water.entries())
     if (water === 2) expect(state.surface.channels.waterDepth[i]).toBeGreaterThan(0);
   expect(Number.isFinite(gridPosition(state.surface, 0).x)).toBe(true);
+});
+
+it("retains Pressure rays for inland earthworks and retraces them when ocean connectivity changes", () => {
+  const { state, context } = fixture();
+  initializeMagic(state);
+  const trace = vi.spyOn(propagation, "propagateMagic");
+  try {
+    const water = state.physical!.map.WaterKindCodes.slice();
+    state.surface.channels.elevation.forEach((height, i) => {
+      if (height > 0) changeSample(state, "elevation", i, height + 1);
+    });
+    state.society!.changed.add("elevation");
+    refreshSocietyEnvironment(state, context, 10, false);
+    expect(state.physical!.map.WaterKindCodes.map((v) => Number(v === 1))).toEqual(
+      water.map((v) => Number(v === 1))
+    );
+    expect(
+      trace.mock.calls.some(([, field]) => field.definition.propagation === "ocean-rays")
+    ).toBe(false);
+    state.surface.channels.elevation.forEach((_height, i) =>
+      changeSample(state, "elevation", i, -100)
+    );
+    state.society!.changed.add("elevation");
+    refreshSocietyEnvironment(state, context, 10, false);
+    expect(
+      trace.mock.calls.some(([, field]) => field.definition.propagation === "ocean-rays")
+    ).toBe(true);
+    trace.mockClear();
+    state.surface.channels.temperature.fill(-20);
+    state.society!.changed.add("temperature");
+    refreshSocietyEnvironment(state, context, 10, false);
+    expect(
+      trace.mock.calls.some(([, field]) => field.definition.propagation === "cold-drainage")
+    ).toBe(true);
+  } finally {
+    trace.mockRestore();
+  }
+});
+
+it("transfers local earthwork deltas without resampling unrelated terrain", () => {
+  const { state, context } = fixture(),
+    map = state.physical!.map;
+  const before = map.Elevation.slice();
+  const work = makeWork(state, state.society!.region.communities[0], "pass", {
+    x: 1875,
+    y: 375,
+    z: 0,
+  });
+  work.radius = 300;
+  state.society!.region.works = [work];
+  applySocietyWorks(state, context, 10);
+  refreshSocietyEnvironment(state, context, 10, false);
+  expect(map.Elevation).not.toEqual(before);
+  for (let i = 0; i < before.length; i++) {
+    const x = map.mesh.x[i] + map.mesh.origin[0];
+    if (x < 500 || x > 3250) expect(map.Elevation[i]).toBe(before[i]);
+  }
+  expect(state.society!.elevationBefore).toBeUndefined();
 });

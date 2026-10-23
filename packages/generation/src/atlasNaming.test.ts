@@ -14,6 +14,8 @@ import { extractOceans } from "./canonry/oceanFeatures";
 import { initializePopulation } from "./societyPopulation";
 import { initializeCultures } from "./societyCulture";
 import { publishSettlements } from "./societyPublication";
+import { evolveSettlements } from "./societySettlements";
+import { communityName } from "./societyNaming";
 import type { MapProcessContext } from "./process";
 
 function fixture() {
@@ -40,6 +42,28 @@ it.each(atlasNamingCultures)(
         .split(/\s+/)
     );
     expect(result.names.some((name) => !training.has(name.toLowerCase()))).toBe(true);
+  }
+);
+it.each(atlasNamingCultures)(
+  "varies $name names across a map-sized set of feature seeds",
+  (culture) => {
+    const world = fixture().domain.world;
+    for (const seed of [104729, 314159, 271828]) {
+      world.seed = seed;
+      const names = Array.from(
+        { length: 1000 },
+        (_, i) =>
+          atlasName(world, {
+            key: `community-${i}`,
+            kind: "settlement",
+            culture: culture.id,
+            position: { x: 1000, y: 500 },
+          }).name
+      );
+      // The original small corpora repeated over half the names in a batch this size.
+      expect(new Set(names).size).toBeGreaterThan(800);
+      expect(names.every((name) => !/\d|markov:|slot:/.test(name))).toBe(true);
+    }
   }
 );
 it("uses GIS naming profiles, biome subkinds and readable geographic descriptors", () => {
@@ -101,6 +125,7 @@ it("keeps naming cultures geographic and independent of generated feature iterat
 });
 it("uses founding culture profiles for settlements and preserves authored community names", () => {
   const state = fixture();
+  state.domain.world.areas.area.profile = "region";
   putChannel(state.surface, "elevation", "metre", new Float64Array(10).fill(100));
   const context: MapProcessContext = {
     scope: state.domain.scope,
@@ -117,22 +142,19 @@ it("uses founding culture profiles for settlements and preserves authored commun
   };
   initializePopulation(state, context);
   for (const community of state.society!.region.communities) {
-    community.groups[0].count = 1000;
-    community.founded = "Founders";
-    community.status = "inhabited";
+    community.groups[0].count = 10000;
   }
   const c = state.society!.region.communities[0];
   c.name = "Creator's Landing";
+  c.founded = "Authored starting community";
+  c.status = "inhabited";
   c.causes.push("Authored starting community creator-1.");
   initializeCultures(state, context);
+  evolveSettlements(state, context, 200);
   expect(c.name).toBe("Creator's Landing");
   for (const other of state.society!.region.communities.slice(1)) {
-    const expected = atlasName(state.domain.world, {
-      key: other.id,
-      kind: "settlement",
-      position: other.position,
-      culture: other.groups[0].culture!,
-    });
+    const expected = communityName(state.domain.world, other, other.founded);
+    expect(other.founded).not.toBe("");
     expect(other.name).toBe(expected.name);
   }
   publishSettlements(state, context);

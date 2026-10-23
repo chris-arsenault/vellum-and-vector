@@ -119,6 +119,7 @@ function useEditing(world: World, state: ReturnType<typeof useEditorState>) {
     setPendingSculpt,
     setTool,
     setPanel,
+    setStyles,
   } = state;
   const commit = useCommit(world.id);
   function execute(kind: string, data: Record<string, unknown>) {
@@ -150,6 +151,12 @@ function useEditing(world: World, state: ReturnType<typeof useEditorState>) {
       return;
     }
     commit.mutate(makeCommand(world, "putFeature", edit), {
+      onSuccess: () =>
+        setStyles((current) =>
+          completeStyles(world, current).map((style) =>
+            style.layerId === feature.layerId ? { ...style, visible: true } : style
+          )
+        ),
       onError: (error) => {
         if (
           error instanceof DomainError &&

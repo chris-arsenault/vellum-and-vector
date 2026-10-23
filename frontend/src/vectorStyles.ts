@@ -3,6 +3,7 @@ import { Circle, Fill, Stroke, Style, Text } from "ol/style.js";
 import type { AtlasFeature, LayerStyle } from "./types";
 import type { Style as SymbolStyle, Symbolizer } from "geostyler-style";
 import { biomeFamilies } from "@atlas/domain";
+import { settlementStyle } from "./settlementStyles";
 
 export function defaultSymbolStyle(
   name: string,
@@ -52,6 +53,10 @@ export function featureStyle(feature: AtlasFeature, style: LayerStyle, resolutio
       .includes(style.filter.toLowerCase())
   )
     return [];
+  if (feature.kind === "settlement") return settlementStyle(feature, style);
+  return geographicStyle(feature, style, resolution);
+}
+function geographicStyle(feature: AtlasFeature, style: LayerStyle, resolution: number) {
   const color = ecologicalColor(feature) ?? style.color;
   const result = new Style({
     text: style.labels

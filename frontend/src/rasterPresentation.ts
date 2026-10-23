@@ -41,8 +41,19 @@ export function fieldLabel(world: World, channel: string) {
     naturalSurface: "Natural land cover",
   };
   if (!id) return names[channel] ?? readable(channel);
+  return identityFieldLabel(world, kind, id, rest, readable);
+}
+function identityFieldLabel(
+  world: World,
+  kind: string,
+  id: string,
+  rest: string[],
+  readable: (text: string) => string
+) {
   const entity = world.entities[id] ?? world.magicSystems?.find((s) => s.id === id);
-  return `${entity?.name ?? readable(id)}${rest.length ? ` · ${readable(rest.join(" · "))}` : ` · ${readable(kind)}`}`;
+  const terms: Record<string, string> = { languageUse: "Naming use", language: "Knowledge" };
+  const suffix = rest.length ? readable(rest.join(" · ")) : (terms[kind] ?? readable(kind));
+  return `${entity?.name ?? readable(id)} · ${suffix}`;
 }
 export function fieldRange(data: Raster[], style: FieldStyle): [number, number] {
   if (style.range) return style.range;

@@ -13,6 +13,7 @@ import { ScaleLine } from "ol/control.js";
 import { defaults as defaultInteractions } from "ol/interaction/defaults.js";
 import { bounds } from "./presentation";
 import { featureStyle } from "./vectorStyles";
+import { settlementPriority } from "./settlementStyles";
 import type { Area, AtlasFeature, LayerStyle, World } from "./types";
 import { RasterSources } from "./RasterSources";
 
@@ -93,6 +94,8 @@ function syncVectorLayers(engine: MapEngine, world: World, styles: LayerStyle[])
       layer = new VectorLayer({
         source: new VectorSource({ wrapX: false }),
         declutter: true,
+        renderOrder: (a, b) =>
+          settlementPriority(b.get("domain")) - settlementPriority(a.get("domain")),
         properties: { title: world.layers[style.layerId].name, layerId: style.layerId },
       });
       engine.featureLayers.set(style.layerId, layer);

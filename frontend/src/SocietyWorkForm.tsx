@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { AtlasFeature } from "@atlas/domain";
+import { societyWorkLayers, type AtlasFeature, type SocietyWorkKind } from "@atlas/domain";
 import type { EditorState } from "./useEditor";
 
 export function SocietyWorkForm({
@@ -78,7 +78,8 @@ function authoredWork(
   return {
     ...feature,
     id: crypto.randomUUID(),
-    kind: "societyWork",
+    kind,
+    layerId: societyWorkLayers[kind as SocietyWorkKind],
     name: `${kind} at ${feature.name}`,
     state: "authored",
     protected: true,

@@ -95,6 +95,7 @@ function carryIdentity(c: SocietyCommunity, origin: SocietyCommunity) {
   c.founded = origin.founded;
   c.settlement = structuredClone(origin.settlement);
   c.history = structuredClone(origin.history);
+  c.naming = structuredClone(origin.naming);
 }
 function inheritPolitics(region: SocietyRegion, prior: SocietyRegion) {
   if (!prior.politics) return;

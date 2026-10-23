@@ -34,6 +34,18 @@ it("refines rural catchments and located settlements without replaying eras", as
   initializePopulation(state, context);
   await evolveSociety(state, context, 200);
   retainSocietyFootprints(state);
+  for (const c of state.society!.region.communities) {
+    for (const group of c.groups) {
+      group.languages = ["founding-language"];
+      group.namingLanguage = "founding-language";
+      delete group.languageShares;
+    }
+    if (c.founded) c.naming = { language: "founding-language", culture: "marches", era: c.founded };
+  }
+  // A major town has a global representation; smaller communities remain latent.
+  const town = state.society!.region.communities.find((c) => c.founded && c.position.x < 150000)!;
+  town.groups[0].count += 6000;
+  town.settlement = { population: 6000, peak: 6000, recoveryYears: 0 };
   const original = structuredClone(state.domain.world.societies!.area);
   publishSettlements(state, context);
   const parentFeatures = Object.values(state.domain.world.features).filter(
@@ -74,6 +86,13 @@ it("refines rural catchments and located settlements without replaying eras", as
   const refined = parentFeatures.filter((f) => f.detail.child);
   expect(refined.length).toBeGreaterThan(0);
   for (const feature of refined) {
+    expect(feature.detail.child.attributes?.namingLanguage).toBe("founding-language");
+    const inherited = state.society!.region.communities.find(
+      (c) => c.id === feature.attributes.communityId
+    )!;
+    expect(inherited.naming).toEqual(
+      original.communities.find((c) => c.id === inherited.id)!.naming
+    );
     expect(
       Object.values(state.domain.world.features).filter(
         (f) =>

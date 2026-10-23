@@ -2,6 +2,17 @@ import { adaptiveCell, rectangle, spatial, type Bounds } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { GenerationState } from "./process";
 import { generatedFeature, putGenerated } from "./mapFeatures";
+import { isWorldSociety } from "./societyMapScope";
+
+const oceanMasks = new WeakMap<Geometry, (geometry: Geometry) => Geometry | null>();
+function excludeOcean(shape: Geometry, ocean: Geometry) {
+  let mask = oceanMasks.get(ocean);
+  if (!mask) {
+    mask = spatial.differenceFrom(ocean);
+    oceanMasks.set(ocean, mask);
+  }
+  return mask(shape);
+}
 
 /** Dissolve ownership cells; physical water boundaries remain authoritative. */
 export function territoryShape(state: GenerationState, members: Set<string>): Geometry | null {
@@ -49,7 +60,7 @@ function clipWater(state: GenerationState, strips: Geometry[]) {
   if (!strips.length) return null;
   const grid = state.surface;
   let shape = spatial.intersection(spatial.unionAll(strips), grid.scope.footprint);
-  if (shape && grid.ocean) shape = spatial.difference(shape, grid.ocean);
+  if (shape && grid.ocean) shape = excludeOcean(shape, grid.ocean);
   for (const lake of Object.values(state.domain.world.features).filter(
     (f) => f.kind === "lake" && f.areaId === grid.scope.areaId
   ))
@@ -94,10 +105,11 @@ export function publishPolitics(state: GenerationState) {
     publishTerritory(state, polity.id, "sovereignty", "sovereignty", "sovereign", sovereign);
     publishTerritory(state, polity.id, "control", "control", "controlledBy", control);
     publishTerritory(state, polity.id, "claim", "claims", "claimedBy", new Set(polity.claims));
+    if (isWorldSociety(state)) continue;
     // Administration is delegated locally and only where effective control exists.
     for (const id of control) {
       const c = state.society!.region.communities.find((c) => c.id === id)!;
-      const shape = territoryShape(state, new Set([id]));
+      const shape = c.footprint ?? territoryShape(state, new Set([id]));
       if (!shape) continue;
       const feature = generatedFeature(
         state,

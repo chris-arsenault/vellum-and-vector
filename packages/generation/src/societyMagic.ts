@@ -14,6 +14,7 @@ import {
 } from "./societyWorks";
 import { societyValue } from "./societySupport";
 import { peopleTrait } from "./societyTraits";
+import { samplesInBox } from "./societySpatial";
 
 export function magicAt(
   state: GenerationState,
@@ -175,7 +176,13 @@ function pressureUse(
 function accessibleDive(state: GenerationState, c: SocietyCommunity, limit: number) {
   let best = -1,
     distance = Math.min(100000, Math.sqrt(c.areaKm2) * 1500);
-  for (let i = 0; i < state.surface.active.length; i++) {
+  const { x, y } = c.position;
+  for (const i of samplesInBox(state.surface, [
+    x - distance,
+    y - distance,
+    x + distance,
+    y + distance,
+  ])) {
     const depth = societyValue(state, "waterDepth", i);
     if (societyValue(state, "water", i) !== 1 || depth < 50 || depth > limit) continue;
     const p = gridPosition(state.surface, i),

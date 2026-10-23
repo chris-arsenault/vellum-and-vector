@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { Style } from "ol/style.js";
+import { Style, RegularShape } from "ol/style.js";
 import { featureStyle, defaultSymbolStyle } from "./vectorStyles";
 import { biomeFamilies, rectangle } from "@atlas/domain";
 import Parser from "geostyler-openlayers-parser";
@@ -47,6 +47,26 @@ it("distinguishes unresolved tributaries and trunks at continental zoom without 
   expect(width(small, 5000)[0]).toBeLessThan(width(large, 5000)[0]);
   expect(width(small, 5000)[0]).toBeLessThan(1);
   expect(styles(large, 5000)).toHaveLength(1);
+});
+
+it("distinguishes political seats without using zoom to add or remove settlement features", () => {
+  const town: AtlasFeature = {
+    ...river([]),
+    kind: "settlement",
+    layerId: "settlements",
+    geometry: { type: "Point", coordinates: [0, 0] },
+    attributes: { population: 6000, settlementRole: "capital" },
+  };
+  for (const resolution of [10000, 1]) {
+    const capital = styles(town, resolution)[0];
+    expect((capital.getImage() as RegularShape).getPoints()).toBe(5);
+    const regional = styles(
+      { ...town, attributes: { ...town.attributes, settlementRole: "regionalCapital" } },
+      resolution
+    )[0];
+    expect((regional.getImage() as RegularShape).getPoints()).toBe(4);
+    expect(capital.getZIndex()).toBeGreaterThan(regional.getZIndex()!);
+  }
 });
 
 it("uses physical bank widths and the longitudinal width profile at close zoom", () => {

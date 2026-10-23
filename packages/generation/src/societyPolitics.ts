@@ -4,7 +4,8 @@ import { centers } from "./mapPeople";
 import { initializePopulation, nearestCommunity } from "./societyPopulation";
 import { communityReach } from "./societyContact";
 import { generationBindings } from "./generationBindings";
-import { namingCulture } from "./atlasNaming";
+import { namePolity } from "./societyNaming";
+import { relocatePolitySeats } from "./societyHierarchy";
 
 export function initializePolitics(state: GenerationState, context: MapProcessContext) {
   if (!state.society) initializePopulation(state, context);
@@ -13,10 +14,12 @@ export function initializePolitics(state: GenerationState, context: MapProcessCo
   const count =
     context.parameters.polityCount ??
     (context.inputs?.features ? generationBindings(context).parameters.polityCount : 3);
+  const established = new Set(Object.keys(state.domain.world.entities));
   const entities = centers(state, context, "polity", Number(count));
   const polities: SocietyPolity[] = entities.flatMap((entity) => {
     const p = entity.attributes.center as { x: number; y: number };
     const seat = nearestCommunity(state, p.x, p.y);
+    if (!established.has(entity.id)) namePolityAtSeat(state, entity, seat);
     return seat
       ? [
           {
@@ -45,6 +48,13 @@ export function initializePolitics(state: GenerationState, context: MapProcessCo
     region.politics.sovereignty[c.id] = polity.id;
     region.politics.control[c.id] = polity.id;
   }
+}
+function namePolityAtSeat(
+  state: GenerationState,
+  entity: Entity,
+  seat: ReturnType<typeof nearestCommunity>
+) {
+  if (seat) namePolity(state.domain.world, entity, seat, "Founding");
 }
 function institutionalSupport(state: GenerationState, polity: SocietyPolity) {
   const world = state.domain.world;
@@ -140,11 +150,11 @@ function successor(state: GenerationState, parent: SocietyPolity, community: str
     state: "generated",
     attributes: {
       center: c.position,
-      namingCulture: namingCulture(state.domain.world, c.position).id,
     },
     relations: [{ targetId: parent.id, kind: "derivedFrom" }],
   };
   state.domain.world.entities[id] = entity;
+  namePolity(state.domain.world, entity, c, era);
   politics.polities.push({
     id,
     seat: c.id,
@@ -186,14 +196,15 @@ export function evolvePolitics(state: GenerationState, context: MapProcessContex
   const region = state.society!.region,
     politics = region.politics!;
   const capacity = Number(context.epochs.at(-1)?.variables.politicalCapacity ?? 1);
+  const era = context.epochs.at(-1)?.id ?? "Settlement";
   for (const p of politics.polities) updateSupport(state, p, years);
-  applyPoliticalAnchors(state, context.epochs.at(-1)?.id ?? "Settlement");
+  applyPoliticalAnchors(state, era);
+  relocatePolitySeats(state, era);
   controlCommunities(
     state,
     politics.polities.map((p) => polityReach(state, p, capacity)),
     years
   );
-  const era = context.epochs.at(-1)?.id ?? "Settlement";
   recordPoliticalChanges(state, years, era);
   if (!state.society!.cycle) recoverCommunities(state, years, era);
   context.recordCause({

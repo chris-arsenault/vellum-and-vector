@@ -98,6 +98,12 @@ it("updates detailed geometry with area footprints and excludes other located fl
   };
   world.features.a = feature(world, "a");
   world.features.inside = { ...feature(world, "inside"), areaId: "floor" };
+  world.features.regional = {
+    ...feature(world, "regional"),
+    areaId: "child",
+    kind: "dam",
+    layerId: "waterworks",
+  };
   world.features.a.detail.child = {
     geometry: {
       type: "LineString",
@@ -114,6 +120,10 @@ it("updates detailed geometry with area footprints and excludes other located fl
     needsReconciliation: false,
   };
   const composed = readScene(world.id, "child")[0];
+  expect(readScene(world.id, root.id).map((f) => f.id)).toEqual(["a"]);
+  expect(readScene(world.id, root.id)[0].geometry).toEqual(world.features.a.geometry);
+  expect(readScene(world.id, root.id, [40, 40, 90, 90]).map((f) => f.id)).toEqual(["a"]);
+  expect(readScene(world.id, "child").some((f) => f.id === "regional")).toBe(true);
   expect(composed.attributes).toEqual({ detail: true });
   expect(readScene(world.id, "child").some((f) => f.id === "inside")).toBe(false);
   expect(readScene(world.id, "floor").map((f) => f.id)).toEqual(["inside"]);

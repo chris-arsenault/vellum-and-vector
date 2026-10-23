@@ -25,6 +25,22 @@ political reach. Culture, language and religious membership remain separate from
 sovereignty, administration, control and claims. Settlements and roads consume
 that state instead of the former capped placeholder selection.
 
+World publication contains major centers and their routes, political territories,
+population and affiliation fields, and major historical events. Smaller communities
+and works remain latent society records; zoom does not turn them into global map
+features. Settlements, ruins, waterworks, transport sites, land use, magic practice
+sites, institutions and historical events have distinct layers and concrete feature
+kinds. A selected creation profile also limits scene features and detailed geometry,
+so materializing a Region does not expose its local features on the World map.
+Regional terrain refinement and decisions about realizing latent sites remain
+separately scoped work, with creator authoring able to shape that geography.
+
+Local society queries use the existing sampling topology. Earthworks transfer
+elevation changes to the existing native mesh without resampling untouched terrain;
+Pressure pathways retrace when connected ocean cells change. This avoids both
+unrelated coast drift and needless propagation while preserving actual coastal
+changes and Aurora's temperature/ice dependencies.
+
 Present edits synchronize residents and works with the retained society records.
 Refinement subdivides population catchments and retains completed history and
 feature identities; it does not rerun old eras. The inspector exposes population
@@ -2163,11 +2179,53 @@ layer. Naming does not alter classification, physical geometry or feature IDs.
 
 Names depend on the world seed and stable geographic key, using a separate random
 stream. Seeded geographic naming traditions cover physical geography even without
-society generation. Generated cultures carry a naming tradition; their founding
-communities use it, while inherited and authored community names survive subsequent
-generation. The existing geographic identity matcher preserves established names
-when contours move. All models are trained in memory from bundled samples, so
-generation in the Web Worker requires no model fetch or filesystem access.
+society generation. Initial languages reference those same traditions. Population
+groups record per-language `languageShares`: overlapping `knowledge` and exclusive
+naming `use`, each expressed as a fraction of the group's residents. Use totals at
+most one; the remainder is unspecified. Simple authored input can still list known
+languages and one `namingLanguage`; omission defaults to the first known language,
+while explicit null means unspecified use. Explicit shares are authoritative;
+the language list and primary naming language summarize them. Migration carries
+the shares with people, and merging groups preserves weighted language counts.
+Human-era contact
+shifts usage through all occupied connections without removing multilingual
+knowledge or changing population totals. Political control does not overwrite
+resident languages. Isolation can change cultural identity while retaining language.
+Language contact updates shares without splitting groups by every language
+combination. Exact individual multilingual correlations are not retained; people,
+culture, religious and practice affiliations still distinguish demographic groups.
+
+The Languages layer publishes both overlapping `language:<id>` knowledge and
+exclusive `languageUse:<id>` shares. Empty communities have no language-use signal.
+The field is a projection of population groups, not an independent simulation.
+Current knowledge, use and per-cycle usage history are inspectable. Population
+authoring can select one naming language or edit individual knowledge and use
+percentages. Raising one use share beyond the available remainder proportionally
+reduces other use shares; knowledge stays at least as high as use.
+
+New settlements choose one whole naming tradition from their founding population's
+usage mixture, retaining the language and founding era. Polities use their seat's
+language. The final `atlas.names` pass names new geographic features after human
+eras, weighting language use by represented population within their extents.
+Water names sample their banks or coasts at the map's sampling resolution.
+Geography without local speakers uses the seeded geographic tradition.
+Source-map, protected, authored and already established names remain unchanged;
+language shifts do not rename existing places. Refinement carries naming provenance
+and the geographic identity matcher preserves it when contours move. All models
+are trained in memory from bundled samples, so the Web Worker requires no model
+fetch or filesystem access. There is one atlas naming config.
+
+That config combines expanded place-name corpora with order-three and order-two
+Markov chains, larger culture-specific root/ending lists and regional qualifiers.
+Most names use Markov chains; compounds and qualified forms supply additional
+variation. Feature kind and subkind participate in each feature's naming seed.
+Vocabulary revisions do not move the initial geographic traditions.
+
+Society works receive names at construction from the local naming-language mix,
+with several readable terms for each work kind (for example Forge, Foundry or
+Smithy). The work kind remains in the feature attributes. Work names and their
+language/era provenance survive later population changes and republication;
+the map no longer labels every work as its internal kind followed by a town name.
 
 Epoch durations are in years. Analytical cohort responses and graph travel times
 avoid annual iteration over geological ages. Each epoch has two coupled biological

@@ -1,4 +1,10 @@
-import type { PopulationGroup, World } from "@atlas/domain";
+import {
+  languageShares,
+  withLanguageShares,
+  type PopulationGroup,
+  type World,
+} from "@atlas/domain";
+import { SocietyLanguageEditor } from "./SocietyLanguageEditor";
 export function SocietyGroupEditor({
   world,
   groups,
@@ -86,7 +92,13 @@ function Affiliations({
             multiple
             value={group[key]}
             onChange={(e) =>
-              change({ [key]: Array.from(e.target.selectedOptions, (o) => o.value) })
+              change(
+                affiliationPatch(
+                  group,
+                  key,
+                  Array.from(e.target.selectedOptions, (o) => o.value)
+                )
+              )
             }
           >
             {Object.values(world.entities)
@@ -99,6 +111,19 @@ function Affiliations({
           </select>
         </label>
       ))}
+      <SocietyLanguageEditor world={world} group={group} change={change} />
     </>
+  );
+}
+function affiliationPatch(
+  group: PopulationGroup,
+  key: "languages" | "religions",
+  values: string[]
+): Partial<PopulationGroup> {
+  if (key === "religions") return { religions: values };
+  const shares = languageShares(group);
+  return withLanguageShares(
+    group,
+    Object.fromEntries(values.map((id) => [id, shares[id] ?? { knowledge: 1, use: 0 }]))
   );
 }

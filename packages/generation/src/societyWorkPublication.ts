@@ -1,18 +1,61 @@
 import { generatedFeature, putGenerated } from "./mapFeatures";
 import type { GenerationState } from "./process";
+import { societyWorkName } from "./societyNaming";
+import type { AtlasFeature, SocietyWork } from "@atlas/domain";
+import { isSocietyWork, societyWorkLayers } from "@atlas/domain";
+import { namingVersion } from "./atlasNaming";
+import { isWorldSociety } from "./societyMapScope";
+
+function nameUnrecordedWork(state: GenerationState, work: SocietyWork) {
+  if (work.name) return;
+  const community = state.society!.region.communities.find((c) => c.id === work.communityId);
+  if (!community) return;
+  const named = societyWorkName(state.domain.world, community, work);
+  work.name = named.name;
+  work.naming = { language: named.namingLanguage, culture: named.namingCulture, era: work.built };
+}
+function workName(state: GenerationState, work: SocietyWork, previous?: AtlasFeature) {
+  // A retained map name takes precedence over vocabulary revisions or a changed population.
+  if (previous) return { name: previous.name, attributes: previous.attributes };
+  nameUnrecordedWork(state, work);
+  return {
+    name: work.name ?? "Unnamed work",
+    attributes: {
+      namingKind: "societyWork",
+      namingVersion,
+      namingSubkind: work.kind,
+      namingCulture: work.naming?.culture ?? null,
+      namingLanguage: work.naming?.language ?? null,
+      namedInEra: work.naming?.era ?? null,
+    },
+  };
+}
 
 export function publishSocietyWorks(state: GenerationState) {
   const region = state.society!.region;
+  const existing = new Map(
+    Object.values(state.domain.world.features)
+      .filter(isSocietyWork)
+      .map((f) => [f.attributes.workId, f])
+  );
   for (const w of region.works) {
     if (w.authored && state.domain.world.features[w.id]) continue;
+    // Current generated works are local interventions, not global landmarks.
+    // Their records and environmental consequences remain in society state.
+    if (isWorldSociety(state)) {
+      nameUnrecordedWork(state, w);
+      continue;
+    }
+    const named = workName(state, w, existing.get(w.id));
     const feature = generatedFeature(
       state,
       `work:${w.id}`,
-      `${w.kind} at ${region.communities.find((c) => c.id === w.communityId)?.name ?? "settlement"}`,
-      "societyWork",
-      "settlements",
+      named.name,
+      w.kind,
+      societyWorkLayers[w.kind],
       { type: "Point", coordinates: [w.position.x, w.position.y] },
       {
+        ...named.attributes,
         workId: w.id,
         workKind: w.kind,
         communityId: w.communityId,
@@ -27,12 +70,13 @@ export function publishSocietyWorks(state: GenerationState) {
     putGenerated(state, feature);
   }
   for (const event of region.events) {
+    if (isWorldSociety(state) && event.casualties + event.displaced < 10000) continue;
     const feature = generatedFeature(
       state,
       `event:${event.id}`,
       `${event.kind} — ${event.era}`,
       "societyEvent",
-      "settlements",
+      "historicalEvents",
       { type: "Point", coordinates: [event.position.x, event.position.y] },
       {
         eventId: event.id,

@@ -21,7 +21,7 @@ export function defaultStyles(world: World, preset = "physical"): LayerStyle[] {
   };
   return Object.values(world.layers).map((layer) => ({
     layerId: layer.id,
-    visible: families[preset].includes(layer.family) && layer.id !== "faults",
+    visible: defaultLayerVisibility(layer.id, layer.family, preset, families[preset]),
     opacity: layer.family === "political" ? 0.4 : 0.85,
     color:
       (
@@ -33,6 +33,19 @@ export function defaultStyles(world: World, preset = "physical"): LayerStyle[] {
     labels: ["settlements", "pois"].includes(layer.id),
     minScale: 0,
   }));
+}
+function defaultLayerVisibility(id: string, family: string, preset: string, families: string[]) {
+  const overlays: Record<string, string> = {
+    waterworks: "infrastructure",
+    transportSites: "infrastructure",
+    landUse: "infrastructure",
+    magicPractices: "magical",
+    institutions: "cultural",
+    historicalEvents: "",
+    ruins: "",
+    faults: "",
+  };
+  return id in overlays ? overlays[id] === preset : families.includes(family);
 }
 
 export function bounds(geometry: Geometry): number[] {

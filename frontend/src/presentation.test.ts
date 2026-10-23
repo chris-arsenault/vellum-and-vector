@@ -25,4 +25,17 @@ describe("geographic presentation", () => {
     expect(styles.find((style) => style.layerId === "faults")?.visible).toBe(false);
     expect(styles.find((style) => style.layerId === "geology")?.visible).toBe(true);
   });
+  it("separates society overlays and enables practices with the magical preset", () => {
+    const world = createWorld({ name: "Society", seed: 1, width: 1000, height: 1000 });
+    expect(defaultStyles(world).find((s) => s.layerId === "waterworks")?.visible).toBe(false);
+    expect(
+      defaultStyles(world, "infrastructure").find((s) => s.layerId === "waterworks")?.visible
+    ).toBe(true);
+    expect(
+      defaultStyles(world, "magical").find((s) => s.layerId === "magicPractices")?.visible
+    ).toBe(true);
+    expect(
+      defaultStyles(world, "cultural").find((s) => s.layerId === "institutions")?.visible
+    ).toBe(true);
+  });
 });

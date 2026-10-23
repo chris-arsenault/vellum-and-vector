@@ -17,7 +17,7 @@ export function readFeature(id: string, featureId: string, areaId: string): Atla
   const world = session(id).snapshot.world;
   const feature = world.features[featureId];
   requireThat(feature, "missing_feature", "Select an existing feature.");
-  const geometry = composeFeature(world, feature);
+  const geometry = composeFeature(world, feature, [], world.areas[areaId].profile);
   requireThat(geometry, "feature_geometry", "This feature has no visible geometry.");
   return {
     ...feature,

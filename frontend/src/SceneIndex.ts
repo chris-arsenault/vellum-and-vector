@@ -1,4 +1,11 @@
-import { areaSpace, composeFeature, requireThat, spatial, rectangle } from "@atlas/domain";
+import {
+  areaSpace,
+  composeFeature,
+  requireThat,
+  spatial,
+  rectangle,
+  profiles,
+} from "@atlas/domain";
 import type { Geometry } from "geojson";
 import GeoJSON from "ol/format/GeoJSON.js";
 import VectorSource from "ol/source/Vector.js";
@@ -27,7 +34,7 @@ function areaContext(world: World) {
   ]);
 }
 function presentFeature(world: World, raw: AtlasFeature, areaId: string) {
-  const geometry = composeFeature(world, raw);
+  const geometry = composeFeature(world, raw, [], world.areas[areaId].profile);
   if (!geometry || !spatial.intersects(geometry, world.areas[areaId].footprint)) return null;
   return { ...raw, geometry, attributes: raw.detail[areaId]?.attributes ?? raw.attributes };
 }
@@ -88,6 +95,11 @@ export class SceneIndex {
     const wanted = new Set<string>();
     for (const feature of Object.values(world.features)) {
       if (areaSpace(world, feature.areaId) !== space) continue;
+      if (
+        profiles.indexOf(world.areas[feature.areaId].profile) >
+        profiles.indexOf(world.areas[this.areaId].profile)
+      )
+        continue;
       wanted.add(feature.id);
       this.updateFeature(world, feature, signature(feature));
     }

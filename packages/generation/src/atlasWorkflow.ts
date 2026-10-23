@@ -23,6 +23,7 @@ import {
   type ProcessSequence,
 } from "./process";
 import { prepareGeneratedProcess } from "./mapFeatures";
+import { finalizeNamesProcess } from "./societyNaming";
 import { atlasPhysicalSequence } from "./canonry/atlasSequence";
 import { atlasQuality } from "./canonry/atlasProfile";
 import { atlasParametersSchema, type AtlasParameters } from "./atlasParameters";
@@ -95,7 +96,8 @@ export function atlasRegistry(source: DomainSnapshot, input: AtlasGenerationInpu
   return atlasGenerationModules
     .processes(source, input)
     .reduce((registry, process) => registry.register(process), new MapProcessRegistry())
-    .register(prepareGeneratedProcess(input.domains));
+    .register(prepareGeneratedProcess(input.domains))
+    .register(finalizeNamesProcess(source));
 }
 
 export function prepareAtlasGeneration(source: DomainSnapshot, input: AtlasGenerationInput) {
@@ -345,6 +347,7 @@ function configuredSequence(source: DomainSnapshot, input: AtlasGenerationInput)
     "profile_domains",
     "Choose a generation domain supported by this profile."
   );
+  sequence.push(invoke(finalizeNamesProcess(source)));
   return sequence;
 }
 function resolveInput(source: DomainSnapshot, input: AtlasGenerationInput): AtlasGenerationInput {

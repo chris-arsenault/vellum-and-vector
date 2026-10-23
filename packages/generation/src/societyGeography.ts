@@ -11,6 +11,7 @@ import type { GenerationState, MapProcessContext } from "./process";
 import { RouteHeap } from "./mapRouting";
 import { channelAccess, dryLand, emptySupport, supportAt } from "./societySupport";
 import { atlasName } from "./atlasNaming";
+import { nearestSocietySample } from "./societySpatial";
 
 export interface SocietyWorkspace {
   region: SocietyRegion;
@@ -19,6 +20,8 @@ export interface SocietyWorkspace {
   river: Float64Array;
   inherited: boolean;
   changed: Set<string>;
+  /** Elevation before local earthworks, for transferring only their terrain changes. */
+  elevationBefore?: Float64Array;
   cycle?: { index: number; elapsed: number; final: boolean };
 }
 function landEdges(state: GenerationState) {
@@ -192,20 +195,9 @@ function connectionsFor(
 export function refreshSocietyConnections(state: GenerationState) {
   const work = state.society!,
     communities = work.region.communities;
-  const seeds = communities.map((c) => {
-    let best = -1,
-      distance = Infinity;
-    for (let i = 0; i < state.surface.active.length; i++) {
-      if (!dryLand(state, i)) continue;
-      const p = gridPosition(state.surface, i),
-        d = Math.hypot(p.x - c.position.x, p.y - c.position.y);
-      if (d < distance) {
-        best = i;
-        distance = d;
-      }
-    }
-    return best;
-  });
+  const seeds = communities.map((c) =>
+    nearestSocietySample(state.surface, c.position, (i) => dryLand(state, i))
+  );
   if (seeds.some((i) => i < 0)) {
     work.region.connections = [];
     return;

@@ -3,19 +3,22 @@ import { spatial, type Position, type World } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import { atlasNamingCultures, atlasNamingModels, type AtlasNamingKind } from "./namingCultures";
 
-export const namingVersion = "atlas-nameforge-1";
+export const namingVersion = "atlas-nameforge-2";
 export interface AtlasNameRequest {
   key: string;
   kind: AtlasNamingKind;
   subkind?: string;
   position: Pick<Position, "x" | "y">;
   culture?: string;
+  language?: string | null;
+  era?: string;
   term?: string;
 }
 /** Five seeded geographic naming traditions also work before society generation is enabled. */
 export function geographicNamingCulture(world: World, p: Pick<Position, "x" | "y">): Culture {
   const [w, s, e, n] = spatial.bounds(world.reference.domain);
-  const rng = createRNG(`${namingVersion}:${world.seed}:culture-origins`);
+  // Vocabulary revisions do not move the five initial language regions.
+  const rng = createRNG(`atlas-nameforge-1:${world.seed}:culture-origins`);
   const origins = atlasNamingCultures.map((culture) => ({
     culture,
     x: w + rng() * (e - w),
@@ -37,16 +40,24 @@ export function namingCulture(
   return configured ?? geographicNamingCulture(world, p);
 }
 export function atlasName(world: World, request: AtlasNameRequest) {
-  const culture = namingCulture(world, request.position, request.culture);
+  const culture = namingCulture(world, request.position, request.language ?? request.culture);
   const name = generateOne(
     culture,
     {
       kind: request.kind,
       subtype: request.subkind,
-      seed: JSON.stringify([namingVersion, world.seed, request.key, culture.id]),
+      seed: JSON.stringify([
+        namingVersion,
+        world.seed,
+        request.key,
+        request.kind,
+        request.subkind ?? null,
+        culture.id,
+        request.language ?? null,
+      ]),
       context: { geographicTerm: request.term ?? request.subkind ?? request.kind },
     },
-    { models: atlasNamingModels, markov: { minLength: 4, maxLength: 12 } }
+    { models: atlasNamingModels, markov: { minLength: 5, maxLength: 14 } }
   );
   return {
     name,
@@ -54,7 +65,14 @@ export function atlasName(world: World, request: AtlasNameRequest) {
     namingKind: request.kind,
     namingSubkind: request.subkind ?? null,
     namingVersion,
+    namingLanguage: request.language ?? null,
+    namedInEra: request.era ?? null,
   };
+}
+export function nameMetadata(named: ReturnType<typeof atlasName>) {
+  const { namingCulture, namingKind, namingSubkind, namingVersion, namingLanguage, namedInEra } =
+    named;
+  return { namingCulture, namingKind, namingSubkind, namingVersion, namingLanguage, namedInEra };
 }
 const landformTerms: Record<string, string> = {
   peak: "Peak",
@@ -86,12 +104,13 @@ export function nameGeographicFeature(
   key: string,
   kind: string,
   geometry: Geometry,
-  attributes: Record<string, unknown>
+  attributes: Record<string, unknown>,
+  source: Pick<AtlasNameRequest, "language" | "era"> = {}
 ) {
   const [w, s, e, n] = spatial.bounds(geometry),
     position = { x: (w + e) / 2, y: (s + n) / 2 };
   if (biomeFamilies.has(kind) && typeof attributes.biome === "string")
-    return atlasName(world, { key, kind: "biome", subkind: attributes.biome, position });
+    return atlasName(world, { key, kind: "biome", subkind: attributes.biome, position, ...source });
   if (landformTerms[kind])
     return atlasName(world, {
       key,
@@ -99,9 +118,10 @@ export function nameGeographicFeature(
       subkind: kind,
       term: landformTerms[kind],
       position,
+      ...source,
     });
   if (["river", "lake", "ocean"].includes(kind))
-    return atlasName(world, { key, kind: kind as "river" | "lake" | "ocean", position });
+    return atlasName(world, { key, kind: kind as "river" | "lake" | "ocean", position, ...source });
   if (typeof attributes.rule === "string" && typeof attributes.placeType === "string")
     return atlasName(world, {
       key,
@@ -109,6 +129,7 @@ export function nameGeographicFeature(
       subkind: attributes.rule,
       term: attributes.placeType,
       position,
+      ...source,
     });
   return null;
 }

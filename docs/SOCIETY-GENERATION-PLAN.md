@@ -54,6 +54,66 @@ can abandon and reoccupy the same place. Check representative default maps and
 their size distributions as well as conservation, determinism and authoring.
 These are scenarios to verify mechanisms, not mandatory events in every world.
 
+### User correction — semantic map scopes and society layers, 2026-10-23
+
+World and Region are different creation profiles, not different zoom levels.
+World publication contains major society geography at every zoom. Smaller
+communities, works, practices and events remain latent society records, with
+their causal effects and histories intact. Regional development may use these
+as inputs while creators refine and customize terrain; a coarse record does not
+require a predetermined local site. Zoom never materializes those records.
+Regional map features and representations must not leak back into the World view.
+
+Society features have separate semantic layers: settlements, ruins, routes,
+waterworks, transport sites, land use, magical practice sites, institutions and
+historical events, alongside population, cultural/language/religious distributions
+and the distinct political layers. Works use concrete kinds such as dam or harbor,
+not settlement or a universal work feature type.
+
+Current publication policy is an implementation choice: capitals, regional
+centers, towns with at least 5,000 concentrated residents and remains of such
+towns qualify for World publication. Routes connect mapped centers. Local works,
+catchment cultural markers, meeting houses and catchment administrative polygons
+are not global features. Events affecting at least 10,000 people can appear on
+the global history overlay. These thresholds are revisable cartographic choices;
+they do not delete records or change population evolution. More detailed regional
+terrain generation remains separately scoped work.
+
+### Linguistic use and geographic names — 2026-10-23
+
+The user authorized the reviewed linguistic-layer approach after the society
+repair finished. Sulion plan: `8a73653e-b005-4424-8b53-5e63e109c85b`.
+Keep the existing human-era loop and single atlas NameForge configuration.
+The five geographic naming traditions initialize languages and supply names where
+there is no society signal; they are not permanent cultural boundaries.
+
+Population groups distinguish multilingual knowledge from primary naming use.
+Migration carries both; contact changes naming use across occupied connections
+without moving people or erasing known languages. Publish normalized usage from
+the same groups on the Languages layer, leaving empty areas without fictional
+speakers. This is a derived GIS field, not a second authority over residents.
+
+The language scaling correction stores per-language knowledge and naming-use
+shares inside each demographic group. Knowledge overlaps; naming use totals at
+most one, with any remainder unspecified. Groups retain their people, culture,
+religious and practice affiliations. Merging and migration preserve weighted
+language counts. Contact updates the shares each cycle rather than enumerating
+every multilingual combination. Exact correlations between languages known by
+the same individual are not represented. Authoring and inspection expose the
+shares; names draw from the whole usage distribution. This removes combinatorial
+growth without reducing human-era cycles or discarding minority languages.
+
+Names become historical facts: settlements name themselves at founding; new
+polities use their seat's language; newly generated geography is named after the
+human eras from local population-weighted language use. Source-map and authored
+names survive later language change and refinement. Retain naming language and era
+with the name. Choose whole Markov traditions rather than mixing their character
+chains. Linguistic sound-change simulation and automatic political renaming are
+outside this addition.
+
+Implementation phases: domain use/contact/publication; naming lifecycle and
+inspection; migration/contact/barrier/history/refinement and browser validation.
+
 ### Scope correction — 2026-10-23
 
 The user explicitly directed delivery of society in a bounded context and rejected
@@ -833,14 +893,14 @@ The attempted B1 execution branch was canceled at the user's correction.
 
 ## Sulion mapping and resume
 
-| Milestone | Phase ID                               | State                      |
-| --------- | -------------------------------------- | -------------------------- |
-| M0        | `850ad3a1-3f86-4ee3-9e73-27a4867563f0` | Completed |
-| M1        | `ae74e167-7dc0-44f2-9179-894d78745040` | Completed |
-| M2        | `cc7a4cc1-51aa-42e1-aa58-dce686b90122` | Completed |
-| E1        | `0732178d-7533-4d02-b1ca-d27561a584ed` | Completed |
-| M3        | `75d063b0-3759-4481-9741-e0ad0ac484d1` | Completed |
-| M4        | `3ff0f2c9-b569-434b-94df-8b3547d04db3` | Completed |
+| Milestone | Phase ID                               | State              |
+| --------- | -------------------------------------- | ------------------ |
+| M0        | `850ad3a1-3f86-4ee3-9e73-27a4867563f0` | Completed          |
+| M1        | `ae74e167-7dc0-44f2-9179-894d78745040` | Completed          |
+| M2        | `cc7a4cc1-51aa-42e1-aa58-dce686b90122` | Completed          |
+| E1        | `0732178d-7533-4d02-b1ca-d27561a584ed` | Completed          |
+| M3        | `75d063b0-3759-4481-9741-e0ad0ac484d1` | Completed          |
+| M4        | `3ff0f2c9-b569-434b-94df-8b3547d04db3` | Completed          |
 | B1        | `fc6a9e64-e3e4-4d6b-a19b-f7f3411c51c4` | Deferred; excluded |
 
 Society implementation is in the domain `society` modules and generation

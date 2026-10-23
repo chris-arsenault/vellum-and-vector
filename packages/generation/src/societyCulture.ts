@@ -1,5 +1,8 @@
 import {
   mergePopulation,
+  languageKnowledge,
+  languageShares,
+  withLanguageShares,
   population,
   semanticId,
   type Entity,
@@ -11,7 +14,8 @@ import type { GenerationState, MapProcess, MapProcessContext } from "./process";
 import { centers } from "./mapPeople";
 import { initializePopulation, nearestCommunity } from "./societyPopulation";
 import { communityReach } from "./societyContact";
-import { atlasName, namingCulture } from "./atlasNaming";
+import { namingCulture } from "./atlasNaming";
+import { evolveLanguageUse } from "./societyLanguage";
 
 export function culturalIdentity(
   state: GenerationState,
@@ -38,15 +42,17 @@ function originReach(state: GenerationState, origin: Entity) {
   const nearest = nearestCommunity(state, p.x, p.y);
   return communityReach(state.society!.region, state.society!.region.communities.indexOf(nearest));
 }
-function nameFoundingCommunity(state: GenerationState, c: SocietyCommunity, culture: string) {
-  const authored = c.causes.some((cause) => cause.startsWith("Authored starting community"));
-  if (state.society!.inherited || c.protected || authored) return;
-  c.name = atlasName(state.domain.world, {
-    key: c.id,
-    kind: "settlement",
-    position: c.position,
-    culture,
-  }).name;
+function foundingGroup(state: GenerationState, group: PopulationGroup, origin: Entity) {
+  const language = culturalIdentity(state, "language", origin.id, `${origin.name} language`);
+  state.domain.world.entities[language].attributes.namingCulture = origin.attributes.namingCulture;
+  return {
+    ...group,
+    culture: origin.id,
+    languages: [language],
+    namingLanguage: language,
+    languageShares: undefined,
+    religions: [culturalIdentity(state, "religion", origin.id, `${origin.name} tradition`)],
+  };
 }
 export function initializeCultures(state: GenerationState, context: MapProcessContext) {
   if (!state.society) initializePopulation(state, context);
@@ -76,25 +82,22 @@ export function initializeCultures(state: GenerationState, context: MapProcessCo
           ? [group]
           : founders.map((origin) => ({
               ...group,
-              culture: origin.id,
+              ...foundingGroup(state, group, origin),
               count: group.count / founders.length,
-              languages: [
-                culturalIdentity(state, "language", origin.id, `${origin.name} language`),
-              ],
-              religions: [
-                culturalIdentity(state, "religion", origin.id, `${origin.name} tradition`),
-              ],
               practices: c.support.farming > c.support.grazing ? ["cultivation"] : ["pastoralism"],
             }))
       )
     );
-    nameFoundingCommunity(state, c, founders[0].id);
   }
 }
 function dominantMembership(
   groups: PopulationGroup[],
   kind: "languages" | "religions" | "practices"
 ) {
+  if (kind === "languages")
+    return Object.entries(languageKnowledge(groups)).sort(
+      (a, b) => b[1] - a[1] || a[0].localeCompare(b[0])
+    )[0]?.[0];
   const totals = new Map<string, number>();
   for (const g of groups) for (const id of g[kind]) totals.set(id, (totals.get(id) ?? 0) + g.count);
   return [...totals].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
@@ -107,14 +110,21 @@ function adopt(groups: PopulationGroup[], source: PopulationGroup[], fraction: n
     groups.flatMap((g) => [
       { ...g, count: g.count * (1 - fraction) },
       {
-        ...g,
+        ...learnLanguage(g, language),
         count: g.count * fraction,
-        languages: [...new Set([...g.languages, ...(language ? [language] : [])])],
         religions: [...new Set([...g.religions, ...(faith ? [faith] : [])])],
         practices: [...new Set([...g.practices, ...(practice ? [practice] : [])])],
       },
     ])
   );
+}
+function learnLanguage(group: PopulationGroup, language: string | undefined) {
+  if (!language) return group;
+  const shares = languageShares(group);
+  return withLanguageShares(group, {
+    ...shares,
+    [language]: { knowledge: 1, use: shares[language]?.use ?? 0 },
+  });
 }
 function strongestContacts(state: GenerationState) {
   const { communities, connections } = state.society!.region;
@@ -173,6 +183,7 @@ export function diffuseCultures(state: GenerationState, context: MapProcessConte
     description:
       "Languages, traditions and practices spread through contact without adding or moving people; isolated communities can retain and develop local identities.",
   });
+  evolveLanguageUse(state, context, years);
 }
 function accumulateIsolation(state: GenerationState, c: SocietyCommunity, years: number) {
   c.isolationYears = (c.isolationYears ?? 0) + years;

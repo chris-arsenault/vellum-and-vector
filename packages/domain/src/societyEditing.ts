@@ -5,16 +5,47 @@ import { population, type SocietyCommunity } from "./society";
 import { sameValue } from "./values";
 import { requireThat } from "./errors";
 import { spatial } from "./spatial";
+import { isSocietyWork } from "./societyFeatures";
 
 export const populationGroupsSchema = z.array(
-  z.object({
-    people: z.string().min(1),
-    culture: z.string().nullable(),
-    languages: z.array(z.string()),
-    religions: z.array(z.string()),
-    practices: z.array(z.string()),
-    count: z.number().finite().nonnegative(),
-  })
+  z
+    .object({
+      people: z.string().min(1),
+      culture: z.string().nullable(),
+      languages: z.array(z.string()),
+      namingLanguage: z.string().nullable().optional(),
+      languageShares: z
+        .record(
+          z.string().min(1),
+          z.object({
+            knowledge: z.number().finite().min(0).max(1),
+            use: z.number().finite().min(0).max(1),
+          })
+        )
+        .optional(),
+      religions: z.array(z.string()),
+      practices: z.array(z.string()),
+      count: z.number().finite().nonnegative(),
+    })
+    .refine((group) => !group.namingLanguage || group.languages.includes(group.namingLanguage), {
+      message: "The naming language must be one of the group's known languages.",
+      path: ["namingLanguage"],
+    })
+    .refine(
+      (group) =>
+        !group.languageShares ||
+        (Object.entries(group.languageShares).every(
+          ([id, share]) => group.languages.includes(id) && share.use <= share.knowledge + 1e-12
+        ) &&
+          group.languages.every((id) => Object.hasOwn(group.languageShares!, id)) &&
+          Object.values(group.languageShares).reduce((sum, share) => sum + share.use, 0) <=
+            1 + 1e-12),
+      {
+        message:
+          "Language shares must cover the listed languages; naming use cannot exceed knowledge or total 100%.",
+        path: ["languageShares"],
+      }
+    )
 );
 export const societyWorkAttributesSchema = z.object({
   workKind: z.enum([
@@ -40,14 +71,14 @@ export function editSocietyFeature(
   feature: AtlasFeature,
   areaId = feature.areaId
 ) {
-  if (feature.kind === "societyWork") societyWorkAttributesSchema.parse(feature.attributes);
+  if (isSocietyWork(feature)) societyWorkAttributesSchema.parse(feature.attributes);
   const prior = snapshot.world.societies?.[areaId];
   if (!prior) return;
   const region = structuredClone(prior);
   const c = region.communities.find((c) => c.id === feature.attributes.communityId);
   if (feature.kind === "settlement" && c) {
     editCommunity(snapshot, feature, c, areaId);
-  } else if (feature.kind === "societyWork") editWork(region.works, feature);
+  } else if (isSocietyWork(feature)) editWork(region.works, feature);
   else if (region.politics && ["sovereignty", "control", "claim"].includes(feature.kind))
     editPoliticalFeature(region, feature);
   else return;
@@ -103,6 +134,13 @@ function editWork(
   work.radius = radius;
   work.maintained = feature.attributes.maintained !== false;
   work.authored = true;
+  if (work.name !== feature.name) {
+    work.name = feature.name;
+    delete work.naming;
+    feature.attributes.namingLanguage = null;
+    feature.attributes.namingCulture = null;
+    feature.attributes.namedInEra = "Creator edit";
+  }
   if (feature.geometry.type === "Point")
     work.position = {
       x: feature.geometry.coordinates[0],
@@ -120,6 +158,15 @@ function editCommunity(
   const old = snapshot.world.features[feature.id];
   const attributes = old?.detail[areaId]?.attributes ?? old?.attributes;
   editResidentCounts(c, feature, attributes);
+  if (c.name !== feature.name) {
+    delete c.naming;
+    feature.attributes = {
+      ...feature.attributes,
+      namingLanguage: null,
+      namingCulture: null,
+      namedInEra: "Creator edit",
+    };
+  }
   c.name = feature.name;
   c.protected = feature.protected;
   if (feature.geometry.type === "Point")

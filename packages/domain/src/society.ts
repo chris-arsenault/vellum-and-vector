@@ -1,11 +1,16 @@
 import type { Position } from "./model";
 import type { Geometry } from "geojson";
+import { mergeLanguageShares, withLanguageShares, type LanguageShares } from "./societyLanguages";
 
-/** A joint demographic combination. Membership lists may overlap; people never do. */
+/** A demographic group. Language shares are marginals, not enumerated combinations. */
 export interface PopulationGroup {
   people: string;
   culture: string | null;
   languages: string[];
+  /** Primary language used for names; omitted authoring input defaults to the first known language. */
+  namingLanguage?: string | null;
+  /** When present, authoritative language proportions; lists above summarize these shares. */
+  languageShares?: LanguageShares;
   religions: string[];
   practices: string[];
   count: number;
@@ -35,6 +40,7 @@ export interface SocietyCommunity {
   settlement?: { population: number; peak: number; recoveryYears: number };
   isolationYears?: number;
   history?: SocietyOccupation[];
+  naming?: { language: string | null; culture: string; era: string };
 }
 export interface SocietyOccupation {
   era: string;
@@ -43,6 +49,7 @@ export interface SocietyOccupation {
   capacity: number;
   settlementPopulation: number;
   status: SocietyCommunity["status"];
+  languageUse?: Record<string, number>;
 }
 export interface SocietyConnection {
   from: string;
@@ -103,6 +110,9 @@ export type SocietyWorkKind =
   | "pressure-diving";
 export interface SocietyWork {
   id: string;
+  /** Assigned at construction; absent on unnamed authored input and older session fixtures. */
+  name?: string;
+  naming?: { language: string | null; culture: string; era: string };
   communityId: string;
   kind: SocietyWorkKind;
   position: Position;
@@ -153,7 +163,6 @@ export function populationKey(group: Omit<PopulationGroup, "count">) {
   return JSON.stringify([
     group.people,
     group.culture,
-    [...group.languages].sort(),
     [...group.religions].sort(),
     [...group.practices].sort(),
   ]);
@@ -164,8 +173,11 @@ export function mergePopulation(groups: PopulationGroup[]): PopulationGroup[] {
     if (group.count <= 0) continue;
     const key = populationKey(group),
       previous = combined.get(key);
-    if (previous) previous.count += group.count;
-    else combined.set(key, { ...group, count: group.count });
+    if (previous) {
+      const merged = withLanguageShares(previous, mergeLanguageShares(previous, group));
+      merged.count += group.count;
+      combined.set(key, merged);
+    } else combined.set(key, { ...group, count: group.count });
   }
   return [...combined.values()];
 }

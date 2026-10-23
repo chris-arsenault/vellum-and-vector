@@ -65,4 +65,6 @@ export * from "./fieldContours";
 export * from "./snapshot";
 export * from "./society";
 export * from "./societyEditing";
+export * from "./societyFeatures";
+export * from "./societyLanguages";
 export * from "./drainageRefinement";

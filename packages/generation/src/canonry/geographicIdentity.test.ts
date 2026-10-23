@@ -31,6 +31,11 @@ function pair() {
     ]);
   old.name = "Established river";
   old.relations = [{ kind: "related", targetId: "a-place" }];
+  Object.assign(old.attributes, {
+    namingLanguage: "old-language",
+    namingCulture: "costa",
+    namedInEra: "Founders",
+  });
   state.domain.world.features[old.id] = old;
   return { state, old, original: structuredClone(state.domain) };
 }
@@ -47,6 +52,11 @@ it("retains ecological polygon identity, name and relationships when resampling 
     rectangle([0, 0, 1000, 1000]),
     { sourceAlgorithm: "atlas-ecology-1", biome: "Temperate forest" }
   );
+  Object.assign(old.attributes, {
+    namingLanguage: "old-language",
+    namingCulture: "costa",
+    namedInEra: "Founders",
+  });
   old.relations = [{ kind: "related", targetId: "a-place" }];
   state.domain.world.features = { [old.id]: old };
   const original = structuredClone(state.domain);
@@ -66,6 +76,7 @@ it("retains ecological polygon identity, name and relationships when resampling 
     name: old.name,
     relations: old.relations,
     geometry: next.geometry,
+    attributes: { namingLanguage: "old-language", namingCulture: "costa", namedInEra: "Founders" },
   });
 });
 

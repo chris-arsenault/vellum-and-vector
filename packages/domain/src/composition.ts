@@ -1,6 +1,6 @@
 import type { Geometry } from "geojson";
 import { requireThat } from "./errors";
-import { profiles, type Area, type AtlasFeature, type World } from "./model";
+import { profiles, type Area, type AtlasFeature, type World, type Profile } from "./model";
 import { spatial, Spatial } from "./spatial";
 
 export function geometryParts(g: Geometry | null): Geometry[] {
@@ -79,7 +79,8 @@ export function isDescendant(
 export function composeFeature(
   world: Pick<World, "id" | "areas" | "features"> & Partial<Pick<World, "reference">>,
   feature: AtlasFeature,
-  path: string[] = []
+  path: string[] = [],
+  profile?: Profile
 ): Geometry | null {
   requireThat(
     !path.includes(feature.id),
@@ -111,7 +112,7 @@ export function composeFeature(
           "binding_space",
           "A line can follow geography in its own located space."
         );
-        const composed = composeFeature(world, target, [...path, feature.id]);
+        const composed = composeFeature(world, target, [...path, feature.id], profile);
         return composed ? geometryParts(gis.intersection(composed, ownArea.footprint)) : [];
       }),
       dimension,
@@ -121,6 +122,7 @@ export function composeFeature(
   const details = Object.entries(feature.detail)
     .filter(
       ([id, d]) =>
+        (!profile || profiles.indexOf(world.areas[id].profile) <= profiles.indexOf(profile)) &&
         !d.needsReconciliation &&
         d.state !== "stale" &&
         d.state !== "unmaterialized" &&

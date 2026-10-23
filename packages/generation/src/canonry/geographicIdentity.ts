@@ -125,13 +125,26 @@ function reuseIdentity(
   if (next.id !== previous.id) delete state.domain.world.features[next.id];
   state.domain.world.features[previous.id] = preserve
     ? structuredClone(previous)
-    : { ...next, id: previous.id, name: previous.name, relations: previous.relations };
+    : {
+        ...next,
+        id: previous.id,
+        name: previous.name,
+        relations: previous.relations,
+        attributes: { ...next.attributes, ...retainedNameMetadata(previous) },
+      };
   for (const reach of Object.values(state.domain.world.networkReaches ?? {})) {
     if (reach.featureId !== next.id) continue;
     if (preserve) delete state.domain.world.networkReaches![reach.id];
     else reach.featureId = previous.id;
   }
   if (preserve) restoreNetwork(state, original, previous.id);
+}
+function retainedNameMetadata(feature: AtlasFeature) {
+  return Object.fromEntries(
+    Object.entries(feature.attributes).filter(
+      ([key]) => key.startsWith("naming") || key === "namedInEra"
+    )
+  );
 }
 function restoreNetwork(state: GenerationState, original: DomainSnapshot, id: string) {
   for (const reach of Object.values(original.world.networkReaches ?? {})) {

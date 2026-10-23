@@ -19,6 +19,7 @@ import { evolveSociety } from "./societyEvolution";
 
 export function societyFixture() {
   const state = landscape();
+  state.domain.world.areas.area.profile = "region";
   state.domain.world.id = state.domain.scope.worldId = "bc07dcd0-7cba-46b1-8e56-5f7829dde8cb";
   state.domain.world.layers = Object.fromEntries(builtinLayers().map((l) => [l.id, l]));
   state.domain.scope.footprint = rectangle([0, 0, 300000, 100000]);

@@ -1,6 +1,6 @@
-import { population, type SocietyCommunity } from "@atlas/domain";
+import { population, languageUse, type SocietyCommunity } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
-import { atlasName } from "./atlasNaming";
+import { communityName } from "./societyNaming";
 import { nearestSample } from "./societyWorks";
 import { dryLand } from "./societySupport";
 
@@ -104,13 +104,9 @@ function inundateSettlement(c: SocietyCommunity, label: string) {
 function establishSettlement(state: GenerationState, c: SocietyCommunity, label: string) {
   if (c.founded || c.status !== "inhabited" || c.protected) return;
   c.founded = label;
-  const culture = [...c.groups].sort((a, b) => b.count - a.count)[0]?.culture;
-  c.name = atlasName(state.domain.world, {
-    key: c.id,
-    kind: "settlement",
-    position: c.position,
-    culture: culture ?? undefined,
-  }).name;
+  const named = communityName(state.domain.world, c, label);
+  c.name = named.name;
+  c.naming = { language: named.namingLanguage, culture: named.namingCulture, era: label };
 }
 function recordOccupation(c: SocietyCommunity, era: string, year: number) {
   (c.history ??= []).push({
@@ -120,5 +116,6 @@ function recordOccupation(c: SocietyCommunity, era: string, year: number) {
     capacity: c.support.capacity,
     settlementPopulation: c.settlement?.population ?? 0,
     status: c.status,
+    languageUse: languageUse(c.groups),
   });
 }

@@ -4,6 +4,7 @@ import {
   semanticId,
   spatial,
   societyWorkAttributesSchema,
+  isSocietyWork,
   type SocietyCommunity,
   type SocietyWork,
   type SocietyWorkKind,
@@ -13,20 +14,11 @@ import { nearestCommunity } from "./societyPopulation";
 import { societyValue } from "./societySupport";
 import { authoredFields } from "./mapAuthored";
 import { anchorRiverWork } from "./societyWaterUse";
+import { nearestSocietySample, samplesInBox } from "./societySpatial";
+import { societyWorkName } from "./societyNaming";
 
 export function nearestSample(state: GenerationState, p: { x: number; y: number }) {
-  let best = -1,
-    distance = Infinity;
-  for (let i = 0; i < state.surface.active.length; i++) {
-    if (!state.surface.active[i]) continue;
-    const q = gridPosition(state.surface, i),
-      d = Math.hypot(q.x - p.x, q.y - p.y);
-    if (d < distance) {
-      distance = d;
-      best = i;
-    }
-  }
-  return best;
+  return nearestSocietySample(state.surface, p);
 }
 export function makeWork(
   state: GenerationState,
@@ -34,7 +26,7 @@ export function makeWork(
   kind: SocietyWorkKind,
   position = c.position
 ): SocietyWork {
-  return {
+  const work: SocietyWork = {
     id: semanticId(state.domain.world.id, "society-work", `${c.id}:${kind}`),
     communityId: c.id,
     kind,
@@ -48,6 +40,14 @@ export function makeWork(
     applied: 0,
     causes: [],
   };
+  const named = societyWorkName(state.domain.world, c, work);
+  work.name = named.name;
+  work.naming = {
+    language: named.namingLanguage,
+    culture: named.namingCulture,
+    era: work.built,
+  };
+  return work;
 }
 function proposedWorks(state: GenerationState, c: SocietyCommunity): SocietyWorkKind[] {
   if (population(c) < 500) return [];
@@ -110,8 +110,7 @@ function addHarbors(state: GenerationState, existing: Set<string>) {
 function addAuthoredWorks(state: GenerationState, existing: Set<string>) {
   const work = state.society!;
   for (const f of Object.values(state.domain.world.features)) {
-    if (f.kind !== "societyWork" || f.state === "generated" || f.geometry.type !== "Point")
-      continue;
+    if (!isSocietyWork(f) || f.state === "generated" || f.geometry.type !== "Point") continue;
     const id = String(f.attributes.workId ?? f.id);
     if (f.areaId !== state.domain.scope.areaId || existing.has(id)) continue;
     const [x, y] = f.geometry.coordinates,
@@ -119,6 +118,8 @@ function addAuthoredWorks(state: GenerationState, existing: Set<string>) {
     if (!c) continue;
     const candidate = makeWork(state, c, f.attributes.workKind as SocietyWorkKind, { x, y, z: 0 });
     candidate.id = id;
+    candidate.name = f.name;
+    delete candidate.naming;
     candidate.authored = true;
     configureWork(candidate, f.attributes);
     candidate.maintained = f.attributes.maintained !== false;
@@ -161,13 +162,17 @@ export function editableSamples(state: GenerationState, channel: string) {
 export function changeSample(state: GenerationState, channel: string, i: number, value: number) {
   const values = state.surface.channels[channel];
   if (!values || !Number.isFinite(value) || values[i] === value) return;
+  if (state.physical && channel === "elevation") {
+    state.society!.elevationBefore ??= values.slice();
+  }
   values[i] = value;
   state.society!.changed.add(channel);
 }
 export function workSamples(state: GenerationState, work: SocietyWork) {
   const samples: { i: number; fraction: number }[] = [];
-  for (let i = 0; i < state.surface.active.length; i++) {
-    if (!state.surface.active[i]) continue;
+  const { x, y } = work.position,
+    r = work.radius;
+  for (const i of samplesInBox(state.surface, [x - r, y - r, x + r, y + r])) {
     const p = gridPosition(state.surface, i),
       d = Math.hypot(p.x - work.position.x, p.y - work.position.y);
     if (d <= work.radius) samples.push({ i, fraction: Math.exp(-d / Math.max(1, work.radius)) });

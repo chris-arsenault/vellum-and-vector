@@ -1,5 +1,7 @@
 import {
   population,
+  languageShares,
+  languageUse,
   type AtlasFeature,
   type World,
   type SocietyMagicPractice,
@@ -20,10 +22,10 @@ export function SocietyInspection({
   if (!region || !community) return null;
   const practice = region.magic.find((p) => p.communityId === community.id);
   const urban = community.settlement?.population ?? 0;
-  const label = (id: string | null) => (id ? (world.entities[id]?.name ?? id) : "Unspecified");
   return (
     <details open>
       <summary>People and livelihoods</summary>
+      <PoliticalSeat world={world} feature={feature} />
       <p>
         {Math.round(urban).toLocaleString()} settlement residents · {community.status}
       </p>
@@ -32,26 +34,8 @@ export function SocietyInspection({
         surrounding {Math.round(community.areaKm2).toLocaleString()} km². Composition below includes
         both.
       </p>
-      <table>
-        <thead>
-          <tr>
-            <th>Culture</th>
-            <th>People</th>
-            <th>Languages</th>
-            <th>Traditions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {community.groups.map((g, i) => (
-            <tr key={i}>
-              <td>{label(g.culture)}</td>
-              <td>{Math.round(g.count).toLocaleString()}</td>
-              <td>{g.languages.map(label).join(", ")}</td>
-              <td>{g.religions.map(label).join(", ")}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <PopulationComposition world={world} community={community} />
+      <LinguisticUse world={world} community={community} />
       <p>
         Local support: {Math.round(community.support.capacity).toLocaleString()} people. Farming{" "}
         {Math.round(community.support.farming)}, grazing {Math.round(community.support.grazing)},
@@ -59,7 +43,7 @@ export function SocietyInspection({
         {Math.round(community.support.fishing)}.
       </p>
       {practice && <PracticeInspection practice={practice} />}
-      <OccupationHistory community={community} />
+      <OccupationHistory world={world} community={community} />
       <details>
         <summary>Completed human eras</summary>
         <ul>
@@ -76,7 +60,88 @@ export function SocietyInspection({
     </details>
   );
 }
-function OccupationHistory({ community }: { community: SocietyCommunity }) {
+function label(world: World, id: string | null) {
+  return id ? (world.entities[id]?.name ?? id) : "Unspecified";
+}
+function PoliticalSeat({ world, feature }: { world: World; feature: AtlasFeature }) {
+  if (feature.attributes.settlementRole === "capital")
+    return (
+      <p>
+        Capital of{" "}
+        {((feature.attributes.capitalOf ?? []) as string[])
+          .map((id) => label(world, id))
+          .join(", ")}
+      </p>
+    );
+  if (feature.attributes.settlementRole === "regionalCapital")
+    return <p>Regional center of {label(world, feature.attributes.polityId as string)}</p>;
+  return null;
+}
+function PopulationComposition({
+  world,
+  community,
+}: {
+  world: World;
+  community: SocietyCommunity;
+}) {
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th>Culture</th>
+          <th>People</th>
+          <th>Languages known</th>
+          <th>Naming use</th>
+          <th>Traditions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {community.groups.map((g, i) => (
+          <tr key={i}>
+            <td>{label(world, g.culture)}</td>
+            <td>{Math.round(g.count).toLocaleString()}</td>
+            <td>{groupLanguageLabel(world, g, "knowledge")}</td>
+            <td>{groupLanguageLabel(world, g, "use")}</td>
+            <td>{g.religions.map((id) => label(world, id)).join(", ")}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+function groupLanguageLabel(
+  world: World,
+  group: SocietyCommunity["groups"][number],
+  channel: "knowledge" | "use"
+) {
+  return (
+    Object.entries(languageShares(group))
+      .filter(([, share]) => share[channel] > 0)
+      .map(([id, share]) => `${label(world, id)} ${(share[channel] * 100).toFixed(1)}%`)
+      .join(" · ") || "Unspecified"
+  );
+}
+function languageUseLabel(world: World, use: Record<string, number>) {
+  return (
+    Object.entries(use)
+      .map(([id, share]) => `${label(world, id)} ${(share * 100).toFixed(1)}%`)
+      .join(" · ") || "Unspecified"
+  );
+}
+function LinguisticUse({ world, community }: { world: World; community: SocietyCommunity }) {
+  return (
+    <div>
+      <p>Naming-language use: {languageUseLabel(world, languageUse(community.groups))}</p>
+      {community.naming && (
+        <p>
+          Named in {community.naming.era} using {label(world, community.naming.language)}. The
+          established name is retained as language use changes.
+        </p>
+      )}
+    </div>
+  );
+}
+function OccupationHistory({ world, community }: { world: World; community: SocietyCommunity }) {
   return (
     <details>
       <summary>Local population history</summary>
@@ -88,6 +153,7 @@ function OccupationHistory({ community }: { community: SocietyCommunity }) {
             <th>Local support</th>
             <th>Settlement</th>
             <th>Occupation</th>
+            <th>Naming-language use</th>
           </tr>
         </thead>
         <tbody>
@@ -100,6 +166,7 @@ function OccupationHistory({ community }: { community: SocietyCommunity }) {
               <td>{Math.round(step.capacity).toLocaleString()}</td>
               <td>{Math.round(step.settlementPopulation).toLocaleString()}</td>
               <td>{step.status}</td>
+              <td>{languageUseLabel(world, step.languageUse ?? {})}</td>
             </tr>
           ))}
         </tbody>

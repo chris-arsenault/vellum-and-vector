@@ -20,7 +20,8 @@ function settlementFeature(): AtlasFeature {
         {
           people: "residents",
           culture: null,
-          languages: [],
+          languages: ["River speech", "Coast speech"],
+          namingLanguage: "River speech",
           religions: [],
           practices: [],
           count: 1000,
@@ -73,6 +74,7 @@ function societyState(feature: AtlasFeature): SocietyRegion {
           water: 1,
         },
         founded: "Settlement, year 10",
+        naming: { language: "River speech", culture: "marches", era: "Settlement, year 10" },
         status: "inhabited",
         protected: false,
         causes: [],
@@ -121,11 +123,17 @@ test("authors population groups and places a located work through the inspector"
   await expect(page.locator(".right-panel h2")).toHaveText("River town");
   await expect(page.getByText("200 settlement residents", { exact: false })).toBeVisible();
   await expect(page.getByText("800 rural residents", { exact: false })).toBeVisible();
+  await expect(
+    page.getByText("Naming-language use: River speech 100.0%", { exact: true })
+  ).toBeVisible();
   await page.getByText("Local population history", { exact: true }).click();
   await expect(page.getByRole("cell", { name: "Settlement / 10", exact: true })).toBeVisible();
   await expect(page.getByRole("cell", { name: "Settlement / 20", exact: true })).toBeVisible();
   await page.getByText("Properties & relationships", { exact: true }).click();
   await page.getByLabel("People in group 1", { exact: true }).fill("1200");
+  await page
+    .getByRole("combobox", { name: "Naming language", exact: true })
+    .selectOption("Coast speech");
   await page
     .getByLabel("Practices (comma separated)", { exact: true })
     .fill("conservation, cultivation");
@@ -143,16 +151,78 @@ test("authors population groups and places a located work through the inspector"
     population: 240,
     communityPopulation: 1200,
     ruralPopulation: 960,
-    groups: [{ count: 1200, practices: ["conservation", "cultivation"] }],
+    groups: [
+      { count: 1200, namingLanguage: "Coast speech", practices: ["conservation", "cultivation"] },
+    ],
   });
   expect(
     exported.features.find(
-      (f: { properties: { kind: string } }) => f.properties.kind === "societyWork"
+      (f: { properties: { kind: string } }) => f.properties.kind === "conservation"
     ).properties
   ).toMatchObject({
     workKind: "conservation",
+    layerId: "landUse",
     radius: 250,
     maintained: true,
   });
   expect(errors).toEqual([]);
+});
+
+test("inspects and edits mixed language shares without flattening the population", async ({
+  page,
+}) => {
+  const settlement = settlementFeature();
+  const group = (settlement.attributes.groups as PopulationGroup[])[0];
+  group.languageShares = {
+    "River speech": { knowledge: 1, use: 0.75 },
+    "Coast speech": { knowledge: 0.4, use: 0.25 },
+  };
+  await installGenerationFixture(page, false, false, false, [settlement], societyState(settlement));
+  await page.goto("/");
+  await page.getByLabel("World name").fill("Mixed languages");
+  await page.getByLabel("Width · km").fill("4");
+  await page.getByLabel("Height · km").fill("1");
+  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
+  await page.getByRole("button", { name: "Create world", exact: true }).click();
+  await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
+  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
+  await page.getByRole("button", { name: "Fit area", exact: true }).click();
+  const canvas = page.getByRole("application", { name: "World map canvas" });
+  const box = (await canvas.boundingBox())!;
+  await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
+  await expect(
+    page.getByRole("cell", {
+      name: "River speech 100.0% · Coast speech 40.0%",
+      exact: true,
+    })
+  ).toBeVisible();
+  await page.getByText("Properties & relationships", { exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "Naming language", exact: true })).toHaveValue(
+    "mixed"
+  );
+  await page.getByLabel("People in group 1", { exact: true }).fill("1200");
+  await page.getByRole("button", { name: "Save feature", exact: true }).click();
+  await expect(
+    page.getByText("Naming-language use: River speech 75.0% · Coast speech 25.0%", {
+      exact: true,
+    })
+  ).toBeVisible();
+  await page.getByLabel("Know Coast speech (%)", { exact: true }).fill("60");
+  await page.getByLabel("Naming use Coast speech (%)", { exact: true }).fill("40");
+  await page.getByRole("button", { name: "Save feature", exact: true }).click();
+  await expect(page.locator(".right-panel h2")).toHaveText("River town");
+  const download = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export GIS", exact: true }).click();
+  const exported = JSON.parse(await readFile((await (await download).path())!, "utf8"));
+  expect(
+    exported.features.find((f: { id: string }) => f.id === settlement.id).properties.groups
+  ).toMatchObject([
+    {
+      count: 1200,
+      languageShares: {
+        "River speech": { knowledge: 1, use: 0.6 },
+        "Coast speech": { knowledge: 0.6, use: 0.4 },
+      },
+    },
+  ]);
 });

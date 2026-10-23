@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { generateAtlas } from "@atlas/generation";
-import { population } from "@atlas/domain";
+import { population, languageUse, isSocietyWork, type DomainSnapshot } from "@atlas/domain";
 import { newGenerationDraft, prepareDraft } from "./generationDraft";
 import { generationSnapshot } from "./generationJobs";
 
@@ -15,6 +15,7 @@ it("delivers a populated world with retained society and environmental consequen
   const start = performance.now();
   const result = await generateAtlas(source, input);
   const snapshot = generationSnapshot(result, input, crypto.randomUUID());
+  checkLinguisticPublication(snapshot, input.areaId);
   const society = snapshot.world.societies![input.areaId];
   expect(society.communities.length).toBeGreaterThan(1);
   expect(society.communities.reduce((sum, c) => sum + population(c), 0)).toBeGreaterThan(0);
@@ -57,3 +58,35 @@ it("delivers a populated world with retained society and environmental consequen
     ).length,
   });
 }, 180000);
+
+function checkLinguisticPublication(snapshot: DomainSnapshot, areaId: string) {
+  const society = snapshot.world.societies![areaId];
+  const languages = snapshot.world.fields.filter((f) => f.layerId === "languages");
+  expect(languages.flatMap((f) => f.channels ?? []).some((c) => c.startsWith("languageUse:"))).toBe(
+    true
+  );
+  for (const community of society.communities) {
+    const shares = Object.values(languageUse(community.groups));
+    if (population(community) > 0)
+      expect(shares.reduce((sum, share) => sum + share, 0)).toBeCloseTo(1, 8);
+    if (community.naming?.language)
+      expect(snapshot.world.entities[community.naming.language].attributes.namingCulture).toBe(
+        community.naming.culture
+      );
+  }
+  const geography = Object.values(snapshot.world.features).filter((f) => f.attributes.namingKind);
+  expect(geography.some((f) => typeof f.attributes.namingLanguage === "string")).toBe(true);
+  expect(geography.every((f) => typeof f.attributes.namedInEra === "string")).toBe(true);
+  expect(society.works.length).toBeGreaterThan(0);
+  for (const work of society.works) {
+    expect(work.name).toBeTypeOf("string");
+    expect(work.name).not.toContain(" at ");
+    expect(work.naming?.era).toBe(work.built);
+  }
+  const works = Object.values(snapshot.world.features).filter(isSocietyWork);
+  for (const work of works) {
+    expect(work.name).not.toContain(" at ");
+    expect(work.attributes.namingKind).toBe("societyWork");
+    expect(work.name).toBe(society.works.find((w) => w.id === work.attributes.workId)!.name);
+  }
+}

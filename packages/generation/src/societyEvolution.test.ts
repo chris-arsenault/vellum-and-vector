@@ -87,6 +87,7 @@ it("colonizes reachable country over cycles while a disconnected valley stays em
   expect(destination.founded).toContain("Settlement");
   expect(destination.history![0].population).toBeLessThan(destination.history!.at(-1)!.population);
   expect(population(isolated)).toBe(0);
+  state.domain.world.areas.area.profile = "region";
   publishSettlements(state, context);
   const published = Object.values(state.domain.world.features).filter(
     (f) => f.kind === "settlement"

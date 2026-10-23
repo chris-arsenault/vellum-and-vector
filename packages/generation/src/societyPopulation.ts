@@ -176,9 +176,8 @@ export function migratePopulation(state: GenerationState, years: number, mobilit
       (response * Math.min(0.5, fractions[route.from]) * route.weight) /
       Math.max(1e-12, fractions[route.from]);
     moved[route.from] += fraction;
-    incoming[route.to].push(
-      ...communities[route.from].groups.map((g) => ({ ...g, count: g.count * fraction }))
-    );
+    for (const g of communities[route.from].groups)
+      incoming[route.to].push({ ...g, count: g.count * fraction });
   }
   for (const [i, c] of communities.entries())
     c.groups = mergePopulation([

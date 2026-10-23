@@ -1,7 +1,7 @@
 import { fieldInterpolator, putChannel } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
 import { generationBindings } from "./generationBindings";
-import { atlasChannels } from "./canonry/atlasChannels";
+import { atlasChannels, type ChannelBinding } from "./canonry/atlasChannels";
 import {
   composeNativeAuthoring,
   createAtlasWorkspace,
@@ -30,23 +30,42 @@ import { irrigateChannels } from "./societyWaterUse";
 import { workSamples } from "./societyWorks";
 
 function synchronizeNative(state: GenerationState) {
-  const work = state.physical!,
-    map = work.map;
   for (const name of state.society!.changed) {
     const binding = atlasChannels.find((b) => b.name === name);
     if (!binding) continue;
-    const at = fieldInterpolator(state.surface, name),
-      values = map[binding.native];
-    for (let i = 0; i < map.mesh.count; i++) {
-      const value = (at(nativePosition(work, i)) - (binding.offset ?? 0)) / binding.scale;
-      values[i] = values instanceof Int32Array ? Math.round(value) : value;
-      if (name === "elevation") {
-        map.Elevation[i] += map.BaseSeaLevel;
-        map.BedrockElevation[i] = map.Elevation[i] - map.SedimentThickness[i];
-      }
+    synchronizeChannel(state, binding);
+  }
+  composeNativeAuthoring(state.physical!);
+}
+function synchronizeChannel(state: GenerationState, binding: ChannelBinding) {
+  const { offset = 0, scale } = binding;
+  const work = state.physical!,
+    map = work.map,
+    name = binding.name;
+  const before = name === "elevation" ? state.society!.elevationBefore : undefined;
+  const at = fieldInterpolator(changedSurface(state, name, before), name),
+    values = map[binding.native];
+  for (let i = 0; i < map.mesh.count; i++) {
+    const sample = at(nativePosition(work, i));
+    if (before && sample === 0) continue;
+    const value = before ? values[i] + sample / scale : (sample - offset) / scale;
+    values[i] = values instanceof Int32Array ? Math.round(value) : value;
+    if (name === "elevation") {
+      if (!before) map.Elevation[i] += map.BaseSeaLevel;
+      map.BedrockElevation[i] = map.Elevation[i] - map.SedimentThickness[i];
     }
   }
-  composeNativeAuthoring(work);
+}
+function changedSurface(state: GenerationState, name: string, before?: Float64Array) {
+  return before
+    ? {
+        ...state.surface,
+        channels: {
+          ...state.surface.channels,
+          [name]: state.surface.channels[name].map((value, i) => value - before[i]),
+        },
+      }
+    : state.surface;
 }
 function refreshWater(state: GenerationState, context: MapProcessContext) {
   const work = state.physical!,
@@ -99,6 +118,7 @@ export function refreshSocietyEnvironment(
   if (society.changed.has("elevation")) refreshSocietyConnections(state);
   refreshSocietySupport(state);
   society.changed.clear();
+  delete society.elevationBefore;
 }
 function refreshNative(
   state: GenerationState,
@@ -108,10 +128,15 @@ function refreshNative(
   publish: boolean
 ) {
   synchronizeNative(state);
-  if (available.has("water") && state.society!.changed.has("elevation"))
+  let oceanChanged = false;
+  if (available.has("water") && state.society!.changed.has("elevation")) {
+    const water = state.physical!.map.WaterKindCodes;
+    const wasOcean = water.map((kind) => Number(kind === 1));
     refreshWater(state, context);
+    oceanChanged = water.some((kind, i) => Number(kind === 1) !== wasOcean[i]);
+  }
   if (available.has("flow")) irrigateChannels(state);
-  refreshMagicPathways(state, context);
+  refreshMagicPathways(state, context, oceanChanged);
   if (available.has("productivity")) advanceHumanEcology(state, context, years);
   projectNative(
     state,
@@ -178,7 +203,11 @@ function publishEnvironmentalChanges(
   });
   if (!available.has("riverOrder") && drainage) world.drainage![area] = drainage;
 }
-function refreshMagicPathways(state: GenerationState, context: MapProcessContext) {
+function refreshMagicPathways(
+  state: GenerationState,
+  context: MapProcessContext,
+  oceanChanged: boolean
+) {
   const work = state.physical!,
     changed = state.society!.changed;
   if (!work.magic) restorePresentMagic(state);
@@ -188,7 +217,9 @@ function refreshMagicPathways(state: GenerationState, context: MapProcessContext
     const cold =
       field.definition.propagation === "cold-drainage" &&
       (changed.has("iceThickness") || changed.has("temperature"));
-    const coast = field.definition.propagation === "ocean-rays" && changed.has("elevation");
+    // Pressure rays trace connected ocean cells. Inland relief does not alter that path;
+    // a newly closed or opened coast still requires propagation.
+    const coast = field.definition.propagation === "ocean-rays" && oceanChanged;
     if (cold || coast) propagateMagic(state, field, seed, field.definition.strength);
   }
   // Reclassify current interaction conditions; this does not create or replay a historical event.
