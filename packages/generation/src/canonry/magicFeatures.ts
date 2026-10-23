@@ -1,4 +1,4 @@
-import { putChannel, type MagicCondition } from "@atlas/domain";
+import { magicSurfaceCode, putChannel, type MagicCondition } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import type { MagicField } from "./magicState";
 import { magicKey } from "./magicState";
@@ -142,13 +142,13 @@ export function classifyMagicFeatures(state: GenerationState, seed = state.domai
   classifyNaturalSurface(state);
   const magic = state.physical!.magic!;
   const priority = new Float64Array(magic.finalSurface.length).fill(-Infinity);
-  let code = 100;
+  const definitions = magic.fields.map((field) => field.definition);
   for (const field of magic.fields) {
     field.features = {};
     const effective = new Set(effectiveMagicRules(field.definition));
     for (const rule of field.definition.features) {
-      const surfaceCode = code++;
       if (!effective.has(rule)) continue;
+      const surfaceCode = magicSurfaceCode(definitions, field.definition.id, rule.id)!;
       const members = growRegion(state, field, rule, seed);
       field.features[rule.id] = members;
       for (let i = 0; i < members.length; i++)

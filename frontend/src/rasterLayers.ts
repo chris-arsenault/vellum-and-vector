@@ -2,8 +2,18 @@ import LayerGroup from "ol/layer/Group.js";
 import WebGLTile from "ol/layer/WebGLTile.js";
 import type { MapEngine } from "./mapEngine";
 import type { Raster, RasterPresentation, World } from "./types";
-import { defaultFieldStyle, fieldLabel, fieldRange } from "./rasterPresentation";
+import {
+  categoryPalette,
+  defaultFieldStyle,
+  fieldLabel,
+  fieldRange,
+  surfacePalette,
+} from "./rasterPresentation";
 import { overlayStyle, overlayVariables, terrainStyle, terrainVariables } from "./rasterStyles";
+import type { SurfaceCategory } from "@atlas/domain";
+
+const classSignature = (classes: SurfaceCategory[] | null) =>
+  classes ? classes.map((c) => `${c.code}${c.color}`).join("") : "";
 
 function groupFor(parent: LayerGroup, key: string, title: string) {
   let group = parent
@@ -62,12 +72,13 @@ export function updateRaster(
   view: RasterPresentation
 ) {
   engine.rasters.begin();
+  const surfaces = surfacePalette(world);
   updateParts(
     engine,
     engine.image,
     base,
-    { ...terrainStyle(view), variables: terrainVariables(view) },
-    "terrain"
+    { ...terrainStyle(view, surfaces), variables: terrainVariables(view) },
+    `terrain:${classSignature(surfaces)}`
   );
   const channels = new Set(
     view.fields.filter((field) => field.visible).map((field) => field.channel)
@@ -90,13 +101,14 @@ export function updateRaster(
     group.set("channel", channel);
     group.setVisible(field.visible);
     group.setOpacity(field.opacity);
-    const range = fieldRange(parts, field);
+    const range = fieldRange(parts, field),
+      classes = categoryPalette(world, channel);
     updateParts(
       engine,
       group,
       parts,
-      { ...overlayStyle(field, range), variables: overlayVariables(field, range) },
-      `${field.palette}:${field.scale}`
+      { ...overlayStyle(field, range, classes), variables: overlayVariables(field, range) },
+      `${field.palette}:${field.scale}:${classSignature(classes)}`
     );
   }
   reorderFields(engine, order);

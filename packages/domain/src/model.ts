@@ -253,7 +253,7 @@ export interface FieldStyle {
   range: [number, number] | null;
 }
 export interface RasterPresentation {
-  base: "topographic" | "relief";
+  base: "surface" | "topographic" | "relief";
   sunAzimuth: number;
   sunElevation: number;
   exaggeration: number;

@@ -38,4 +38,12 @@ describe("geographic presentation", () => {
       defaultStyles(world, "cultural").find((s) => s.layerId === "institutions")?.visible
     ).toBe(true);
   });
+  it("shows magical geography on the physical map without switching presets", () => {
+    const world = createWorld({ name: "Magic", seed: 1, width: 1000, height: 1000 });
+    for (const preset of ["physical", "infrastructure", "magical"])
+      expect(defaultStyles(world, preset).find((s) => s.layerId === "magic")?.visible).toBe(true);
+    expect(defaultStyles(world, "political").find((s) => s.layerId === "magic")?.visible).toBe(
+      false
+    );
+  });
 });

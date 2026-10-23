@@ -77,9 +77,9 @@ it("shares immutable grid registration across channels and preserves actual samp
   const tile = await result,
     expected = numericTileSampler(raster)([20, 20, 80, 80], 6);
   for (let pixel = 0; pixel < 36; pixel++)
-    expect(tile.slice(pixel * 8, pixel * 8 + 6)).toEqual(expected.slice(pixel * 6, pixel * 6 + 6));
-  expect(tile[(2 * 6 + 2) * 8 + 6]).toBeCloseTo(0.04);
-  expect(tile[(2 * 6 + 2) * 8 + 7]).toBeCloseTo(0.2);
+    expect(tile.slice(pixel * 9, pixel * 9 + 7)).toEqual(expected.slice(pixel * 7, pixel * 7 + 7));
+  expect(tile[(2 * 6 + 2) * 9 + 7]).toBeCloseTo(0.04);
+  expect(tile[(2 * 6 + 2) * 9 + 8]).toBeCloseTo(0.2);
   client.release(elevation);
   expect(worker.messages).toContainEqual({ kind: "release", id: elevation, grids: [] });
   worker.flush();

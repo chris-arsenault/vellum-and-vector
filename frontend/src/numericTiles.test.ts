@@ -17,6 +17,12 @@ import {
 } from "./rasterPresentation";
 import { terrainStyle, overlayStyle } from "./rasterStyles";
 import { defaultRasterPresentation } from "./rasterPresentation";
+import {
+  canonryMagicPresets,
+  magicPlacePresentations,
+  naturalSurfaceColors,
+  surfaceCategories,
+} from "@atlas/domain";
 import { newCompilationContext, buildExpression } from "ol/expr/gpu.js";
 import { ColorType, NumberType, newParsingContext } from "ol/expr/expression.js";
 import type { Raster } from "./types";
@@ -102,12 +108,26 @@ it("preserves authored patches, physical sea level, lakes and emergent islands",
   raster.field.channels.elevation.fill(100);
   raster.water = { ...raster.field, channels: { seaLevel: new Float64Array(25).fill(200) } };
   raster.lakes = [{ geometry: rectangle([20, 20, 80, 80]), level: 300 }];
-  expect([...numericTileSampler(raster)([29, 29, 31, 31], 1)]).toEqual([100, 1, -100, 2, 0, 2]);
+  expect([...numericTileSampler(raster)([29, 29, 31, 31], 1)]).toEqual([100, 1, -100, 2, 0, 2, -1]);
   const patch = fixture("elevation").field;
   patch.scope = { ...patch.scope, footprint: rectangle([45, 45, 55, 55]) };
   patch.channels.elevation.fill(400);
   raster.field.overlays = [{ grid: patch, channels: ["elevation"] }];
-  expect([...numericTileSampler(raster)([49, 49, 51, 51], 1)]).toEqual([400, 1, 200, 0, 0, 2]);
+  expect([...numericTileSampler(raster)([49, 49, 51, 51], 1)]).toEqual([400, 1, 200, 0, 0, 2, -1]);
+});
+it("carries the surface class as a discrete terrain band and marks its absence", () => {
+  const raster = fixture("elevation");
+  raster.field.channels.elevation.fill(100);
+  expect(numericTileSampler(raster)([49, 49, 51, 51], 1)[6]).toBe(-1);
+  raster.surface = fixture("finalSurface").field;
+  raster.surface.units.finalSurface = "category";
+  raster.surface.channels.finalSurface.set(
+    Float64Array.from({ length: 25 }, (_, i) => (i % 5 < 2 ? 3 : 102))
+  );
+  const sample = numericTileSampler(raster)([0, 0, 100, 100], 32);
+  const classes = new Set<number>();
+  for (let i = 0; i < sample.length; i += 7) if (sample[i + 1]) classes.add(sample[i + 6]);
+  expect([...classes].sort((a, b) => a - b)).toEqual([3, 102]);
 });
 it("shares adaptive locations across terrain bands while respecting distinct overlay and ice topologies", () => {
   const raster = fixture("elevation");
@@ -134,11 +154,11 @@ it("shares adaptive locations across terrain bands while respecting distinct ove
   putChannel(patch, "elevation", "metre", new Float64Array(patch.active.length).fill(400));
   raster.field.overlays = [{ grid: patch, channels: ["elevation"] }];
   const sample = numericTileSampler(raster);
-  expect([...sample([29, 29, 31, 31], 1)]).toEqual([100, 1, -100, 1, 0.25, 2]);
-  expect([...sample([49, 49, 51, 51], 1)]).toEqual([400, 1, 200, 0, 0.25, 2]);
-  expect([...sample([29, 29, 31, 31], 1)]).toEqual([100, 1, -100, 1, 0.25, 2]);
+  expect([...sample([29, 29, 31, 31], 1)]).toEqual([100, 1, -100, 1, 0.25, 2, -1]);
+  expect([...sample([49, 49, 51, 51], 1)]).toEqual([400, 1, 200, 0, 0.25, 2, -1]);
+  expect([...sample([29, 29, 31, 31], 1)]).toEqual([100, 1, -100, 1, 0.25, 2, -1]);
   patch.active.fill(0);
-  expect([...sample([49, 49, 51, 51], 1)]).toEqual([0, 0, 0, 0, 0, 0]);
+  expect([...sample([49, 49, 51, 51], 1)]).toEqual([0, 0, 0, 0, 0, 0, 0]);
 });
 it("uses actual data ranges and an invertible signed log legend", () => {
   const raster = fixture();
@@ -156,12 +176,20 @@ it("keeps published lake shores when scalar resampling raises the apparent lake 
   expect(numericTileSampler(raster)([29, 29, 31, 31], 1)[3]).toBe(2);
 });
 it("compiles terrain and overlay expressions using the real OpenLayers expression parser", () => {
+  const surfaces = surfaceCategories(canonryMagicPresets());
   const styles = [
     terrainStyle(defaultRasterPresentation()),
+    terrainStyle(defaultRasterPresentation(), surfaces),
+    terrainStyle({ ...defaultRasterPresentation(), base: "relief" }, surfaces),
     overlayStyle(defaultFieldStyle("temperature"), [-10, 30]),
     overlayStyle({ ...defaultFieldStyle("temperature"), scale: "log" }, [-10, 30]),
     overlayStyle(defaultFieldStyle("biome"), [0, 14]),
+    overlayStyle(defaultFieldStyle("finalSurface"), [0, 120], surfaces),
   ];
+  const surfaced = JSON.stringify(terrainStyle(defaultRasterPresentation(), surfaces).color);
+  expect(surfaced).toContain(magicPlacePresentations.spring.color);
+  expect(surfaced).not.toContain(naturalSurfaceColors.Ocean);
+  expect(JSON.stringify(terrainStyle(defaultRasterPresentation()).color)).not.toContain("match");
   for (const style of styles) {
     expect(
       buildExpression(

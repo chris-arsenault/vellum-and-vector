@@ -79,7 +79,11 @@ settings. **Library** retains templates and the supporting analysis, connection
 and schema tools. Templates can be placed on the map; precise placement and access
 bindings remain available.
 
-Open **Layers** to switch between **Topographic** and **Relief** base maps.
+Open **Layers** to switch between the **Surface**, **Topographic** and **Relief** base
+maps. Surface, the default, paints natural and magical surface classes under the
+hillshade with a legend in the terrain appearance panel; generated magic places draw
+with a colour and mark per feature rule, so a hot spring, a vent and an Aurora field
+are distinguishable without switching presets.
 The compact drawer floats over the map and closes when you finish. **Add overlay**
 opens a separate floating chooser with searchable theme groups. **All fields**
 includes diagnostic channels. Checked fields stay in the overlay stack even when

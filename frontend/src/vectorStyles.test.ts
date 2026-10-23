@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
-import { Style, RegularShape } from "ol/style.js";
+import { Circle, Style, RegularShape } from "ol/style.js";
 import { featureStyle, defaultSymbolStyle } from "./vectorStyles";
-import { biomeFamilies, rectangle } from "@atlas/domain";
+import { biomeFamilies, magicPlacePresentations, rectangle } from "@atlas/domain";
 import Parser from "geostyler-openlayers-parser";
 import type { AtlasFeature, LayerStyle } from "./types";
 
@@ -107,6 +107,34 @@ it("uses biome colors for ecological polygons and preserves thematic rules in Ge
     "==",
     "kind",
     "altered",
+  ]);
+  const parsed = await new Parser().writeStyle(symbols);
+  expect(parsed.errors ?? []).toEqual([]);
+});
+it("marks generated magic places by rule so springs, vents and crush zones differ", async () => {
+  const magic = { ...layer, layerId: "magic", color: "#c199ee" };
+  const place = (system: string, rule: string): AtlasFeature => ({
+    ...river([]),
+    kind: `${system}:${rule}`,
+    layerId: "magic",
+    geometry: { type: "Point", coordinates: [0, 0] },
+    attributes: { system, rule, placeType: rule },
+  });
+  const styled = ["spring", "vent", "crush", "field"].map(
+    (rule) =>
+      featureStyle(place(rule === "crush" ? "pressure" : "fire", rule), magic, 1000) as Style
+  );
+  expect(new Set(styled.map((style) => style.getStroke()?.getColor())).size).toBe(4);
+  expect(styled[0].getStroke()?.getColor()).toBe(magicPlacePresentations.spring.color);
+  expect((styled[1].getImage() as RegularShape).getPoints()).toBe(4);
+  expect(styled[0].getImage()).toBeInstanceOf(Circle);
+  const authored = { ...place("fire", "spring"), kind: "magicSource", attributes: {} };
+  expect((featureStyle(authored, magic, 1000) as Style).getStroke()?.getColor()).toBe(magic.color);
+  const symbols = defaultSymbolStyle("Magic", magic, ["Point"]);
+  expect(symbols.rules.find((rule) => rule.name === "Vent")?.filter).toEqual([
+    "==",
+    "rule",
+    "vent",
   ]);
   const parsed = await new Parser().writeStyle(symbols);
   expect(parsed.errors ?? []).toEqual([]);

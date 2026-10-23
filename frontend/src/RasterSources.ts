@@ -24,6 +24,7 @@ function sameData(a: Raster, b: Raster) {
     sameGrid(a.field, b.field) &&
     sameGrid(a.water, b.water) &&
     sameGrid(a.ice, b.ice) &&
+    sameGrid(a.surface, b.surface) &&
     JSON.stringify(a.lakes) === JSON.stringify(b.lakes) &&
     a.footprint === b.footprint
   );

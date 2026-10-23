@@ -1,6 +1,13 @@
 import type { FieldStyle, Raster, RasterPresentation, World } from "./types";
 import { rasterLimits } from "./rasterTiles";
-import { ecologyLabels, fieldCategories, spatial } from "@atlas/domain";
+import {
+  biomes,
+  ecologyLabels,
+  fieldCategories,
+  spatial,
+  surfaceCategories,
+  type SurfaceCategory,
+} from "@atlas/domain";
 import type { Geometry } from "geojson";
 
 export const palettes = {
@@ -11,7 +18,8 @@ export const palettes = {
 };
 export function defaultRasterPresentation(): RasterPresentation {
   return {
-    base: "topographic",
+    // The surface base paints natural and magical surface classes under the hillshade.
+    base: "surface",
     sunAzimuth: 315,
     sunElevation: 45,
     exaggeration: 1,
@@ -20,6 +28,21 @@ export function defaultRasterPresentation(): RasterPresentation {
     fields: [],
   };
 }
+/** Class colours for categorical channels; null for continuous ones. */
+export function categoryPalette(world: World, channel: string): SurfaceCategory[] | null {
+  if (channel === "biome")
+    return biomes.map((biome, code) => ({
+      code,
+      name: biome.name,
+      color: biome.color,
+      bathymetric: false,
+      tint: 1,
+    }));
+  if (channel === "naturalSurface") return surfaceCategories();
+  if (channel === "finalSurface") return surfaceCategories(world.magicSystems ?? []);
+  return null;
+}
+export const surfacePalette = (world: World) => categoryPalette(world, "finalSurface")!;
 export function defaultFieldStyle(channel: string): FieldStyle {
   return {
     channel,

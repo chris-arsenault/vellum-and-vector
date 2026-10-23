@@ -103,8 +103,13 @@ test("switch bases and compose independent field styles through the layer contro
   await page.getByRole("button", { name: "Layers", exact: true }).click();
   await checkFaultControl(page);
   await checkTerrainControl(page);
-  await expect(page.getByRole("radio", { name: "Topographic", exact: true })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "Surface", exact: true })).toBeChecked();
   await page.screenshot({ path: "test-results/gis-layer-browser.png" });
+  const surface = await mapImage(page);
+  await page.getByRole("radio", { name: "Topographic", exact: true }).click();
+  await expect(page.getByRole("radio", { name: "Topographic", exact: true })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "Surface", exact: true })).not.toBeChecked();
+  await expect.poll(() => mapImage(page)).not.toBe(surface);
   const topo = await mapImage(page);
   await page.getByRole("radio", { name: "Relief", exact: true }).click();
   await expect(page.getByRole("radio", { name: "Relief", exact: true })).toBeChecked();

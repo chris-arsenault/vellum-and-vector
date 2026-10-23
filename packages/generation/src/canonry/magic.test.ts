@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { canonryMagicPresets, magicSystemSchema } from "@atlas/domain";
+import { canonryMagicPresets, magicSurfaceCode, magicSystemSchema } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { createAdaptiveWorldMesh } from "./adaptiveMesh";
 import { createField } from "./field";
@@ -133,4 +133,23 @@ it("classifies nonexclusive interactions from editable conditions on multiple sy
   classifyMagicFeatures(state, 42);
   expect(pressure.features.war.every((value) => value === 0)).toBe(true);
   expect(pressure.features.steam.some((value) => value === 1)).toBe(true);
+});
+it("writes final-surface codes that the shared surface catalogue names", () => {
+  const state = scenario(),
+    magic = state.physical!.magic!;
+  for (const field of magic.fields) field.intensity.fill(500);
+  classifyMagicFeatures(state, 42);
+  const systems = magic.fields.map((field) => field.definition);
+  const catalogue = new Set(
+    systems.flatMap((system) =>
+      system.features.map((rule) => magicSurfaceCode(systems, system.id, rule.id))
+    )
+  );
+  expect(magic.finalSurface.every((code) => code < 100 || catalogue.has(code))).toBe(true);
+  // Steam fracture (priority 110) owns its cells unless the higher-priority breach also matches.
+  const steam = magicSurfaceCode(systems, "pressure", "steam")!,
+    { steam: cells, breach } = magic.fields[2].features;
+  expect(cells.some((value, i) => value === 1 && !breach[i])).toBe(true);
+  for (let i = 0; i < cells.length; i++)
+    if (cells[i] && !breach[i]) expect(magic.finalSurface[i]).toBe(steam);
 });

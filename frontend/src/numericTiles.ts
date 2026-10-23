@@ -22,6 +22,17 @@ function terrainAt(raster: Raster, locate: AdaptivePointLocator) {
     return [height - water.level, water.kind, Math.min(1, ice(p))];
   };
 }
+/** Surface class for the base map; -1 where no classification exists. */
+function surfaceAt(raster: Raster, locate: AdaptivePointLocator) {
+  if (!raster.surface?.channels.finalSurface) return () => -1;
+  const read = fieldInterpolator(raster.surface, "finalSurface", true, locate);
+  return (p: Position) => {
+    const code = read(p);
+    return Number.isFinite(code) ? code : -1;
+  };
+}
+/** Terrain tiles: value, mask, relative height, water kind, ice, step, surface class. */
+export const terrainSampleBands = 7;
 
 /** Sampling is shared with geographic reads; pixels never introduce new terrain. */
 export function numericTileSampler(raster: Raster) {
@@ -30,7 +41,8 @@ export function numericTileSampler(raster: Raster) {
   const valueAt = fieldInterpolator(raster.field, raster.channel, categorical(raster), locate);
   const active = activeSampler(raster.field, raster.channel, locate);
   const terrain = raster.channel === "elevation" ? terrainAt(raster, locate) : null;
-  const bands = terrain ? 6 : 3;
+  const surface = terrain ? surfaceAt(raster, locate) : null;
+  const bands = terrain ? terrainSampleBands : 3;
   return (extent: number[], size: number) => {
     const values = new Float32Array(size * size * bands);
     const dx = (extent[2] - extent[0]) / size,
@@ -41,7 +53,9 @@ export function numericTileSampler(raster: Raster) {
         if (!footprint.intersectsCoordinate([p.x, p.y]) || !active(p)) continue;
         const value = valueAt(p);
         if (!Number.isFinite(value)) continue;
-        const companions = terrain ? [...terrain(p, value), dx] : [scaledValue(value, "log")];
+        const companions = terrain
+          ? [...terrain(p, value), dx, surface!(p)]
+          : [scaledValue(value, "log")];
         if (!companions.every(Number.isFinite)) continue;
         values.set([value, 1, ...companions], (row * size + col) * bands);
       }
@@ -61,7 +75,7 @@ export function numericTileSource(
     tileGrid,
     tileSize: 256,
     gutter: 1,
-    bandCount: raster.channel === "elevation" ? 8 : 3,
+    bandCount: raster.channel === "elevation" ? terrainSampleBands + 2 : 3,
     interpolate: !categorical(raster),
     transition: 0,
     wrapX: false,

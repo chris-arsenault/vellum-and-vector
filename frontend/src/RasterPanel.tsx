@@ -1,14 +1,16 @@
 import { useId } from "react";
-import { biomes, naturalSurfaceNames, physicalMaterialNames } from "@atlas/domain";
+import { physicalMaterialNames, type SurfaceCategory } from "@atlas/domain";
 import type { EditorState } from "./useEditor";
 import type { FieldStyle, Raster, RasterPresentation, World } from "./types";
 import {
+  categoryPalette,
   defaultFieldStyle,
   fieldLabel,
   fieldRange,
   legendValue,
   palettes,
   rasterCategories,
+  surfacePalette,
 } from "./rasterPresentation";
 
 export function RasterPanel({
@@ -31,6 +33,9 @@ export function RasterPanel({
         <>
           <h3>Terrain appearance</h3>
           <TerrainControls view={editor.rasterView} update={update} />
+          {editor.rasterView.base === "surface" && (
+            <SurfaceLegend world={world} base={editor.baseRaster.data ?? []} />
+          )}
         </>
       )}
       {channel && <FieldControls key={channel} world={world} editor={editor} channel={channel} />}
@@ -117,14 +122,16 @@ function FieldControls({
     }));
   }
   const data = (editor.raster.data ?? []).filter((part) => part.channel === channel);
-  if (channel === "biome")
+  if (categoryPalette(world, channel))
     return (
       <fieldset className="field-style">
-        <legend>Biomes</legend>
-        <p className="hint">
-          Biomes describe living cover independently of landform. Tree cover, wetland cover and
-          animal biomass can be inspected as separate fields under Biomes and life.
-        </p>
+        <legend>{fieldLabel(world, channel)}</legend>
+        {channel === "biome" && (
+          <p className="hint">
+            Biomes describe living cover independently of landform. Tree cover, wetland cover and
+            animal biomass can be inspected as separate fields under Biomes and life.
+          </p>
+        )}
         <FieldLegend world={world} field={field} data={data} />
       </fieldset>
     );
@@ -163,16 +170,9 @@ function FieldControls({
     </fieldset>
   );
 }
-function SurfaceCodes({ world, channel }: { world: World; channel: string }) {
+function SurfaceCodes({ channel }: { world: World; channel: string }) {
   const names: Record<number, string> = {};
   if (channel === "physicalMaterial") physicalMaterialNames.forEach((name, i) => (names[i] = name));
-  if (["naturalSurface", "finalSurface"].includes(channel))
-    naturalSurfaceNames.forEach((name, i) => (names[i] = name));
-  if (channel === "finalSurface") {
-    let code = 100;
-    for (const system of world.magicSystems?.filter((system) => system.enabled) ?? [])
-      for (const rule of system.features) names[code++] = `${system.name} · ${rule.name}`;
-  }
   if (!Object.keys(names).length) return null;
   return (
     <details>
@@ -242,7 +242,11 @@ export function FieldLegend({
   data: Raster[];
 }) {
   const id = useId();
-  if (field.channel === "biome") return <BiomeLegend data={data} />;
+  const classes = categoryPalette(world, field.channel);
+  if (classes)
+    return (
+      <CategoryLegend title={fieldLabel(world, field.channel)} classes={classes} data={data} />
+    );
   const range = fieldRange(data, field);
   const unit = data[0]?.field.units[field.channel] ?? "";
   const number = (value: number) => Number(value.toPrecision(4)).toLocaleString();
@@ -274,23 +278,40 @@ export function FieldLegend({
     </figure>
   );
 }
-function BiomeLegend({ data }: { data: Raster[] }) {
+/** Only classes present in the displayed rasters are listed. */
+function CategoryLegend({
+  title,
+  classes,
+  data,
+}: {
+  title: string;
+  classes: SurfaceCategory[];
+  data: Raster[];
+}) {
   const present = new Set(rasterCategories(data));
   return (
     <figure className="field-legend categorical-legend">
-      <figcaption>Biomes</figcaption>
+      <figcaption>{title}</figcaption>
       <ul>
-        {biomes.map((biome, code) =>
-          present.has(code) ? (
-            <li key={biome.name}>
+        {classes.map((item) =>
+          present.has(item.code) ? (
+            <li key={item.code}>
               <svg width="12" height="12" aria-hidden="true">
-                <rect width="12" height="12" fill={biome.color} />
+                <rect width="12" height="12" fill={item.color} />
               </svg>{" "}
-              {biome.name}
+              {item.name}
             </li>
           ) : null
         )}
       </ul>
     </figure>
   );
+}
+/** The surface base legend reads the terrain rasters' surface companions. */
+export function SurfaceLegend({ world, base }: { world: World; base: Raster[] }) {
+  const data = base
+    .filter((raster) => raster.surface?.channels.finalSurface)
+    .map((raster) => ({ ...raster, field: raster.surface!, channel: "finalSurface" }));
+  if (!data.length) return null;
+  return <CategoryLegend title="Surface" classes={surfacePalette(world)} data={data} />;
 }

@@ -189,7 +189,7 @@
 }
 .base-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 26px;
+  grid-template-columns: 1fr 1fr 1fr 26px;
   gap: 4px;
 }
 .base-choice {

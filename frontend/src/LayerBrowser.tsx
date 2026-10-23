@@ -71,17 +71,18 @@ export function LayerBrowser({
     </section>
   );
 }
+const baseLabels = { surface: "Surface", topographic: "Topographic", relief: "Relief" } as const;
 function BaseChoices({ editor, edit }: { editor: EditorState; edit: (target: string) => void }) {
   return (
     <fieldset className="base-choices">
       <legend>Base map</legend>
       <div className="base-grid">
-        {(["topographic", "relief"] as const).map((base) => (
+        {(["surface", "topographic", "relief"] as const).map((base) => (
           <label className={`base-choice ${base}`} key={base}>
             <input
               type="radio"
               name="base-map"
-              aria-label={base === "topographic" ? "Topographic" : "Relief"}
+              aria-label={baseLabels[base]}
               checked={editor.rasterView.base === base}
               onChange={() => editor.setRasterView((view) => ({ ...view, base }))}
             />
@@ -94,7 +95,7 @@ function BaseChoices({ editor, edit }: { editor: EditorState; edit: (target: str
               />
               <path className="preview-river" d="M22 0Q15 20 45 33T70 69" />
             </svg>
-            <span>{base === "topographic" ? "Topographic" : "Relief"}</span>
+            <span>{baseLabels[base]}</span>
           </label>
         ))}
         <button

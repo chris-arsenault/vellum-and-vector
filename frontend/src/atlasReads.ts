@@ -62,14 +62,21 @@ function terrainCompanions(id: string, elevation: import("@atlas/domain").Grid) 
     result: {
       water?: import("@atlas/domain").GridSurface;
       ice?: import("@atlas/domain").GridSurface;
+      surface?: import("@atlas/domain").GridSurface;
       lakes?: { geometry: Geometry; level: number }[];
     } = {};
-  for (const name of ["water", "ice"] as const) {
+  const companion = (channel: string) => {
     const field = snapshot.world.fields.find(
-      (field) => field.areaId === elevation.scope.areaId && field.channels?.includes(name)
+      (field) => field.areaId === elevation.scope.areaId && field.channels?.includes(channel)
     );
-    if (field) result[name] = snapshot.numerical[field.id];
+    return field ? snapshot.numerical[field.id] : undefined;
+  };
+  for (const name of ["water", "ice"] as const) {
+    const grid = companion(name);
+    if (grid) result[name] = grid;
   }
+  const surface = companion("finalSurface");
+  if (surface) result.surface = surface;
   result.lakes = Object.values(snapshot.world.features)
     .filter(
       (feature) =>

@@ -1,4 +1,10 @@
-import { fieldInterpolator, type GridSurface, type Position } from "@atlas/domain";
+import {
+  fieldInterpolator,
+  surfaceCategories,
+  type GridSurface,
+  type Position,
+  type SurfaceCategory,
+} from "@atlas/domain";
 import GeoJSON from "ol/format/GeoJSON.js";
 import ImageTileSource from "ol/source/ImageTile.js";
 import { createXYZ } from "ol/tilegrid.js";
@@ -33,13 +39,14 @@ export function rasterLimits(data: Raster[]): number[] {
 /** Pixels query committed geography. Tile boundaries do not bound derivative reads. */
 export function tilePainter(
   raster: Raster,
-  limits: number[]
+  limits: number[],
+  classes: SurfaceCategory[] = surfaceCategories()
 ): (extent: number[], size: number) => Uint8ClampedArray {
   const footprint = new GeoJSON().readGeometry(raster.footprint)!;
   const valueAt = fieldInterpolator(raster.field, raster.channel);
   const colorAt: ColorAt =
     raster.channel === "elevation"
-      ? terrainPainter(raster, limits[0], valueAt)
+      ? terrainPainter(raster, limits[0], valueAt, classes)
       : (p) => fieldColor(valueAt(p), limits[0], limits[1]);
   return (extent, size) => {
     const pixels = new Uint8ClampedArray(size * size * 4);
@@ -94,15 +101,36 @@ export function rasterTileSource(
   });
 }
 
-function terrainPainter(raster: Raster, minimum: number, height: (p: Position) => number): ColorAt {
+const hexColor = (hex: string) => [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
+function terrainPainter(
+  raster: Raster,
+  minimum: number,
+  height: (p: Position) => number,
+  classes: SurfaceCategory[]
+): ColorAt {
   const waterAt = terrainWater(raster);
   const iceAt = raster.ice ? fieldInterpolator(raster.ice, "ice") : null;
+  const surfaceAt = raster.surface?.channels.finalSurface
+    ? fieldInterpolator(raster.surface, "finalSurface", true)
+    : null;
+  const painted = new Map(
+    classes
+      .filter((c) => !c.bathymetric)
+      .map((c) => [c.code, { rgb: hexColor(c.color), tint: c.tint }])
+  );
   return (p, dx, dy) => {
     const value = height(p),
       { level: seaLevel, kind: water } = waterAt(p, value);
     const relative =
       water === 1 ? Math.min(-Number.EPSILON, value - seaLevel) : Math.max(0, value - seaLevel);
-    let color = water === 2 ? [73, 139, 153] : terrainColor(relative, minimum - seaLevel);
+    const base = terrainColor(relative, minimum - seaLevel);
+    const surface = surfaceAt ? painted.get(Math.round(surfaceAt(p))) : undefined;
+    let color =
+      water === 2
+        ? [73, 139, 153]
+        : surface
+          ? base.map((channel, i) => channel + (surface.rgb[i] - channel) * surface.tint)
+          : base;
     if (water !== 2) {
       const east = ((height({ ...p, x: p.x + dx }) - height({ ...p, x: p.x - dx })) * 4) / dx;
       const north = ((height({ ...p, y: p.y + dy }) - height({ ...p, y: p.y - dy })) * 4) / dy;

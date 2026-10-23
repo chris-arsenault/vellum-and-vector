@@ -344,6 +344,76 @@ recover across the epoch unless the stock was extirpated.
 - Society → magic: tapping and exhaustion of Fire conduits; prism quarrying of
   Aurora capacity; shoreline works that reflect Pressure.
 
+### Settlement location obeys geology
+
+Current behavior, read from `societyGeography.ts` on 2026-10-23: community
+seeds are dry-land cells ranked by an exponential random draw weighted by local
+support capacity (farming, grazing, gathering, fishing), then thinned by a
+spacing filter of one nominal spacing per profile (100 km at World) with a
+radius that shrinks where capacity is high. The seed cell is the settlement
+site. Nothing in the choice looks at relief, routes, coast shape or river
+geometry, so settlements land as a near-equidistant scatter over whatever is
+fertile. Pass and harbor works are placed afterwards from the community, not
+the other way round.
+
+**Design.** Separate the population unit from the site. The unit is the
+catchment (the third pass already moves World society onto catchments). The
+site is the one place inside the unit that the geography offers, and the
+geography offers sites in a definite order of reliability:
+
+1. **Passes.** Where the cheapest routes between two lowlands funnel through a
+   gap in relief. The settlement sits at the foot of the pass on the last flat
+   ground, one on each side if both sides are populated. Passes are rare and
+   create towns out of proportion to their farmland, because everything moving
+   between the lowlands goes through them.
+2. **Rivers.** Confluences, fords (a wide shallow reach between two gorges), the
+   head of navigation, and the valley mouth where a river leaves the hills for
+   the plain and drops its load. A range front therefore reads as a line of
+   towns, one at each valley mouth, strung along the piedmont.
+3. **Harbors.** A sheltered bay (coast concavity), deep water near shore, an
+   estuary, and a lee from the prevailing weather and from Pressure surge. A
+   straight exposed coast has fishing camps, not ports.
+4. **Plains.** Fertile open ground is where people are, not where towns are.
+   Plains carry dispersed farmsteads and villages (latent at World under the
+   third pass) and a town only at a node on the plain: a crossing, a spring in
+   dry country, a lake shore, the edge of a marsh.
+
+Magic adds sites of its own at the same rank as rivers: a Fire halo edge, an
+Aurora melt line, a Pressure upwelling coast, the archive sites and ruins the
+ice-age round left.
+
+**Mechanism.** Site opportunity is a scored field computed from fields that
+already exist: route centrality on the current society route graph (edges cost
+distance plus rise, so the graph already knows where passes are), river order
+and confluence, coast shelter and depth, buildable slope, water access, and
+magical opportunity. The site is a hard choice, not a weighting: each catchment
+takes its best-ranked site class, and within that class the highest opportunity
+× capacity cell; the random draw only breaks ties among cells of the same
+class. Capacity still decides how large the settlement grows and whether the
+catchment is settled at all. The spacing filter stays as the territory floor;
+it stops deciding the site. The result is settlements that cluster along
+rivers and coasts and at range fronts, with empty interiors, instead of a
+lattice. Variety comes from the geography differing between catchments, not
+from noise in the choice.
+
+**The mountain fortress.** A refuge on a defensible crag above a route node is
+a real site class but a rare one. It requires three things at once: a route to
+control (a pass or a river gorge below), relief that is defensible but still
+reachable (a knoll or spur, not a summit), and a reason, which is political
+pressure or a hazard in the lowland below (raids across a polity border, floods,
+a volatile Fire halo). Its population stays small; it is a seat, not a market.
+Scarcity comes from the conjunction, not from a quota: most passes get a foot
+town, a few get a fortress above it, and only when the era's political capacity
+and contact produce the pressure.
+
+**Across epochs.** Ice-age camps use the magical and food-driven sites (halo
+edge, melt line, upwelling coast, river crossings on herd routes) and ignore
+passes and harbors, which mean nothing to a mobile band. Present towns sit on
+ice-age ruins only where the ruin coincides with a present site class; a camp
+on a halo edge that burned out is a ruin field with no town. Site opportunity
+is recomputed each era from the geography of that era, so a river that shifted,
+a harbor that silted, or a coast that drowned moves the town.
+
 ### The epoch loop as layers
 
 Per geological epoch, in causal order. "Exists" marks a slot already in the
@@ -402,6 +472,10 @@ inherited; it is simply the geography.
    melt channel, with the archive site at the old larder.
 9. **Overhunted ribbon:** a vein ribbon whose herd was extirpated is closed
    grove in the present; the neighbouring ribbon is open grassland.
+10. **Range front:** a line of towns at the valley mouths along a piedmont, a
+    pair of pass towns on either side of the one gap in the range, one
+    fortress on a spur above the pass on the side with the contested border,
+    and villages but no towns on the plain between them.
 
 ### Questions this pass raises
 
@@ -414,6 +488,9 @@ inherited; it is simply the geography.
   burnout permanent?
 - How large should the ice-age round be: a handful of camps, or enough to mark
   most Fire ribbons?
+- Resolved: site opportunity is a hard choice of the best site per catchment,
+  with the random draw breaking ties only. Chosen so that range fronts and
+  river chains read unmistakably on visual inspection.
 
 ## Third pass: scale contract — realized, latent and absent
 
@@ -582,6 +659,79 @@ inputs. Candidates:
   the parent stays fixed until regenerated, consistent with spec §9.
 - Whether the World publishes any works under the major-works exception, or
   none until Region.
+
+## Fourth pass: where the magic went
+
+User observation, 2026-10-23, from Canonry screenshots: Aurora fields (teal),
+geothermal vents (hatched brown), a midline ridge and hot springs are all
+visible as distinct surfaces in Canonry and none of them are visible on the
+atlas map. Measured on one draft World (seed 104729, 2,000 × 1,000 km, one
+Formation epoch only, 16,836 cells of which 3,925 are land), generated by the
+display test on 2026-10-23:
+
+| Where the magic is                    | Count                                                                                                                                                                              |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Magic places as vector features       | 110 Fire cores, 24 veins, 28 hot springs, 76 vents, 27 basalt flats, 46 halos; 8 Aurora fields, 2 wells, 7 prisms; 184 rogue impacts, 98 steam fractures, 26 crush zones, 22 wakes |
+| Cells with a magic final-surface code | 13,658 of 16,836 (81 percent)                                                                                                                                                      |
+| Pressure crush zone cells             | 11,378, against 12,911 water cells; Pressure intensity is at its 1,000 ceiling across the sea                                                                                      |
+| Fire feature cells on land            | 1,779 of 3,925 (45 percent)                                                                                                                                                        |
+| Aurora field cells                    | 0: the rule needs ice 260 and this warm epoch peaks at 140                                                                                                                         |
+
+So the classification is running with Canonry's thresholds and the places are
+produced. They are lost between generation and the eye, for four reasons:
+
+1. **The magic layer is hidden by default.** Its family is `magic`; the
+   default physical presentation shows physical, water, transport, built and
+   custom families only. Magic appears under the magical preset alone.
+2. **One colour for everything.** Every magic place on the layer draws in the
+   layer colour with a 40 percent fill. A hot spring, a vent, an Aurora field
+   and a crush zone are the same lavender blob. Canonry gives each surface
+   type its own colour and hatching.
+3. **No land cover base.** The atlas base is hillshade and an elevation ramp.
+   The final-surface classification, which carries the magic surface codes,
+   is an opt-in overlay rendered through a continuous ramp, so categories are
+   illegible even when turned on. Canonry paints every hex by surface type.
+4. **Saturation.** Pressure fills the sea at maximum intensity, so crush zone
+   and lattice cover most water cells; Fire features cover nearly half the
+   land. Drawn as-is, the map would be a wash, not detail. This is the
+   "bland field-threshold" anti-pattern the Canonry design warns against, and
+   it comes from field strength and reach, not from the feature rules.
+
+Aurora in a warm present is the separate, known case: retention scales with
+ice thickness, so the default Present epoch (ice 0, 15 °C) keeps Aurora
+history but almost no Aurora field. Recovering it means relict ice on high
+ground, or Aurora that lives in cold air rather than only in ice, which is the
+per-system world-design question.
+
+**Recovery scope, split in two.** Presentation (parent plan phase 3): a
+land-cover or surface base that shows natural and magic surfaces by category
+with a legend; per-kind symbols for magic places; the magic layer visible in
+the physical preset. This is the review instrument for every later phase, so
+it is the one piece recommended for early implementation under explicit
+instruction. Retune (parent plan phase 5, after the per-system world design):
+Fire and Pressure reach and strength so features are rare and shaped, with
+each system's reach and rarity target stated in its world-design section;
+Aurora viable in the present per the world-design answer. Draft-quality
+sampling of a 2,000 km world at 11 km cells also hides veins and springs by
+construction; the scale contract above says where they are realized.
+
+**What this changes in the plan.** Process parity with Canonry does not give
+result parity: the atlas world is larger, warmer and more oceanic, so
+Canonry's strength, reach and threshold defaults saturate here. Every magic
+design section must state reach and rarity, not only mechanism.
+
+**Presentation delivered (2026-10-23, user-authorized).** The default base map
+is now "Surface": the terrain tile carries the final-surface class as a band,
+natural classes take a colour each and magic classes take the colour of their
+feature rule, under the same hillshade and contours. The surface code catalogue
+lives in the domain (`surfaceCategories`, `magicSurfaceCode`) and generation
+assigns codes through it, so a legend entry always names the rule that wrote
+the cell. Magic places on the magic layer draw with a colour and mark per rule,
+and the layer is visible in the physical preset. Broad field classes (crush
+zone, wake, lattice, halo, Aurora field) tint the relief at 35 to 80 percent
+instead of replacing it; without that the Pressure field painted the whole sea
+one flat slate, which is the saturation finding made visible. The retune
+itself remains phase 5.
 
 ## Proposed generation approach for discussion
 

@@ -1,10 +1,11 @@
 import type { GridSurface } from "@atlas/domain";
 import type { Raster } from "./types";
 
-export type TileRaster = Omit<Raster, "field" | "water" | "ice"> & {
+export type TileRaster = Omit<Raster, "field" | "water" | "ice" | "surface"> & {
   field: number;
   water?: number;
   ice?: number;
+  surface?: number;
 };
 export type TileMessage =
   | { kind: "grid"; id: number; grid: GridSurface }

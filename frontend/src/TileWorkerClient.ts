@@ -56,12 +56,14 @@ export class TileWorkerClient {
       raster.field,
       ...(raster.water ? [raster.water] : []),
       ...(raster.ice ? [raster.ice] : []),
+      ...(raster.surface ? [raster.surface] : []),
     ];
     const field = this.grid(raster.field),
       water = raster.water ? this.grid(raster.water) : undefined,
-      ice = raster.ice ? this.grid(raster.ice) : undefined;
+      ice = raster.ice ? this.grid(raster.ice) : undefined,
+      surface = raster.surface ? this.grid(raster.surface) : undefined;
     this.rasters.set(id, used);
-    this.send({ kind: "raster", id, raster: { ...raster, field, water, ice } });
+    this.send({ kind: "raster", id, raster: { ...raster, field, water, ice, surface } });
     return id;
   }
   load(raster: number, extent: number[], size: number, signal: AbortSignal) {

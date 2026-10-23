@@ -11,6 +11,7 @@ function rasterSampler(
     field: grids.get(r.field)!,
     water: r.water === undefined ? undefined : grids.get(r.water),
     ice: r.ice === undefined ? undefined : grids.get(r.ice),
+    surface: r.surface === undefined ? undefined : grids.get(r.surface),
   });
   return (extent: number[], size: number) =>
     r.channel === "elevation" ? terrainTile(sample(extent, size), size) : sample(extent, size);

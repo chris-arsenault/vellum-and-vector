@@ -13,11 +13,12 @@ export function lineage(world: World, areaId: string): Area[] {
 
 export function defaultStyles(world: World, preset = "physical"): LayerStyle[] {
   const families: Record<string, string[]> = {
-    physical: ["physical", "water", "transport", "built", "custom"],
+    // Magical geography is part of the physical map, not a theme of its own.
+    physical: ["physical", "water", "magic", "transport", "built", "custom"],
     political: ["physical", "water", "political", "built"],
     cultural: ["physical", "water", "cultural", "built"],
     magical: ["physical", "water", "magic"],
-    infrastructure: ["physical", "water", "transport", "built", "custom"],
+    infrastructure: ["physical", "water", "magic", "transport", "built", "custom"],
   };
   return Object.values(world.layers).map((layer) => ({
     layerId: layer.id,

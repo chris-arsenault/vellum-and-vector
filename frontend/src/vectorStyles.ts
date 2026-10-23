@@ -1,9 +1,39 @@
 import LineString from "ol/geom/LineString.js";
-import { Circle, Fill, Stroke, Style, Text } from "ol/style.js";
+import { Circle, Fill, RegularShape, Stroke, Style, Text } from "ol/style.js";
 import type { AtlasFeature, LayerStyle } from "./types";
-import type { Style as SymbolStyle, Symbolizer } from "geostyler-style";
-import { biomeFamilies } from "@atlas/domain";
+import type { Style as SymbolStyle, Symbolizer, WellKnownName } from "geostyler-style";
+import {
+  biomeFamilies,
+  magicPlacePresentation,
+  magicPlacePresentations,
+  type MagicPlaceSymbol,
+} from "@atlas/domain";
 import { settlementStyle } from "./settlementStyles";
+
+const wellKnownMarks: Record<MagicPlaceSymbol, WellKnownName> = {
+  circle: "circle",
+  square: "square",
+  diamond: "square",
+  triangle: "triangle",
+  star: "star",
+  cross: "cross",
+};
+/** Magic places keep their rule colour and mark so a spring never looks like a crush zone. */
+function magicSymbolRules(symbolizers: Symbolizer[]) {
+  return [
+    ...Object.entries(magicPlacePresentations).map(([rule, presentation]) => ({
+      name: rule.replace(/^./, (c) => c.toUpperCase()),
+      filter: ["==", "rule", rule] as ["==", string, string],
+      symbolizers: symbolizers.map((symbol) => ({
+        ...symbol,
+        color: presentation.color,
+        ...(symbol.kind === "Fill" ? { outlineColor: presentation.color } : {}),
+        ...(symbol.kind === "Mark" ? { wellKnownName: wellKnownMarks[presentation.symbol] } : {}),
+      })),
+    })),
+    { name: "Other magical places", elseRule: true, symbolizers },
+  ];
+}
 
 export function defaultSymbolStyle(
   name: string,
@@ -11,7 +41,7 @@ export function defaultSymbolStyle(
   geometries: string[]
 ): SymbolStyle {
   const kinds = new Set(geometries);
-  if (style.layerId === "ecology") kinds.add("Polygon");
+  if (["ecology", "magic"].includes(style.layerId)) kinds.add("Polygon");
   const symbolizers: Symbolizer[] = [];
   if ([...kinds].some((kind) => kind.includes("Polygon")))
     symbolizers.push({
@@ -27,6 +57,7 @@ export function defaultSymbolStyle(
     symbolizers.push({ kind: "Mark", wellKnownName: "circle", color: style.color, radius: 5 });
   if (style.labels)
     symbolizers.push({ kind: "Text", label: "{{name}}", color: style.color, size: 12 });
+  if (style.layerId === "magic") return { name, rules: magicSymbolRules(symbolizers) };
   if (style.layerId !== "ecology") return { name, rules: [{ name: "Default", symbolizers }] };
   return {
     name,
@@ -54,7 +85,47 @@ export function featureStyle(feature: AtlasFeature, style: LayerStyle, resolutio
   )
     return [];
   if (feature.kind === "settlement") return settlementStyle(feature, style);
+  if (style.layerId === "magic" && typeof feature.attributes.rule === "string")
+    return magicPlaceStyle(feature, style);
   return geographicStyle(feature, style, resolution);
+}
+function magicMark(symbol: MagicPlaceSymbol, color: string) {
+  const base = {
+    radius: 6,
+    fill: new Fill({ color }),
+    stroke: new Stroke({ color: "#233638", width: 1.5 }),
+  };
+  switch (symbol) {
+    case "square":
+      return new RegularShape({ ...base, points: 4, angle: Math.PI / 4 });
+    case "diamond":
+      return new RegularShape({ ...base, points: 4, angle: 0 });
+    case "triangle":
+      return new RegularShape({ ...base, points: 3 });
+    case "star":
+      return new RegularShape({ ...base, radius: 7, radius2: 3, points: 5 });
+    case "cross":
+      return new RegularShape({ ...base, points: 4, radius2: 0, angle: 0 });
+    default:
+      return new Circle({ ...base, radius: 5 });
+  }
+}
+/** Generated magic places: colour and mark follow the classification rule, not the layer. */
+function magicPlaceStyle(feature: AtlasFeature, style: LayerStyle) {
+  const { color, symbol } = magicPlacePresentation(String(feature.attributes.rule));
+  return new Style({
+    text: style.labels
+      ? new Text({
+          text: feature.name,
+          font: "12px system-ui",
+          fill: new Fill({ color }),
+          stroke: new Stroke({ color: "#203739", width: 3 }),
+        })
+      : undefined,
+    stroke: new Stroke({ color, width: 1.5 }),
+    fill: new Fill({ color: color + "66" }),
+    image: magicMark(symbol, color),
+  });
 }
 function geographicStyle(feature: AtlasFeature, style: LayerStyle, resolution: number) {
   const color = ecologicalColor(feature) ?? style.color;
