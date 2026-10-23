@@ -6,6 +6,7 @@ import {
   mergePopulation,
   population,
   populationGroupsSchema,
+  storableValue,
   putChannel,
   type PopulationGroup,
 } from "@atlas/domain";
@@ -74,17 +75,29 @@ function group(language: string, count = 1000): PopulationGroup {
 }
 it("initializes explicit language use and connects languages to the single atlas config", () => {
   const { state, context, region } = languageFixture();
-  for (const c of region.communities) c.groups = [{ ...group("A"), culture: null }];
-  initializeCultures(state, context);
   for (const c of region.communities)
+    c.groups = [
+      {
+        ...group("A"),
+        culture: null,
+        languageShares: { A: { knowledge: 1, use: 1 } },
+      },
+    ];
+  initializeCultures(state, context);
+  for (const c of region.communities) {
+    const problems: string[] = [];
+    storableValue({ groups: c.groups }, "", problems);
+    expect(problems).toEqual([]);
     for (const g of c.groups) {
       expect(g.languages).toContain(g.namingLanguage);
+      expect(languageShares(g)).toEqual({ [g.namingLanguage!]: { knowledge: 1, use: 1 } });
       const language = state.domain.world.entities[g.namingLanguage!];
       expect(language.kind).toBe("language");
       expect(language.attributes.namingCulture).toBe(
         state.domain.world.entities[g.culture!].attributes.namingCulture
       );
     }
+  }
 });
 it("publishes exclusive use alongside overlapping bilingual knowledge", () => {
   const { state, region } = languageFixture();

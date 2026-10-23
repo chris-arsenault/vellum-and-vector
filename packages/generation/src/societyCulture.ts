@@ -45,14 +45,15 @@ function originReach(state: GenerationState, origin: Entity) {
 function foundingGroup(state: GenerationState, group: PopulationGroup, origin: Entity) {
   const language = culturalIdentity(state, "language", origin.id, `${origin.name} language`);
   state.domain.world.entities[language].attributes.namingCulture = origin.attributes.namingCulture;
-  return {
+  const founded = {
     ...group,
     culture: origin.id,
     languages: [language],
     namingLanguage: language,
-    languageShares: undefined,
     religions: [culturalIdentity(state, "religion", origin.id, `${origin.name} tradition`)],
   };
+  delete founded.languageShares;
+  return founded;
 }
 export function initializeCultures(state: GenerationState, context: MapProcessContext) {
   if (!state.society) initializePopulation(state, context);
@@ -81,7 +82,6 @@ export function initializeCultures(state: GenerationState, context: MapProcessCo
         group.culture
           ? [group]
           : founders.map((origin) => ({
-              ...group,
               ...foundingGroup(state, group, origin),
               count: group.count / founders.length,
               practices: c.support.farming > c.support.grazing ? ["cultivation"] : ["pastoralism"],
