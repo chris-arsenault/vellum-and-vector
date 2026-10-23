@@ -733,6 +733,15 @@ instead of replacing it; without that the Pressure field painted the whole sea
 one flat slate, which is the saturation finding made visible. The retune
 itself remains phase 5.
 
+The first cut sampled the class per pixel from the nearest cell and brought
+back cell squares. Classes are now reconstructed from per-cell memberships
+over the grid's own interpolation support (bilinear on the published World
+grid, the shared Hermite patches on adaptive fields), and the class with the
+highest membership wins. Cell centres keep their class; boundaries fall where
+one membership overtakes another, the same rule region outlines use, so the
+raster fill and the vector outline of a place agree. Cost measured on the
+draft World: about 10 ms more per 258-pixel terrain tile on a 150 ms base.
+
 ## Proposed generation approach for discussion
 
 This is a **process sketch**, not a mandated order or a command to implement.

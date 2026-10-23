@@ -1,4 +1,5 @@
 import {
+  classInterpolator,
   fieldInterpolator,
   surfaceCategories,
   type GridSurface,
@@ -111,7 +112,7 @@ function terrainPainter(
   const waterAt = terrainWater(raster);
   const iceAt = raster.ice ? fieldInterpolator(raster.ice, "ice") : null;
   const surfaceAt = raster.surface?.channels.finalSurface
-    ? fieldInterpolator(raster.surface, "finalSurface", true)
+    ? classInterpolator(raster.surface, "finalSurface")
     : null;
   const painted = new Map(
     classes

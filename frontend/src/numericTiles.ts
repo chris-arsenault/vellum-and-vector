@@ -1,4 +1,5 @@
 import {
+  classInterpolator,
   fieldInterpolator,
   adaptivePointLocator,
   type AdaptivePointLocator,
@@ -25,7 +26,7 @@ function terrainAt(raster: Raster, locate: AdaptivePointLocator) {
 /** Surface class for the base map; -1 where no classification exists. */
 function surfaceAt(raster: Raster, locate: AdaptivePointLocator) {
   if (!raster.surface?.channels.finalSurface) return () => -1;
-  const read = fieldInterpolator(raster.surface, "finalSurface", true, locate);
+  const read = classInterpolator(raster.surface, "finalSurface", locate);
   return (p: Position) => {
     const code = read(p);
     return Number.isFinite(code) ? code : -1;
@@ -38,7 +39,10 @@ export const terrainSampleBands = 7;
 export function numericTileSampler(raster: Raster) {
   const footprint = new GeoJSON().readGeometry(raster.footprint)!;
   const locate = adaptivePointLocator();
-  const valueAt = fieldInterpolator(raster.field, raster.channel, categorical(raster), locate);
+  // Classes are reconstructed from memberships so their boundaries match region outlines.
+  const valueAt = categorical(raster)
+    ? classInterpolator(raster.field, raster.channel, locate)
+    : fieldInterpolator(raster.field, raster.channel, false, locate);
   const active = activeSampler(raster.field, raster.channel, locate);
   const terrain = raster.channel === "elevation" ? terrainAt(raster, locate) : null;
   const surface = terrain ? surfaceAt(raster, locate) : null;

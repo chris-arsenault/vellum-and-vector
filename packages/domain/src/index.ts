@@ -61,6 +61,7 @@ export * from "./adaptiveReconstruction";
 export * from "./adaptiveTransfer";
 export * from "./adaptiveField";
 export * from "./adaptivePoint";
+export * from "./classSampler";
 export * from "./fieldContours";
 export * from "./snapshot";
 export * from "./society";
