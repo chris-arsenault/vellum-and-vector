@@ -82,6 +82,34 @@ and publish validated candidate geography atomically.
 Generation runs in a Web Worker and ends when the tab closes. Pure generation
 modules remain independent of that browser adapter.
 
+### Magic source authority
+
+Per the user's 2026-10-22 clarification, the current Fire, Aurora and Pressure
+systems are first-class world effects and processes. Preserve their distinct
+physical motivations, media, propagation, feedback and interactions. Future magic
+systems remain open: the current three are not a closed universe, and extension
+must not require flattening them into interchangeable generic effects. Use shared
+process contracts where useful and system-specific behavior where needed. Do not
+build speculative extension machinery before a concrete system needs it.
+
+Before designing magic behavior, read the corresponding bodies in
+`../the-canonry-game/docs/lore/lore-bible.md` (especially section 7),
+`../the-canonry-game/docs/lore/encyclopedia/three-fires.md`,
+`../the-canonry-game/docs/design/physical-microgeography-worldgen.md` and the
+relevant `src/IceRemembers.Seed/PhysicalGeneration/Layers` implementations.
+Read lore for motivation and code for implemented mechanisms; neither substitutes
+for the other. Extract mechanisms without importing named setting lore: gods,
+characters, peoples, factions, artifacts, places and historical events do not
+become atlas requirements. Record adaptations and proposed additions explicitly.
+
+Ground society effects in fire-core extraction/use, Aurora crystal and ice-memory
+practices, and depth-dependent Pressure use and ocean propagation. Do not replace
+them with generic abundance, mana, wards or explosions. Treat lore-derived social
+uses and practitioner costs as adaptation proposals, not mandatory setting canon.
+The society plan records the proposed aggregate adaptation. Configuration and
+shaping should expose these systems' actual behavior, not require users to invent
+the systems before generation can work.
+
 ## Spatial model
 
 Use the fictional planar metre CRS and explicit local/vertical frames in
