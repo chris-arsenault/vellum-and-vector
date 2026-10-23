@@ -19,7 +19,7 @@ export const symbolStyleSchema = z
   .transform((value) => value as Style);
 
 export const rasterPresentationSchema = z.object({
-  base: z.enum(["topographic", "relief"]),
+  base: z.enum(["surface", "topographic", "relief"]),
   sunAzimuth: finite.min(0).max(360),
   sunElevation: finite.min(1).max(90),
   exaggeration: finite.min(0).max(20),

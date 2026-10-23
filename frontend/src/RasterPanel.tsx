@@ -133,6 +133,7 @@ function FieldControls({
           </p>
         )}
         <FieldLegend world={world} field={field} data={data} />
+        <SurfaceCodes world={world} channel={channel} />
       </fieldset>
     );
   return (
@@ -170,9 +171,12 @@ function FieldControls({
     </fieldset>
   );
 }
-function SurfaceCodes({ channel }: { world: World; channel: string }) {
+/** The full code catalogue, including classes absent from the current map. */
+function SurfaceCodes({ world, channel }: { world: World; channel: string }) {
   const names: Record<number, string> = {};
   if (channel === "physicalMaterial") physicalMaterialNames.forEach((name, i) => (names[i] = name));
+  if (["naturalSurface", "finalSurface"].includes(channel))
+    for (const item of categoryPalette(world, channel) ?? []) names[item.code] = item.name;
   if (!Object.keys(names).length) return null;
   return (
     <details>
