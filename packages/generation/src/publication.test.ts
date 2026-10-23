@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { putChannel, type Layer } from "@atlas/domain";
+import { putChannel, validateLayerChange, type Layer } from "@atlas/domain";
 import { landscape } from "./mapFixtures";
 import { MapRunner } from "./mapRunner";
 import { MapProcessRegistry, type MapProcess } from "./process";
@@ -250,6 +250,48 @@ it("rejects new undeclared geographic kinds while retaining unchanged original g
   ];
   expect(publishGenerationProducts(state, "registered-geography")).toEqual(new Set([layer.id]));
   expect(state.domain.coverage).toContainEqual(expect.objectContaining({ layerId: layer.id }));
+});
+
+it("stores the nearest value for a generated attribute that cannot be stored and warns", () => {
+  const state = initial(),
+    vector = { ...layer, representation: "vector" as const, representations: ["vector" as const] };
+  state.publications = [{ kind: "geography", layer: vector, featureKinds: ["surveyMarker"] }];
+  const feature = generatedFeature(
+    state,
+    "faulty-marker",
+    "Survey station",
+    "surveyMarker",
+    layer.id,
+    { type: "Point", coordinates: [100, 100] },
+    { depth: NaN, region: { systems: new Map([["mana", 0.5]]) }, samples: new Float64Array([1, 2]) }
+  );
+  state.domain.world.features[feature.id] = feature;
+  const warnings: Parameters<typeof publishGenerationProducts>[3] = [];
+  expect(publishGenerationProducts(state, "repaired", undefined, warnings)).toEqual(
+    new Set([layer.id])
+  );
+  expect(state.domain.world.features[feature.id].attributes).toMatchObject({
+    depth: null,
+    region: { systems: { mana: 0.5 } },
+    samples: [1, 2],
+  });
+  expect(warnings).toHaveLength(1);
+  expect(warnings[0]).toMatchObject({ severity: "warning", resource: feature.id });
+  for (const problem of ["depth is NaN", "region.systems is a Map", "samples is a Float64Array"])
+    expect(warnings[0].message).toContain(problem);
+});
+
+it("names the feature and attribute when stored attributes cannot be validated", () => {
+  expect(() =>
+    validateLayerChange(
+      undefined,
+      { ...layer, representation: "vector" },
+      [{ id: "peak-1", kind: "peak", attributes: { prominence: Infinity }, detail: {} }],
+      0
+    )
+  ).toThrow(
+    "The peak peak-1 on layer survey-analysis has attributes that cannot be stored: prominence is Infinity."
+  );
 });
 
 it("registers a new vector layer before common extractor validation and worker transfer", async () => {

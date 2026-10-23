@@ -5,7 +5,8 @@ import { featureStation, sampleFields } from "./boundaryContracts";
 import { lineParts } from "./lineStations";
 import { requireThat } from "./errors";
 import { sameValue } from "./values";
-import { valueRecordSchema, type Value } from "./schemas";
+import type { Value } from "./schemas";
+import { requireValueRecord } from "./layerAttributes";
 
 const stations = [
   "elevations",
@@ -54,10 +55,10 @@ export function featureAttributes(
   geometry: Geometry,
   input: Record<string, unknown>
 ): Record<string, Value> {
-  const result = Object.assign(Object.create(null), valueRecordSchema.parse(input)) as Record<
-    string,
-    Value
-  >;
+  const result = Object.assign(
+    Object.create(null),
+    requireValueRecord(input, "The feature")
+  ) as Record<string, Value>;
   const old = previous?.detail[areaId]?.attributes ?? previous?.attributes ?? {};
   if (previous?.generationId) retainHistory(result, old);
   if (!geometry.type.includes("LineString")) return result;

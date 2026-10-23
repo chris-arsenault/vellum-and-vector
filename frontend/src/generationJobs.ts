@@ -124,33 +124,40 @@ function receive(id: string, message: WorkerResult) {
     return;
   }
   try {
-    logProgress(active.job, "Publishing fields and coverage in the editor", 0.997);
-    changed("jobs");
-    requireThat(
-      session(active.job.worldId).snapshot.world.version === active.expectedVersion,
-      "generation_conflict",
-      "The world was edited during generation. Your edits were kept. Generate again from the current geography."
-    );
-    const candidate = generationSnapshot(
-      message.result,
-      active.input,
-      id,
-      session(active.job.worldId).snapshot
-    );
-    const entry = session(active.job.worldId);
-    const areaId = active.input.areaId;
-    entry.causes[areaId] = [
-      ...(entry.causes[areaId] ?? []),
-      ...message.result.state.history,
-      ...(message.result.state.causes?.length
-        ? [{ path: ["present"], ancestry: [], causes: message.result.state.causes }]
-        : []),
-    ];
-    publish(active.job.worldId, candidate, "generate", id);
+    complete(id, active, message.result);
     finish(id, "completed");
   } catch (error) {
     finish(id, "failed", error instanceof Error ? error.message : String(error));
   }
+}
+function complete(id: string, active: RunningJob, result: CompletedBoundary) {
+  logProgress(active.job, "Publishing fields and coverage in the editor", 0.997);
+  changed("jobs");
+  requireThat(
+    session(active.job.worldId).snapshot.world.version === active.expectedVersion,
+    "generation_conflict",
+    "The world was edited during generation. Your edits were kept. Generate again from the current geography."
+  );
+  const warnings: Diagnostic[] = [],
+    candidate = generationSnapshot(
+      result,
+      active.input,
+      id,
+      session(active.job.worldId).snapshot,
+      warnings
+    );
+  for (const warning of warnings) console.warn(`[atlas generation ${id}] ${warning.message}`);
+  if (warnings.length) active.job.diagnostics = warnings;
+  const entry = session(active.job.worldId);
+  const areaId = active.input.areaId;
+  entry.causes[areaId] = [
+    ...(entry.causes[areaId] ?? []),
+    ...result.state.history,
+    ...(result.state.causes?.length
+      ? [{ path: ["present"], ancestry: [], causes: result.state.causes }]
+      : []),
+  ];
+  publish(active.job.worldId, candidate, "generate", id);
 }
 function finish(id: string, status: string, error: string | null = null) {
   const active = running.get(id);
@@ -187,12 +194,13 @@ export function generationSnapshot(
   result: CompletedBoundary,
   input: AtlasGenerationInput,
   id: string,
-  original?: DomainSnapshot
+  original?: DomainSnapshot,
+  warnings: Diagnostic[] = []
 ): DomainSnapshot {
   const snapshot = result.state.domain,
     world = snapshot.world;
   world.version++;
-  publishGenerationProducts(result.state, id, original);
+  publishGenerationProducts(result.state, id, original, warnings);
   const area = world.areas[input.areaId];
   area.version = world.version;
   world.generations.push({

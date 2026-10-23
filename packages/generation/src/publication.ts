@@ -4,8 +4,10 @@ import {
   requireThat,
   sameValue,
   semanticId,
+  storableValue,
   validateCoverage,
   validateLayerChange,
+  type Diagnostic,
   type DomainSnapshot,
   type AtlasFeature,
   type Grid,
@@ -51,9 +53,11 @@ export function preparePublicationLayers(
 export function publishGenerationProducts(
   state: Pick<GenerationState, "domain" | "surface" | "publications">,
   runId: string,
-  original?: DomainSnapshot
+  original?: DomainSnapshot,
+  diagnostics: Diagnostic[] = []
 ) {
   const definitions = state.publications ?? [];
+  repairGeneratedAttributes(state.domain, diagnostics);
   checkLayerDefinitions(definitions);
   validateCandidateBindings(state.domain, definitions, original);
   const layers = publishFields(state.domain, state.surface, definitions, runId);
@@ -73,6 +77,37 @@ export function publishGenerationProducts(
   }
   for (const layer of layers) publishCoverage(state.domain, state.surface, layer, runId);
   return layers;
+}
+
+/**
+ * A generator value that cannot be stored (NaN, a Map, a typed array) becomes its nearest
+ * storable value with a warning, so one faulty attribute does not discard the whole run.
+ */
+function repairGeneratedAttributes(snapshot: DomainSnapshot, diagnostics: Diagnostic[]) {
+  for (const feature of Object.values(snapshot.world.features)) {
+    if (feature.areaId !== snapshot.scope.areaId || feature.state !== "generated") continue;
+    const problems: string[] = [];
+    feature.attributes = storableValue(
+      feature.attributes,
+      "",
+      problems
+    ) as AtlasFeature["attributes"];
+    for (const detail of Object.values(feature.detail))
+      if (detail.attributes)
+        detail.attributes = storableValue(
+          detail.attributes,
+          "",
+          problems
+        ) as AtlasFeature["attributes"];
+    if (problems.length)
+      diagnostics.push({
+        code: "repaired_attributes",
+        message: `The ${feature.kind} ${feature.name} (${feature.id}) stored repaired attributes: ${problems.join("; ")}.`,
+        severity: "warning",
+        invocation: null,
+        resource: feature.id,
+      });
+  }
 }
 
 function validateGeographicRepresentation(
