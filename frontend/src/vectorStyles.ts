@@ -2,7 +2,7 @@ import LineString from "ol/geom/LineString.js";
 import { Circle, Fill, Stroke, Style, Text } from "ol/style.js";
 import type { AtlasFeature, LayerStyle } from "./types";
 import type { Style as SymbolStyle, Symbolizer } from "geostyler-style";
-import { biomes } from "@atlas/domain";
+import { biomeFamilies } from "@atlas/domain";
 
 export function defaultSymbolStyle(
   name: string,
@@ -30,9 +30,9 @@ export function defaultSymbolStyle(
   return {
     name,
     rules: [
-      ...biomes.map((biome) => ({
+      ...biomeFamilies.map((biome) => ({
         name: biome.name,
-        filter: ["==", "biome", biome.name] as ["==", string, string],
+        filter: ["==", "kind", biome.kind] as ["==", string, string],
         symbolizers: symbolizers.map((symbol) => ({
           ...symbol,
           color: biome.color,
@@ -84,7 +84,7 @@ function featureStrokeWidth(feature: AtlasFeature, resolution: number) {
 }
 function ecologicalColor(feature: AtlasFeature) {
   if (feature.layerId !== "ecology") return null;
-  return biomes.find((biome) => biome.name === feature.attributes.biome)?.color;
+  return biomeFamilies.find((biome) => biome.kind === feature.kind)?.color;
 }
 function profiledLineStyles(feature: AtlasFeature, base: Style, color: string, resolution: number) {
   const widths = feature.attributes.widths;

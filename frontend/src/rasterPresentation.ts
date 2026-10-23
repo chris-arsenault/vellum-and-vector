@@ -16,7 +16,8 @@ export function defaultRasterPresentation(): RasterPresentation {
     sunElevation: 45,
     exaggeration: 1,
     contourInterval: 100,
-    fields: [{ ...defaultFieldStyle("biome"), opacity: 0.55 }],
+    // Named biome regions are vector features; cover fields are opt-in overlays.
+    fields: [],
   };
 }
 export function defaultFieldStyle(channel: string): FieldStyle {

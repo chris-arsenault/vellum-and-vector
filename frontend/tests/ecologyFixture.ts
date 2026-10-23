@@ -25,12 +25,15 @@ export function ecologicalPolygons() {
     sampling: { maximumSize: 250, minimumSize: 250, featureSamples: 2 },
   };
   map.Elevation.fill(100 * 1024);
+  map.Temperature.fill(450);
+  map.Rainfall.fill(800);
+  // Forest, grassland and wetland bands, outlined from their cover.
   for (let i = 0; i < map.mesh.count; i++) {
-    const x = map.mesh.x[i] + map.mesh.origin[0];
-    map.BiomeCodes[i] = x < 1250 ? 10 : x < 2750 ? 7 : 15;
-    map.TreeCover[i] = map.BiomeCodes[i] === 7 ? 0.1 : 0.7;
-    map.GrassCover[i] = map.BiomeCodes[i] === 7 ? 0.8 : 0.1;
-    map.AlteredCover[i] = map.BiomeCodes[i] === 15 ? 0.7 : 0;
+    const x = map.mesh.x[i] + map.mesh.origin[0],
+      band = x < 1250 ? 0 : x < 2750 ? 1 : 2;
+    map.BroadleafCover[i] = band === 0 ? 0.7 : 0.05;
+    map.GrassCover[i] = band === 1 ? 0.8 : 0.1;
+    map.WetlandCover[i] = band === 2 ? 0.7 : 0;
   }
   extractEcologicalFeatures(state);
   return Object.values(state.domain.world.features);

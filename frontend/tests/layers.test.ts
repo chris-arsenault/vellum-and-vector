@@ -51,7 +51,7 @@ test("manage continuous and categorical overlays without expanding the stack", a
     .getByLabel("Add map overlays")
     .screenshot({ path: "test-results/overlay-chooser.png" });
   await page.getByRole("button", { name: "Done", exact: true }).click();
-  await expect(page.locator(".overlay-row")).toHaveCount(6);
+  await expect(page.locator(".overlay-row")).toHaveCount(5);
   await expect(page.locator(".overlay-content")).toHaveCount(0);
   await page.getByRole("checkbox", { name: "Show Temperature", exact: true }).uncheck();
   await page.getByRole("button", { name: "+ Add overlay", exact: true }).click();
@@ -61,6 +61,8 @@ test("manage continuous and categorical overlays without expanding the stack", a
   await expect(
     page.getByRole("checkbox", { name: "Add Young broadleaf trees", exact: true })
   ).toBeVisible();
+  // The per-cell biome category stays available as data, outside the common overlays.
+  await page.getByRole("checkbox", { name: "Add Biomes", exact: true }).check();
   await page.keyboard.press("Escape");
   await expect(page.getByLabel("Add map overlays")).not.toBeVisible();
   await expect(page.getByRole("checkbox", { name: "Show Temperature", exact: true })).toHaveCount(

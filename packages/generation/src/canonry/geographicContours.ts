@@ -11,6 +11,7 @@ import {
 import type { GenerationState } from "../process";
 import { triangleSampler, triangleFans, triangleBoundary } from "./triangleSampling";
 import { physicalSampler } from "./physicalMetric";
+import type { PhysicalMesh } from "./mesh";
 
 export function lakeFootprint(
   state: GenerationState,
@@ -88,6 +89,41 @@ export function membershipContour(
   if (mesh.topology || members.some((i) => mesh.boundary[i]))
     return geographicContour(state, members, valueAt);
   return linearFieldContour(triangleFans(mesh, members, includes), valueAt);
+}
+/**
+ * Trace where several per-cell quantities, each interpolated on its own, combine above zero.
+ * Combining at every interpolation sample keeps each quantity's own zero crossings, so a
+ * term shared with another outline, such as the sea's depth, crosses where that one does.
+ */
+export function combinedContour(
+  state: GenerationState,
+  members: number[],
+  terms: ((cell: number) => number)[],
+  combine: (values: number[]) => number
+) {
+  const mesh = state.physical!.map.mesh,
+    samplers = terms.map((term) => membershipSampler(state, term)),
+    valueAt = (x: number, y: number) => combine(samplers.map((sample) => sample(x, y)));
+  if (mesh.topology || members.some((i) => mesh.boundary[i]))
+    return geographicContour(state, members, valueAt, 0);
+  return linearFieldContour(combinedFans(mesh, members, terms, combine), valueAt, 0);
+}
+function* combinedFans(
+  mesh: PhysicalMesh,
+  members: number[],
+  terms: ((cell: number) => number)[],
+  combine: (values: number[]) => number
+) {
+  const fans = terms.map((term) => triangleFans(mesh, members, term));
+  for (;;) {
+    const triangles = fans.map((fan) => fan.next());
+    if (triangles[0].done) return;
+    yield triangles[0].value.map(([x, y], corner): [number, number, number] => [
+      x,
+      y,
+      combine(triangles.map((triangle) => triangle.value![corner][2])),
+    ]);
+  }
 }
 export function geographicContour(
   state: GenerationState,

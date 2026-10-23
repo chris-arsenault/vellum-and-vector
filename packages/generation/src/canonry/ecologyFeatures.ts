@@ -1,62 +1,193 @@
-import { biomeCode, biomes, spatial } from "@atlas/domain";
+import { biomes, spatial } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { components, publishPlace } from "./geographicRegions";
+import { combinedContour } from "./geographicContours";
+import { biomeRules, type BiomeRule, type BiomeSummary } from "./ecologyBiomes";
 
-/** Located woodland and wetland regions use the same spatial publication as landforms. */
-export function extractEcologicalFeatures(state: GenerationState) {
+type Term = (i: number) => number;
+const families: Record<string, string> = {
+  Barren: "barren",
+  Desert: "barren",
+  Tundra: "grassland",
+  Grassland: "grassland",
+  Savanna: "grassland",
+  Woodland: "forest",
+  "Temperate forest": "forest",
+  "Boreal forest": "forest",
+  Rainforest: "forest",
+  Marsh: "wetland",
+  Swamp: "wetland",
+  "Altered woodland": "altered",
+  "Altered wetland": "altered",
+};
+/** Authored biome samples decide their cells outright: positive for their family's rule only. */
+function authoredTerms(state: GenerationState, rule: BiomeRule): Term[] {
+  const fixed = state.physical!.fixed.find(({ binding }) => binding.native === "BiomeCodes");
+  if (!fixed) return rule.terms;
+  const values = fixed.values;
+  return rule.terms.map((term) => (i) => {
+    if (!Number.isFinite(values[i])) return term(i);
+    return families[biomes[values[i]]?.name ?? ""] === rule.kind ? 1 : -1;
+  });
+}
+/**
+ * Dry, ice-free land as the per-cell quantities the ocean and lake outlines trace: the sea's
+ * signed depth, and each lake's depth below its level with its body membership.
+ */
+function waterTerms(state: GenerationState): { terms: Term[]; dry: (v: number[]) => number } {
+  const map = state.physical!.map,
+    mesh = map.mesh,
+    level = new Float64Array(mesh.count).fill(NaN),
+    body = new Int32Array(mesh.count).fill(-1);
+  let front: number[] = [];
+  for (let i = 0; i < mesh.count; i++)
+    if (map.WaterKindCodes[i] === 2) {
+      [level[i], body[i]] = [map.WaterSurfaceElevations[i], map.WaterBodyIds[i]];
+      front.push(i);
+    }
+  // A lake's shoreline samples average its neighbours; carry its level past that support.
+  for (let ring = 0; ring < 3; ring++) {
+    const next: number[] = [];
+    for (const i of front)
+      for (let edge = 0; edge < mesh.degree[i]; edge++) {
+        const j = mesh.neighbors[i * mesh.stride + edge];
+        if (j < 0 || body[j] >= 0) continue;
+        [level[j], body[j]] = [level[i], body[i]];
+        next.push(j);
+      }
+    front = next;
+  }
+  const depth = (i: number) => map.EffectiveSeaLevel - map.Elevation[i];
+  return {
+    terms: [
+      (i) => -(map.WaterKindCodes[i] === 1 ? depth(i) : -Math.abs(depth(i))) / 102_400,
+      (i) => 1 - map.IceThickness[i],
+      (i) => (Number.isNaN(level[i]) ? 1 : (map.Elevation[i] - level[i]) / 102_400),
+      (i) => (body[i] >= 0 && map.WaterBodyIds[i] === body[i] ? 1 : 0),
+    ],
+    dry: ([sea, ice, lake, lakeMember]) =>
+      Math.min(sea, ice, Math.max(lake, (0.1 - lakeMember) * 1000)),
+  };
+}
+function summarize(
+  state: GenerationState,
+  members: number[],
+  biome: ReturnType<typeof biomeRules>
+) {
+  const map = state.physical!.map,
+    areas = map.mesh.areas,
+    total = members.reduce((sum, i) => sum + areas[i], 0),
+    mean = (value: Term) => members.reduce((sum, i) => sum + value(i) * areas[i], 0) / total;
+  const systems = new Map<string, number>();
+  for (const field of state.physical!.magic?.fields ?? [])
+    if (field.definition.enabled)
+      systems.set(
+        field.definition.id,
+        mean((i) => field.intensity[i])
+      );
+  return {
+    broadleaf: mean((i) => map.BroadleafCover[i]),
+    conifer: mean((i) => map.ConiferCover[i]),
+    grass: mean((i) => map.GrassCover[i]),
+    wetland: mean((i) => map.WetlandCover[i]),
+    fire: mean((i) => map.FireActivity[i]),
+    flood: mean((i) => map.FloodFrequency[i]),
+    peat: mean((i) => map.PeatCarbon[i]),
+    temperature: mean((i) => biome.temperature[i]),
+    moisture: mean((i) => biome.moisture[i]),
+    wetness: mean((i) => biome.wetness[i]),
+    slope: mean((i) => map.Slope[i]),
+    elevation: mean((i) => (map.Elevation[i] - map.BaseSeaLevel) / 1024),
+    systems,
+  } satisfies BiomeSummary;
+}
+/**
+ * A rule's traced quantity: all of its own terms positive, no higher rule holding, and dry.
+ * Each piece is a term interpolated on its own, so neighbours share their crossings.
+ */
+function ruleQuantity(
+  state: GenerationState,
+  rules: BiomeRule[],
+  index: number,
+  water: ReturnType<typeof waterTerms>
+) {
+  const groups = rules.slice(0, index + 1).map((rule) => authoredTerms(state, rule));
+  const terms = [...groups.flat(), ...water.terms],
+    offsets = groups.map((_, g) => groups.slice(0, g).reduce((n, group) => n + group.length, 0));
+  const combine = (values: number[]) => {
+    let result = water.dry(values.slice(values.length - water.terms.length));
+    for (let g = 0; g < groups.length; g++) {
+      const part = values.slice(offsets[g], offsets[g] + groups[g].length);
+      result = Math.min(result, g === index ? Math.min(...part) : Math.max(...part.map((v) => -v)));
+    }
+    return result;
+  };
+  const at = (i: number) => combine(terms.map((term) => term(i)));
+  return { terms, combine, at };
+}
+function landArea(state: GenerationState) {
   const map = state.physical!.map;
-  const dry = state.surface.ocean
-    ? spatial.differenceFrom(state.surface.ocean)
-    : (shape: import("geojson").Geometry) => shape;
-  const kinds = [
-    ["Barren", "barren"],
-    ["Desert", "desert"],
-    ["Tundra", "tundra"],
-    ["Grassland", "grassland"],
-    ["Savanna", "savanna"],
-    ["Woodland", "forest"],
-    ["Temperate forest", "forest"],
-    ["Boreal forest", "forest"],
-    ["Rainforest", "forest"],
-    ["Marsh", "marsh"],
-    ["Swamp", "swamp"],
-    ["Altered woodland", "forest"],
-    ["Altered wetland", "swamp"],
-  ] as const;
-  for (const [name, kind] of kinds) {
-    const code = biomeCode(name);
+  let area = 0;
+  for (let i = 0; i < map.mesh.contentCount; i++)
+    if (map.WaterKindCodes[i] === 0) area += map.mesh.contentAreas[i];
+  return area;
+}
+/**
+ * Named biomes are large contiguous regions of one rule, outlined in generation from the cover
+ * or magic quantity that defines them. Continuous cover remains the ecological representation.
+ */
+export function extractEcologicalFeatures(state: GenerationState) {
+  const map = state.physical!.map,
+    biome = biomeRules(state),
+    water = waterTerms(state),
+    land = landArea(state);
+  biome.rules.forEach((rule, index) => {
+    const quantity = ruleQuantity(state, biome.rules, index, water);
+    const inside = new Float64Array(map.mesh.count).map((_, i) => quantity.at(i));
     components(
       state,
-      (i) => map.BiomeCodes[i] === code,
-      (members, geometry) => {
-        if (!geometry) return;
-        const extent = dry(geometry);
-        if (!extent) return;
-        const area = members.reduce((sum, i) => sum + map.mesh.areas[i], 0);
-        const average = (values: Float64Array) =>
-          members.reduce((sum, i) => sum + values[i] * map.mesh.areas[i], 0) / area;
-        publishPlace(
-          state,
-          kind,
-          name,
-          members,
-          "ecology",
-          {
-            sourceAlgorithm: "atlas-ecology-1",
-            biome: biomes[code].name,
-            treeCover: average(map.TreeCover),
-            broadleafCover: average(map.BroadleafCover),
-            coniferCover: average(map.ConiferCover),
-            alteredCover: average(map.AlteredCover),
-            canopyAge: average(map.CanopyAge),
-            wetlandCover: average(map.WetlandCover),
-            herbivores: average(map.Herbivores),
-            peatCarbon: average(map.PeatCarbon),
-          },
-          extent
-        );
-      },
-      true
+      (i) => inside[i] > 0,
+      (members) => {
+        const area = members.reduce((sum, i) => sum + map.mesh.contentAreas[i], 0);
+        if (area < rule.share * land) return;
+        publishBiome(state, rule, members, quantity, summarize(state, members, biome));
+      }
     );
-  }
+  });
+}
+function publishBiome(
+  state: GenerationState,
+  rule: BiomeRule,
+  members: number[],
+  quantity: ReturnType<typeof ruleQuantity>,
+  region: BiomeSummary
+) {
+  const set = new Set(members),
+    shape = combinedContour(
+      state,
+      members,
+      [...quantity.terms, (i) => Number(set.has(i))],
+      (values) => Math.min(quantity.combine(values.slice(0, -1)), values.at(-1)! - 0.1)
+    );
+  const extent = shape && spatial.intersection(shape, state.domain.scope.footprint);
+  if (!extent) return;
+  const name = rule.name(region);
+  publishPlace(
+    state,
+    rule.kind,
+    name,
+    members,
+    "ecology",
+    {
+      sourceAlgorithm: "atlas-biomes-1",
+      biome: name,
+      system: rule.system?.(region) ?? null,
+      treeCover: region.broadleaf + region.conifer,
+      grassCover: region.grass,
+      wetlandCover: region.wetland,
+      temperature: region.temperature,
+      moisture: region.moisture,
+    },
+    extent
+  );
 }

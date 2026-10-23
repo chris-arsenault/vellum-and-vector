@@ -116,7 +116,11 @@ async function checkMagicPublication(
   expect(result.state.surface.channels.biome.some((v) => v === 15)).toBe(true);
   expect(
     Object.values(result.state.domain.world.features).some(
-      (f) => f.layerId === "ecology" && f.attributes.biome === "Altered woodland"
+      (f) =>
+        f.layerId === "ecology" &&
+        f.kind === "altered" &&
+        f.attributes.biome === "Wildwood-altered woodland" &&
+        f.attributes.system === "wildwood"
     )
   ).toBe(true);
   expect(sample(result.state.surface, "elevation", position)).toBeCloseTo(

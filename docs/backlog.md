@@ -111,6 +111,23 @@ with no backend, persistence or MCP; preserve the existing backend source.
       **Deferred: outside the current continuous-terrain and adaptive-generation
       replacement plan.**
 
+- [ ] **10. Rework the interaction between magic and ecology.** Magic reaches
+      vegetation only through generic ecological effects, so the three systems'
+      own rules barely shape the living landscape. Fire heats land to 46–60 °C
+      and its fire effect holds grass along its veins; Aurora and Pressure have
+      no ecological effect at all. Ecology itself shows gaps the named biomes
+      exposed (2026-10-23 Draft world): fire activity and flood frequency are
+      zero everywhere, conifer cover is essentially absent, and 58–62% of land
+      carries under 12% plant cover. Define how each system's physical rules
+      change vegetation, and make the ecological disturbance regimes produce
+      results that biome naming can use.
+
+      Remove "altered" as an ecological descriptor. It is too generic: the
+      altered plant group, altered cover, and biome names such as
+      "Wildwood-altered woodland" say that magic changed something without
+      saying what. Replace it with effects and names that follow the
+      responsible system's rules.
+
 The [product contract](product-spec.md) supplies the geographic and authoring
 requirements. [ADR 0003](adr/0003-frontend-session.md) defines the current execution
 and session boundary; the [generation design](generation-workflows.md) records

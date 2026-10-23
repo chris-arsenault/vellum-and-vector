@@ -34,6 +34,16 @@ export const biomes = [
 ] as const;
 export const biomeCode = (name: (typeof biomes)[number]["name"]) =>
   biomes.findIndex((biome) => biome.name === name);
+/** Named biome regions, by the feature kind of the rule that outlines them. */
+export const biomeFamilies = [
+  { kind: "forest", name: "Forest", color: "#4f8d55" },
+  { kind: "grassland", name: "Grassland", color: "#afbd74" },
+  { kind: "wetland", name: "Wetland", color: "#83a794" },
+  { kind: "barren", name: "Barren land", color: "#ddc78d" },
+  { kind: "ember", name: "Ember grassland", color: "#c9774a" },
+  { kind: "thaw", name: "Thaw ground", color: "#9fc7b0" },
+  { kind: "altered", name: "Altered land", color: "#76618e" },
+] as const;
 
 export const ecologyLabels: Record<string, string> = {
   biome: "Biomes",

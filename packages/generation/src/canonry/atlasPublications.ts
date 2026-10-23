@@ -245,7 +245,7 @@ function geographicPublications(
     [
       "ecology.living",
       "ecology",
-      ["barren", "desert", "tundra", "grassland", "savanna", "forest", "marsh", "swamp"],
+      ["altered", "ember", "thaw", "wetland", "forest", "grassland", "barren"],
     ],
     ["human.cultures", "cultures", ["culturalOrigin"]],
     ["human.politics", "sovereignty", ["sovereignty"]],

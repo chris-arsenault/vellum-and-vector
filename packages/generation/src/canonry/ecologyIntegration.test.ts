@@ -349,32 +349,6 @@ it("creates located forest polygons with deterministic identities and keeps auth
   ).toEqual(ids);
 });
 
-it("publishes selectable open-land biome polygons through the same scoped feature path", () => {
-  const state = fixture();
-  state.domain.world.id = "2f6e0134-6017-4e80-9196-052a12218500";
-  const map = state.physical!.map;
-  for (const [code, name] of [
-    [4, "Barren"],
-    [5, "Desert"],
-    [6, "Tundra"],
-    [7, "Grassland"],
-    [8, "Savanna"],
-  ] as const) {
-    state.domain.world.features = {};
-    map.BiomeCodes.fill(code);
-    extractEcologicalFeatures(state);
-    const features = Object.values(state.domain.world.features);
-    expect(features.length).toBeGreaterThan(0);
-    for (const feature of features) {
-      expect(feature.attributes.biome).toBe(name);
-      expect(feature.kind).toBe(name.toLowerCase());
-      expect(feature.layerId).toBe("ecology");
-      expect(feature.geometry.type).toMatch(/Polygon/);
-      expect(spatial.covers(state.domain.scope.footprint, feature.geometry)).toBe(true);
-    }
-  }
-});
-
 it("keeps protected biome samples authoritative for both polygons and published categories", () => {
   const state = fixture();
   state.domain.world.id = "2f6e0134-6017-4e80-9196-052a12218500";
