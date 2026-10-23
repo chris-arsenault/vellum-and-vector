@@ -9,6 +9,39 @@ import { drainageConditioning } from "./drainageFlood";
 import { targetOrder } from "./flowGraph";
 import { unitNoise } from "./noise";
 
+it("follows the true descent of a slope that runs between lattice directions", () => {
+  const mesh = createWorldMesh([0, 0, 600_000, 600_000], 4096, 0),
+    map = createField(mesh),
+    aspect = (255 * Math.PI) / 180,
+    [ax, ay] = [Math.cos(aspect), Math.sin(aspect)];
+  for (let i = 0; i < mesh.count; i++) {
+    const along = mesh.x[i] * ax + mesh.y[i] * ay;
+    map.Elevation[i] = (200 - along / 1000) * 1024;
+    map.WaterKindCodes[i] = along > 250_000 ? 1 : 0;
+  }
+  const c = physicalContext(5, 0, physicalProfile);
+  drainageConditioning(map, c);
+  const targets = resolveLandTargets(map, c);
+  // Ten-step paths from the upslope half. Always taking the steepest of three
+  // neighbours locks every path onto a lattice heading 15 degrees off the descent;
+  // individual paths may wander, but on average they must follow it.
+  let paths = 0,
+    dx = 0,
+    dy = 0;
+  for (let i = 0; i < mesh.contentCount; i++) {
+    if (mesh.x[i] * ax + mesh.y[i] * ay > -100_000) continue;
+    let j = i;
+    for (let step = 0; step < 10 && targets[j] >= 0; step++) j = targets[j];
+    dx += mesh.x[j] - mesh.x[i];
+    dy += mesh.y[j] - mesh.y[i];
+    paths++;
+  }
+  const heading = Math.atan2(dy, dx),
+    bias = Math.abs(Math.atan2(Math.sin(heading - aspect), Math.cos(heading - aspect)));
+  expect(paths).toBeGreaterThan(200);
+  expect((bias * 180) / Math.PI).toBeLessThan(3);
+});
+
 it("routes a conditioned flat by outlet-rank progress rather than a parent-only bonus", () => {
   const mesh = createWorldMesh([0, 0, 200_000, 200_000], 256, 30_000),
     map = createField(mesh),

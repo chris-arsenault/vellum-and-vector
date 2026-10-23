@@ -27,6 +27,13 @@ const meanRain = (profile: Band[]) =>
   profile.reduce((sum, b) => sum + b.land, 0);
 const largest = (world: World) =>
   world.rivers.reduce((best, river) => (river.discharge > best.discharge ? river : best));
+/** One integrated basin can outweigh a wetter world's largest river; ten large reaches cannot. */
+const majorDischarge = (world: World) =>
+  world.rivers
+    .map((river) => river.discharge)
+    .sort((a, b) => b - a)
+    .slice(0, 10)
+    .reduce((sum, discharge) => sum + discharge, 0);
 /** Share of land flooded more often than once a decade. */
 function flooded(grid: Grid) {
   const c = grid.channels,
@@ -56,8 +63,8 @@ function expectWetter(wet: Band[], mixed: Band[], frame: string) {
 function expectRivers([dry, mixed, wet]: World[], frame: string, spansEquator: boolean) {
   expect(dry.rivers.length, frame).toBeGreaterThan(0);
   expect(wet.rivers.length, frame).toBeGreaterThanOrEqual(mixed.rivers.length);
-  expect(largest(wet).discharge, frame).toBeGreaterThan(largest(mixed).discharge);
-  expect(largest(mixed).discharge, frame).toBeGreaterThan(largest(dry).discharge);
+  expect(majorDischarge(wet), frame).toBeGreaterThan(majorDischarge(mixed));
+  expect(majorDischarge(mixed), frame).toBeGreaterThan(majorDischarge(dry));
   // The wet tropics carry the largest river where the frame spans the equator.
   if (spansEquator) expect(Math.abs(largest(mixed).latitude)).toBeLessThan(30);
   expect(flooded(wet.grid), frame).toBeLessThan(0.5);

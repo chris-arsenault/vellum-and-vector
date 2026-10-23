@@ -64,7 +64,8 @@ function erodeTriangle(
   i: number
 ) {
   const target = targets[i];
-  if (target < 0 || map.WaterKindCodes[i] === 1) return;
+  // Only channels incise; leaving interfluves standing lets valleys capture neighbouring flow.
+  if (target < 0 || map.WaterKindCodes[i] === 1 || area[i] < c.Profile.FluvialChannelArea) return;
   const length = Math.hypot(map.mesh.x[i] - map.mesh.x[target], map.mesh.y[i] - map.mesh.y[target]);
   const fall = Math.max(
     0,

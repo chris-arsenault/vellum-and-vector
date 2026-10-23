@@ -109,12 +109,104 @@ function descentDirection(
     ? desiredDirection(map, source, current)
     : normalize(x, y);
 }
+type Step = { target: number; x: number; y: number };
+/** Downhill moves from a land cell, or null beside the sea, where existing routing decides. */
+function downhillSteps(map: PhysicalField, source: number): Step[] | null {
+  const steps: Step[] = [];
+  for (let edge = 0; edge < map.mesh.degree[source]; edge++) {
+    const target = map.mesh.neighbors[source * map.mesh.stride + edge];
+    if (target < 0) continue;
+    if (map.WaterKindCodes[target] === 1) return null;
+    if (map.DrainageElevations[target] >= map.DrainageElevations[source]) continue;
+    steps.push({
+      target,
+      x: map.mesh.x[target] - map.mesh.x[source],
+      y: map.mesh.y[target] - map.mesh.y[source],
+    });
+  }
+  return steps;
+}
+/**
+ * The closest move on each side of the descent and the probability of the left one that
+ * makes their expected displacement parallel to it; one side only means no choice.
+ */
+function bracket(moves: { x: number; y: number }[], ax: number, ay: number) {
+  let left = -1,
+    right = -1,
+    nearest = 0;
+  const cross = (m: { x: number; y: number }) => m.x * ay - m.y * ax,
+    cosine = (m: { x: number; y: number }) => (m.x * ax + m.y * ay) / Math.hypot(m.x, m.y);
+  moves.forEach((move, k) => {
+    if (cosine(move) > cosine(moves[nearest])) nearest = k;
+    if (cross(move) > 0 && (left < 0 || cosine(move) > cosine(moves[left]))) left = k;
+    if (cross(move) <= 0 && (right < 0 || cosine(move) > cosine(moves[right]))) right = k;
+  });
+  if (left < 0 || right < 0) return { left: nearest, right: nearest, p: 1 };
+  const l = cross(moves[left]),
+    r = cross(moves[right]);
+  return { left, right, p: -r / (l - r) };
+}
+function expectedStep(map: PhysicalField, cell: number, ax: number, ay: number) {
+  const steps = downhillSteps(map, cell);
+  if (!steps?.length) return { x: 0, y: 0 };
+  const { left, right, p } = bracket(steps, ax, ay);
+  return {
+    x: p * steps[left].x + (1 - p) * steps[right].x,
+    y: p * steps[left].y + (1 - p) * steps[right].y,
+  };
+}
+/**
+ * Three neighbours quantize flow to 120-degree sectors, so always taking the steepest one
+ * draws parallel lattice lines. On sloping ground, choose between the downhill neighbours
+ * either side of the true descent so that, together with each neighbour's expected next
+ * step, the path follows the descent on average and gently converging flow actually meets.
+ * Triangles alternate orientation, and one orientation often has a single downhill move;
+ * judging two steps lets the other compensate. The draw is stable across erosion passes
+ * and epochs so incision deepens the same channels.
+ */
+function aspectTarget(
+  map: PhysicalField,
+  c: PhysicalContext,
+  source: number,
+  gradient: ReturnType<typeof physicalGradients>
+): number {
+  const length = Math.hypot(gradient.x[source], gradient.y[source]);
+  if (length === 0) return -1;
+  const ax = -gradient.x[source] / length,
+    ay = -gradient.y[source] / length,
+    steps = downhillSteps(map, source);
+  if (!steps?.length) return -1;
+  const twoSteps = steps.map((step) => {
+    const next = expectedStep(map, step.target, ax, ay);
+    return { x: step.x + next.x, y: step.y + next.y };
+  });
+  const { left, right, p } = bracket(twoSteps, ax, ay);
+  const draw = hashUnit(
+    c.EpochStableSeed ^ 0x2f8a,
+    round(map.mesh.x[source] * 1024),
+    round(map.mesh.y[source] * 1024)
+  );
+  return draw < p ? steps[left].target : steps[right].target;
+}
 function captureScore(area: Float64Array | null, target: number, p: PhysicalProfile): number {
   return area === null
     ? 0
     : (Math.log2(1 + area[target] / 100_000_000) * p.DrainageCaptureWeight) / 1000;
 }
+/** Sloping ground follows the descent; flats, shores and enclosed cells keep scored guidance. */
 function selectTarget(
+  map: PhysicalField,
+  c: PhysicalContext,
+  source: number,
+  area: Float64Array | null,
+  gradient: ReturnType<typeof physicalGradients>
+): number {
+  const aspect = aspectTarget(map, c, source, gradient);
+  if (aspect < 0) return scoredTarget(map, c, source, area, gradient);
+  map.DrainageDecisionTotal++;
+  return aspect;
+}
+function scoredTarget(
   map: PhysicalField,
   c: PhysicalContext,
   source: number,

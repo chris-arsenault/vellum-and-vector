@@ -10,6 +10,7 @@ import { createRiverPaths, riverPath, type RiverPaths } from "./riverPaths";
 import type { PhysicalField } from "./field";
 import { oceanFootprint } from "./geographicContours";
 import { extractEcologicalFeatures } from "./ecologyFeatures";
+import { physicalDistance } from "./physicalMetric";
 
 function riverReach(state: GenerationState, start: number, incoming: Int32Array) {
   const map = state.physical!.map,
@@ -82,6 +83,30 @@ function publishReach(
     putGeneratedNetwork(state, feature);
   }
 }
+/** World maps keep their major basins; a dry world still shows its largest river systems. */
+function worldRiverMinimum(state: GenerationState, basinDischarge: Map<number, number>) {
+  if (state.domain.world.areas[state.domain.scope.areaId].profile !== "world") return 0;
+  let largest = 0;
+  for (const discharge of basinDischarge.values()) largest = Math.max(largest, discharge);
+  return Math.min(state.physical!.profile.WorldRiverMinimumBasinDischarge, largest / 2);
+}
+/**
+ * A short first-order tributary draws one lattice step of valley side as a parallel tooth.
+ * The physical channel remains for erosion and landforms; only the map omits it. A short
+ * river reaching the sea or a lake is a complete river and stays.
+ */
+function shortHeadwater(
+  work: NonNullable<GenerationState["physical"]>,
+  incoming: Int32Array,
+  members: number[]
+) {
+  const mouth = members.at(-1)!;
+  if (incoming[members[0]] !== 0 || work.map.WaterKindCodes[mouth] !== 0) return false;
+  let length = 0;
+  for (let n = 1; n < members.length; n++)
+    length += physicalDistance(work.map.mesh, members[n - 1], members[n]);
+  return length < work.profile.MappedHeadwaterMinimumLength;
+}
 function riverInputs(map: PhysicalField) {
   const incoming = new Int32Array(map.mesh.count),
     basinDischarge = new Map<number, number>();
@@ -142,17 +167,16 @@ function extractRiverGeography(state: GenerationState, context: MapProcessContex
         .map((feature) => [Number(feature.attributes.waterBody), feature.geometry])
     ),
   };
+  const minimum = worldRiverMinimum(state, basinDischarge);
   for (let i = 0; i < map.mesh.contentCount; i++) {
     if (map.RiverOrders[i] <= 0 || incoming[i] === 1) continue;
     const discharge = basinDischarge.get(map.DrainageBasinIds[i]) ?? 0;
-    if (
-      state.domain.world.areas[state.domain.scope.areaId].profile === "world" &&
-      discharge < work.profile.WorldRiverMinimumBasinDischarge
-    )
-      continue;
+    if (discharge < minimum) continue;
     const p = nativePosition(work, i);
     if (!spatial.covers(state.domain.scope.footprint, point(p))) continue;
-    publishReach(state, i, riverReach(state, i, incoming), paths, discharge);
+    const members = riverReach(state, i, incoming);
+    if (shortHeadwater(work, incoming, members)) continue;
+    publishReach(state, i, members, paths, discharge);
   }
   context.recordCause({
     kind: "domain",

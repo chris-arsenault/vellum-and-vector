@@ -118,6 +118,8 @@ export const physicalProfile = {
   FluvialErosionIterations: 13,
   FluvialErosionStrength: 0.32,
   FluvialEquilibriumGradient: 0.0008,
+  // Square metres of catchment before stream power incises; smaller areas are hillslope.
+  FluvialChannelArea: 1e9,
   SedimentTransportFraction: 760,
   SedimentDepositionLength: 10_000,
   SedimentDepositionSlopeThreshold: 0.0034,
@@ -185,6 +187,8 @@ export const physicalProfile = {
   ChannelSlopeFloor: 350,
   ChannelSlopeCeiling: 2600,
   MinimumRiverReachLength: 30_000,
+  // Metres a first-order headwater reach must run before the map publishes it.
+  MappedHeadwaterMinimumLength: 60_000,
   RiverChannelBaseStrength: 260,
   RiverChannelOrderStrength: 145,
   RiverChannelDischargeStrength: 55,
