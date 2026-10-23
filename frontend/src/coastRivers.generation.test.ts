@@ -96,4 +96,20 @@ it("presents the ocean and river mouths where generation placed them", async () 
     mouths++;
   }
   expect(mouths).toBeGreaterThan(100);
+
+  // The stored network keeps every channel the map hides, connected downstream.
+  const network = state.domain.world.drainage![state.domain.scope.areaId].reaches,
+    rivers = Object.values(state.domain.world.features).filter((f) => f.kind === "river");
+  expect(network).toHaveLength([...reaches(map)].length);
+  expect(network.filter((reach) => reach.featureIds.length).length).toBeLessThan(network.length);
+  expect(new Set(network.flatMap((reach) => reach.featureIds))).toEqual(
+    new Set(rivers.map((river) => river.id))
+  );
+  for (const reach of network) {
+    expect(reach.discharges).toHaveLength(reach.coordinates.length);
+    if (reach.downstream === null) continue;
+    const below = network[reach.downstream];
+    expect(below.coordinates[0]).toEqual(reach.coordinates.at(-1));
+    expect(below.discharges[0]).toBeGreaterThanOrEqual(reach.discharges.at(-1)!);
+  }
 }, 300_000);

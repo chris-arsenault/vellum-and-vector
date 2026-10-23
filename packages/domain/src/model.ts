@@ -354,6 +354,7 @@ export interface World {
   connections?: Record<string, Connection>;
   networkNodes?: Record<string, NetworkNode>;
   networkReaches?: Record<string, NetworkReach>;
+  drainage?: Record<string, import("./drainage").DrainageNetwork>;
 }
 export interface Command {
   operationId: string;
