@@ -11,7 +11,8 @@ import { populationInitialize, populationProcess, populationPublish } from "./so
 import { MapRunner } from "./mapRunner";
 import { publishSettlements } from "./societyPublication";
 import type { MapProcessContext } from "./process";
-import { generateAtlas } from "./atlasWorkflow";
+import { prepareAtlasGeneration } from "./atlasWorkflow";
+import { atlasGenerationModules } from "./atlasModules";
 import { publishGenerationProducts } from "./publication";
 import { generatedFeature } from "./mapFeatures";
 
@@ -180,12 +181,23 @@ it.each([["built"], ["built", "cultural"]])(
       spaceId: "surface",
     });
     source.numerical.terrain = state.surface;
-    const result = await generateAtlas(source, {
+    const prepared = prepareAtlasGeneration(source, {
       areaId: "area",
       domains,
       quality: "draft",
       seed: 42,
     });
+    expect(prepared.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    // Exercise the real configured workflow on the inherited fixture. Whole-world
+    // sampling is covered by society.generation.test.ts, not this publication check.
+    const result = await new MapRunner(prepared.input.configuration!, prepared.registry).run(
+      { ...state, domain: prepared.source },
+      { seed: "42", seedScope: "society-publication" }
+    );
+    result.state.publications = atlasGenerationModules.publications(
+      prepared.input,
+      result.state.domain.world
+    );
     publishGenerationProducts(result.state, "population-run", source);
     expect(result.state.domain.world.societies!.area.history).toHaveLength(1);
     expect(
@@ -196,6 +208,9 @@ it.each([["built"], ["built", "cultural"]])(
         (f) => Number(f.attributes.population) > 0
       )
     ).toBe(true);
+    expect(
+      Object.values(result.state.domain.world.entities).some((e) => e.kind === "culture")
+    ).toBe(domains.includes("cultural"));
   },
   30000
 );
