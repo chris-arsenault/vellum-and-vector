@@ -3,7 +3,7 @@ import { AttributeEditor } from "./AttributeEditor";
 import { RelationshipEditor } from "./RelationshipEditor";
 import type { AtlasFeature, World } from "./types";
 import type { EditorState } from "./useEditor";
-import { SocietyInspection } from "./SocietyInspection";
+import { SettlementSurface } from "./SettlementSurface";
 import { SocietyGroupEditor } from "./SocietyGroupEditor";
 import { SocietyWorkForm } from "./SocietyWorkForm";
 import type { PopulationGroup } from "@atlas/domain";
@@ -51,9 +51,16 @@ function FeatureInspection({
         {feature.kind} · {feature.state}
       </p>
       <h2>{feature.name}</h2>
+      {feature.kind === "settlement" && (
+        <SettlementSurface
+          world={world}
+          feature={feature}
+          areaId={editor.area.id}
+          editor={editor}
+        />
+      )}
       <GeometryTools editor={editor} feature={feature} />
       <FeatureIdentity feature={feature} world={world} />
-      <SocietyInspection world={world} feature={feature} areaId={editor.area.id} />
       <SocietyWorkForm feature={feature} editor={editor} />
       <FeatureEditor
         key={`${feature.id}:${editor.area.id}`}

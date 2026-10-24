@@ -1,7 +1,12 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import type { AtlasFeature, PopulationGroup, SocietyRegion } from "@atlas/domain";
 import { readFile } from "node:fs/promises";
 import { installGenerationFixture } from "./generationFixture";
+
+/** The legend items of a share bar on the inspection surface, by the bar's label. */
+function legend(page: Page, label: string) {
+  return page.getByRole("img", { name: label, exact: true }).locator("..").getByRole("listitem");
+}
 
 function settlementFeature(): AtlasFeature {
   return {
@@ -121,11 +126,9 @@ test("authors population groups and places a located work through the inspector"
   const box = (await canvas.boundingBox())!;
   await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
   await expect(page.locator(".right-panel h2")).toHaveText("River town");
-  await expect(page.getByText("200 settlement residents", { exact: false })).toBeVisible();
-  await expect(page.getByText("800 rural residents", { exact: false })).toBeVisible();
-  await expect(
-    page.getByText("Naming-language use: River speech 100.0%", { exact: true })
-  ).toBeVisible();
+  await expect(page.getByTitle("200 settlement residents", { exact: true })).toBeVisible();
+  await expect(page.getByTitle("800 rural residents", { exact: true })).toBeVisible();
+  await expect(legend(page, "Naming-language use")).toHaveText(["River speech 100.0%"]);
   await page.getByText("Local population history", { exact: true }).click();
   await expect(page.getByRole("cell", { name: "Settlement / 10", exact: true })).toBeVisible();
   await expect(page.getByRole("cell", { name: "Settlement / 20", exact: true })).toBeVisible();
@@ -190,23 +193,20 @@ test("inspects and edits mixed language shares without flattening the population
   const canvas = page.getByRole("application", { name: "World map canvas" });
   const box = (await canvas.boundingBox())!;
   await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
-  await expect(
-    page.getByRole("cell", {
-      name: "River speech 100.0% · Coast speech 40.0%",
-      exact: true,
-    })
-  ).toBeVisible();
+  await expect(legend(page, "Languages residents know")).toHaveText([
+    "River speech 100.0%",
+    "Coast speech 40.0%",
+  ]);
   await page.getByText("Properties & relationships", { exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Naming language", exact: true })).toHaveValue(
     "mixed"
   );
   await page.getByLabel("People in group 1", { exact: true }).fill("1200");
   await page.getByRole("button", { name: "Save feature", exact: true }).click();
-  await expect(
-    page.getByText("Naming-language use: River speech 75.0% · Coast speech 25.0%", {
-      exact: true,
-    })
-  ).toBeVisible();
+  await expect(legend(page, "Naming-language use")).toHaveText([
+    "River speech 75.0%",
+    "Coast speech 25.0%",
+  ]);
   await page.getByLabel("Know Coast speech (%)", { exact: true }).fill("60");
   await page.getByLabel("Naming use Coast speech (%)", { exact: true }).fill("40");
   await page.getByRole("button", { name: "Save feature", exact: true }).click();

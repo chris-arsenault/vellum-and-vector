@@ -1,0 +1,449 @@
+/* The inspection surface: sections, stats, meters, share bars, trends and links. */
+:root {
+  --ch-accent: #ddbe83;
+  --ch-farming: #ddbe83;
+  --ch-grazing: #9fbf7a;
+  --ch-gathering: #b58b5a;
+  --ch-fishing: #6fa8c9;
+  --ch-water: #4f8fb3;
+  --ch-fire: #e07a5f;
+  --ch-aurora: #9d8fd6;
+  --ch-pressure: #3f6f9f;
+  --ch-land: #b7a57c;
+  --ch-river: #6fa8c9;
+  --ch-sea: #3f6f9f;
+  --ch-0: #d9bb81;
+  --ch-1: #9ba995;
+  --ch-2: #c98d6c;
+  --ch-3: #7fa6a0;
+  --ch-4: #b89bd1;
+  --ch-5: #d4a5a5;
+  --ch-6: #8fb3d9;
+  --ch-7: #c9c17a;
+  --surface-line: #3d4e4a;
+  --surface-track: #243638;
+  --surface-muted: #a7b6ae;
+}
+.ch-accent {
+  --ch: var(--ch-accent);
+}
+.ch-farming {
+  --ch: var(--ch-farming);
+}
+.ch-grazing {
+  --ch: var(--ch-grazing);
+}
+.ch-gathering {
+  --ch: var(--ch-gathering);
+}
+.ch-fishing {
+  --ch: var(--ch-fishing);
+}
+.ch-water {
+  --ch: var(--ch-water);
+}
+.ch-fire {
+  --ch: var(--ch-fire);
+}
+.ch-aurora {
+  --ch: var(--ch-aurora);
+}
+.ch-pressure {
+  --ch: var(--ch-pressure);
+}
+.ch-land {
+  --ch: var(--ch-land);
+}
+.ch-river {
+  --ch: var(--ch-river);
+}
+.ch-sea {
+  --ch: var(--ch-sea);
+}
+.ch-0 {
+  --ch: var(--ch-0);
+}
+.ch-1 {
+  --ch: var(--ch-1);
+}
+.ch-2 {
+  --ch: var(--ch-2);
+}
+.ch-3 {
+  --ch: var(--ch-3);
+}
+.ch-4 {
+  --ch: var(--ch-4);
+}
+.ch-5 {
+  --ch: var(--ch-5);
+}
+.ch-6 {
+  --ch: var(--ch-6);
+}
+.ch-7 {
+  --ch: var(--ch-7);
+}
+.series-0 {
+  --ch: var(--ch-accent);
+}
+.series-1 {
+  --ch: var(--ch-1);
+}
+.series-2 {
+  --ch: var(--ch-6);
+}
+.series-3 {
+  --ch: var(--ch-2);
+}
+
+/* Surface header: the feature's kind, name and status badges. */
+.surface-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: -6px 0 12px;
+}
+.surface-section {
+  border-top: 1px solid var(--surface-line);
+  margin: 14px 0 0;
+  padding-top: 10px;
+}
+details.surface-section > summary {
+  list-style: none;
+}
+details.surface-section > summary::-webkit-details-marker {
+  display: none;
+}
+.surface-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.surface-head h3 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+  color: #b7c0af;
+}
+details.surface-section > summary.surface-head {
+  cursor: pointer;
+}
+.surface-caret {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-right: 7px;
+  border: 4px solid transparent;
+  border-left: 5px solid var(--surface-muted);
+  vertical-align: 1px;
+  transition: transform 0.1s;
+}
+details[open] > summary .surface-caret {
+  transform: rotate(90deg);
+}
+.surface-meta {
+  font-size: 11px;
+  color: var(--surface-muted);
+  text-align: right;
+}
+.surface-empty {
+  margin: 4px 0 8px;
+  font-size: 12px;
+  color: var(--surface-muted);
+}
+
+/* Stats */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 8px 10px;
+  margin: 6px 0 10px;
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 10px;
+  background: #223437;
+  border-radius: 5px;
+  min-width: 0;
+}
+.stat-value {
+  font:
+    400 19px/1.1 Georgia,
+    serif;
+  color: #f0e4c9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stat-label {
+  font-size: 10px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--surface-muted);
+}
+
+/* Badges */
+.badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  border: 1px solid #4b5f5a;
+  color: #cfd6c8;
+}
+.badge-good {
+  color: #bfe0a6;
+  border-color: #6f9460;
+}
+.badge-warn {
+  color: #f1d9a0;
+  border-color: #a68a4e;
+}
+.badge-bad {
+  color: #f2a899;
+  border-color: #a5635a;
+}
+.badge-accent {
+  color: #1d2c2c;
+  background: #ddbe83;
+  border-color: #ddbe83;
+}
+
+/* Meters */
+.meter {
+  margin: 6px 0 10px;
+}
+.meter-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: #c6cfc4;
+  margin-bottom: 4px;
+}
+.meter-text {
+  font-variant-numeric: tabular-nums;
+  color: #ece8d7;
+}
+.meter-track {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-track);
+  overflow: hidden;
+}
+.meter-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--w);
+  background: var(--ch);
+  border-radius: 3px;
+  transition: width 0.2s;
+}
+.meter-near .meter-fill,
+.meter-fill.meter-near {
+  background: #f1d9a0;
+}
+.meter-fill.meter-over {
+  background: #e07a5f;
+}
+
+/* Share bars and legends */
+.share {
+  margin: 6px 0 10px;
+}
+.share-bar {
+  position: relative;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--surface-track);
+  overflow: hidden;
+}
+.share-seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--x);
+  width: var(--w);
+  background: var(--ch);
+}
+.share-seg + .share-seg {
+  box-shadow: inset 1px 0 0 #19272a;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+  color: #c6cfc4;
+}
+.legend li,
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.legend-empty {
+  color: var(--surface-muted);
+}
+.swatch {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--ch);
+}
+
+/* Trend charts */
+.trend {
+  position: relative;
+  margin: 6px 0 10px;
+}
+.trend svg {
+  display: block;
+  width: 100%;
+  height: 56px;
+  border-bottom: 1px solid var(--surface-line);
+  overflow: visible;
+}
+.trend-max {
+  position: absolute;
+  top: -2px;
+  right: 0;
+  padding: 0 0 0 4px;
+  font-size: 10px;
+  color: var(--surface-muted);
+  background: #1e2f31;
+}
+.trend-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--surface-muted);
+  margin-top: 3px;
+}
+.series-area {
+  fill: var(--ch);
+  fill-opacity: 0.18;
+  stroke: none;
+}
+.series-line {
+  fill: none;
+  stroke: var(--ch);
+  stroke-width: 1.5px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.series-mark {
+  stroke: var(--ch);
+  stroke-width: 2px;
+}
+
+/* Link lists: rows that select related features. */
+.link-list {
+  list-style: none;
+  margin: 4px 0 8px;
+  padding: 0;
+}
+.surface-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  margin: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  text-align: left;
+  font-size: 12px;
+}
+.surface-link:hover:not(:disabled) {
+  background: #2b3c3e;
+}
+.surface-link:disabled {
+  opacity: 1;
+  color: #c6cfc4;
+}
+.surface-link-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.surface-link-meta {
+  flex: none;
+  font-size: 11px;
+  color: var(--surface-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A population group: its weight, practices and languages as one card. */
+.group-card {
+  padding: 8px 10px 2px;
+  margin: 6px 0 10px;
+  background: #223437;
+  border-radius: 5px;
+}
+.group-card .meter {
+  margin-top: 0;
+}
+.group-card .share {
+  margin-bottom: 8px;
+}
+
+/* Facts */
+.facts {
+  display: block;
+  margin: 4px 0 8px;
+  font-size: 12px;
+}
+.facts > div {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 8px;
+  padding: 3px 0;
+}
+.facts dt {
+  color: var(--surface-muted);
+}
+.facts dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Compact tables inside a section. */
+.surface-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.surface-table th,
+.surface-table td {
+  padding: 3px 6px 3px 0;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid #2c3d3c;
+}
+.surface-table th {
+  font-weight: 600;
+  color: var(--surface-muted);
+}
