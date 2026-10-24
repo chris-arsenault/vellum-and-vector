@@ -8,6 +8,9 @@ import {
   resolveGenerationFeatures,
   applyCartographicSelection,
   defaultWorldDimensions,
+  mapBoundaryName,
+  migrateBoundarySelection,
+  inheritMapBoundary,
   type FeatureSelection,
   type GenerationRecipe,
 } from "@atlas/generation";
@@ -66,7 +69,8 @@ export function newGenerationDraft(): GenerationDraft {
 
 /** Import compatibility once; subsequent edits belong to feature selections. */
 export function normalizeGenerationRecipe(value: unknown): GenerationRecipe {
-  const recipe = generationRecipeSchema.parse(value);
+  const parsed = generationRecipeSchema.parse(value);
+  const recipe = { ...parsed, features: migrateBoundarySelection(parsed.features) };
   const legacy = atlasGenerationModules.prepareSettings(recipe.features ?? {}, recipe.settings);
   // Preserve selection intent while domains gate the prepared request separately.
   const domains = [...new Set(atlasFeatureDefinitions.flatMap((feature) => feature.domains))];
@@ -148,14 +152,24 @@ export function prepareDraft(draft: GenerationDraft, source?: DomainSnapshot, ar
   const snapshot = source
     ? { ...source, scope: worldScope(source.world, areaId ?? source.scope.areaId) }
     : draftWorldSnapshot(draft);
-  return prepareAtlasGeneration(snapshot, { ...recipe, areaId: areaId ?? snapshot.scope.areaId });
+  const input = { ...recipe, areaId: areaId ?? snapshot.scope.areaId };
+  return prepareAtlasGeneration(
+    snapshot,
+    source ? inheritMapBoundary(snapshot, input, true) : input
+  );
 }
 /** Blank creation installs valid world data without composing a generation request. */
 export function draftWorldSnapshot(draft: GenerationDraft) {
   const recipe = normalizeGenerationRecipe(draft.recipe);
   requireThat(draft.worldId, "draft_identity", "Normalize the world draft before creating it.");
   return createWorldSnapshot(
-    { ...draft, name: draft.name || "New world", seed: recipe.seed, settings: recipe.settings },
+    {
+      ...draft,
+      name: draft.name || "New world",
+      seed: recipe.seed,
+      settings: recipe.settings,
+      boundaryMode: mapBoundaryName(recipe.parameters.mapBoundary),
+    },
     draft.worldId
   );
 }

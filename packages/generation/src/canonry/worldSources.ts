@@ -1,4 +1,4 @@
-import type { PhysicalMesh } from "./mesh";
+import { meshDeltaX, type PhysicalMesh } from "./mesh";
 import { hashUnit } from "./noise";
 
 export interface WorldCandidate {
@@ -20,11 +20,24 @@ export function worldCandidates(mesh: PhysicalMesh, seed: number, count: number)
   }));
 }
 
-export function separatedCandidates(candidates: WorldCandidate[], count: number, spacing: number) {
+export function separatedCandidates(
+  candidates: WorldCandidate[],
+  count: number,
+  spacing: number,
+  mesh?: PhysicalMesh
+) {
   const selected: WorldCandidate[] = [];
   for (const candidate of candidates) {
     if (selected.length >= count) break;
-    if (selected.every((p) => Math.hypot(p.x - candidate.x, p.y - candidate.y) >= spacing))
+    if (
+      selected.every(
+        (p) =>
+          Math.hypot(
+            mesh ? meshDeltaX(mesh, p.x - candidate.x) : p.x - candidate.x,
+            p.y - candidate.y
+          ) >= spacing
+      )
+    )
       selected.push(candidate);
   }
   return selected;

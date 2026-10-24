@@ -2,6 +2,7 @@ import type { PhysicalField } from "./field";
 import { physicalSampler } from "./physicalMetric";
 import { spatial } from "@atlas/domain";
 import type { Geometry } from "geojson";
+import { meshDeltaX, meshPointX } from "./mesh";
 
 type Coordinate = [number, number];
 type Station = { point: Coordinate; segment: number; fraction: number };
@@ -51,7 +52,10 @@ function relax(map: PhysicalField, paths: RiverPaths) {
       bordersWater(map, i)
     )
       continue;
-    const dx = (x[previous] + x[next] + 2 * x[i]) / 4 - map.mesh.x[i],
+    const dx =
+        x[i] +
+        (meshDeltaX(map.mesh, x[previous] - x[i]) + meshDeltaX(map.mesh, x[next] - x[i])) / 4 -
+        map.mesh.x[i],
       dy = (y[previous] + y[next] + 2 * y[i]) / 4 - map.mesh.y[i];
     // The centroid-to-edge distance is h/2. Keep the point strictly inside its cell.
     const factor = map.mesh.topology
@@ -100,17 +104,17 @@ function tangent(map: PhysicalField, paths: RiverPaths, i: number): Coordinate {
         : map.FlowTargets[i];
   const a = position(paths, previous < 0 ? i : previous),
     b = position(paths, next < 0 ? i : next);
-  return [b[0] - a[0], b[1] - a[1]];
+  return [meshDeltaX(map.mesh, b[0] - a[0]), b[1] - a[1]];
 }
 
 /** Clip a handle to the convex union of the two adjacent triangular drainage cells. */
 function corridorHandle(map: PhysicalField, i: number, j: number, a: Coordinate, d: Coordinate) {
-  const dx = map.mesh.x[j] - map.mesh.x[i],
+  const dx = meshDeltaX(map.mesh, map.mesh.x[j] - map.mesh.x[i]),
     dy = map.mesh.y[j] - map.mesh.y[i],
     h = Math.hypot(dx, dy),
     ex = dx / h,
     ey = dy / h;
-  const x = a[0] - (map.mesh.x[i] + map.mesh.x[j]) / 2,
+  const x = a[0] - (map.mesh.x[i] + dx / 2),
     y = a[1] - (map.mesh.y[i] + map.mesh.y[j]) / 2;
   const u = (x * ex + y * ey) / (1.5 * h),
     v = (-x * ey + y * ex) / ((Math.sqrt(3) * h) / 2),
@@ -128,7 +132,8 @@ function handle(map: PhysicalField, paths: RiverPaths, i: number, j: number, end
   const source = position(paths, i),
     target = position(paths, j),
     direction = tangent(map, paths, end ? j : i),
-    chord: Coordinate = [target[0] - source[0], target[1] - source[1]];
+    chord: Coordinate = [meshDeltaX(map.mesh, target[0] - source[0]), target[1] - source[1]];
+  target[0] = source[0] + chord[0];
   // A joining tributary must not turn upstream to borrow the main stem's tangent.
   const vector = direction[0] * chord[0] + direction[1] * chord[1] > 0 ? direction : chord;
   const scale = (Math.hypot(...chord) / (3 * Math.hypot(...vector))) * (end ? -1 : 1);
@@ -350,7 +355,7 @@ function receivingWater(map: PhysicalField, paths: RiverPaths, last: number) {
   if (shape) {
     const covers = spatial.pointCoverage(shape);
     return (x: number, y: number) =>
-      covers({ x: x + map.mesh.origin[0], y: y + map.mesh.origin[1], z: 0 });
+      covers({ x: meshPointX(map.mesh, x) + map.mesh.origin[0], y: y + map.mesh.origin[1], z: 0 });
   }
   const level = map.WaterSurfaceElevations[last];
   return (x: number, y: number) => Number.isFinite(level) && paths.elevationAt!(x, y) < level;
@@ -366,17 +371,18 @@ export function riverPath(map: PhysicalField, paths: RiverPaths, members: number
       appendAdaptiveSegment(map, paths, i, j, segment, stations);
       continue;
     }
+    const a = position(paths, i),
+      d = position(paths, j);
+    d[0] = a[0] + meshDeltaX(map.mesh, d[0] - a[0]);
+    const offset = stations.at(-1)!.point[0] - a[0],
+      start = stations.length;
     appendCurve(
-      [
-        position(paths, i),
-        handle(map, paths, i, j, false),
-        handle(map, paths, i, j, true),
-        position(paths, j),
-      ],
+      [a, handle(map, paths, i, j, false), handle(map, paths, i, j, true), d],
       segment,
       Math.min(100, map.mesh.spacing / 64),
       stations
     );
+    for (let n = start; n < stations.length; n++) stations[n].point[0] += offset;
   }
   stations = clipReceivingWater(map, paths, members, stations);
   return {

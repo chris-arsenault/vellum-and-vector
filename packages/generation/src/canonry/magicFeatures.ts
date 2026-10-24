@@ -3,7 +3,7 @@ import type { GenerationState } from "../process";
 import type { MagicField } from "./magicState";
 import { magicKey } from "./magicState";
 import { classifyNaturalSurface } from "./naturalSurface";
-import { unitNoise, hashUnit } from "./noise";
+import { meshUnitNoise as unitNoise, hashUnit } from "./noise";
 import { projectedValues } from "./atlasSampling";
 import {
   magicChannels,
@@ -62,6 +62,7 @@ function conditionReader(
   if (key === "noise")
     return (i: number) =>
       unitNoise(
+        map.mesh,
         map.mesh.x[i],
         map.mesh.y[i],
         test.salt ?? 0x621d,

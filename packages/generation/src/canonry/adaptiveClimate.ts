@@ -1,3 +1,4 @@
+import { meshDeltaX } from "./mesh";
 import type { GenerationState, MapProcess } from "../process";
 import type { PhysicalContext } from "./context";
 import { refineWorkspace, remeshInvalidations, type SamplingSupport } from "./adaptiveWorkspace";
@@ -76,7 +77,7 @@ function iceSupport(state: GenerationState) {
     const stations = Math.max(1, Math.ceil(physicalDistance(mesh, i, j) / size));
     for (let n = 0; n <= stations; n++)
       supports.push({
-        x: mesh.x[i] + mesh.origin[0] + ((mesh.x[j] - mesh.x[i]) * n) / stations,
+        x: mesh.x[i] + mesh.origin[0] + (meshDeltaX(mesh, mesh.x[j] - mesh.x[i]) * n) / stations,
         y: mesh.y[i] + mesh.origin[1] + ((mesh.y[j] - mesh.y[i]) * n) / stations,
         radius: size,
         size,

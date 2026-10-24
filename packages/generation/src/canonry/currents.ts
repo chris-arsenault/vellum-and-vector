@@ -2,7 +2,7 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, round, toUnits, truncate } from "./math";
-import { unitNoise } from "./noise";
+import { meshUnitNoise as unitNoise } from "./noise";
 import { prepareMetricSmoother } from "./metricSmoothing";
 import { physicalDistance } from "./physicalMetric";
 import { gyreDirections, intensifyWesternBoundaries, seaSurfaceAnomaly } from "./oceanGyres";
@@ -53,6 +53,7 @@ function measureStrength(map: PhysicalField, c: PhysicalContext) {
     );
     const broad = round(
       unitNoise(
+        map.mesh,
         map.mesh.x[i],
         map.mesh.y[i],
         c.Seed ^ 0x19af,

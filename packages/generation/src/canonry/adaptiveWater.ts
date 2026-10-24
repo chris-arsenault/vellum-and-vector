@@ -1,3 +1,4 @@
+import { meshDeltaX } from "./mesh";
 import type { GenerationState, MapProcess } from "../process";
 import { refineWorkspace, remeshInvalidations, type SamplingSupport } from "./adaptiveWorkspace";
 import { physicalFeatureSequence } from "../physicalFeatureSequence";
@@ -18,7 +19,7 @@ function valleySupport(state: GenerationState) {
       stations = Math.ceil(length / size);
     for (let n = 0; n <= stations; n++)
       supports.push({
-        x: mesh.origin[0] + mesh.x[i] + ((mesh.x[j] - mesh.x[i]) * n) / stations,
+        x: mesh.origin[0] + mesh.x[i] + (meshDeltaX(mesh, mesh.x[j] - mesh.x[i]) * n) / stations,
         y: mesh.origin[1] + mesh.y[i] + ((mesh.y[j] - mesh.y[i]) * n) / stations,
         radius: size,
         size,

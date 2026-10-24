@@ -1,17 +1,26 @@
 import type { PhysicalMesh } from "./mesh";
 import { adaptivePointSampler } from "@atlas/domain";
 import { triangleSampler } from "./triangleSampling";
+import { meshDeltaX, edgeLeadingTo } from "./mesh";
 
-export const physicalDistance = (mesh: PhysicalMesh, i: number, j: number) =>
-  Math.hypot(mesh.x[j] - mesh.x[i], mesh.y[j] - mesh.y[i]);
+export function physicalDistance(mesh: PhysicalMesh, i: number, j: number) {
+  const edge = mesh.periodic?.poles ? edgeLeadingTo(mesh, i, j) : -1;
+  return edge >= 0
+    ? mesh.edgeLength[i * mesh.stride + edge]
+    : Math.hypot(meshDeltaX(mesh, mesh.x[j] - mesh.x[i]), mesh.y[j] - mesh.y[i]);
+}
 
 export function physicalFace(mesh: PhysicalMesh, i: number, edge: number) {
   const at = i * mesh.stride + edge,
     j = mesh.neighbors[at];
-  let x = (mesh.x[i] + mesh.x[j]) / 2,
+  let x = mesh.x[i] + meshDeltaX(mesh, mesh.x[j] - mesh.x[i]) / 2,
     y = (mesh.y[i] + mesh.y[j]) / 2;
   let nx = mesh.edgeX[at],
     ny = mesh.edgeY[at];
+  if (mesh.periodic?.poles) {
+    x = mesh.x[i] + (nx * mesh.edgeLength[at]) / 2;
+    y = mesh.y[i] + (ny * mesh.edgeLength[at]) / 2;
+  }
   if (mesh.topology) {
     const leaf = mesh.cellToLeaf[i],
       source = mesh.topology.offsets[leaf] + edge;
@@ -43,8 +52,10 @@ export function physicalGradients(mesh: PhysicalMesh, values: ArrayLike<number>)
       const at = i * mesh.stride + edge,
         j = mesh.neighbors[at];
       if (j < 0) continue;
-      const dx = mesh.x[j] - mesh.x[i],
-        dy = mesh.y[j] - mesh.y[i];
+      const dx = mesh.periodic?.poles
+          ? mesh.edgeX[at] * mesh.edgeLength[at]
+          : meshDeltaX(mesh, mesh.x[j] - mesh.x[i]),
+        dy = mesh.periodic?.poles ? mesh.edgeY[at] * mesh.edgeLength[at] : mesh.y[j] - mesh.y[i];
       const weight = mesh.faceLength[at] / mesh.edgeLength[at] ** 2;
       const delta = values[j] - values[i];
       xx += weight * dx * dx;

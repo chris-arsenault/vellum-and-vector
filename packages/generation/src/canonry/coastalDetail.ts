@@ -3,7 +3,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
 import { clamp, elevationLimit, units } from "./math";
-import { fractalNoise } from "./noise";
+import { meshNoise as fractalNoise } from "./noise";
 import { rebuild } from "./surface";
 
 function character(p: PhysicalProfile, margin: number) {
@@ -31,9 +31,9 @@ function coastalNoise(
   const x = map.mesh.x[i],
     y = map.mesh.y[i],
     scale = Math.max(1, ch.scale * 1.7);
-  const wx = fractalNoise(x, y, c.Seed ^ 0x51a3, scale, 3) * ch.warp;
-  const wy = fractalNoise(x + 917_000, y - 431_000, c.Seed ^ 0x51a3, scale, 3) * ch.warp;
-  const value = fractalNoise(x + wx, y + wy, c.Seed ^ 0x7c4b, ch.scale, ch.octaves);
+  const wx = fractalNoise(map.mesh, x, y, c.Seed ^ 0x51a3, scale, 3) * ch.warp;
+  const wy = fractalNoise(map.mesh, x + 917_000, y - 431_000, c.Seed ^ 0x51a3, scale, 3) * ch.warp;
+  const value = fractalNoise(map.mesh, x + wx, y + wy, c.Seed ^ 0x7c4b, ch.scale, ch.octaves);
   return ch.ridged ? 2 * Math.abs(value) - 1 : value;
 }
 export function coastalDetail(map: PhysicalField, c: PhysicalContext) {

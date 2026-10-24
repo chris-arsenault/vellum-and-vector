@@ -28,6 +28,7 @@ import type { PhysicalProfile } from "./profile";
 import { units } from "./math";
 import { inheritedNativeFacts } from "./inheritedFacts";
 import type { AtlasParameters } from "../atlasParameters";
+import { mapBoundaryValue } from "../atlasParameters";
 
 export interface AtlasPhysicalWorkspace {
   magic?: import("./magicState").MagicWorkspace;
@@ -184,6 +185,8 @@ export function createAtlasWorkspace(
   const profile = continentalWorldProfile(atlasPhysicalProfile(parameters, overrides), frame);
   profile.WorldExtentY = [frame[1], frame[3]];
   profile.WorldExtentX = [frame[0], frame[2]];
+  profile.MapBoundary = mapBoundaryValue(state.domain.world.reference.boundaryMode);
+  profile.WrapLongitude = Number(profile.MapBoundary === 1);
   const bounds = state.surface.bounds;
   const { cellArea, cellSpan } = generationResolution(
     quality,
@@ -204,7 +207,9 @@ export function createAtlasWorkspace(
         profile.BoundaryPadding,
         (x, y) => covers({ x, y, z: 0 }),
         spatial.area(state.domain.scope.footprint),
-        [anchor.x, anchor.y]
+        [anchor.x, anchor.y],
+        profile.MapBoundary === 1,
+        profile.MapBoundary === 1 && profile.LatitudeSouth === -90 && profile.LatitudeNorth === 90
       )
     : createChildMesh(state, sampling, profile.BoundaryPadding);
   const map = createField(mesh);

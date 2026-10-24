@@ -40,6 +40,7 @@ export const referenceSchema = z.object({
   id: identifier,
   domain: geometrySchema,
   topology: z.literal("planar"),
+  boundaryMode: z.enum(["cylinder", "ocean", "none"]).default("none"),
   units: z.literal("metre"),
   axes: z.literal("east,north,up"),
   verticalDatum: identifier,

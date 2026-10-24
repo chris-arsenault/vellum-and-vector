@@ -57,6 +57,11 @@ export function numericTileSampler(raster: Raster) {
     for (let row = 0; row < size; row++)
       for (let col = 0; col < size; col++) {
         const p = { x: extent[0] + (col + 0.5) * dx, y: extent[3] - (row + 0.5) * dy, z: 0 };
+        if (raster.wrap) {
+          const [west, east] = raster.wrap,
+            width = east - west;
+          p.x = west + ((((p.x - west) % width) + width) % width);
+        }
         if (!footprint.intersectsCoordinate([p.x, p.y]) || !active(p)) continue;
         const value = valueAt(p);
         if (!Number.isFinite(value)) continue;
@@ -76,7 +81,13 @@ export function numericTileSource(
   load: (extent: number[], size: number, signal: AbortSignal) => Promise<Float32Array>,
   pixelRatio = globalThis.devicePixelRatio ?? 1
 ) {
-  const tileGrid = createXYZ({ extent: projection.getExtent(), tileSize: 256 / pixelRatio });
+  const extent = projection.getExtent(),
+    tileSize = 256 / pixelRatio;
+  const tileGrid = createXYZ({
+    extent,
+    tileSize,
+    ...(projection.canWrapX() ? { maxResolution: (extent[2] - extent[0]) / tileSize } : {}),
+  });
   return new DataTileSource({
     projection,
     tileGrid,
@@ -85,7 +96,7 @@ export function numericTileSource(
     bandCount: raster.channel === "elevation" ? terrainSampleBands + 2 : 3,
     interpolate: !categorical(raster),
     transition: 0,
-    wrapX: false,
+    wrapX: projection.canWrapX(),
     loader: (z, x, y, { signal }) => {
       const box = tileGrid.getTileCoordExtent([z, x, y]);
       const resolution = (box[2] - box[0]) / 256;

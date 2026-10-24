@@ -4,6 +4,7 @@ import type { PhysicalContext } from "./context";
 import { round, toUnits } from "./math";
 import { hashUnit } from "./noise";
 import { metricSearch } from "./metricSearch";
+import { meshDeltaX, meshPointX } from "./mesh";
 
 export interface BoundaryComponent {
   id: number;
@@ -30,7 +31,7 @@ export interface OrogenicFrame {
 }
 const active = (map: PhysicalField, i: number, minimum: number) =>
   map.TectonicBoundaryCodes[i] !== 0 && map.TectonicStrain[i] >= minimum;
-function addCell(c: BoundaryComponent, map: PhysicalField, i: number) {
+function addCell(c: BoundaryComponent, map: PhysicalField, i: number, origin: number) {
   c.count++;
   c.area += map.mesh.areas[i];
   c.collision += map.CrustCollisionIntensity[i] * map.mesh.areas[i];
@@ -39,7 +40,7 @@ function addCell(c: BoundaryComponent, map: PhysicalField, i: number) {
   c.continental += map.CrustContinentalFraction[i] * map.mesh.areas[i];
   c.maximumContinental = Math.max(c.maximumContinental, map.CrustContinentalFraction[i] / 1000);
   c.shortening += toUnits(map.ConvergentCrustSurplus[i]) * map.mesh.areas[i];
-  c.x += map.mesh.x[i] * map.mesh.areas[i];
+  c.x += (origin + meshDeltaX(map.mesh, map.mesh.x[i] - origin)) * map.mesh.areas[i];
   c.y += map.mesh.y[i] * map.mesh.areas[i];
 }
 function floodComponent(
@@ -52,7 +53,7 @@ function floodComponent(
   const queue = [start];
   for (let head = 0; head < queue.length; head++) {
     const i = queue[head];
-    addCell(component, map, i);
+    addCell(component, map, i, map.mesh.x[start]);
     for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
       const j = map.mesh.neighbors[i * map.mesh.stride + edge];
       if (
@@ -71,7 +72,7 @@ function floodComponent(
   component.suture /= component.area * 1000;
   component.strain /= component.area * 1000;
   component.continental /= component.area * 1000;
-  component.x = round(component.x / component.area);
+  component.x = meshPointX(map.mesh, round(component.x / component.area));
   component.y = round(component.y / component.area);
 }
 export function discoverComponents(
@@ -141,7 +142,10 @@ function acrossStrike(map: PhysicalField, i: number, source: number): number {
     tx = 1;
     ty = 0;
   }
-  return -(map.mesh.x[i] - map.mesh.x[source]) * ty + (map.mesh.y[i] - map.mesh.y[source]) * tx;
+  return (
+    -meshDeltaX(map.mesh, map.mesh.x[i] - map.mesh.x[source]) * ty +
+    (map.mesh.y[i] - map.mesh.y[source]) * tx
+  );
 }
 /**
  * A belt's hinterland is the side of its boundary that holds more continental mass: the

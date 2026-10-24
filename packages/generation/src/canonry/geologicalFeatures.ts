@@ -1,9 +1,30 @@
-import { point, spatial } from "@atlas/domain";
+import {
+  canonicalGeometry,
+  canonicalPosition,
+  unwrapCoordinates,
+  point,
+  spatial,
+} from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
 import { physicalSampler } from "./physicalMetric";
 
 type Event = NonNullable<GenerationState["physical"]>["map"]["events"][number];
+
+function eventDisk(
+  state: GenerationState,
+  center: import("@atlas/domain").Position,
+  radius: number
+) {
+  const disk = spatial.buffer(point(center), radius);
+  return (
+    disk &&
+    spatial.intersection(
+      canonicalGeometry(state.domain.world.reference, disk),
+      state.domain.scope.footprint
+    )
+  );
+}
 
 /**
  * Metres the rim stands above both the floor and the surrounding plain, from the current
@@ -40,9 +61,12 @@ function extractEvents(state: GenerationState, selected: { impacts: boolean; vol
   for (const event of map.events) {
     const relief = selectedEvent(state, event, selected);
     if (relief === false) continue;
-    const center = { x: x0 + event.x, y: y0 + event.y, z: 0 };
-    const disk = spatial.buffer(point(center), event.radius);
-    const shape = disk && spatial.intersection(disk, state.domain.scope.footprint);
+    const center = canonicalPosition(state.domain.world.reference, {
+      x: x0 + event.x,
+      y: y0 + event.y,
+      z: 0,
+    });
+    const shape = eventDisk(state, center, event.radius);
     if (!shape) continue;
     const kind = event.kind === "impact" ? "crater" : "volcano";
     const attributes = {
@@ -66,8 +90,7 @@ function extractEvents(state: GenerationState, selected: { impacts: boolean; vol
     locateVolcano(state, feature, center);
     putGenerated(state, feature);
     if (!event.caldera) continue;
-    const bowl = spatial.buffer(point(center), event.radius * 0.28);
-    const caldera = bowl && spatial.intersection(bowl, state.domain.scope.footprint);
+    const caldera = eventDisk(state, center, event.radius * 0.28);
     if (caldera)
       putGenerated(
         state,
@@ -109,9 +132,15 @@ function extractFaults(state: GenerationState) {
     if (fault.coordinates.length < 2) continue;
     const line = {
       type: "LineString" as const,
-      coordinates: fault.coordinates.map(([x, y]) => [x + x0, y + y0]),
+      coordinates: unwrapCoordinates(
+        fault.coordinates.map(([x, y]) => [x + x0, y + y0]),
+        map.mesh.periodic?.width
+      ),
     };
-    const shape = spatial.intersection(line, state.domain.scope.footprint);
+    const shape = spatial.intersection(
+      canonicalGeometry(state.domain.world.reference, line),
+      state.domain.scope.footprint
+    );
     if (shape)
       putGenerated(
         state,

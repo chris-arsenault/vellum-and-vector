@@ -11,6 +11,16 @@ import { requireThat } from "./errors";
 import { sameValue } from "./values";
 import { layerSupports } from "./builtinLayers";
 import { locateOnLine, lineParts } from "./lineStations";
+import { canonicalPosition, chartCopies } from "./worldBoundary";
+
+function junctionPosition(path: Path, position: Position, snapshot: DomainSnapshot, gis: Spatial) {
+  const candidates = chartCopies(snapshot.world.reference, point(position));
+  const nearest = candidates.reduce((a, b) =>
+    gis.distance(path.geometry, a) <= gis.distance(path.geometry, b) ? a : b
+  );
+  const [x, y] = (nearest as import("geojson").Point).coordinates;
+  return { ...position, x, y };
+}
 
 interface Path {
   feature: AtlasFeature;
@@ -69,13 +79,19 @@ function preserveJunctions(snapshot: DomainSnapshot, paths: Path[], ids: string[
       );
       if (incident.size < 2) continue;
       requireThat(
-        nodes[id] && gis.distance(path.geometry, point(nodes[id].position)) <= gis.precision,
+        nodes[id] &&
+          gis.distance(
+            path.geometry,
+            point(junctionPosition(path, nodes[id].position, snapshot, gis))
+          ) <= gis.precision,
         "locked_junction",
         "Keep shared network junctions anchored; move them through an explicit junction operation."
       );
       requireThat(
-        Math.abs(nodeElevation(snapshot, path, nodes[id].position) - nodes[id].position.z) <=
-          gis.precision,
+        Math.abs(
+          nodeElevation(snapshot, path, junctionPosition(path, nodes[id].position, snapshot, gis)) -
+            nodes[id].position.z
+        ) <= gis.precision,
         "locked_junction_elevation",
         "Connected junction elevations move together through an explicit junction operation."
       );
@@ -157,8 +173,9 @@ function nodeFor(
   nodes: Map<string, NetworkNode>,
   gis: Spatial
 ): NetworkNode {
-  const elevation = nodeElevation(snapshot, path, p),
-    id = nodeIdentity(path, p, elevation, snapshot, gis);
+  const elevation = nodeElevation(snapshot, path, p);
+  p = canonicalPosition(snapshot.world.reference, p);
+  const id = nodeIdentity(path, p, elevation, snapshot, gis);
   const value: NetworkNode = {
     id,
     kind: snapshot.world.networkNodes?.[id]?.kind ?? `network:${path.feature.layerId}`,

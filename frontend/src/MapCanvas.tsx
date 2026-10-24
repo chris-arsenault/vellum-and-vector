@@ -7,6 +7,7 @@ import type { RasterPresentation } from "./types";
 import { installMapTools, type MapEvents } from "./mapInteractions";
 import { toolInstruction } from "./cartography";
 import { useGenerationPreview } from "./useAtlas";
+import { canonicalPosition } from "@atlas/domain";
 interface Props {
   world: World;
   area: Area;
@@ -154,7 +155,14 @@ function observeMap(
   coordinates: import("react").RefObject<HTMLOutputElement | null>,
   callbacks: import("react").RefObject<MapEvents>
 ) {
-  engine.map.on("pointermove", (event) => showCoordinates(coordinates.current, event.coordinate));
+  engine.map.on("pointermove", (event) => {
+    const p = canonicalPosition(engine.reference, {
+      x: event.coordinate[0],
+      y: event.coordinate[1],
+      z: 0,
+    });
+    showCoordinates(coordinates.current, [p.x, p.y]);
+  });
   engine.map.on("moveend", () => reportViewport(engine, callbacks.current));
   const busy = () => target.current?.setAttribute("aria-busy", "true");
   engine.map.on("loadstart", busy);

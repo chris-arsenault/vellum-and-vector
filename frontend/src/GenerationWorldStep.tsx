@@ -2,6 +2,8 @@ import type { GenerationRecipe } from "@atlas/generation";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 import { NumberField } from "./WorkflowFields";
 import { GenerationResolution } from "./GenerationResolution";
+import { setFeatureSetting } from "./generationDraft";
+import { mapBoundaryValue } from "@atlas/generation";
 
 export function GenerationWorldStep({ flow }: { flow: GenerationWorkflow }) {
   const { draft, change } = flow;
@@ -50,6 +52,7 @@ export function GenerationWorldStep({ flow }: { flow: GenerationWorkflow }) {
             })
           }
         />
+        <BoundaryChoice flow={flow} />
         <NumberField
           label="Generation seed"
           fieldKey="world.seed"
@@ -59,8 +62,8 @@ export function GenerationWorldStep({ flow }: { flow: GenerationWorkflow }) {
         />
       </div>
       <p className="hint">
-        Planar metres. Detail controls spatial sampling, separately from the geography you choose
-        next.
+        Cylinder joins the east and west edges. Pole-to-pole coverage closes the polar caps. Nothing
+        leaves all edges open. Ocean surrounded is deferred.
       </p>
       {flow.approach === "procedural" && (
         <p className="brief-next">
@@ -68,6 +71,42 @@ export function GenerationWorldStep({ flow }: { flow: GenerationWorkflow }) {
         </p>
       )}
     </>
+  );
+}
+function BoundaryChoice({ flow }: { flow: GenerationWorkflow }) {
+  const { draft, change } = flow,
+    source = flow.options.source;
+  const value = source
+    ? mapBoundaryValue(source.world.reference.boundaryMode)
+    : Number(
+        draft.recipe.features?.["physical.foundation"]?.settings?.mapBoundary ??
+          draft.recipe.parameters.mapBoundary
+      );
+  return (
+    <label>
+      Map boundary
+      <select
+        aria-label="Map boundary"
+        disabled={Boolean(source)}
+        value={value}
+        onChange={(event) =>
+          change(
+            setFeatureSetting(
+              draft,
+              "physical.foundation",
+              "mapBoundary",
+              Number(event.target.value)
+            )
+          )
+        }
+      >
+        <option value={1}>Cylinder</option>
+        <option value={2} disabled>
+          Ocean surrounded (coming later)
+        </option>
+        <option value={0}>Nothing</option>
+      </select>
+    </label>
   );
 }
 function StartingApproach({ flow }: { flow: GenerationWorkflow }) {

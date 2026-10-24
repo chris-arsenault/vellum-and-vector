@@ -1,3 +1,4 @@
+import { meshDeltaX } from "./mesh";
 // RiverChannelGeometryLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
@@ -12,7 +13,7 @@ function normalize(x: number, y: number): [number, number] {
 }
 function direction(map: PhysicalField, source: number, target: number): [number, number] {
   return normalize(
-    Math.fround(map.mesh.x[target] - map.mesh.x[source]),
+    Math.fround(meshDeltaX(map.mesh, map.mesh.x[target] - map.mesh.x[source])),
     Math.fround(map.mesh.y[target] - map.mesh.y[source])
   );
 }

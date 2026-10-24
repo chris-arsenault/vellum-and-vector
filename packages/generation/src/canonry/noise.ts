@@ -1,5 +1,6 @@
 // Canonry PhysicalNoise.cs, commit 0f62584c114863ffadeb5e29e021f5fce6b37a61.
 import { lerp } from "./math";
+import type { PhysicalMesh } from "./mesh";
 
 const goldenAngle = Number("2.39996322972865332");
 const rotationCos = Math.cos(goldenAngle);
@@ -83,3 +84,66 @@ export function fractalNoise(
 }
 export const unitNoise = (x: number, y: number, salt: number, scale: number, octaves: number) =>
   (fractalNoise(x, y, salt, scale, octaves) + 1) * 0.5;
+
+/** Blend translated noise charts with matching endpoint derivatives at the world seam. */
+export function meshNoise(
+  mesh: PhysicalMesh,
+  x: number,
+  y: number,
+  salt: number,
+  scale: number,
+  octaves: number
+) {
+  const width = mesh.periodic?.width;
+  if (!width) return fractalNoise(x, y, salt, scale, octaves);
+  if (mesh.periodic?.poles) {
+    const height = mesh.bounds[3] - mesh.bounds[1],
+      radius = Math.sqrt((width * height) / (4 * Math.PI));
+    const latitude = Math.PI * Math.max(-0.5, Math.min(0.5, y / height));
+    const angle = (x * 2 * Math.PI) / width,
+      ring = radius * Math.cos(latitude),
+      z = radius * Math.sin(latitude);
+    return (
+      (fractalNoise(ring * Math.cos(angle), z, salt, scale, octaves) +
+        fractalNoise(ring * Math.sin(angle), z, salt ^ 0x7d31, scale, octaves)) /
+      2
+    );
+  }
+  const phase = ((x % width) + width) % width,
+    t = phase / width;
+  return lerp(
+    fractalNoise(phase, y, salt, scale, octaves),
+    fractalNoise(phase - width, y, salt, scale, octaves),
+    t * t * (3 - 2 * t)
+  );
+}
+export const meshUnitNoise = (
+  mesh: PhysicalMesh,
+  x: number,
+  y: number,
+  salt: number,
+  scale: number,
+  octaves: number
+) => (meshNoise(mesh, x, y, salt, scale, octaves) + 1) * 0.5;
+
+/** World-space callers retain the same phase as the local full-world chart. */
+export function meshWorldNoise(
+  mesh: PhysicalMesh,
+  x: number,
+  y: number,
+  salt: number,
+  scale: number,
+  octaves: number
+) {
+  return mesh.periodic
+    ? meshNoise(mesh, x - mesh.origin[0], y - mesh.origin[1], salt, scale, octaves)
+    : fractalNoise(x, y, salt, scale, octaves);
+}
+export const meshWorldUnitNoise = (
+  mesh: PhysicalMesh,
+  x: number,
+  y: number,
+  salt: number,
+  scale: number,
+  octaves: number
+) => (meshWorldNoise(mesh, x, y, salt, scale, octaves) + 1) * 0.5;

@@ -1,8 +1,9 @@
+import { meshDeltaX } from "./mesh";
 import type { PhysicalField } from "./field";
 import { ecologicalFront } from "./ecologyMovement";
 import { plantGroups, livingPlantCarbon } from "./ecologyGroups";
 import { environment, unit, windStrength, type EcologyForcing } from "./ecologyEnvironment";
-import { unitNoise } from "./noise";
+import { meshWorldUnitNoise as unitNoise } from "./noise";
 
 /**
  * Floods along floodplains and deltas, more often where the seasons and runoff
@@ -55,6 +56,7 @@ function ignition(
 ) {
   const env = environment(map, i, f);
   const noise = unitNoise(
+    map.mesh,
     map.mesh.x[i] + map.mesh.origin[0],
     map.mesh.y[i] + map.mesh.origin[1],
     seed,
@@ -71,7 +73,7 @@ function fireTravel(map: PhysicalField, fuel: Float64Array, i: number, edge: num
   const distance = map.mesh.edgeLength[i * map.mesh.stride + edge];
   const wetness = environment(map, j).wetness;
   const wind =
-    (((map.mesh.x[j] - map.mesh.x[i]) * map.WindX[i] +
+    ((meshDeltaX(map.mesh, map.mesh.x[j] - map.mesh.x[i]) * map.WindX[i] +
       (map.mesh.y[j] - map.mesh.y[i]) * map.WindY[i]) /
       Math.max(1, distance * 1000)) *
     windStrength(map, i);

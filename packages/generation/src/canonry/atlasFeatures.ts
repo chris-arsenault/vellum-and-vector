@@ -1,4 +1,11 @@
-import { interpolateProfile, point, spatial, type DrainageReach } from "@atlas/domain";
+import {
+  chartCopies,
+  unwrapCoordinates,
+  interpolateProfile,
+  point,
+  spatial,
+  type DrainageReach,
+} from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { GenerationState, MapProcessContext } from "../process";
 import { generatedFeature, putGeneratedNetwork } from "../mapFeatures";
@@ -43,9 +50,36 @@ function publishReach(
   if (members.length < 2) return [];
   const work = state.physical!,
     map = work.map,
-    footprint = state.domain.scope.footprint,
     ids: string[] = [];
   const { geometry, profiles } = riverPath(map, paths, members);
+  for (const copy of chartCopies(state.domain.world.reference, geometry)) {
+    ids.push(
+      ...publishReachCopy(
+        state,
+        start,
+        members,
+        copy as typeof geometry,
+        profiles,
+        basinDischarge,
+        ids.length
+      )
+    );
+  }
+  return ids;
+}
+function publishReachCopy(
+  state: GenerationState,
+  start: number,
+  members: number[],
+  geometry: ReturnType<typeof riverPath>["geometry"],
+  profiles: ReturnType<typeof riverPath>["profiles"],
+  basinDischarge: number,
+  offset: number
+) {
+  const work = state.physical!,
+    map = work.map,
+    footprint = state.domain.scope.footprint,
+    ids: string[] = [];
   if (!spatial.intersects(geometry, footprint)) return ids;
   const area = state.domain.world.areas[state.domain.scope.areaId];
   if (area.boundary && spatial.crossings(geometry, footprint).length) return ids;
@@ -70,7 +104,7 @@ function publishReach(
     const discharges = attributes.discharges;
     const feature = generatedFeature(
       state,
-      `river:${coordinateKey(source.x, source.y)}:${coordinateKey(outlet.x, outlet.y)}:${part}`,
+      `river:${coordinateKey(source.x, source.y)}:${coordinateKey(outlet.x, outlet.y)}:${part + offset}`,
       `River ${Math.round(source.x / 1000)} ${Math.round(source.y / 1000)}`,
       "river",
       "rivers",
@@ -105,10 +139,13 @@ function drainageReaches(state: GenerationState, incoming: Int32Array) {
         waterBody: map.WaterKindCodes[mouth] !== 0 ? map.WaterBodyIds[mouth] : null,
         order: map.RiverOrders[i],
         basin: map.DrainageBasinIds[i],
-        coordinates: members.map((j) => {
-          const p = nativePosition(work, j);
-          return [Math.round(p.x), Math.round(p.y)];
-        }),
+        coordinates: unwrapCoordinates(
+          members.map((j) => {
+            const p = nativePosition(work, j);
+            return [Math.round(p.x), Math.round(p.y)] as [number, number];
+          }),
+          map.mesh.periodic?.width
+        ) as [number, number][],
         discharges: members.map((j) => map.FlowAccumulation[j]),
         catchmentAreas: members.map((j) => map.CatchmentArea[j]),
         featureIds: [],

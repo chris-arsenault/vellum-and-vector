@@ -1,5 +1,5 @@
 import type { PhysicalMesh } from "./mesh";
-import { nearestTriangle } from "./mesh";
+import { nearestTriangle, meshDeltaX, meshPoint } from "./mesh";
 
 export interface TriangleSample {
   cell: number;
@@ -9,11 +9,19 @@ export interface TriangleSample {
 const rootThree = Math.sqrt(3);
 const prepared = new WeakMap<PhysicalMesh, ReturnType<typeof prepareVertices>>();
 
+function vertexKey(mesh: PhysicalMesh, v: number[]) {
+  const period = 6 * (mesh.periodic?.columns ?? 0),
+    pole = mesh.periodic?.poles;
+  if (pole && Math.abs(v[1]) === pole.rows) return `pole:${Math.sign(v[1])}`;
+  return period ? `${((v[0] % period) + period) % period}:${v[1]}` : v.join(":");
+}
+
 function prepareVertices(mesh: PhysicalMesh) {
   const vertices: number[][] = [],
     positions: [number, number][] = [],
     indexes = new Map<string, number>();
   const corners = new Int32Array(mesh.count * 3);
+  const seamMembers = new Map<string, number[]>();
   mesh.coords.forEach((p, i) => {
     const x = 3 * (p.u + p.v) + (p.inverted ? 4 : 2),
       y = -p.u + p.v,
@@ -27,13 +35,18 @@ function prepareVertices(mesh: PhysicalMesh) {
         index = indexes.get(key) ?? vertices.length;
       if (!indexes.has(key)) {
         indexes.set(key, index);
-        vertices.push([]);
+        const equivalent = vertexKey(mesh, v);
+        const members = seamMembers.get(equivalent) ?? [];
+        seamMembers.set(equivalent, members);
+        vertices.push(members);
         positions.push([
           (v[0] * mesh.spacing) / 2 + mesh.latticeOffset[0] + mesh.origin[0],
-          (v[1] * rootThree * mesh.spacing) / 2 + mesh.latticeOffset[1] + mesh.origin[1],
+          (v[1] * rootThree * (mesh.periodic?.poles?.spacingY ?? mesh.spacing)) / 2 +
+            mesh.latticeOffset[1] +
+            mesh.origin[1],
         ]);
       }
-      vertices[index].push(i);
+      if (!vertices[index].includes(i)) vertices[index].push(i);
       corners[i * 3 + corner] = index;
     });
   });
@@ -49,11 +62,12 @@ function vertexSupport(mesh: PhysicalMesh) {
 }
 /** Piecewise linear fans share vertex averages across faces. Centre samples are exact. */
 function locate(mesh: PhysicalMesh, x: number, y: number) {
+  [x, y] = meshPoint(mesh, x, y);
   const cell = nearestTriangle(mesh, x, y);
   if (cell < 0) return { cell, barycentric: [0, 0, 0], minimum: 0 };
   const sign = mesh.coords[cell].inverted ? -1 : 1,
-    dx = ((x - mesh.x[cell]) / mesh.spacing) * sign,
-    dy = (y - mesh.y[cell]) / mesh.spacing;
+    dx = (meshDeltaX(mesh, x - mesh.x[cell]) / mesh.spacing) * sign,
+    dy = (y - mesh.y[cell]) / (mesh.periodic?.poles?.spacingY ?? mesh.spacing);
   const barycentric = [
     (1 - 2 * dx) / 3,
     (1 + dx) / 3 - dy / rootThree,
@@ -166,7 +180,9 @@ export function* triangleBoundary(
   for (const cell of cells) {
     for (let corner = 0; corner < 3; corner++) {
       const neighbor = faceNeighbor(mesh, cell, (corner + 2) % 3);
-      if (neighbor !== cell && cells.has(neighbor)) continue;
+      const acrossChart =
+        mesh.periodic && Math.abs(mesh.x[neighbor] - mesh.x[cell]) > 2 * mesh.spacing;
+      if (neighbor !== cell && cells.has(neighbor) && !acrossChart) continue;
       const a = vertex(support.corners[cell * 3 + corner]),
         b = vertex(support.corners[cell * 3 + ((corner + 1) % 3)]),
         middle: [number, number, number] = [

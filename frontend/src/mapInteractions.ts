@@ -4,10 +4,12 @@ import { primaryAction } from "ol/events/condition.js";
 import { fromCircle } from "ol/geom/Polygon.js";
 import Circle from "ol/geom/Circle.js";
 import Feature from "ol/Feature.js";
+import { unByKey } from "ol/Observable.js";
 import type { Geometry } from "geojson";
 import type { MapEngine } from "./mapEngine";
 import type { AtlasFeature, Position, Tool } from "./types";
 import { drawingTools } from "./cartography";
+import { canonicalGeometry, canonicalPosition, spatial, translateGeometry } from "@atlas/domain";
 
 export interface MapEvents {
   select: (feature: AtlasFeature | null) => void;
@@ -27,12 +29,18 @@ export function installMapTools(
   events: () => MapEvents,
   geometryRole: "primary" | "footprint" = "primary"
 ) {
+  const originalEvents = events;
+  events = () => canonicalEvents(engine, tool, originalEvents());
   const map = engine.map,
     active: (Draw | Modify | Select | Translate | DragBox | Snap)[] = [];
   const navigation = { space: false };
+  const editing = installCanonicalEditing(engine, tool);
   active.push(...featureTools(engine, tool, selected, events, geometryRole));
   if (tool === "extentEdit") {
-    const modify = new Modify({ source: engine.preview.getSource()! });
+    const modify = new Modify({
+      source: engine.preview.getSource()!,
+      wrapX: engine.reference.boundaryMode === "cylinder",
+    });
     modify.on("modifyend", (event) => {
       const feature = event.features.item(0),
         geometry = format.writeGeometryObject(feature.getGeometry()!) as Geometry;
@@ -69,15 +77,78 @@ export function installMapTools(
     }
   );
   map.getTargetElement()?.focus({ preventScroll: true });
+  const unlisten = installMapNavigation(engine, tool, events);
+  return () => {
+    editing();
+    keyboard();
+    unlisten();
+    map.removeInteraction(pan);
+    for (const interaction of active) map.removeInteraction(interaction);
+  };
+}
+function canonicalEvents(engine: MapEngine, tool: Tool, original: MapEvents): MapEvents {
+  const reference = engine.reference;
+  return {
+    ...original,
+    draw: (shape) => original.draw(canonicalDrawing(engine, tool, shape)),
+    extent: (shape) => original.extent(canonicalGeometry(reference, shape)),
+    modify: (feature, shape, role) =>
+      original.modify(feature, canonicalGeometry(reference, shape), role),
+    stroke: (points) => original.stroke(points.map((p) => canonicalPosition(reference, p))),
+  };
+}
+/** Recenter by whole worlds before native vertex hit-testing; the rendered view stays identical. */
+function installCanonicalEditing(engine: MapEngine, tool: Tool) {
+  if (!["reshape", "extentEdit"].includes(tool) || engine.reference.boundaryMode !== "cylinder")
+    return () => {};
+  const map = engine.map;
+  const recenter = ([x, y]: number[]) => {
+    const p = canonicalPosition(engine.reference, { x, y, z: 0 });
+    const shift = x - p.x;
+    if (shift) {
+      const view = map.getView(),
+        center = view.getCenter()!;
+      view.setCenter([center[0] - shift, center[1]]);
+      map.renderSync();
+    }
+    return [p.x, y];
+  };
+  const keys = map.on("pointermove", (event) => {
+    if (!event.dragging) event.coordinate = recenter(event.coordinate);
+  });
+  const down = (event: PointerEvent) =>
+    recenter(map.getCoordinateFromPixel(map.getEventPixel(event)));
+  const viewport = map.getViewport()!;
+  viewport.addEventListener("pointerdown", down, true);
+  return () => {
+    unByKey(keys);
+    viewport.removeEventListener("pointerdown", down, true);
+  };
+}
+function canonicalDrawing(engine: MapEngine, tool: Tool, shape: Geometry) {
+  if (tool !== "magic" && tool !== "hill") return canonicalGeometry(engine.reference, shape);
+  const [west, , east] = spatial.bounds(shape),
+    x = (west + east) / 2;
+  const center = canonicalPosition(engine.reference, { x, y: 0, z: 0 });
+  return translateGeometry(shape, center.x - x);
+}
+function installMapNavigation(engine: MapEngine, tool: Tool, events: () => MapEvents) {
+  const map = engine.map;
   const enter = map.on("dblclick", (event) => {
     if (tool !== "select") return;
+    const p = canonicalPosition(engine.reference, {
+        x: event.coordinate[0],
+        y: event.coordinate[1],
+        z: 0,
+      }),
+      coordinate = [p.x, p.y];
     const child = engine.areas
       .getSource()!
       .getFeatures()
       .find(
         (feature) =>
           feature.get("area").parentId === engine.areas.get("currentArea") &&
-          feature.getGeometry()!.intersectsCoordinate(event.coordinate)
+          feature.getGeometry()!.intersectsCoordinate(coordinate)
       );
     if (child) {
       event.preventDefault();
@@ -85,10 +156,7 @@ export function installMapTools(
     }
   });
   return () => {
-    keyboard();
     map.un("dblclick", enter.listener);
-    map.removeInteraction(pan);
-    for (const interaction of active) map.removeInteraction(interaction);
   };
 }
 function featureTools(
@@ -111,7 +179,10 @@ function featureTools(
   select.on("select", (event) => events().select(event.selected[0]?.get("domain") ?? null));
   if (["select", "reshape", "move"].includes(tool)) active.push(select);
   if (tool === "reshape") {
-    const modify = new Modify({ features: select.getFeatures() });
+    const modify = new Modify({
+      features: select.getFeatures(),
+      wrapX: engine.reference.boundaryMode === "cylinder",
+    });
     modify.on("modifyend", (event) =>
       event.features.forEach((item) => commitGeometry(item, events))
     );

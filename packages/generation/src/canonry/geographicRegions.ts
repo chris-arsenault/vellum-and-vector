@@ -10,6 +10,7 @@ import {
   fillSmallHoles,
   lakeFootprint,
   membershipContour,
+  areaGeometry,
 } from "./geographicContours";
 import { landArea, largestRegionShare, partitionRegion } from "./regionPartition";
 import { naturalPlaceGeometry, magicPlaceGeometry, type PlaceGeometry } from "./placeGeometry";
@@ -58,7 +59,7 @@ export function extractLakes(state: GenerationState) {
   }
 }
 function clipRegion(state: GenerationState, shape: Geometry | null) {
-  return shape && spatial.intersection(shape, state.domain.scope.footprint);
+  return areaGeometry(shape && spatial.intersection(shape, state.domain.scope.footprint));
 }
 function connectedMembers(
   state: GenerationState,

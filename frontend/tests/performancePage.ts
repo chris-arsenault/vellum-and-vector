@@ -14,6 +14,7 @@ import type { AtlasFeature, Raster, World, Area } from "../src/types";
 export interface PerformanceScene {
   grid: Grid;
   features: Record<string, AtlasFeature>;
+  reference?: Pick<World["reference"], "boundaryMode">;
 }
 export interface NavigationMeasurement {
   first: number;
@@ -94,10 +95,29 @@ function disposeMap(engine: ReturnType<typeof createMap>) {
   engine.map.getAllLayers().forEach((l) => l.dispose());
   engine.map.dispose();
 }
+function boundaryState(engine: ReturnType<typeof createMap>, world: World) {
+  return {
+    mode: world.reference.boundaryMode,
+    wraps: engine.map.getView().getProjection().canWrapX(),
+    vectorWraps: [...engine.featureLayers.values()].every((l) => l.getSource()!.getWrapX()),
+    center: engine.map.getView().getCenter(),
+  };
+}
+function boundaryEngine(
+  input: PerformanceScene,
+  world: World,
+  engine: ReturnType<typeof createMap>
+) {
+  const mode = input.reference?.boundaryMode ?? "none";
+  if (mode === world.reference.boundaryMode) return engine;
+  disposeMap(engine);
+  world.reference = { ...world.reference, boundaryMode: mode };
+  return createMap(document.getElementById("map")!, world.reference);
+}
 function benchmark() {
   let world = createWorld({ name: "Real Draft", seed: 104729, width: 4e6, height: 3e6 });
   let area = Object.values(world.areas)[0];
-  const engine = createMap(document.getElementById("map")!, world.reference);
+  let engine = createMap(document.getElementById("map")!, world.reference);
   const view = defaultRasterPresentation();
   let data: Raster[] = [];
   const scene = () =>
@@ -113,6 +133,7 @@ function benchmark() {
   const render = (change: () => void) => renderMap(engine, change);
   return {
     async load(input: PerformanceScene) {
+      engine = boundaryEngine(input, world, engine);
       data = loadScene(input, world, area);
       return render(() => {
         scene();
@@ -126,12 +147,11 @@ function benchmark() {
         engine.map.getView().setResolution(resolution);
       });
     },
-    sample() {
-      return sampleRaster(data.find((r) => r.channel === "elevation")!);
+    boundary() {
+      return boundaryState(engine, world);
     },
-    observe() {
-      return renderMap(engine);
-    },
+    sample: () => sampleRaster(data.find((r) => r.channel === "elevation")!),
+    observe: () => renderMap(engine),
     async refine() {
       ({ world, area } = await refineScene(world));
       data = world.fields.flatMap((f) =>

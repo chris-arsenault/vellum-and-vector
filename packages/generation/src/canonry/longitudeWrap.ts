@@ -22,9 +22,9 @@ export function wrappedEdges(map: PhysicalField, p: PhysicalProfile): [number, n
   return low <= west + tolerance && high >= east - tolerance ? [west, east] : null;
 }
 /**
- * Climate transport only: a link from a cell inside the world to a cell beyond
- * its east or west edge is redirected to the cell at the same northing on the
- * opposite edge. Terrain, plates and rivers never see these links.
+ * Compatibility for climate links on an open numerical mesh. Periodic world
+ * meshes already join terrain, plates and rivers through their own adjacency.
+ * A climate link into an exterior halo is redirected to the opposite longitude.
  */
 export function wrapLinks(
   map: PhysicalField,

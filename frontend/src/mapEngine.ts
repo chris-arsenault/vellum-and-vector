@@ -22,22 +22,23 @@ const format = new GeoJSON();
 export function createMap(target: HTMLElement, reference: World["reference"]) {
   target.tabIndex = 0;
   const extent = bounds(reference.domain);
-  const projection = new Projection({ code: reference.id, units: "m", extent });
+  const wrapX = reference.boundaryMode === "cylinder";
+  const projection = new Projection({ code: reference.id, units: "m", extent, global: wrapX });
   const rasters = new RasterSources(projection);
   const image = new LayerGroup({ properties: { title: "Base map" } });
   const overlay = new LayerGroup({
     properties: { title: "Field overlays" },
   });
   const vectors = new LayerGroup({ properties: { title: "Features" } });
-  const features = new VectorSource({ wrapX: false });
+  const features = new VectorSource({ wrapX });
   const snapFeatures = new Collection<Feature>();
   const featureLayers = new Map<string, VectorLayer>();
   const areas = new VectorLayer({
-    source: new VectorSource({ wrapX: false }),
+    source: new VectorSource({ wrapX }),
     properties: { title: "Area boundaries" },
   });
   const preview = new VectorLayer({
-    source: new VectorSource({ wrapX: false }),
+    source: new VectorSource({ wrapX }),
     style: new Style({
       stroke: new Stroke({ color: "#f8d589", width: 3, lineDash: [8, 5] }),
       fill: new Fill({ color: "#f8d58933" }),
@@ -49,6 +50,8 @@ export function createMap(target: HTMLElement, reference: World["reference"]) {
     layers: [image, overlay, vectors, areas, preview],
     view: new View({
       projection,
+      multiWorld: wrapX,
+      ...(wrapX ? { extent: [-Infinity, extent[1], Infinity, extent[3]] } : {}),
       center: [(extent[0] + extent[2]) / 2, (extent[1] + extent[3]) / 2],
       resolution: (extent[2] - extent[0]) / 800,
     }),
@@ -58,6 +61,7 @@ export function createMap(target: HTMLElement, reference: World["reference"]) {
     if (!map.getTarget()) rasters.dispose();
   });
   const engine = {
+    reference,
     map,
     rasters,
     image,
@@ -93,7 +97,7 @@ function syncVectorLayers(engine: MapEngine, world: World, styles: LayerStyle[])
     let layer = engine.featureLayers.get(style.layerId);
     if (!layer) {
       layer = new VectorLayer({
-        source: new VectorSource({ wrapX: false }),
+        source: new VectorSource({ wrapX: world.reference.boundaryMode === "cylinder" }),
         declutter: true,
         renderOrder: (a, b) =>
           settlementPriority(b.get("domain")) - settlementPriority(a.get("domain")),

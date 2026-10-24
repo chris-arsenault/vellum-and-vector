@@ -10,6 +10,8 @@ export interface TriangleCoord {
   inverted: boolean;
 }
 export interface PhysicalMesh {
+  /** Only full-width world meshes identify their east/west edges. */
+  periodic?: { width: number; columns: number; poles?: { rows: number; spacingY: number } };
   count: number;
   contentCount: number;
   contentRadius: number;
@@ -163,17 +165,18 @@ function latticeCandidate(mesh: PhysicalMesh, x: number, y: number, inverted: bo
   return mesh.indexes.get(`${a}:${b}:${Number(inverted)}`);
 }
 export function nearestTriangle(mesh: PhysicalMesh, x: number, y: number): number {
+  [x, y] = meshPoint(mesh, x, y);
   if (mesh.topology) {
     const leaf = adaptiveLeafAt(mesh.topology, x + mesh.origin[0], y + mesh.origin[1]);
     return leaf < 0 ? -1 : mesh.leafToCell[leaf];
   }
   const latticeX = (x - mesh.latticeOffset[0]) / mesh.spacing,
-    latticeY = (y - mesh.latticeOffset[1]) / mesh.spacing;
+    latticeY = (y - mesh.latticeOffset[1]) / (mesh.periodic?.poles?.spacingY ?? mesh.spacing);
   const a = latticeCandidate(mesh, latticeX, latticeY, false),
     b = latticeCandidate(mesh, latticeX, latticeY, true);
   if (a !== undefined && b !== undefined)
-    return (mesh.x[a] - x) ** 2 + (mesh.y[a] - y) ** 2 <=
-      (mesh.x[b] - x) ** 2 + (mesh.y[b] - y) ** 2
+    return meshDeltaX(mesh, mesh.x[a] - x) ** 2 + (mesh.y[a] - y) ** 2 <=
+      meshDeltaX(mesh, mesh.x[b] - x) ** 2 + (mesh.y[b] - y) ** 2
       ? a
       : b;
   // The clipped outer work boundary can omit a nearest infinite-lattice site.
@@ -197,7 +200,8 @@ function boundaryTriangle(
       for (let dv = -2; dv <= 2; dv++) {
         const candidate = mesh.indexes.get(key({ u: u + du, v: v + dv, inverted }));
         if (candidate === undefined) continue;
-        const distance = (mesh.x[candidate] - x) ** 2 + (mesh.y[candidate] - y) ** 2;
+        const distance =
+          meshDeltaX(mesh, mesh.x[candidate] - x) ** 2 + (mesh.y[candidate] - y) ** 2;
         if (distance < best) {
           best = distance;
           index = candidate;
@@ -205,6 +209,29 @@ function boundaryTriangle(
       }
   }
   return index;
+}
+/** Short east/west displacement within a periodic metre chart. */
+export function meshDeltaX(mesh: PhysicalMesh, dx: number): number {
+  const width = mesh.periodic?.width;
+  return width ? dx - Math.round(dx / width) * width : dx;
+}
+/** Canonical local easting; numerical padding remains ordinary on open meshes. */
+export function meshPointX(mesh: PhysicalMesh, x: number): number {
+  const width = mesh.periodic?.width;
+  if (!width) return x;
+  return ((((x + width / 2) % width) + width) % width) - width / 2;
+}
+/** Crossing a pole continues on the opposite meridian, retaining the flat chart. */
+export function meshPoint(mesh: PhysicalMesh, x: number, y: number): [number, number] {
+  if (mesh.periodic?.poles) {
+    const height = mesh.bounds[3] - mesh.bounds[1];
+    const band = Math.floor((y + height / 2) / height);
+    const phase = (y + height / 2) / height - band;
+    x += (band * mesh.periodic.width) / 2;
+    y = Math.abs(band % 2) ? height / 2 - phase * height : -height / 2 + phase * height;
+    if (Math.abs(Math.abs(y) - height / 2) < 1e-8) x = 0;
+  }
+  return [meshPointX(mesh, x), y];
 }
 export function edgeLeadingTo(mesh: PhysicalMesh, i: number, target: number): number {
   for (let edge = 0; edge < mesh.degree[i]; edge++)

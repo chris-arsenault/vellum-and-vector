@@ -1,0 +1,107 @@
+import type { Geometry, Position as Coordinate } from "geojson";
+import type { Position, World } from "./model";
+import { spatial } from "./spatial";
+
+export interface WorldReference {
+  id: string;
+  domain: Geometry;
+  topology: string;
+  boundaryMode?: "cylinder" | "ocean" | "none";
+  units: string;
+  axes: string;
+  verticalDatum: string;
+  version?: number;
+  precision?: number;
+}
+type Reference = World["reference"];
+export function canonicalPosition(reference: Reference, p: Position): Position {
+  if (reference.boundaryMode !== "cylinder") return p;
+  const [west, , east] = spatial.bounds(reference.domain),
+    width = east - west;
+  return { ...p, x: west + ((((p.x - west) % width) + width) % width) };
+}
+
+export function translateGeometry(geometry: Geometry, dx: number): Geometry {
+  if (geometry.type === "GeometryCollection")
+    return { ...geometry, geometries: geometry.geometries.map((g) => translateGeometry(g, dx)) };
+  const move = (value: Coordinate | Coordinate[] | Coordinate[][] | Coordinate[][][]): unknown =>
+    typeof value[0] === "number"
+      ? [(value[0] as number) + dx, ...value.slice(1)]
+      : (value as Coordinate[]).map(move);
+  return { ...geometry, coordinates: move(geometry.coordinates) } as Geometry;
+}
+
+/** Copies that intersect the authoritative chart; coordinates remain continuous before clipping. */
+export function chartCopies(reference: Reference, geometry: Geometry): Geometry[] {
+  if (reference.boundaryMode !== "cylinder") return [geometry];
+  const [west, , east] = spatial.bounds(reference.domain),
+    width = east - west;
+  const [low, , high] = spatial.bounds(geometry);
+  const first = Math.ceil((west - high) / width),
+    last = Math.floor((east - low) / width);
+  return Array.from({ length: last - first + 1 }, (_, i) =>
+    first + i === 0 ? geometry : translateGeometry(geometry, (first + i) * width)
+  );
+}
+
+function parts(geometry: Geometry, dimension: "point" | "line" | "polygon"): Geometry[] {
+  if (geometry.type === "GeometryCollection")
+    return geometry.geometries.flatMap((g) => parts(g, dimension));
+  return geometry.type.toLowerCase().includes(dimension) ? [geometry] : [];
+}
+
+/** Split geography at the chart seam, keeping all pieces under one feature identity. */
+export function canonicalGeometry(reference: Reference, geometry: Geometry): Geometry {
+  if (reference.boundaryMode !== "cylinder" || spatial.covers(reference.domain, geometry))
+    return geometry;
+  if (geometry.type === "Point") {
+    const [x, y, z = 0] = geometry.coordinates;
+    const p = canonicalPosition(reference, { x, y, z });
+    return { type: "Point", coordinates: [p.x, p.y, ...geometry.coordinates.slice(2)] };
+  }
+  return clipGeometry(reference, geometry);
+}
+function clipGeometry(reference: Reference, geometry: Geometry): Geometry {
+  const dimension = geometry.type.includes("Polygon")
+    ? "polygon"
+    : geometry.type.includes("Line")
+      ? "line"
+      : "point";
+  const shapes = chartCopies(reference, geometry).flatMap((copy) => {
+    const clipped = spatial.intersection(copy, reference.domain);
+    return clipped ? parts(clipped, dimension) : [];
+  });
+  if (!shapes.length) return geometry;
+  if (shapes.length === 1) return shapes[0];
+  if (dimension === "polygon") return spatial.unionAll(shapes)!;
+  if (dimension === "line")
+    return {
+      type: "MultiLineString",
+      coordinates: shapes.flatMap((s) =>
+        s.type === "LineString"
+          ? [s.coordinates]
+          : s.type === "MultiLineString"
+            ? s.coordinates
+            : []
+      ),
+    };
+  return {
+    type: "MultiPoint",
+    coordinates: shapes.flatMap((s) =>
+      s.type === "Point" ? [s.coordinates] : s.type === "MultiPoint" ? s.coordinates : []
+    ),
+  };
+}
+
+export function unwrapCoordinates(
+  coordinates: Coordinate[],
+  width: number | undefined
+): Coordinate[] {
+  if (!width || !coordinates.length) return coordinates;
+  const result = [coordinates[0]];
+  for (const p of coordinates.slice(1)) {
+    const previous = result.at(-1)![0];
+    result.push([p[0] - Math.round((p[0] - previous) / width) * width, ...p.slice(1)]);
+  }
+  return result;
+}

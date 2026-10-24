@@ -2,7 +2,7 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, round, truncate } from "./math";
-import { fractalNoise } from "./noise";
+import { meshNoise as fractalNoise } from "./noise";
 import { Feature } from "./codes";
 
 export function seaIce(map: PhysicalField, c: PhysicalContext) {
@@ -15,7 +15,7 @@ export function seaIce(map: PhysicalField, c: PhysicalContext) {
     map.IceThickness[i] = 0;
     ocean.push(i);
     const coherence = round(
-      fractalNoise(map.mesh.x[i], map.mesh.y[i], c.Seed, p.SeaIceVariationScale, 3) *
+      fractalNoise(map.mesh, map.mesh.x[i], map.mesh.y[i], c.Seed, p.SeaIceVariationScale, 3) *
         p.SeaIceSuitabilityVariation
     );
     const value = clamp(

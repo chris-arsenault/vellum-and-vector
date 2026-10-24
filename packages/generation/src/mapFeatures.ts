@@ -2,6 +2,7 @@ import {
   gridPosition,
   semanticId,
   spatial,
+  canonicalPosition,
   type AtlasFeature,
   type RegularGrid,
 } from "@atlas/domain";
@@ -95,7 +96,11 @@ export function putGeneratedNetwork(state: GenerationState, feature: AtlasFeatur
     semanticId(
       world.id,
       "generated-junction",
-      JSON.stringify([state.domain.scope.spaceId, p[0], p[1]])
+      JSON.stringify([
+        state.domain.scope.spaceId,
+        canonicalPosition(world.reference, { x: p[0], y: p[1], z: 0 }).x,
+        p[1],
+      ])
     )
   );
   world.networkNodes ??= {};
@@ -104,11 +109,11 @@ export function putGeneratedNetwork(state: GenerationState, feature: AtlasFeatur
     world.networkNodes[ids[index]] = {
       id: ids[index],
       kind: feature.kind,
-      position: {
+      position: canonicalPosition(world.reference, {
         x: p[0],
         y: p[1],
         z: networkHeight(feature, index, p),
-      },
+      }),
       spaceId: state.domain.scope.spaceId,
       waterLevel: null,
     };

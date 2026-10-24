@@ -33,7 +33,7 @@ function SettingField({
           onChange={(event) => change(Number(event.target.value))}
         >
           {setting.choices.map((option) => (
-            <option key={option.value} value={option.value}>
+            <option key={option.value} value={option.value} disabled={option.disabled}>
               {option.label}
             </option>
           ))}

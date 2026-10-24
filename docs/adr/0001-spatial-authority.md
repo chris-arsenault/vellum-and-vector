@@ -24,6 +24,21 @@ Local frames carry origin, rotation, scale and vertical/floor offsets, with
 invertible local/world transforms. GeoJSON interchange includes the declared
 world reference and local/vertical metadata.
 
+The world reference also declares its map boundary. Cylinder is the default for
+new worlds and identifies the chart's east and west edges. Nothing leaves edges
+open; absent metadata means Nothing for existing maps. Ocean surrounded is
+reserved and unavailable until its physical ocean rim is implemented. Cylinder
+uses reciprocal periodic physical adjacency, periodic geographic causes and
+short seam links. Pole-to-pole coverage shares polar reconstruction values and
+closes polar numerical faces. Distances and represented areas retain the existing
+metre chart approximation; they are not geodesic spherical measurements.
+
+Keep canonical features in the authoritative chart. Cut crossing geometry into
+parts while retaining its semantic identity, profiles and shared network
+junctions. The editor repeats the chart through OpenLayers and normalizes edits
+back into it. Child extents inherit world topology and retain their local parent
+interfaces rather than becoming independent wrapping worlds.
+
 Mapped areas have a geographic parent, a footprint and a creation profile:
 World, Region, Local, Site or Interior. Profiles can be skipped when the finer
 area has a valid parent context. Finer data is materialized for the requested

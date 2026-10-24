@@ -89,6 +89,7 @@ export function indexSnapshot(snapshot: DomainSnapshot): DomainSnapshot {
 }
 
 export interface WorldCreationInput {
+  boundaryMode?: World["reference"]["boundaryMode"];
   name: string;
   seed: number;
   width: number;
@@ -131,6 +132,7 @@ export function createWorldSnapshot(input: WorldCreationInput, id: string = cryp
       id: `world:${id}`,
       domain: rectangle([0, 0, input.width, input.height]),
       topology: "planar",
+      boundaryMode: input.boundaryMode ?? "none",
       units: "metre",
       axes: "east,north,up",
       verticalDatum: "Sea level",

@@ -22,7 +22,8 @@ export function atlasPhysicalProfile(
   profile.LatitudeSouth = settings.southLatitude;
   profile.LatitudeNorth = settings.northLatitude;
   profile.LatitudeProjection = settings.latitudeProjection;
-  profile.WrapLongitude = settings.wrapLongitude;
+  profile.MapBoundary = parameters.mapBoundary ?? parameters.wrapLongitude ?? settings.mapBoundary;
+  profile.WrapLongitude = Number(profile.MapBoundary === 1);
   // Rainfall sets moisture supply: how much water the air holds before belts and
   // relief decide where it falls.
   profile.PrecipitationBaseline *= settings.rainfall;

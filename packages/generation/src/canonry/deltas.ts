@@ -1,3 +1,4 @@
+import { meshDeltaX } from "./mesh";
 // DeltaFormationLayer.cs, Canonry 0f62584c. Float32 intermediates match the reference fan geometry.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
@@ -55,7 +56,7 @@ function stepDirection(
   target: number
 ): [number, number, number] {
   const f = Math.fround,
-    x = f(map.mesh.x[target] - map.mesh.x[source]),
+    x = f(meshDeltaX(map.mesh, map.mesh.x[target] - map.mesh.x[source])),
     y = f(map.mesh.y[target] - map.mesh.y[source]);
   const length = Math.max(f(0.001), f(Math.sqrt(f(f(x * x) + f(y * y)))));
   return [x, y, length];

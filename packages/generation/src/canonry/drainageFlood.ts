@@ -1,7 +1,7 @@
 // PriorityFlood.cs, Canonry 0f62584c: depression filling and preferred cheap flat corridors.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import { unitNoise, hashUnit } from "./noise";
+import { meshWorldUnitNoise as unitNoise, hashUnit } from "./noise";
 import { PriorityQueue } from "./priorityQueue";
 
 type Front = { i: number; priority: number; cost: number; tie: number };
@@ -18,6 +18,7 @@ function seedOutlets(map: PhysicalField, add: (i: number) => void) {
 function corridorResistance(map: PhysicalField, c: PhysicalContext) {
   return Float64Array.from(map.mesh.x, (x, i) => {
     const value = unitNoise(
+      map.mesh,
       x + map.mesh.origin[0],
       map.mesh.y[i] + map.mesh.origin[1],
       c.Seed ^ 0x1f7d,

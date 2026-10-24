@@ -72,7 +72,7 @@ function SettingControl({
           onChange={(event) => change(Number(event.target.value))}
         >
           {definition.choices.map((option) => (
-            <option key={option.value} value={option.value}>
+            <option key={option.value} value={option.value} disabled={option.disabled}>
               {option.label}
             </option>
           ))}

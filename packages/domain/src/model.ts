@@ -296,16 +296,7 @@ export interface World {
   seed: number;
   version: number;
   owner: string;
-  reference: {
-    id: string;
-    domain: Geometry;
-    topology: string;
-    units: string;
-    axes: string;
-    verticalDatum: string;
-    version?: number;
-    precision?: number;
-  };
+  reference: import("./worldBoundary").WorldReference;
   areas: Record<string, Area>;
   features: Record<string, AtlasFeature>;
   layers: Record<string, Layer>;

@@ -4,7 +4,7 @@ import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
 import type { BoundaryComponent, OrogenicFrame } from "./orogenicComponents";
 import { clamp } from "./math";
-import { unitNoise } from "./noise";
+import { meshUnitNoise, unitNoise } from "./noise";
 
 const gaussian = (value: number, center: number, width: number) =>
   Math.exp(-0.5 * ((value - center) / Math.max(0.001, width)) ** 2);
@@ -65,14 +65,32 @@ export function crossSection(
     ? gaussian(distance, 0, p.TransformRangeWidth) * (0.06 + continental * 0.14)
     : 0;
 }
-function alongPosition(map: PhysicalField, i: number, source: number, summit: boolean): number {
+function alongNoise(
+  map: PhysicalField,
+  i: number,
+  source: number,
+  summit: boolean,
+  pair: number,
+  seed: number,
+  scale: number
+): number {
   let tx = map.TectonicTangentX[source] / 1000,
     ty = map.TectonicTangentY[source] / 1000;
   if (Math.abs(tx) + Math.abs(ty) < 0.01) {
     tx = 1;
     if (!summit) ty = 0;
   }
-  return map.mesh.x[i] * tx + map.mesh.y[i] * ty;
+  const x = map.mesh.x[i],
+    y = map.mesh.y[i],
+    width = map.mesh.periodic?.width;
+  const offset = pair * (summit ? 310_000 : 190_000);
+  if (map.mesh.periodic?.poles) return meshUnitNoise(map.mesh, x, y, seed ^ pair, scale, 3);
+  if (!width) return unitNoise(x * tx + y * ty, offset, seed, scale, 3);
+  const phase = ((x % width) + width) % width,
+    t = phase / width;
+  const a = unitNoise(phase * tx + y * ty, offset, seed, scale, 3);
+  const b = unitNoise((phase - width) * tx + y * ty, offset, seed, scale, 3);
+  return a + (b - a) * t * t * (3 - 2 * t);
 }
 export function alongStrike(
   map: PhysicalField,
@@ -81,12 +99,14 @@ export function alongStrike(
   i: number,
   source: number
 ) {
-  const noise = unitNoise(
-    alongPosition(map, i, source, false),
-    c.pair * 190_000,
+  const noise = alongNoise(
+    map,
+    i,
+    source,
+    false,
+    c.pair,
     context.EpochStableSeed ^ 0x6c91,
-    context.Profile.OrogenicAlongStrikeScale,
-    3
+    context.Profile.OrogenicAlongStrikeScale
   );
   return 0.74 + noise ** 1.7 * 0.54;
 }
@@ -97,12 +117,14 @@ export function summitVariation(
   i: number,
   source: number
 ) {
-  const noise = unitNoise(
-    alongPosition(map, i, source, true),
-    c.pair * 310_000,
+  const noise = alongNoise(
+    map,
+    i,
+    source,
+    true,
+    c.pair,
     context.EpochStableSeed ^ 0x19d7,
-    Math.max(3, context.Profile.OrogenicAlongStrikeScale * 0.28),
-    3
+    Math.max(3, context.Profile.OrogenicAlongStrikeScale * 0.28)
   );
   return 0.72 + noise ** 2.1 * 0.68;
 }

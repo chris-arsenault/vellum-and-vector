@@ -6,14 +6,13 @@ import { buildTransportPlan } from "./transportPlan";
 import { transportHistory } from "./transportHistory";
 import { rebuild } from "./surface";
 import { physicalSampler } from "./physicalMetric";
+import { meshDeltaX, meshPoint } from "./mesh";
 
 function advectGeometry(map: PhysicalField, distance: number) {
   const vx = physicalSampler(map.mesh, map.CrustMotionX),
     vy = physicalSampler(map.mesh, map.CrustMotionY);
-  const move = (x: number, y: number): [number, number] => [
-    x + (vx(x, y) / 1000) * distance,
-    y + (vy(x, y) / 1000) * distance,
-  ];
+  const move = (x: number, y: number): [number, number] =>
+    meshPoint(map.mesh, x + (vx(x, y) / 1000) * distance, y + (vy(x, y) / 1000) * distance);
   for (const event of map.events)
     if (event.kind !== "plume") [event.x, event.y] = move(event.x, event.y);
   for (const fault of map.faults) {
@@ -21,10 +20,11 @@ function advectGeometry(map: PhysicalField, distance: number) {
     fault.coordinates.forEach((b, index) => {
       if (index === 0) return;
       const a = fault.coordinates[index - 1],
-        count = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / (map.mesh.spacing / 4));
+        dx = meshDeltaX(map.mesh, b[0] - a[0]),
+        count = Math.ceil(Math.hypot(dx, b[1] - a[1]) / (map.mesh.spacing / 4));
       for (let station = 0; station < count; station++) {
         const fraction = station / count;
-        result.push(move(a[0] + (b[0] - a[0]) * fraction, a[1] + (b[1] - a[1]) * fraction));
+        result.push(move(a[0] + dx * fraction, a[1] + (b[1] - a[1]) * fraction));
       }
     });
     if (fault.coordinates.length) result.push(move(...fault.coordinates.at(-1)!));

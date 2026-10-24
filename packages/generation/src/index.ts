@@ -10,6 +10,7 @@ export * from "./atlasPublication";
 export * from "./generationPreview";
 export * from "./resolution";
 export * from "./atlasParameters";
+export { migrateBoundarySelection, inheritMapBoundary } from "./worldBoundary";
 export * from "./processCatalogue";
 export * from "./generationSettings";
 export * from "./preflight";

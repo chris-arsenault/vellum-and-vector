@@ -15,7 +15,9 @@ export interface ProvinceSite extends Candidate {
   motionX: number;
   motionY: number;
 }
-const distance2 = (a: Candidate, b: Candidate) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
+const deltaX = (dx: number, width = 0) => (width ? dx - Math.round(dx / width) * width : dx);
+const distance2 = (a: Candidate, b: Candidate, width = 0) =>
+  deltaX(a.x - b.x, width) ** 2 + (a.y - b.y) ** 2;
 const radius2 = (a: Candidate) => a.x * a.x + a.y * a.y;
 function bestIndex(indices: number[], score: (index: number) => number): number {
   let best = indices[0],
@@ -29,25 +31,37 @@ function bestIndex(indices: number[], score: (index: number) => number): number 
   }
   return best;
 }
-function minimumDistance(sites: Candidate[], candidate: number, selected: number[]): number {
+function minimumDistance(
+  sites: Candidate[],
+  candidate: number,
+  selected: number[],
+  width = 0
+): number {
   return selected.reduce(
-    (minimum, i) => Math.min(minimum, distance2(sites[candidate], sites[i])),
+    (minimum, i) => Math.min(minimum, distance2(sites[candidate], sites[i], width)),
     Infinity
   );
 }
-function territoryAreas(sites: Candidate[], samples: Candidate[]): Float64Array {
+function territoryAreas(sites: Candidate[], samples: Candidate[], width: number): Float64Array {
   // Uniform world-space samples estimate unwarped territory area independently of the mesh.
   // Every sample has the same represented area, so counts suffice for growth budgets.
   const areas = new Float64Array(sites.length);
   for (const sample of samples) {
     let nearest = 0;
     for (let i = 1; i < sites.length; i++)
-      if (distance2(sample, sites[i]) < distance2(sample, sites[nearest])) nearest = i;
+      if (distance2(sample, sites[i], width) < distance2(sample, sites[nearest], width))
+        nearest = i;
     areas[nearest]++;
   }
   return areas;
 }
-function anchors(sites: Candidate[], count: number, areas: Float64Array, target: number): number[] {
+function anchors(
+  sites: Candidate[],
+  count: number,
+  areas: Float64Array,
+  target: number,
+  width: number
+): number[] {
   const indices = sites.map((_, i) => i);
   // Seed each requested assembly without spending its whole area budget on a large block.
   const smaller = indices.filter((i) => areas[i] <= target / count);
@@ -59,7 +73,7 @@ function anchors(sites: Candidate[], count: number, areas: Float64Array, target:
     chosen.push(
       bestIndex(
         candidates.filter((i) => !chosen.includes(i)),
-        (i) => minimumDistance(sites, i, chosen)
+        (i) => minimumDistance(sites, i, chosen, width)
       )
     );
   return chosen;
@@ -69,29 +83,32 @@ function assemblyDistance(
   selected: Int32Array,
   candidate: number,
   assembly: number,
-  competing = false
+  competing = false,
+  width = 0
 ): number {
   const indices = sites
     .map((_, i) => i)
     .filter((i) =>
       competing ? selected[i] !== 0 && selected[i] !== assembly : selected[i] === assembly
     );
-  return minimumDistance(sites, candidate, indices);
+  return minimumDistance(sites, candidate, indices, width);
 }
 function frontierSite(
   sites: Candidate[],
   selected: Int32Array,
   assembly: number,
   anchor: number,
-  direction: [number, number]
+  direction: [number, number],
+  width: number
 ): number {
   let best = -1,
     bestCost = Infinity;
   for (let candidate = 0; candidate < sites.length; candidate++) {
     if (selected[candidate] !== 0) continue;
-    const frontier = assemblyDistance(sites, selected, candidate, assembly);
-    if (assemblyDistance(sites, selected, candidate, assembly, true) < frontier * 0.62) continue;
-    const dx = sites[candidate].x - sites[anchor].x,
+    const frontier = assemblyDistance(sites, selected, candidate, assembly, false, width);
+    if (assemblyDistance(sites, selected, candidate, assembly, true, width) < frontier * 0.62)
+      continue;
+    const dx = deltaX(sites[candidate].x - sites[anchor].x, width),
       dy = sites[candidate].y - sites[anchor].y;
     const length = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
     const alignment = Math.abs((dx / length) * direction[0] + (dy / length) * direction[1]);
@@ -105,15 +122,20 @@ function frontierSite(
   if (best >= 0) return best;
   return bestIndex(
     sites.map((_, i) => i).filter((i) => selected[i] === 0),
-    (i) => -assemblyDistance(sites, selected, i, assembly)
+    (i) => -assemblyDistance(sites, selected, i, assembly, false, width)
   );
 }
-function assemblies(sites: Candidate[], areas: Float64Array, context: PhysicalContext): Int32Array {
+function assemblies(
+  sites: Candidate[],
+  areas: Float64Array,
+  context: PhysicalContext,
+  width: number
+): Int32Array {
   const profile = context.Profile,
     seed = context.EpochStableSeed;
   const target = areas.reduce((sum, area) => sum + area, 0) * profile.ContinentalCrustFraction;
   const result = new Int32Array(sites.length),
-    chosen = anchors(sites, profile.ContinentalAssemblyCount, areas, target);
+    chosen = anchors(sites, profile.ContinentalAssemblyCount, areas, target, width);
   chosen.forEach((i, n) => {
     result[i] = n + 1;
   });
@@ -133,7 +155,7 @@ function assemblies(sites: Candidate[], areas: Float64Array, context: PhysicalCo
     const options = chosen
       .map((anchor, n) => ({
         n,
-        next: frontierSite(sites, result, n + 1, anchor, directions[n]),
+        next: frontierSite(sites, result, n + 1, anchor, directions[n], width),
       }))
       .filter(
         ({ next }) => next >= 0 && Math.abs(total + areas[next] - target) < Math.abs(total - target)
@@ -167,7 +189,8 @@ export function createProvinceSites(map: PhysicalField, context: PhysicalContext
   const selected = [...candidates]
     .sort((a, b) => b.priority - a.priority)
     .slice(0, p.TectonicProvinceCount);
-  const groups = assemblies(selected, territoryAreas(selected, candidates), context);
+  const width = map.mesh.periodic?.width ?? 0;
+  const groups = assemblies(selected, territoryAreas(selected, candidates, width), context, width);
   const motionOf = (salt: number, key: number): [number, number] => {
     const angle = hashUnit(seed ^ salt, key, 0) * Math.PI * 2;
     const speed = lerp(

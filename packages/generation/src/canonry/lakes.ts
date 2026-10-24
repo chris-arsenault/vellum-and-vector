@@ -1,3 +1,4 @@
+import { meshDeltaX } from "./mesh";
 // LakeBasinLayer depression discovery, pools and outlets, Canonry 0f62584c.
 import { clearWaterSurface, setWaterSurface, type PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
@@ -95,7 +96,11 @@ function findOutlet(
     if (target < 0 || marks[target] === lake.component.id) continue;
     const drainage = map.WaterKindCodes[target] === 1 ? -(2 ** 63) : map.DrainageElevations[target];
     if (drainage > lake.component.spill) continue;
-    const x = round(Math.fround(map.mesh.x[member] + map.mesh.x[target]) * 512);
+    const x = round(
+      Math.fround(
+        2 * map.mesh.x[member] + meshDeltaX(map.mesh, map.mesh.x[target] - map.mesh.x[member])
+      ) * 512
+    );
     const y = round(Math.fround(map.mesh.y[member] + map.mesh.y[target]) * 512);
     const candidate = {
       member,

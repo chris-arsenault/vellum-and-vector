@@ -3,9 +3,9 @@ import type { FeatureSelection } from "./features";
 import { terrainCartography } from "./terrainCartography";
 
 const profile = (values: Record<string, number>) => ({ configuration: { profile: values } });
-const frame = (southLatitude: number, northLatitude: number, wrapLongitude: number) => ({
+const frame = (southLatitude: number, northLatitude: number) => ({
   "physical.climate": {
-    settings: { southLatitude, northLatitude, latitudeProjection: 1, wrapLongitude },
+    settings: { southLatitude, northLatitude, latitudeProjection: 1 },
   },
 });
 const land = (
@@ -105,11 +105,11 @@ export const physicalCartography: Record<string, CartographicControl | Cartograp
       initialOnly: true,
       defaultChoice: "northern",
       explanation:
-        "The latitude zones represented by this map, independent of its dimensions. Pole-to-pole climate wraps air and ocean east–west.",
+        "The latitude zones represented by this map, independent of its dimensions and map boundary.",
       choices: [
-        choice("northern", "Northern lands", frame(10, 70, 0)),
-        choice("hemispheres", "Two hemispheres", frame(-70, 70, 0)),
-        choice("globe", "Pole to pole", frame(-90, 90, 1)),
+        choice("northern", "Northern lands", frame(10, 70)),
+        choice("hemispheres", "Two hemispheres", frame(-70, 70)),
+        choice("globe", "Pole to pole", frame(-90, 90)),
       ],
     },
     {

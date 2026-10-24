@@ -1,6 +1,6 @@
 // PlateAdvectionLayer.MaterialTransportPlan, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
-import { nearestTriangle } from "./mesh";
+import { nearestTriangle, meshDeltaX, meshPoint } from "./mesh";
 import { clamp, round } from "./math";
 import { adaptiveCell, visitAdaptiveOverlap, type Bounds } from "@atlas/domain";
 
@@ -32,10 +32,11 @@ function add(map: PhysicalField, plan: Builder, source: number, target: number, 
   }
 }
 function scatter(map: PhysicalField, plan: Builder, source: number, x: number, y: number) {
+  [x, y] = meshPoint(map.mesh, x, y);
   const mesh = map.mesh,
     nearest = nearestTriangle(mesh, x, y);
   if (nearest < 0) return;
-  const distance2 = (i: number) => (mesh.x[i] - x) ** 2 + (mesh.y[i] - y) ** 2;
+  const distance2 = (i: number) => meshDeltaX(mesh, mesh.x[i] - x) ** 2 + (mesh.y[i] - y) ** 2;
   if (distance2(nearest) < 0.00000001) {
     add(map, plan, source, nearest, weightScale);
     return;

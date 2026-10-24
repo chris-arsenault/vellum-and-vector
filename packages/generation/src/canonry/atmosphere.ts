@@ -3,7 +3,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
 import { clamp, round, toUnits, truncate } from "./math";
-import { fractalNoise } from "./noise";
+import { meshWorldNoise as fractalNoise } from "./noise";
 import { latitudeAt } from "./latitude";
 import { deflectWind, windSpeed, windTerrain } from "./windTerrain";
 import { physicalDistance } from "./physicalMetric";
@@ -60,6 +60,7 @@ function windDirection(map: PhysicalField, c: PhysicalContext, i: number): [numb
   // World coordinates and a fixed scale keep a region's wander equal to its parent's.
   const wander =
     fractalNoise(
+      map.mesh,
       map.mesh.x[i] + map.mesh.origin[0],
       map.mesh.y[i] + map.mesh.origin[1],
       c.Seed ^ 0x713b,

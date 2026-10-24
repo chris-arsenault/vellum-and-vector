@@ -67,7 +67,15 @@ export function useRasters(
   viewport: number[] | null | undefined = undefined
 ) {
   const area = world.areas[areaId];
-  const extent = viewport ?? bounds(area.footprint);
+  const extent =
+    viewport && world.reference.boundaryMode === "cylinder"
+      ? [
+          bounds(world.reference.domain)[0],
+          viewport[1],
+          bounds(world.reference.domain)[2],
+          viewport[3],
+        ]
+      : (viewport ?? bounds(area.footprint));
   const fields = world.fields
     .filter((f) => {
       if (f.channels && !f.channels.includes(channel)) return false;

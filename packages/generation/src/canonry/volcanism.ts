@@ -1,3 +1,4 @@
+import { meshDeltaX, meshPoint } from "./mesh";
 // VolcanicConstructionLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
@@ -102,7 +103,7 @@ export function volcanicConstruction(map: PhysicalField, context: PhysicalContex
   for (const root of map.events.filter((event) => event.kind === "plume")) {
     const strength = root.strength;
     if (strength <= 0) continue;
-    const center = plumeCenter(context, root, sequence);
+    const center = meshPoint(map.mesh, ...plumeCenter(context, root, sequence));
     const caldera =
       hashUnit(context.Seed ^ 0x2f41, Number(root.id.split(":").at(-1)), sequence) <
       context.Profile.VolcanicCalderaChance / 1000;
@@ -117,7 +118,10 @@ export function volcanicConstruction(map: PhysicalField, context: PhysicalContex
       caldera,
     });
     for (let i = 0; i < map.mesh.count; i++) {
-      const distance = Math.hypot(map.mesh.x[i] - center[0], map.mesh.y[i] - center[1]);
+      const distance = Math.hypot(
+        meshDeltaX(map.mesh, map.mesh.x[i] - center[0]),
+        map.mesh.y[i] - center[1]
+      );
       if (distance <= context.Profile.MantlePlumeRadius)
         constructTriangle(map, context, i, distance, strength, recorded, caldera);
     }

@@ -18,7 +18,7 @@ export function mantlePlumeRoots(map: PhysicalField, context: PhysicalContext) {
       return { ...source, priority: 1000 - map.TectonicStrain[cell] + source.priority * 420 };
     })
     .sort((a, b) => b.priority - a.priority);
-  const selected = separatedCandidates(ranked, count, p.MantlePlumeMinimumSpacing);
+  const selected = separatedCandidates(ranked, count, p.MantlePlumeMinimumSpacing, map.mesh);
   selected.forEach((source, rank) => {
     const position = selected.length <= 1 ? 0 : rank / (selected.length - 1);
     const floor = p.MantlePlumeMinimumShare / 1000;

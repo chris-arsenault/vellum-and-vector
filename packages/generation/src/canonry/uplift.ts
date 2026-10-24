@@ -2,7 +2,7 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { buoyancy, clamp, crustHeight, scaled, thickness, units } from "./math";
-import { fractalNoise, hashUnit } from "./noise";
+import { meshNoise as fractalNoise, hashUnit } from "./noise";
 
 function interiorRelief(map: PhysicalField, context: PhysicalContext, i: number): number {
   const p = context.Profile;
@@ -10,6 +10,7 @@ function interiorRelief(map: PhysicalField, context: PhysicalContext, i: number)
   if (continentality <= 0) return 0;
   let macro =
     fractalNoise(
+      map.mesh,
       map.mesh.x[i],
       map.mesh.y[i],
       context.EpochStableSeed ^ 0x5ee1,
@@ -29,6 +30,7 @@ function initializeSurface(
     province = map.CrustProvinceIds[i];
   const variation =
     fractalNoise(
+      map.mesh,
       map.mesh.x[i],
       map.mesh.y[i],
       context.Seed ^ 0x52c9,

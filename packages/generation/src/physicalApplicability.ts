@@ -23,7 +23,9 @@ export const physicalApplicability: Record<string, FeatureApplicability> = {
       continents: ["canonry.tectonic-provinces"],
       provinces: ["canonry.tectonic-provinces"],
       landFraction: ["canonry.tectonic-provinces"],
+      mapBoundary: ["canonry.initialize", "canonry.tectonic-provinces"],
     },
+    initialOnlySettings: ["mapBoundary"],
   },
   "physical.tectonic-history": {
     settingConsumers: { plateDrift: ["canonry.plate-advection"] },
@@ -59,7 +61,6 @@ export const physicalApplicability: Record<string, FeatureApplicability> = {
       southLatitude: ["canonry.temperature", "canonry.atmospheric-flow"],
       northLatitude: ["canonry.temperature", "canonry.atmospheric-flow"],
       latitudeProjection: ["canonry.temperature", "canonry.atmospheric-flow"],
-      wrapLongitude: ["canonry.moisture-transport", "canonry.ocean-currents"],
     },
     // Latitude belongs to the world frame; regions read their parent's frame.
     initialOnlySettings: ["seaLevel", ...latitudeFrameSettings],

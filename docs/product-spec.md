@@ -181,7 +181,7 @@ Every world must explicitly define its coordinate reference model, including:
 
 Do not assume Earth's WGS84 coordinates for fictional planets. An Earth-like geographic projection may be useful for display or interchange, but the fictional world needs its own declared parameters.
 
-**Implementation option:** Start with a planar world and one coherent, explicit world CRS; preserve the domain abstraction for spherical/wrapped worlds. Whether spherical worlds are required at initial release must be decided explicitly rather than silently precluded.
+**Current implementation:** Use one planar metre chart with an explicit map boundary. New worlds default to **Cylinder**, joining east and west in physical generation and the editor. **Nothing** retains open edges and permits geography to continue off-map. **Ocean surrounded** is a reserved, unavailable choice pending an ocean-rim boundary condition. Latitude coverage is independent: pole-to-pole cylinders share polar sample values and close polar outlets. This remains an approximate chart-based physical model with a flat editor; it does not provide geodesic spherical distances or a 3D globe. Existing maps without boundary metadata retain open edges. Refinement inherits its world's boundary choice and keeps local parent interfaces.
 
 ### 5.2 Local coordinate frames
 
@@ -709,7 +709,7 @@ Canonry's full-generation pipeline was designed for globally constructed fields 
 
 | Decision                        | Product constraint                                  | Recommended starting point                                                   | Must be proven before committing                                             |
 | ------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| World geometry                  | Exact spatial reference at all levels               | Planar world first; abstract for globe/wrapping                              | Transformation validity, area/distance correctness, future CRS extensibility |
+| World geometry                  | Exact spatial reference at all levels               | Planar metre chart with explicit edge identification                        | Transformation validity, area/distance correctness, future CRS extensibility |
 | Authoritative features          | Persistent IDs, geometry, queries, overlays         | GIS vector model, likely spatial DB                                          | Cross-scale feature identity; custom world CRS and local coordinates         |
 | Generated fields                | Causal simulation, multiple resolutions             | Adapt Canonry field model plus tiled/coarse/fine artifacts                   | Edge/halo consistency, generation costs, versioned output                    |
 | Region ownership                | No conflicting detail in overlaps                   | Explicit nonoverlapping materialization ownership; overlapping views allowed | Correct handling of arbitrarily drawn selection and existing generated areas |
@@ -825,7 +825,7 @@ An agent proposes “Add a river through the center of this region.” It reads 
 
 These issues need engineering decisions/prototypes, but **do not block the product specification**:
 
-1. **Global topology and projection:** Whether v1 is planar only or includes spherical/wrapped worlds; choose before designing storage transforms and geometry indexes.
+1. **Global topology and projection:** Cylinder and open metre charts are supported. Ocean-rim generation and geodesic spherical geometry remain deferred.
 2. **Numerical refinement strategy:** How Canonry's globally connected microtriangle graph is adapted to selected child extents/halos and possibly other geometry; verify drainage, erosion and glacial boundary correctness.
 3. **Authority across varying detail:** How coarse parent constraint geometry, high-resolution child geometry, cross-area patches, and cartographic generalization are stored and reconciled.
 4. **GIS persistence split:** Which data live in a spatial database versus raster/tile/object storage versus generator artifacts; evaluate costs and query/edit patterns.

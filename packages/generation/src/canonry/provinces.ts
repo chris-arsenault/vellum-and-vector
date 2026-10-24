@@ -2,8 +2,9 @@
 import type { PhysicalContext } from "./context";
 import type { PhysicalField } from "./field";
 import { clamp, round } from "./math";
-import { fractalNoise } from "./noise";
+import { meshNoise as fractalNoise } from "./noise";
 import { createProvinceSites, type ProvinceSite } from "./provinceSites";
+import { meshDeltaX, type PhysicalMesh } from "./mesh";
 
 interface Selection {
   nearest: number;
@@ -16,7 +17,7 @@ interface Selection {
 }
 const unit = (value: number) => round(clamp(value, 0, 1) * 1000);
 const motion = (value: number) => round(clamp(value, -1, 1) * 1000);
-function selectSites(sites: ProvinceSite[], x: number, y: number): Selection {
+function selectSites(sites: ProvinceSite[], x: number, y: number, mesh: PhysicalMesh): Selection {
   const result: Selection = {
     nearest: -1,
     second: -1,
@@ -27,7 +28,7 @@ function selectSites(sites: ProvinceSite[], x: number, y: number): Selection {
     oceanicDistance: Infinity,
   };
   for (const [i, site] of sites.entries()) {
-    const distance = Math.sqrt((x - site.x) ** 2 + (y - site.y) ** 2);
+    const distance = Math.hypot(meshDeltaX(mesh, x - site.x), y - site.y);
     if (site.assembly > 0 && distance < result.continentalDistance) {
       result.nearestContinental = i;
       result.continentalDistance = distance;
@@ -45,35 +46,40 @@ function selectSites(sites: ProvinceSite[], x: number, y: number): Selection {
   }
   return result;
 }
-function relativeMotion(sites: ProvinceSite[], selection: Selection): number {
+function relativeMotion(sites: ProvinceSite[], selection: Selection, mesh: PhysicalMesh): number {
   if (selection.second < 0) return 0;
   const a = sites[selection.nearest],
     b = sites[selection.second];
-  const dx = b.x - a.x,
+  const dx = meshDeltaX(mesh, b.x - a.x),
     dy = b.y - a.y,
     length = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
   return ((b.motionX - a.motionX) * dx) / length + ((b.motionY - a.motionY) * dy) / length;
 }
-function boundaryDistance(sites: ProvinceSite[], s: Selection): number {
+function boundaryDistance(sites: ProvinceSite[], s: Selection, mesh: PhysicalMesh): number {
   if (s.second < 0) return Infinity;
   const a = sites[s.nearest],
     b = sites[s.second];
-  const separation = Math.hypot(b.x - a.x, b.y - a.y);
+  const separation = Math.hypot(meshDeltaX(mesh, b.x - a.x), b.y - a.y);
   // Perpendicular distance to the bisector in the existing warped coordinate frame.
   // A distance difference alone saturates at the site separation and makes close
   // pairs appear active arbitrarily far from their shared boundary.
   return (s.secondDistance ** 2 - s.nearestDistance ** 2) / (2 * separation);
 }
-function assemblyGap(sites: ProvinceSite[], s: Selection, context: PhysicalContext): number {
+function assemblyGap(
+  sites: ProvinceSite[],
+  s: Selection,
+  context: PhysicalContext,
+  mesh: PhysicalMesh
+): number {
   if (s.second < 0) return 0;
   const a = sites[s.nearest].assembly,
     b = sites[s.second].assembly;
   if (a === 0 || b === 0 || a === b) return 0;
   const p = context.Profile;
   const raw =
-    clamp(1 - boundaryDistance(sites, s) / Math.max(0.001, p.RidgeWidth * 1.4), 0, 1) *
+    clamp(1 - boundaryDistance(sites, s, mesh) / Math.max(0.001, p.RidgeWidth * 1.4), 0, 1) *
     p.ContinentalAssemblySeparationDepth;
-  return raw > 0 && relativeMotion(sites, s) < -p.TectonicConvergenceThreshold ? 0 : raw;
+  return raw > 0 && relativeMotion(sites, s, mesh) < -p.TectonicConvergenceThreshold ? 0 : raw;
 }
 function assignBoundary(
   map: PhysicalField,
@@ -83,7 +89,11 @@ function assignBoundary(
   context: PhysicalContext
 ) {
   const p = context.Profile;
-  const amount = clamp(1 - boundaryDistance(sites, s) / Math.max(0.001, p.RidgeWidth * 0.9), 0, 1);
+  const amount = clamp(
+    1 - boundaryDistance(sites, s, map.mesh) / Math.max(0.001, p.RidgeWidth * 0.9),
+    0,
+    1
+  );
   if (amount <= 0) {
     for (const name of [
       "TectonicBoundaryCodes",
@@ -95,7 +105,7 @@ function assignBoundary(
       map[name][i] = 0;
     return;
   }
-  const relative = relativeMotion(sites, s);
+  const relative = relativeMotion(sites, s, map.mesh);
   map.TectonicBoundaryCodes[i] =
     relative < -p.TectonicConvergenceThreshold
       ? 1
@@ -107,7 +117,7 @@ function assignBoundary(
   map.TectonicStrain[i] = unit(amount * clamp(0.48 + Math.abs(relative), 0, 1));
   const a = sites[s.nearest],
     b = sites[s.second],
-    dx = b.x - a.x,
+    dx = meshDeltaX(map.mesh, b.x - a.x),
     dy = b.y - a.y;
   const length = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
   let tx = -dy / length,
@@ -139,12 +149,12 @@ function assignTriangle(
     x = map.mesh.x[i],
     y = map.mesh.y[i];
   const wx =
-    fractalNoise(x, y, context.Seed ^ 0x16f1, p.ContinentalWarpScale, 3) *
+    fractalNoise(map.mesh, x, y, context.Seed ^ 0x16f1, p.ContinentalWarpScale, 3) *
     p.ContinentalWarpStrength;
   const wy =
-    fractalNoise(x, y, context.Seed ^ 0x62bd, p.ContinentalWarpScale, 3) *
+    fractalNoise(map.mesh, x, y, context.Seed ^ 0x62bd, p.ContinentalWarpScale, 3) *
     p.ContinentalWarpStrength;
-  const s = selectSites(sites, x + wx, y + wy),
+  const s = selectSites(sites, x + wx, y + wy, map.mesh),
     site = sites[s.nearest];
   map.CrustProvinceIds[i] = s.nearest + 1;
   map.CrustMotionX[i] = motion(site.motionX);
@@ -158,7 +168,7 @@ function assignTriangle(
     site.assembly > 0
       ? Math.max(affinity, p.ContinentalCrustPotentialFloor)
       : Math.min(affinity, p.OceanicCrustPotentialCeiling);
-  const gap = assemblyGap(sites, s, context);
+  const gap = assemblyGap(sites, s, context, map.mesh);
   let composition = clamp(affinity - gap, 0, 1);
   potential -= gap;
   if (site.assembly > 0 && gap > 0)
@@ -186,6 +196,7 @@ export function continentalDomains(map: PhysicalField, context: PhysicalContext)
   for (let i = 0; i < map.mesh.count; i++) {
     const potential = map.CrustBasePotential[i] / 1000;
     const roughness = fractalNoise(
+      map.mesh,
       map.mesh.x[i],
       map.mesh.y[i],
       context.Seed ^ 0x41c7,

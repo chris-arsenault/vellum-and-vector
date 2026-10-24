@@ -1,3 +1,4 @@
+import { meshDeltaX } from "./mesh";
 // CoastalErosionLayer.cs and ExternalCoastalForcingLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
@@ -119,7 +120,7 @@ function depositionTargets(
       if (j < 0 || visited.has(j)) continue;
       visited.add(j);
       const distance = Math.hypot(
-        map.mesh.x[j] - map.mesh.x[source],
+        meshDeltaX(map.mesh, map.mesh.x[j] - map.mesh.x[source]),
         map.mesh.y[j] - map.mesh.y[source]
       );
       if (distance >= reach) continue;

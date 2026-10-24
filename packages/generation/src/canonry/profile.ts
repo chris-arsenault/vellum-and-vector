@@ -255,6 +255,7 @@ export const physicalProfile = {
   LatitudeNorth: 70,
   LatitudeProjection: 1,
   WrapLongitude: 0,
+  MapBoundary: 0,
   WorldExtentY: null as [number, number] | null,
   WorldExtentX: null as [number, number] | null,
   // Global mean at sea level; annual-mean insolation adds a second Legendre

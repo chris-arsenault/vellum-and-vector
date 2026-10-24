@@ -196,6 +196,12 @@ with no backend, persistence or MCP; preserve the existing backend source.
       cartographic generalization question
       ([ADR 0005](adr/0005-scale-contract.md)).
 
+- [ ] **15. Ocean-surrounded worlds.** The map-boundary setting reserves this
+      choice but leaves it unavailable. Add a physical ocean rim that survives
+      tectonic, erosional and sea-level epochs, using the existing conditioning
+      and authored-protection rules. A painted border or clipping land at the
+      map edge does not establish an ocean boundary.
+
 The [product contract](product-spec.md) supplies the geographic and authoring
 requirements. [ADR 0003](adr/0003-frontend-session.md) defines the current execution
 and session boundary; the [generation design](generation-workflows.md) records

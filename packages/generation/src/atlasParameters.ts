@@ -10,11 +10,26 @@ export interface AtlasParameterDefinition {
   integer?: boolean;
   exclusiveMinimum?: boolean;
   /** Named values for a categorical setting, shown as a choice instead of a number. */
-  choices?: readonly { value: number; label: string }[];
+  choices?: readonly { value: number; label: string; disabled?: boolean }[];
   group: "geology" | "climate" | "water" | "ecology" | "human";
 }
 
 export const atlasParameterDefinitions = {
+  mapBoundary: {
+    label: "Map boundary",
+    unit: "choice",
+    minimum: 0,
+    maximum: 2,
+    default: 1,
+    step: 1,
+    integer: true,
+    choices: [
+      { value: 1, label: "Cylinder" },
+      { value: 2, label: "Ocean surrounded (coming later)", disabled: true },
+      { value: 0, label: "Nothing" },
+    ],
+    group: "geology",
+  },
   continents: {
     label: "Continental assemblies",
     unit: "count",
@@ -215,6 +230,9 @@ export const atlasParameterDefinitions = {
 } satisfies Record<string, AtlasParameterDefinition>;
 
 export type AtlasParameters = Record<keyof typeof atlasParameterDefinitions, number>;
+export const mapBoundaryName = (value: number) => (["none", "cylinder", "ocean"] as const)[value];
+export const mapBoundaryValue = (value: "cylinder" | "ocean" | "none" = "none") =>
+  ({ none: 0, cylinder: 1, ocean: 2 })[value];
 /**
  * Named anchors of the continuous `rainfall` setting. Each is fitted to its
  * own outcome on the default worlds rather than scaled from Mixed: Dry keeps
@@ -230,7 +248,6 @@ export const latitudeFrameSettings = [
   "southLatitude",
   "northLatitude",
   "latitudeProjection",
-  "wrapLongitude",
 ] as const;
 export function parameterSchema(definition: AtlasParameterDefinition) {
   let schema = z.number().finite();
@@ -241,20 +258,28 @@ export function parameterSchema(definition: AtlasParameterDefinition) {
   if (definition.maximum !== undefined) schema = schema.max(definition.maximum);
   return schema.default(definition.default);
 }
-export const atlasParametersSchema = z
-  .object(
-    Object.fromEntries(
-      Object.entries(atlasParameterDefinitions).map(([key, definition]) => [
-        key,
-        parameterSchema(definition),
-      ])
-    ) as Record<keyof AtlasParameters, z.ZodDefault<z.ZodNumber>>
-  )
-  .strict()
-  .refine((parameters) => parameters.northLatitude >= parameters.southLatitude, {
-    path: ["northLatitude"],
-    message: "The north edge cannot lie south of the south edge.",
-  });
+export const atlasParametersSchema = z.preprocess(
+  legacyMapBoundary,
+  z
+    .object(
+      Object.fromEntries(
+        Object.entries(atlasParameterDefinitions).map(([key, definition]) => [
+          key,
+          parameterSchema(definition),
+        ])
+      ) as Record<keyof AtlasParameters, z.ZodDefault<z.ZodNumber>>
+    )
+    .strict()
+    .refine((parameters) => parameters.northLatitude >= parameters.southLatitude, {
+      path: ["northLatitude"],
+      message: "The north edge cannot lie south of the south edge.",
+    })
+);
+function legacyMapBoundary(value: unknown) {
+  if (!value || typeof value !== "object" || !("wrapLongitude" in value) || "mapBoundary" in value)
+    return value;
+  return { ...value, mapBoundary: value.wrapLongitude };
+}
 export const defaultAtlasParameters: AtlasParameters = atlasParametersSchema.parse({});
 const parameterProcesses: Partial<Record<keyof AtlasParameters, string>> = {
   impacts: "canonry.impact-cratering",

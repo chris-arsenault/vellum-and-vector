@@ -4,7 +4,45 @@ import { landscape } from "../mapFixtures";
 import { createField } from "./field";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { createWorldMesh } from "./worldMesh";
-import { combinedContour, membershipContour, membershipSampler } from "./geographicContours";
+import {
+  areaGeometry,
+  fillSmallHoles,
+  combinedContour,
+  membershipContour,
+  membershipSampler,
+} from "./geographicContours";
+
+it("retains polygon area when chart clipping also returns isolated boundary lines", () => {
+  const shape = areaGeometry({
+    type: "GeometryCollection",
+    geometries: [
+      rectangle([0, 0, 10, 10]),
+      {
+        type: "LineString",
+        coordinates: [
+          [10, 10],
+          [20, 10],
+        ],
+      },
+    ],
+  });
+  expect(shape?.type).toBe("Polygon");
+  expect(spatial.area(shape!)).toBe(100);
+});
+
+it("unites an enclosed island after filling the surrounding region's small hole", () => {
+  const { state } = fixture();
+  const outer = rectangle([0, 0, 1000, 1000]) as import("geojson").Polygon;
+  const hole = rectangle([300, 300, 700, 700]) as import("geojson").Polygon;
+  const island = rectangle([400, 400, 600, 600]) as import("geojson").Polygon;
+  const shape: import("geojson").Geometry = {
+    type: "MultiPolygon",
+    coordinates: [[outer.coordinates[0], hole.coordinates[0]], island.coordinates],
+  };
+  const result = fillSmallHoles(state, shape, 1e7, () => false);
+  expect(result.type).toBe("Polygon");
+  expect(spatial.area(result)).toBe(1e6);
+});
 
 function fixture(bounds: Bounds = [0, 0, 2000, 1000]) {
   const state = landscape(),

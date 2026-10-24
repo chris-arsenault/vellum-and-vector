@@ -43,6 +43,10 @@ export class RasterSources {
     this.used.clear();
   }
   source(raster: Raster) {
+    if (this.projection.canWrapX()) {
+      const extent = this.projection.getExtent();
+      raster = { ...raster, wrap: [extent[0], extent[2]] };
+    }
     const key = `${raster.id}:${raster.channel}`;
     this.used.add(key);
     let entry = this.sources.get(key);

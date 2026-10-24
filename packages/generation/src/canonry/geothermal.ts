@@ -2,7 +2,7 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, round, truncate } from "./math";
-import { fractalNoise, unitNoise } from "./noise";
+import { meshNoise as fractalNoise, meshUnitNoise as unitNoise } from "./noise";
 import { Feature } from "./codes";
 
 export function geothermal(map: PhysicalField, c: PhysicalContext) {
@@ -13,6 +13,7 @@ export function geothermal(map: PhysicalField, c: PhysicalContext) {
     const fracture = (map.FractureConductance[i] / 1000) * 0.28;
     const impact = ((map.ImpactHeat[i] / 1000) * 0.36) / Math.max(1, map.CompletedEpochCount + 1);
     const lobes = fractalNoise(
+      map.mesh,
       map.mesh.x[i],
       map.mesh.y[i],
       c.Seed ^ 0x4d13,
@@ -25,6 +26,7 @@ export function geothermal(map: PhysicalField, c: PhysicalContext) {
       clamp(1 + (lobes * c.Profile.PlumeLobeStrength) / 1000, 0, 1.6);
     const broad =
       unitNoise(
+        map.mesh,
         map.mesh.x[i],
         map.mesh.y[i],
         c.Seed,

@@ -1,5 +1,6 @@
+import { meshDeltaX } from "./mesh";
 import type { PhysicalField } from "./field";
-import { unitNoise } from "./noise";
+import { meshWorldUnitNoise as unitNoise } from "./noise";
 import { plantGroups, groupSuitability, type PlantGroup } from "./ecologyGroups";
 import { ecologicalFront, type EcologicalFront } from "./ecologyMovement";
 import { windStrength, type EcologyForcing } from "./ecologyEnvironment";
@@ -25,6 +26,7 @@ function inheritFunctionalGroups(map: PhysicalField, i: number) {
 }
 function founders(map: PhysicalField, i: number, seed: number) {
   const diversity = unitNoise(
+    map.mesh,
     map.mesh.x[i] + map.mesh.origin[0],
     map.mesh.y[i] + map.mesh.origin[1],
     seed,
@@ -85,7 +87,7 @@ function seedTravel(
   const at = i * map.mesh.stride + edge,
     distance = map.mesh.edgeLength[at];
   const along =
-    (((map.mesh.x[j] - map.mesh.x[i]) * map.WindX[i] +
+    ((meshDeltaX(map.mesh, map.mesh.x[j] - map.mesh.x[i]) * map.WindX[i] +
       (map.mesh.y[j] - map.mesh.y[i]) * map.WindY[i]) /
       Math.max(1, distance * 1000)) *
     windStrength(map, i);

@@ -3,13 +3,26 @@ import { setWaterSurface, type PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { noWaterSurface, units } from "./math";
 
+/** Closed worlds seed their ocean in the deepest basin rather than an off-map outlet. */
+function oceanSeeds(map: PhysicalField) {
+  const seeds: number[] = [];
+  let deepest = 0;
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (map.mesh.boundary[i]) seeds.push(i);
+    if (map.Elevation[i] < map.Elevation[deepest]) deepest = i;
+  }
+  return seeds.length ? seeds : [deepest];
+}
+
 class OceanComponents {
+  private readonly seeds: Set<number>;
   readonly parent: Int32Array;
   readonly sizes: Int32Array;
   readonly contents: Float64Array;
   readonly boundary: Uint8Array;
   connected = 0;
   constructor(private readonly map: PhysicalField) {
+    this.seeds = new Set(oceanSeeds(map));
     const n = map.mesh.count;
     this.parent = new Int32Array(n).fill(-1);
     this.sizes = new Int32Array(n);
@@ -20,7 +33,7 @@ class OceanComponents {
     this.parent[i] = i;
     this.sizes[i] = 1;
     this.contents[i] = this.map.mesh.contentAreas[i];
-    this.boundary[i] = this.map.mesh.boundary[i];
+    this.boundary[i] = Number(this.seeds.has(i));
     if (this.boundary[i]) this.connected += this.contents[i];
   }
   root(i: number): number {
@@ -81,7 +94,7 @@ function connectedVolume(map: PhysicalField, level: number): number {
     volume += ((level - map.Elevation[i]) / 1024) * map.mesh.contentAreas[i];
     queue.push(i);
   };
-  for (let i = 0; i < map.mesh.count; i++) if (map.mesh.boundary[i]) visit(i);
+  for (const i of oceanSeeds(map)) visit(i);
   for (let head = 0; head < queue.length; head++)
     for (let edge = 0; edge < map.mesh.degree[queue[head]]; edge++)
       visit(map.mesh.neighbors[queue[head] * map.mesh.stride + edge]);
@@ -105,8 +118,7 @@ function levelForVolume(map: PhysicalField, volume: number): number {
 }
 function lowestBoundary(map: PhysicalField) {
   let boundary = Number.MAX_VALUE;
-  for (let i = 0; i < map.mesh.count; i++)
-    if (map.mesh.boundary[i]) boundary = Math.min(boundary, map.Elevation[i]);
+  for (const i of oceanSeeds(map)) boundary = Math.min(boundary, map.Elevation[i]);
   return boundary;
 }
 /**
@@ -149,7 +161,7 @@ export function oceanConnectivity(map: PhysicalField, c: PhysicalContext) {
     setWaterSurface(map, i, map.EffectiveSeaLevel);
     queue.push(i);
   };
-  for (let i = 0; i < map.mesh.count; i++) if (map.mesh.boundary[i]) mark(i);
+  for (const i of oceanSeeds(map)) mark(i);
   for (let head = 0; head < queue.length; head++)
     for (let edge = 0; edge < map.mesh.degree[queue[head]]; edge++)
       mark(map.mesh.neighbors[queue[head] * map.mesh.stride + edge]);

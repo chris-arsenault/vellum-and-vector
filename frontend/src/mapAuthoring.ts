@@ -1,4 +1,4 @@
-import { sampleFields, spatial, type Position } from "@atlas/domain";
+import { sampleFields, lineParts, spatial, type Position } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import { session } from "./atlasState";
 import type { Area, AtlasFeature, World } from "./types";
@@ -36,11 +36,12 @@ export function drawnFeature(
     generationId: null,
     causes: [],
   };
-  if (geometry.type === "LineString" && tool.kind === "river") {
-    feature.attributes.elevations = geometry.coordinates.map(
+  if (geometry.type.includes("LineString") && tool.kind === "river") {
+    const coordinates = lineParts(geometry).flat();
+    feature.attributes.elevations = coordinates.map(
       ([x, y]) => sampleFields(session(world.id).snapshot, { x, y, z: 0 }).elevation ?? 0
     );
-    feature.attributes.discharges = geometry.coordinates.map(() => 1);
+    feature.attributes.discharges = coordinates.map(() => 1);
     feature.attributes.discharge = 1;
   }
   const relation = {

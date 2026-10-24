@@ -1,5 +1,7 @@
 export * from "@atlas/domain/model";
 export interface Raster {
+  /** Longitude chart used by tile gutters and repeated map views. */
+  wrap?: [number, number];
   id: string;
   areaId: string;
   footprint: import("geojson").Geometry;

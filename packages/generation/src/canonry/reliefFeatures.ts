@@ -1,4 +1,5 @@
-import { spatial, point } from "@atlas/domain";
+import { meshDeltaX } from "./mesh";
+import { spatial, point, unwrapCoordinates, canonicalGeometry } from "@atlas/domain";
 import { nativePosition } from "./atlasWorkspace";
 import type { Geometry } from "geojson";
 import type { GenerationState } from "../process";
@@ -125,9 +126,13 @@ export function extractValleys(
     for (const run of incisedRuns(state, ring, members)) {
       const line: Geometry = {
           type: "LineString",
-          coordinates: run.map((i) => [x0 + map.mesh.x[i], y0 + map.mesh.y[i]]),
+          coordinates: unwrapCoordinates(
+            run.map((i) => [x0 + map.mesh.x[i], y0 + map.mesh.y[i]]),
+            map.mesh.periodic?.width
+          ),
         },
-        extent = corridor && spatial.buffer(line, map.mesh.spacing),
+        buffer = corridor && spatial.buffer(line, map.mesh.spacing),
+        extent = buffer && canonicalGeometry(state.domain.world.reference, buffer),
         shape = extent && spatial.intersection(corridor!, extent),
         surface = shape && valleySurface(state, shape);
       if (!surface) continue;
@@ -157,7 +162,7 @@ function incisedRuns(state: GenerationState, ring: (i: number) => number[], memb
     let length = 0;
     for (let k = 1; k < run.length; k++)
       length += Math.hypot(
-        map.mesh.x[run[k]] - map.mesh.x[run[k - 1]],
+        meshDeltaX(map.mesh, map.mesh.x[run[k]] - map.mesh.x[run[k - 1]]),
         map.mesh.y[run[k]] - map.mesh.y[run[k - 1]]
       );
     if (run.length > 1 && length >= profile.ValleyMinimumLength) runs.push(run);

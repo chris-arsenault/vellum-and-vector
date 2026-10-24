@@ -27,7 +27,7 @@ import { finalizeNamesProcess } from "./societyNaming";
 import { atlasPhysicalSequence } from "./canonry/atlasSequence";
 import { atlasQuality } from "./canonry/atlasProfile";
 import { generationResolution } from "./resolution";
-import { atlasParametersSchema, type AtlasParameters } from "./atlasParameters";
+import { atlasParametersSchema, mapBoundaryName, type AtlasParameters } from "./atlasParameters";
 import {
   generationSettingsSchema,
   worldGenerationSettings,
@@ -44,6 +44,7 @@ import { atlasGenerationModules } from "./atlasModules";
 import { serializableBindings } from "./generationBindings";
 import { inheritedChannelNames, inheritedNativeFacts } from "./canonry/inheritedFacts";
 import { societySequence } from "./societyProcesses";
+import { boundaryDiagnostics, migrateBoundarySelection, inheritMapBoundary } from "./worldBoundary";
 
 export interface AtlasGenerationInput {
   areaId: string;
@@ -103,6 +104,8 @@ export function atlasRegistry(source: DomainSnapshot, input: AtlasGenerationInpu
 
 export function prepareAtlasGeneration(source: DomainSnapshot, input: AtlasGenerationInput) {
   input = structuredClone(input);
+  input.features = migrateBoundarySelection(input.features);
+  input = inheritMapBoundary(source, input);
   source = configuredSource(source, input);
   checkRunInputs(source, input);
   input = {
@@ -119,6 +122,7 @@ export function prepareAtlasGeneration(source: DomainSnapshot, input: AtlasGener
   input = { ...input, configuration };
   const registry = atlasRegistry(source, input);
   const diagnostics = [
+    ...boundaryDiagnostics(input),
     ...resolvedFeatures.diagnostics.filter((item) => item.code !== "feature_dependency"),
   ];
   checkNewSelection(source, input);
@@ -171,7 +175,15 @@ function configuredSource(source: DomainSnapshot, input: AtlasGenerationInput) {
       "completed_history",
       "Inherited and completed history stays fixed. Configure the new world before its first generation."
     );
-  return { ...source, world: { ...source.world, ...settings } };
+  const stable =
+    area.parentId || source.world.generations.some((run) => run.domains.includes("physical"));
+  const boundaryMode = stable
+    ? (source.world.reference.boundaryMode ?? "none")
+    : mapBoundaryName(atlasParametersSchema.parse(input.parameters ?? {}).mapBoundary);
+  return {
+    ...source,
+    world: { ...source.world, ...settings, reference: { ...source.world.reference, boundaryMode } },
+  };
 }
 function checkReviewedConfiguration(
   input: AtlasGenerationInput,

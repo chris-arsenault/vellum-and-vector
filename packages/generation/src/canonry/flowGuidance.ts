@@ -1,3 +1,4 @@
+import { meshDeltaX } from "./mesh";
 // ConditionedFlowResolver.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import { isOpenOutlet } from "./field";
@@ -15,7 +16,7 @@ function normalize(x: number, y: number): [number, number] {
 }
 function desiredDirection(map: PhysicalField, source: number, target: number): [number, number] {
   return normalize(
-    Math.fround(map.mesh.x[target] - map.mesh.x[source]),
+    Math.fround(meshDeltaX(map.mesh, map.mesh.x[target] - map.mesh.x[source])),
     Math.fround(map.mesh.y[target] - map.mesh.y[source])
   );
 }
@@ -48,7 +49,7 @@ function candidateScore(
   );
   if (map.WaterKindCodes[target] === 1) return 10000 + alignment;
   const length = Math.hypot(
-    map.mesh.x[source] - map.mesh.x[target],
+    meshDeltaX(map.mesh, map.mesh.x[source] - map.mesh.x[target]),
     map.mesh.y[source] - map.mesh.y[target]
   );
   const drop = (map.DrainageElevations[source] - map.DrainageElevations[target]) / (1024 * length);
@@ -120,7 +121,7 @@ function downhillSteps(map: PhysicalField, source: number): Step[] | null {
     if (map.DrainageElevations[target] >= map.DrainageElevations[source]) continue;
     steps.push({
       target,
-      x: map.mesh.x[target] - map.mesh.x[source],
+      x: meshDeltaX(map.mesh, map.mesh.x[target] - map.mesh.x[source]),
       y: map.mesh.y[target] - map.mesh.y[source],
     });
   }

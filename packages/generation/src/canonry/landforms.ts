@@ -1,3 +1,4 @@
+import { meshDeltaX } from "./mesh";
 // LandformClassificationLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
@@ -101,7 +102,7 @@ function hasDrop(map: PhysicalField, p: PhysicalProfile, i: number): boolean {
   const target = map.FlowTargets[i];
   if (target < 0) return false;
   const distance = Math.hypot(
-    map.mesh.x[i] - map.mesh.x[target],
+    meshDeltaX(map.mesh, map.mesh.x[i] - map.mesh.x[target]),
     map.mesh.y[i] - map.mesh.y[target]
   );
   return (

@@ -1,3 +1,4 @@
+import { meshDeltaX } from "./mesh";
 import type { GenerationState } from "../process";
 import type { MagicField } from "./magicState";
 import { nearestTriangle } from "./mesh";
@@ -23,7 +24,10 @@ function isHeatMaximum(map: PhysicalField, start: number, radius: number) {
       const j = mesh.neighbors[i * mesh.stride + edge];
       if (j < 0 || visited.has(j)) continue;
       visited.add(j);
-      if (Math.hypot(mesh.x[j] - mesh.x[start], mesh.y[j] - mesh.y[start]) <= radius) queue.push(j);
+      if (
+        Math.hypot(meshDeltaX(mesh, mesh.x[j] - mesh.x[start]), mesh.y[j] - mesh.y[start]) <= radius
+      )
+        queue.push(j);
     }
   }
   return true;
@@ -44,7 +48,12 @@ function geothermalSources(state: GenerationState, field: MagicField, seed: numb
   for (const source of candidates) {
     const i = source.i;
     const spacing = p.sourceSpacing + ((1000 - map.HeatSourceDensity[i]) * 10_000) / 150;
-    if (selected.some((j) => Math.hypot(source.x - j.x, source.y - j.y) < spacing)) continue;
+    if (
+      selected.some(
+        (j) => Math.hypot(meshDeltaX(map.mesh, source.x - j.x), source.y - j.y) < spacing
+      )
+    )
+      continue;
     selected.push(source);
     if (selected.length >= budget) break;
   }
@@ -119,7 +128,8 @@ function oceanSource(state: GenerationState, field: MagicField, seed: number) {
   const selected = separatedCandidates(
     candidates,
     budget,
-    field.definition.parameters.rayDistance / 2
+    field.definition.parameters.rayDistance / 2,
+    map.mesh
   );
   for (const source of selected) {
     const i = nearestTriangle(map.mesh, source.x, source.y);

@@ -1,3 +1,4 @@
+import { meshDeltaX } from "./mesh";
 // FluvialErosionLayer.cs and SedimentTransportLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
@@ -69,7 +70,10 @@ function erodeTriangle(
   const target = targets[i];
   // Only channels incise; leaving interfluves standing lets valleys capture neighbouring flow.
   if (target < 0 || map.WaterKindCodes[i] === 1 || area[i] < c.Profile.FluvialChannelArea) return;
-  const length = Math.hypot(map.mesh.x[i] - map.mesh.x[target], map.mesh.y[i] - map.mesh.y[target]);
+  const length = Math.hypot(
+    meshDeltaX(map.mesh, map.mesh.x[i] - map.mesh.x[target]),
+    map.mesh.y[i] - map.mesh.y[target]
+  );
   const fall = Math.max(
     0,
     (map.DrainageElevations[i] - map.DrainageElevations[target]) / (1024 * length)
@@ -106,7 +110,12 @@ function transportDistance(map: PhysicalField, i: number, previous: Int32Array) 
   const target = map.FlowTargets[i],
     next = target >= 0 ? target : previous[i];
   return next >= 0
-    ? cellTravel(map.mesh, i, map.mesh.x[next] - map.mesh.x[i], map.mesh.y[next] - map.mesh.y[i])
+    ? cellTravel(
+        map.mesh,
+        i,
+        meshDeltaX(map.mesh, map.mesh.x[next] - map.mesh.x[i]),
+        map.mesh.y[next] - map.mesh.y[i]
+      )
     : Math.sqrt(map.mesh.areas[i]);
 }
 export function sedimentTransport(map: PhysicalField, c: PhysicalContext) {

@@ -73,3 +73,10 @@ export * from "./societyFeatures";
 export * from "./societyLanguages";
 export * from "./societyPractices";
 export * from "./drainageRefinement";
+export {
+  canonicalPosition,
+  canonicalGeometry,
+  chartCopies,
+  translateGeometry,
+  unwrapCoordinates,
+} from "./worldBoundary";

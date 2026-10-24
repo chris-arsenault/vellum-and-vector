@@ -1,3 +1,4 @@
+import { meshDeltaX } from "./mesh";
 // FractureNetworkLayer.cs, Canonry 0f62584c; world-space steering replaces lattice directions.
 import type { PhysicalField } from "./field";
 import { areaBudget, mediumArea } from "./worldScale";
@@ -73,7 +74,10 @@ export function widenFracture(
     visited = new Set(queue);
   for (let head = 0; head < queue.length; head++) {
     const i = queue[head];
-    const distance = Math.hypot(map.mesh.x[i] - point[0], map.mesh.y[i] - point[1]);
+    const distance = Math.hypot(
+      meshDeltaX(map.mesh, map.mesh.x[i] - point[0]),
+      map.mesh.y[i] - point[1]
+    );
     const support = width / 2 + Math.hypot(map.mesh.cellWidth[i], map.mesh.cellHeight[i]) / 2;
     if (distance > support && i !== source) continue;
     map.FractureConductance[i] = Math.max(

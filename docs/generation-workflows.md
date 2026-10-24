@@ -815,19 +815,24 @@ radial frozen-world climate.
 | `precipitation`                       | Column precipitation with the epoch multiplier, in mm/year up to a 4 m ceiling, split into rain and snow by the share of a sinusoidal year below freezing. The equatorial convergence spreads over 15° to stand in for the rain belt's seasonal migration; subtropical subsidence dries 20–35° and also caps uplift rain there.                                                           |
 | `land-ice-mass-balance` and `sea-ice` | Ice extent follows mass balance and cold rather than a coverage quota. Epoch glaciation scales growth. Melting scales with the deficit. Current, wave exposure and local variation move the sea-ice edge by a few degrees only, so polar seas well below freezing freeze.                                                                                                                 |
 
-**World frame.** Four initial-only climate settings, inherited by regions, place
-the map between equator and poles independently of its size:
+**World frame.** The initial latitude frame is inherited by regions and places
+the map between equator and poles independently of its physical size. An
+equal-area projection or even-degree spacing maps northing to latitude.
 
-- `southLatitude` and `northLatitude` (defaults 10° and 70°);
-- `latitudeProjection`: equal area (default; sin latitude is linear in northing,
-  so high latitudes take less map height) or even degrees;
-- `wrapLongitude`: when the map spans the world's width, air columns and ocean
-  currents leaving one edge re-enter at the other, and transport distances take
-  the short way round. Terrain, plates, rivers and the editor stay planar, and a
-  region of a wrapping world keeps open edges.
+Map boundary is a separate world setting. Cylinder, the new-world default,
+joins east and west for crust, terrain, transport, drainage, climate and display.
+The triangular world lattice has reciprocal short links across the seam;
+geographic noise and reconstructed samples share the same period. Extracted
+geometry is cut into chart pieces, retaining network junctions and directed river
+profiles. The editor repeats the metre chart and normalizes edits into it.
+Nothing retains open edges. Ocean surrounded remains unavailable pending an
+ocean-rim condition that survives the physical epochs. Existing configurations
+with an explicit legacy longitude choice retain that choice.
 
-The setup's Latitude frame choice offers a northern band (10° to 70°), two
-hemispheres (70°S to 70°N) and a full globe (pole to pole, wrapping). Physical
+The setup's Latitude frame choice offers a northern band, both hemispheres
+and pole-to-pole coverage. It does not change the map boundary. Pole-to-pole
+cylinders share polar reconstruction values, close polar
+outlets and seed the connected ocean in the deepest basin. Physical
 transport lengths stay in map kilometres; only the front-mixing width is capped
 at 6° of latitude, so a small full-globe map keeps distinct belts. A numerical
 patch without a world frame sits at the mid latitude.
@@ -1374,13 +1379,16 @@ not invent finer terrain or implement physical meander migration.
 
 ### Inland work-area drainage
 
-Rectangular world meshes describe a finite planar work area. If an epoch leaves
+Open rectangular meshes describe a finite planar work area. If an epoch leaves
 no connected ocean in that area, priority flooding uses its boundary as the
 external drainage outlet. Ocean-connected drainage remains the default whenever
 an ocean is present; subsequent epochs recompute the roots. This preserves sea
 level and terrain instead of creating water to satisfy the solver. The reference
 disk retains its closed-world requirement. This numerical drainage boundary is
 separate from the inherited parent-boundary fields used by refinement.
+Cylinder has no east/west outlet; pole-to-pole coverage also closes the polar
+faces. These boundaries retain the existing approximate physical metre chart,
+without introducing spherical geodesic transport.
 
 ## Continuous terrain and adaptive generation — replacement plan
 

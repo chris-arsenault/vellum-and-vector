@@ -19,6 +19,14 @@ import {
 import { physicalSampler } from "./physicalMetric";
 import type { PhysicalMesh } from "./mesh";
 
+/** Polygon overlays can also return isolated boundary lines; these are not surface area. */
+export function areaGeometry(shape: Geometry | null): Geometry | null {
+  if (!shape || shape.type === "Polygon" || shape.type === "MultiPolygon") return shape;
+  if (shape.type !== "GeometryCollection") return null;
+  const polygons = shape.geometries.map(areaGeometry).filter((g): g is Geometry => Boolean(g));
+  return polygons.length ? spatial.unionAll(polygons) : null;
+}
+
 export function lakeFootprint(
   state: GenerationState,
   members: number[],
@@ -74,7 +82,7 @@ export function oceanFootprint(state: GenerationState) {
         0,
         triangleBoundary(mesh, (i) => depths[i])
       );
-  return shape && spatial.intersection(shape, state.domain.scope.footprint);
+  return areaGeometry(shape && spatial.intersection(shape, state.domain.scope.footprint));
 }
 
 export function membershipSampler(state: GenerationState, includes: (cell: number) => number) {
@@ -92,7 +100,11 @@ export function membershipContour(
 ) {
   const mesh = state.physical!.map.mesh,
     valueAt = membershipSampler(state, includes);
-  if (mesh.topology || [...triangleSupport(mesh, members)].some((i) => mesh.boundary[i]))
+  if (
+    mesh.topology ||
+    mesh.periodic ||
+    [...triangleSupport(mesh, members)].some((i) => mesh.boundary[i])
+  )
     return geographicContour(state, members, valueAt);
   return linearFieldContour(triangleFans(mesh, members, includes), valueAt);
 }
@@ -110,7 +122,11 @@ export function combinedContour(
   const mesh = state.physical!.map.mesh,
     samplers = terms.map((term) => membershipSampler(state, term)),
     valueAt = (x: number, y: number) => combine(samplers.map((sample) => sample(x, y)));
-  if (mesh.topology || [...triangleSupport(mesh, members)].some((i) => mesh.boundary[i]))
+  if (
+    mesh.topology ||
+    mesh.periodic ||
+    [...triangleSupport(mesh, members)].some((i) => mesh.boundary[i])
+  )
     return geographicContour(state, members, valueAt, 0);
   return linearFieldContour(combinedFans(mesh, members, terms, combine), valueAt, 0);
 }
@@ -164,7 +180,7 @@ export function fillSmallHoles(
   const filled = polygons.map(([outer, ...holes]) => [outer, ...holes.filter(keep)]);
   return shape.type === "Polygon"
     ? { type: "Polygon", coordinates: filled[0] }
-    : { type: "MultiPolygon", coordinates: filled };
+    : spatial.unionAll(filled.map((coordinates) => ({ type: "Polygon", coordinates })));
 }
 export function geographicContour(
   state: GenerationState,

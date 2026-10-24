@@ -1,3 +1,4 @@
+import { meshDeltaX } from "./mesh";
 // ImpactCrateringLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
@@ -29,7 +30,7 @@ function centers(map: PhysicalField, c: PhysicalContext): WorldCandidate[] {
   const ranked = worldCandidates(map.mesh, c.Seed, Math.max(256, count * 256)).sort(
     (a, b) => b.priority - a.priority
   );
-  return separatedCandidates(ranked, count, c.Profile.ImpactMinimumSpacing);
+  return separatedCandidates(ranked, count, c.Profile.ImpactMinimumSpacing, map.mesh);
 }
 export function plannedImpacts(map: PhysicalField, c: PhysicalContext) {
   if (c.IsEvolutionEpoch && c.EpochIndex >= c.EpochCount - 1) return [];
@@ -130,7 +131,10 @@ function applyImpact(
   let excavation = 0;
   const candidates: [number, number][] = [];
   for (let i = 0; i < map.mesh.count; i++) {
-    const distance = Math.hypot(map.mesh.x[i] - source.x, map.mesh.y[i] - source.y);
+    const distance = Math.hypot(
+      meshDeltaX(map.mesh, map.mesh.x[i] - source.x),
+      map.mesh.y[i] - source.y
+    );
     excavation += (excavate(map, i, distance, radius, depth) / 1024) * map.mesh.areas[i];
     raiseRim(map, i, distance, radius, rim);
     shock(map, p, i, distance, radius, share);
