@@ -11,6 +11,7 @@ import {
 } from "./rasterPresentation";
 import { overlayStyle, overlayVariables, terrainStyle, terrainVariables } from "./rasterStyles";
 import type { SurfaceCategory } from "@atlas/domain";
+import { configureTerrainContours } from "./terrainContours";
 
 const classSignature = (classes: SurfaceCategory[] | null) =>
   classes ? classes.map((c) => `${c.code}${c.color}`).join("") : "";
@@ -57,6 +58,7 @@ function updateParts(
       layer.setStyle(style);
       layer.set("signature", signature);
     } else layer.updateStyleVariables(style.variables as Record<string, number>);
+    if (group === engine.image) configureTerrainContours(layer, Number(style.variables!.interval));
     if (layers.item(index) !== layer) {
       layers.remove(layer);
       layers.insertAt(index, layer);

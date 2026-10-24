@@ -85,7 +85,7 @@ function TerrainControls({
         <output>{view.exaggeration}×</output>
       </label>
       <label>
-        Contour interval · m
+        Minimum contour interval · m
         <input
           type="number"
           min="0.01"
@@ -97,6 +97,9 @@ function TerrainControls({
           }}
         />
       </label>
+      <p className="hint">
+        Contours become coarser as you zoom out. Every fifth line is emphasized.
+      </p>
     </>
   );
 }

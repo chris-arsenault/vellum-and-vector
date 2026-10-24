@@ -14,7 +14,8 @@ export const palettes = {
   viridis: ["#440154", "#3b528b", "#21918c", "#5ec962", "#fde725"],
   magma: ["#000004", "#51127c", "#b73779", "#fc8961", "#fcfdbf"],
   blueRed: ["#2166ac", "#92c5de", "#f7f7f7", "#f4a582", "#b2182b"],
-  terrain: ["#dae3bd", "#becda5", "#c3c3a8", "#d5ccba", "#f3f1e7"],
+  // Elevation alone stays rocky; snow and ice have their own physical colours.
+  terrain: ["#dae3bd", "#becda5", "#c3c3a8", "#b9ad98", "#a89f93"],
 };
 export function defaultRasterPresentation(): RasterPresentation {
   return {

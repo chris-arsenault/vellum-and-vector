@@ -14,6 +14,7 @@ import type { Raster } from "./types";
 import { categorical } from "./rasterTiles";
 import { scaledValue } from "./rasterPresentation";
 import { terrainWater } from "./terrainWater";
+import { terrainDisplaySampler } from "./terrainDisplay";
 
 function terrainAt(raster: Raster, locate: AdaptivePointLocator) {
   const waterAt = terrainWater(raster, locate);
@@ -32,10 +33,10 @@ function surfaceAt(raster: Raster, channel: string, locate: AdaptivePointLocator
     return Number.isFinite(code) ? code : -1;
   };
 }
-/** Terrain tiles: value, mask, relative height, water kind, ice, step, final and natural classes. */
-export const terrainSampleBands = 8;
+/** Terrain tiles: physical value, mask, relative height, water, ice, step, final/natural classes, display height. */
+export const terrainSampleBands = 9;
 
-/** Sampling is shared with geographic reads; pixels never introduce new terrain. */
+/** Physical bands share geographic reads; display height only generalizes contours and relief. */
 export function numericTileSampler(raster: Raster) {
   const footprint = new GeoJSON().readGeometry(raster.footprint)!;
   const locate = adaptivePointLocator();
@@ -45,6 +46,7 @@ export function numericTileSampler(raster: Raster) {
     : fieldInterpolator(raster.field, raster.channel, false, locate);
   const active = activeSampler(raster.field, raster.channel, locate);
   const terrain = raster.channel === "elevation" ? terrainAt(raster, locate) : null;
+  const display = terrain ? terrainDisplaySampler(raster.field, locate) : null;
   const surface = terrain ? surfaceAt(raster, "finalSurface", locate) : null;
   const natural = terrain ? surfaceAt(raster, "naturalSurface", locate) : null;
   const bands = terrain ? terrainSampleBands : 3;
@@ -59,7 +61,7 @@ export function numericTileSampler(raster: Raster) {
         const value = valueAt(p);
         if (!Number.isFinite(value)) continue;
         const companions = terrain
-          ? [...terrain(p, value), dx, surface!(p), natural!(p)]
+          ? [...terrain(p, value), dx, surface!(p), natural!(p), display!(p)]
           : [scaledValue(value, "log")];
         if (!companions.every(Number.isFinite)) continue;
         values.set([value, 1, ...companions], (row * size + col) * bands);

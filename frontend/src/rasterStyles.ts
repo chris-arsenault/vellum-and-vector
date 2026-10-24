@@ -3,12 +3,13 @@ import type { Style } from "ol/layer/WebGLTile.js";
 import type { FieldStyle, RasterPresentation } from "./types";
 import { palettes, scaledValue } from "./rasterPresentation";
 import { biomes, type SurfaceCategory } from "@atlas/domain";
+import { contourScale, terrainContours } from "./terrainContours";
 
 const band = (index: number, x = 0, y = 0): Expr => ["band", index, x, y];
 const variable = (name: string): Expr => ["var", name];
 const mask: Expr = [">", band(2), 0.99];
 /** Terrain band order after `terrainTile`: see `terrainSampleBands`. */
-const terrainBand = { relative: 3, water: 4, ice: 5, surface: 7, natural: 8, east: 9, north: 10 };
+const terrainBand = { relative: 3, water: 4, ice: 5, surface: 7, natural: 8, east: 10, north: 11 };
 type ClassColor = Pick<SurfaceCategory, "code" | "color">;
 function classMatch(value: Expr, classes: ClassColor[], fallback: Expr): Expr {
   if (!classes.length) return fallback;
@@ -62,35 +63,31 @@ export function terrainVariables(view: RasterPresentation) {
     altitudeCos: Math.cos((view.sunElevation * Math.PI) / 180),
     exaggeration: view.exaggeration,
     interval: view.contourInterval,
+    ...contourScale(view.contourInterval, 1),
     topo: Number(view.base !== "relief"),
     surface: Number(view.base === "surface"),
   };
 }
-function gradients(): { east: Expr; north: Expr; slope: Expr; light: Expr } {
-  const east: Expr = ["*", variable("exaggeration"), band(terrainBand.east)];
-  const north: Expr = ["*", variable("exaggeration"), band(terrainBand.north)];
-  const slope: Expr = ["sqrt", ["+", ["*", east, east], ["*", north, north]]];
+function gradients(): { slope: Expr; light: Expr } {
+  const rawEast = band(terrainBand.east),
+    rawNorth = band(terrainBand.north);
+  const east: Expr = ["*", variable("exaggeration"), rawEast];
+  const north: Expr = ["*", variable("exaggeration"), rawNorth];
+  const exaggeratedSlope: Expr = ["sqrt", ["+", ["*", east, east], ["*", north, north]]];
+  const slope: Expr = ["sqrt", ["+", ["*", rawEast, rawEast], ["*", rawNorth, rawNorth]]];
   const facing: Expr = [
     "+",
     ["*", east, variable("azimuthSin")],
     ["*", north, variable("azimuthCos")],
   ];
   const dot: Expr = ["-", variable("altitudeSin"), ["*", variable("altitudeCos"), facing]];
-  const light: Expr = ["clamp", ["/", dot, ["sqrt", ["+", 1, ["*", slope, slope]]]], 0, 1];
-  return { east, north, slope, light };
-}
-function contourLine(slope: Expr): Expr {
-  const distance: Expr = [
-    "abs",
-    ["-", band(1), ["*", variable("interval"), ["round", ["/", band(1), variable("interval")]]]],
+  const light: Expr = [
+    "clamp",
+    ["/", dot, ["sqrt", ["+", 1, ["*", exaggeratedSlope, exaggeratedSlope]]]],
+    0,
+    1,
   ];
-  return [
-    "all",
-    [">", variable("topo"), 0],
-    [">", slope, 0.0001],
-    [">", variable("interval"), ["*", 5, slope, ["resolution"]]],
-    ["<", distance, ["*", 0.65, slope, ["resolution"]]],
-  ];
+  return { slope, light };
 }
 function landColor(): Expr {
   return [
@@ -140,12 +137,7 @@ export function terrainStyle(view: RasterPresentation, classes: SurfaceCategory[
     color: [
       "case",
       mask,
-      [
-        "case",
-        ["all", ["<", water, 0.5], contourLine(slope)],
-        "#92876b",
-        ["interpolate", ["linear"], ice, 0, color, 1, "#e2ede8"],
-      ],
+      terrainContours(["interpolate", ["linear"], ice, 0, color, 1, "#e2ede8"], slope),
       ["color", 0, 0, 0, 0],
     ],
   };

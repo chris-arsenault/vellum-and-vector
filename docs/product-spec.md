@@ -278,6 +278,14 @@ Display resolution must never be confused with generation status. When a layer h
 
 The renderer can display the same stable world feature at multiple scales without duplicating its domain identity. Multiple specialized visualizations are allowed: borders for jurisdictions, heatmaps for cultural prevalence, lines for networks, region fills for claims, point symbols for sites, and field maps for magic.
 
+Terrain contours retain emphasized index lines while crowded intermediate lines
+fade. Nested contour intervals transition with map scale above the creator's
+chosen minimum, independently of visual vertical exaggeration. Bounded display
+interpolation smooths regular elevation grids for contours and relief while
+physical heights, water boundaries and authored patch ownership retain their
+domain authority. Elevation colouring keeps dry summits rocky; snow and ice use
+their own surface and physical fields.
+
 ### 7.3 Political and cultural modeling
 
 **Political geography must not be reduced to a single mutually exclusive territory layer.** Distinguish, at minimum:

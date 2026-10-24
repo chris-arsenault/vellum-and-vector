@@ -14,6 +14,7 @@ import {
 import { numericTileSampler, numericTileSource } from "../src/numericTiles";
 import { terrainTile } from "../src/terrainTile";
 import { terrainStyle } from "../src/rasterStyles";
+import { configureTerrainContours } from "../src/terrainContours";
 import { defaultRasterPresentation } from "../src/rasterPresentation";
 import type { Raster } from "../src/types";
 
@@ -59,6 +60,7 @@ function fixture() {
       view.contourInterval = options.contours ? 50 : 100_000;
       view.sunElevation = options.shape === "ridge" ? 35 : 90;
       layer.setStyle(terrainStyle(view, surfaceCategories(canonryMagicPresets())));
+      configureTerrainContours(layer, view.contourInterval);
       const previous = layer.getSource();
       const rendered = new Promise<void>((resolve) => map.once("rendercomplete", () => resolve()));
       layer.setSource(
