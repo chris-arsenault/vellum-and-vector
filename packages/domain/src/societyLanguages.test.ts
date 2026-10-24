@@ -29,16 +29,15 @@ it("merges weighted language shares without inventing speakers or mutating sourc
   expect(groups).toEqual(before);
 });
 
-it("retains distinct people, cultures, religions and practices when merging languages", () => {
+it("retains distinct people, cultures and religions when merging languages", () => {
   const base = group(100, "A");
   const groups = [
     base,
     { ...base, people: "new people" },
     { ...base, culture: "new culture" },
     { ...base, religions: ["faith"] },
-    { ...base, practices: ["pastoralism"] },
   ];
-  expect(mergePopulation(groups)).toHaveLength(5);
+  expect(mergePopulation(groups)).toHaveLength(4);
 });
 
 it("accepts mixed shares and preserves them when other demographic properties change", () => {

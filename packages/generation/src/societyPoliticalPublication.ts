@@ -3,6 +3,7 @@ import type { Geometry } from "geojson";
 import type { GenerationState } from "./process";
 import { generatedFeature, putGenerated } from "./mapFeatures";
 import { isWorldSociety } from "./societyMapScope";
+import { polityCharacter } from "./societyCharacter";
 
 const oceanMasks = new WeakMap<Geometry, (geometry: Geometry) => Geometry | null>();
 function excludeOcean(shape: Geometry, ocean: Geometry) {
@@ -94,8 +95,12 @@ function publishTerritory(
   putGenerated(state, feature);
 }
 export function publishPolitics(state: GenerationState) {
-  const politics = state.society!.region.politics!;
+  const region = state.society!.region,
+    politics = region.politics!;
   for (const polity of politics.polities) {
+    // What the polity is, read from the communities it holds; the territories carry the rest.
+    const entity = state.domain.world.entities[polity.id];
+    if (entity) entity.attributes.character = polityCharacter(region, polity);
     const sovereign = new Set(
       Object.keys(politics.sovereignty).filter((id) => politics.sovereignty[id] === polity.id)
     );

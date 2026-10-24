@@ -5,11 +5,12 @@ import { diffuseCultures } from "./societyCulture";
 import { evolvePolitics } from "./societyPolitics";
 import { applySocietyWorks } from "./societyWorks";
 import { useSocietyMagic } from "./societyMagic";
+import { fishWaters, learnPractices } from "./societyPractices";
 import { refreshSocietyEnvironment } from "./societyEnvironment";
 import { resolveSocietyHazards } from "./societyHazards";
 import { evolveSettlements } from "./societySettlements";
 
-/** One decadal cycle of feedback: people, works, magic use, environment, hazards, settlements. */
+/** One decadal cycle of feedback: people, works, magic use, learned practices, environment, hazards, settlements. */
 export function societyCycle(
   state: GenerationState,
   context: MapProcessContext,
@@ -22,6 +23,8 @@ export function societyCycle(
   if (context.parameters.cultural) diffuseCultures(state, context, dt);
   applySocietyWorks(state, context, dt);
   useSocietyMagic(state, context, dt);
+  learnPractices(state, context, dt);
+  fishWaters(state, dt);
   refreshSocietyEnvironment(state, context, dt, cycle.final);
   resolveSocietyHazards(state, context, dt);
   evolveSettlements(state, context, dt);

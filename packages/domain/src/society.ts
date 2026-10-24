@@ -1,8 +1,9 @@
 import type { Position } from "./model";
 import type { Geometry } from "geojson";
 import { mergeLanguageShares, withLanguageShares, type LanguageShares } from "./societyLanguages";
+import { mergePracticeShares, withPracticeShares, type PracticeShares } from "./societyPractices";
 
-/** A demographic group. Language shares are marginals, not enumerated combinations. */
+/** A demographic group. Language and practice shares are marginals, not enumerated combinations. */
 export interface PopulationGroup {
   people: string;
   culture: string | null;
@@ -13,6 +14,8 @@ export interface PopulationGroup {
   languageShares?: LanguageShares;
   religions: string[];
   practices: string[];
+  /** When present, authoritative practice weights; the list above summarizes these shares. */
+  practiceShares?: PracticeShares;
   count: number;
 }
 export interface SocietySupport {
@@ -252,13 +255,9 @@ export interface SocietyMagicPractice {
 export function population(community: Pick<SocietyCommunity, "groups">) {
   return community.groups.reduce((sum, group) => sum + group.count, 0);
 }
+/** People, culture and faith distinguish groups; languages and practices are shares within one. */
 export function populationKey(group: Omit<PopulationGroup, "count">) {
-  return JSON.stringify([
-    group.people,
-    group.culture,
-    [...group.religions].sort(),
-    [...group.practices].sort(),
-  ]);
+  return JSON.stringify([group.people, group.culture, [...group.religions].sort()]);
 }
 export function mergePopulation(groups: PopulationGroup[]): PopulationGroup[] {
   const combined = new Map<string, PopulationGroup>();
@@ -267,7 +266,10 @@ export function mergePopulation(groups: PopulationGroup[]): PopulationGroup[] {
     const key = populationKey(group),
       previous = combined.get(key);
     if (previous) {
-      const merged = withLanguageShares(previous, mergeLanguageShares(previous, group));
+      const merged = withPracticeShares(
+        withLanguageShares(previous, mergeLanguageShares(previous, group)),
+        mergePracticeShares(previous, group)
+      );
       merged.count += group.count;
       combined.set(key, merged);
     } else combined.set(key, { ...group, count: group.count });

@@ -9,19 +9,10 @@ import { changeSample, editableSamples, makeWork, workSamples } from "./societyW
 import { nearestSample } from "./societySpatial";
 import { societyValue } from "./societySupport";
 import { peopleTrait } from "./societyTraits";
-import { samplesInBox } from "./societySpatial";
+import { practiceSkill } from "./societySkill";
+import { accessibleDive, magicAt } from "./societyMagicAccess";
 
-export function magicAt(
-  state: GenerationState,
-  propagation: string,
-  i: number,
-  channel = "intensity"
-) {
-  const system = state.domain.world.magicSystems?.find(
-    (s) => s.enabled && s.propagation === propagation
-  );
-  return system ? societyValue(state, `magic:${system.id}:${channel}`, i) / 1000 : 0;
-}
+export { magicAt } from "./societyMagicAccess";
 function initialPractice(state: GenerationState, c: SocietyCommunity): SocietyMagicPractice {
   const i = nearestSample(state, c.position),
     ice = societyValue(state, "iceThickness", i);
@@ -59,13 +50,19 @@ function workFor(
   region.works.push(work);
   return work;
 }
+/** The factor a community's practice earns in a channel; skilled hands mine, read and dive more. */
+type Skill = (channel: string) => number;
 function fireUse(
   state: GenerationState,
   c: SocietyCommunity,
   practice: SocietyMagicPractice,
-  years: number
+  years: number,
+  skill: Skill
 ) {
-  const extracted = Math.min(practice.coreDeposit, population(c) * years * 0.002);
+  const extracted = Math.min(
+    practice.coreDeposit,
+    population(c) * years * 0.002 * skill("fire-forge")
+  );
   practice.coreDeposit -= extracted;
   practice.coreSupply += extracted;
   const demand = population(c) * years * 0.0005,
@@ -107,7 +104,8 @@ function auroraUse(
   state: GenerationState,
   c: SocietyCommunity,
   p: SocietyMagicPractice,
-  years: number
+  years: number,
+  skill: Skill
 ) {
   if (p.crystals <= 0) return;
   const i = nearestSample(state, c.position),
@@ -116,7 +114,7 @@ function auroraUse(
   const retained = Math.min(1, societyValue(state, "iceThickness", i) / 10) * cold;
   p.crystals *= Math.exp((-years * (1 - retained)) / 200);
   p.charge = Math.min(p.crystals, p.charge + (intensity * p.crystals * years) / 50);
-  p.readers = (population(c) * 0.005) / (1 + p.strain);
+  p.readers = (population(c) * 0.005 * skill("aurora-archive")) / (1 + p.strain);
   const use = Math.min(p.charge, p.readers * years * 0.02);
   p.charge -= use;
   p.strain = p.strain * Math.exp(-years / 20) + use / Math.max(1, p.readers * 100);
@@ -133,7 +131,8 @@ function pressureUse(
   state: GenerationState,
   c: SocietyCommunity,
   p: SocietyMagicPractice,
-  years: number
+  years: number,
+  skill: Skill
 ) {
   const i = accessibleDive(state, c, p.depthLimit);
   const nearby = state.society!.region.works.find(
@@ -149,7 +148,7 @@ function pressureUse(
   const ocean = societyValue(state, "water", at) === 1;
   const enabled = ocean && depth >= 50 && depth <= p.depthLimit;
   const intensity = enabled ? magicAt(state, "ocean-rays", at) : 0;
-  p.divers = intensity > 0 ? (population(c) * 0.002) / (1 + p.strain) : 0;
+  p.divers = intensity > 0 ? (population(c) * 0.002 * skill("pressure-diving")) / (1 + p.strain) : 0;
   p.pressureCharge = Math.max(
     0,
     p.pressureCharge * Math.exp(-years / 5) + intensity * p.divers * (1 - Math.exp(-years / 5))
@@ -173,27 +172,6 @@ function pressureUse(
     `${p.divers.toFixed(1)} practitioners reach ${depth.toFixed(0)} m within a ${p.depthLimit} m tolerance; directed force and subsonic contact consumed ${spent.toFixed(1)} carried charge.`,
   ];
 }
-function accessibleDive(state: GenerationState, c: SocietyCommunity, limit: number) {
-  let best = -1,
-    distance = Math.min(100000, Math.sqrt(c.areaKm2) * 1500);
-  const { x, y } = c.position;
-  for (const i of samplesInBox(state.surface, [
-    x - distance,
-    y - distance,
-    x + distance,
-    y + distance,
-  ])) {
-    const depth = societyValue(state, "waterDepth", i);
-    if (societyValue(state, "water", i) !== 1 || depth < 50 || depth > limit) continue;
-    const p = gridPosition(state.surface, i),
-      d = Math.hypot(p.x - c.position.x, p.y - c.position.y);
-    if (d < distance) {
-      best = i;
-      distance = d;
-    }
-  }
-  return best;
-}
 function distributeCores(state: GenerationState, years: number) {
   const region = state.society!.region,
     practices = new Map(region.magic.map((p) => [p.communityId, p]));
@@ -216,11 +194,12 @@ export function useSocietyMagic(state: GenerationState, context: MapProcessConte
   region.magic = region.communities.map((c) => previous.get(c.id) ?? initialPractice(state, c));
   for (const [i, c] of region.communities.entries()) {
     if (c.protected) continue;
-    const p = region.magic[i];
+    const p = region.magic[i],
+      skill = practiceSkill(c.groups);
     p.injuries *= Math.exp(-years / 30);
-    fireUse(state, c, p, years);
-    auroraUse(state, c, p, years);
-    pressureUse(state, c, p, years);
+    fireUse(state, c, p, years, skill);
+    auroraUse(state, c, p, years, skill);
+    pressureUse(state, c, p, years, skill);
   }
   distributeCores(state, years);
   context.recordCause({

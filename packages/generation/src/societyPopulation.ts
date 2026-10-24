@@ -12,6 +12,7 @@ import { createSocietyGeography, refreshSocietySupport } from "./societyGeograph
 import { societyAncestor, inheritSociety } from "./societyInheritance";
 import { peopleTrait } from "./societyTraits";
 import { startingPopulations } from "./societySettlements";
+import { practiceOpportunities, seekerShares, seekingFactor } from "./societySeeking";
 
 export function initializePopulation(state: GenerationState, context: MapProcessContext) {
   const prior = societyAncestor(state);
@@ -157,6 +158,9 @@ export function migratePopulation(state: GenerationState, years: number, mobilit
   const incoming: PopulationGroup[][] = communities.map(() => []),
     fractions = communities.map(() => 0);
   const routes: { from: number; to: number; weight: number }[] = [];
+  // Room per head decides where people are drawn; what they know how to do steers how many go.
+  const offers = practiceOpportunities(state),
+    seekers = seekerShares(communities);
   for (const link of connections) {
     const a = index.get(link.from)!,
       b = index.get(link.to)!;
@@ -168,7 +172,10 @@ export function migratePopulation(state: GenerationState, years: number, mobilit
     const difference = Math.log1p(opportunity(b)) - Math.log1p(opportunity(a));
     const from = difference > 0 ? a : b,
       to = difference > 0 ? b : a;
-    const weight = Math.abs(difference) * Math.exp(-link.travelCost / 200000);
+    const weight =
+      Math.abs(difference) *
+      Math.exp(-link.travelCost / 200000) *
+      seekingFactor(seekers[from], offers[to]);
     routes.push({ from, to, weight });
     fractions[from] += weight;
   }

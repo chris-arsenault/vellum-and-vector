@@ -1,5 +1,13 @@
-import { population, semanticId, type SocietyPolity, type Entity } from "@atlas/domain";
+import {
+  communityPractices,
+  population,
+  semanticId,
+  type PracticeShares,
+  type SocietyPolity,
+  type Entity,
+} from "@atlas/domain";
 import type { GenerationState, MapProcessContext, MapProcess } from "./process";
+import { practiceOpportunities, seekingFactor } from "./societySeeking";
 import { centers } from "./mapPeople";
 import { initializePopulation, nearestCommunity } from "./societyPopulation";
 import { communityReach } from "./societyContact";
@@ -67,7 +75,13 @@ function institutionalSupport(state: GenerationState, polity: SocietyPolity) {
     )
     .reduce((sum, f) => sum + Number(f.attributes.influence ?? 0.1), 0);
 }
-function polityReach(state: GenerationState, polity: SocietyPolity, capacity: number) {
+/** Reach falls with travel cost and rises where the seat's people know how to hold the country. */
+function polityReach(
+  state: GenerationState,
+  polity: SocietyPolity,
+  capacity: number,
+  offers: PracticeShares[]
+) {
   const region = state.society!.region;
   const seat = region.communities.findIndex((c) => c.id === polity.seat);
   const distance = communityReach(region, seat);
@@ -75,12 +89,18 @@ function polityReach(state: GenerationState, polity: SocietyPolity, capacity: nu
   const scale = Math.max(1000, Number(entity?.attributes.reach ?? 250000));
   const health = Math.max(0, Math.min(1, polity.support));
   const institution = institutionalSupport(state, polity);
+  const seeker = seat >= 0 ? communityPractices(region.communities[seat].groups) : {};
   return Float64Array.from(distance, (d, i) => {
     const c = region.communities[i],
       pressure = population(c) / Math.max(1, c.support.capacity);
     const damage = c.status === "ruined" ? 0.25 : 1;
     return (
-      (Math.exp(-d / scale) * capacity * health * damage * (1 + institution)) /
+      (Math.exp(-d / scale) *
+        capacity *
+        health *
+        damage *
+        (1 + institution) *
+        seekingFactor(seeker, offers[i])) /
       Math.max(1, pressure)
     );
   });
@@ -200,9 +220,10 @@ export function evolvePolitics(state: GenerationState, context: MapProcessContex
   for (const p of politics.polities) updateSupport(state, p, years);
   applyPoliticalAnchors(state, era);
   relocatePolitySeats(state, era);
+  const offers = practiceOpportunities(state);
   controlCommunities(
     state,
-    politics.polities.map((p) => polityReach(state, p, capacity)),
+    politics.polities.map((p) => polityReach(state, p, capacity, offers)),
     years
   );
   recordPoliticalChanges(state, years, era);

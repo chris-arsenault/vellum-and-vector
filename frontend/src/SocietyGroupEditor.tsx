@@ -1,6 +1,8 @@
 import {
   languageShares,
+  practiceShares,
   withLanguageShares,
+  withPracticeShares,
   type PopulationGroup,
   type World,
 } from "@atlas/domain";
@@ -54,12 +56,16 @@ export function SocietyGroupEditor({
             <input
               value={g.practices.join(", ")}
               onChange={(e) =>
-                update(i, {
-                  practices: e.target.value
-                    .split(",")
-                    .map((s) => s.trim())
-                    .filter(Boolean),
-                })
+                update(
+                  i,
+                  practicePatch(
+                    g,
+                    e.target.value
+                      .split(",")
+                      .map((s) => s.trim())
+                      .filter(Boolean)
+                  )
+                )
               }
             />
           </label>
@@ -73,6 +79,16 @@ export function SocietyGroupEditor({
 }
 function emptyGroup(people = "residents"): PopulationGroup {
   return { people, culture: null, languages: [], religions: [], practices: [], count: 0 };
+}
+/** A named practice keeps the share it had; a new one takes the equal share a list implies. */
+function practicePatch(group: PopulationGroup, names: string[]): Partial<PopulationGroup> {
+  const existing = practiceShares(group),
+    equal = practiceShares({ practices: names });
+  const { practices, practiceShares: shares } = withPracticeShares(
+    group,
+    Object.fromEntries(names.map((id) => [id, existing[id] ?? equal[id] ?? 1]))
+  );
+  return { practices, practiceShares: shares };
 }
 function Affiliations({
   world,

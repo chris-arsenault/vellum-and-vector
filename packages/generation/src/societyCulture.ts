@@ -3,6 +3,11 @@ import {
   languageKnowledge,
   languageShares,
   withLanguageShares,
+  communityPractices,
+  livelihoodShares,
+  practiceShares,
+  relaxShares,
+  withPracticeShares,
   population,
   semanticId,
   type Entity,
@@ -13,7 +18,7 @@ import {
 import type { GenerationState, MapProcess, MapProcessContext } from "./process";
 import { centers } from "./mapPeople";
 import { initializePopulation, nearestCommunity } from "./societyPopulation";
-import { communityReach } from "./societyContact";
+import { communityReach, contactCosts } from "./societyContact";
 import { namingCulture } from "./atlasNaming";
 import { evolveLanguageUse } from "./societyLanguage";
 
@@ -77,23 +82,23 @@ export function initializeCultures(state: GenerationState, context: MapProcessCo
         state.domain.world,
         origin.attributes.center as Position
       ).id;
+    // Founders live by what their country yields; the shares then follow what they do.
+    const founded = livelihoodShares(c.support);
     c.groups = mergePopulation(
       c.groups.flatMap((group) =>
         group.culture
           ? [group]
-          : founders.map((origin) => ({
-              ...foundingGroup(state, group, origin),
-              count: group.count / founders.length,
-              practices: c.support.farming > c.support.grazing ? ["cultivation"] : ["pastoralism"],
-            }))
+          : founders.map((origin) =>
+              withPracticeShares(
+                { ...foundingGroup(state, group, origin), count: group.count / founders.length },
+                group.practices.length ? practiceShares(group) : founded
+              )
+            )
       )
     );
   }
 }
-function dominantMembership(
-  groups: PopulationGroup[],
-  kind: "languages" | "religions" | "practices"
-) {
+function dominantMembership(groups: PopulationGroup[], kind: "languages" | "religions") {
   if (kind === "languages")
     return Object.entries(languageKnowledge(groups)).sort(
       (a, b) => b[1] - a[1] || a[0].localeCompare(b[0])
@@ -102,19 +107,22 @@ function dominantMembership(
   for (const g of groups) for (const id of g[kind]) totals.set(id, (totals.get(id) ?? 0) + g.count);
   return [...totals].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
 }
+/** The adopting part takes the neighbour's language and faith and meets its practices halfway. */
 function adopt(groups: PopulationGroup[], source: PopulationGroup[], fraction: number) {
   const language = dominantMembership(source, "languages"),
     faith = dominantMembership(source, "religions"),
-    practice = dominantMembership(source, "practices");
+    practices = communityPractices(source);
   return mergePopulation(
     groups.flatMap((g) => [
       { ...g, count: g.count * (1 - fraction) },
-      {
-        ...learnLanguage(g, language),
-        count: g.count * fraction,
-        religions: [...new Set([...g.religions, ...(faith ? [faith] : [])])],
-        practices: [...new Set([...g.practices, ...(practice ? [practice] : [])])],
-      },
+      withPracticeShares(
+        {
+          ...learnLanguage(g, language),
+          count: g.count * fraction,
+          religions: [...new Set([...g.religions, ...(faith ? [faith] : [])])],
+        },
+        relaxShares(practiceShares(g), practices, 0.5)
+      ),
     ])
   );
 }
@@ -127,14 +135,16 @@ function learnLanguage(group: PopulationGroup, language: string | undefined) {
   });
 }
 function strongestContacts(state: GenerationState) {
-  const { communities, connections } = state.society!.region;
+  const region = state.society!.region,
+    { communities, connections } = region;
   const byId = new Map(communities.map((c, i) => [c.id, i]));
   const contacts = communities.map(() => ({ index: -1, strength: 0 }));
+  const cost = contactCosts(region);
   for (const link of connections) {
     const a = byId.get(link.from)!,
       b = byId.get(link.to)!;
     if (population(communities[a]) < 1 || population(communities[b]) < 1) continue;
-    const strength = Math.exp(-link.travelCost / 150000);
+    const strength = Math.exp(-cost(link) / 150000);
     if (strength > contacts[a].strength) contacts[a] = { index: b, strength };
     if (strength > contacts[b].strength) contacts[b] = { index: a, strength };
   }

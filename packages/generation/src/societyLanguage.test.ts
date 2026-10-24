@@ -224,7 +224,9 @@ it("matches language marginals of the prior splitting rule for one contact step"
   ];
   neighbor.groups = [group("B")];
   region.connections = [region.connections[0]];
-  const fraction = -Math.expm1((-10 * Math.exp(-1000 / 150000)) / 400);
+  // The link is shortened by the language the two ends share: home knows B at 0.4.
+  const cost = 1000 / (1 + 0.5 * 0.4);
+  const fraction = -Math.expm1((-10 * Math.exp(-cost / 150000)) / 400);
   evolveLanguageUse(state, context, 10);
   const shares = languageShares(home.groups[0]);
   expect(shares.A.use).toBeCloseTo(0.8 * (1 - fraction), 12);

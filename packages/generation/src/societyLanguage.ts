@@ -6,7 +6,7 @@ import {
   type PopulationGroup,
 } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
-import { effectiveContactCost } from "./societyContact";
+import { contactCosts } from "./societyContact";
 
 interface Contact {
   language: string;
@@ -17,11 +17,12 @@ function contacts(state: GenerationState) {
   const indices = new Map(region.communities.map((c, i) => [c.id, i]));
   const mixes = region.communities.map((c) => languageUse(c.groups));
   const exposures: Contact[][] = region.communities.map(() => []);
+  const cost = contactCosts(region);
   for (const link of region.connections) {
     const a = indices.get(link.from)!,
       b = indices.get(link.to)!;
     if (population(region.communities[a]) < 1 || population(region.communities[b]) < 1) continue;
-    const strength = Math.exp(-effectiveContactCost(region, link) / 150000);
+    const strength = Math.exp(-cost(link) / 150000);
     for (const [target, source] of [
       [a, b],
       [b, a],
@@ -58,6 +59,32 @@ function adoptUse(groups: PopulationGroup[], exposure: Contact[], years: number,
     return withLanguageShares(group, shares);
   });
 }
+/**
+ * A language kept by fewer than one naming in a hundred is no longer passed on; knowledge of
+ * it fades over three centuries toward the little use that remains. This is the brake on
+ * reach through diversity: a seat that consolidates on one language loses the others and the
+ * connections they opened. Contact itself never erases knowledge.
+ */
+const spokenUse = 0.01,
+  forgettingYears = 300;
+function forgetUnspoken(groups: PopulationGroup[], years: number) {
+  const kept = Math.exp(-years / forgettingYears);
+  return groups.map((group) => {
+    const shares = languageShares(group);
+    if (Object.values(shares).every((share) => share.use >= spokenUse)) return group;
+    return withLanguageShares(
+      group,
+      Object.fromEntries(
+        Object.entries(shares).map(([id, share]) => [
+          id,
+          share.use >= spokenUse
+            ? share
+            : { knowledge: share.use + (share.knowledge - share.use) * kept, use: share.use },
+        ])
+      )
+    );
+  });
+}
 /** Read all sources before writing any destination; contact changes use without moving people. */
 export function evolveLanguageUse(
   state: GenerationState,
@@ -70,7 +97,7 @@ export function evolveLanguageUse(
   const mobility = Number(context.epochs.at(-1)?.variables.mobility ?? 1);
   for (const [i, c] of work.region.communities.entries()) {
     if (c.protected || population(c) <= 0) continue;
-    c.groups = adoptUse(c.groups, exposure[i], years, mobility);
+    c.groups = forgetUnspoken(adoptUse(c.groups, exposure[i], years, mobility), years);
   }
   context.recordCause({
     kind: "domain",

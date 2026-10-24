@@ -71,4 +71,5 @@ export * from "./society";
 export * from "./societyEditing";
 export * from "./societyFeatures";
 export * from "./societyLanguages";
+export * from "./societyPractices";
 export * from "./drainageRefinement";

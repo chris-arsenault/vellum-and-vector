@@ -13,6 +13,7 @@ import { createRNG, pickWeighted } from "@atlas/name-forge";
 import type { Geometry } from "geojson";
 import type { GenerationState, MapProcess } from "./process";
 import { atlasName, nameGeographicFeature, nameMetadata } from "./atlasNaming";
+import { polityCharacter, polityTerm } from "./societyCharacter";
 
 function selectLanguage(world: World, weights: Record<string, number>, key: string) {
   const entries = Object.entries(weights)
@@ -46,8 +47,17 @@ export function societyWorkName(world: World, community: SocietyCommunity, work:
     era: work.built,
   });
 }
-/** Seat language establishes a polity's name without replacing languages inside its territory. */
-export function namePolity(world: World, entity: Entity, seat: SocietyCommunity, era: string) {
+/**
+ * Seat language establishes a polity's name without replacing languages inside its territory;
+ * the word the name ends in follows the polity's character once it has one.
+ */
+export function namePolity(
+  world: World,
+  entity: Entity,
+  seat: SocietyCommunity,
+  era: string,
+  term = "Commonwealth"
+) {
   if (entity.state !== "generated" || entity.attributes.namedInEra) return;
   const language = selectLanguage(world, languageUse(seat.groups), entity.id);
   if (!language) return;
@@ -55,7 +65,7 @@ export function namePolity(world: World, entity: Entity, seat: SocietyCommunity,
     key: entity.id,
     kind: "polity",
     subkind: "commonwealth",
-    term: "Commonwealth",
+    term,
     position: seat.position,
     language,
     era,
@@ -175,7 +185,9 @@ function finalizePolities(state: GenerationState, original: DomainSnapshot, era:
     const entity = world.entities[polity.id],
       seat = region.communities.find((c) => c.id === polity.seat);
     if (!seat || original.world.entities[entity.id] || entity.state !== "generated") continue;
-    namePolity(world, entity, seat, era);
+    const character = polityCharacter(region, polity);
+    entity.attributes.character = character;
+    namePolity(world, entity, seat, era, polityTerm(character));
     entity.attributes.namedInEra ??= era;
     refreshPolityLabels(world, original, entity);
   }

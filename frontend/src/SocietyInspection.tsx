@@ -2,6 +2,7 @@ import {
   population,
   languageShares,
   languageUse,
+  practiceShares,
   type AtlasFeature,
   type World,
   type SocietyMagicPractice,
@@ -75,16 +76,32 @@ function SettlementSite({ feature }: { feature: AtlasFeature }) {
     </p>
   );
 }
+/** A polity's character as published: the practices and languages of the people it holds. */
+function polityCharacterLabel(world: World, id: string) {
+  const character = world.entities[id]?.attributes.character as
+    | { practices: Record<string, number>; languages: number; communities: number }
+    | undefined;
+  if (!character) return null;
+  const practices = Object.entries(character.practices)
+    .sort(([a, x], [b, y]) => y - x || a.localeCompare(b))
+    .slice(0, 3)
+    .map(([key, share]) => `${key} ${(share * 100).toFixed(0)}%`)
+    .join(" · ");
+  return `${label(world, id)}: ${practices || "no settled practices"}; ${character.languages} language${character.languages === 1 ? "" : "s"} widely known across ${character.communities} communities`;
+}
 function PoliticalSeat({ world, feature }: { world: World; feature: AtlasFeature }) {
-  if (feature.attributes.settlementRole === "capital")
+  if (feature.attributes.settlementRole === "capital") {
+    const polities = (feature.attributes.capitalOf ?? []) as string[];
     return (
-      <p>
-        Capital of{" "}
-        {((feature.attributes.capitalOf ?? []) as string[])
-          .map((id) => label(world, id))
-          .join(", ")}
-      </p>
+      <>
+        <p>Capital of {polities.map((id) => label(world, id)).join(", ")}</p>
+        {polities.map((id) => {
+          const character = polityCharacterLabel(world, id);
+          return character ? <p key={id}>{character}</p> : null;
+        })}
+      </>
     );
+  }
   if (feature.attributes.settlementRole === "regionalCapital")
     return <p>Regional center of {label(world, feature.attributes.polityId as string)}</p>;
   return null;
@@ -105,6 +122,7 @@ function PopulationComposition({
           <th>Languages known</th>
           <th>Naming use</th>
           <th>Traditions</th>
+          <th>Practices</th>
         </tr>
       </thead>
       <tbody>
@@ -115,6 +133,7 @@ function PopulationComposition({
             <td>{groupLanguageLabel(world, g, "knowledge")}</td>
             <td>{groupLanguageLabel(world, g, "use")}</td>
             <td>{g.religions.map((id) => label(world, id)).join(", ")}</td>
+            <td>{practiceLabel(g)}</td>
           </tr>
         ))}
       </tbody>
@@ -131,6 +150,14 @@ function groupLanguageLabel(
       .filter(([, share]) => share[channel] > 0)
       .map(([id, share]) => `${label(world, id)} ${(share[channel] * 100).toFixed(1)}%`)
       .join(" · ") || "Unspecified"
+  );
+}
+/** Livelihood shares and magic practices, heaviest first; the list order already carries it. */
+function practiceLabel(group: SocietyCommunity["groups"][number]) {
+  const shares = practiceShares(group);
+  return (
+    group.practices.map((id) => `${id} ${(shares[id] * 100).toFixed(0)}%`).join(" · ") ||
+    "Unspecified"
   );
 }
 function languageUseLabel(world: World, use: Record<string, number>) {

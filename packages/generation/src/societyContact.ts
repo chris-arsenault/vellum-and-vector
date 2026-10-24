@@ -1,10 +1,31 @@
-import type { SocietyRegion, SocietyConnection } from "@atlas/domain";
+import { languageKnowledge, type SocietyRegion, type SocietyConnection } from "@atlas/domain";
 import { RouteHeap } from "./mapRouting";
 
+/**
+ * The share of language the two ends have in common: for each language, the lesser of the
+ * two populations' knowledge of it. Diversity extends reach through this: a seat whose
+ * people know many languages is understood along more of its connections.
+ */
+export function languageOverlap(a: Record<string, number>, b: Record<string, number>) {
+  let overlap = 0;
+  for (const [id, knowledge] of Object.entries(a)) overlap += Math.min(knowledge, b[id] ?? 0);
+  return Math.min(1, overlap);
+}
+/**
+ * What a connection costs to use for contact and reach, read once for a region's current
+ * state: memory access from an Aurora archive at either end shortens it, as does language
+ * the two ends share.
+ */
+export function contactCosts(region: SocietyRegion) {
+  const memory = new Map(region.magic.map((p) => [p.communityId, p.memoryAccess]));
+  const knowledge = new Map(region.communities.map((c) => [c.id, languageKnowledge(c.groups)]));
+  return (link: SocietyConnection) =>
+    link.travelCost /
+    (1 + 0.3 * Math.max(memory.get(link.from) ?? 0, memory.get(link.to) ?? 0)) /
+    (1 + 0.5 * languageOverlap(knowledge.get(link.from) ?? {}, knowledge.get(link.to) ?? {}));
+}
 export function effectiveContactCost(region: SocietyRegion, link: SocietyConnection) {
-  const a = region.magic.find((p) => p.communityId === link.from)?.memoryAccess ?? 0;
-  const b = region.magic.find((p) => p.communityId === link.to)?.memoryAccess ?? 0;
-  return link.travelCost / (1 + 0.3 * Math.max(a, b));
+  return contactCosts(region)(link);
 }
 
 /** Terrain/network distance, shared by transmission and political reach. */
@@ -14,16 +35,15 @@ export function communityReach(region: SocietyRegion, start: number) {
 /** Reuse one current travel graph when evaluating several centers in the same cycle. */
 export function communityDistances(region: SocietyRegion) {
   const index = new Map(region.communities.map((c, i) => [c.id, i]));
-  const memory = new Map(region.magic.map((p) => [p.communityId, p.memoryAccess]));
+  const cost = contactCosts(region);
   const edges: { to: number; cost: number }[][] = region.communities.map(() => []);
   for (const link of region.connections) {
     const a = index.get(link.from),
       b = index.get(link.to);
     if (a === undefined || b === undefined) continue;
-    const cost =
-      link.travelCost / (1 + 0.3 * Math.max(memory.get(link.from) ?? 0, memory.get(link.to) ?? 0));
-    edges[a].push({ to: b, cost });
-    edges[b].push({ to: a, cost });
+    const c = cost(link);
+    edges[a].push({ to: b, cost: c });
+    edges[b].push({ to: a, cost: c });
   }
   return (start: number) => distancesFrom(edges, start);
 }
