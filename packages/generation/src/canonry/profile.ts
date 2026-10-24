@@ -9,6 +9,8 @@ export const physicalProfile = {
   TectonicProvinceCount: 14,
   TectonicSiteCandidateMultiplier: 24,
   ContinentalAssemblyCount: 4,
+  // Relative variation in initial assembly area budgets; motion stays coherent within each.
+  ContinentalAssemblyGrowthVariation: 0.8,
   ContinentalCrustFraction: 0.48,
   ContinentalTransitionWidth: 260_000,
   ContinentalAssemblySeparationDepth: 0.38,

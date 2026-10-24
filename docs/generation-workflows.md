@@ -472,6 +472,15 @@ budgets follow ocean area, and coastal impulse budgets follow shoreline length.
 Their footprint widths, spacing, travel distances and physical feedback retain
 metre units. Climate coverage remains an explicit latitude-frame choice.
 
+Initial province sites are independently distributed, allowing unequal blocks
+and locally clustered boundaries. Continental assemblies grow from distributed
+anchors with unequal area budgets. Uniform world-space samples estimate the
+unwarped territory areas independently of terrain sampling; whole-block selection,
+warping and crust transitions make the resulting continental fraction approximate.
+Assembly motion remains coherent. Active boundaries and inter-assembly rifts use
+distance to the shared site bisector in the warped coordinate frame, keeping
+closely spaced sites from marking distant interiors as active margins.
+
 Regional refinement imports parent crust and accumulated material histories. It
 first realizes the relief its parent left latent (`canonry.refine-relief`,
 [ADR 0005](adr/0005-scale-contract.md)): the parent's gradient across one of its

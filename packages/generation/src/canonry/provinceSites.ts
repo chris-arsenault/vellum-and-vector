@@ -1,7 +1,7 @@
 // TectonicProvinceLayer.CreateSites and continental assembly growth, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import { clamp, lerp, round } from "./math";
+import { lerp } from "./math";
 import { hashUnit } from "./noise";
 import { worldCandidates } from "./worldSources";
 
@@ -35,20 +35,23 @@ function minimumDistance(sites: Candidate[], candidate: number, selected: number
     Infinity
   );
 }
-function separated(candidates: Candidate[], count: number): Candidate[] {
-  const indices = candidates.map((_, i) => i);
-  const selected = [bestIndex(indices, (i) => candidates[i].priority)];
-  while (selected.length < count)
-    selected.push(
-      bestIndex(
-        indices,
-        (i) => minimumDistance(candidates, i, selected) * (0.88 + candidates[i].priority * 0.24)
-      )
-    );
-  return selected.map((i) => candidates[i]);
+function territoryAreas(sites: Candidate[], samples: Candidate[]): Float64Array {
+  // Uniform world-space samples estimate unwarped territory area independently of the mesh.
+  // Every sample has the same represented area, so counts suffice for growth budgets.
+  const areas = new Float64Array(sites.length);
+  for (const sample of samples) {
+    let nearest = 0;
+    for (let i = 1; i < sites.length; i++)
+      if (distance2(sample, sites[i]) < distance2(sample, sites[nearest])) nearest = i;
+    areas[nearest]++;
+  }
+  return areas;
 }
-function anchors(sites: Candidate[], count: number): number[] {
-  const candidates = sites.map((_, i) => i);
+function anchors(sites: Candidate[], count: number, areas: Float64Array, target: number): number[] {
+  const indices = sites.map((_, i) => i);
+  // Seed each requested assembly without spending its whole area budget on a large block.
+  const smaller = indices.filter((i) => areas[i] <= target / count);
+  const candidates = smaller.length >= count ? smaller : indices;
   const chosen = [
     bestIndex(candidates, (i) => -radius2(sites[i]) / (0.8 + sites[i].priority * 0.4)),
   ];
@@ -105,12 +108,12 @@ function frontierSite(
     (i) => -assemblyDistance(sites, selected, i, assembly)
   );
 }
-function assemblies(sites: Candidate[], context: PhysicalContext): Int32Array {
+function assemblies(sites: Candidate[], areas: Float64Array, context: PhysicalContext): Int32Array {
   const profile = context.Profile,
     seed = context.EpochStableSeed;
-  const count = clamp(round(sites.length * profile.ContinentalCrustFraction), 2, sites.length - 2);
+  const target = areas.reduce((sum, area) => sum + area, 0) * profile.ContinentalCrustFraction;
   const result = new Int32Array(sites.length),
-    chosen = anchors(sites, profile.ContinentalAssemblyCount);
+    chosen = anchors(sites, profile.ContinentalAssemblyCount, areas, target);
   chosen.forEach((i, n) => {
     result[i] = n + 1;
   });
@@ -118,19 +121,36 @@ function assemblies(sites: Candidate[], context: PhysicalContext): Int32Array {
     const angle = hashUnit(seed ^ 0x67d3, i, 0) * Math.PI * 2;
     return [Math.cos(angle), Math.sin(angle)];
   });
-  let selected = chosen.length,
-    iteration = 0;
-  while (selected < count) {
-    const start = ((seed + iteration * 397) >>> 0) % chosen.length;
-    for (let offset = 0; offset < chosen.length && selected < count; offset++) {
-      const n = (start + offset) % chosen.length;
-      const next = frontierSite(sites, result, n + 1, chosen[n], directions[n]);
-      if (next >= 0) {
-        result[next] = n + 1;
-        selected++;
+  const weights = chosen.map(
+    (_, i) =>
+      1 + (hashUnit(seed ^ 0x4b19, i, 0) * 2 - 1) * profile.ContinentalAssemblyGrowthVariation
+  );
+  const weight = weights.reduce((sum, value) => sum + value, 0);
+  const occupied = Float64Array.from(chosen, (i) => areas[i]);
+  let total = occupied.reduce((sum, area) => sum + area, 0);
+  let selected = chosen.length;
+  while (selected < sites.length - 1) {
+    const options = chosen
+      .map((anchor, n) => ({
+        n,
+        next: frontierSite(sites, result, n + 1, anchor, directions[n]),
+      }))
+      .filter(
+        ({ next }) => next >= 0 && Math.abs(total + areas[next] - target) < Math.abs(total - target)
+      );
+    if (!options.length) break;
+    const pick = bestIndex(
+      options.map((_, i) => i),
+      (i) => {
+        const { n, next } = options[i];
+        return ((target * weights[n]) / weight - occupied[n] - areas[next] / 2) / weights[n];
       }
-    }
-    iteration++;
+    );
+    const { n, next } = options[pick];
+    result[next] = n + 1;
+    occupied[n] += areas[next];
+    total += areas[next];
+    selected++;
   }
   return result;
 }
@@ -142,8 +162,12 @@ export function createProvinceSites(map: PhysicalField, context: PhysicalContext
     seed,
     p.TectonicProvinceCount * p.TectonicSiteCandidateMultiplier
   );
-  const selected = separated(candidates, p.TectonicProvinceCount);
-  const groups = assemblies(selected, context);
+  // Independent seeded positions allow both sparse interiors and clusters of small blocks.
+  // Farthest-site packing imposed a nearly uniform spacing before any geology occurred.
+  const selected = [...candidates]
+    .sort((a, b) => b.priority - a.priority)
+    .slice(0, p.TectonicProvinceCount);
+  const groups = assemblies(selected, territoryAreas(selected, candidates), context);
   const motionOf = (salt: number, key: number): [number, number] => {
     const angle = hashUnit(seed ^ salt, key, 0) * Math.PI * 2;
     const speed = lerp(

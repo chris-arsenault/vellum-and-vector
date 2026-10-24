@@ -30,7 +30,11 @@ it("preserves broad crust transitions at matching relative positions on differen
   const fields = [1, 10].map((scale) => {
     const bounds: [number, number, number, number] = [0, 0, 4_000_000 * scale, 2_000_000 * scale];
     const map = createField(createWorldMesh(bounds, 4096, 0));
-    const profile = continentalWorldProfile(atlasPhysicalProfile(), bounds);
+    // Isolate broad crust blending from rifts, whose widths correctly retain metres.
+    const profile = continentalWorldProfile(
+      atlasPhysicalProfile({}, { ContinentalAssemblySeparationDepth: 0 }),
+      bounds
+    );
     tectonicProvinces(map, physicalContext(73, 0, profile));
     return map;
   });

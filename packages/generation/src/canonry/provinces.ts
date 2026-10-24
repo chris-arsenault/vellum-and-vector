@@ -54,6 +54,16 @@ function relativeMotion(sites: ProvinceSite[], selection: Selection): number {
     length = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
   return ((b.motionX - a.motionX) * dx) / length + ((b.motionY - a.motionY) * dy) / length;
 }
+function boundaryDistance(sites: ProvinceSite[], s: Selection): number {
+  if (s.second < 0) return Infinity;
+  const a = sites[s.nearest],
+    b = sites[s.second];
+  const separation = Math.hypot(b.x - a.x, b.y - a.y);
+  // Perpendicular distance to the bisector in the existing warped coordinate frame.
+  // A distance difference alone saturates at the site separation and makes close
+  // pairs appear active arbitrarily far from their shared boundary.
+  return (s.secondDistance ** 2 - s.nearestDistance ** 2) / (2 * separation);
+}
 function assemblyGap(sites: ProvinceSite[], s: Selection, context: PhysicalContext): number {
   if (s.second < 0) return 0;
   const a = sites[s.nearest].assembly,
@@ -61,7 +71,7 @@ function assemblyGap(sites: ProvinceSite[], s: Selection, context: PhysicalConte
   if (a === 0 || b === 0 || a === b) return 0;
   const p = context.Profile;
   const raw =
-    clamp(1 - (s.secondDistance - s.nearestDistance) / Math.max(0.001, p.RidgeWidth * 2.8), 0, 1) *
+    clamp(1 - boundaryDistance(sites, s) / Math.max(0.001, p.RidgeWidth * 1.4), 0, 1) *
     p.ContinentalAssemblySeparationDepth;
   return raw > 0 && relativeMotion(sites, s) < -p.TectonicConvergenceThreshold ? 0 : raw;
 }
@@ -73,12 +83,8 @@ function assignBoundary(
   context: PhysicalContext
 ) {
   const p = context.Profile;
-  const amount = clamp(
-    1 - (s.secondDistance - s.nearestDistance) / Math.max(0.001, p.RidgeWidth * 1.8),
-    0,
-    1
-  );
-  if (amount <= 0 || s.second < 0) {
+  const amount = clamp(1 - boundaryDistance(sites, s) / Math.max(0.001, p.RidgeWidth * 0.9), 0, 1);
+  if (amount <= 0) {
     for (const name of [
       "TectonicBoundaryCodes",
       "TectonicStrain",
