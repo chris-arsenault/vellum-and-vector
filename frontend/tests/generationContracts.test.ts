@@ -24,7 +24,9 @@ test("an invalid system name does not freeze unrelated generation switches", asy
   await expect(impacts).not.toBeChecked();
   await impacts.check();
   await expect(impacts).toBeChecked();
-  await expect(page.getByLabel("Meteor impacts · history budget", { exact: true })).toBeEnabled();
+  await expect(
+    page.getByLabel("Meteor impacts · history budget per 12 million km²", { exact: true })
+  ).toBeEnabled();
   await page
     .getByRole("navigation", { name: "Generation steps" })
     .getByRole("button", { name: /Review & generate/ })
@@ -37,11 +39,14 @@ test("switching magic strategies removes hidden errors and preserves visible pen
 }) => {
   const fire = await magic(page);
   await fire.getByText("Propagation & source controls", { exact: true }).click();
-  await fire.getByLabel("Maximum cores", { exact: true }).fill("");
+  const coreBudget = fire.getByLabel("Core-site budget per 5.76 million km² of land", {
+    exact: true,
+  });
+  await coreBudget.fill("");
   await fire.getByLabel("Propagation loss per kilometre", { exact: true }).fill("");
   await fire.getByRole("combobox", { name: /^Source selection/ }).selectOption("placed");
-  await expect(fire.getByLabel("Maximum cores", { exact: true })).toHaveCount(0);
-  await expect(page.locator(".setup-issues")).not.toContainText("Maximum cores");
+  await expect(coreBudget).toHaveCount(0);
+  await expect(page.locator(".setup-issues")).not.toContainText("Core-site budget");
   await expect(page.locator(".setup-issues")).toContainText("Propagation loss per kilometre");
   await fire.getByRole("combobox", { name: /^Propagation/ }).selectOption("radial");
   await expect(page.locator(".setup-issues")).toHaveCount(0);
