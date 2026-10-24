@@ -96,6 +96,19 @@ function FeatureRuleEditor({
         value={rule.priority}
         change={(priority) => change({ ...rule, priority })}
       />
+      <label>
+        Map representation
+        <select
+          value={rule.cartography ?? "area"}
+          onChange={(e) =>
+            change({ ...rule, cartography: e.target.value as MagicFeatureRule["cartography"] })
+          }
+        >
+          <option value="site">Located site with surrounding extent</option>
+          <option value="area">Classified area</option>
+          <option value="course">Physical course where supported</option>
+        </select>
+      </label>
       <ConditionGroups
         fieldKey={`${fieldKey}.seeds`}
         label="Seed conditions"

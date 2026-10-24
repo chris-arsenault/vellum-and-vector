@@ -9,6 +9,7 @@ import type { AtlasFeature, Position, Template, Tool, World } from "./types";
 
 export function useMapActions(world: World, state: EditorSessionState, editing: EditorEditing) {
   const select = (feature: AtlasFeature | null) => {
+    state.setGeometryRole("primary");
     state.setSelected(feature);
     const source = world.magic.find((source) => source.id === feature?.id);
     if (source) {
@@ -145,7 +146,11 @@ function enterArea(world: World, state: EditorSessionState, id: string) {
 }
 function geometryActions(world: World, state: EditorSessionState, editing: EditorEditing) {
   return {
-    modify: (feature: AtlasFeature, geometry: Geometry) => {
+    modify: (feature: AtlasFeature, geometry: Geometry, role?: "footprint") => {
+      if (role === "footprint") {
+        editing.saveFeature({ ...feature, footprint: geometry, protected: true });
+        return;
+      }
       const source = world.magic.find((source) => source.id === feature.id);
       if (source && geometry.type === "Point")
         editing.commit.mutate(

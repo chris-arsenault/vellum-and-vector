@@ -36,6 +36,18 @@ function replace(world: World, change: (world: World) => void) {
   publish(world.id, snapshot, "test", operation);
   return { world: snapshot.world, operation };
 }
+it("indexes both an independently moved site and its retained surroundings", () => {
+  const world = createWorld({ name: "Independent roles", seed: 1, width: 1000, height: 1000 }),
+    area = Object.keys(world.areas)[0];
+  world.features.site = {
+    ...feature(world, "site"),
+    geometry: { type: "Point", coordinates: [800, 800] },
+    footprint: rectangle([100, 100, 300, 300]),
+  };
+  expect(readScene(world.id, area, [790, 790, 810, 810]).map((f) => f.id)).toEqual(["site"]);
+  expect(readScene(world.id, area, [150, 150, 250, 250]).map((f) => f.id)).toEqual(["site"]);
+  expect(readScene(world.id, area, [500, 500, 600, 600])).toEqual([]);
+});
 it("reuses composed features across indexed viewport reads and unrelated edits, then invalidates undo", () => {
   let world = createWorld({ name: "Index", seed: 1, width: 1000, height: 1000 });
   const area = Object.keys(world.areas)[0];
@@ -125,6 +137,8 @@ it("updates detailed geometry with area footprints and excludes other located fl
   expect(readScene(world.id, root.id, [40, 40, 90, 90]).map((f) => f.id)).toEqual(["a"]);
   expect(readScene(world.id, "child").some((f) => f.id === "regional")).toBe(true);
   expect(composed.attributes).toEqual({ detail: true });
+  expect(composed.state).toBe("authored");
+  expect(composed.protected).toBe(true);
   expect(readScene(world.id, "child").some((f) => f.id === "inside")).toBe(false);
   expect(readScene(world.id, "floor").map((f) => f.id)).toEqual(["inside"]);
   expect(readScene(world.id, "child", [200, 200, 300, 300])).toEqual([]);

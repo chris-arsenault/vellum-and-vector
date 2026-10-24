@@ -3,6 +3,7 @@ import type { Position, Template } from "./types";
 import type { Workspace } from "./cartography";
 
 export function useCartographicState() {
+  const [geometryRole, setGeometryRole] = useState<"primary" | "footprint">("primary");
   const [workspace, setWorkspace] = useState<Workspace>("terrain");
   const [customLayer, setCustomLayer] = useState("");
   const [drawName, setDrawName] = useState("");
@@ -16,6 +17,8 @@ export function useCartographicState() {
   const [templateToPlace, setTemplateToPlace] = useState<Template | null>(null);
   const [interactionError, setInteractionError] = useState<Error | null>(null);
   return {
+    geometryRole,
+    setGeometryRole,
     workspace,
     setWorkspace,
     customLayer,

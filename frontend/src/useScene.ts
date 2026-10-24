@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { readScene, readRaster } from "./atlasReads";
 import { bounds } from "./presentation";
-import { areaSpace } from "@atlas/domain";
+import { areaSpace, spatial } from "@atlas/domain";
 import { profiles, type Area, type AtlasFeature, type World } from "./types";
 
 export function useMapData(world: World, areaId: string, extent: number[] | null = null) {
@@ -31,6 +31,14 @@ export function editArea(world: World, areaId: string, feature: AtlasFeature) {
   for (let current: string | null = areaId; current; current = world.areas[current].parentId)
     if (current === feature.areaId) return areaId;
   return feature.areaId;
+}
+export function scopedFootprint(world: World, areaId: string, feature: AtlasFeature) {
+  if (!feature.footprint || feature.areaId === areaId) return feature;
+  const footprint = spatial.intersection(feature.footprint, world.areas[areaId].footprint);
+  const local = { ...feature };
+  delete local.footprint;
+  if (footprint) local.footprint = footprint;
+  return local;
 }
 
 export function useScene(

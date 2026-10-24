@@ -25,18 +25,7 @@ export function SocietyWorkForm({
         <label>
           Work
           <select value={kind} onChange={(e) => setKind(e.target.value)}>
-            {[
-              "dam",
-              "irrigation",
-              "pass",
-              "harbor",
-              "clearance",
-              "hunting",
-              "conservation",
-              "fire-forge",
-              "aurora-archive",
-              "pressure-diving",
-            ].map((k) => (
+            {Object.keys(societyWorkLayers).map((k) => (
               <option key={k}>{k}</option>
             ))}
           </select>

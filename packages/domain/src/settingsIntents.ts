@@ -26,6 +26,22 @@ const magicSchema = z.object({
   scope: geometrySchema.optional(),
 });
 const styleSchema = z.object({
+  groups: z.record(z.string(), z.boolean()).optional(),
+  types: z
+    .record(
+      z.string(),
+      z.object({
+        footprints: z.boolean().optional(),
+        visible: z.boolean().optional(),
+        labels: z.boolean().optional(),
+        color: z
+          .string()
+          .regex(/^#[0-9a-fA-F]{6}$/)
+          .optional(),
+        opacity: finite.min(0).max(1).optional(),
+      })
+    )
+    .optional(),
   symbols: symbolStyleSchema.optional(),
   layerId: z.string().min(1),
   visible: z.boolean(),

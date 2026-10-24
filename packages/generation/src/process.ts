@@ -30,6 +30,7 @@ export interface HumanRound {
   }[];
 }
 export interface GenerationState {
+  retainedFeatureNames?: Record<string, { name: string; attributes: Record<string, unknown> }>;
   society?: import("./societyGeography").SocietyWorkspace;
   /** Completed human rounds of earlier epochs; the present society reads their ruins and history. */
   rounds?: HumanRound[];

@@ -12,6 +12,7 @@ const condition = z.object({
 });
 // Alternatives of conjunctions: any group may seed or retain a feature region.
 export const magicFeatureSchema = z.object({
+  cartography: z.enum(["site", "area", "course"]).optional(),
   id: z.string().min(1),
   name: z.string().min(1),
   priority: finite.default(1),

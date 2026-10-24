@@ -61,7 +61,8 @@ function site(state: GenerationState) {
           x === 2 && y === 2 ? "The Wayfarer's Rest" : `Building ${x + (y - 1) * 3}`,
           "building",
           "structures",
-          shape
+          shape,
+          { nameStatus: x === 2 && y === 2 ? "proper" : "label" }
         )
       );
     }

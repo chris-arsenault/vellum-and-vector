@@ -182,6 +182,9 @@ function insertTemplateFeatures(
       id: featureIds.get(feature.id)!,
       areaId: space.id,
       geometry: transformGeometry(feature.geometry, space.frame),
+      ...(feature.footprint
+        ? { footprint: transformGeometry(feature.footprint, space.frame) }
+        : {}),
       relations: feature.relations.map((r) => ({
         ...r,
         targetId: featureIds.get(r.targetId) ?? entityIds.get(r.targetId) ?? r.targetId,

@@ -16,6 +16,7 @@ import { ToolIcon } from "./ToolIcon";
 import { useJobs } from "./useAtlas";
 import { UndoButton } from "./UndoButton";
 import { paletteTools, toolLabel, workspaces, type Workspace } from "./cartography";
+import { AtlasPanel } from "./AtlasPanel";
 
 interface Props {
   world: World;
@@ -59,7 +60,10 @@ export function Editor({ world, worlds, changeWorld, newWorld }: Props) {
             </button>
           </header>
           {tab === "atlas" ? (
-            <AtlasTree world={world} current={editor.area.id} enter={editor.enter} />
+            <AtlasPanel
+              editor={editor}
+              maps={<AtlasTree world={world} current={editor.area.id} enter={editor.enter} />}
+            />
           ) : (
             <LayerPanel world={world} editor={editor} />
           )}
@@ -164,7 +168,7 @@ function MapWorkspace({ world, editor }: { world: World; editor: EditorState }) 
         presentation={editor.rasterView}
         onEngine={editor.setMapEngine}
         tool={editor.tool}
-        selected={editor.selected}
+        selection={{ feature: editor.selected, role: editor.geometryRole }}
         events={{
           select: editor.select,
           draw: editor.draw,

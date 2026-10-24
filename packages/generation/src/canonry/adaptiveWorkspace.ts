@@ -88,6 +88,7 @@ function remapMagic(
     magic = work.magic;
   if (!magic) return;
   for (const field of magic.fields) {
+    delete field.parents;
     for (const key of magicChannels) {
       field[key] = remapArray(
         old,

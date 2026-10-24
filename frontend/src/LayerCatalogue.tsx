@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { EditorState } from "./useEditor";
 import type { FieldStyle } from "./types";
 import { fieldLabel } from "./rasterPresentation";
-import { commonOverlay, overlayTheme, overlayThemes } from "./overlayFields";
+import { commonOverlay, overlayTheme, overlayThemes, overlayBranch } from "./overlayFields";
 export function LayerCatalogue({
   id,
   editor,
@@ -97,19 +97,62 @@ function CatalogueGroups({
               {theme}
               <small>{members.length}</small>
             </summary>
-            {members.map((channel) => (
-              <CatalogueRow
-                key={channel}
-                editor={editor}
-                channel={channel}
-                selected={selected.has(channel)}
-                update={update}
-                remove={remove}
-              />
-            ))}
+            <CatalogueBranches
+              editor={editor}
+              members={members}
+              selected={selected}
+              update={update}
+              remove={remove}
+            />
           </details>
         );
       })}
+    </>
+  );
+}
+function CatalogueBranches({
+  editor,
+  members,
+  selected,
+  update,
+  remove,
+}: {
+  editor: EditorState;
+  members: string[];
+  selected: Set<string>;
+  update: (channel: string, changes: Partial<FieldStyle>) => void;
+  remove: (channel: string) => void;
+}) {
+  return (
+    <>
+      {[...new Set(members.map((channel) => overlayBranch(editor.world, channel)))].map(
+        (branch) => {
+          const channels = members.filter(
+            (channel) => overlayBranch(editor.world, channel) === branch
+          );
+          const rows = channels.map((channel) => (
+            <CatalogueRow
+              key={channel}
+              editor={editor}
+              channel={channel}
+              selected={selected.has(channel)}
+              update={update}
+              remove={remove}
+            />
+          ));
+          return branch ? (
+            <details className="overlay-group" key={branch} open>
+              <summary>
+                {branch}
+                <small>{channels.length}</small>
+              </summary>
+              {rows}
+            </details>
+          ) : (
+            <div key="fields">{rows}</div>
+          );
+        }
+      )}
     </>
   );
 }

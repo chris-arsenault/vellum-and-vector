@@ -30,14 +30,22 @@ it("runs a causal landscape without services and retains authored features", asy
     quality: "draft",
     seed: initial.seed,
   });
-  expect(result.state.history).toHaveLength(3);
+  expect(result.state.history.flatMap((h) => h.ancestry.map((epoch) => epoch.id))).toEqual(
+    expect.arrayContaining(initial.epochs.map((epoch) => epoch.id))
+  );
   expect(result.state.surface.channels.flow.some((v) => v > 0)).toBe(true);
   expect(result.state.surface.channels.elevation.every(Number.isFinite)).toBe(true);
   expect(result.state.domain.world.features[markerId].name).toBe("Authored landmark");
   expect(
     Object.values(result.state.domain.world.features).some((f) => f.kind === "sovereignty")
   ).toBe(true);
+  const cultures = Object.values(result.state.domain.world.entities).filter(
+    (entity) => entity.kind === "culture"
+  );
+  expect(cultures.length).toBeGreaterThan(0);
   expect(
-    Object.keys(result.state.surface.channels).filter((c) => c.startsWith("culture:"))
-  ).toHaveLength(3);
+    Object.keys(result.state.surface.channels)
+      .filter((c) => c.startsWith("culture:"))
+      .sort()
+  ).toEqual(cultures.map((culture) => `culture:${culture.id}`).sort());
 }, 120000);

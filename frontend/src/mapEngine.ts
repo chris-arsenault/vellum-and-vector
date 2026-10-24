@@ -12,7 +12,8 @@ import type { StyleLike } from "ol/style/Style.js";
 import { ScaleLine } from "ol/control.js";
 import { defaults as defaultInteractions } from "ol/interaction/defaults.js";
 import { bounds } from "./presentation";
-import { featureStyle } from "./vectorStyles";
+import { typeStyle } from "./typeStyles";
+import { presentedFeatureStyle } from "@atlas/domain";
 import { settlementPriority } from "./settlementStyles";
 import type { Area, AtlasFeature, LayerStyle, World } from "./types";
 import { RasterSources } from "./RasterSources";
@@ -104,7 +105,7 @@ function syncVectorLayers(engine: MapEngine, world: World, styles: LayerStyle[])
     layer.setVisible(style.visible);
     layer.setOpacity(style.opacity);
     layer.setMinResolution(style.minScale);
-    applyVectorStyle(layer, style);
+    applyVectorStyle(layer, style, world);
   }
   const collection = engine.vectors.getLayers();
   styles
@@ -118,22 +119,31 @@ function syncVectorLayers(engine: MapEngine, world: World, styles: LayerStyle[])
       }
     });
 }
-function applyVectorStyle(layer: VectorLayer, style: LayerStyle) {
-  if (layer.get("presentation") === style) return;
+function applyVectorStyle(layer: VectorLayer, style: LayerStyle, world: World) {
+  if (layer.get("presentation") === style && layer.get("styleSystems") === world.magicSystems)
+    return;
   layer.set("presentation", style);
+  layer.set("styleSystems", world.magicSystems);
+  layer.set("styleWorld", world);
   if (!style.symbols) {
     layer.set("symbols", null);
-    layer.setStyle((feature, resolution) => featureStyle(feature.get("domain"), style, resolution));
+    layer.setStyle(typeStyle(world, style));
     return;
   }
-  if (layer.get("symbols") === style.symbols) return;
+  if (layer.get("symbols") === style.symbols && layer.get("parsedStyle")) {
+    layer.setStyle(typeStyle(world, style, layer.get("parsedStyle")));
+    return;
+  }
   layer.set("symbols", style.symbols);
   void import("geostyler-openlayers-parser")
     .then(async ({ default: Parser }) => {
       const result = await new Parser().writeStyle(style.symbols!);
       if (layer.get("symbols") !== style.symbols) return;
       if (result.errors?.length) throw result.errors[0];
-      layer.setStyle(result.output as StyleLike);
+      layer.set("parsedStyle", result.output);
+      layer.setStyle(
+        typeStyle(layer.get("styleWorld"), layer.get("presentation"), result.output as StyleLike)
+      );
     })
     .catch((error: unknown) => {
       layer.set("styleError", error instanceof Error ? error.message : String(error));
@@ -147,6 +157,7 @@ export function updateFeatures(
   styles: LayerStyle[],
   scene: AtlasFeature[]
 ) {
+  engine.vectors.set("world", world);
   syncVectorLayers(engine, world, styles);
   const wanted = new Set(scene.map((feature) => feature.id));
   for (const feature of engine.features.getFeatures()) {
@@ -161,8 +172,10 @@ export function updateFeatures(
 function syncSnapping(engine: MapEngine) {
   const visible = engine.features
     .getFeatures()
-    .filter((feature) =>
-      engine.featureLayers.get(feature.get("domain").layerId)?.isVisible(engine.map.getView())
+    .filter(
+      (feature) =>
+        engine.featureLayers.get(feature.get("domain").layerId)?.isVisible(engine.map.getView()) &&
+        feature.get("typeVisible")
     );
   const wanted = new Set(visible);
   for (const feature of engine.snapFeatures.getArray().slice())
@@ -189,7 +202,15 @@ function syncFeature(engine: MapEngine, feature: AtlasFeature) {
     engine.features.addFeature(ol);
   } else {
     const previous = ol.get("domain") as AtlasFeature;
-    if (previous === feature) return;
+    if (previous === feature) {
+      const world = engine.vectors.get("world") as World;
+      const layer = engine.featureLayers.get(feature.layerId)!;
+      ol.set(
+        "typeVisible",
+        presentedFeatureStyle(world, feature, layer.get("presentation")).visible
+      );
+      return;
+    }
     if (previous.layerId !== feature.layerId)
       engine.featureLayers.get(previous.layerId)?.getSource()!.removeFeature(ol);
     if (
@@ -206,6 +227,9 @@ function syncFeature(engine: MapEngine, feature: AtlasFeature) {
     });
   }
   if (!source.hasFeature(ol)) source.addFeature(ol);
+  const world = engine.vectors.get("world") as World;
+  const layer = engine.featureLayers.get(feature.layerId)!;
+  ol.set("typeVisible", presentedFeatureStyle(world, feature, layer.get("presentation")).visible);
 }
 function removeOldAttributes(ol: Feature, previous: AtlasFeature, feature: AtlasFeature) {
   for (const key of Object.keys(previous.attributes))

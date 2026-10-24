@@ -1,6 +1,9 @@
 import {
   areaSpace,
   composeFeature,
+  canonicalFeatures,
+  composeFootprint,
+  presentAtlasFeature,
   gridPosition,
   gridSampler,
   requireThat,
@@ -15,15 +18,12 @@ import { SceneIndex } from "./SceneIndex";
 
 export function readFeature(id: string, featureId: string, areaId: string): AtlasFeature {
   const world = session(id).snapshot.world;
-  const feature = world.features[featureId];
+  const feature =
+    world.features[featureId] ?? canonicalFeatures(world).find((f) => f.id === featureId);
   requireThat(feature, "missing_feature", "Select an existing feature.");
-  const geometry = composeFeature(world, feature, [], world.areas[areaId].profile);
-  requireThat(geometry, "feature_geometry", "This feature has no visible geometry.");
-  return {
-    ...feature,
-    geometry,
-    attributes: feature.detail[areaId]?.attributes ?? feature.attributes,
-  };
+  const presented = presentAtlasFeature(world, feature, areaId);
+  requireThat(presented, "feature_geometry", "Open a compatible mapped area for this feature.");
+  return presented;
 }
 
 const scenes = new WeakMap<SessionWorld, Map<string, SceneIndex>>();
@@ -105,7 +105,7 @@ export function exportWorld(id: string) {
       footprint,
       frame,
     })),
-    features: Object.values(world.features).map((feature) => ({
+    features: canonicalFeatures(world).map((feature) => ({
       type: "Feature",
       id: feature.id,
       geometry: composeFeature(world, feature),
@@ -114,6 +114,7 @@ export function exportWorld(id: string) {
         name: feature.name,
         kind: feature.kind,
         layerId: feature.layerId,
+        footprint: composeFootprint(world, feature),
         areaId: feature.areaId,
         spaceId: areaSpace(world, feature.areaId),
         state: feature.state,

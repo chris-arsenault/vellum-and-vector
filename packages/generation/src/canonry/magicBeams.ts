@@ -100,41 +100,61 @@ export function traceOceanBeam(
   reach: number,
   wake = false
 ) {
-  let x = map.mesh.x[source],
-    y = map.mesh.y[source],
-    bounces = 0;
+  const beam = { x: map.mesh.x[source], y: map.mesh.y[source], angle, energy, bounces: 0 };
   const p = field.definition.parameters,
     step = p.beamWidth / 2;
-  for (let distance = 0; distance < reach && energy > 0;) {
+  const path: number[][] = [[beam.x + map.mesh.origin[0], beam.y + map.mesh.origin[1]]];
+  for (let distance = 0; distance < reach && beam.energy > 0;) {
     const travel = Math.min(step, reach - distance);
-    // A source station has a beam-width footprint, even when its ray terminates there.
     paintBeam(
       map,
       field,
-      x,
-      y,
-      wake ? energy : (energy * p.rayIntensity) / 1000,
+      beam.x,
+      beam.y,
+      wake ? beam.energy : (beam.energy * p.rayIntensity) / 1000,
       Math.max(travel, step),
       wake
     );
-    const nx = x + Math.cos(angle) * travel,
-      ny = y + Math.sin(angle) * travel;
-    const next = nearestTriangle(map.mesh, nx, ny);
-    if (reflects(map, next)) {
-      if (wake || ++bounces > 4) break;
-      angle += Math.PI * (0.58 + hashUnit(seed, Math.floor(x / 10_000), bounces) * 0.62);
-      energy -= 90;
-    } else {
-      x = nx;
-      y = ny;
-      if (wake)
-        angle +=
-          (hashSigned(seed, Math.floor(distance / 10_000), Math.floor(x / 10_000)) *
-            0.16 *
-            travel) /
-          10_000;
-      else energy -= (p.rayDecay * (1 + bounces * 0.67) * travel) / 10_000;
-    }
+    if (!advanceBeam(map, beam, seed, travel, distance, wake, p.rayDecay)) break;
+    if (wake) path.push([beam.x + map.mesh.origin[0], beam.y + map.mesh.origin[1]]);
     distance += travel;
   }
+  if (wake && path.length > 1) (field.wakePaths ??= []).push(path);
+}
+interface Beam {
+  x: number;
+  y: number;
+  angle: number;
+  energy: number;
+  bounces: number;
+}
+function advanceBeam(
+  map: PhysicalField,
+  beam: Beam,
+  seed: number,
+  travel: number,
+  distance: number,
+  wake: boolean,
+  decay: number
+) {
+  const nx = beam.x + Math.cos(beam.angle) * travel,
+    ny = beam.y + Math.sin(beam.angle) * travel;
+  const next = nearestTriangle(map.mesh, nx, ny);
+  if (reflects(map, next)) {
+    if (wake || ++beam.bounces > 4) return false;
+    beam.angle +=
+      Math.PI * (0.58 + hashUnit(seed, Math.floor(beam.x / 10_000), beam.bounces) * 0.62);
+    beam.energy -= 90;
+  } else {
+    beam.x = nx;
+    beam.y = ny;
+    if (wake)
+      beam.angle +=
+        (hashSigned(seed, Math.floor(distance / 10_000), Math.floor(beam.x / 10_000)) *
+          0.16 *
+          travel) /
+        10_000;
+    else beam.energy -= (decay * (1 + beam.bounces * 0.67) * travel) / 10_000;
+  }
+  return true;
 }

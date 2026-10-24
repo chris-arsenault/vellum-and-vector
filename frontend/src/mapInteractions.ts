@@ -3,6 +3,7 @@ import { DragBox, DragPan, Draw, Modify, Select, Snap, Translate } from "ol/inte
 import { primaryAction } from "ol/events/condition.js";
 import { fromCircle } from "ol/geom/Polygon.js";
 import Circle from "ol/geom/Circle.js";
+import Feature from "ol/Feature.js";
 import type { Geometry } from "geojson";
 import type { MapEngine } from "./mapEngine";
 import type { AtlasFeature, Position, Tool } from "./types";
@@ -12,7 +13,7 @@ export interface MapEvents {
   select: (feature: AtlasFeature | null) => void;
   draw: (geometry: Geometry) => void;
   extent: (geometry: Geometry) => void;
-  modify: (feature: AtlasFeature, geometry: Geometry) => void;
+  modify: (feature: AtlasFeature, geometry: Geometry, role?: "footprint") => void;
   stroke: (points: Position[]) => void;
   cancel: () => void;
   enter: (id: string) => void;
@@ -23,12 +24,13 @@ export function installMapTools(
   engine: MapEngine,
   tool: Tool,
   selected: string | null,
-  events: () => MapEvents
+  events: () => MapEvents,
+  geometryRole: "primary" | "footprint" = "primary"
 ) {
   const map = engine.map,
     active: (Draw | Modify | Select | Translate | DragBox | Snap)[] = [];
   const navigation = { space: false };
-  active.push(...featureTools(engine, tool, selected, events));
+  active.push(...featureTools(engine, tool, selected, events, geometryRole));
   if (tool === "extentEdit") {
     const modify = new Modify({ source: engine.preview.getSource()! });
     modify.on("modifyend", (event) => {
@@ -93,15 +95,18 @@ function featureTools(
   engine: MapEngine,
   tool: Tool,
   selected: string | null,
-  events: () => MapEvents
+  events: () => MapEvents,
+  geometryRole: "primary" | "footprint"
 ) {
   const active: (Select | Modify | Translate)[] = [];
   if (!["select", "reshape", "move"].includes(tool)) return active;
   const select = new Select({
+    filter: (feature) => feature.get("typeVisible") !== false,
     layers: (layer) => engine.vectors.getLayers().getArray().includes(layer),
     hitTolerance: 8,
   });
-  const feature = selected ? engine.features.getFeatureById(selected) : null;
+  let feature = selected ? engine.features.getFeatureById(selected) : null;
+  if (feature && geometryRole === "footprint") feature = footprintHandle(feature);
   if (feature) select.getFeatures().push(feature);
   select.on("select", (event) => events().select(event.selected[0]?.get("domain") ?? null));
   if (["select", "reshape", "move"].includes(tool)) active.push(select);
@@ -121,11 +126,22 @@ function featureTools(
   }
   return active;
 }
+function footprintHandle(feature: Feature) {
+  const domain = feature.get("domain") as AtlasFeature;
+  if (!domain.footprint) return feature;
+  return new Feature({
+    domain,
+    geometry: format.readGeometry(domain.footprint)!,
+    editingFootprint: true,
+    typeVisible: true,
+  });
+}
 function commitGeometry(feature: import("ol/Feature.js").default, events: () => MapEvents) {
   const domain = feature.get("domain") as AtlasFeature,
     geometry = format.writeGeometryObject(feature.getGeometry()!) as Geometry;
-  feature.setGeometry(format.readGeometry(domain.geometry));
-  events().modify(domain, geometry);
+  const footprint = feature.get("editingFootprint");
+  feature.setGeometry(format.readGeometry(footprint ? domain.footprint! : domain.geometry));
+  events().modify(domain, geometry, footprint ? "footprint" : undefined);
 }
 function installDrawing(tool: Tool, events: () => MapEvents, panning: () => boolean) {
   const type =

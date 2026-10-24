@@ -2,7 +2,7 @@ import type { DomainSnapshot } from "./operations";
 import type { World } from "./model";
 import type { Geometry } from "geojson";
 import { Spatial } from "./spatial";
-import { composeFeature } from "./composition";
+import { composeFeature, composeFootprint } from "./composition";
 import { sameValue } from "./values";
 import { requireThat } from "./errors";
 
@@ -17,14 +17,28 @@ export function validateGeometryWriteScopes(
       after = candidate.features[id];
     const oldGeometry = before ? composeFeature(source.world, before) : null,
       newGeometry = after ? composeFeature(candidate, after) : null;
-    if (sameValue(oldGeometry, newGeometry)) continue;
-    for (const geometry of changedGeometry(gis, oldGeometry, newGeometry))
-      requireThat(
-        gis.covers(source.scope.footprint, geometry),
-        "write_scope",
-        "The declared edit extent must contain the geography it adds, removes or moves."
-      );
+    validateRoleScope(source, gis, oldGeometry, newGeometry);
+    validateRoleScope(
+      source,
+      gis,
+      before ? composeFootprint(source.world, before) : null,
+      after ? composeFootprint(candidate, after) : null
+    );
   }
+}
+function validateRoleScope(
+  source: DomainSnapshot,
+  gis: Spatial,
+  before: Geometry | null,
+  after: Geometry | null
+) {
+  if (sameValue(before, after)) return;
+  for (const geometry of changedGeometry(gis, before, after))
+    requireThat(
+      gis.covers(source.scope.footprint, geometry),
+      "write_scope",
+      "The declared edit extent must contain the geography it adds, removes or moves."
+    );
 }
 function changedGeometry(
   gis: Spatial,

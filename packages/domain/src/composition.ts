@@ -144,3 +144,25 @@ export function composeFeature(
   }
   return geometry;
 }
+
+/** The physical/affected extent composes independently from a site's point or course. */
+export function composeFootprint(world: World, feature: AtlasFeature, profile?: Profile) {
+  const initial = Object.entries(feature.detail).find(
+    ([id, representation]) =>
+      representation.footprint &&
+      (!profile || profiles.indexOf(world.areas[id].profile) <= profiles.indexOf(profile)) &&
+      !representation.needsReconciliation &&
+      !["stale", "unmaterialized", "intentionallyEmpty"].includes(representation.state) &&
+      areaSpace(world, id) === areaSpace(world, feature.areaId)
+  );
+  const base = feature.footprint ?? initial?.[1].footprint;
+  if (!base) return null;
+  const detail = Object.fromEntries(
+    Object.entries(feature.detail).flatMap(([id, representation]) =>
+      representation.footprint || representation.state === "intentionallyEmpty"
+        ? [[id, { ...representation, geometry: representation.footprint ?? base }]]
+        : []
+    )
+  );
+  return composeFeature(world, { ...feature, geometry: base, detail, relations: [] }, [], profile);
+}

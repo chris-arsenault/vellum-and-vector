@@ -272,8 +272,9 @@ it("publishes subcell volcanic events in world coordinates without resizing thei
   expect(cone.kind).toBe("volcano");
   expect(cone.attributes.radius).toBe(400);
   expect(cone.attributes.epoch).toBe(2);
-  expect(spatial.bounds(cone.geometry)).toEqual([2_049_600, 3_049_600, 2_050_400, 3_050_400]);
-  expect(spatial.area(cone.geometry) / (Math.PI * 400 ** 2)).toBeCloseTo(1, 1);
+  expect(cone.geometry).toEqual({ type: "Point", coordinates: [2_050_000, 3_050_000] });
+  expect(spatial.bounds(cone.footprint!)).toEqual([2_049_600, 3_049_600, 2_050_400, 3_050_400]);
+  expect(spatial.area(cone.footprint!) / (Math.PI * 400 ** 2)).toBeCloseTo(1, 1);
 });
 
 it("maps an impact crater only while its rim stands above the floor and plain", () => {

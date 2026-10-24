@@ -16,7 +16,7 @@ interface Props {
   features: AtlasFeature[];
   tool: Tool;
   events: MapEvents;
-  selected: AtlasFeature | null;
+  selection: { feature: AtlasFeature | null; role: "primary" | "footprint" };
   proposal: AtlasFeature[];
   presentation: RasterPresentation;
   onEngine: (engine: MapEngine | null) => void;
@@ -32,7 +32,7 @@ export function MapCanvas({
   events,
   proposal,
   features,
-  selected,
+  selection,
   presentation,
   onEngine,
 }: Props) {
@@ -69,9 +69,7 @@ export function MapCanvas({
     presentation
   );
   useAreaFit(engine, area, callbacks);
-  useEffect(() => {
-    if (engine) return installMapTools(engine, tool, selected?.id ?? null, () => callbacks.current);
-  }, [engine, tool, selected?.id]);
+  useFeatureTools(engine, tool, selection, callbacks, world.version);
   usePreview(engine, proposal);
   return (
     <div className="map-frame">
@@ -93,6 +91,19 @@ export function MapCanvas({
       </div>
     </div>
   );
+}
+function useFeatureTools(
+  engine: MapEngine | null,
+  tool: Tool,
+  selection: Props["selection"],
+  callbacks: import("react").RefObject<MapEvents>,
+  version: number
+) {
+  const { feature, role } = selection;
+  useEffect(() => {
+    if (engine)
+      return installMapTools(engine, tool, feature?.id ?? null, () => callbacks.current, role);
+  }, [engine, tool, feature?.id, role, version, callbacks]);
 }
 function useAreaFit(engine: MapEngine | null, area: Area, callbacks: { current: MapEvents }) {
   const fittedArea = useRef("");

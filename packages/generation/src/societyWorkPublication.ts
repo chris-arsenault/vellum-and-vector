@@ -5,6 +5,7 @@ import type { AtlasFeature, SocietyWork } from "@atlas/domain";
 import { isSocietyWork, societyWorkLayers } from "@atlas/domain";
 import { namingVersion } from "./atlasNaming";
 import { isWorldSociety } from "./societyMapScope";
+import { societyWorkGeometry, eventFootprint } from "./societyWorkGeometry";
 
 function nameUnrecordedWork(state: GenerationState, work: SocietyWork) {
   if (work.name) return;
@@ -47,15 +48,18 @@ export function publishSocietyWorks(state: GenerationState) {
       continue;
     }
     const named = workName(state, w, existing.get(w.id));
+    const shape = societyWorkGeometry(state, w);
     const feature = generatedFeature(
       state,
       `work:${w.id}`,
       named.name,
       w.kind,
       societyWorkLayers[w.kind],
-      { type: "Point", coordinates: [w.position.x, w.position.y] },
+      shape.geometry,
       {
         ...named.attributes,
+        geometryMeaning: shape.meaning,
+        site: w.position,
         workId: w.id,
         workKind: w.kind,
         communityId: w.communityId,
@@ -80,6 +84,7 @@ export function publishSocietyWorks(state: GenerationState) {
       { type: "Point", coordinates: [event.position.x, event.position.y] },
       {
         eventId: event.id,
+        communities: event.communities,
         eventKind: event.kind,
         era: event.era,
         radius: event.radius,
@@ -89,6 +94,11 @@ export function publishSocietyWorks(state: GenerationState) {
       }
     );
     feature.causes = event.causes;
+    const footprint = eventFootprint(state, event);
+    if (footprint) {
+      feature.footprint = footprint;
+      feature.attributes.geometryMeaning = "event location with known affected community extents";
+    }
     putGenerated(state, feature);
   }
 }

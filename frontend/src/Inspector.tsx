@@ -51,14 +51,7 @@ function FeatureInspection({
         {feature.kind} · {feature.state}
       </p>
       <h2>{feature.name}</h2>
-      <button className="secondary" onClick={() => editor.setTool("move")}>
-        Move on map
-      </button>
-      {feature.geometry.type !== "Point" && (
-        <button className="secondary" onClick={() => editor.setTool("reshape")}>
-          Reshape on map
-        </button>
-      )}
+      <GeometryTools editor={editor} feature={feature} />
       <FeatureIdentity feature={feature} world={world} />
       <SocietyInspection world={world} feature={feature} areaId={editor.area.id} />
       <SocietyWorkForm feature={feature} editor={editor} />
@@ -105,6 +98,39 @@ function FeatureInspection({
         Delete feature
       </button>
     </section>
+  );
+}
+function GeometryTools({ editor, feature }: { editor: EditorState; feature: AtlasFeature }) {
+  return (
+    <>
+      {feature.footprint && (
+        <label>
+          Geometry to edit
+          <select
+            aria-label="Geometry to edit"
+            value={editor.geometryRole}
+            onChange={(e) => {
+              editor.setGeometryRole(e.target.value as "primary" | "footprint");
+              editor.setTool("select");
+            }}
+          >
+            <option value="primary">Primary location or course</option>
+            <option value="footprint">Surrounding footprint</option>
+          </select>
+        </label>
+      )}
+      {typeof feature.attributes.geometryMeaning === "string" && (
+        <p className="hint">{feature.attributes.geometryMeaning}</p>
+      )}
+      <button className="secondary" onClick={() => editor.setTool("move")}>
+        Move on map
+      </button>
+      {(feature.geometry.type !== "Point" || editor.geometryRole === "footprint") && (
+        <button className="secondary" onClick={() => editor.setTool("reshape")}>
+          Reshape on map
+        </button>
+      )}
+    </>
   );
 }
 function FeatureIdentity({ feature, world }: { feature: AtlasFeature; world: World }) {

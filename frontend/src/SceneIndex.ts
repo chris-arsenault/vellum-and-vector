@@ -1,6 +1,7 @@
 import {
   areaSpace,
-  composeFeature,
+  presentAtlasFeature,
+  featureIntersects,
   requireThat,
   spatial,
   rectangle,
@@ -34,9 +35,7 @@ function areaContext(world: World) {
   ]);
 }
 function presentFeature(world: World, raw: AtlasFeature, areaId: string) {
-  const geometry = composeFeature(world, raw, [], world.areas[areaId].profile);
-  if (!geometry || !spatial.intersects(geometry, world.areas[areaId].footprint)) return null;
-  return { ...raw, geometry, attributes: raw.detail[areaId]?.attributes ?? raw.attributes };
+  return presentAtlasFeature(world, raw, areaId);
 }
 function signatures(world: World) {
   const cache = new Map<string, string>(),
@@ -121,7 +120,9 @@ export class SceneIndex {
       ? (format.readFeature({
           type: "Feature",
           id: feature.id,
-          geometry: feature.geometry,
+          geometry: feature.footprint
+            ? { type: "GeometryCollection", geometries: [feature.geometry, feature.footprint] }
+            : feature.geometry,
           properties: { presented: feature },
         }) as Feature)
       : null;
@@ -139,7 +140,7 @@ export class SceneIndex {
       .filter(
         (f) =>
           f.getGeometry()!.intersectsExtent(extent) &&
-          (covered || spatial.intersects(f.get("presented").geometry, footprint))
+          (covered || featureIntersects(f.get("presented"), footprint))
       )
       .map((f) => f.get("presented") as AtlasFeature);
     return [...result, ...this.magic.filter((f) => spatial.intersects(f.geometry, footprint))];

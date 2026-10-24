@@ -4,13 +4,22 @@ const at = (field: string, min: number): MagicCondition => ({ field, min });
 const oneOf = (field: string, values: number[]): MagicCondition => ({ field, values });
 const land = oneOf("water", [0, 2]);
 const ocean = oneOf("water", [1]);
+const siteRules = new Set(["core", "spring", "vent", "well", "locus", "rogue", "breach"]);
+const courseRules = new Set(["vein", "wake", "steam"]);
 const feature = (
   id: string,
   name: string,
   priority: number,
   seeds: MagicCondition[][],
   retains?: MagicCondition[][]
-): MagicFeatureRule => ({ id, name, priority, seeds, ...(retains ? { retains } : {}) });
+): MagicFeatureRule => ({
+  id,
+  name,
+  priority,
+  seeds,
+  cartography: siteRules.has(id) ? "site" : courseRules.has(id) ? "course" : "area",
+  ...(retains ? { retains } : {}),
+});
 
 // Canonry IceRemembers' three systems are data passed to the same process contracts. The
 // reach and rarity below are the atlas's own (docs/adr/0004): Canonry's defaults saturate

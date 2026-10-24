@@ -18,14 +18,14 @@ export function generatedFeature(
   attributes: Record<string, unknown> = {}
 ): AtlasFeature {
   const id = semanticId(state.domain.world.id, `generated:${state.domain.scope.areaId}`, key);
-  const named = nameGeographicFeature(state.domain.world, key, kind, geometry, attributes);
+  const naming = featureNaming(state, id, key, name, kind, geometry, attributes);
   return {
     id,
-    name: named?.name ?? name,
+    name: naming.name,
     kind,
     layerId,
     geometry,
-    attributes: named ? { ...attributes, ...nameMetadata(named) } : attributes,
+    attributes: naming.attributes,
     areaId: state.domain.scope.areaId,
     detail: {},
     relations: [],
@@ -37,6 +37,30 @@ export function generatedFeature(
     causes: [
       `Generated from ${key} in ${state.domain.world.areas[state.domain.scope.areaId].name}.`,
     ],
+  };
+}
+function featureNaming(
+  state: GenerationState,
+  id: string,
+  key: string,
+  name: string,
+  kind: string,
+  geometry: AtlasFeature["geometry"],
+  attributes: Record<string, unknown>
+) {
+  const named = nameGeographicFeature(state.domain.world, key, kind, geometry, attributes);
+  const previous = state.retainedFeatureNames?.[id];
+  const nameStatus = ["furniture", "wall", "door", "room", "building"].includes(kind)
+    ? "label"
+    : "proper";
+  return {
+    name: previous?.name ?? named?.name ?? name,
+    attributes: {
+      nameStatus,
+      ...attributes,
+      ...(named ? nameMetadata(named) : {}),
+      ...previous?.attributes,
+    },
   };
 }
 export function putGenerated(state: GenerationState, feature: AtlasFeature) {
@@ -115,6 +139,19 @@ export function prepareGeneratedProcess(domains: string[]): MapProcess {
       kind: "initialize",
       initialize(state) {
         const world = state.domain.world;
+        state.retainedFeatureNames = Object.fromEntries(
+          Object.values(world.features).map((f) => [
+            f.id,
+            {
+              name: f.name,
+              attributes: Object.fromEntries(
+                Object.entries(f.attributes).filter(
+                  ([key]) => key.startsWith("naming") || key === "namedInEra"
+                )
+              ),
+            },
+          ])
+        );
         const contracted = new Set([
           ...Object.values(world.areas).flatMap(
             (a) => a.boundary?.crossings.map((c) => c.featureId) ?? []

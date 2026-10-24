@@ -1,47 +1,46 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
+import {
+  availableFeatureTypes,
+  describeFeature,
+  featureGroupKey,
+  typePresentation,
+  type FeatureType,
+  type FeatureTypeStyle,
+} from "@atlas/domain";
 import type { EditorState } from "./useEditor";
+import type { AtlasFeature } from "./types";
 import type { LayerStyle } from "./types";
-function countFeatures(features: EditorState["world"]["features"]) {
-  const result = new Map<string, number>();
-  for (const f of Object.values(features)) result.set(f.layerId, (result.get(f.layerId) ?? 0) + 1);
-  return result;
-}
+import "./featureCatalogue.css";
 
-const familyNames: Record<string, string> = {
-  physical: "Terrain & geology",
-  water: "Water",
-  transport: "Routes",
-  built: "Places & buildings",
-  political: "Politics",
-  cultural: "Culture",
-  magic: "Magic",
-  custom: "Custom layers",
-};
-export function FeatureThemes({
-  editor,
-  edit,
-}: {
+interface Context {
   editor: EditorState;
+  features: AtlasFeature[];
   edit: (target: string) => void;
-}) {
+  search: string;
+}
+const noFeatures: AtlasFeature[] = [];
+export function FeatureThemes({ editor, edit }: Pick<Context, "editor" | "edit">) {
   const [empty, setEmpty] = useState(false);
   const [search, setSearch] = useState("");
-  const counts = useMemo(() => countFeatures(editor.world.features), [editor.world.features]);
-  const layers = editor.styles.filter(
-    (s) =>
-      (empty || counts.has(s.layerId)) &&
-      editor.world.layers[s.layerId].name.toLowerCase().includes(search.toLowerCase())
+  const features = editor.scene.data ?? noFeatures;
+  const types = useMemo(
+    () => availableFeatureTypes(editor.world, features, empty),
+    [editor.world, features, empty]
   );
+  const matches = types.filter((t) =>
+    t.path.join(" ").toLowerCase().includes(search.toLowerCase())
+  );
+  const context = { editor, edit, features, search };
   return (
     <details className="feature-themes" open>
       <summary>
-        Features <small>{Object.values(editor.world.features).length.toLocaleString()}</small>
+        Features <small>{features.length.toLocaleString()} in this map</small>
       </summary>
       <div className="feature-filters">
         <input
           type="search"
           aria-label="Search features"
-          placeholder="Filter feature layers…"
+          placeholder="Find a feature type…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -52,91 +51,245 @@ export function FeatureThemes({
             checked={empty}
             onChange={(e) => setEmpty(e.target.checked)}
           />
-          Empty layers
+          Empty types
         </label>
       </div>
-      {Object.entries(familyNames).map(([family, title]) => {
-        const members = layers.filter((s) => editor.world.layers[s.layerId].family === family);
-        if (!members.length) return null;
-        return (
-          <details className="feature-group" key={`${family}:${Boolean(search)}`} open>
-            <summary>
-              {title} <small title={`${members.length} layers`}>{members.length}</small>
-            </summary>
-            {members.map((style) => (
-              <FeatureRow
-                key={style.layerId}
-                editor={editor}
-                edit={edit}
-                presentation={style}
-                count={counts.get(style.layerId) ?? 0}
-              />
-            ))}
-          </details>
-        );
-      })}
+      <TypeGroups types={matches} path={[]} context={context} />
+      {!matches.length && <p className="hint">No matching feature types in this map.</p>}
     </details>
   );
 }
-function FeatureRow({
-  editor,
-  edit,
-  presentation,
-  count,
+function TypeGroups({
+  types,
+  path,
+  context,
 }: {
-  editor: EditorState;
-  edit: (target: string) => void;
-  presentation: LayerStyle;
-  count: number;
+  types: FeatureType[];
+  path: string[];
+  context: Context;
 }) {
-  const layer = editor.world.layers[presentation.layerId];
+  const names = [...new Set(types.map((t) => t.path[path.length]))];
   return (
-    <div className="feature-row">
+    <>
+      {names.map((name) => {
+        const next = [...path, name],
+          members = types.filter((t) => t.path[path.length] === name);
+        const leaf = members.length === 1 && members[0].path.length === next.length;
+        return leaf ? (
+          <TypeRow key={members[0].id} type={members[0]} context={context} />
+        ) : (
+          <TypeGroup key={name} types={members} path={next} context={context} />
+        );
+      })}
+    </>
+  );
+}
+function TypeGroup({
+  types,
+  path,
+  context,
+}: {
+  types: FeatureType[];
+  path: string[];
+  context: Context;
+}) {
+  const { editor } = context;
+  const visible = types.filter(
+    (t) =>
+      typePresentation(
+        t,
+        editor.styles.find((s) => s.layerId === t.layerId)!
+      ).visible
+  ).length;
+  const count = context.features.filter((f) =>
+    types.some((t) => t.id === describeFeature(editor.world, f).id)
+  ).length;
+  const toggle = (enabled: boolean) =>
+    editor.setStyles(
+      editor.styles.map((style) => {
+        if (!types.some((t) => t.layerId === style.layerId)) return style;
+        const groups = { ...style.groups, [featureGroupKey(path)]: enabled };
+        if (enabled)
+          path.forEach((_, i) => {
+            groups[featureGroupKey(path.slice(0, i + 1))] = true;
+          });
+        return { ...style, visible: enabled || style.visible, groups };
+      })
+    );
+  return (
+    <details className="feature-type-group" open={true}>
+      <summary>
+        <MixedCheck
+          label={`Show ${path.at(-1)}`}
+          checked={visible > 0}
+          mixed={visible > 0 && visible < types.length}
+          change={toggle}
+        />
+        <span>{path.at(-1)}</span>
+        <small>{count.toLocaleString()}</small>
+      </summary>
+      <div className="feature-type-children">
+        <TypeGroups types={types} path={path} context={context} />
+      </div>
+    </details>
+  );
+}
+function MixedCheck({
+  label,
+  checked,
+  mixed,
+  change,
+}: {
+  label: string;
+  checked: boolean;
+  mixed: boolean;
+  change: (value: boolean) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (input.current) input.current.indeterminate = mixed;
+  }, [mixed]);
+  return (
+    <input
+      ref={input}
+      type="checkbox"
+      aria-label={label}
+      checked={checked}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => change(e.target.checked)}
+    />
+  );
+}
+function TypeRow({ type, context }: { type: FeatureType; context: Context }) {
+  const { editor, features } = context;
+  const style = editor.styles.find((s) => s.layerId === type.layerId)!;
+  const effective = typePresentation(type, style);
+  const members = features.filter((f) => describeFeature(editor.world, f).id === type.id);
+  const update = (changes: FeatureTypeStyle) =>
+    editor.setStyles(
+      editor.styles.map((s) => {
+        if (s.layerId !== type.layerId) return s;
+        const groups = { ...s.groups };
+        if (changes.visible)
+          type.path.forEach((_, i) => {
+            groups[featureGroupKey(type.path.slice(0, i + 1))] = true;
+          });
+        return {
+          ...s,
+          visible: changes.visible || s.visible,
+          groups,
+          types: { ...s.types, [type.id]: { ...s.types?.[type.id], ...changes } },
+        };
+      })
+    );
+  return (
+    <details className="feature-type-row">
+      <summary>
+        <label className="check">
+          <input
+            type="checkbox"
+            aria-label={`Show ${type.label}`}
+            checked={effective.visible}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => update({ visible: e.target.checked })}
+          />
+          <span className="geometry-symbol" aria-hidden="true">
+            {geometrySymbol(members)}
+          </span>
+          <span>{type.label}</span>
+          <small>{members.length.toLocaleString()}</small>
+        </label>
+        <button
+          className="quiet"
+          aria-label={`Style ${editor.world.layers[type.layerId].name}`}
+          onClick={(e) => {
+            e.preventDefault();
+            context.edit(`vector:${type.layerId}`);
+          }}
+        >
+          Style
+        </button>
+      </summary>
+      <TypeAppearance
+        type={type}
+        context={context}
+        members={members}
+        effective={effective}
+        presentation={style}
+        update={update}
+      />
+    </details>
+  );
+}
+function TypeAppearance({
+  type,
+  context,
+  members,
+  effective,
+  presentation: style,
+  update,
+}: {
+  type: FeatureType;
+  context: Context;
+  members: AtlasFeature[];
+  effective: ReturnType<typeof typePresentation>;
+  presentation: LayerStyle;
+  update: (changes: FeatureTypeStyle) => void;
+}) {
+  return (
+    <div className="feature-type-appearance">
+      {members.some((f) => f.footprint) && (
+        <label className="check">
+          <input
+            type="checkbox"
+            aria-label={`Footprints for ${type.label}`}
+            checked={Boolean(effective.footprints)}
+            onChange={(e) => update({ footprints: e.target.checked })}
+          />
+          Surrounding footprints
+        </label>
+      )}
       <label className="check">
         <input
           type="checkbox"
-          aria-label={`Show ${layer.name}`}
-          checked={presentation.visible}
-          onChange={(e) =>
-            editor.setStyles(
-              editor.styles.map((s) =>
-                s.layerId === presentation.layerId ? { ...s, visible: e.target.checked } : s
-              )
-            )
-          }
+          aria-label={`Labels for ${type.label}`}
+          checked={Boolean(effective.labels)}
+          onChange={(e) => update({ labels: e.target.checked })}
         />
-        <svg className="layer-symbol" viewBox="0 0 16 16" aria-hidden="true">
-          {layer.representation === "network" ? (
-            <path
-              d="M1 13L5 4L10 10L15 2"
-              fill="none"
-              stroke={presentation.color}
-              strokeWidth="2"
-            />
-          ) : (
-            <rect
-              x="2"
-              y="3"
-              width="12"
-              height="10"
-              fill={presentation.color}
-              fillOpacity="0.25"
-              stroke={presentation.color}
-            />
-          )}
-        </svg>
-        <span className="feature-name" title={layer.name}>
-          {layer.name}
-        </span>
-        <small>{count.toLocaleString()}</small>
+        Labels
       </label>
-      <button
-        className="quiet"
-        aria-label={`Style ${layer.name}`}
-        onClick={() => edit(`vector:${presentation.layerId}`)}
-      >
-        Style
+      <label>
+        Color
+        <input
+          type="color"
+          aria-label={`Color for ${type.label}`}
+          value={effective.color}
+          onChange={(e) => update({ color: e.target.value })}
+        />
+      </label>
+      <label>
+        Opacity
+        <input
+          type="range"
+          min="0"
+          max="1"
+          step="0.05"
+          aria-label={`Opacity for ${type.label}`}
+          value={style.types?.[type.id]?.opacity ?? 1}
+          onChange={(e) => update({ opacity: Number(e.target.value) })}
+        />
+      </label>
+      <button className="quiet" onClick={() => context.edit(`vector:${type.layerId}`)}>
+        Layer symbols and draw order
       </button>
     </div>
   );
+}
+function geometrySymbol(features: AtlasFeature[]) {
+  const types = new Set(features.map((f) => f.geometry.type));
+  if (types.size > 1) return "◈";
+  const kind = features[0]?.geometry.type ?? "";
+  if (kind.includes("Point")) return "●";
+  if (kind.includes("Line")) return "╱";
+  return kind ? "▱" : "◇";
 }

@@ -39,7 +39,9 @@ test("keeps ecological fields as opt-in overlays beside named biome regions", as
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
   await page.getByRole("button", { name: "Layers", exact: true }).click();
   // Named biomes are vector regions; the per-cell category is not drawn by default.
-  await expect(page.getByRole("checkbox", { name: "Show Biomes", exact: true })).toHaveCount(0);
+  await expect(
+    page.locator(".active-overlays").getByRole("checkbox", { name: "Show Biomes", exact: true })
+  ).toHaveCount(0);
   await page.getByRole("button", { name: "+ Add overlay", exact: true }).click();
   await page.getByLabel("Search overlays").fill("broadleafSaplings");
   await page.getByRole("checkbox", { name: "Add Young broadleaf trees", exact: true }).check();
@@ -74,7 +76,7 @@ test("selects, protects, exports and refines extracted ecological polygons with 
   await page.getByRole("button", { name: "Layers", exact: true }).click();
   const canvas = page.getByRole("application", { name: "World map canvas" });
   const visible = await imageHash(page);
-  const ecology = page.getByRole("checkbox", { name: "Show Biomes and life", exact: true });
+  const ecology = page.getByRole("checkbox", { name: "Show Ecology", exact: true });
   await ecology.click();
   await expect(ecology).not.toBeChecked();
   await expect.poll(() => imageHash(page)).not.toBe(visible);

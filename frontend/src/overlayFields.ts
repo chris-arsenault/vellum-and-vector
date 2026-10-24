@@ -1,4 +1,5 @@
 import { ecologyLabels } from "@atlas/domain";
+import type { World } from "./types";
 
 export const overlayThemes = [
   "Climate",
@@ -35,4 +36,14 @@ export function overlayTheme(channel: string) {
   if (/surface|bedrock|sediment|erosion|landform|fracture|rock|elevation/i.test(channel))
     return "Terrain";
   return "Advanced";
+}
+/** Group independent fields without converting classified cells into named features. */
+export function overlayBranch(world: World, channel: string): string {
+  const [kind, id] = channel.split(":");
+  if (kind === "magic") return world.magicSystems?.find((system) => system.id === id)?.name ?? id;
+  if (kind === "culture") return "Cultural distributions";
+  if (kind === "language" || kind === "languageUse") return "Language distributions";
+  if (kind === "religion") return "Religious distributions";
+  if (/population|settlement/i.test(channel)) return "Population and settlement";
+  return "";
 }

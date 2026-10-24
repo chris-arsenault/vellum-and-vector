@@ -1,0 +1,53 @@
+.feature-type-group {
+  margin: 0.4rem 0;
+}
+.feature-type-group > summary,
+.feature-type-row > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  padding: 0.35rem 0;
+}
+.feature-type-group small,
+.feature-type-row small {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+.feature-type-children {
+  margin-left: 0.65rem;
+  padding-left: 0.55rem;
+  border-left: 1px solid #a59c7c55;
+}
+.feature-type-row .check {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+.geometry-symbol {
+  width: 1rem;
+  text-align: center;
+}
+.type-style-label {
+  font-size: 0.72rem;
+  opacity: 0.75;
+}
+.feature-type-appearance {
+  padding: 0.4rem 0.4rem 0.65rem 1rem;
+  display: grid;
+  gap: 0.5rem;
+}
+.feature-type-appearance label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.feature-type-appearance input[type="color"] {
+  width: 3rem;
+}
+.feature-type-appearance input[type="range"] {
+  width: 7rem;
+}

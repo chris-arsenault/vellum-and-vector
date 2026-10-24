@@ -108,6 +108,7 @@ export interface Area {
   recipeJobId?: string | null;
 }
 export interface Representation {
+  footprint?: Geometry;
   id?: string;
   protected: boolean;
   needsReconciliation: boolean;
@@ -127,6 +128,7 @@ export interface Relation {
   kind: string;
 }
 export interface AtlasFeature {
+  footprint?: Geometry;
   id: string;
   name: string;
   kind: string;
@@ -235,6 +237,8 @@ export interface Template {
   context?: string;
 }
 export interface LayerStyle {
+  types?: Record<string, import("./featureCatalogue").FeatureTypeStyle>;
+  groups?: Record<string, boolean>;
   symbols?: import("geostyler-style").Style;
   labels?: boolean;
   filter?: string | null;

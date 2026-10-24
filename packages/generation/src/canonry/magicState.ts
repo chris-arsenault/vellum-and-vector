@@ -9,6 +9,8 @@ import {
 } from "./magicFieldDefinitions";
 
 export interface MagicField extends Record<MagicChannel, Float64Array> {
+  parents?: Int32Array;
+  wakePaths?: number[][][];
   definition: MagicSystem;
   origins: { id: string; x: number; y: number; radius: number; strength: number }[];
   features: Record<string, Uint8Array>;

@@ -10,6 +10,7 @@ import type { MagicSystem } from "@atlas/domain";
 function fracturePropagation(state: GenerationState, field: MagicField, activity: number) {
   const map = state.physical!.map,
     p = field.definition.parameters;
+  field.parents = new Int32Array(map.mesh.count).fill(-1);
   const queue = new PriorityQueue<{ index: number; value: number }>(
     (a, b) => b.value - a.value || a.index - b.index
   );
@@ -32,6 +33,7 @@ function fracturePropagation(state: GenerationState, field: MagicField, activity
           1000;
       if (next <= field.intensity[j]) continue;
       field.intensity[j] = next;
+      field.parents[j] = i;
       queue.push({ index: j, value: next });
     }
   }
@@ -157,6 +159,8 @@ export function propagateMagic(
   field.wake.fill(0);
   field.rogue.fill(0);
   field.retained.fill(0);
+  delete field.parents;
+  field.wakePaths = [];
   if (!field.definition.enabled) {
     field.source.fill(0);
     field.stored.fill(0);

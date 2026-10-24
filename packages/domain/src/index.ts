@@ -1,4 +1,6 @@
 export * from "./model";
+export * from "./featureCatalogue";
+export * from "./featureReads";
 export * from "./drainage";
 export * from "./magicSystems";
 export * from "./magicEffects";

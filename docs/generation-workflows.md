@@ -5,6 +5,31 @@ uses in-memory inputs and streams validated output with transferable numerical
 buffers. Initial generation also displays sampled epoch previews. No persistent
 state, restart, recovery, backend or MCP is part of this product phase.
 
+Published geography uses primary points, courses or areas according to its
+source. Peaks and channel drops are located points; volcano centers retain cone
+footprints. Gorges follow actual drainage through their classified extents.
+Magic source/site complexes retain surrounding classified footprints. Fire
+courses use conductive propagation links; Pressure wakes retain traced paths,
+and interaction courses use their participating systems. Mask-only regions and
+transition bands stay areas. A label or polygon boundary does not stand in for a
+missing physical path. Existing identities and names survive anchor corrections
+where the generated identity remains the same.
+
+Located society works keep their specific kind and medium. Resolved intensive
+activity can publish its modeled extent, explicitly distinct from a surveyed
+parcel. Unresolved works and structures remain sites with modeled reach as an
+attribute. Events can retain known affected community extents without inventing
+hazard paths. World-scale demands remain unlocated aggregate forcing under
+ADR 0005; extra discovery controls do not materialize them as works.
+
+Optional feature footprints compose separately from primary geometry. Browser
+reads, editing, measurement, spatial discovery, templates and export preserve
+those roles under one identity and respect profiles and located spaces. The
+shared type catalogue supplies the map's hierarchical feature controls and the
+Atlas Features registry, including authored magic sources and unknown custom
+types. Continuous fields retain independent display controls. Registry discovery
+can open existing finer geography; it does not generate that geography.
+
 **Magic clarification — 2026-10-22:** Fire, Aurora and Pressure are first-class
 world effects and processes. Preserve their physical motivations, media,
 feedback and interference without importing named setting lore. Read
@@ -644,24 +669,6 @@ these measurements are examples, not a claim about every seed.
   deliberate adaptations. These require behavior checks in the atlas context;
   source provenance alone does not validate them.
 
-### Feature geometry and display limitations
-
-- `geographicRegions.ts` exports most named landforms as one point per connected
-  cluster. Its crater extraction uses impact-center flags. Canonry's
-  `PhysicalGeologicalFeatureIdentification.cs` identifies connected basin/rim
-  membership and anchors a crater at its deepest excavation. The atlas does not
-  carry crater shape or gorge/ridge geometry into corresponding editable features.
-  Raster masks retain some extents, but generic point markers do not show them.
-- `frontend/src/presentation.ts` gives categorical landform, surface and material
-  codes a continuous numerical colour ramp. Its elevation rendering combines
-  relief with water and ice, without the reference's surface and river composition.
-- `frontend/src/mapEngine.ts` draws landform points as generic circles and rivers
-  at a fixed width. Canonry's `PhysicalMicrogeographyPainter.cs` draws categorical
-  terrain, ridge/cliff/coast/pass edges, filled channels and deltas, river spines
-  and distinct feature marks. Those are functional cartographic differences.
-  The reference also uses percentile-based elevation colours; the atlas's fixed
-  elevation ramp suppresses contrast in the observed low-relief output.
-
 ### Bounded source inventory
 
 Reference checkout: `../the-canonry-game` at
@@ -851,23 +858,13 @@ them is not evidence that one of those semantic operations is absent.
 
 ### Geographic extraction comparison
 
-`PhysicalGeologicalFeatureIdentification` is outside the 54 physical layer
-classes. It identifies four kinds and retains their triangle membership. The
-atlas changes selection or grouping for three kinds and exports a different
-representation for all four:
-
-| Kind         | Reference                                                                             | Atlas                                                                                                             |
-| ------------ | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| Peak         | Connected peak cells, anchored at highest elevation                                   | Same clustering/anchor principle, exported as a point without membership geometry                                 |
-| Crater       | Connected impact-basin/rim cells, at least 48 members, anchored at deepest excavation | Connected impact-center flags, no equivalent minimum, anchored at highest in-scope elevation, exported as a point |
-| Lake         | Native water-body membership, at least 96 cells, anchored at lowest floor             | GIS polygons assembled from sampled raster cells, without the reference size filter or anchor                     |
-| River system | Upstream-connected membership from mouths with discharge at least 60,000              | Separate line reaches between junctions; no corresponding river-system membership object                          |
-
-The atlas also adds point extraction for volcanoes, calderas, cirques, fjords,
-moraines, gorges, waterfalls and configured magical regions. These additions do
-not implement the reference's retained membership automatically. River width,
-floodplain and delta fields exist in the physical kernel, but their geometry is
-not represented by a fixed-width river reach alone.
+`PhysicalGeologicalFeatureIdentification` sits outside the physical layer
+classes and retains triangle membership for named features. The atlas publishes
+GIS geography using summit prominence, surviving causal crater footprints,
+water-body polygons and connected river reaches. River reaches retain their
+station profiles; they do not imply a separate whole-river-system identity.
+Additional landforms and magical places use their supported site, course and
+area geometry. Field-only geography remains distinct from named features.
 
 ### Recommended order
 

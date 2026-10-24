@@ -228,11 +228,15 @@ function landform(snapshot: DomainSnapshot, context: IntentContext, data: Record
     id: semanticId(snapshot.world.id, "landform", context.operationId),
     areaId: context.scope.areaId,
     name: String(data.name),
-    kind: "peak",
-    layerId: "pois",
-    geometry: point(center),
+    kind: "hill",
+    layerId: "geology",
+    geometry: spatial.intersection(
+      spatial.buffer(point(center), Number(data.radius))!,
+      context.scope.footprint
+    )!,
     attributes: {
       elevation: (sampleFields(snapshot, center).elevation ?? 0) + Number(data.height),
+      summit: center,
     },
     relations: [],
     detail: {},

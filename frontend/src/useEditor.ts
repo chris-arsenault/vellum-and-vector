@@ -5,7 +5,7 @@ import { makeCommand, useCommit } from "./useAtlas";
 import type { Area, AtlasFeature, LayerStyle, Tool, World } from "./types";
 import type { Geometry } from "geojson";
 import { useMapData } from "./useScene";
-import { editArea } from "./useScene";
+import { editArea, scopedFootprint } from "./useScene";
 import { useCartographicState } from "./useCartographicState";
 import { useMapActions } from "./useMapActions";
 import type { MapEngine } from "./mapEngine";
@@ -95,6 +95,7 @@ export function useEditor(world: World) {
     ...editing,
     world,
     styles,
+    viewportExtent: viewport,
     ...useMapData(world, area.id, viewport),
     viewport: setViewport,
     ...useMapActions(world, state, editing),
@@ -138,7 +139,8 @@ function useEditing(world: World, state: ReturnType<typeof useEditorState>) {
     });
   }
   function saveFeature(feature: AtlasFeature) {
-    const edit = { areaId: editArea(world, areaId, feature), feature };
+    const target = editArea(world, areaId, feature);
+    const edit = { areaId: target, feature: scopedFootprint(world, target, feature) };
     const stage = () => {
       const edits = [...pendingEdits.filter((e) => e.feature.id !== feature.id), edit];
       setPendingEdits(edits);

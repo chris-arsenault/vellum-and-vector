@@ -105,6 +105,15 @@ function editContext(data: FeatureEdit, context: IntentContext, snapshot: Domain
     "The edited geometry stays within its mapped and requested extent."
   );
   const previous = snapshot.world.features[data.feature.id];
+  if (data.feature.footprint) {
+    requireThat(
+      data.feature.footprint.type.includes("Polygon") &&
+        gis.covers(area.footprint, data.feature.footprint) &&
+        gis.covers(snapshot.scope.footprint, data.feature.footprint),
+      "feature_footprint",
+      "A feature footprint is a polygon within its mapped and requested extent."
+    );
+  }
   requireIdentity(snapshot, data.feature.id, "feature");
   requireThat(
     previous || snapshot.identities[data.feature.id] === undefined,
@@ -162,7 +171,12 @@ export function evaluateFeature(
   else {
     const detail = authoredDetail(snapshot, area, feature, previous, data.feature.protected);
     changes.writes.push({ kind: "representation", value: detail });
-    const metadata = { ...previous, name: feature.name, relations: feature.relations };
+    const metadata = {
+      ...previous,
+      name: feature.name,
+      relations: feature.relations,
+      attributes: renamedAttributes(previous, feature.name),
+    };
     if (!sameValue(previous, metadata)) changes.writes.push({ kind: "feature", value: metadata });
   }
   if (!options.reconcile && !options.deferComposition)
@@ -174,6 +188,11 @@ export function evaluateFeature(
   upsertArea(changes, { ...area, layers: { ...area.layers, [layer.id]: "authored" } });
   invalidateFacts(changes, context, snapshot, [layer.id, ...(layer.facts ?? [])]);
   return changes;
+}
+function renamedAttributes(previous: AtlasFeature, name: string) {
+  return previous.name !== name
+    ? { ...previous.attributes, nameStatus: "proper" }
+    : previous.attributes;
 }
 function validateFeatureRelations(
   data: FeatureEdit,
@@ -224,6 +243,7 @@ function authoredFeature(
     areaId: area.id,
     geometry,
     attributes,
+    ...(data.feature.footprint ? { footprint: data.feature.footprint } : {}),
     detail: {},
     state: "authored",
     protected: false,
@@ -236,9 +256,13 @@ function authoredFeature(
   return {
     ...source,
     name: data.feature.name,
+    ...(data.feature.footprint ? { footprint: data.feature.footprint } : {}),
     relations: data.feature.relations,
     geometry,
-    attributes,
+    attributes:
+      previous && previous.name !== data.feature.name
+        ? { ...attributes, nameStatus: "proper" }
+        : attributes,
     protected: data.feature.protected ?? source.protected,
     state: "authored",
     actor: context.actor,
@@ -257,6 +281,7 @@ function authoredDetail(
     featureId: feature.id,
     areaId: area.id,
     geometry: feature.geometry,
+    ...(feature.footprint ? { footprint: feature.footprint } : {}),
     attributes: feature.attributes,
     state: "authored",
     actor: feature.actor,

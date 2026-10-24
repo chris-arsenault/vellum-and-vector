@@ -62,13 +62,17 @@ function analysisInput(editor: EditorState, form: FormData) {
     areaId: editor.area.id,
     operation: String(form.get("operation")),
     featureId: editor.selected?.id ?? null,
-    geometry: editor.selection ?? editor.selected?.geometry ?? editor.area.footprint,
+    geometry: editor.selection ?? analysisGeometry(editor) ?? editor.area.footprint,
     targetFeatureId: String(form.get("target")) || null,
     layer: String(form.get("layer")) || null,
     channel: String(form.get("channel")) || null,
     distance: Number(form.get("distance")),
     networkKind: String(form.get("networkKind")),
   };
+}
+function analysisGeometry(editor: EditorState) {
+  const feature = editor.scene.data?.find((f) => f.id === editor.selected?.id) ?? editor.selected;
+  return editor.geometryRole === "footprint" ? feature?.footprint : feature?.geometry;
 }
 function AnalysisInputs({ world, editor }: { world: World; editor: EditorState }) {
   return (

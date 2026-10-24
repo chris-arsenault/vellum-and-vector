@@ -12,6 +12,7 @@ import {
   membershipContour,
 } from "./geographicContours";
 import { landArea, largestRegionShare, partitionRegion } from "./regionPartition";
+import { naturalPlaceGeometry, magicPlaceGeometry, type PlaceGeometry } from "./placeGeometry";
 
 /** Largest enclosed gap, in square metres, that a landform or magic region absorbs. */
 const smallHole = 2_000_000_000;
@@ -157,31 +158,54 @@ export function publishPlace(
   members: number[],
   layer: string,
   attributes: Record<string, unknown> = {},
-  extent?: Geometry
+  extent?: Geometry,
+  placement?: PlaceGeometry | null
 ) {
-  const work = state.physical!,
-    map = work.map;
-  const covers = spatial.pointCoverage(state.domain.scope.footprint);
+  const work = state.physical!;
+  const representative = placeRepresentative(state, members);
+  if (representative < 0) return;
+  const identityPosition = nativePosition(work, representative);
+  const position = nativePosition(work, placement?.anchor ?? representative),
+    geometry = placement?.geometry ?? extent ?? point(position);
+  const identity = coordinateKey(identityPosition.x, identityPosition.y);
+  const feature = generatedFeature(state, `${kind}:${identity}`, name, kind, layer, geometry, {
+    ...placeAttributes(state, name, members, representative, extent, placement),
+    ...attributes,
+  });
+  if (extent && !geometry.type.includes("Polygon")) feature.footprint = extent;
+  putGenerated(state, feature);
+}
+function placeRepresentative(state: GenerationState, members: number[]) {
+  const covers = spatial.pointCoverage(state.domain.scope.footprint),
+    work = state.physical!;
   let representative = -1;
   for (const i of members) {
     if (!covers(nativePosition(work, i))) continue;
-    if (representative < 0 || map.Elevation[i] > map.Elevation[representative]) representative = i;
+    if (representative < 0 || work.map.Elevation[i] > work.map.Elevation[representative])
+      representative = i;
   }
-  if (representative < 0) return;
-  const position = nativePosition(work, representative),
-    geometry = extent ?? point(position);
-  const identity = coordinateKey(position.x, position.y);
-  putGenerated(
-    state,
-    generatedFeature(state, `${kind}:${identity}`, name, kind, layer, geometry, {
-      sourceAlgorithm: "canonry-0f62584c",
-      area: extent ? spatial.area(extent) : members.reduce((sum, i) => sum + map.mesh.areas[i], 0),
-      representative: position,
-      placeType: name,
-      elevation: (map.Elevation[representative] - map.BaseSeaLevel) / 1024,
-      ...attributes,
-    })
-  );
+  return representative;
+}
+function placeAttributes(
+  state: GenerationState,
+  name: string,
+  members: number[],
+  representative: number,
+  extent?: Geometry,
+  placement?: PlaceGeometry | null
+) {
+  const work = state.physical!,
+    anchor = placement?.anchor ?? representative;
+  return {
+    sourceAlgorithm: "canonry-0f62584c",
+    area: extent
+      ? spatial.area(extent)
+      : members.reduce((sum, i) => sum + work.map.mesh.areas[i], 0),
+    representative: nativePosition(work, anchor),
+    placeType: name,
+    geometryMeaning: placement?.meaning ?? "classified geographic region",
+    elevation: (work.map.Elevation[anchor] - work.map.BaseSeaLevel) / 1024,
+  };
 }
 export function extractNamedLandforms(state: GenerationState) {
   const map = state.physical!.map;
@@ -203,7 +227,16 @@ export function extractNamedLandforms(state: GenerationState) {
       (members, extent) => {
         const surface = extent && kind !== "fjord" ? dry(extent) : extent;
         if (extent && !surface) return;
-        publishPlace(state, kind, name, members, "geology", {}, surface ?? undefined);
+        publishPlace(
+          state,
+          kind,
+          name,
+          members,
+          "geology",
+          {},
+          surface ?? undefined,
+          naturalPlaceGeometry(state, kind, members, surface ?? undefined)
+        );
       },
       kind !== "waterfall",
       kind === "fjord" ? Infinity : maximum
@@ -235,7 +268,8 @@ export function extractMagicPlaces(state: GenerationState) {
                   0
                 ) / region.reduce((sum, i) => sum + state.physical!.map.mesh.areas[i], 0),
             },
-            extent
+            extent,
+            extent ? magicPlaceGeometry(state, field, rule.id, region, extent) : null
           ),
         true
       );

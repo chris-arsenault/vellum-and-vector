@@ -132,10 +132,10 @@ function addHarbors(state: GenerationState, existing: Set<string>) {
 function addAuthoredWorks(state: GenerationState, existing: Set<string>) {
   const work = state.society!;
   for (const f of Object.values(state.domain.world.features)) {
-    if (!isSocietyWork(f) || f.state === "generated" || f.geometry.type !== "Point") continue;
+    if (!isSocietyWork(f) || f.state === "generated") continue;
     const id = String(f.attributes.workId ?? f.id);
     if (f.areaId !== state.domain.scope.areaId || existing.has(id)) continue;
-    const [x, y] = f.geometry.coordinates,
+    const { x, y } = spatial.interiorPosition(f.geometry),
       c = nearestCommunity(state, x, y);
     if (!c) continue;
     const candidate = makeWork(state, c, f.attributes.workKind as SocietyWorkKind, { x, y, z: 0 });

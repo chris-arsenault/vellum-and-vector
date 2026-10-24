@@ -17,6 +17,7 @@ export const candidateFeatureSchema = z.object({
   name: z.string(),
   kind: identifier,
   geometry: geometrySchema,
+  footprint: geometrySchema.optional(),
   state: z.enum(materializationStates),
   protected: z.boolean(),
   actor: identifier,

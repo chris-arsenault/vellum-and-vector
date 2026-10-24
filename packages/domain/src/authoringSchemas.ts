@@ -24,6 +24,7 @@ export const featureInputSchema = z.object({
   kind: identifier,
   layerId: identifier,
   geometry: geometrySchema,
+  footprint: geometrySchema.optional(),
   attributes: valueRecordSchema,
   relations: z.array(relationSchema).default([]),
   protected: z.boolean().optional(),

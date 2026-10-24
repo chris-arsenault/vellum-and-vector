@@ -1,4 +1,5 @@
-import { spatial } from "@atlas/domain";
+import { spatial, point } from "@atlas/domain";
+import { nativePosition } from "./atlasWorkspace";
 import type { Geometry } from "geojson";
 import type { GenerationState } from "../process";
 import { components, publishPlace } from "./geographicRegions";
@@ -60,7 +61,20 @@ export function extractReliefFeatures(state: GenerationState) {
     (i) => map.LandformCodes[i] === Landform.Peak,
     (members) => {
       const summit = members.reduce((best, i) => (rise[i] > rise[best] ? i : best));
-      publishPlace(state, "peak", "Peak", members, "geology", { prominence: rise[summit] / 1024 });
+      publishPlace(
+        state,
+        "peak",
+        "Peak",
+        members,
+        "geology",
+        { prominence: rise[summit] / 1024 },
+        undefined,
+        {
+          geometry: point(nativePosition(state.physical!, summit)),
+          anchor: summit,
+          meaning: "prominent summit",
+        }
+      );
     }
   );
   const mountain = (i: number) =>

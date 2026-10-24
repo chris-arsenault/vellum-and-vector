@@ -54,18 +54,17 @@ function extractEvents(state: GenerationState, selected: { impacts: boolean; vol
       strength: event.strength,
       ...relief,
     };
-    putGenerated(
+    const feature = generatedFeature(
       state,
-      generatedFeature(
-        state,
-        event.id,
-        `${kind === "crater" ? "Impact crater" : "Volcano"} ${event.id.split(":").at(-1)}`,
-        kind,
-        "geology",
-        shape,
-        attributes
-      )
+      event.id,
+      `${kind === "crater" ? "Impact crater" : "Volcano"} ${event.id.split(":").at(-1)}`,
+      kind,
+      "geology",
+      shape,
+      attributes
     );
+    locateVolcano(state, feature, center);
+    putGenerated(state, feature);
     if (!event.caldera) continue;
     const bowl = spatial.buffer(point(center), event.radius * 0.28);
     const caldera = bowl && spatial.intersection(bowl, state.domain.scope.footprint);
@@ -78,6 +77,19 @@ function extractEvents(state: GenerationState, selected: { impacts: boolean; vol
         })
       );
   }
+}
+function locateVolcano(
+  state: GenerationState,
+  feature: import("@atlas/domain").AtlasFeature,
+  center: import("@atlas/domain").Position
+) {
+  if (
+    feature.kind !== "volcano" ||
+    !spatial.intersects(point(center), state.domain.scope.footprint)
+  )
+    return;
+  feature.footprint = feature.geometry;
+  feature.geometry = point(center);
 }
 /** False for an unmapped event; otherwise its extra attributes, a crater's surviving relief. */
 function selectedEvent(

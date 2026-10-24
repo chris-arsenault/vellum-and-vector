@@ -226,6 +226,14 @@ Prefer recognized standards and established libraries when feasible (e.g., OGC S
 - Significant boundary-altering changes require explicit reconciliation, potentially including updates to the parent summary and adjacent mapped areas.
 - **Feature identity is not the same as a specific coordinate or sample index.** IDs should remain stable under reasonable editing and resampling.
 
+A feature's primary geometry expresses its geographic meaning: a located site,
+a supported course, or an area. An optional polygon footprint records known
+surroundings or affected geography under that same identity. Primary geometry
+and footprint compose independently through finer representations. Creators can
+edit either role and undo the change; moving a site leaves its surroundings in
+place. Spatial discovery considers both roles, and GIS export retains both.
+Classification bands remain areas when the source supplies no physical course.
+
 ### 6.3 Data representations
 
 | Representation                   | Core uses                                                                            |
@@ -283,6 +291,36 @@ The renderer can display the same stable world feature at multiple scales withou
 **Cultural geography must not be forced into exclusive polygons.** Multiple cultures, languages, traditions, and religions may coexist geographically. Support distributions/prevalence fields and optionally inferred boundaries for cartographic presentation. Store genuine institutions, communities, and important sites as entities/features.
 
 Political and cultural map content should be available at every creation level where meaningful. World and Region generators can model states, cultural distributions, and broad administrative structure; Local/Site generation can model wards, local control, groups, property, and institutions. Interior maps can display ownership, restricted areas, affiliations, and artifacts without requiring a dedicated interior nation-state generator.
+
+### 7.4 Feature types and Atlas discovery
+
+Feature controls organize terrain, water, ecology, magic, inhabited places,
+transport, works, society, politics, history, structures and custom content into
+searchable groups. Published biome and settlement-role attributes supply finer
+types; magic types follow configured systems, classification rules and their
+interactions. Parent visibility preserves individual child settings. Each type
+has independent visibility, labels and appearance, including optional footprint
+display. Counts describe unique eligible identities in the current map. Hidden
+types are excluded from ordinary picking and snapping under both default and
+advanced styles. Session views retain these settings.
+
+Continuous fields remain independent overlays. Their discovery groups distinguish
+magic systems, population and cultural, language and religious distributions.
+Turning off site symbols does not remove a field or alter the base surface.
+
+The Atlas provides **Maps** for mapped-area navigation and **Features** for a
+sortable, filterable registry. Features defaults to named content and can include
+generic components explicitly. Whole-world, current-map and viewport scopes
+combine with type, attribute, status, authorship, protection, profile and located
+space filters. Selectable columns retain numerical values, units and explicit
+unknowns; settlement residents remain distinct from community population.
+Custom attributes and separately owned authored magic sources are included.
+
+Each semantic identity has one row. Discovery retains hidden features and opens
+existing finer maps or interiors through the inspector without changing saved
+visibility or generating detail. Current-map and viewport reads respect composed
+geometry, profile eligibility and located spaces. Edits, undo and delivered
+initial-generation features refresh the registry; incomplete delivery is marked.
 
 ---
 
