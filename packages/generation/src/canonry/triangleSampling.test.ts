@@ -2,9 +2,26 @@ import { expect, it } from "vitest";
 import { createWorldMesh } from "./worldMesh";
 import { physicalSampler } from "./physicalMetric";
 import { nearestTriangle } from "./mesh";
-import { triangleSample, triangleValue } from "./triangleSampling";
+import { triangleSample, triangleValue, triangleFans, triangleBoundary } from "./triangleSampling";
 
 const mesh = createWorldMesh([2e6, 3e6, 2.2e6, 3.1e6], 1024, 30_000);
+
+it("preserves constant decimal fields in sampling, fan vertices and boundary closure", () => {
+  const value = 0.1,
+    values = new Float64Array(mesh.count).fill(value),
+    sample = physicalSampler(mesh, values);
+  for (let i = 0; i < mesh.contentCount; i++) {
+    const x = mesh.x[i] + mesh.spacing * 0.12,
+      y = mesh.y[i] - mesh.spacing * 0.17;
+    expect(sample(x, y)).toBe(value);
+    expect(triangleValue(triangleSample(mesh, x, y), values)).toBe(value);
+  }
+  for (const samples of [
+    triangleFans(mesh, [...mesh.x.keys()], () => value),
+    triangleBoundary(mesh, () => value),
+  ])
+    for (const segment of samples) for (const station of segment) expect(station[2]).toBe(value);
+});
 
 it("reproduces physical planes at subcell positions and retains exact centre samples", () => {
   const plane = (x: number, y: number) => 700 + x * 0.003 - y * 0.001;

@@ -6,8 +6,11 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 import { atlasGenerationModules } from "./atlasModules";
-import { prepareAtlasGeneration, type generateAtlas } from "./atlasWorkflow";
-import { publishGenerationProducts } from "./publication";
+import { prepareAtlasGeneration } from "./atlasWorkflow";
+import {
+  GenerationReceiver,
+  type GenerationMessage,
+} from "../../../frontend/src/generationTransport";
 import {
   inventoryChannel,
   inventoryFeature,
@@ -16,15 +19,16 @@ import {
   statefulInventoryRequest,
 } from "./fixtures/statefulModule";
 
-type Result = Awaited<ReturnType<typeof generateAtlas>>;
-type WorkerMessage = { kind: string; error?: string; result?: Result };
-
-function run(worker: Worker, message: unknown): Promise<Result> {
+function run(worker: Worker, message: unknown): Promise<GenerationReceiver> {
   return new Promise((resolve, reject) => {
+    let receiver: GenerationReceiver | undefined;
     worker.on("error", reject);
-    worker.on("message", (entry: WorkerMessage) => {
+    worker.on("message", (entry: GenerationMessage) => {
       if (entry.kind === "failed") reject(new Error(entry.error));
-      if (entry.kind === "completed" && entry.result) resolve(entry.result);
+      if (entry.kind === "snapshot") receiver = new GenerationReceiver(entry);
+      else if (entry.kind === "samples" || entry.kind === "numerical" || entry.kind === "records")
+        receiver!.receive(entry);
+      else if (entry.kind === "completed") resolve(receiver!);
     });
     worker.on("exit", (code) => {
       if (code !== 0) reject(new Error(`Worker exited ${code}.`));
@@ -51,12 +55,19 @@ it("rebinds a reviewed stateful module in a separately bundled worker and publis
     const prepared = prepareAtlasGeneration(source, input);
     expect(prepared.diagnostics).toEqual([]);
     worker = new Worker(outfile, { execArgv: [] });
-    const completed = await run(worker, { snapshot: prepared.source, input: prepared.input });
-    const grid = completed.state.surface;
-    expect(completed.state.history.map((entry) => entry.ancestry.at(-1)?.id)).toEqual([
-      "Formation",
-      "Recent",
-    ]);
+    const completed = await run(worker, {
+      snapshot: prepared.source,
+      input: prepared.input,
+      operationId: crypto.randomUUID(),
+    });
+    const snapshot = completed.complete();
+    const field = snapshot.world.fields.find((field) => field.layerId === inventoryLayer)!;
+    const grid = snapshot.numerical[field.id];
+    expect(
+      completed.history
+        .filter((entry) => entry.path[0] !== "present")
+        .map((entry) => entry.ancestry.at(-1)?.id)
+    ).toEqual(["Formation", "Recent"]);
     expect(grid.channels[inventoryChannel]).toBeInstanceOf(Float64Array);
     expect(grid.quantities?.[inventoryChannel]).toBe("extensive");
     for (let i = 0; i < grid.active.length; i++)
@@ -65,12 +76,7 @@ it("rebinds a reviewed stateful module in a separately bundled worker and publis
     expect(prepared.input.resolvedFeatures!.selection[inventoryFeature].settings.deposition).toBe(
       2
     );
-    expect(completed.state.physical).toBeUndefined();
-    publishGenerationProducts(completed.state, "separate-worker-contract");
-    expect(completed.state.domain.world.layers[inventoryLayer].name).toBe("Carried inventory");
-    expect(
-      completed.state.domain.world.fields.some((field) => field.layerId === inventoryLayer)
-    ).toBe(true);
+    expect(snapshot.world.layers[inventoryLayer].name).toBe("Carried inventory");
     expect(source.world.layers[inventoryLayer]).toBeUndefined();
   } finally {
     if (worker) await worker.terminate();

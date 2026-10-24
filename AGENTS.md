@@ -34,7 +34,7 @@ Organize responsibilities around these boundaries:
 | Shared domain modules | Typed world model, coordinates, commands, invariants and dependency contracts        |
 | Generation modules    | Deterministic atlas algorithms, epoch state, causal magic and scoped refinement      |
 | Browser session       | In-memory worlds, direct validated edits, spatial reads, templates, history and undo |
-| Browser worker        | Generation lifecycle, progress, cancellation and complete result delivery            |
+| Browser worker        | Generation lifecycle, previews, cancellation and transferable output delivery        |
 
 Keep domain and generation modules independent of React, HTTP handlers and
 database connections. The UI calls shared domain operations directly.
@@ -77,7 +77,9 @@ no saved execution state, restart or recovery.
 
 Preserve completed history while ordinary edits change the present. Apply the
 same identity, boundary and authored-protection rules to every process result,
-and publish validated candidate geography atomically.
+and publish validated regeneration geography atomically. Per the user's
+2026-10-24 direction, initial generation progressively installs streamed output
+and shows independent epoch previews; interrupted delivery stays incomplete.
 
 Generation runs in a Web Worker and ends when the tab closes. Pure generation
 modules remain independent of that browser adapter.
@@ -139,6 +141,9 @@ behavior from future architecture in documentation and status updates.
 Assess changes through representative map behavior, geographic output and
 focused domain and browser checks. Keep scope tied to the atlas's authoring
 workflows and the product's physical-plausibility requirements.
+
+Ask before running Fine generation for verification; these runs can take hours.
+Do not include them in routine verification without the user's authorization.
 
 ### Documentation
 

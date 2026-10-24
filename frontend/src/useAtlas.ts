@@ -1,9 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { listWorlds, session } from "./atlasState";
+import { useSyncExternalStore } from "react";
+import { listWorlds, session, subscribe } from "./atlasState";
 import { commitCommand } from "./atlasCommands";
-import { listJobs, startGeneration } from "./generationJobs";
+import { generationPreviewFor, listJobs, startGeneration } from "./generationJobs";
 import type { Command, World } from "./types";
 import type { AtlasParameters } from "@atlas/generation";
+
+export function useGenerationPreview(worldId: string, areaId: string) {
+  return useSyncExternalStore(subscribe, () => generationPreviewFor(worldId, areaId));
+}
 
 export function useWorlds() {
   return useQuery({

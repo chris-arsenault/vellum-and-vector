@@ -6,6 +6,7 @@ import { updateRaster } from "./rasterLayers";
 import type { RasterPresentation } from "./types";
 import { installMapTools, type MapEvents } from "./mapInteractions";
 import { toolInstruction } from "./cartography";
+import { useGenerationPreview } from "./useAtlas";
 interface Props {
   world: World;
   area: Area;
@@ -38,7 +39,6 @@ export function MapCanvas({
   const target = useRef<HTMLDivElement>(null);
   const coordinates = useRef<HTMLOutputElement>(null);
   const [engine, setEngine] = useState<MapEngine | null>(null);
-  const fittedArea = useRef("");
   const [reference] = useState(world.reference);
   const callbacks = useRef(events);
   useEffect(() => {
@@ -60,19 +60,15 @@ export function MapCanvas({
   useEffect(() => {
     if (engine) applyMapUpdate(engine, () => updateFeatures(engine, world, area, styles, features));
   }, [engine, world, area, styles, features]);
-  useEffect(() => {
-    if (engine)
-      applyMapUpdate(engine, () =>
-        updateRaster(engine, world, raster ?? [], baseRaster ?? [], presentation)
-      );
-  }, [engine, world, raster, baseRaster, presentation]);
-  useEffect(() => {
-    if (engine && fittedArea.current !== area.id) {
-      fitArea(engine, area);
-      fittedArea.current = area.id;
-      reportViewport(engine, callbacks.current);
-    }
-  }, [engine, area]);
+  const previewLabel = useGenerationRaster(
+    engine,
+    world,
+    area.id,
+    raster,
+    baseRaster,
+    presentation
+  );
+  useAreaFit(engine, area, callbacks);
   useEffect(() => {
     if (engine) return installMapTools(engine, tool, selected?.id ?? null, () => callbacks.current);
   }, [engine, tool, selected?.id]);
@@ -91,9 +87,55 @@ export function MapCanvas({
       <output className="coordinates" ref={coordinates}>
         World coordinates · metres
       </output>
-      <div className="map-instruction">{toolInstruction(tool)} · Space: pan · Esc: cancel</div>
+      <div className="map-instruction">
+        {previewLabel ? `Generation preview · ${previewLabel} · ` : ""}
+        {toolInstruction(tool)} · Space: pan · Esc: cancel
+      </div>
     </div>
   );
+}
+function useAreaFit(engine: MapEngine | null, area: Area, callbacks: { current: MapEvents }) {
+  const fittedArea = useRef("");
+  useEffect(() => {
+    if (engine && fittedArea.current !== area.id) {
+      fitArea(engine, area);
+      fittedArea.current = area.id;
+      reportViewport(engine, callbacks.current);
+    }
+  }, [engine, area, callbacks]);
+}
+function useGenerationRaster(
+  engine: MapEngine | null,
+  world: World,
+  areaId: string,
+  raster: Optional<Raster[]>,
+  baseRaster: Optional<Raster[]>,
+  presentation: RasterPresentation
+) {
+  const preview = useGenerationPreview(world.id, areaId);
+  useEffect(() => {
+    if (!engine) return;
+    const grid = preview?.grid;
+    const base = baseRaster?.length
+      ? baseRaster
+      : grid
+        ? [
+            {
+              id: grid.id,
+              areaId,
+              footprint: grid.scope.footprint,
+              bounds: grid.bounds,
+              channel: "elevation",
+              field: grid,
+              water: grid.channels.water ? grid : undefined,
+              ice: grid.channels.ice ? grid : undefined,
+              surface: grid.channels.finalSurface ? grid : undefined,
+            },
+          ]
+        : [];
+    applyMapUpdate(engine, () => updateRaster(engine, world, raster ?? [], base, presentation));
+  }, [engine, world, areaId, raster, baseRaster, presentation, preview]);
+  return !baseRaster?.length ? preview?.label : null;
 }
 function observeMap(
   engine: MapEngine,

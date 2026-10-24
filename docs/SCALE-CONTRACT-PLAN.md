@@ -125,20 +125,27 @@ the Draft cell count.
 - The `cd507f80` fixes land before M1 and M4 expand. Checked by reading the
   tree at M0.
 
-### Deferred decisions
+### Settled agent choices, revisable on inspection
 
-- **[DECISION] _k_ and the major categories per pillar.** Owner: user.
-  Trigger: M0 table draft. Affects M1, M3, M5.
-- **[DECISION] Whether World ever realizes a structure under the major-works
-  exception** (a trunk-river dam whose impoundment spans _k_ cells, a canal, a
-  long wall) or publishes none until Region. Owner: user. Trigger: M0.
-  Affects M1.
-- **[DECISION] Durable record.** Whether the settled contract becomes ADR 0004
-  or a section of generation-workflows.md. Recommendation: ADR, because it is a
-  cross-cutting rule about what each profile may generate. Owner: user.
-  Trigger: end of M0.
-- **Conservation tolerance.** Owner: agent, within the user's outcome.
-  Trigger: M4 expansion, from the inheritance arithmetic.
+None of these needs a user decision up front. Each is an agent choice with a
+reassessment trigger; the user overrides any of them after seeing the maps.
+
+- **_k_ = 2 cells on the smaller dimension.** Trigger: a World map at M1 or M5
+  that realizes something sub-mesh or drops something mesh-scale.
+- **Major categories per pillar are what each pillar publishes at World today:**
+  capitals, regional centres and towns of 5,000 concentrated residents; Fire
+  cores; trunk-river crossings; named ranges and biome regions above their
+  minimum. Recorded in the M0 table from the existing rules, not chosen anew.
+- **The major-works exception is the resolution rule applied to a work.** A
+  structure whose realized footprint spans _k_ cells is realized at World with
+  its consequence; one that does not stays latent. Whether World society ever
+  produces a dam that large is emergent. M1 implements the rule once; no
+  separate switch.
+- **Durable record: ADR 0005.** The contract is a cross-cutting rule about what
+  each profile may generate, so it belongs with the ADRs; 0004 is the coupling
+  ADR. Written at the end of M0.
+- **Conservation tolerance.** Set at the M4 expansion from the inheritance
+  arithmetic.
 
 ## Milestones
 
@@ -146,19 +153,20 @@ the Draft cell count.
 
 Scope: read what `cd507f80` landed in `societyNativeWorks.ts`,
 `societyInheritance.ts`, `societyWorks.ts` and `societyRound.ts`; classify every
-`SocietyWorkKind` as intensive or structural with its demand unit; propose _k_
-and the major categories per pillar; settle the Region realization interface
-(what a child reads: demand per kind per unit with units, unit footprint,
-seat, inherited totals); publish the per-process realized/latent/absent table
-as the declaration each process is held to.
+`SocietyWorkKind` as intensive or structural with its demand unit; record _k_
+and the major categories per pillar from the existing rules; settle the Region
+realization interface (what a child reads: demand per kind per unit with
+units, unit footprint, seat, inherited totals); publish the per-process
+realized/latent/absent table as the declaration each process is held to;
+write ADR 0005 from the settled contract.
 
 Acceptance: a table naming, for each registered process, what it realizes,
 leaves latent and leaves absent at World and Region, with the consumer of each
-latent channel; the three user decisions above answered or explicitly left
-open with their trigger; the work-kind classification recorded.
+latent channel; the work-kind classification recorded; ADR 0005 drafted.
 
 Evidence: source review of the process contracts and the four-pillar plan's
-third pass; the table and decisions in this document. No runtime change.
+third pass; the table, the ADR and the choices in this document. No runtime
+change.
 
 Sulion: `493cd9d7-0036-4c9f-8818-6b950a98fcab`.
 
@@ -169,8 +177,9 @@ units and make no elevation, `EngineeredDams`, shoal or lake changes. Tapping
 and quarrying stay field forcing as conductance and stored-charge fractions
 along their medium. Clearance, burning, hunting, conservation, irrigation
 withdrawal and Fire heat keep field forcing. Authored works with positions stay
-located at every profile. If the user chooses the major-works exception at M0,
-implement its realization rule here.
+located at every profile. The resolution rule applies to works as to every
+other feature: a structure whose realized footprint spans _k_ cells is realized
+at World with its consequence, implemented here once.
 
 Acceptance: a World run's lake set, terrain and shoal flags are identical with
 and without society demands; intensive forcing still changes cover, discharge
@@ -273,5 +282,5 @@ Plan established 2026-10-24. No milestone has started. The four-pillar review
 fixes (`cd507f80`) are in progress in another session and touch the same
 society files; M0 begins by reading their landed state.
 
-Next action: when the user authorizes it, expand M0 with plan-phase and answer
-the three user decisions.
+Next action: when the user authorizes it, expand M0 with plan-phase. No user
+decision blocks it.

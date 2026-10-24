@@ -26,7 +26,16 @@ directly; do not emulate HTTP routes inside the browser.
 
 Each worker receives the current in-memory snapshot. Processes share its private
 working map and report stage progress. Cancellation terminates that worker.
-Successful, validated geography replaces session state as one operation. If the
+Per the user's 2026-10-24 direction, initial generation shows independent sampled
+previews at completed epochs and progressively installs validated output as it
+arrives. The worker prepares publication, sends numerical buffer ownership through
+transfer lists, and batches world records. Shared buffers and topology travel
+once; completion is a small notification. There are no acknowledgements or saved
+delivery state. Cancellation or failure during delivery leaves initial output
+marked incomplete; it does not claim a completed world.
+
+Regeneration retains its existing behavior: successful, validated geography
+replaces session state as one operation after delivery. If the
 world was edited during the run, retain the edits and report that its generation
 result is out of date. The creator can generate again from the current state.
 There is no automatic retry.

@@ -5,7 +5,7 @@ import { applyCartographicChoice, cartographicControls } from "./cartographicDra
 import { generationSnapshot } from "./generationJobs";
 
 it.each(["northern", "globe"])(
-  "publishes a large %s world while retaining recoverable errors",
+  "publishes a large %s world without contour extraction failures",
   async (coverage) => {
     const base = newGenerationDraft();
     const draft = applyCartographicChoice(
@@ -23,6 +23,9 @@ it.each(["northern", "globe"])(
     expect(prepared.diagnostics.filter((entry) => entry.severity === "error")).toEqual([]);
     const started = performance.now();
     const result = await generateAtlas(prepared.source, prepared.input);
+    expect(
+      result.state.diagnostics?.filter((entry) => entry.process === "canonry.features") ?? []
+    ).toEqual([]);
     const snapshot = generationSnapshot(result, prepared.input, crypto.randomUUID());
     expect(snapshot.world.fields.some((field) => field.channels?.includes("elevation"))).toBe(true);
     expect(result.state.surface.channels.elevation.every(Number.isFinite)).toBe(true);

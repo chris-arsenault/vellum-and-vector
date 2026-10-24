@@ -13,6 +13,7 @@ import { exportWorld } from "./atlasReads";
 import { download } from "./download";
 import type { Tool, World } from "./types";
 import { ToolIcon } from "./ToolIcon";
+import { useJobs } from "./useAtlas";
 import { UndoButton } from "./UndoButton";
 import { paletteTools, toolLabel, workspaces, type Workspace } from "./cartography";
 
@@ -182,13 +183,20 @@ function MapWorkspace({ world, editor }: { world: World; editor: EditorState }) 
   );
 }
 function MapStatus({ world, editor }: { world: World; editor: EditorState }) {
+  const jobs = useJobs(world.id);
+  const generating = jobs.data?.some((job) => job.status === "running");
+  const partial = jobs.data?.[0]?.partial;
   return (
     <div className="map-status">
       <span>
         {editor.area.profile} ·{" "}
-        {Object.values(editor.area.layers).includes("stale")
-          ? "Needs reconciliation"
-          : "Committed geography"}
+        {generating
+          ? "Generation in progress"
+          : partial
+            ? "Incomplete generation"
+            : Object.values(editor.area.layers).includes("stale")
+              ? "Needs reconciliation"
+              : "Committed geography"}
       </span>
       <span>
         {world.featureCount ?? Object.keys(world.features).length} world features ·{" "}

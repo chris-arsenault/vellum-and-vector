@@ -2,12 +2,11 @@ import { expect, it, vi } from "vitest";
 import { z } from "zod";
 import { builtinLayers, putChannel, rectangle } from "@atlas/domain";
 import { atlasGenerationModules, type GenerationModule } from "./generationModules";
+import { prepareAtlasGeneration, type AtlasGenerationInput } from "./atlasWorkflow";
 import {
-  prepareAtlasGeneration,
-  type generateAtlas,
-  type AtlasGenerationInput,
-} from "./atlasWorkflow";
-import { publishGenerationProducts } from "./publication";
+  GenerationReceiver,
+  type GenerationMessage,
+} from "../../../frontend/src/generationTransport";
 import { landscape } from "./mapFixtures";
 import { sequenceStages } from "./sequence";
 
@@ -165,19 +164,17 @@ it("extends the real atlas recipe, runtime and new-layer publication by register
     const message = structuredClone({ snapshot, input: prepared.input });
     const completed = await runWorker(message);
     expect(
-      completed.state.history[0].causes.some((cause) => cause.process === "test.survey.measure")
+      completed.history[0].causes.some((cause) => cause.process === "test.survey.measure")
     ).toBe(true);
+    const snapshotOutput = completed.complete();
+    const field = snapshotOutput.world.fields.find((field) => field.layerId === "survey")!;
     expect(
-      completed.state.surface.channels.testSurvey.every((value) => Math.abs(value - 1.2) < 1e-12)
+      snapshotOutput.numerical[field.id].channels.testSurvey.every(
+        (value) => Math.abs(value - 1.2) < 1e-12
+      )
     ).toBe(true);
-    publishGenerationProducts(completed.state, "survey-run");
-    expect(completed.state.domain.world.layers.survey.name).toBe("Survey");
-    expect(completed.state.domain.world.fields.some((field) => field.layerId === "survey")).toBe(
-      true
-    );
-    expect(completed.state.domain.coverage.some((coverage) => coverage.layerId === "survey")).toBe(
-      true
-    );
+    expect(snapshotOutput.world.layers.survey.name).toBe("Survey");
+    expect(snapshotOutput.coverage.some((coverage) => coverage.layerId === "survey")).toBe(true);
     expect(snapshot.world.layers.survey).toBeUndefined();
   } finally {
     vi.unstubAllGlobals();
@@ -206,21 +203,32 @@ async function runWorker(message: {
   snapshot: ReturnType<typeof source>;
   input: AtlasGenerationInput;
 }) {
-  type Result = Awaited<ReturnType<typeof generateAtlas>>;
-  const messages: { kind: string; error?: string; result?: Result }[] = [];
+  const messages: GenerationMessage[] = [];
+  let receiver: GenerationReceiver | undefined;
   const worker: {
     onmessage?: (event: MessageEvent) => Promise<void>;
-    postMessage(message: unknown): void;
+    postMessage(message: GenerationMessage, options?: { transfer: ArrayBuffer[] }): void;
   } = {
-    postMessage(value) {
-      messages.push(structuredClone(value) as (typeof messages)[number]);
+    postMessage(value, options) {
+      const received = structuredClone(value, { transfer: options?.transfer });
+      messages.push(received);
+      if (received.kind === "snapshot") receiver = new GenerationReceiver(received);
+      else if (
+        received.kind === "numerical" ||
+        received.kind === "samples" ||
+        received.kind === "records"
+      )
+        receiver!.receive(received);
     },
   };
   vi.stubGlobal("self", worker);
   await import("../../../frontend/src/generation.worker");
-  await worker.onmessage!({ data: message } as MessageEvent);
+  await worker.onmessage!({
+    data: { ...message, operationId: crypto.randomUUID() },
+  } as MessageEvent);
   expect(messages.filter((entry) => entry.kind === "failed")).toEqual([]);
-  const completed = messages.find((entry) => entry.kind === "completed")?.result;
-  expect(completed).toBeDefined();
-  return completed!;
+  expect(messages.at(-1)).toEqual({ kind: "completed" });
+  expect(messages.some((entry) => entry.kind === "preview")).toBe(true);
+  expect(receiver).toBeDefined();
+  return receiver!;
 }

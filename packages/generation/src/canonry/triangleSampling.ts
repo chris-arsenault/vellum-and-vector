@@ -95,12 +95,20 @@ export function triangleSample(mesh: PhysicalMesh, x: number, y: number): Triang
   return { cell, cells, weights: weights.map((value) => value / total) };
 }
 export function triangleValue(sample: TriangleSample, values: ArrayLike<number>) {
+  if (!sample.cells.length) return 0;
+  const base = values[sample.cells[0]];
   let value = 0;
   for (let i = 0; i < sample.cells.length; i++)
-    value += sample.weights[i] * values[sample.cells[i]];
-  return value;
+    value += sample.weights[i] * (values[sample.cells[i]] - base);
+  return base + value;
 }
-function triangleSupport(mesh: PhysicalMesh, members: number[]) {
+/** Average differences so a constant field remains constant, including at contour thresholds. */
+function vertexMean(members: number[], read: (i: number) => number) {
+  const base = read(members[0]);
+  return base + members.reduce((sum, i) => sum + (read(i) - base), 0) / members.length;
+}
+/** Include vertex neighbors: a region's interpolation can reach beyond its member cells. */
+export function triangleSupport(mesh: PhysicalMesh, members: number[]) {
   const support = vertexSupport(mesh),
     cells = new Set(members);
   for (const cell of members)
@@ -116,11 +124,7 @@ export function* triangleFans(mesh: PhysicalMesh, members: number[], read: (i: n
     if (!values.has(index)) {
       const members = support.vertices[index],
         p = support.positions[index];
-      values.set(index, [
-        p[0],
-        p[1],
-        members.reduce((sum, i) => sum + read(i), 0) / members.length,
-      ]);
+      values.set(index, [p[0], p[1], vertexMean(members, read)]);
     }
     return values.get(index)!;
   };
@@ -157,7 +161,7 @@ export function* triangleBoundary(
   const vertex = (index: number): [number, number, number] => {
     const members = support.vertices[index],
       p = support.positions[index];
-    return [p[0], p[1], members.reduce((sum, i) => sum + read(i), 0) / members.length];
+    return [p[0], p[1], vertexMean(members, read)];
   };
   for (const cell of cells) {
     for (let corner = 0; corner < 3; corner++) {
@@ -185,7 +189,7 @@ export function triangleSampler(
   const vertexValue = (index: number) => {
     if (Number.isNaN(vertices[index])) {
       const members = support.vertices[index];
-      vertices[index] = members.reduce((sum, i) => sum + read(i), 0) / members.length;
+      vertices[index] = vertexMean(members, read);
     }
     return vertices[index];
   };
@@ -194,11 +198,12 @@ export function triangleSampler(
     if (cell < 0) return 0;
     const fan = fanWeights(barycentric, minimum),
       neighbor = faceNeighbor(mesh, cell, fan.opposite);
+    const base = read(cell);
     return (
-      (fan.center * read(cell) +
-        fan.vertex * vertexValue(support.corners[cell * 3 + fan.corner]) +
-        (fan.face * (read(cell) + read(neighbor))) / 2) /
-      (fan.center + fan.vertex + fan.face)
+      base +
+      (fan.vertex * (vertexValue(support.corners[cell * 3 + fan.corner]) - base) +
+        (fan.face * (read(neighbor) - base)) / 2) /
+        (fan.center + fan.vertex + fan.face)
     );
   };
 }

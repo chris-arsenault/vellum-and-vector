@@ -10,7 +10,12 @@ import {
 } from "@atlas/domain";
 import type { Geometry, Position } from "geojson";
 import type { GenerationState } from "../process";
-import { triangleSampler, triangleFans, triangleBoundary } from "./triangleSampling";
+import {
+  triangleSampler,
+  triangleFans,
+  triangleBoundary,
+  triangleSupport,
+} from "./triangleSampling";
 import { physicalSampler } from "./physicalMetric";
 import type { PhysicalMesh } from "./mesh";
 
@@ -87,7 +92,7 @@ export function membershipContour(
 ) {
   const mesh = state.physical!.map.mesh,
     valueAt = membershipSampler(state, includes);
-  if (mesh.topology || members.some((i) => mesh.boundary[i]))
+  if (mesh.topology || [...triangleSupport(mesh, members)].some((i) => mesh.boundary[i]))
     return geographicContour(state, members, valueAt);
   return linearFieldContour(triangleFans(mesh, members, includes), valueAt);
 }
@@ -105,7 +110,7 @@ export function combinedContour(
   const mesh = state.physical!.map.mesh,
     samplers = terms.map((term) => membershipSampler(state, term)),
     valueAt = (x: number, y: number) => combine(samplers.map((sample) => sample(x, y)));
-  if (mesh.topology || members.some((i) => mesh.boundary[i]))
+  if (mesh.topology || [...triangleSupport(mesh, members)].some((i) => mesh.boundary[i]))
     return geographicContour(state, members, valueAt, 0);
   return linearFieldContour(combinedFans(mesh, members, terms, combine), valueAt, 0);
 }

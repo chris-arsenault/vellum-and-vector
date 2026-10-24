@@ -7,10 +7,10 @@ if (!parentPort) throw new Error("Start this fixture in a worker thread.");
 const port = parentPort;
 const bridge: {
   onmessage: ((event: MessageEvent) => Promise<void>) | null;
-  postMessage(message: unknown): void;
+  postMessage(message: unknown, options?: { transfer: ArrayBuffer[] }): void;
 } = {
   onmessage: null,
-  postMessage: (message) => port.postMessage(message),
+  postMessage: (message, options) => port.postMessage(message, options?.transfer ?? []),
 };
 Object.defineProperty(globalThis, "self", { value: bridge });
 atlasGenerationModules.register(statefulInventoryModule);

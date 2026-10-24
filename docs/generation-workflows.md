@@ -1,7 +1,8 @@
 # GIS/domain-backed generation workflows
 
 Current execution follows [ADR 0003](adr/0003-frontend-session.md): a browser worker
-uses in-memory inputs and returns complete validated geography. No persistent
+uses in-memory inputs and streams validated output with transferable numerical
+buffers. Initial generation also displays sampled epoch previews. No persistent
 state, restart, recovery, backend or MCP is part of this product phase.
 
 **Magic clarification — 2026-10-22:** Fire, Aurora and Pressure are first-class
@@ -324,13 +325,22 @@ The worker receives the current session snapshot, configuration, seed and scope.
 Status, stage progress and failure diagnostics live in memory. Terminating the
 worker cancels generation. Closing or reloading the tab discards the session.
 
-Keep numerical workspace in memory. An interrupted attempt publishes no geography.
-Completed epochs retain their ancestry and typed causal consequences. They do
-not duplicate every intermediate field. An optional in-memory epoch/final callback
-can present completed work without persisting execution frames.
+Keep numerical workspace in memory. Completed epochs retain their ancestry and
+typed causal consequences without duplicating every intermediate field. The
+epoch/final callback samples an independent display grid before generation
+continues; transferring that preview never detaches live workspace arrays.
 
-At publication, check the world revision and field ownership, then replace session
-geography as one undoable operation. If intervening edits changed the world, keep
+The worker prepares field publication and sends numerical resource descriptions,
+then transfers each backing buffer once, preserving shared views and topology.
+World records arrive in batches. The editor installs available fields and records
+progressively during initial generation. Completion carries no geography payload.
+An interrupted initial delivery remains marked incomplete. The adapter uses no
+acknowledgements, persistence, restart or recovery, and generation processes do
+not know about browser messaging.
+
+Regeneration still assembles the same delivered output before replacing session
+geography through its existing publication operation. Check world revision and
+field ownership. If intervening edits changed the world, keep
 the edits and report the out-of-date generation result. No automatic retry occurs.
 Domain processes remain independent of the browser adapter.
 
@@ -1998,8 +2008,11 @@ without discontinuities or invented extrema. Continuous channels reuse prepared
 weights for publication, while categories retain discrete identities. Retained
 magic inventory is published from density times the destination sample's area.
 Classified-region contours follow these linear fans directly, avoiding adaptive
-root searches on a fixed linear field. Lake contours retain floor/stage and body
-membership, including the numerical halo before clipping to the world.
+root searches on a fixed linear field. Boundary-aware contour selection checks
+the complete interpolation support, including neighboring cells added around a
+region. Interpolation preserves constant fields at contour thresholds. Lake
+contours retain floor/stage and body membership, including the numerical halo
+before clipping to the world.
 
 Existing child generation remains on its prior path; this replacement does not
 redesign it. Focused tests cover metre planes, shared faces, nearest-site lookup,

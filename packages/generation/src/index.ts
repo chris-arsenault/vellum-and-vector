@@ -6,6 +6,8 @@ export * from "./mapRunner";
 export * from "./mapClimate";
 export * from "./mapMagic";
 export * from "./atlasWorkflow";
+export * from "./atlasPublication";
+export * from "./generationPreview";
 export * from "./atlasParameters";
 export * from "./processCatalogue";
 export * from "./generationSettings";

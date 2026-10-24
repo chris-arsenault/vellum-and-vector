@@ -2,11 +2,13 @@ import { requireThat, type DomainSnapshot, type World, type Diagnostic } from "@
 import {
   atlasParametersSchema,
   prepareAtlasGeneration,
-  publishGenerationProducts,
   type AtlasGenerationInput,
-  type CompletedBoundary,
 } from "@atlas/generation";
 import { session, changed, publish, worldScope } from "./atlasState";
+import { GenerationReceiver, type GenerationMessage } from "./generationTransport";
+import type { Grid } from "@atlas/domain";
+
+export { generationSnapshot } from "@atlas/generation";
 
 interface GenerationJob {
   id: string;
@@ -17,12 +19,17 @@ interface GenerationJob {
   error: string | null;
   startedAt: number;
   diagnostics?: Diagnostic[];
+  partial?: boolean;
 }
 interface RunningJob {
   job: GenerationJob;
   worker: Worker;
   expectedVersion: number;
   input: AtlasGenerationInput;
+  original: DomainSnapshot;
+  initial: boolean;
+  delivery?: GenerationReceiver;
+  preview?: { grid: Grid; label: string };
 }
 const jobs: GenerationJob[] = [];
 const running = new Map<string, RunningJob>();
@@ -78,14 +85,23 @@ export function startGeneration(
   );
   console.log(`[atlas generation ${job.id}] Inputs`, input);
   jobs.unshift(job);
-  running.set(job.id, { job, worker, expectedVersion: input.expectedVersion, input });
-  worker.onmessage = (event: MessageEvent<WorkerResult>) => receive(job.id, event.data);
+  running.set(job.id, {
+    job,
+    worker,
+    expectedVersion: input.expectedVersion,
+    input,
+    original: snapshot,
+    initial:
+      snapshot.world.generations.length === 0 && !snapshot.world.areas[input.areaId].parentId,
+  });
+  worker.onmessage = (event: MessageEvent<GenerationMessage>) => receive(job.id, event.data);
   worker.onerror = (event) => finish(job.id, "failed", event.message);
   worker.onmessageerror = () =>
     finish(job.id, "failed", "Could not read the generation worker's result.");
   worker.postMessage({
     snapshot: { ...snapshot, scope: worldScope(snapshot.world, input.areaId) },
     input,
+    operationId: job.id,
   });
   changed("jobs");
   return { ...job };
@@ -102,12 +118,13 @@ export function inheritedGeneration(
   }
   return undefined;
 }
-type WorkerResult =
-  | { kind: "progress"; path: string[]; fraction: number; message: string }
-  | { kind: "diagnostic"; diagnostic: Diagnostic }
-  | { kind: "completed"; result: CompletedBoundary }
-  | { kind: "failed"; error: string; diagnostics?: Diagnostic[] };
-function receive(id: string, message: WorkerResult) {
+export function generationPreviewFor(worldId: string, areaId: string) {
+  const active = [...running.values()].find(
+    (active) => active.job.worldId === worldId && active.input.areaId === areaId
+  );
+  return active?.preview ?? null;
+}
+function receive(id: string, message: GenerationMessage) {
   const active = running.get(id);
   if (!active) return;
   if (message.kind === "diagnostic") {
@@ -130,39 +147,61 @@ function receive(id: string, message: WorkerResult) {
     return;
   }
   try {
-    complete(id, active, message.result);
-    finish(id, "completed");
+    receiveOutput(id, active, message);
   } catch (error) {
     finish(id, "failed", error instanceof Error ? error.message : String(error));
   }
 }
-function complete(id: string, active: RunningJob, result: CompletedBoundary) {
-  appendDiagnostics(active.job, result.state.diagnostics ?? []);
-  logProgress(active.job, "Publishing fields and coverage in the editor", 0.997);
-  changed("jobs");
+function receiveOutput(
+  id: string,
+  active: RunningJob,
+  message: Exclude<GenerationMessage, { kind: "progress" | "diagnostic" | "failed" }>
+) {
+  if (message.kind === "preview") {
+    active.preview = { grid: message.grid, label: message.label };
+    changed("jobs");
+    return;
+  }
   requireThat(
     session(active.job.worldId).snapshot.world.version === active.expectedVersion,
     "generation_conflict",
     "The world was edited during generation. Your edits were kept. Generate again from the current geography."
   );
-  const warnings: Diagnostic[] = [],
-    candidate = generationSnapshot(
-      result,
-      active.input,
-      id,
-      session(active.job.worldId).snapshot,
-      warnings
+  if (message.kind === "snapshot") active.delivery = new GenerationReceiver(message);
+  else {
+    requireThat(
+      active.delivery,
+      "generation_delivery",
+      "Receive the generation snapshot before its resources."
     );
-  appendDiagnostics(active.job, warnings);
+    if (message.kind === "completed") {
+      complete(id, active, active.delivery);
+      finish(id, "completed");
+      return;
+    }
+    active.delivery.receive(message);
+  }
+  if (active.initial) {
+    const delivery = active.delivery!;
+    active.job.partial = true;
+    session(active.job.worldId).snapshot = {
+      ...delivery.snapshot,
+      world: {
+        ...delivery.visibleWorld(active.expectedVersion),
+        generations: active.original.world.generations,
+      },
+    };
+    changed();
+  }
+}
+function complete(id: string, active: RunningJob, delivery: GenerationReceiver) {
+  const candidate = delivery.complete();
+  active.job.partial = false;
+  appendDiagnostics(active.job, delivery.diagnostics);
   const entry = session(active.job.worldId);
   const areaId = active.input.areaId;
-  entry.causes[areaId] = [
-    ...(entry.causes[areaId] ?? []),
-    ...result.state.history,
-    ...(result.state.causes?.length
-      ? [{ path: ["present"], ancestry: [], causes: result.state.causes }]
-      : []),
-  ];
+  entry.causes[areaId] = [...(entry.causes[areaId] ?? []), ...delivery.history];
+  if (active.initial) entry.snapshot = active.original;
   publish(active.job.worldId, candidate, "generate", id);
 }
 function appendDiagnostics(job: GenerationJob, diagnostics: Diagnostic[]) {
@@ -198,32 +237,4 @@ function logProgress(job: GenerationJob, message: string, progress: number) {
 }
 export function cancelGeneration(id: string) {
   finish(id, "cancelled");
-}
-
-export function generationSnapshot(
-  result: CompletedBoundary,
-  input: AtlasGenerationInput,
-  id: string,
-  original?: DomainSnapshot,
-  warnings: Diagnostic[] = []
-): DomainSnapshot {
-  const snapshot = result.state.domain,
-    world = snapshot.world;
-  world.version++;
-  publishGenerationProducts(result.state, id, original, warnings);
-  const area = world.areas[input.areaId];
-  area.version = world.version;
-  world.generations.push({
-    id,
-    areaId: input.areaId,
-    domains: input.domains,
-    quality: input.quality,
-    seed: input.seed,
-    parameters: atlasParametersSchema.parse(input.parameters ?? {}),
-    completedAt: new Date().toISOString(),
-    physicalEpochs: structuredClone(world.epochs),
-    magicSystems: structuredClone(world.magicSystems ?? []),
-    configuration: input.configuration && { ...input.configuration },
-  });
-  return snapshot;
 }
