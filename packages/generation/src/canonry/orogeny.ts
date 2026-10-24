@@ -9,7 +9,16 @@ import {
   type OrogenicFrame,
 } from "./orogenicComponents";
 import { constructionWeight, crossSection, summitVariation } from "./orogenicShape";
-import { buoyancy, clamp, crustHeight, round, thickness, toUnits, units } from "./math";
+import {
+  buoyancy,
+  clamp,
+  crustHeight,
+  elevationLimit,
+  round,
+  thickness,
+  toUnits,
+  units,
+} from "./math";
 import { rebuild } from "./surface";
 
 function deformationLimit(
@@ -89,7 +98,11 @@ function constructSurface(
   );
   if (requested <= 0) return;
   const old = map.BedrockElevation[i];
-  const next = clamp(old + requested, units(-4000), units(4000) - map.SedimentThickness[i]);
+  const next = clamp(
+    old + requested,
+    units(-elevationLimit),
+    units(elevationLimit) - map.SedimentThickness[i]
+  );
   const applied = next - old;
   if (applied <= 0) return;
   map.BedrockElevation[i] = next;
@@ -125,7 +138,7 @@ function constructTriangle(
   step: number
 ) {
   const source = frame.source[i],
-    section = crossSection(map, context, c, i, source, frame.distance[i]);
+    section = crossSection(map, context, c, i, source, frame.distance[i], frame.side[i]);
   const weight = constructionWeight(map, context, c, frame, i, section);
   let drive = step * (c.prominence / 1000) * weight;
   if (context.IsEvolutionEpoch && c.code === 1)

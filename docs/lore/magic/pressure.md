@@ -2,72 +2,70 @@
 
 ![A coast cut away to show the deep: a diving bell descending past whales into blue water, a storm standing over the headland, a settlement on the cliff above](../images/pressure.webp)
 
-_The river too strong to land unbroken._
+_The river that had to be caught before it could reach the ground._
 
-**Physical character.** Pressure is a force that originates at a locus in the
-deep ocean and travels outward through water as rays. Rays reflect from coasts
-and shelves, cross and reinforce one another, and where they shoal they lift
-deep water. A shoaling ray makes an upwelling band of cold water at the surface
-and fogs the coast it faces. Behind a strong front the water is left warm and
-still, a wake. Where many rays meet, the sea crushes: a crush zone grinds the
-bottom and the shore, and its history is a record of wakes and rogue impacts. A
-front large enough changes the climate of the coast it reaches, and the storm
-that rises from a warm wake under a cold sky is the front continued onto land.
+**Physical character.** Pressure originates at a source in the deep ocean and travels outward
+through water along paths called rays. These reflect from coasts and shelves, and can reinforce one
+another where they cross. As rays reach shallower water, they drive cold water upward, cooling the
+surface and bringing fog to the facing coast. A strong front leaves warm, still water behind it: a
+wake. Where many rays converge, repeated crushing forces grind the seabed and shore. Past wakes and
+sudden impacts leave lasting marks on the coast. Strong fronts change coastal climate. A warm wake
+beneath cold air can raise a storm that carries their effects inland.
 
-**Where it is found.** In the deep, and wherever the deep's rays reach: coasts,
-shelves, straits, the lee of islands, and inland along storm tracks. A coast's
-Pressure character depends on its angle to the locus and what lies between.
+**Where it is found.** Pressure travels through the deep ocean to coasts, shelves, straits and the
+sheltered sides of islands. Its weather effects reach inland along storm tracks. A coast's exposure
+depends on its angle to the source and the shelves, islands and other obstacles between them.
 
-**Effects on the world.** Pressure stresses coasts and shapes them. Its upwelling
-feeds fisheries and cools the sea surface; its fog makes the Fog heath and the
-Moss forest on the coasts facing a band; its wakes warm the water behind them.
-Its storms carry rain and snow onto windward slopes, scour soil, drive dunes
-and leave a dry lee, so a weather-wall range with a desert behind it is a
-Pressure signature as surely as a fogbound coast.
+**Effects on the world.** Pressure reshapes coasts through repeated stress. Upwelling cools the sea
+surface and feeds fisheries, while fog supports Fog heath and Moss forest along exposed shores.
+Wakes leave warmer water behind the fronts. Storms bring rain and snow to windward slopes, scour
+soil and move dunes. They leave the sheltered side of a mountain range dry. A wet range with a
+desert behind it can be as characteristic of Pressure as a fogbound coast.
 
-**Practice.** The practitioner descends. The deeper the descent, the more
-weight is available, and at sufficient depth the weight becomes a carrier for
-intent. The practitioner opens to it, is filled, and surfaces carrying a charge.
-With it they speak across distances through vibration too low to hear, exert
-force without contact and, in the oldest practice, commune with whatever
-answers from the deep. Depth tolerance limits who can practise, and the limit is
-physical, not cultural; a people that cannot dive cannot do this. On land, the
-same tradition reads storms: a sky-reader knows which wake will raise weather
-and where the track will run. The cost is distance. What is carried up wanders
-inside the carrier for a long time before it finds a way out, and a practitioner
-who has carried much is present but lagged, answering after a long pause, always
-partly somewhere deep.
+**Practice.** Practitioners gather a charge by descending into deep water. Greater depth offers more
+force, provided the diver can withstand it. Below a sufficient depth, they can direct that force and
+bring a charge to the surface. It allows them to communicate over long distances through vibrations
+too low to hear, exert force without contact and, in the oldest practice, commune with whatever
+answers from the deep. The physical ability to survive the descent limits who can practise. On land,
+sky-readers study the resulting weather, learning which wakes will raise storms and where those
+storms will travel.
 
-**Lore.** Pressure traditions tell that the deep was brought down for the sake
-of the dead. Someone owed rites to ancestors who could not be reached, and
-asked for the deep to come where they were; and the deep answered that its fall
-would break whatever it landed on. So it was caught. The teaching is that a
-force this large can never arrive directly. It must be received in something
-that breaks its fall and braids it into streams, and the coasts of the world are
-that receiver. A shelf, a reef, a scatter of islands catches the ray and splits
-it; the fog and the fisheries and the warm wakes are the braided streams, and a
-coast with nothing to catch the fall takes it whole and is ground to a crush
-zone. Sky-readers say that a storm is one of the streams reaching inland, still
-looking for the ground it was owed.
+Carrying a charge leaves practitioners feeling distant from their surroundings. The effect lingers
+while the charge remains in them. Those who have carried a great deal become slow to respond,
+pausing before they answer and feeling as though part of them is still in the deep.
 
-The same story explains the practitioner. What is caught in a receiver wanders
-there a long time. The deep, once caught, circled for ages before it was let
-down, and the charge a practitioner carries up does the same inside them,
-circling until it is released through speech too low to hear or force without a
-hand. The traditions also tell of the one who, angered by the river's flood,
-swallowed it whole and had to let it out again through his ears. They use this
-to teach restraint. A practitioner who takes in more than they can release is
-not a vessel but a swallower, and what comes out of a swallower comes out
-wrong. The cost of distance is the wandering: a part of the carrier is always
-in the receiver, circling, and each descent adds to it.
+**Lore.** Pressure traditions tell of someone who owed rites to ancestors whose resting place could
+not be reached. They asked the deep to descend to that place. It agreed, but warned that its fall
+would shatter the ground. A receiver caught it and divided its force into streams before letting it
+flow onward.
 
-**Interference.** Carried Pressure dissipates near Aurora-crystals. Pressure
-and Fire destroy each other on contact, and a Pressure/Aurora breach is a
-coast broken by both. Fire heat columns feed a Pressure storm; Aurora's cold
-shadow pins a front in place; a Hallowed rim turns a storm track. Pressure
-upwelling salts a Greenwood spring on the coast. Carried Pressure cannot pass a
-Veil door.
+The story teaches that a force this great must be broken into smaller parts before it can be safely
+received. Shelves, reefs and islands serve that role along a coast, splitting incoming rays. Fog,
+fisheries and warm wakes show where the divided force has passed. A coast with nothing to break the
+force takes the full impact and becomes a crush zone. Sky-readers describe storms as streams still
+travelling inland toward the ancestors they were meant to reach.
+
+Practitioners understand their own cost through the same story. The deep waited in its receiver for
+ages before being released; a charge likewise lingers in its carrier until used for speech or force.
+Each descent leaves more of the practitioner feeling caught there with it. Another tale tells of
+someone who swallowed a flooding river in anger, then had to release it through his ears. Teachers
+use it as a warning: taking in more than you can release does not give you control over how it comes
+out.
+
+> We hauled the diver up at noon. At supper she asked whether the rope had broken. We showed her the
+> bell on deck and the rope, still whole. She felt along it twice.
+>
+> "Then who's still pulling?"
+
+_A ship's log, last entry before the crew cut the bell loose._
+
+**Interference.** A practitioner's stored Pressure charge dissipates near Aurora-crystals and
+destroys a Fire charge on contact, consuming both. Where Pressure and Aurora meet along a coast,
+their combined effects can breach it. Fire heat columns feed Pressure storms; Aurora's lingering
+cold can pin a front in place; a Hallowed boundary redirects a storm track. Pressure upwelling salts
+coastal Greenwood springs. A stored Pressure charge cannot pass through a Veil door.
 
 ---
 
-[Magic lore bible](../magic.md) · [Fire](fire.md) · [Aurora](aurora.md) · [Greenwood](greenwood.md) · [Salt](salt.md) · [Veil](veil.md) · [Hallowed](hallowed.md)
+[Magic lore bible](../magic.md) · [Fire](fire.md) · [Aurora](aurora.md) · [Greenwood](greenwood.md)
+· [Salt](salt.md) · [Veil](veil.md) · [Hallowed](hallowed.md)

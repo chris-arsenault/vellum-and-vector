@@ -430,6 +430,27 @@ adapts them for the atlas rather than copying the game's frozen-world setting:
 - Magical storage follows the native dominant source mapping when crust moves.
   Thermal forcing refreshes with climate; material feedback and elapsed storage
   advance once per epoch.
+- A continental assembly moves as one plate: its provinces take most of their
+  motion from the assembly and keep a declared minority of their own, while
+  oceanic provinces drift independently. Thermal subsidence belongs to oceanic
+  composition and fades to nothing at the continental threshold, so an aged
+  platform keeps its height.
+- Formation sets the water budget: each formation flood covers the share of the
+  world that is not continental crust, so the land fraction a cartographer asks
+  for is the land the first flood leaves. Epoch floods hold that ocean volume and
+  move the sea instead of drowning or stranding land; an epoch's eustatic offset
+  applies on top. A child inherits its parent's datum and never moves it. Rivers
+  grade to the sea and never cut below it.
+- A collision belt has a polarity: its hinterland is the side of the boundary
+  holding more continental mass. The foreland rises to the crest within a
+  narrower front; the hinterland carries the crest and a plateau shoulder that
+  spends part of the root budget flat behind the belt before letting go. Rank
+  sets height through the root budget; per-pass bedrock relief adds summit
+  texture. The terrain choice sets the budgets, the plateau width and share;
+  Mountain ranges is the default.
+- Ice mass balance follows climate: the lapse rate already in the temperature
+  field carries altitude, and the separate altitude bonus is zero except under
+  the Glacier-carved terrain choice.
 
 Detail presets specify physical area per terrain cell in km². The creation
 profile selects the physical scale; world dimensions determine how many cells
@@ -452,8 +473,13 @@ Their footprint widths, spacing, travel distances and physical feedback retain
 metre units. Climate coverage remains an explicit latitude-frame choice.
 
 Regional refinement imports parent crust and accumulated material histories. It
-refines climate, drainage, erosion, ice and coasts without assembling a new set
-of continents or replaying global plate movement. The native work boundary can
+first realizes the relief its parent left latent (`canonry.refine-relief`,
+[ADR 0005](adr/0005-scale-contract.md)): the parent's gradient across one of its
+cells sets how rugged the child's texture is and which way its ridges run, the
+texture is added below the parent's cell at the child's wavelengths, each parent
+cell keeps its mean height, and the inherited boundary band is untouched. It then
+refines climate, drainage, erosion, ice and coasts on that surface without
+assembling a new set of continents or replaying global plate movement. The native work boundary can
 receive drainage outside the write extent, so an inland patch does not require
 a fabricated ocean. Inherited ocean distances retain metre units. The authored
 area boundary, protected samples and contracted network crossings stay fixed.

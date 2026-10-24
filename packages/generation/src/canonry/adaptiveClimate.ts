@@ -3,7 +3,7 @@ import type { PhysicalContext } from "./context";
 import { refineWorkspace, remeshInvalidations, type SamplingSupport } from "./adaptiveWorkspace";
 import { nativeContext } from "./context";
 import { physicalFace, physicalDistance } from "./physicalMetric";
-import { physicalFeatureSequence } from "../physicalFeatures";
+import { physicalFeatureSequence } from "../physicalFeatureSequence";
 import type { ResolvedFeatures } from "../features";
 
 export function shoreSupport(state: GenerationState, context: PhysicalContext) {

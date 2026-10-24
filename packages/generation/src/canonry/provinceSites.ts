@@ -144,15 +144,23 @@ export function createProvinceSites(map: PhysicalField, context: PhysicalContext
   );
   const selected = separated(candidates, p.TectonicProvinceCount);
   const groups = assemblies(selected, context);
-  return selected.map((site, i) => {
-    const angle = hashUnit(seed ^ 0x5c27, i, 0) * Math.PI * 2;
+  const motionOf = (salt: number, key: number): [number, number] => {
+    const angle = hashUnit(seed ^ salt, key, 0) * Math.PI * 2;
     const speed = lerp(
       p.TectonicMotionMinimum,
       p.TectonicMotionMaximum,
-      hashUnit(seed ^ 0x73a1, i, 1)
+      hashUnit(seed ^ (salt + 0x16da), key, 1)
     );
-    const motionX = Math.cos(angle) * speed,
-      motionY = Math.sin(angle) * speed;
+    return [Math.cos(angle) * speed, Math.sin(angle) * speed];
+  };
+  return selected.map((site, i) => {
+    const own = motionOf(0x5c27, i);
+    // A continent moves as one plate: its provinces share the assembly's motion, keeping only a
+    // minority of their own, while oceanic provinces drift independently.
+    const coherence = groups[i] > 0 ? p.AssemblyMotionCoherence : 0;
+    const assembly = groups[i] > 0 ? motionOf(0x2e9b, groups[i]) : own;
+    const motionX = lerp(own[0], assembly[0], coherence),
+      motionY = lerp(own[1], assembly[1], coherence);
     return {
       ...site,
       x: site.x + motionX * map.AccumulatedPlateDrift,

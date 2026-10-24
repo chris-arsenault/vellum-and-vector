@@ -77,9 +77,13 @@ function coldPropagation(state: GenerationState, field: MagicField, seed: number
     const capture =
       1 - (1 - clamp(capacity / p.iceRetention, 0, 1)) ** (travel / p.coldRetentionDistance);
     const retained = accumulation[i] * capture;
+    // Local input is an intensity. Only transported charge represents an upstream
+    // physical area; treating the local cell's whole inventory as inflow makes
+    // coarse cells brighter even on identical terrain with no coldward transport.
+    const incoming = Math.max(0, accumulation[i] - field.source[i] * map.mesh.areas[i]);
+    const concentration = field.source[i] + incoming / p.accumulationArea;
     field.intensity[i] = clamp(
-      round(Math.log2(accumulation[i] / p.accumulationArea + 1) * p.logScale) +
-        Math.trunc(capacity / 4),
+      round(Math.log2(concentration + 1) * p.logScale) + Math.trunc(capacity / 4),
       0,
       1000
     );

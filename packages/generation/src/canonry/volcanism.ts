@@ -1,7 +1,7 @@
 // VolcanicConstructionLayer.cs, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
-import { clamp, round, units } from "./math";
+import { clamp, elevationLimit, round, units } from "./math";
 import { hashUnit } from "./noise";
 import { Feature } from "./codes";
 import { rebuild } from "./surface";
@@ -72,8 +72,8 @@ function constructTriangle(
       : 0;
   map.BedrockElevation[i] = clamp(
     map.BedrockElevation[i] + uplift - cut,
-    units(-4000),
-    units(4000) - map.SedimentThickness[i]
+    units(-elevationLimit),
+    units(elevationLimit) - map.SedimentThickness[i]
   );
   map.SurfaceRockLoad[i] += uplift - cut;
   map.VolcanicConstructionHistory[i] += uplift;

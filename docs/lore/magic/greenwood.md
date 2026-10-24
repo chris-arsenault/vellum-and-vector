@@ -4,65 +4,60 @@
 
 _The seed is the same everywhere. The ground decides._
 
-**Physical character.** Greenwood is a vitality carried in sap and groundwater.
-It moves root to root through connected living cover and along aquifers under
-the ground, and surfaces where an aquifer reaches air as a spring. It does not
-cross bare rock, open water or ice. Where it surfaces without cover it makes an
-oasis, and the oasis grows cover, so a spring and a forest are the same system
-meeting itself. Its two origins are the oldest stands of high-biomass cover and
-deep peat, and the outcrops where an aquifer breaks the surface.
+**Physical character.** Greenwood is a life-sustaining force carried in sap and groundwater. It
+spreads between roots through connected vegetation and travels along aquifers, emerging at springs.
+It cannot cross bare rock, open water or ice. A spring on bare ground can establish an oasis, whose
+plants then carry Greenwood farther. It has two kinds of source: old, dense vegetation and deep
+peat; and springs where aquifers reach the surface.
 
-**Where it is found.** In old-growth forest, in deep peatland, along spring
-lines at the foot of karst and at the edges of basins, in oasis chains across
-dry ground. A Greenwood country is recognisable from the air as forest where
-the climate says there should be none.
+**Where it is found.** In old-growth forest, in deep peatland, along spring lines below karst, where
+water runs through soluble rock, and at basin edges. It also occurs in chains of oases across dry
+country. From the air, Greenwood can be recognised by forest growing where the climate alone could
+not support it.
 
-**Effects on the world.** Greenwood holds forest beyond its climate band,
-deepens soil, braids rivers into wetland and regrows cleared land within an
-epoch. Its biomes are the Deepwood, the Wending fen and the Well meadow around
-a spring. The water at a spring heals and fertilises. Drawn too hard, the karst
-beneath a spring collapses into sinkholes, and a well town that overdraws its
-spring sits on a field of them.
+**Effects on the world.** Greenwood sustains forest beyond its normal climate range, deepens soil
+and divides rivers into wetland channels. Cleared land regrows within an epoch. Its biomes are the
+Deepwood, the Wending fen and the Well meadow around a spring. Spring water heals and fertilises,
+but excessive withdrawal can collapse the karst beneath it. Towns that overdraw their springs may
+find themselves surrounded by sinkholes.
 
-**Practice.** Greenwood practice is soil-making. The practitioner cannot change
-what Greenwood is or how far it reaches; they can only change the ground it
-reaches into. They deepen soil, open and close channels, graft, plant, mark
-what must not be cut and clear what crowds. A healer works at a spring, and
-healing is the water's act with the practitioner as its hand. Nothing about it
-is fast; a grove planted on bare ground is a century from being real, and the
-one who plants it will not see it. The cost is rootedness. A practitioner
-becomes part of the ground they have made. They sicken when it is cut, cannot
-easily leave the country it covers, and the oldest of them do not leave it at
-all.
+**Practice.** Greenwood practitioners prepare the ground. They cannot directly change the force or
+extend its reach, but can make land ready to receive it. They deepen soil, manage channels, graft
+and plant, protect some growth and thin the rest. Healers work at springs, guiding the water's
+healing effect. The work is slow: a grove planted on bare ground may take a century to mature, and
+its planter may never see it fully grown. Practitioners gradually become bound to the land they
+tend. They sicken when its vegetation is cut and find it difficult to leave. The oldest never do.
 
-**Lore.** Greenwood traditions teach with four grounds. The vitality falls
-alike on all of them, they say, the way a sower casts without choosing; what
-differs is the ground. On the trodden path it never enters, and the road, the
-bare rock and the ice are the path: Greenwood does not cross them. On thin
-soil over stone it enters at once and flares, green in a season, and dies in
-the next because there is no depth to hold it; the traditions point to a Fire
-halo as the clearest case, where quickening makes the vitality flare and rot.
-Among thorns it enters and is choked by what was already growing, and the front
-where Greenwood meets Salt is thorn ground, a line of trees that took and were
-crowded out. And on deep ground it takes and holds and yields, thirty, sixty, a
-hundredfold, and that is the Deepwood.
+**Lore.** Greenwood teachers describe four kinds of ground. The seed is the same in each case; the
+soil determines what grows. On a trodden path it cannot take root. Roads, bare rock and ice are
+understood this way: Greenwood cannot cross them. On thin soil over stone, it sprouts quickly and
+dies for lack of depth. Teachers compare this to a Fire halo, where accelerated growth ends in rot.
+Among thorns, it is choked by what already occupies the ground. The dying trees where Greenwood
+meets Salt are their example of this struggle. In deep soil, it takes root and yields many times
+what was sown. This is the Deepwood.
 
-From this they draw their whole ethic. Since the seed is the same everywhere,
-there is no such thing as bad seed, only ground not yet made. A Greenwood people
-does not ask whether a place can carry forest; it asks how long the soil will
-take. The grove it plants is as real in a hundred years as the primeval one,
-and the tender who plants it is understood to be making ground for someone they
-will never meet. The traditions end every teaching with the same word, which is
-_listen_, and they mean it of the ground: a tender who cannot hear whether a
-place is path, stone, thorn or depth cannot work, and the hearing is most of the
-training.
+This teaching makes soil preparation an obligation to future generations. There is no bad seed, the
+traditions say, only ground not yet prepared. When planning a forest, followers ask how long the
+soil will take to build, even if they will never meet the people who walk beneath its trees. Every
+lesson ends with the word _listen_. It means learning to recognise what a place lacks: access,
+depth, room to grow or nothing at all. Most of a tender's training is learning to tell the
+difference.
 
-**Interference.** Fire quickening overdrives Greenwood into rot and boils its
-springs into steam fractures. Aurora stillness freezes its front. Salt kills
-Greenwood from below wherever the two meet, and Greenwood buries Salt under
-peat where it wins; the line between them is a front of dying trees. Pressure
-upwelling salts a coastal spring.
+> Plant two trees beside the road,\
+> far enough apart for a cart.\
+> When their branches meet,\
+> someone will stop there in the rain.\
+> They will never know your name.\
+> Leave room for them anyway.
+
+_A roadside planting verse._
+
+**Interference.** Fire accelerates Greenwood's growth until it rots and boils its springs,
+fracturing the ground with steam. Aurora freezes growth along their shared boundary. Salt kills
+Greenwood from below; where Greenwood prevails, it buries Salt beneath peat. Their boundary is
+marked by dying trees. Pressure upwelling salts coastal springs.
 
 ---
 
-[Magic lore bible](../magic.md) · [Fire](fire.md) · [Aurora](aurora.md) · [Pressure](pressure.md) · [Salt](salt.md) · [Veil](veil.md) · [Hallowed](hallowed.md)
+[Magic lore bible](../magic.md) · [Fire](fire.md) · [Aurora](aurora.md) · [Pressure](pressure.md) ·
+[Salt](salt.md) · [Veil](veil.md) · [Hallowed](hallowed.md)

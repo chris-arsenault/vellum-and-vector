@@ -2,82 +2,78 @@
 
 ![Seven realms on one chart: fire, ice, deep water, forest, salt, veil and a hallowed city around a parchment map](images/banner.webp)
 
-Setting-neutral lore for the seven magic systems in
-[magic system candidates](../magic-system-candidates.md). It sits at the level
-of a school of magic, not a setting: each entry says what the system is made
-of, where the generator finds it, what it does to rock, weather and living
-things, how a people uses it and what that costs, and enough lore to make it
-feel like one thing rather than a slot. Peoples, gods, places and events are
-left to the world author. "Practitioner" means anyone of any kind who works the
-system.
+This guide describes the seven magic systems in
+[magic system candidates](../magic-system-candidates.md). Each entry covers a system's physical
+nature, where it occurs, its effects on the landscape, and how people use it. The lore sections
+offer beliefs and customs that a world author can adapt without adopting a particular setting.
+Peoples, gods, places and events are left to the author. "Practitioner" means anyone who works with
+a system, regardless of species.
 
-The current three are implemented as described in the
-[product contract](../product-spec.md#103-magical-generation--fire-aurora-and-pressure).
-The extensions and the four new systems are design.
+Fire, Aurora and Pressure are implemented as described in the
+[product contract](../product-spec.md#103-magical-generation--fire-aurora-and-pressure). Their
+proposed extensions and the four new systems remain designs.
 
 ## The seven
 
-| System                          | Medium                           | Epigraph                                                              |
-| ------------------------------- | -------------------------------- | --------------------------------------------------------------------- |
-| [Fire](magic/fire.md)           | stone, and fallen stone          | _The hearth that can be carried._                                     |
-| [Aurora](magic/aurora.md)       | ice                              | _The light that withdrew to leave room, and what it left in the ice._ |
-| [Pressure](magic/pressure.md)   | deep water, and the sky above it | _The river too strong to land unbroken._                              |
-| [Greenwood](magic/greenwood.md) | sap and groundwater              | _The seed is the same everywhere. The ground decides._                |
-| [Salt](magic/salt.md)           | brine                            | _The garden where the water is shown by its absence._                 |
-| [Veil](magic/veil.md)           | the tear between two others      | _The post the crossing comes down._                                   |
-| [Hallowed](magic/hallowed.md)   | what people keep                 | _The ground on which nothing is harmed._                              |
+| System                          | Medium                           | Epigraph                                                            |
+| ------------------------------- | -------------------------------- | ------------------------------------------------------------------- |
+| [Fire](magic/fire.md)           | stone, including fallen cores    | _The hearth that can be carried._                                   |
+| [Aurora](magic/aurora.md)       | ice                              | _The light withdrew. Its sparks remain in the ice._                 |
+| [Pressure](magic/pressure.md)   | deep water                       | _The river that had to be caught before it could reach the ground._ |
+| [Greenwood](magic/greenwood.md) | sap and groundwater              | _The seed is the same everywhere. The ground decides._              |
+| [Salt](magic/salt.md)           | brine                            | _A garden in the bed of a vanished lake._                           |
+| [Veil](magic/veil.md)           | tears where other systems meet   | _A door needs a house, and a house needs a keeper._                 |
+| [Hallowed](magic/hallowed.md)   | maintained routes and boundaries | _The ground on which nothing is harmed._                            |
 
 ![A stained-glass compass rose with seven panels, one for each system, around a central map](images/hero.webp)
 
 ## The shape of the seven
 
-Each system has a medium, and acts only through it. Fire is in stone, Aurora in
-ice, Pressure in deep water, Greenwood in the water inside living things, Salt
-in brine, Veil in the tear between two others, Hallowed in what people keep.
-None of them is a fuel for another. Where two meet they interfere, and the
-interference is itself geography: a thermal rim, a steam fracture, a front of
-dying trees, a tear.
+Each system acts through its own medium. Fire stores heat in stone; Aurora holds charge in ice;
+Pressure travels through deep water and drives weather above it. Greenwood moves through sap and
+groundwater, Salt through brine. Veil occupies tears formed where other systems clash. Hallowed
+follows the routes and boundaries that people maintain. None serves as fuel for another. Where
+systems meet, their interference changes the landscape: cracked ground along a thermal rim, steam
+fractures, a line of dying trees or a tear in space.
 
-Every system costs its practitioner something that the system is made of. Fire
-takes flesh, Aurora takes the boundary of the self, Pressure takes presence,
-Greenwood takes rootedness, Salt takes the ability to forget, Veil takes the
-certainty of where one is, Hallowed takes the freedom to leave.
+Each practice also has a cost. Fire burns its users. Aurora readers lose track of which memories are
+their own. Pressure users become slow to respond and feel partly absent, as though still in the
+deep. Greenwood binds practitioners to the land they tend; Salt leaves them unable to forget. Veil
+crossings blur their sense of where they are. Hallowed vows restrict travel and require lifelong
+maintenance of the boundaries they protect.
 
 ## How the seven touch
 
-| Meeting              | What the map shows                                     |
-| -------------------- | ------------------------------------------------------ |
-| Fire / Aurora        | thermal rim of cracked ground, Veil where steep        |
-| Fire / Pressure      | steam fractures and a broken coast                     |
-| Fire / Greenwood     | rot halo, steam fractures at springs                   |
-| Fire / Salt          | burnt-clean ground, the one way to end a Barrow heath  |
-| Aurora / Pressure    | breached coast, Veil where steep                       |
-| Aurora / Greenwood   | frozen forest front                                    |
-| Aurora / Salt        | undeath: preserved dead on the Barrow heath            |
-| Pressure / Greenwood | salted coastal springs                                 |
-| Greenwood / Salt     | a front of dying trees, Veil where steep               |
-| Hallowed / any       | damped inside, piled at the rim                        |
-| Veil / any           | closed by Aurora, ruptured by Fire, sealed by Hallowed |
+| Meeting              | What the map shows                                      |
+| -------------------- | ------------------------------------------------------- |
+| Fire / Aurora        | rim of cracked ground, Veil where fields change sharply |
+| Fire / Pressure      | steam fractures and a broken coast                      |
+| Fire / Greenwood     | rot halo, steam fractures at springs                    |
+| Fire / Salt          | burnt-clean ground, the one way to end a Barrow heath   |
+| Aurora / Pressure    | breached coast, Veil where fields change sharply        |
+| Aurora / Greenwood   | frozen forest front                                     |
+| Aurora / Salt        | undeath: preserved dead on the Barrow heath             |
+| Pressure / Greenwood | salted coastal springs                                  |
+| Greenwood / Salt     | dying trees, Veil where fields change sharply           |
+| Hallowed / any       | weaker effects inside, concentrated effects at the rim  |
+| Veil / any           | closed by Aurora, ruptured by Fire, sealed by Hallowed  |
 
 ## Adjacent sources
 
-Each system's lore was written against one real-world body of thought chosen
-to be near the trope without being the trope, so that the entry would not fall
-back on genre defaults. The sources were drawn at random from the pool in
-[`lore-pool/pool.txt`](../lore-pool/pool.txt), 385 texts, practices and
-concepts in 53 tradition families, with
-[`lore-pool/roll.py`](../lore-pool/roll.py). The script rolled three draws
-(seeds 338923 to 338925), each giving three candidates per system with no two
-systems sharing a family, and one candidate per system was chosen from across
-the draws. To reroll:
+Each lore section draws on a real-world tradition or practice chosen to suggest customs and beliefs
+beyond familiar fantasy conventions. The sources were drawn at random from the pool in
+[`lore-pool/pool.txt`](../lore-pool/pool.txt), 385 texts, practices and concepts in 53 tradition
+families, with [`lore-pool/roll.py`](../lore-pool/roll.py). The script rolled three draws (seeds
+338923 to 338925), each giving three candidates per system with no two systems sharing a family, and
+one candidate per system was chosen from across the draws. To reroll:
 
 ```
 python3 docs/lore-pool/roll.py docs/lore-pool/pool.txt --rolls 3
 python3 docs/lore-pool/roll.py docs/lore-pool/pool.txt --seed 338923 --rolls 3
 ```
 
-The second command reproduces the recorded draw. Nothing from the sources is
-setting content; each shaped the structure of its entry's teaching.
+The second command reproduces the recorded draw. These sources inspired the entries' teachings; they
+do not establish religions or history for a generated world.
 
 | System    | Adjacent source                                                                                                                                                                                                                                                                                                                                                                        |
 | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

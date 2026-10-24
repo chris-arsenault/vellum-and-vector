@@ -2,67 +2,62 @@
 
 ![A violet tear in the sky over broken ground: ruined arches, floating rock, a standing stone carved with rings, keepers with staves watching the crossing](../images/veil.webp)
 
-_The post the crossing comes down._
+_A door needs a house, and a house needs a keeper._
 
-**Physical character.** Veil has no source of its own. It is what happens where
-two other systems interfere hard enough: a Fire halo against an Aurora field, a
-Pressure front against an Aurora coast, a Greenwood front against Salt. Where
-the gradients are steep the world tears. A small or shifting tear is a wild
-zone, ground whose terrain and cover change between one survey and the next
-with no cause a surveyor can name. A large and stable tear pairs with another
-stable tear elsewhere, and the pair is a door: a connection between two
-located places that are not adjacent.
+**Physical character.** Veil forms where other systems interfere strongly enough to tear space: Fire
+against Aurora, Pressure against an Aurora coast, or Greenwood against Salt. Tears occur where the
+fields change sharply across their shared boundary. A small or shifting tear creates a wild zone,
+where terrain and vegetation change between surveys without an ordinary geographic cause. A large,
+stable tear pairs with another stable tear elsewhere. The pair forms a door connecting two places
+that are otherwise far apart.
 
-**Where it is found.** On the rims and fronts between systems, so Veil is found
-wherever two of the others meet strongly, and nowhere else. A world with one
-magic system has no Veil. A world with many has a great deal, and a world in
-crisis, where the fronts are pressing hardest, has the most.
+**Where it is found.** Veil occurs only at strong boundaries between other systems. A world with
+just one other magic system has no Veil. More systems create more opportunities for tears,
+especially where their boundaries are under severe strain.
 
-**Effects on the world.** In a wild zone the geography is unreliable: a hill is
-not where it was, a stream has changed its bed without a flood, a forest has a
-different edge. The atlas marks such ground and shows features in their
-alternate positions. A door shows little locally, a ring of odd cover and a cold
-pool, and changes everything at the scale of a continent: a route through it
-is short, and trade geography stops obeying distance. An inland city with a
-door behaves like a port.
+**Effects on the world.** Wild zones make maps unreliable. A hill shifts, a stream changes course
+without flooding, or a forest edge moves between surveys. The atlas marks these regions and shows
+features in their alternate positions. A door leaves only a small local trace: a ring of unusual
+vegetation and a cold pool. Its effect on travel is much larger. A short crossing can replace a
+journey across a continent, making an inland city with a door a trade hub much like a port.
 
-**Practice.** Veil is not worked; it is housed. A tear left alone is a wild
-zone. A tear that a people builds around becomes a door, and the building is
-the practice: a house raised over the tear, and at its centre a post, a whole
-trunk or a standing stone or a living tree, which is the axis the crossing
-travels. Everything in the house turns around the post. A door-keeper's work is
-to keep the house, keep the post, and open the crossing in order, saluting
-first what must be saluted first before anything else is asked. A door forced
-without a house is a wild zone made worse, and the traditions agree that
-forcing one kills. The cost is place. One who crosses is inhabited by the
-crossing for a time, and is for that time partly where they left; the oldest
-keepers, who have been inhabited many times, speak of their own country as one
-of several they might be standing in.
+**Practice.** Practitioners stabilise a tear by housing it. They build around it and place a post at
+the centre: a trunk, standing stone or living tree that serves as the crossing's axis. Door-keepers
+maintain the house and post, and follow a prescribed sequence when opening the crossing. They begin
+by greeting the gatekeeper before making any other request. Forcing a crossing without a house
+worsens the wild zone and is considered lethal.
 
-**Lore.** Veil traditions teach that a crossing does not pass through a hole.
-It comes down a post. Where two forces press on each other hard enough the
-world opens at a point, and what opens there is vertical: an axis between
-places, not a gap in a wall. Left bare, the axis has nothing to come down, and
-so it comes down into the ground itself, and the ground is ridden. That is a
-wild zone in their account: a landscape inhabited by the crossing, moving its
-hills and streams as a ridden body moves, until the crossing leaves it and it
-settles somewhere not quite where it was. The traditions regard a wild zone with
-pity more than fear. It is a door no one built a house for.
+Crossing has a cost. The crossing inhabits the traveller for a time, leaving them partly connected
+to the place they left and unsure where they are. Repeated crossings deepen this disorientation. The
+oldest keepers speak of their own country as one of several places they might be standing in.
 
-A housed door is the opposite. The post gives the crossing a way down that is
-not the ground, and the house gives it an order: who is saluted first, who
-opens, who may be inhabited and for how long. The keepers say the first
-salutation is everything. A crossing opened without greeting the one who keeps
-the gate opens onto the wrong place, and the fortress at a door exists less to
-stop armies than to make sure the order is kept. The lands on the far side of a
-door are spoken of as a neighbouring house with its own post and its own order,
-and a door-empire is a people that has learned the orders of many houses.
+**Lore.** Veil traditions describe a crossing as a presence that descends along an axis between
+places. The post gives it a path into the house. Without one, they say, it enters the ground instead
+and moves the landscape as a spirit might move a body. Hills and streams shift until the presence
+leaves, then settle in altered positions. Keepers regard such places with pity as well as fear. A
+wild zone is a door no one built a house for.
 
-**Interference.** Veil is made of interference and has none of its own. Aurora
-crystals close a door, Fire release ruptures one, carried Pressure cannot pass
-through, a Hallowed ward seals one. Every new front between any two systems
-makes new Veil.
+A door-house gives that presence both a path and rules: who must be greeted first, who opens the
+crossing, and who may host it for how long. Keepers teach that neglecting the first greeting opens
+the door onto the wrong place. A fortress at a door therefore guards the opening ritual as carefully
+as the passage itself. The far side is spoken of as a neighbouring house, with its own post and
+customs. A door-empire depends on knowing the customs of many houses.
+
+> The inn beside the door had two front steps. Snow lay on one. Red dust covered the other. The
+> keeper swept both into the same pan.
+>
+> "You're a long way from home," I said.
+>
+> "Which one?"
+
+_From a traveller's account of the door-roads._
+
+**Interference.** Veil depends on interference between other systems. Aurora-crystals close doors,
+Fire releases rupture them, and Hallowed wards seal them. A practitioner's stored Pressure charge
+cannot pass through a door. New boundaries between systems can create more Veil where the
+interference is strong enough.
 
 ---
 
-[Magic lore bible](../magic.md) · [Fire](fire.md) · [Aurora](aurora.md) · [Pressure](pressure.md) · [Greenwood](greenwood.md) · [Salt](salt.md) · [Hallowed](hallowed.md)
+[Magic lore bible](../magic.md) · [Fire](fire.md) · [Aurora](aurora.md) · [Pressure](pressure.md) ·
+[Greenwood](greenwood.md) · [Salt](salt.md) · [Hallowed](hallowed.md)

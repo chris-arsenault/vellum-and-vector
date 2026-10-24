@@ -7,7 +7,7 @@ import {
   rectangle,
   overlayField,
 } from "@atlas/domain";
-import { numericTileSampler } from "./numericTiles";
+import { numericTileSampler, terrainSampleBands } from "./numericTiles";
 import {
   defaultFieldStyle,
   fieldRange,
@@ -22,6 +22,8 @@ import {
   magicPlacePresentations,
   naturalSurfaceColors,
   surfaceCategories,
+  magicSurfaceCode,
+  surfaceCode,
 } from "@atlas/domain";
 import { newCompilationContext, buildExpression } from "ol/expr/gpu.js";
 import { ColorType, NumberType, newParsingContext } from "ol/expr/expression.js";
@@ -108,12 +110,16 @@ it("preserves authored patches, physical sea level, lakes and emergent islands",
   raster.field.channels.elevation.fill(100);
   raster.water = { ...raster.field, channels: { seaLevel: new Float64Array(25).fill(200) } };
   raster.lakes = [{ geometry: rectangle([20, 20, 80, 80]), level: 300 }];
-  expect([...numericTileSampler(raster)([29, 29, 31, 31], 1)]).toEqual([100, 1, -100, 2, 0, 2, -1]);
+  expect([...numericTileSampler(raster)([29, 29, 31, 31], 1)]).toEqual([
+    100, 1, -100, 2, 0, 2, -1, -1,
+  ]);
   const patch = fixture("elevation").field;
   patch.scope = { ...patch.scope, footprint: rectangle([45, 45, 55, 55]) };
   patch.channels.elevation.fill(400);
   raster.field.overlays = [{ grid: patch, channels: ["elevation"] }];
-  expect([...numericTileSampler(raster)([49, 49, 51, 51], 1)]).toEqual([400, 1, 200, 0, 0, 2, -1]);
+  expect([...numericTileSampler(raster)([49, 49, 51, 51], 1)]).toEqual([
+    400, 1, 200, 0, 0, 2, -1, -1,
+  ]);
 });
 it("carries the surface class as a discrete terrain band and marks its absence", () => {
   const raster = fixture("elevation");
@@ -126,8 +132,38 @@ it("carries the surface class as a discrete terrain band and marks its absence",
   );
   const sample = numericTileSampler(raster)([0, 0, 100, 100], 32);
   const classes = new Set<number>();
-  for (let i = 0; i < sample.length; i += 7) if (sample[i + 1]) classes.add(sample[i + 6]);
+  for (let i = 0; i < sample.length; i += terrainSampleBands)
+    if (sample[i + 1]) classes.add(sample[i + 6]);
   expect([...classes].sort((a, b) => a - b)).toEqual([3, 102]);
+});
+it("carries natural cover beneath a shared magical class", () => {
+  const raster = fixture("elevation");
+  raster.field.channels.elevation.fill(100);
+  raster.surface = fixture("finalSurface").field;
+  const magic = magicSurfaceCode(canonryMagicPresets(), "aurora", "field")!;
+  putChannel(
+    raster.surface,
+    "finalSurface",
+    "category",
+    new Float64Array(25).fill(magic),
+    "category"
+  );
+  putChannel(
+    raster.surface,
+    "naturalSurface",
+    "category",
+    Float64Array.from({ length: 25 }, (_, i) =>
+      surfaceCode(i % 5 < 2 ? "Boreal forest" : "Scree field")
+    ),
+    "category"
+  );
+  const sample = numericTileSampler(raster);
+  const forest = sample([19, 49, 21, 51], 1),
+    rock = sample([79, 49, 81, 51], 1);
+  expect(forest[6]).toBe(magic);
+  expect(rock[6]).toBe(magic);
+  expect(forest[7]).toBe(surfaceCode("Boreal forest"));
+  expect(rock[7]).toBe(surfaceCode("Scree field"));
 });
 it("shares adaptive locations across terrain bands while respecting distinct overlay and ice topologies", () => {
   const raster = fixture("elevation");
@@ -154,11 +190,11 @@ it("shares adaptive locations across terrain bands while respecting distinct ove
   putChannel(patch, "elevation", "metre", new Float64Array(patch.active.length).fill(400));
   raster.field.overlays = [{ grid: patch, channels: ["elevation"] }];
   const sample = numericTileSampler(raster);
-  expect([...sample([29, 29, 31, 31], 1)]).toEqual([100, 1, -100, 1, 0.25, 2, -1]);
-  expect([...sample([49, 49, 51, 51], 1)]).toEqual([400, 1, 200, 0, 0.25, 2, -1]);
-  expect([...sample([29, 29, 31, 31], 1)]).toEqual([100, 1, -100, 1, 0.25, 2, -1]);
+  expect([...sample([29, 29, 31, 31], 1)]).toEqual([100, 1, -100, 1, 0.25, 2, -1, -1]);
+  expect([...sample([49, 49, 51, 51], 1)]).toEqual([400, 1, 200, 0, 0.25, 2, -1, -1]);
+  expect([...sample([29, 29, 31, 31], 1)]).toEqual([100, 1, -100, 1, 0.25, 2, -1, -1]);
   patch.active.fill(0);
-  expect([...sample([49, 49, 51, 51], 1)]).toEqual([0, 0, 0, 0, 0, 0, 0]);
+  expect([...sample([49, 49, 51, 51], 1)]).toEqual(new Array(terrainSampleBands).fill(0));
 });
 it("uses actual data ranges and an invertible signed log legend", () => {
   const raster = fixture();

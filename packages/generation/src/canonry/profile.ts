@@ -19,6 +19,9 @@ export const physicalProfile = {
   RidgeWidth: 110_000,
   TectonicMotionMinimum: 0.22,
   TectonicMotionMaximum: 0.72,
+  // Share of a continental province's motion taken from its assembly's motion, so a continent
+  // moves as one plate; the rest is the province's own, which keeps interior boundaries alive.
+  AssemblyMotionCoherence: 0.95,
   TectonicConvergenceThreshold: 0.12,
   TectonicBoundaryPersistence: 420,
   ContinentalSutureDetectionReach: 60_000,
@@ -29,6 +32,9 @@ export const physicalProfile = {
   MarginInfluenceReach: 260_000,
   CrustAgeSaturationDistance: 700_000,
   OceanicSubsidenceDepth: 1200,
+  // Thermal subsidence belongs to oceanic lithosphere: full at continental fraction 0, fading
+  // linearly to none at this fraction, so an aged continental platform keeps its height.
+  OceanicSubsidenceCompositionLimit: 0.5,
   PassiveShelfWidth: 240_000,
   RiftedShelfWidth: 160_000,
   TransformShelfWidth: 80_000,
@@ -82,7 +88,19 @@ export const physicalProfile = {
   InteriorReliefScale: 120_000,
   OrogenicMinimumComponentArea: 600_000_000,
   OrogenicMinimumStrain: 80,
-  OrogenicInfluenceReach: 280_000,
+  // Metres from a belt's boundary that construction reaches; it must cover the plateau.
+  OrogenicInfluenceReach: 520_000,
+  // Hinterland plateau: share of the crest section carried flat behind the belt, and the metres
+  // behind the boundary over which it fades. The foreland front keeps this share of the range width.
+  OrogenicPlateauWidth: 320_000,
+  OrogenicPlateauShare: 0.6,
+  OrogenicForelandWidthShare: 0.5,
+  // Relief a child profile realizes below its parent's cell from the parent's own gradient:
+  // amplitude is the gain times the parent cell's relief above the floor (metres), stretched
+  // along the ridge direction by the anisotropy. Parent-cell means are conserved.
+  ReliefSynthesisGain: 2,
+  ReliefSynthesisFloor: 60,
+  ReliefSynthesisAnisotropy: 3,
   InitialOrogenicConstructionStep: 3200,
   EpochOrogenicConstructionStep: 1200,
   CollisionRangeWidth: 180_000,
@@ -139,6 +157,11 @@ export const physicalProfile = {
   ImpactEjectaFraction: 520,
   ImpactFractureStrength: 760,
   ImpactThermalRadiusThreshold: 120_000,
+  // Ice-balance units gained per metre of height above the sea, on top of the lapse rate the
+  // temperature field already carries. Zero lets climate alone decide; the reference value of
+  // 0.25 glaciated every plateau above about 3,000 m in any climate and is kept for the
+  // Glacier-carved terrain choice.
+  IceAltitudeBalance: 0,
   IceAccumulationStep: 420,
   IceAblationStep: 260,
   FrozenLakeIceAdvanceGradient: 0.004,

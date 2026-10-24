@@ -5,6 +5,10 @@ import {
   createAdaptiveTopology,
   rectangle,
   putChannel,
+  canonryMagicPresets,
+  magicSurfaceCode,
+  surfaceCategories,
+  surfaceCode,
 } from "@atlas/domain";
 import { categorical, tilePainter, rasterTileSource } from "./rasterTiles";
 import Projection from "ol/proj/Projection.js";
@@ -144,6 +148,45 @@ it("requests finer existing field samples for a higher-density screen", () => {
   expect(retina.getTileGrid()!.getZForResolution(resolution)).toBeGreaterThan(
     standard.getTileGrid()!.getZForResolution(resolution)
   );
+});
+
+it("preserves natural cover contrast beneath Aurora in exported terrain", () => {
+  const raster = fixture(),
+    classes = surfaceCategories(canonryMagicPresets());
+  raster.field.channels.elevation.fill(400);
+  raster.surface = raster.field;
+  const count = raster.field.active.length;
+  putChannel(raster.surface, "naturalSurface", "category", new Float64Array(count), "category");
+  putChannel(raster.surface, "finalSurface", "category", new Float64Array(count), "category");
+  const color = (natural: "Boreal forest" | "Scree field", magic: boolean) => {
+    raster.surface!.channels.naturalSurface.fill(surfaceCode(natural));
+    raster.surface!.channels.finalSurface.fill(
+      magic ? magicSurfaceCode(canonryMagicPresets(), "aurora", "field")! : surfaceCode(natural)
+    );
+    return tilePainter(raster, [0, 1000], classes)([490, 490, 510, 510], 1);
+  };
+  const contrast = (a: Uint8ClampedArray, b: Uint8ClampedArray) =>
+    a.slice(0, 3).reduce((sum, value, i) => sum + Math.abs(value - b[i]), 0);
+  const natural = contrast(color("Boreal forest", false), color("Scree field", false));
+  const magical = contrast(color("Boreal forest", true), color("Scree field", true));
+  expect(magical).toBeGreaterThan(natural / 2);
+});
+
+it("retains opposite-facing relief under completely opaque ice in exported terrain", () => {
+  const raster = fixture(),
+    geometry = adaptiveGeometry(raster.field.topology!);
+  raster.field.channels.elevation.set(
+    Float64Array.from(geometry.x, (x) => 400 + Math.abs(x - 500) * 0.2)
+  );
+  raster.ice = {
+    ...raster.field,
+    channels: { ice: new Float64Array(raster.field.active.length).fill(1) },
+    units: { ice: "ratio" },
+  };
+  const paint = tilePainter(raster, [0, 1000]);
+  const west = paint([240, 490, 260, 510], 1),
+    east = paint([740, 490, 760, 510], 1);
+  expect(Math.abs(west[0] - east[0])).toBeGreaterThan(20);
 });
 
 it("shows submerged relief instead of flattening every ocean feature to a depth color", () => {

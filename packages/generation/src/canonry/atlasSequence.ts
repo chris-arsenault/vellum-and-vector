@@ -2,7 +2,8 @@ import type { DomainSnapshot } from "@atlas/domain";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
 import type { ProcessInvocation, ProcessSequence } from "../process";
 import { resolveGenerationFeatures, type FeatureContributionContext } from "../features";
-import { physicalFeatureDefinitions, physicalFeatureSequence } from "../physicalFeatures";
+import { physicalFeatureDefinitions } from "../physicalFeatures";
+import { physicalFeatureSequence } from "../physicalFeatureSequence";
 import { nativeContracts } from "./contracts";
 import { atlasGenerationModules } from "../generationModules";
 import { worldGenerationSettings, type GenerationSettings } from "../generationSettings";
@@ -170,7 +171,9 @@ export function atlasPhysicalSequence(
     },
     ...contributions("initialize.influences", context),
   ];
+  // A child inherits its parent's geology and realizes the relief below the parent's cells.
   if (!inherited) result.push(...geology(context, true));
+  else result.push(...named(contributions("terrain.refinement", context), "refinement"));
   result.push(...contributions("initialize.ecology", context));
   if (physical)
     result.push({

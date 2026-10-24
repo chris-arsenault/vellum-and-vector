@@ -51,7 +51,8 @@ function preferInput(candidate: Grid, previous: Grid | undefined): boolean {
     !previous || (candidate.scope.resolution ?? Infinity) < (previous.scope.resolution ?? Infinity)
   );
 }
-function parentChannels(state: GenerationState) {
+/** Ancestor grids that cover this surface, keyed by channel, finest resolution preferred. */
+export function parentChannels(state: GenerationState) {
   const inputs = new Map<string, Grid>();
   for (const field of state.domain.world.fields) {
     const grid = state.domain.numerical[field.id];

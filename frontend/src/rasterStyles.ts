@@ -8,7 +8,7 @@ const band = (index: number, x = 0, y = 0): Expr => ["band", index, x, y];
 const variable = (name: string): Expr => ["var", name];
 const mask: Expr = [">", band(2), 0.99];
 /** Terrain band order after `terrainTile`: see `terrainSampleBands`. */
-const terrainBand = { relative: 3, water: 4, ice: 5, surface: 7, east: 8, north: 9 };
+const terrainBand = { relative: 3, water: 4, ice: 5, surface: 7, natural: 8, east: 9, north: 10 };
 type ClassColor = Pick<SurfaceCategory, "code" | "color">;
 function classMatch(value: Expr, classes: ClassColor[], fallback: Expr): Expr {
   if (!classes.length) return fallback;
@@ -101,18 +101,23 @@ function landColor(): Expr {
   ];
 }
 /**
- * Surface classes replace the base colour where the class says more than depth or
- * height does; bathymetric water classes keep the depth ramp. Hillshade applies on top.
+ * Magical surface tints sit over natural cover. Bathymetric water classes keep
+ * the depth ramp; relief and contours apply after surface and ice colour.
  */
 function surfaced(base: Expr, classes: SurfaceCategory[]): Expr {
   const painted = classes.filter((c) => !c.bathymetric);
   if (!painted.length) return base;
+  const natural = classMatch(
+    band(terrainBand.natural),
+    painted.filter((c) => !c.system),
+    base
+  );
   const code = band(terrainBand.surface);
-  let colored = classMatch(code, painted, base);
+  let colored = classMatch(code, painted, natural);
   const tinted = painted.filter((c) => c.tint < 1);
   if (tinted.length) {
     const weight: Expr = ["match", ["round", code], ...tinted.flatMap((c) => [c.code, c.tint]), 1];
-    colored = ["interpolate", ["linear"], weight, 0, base, 1, colored];
+    colored = ["interpolate", ["linear"], weight, 0, natural, 1, colored];
   }
   return ["case", [">", variable("surface"), 0], colored, base];
 }
@@ -126,18 +131,21 @@ export function terrainStyle(view: RasterPresentation, classes: SurfaceCategory[
     "#a1c8ce",
     [">", water, 0.5],
     surfaced(sea, classes),
-    contourLine(slope),
-    "#92876b",
     surfaced(landColor(), classes),
   ];
   const ice: Expr = ["clamp", ["*", band(terrainBand.ice), 1.5], 0, 1];
   return {
     variables: terrainVariables(view),
-    brightness: ["*", ["-", ["*", 0.55, light], 0.4], ["-", 1, ice]],
+    brightness: ["-", ["*", 0.55, light], 0.4],
     color: [
       "case",
       mask,
-      ["interpolate", ["linear"], ice, 0, color, 1, "#e2ede8"],
+      [
+        "case",
+        ["all", ["<", water, 0.5], contourLine(slope)],
+        "#92876b",
+        ["interpolate", ["linear"], ice, 0, color, 1, "#e2ede8"],
+      ],
       ["color", 0, 0, 0, 0],
     ],
   };

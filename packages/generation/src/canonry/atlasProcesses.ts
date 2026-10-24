@@ -24,8 +24,9 @@ import { refreshGrounding } from "./glacierSurface";
 import { refineGeologicalCauses, refineWorkspace, remeshInvalidations } from "./adaptiveWorkspace";
 import { adaptiveWaterProcess } from "./adaptiveWater";
 import { adaptiveClimateProcess, adaptiveIceProcess, shoreSupport } from "./adaptiveClimate";
+import { adaptiveReliefProcess } from "./adaptiveRelief";
 import { prepareAdaptiveFractures } from "./adaptiveFractures";
-import { nativeFeatureContract } from "../physicalFeatures";
+import { nativeFeatureContract } from "../physicalFeatureSequence";
 import type { ResolvedFeatures } from "../features";
 import { generationBindings } from "../generationBindings";
 import { absenceInitialization } from "./absenceInitialization";
@@ -198,6 +199,7 @@ export function atlasNativeProcesses(
       : [
           adaptiveWaterProcess(input.resolvedFeatures!),
           adaptiveClimateProcess(),
+          adaptiveReliefProcess(),
           adaptiveIceProcess(input.resolvedFeatures!),
         ]),
     ...Array.from(implementations.values(), (step) =>

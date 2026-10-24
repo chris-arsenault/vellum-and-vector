@@ -103,6 +103,27 @@ export function rasterTileSource(
 }
 
 const hexColor = (hex: string) => [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
+function surfacePainter(raster: Raster, classes: SurfaceCategory[]) {
+  const surfaceAt = raster.surface?.channels.finalSurface
+    ? classInterpolator(raster.surface, "finalSurface")
+    : null;
+  const naturalAt = raster.surface?.channels.naturalSurface
+    ? classInterpolator(raster.surface, "naturalSurface")
+    : null;
+  const painted = new Map(
+    classes
+      .filter((c) => !c.bathymetric)
+      .map((c) => [c.code, { rgb: hexColor(c.color), tint: c.tint }])
+  );
+  return (p: Position, terrain: number[]) => {
+    const natural = naturalAt ? painted.get(Math.round(naturalAt(p))) : undefined;
+    const base = natural?.rgb ?? terrain;
+    const surface = surfaceAt ? painted.get(Math.round(surfaceAt(p))) : undefined;
+    return surface
+      ? base.map((channel, i) => channel + (surface.rgb[i] - channel) * surface.tint)
+      : base;
+  };
+}
 function terrainPainter(
   raster: Raster,
   minimum: number,
@@ -111,27 +132,16 @@ function terrainPainter(
 ): ColorAt {
   const waterAt = terrainWater(raster);
   const iceAt = raster.ice ? fieldInterpolator(raster.ice, "ice") : null;
-  const surfaceAt = raster.surface?.channels.finalSurface
-    ? classInterpolator(raster.surface, "finalSurface")
-    : null;
-  const painted = new Map(
-    classes
-      .filter((c) => !c.bathymetric)
-      .map((c) => [c.code, { rgb: hexColor(c.color), tint: c.tint }])
-  );
+  const surfaceAt = surfacePainter(raster, classes);
   return (p, dx, dy) => {
     const value = height(p),
       { level: seaLevel, kind: water } = waterAt(p, value);
     const relative =
       water === 1 ? Math.min(-Number.EPSILON, value - seaLevel) : Math.max(0, value - seaLevel);
-    const base = terrainColor(relative, minimum - seaLevel);
-    const surface = surfaceAt ? painted.get(Math.round(surfaceAt(p))) : undefined;
     let color =
-      water === 2
-        ? [73, 139, 153]
-        : surface
-          ? base.map((channel, i) => channel + (surface.rgb[i] - channel) * surface.tint)
-          : base;
+      water === 2 ? [73, 139, 153] : surfaceAt(p, terrainColor(relative, minimum - seaLevel));
+    const ice = Math.min(1, (iceAt?.(p) ?? 0) * (water ? 2 : 1.5));
+    color = color.map((channel, i) => channel + ([226, 237, 232][i] - channel) * ice);
     if (water !== 2) {
       const east = ((height({ ...p, x: p.x + dx }) - height({ ...p, x: p.x - dx })) * 4) / dx;
       const north = ((height({ ...p, y: p.y + dy }) - height({ ...p, y: p.y - dy })) * 4) / dy;
@@ -141,8 +151,7 @@ function terrainPainter(
       );
       color = color.map((channel) => Math.min(255, channel * (0.63 + light * 0.52)));
     }
-    const ice = Math.min(1, (iceAt?.(p) ?? 0) * (water ? 2 : 1.5));
-    return [...color.map((channel, i) => channel + ([226, 237, 232][i] - channel) * ice), 255];
+    return [...color, 255];
   };
 }
 

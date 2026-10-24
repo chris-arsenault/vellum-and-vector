@@ -1,6 +1,6 @@
 import type { GenerationState, MapProcess } from "../process";
 import { refineWorkspace, remeshInvalidations, type SamplingSupport } from "./adaptiveWorkspace";
-import { physicalFeatureSequence } from "../physicalFeatures";
+import { physicalFeatureSequence } from "../physicalFeatureSequence";
 import type { ResolvedFeatures } from "../features";
 import { physicalDistance } from "./physicalMetric";
 

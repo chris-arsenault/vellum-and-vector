@@ -177,6 +177,22 @@ with no backend, persistence or MCP; preserve the existing backend source.
       routing edges. Decide those two prerequisites before implementing any of
       the four.
 
+- [ ] **13. Keep a child's epochs from moving its parent's cell means.** A Region
+      over a mountain belt ends its epochs with its land about 150 m away, on
+      average per parent cell, from the World surface it inherited (worst cells
+      above 350 m), with or without realized relief. Incision, hillslopes and
+      Cold-age glacial erosion at the child's mesh do this. Under
+      [ADR 0005](adr/0005-scale-contract.md) the parent is authoritative at its
+      mesh; decide whether child epochs should conserve parent-cell means, or
+      whether the World should carry the erosion its children will do.
+
+- [ ] **14. Generalize Region relief features for the map.** Realized relief gives
+      a 300 km belt Region on the order of a thousand peaks and two thousand
+      cirque cells, plus lakes where the texture closes depressions. The
+      classification is right at cell scale; what the map shows at a zoom is a
+      cartographic generalization question
+      ([ADR 0005](adr/0005-scale-contract.md)).
+
 The [product contract](product-spec.md) supplies the geographic and authoring
 requirements. [ADR 0003](adr/0003-frontend-session.md) defines the current execution
 and session boundary; the [generation design](generation-workflows.md) records

@@ -15,6 +15,9 @@ export function atlasPhysicalProfile(
   profile.ContinentalAssemblyCount = settings.continents;
   profile.TectonicProvinceCount = settings.provinces;
   profile.ContinentalCrustFraction = settings.landFraction;
+  // The water budget covers what is not continental crust, so the land fraction a cartographer
+  // asks for is the land share the first flood leaves, not only the share of continental sites.
+  profile.QualityTargets.OceanCoverage.target = 1 - settings.landFraction;
   profile.TemperatureBaseline = 300 + settings.temperature * 10;
   profile.LatitudeSouth = settings.southLatitude;
   profile.LatitudeNorth = settings.northLatitude;

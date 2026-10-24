@@ -22,7 +22,7 @@ function massBalance(map: PhysicalField, p: PhysicalProfile, i: number): number 
   const cold = Math.max(0, p.IceTemperatureThreshold - map.Temperature[i]);
   const snow = truncate((map.Snowfall[i] * cold) / 300);
   const altitude = truncate(
-    toUnits(Math.max(0, supportElevation(map, i) - map.EffectiveSeaLevel)) / 4
+    toUnits(Math.max(0, supportElevation(map, i) - map.EffectiveSeaLevel)) * p.IceAltitudeBalance
   );
   const warm = Math.max(0, map.Temperature[i] - p.IceTemperatureThreshold) * 4;
   return (

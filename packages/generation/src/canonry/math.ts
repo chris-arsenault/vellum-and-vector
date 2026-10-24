@@ -17,7 +17,14 @@ export const ratio = (value: number, numerator: number, denominator: number) =>
   truncate((value * numerator) / denominator);
 export const noWaterSurface = -(2 ** 63);
 export const buoyancy = (fraction: number) => 300 + 400 * clamp(fraction, 0, 1);
-export const thickness = (value: number) => clamp(value, 800, 8000);
+// Metres of the model's crust column. Continental foundation is 4,000; buoyancy lifts each
+// metre above it by 0.7, so the ceiling bounds isostatic height at about 7,200 m (ADR 0005 plan).
+export const minimumCrustThickness = 800;
+export const maximumCrustThickness = 14_000;
+// Metres above or below the datum that bedrock, support targets and constructed surfaces may reach.
+export const elevationLimit = 8000;
+export const thickness = (value: number) =>
+  clamp(value, minimumCrustThickness, maximumCrustThickness);
 export function crustHeight(value: number, continentalFraction: number): number {
   const fraction = clamp(continentalFraction, 0, 1);
   const foundation = 1000 + 3000 * fraction;

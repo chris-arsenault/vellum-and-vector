@@ -79,11 +79,13 @@ function erodeTriangle(
   const erosiveFall = Math.max(0, fall - equilibrium);
   if (erosiveFall <= 0) return;
   const power = catchment ** 0.42 * Math.sqrt(erosiveFall) * 100;
-  const cut = units(
+  const requested = units(
     (Math.min(22, (power * c.Profile.FluvialErosionStrength * 1000) / surfaceResistance(map, i)) *
       c.HydrologyStrength) /
       1000
   );
+  // Sea level is the base level: a river grades to the sea and never cuts its bed below it.
+  const cut = Math.min(requested, map.Elevation[i] - (map.EffectiveSeaLevel + units(1)));
   if (cut > 0) recordCut(map, i, cut);
 }
 export function fluvialErosion(map: PhysicalField, c: PhysicalContext) {

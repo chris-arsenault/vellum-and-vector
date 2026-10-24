@@ -67,7 +67,7 @@ test("accepts the curated reference through keyboard navigation without raw conf
   await setupStep(page, /Land$/).focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("heading", { name: "Land", exact: true })).toBeFocused();
-  await expect(page.getByLabel("Terrain", { exact: true })).toHaveValue("hills");
+  await expect(page.getByLabel("Terrain", { exact: true })).toHaveValue("ranges");
   await setupStep(page, /Review & generate/).click();
   await expect(page.getByLabel("Generation configuration", { exact: true })).toHaveCount(0);
   await expect(page.locator(".setup-tuning")).toHaveCount(0);

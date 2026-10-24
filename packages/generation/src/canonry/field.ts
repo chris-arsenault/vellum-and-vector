@@ -173,6 +173,9 @@ export type PhysicalField = Record<(typeof integerFields)[number], Int32Array> &
     AvailableFacts: Set<string>;
     EffectiveSeaLevel: number;
     BaseSeaLevel: number;
+    // Connected ocean volume (m³) at the base level once the first flood has set it; later
+    // floods move the base level to hold this volume, as a fixed water budget does.
+    BaseOceanVolume: number;
     SeaLevelInitialized: boolean;
     OpenBoundary: boolean;
     CrustSupportInitialized: boolean;
@@ -204,6 +207,7 @@ export function createField(mesh: PhysicalMesh): PhysicalField {
     EngineeredDams: new Set<number>(),
     EffectiveSeaLevel: 0,
     BaseSeaLevel: 0,
+    BaseOceanVolume: 0,
     SeaLevelInitialized: false,
     OpenBoundary: false,
     CrustSupportInitialized: false,

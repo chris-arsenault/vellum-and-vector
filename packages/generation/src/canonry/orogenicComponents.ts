@@ -25,6 +25,8 @@ export interface BoundaryComponent {
 export interface OrogenicFrame {
   distance: Float64Array;
   source: Int32Array;
+  // +1 on the belt's hinterland, −1 on its foreland (see assignSides).
+  side: Float64Array;
 }
 const active = (map: PhysicalField, i: number, minimum: number) =>
   map.TectonicBoundaryCodes[i] !== 0 && map.TectonicStrain[i] >= minimum;
@@ -131,6 +133,42 @@ export function rankComponents(components: BoundaryComponent[], context: Physica
     );
   });
 }
+/** Signed across-strike offset (metres) of a cell from its source boundary cell. */
+function acrossStrike(map: PhysicalField, i: number, source: number): number {
+  let tx = map.TectonicTangentX[source] / 1000,
+    ty = map.TectonicTangentY[source] / 1000;
+  if (Math.abs(tx) + Math.abs(ty) < 0.01) {
+    tx = 1;
+    ty = 0;
+  }
+  return -(map.mesh.x[i] - map.mesh.x[source]) * ty + (map.mesh.y[i] - map.mesh.y[source]) * tx;
+}
+/**
+ * A belt's hinterland is the side of its boundary that holds more continental mass: the
+ * overriding plate of a subduction, the larger plate of a collision, where Tibet stands behind
+ * the Himalaya. Cells there read +1, the foreland −1; boundary cells themselves count as interior.
+ */
+function assignSides(
+  map: PhysicalField,
+  components: BoundaryComponent[],
+  source: Int32Array,
+  side: Float64Array
+) {
+  const mass = new Float64Array(components.length);
+  for (let i = 0; i < map.mesh.count; i++) {
+    const id = map.OrogenicComponentIds[i];
+    if (id < 0 || source[i] < 0) continue;
+    const offset = acrossStrike(map, i, source[i]);
+    if (offset !== 0)
+      mass[id] += Math.sign(offset) * (map.CrustContinentalFraction[i] / 1000) * map.mesh.areas[i];
+  }
+  for (let i = 0; i < map.mesh.count; i++) {
+    const id = map.OrogenicComponentIds[i];
+    if (id < 0 || source[i] < 0) continue;
+    const offset = acrossStrike(map, i, source[i]);
+    side[i] = offset === 0 ? 1 : Math.sign(offset) * (mass[id] < 0 ? -1 : 1);
+  }
+}
 export function propagateInfluence(
   map: PhysicalField,
   context: PhysicalContext,
@@ -138,7 +176,8 @@ export function propagateInfluence(
   ids: Int32Array
 ): OrogenicFrame {
   const distance = new Float64Array(map.mesh.count).fill(Infinity),
-    source = new Int32Array(map.mesh.count).fill(-1);
+    source = new Int32Array(map.mesh.count).fill(-1),
+    side = new Float64Array(map.mesh.count);
   const queue: number[] = [];
   for (let i = 0; i < ids.length; i++) {
     const id = ids[i];
@@ -154,5 +193,6 @@ export function propagateInfluence(
     map.OrogenicComponentIds[j] = map.OrogenicComponentIds[i];
     map.OrogenicSystemProminence[j] = map.OrogenicSystemProminence[i];
   });
-  return { distance, source };
+  assignSides(map, components, source, side);
+  return { distance, source, side };
 }

@@ -2,69 +2,67 @@
 
 ![An aurora over an ice realm: a glowing crystal mountain, standing stones on a frozen shore, readers in heavy cloaks and a white owl in the snow](../images/aurora.webp)
 
-_The light that withdrew to leave room, and what it left in the ice._
+_The light withdrew. Its sparks remain in the ice._
 
-**Physical character.** Aurora is a charge that falls from the sky toward cold
-ground and is kept in ice. Thick ice holds it; thin ice and warm ground let it
-drain toward colder neighbours. The charge itself does nothing violent. It keeps.
-Ice that holds it does not ablate, the ground near it is a few degrees colder
-than it should be, and whatever is inside it slows: growth, decay, turnover, the
-ripening of anything. Aurora-crystals are formations in the ice that collect and
-hold charge densely enough to be carried, and a practitioner works through one.
+**Physical character.** Aurora is a charge that falls from the sky toward cold ground and
+accumulates in ice. Thick ice retains it; thin ice and warm ground allow it to drain toward colder
+areas. It preserves rather than destroys. Ice that holds it resists melting and surface loss, nearby
+ground cools by a few degrees, and growth, decay and ripening slow within the field. Aurora-crystals
+concentrate the charge into a portable form. Practitioners work through these crystals.
 
-**Where it is found.** On cold high ground, on ice caps and glaciers, and in the
-cold drainages that lead toward them. The field is strongest where ice is
-thickest and oldest. A relict charge stays in ground the ice has left, so a
-valley that was glaciated keeps a cold shadow for a long time after the glacier
-is gone.
+**Where it is found.** On cold high ground, on ice caps and glaciers, and in the cold drainage
+routes that lead toward them. The field is strongest where ice is thickest and oldest. Some charge
+remains in the ground after the ice retreats, leaving formerly glaciated valleys cold long after the
+glaciers are gone.
 
-**Effects on the world.** Aurora weakens the rock it sits in over an age. It
-keeps ice from melting that climate alone would melt, so Aurora ground is
-colder and whiter than its latitude. Its stillness slows the living landscape
-into the Rime forest, where trees grow for centuries, and the Glow-lichen
-barrens, where almost nothing turns over. What the ice preserved is released
-where the field retreats, and a retreating Aurora edge is a line of sudden
-decay, a rich strip, the melt line a people settles on.
+**Effects on the world.** Over long periods, Aurora weakens the rock exposed to it. It preserves ice
+in climates where that ice would otherwise melt. Its biomes are the Rime forest, where trees grow
+for centuries, and the Glow-lichen barrens, where growth and decay are both extremely slow. When the
+field retreats, preserved material thaws and rapidly decays. This leaves a fertile strip along the
+melt line that attracts settlement.
 
-**Practice.** Aurora is slow magic. A practitioner attunes to a crystal through
-sustained attention and draws its charge into an act of perception: reading
-what the ice holds of the past, seeing a distant place as it is now, or at the
-height of the art, fixing a moment into a construct of ice that replays it.
-Nothing about it is quick, and nothing about it harms a body at a distance. The
-cost is to the boundary of the self. A reader is a vessel, and charge is light;
-a vessel that takes more light than it can hold breaks, and what breaks does not
-come back whole. Casual use costs little. Sustained use cracks the reader a
-little at a time, and the oldest readers are held together by habit, unsure
-which of their memories are their own. Traditions ration their readers with
-strict rotations of practice and rest, and retire a reader at the first crack
-they can see.
+**Practice.** Aurora requires time and sustained attention. A practitioner attunes to a crystal and
+uses its charge to read the past preserved in ice or see a distant place as it is now. The most
+skilled can capture a moment in an ice construct that replays it. These are acts of perception; they
+cannot harm someone at a distance. Occasional use has little cost, but sustained reading can
+permanently damage the reader's sense of self. Memories encountered through the crystal become
+difficult to distinguish from personal experience. The oldest readers may rely on familiar routines
+because they no longer know which memories are their own. Schools enforce rotations of practice and
+rest, and retire readers at the first visible signs of this confusion.
 
-**Lore.** Aurora traditions begin with a withdrawal. The light, they say, was
-once everywhere, and nothing else could exist in it; so it drew back into
-itself and left a space, and the world is what grew in the space it left. The
-cold shadow around Aurora ground is read as the same act repeated small: the
-field withdraws warmth from a place so that something else, slower, can be
-there. A Rime forest is not a dead place to them. It is a place the light made
-room for, and the long lives of its trees are the proof.
+**Lore.** Aurora traditions say that light once filled everything, leaving no room for anything
+else. It drew back, and the world grew in the space it left. Believers see the cold around Aurora
+ground as a smaller version of that withdrawal: warmth recedes, making room for slower forms of
+life. They point to the long-lived trees of the Rime forest as evidence that cold can shelter life
+as well as threaten it.
 
-Then the breaking. When the light first returned into the space it had left, it
-came too strongly for the vessels made to hold it, and they shattered. The
-shards fell into the ice, and the light they held fell with them. This is what
-an Aurora-crystal is in the tradition's account: a shard of a vessel that
-broke, still holding a spark of what broke it. The melt line is where the
-sparks come loose, and a reader's work is gathering. Every reading lifts a
-spark out of the ice and returns it to where it belonged, and the traditions
-hold that when every spark has been gathered the world as it stands will end,
-because the space the light left will be full again. No reader expects to see
-this. The strictest schools say that a reader who gathers too eagerly is
-hurrying the end, and that the rotation of practice and rest is there to slow
-the world's completion as much as to protect the reader.
+In the next part of the story, light returned too strongly for the vessels made to hold it. They
+shattered, scattering shards and sparks into the ice. An Aurora-crystal is said to be one of those
+shards, still holding a spark. Readers call themselves gatherers: each reading returns a spark to
+its original place. Their warning about a reader who takes in too much light is simple. The first
+vessels broke, and so can you.
 
-**Interference.** Aurora cancels Fire along a thermal rim. Aurora-crystals
-dissipate carried Pressure. Aurora stillness freezes a Greenwood front. Aurora
-over Salt ground is undeath: what Salt kept, Aurora will not let decay, and the
-dead do not rest. Aurora reinforces a Hallowed ward and closes a Veil door.
+The traditions teach that when every spark has been gathered, the light will fill the space again
+and the world as it is known will end. The melt line, where sparks are released from the ice, is
+therefore both a place of work and a reminder of that ending. No reader expects to witness it. The
+strictest schools still regard overuse as a way of hastening it, and prescribe rest to protect the
+world as well as the reader.
+
+> They told me to keep one memory that was mine alone. I chose the kitchen, my mother's yellow coat,
+> the spoon she tapped against the pot.
+>
+> Today I saw that kitchen in a glacier older than our town. Someone was sitting in my chair.
+>
+> I put the crystal away before they turned around.
+
+_An unsigned page in a reader's notebook._
+
+**Interference.** Aurora cancels Fire along a thermal rim. Aurora-crystals dissipate a
+practitioner's stored Pressure charge. Aurora freezes Greenwood along their shared boundary. Over
+Salt ground, its preservation produces undeath: bodies preserved by Salt cannot decay, and the dead
+do not rest. Aurora reinforces a Hallowed ward and closes a Veil door.
 
 ---
 
-[Magic lore bible](../magic.md) · [Fire](fire.md) · [Pressure](pressure.md) · [Greenwood](greenwood.md) · [Salt](salt.md) · [Veil](veil.md) · [Hallowed](hallowed.md)
+[Magic lore bible](../magic.md) · [Fire](fire.md) · [Pressure](pressure.md) ·
+[Greenwood](greenwood.md) · [Salt](salt.md) · [Veil](veil.md) · [Hallowed](hallowed.md)

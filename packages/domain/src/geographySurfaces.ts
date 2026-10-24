@@ -133,10 +133,11 @@ export const magicPlacePresentations: Record<string, MagicPlacePresentation> = {
   scar: { color: "#302826", symbol: "square", tint: 1 },
   // The halo is the quickened country: the living cover shows through a warm cast.
   halo: { color: "#d9a441", symbol: "circle", tint: 0.3 },
-  field: { color: "#3fd9b5", symbol: "circle", tint: 0.8 },
-  well: { color: "#a8f0ff", symbol: "star", tint: 1 },
-  prism: { color: "#9fd8f0", symbol: "diamond", tint: 1 },
-  melt: { color: "#5fb1a3", symbol: "triangle", tint: 1 },
+  // Aurora marks the existing ground; its place symbols retain the full class colour.
+  field: { color: "#3fd9b5", symbol: "circle", tint: 0.25 },
+  well: { color: "#a8f0ff", symbol: "star", tint: 0.6 },
+  prism: { color: "#9fd8f0", symbol: "diamond", tint: 0.45 },
+  melt: { color: "#5fb1a3", symbol: "triangle", tint: 0.35 },
   locus: { color: "#1d2f6b", symbol: "star", tint: 1 },
   crush: { color: "#44506a", symbol: "square", tint: 0.45 },
   // Pale cold water, kept apart from Aurora's saturated teal and the fog coast's grey-green.

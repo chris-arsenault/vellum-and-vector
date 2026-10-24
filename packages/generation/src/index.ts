@@ -20,6 +20,7 @@ export * from "./mapRouting";
 export * from "./features";
 export * from "./domainFeatures";
 export * from "./physicalFeatures";
+export * from "./physicalFeatureSequence";
 export * from "./generationBindings";
 export * from "./productLedger";
 export * from "./processTraits";

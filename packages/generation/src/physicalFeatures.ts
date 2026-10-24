@@ -1,14 +1,7 @@
 import type { ParameterValues } from "@atlas/domain";
 import { atlasParameterDefinitions, type AtlasParameters } from "./atlasParameters";
-import {
-  featureContribution,
-  type GenerationFeature,
-  type ResolvedFeatures,
-  type FeatureContributionContext,
-} from "./features";
-import type { ProcessInvocation, ProcessSequence } from "./process";
-import { physicalInputContract } from "./physicalInputs";
-import { atlasGenerationModules } from "./generationModules";
+import type { GenerationFeature, FeatureContributionContext } from "./features";
+import type { ProcessInvocation } from "./process";
 import { physicalApplicability, climateSettings } from "./physicalApplicability";
 import { physicalCartography } from "./physicalCartography";
 import { clockConfiguration } from "./featureConfiguration";
@@ -116,8 +109,14 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
     {
       "formation.mountains": ["orogenic-construction"],
       "epoch.mountains": ["orogenic-construction"],
+      // A child realizes the relief its parent's cells left latent (ADR 0005).
+      "terrain.refinement": ["refine-relief"],
     },
-    { requires: ["physical.foundation"], absent: ["OrogenicConstruction"] }
+    {
+      requires: ["physical.foundation"],
+      absent: ["OrogenicConstruction"],
+      when: (slot, context) => slot !== "terrain.refinement" || isRefinement(context),
+    }
   ),
   definition(
     "physical.volcanism",
@@ -384,25 +383,4 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
 
 function isRefinement(context?: FeatureContributionContext) {
   return Boolean(context && context.source.world.areas[context.input.areaId].profile !== "world");
-}
-
-/** Support identity is the profile slot, independent of requesting features. */
-export function physicalFeatureSequence(
-  slot: string,
-  resolved: ResolvedFeatures,
-  context?: FeatureContributionContext
-): ProcessSequence {
-  const registered = atlasGenerationModules.features();
-  const definitions = registered.length ? registered : physicalFeatureDefinitions;
-  return definitions
-    .filter((feature) => resolved.selection[feature.id])
-    .flatMap((feature) => featureContribution(feature, slot, resolved, context));
-}
-
-export function nativeFeatureContract(
-  name: string,
-  resolved: ResolvedFeatures,
-  inheritedAbsences: string[] = []
-) {
-  return physicalInputContract(name, resolved, physicalFeatureDefinitions, inheritedAbsences);
 }

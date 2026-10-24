@@ -1,19 +1,35 @@
 // OrogenicConstructionLayer cross sections and along-strike relief, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
+import type { PhysicalProfile } from "./profile";
 import type { BoundaryComponent, OrogenicFrame } from "./orogenicComponents";
 import { clamp } from "./math";
 import { unitNoise } from "./noise";
 
 const gaussian = (value: number, center: number, width: number) =>
   Math.exp(-0.5 * ((value - center) / Math.max(0.001, width)) ** 2);
+/**
+ * The hinterland carries part of the crest section flat behind the belt and lets it go over the
+ * last part of the plateau width: the root budget spread into a plateau rather than a crest.
+ */
+function plateauShoulder(p: PhysicalProfile, distance: number): number {
+  const width = p.OrogenicPlateauWidth;
+  if (width <= 0 || p.OrogenicPlateauShare <= 0) return 0;
+  const t = clamp((distance - width * 0.6) / (width * 0.5), 0, 1);
+  return p.OrogenicPlateauShare * (1 - t * t * (3 - 2 * t));
+}
+/**
+ * Cross-section of a belt at a signed side: the foreland (side < 0) rises to the crest within a
+ * narrower front; the hinterland (side ≥ 0) carries the crest and the plateau shoulder.
+ */
 export function crossSection(
   map: PhysicalField,
   context: PhysicalContext,
   c: BoundaryComponent,
   i: number,
   source: number,
-  distance: number
+  distance: number,
+  side = 1
 ): number {
   const p = context.Profile,
     continental = map.CrustContinentalFraction[i] / 1000;
@@ -23,17 +39,19 @@ export function crossSection(
       0,
       1
     );
-    const w = p.CollisionRangeWidth;
+    const front = side < 0 ? p.OrogenicForelandWidthShare : 1;
+    const w = p.CollisionRangeWidth * front;
     const collision =
       (gaussian(distance, 0, w) * 0.42 +
         gaussian(distance, w * 0.28, w * 0.17) * 0.9 +
         gaussian(distance, w * 0.72, w * 0.21) * 0.68) *
       (0.4 + continental * 0.6);
-    const sw = p.SubductionRangeWidth;
+    const sw = p.SubductionRangeWidth * front;
     const subduction =
       (gaussian(distance, 0, sw) * 0.26 + gaussian(distance, sw * 0.42, sw * 0.25) * 1.02) *
       continental;
-    return subduction * (1 - mix) + collision * mix;
+    const plateau = side < 0 ? 0 : plateauShoulder(p, distance) * continental;
+    return subduction * (1 - mix) + collision * mix + plateau;
   }
   if (c.code === 2) {
     const d = p.RiftShoulderDistance;
@@ -97,7 +115,8 @@ export function constructionWeight(
   section?: number
 ): number {
   const source = frame.source[i];
-  const shape = section ?? crossSection(map, context, c, i, source, frame.distance[i]);
+  const shape =
+    section ?? crossSection(map, context, c, i, source, frame.distance[i], frame.side[i]);
   const activity = (map.TectonicStrain[source] / 1000) * 0.62 + c.strain * 0.38;
   return activity * alongStrike(map, context, c, i, source) * shape;
 }

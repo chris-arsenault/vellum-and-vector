@@ -2,7 +2,7 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
-import { clamp, units } from "./math";
+import { clamp, elevationLimit, units } from "./math";
 import { fractalNoise } from "./noise";
 import { rebuild } from "./surface";
 
@@ -50,8 +50,8 @@ export function coastalDetail(map: PhysicalField, c: PhysicalContext) {
     if (delta === 0) continue;
     map.BedrockElevation[i] = clamp(
       map.BedrockElevation[i] + delta,
-      units(-4000),
-      units(4000) - map.SedimentThickness[i]
+      units(-elevationLimit),
+      units(elevationLimit) - map.SedimentThickness[i]
     );
     rebuild(map, i);
   }

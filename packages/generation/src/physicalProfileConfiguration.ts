@@ -19,6 +19,8 @@ const owners = {
     "OrogenicRootBudgetMinimum",
     "OrogenicRootBudgetMaximum",
     "MaximumOrogenicSurfaceReliefPerPass",
+    "OrogenicPlateauWidth",
+    "OrogenicPlateauShare",
   ],
   "physical.river-incision": ["FluvialEquilibriumGradient"],
   "material.fluvial-transport": ["SedimentTransportFraction", "MaximumSedimentDepositionPerPass"],
@@ -34,6 +36,7 @@ const owners = {
   ],
   "physical.coastal-evolution": ["CoastalDepositionFraction", "CoastalDepositionReach"],
   "physical.deltas": ["DeltaMaximumRadius"],
+  "physical.glacial-sculpting": ["IceAltitudeBalance"],
   "physical.volcanism": ["MantlePlumeCount"],
   "physical.impacts": ["ImpactPrimordialShare"],
 } satisfies Record<string, (keyof typeof physicalProfile)[]>;
