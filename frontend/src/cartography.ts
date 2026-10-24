@@ -229,6 +229,10 @@ export function toolLabel(tool: Tool): string {
         refine: "Draw region rectangle",
         refinePolygon: "Draw region polygon",
         extentEdit: "Adjust region outline",
+        regionPick: "Pick geographic region",
+        regionOutline: "Draw geographic region outline",
+        regionCut: "Draw geographic dividing line",
+        regionEdit: "Adjust geographic region outline",
         sculpt: "Paint field",
       } as Partial<Record<Tool, string>>
     )[tool]!
@@ -246,6 +250,11 @@ export function toolInstruction(tool: Tool): string {
         refine: "Drag a rectangle over the geography to develop.",
         refinePolygon: "Trace a region outline; double-click to finish.",
         extentEdit: "Adjust the outline, then create the region.",
+        regionPick: "Click a place to preview a region at this map scale.",
+        regionOutline: "Trace the region outline; double-click or press Enter to finish.",
+        regionCut:
+          "Join existing boundaries with a dividing line; double-click or press Enter to finish.",
+        regionEdit: "Drag outline vertices, then keep the region.",
         sculpt: "Drag to paint the field; hold Space to pan.",
       } as Partial<Record<Tool, string>>
     )[tool]!

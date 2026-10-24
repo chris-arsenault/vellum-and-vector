@@ -37,7 +37,8 @@ export function useMapActions(world: World, state: EditorSessionState, editing: 
       return;
     }
     state.setTool(tool);
-    if (["refine", "refinePolygon", "extentEdit"].includes(tool)) state.setPanel("refine");
+    if (tool.startsWith("region")) state.setPanel("regions");
+    else if (["refine", "refinePolygon", "extentEdit"].includes(tool)) state.setPanel("refine");
     else if (tool === "magic") state.setPanel("magic");
     else if (!["select", "pan", "move", "reshape"].includes(tool)) state.setPanel("author");
   };
@@ -133,6 +134,7 @@ function enterArea(world: World, state: EditorSessionState, id: string) {
   const area = session(world.id).snapshot.world.areas[id] ?? state.area,
     box = bounds(area.footprint);
   state.setAreaId(id);
+  state.setRegionId(null);
   state.setViewport(null);
   state.setSelected(null);
   state.setSelection(null);

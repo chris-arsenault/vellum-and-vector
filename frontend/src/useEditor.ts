@@ -10,6 +10,7 @@ import { useCartographicState } from "./useCartographicState";
 import { useMapActions } from "./useMapActions";
 import type { MapEngine } from "./mapEngine";
 import { defaultRasterPresentation, defaultFieldStyle } from "./rasterPresentation";
+import { useRegions, isRegionTool } from "./useRegions";
 
 function useEditorState(world: World) {
   const [selectedAreaId, setAreaId] = useState(
@@ -19,18 +20,14 @@ function useEditorState(world: World) {
   const areaId = area.id;
   const [tool, setTool] = useState<Tool>("select");
   const [selected, setSelected] = useState<AtlasFeature | null>(null);
+  const [selectedRegionId, setRegionId] = useState<string | null>(null);
   const [savedStyles, setStyles] = useState<LayerStyle[]>(() => defaultStyles(world));
   const [selection, setSelection] = useState<Geometry | null>(null);
   const [drawing, setDrawing] = useState<Geometry | null>(null);
   const [channel, setBrushChannel] = useState("elevation");
   const [rasterView, setRasterView] = useState(defaultRasterPresentation);
   const [mapEngine, setMapEngine] = useState<MapEngine | null>(null);
-  const extent = bounds(area.footprint);
-  const [brush, setBrush] = useState({
-    radius: (extent[2] - extent[0]) / 30,
-    delta: 10,
-    mode: "add" as "add" | "set" | "smooth",
-  });
+  const [brush, setBrush] = useState(() => initialBrush(area));
   const [panel, setPanel] = useState("generate");
   const [proposedFeatures, setProposedFeatures] = useState<AtlasFeature[]>([]);
   const [pendingEdits, setPendingEdits] = useState<{ areaId: string; feature: AtlasFeature }[]>([]);
@@ -44,6 +41,8 @@ function useEditorState(world: World) {
     tool,
     setTool,
     selected,
+    selectedRegionId,
+    setRegionId,
     setSelected,
     savedStyles,
     setStyles,
@@ -85,11 +84,21 @@ function useEditorState(world: World) {
     ...useCartographicState(),
   };
 }
+function initialBrush(area: Area) {
+  const extent = bounds(area.footprint);
+  return {
+    radius: (extent[2] - extent[0]) / 30,
+    delta: 10,
+    mode: "add" as "add" | "set" | "smooth",
+  };
+}
 export function useEditor(world: World) {
   const state = useEditorState(world);
   const { area, savedStyles, viewport, setViewport, setStyles, setChannel } = state;
   const editing = useEditing(world, state);
   const styles = useMemo(() => completeStyles(world, savedStyles), [world, savedStyles]);
+  const actions = useMapActions(world, state, editing);
+  const regions = useRegions({ ...state, world, commit: editing.commit });
   return {
     ...state,
     ...editing,
@@ -98,7 +107,17 @@ export function useEditor(world: World) {
     viewportExtent: viewport,
     ...useMapData(world, area.id, viewport),
     viewport: setViewport,
-    ...useMapActions(world, state, editing),
+    ...actions,
+    ...regions,
+    enter: (id: string) => {
+      regions.cancelRegion();
+      actions.enter(id);
+    },
+    draw: (geometry: Geometry) =>
+      isRegionTool(state.tool) ? regions.regionDraw(geometry) : actions.draw(geometry),
+    selectExtent: (geometry: Geometry) =>
+      state.tool === "regionEdit" ? regions.regionDraw(geometry) : actions.selectExtent(geometry),
+    cancel: () => (isRegionTool(state.tool) ? regions.cancelRegion() : actions.cancel()),
     preset: (name: string) => {
       setStyles(defaultStyles(world, name));
       setChannel(presetChannel(world, name));

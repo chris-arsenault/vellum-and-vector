@@ -345,6 +345,8 @@ export interface World {
     name: string;
     areaId: string;
     layers: LayerStyle[];
+    region?: { parentId: string | null; footprint: Geometry };
+    regionId?: string;
     raster?: RasterPresentation;
   }[];
   connections?: Record<string, Connection>;

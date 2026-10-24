@@ -7,6 +7,7 @@ import type { RasterPresentation } from "./types";
 import { installMapTools, type MapEvents } from "./mapInteractions";
 import { toolInstruction } from "./cartography";
 import { useGenerationPreview } from "./useAtlas";
+import { updateRegionMap, type RegionPresentation } from "./regionMap";
 import { canonicalPosition } from "@atlas/domain";
 interface Props {
   world: World;
@@ -17,7 +18,11 @@ interface Props {
   features: AtlasFeature[];
   tool: Tool;
   events: MapEvents;
-  selection: { feature: AtlasFeature | null; role: "primary" | "footprint" };
+  selection: {
+    feature: AtlasFeature | null;
+    role: "primary" | "footprint";
+    region?: RegionPresentation;
+  };
   proposal: AtlasFeature[];
   presentation: RasterPresentation;
   onEngine: (engine: MapEngine | null) => void;
@@ -37,6 +42,7 @@ export function MapCanvas({
   presentation,
   onEngine,
 }: Props) {
+  const region = selection.region;
   const target = useRef<HTMLDivElement>(null);
   const coordinates = useRef<HTMLOutputElement>(null);
   const [engine, setEngine] = useState<MapEngine | null>(null);
@@ -69,7 +75,11 @@ export function MapCanvas({
     baseRaster,
     presentation
   );
-  useAreaFit(engine, area, callbacks);
+  const subject = region ? { id: region.id ?? area.id, footprint: region.footprint } : area;
+  useAreaFit(engine, subject, callbacks);
+  useEffect(() => {
+    if (engine && region) updateRegionMap(engine, region);
+  }, [engine, region]);
   useFeatureTools(engine, tool, selection, callbacks, world.version);
   usePreview(engine, proposal);
   return (
@@ -82,7 +92,7 @@ export function MapCanvas({
         aria-busy="true"
         onPointerDown={(event) => event.currentTarget.focus()}
       />
-      <FitButton engine={engine} area={area} />
+      <FitButton engine={engine} area={subject} />
       <output className="coordinates" ref={coordinates}>
         World coordinates · metres
       </output>
@@ -106,12 +116,17 @@ function useFeatureTools(
       return installMapTools(engine, tool, feature?.id ?? null, () => callbacks.current, role);
   }, [engine, tool, feature?.id, role, version, callbacks]);
 }
-function useAreaFit(engine: MapEngine | null, area: Area, callbacks: { current: MapEvents }) {
+function useAreaFit(
+  engine: MapEngine | null,
+  area: Pick<Area, "id" | "footprint">,
+  callbacks: { current: MapEvents }
+) {
   const fittedArea = useRef("");
   useEffect(() => {
-    if (engine && fittedArea.current !== area.id) {
+    const signature = JSON.stringify([area.id, area.footprint]);
+    if (engine && fittedArea.current !== signature) {
       fitArea(engine, area);
-      fittedArea.current = area.id;
+      fittedArea.current = signature;
       reportViewport(engine, callbacks.current);
     }
   }, [engine, area, callbacks]);
@@ -176,7 +191,7 @@ function reportViewport(engine: MapEngine, events: MapEvents) {
 function showCoordinates(output: HTMLOutputElement | null, coordinate: number[]) {
   if (output) output.value = `${coordinate[0].toFixed(1)} E · ${coordinate[1].toFixed(1)} N · m`;
 }
-function FitButton({ engine, area }: { engine: MapEngine | null; area: Area }) {
+function FitButton({ engine, area }: { engine: MapEngine | null; area: Pick<Area, "footprint"> }) {
   return (
     <button
       className="fit-map"

@@ -128,24 +128,36 @@ function SessionViews({ world, editor }: { world: World; editor: EditorState }) 
             areaId: editor.area.id,
             layers: editor.styles,
             raster: editor.rasterView,
+            regionId: editor.region?.id,
           })
         }
       >
         Save map view
       </button>
-      {world.views.map((view) => (
-        <button
-          className="quiet"
-          key={view.id}
-          onClick={() => {
-            editor.enter(view.areaId);
-            editor.setStyles(view.layers);
-            editor.setRasterView(view.raster ?? defaultRasterPresentation());
-          }}
-        >
-          {view.name}
-        </button>
-      ))}
+      {world.views
+        .filter((view) => !view.region)
+        .map((view) => (
+          <div key={view.id}>
+            <button
+              className="quiet"
+              onClick={() => {
+                editor.enter(view.areaId);
+                if (view.regionId) editor.enterRegion(view.regionId);
+                editor.setStyles(view.layers);
+                editor.setRasterView(view.raster ?? defaultRasterPresentation());
+              }}
+            >
+              {view.name}
+            </button>
+            <button
+              className="quiet"
+              aria-label={`Remove ${view.name}`}
+              onClick={() => editor.execute("removeView", { id: view.id })}
+            >
+              ×
+            </button>
+          </div>
+        ))}
     </details>
   );
 }

@@ -6,11 +6,14 @@ import { MagicForm } from "./MagicForm";
 import { ReconcilePanel } from "./ReconcilePanel";
 import { RefinementPanel } from "./RefinementPanel";
 import { RegionalGeneration } from "./RegionalGeneration";
+import { RegionsPanel } from "./RegionsPanel";
 import type { EditorState } from "./useEditor";
 import type { World } from "./types";
 
 export function WorkflowPanel({ world, editor }: { world: World; editor: EditorState }) {
   switch (editor.panel) {
+    case "regions":
+      return <RegionsPanel editor={editor} />;
     case "configure-generation":
       return <RegionalGeneration world={world} editor={editor} />;
     case "reconcile":
@@ -26,6 +29,10 @@ export function WorkflowPanel({ world, editor }: { world: World; editor: EditorS
     case "magic":
       return <MagicForm editor={editor} />;
     default:
-      return <DevelopmentPanel key={editor.area.id} world={world} editor={editor} />;
+      return editor.region ? (
+        <RegionsPanel editor={editor} />
+      ) : (
+        <DevelopmentPanel key={editor.area.id} world={world} editor={editor} />
+      );
   }
 }

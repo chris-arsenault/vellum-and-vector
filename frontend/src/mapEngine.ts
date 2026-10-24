@@ -44,10 +44,11 @@ export function createMap(target: HTMLElement, reference: World["reference"]) {
       fill: new Fill({ color: "#f8d58933" }),
     }),
   });
+  const regions = new VectorLayer({ source: new VectorSource({ wrapX }) });
   const map = new OLMap({
     target,
     interactions: defaultInteractions({ dragPan: false, doubleClickZoom: false }),
-    layers: [image, overlay, vectors, areas, preview],
+    layers: [image, overlay, vectors, areas, regions, preview],
     view: new View({
       projection,
       multiWorld: wrapX,
@@ -72,6 +73,7 @@ export function createMap(target: HTMLElement, reference: World["reference"]) {
     featureLayers,
     areas,
     preview,
+    regions,
     sync: { applying: false },
   };
   map.on("moveend", () => syncSnapping(engine));
@@ -277,6 +279,6 @@ function updateAreas(engine: MapEngine, world: World, area: Area) {
     source.addFeature(ol);
   }
 }
-export function fitArea(engine: MapEngine, area: Area) {
+export function fitArea(engine: MapEngine, area: Pick<Area, "footprint">) {
   engine.map.getView().fit(bounds(area.footprint), { padding: [35, 35, 35, 35] });
 }

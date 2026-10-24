@@ -60,7 +60,7 @@ The requirements and invariants below supersede architectural suggestions from e
 ### 2.1 Primary goals — accepted
 
 - Create a world at coarse geographic scale, select areas, create more detailed geographic maps, place POIs, develop individual sites, and eventually create structures and interiors.
-- Use a **finite, genre-neutral set of creation levels**; levels are neither arbitrarily recursive nor an infinite zoom ladder. A user can skip intermediary creation levels.
+- Keep creation profiles distinct from geographic nesting. Geographic regions support arbitrary nesting down to a useful minimum size within the same map type; names do not prescribe ranks or generation behavior. A user can skip unused creation profiles.
 - Leave large parts of the world ungenerated or under-detailed indefinitely.
 - Support procedural generation at most levels and direct editing at all appropriate levels. The balance should shift toward manual creation at small scales.
 - Preserve Canonry's causal geography and the distinct Fire, Aurora and Pressure systems, including historical effects and system-specific creator controls.
@@ -87,7 +87,7 @@ The requirements and invariants below supersede architectural suggestions from e
 
 - Running an ongoing civilization simulation or continuously advancing in-world time after generation.
 - Editing historical epochs as a timeline editor, or providing a time slider through past map snapshots.
-- Generating every level everywhere or maintaining an infinitely deep map hierarchy.
+- Generating every level everywhere or generating new detail merely by zooming.
 - Enforcing realistic Earth physics on worlds with explicit supernatural exceptions.
 - Requiring 3D modeling or true spherical globe rendering for the initial editor.
 - Duplicating ArcGIS/QGIS's full analysis, survey, or enterprise administration product surface.
@@ -163,6 +163,39 @@ Blank/manual creation still inherits the boundary contract and geographic parent
 ### 4.4 Overlap and competing authority — design baseline
 
 Geographic **views** and thematic **features** may overlap freely. Two independently generated patches of the **same world layer at the same effective detail** must not silently own conflicting facts for the same location. A practical initial policy is to reject or explicitly reconcile overlapping materialized generation ownership, while allowing overlapping mapped views into shared spatial features. Later implementations may support compositing/merging refined patches, but must retain a single authoritative result per location and layer.
+
+### 4.5 Geographic region selection
+
+Regions subdivide an existing geographic map on demand. Their parent links support
+arbitrary nesting until the selected area is too small or narrow to be useful.
+Country, state and county are examples of names, with no required sequence or
+depth. Each region retains its source map's creation profile and existing detail.
+Selecting or entering it does not start generation, copy numerical fields or
+reveal latent rivers and settlements. Other map types, including city layouts,
+sites and interiors, are outside this regional selection and refinement flow.
+
+The Regions tool proposes outlines near the clicked location using existing
+geographic and social polygons, shorelines and river lines. Current zoom guides
+candidate size. Creators can draw a closed outline, or divide existing boundaries
+with polylines whose endpoints snap to nearby edges. Mixed boundaries form one
+polygonal footprint. Candidates remain previews until kept; the atlas does not
+precompute every region. Committed siblings form a partial subdivision with
+shared edges and no overlapping interiors.
+
+Creators can revisit children through the region list and ancestor breadcrumbs,
+rename regions, adjust outlines and remove unreferenced leaves. Outline changes
+keep existing children contained. Removing a region requires first removing its
+children and any saved map compositions that use it. These operations use the
+existing history and undo.
+
+Region views carry stable identity, source area, name, parent and world-coordinate
+footprint in `world.views`. Saved layer compositions can reference that identity
+as their subject. Selection frames the map and shows region outlines while reads
+continue to use the source map. Cartographic presentation consumes the selected
+identity, footprint and ancestor path; it owns illustration, clipping, typography
+and sheet layout. Explicit local Save map retains committed regions and view
+references, and GIS exports include region metadata. Regional terrain refinement
+and changes to map-editing authority remain separate work.
 
 ---
 

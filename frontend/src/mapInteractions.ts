@@ -20,6 +20,8 @@ export interface MapEvents {
   cancel: () => void;
   enter: (id: string) => void;
   viewport: (extent: number[]) => void;
+  pickRegion?: (position: Position) => void;
+  enterRegion?: (id: string) => void;
 }
 const format = new GeoJSON();
 export function installMapTools(
@@ -36,7 +38,7 @@ export function installMapTools(
   const navigation = { space: false };
   const editing = installCanonicalEditing(engine, tool);
   active.push(...featureTools(engine, tool, selected, events, geometryRole));
-  if (tool === "extentEdit") {
+  if (tool === "extentEdit" || tool === "regionEdit") {
     const modify = new Modify({
       source: engine.preview.getSource()!,
       wrapX: engine.reference.boundaryMode === "cylinder",
@@ -63,7 +65,8 @@ export function installMapTools(
     active.push(new Snap({ features: engine.snapFeatures, pixelTolerance: 8 }));
   const pan = new DragPan({
     condition: (event) =>
-      primaryAction(event) && (navigation.space || tool === "pan" || tool === "select"),
+      primaryAction(event) &&
+      (navigation.space || tool === "pan" || tool === "select" || tool === "regionPick"),
   });
   map.addInteraction(pan);
   for (const interaction of active) map.addInteraction(interaction);
@@ -77,7 +80,7 @@ export function installMapTools(
     }
   );
   map.getTargetElement()?.focus({ preventScroll: true });
-  const unlisten = installMapNavigation(engine, tool, events);
+  const unlisten = installMapNavigation(engine, tool, events, () => !navigation.space);
   return () => {
     editing();
     keyboard();
@@ -95,11 +98,15 @@ function canonicalEvents(engine: MapEngine, tool: Tool, original: MapEvents): Ma
     modify: (feature, shape, role) =>
       original.modify(feature, canonicalGeometry(reference, shape), role),
     stroke: (points) => original.stroke(points.map((p) => canonicalPosition(reference, p))),
+    pickRegion: (p) => original.pickRegion?.(canonicalPosition(reference, p)),
   };
 }
 /** Recenter by whole worlds before native vertex hit-testing; the rendered view stays identical. */
 function installCanonicalEditing(engine: MapEngine, tool: Tool) {
-  if (!["reshape", "extentEdit"].includes(tool) || engine.reference.boundaryMode !== "cylinder")
+  if (
+    !["reshape", "extentEdit", "regionEdit"].includes(tool) ||
+    engine.reference.boundaryMode !== "cylinder"
+  )
     return () => {};
   const map = engine.map;
   const recenter = ([x, y]: number[]) => {
@@ -132,8 +139,17 @@ function canonicalDrawing(engine: MapEngine, tool: Tool, shape: Geometry) {
   const center = canonicalPosition(engine.reference, { x, y: 0, z: 0 });
   return translateGeometry(shape, center.x - x);
 }
-function installMapNavigation(engine: MapEngine, tool: Tool, events: () => MapEvents) {
+function installMapNavigation(
+  engine: MapEngine,
+  tool: Tool,
+  events: () => MapEvents,
+  canPick: () => boolean
+) {
   const map = engine.map;
+  const pick = map.on("singleclick", (event) => {
+    if (tool === "regionPick" && canPick())
+      events().pickRegion?.({ x: event.coordinate[0], y: event.coordinate[1], z: 0 });
+  });
   const enter = map.on("dblclick", (event) => {
     if (tool !== "select") return;
     const p = canonicalPosition(engine.reference, {
@@ -142,6 +158,19 @@ function installMapNavigation(engine: MapEngine, tool: Tool, events: () => MapEv
         z: 0,
       }),
       coordinate = [p.x, p.y];
+    const region = engine.regions
+      .getSource()!
+      .getFeatures()
+      .find(
+        (f) =>
+          f.get("region").region.parentId === engine.regions.get("currentRegion") &&
+          f.getGeometry()!.intersectsCoordinate(coordinate)
+      );
+    if (region) {
+      event.preventDefault();
+      events().enterRegion?.(region.get("region").id);
+      return;
+    }
     const child = engine.areas
       .getSource()!
       .getFeatures()
@@ -157,6 +186,7 @@ function installMapNavigation(engine: MapEngine, tool: Tool, events: () => MapEv
   });
   return () => {
     map.un("dblclick", enter.listener);
+    map.un("singleclick", pick.listener);
   };
 }
 function featureTools(
@@ -216,9 +246,9 @@ function commitGeometry(feature: import("ol/Feature.js").default, events: () => 
 }
 function installDrawing(tool: Tool, events: () => MapEvents, panning: () => boolean) {
   const type =
-    tool === "refinePolygon"
+    tool === "refinePolygon" || tool === "regionOutline"
       ? "Polygon"
-      : tool === "sculpt"
+      : tool === "sculpt" || tool === "regionCut"
         ? "LineString"
         : drawingTools[tool]?.geometry;
   if (!type) return null;

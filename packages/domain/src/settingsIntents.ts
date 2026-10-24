@@ -9,6 +9,7 @@ import type { World } from "./model";
 import { registerMagicSystemIntents } from "./magicSystemIntents";
 import { rasterPresentationSchema, symbolStyleSchema } from "./viewSchemas";
 import { locatedMagicEffects } from "./magicEffects";
+import { regionViewSchema, validateRegionView } from "./regionViews";
 
 const magicSchema = z.object({
   systemId: z.string().min(1).optional(),
@@ -57,6 +58,8 @@ const viewSchema = z.object({
   areaId: uuid,
   layers: z.array(styleSchema),
   raster: rasterPresentationSchema.optional(),
+  region: regionViewSchema.optional(),
+  regionId: uuid.optional(),
 });
 
 function validateMagicGraph(values: World["magic"]) {
@@ -190,7 +193,7 @@ function registerViews(registry: IntentRegistry) {
         "View styles refer to registered layers."
       );
       const changes = intentChanges(context, snapshot);
-      changes.writes.push({ kind: "view", value: data });
+      changes.writes.push({ kind: "view", value: validateRegionView(snapshot.world, data) });
       return changes;
     },
   });
@@ -206,6 +209,11 @@ function registerViews(registry: IntentRegistry) {
         snapshot.world.views.some((v) => v.id === data.id),
         "missing_view",
         "Choose a saved view."
+      );
+      requireThat(
+        !snapshot.world.views.some((v) => v.region?.parentId === data.id || v.regionId === data.id),
+        "region_children",
+        "Remove this region's children and saved map views before removing the region."
       );
       const changes = intentChanges(context, snapshot);
       changes.removes.push({ kind: "view", id: data.id });

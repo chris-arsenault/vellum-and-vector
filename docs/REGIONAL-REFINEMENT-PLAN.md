@@ -1,13 +1,13 @@
 # Regional refinement and direct map authoring
 
-Status: working design, updated 2026-10-24. Planning only; no implementation authorized
-by the request that created this document. All milestones remain pending.
+Status: updated 2026-10-24. Independent regional selection and hierarchy are
+implemented. The user has authorized committing and pushing this delivery;
+B–E remain planning-only.
 
 Sulion root: `6bda9dba-ba6b-468a-a463-4dea05f96155`.
 
-Delivery is organized into five sibling Sulion subplans below. This document
-retains their shared design and boundaries; each subplan has its own outcome,
-dependencies and pending delivery phases. The original parent milestones remain
+The four remaining sibling Sulion subplans below retain their shared design and
+boundaries, outcomes, dependencies and pending delivery phases. The original parent milestones remain
 acceptance coverage, not a second implementation queue.
 
 ## Outcome and authority
@@ -39,11 +39,16 @@ on the geographic map remains in scope; generating its internal map does not.
   linkage and translation without requiring the edited world to remain suitable
   for continued simulation. Locking an edited region was raised as a possibility,
   not a settled requirement.
-- **Current authorization:** create and track the design durably; do not execute
-  the plan. Creating this record does not authorize code changes or publication.
+- **Current authorization:** implement independent selection/navigation subplan A
+  on existing geography, then commit and push that delivery. B–E remain
+  planning-only.
 - **Delivery organization:** split the work into focused subplans so a few can
   progress at a time, each delivering a high-quality creator experience. This
   reorganizes planning; it does not authorize implementation or agent delegation.
+- **Independent first delivery:** regional selection and a rough recursive
+  hierarchy must be useful on the existing map before the rest of refinement is
+  delivered. The current Cartographic map mode plan is an immediate consumer;
+  neither selection nor that presentation needs new terrain generation.
 - **2026-10-24 correction:** hierarchical subdivision comes first. Regions follow
   geography or social constructs and may combine rivers, shorelines,
   coordinate-aligned segments and user-defined polylines. Rectangular selection
@@ -62,9 +67,11 @@ on the geographic map remains in scope; generating its internal map does not.
   World map must not disclose regional features. Source: user turn
   `01a1624c-599c-7bf1-9637-19d90755e636 / 18661021`, available through
   `sulion-retrieve turn`.
-- **Project boundary:** browser memory, TypeScript, React/OpenLayers and worker
-  generation remain the active architecture. No backend, persistence, MCP,
-  recovery or restart mechanisms; see [ADR 0003](adr/0003-frontend-session.md).
+- **Project boundary:** TypeScript, React/OpenLayers, browser sessions and worker
+  generation remain the active architecture. Preserve the existing explicit local
+  map saves in IndexedDB adopted on 2026-10-24; this plan adds no separate storage
+  path, backend, MCP, generation recovery or restart mechanism. See
+  [ADR 0003](adr/0003-frontend-session.md).
 - Preserve geographic location, stable identities, authored work and coherent
   connections. Keep hierarchy depth, semantic region kind, creation profile,
   geographic extent, numerical detail and display zoom separate. Recursion must
@@ -138,10 +145,9 @@ geographic scale and available detail, not a label or numeric nesting depth.
 Entering or selecting a child does not itself regenerate its interior.
 
 Recursion stops at a useful minimum geographic size for this map type, not after
-a fixed number of ancestors. Define that minimum from the meaningful geographic
-detail the type supports, including narrow or irregular footprints, in H0. The
-exact threshold remains open. At that point the creator stays on the geographic
-map; this plan neither offers nor generates a different map type.
+a fixed number of ancestors. The implemented selection contract is recorded in
+[product specification 4.5](product-spec.md#45-geographic-region-selection).
+The creator stays on the geographic map at that minimum.
 
 Build a selected outline from a mixture of boundary segments:
 
@@ -285,25 +291,32 @@ or continuous-field rewrites, backend plans or abandoned numerical targets.
 
 ## Delivery subplans
 
-All five inherit the root requirements, user corrections and same-map-type scope.
-No phase is started. These are delivery milestones, not speculative file-by-file
-execution expansions; expand the selected phase when execution is authorized.
+All remaining subplans inherit the root requirements, user corrections and
+same-map-type scope. B–E remain pending. Expand each imminent delivery phase before
+implementation. Selection and hierarchy are delivered; their contract lives in
+[product specification 4.5](product-spec.md#45-geographic-region-selection).
 
-| Subplan                             | Creator outcome                                                                                       | Parent coverage               | Dependency needed for integration                                                                         |
-| ----------------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------- |
-| A — Region selection and navigation | Choose, compose and navigate meaningful nested regions.                                               | H0                            | Existing geographic map; no refinement prerequisite.                                                      |
-| B — Terrain and rivers              | Generate recognizable finer relief and connected water.                                               | M0/M1 generation contract; M2 | A1 region identity and footprint contract; actual selected-area flow from A for delivery.                 |
-| C — Living landscapes               | See climate, habitat and distinct magic respond to regional geography.                                | M3                            | B1 output contract for design; actual refined relief and water for delivery.                              |
-| D — Settlements and routes          | Discover smaller mapped places connected to the living landscape.                                     | M4                            | B/C input contracts for design; actual refined geography and environment for delivery.                    |
-| E — Direct map authoring            | Edit geographic features and surfaces directly, with understandable refinement consequences and undo. | M0/M1 map authority; M5       | A1 identity and B1 input/output agreement; existing generated geography can support initial editing work. |
+| Subplan                    | Creator outcome                                                                                       | Parent coverage               | Dependency needed for integration                                                                                    |
+| -------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| B — Terrain and rivers     | Generate recognizable finer relief and connected water.                                               | M0/M1 generation contract; M2 | Delivered region identity, footprint and selection flow; agree its connection to refinement.                         |
+| C — Living landscapes      | See climate, habitat and distinct magic respond to regional geography.                                | M3                            | B1 output contract for design; actual refined relief and water for delivery.                                         |
+| D — Settlements and routes | Discover smaller mapped places connected to the living landscape.                                     | M4                            | B/C input contracts for design; actual refined geography and environment for delivery.                               |
+| E — Direct map authoring   | Edit geographic features and surfaces directly, with understandable refinement consequences and undo. | M0/M1 map authority; M5       | Delivered region identity and B1 input/output agreement; existing generated geography supports initial editing work. |
 
 ### Sequencing and shared ownership
 
-Start A first, as requested. Once its region identity and selection behavior are
-settled, B can develop the physical refinement experience while E develops the
-direct-editing experience. E's user-owned decision about structural-edit locks
-does not block refinement of untouched regions. E's initial design discussion
-can run alongside A; it must not invent a competing hierarchy or map model.
+Selection and hierarchy are available independently. B can develop the physical
+refinement experience while E develops direct editing. E's user-owned decision
+about structural-edit locks does not block refinement of untouched regions.
+Both consume the existing region identities and source map rather than inventing
+a competing hierarchy or map model.
+
+The first consumer is the separately tracked **Cartographic map mode**
+plan, `51af6b95-6ff3-4e1e-9203-c4990e6c912e`, reviewed on 2026-10-24. That plan's
+drawn-map presentation, coloured political-atlas experiment and later compositions
+use existing atlas geography. Region selection supplies its geographic subject,
+footprint and hierarchy. Saved layer compositions retain their selected region;
+the cartographic renderer can consume that subject without waiting for refinement.
 
 After B's geography inputs and outputs are settled, C and D can develop their
 respective designs together. D's placement behavior can use existing inherited
@@ -312,9 +325,8 @@ checked against C's real regional landscape. This permits useful overlap without
 claiming fixtures or agreement on types prove an integrated product.
 
 M0/M1 are shared acceptance coverage rather than a separate architecture project.
-A owns region identity, footprint composition and navigation. B owns refinement
-inputs and generated geographic output. E owns map-edit authority, undo and
-generation eligibility after edits. They agree the small interfaces they consume;
+B owns refinement inputs and generated geographic output. E owns map-edit
+authority, undo and generation eligibility after edits. They agree the small interfaces they consume;
 each writes its implementation once. C and D consume those boundaries and request
 concrete additions when needed. Keep shared-file changes coordinated during any
 future concurrent work; creating subplans does not assign editing ownership.
@@ -327,32 +339,6 @@ entirely to parent M6. M6 checks the combined experience after those deliveries.
 No deployment, separate verification report, extra backend or new map type is
 introduced by the split.
 
-### A: Region selection and navigation
-
-Sulion: `b48001aa-d179-4e14-ba26-57253b1172c8`.
-
-Outcome: creators choose a meaningful irregular area, adjust its outline and
-navigate recursively within the same geographic map type. The interaction works
-before new terrain generation exists. It does not predetermine all siblings.
-
-1. **A1 — Agree region and selection behavior.** Establish the shared region
-   identity/footprint contract, candidate size and source choice, minimum-size
-   behavior and boundary-sharing semantics. Names are optional metadata, with no
-   required ranks or depth cap. Use concrete broad-view and close-view scenarios.
-2. **A2 — Select and compose meaningful regions.** Deliver candidate previews,
-   geographic/social boundary reuse and authored-polyline composition into valid
-   selected polygons. Selecting a region does not generate finer geography.
-3. **A3 — Navigate nested regions and finish the experience.** Deliver ancestor
-   navigation, arbitrary same-type nesting, outline adjustment and appropriate
-   minimum-size feedback. Review mixed-boundary and neighboring regions in the
-   actual UI, including stable identities and shared edges as zoom changes.
-
-Done means a creator can select and revisit useful regions without tracing every
-existing boundary or navigating a fixed profile ladder. Check valid containment,
-mixed line-to-polygon composition, partial subdivision and World-view separation.
-Do not wait for B–E to finish this experience. A does not own structural-edit
-locks or physical generation algorithms.
-
 ### B: Terrain and rivers
 
 Sulion: `cea5e9bb-a7c7-483f-91c4-3b6d8e50ae41`.
@@ -360,7 +346,7 @@ Sulion: `cea5e9bb-a7c7-483f-91c4-3b6d8e50ae41`.
 Outcome: an actual selected region gains coherent smaller landforms, valleys and
 tributaries while remaining recognizable within its parent geography.
 
-1. **B1 — Agree the regional geography inputs and output.** Consume A1's region
+1. **B1 — Agree the regional geography inputs and output.** Consume the delivered region
    identity; inventory current fields, drainage and the scale contract. Specify
    inherited constraints, unresolved detail and the minimum publishable output.
    Agree with E how mapped overrides remain distinct from procedural inputs;
@@ -369,7 +355,7 @@ tributaries while remaining recognizable within its parent geography.
    drainage together on irregular footprints, including externally supplied
    river flow, receiving waters, new tributaries and river-aligned borders. Do
    not replay completed geological history or add unrelated major features.
-3. **B3 — Finish the geographic refinement experience.** Connect A's selection to
+3. **B3 — Finish the geographic refinement experience.** Connect region selection to
    useful refinement choices, progress, cancellation and publication. Inspect a
    river/relief region, its neighbor and a smaller recursive refinement, with
    focused connectivity, determinism and outside-scope preservation checks.
@@ -436,7 +422,7 @@ Outcome: creators reshape rivers, move mapped settlements and paint surfaces
 directly, with consistent selection and undo and understandable consequences for
 later refinement. This work can begin on existing generated geographic maps.
 
-1. **E1 — Settle map authority and post-edit refinement behavior.** Use A1/B1
+1. **E1 — Settle map authority and post-edit refinement behavior.** Use the delivered region contract and B1
    contracts to resolve structural versus presentation edits, generation eligibility,
    existing descendants and shared crossings. The structural-edit lock remains
    a user-owned design decision; it becomes blocking only before encoding that
@@ -457,8 +443,8 @@ is not promised unless the settled E1 design explicitly supports it.
 
 ## Parent acceptance coverage
 
-All parent milestones are pending. Their bodies retain the required outcome and
-evidence from the original plan; execute work through the five subplans above,
+H0 is delivered; M0–M6 remain pending. Their bodies retain the required outcome and
+evidence from the original plan; execute work through the remaining subplans above,
 not through duplicate parent expansions. The subplan dependencies supersede the
 old wholly serial ordering: shared M0/M1 contracts are settled where consumed,
 and authoring policy does not block unedited generation. Implementation-specific
@@ -466,32 +452,12 @@ checks can change when a simpler mechanism satisfies the same user outcome.
 
 ### H0 — Hierarchical subdivision and region selection
 
-Scope: first establish recursive same-map-type region identity and mixed-source boundary
-composition, then candidate preview, selection and ancestor/child navigation on
-existing geography. Reuse polygonal footprints and GIS operations; decouple
-containment depth from profile order before physical refinement work. Selecting
-a child must work without generating its finer geography. Define the relevant
-hierarchy contract before changing its implementation under later authorization.
+Delivered independently. The region view, selection, navigation and cartographic
+subject contract is in [product specification 4.5](product-spec.md#45-geographic-region-selection).
+Later generation consumes those identities and outlines without changing the
+source-preserving selection behavior or imposing a named profile ladder.
 
-Acceptance: a creator can build and navigate arbitrarily named or unnamed nested
-regions until the minimum useful geographic size, with no fixed rank sequence or
-depth limit. The earlier World → continent → country → state → county chain is
-one illustration, never a required taxonomy. All children retain the existing
-geographic map type. Candidates
-follow geographic or social constructs at useful sizes for the current zoom;
-user polylines can complete or divide mixed river/coast/straight-line borders.
-Existing chosen regions remain stable as the viewport changes. Unselected
-siblings and deeper levels need not exist, and zoom alone creates no fine detail.
-Committed subdivisions retain containing parents and consistent shared borders.
-
-Evidence: review and later exercise a geographic outline, a social territory, a
-mixed-boundary region and several arbitrarily named or unnamed descendants.
-Check depth beyond the illustrative chain, minimum-size behavior, same-type nesting,
-polyline-to-polygon composition, partial subdivision and shared-edge agreement;
-inspect selection at broad and close zoom without regional content leaking into
-the World map. No complete global subdivision is an acceptance prerequisite.
-
-### M0 — Settle refinement and authoring contract [covered by A1, B1 and E1]
+### M0 — Settle refinement and authoring contract [remaining work in B1 and E1]
 
 Scope: resolve inherited facts versus estimates, map/procedural authority,
 structural-edit classification, lock extent, descendants and shared edges.
@@ -618,23 +584,15 @@ this working plan file and references, following repository documentation rules.
 | Precise synthesis algorithms                            | Conditioned multiscale terrain and constrained drainage are starting proposals. Choose algorithms through representative geography rather than numerical parity.                                                  | Implementation design in M2, within the agreed product contract.                   |
 | Four-pillar evolution                                   | Its design may change the world context consumed here. Consume the agreed implemented mechanisms; do not make this plan wait on every speculative addition or implement that workshop implicitly.                 | Reassess at M3 against its current authority and source bodies.                    |
 
-Subdivision-specific design work belongs to H0: how to rank candidate size and
-boundary sources, how to suggest a useful outline where neither natural nor
-social boundaries form a closed area, and how to retain shared boundaries when
-an adjoining region is selected later. The requirements for mixed boundaries,
-recursive nesting and on-demand selection are settled by the 2026-10-24 request;
-only their mechanisms remain proposals. Choosing a subdivision scheme does not
-require a universal tree covering all possible overlapping social/geographic views.
-H0 also determines the useful minimum geographic size for this map type. Arbitrary
-depth and arbitrary labels are requirements; the stopping size and its behavior
-for narrow footprints need design evidence. No maximum level count, required
-terminology or automatic transition to another map type is proposed.
+The existing selection implementation resolves candidates from available source
+boundaries and authored cuts, keeps sibling borders and stops at useful geographic
+size. B must connect refinement to these selected views; it must not treat them
+as already generated areas or infer new detail from their nesting depth.
 
 ## Sulion mapping and current state
 
 | Subplan | Plan ID                                | Pending phase IDs, in order                                                                                                     |
 | ------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| A       | `b48001aa-d179-4e14-ba26-57253b1172c8` | A1 `544632dd-8942-41f0-bb66-9ec52ce36b45`; A2 `9916dd45-9173-400d-9635-3b74d1684da8`; A3 `3ac698e8-910c-414a-aea9-e941910928d3` |
 | B       | `cea5e9bb-a7c7-483f-91c4-3b6d8e50ae41` | B1 `70b28aa8-acf6-4e7a-b8be-7d8cfce26b25`; B2 `bd48069c-1dc4-46c1-974c-8a02cde8349f`; B3 `762bf875-6425-41b4-b93e-96d99dbe6ec3` |
 | C       | `28cabe93-883c-427c-beed-7a35ca92c585` | C1 `94249354-cd4f-4910-a64b-a2fc664827b6`; C2 `22863598-50c8-43a5-9538-a0ff72757b7b`; C3 `6f07843c-83fc-4d2a-8212-901046f2dfec` |
 | D       | `0316fae6-8ad0-4ea5-87cb-a314ffb2cf92` | D1 `17e2b5fd-c65e-4ac1-bb96-9c91d905eba9`; D2 `54fda285-e864-4459-8e68-bf08d063e363`; D3 `0fb760b2-2ba5-42b5-bf88-4daa8978bab7` |
@@ -643,26 +601,23 @@ terminology or automatic transition to another map type is proposed.
 The root retains these acceptance milestones; child plans anchor to their listed
 coverage. M6 stays on the root for the combined creator flow and final cleanup.
 
-| Milestone | Phase ID                               | State   |
-| --------- | -------------------------------------- | ------- |
-| H0        | `dff66e05-b874-4d74-8434-77e1d64bee9d` | pending |
-| M0        | `53b147e7-4e2b-4f51-820e-16ad21f68462` | pending |
-| M1        | `ba53eff6-343e-4b80-adc6-f9e51e257042` | pending |
-| M2        | `0cb6eac5-7ac9-42a4-92e3-d739f5e3e5d0` | pending |
-| M3        | `2fe47b1a-579b-4cda-9750-16d85d53fbdd` | pending |
-| M4        | `e5f1bc2e-e758-416f-9983-8638e4d3bfc4` | pending |
-| M5        | `cda68b41-8ec6-4873-828e-9fa9403257bb` | pending |
-| M6        | `2361d66b-2daf-463a-b36c-f1205f7833d6` | pending |
+| Milestone | Phase ID                               | State     |
+| --------- | -------------------------------------- | --------- |
+| H0        | `dff66e05-b874-4d74-8434-77e1d64bee9d` | completed |
+| M0        | `53b147e7-4e2b-4f51-820e-16ad21f68462` | pending   |
+| M1        | `ba53eff6-343e-4b80-adc6-f9e51e257042` | pending   |
+| M2        | `0cb6eac5-7ac9-42a4-92e3-d739f5e3e5d0` | pending   |
+| M3        | `2fe47b1a-579b-4cda-9750-16d85d53fbdd` | pending   |
+| M4        | `e5f1bc2e-e758-416f-9983-8638e4d3bfc4` | pending   |
+| M5        | `cda68b41-8ec6-4873-828e-9fa9403257bb` | pending   |
+| M6        | `2361d66b-2daf-463a-b36c-f1205f7833d6` | pending   |
 
-The initial read-only source review, shared design and five delivery subplans are
-recorded. All 15 child phases and all parent milestones are pending. No runtime
-implementation or file-level execution expansion has started. The root remains
-attached to this terminal; the sibling subplans remain open for focused work.
+Selection and hierarchy are implemented independently. The remaining 12 child
+phases and M0–M6 remain pending. The root and B–E remain open for focused work.
 Existing unrelated plans and working-tree changes retain their ownership.
 
-Next action when requested: attach A and begin its region/selection design; E1's
-authoring-policy discussion can progress alongside it using the same hierarchy.
-After A1, B and E can develop their focused experiences on agreed contracts.
+Next action when requested: B1 can establish refinement inputs and output, while
+E1 settles authoring policy using the delivered region contract.
 Read `sulion plan current`, the shared requirements, the selected subplan body and
 affected source bodies before any later expansion or execution. A planning-only
 request still does not authorize starting those phases.

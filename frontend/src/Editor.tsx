@@ -18,6 +18,7 @@ import { UndoButton } from "./UndoButton";
 import { paletteTools, toolLabel, workspaces, type Workspace } from "./cartography";
 import { AtlasPanel } from "./AtlasPanel";
 import { MapStorage } from "./MapStorage";
+import { RegionList } from "./RegionsPanel";
 
 interface Props {
   world: World;
@@ -72,7 +73,13 @@ export function Editor({ world, worlds, changeWorld, newWorld, openLore, openSav
           {tab === "atlas" ? (
             <AtlasPanel
               editor={editor}
-              maps={<AtlasTree world={world} current={editor.area.id} enter={editor.enter} />}
+              maps={
+                <>
+                  <AtlasTree world={world} current={editor.area.id} enter={editor.enter} />
+                  <button onClick={editor.openRegions}>Choose a region</button>
+                  <RegionList editor={editor} />
+                </>
+              }
             />
           ) : (
             <LayerPanel world={world} editor={editor} />
@@ -126,28 +133,9 @@ function EditorHeader({ world, worlds, changeWorld, newWorld, openLore, openSave
   );
 }
 function MapWorkspace({ world, editor }: { world: World; editor: EditorState }) {
-  const proposal = editor.magicDraft
-    ? [
-        {
-          id: "magic-reach",
-          geometry: spatial.buffer(point(editor.magicDraft.source), editor.magicDraft.radius),
-        } as import("./types").AtlasFeature,
-      ]
-    : editor.drawing
-      ? [{ id: "drawing", geometry: editor.drawing } as import("./types").AtlasFeature]
-      : editor.selection
-        ? [{ id: "region-selection", geometry: editor.selection } as import("./types").AtlasFeature]
-        : editor.proposedFeatures;
   return (
     <main className="map-workspace">
-      <nav className="breadcrumbs" aria-label="Geographic lineage">
-        {lineage(world, editor.area.id).map((area) => (
-          <button key={area.id} onClick={() => editor.enter(area.id)}>
-            {area.name}
-            <small>{area.profile}</small>
-          </button>
-        ))}
-      </nav>
+      <MapBreadcrumbs world={world} editor={editor} />
       <div className="map-toolbar">
         <ToolButtons
           current={editor.tool}
@@ -155,6 +143,9 @@ function MapWorkspace({ world, editor }: { world: World; editor: EditorState }) 
           palette={paletteTools(editor.workspace, world.layers[editor.customLayer])}
         />
         <UndoButton world={world} />
+        <button onClick={editor.openRegions} aria-pressed={editor.panel === "regions"}>
+          Regions
+        </button>
         <label>
           Work on
           <select
@@ -170,31 +161,87 @@ function MapWorkspace({ world, editor }: { world: World; editor: EditorState }) 
           </select>
         </label>
       </div>
-      <MapCanvas
-        world={world}
-        area={editor.area}
-        styles={editor.styles}
-        raster={editor.raster.data}
-        baseRaster={editor.baseRaster.data}
-        presentation={editor.rasterView}
-        onEngine={editor.setMapEngine}
-        tool={editor.tool}
-        selection={{ feature: editor.selected, role: editor.geometryRole }}
-        events={{
-          select: editor.select,
-          draw: editor.draw,
-          extent: editor.selectExtent,
-          modify: editor.modify,
-          stroke: editor.stroke,
-          cancel: editor.cancel,
-          enter: editor.enter,
-          viewport: editor.viewport,
-        }}
-        proposal={proposal}
-        features={editor.scene.data ?? []}
-      />
+      <SubjectCanvas world={world} editor={editor} />
       <MapStatus world={world} editor={editor} />
     </main>
+  );
+}
+function MapBreadcrumbs({ world, editor }: { world: World; editor: EditorState }) {
+  return (
+    <nav className="breadcrumbs" aria-label="Geographic lineage">
+      {lineage(world, editor.area.id).map((area) => (
+        <button key={area.id} onClick={() => editor.enter(area.id)}>
+          {area.name}
+          <small>{area.profile}</small>
+        </button>
+      ))}
+      {editor.regionTrail.map((region) => (
+        <button
+          key={region.id}
+          onClick={() => editor.enterRegion(region.id)}
+          aria-current={editor.region?.id === region.id ? "location" : undefined}
+        >
+          {region.name}
+        </button>
+      ))}
+    </nav>
+  );
+}
+function SubjectCanvas({ world, editor }: { world: World; editor: EditorState }) {
+  const proposal = editor.regionDraft
+    ? [
+        {
+          id: "region-draft",
+          geometry: editor.regionDraft.footprint,
+        } as import("./types").AtlasFeature,
+      ]
+    : editor.magicDraft
+      ? [
+          {
+            id: "magic-reach",
+            geometry: spatial.buffer(point(editor.magicDraft.source), editor.magicDraft.radius),
+          } as import("./types").AtlasFeature,
+        ]
+      : editor.drawing
+        ? [{ id: "drawing", geometry: editor.drawing } as import("./types").AtlasFeature]
+        : editor.selection
+          ? [
+              {
+                id: "region-selection",
+                geometry: editor.selection,
+              } as import("./types").AtlasFeature,
+            ]
+          : editor.proposedFeatures;
+  return (
+    <MapCanvas
+      world={world}
+      area={editor.area}
+      styles={editor.styles}
+      raster={editor.raster.data}
+      baseRaster={editor.baseRaster.data}
+      presentation={editor.rasterView}
+      onEngine={editor.setMapEngine}
+      tool={editor.tool}
+      selection={{
+        feature: editor.selected,
+        role: editor.geometryRole,
+        region: editor.regionPresentation,
+      }}
+      events={{
+        select: editor.select,
+        draw: editor.draw,
+        extent: editor.selectExtent,
+        modify: editor.modify,
+        stroke: editor.stroke,
+        cancel: editor.cancel,
+        enter: editor.enter,
+        viewport: editor.viewport,
+        pickRegion: editor.regionPick,
+        enterRegion: editor.enterRegion,
+      }}
+      proposal={proposal}
+      features={editor.scene.data ?? []}
+    />
   );
 }
 function MapStatus({ world, editor }: { world: World; editor: EditorState }) {

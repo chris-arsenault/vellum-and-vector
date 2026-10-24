@@ -98,6 +98,14 @@ export function exportWorld(id: string) {
     worldReference: world.reference,
     name: world.name,
     version: world.version,
+    regions: world.views
+      .filter((view) => view.region)
+      .map((view) => ({
+        id: view.id,
+        name: view.name,
+        areaId: view.areaId,
+        ...view.region,
+      })),
     areas: Object.values(world.areas).map(({ id, parentId, profile, footprint, frame }) => ({
       id,
       parentId,

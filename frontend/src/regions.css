@@ -1,0 +1,38 @@
+.region-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.region-actions button[aria-pressed="true"] {
+  border-color: var(--accent, #d7b77a);
+  background: #ffffff15;
+}
+.region-draft {
+  border: 1px solid #bfa87566;
+  padding: 0.8rem;
+  border-radius: 0.4rem;
+  margin-block: 0.8rem;
+}
+.region-list {
+  display: grid;
+  gap: 0.35rem;
+  margin-block: 0.8rem;
+}
+.region-list button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  gap: 0.5rem;
+}
+.region-list small {
+  opacity: 0.65;
+  font-size: 0.7rem;
+}
+.breadcrumbs {
+  overflow-x: auto;
+  flex-wrap: nowrap;
+}
+.breadcrumbs button {
+  flex-shrink: 0;
+}
