@@ -1,9 +1,10 @@
 # World Atlas Creator
 
-**Current implementation scope — 2026-10-18:** The user has deferred the backend,
-all persistence and MCP until the frontend product functions. The browser owns
-session memory and runs generation in a worker; closing or reloading the tab
-discards state and stops generation. [ADR 0003](adr/0003-frontend-session.md)
+**Current implementation scope — updated 2026-10-24:** The user has deferred the
+backend and MCP until the frontend product functions. The browser owns session
+memory and runs generation in a worker. Explicit local map saves in IndexedDB
+allow reopening geography without regeneration; unsaved changes disappear on
+reload, and generation stops when the tab closes. [ADR 0003](adr/0003-frontend-session.md)
 supersedes this document's backend, durable-job, recovery and service requirements
 for current work. Geographic authoring behavior remains the product direction.
 

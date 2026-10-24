@@ -9,6 +9,7 @@ import { useWorld, useWorlds } from "./useAtlas";
 import { Editor } from "./Editor";
 import { TemplateStudio } from "./TemplateStudio";
 import { LoreEncyclopedia } from "./LoreEncyclopedia";
+import { MapStorage } from "./MapStorage";
 
 export function App() {
   return <Atlas />;
@@ -20,18 +21,17 @@ function Atlas() {
   const [creating, setCreating] = useState(false);
   const [library, setLibrary] = useState(false);
   const [lore, setLore] = useState(false);
+  const [opened, setOpened] = useState(0);
+  const openSaved = (id: string) => {
+    setSelected(id);
+    setCreating(false);
+    setOpened((value) => value + 1);
+  };
   const selectedId = selected || firstWorld(worlds.data);
   const world = useWorld(selectedId);
   if (lore) return <LoreEncyclopedia onClose={() => setLore(false)} />;
   if (loadingAtlas(worlds.isPending, world.isPending, selectedId, creating))
-    return (
-      <main className="welcome">
-        <div className="welcome-card">
-          <Brand />
-          <p>Loading atlas…</p>
-        </div>
-      </main>
-    );
+    return <LoadingAtlas />;
   if (library)
     return (
       <main className="welcome">
@@ -47,12 +47,13 @@ function Atlas() {
   if (world.data && !creating)
     return (
       <Editor
-        key={world.data.id}
+        key={`${world.data.id}:${opened}`}
         world={world.data}
         worlds={worlds.data ?? []}
         changeWorld={setSelected}
         newWorld={() => setCreating(true)}
         openLore={() => setLore(true)}
+        openSaved={openSaved}
       />
     );
   return (
@@ -63,8 +64,10 @@ function Atlas() {
           <h1>New world</h1>
         </div>
         <p className="hint">
-          This session lives in this tab. Reloading or closing it discards your worlds.
+          Save maps in this browser to reopen them after reloading. Unsaved changes stay in this
+          tab.
         </p>
+        <MapStorage onOpen={openSaved} />
         <button className="secondary" onClick={() => setLibrary(true)}>
           Independent template library
         </button>
@@ -80,6 +83,17 @@ function Atlas() {
         }}
       />
       <ErrorMessage error={worlds.error ?? world.error} />
+    </main>
+  );
+}
+
+function LoadingAtlas() {
+  return (
+    <main className="welcome">
+      <div className="welcome-card">
+        <Brand />
+        <p>Loading atlas…</p>
+      </div>
     </main>
   );
 }

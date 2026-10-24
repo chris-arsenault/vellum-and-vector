@@ -17,6 +17,7 @@ import { useJobs } from "./useAtlas";
 import { UndoButton } from "./UndoButton";
 import { paletteTools, toolLabel, workspaces, type Workspace } from "./cartography";
 import { AtlasPanel } from "./AtlasPanel";
+import { MapStorage } from "./MapStorage";
 
 interface Props {
   world: World;
@@ -24,8 +25,9 @@ interface Props {
   changeWorld: (id: string) => void;
   newWorld: () => void;
   openLore: () => void;
+  openSaved: (id: string) => void;
 }
-export function Editor({ world, worlds, changeWorld, newWorld, openLore }: Props) {
+export function Editor({ world, worlds, changeWorld, newWorld, openLore, openSaved }: Props) {
   const editor = useEditor(world);
   const [tab, setTab] = useState<string | null>(null);
   const toggle = (next: string) => setTab(tab === next ? null : next);
@@ -37,6 +39,7 @@ export function Editor({ world, worlds, changeWorld, newWorld, openLore }: Props
         changeWorld={changeWorld}
         newWorld={newWorld}
         openLore={openLore}
+        openSaved={openSaved}
       />
       <nav className="map-navigation" aria-label="Workspace panels">
         <button
@@ -86,7 +89,7 @@ export function Editor({ world, worlds, changeWorld, newWorld, openLore }: Props
     </div>
   );
 }
-function EditorHeader({ world, worlds, changeWorld, newWorld, openLore }: Props) {
+function EditorHeader({ world, worlds, changeWorld, newWorld, openLore, openSaved }: Props) {
   return (
     <header className="app-header">
       <Brand />
@@ -109,9 +112,7 @@ function EditorHeader({ world, worlds, changeWorld, newWorld, openLore }: Props)
           + New world
         </button>
       </div>
-      <span className="header-meta" title="Reloading or closing this tab discards the session">
-        Session only · not saved
-      </span>
+      <MapStorage world={world} onOpen={openSaved} />
       <button className="quiet" onClick={openLore}>
         Lore
       </button>

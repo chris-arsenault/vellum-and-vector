@@ -1,4 +1,5 @@
 @import url("./workspace.css");
+@import url("./savedMaps.css");
 :root {
   font-family: Inter, "Segoe UI", system-ui, sans-serif;
   color: #dfdfd4;

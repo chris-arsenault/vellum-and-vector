@@ -109,6 +109,10 @@ export function registerWorldSnapshot(snapshot: DomainSnapshot) {
   changed();
   return world;
 }
+export function restoreSessionWorld(saved: SessionWorld) {
+  worlds.set(saved.snapshot.world.id, saved);
+  changed();
+}
 export function createWorldSnapshot(input: WorldCreationInput, id: string = crypto.randomUUID()) {
   requireThat(
     Number.isFinite(input.width) &&

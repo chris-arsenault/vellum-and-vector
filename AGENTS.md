@@ -14,11 +14,13 @@ revise the latter when a simpler implementation meets the same requirements.
 Read the relevant bodies and record consequential changes and their reasons.
 
 **Current scope:** Build a functioning frontend first. Per the user's 2026-10-18
-direction and [ADR 0003](docs/adr/0003-frontend-session.md), there is no backend,
-persistence or MCP in the active product. Browser memory owns the current session;
-closing or reloading the tab discards it. This direction supersedes the storage,
-service and durable-job requirements below and in the older design documents.
-Do not add recovery or restart mechanisms.
+direction and [ADR 0003](docs/adr/0003-frontend-session.md), there is no backend or
+MCP in the active product. Browser memory owns the current session. The user's
+2026-10-24 direction adds explicit local map saves in IndexedDB for reopening
+maps without regeneration. Unsaved changes and independent templates disappear
+on reload. This direction supersedes the storage, service and durable-job
+requirements below and in the older design documents. Do not add generation
+recovery or restart mechanisms.
 
 ## Application structure
 

@@ -113,8 +113,8 @@ The **Adjust terrain appearance** icon beside the base choices controls lighting
 exaggeration and contour interval.
 These display settings do not change the geography. Satellite appearance is deferred.
 
-**Session map views** retain the base, field overlays and vector styles together
-for this tab's session. Reloading the tab still discards the world and its views.
+**Session map views** retain the base, field overlays and vector styles together.
+Use **Save map** to retain the world and its saved views across reloads.
 
 ## Architecture
 
@@ -122,7 +122,8 @@ The application is written in TypeScript. React and OpenLayers provide the edito
 shared TypeScript modules define world data, commands, validation and procedural
 generation. The UI calls domain operations directly against browser memory.
 Generation runs in a Web Worker with progress, cancellation and complete result
-publication. There is no backend, authentication, database or MCP.
+publication. Explicit map snapshots use IndexedDB. There is no backend,
+authentication, server database or MCP.
 
 | Responsibility | Direction                                                                               |
 | -------------- | --------------------------------------------------------------------------------------- |
@@ -169,9 +170,17 @@ Create a world, generate its geography, refine areas with skipped profiles, draw
 and inspect protected features, compose layers, author entities and fields, place
 located templates, inspect causes and undo session edits.
 
-**Reloading or closing the tab discards every world and template and stops
-generation.** There is no automatic browser storage or recovery. Explicit GIS
-and template exports download local files.
+Choose **Save map** in the editor to store the current world in this browser.
+Saving again updates that world's saved copy. **Saved maps**, available in the
+editor and on the new-world screen, reopens a save without regenerating it and
+replaces that world's current session copy. Saves include numerical geography,
+world map views, completed causes, history and undo. Finish generation before
+saving its output.
+
+Unsaved changes and independent templates disappear on reload, and closing the
+tab stops generation. Saves belong to this browser and site origin; clearing
+site data removes them. There is no autosave or generation recovery. Explicit
+GIS and template exports download local files.
 
 Physical generation includes continental assemblies and sutures, plate advection,
 mountain construction, volcanism, impacts, flexure, continental margins, ocean

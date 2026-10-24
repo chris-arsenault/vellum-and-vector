@@ -36,6 +36,16 @@ const running = new Map<string, RunningJob>();
 export function listJobs(id: string) {
   return jobs.filter((j) => j.worldId === id).map((j) => ({ ...j }));
 }
+export function clearGenerationJobs(worldId: string) {
+  requireThat(
+    !jobs.some((job) => job.worldId === worldId && job.status === "running"),
+    "generation_running",
+    "Cancel or finish this world's generation before opening its saved map."
+  );
+  for (let index = jobs.length - 1; index >= 0; index--)
+    if (jobs[index].worldId === worldId) jobs.splice(index, 1);
+  changed("jobs");
+}
 
 export function startGeneration(
   id: string,

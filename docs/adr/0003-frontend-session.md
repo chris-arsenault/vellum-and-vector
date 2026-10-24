@@ -10,12 +10,20 @@ Run the atlas entirely in the browser. React and OpenLayers present the editor;
 shared TypeScript domain operations validate changes against session memory.
 Generation runs the shared process sequence in a Web Worker. Keep worlds,
 templates, numerical fields, completed causes, edit history and undo in memory.
-Reloading or closing the tab discards them and ends generation.
+Reloading or closing the tab ends generation and discards unsaved session changes.
 
-There is no authentication, API, database, localStorage, IndexedDB, MCP service,
-saved job input, restart mechanism or recovery mechanism. Explicit GIS and
-template downloads are local user actions. They do not introduce an automatic
-storage path.
+Per the user's 2026-10-24 direction, explicit **Save map** stores a world's session
+snapshot in IndexedDB. **Saved maps** lists local saves and reopens a selected
+map without generation, replacing that world's current session copy. A save
+retains geography, numerical fields, world map views, completed causes, history
+and undo. Saving again updates that world's copy. Independent templates and
+running jobs are not saved; generation must finish before saving its output.
+There is no autosave, generation restart or recovery mechanism. Browser storage
+belongs to the current browser and site origin and may be cleared by the browser
+or user.
+
+There is no authentication, API, server database or MCP service. Explicit GIS and
+template downloads remain local user actions.
 
 Keep the existing spatial model: geographically parented areas, planar metric
 coordinates, stable feature identity, distinct located floors, layer composition,
