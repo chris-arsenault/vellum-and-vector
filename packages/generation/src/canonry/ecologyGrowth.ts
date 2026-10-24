@@ -26,7 +26,7 @@ function proposal(
   const seed = available > 0 ? 0.001 * Math.max(map[group.seed][i], 0.01) : 0;
   const suitable = groupSuitability(map, group, i, f);
   const browsing = group.juvenile ? map.Browsers[i] * 0.7 : map.Grazers[i] * 2;
-  const toxicity = group.id === "altered" ? 0 : map.EcologicalToxicity[i] * 0.02;
+  const toxicity = map.EcologicalToxicity[i] * 0.02;
   const fire = map.FireActivity[i] * f.fireRegime * (group.id === "grass" ? 0.003 : 0.025);
   const flood = map.FloodFrequency[i] * group.floodSensitivity;
   // Quickened plants mature early and die young; stilled plants stand past their span.
@@ -114,8 +114,7 @@ function growCohort(map: PhysicalField, i: number, p: Proposal) {
 }
 export function updateTreeCover(map: PhysicalField, i: number) {
   map.TreeCover[i] = unit(
-    canopy(map, i) +
-      (map.BroadleafSaplings[i] + map.ConiferSaplings[i] + map.AlteredSaplings[i]) * 0.35
+    canopy(map, i) + (map.BroadleafSaplings[i] + map.ConiferSaplings[i]) * 0.35
   );
 }
 /** Shared resources and cohort survival determine cover; biome names never enter growth. */

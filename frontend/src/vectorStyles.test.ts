@@ -89,7 +89,7 @@ it("distinguishes subsurface fault traces from topographic and landform boundari
 
 it("uses biome colors for ecological polygons and preserves thematic rules in GeoStyler", async () => {
   const ecology = { ...layer, layerId: "ecology", color: "#588860" };
-  const colors = ["forest", "wetland", "altered", "grassland"].map((kind) => {
+  const colors = ["forest", "wetland", "ember", "grassland"].map((kind) => {
     const feature = {
       ...river([]),
       kind,
@@ -103,10 +103,10 @@ it("uses biome colors for ecological polygons and preserves thematic rules in Ge
   });
   expect(new Set(colors).size).toBe(4);
   const symbols = defaultSymbolStyle("Biomes", ecology, ["Polygon"]);
-  expect(symbols.rules.find((rule) => rule.name === "Altered land")?.filter).toEqual([
+  expect(symbols.rules.find((rule) => rule.name === "Ember grove")?.filter).toEqual([
     "==",
     "kind",
-    "altered",
+    "ember",
   ]);
   const parsed = await new Parser().writeStyle(symbols);
   expect(parsed.errors ?? []).toEqual([]);

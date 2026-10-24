@@ -124,7 +124,11 @@ with no backend, persistence or MCP; preserve the existing backend source.
       **Deferred: outside the current continuous-terrain and adaptive-generation
       replacement plan.**
 
-- [ ] **10. Rework the interaction between magic and ecology.** Magic reaches
+- [x] **10. Rework the interaction between magic and ecology.** Delivered
+      2026-10-24 by the [four-pillar plan](FOUR-PILLAR-INTEGRATION-PLAN.md):
+      each system acts through its own medium (quickening, stillness, fog) and
+      names its own biomes; the generic altered group, cover and biome names are
+      removed. Original statement kept below. Magic reaches
       vegetation only through generic ecological effects, so the three systems'
       own rules barely shape the living landscape. Fire heats land to 46–60 °C
       and its fire effect holds grass along its veins; Aurora and Pressure have

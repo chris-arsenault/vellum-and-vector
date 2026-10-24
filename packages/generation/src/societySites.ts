@@ -298,8 +298,46 @@ export function chooseSettlementSites(
     current.key = key;
     current.site = { kind: site.kind, reason: site.reason, fortress: false };
   }
-  // A band on the move holds no fortress.
-  return best.map((choice) => (options.mobile ? choice : holdFromSpur(r, choice)));
+  // A band on the move holds no fortress and camps on the col itself.
+  return best.map((choice, k) =>
+    options.mobile ? choice : passFoot(r, holdFromSpur(r, choice), owner, k, seeds[k])
+  );
+}
+/**
+ * A pass town sits at the foot of the pass, on the last flat ground below the col and on
+ * the side its people came from. A fortress stays on its spur.
+ */
+function passFoot(
+  r: SiteReader,
+  choice: { cell: number; site: SettlementSite | null },
+  owner: Int32Array,
+  unit: number,
+  seed: number
+) {
+  if (choice.site?.kind !== "pass" || choice.site.fortress) return choice;
+  const col = r.elevation(choice.cell),
+    origin = gridPosition(r.grid, seed);
+  const foot = r
+    .ring(choice.cell)
+    .filter((j) => dryLand(r.state, j) && col - r.elevation(j) >= 50)
+    .sort((a, b) => {
+      const ownA = Number(owner[a] === unit),
+        ownB = Number(owner[b] === unit);
+      if (ownA !== ownB) return ownB - ownA;
+      const slopeA = r.value("slope", a),
+        slopeB = r.value("slope", b);
+      if (slopeA !== slopeB) return slopeA - slopeB;
+      const pa = gridPosition(r.grid, a),
+        pb = gridPosition(r.grid, b);
+      return (
+        Math.hypot(pa.x - origin.x, pa.y - origin.y) - Math.hypot(pb.x - origin.x, pb.y - origin.y)
+      );
+    })[0];
+  if (foot === undefined) return choice;
+  return {
+    cell: foot,
+    site: { ...choice.site, reason: `at the foot of the pass: ${choice.site.reason}` },
+  };
 }
 /** Lower rank wins; then higher weighted opportunity; the draw decides only an exact tie. */
 function betterSite(key: number[], current: number[], tie: () => boolean) {

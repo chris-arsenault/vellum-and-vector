@@ -1,6 +1,12 @@
 import { expect, it } from "vitest";
 import { generateAtlas } from "@atlas/generation";
-import { gridPosition, sample, magicSystemSchema, type DomainSnapshot } from "@atlas/domain";
+import {
+  biomeCode,
+  gridPosition,
+  sample,
+  magicSystemSchema,
+  type DomainSnapshot,
+} from "@atlas/domain";
 import { createWorld, session } from "./atlasState";
 import { generationSnapshot } from "./generationJobs";
 
@@ -110,13 +116,13 @@ async function checkMagicPublication(
       source: "placed",
       propagation: "radial",
       phase: "climate",
-      effects: { ecologicalAlteration: 1, plantColdTolerance: 20, animalToxicity: 0.5 },
+      effects: { quickening: 1, animalToxicity: 0.5 },
     }),
   ];
   magical.world.magic.push({
     id: crypto.randomUUID(),
     systemId: "wildwood",
-    name: "Altered forest source",
+    name: "Quickened forest source",
     source: position,
     radius: 10_000_000,
     strength: 1000,
@@ -130,14 +136,19 @@ async function checkMagicPublication(
   });
   const result = await generateAtlas(magical, { ...input, domains: ["magic"] });
   expect(result.state.history).toHaveLength(0);
-  expect(result.state.surface.channels.alteredCover.some((v) => v > 0.2)).toBe(true);
-  expect(result.state.surface.channels.biome.some((v) => v === 15)).toBe(true);
+  // The quickening is the system's own living forcing; the biome it makes is named for it.
+  expect(result.state.surface.channels.quickening.some((v) => v > 0.2)).toBe(true);
+  expect(result.state.surface.channels.ecologicalToxicity.some((v) => v > 0)).toBe(true);
+  expect(
+    result.state.surface.channels.biome.some(
+      (v) => v === biomeCode("Ember grove") || v === biomeCode("Thaw meadow")
+    )
+  ).toBe(true);
   expect(
     Object.values(result.state.domain.world.features).some(
       (f) =>
         f.layerId === "ecology" &&
-        f.kind === "altered" &&
-        f.attributes.biome === "Wildwood-altered woodland" &&
+        (f.kind === "ember" || f.kind === "thaw") &&
         f.attributes.system === "wildwood"
     )
   ).toBe(true);
@@ -154,5 +165,5 @@ async function checkMagicPublication(
     crypto.randomUUID(),
     magical
   );
-  expect(published.numerical[ecology.id].channels.alteredCover.some((v) => v > 0.2)).toBe(true);
+  expect(published.numerical[ecology.id].channels.quickening.some((v) => v > 0.2)).toBe(true);
 }

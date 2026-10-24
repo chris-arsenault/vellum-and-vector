@@ -6,7 +6,6 @@ import { ecologyCarbon, ecologyMemory, ecologyRatios } from "./ecologyState";
 
 const intensive = [
   ...ecologyRatios,
-  "ColdAdaptation",
   "CanopyAge",
   "Evapotranspiration",
   "Productivity",

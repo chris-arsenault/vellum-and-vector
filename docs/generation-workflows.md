@@ -2144,15 +2144,15 @@ expansion, a dry fire age, cold retreat and refugial recovery. These controls
 change processes rather than requesting a particular biome. Existing climate,
 ice, hydrology and per-system magical activity also shape each epoch.
 
-Magic can accelerate growth, burn cover, change decomposition, transform existing
-vegetation, or restore altered vegetation. `ecologicalAlteration` creates an altered
-woody group; `plantColdTolerance`, `plantDroughtTolerance` and `animalToxicity`
-leave traits that its seeds can carry beyond the original magical source.
-`seedDispersal` changes migration speed. Toxic altered habitat changes forage and
-animal passage. Magical feature conditions can inspect living cover, soil water,
-alteration, toxicity and animal biomass. Effects use configured system intensity,
-independently of the system's name. Fire's preset includes vegetation burning;
-alteration requires configuring an effect on a system or variant.
+Magic acts on the living landscape through each system's own medium, never through a
+generic altered plant group. `quickening` speeds growth, decomposition and succession
+and names Ember groves and Thaw meadows; `stillness` holds charged cold and names
+Rime forests and Glow-lichen barrens; a Pressure front's fog names Fog heath and
+Moss forest. `vegetationGrowth`, `fire`, `organicPreservation`, `seedDispersal` and
+`animalToxicity` scale growth, burning, preservation, migration speed and habitat
+toxicity by configured system intensity, independently of the system's name. Toxic
+habitat changes forage and animal passage. Magical feature conditions can inspect
+living cover, soil water, toxicity and animal biomass.
 
 A magic-only generation refreshes living fields and ecological polygons while
 retaining existing terrain and completed epochs. Obsolete generated ecological

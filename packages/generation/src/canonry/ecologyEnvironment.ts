@@ -17,9 +17,6 @@ export interface EcologyForcing {
   migration: number;
   recovery: number;
   fireRegime: number;
-  alteration: number;
-  coldTolerance: number;
-  droughtTolerance: number;
   toxicity: number;
   dispersal: number;
   /** Fire: living processes run faster, 0 to 1. */
@@ -37,9 +34,6 @@ export const neutralEcology: EcologyForcing = {
   migration: 1,
   recovery: 1,
   fireRegime: 1,
-  alteration: 0,
-  coldTolerance: 0,
-  droughtTolerance: 0,
   toxicity: 0,
   dispersal: 0,
   quickening: 0,
@@ -96,7 +90,7 @@ export function classifyBiome(map: PhysicalField, i: number, env = environment(m
   if (env.frozen) return B("Ice");
   if (env.water === 1) return B("Ocean");
   if (env.submerged) return B("Freshwater");
-  const magical = magicalBiome(map, i, env);
+  const magical = magicalBiome(map, i);
   if (magical !== null) return magical;
   if (env.wetness > 0.5) return B(map.TreeCover[i] > 0.2 ? "Swamp" : "Marsh");
   if (env.temperature < 2) return B("Tundra");
@@ -106,11 +100,9 @@ export function classifyBiome(map: PhysicalField, i: number, env = environment(m
  * Living landscapes a magic system makes through its own forcing. Each needs the forcing
  * and the cover it produces; a bare quickened crag or a stilled meadow stays unnamed.
  */
-function magicalBiome(map: PhysicalField, i: number, env: EcologyEnvironment) {
+function magicalBiome(map: PhysicalField, i: number) {
   const trees = map.TreeCover[i],
     cover = trees + map.GrassCover[i] + map.WetlandCover[i];
-  if (map.AlteredCover[i] + map.AlteredSaplings[i] > 0.2)
-    return B(env.wetness > 0.5 ? "Altered wetland" : "Altered woodland");
   return (
     quickenedBiome(map, i, trees, cover) ??
     stilledBiome(map, i, trees, cover) ??

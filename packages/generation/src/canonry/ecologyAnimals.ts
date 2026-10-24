@@ -10,7 +10,7 @@ function populationResponse(value: number, capacity: number, years: number, time
 }
 
 function forage(map: PhysicalField, i: number, browser: boolean) {
-  const palatable = unit(1 - map.EcologicalToxicity[i] * (0.5 + map.AlteredCover[i]));
+  const palatable = unit(1 - map.EcologicalToxicity[i] * 0.5);
   const food = browser
     ? map.TreeCover[i] * 0.018
     : map.GrassCover[i] * 0.08 + map.WetlandCover[i] * 0.025;

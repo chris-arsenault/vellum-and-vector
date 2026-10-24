@@ -161,6 +161,12 @@ export interface SocietyWork {
   authored: boolean;
   built: string;
   applied: number;
+  /**
+   * A World-profile work is a demand its unit makes of its country, not a located
+   * earthwork: it acts over the unit's cells of the kind's medium, and a finer profile
+   * realizes it at a site. Absent or false for located works.
+   */
+  demand?: boolean;
   previousShape?: { position: Position; radius: number; applied: number };
   causes: string[];
 }

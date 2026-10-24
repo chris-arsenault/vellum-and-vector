@@ -1217,20 +1217,124 @@ scree and ridge cells rose from 42 and 88 to 44 and 89, barren land from 233 to
 250 cells, and nine river cells below Fire wellsprings are now warm-water
 reaches that stay open and green. Generation time is unchanged within noise.
 
+## Ninth pass: the deferred register closed
+
+Implemented 2026-10-24 under "finish out the plan", read as parent phase 11:
+every piece the register held that was the agent's to do.
+
+### Reach and rarity on a continental seed
+
+A 4000 × 3000 km draft World on the default seed, the same presets as the
+oceanic 2000 × 1000 km draft. Land is 4,263 of 16,688 cells, 2.2 times the
+oceanic draft's 1,899; generation took 99 s with the ice-age round at 28 s and
+the present eras at 34 s. The same world without magic took 89 s, has 26 fewer
+land cells (Fire's basalt), and its round left 212 camps and 165 works against
+173 and 642 with magic: the cold-age tapping and quarrying are most of the
+magical world's works, and camps are fewer because melt lines and Fire seats
+gather them.
+
+| Measure                                  | Oceanic draft (1,899 land) | Continental (4,263 land) |
+| ---------------------------------------- | -------------------------- | ------------------------ |
+| Fire cores / Fire core class cells       | 8 / –                      | 26 / 24 (0.6 % of land)  |
+| Hot spring class                         | 47 cells (2.5 %)           | 15 cells (0.4 %)         |
+| Thawed halo class                        | 17 cells (0.9 %)           | 2 cells                  |
+| Warm-water reach (thawed tongue)         | 9 cells                    | 61 cells (1.4 %)         |
+| Aurora fields / prisms / wells / melts   | 5 / 5 / 0 / 5              | 15 / 40 / 8 / 16         |
+| Aurora field class                       | 64 cells (3.4 %)           | 8 land + 14 sea (0.2 %)  |
+| Frost prism class                        | –                          | 75 cells (1.8 %)         |
+| Pressure crush / lattice / wake / front  | 14.1 / 13.9 / 5.0 / 4.9 %  | 1.7 / 3.9 / 3.7 / 0.5 %  |
+| Fog heath                                | 63 cells (3.3 %)           | 9 cells (0.2 %)          |
+| Ember grove / Thaw meadow regions        | 0 / 18                     | 0 / 0                    |
+| Grassland / Desert / Gorge share of land | 42.4 / 6.8 / 5.6 %         | 34.2 / 13.6 / 13.3 %     |
+| Ice-age camps / cold-age works           | 35 / 174                   | 173 / 642                |
+
+What the land-heavy seed says about the tuning:
+
+- **Fire scales with land, as designed.** Cores grow faster than land (3.3× for
+  2.2× the land) because the 90 km spacing fills a continent's interior that an
+  archipelago never offers. Their visible footprint changes character: fewer
+  springs and almost no thawed halo, because the continental world carries thin
+  ice (6 cells of 260 units or more against 3,961 cells of any ice), while the
+  thawed tongue is seven times longer on long continental rivers. No Ember grove
+  or Thaw meadow region formed on this seed. The likely reason, not verified
+  cell by cell, is that the cores stand in desert and gorge country whose cover
+  is under the 12 percent the Thaw meadow rule needs. If so it is a true reading
+  of a dry continent rather than a defect, but Fire's "wellspring of life" shows
+  on this seed as open water, not as groves, which the user may want to weigh.
+- **Aurora shifts from fields to prisms.** Three times the fields, eight times
+  the prisms, and the Aurora field class nearly disappears, because the
+  continental interior reaches the field threshold only in spots while the
+  charged rock that makes prisms is everywhere the ice thinned. Light wells
+  appear for the first time.
+- **Pressure reach is the seed-dependent one.** With a fifth less sea and far
+  more coast, 128 rays reflect sooner and the crush and lattice classes fall
+  from a quarter of the sea to a twentieth, and the upwelling front from 4.9 to
+  0.5 percent, which takes the fog heath with it. Pressure's reach should be
+  stated per sea cell, not per world, if the ray count is ever retuned; the
+  current numbers keep the oceanic draft at the user's requested density and
+  leave a continental sea quiet.
+- **The round scales with the land.** Five times the camps and 3.7 times the
+  works for 2.2 times the land, because camps follow coasts and melt lines whose
+  length grows faster than area.
+
+No parameter changed from this measurement; the magic-density boundary says
+not to drive defaults toward rarity without asking, and the continental seed's
+quiet sea is the opposite case, which the user may want to raise.
+
+### Generic altered ecology removed
+
+The dormant generic group is gone from every layer: the Altered woodland and
+Altered wetland biomes and the "altered" family, the `alteredCover`,
+`alteredSaplings`, `alteredSeed`, `ecologicalAlteration`, `coldAdaptation` and
+`droughtAdaptation` channels and fields, the `ecologicalAlteration`,
+`plantColdTolerance` and `plantDroughtTolerance` effects and their wizard
+labels, the altering biome rule, the "altered" publication kind and the biome
+vocabulary. What remains is each system's own medium (quickening, stillness,
+fog) and `applyToxicity`, the one generic ecological consequence that is a
+system's effect and not a vegetation of its own. The generation workflow doc and
+backlog item 10 record the change.
+
+### The pass foot
+
+A pass town no longer sits on the col. `passFoot` moves it to a lower ring
+neighbour at least 50 m below the col, preferring the unit's own side, the
+lowest slope and the cell nearest the unit's seed, and its site reason reads "at
+the foot of the pass". Mobile camps keep their col-side placement, since a camp
+holds the route rather than the valley.
+
+### Society as field forcing
+
+A World unit's works are now demands rather than earthworks. `makeWork` marks a
+work `demand` when the profile is World and no position is given; the demand
+acts over the unit's cells of the kind's medium (rivers for dam and irrigation,
+shore for harbour and weir, Fire veins of 100 units or more for tapping, prism
+cells for quarrying, slopes over 8 percent for a pass, all dry land otherwise)
+at the share a located work of the same radius would have covered, so the total
+is conserved and spread. River anchoring, harbour snapping and cold-age
+placement run only for located works. At any finer profile `realizeDemands`
+turns each inherited demand into a located work at the nearest medium cell of
+its unit and records the realization as a cause; a demand with no medium in the
+refined area stays a demand. Settlement features publish `worksDemanded`, the
+kinds the unit asks of its country, since demands themselves are not features.
+
+Authored works and the environment and feedback tests give explicit positions,
+so they remain located at every profile.
+
 ## Deferred work register
 
 Pieces set aside while phases 3 to 8 were delivered, gathered in one place so
-each is done or consciously dropped. The plan carries them as phase 11.
+each is done or consciously dropped. The plan carried them as phase 11; the
+ninth pass closed every row but the user's.
 
-| Piece                                                                                                                                                   | Deferred from               | What it needs                                                              |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------- |
-| Society as field forcing: demand budgets per unit instead of located works at World, located works realized at Region (third pass)                      | Phase 7                     | Its own branch over the works, environment and inheritance pipeline        |
-| Thawed-river tongue: Fire heat carried down the drainage so a river below a wellspring stays open                                                       | Phase 6                     | Delivered in the eighth pass                                               |
-| Melt-line fen: Aurora's one-pulse release of preserved matter at the field edge                                                                         | Phase 8                     | Delivered in the eighth pass                                               |
-| Era-dependent sites (camps on magical and food sites; present towns on ruins only where the class still holds) and the pass town at the foot of the col | Phase 7                     | Phase 9 eras; Region-scale placement                                       |
-| Removal of the dormant generic altered ecology (plant group, cover, biome names)                                                                        | User correction, first pass | A cleanup pass over ecology groups, establishment, biomes and publications |
-| Reach and rarity measured on a continental seed                                                                                                         | Phase 5                     | One measured generation of a land-heavy seed                               |
-| User review of the fifth-pass Fire, Aurora and Pressure sections                                                                                        | Phase 4 outcome             | The user                                                                   |
+| Piece                                                                                                                                                   | Deferred from               | Outcome                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | --------------------------------------------------------------------------- |
+| Society as field forcing: demand budgets per unit instead of located works at World, located works realized at Region (third pass)                      | Phase 7                     | Delivered in the ninth pass                                                 |
+| Thawed-river tongue: Fire heat carried down the drainage so a river below a wellspring stays open                                                       | Phase 6                     | Delivered in the eighth pass                                                |
+| Melt-line fen: Aurora's one-pulse release of preserved matter at the field edge                                                                         | Phase 8                     | Delivered in the eighth pass                                                |
+| Era-dependent sites (camps on magical and food sites; present towns on ruins only where the class still holds) and the pass town at the foot of the col | Phase 7                     | Era-dependent sites in the seventh pass; the pass foot in the ninth         |
+| Removal of the dormant generic altered ecology (plant group, cover, biome names)                                                                        | User correction, first pass | Delivered in the ninth pass                                                 |
+| Reach and rarity measured on a continental seed                                                                                                         | Phase 5                     | Measured in the ninth pass; no parameter changed, Pressure's quiet sea open |
+| User review of the fifth-pass Fire, Aurora and Pressure sections                                                                                        | Phase 4 outcome             | The user's; open                                                            |
 
 ## Proposed generation approach for discussion
 

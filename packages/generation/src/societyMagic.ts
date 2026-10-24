@@ -5,13 +5,8 @@ import {
   type SocietyMagicPractice,
 } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
-import {
-  changeSample,
-  editableSamples,
-  makeWork,
-  nearestSample,
-  workSamples,
-} from "./societyWorks";
+import { changeSample, editableSamples, makeWork, workSamples } from "./societyWorks";
+import { nearestSample } from "./societySpatial";
 import { societyValue } from "./societySupport";
 import { peopleTrait } from "./societyTraits";
 import { samplesInBox } from "./societySpatial";

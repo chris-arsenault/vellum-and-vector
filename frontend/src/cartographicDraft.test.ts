@@ -180,10 +180,11 @@ it("keeps curated controls free of process-enable vectors and universal magical 
   expect(magic.filter((entry) => entry.system === "fire")).toHaveLength(4);
   expect(magic.filter((entry) => entry.system === "aurora")).toHaveLength(4);
   expect(magic.filter((entry) => entry.system === "pressure")).toHaveLength(5);
+  // No control turns a system into generic altered vegetation; each acts through its own medium.
   expect(
     (
       newGenerationDraft().recipe.features!["magic.configured"].configuration!
         .magicSystems as unknown as MagicSystem[]
-    ).every((entry) => entry.effects.ecologicalAlteration === 0)
+    ).every((entry) => !("ecologicalAlteration" in entry.effects))
   ).toBe(true);
 });

@@ -90,10 +90,12 @@ it("moves each unit's settlement to its best site and keeps the draw where there
   const river = new Float64Array(owner.length),
     coast = new Float64Array(owner.length);
   const chosen = chooseSettlementSites(state, context, owner, seeds, river, coast);
-  // The western unit owns the col, the best class there is.
-  expect(chosen[0].cell).toBe(cell(10, 4));
+  // The western unit owns the col, the best class there is; the town sits at its foot on
+  // the unit's own side, on the flat ground nearest the people who settled it.
+  expect(chosen[0].cell).toBe(cell(9, 5));
   expect(chosen[0].site?.kind).toBe("pass");
   expect(chosen[0].site?.fortress).toBe(false);
+  expect(chosen[0].site?.reason).toContain("at the foot of the pass");
   // The eastern unit has a river junction and a harbour; the junction ranks higher.
   expect(chosen[1].cell).toBe(cell(14, 4));
   expect(chosen[1].site?.kind).toBe("river-node");

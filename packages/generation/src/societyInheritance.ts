@@ -9,6 +9,7 @@ import type { GenerationState } from "./process";
 import { refreshSocietyConnections, refreshSocietySupport } from "./societyGeography";
 import { territoryShape } from "./societyPoliticalPublication";
 import { inheritSocietyDrainage } from "./societyDrainage";
+import { realizeDemands } from "./societyDemand";
 
 export function societyAncestor(state: GenerationState) {
   const world = state.domain.world;
@@ -81,6 +82,7 @@ function refineSociety(state: GenerationState, prior: SocietyRegion) {
   );
   inheritPolitics(region, prior);
   refreshSocietyConnections(state);
+  realizeDemands(state);
 }
 function inheritedFraction(origin: SocietyCommunity, located: boolean, areaFraction: number) {
   const total = population(origin),

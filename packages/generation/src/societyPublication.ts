@@ -13,6 +13,7 @@ import { findRoute } from "./mapRouting";
 import { publishSocietyWorks } from "./societyWorkPublication";
 import { settlementHierarchy, type SettlementHierarchy } from "./societyHierarchy";
 import { isMajorSettlement, isWorldSociety } from "./societyMapScope";
+import { demandedKinds } from "./societyDemand";
 
 export function societyPublications(input: AtlasGenerationInput): PublicationDefinition[] {
   const enabled = ["human.cultures", "human.politics", "built.layout"].some(
@@ -66,6 +67,7 @@ export function publishSettlements(state: GenerationState, context: MapProcessCo
         founded: c.founded,
         representedAreaKm2: c.areaKm2,
         ...siteAttributes(c),
+        worksDemanded: demandedKinds(state, c.id),
         ...hierarchy.get(c.id),
         ...communityNameMetadata(c),
       }

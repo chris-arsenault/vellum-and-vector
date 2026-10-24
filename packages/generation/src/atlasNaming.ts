@@ -93,7 +93,6 @@ const biomeFamilies = new Set([
   "grassland",
   "wetland",
   "barren",
-  "altered",
   "ember",
   "thaw",
   "rime",

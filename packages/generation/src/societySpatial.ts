@@ -29,6 +29,10 @@ export function samplesInBox(grid: Grid, box: Bounds) {
   return indices.filter((i) => grid.active[i]).sort((a, b) => a - b);
 }
 
+/** The sample nearest a position on a state's surface. */
+export function nearestSample(state: { surface: Grid }, p: Pick<Position, "x" | "y">) {
+  return nearestSocietySample(state.surface, p);
+}
 export function nearestSocietySample(
   grid: Grid,
   p: Pick<Position, "x" | "y">,

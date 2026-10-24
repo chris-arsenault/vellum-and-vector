@@ -2,7 +2,7 @@ import type { PhysicalField } from "./field";
 import { classifyBiome, neutralEcology, type EcologyForcing } from "./ecologyEnvironment";
 import { initializeEcology, dispersePlants } from "./ecologyEstablishment";
 import { evolveSoils } from "./ecologySoils";
-import { alterEcology } from "./ecologyMagic";
+import { applyToxicity } from "./ecologyMagic";
 import { disturbEcology, floodEcology } from "./ecologyDisturbance";
 import { growCommunities, updateTreeCover, normalizeCommunities } from "./ecologyGrowth";
 import { evolveAnimals } from "./ecologyAnimals";
@@ -18,7 +18,7 @@ export function evolveVegetation(
   initializeEcology(map, seed);
   if (years > 0) {
     evolveSoils(map, years, forcing);
-    alterEcology(map, years, forcing);
+    applyToxicity(map, years, forcing);
     disturbEcology(map, years, forcing, seed);
     floodEcology(map, years);
     const arrivals = dispersePlants(map, years, forcing);

@@ -16,7 +16,7 @@ export function initializeEcology(map: PhysicalField, seed = 42, inherited = fal
   map.EcologyInitialized = true;
 }
 function inheritFunctionalGroups(map: PhysicalField, i: number) {
-  const represented = map.BroadleafCover[i] + map.ConiferCover[i] + map.AlteredCover[i];
+  const represented = map.BroadleafCover[i] + map.ConiferCover[i];
   if (represented === 0 && map.TreeCover[i] > 0) map.BroadleafCover[i] = map.TreeCover[i];
   if (map.Grazers[i] + map.Browsers[i] === 0) {
     map.Grazers[i] = map.Herbivores[i] * 0.6;
@@ -67,14 +67,10 @@ export function dispersePlants(
     for (let i = 0; i < starts.length; i++)
       if (Number.isFinite(landed[i]))
         starts[i] = Math.min(starts[i], crossingTime(crossing, landed[i]));
-    const admits = (i: number) =>
-      group.id === "altered"
-        ? map.WaterKindCodes[i] !== 1 && map.WaterDepths[i] < 1.5 * 1024 && map.IceThickness[i] < 1
-        : suitability[i] > 0.001;
+    const admits = (i: number) => suitability[i] > 0.001;
     const front = ecologicalFront(map, starts, admits, (i, edge, j) =>
       seedTravel(map, group, forcing(i), i, edge, j)
     );
-    if (group.id === "altered") inheritAlteration(map, front, years);
     return { group, front, suitability };
   });
 }
@@ -103,16 +99,4 @@ function seedTravel(
   // Spread is already a front speed in metres/year; a delay per mesh edge would
   // make migration slower whenever the same geography is refined.
   return speed > 0 ? (distance * (1 + map.Slope[j] * 10)) / speed : Infinity;
-}
-function inheritAlteration(map: PhysicalField, front: EcologicalFront, years: number) {
-  const cold = map.ColdAdaptation.slice(),
-    drought = map.DroughtAdaptation.slice(),
-    toxicity = map.EcologicalToxicity.slice();
-  for (let i = 0; i < map.mesh.count; i++) {
-    const source = front.source[i];
-    if (source < 0 || front.time[i] > years) continue;
-    map.ColdAdaptation[i] = Math.max(map.ColdAdaptation[i], cold[source]);
-    map.DroughtAdaptation[i] = Math.max(map.DroughtAdaptation[i], drought[source]);
-    map.EcologicalToxicity[i] = Math.max(map.EcologicalToxicity[i], toxicity[source] * 0.6);
-  }
 }

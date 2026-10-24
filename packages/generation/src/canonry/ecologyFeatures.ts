@@ -19,8 +19,6 @@ const families: Record<string, string> = {
   Rainforest: "forest",
   Marsh: "wetland",
   Swamp: "wetland",
-  "Altered woodland": "altered",
-  "Altered wetland": "altered",
   "Ember grove": "ember",
   "Thaw meadow": "thaw",
   "Rime forest": "rime",

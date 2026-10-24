@@ -8,7 +8,7 @@ import { evolveVegetation } from "./ecologyVegetation";
 import { neutralEcology } from "./ecologyEnvironment";
 import { migrateAnimals } from "./ecologyMovement";
 import { disturbEcology } from "./ecologyDisturbance";
-import { alterEcology } from "./ecologyMagic";
+import { applyToxicity } from "./ecologyMagic";
 import { physicalContext } from "./context";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { precipitation } from "./climate";
@@ -159,32 +159,14 @@ it("lets a strong headwind hold back fire that a gentle wind allows to spread", 
   expect(strong.BroadleafCover[far]).toBe(0.7);
 });
 
-it("carries altered vegetation and inherited traits beyond a vanished magical source", () => {
+it("raises habitat toxicity at once and bounds it, then lets it recover over the epoch", () => {
   const map = corridor();
   source(map);
-  alterEcology(map, 100, (i) => ({
-    ...neutralEcology,
-    alteration: xAt(map, i) < 2000 ? 1 : 0,
-    coldTolerance: 30,
-    droughtTolerance: 0.7,
-    toxicity: 0.8,
-  }));
-  expect(map.AlteredCover.some((v) => v > 0.4)).toBe(true);
-  map.Temperature.fill(220);
-  evolveVegetation(map, 500, force({ recovery: 0.2 }));
-  expect(map.AlteredCover.some((v, i) => v > 0 && xAt(map, i) > 4000)).toBe(true);
-  expect(map.ColdAdaptation.some((v, i) => v > 20 && xAt(map, i) > 4000)).toBe(true);
-  expect(map.EcologicalToxicity.some((v) => v > 0)).toBe(true);
-});
-
-it("bounds transformations when several magical systems overlap in the present", () => {
-  const map = corridor();
-  source(map);
-  alterEcology(map, 0, force({ alteration: 3, droughtTolerance: 2, toxicity: 2 }));
-  expect(map.BroadleafCover.every((v) => v >= 0)).toBe(true);
-  expect(map.AlteredCover.some((v) => v > 0)).toBe(true);
-  expect(map.DroughtAdaptation.every((v) => v <= 1)).toBe(true);
+  applyToxicity(map, 0, force({ toxicity: 2 }));
   expect(map.EcologicalToxicity.every((v) => v <= 1)).toBe(true);
+  expect(map.EcologicalToxicity.some((v) => v > 0)).toBe(true);
+  applyToxicity(map, 500, force({ toxicity: 0, recovery: 1 }));
+  expect(map.EcologicalToxicity.every((v) => v < 0.5)).toBe(true);
 });
 
 it("leaves glacial soil and seed losses that delay recovery after the ice retreats", () => {

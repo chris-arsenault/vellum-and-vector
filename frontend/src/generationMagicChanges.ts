@@ -27,7 +27,6 @@ function parameterValue(key: string, value: number) {
 function effectValue(key: keyof MagicSystem["effects"], value: number) {
   if (key === "heat") return `${value / 10} °C per intensity unit`;
   if (key === "iceMelt") return `${value} m per intensity unit`;
-  if (key === "plantColdTolerance") return `${value} °C additional tolerance`;
   if (key === "coastalForcing") return `${value}×`;
   return String(value);
 }

@@ -16,7 +16,7 @@ import type { AtlasGenerationInput } from "../atlasWorkflow";
 import { initializeEcology } from "./ecologyEstablishment";
 import { authoritativeCanopy, updateTreeCover, normalizeCommunities } from "./ecologyGrowth";
 import { plantGroups, livingPlantCarbon } from "./ecologyGroups";
-import { alterEcology } from "./ecologyMagic";
+import { applyToxicity } from "./ecologyMagic";
 import { erosionHistory } from "./ecologySoils";
 import { riverWarmth } from "./riverWarmth";
 import { generationBindings } from "../generationBindings";
@@ -52,9 +52,6 @@ export const ecologicalMagicEffectBindings = {
   vegetationGrowth: "growth",
   fire: "fire",
   organicPreservation: "preservation",
-  ecologicalAlteration: "alteration",
-  plantColdTolerance: "coldTolerance",
-  plantDroughtTolerance: "droughtTolerance",
   animalToxicity: "toxicity",
   seedDispersal: "dispersal",
 } as const satisfies Partial<Record<keyof MagicSystem["effects"], keyof EcologyForcing>>;
@@ -63,16 +60,7 @@ export const ecologicalMagicEffects = Object.keys(
 ) as (keyof typeof ecologicalMagicEffectBindings)[];
 
 function magicalEcologyForcing(state: GenerationState, i: number) {
-  const result = {
-    growth: 0,
-    fire: 0,
-    preservation: 0,
-    alteration: 0,
-    coldTolerance: 0,
-    droughtTolerance: 0,
-    toxicity: 0,
-    dispersal: 0,
-  };
+  const result = { growth: 0, fire: 0, preservation: 0, toxicity: 0, dispersal: 0 };
   for (const field of state.physical!.magic?.fields ?? []) {
     if (!field.definition.enabled) continue;
     const intensity = field.intensity[i] / 1000;
@@ -168,7 +156,7 @@ function present(
   riverWarmth(map);
   const restore = coverAuthority(state);
   const magic = input ? forcing(state, input, context) : null;
-  if (magic) alterEcology(map, 0, magic);
+  if (magic) applyToxicity(map, 0, magic);
   for (let i = 0; i < map.mesh.count; i++) {
     const env = environment(map, i);
     const fire = magic ? unit(magic(i).fire) : 0;
@@ -207,7 +195,6 @@ function recordEcology(state: GenerationState, context: MapProcessContext) {
   const map = state.physical!.map;
   const areas = new Float64Array(biomes.length);
   let migration = 0,
-    altered = 0,
     burned = 0,
     grazers = 0,
     browsers = 0,
@@ -216,7 +203,6 @@ function recordEcology(state: GenerationState, context: MapProcessContext) {
     areas[map.BiomeCodes[i]] += map.mesh.contentAreas[i];
     const area = map.mesh.contentAreas[i];
     migration += map.MigrationFlux[i] * area;
-    altered += map.AlteredCover[i] * area;
     burned += map.FireActivity[i] * area;
     grazers += map.Grazers[i] * area;
     browsers += map.Browsers[i] * area;
@@ -231,7 +217,7 @@ function recordEcology(state: GenerationState, context: MapProcessContext) {
     kind: "domain",
     process: "atlas.ecology",
     subjects: [],
-    description: `${duration} years of establishment, competition, cohort growth, migration and disturbance${state.physical!.inherited ? " (inherited ecology is refined without replaying its age)" : ""}. ${cover}. Altered canopy ${Math.round(altered / 1e6)} km²; fire-affected cover ${Math.round(burned / 1e6)} km². Grazers/browsers/predators ${Math.round(grazers)}/${Math.round(browsers)}/${Math.round(predators)} kg C; migrated ${Math.round(migration)} kg C through reachable habitat. Soil and seed banks carry this epoch's ecological consequences forward.`,
+    description: `${duration} years of establishment, competition, cohort growth, migration and disturbance${state.physical!.inherited ? " (inherited ecology is refined without replaying its age)" : ""}. ${cover}. Fire-affected cover ${Math.round(burned / 1e6)} km². Grazers/browsers/predators ${Math.round(grazers)}/${Math.round(browsers)}/${Math.round(predators)} kg C; migrated ${Math.round(migration)} kg C through reachable habitat. Soil and seed banks carry this epoch's ecological consequences forward.`,
   });
 }
 function recordTransitions(state: GenerationState, before: Int32Array, context: MapProcessContext) {

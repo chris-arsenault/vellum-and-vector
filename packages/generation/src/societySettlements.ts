@@ -1,7 +1,7 @@
 import { population, languageUse, type SocietyCommunity } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
 import { communityName } from "./societyNaming";
-import { nearestSample } from "./societyWorks";
+import { nearestSample } from "./societySpatial";
 import { dryLand } from "./societySupport";
 
 /** Founders occupy a subset of suitable country. Empty catchments remain destinations. */

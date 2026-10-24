@@ -6,7 +6,7 @@ import {
   type SocietyEvent,
 } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
-import { nearestSample } from "./societyWorks";
+import { nearestSample } from "./societySpatial";
 import { societyValue } from "./societySupport";
 import { magicAt } from "./societyMagic";
 import { fieldInterpolator } from "@atlas/domain";

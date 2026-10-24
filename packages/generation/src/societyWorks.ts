@@ -12,25 +12,27 @@ import {
 import type { GenerationState, MapProcessContext } from "./process";
 import { nearestCommunity } from "./societyPopulation";
 import { societyValue } from "./societySupport";
+import { isWorldSociety } from "./societyMapScope";
+import { demandSamples } from "./societyDemand";
 import { authoredFields } from "./mapAuthored";
 import { anchorRiverWork } from "./societyWaterUse";
-import { nearestSocietySample, samplesInBox } from "./societySpatial";
+import { nearestSample, samplesInBox } from "./societySpatial";
 import { societyWorkName } from "./societyNaming";
 
-export function nearestSample(state: GenerationState, p: { x: number; y: number }) {
-  return nearestSocietySample(state.surface, p);
-}
 export function makeWork(
   state: GenerationState,
   c: SocietyCommunity,
   kind: SocietyWorkKind,
-  position = c.position
+  position?: SocietyCommunity["position"]
 ): SocietyWork {
+  // A World unit makes demands of its country; only a finer profile, or an explicit
+  // position, locates a work.
+  const demand = position === undefined && isWorldSociety(state);
   const work: SocietyWork = {
     id: semanticId(state.domain.world.id, "society-work", `${c.id}:${kind}`),
     communityId: c.id,
     kind,
-    position,
+    position: position ?? c.position,
     radius: Math.min(5000, Math.sqrt(c.areaKm2) * 200),
     magnitude: 1,
     condition: 1,
@@ -39,6 +41,7 @@ export function makeWork(
     built: state.society!.region.history.at(-1)?.id ?? "Settlement",
     applied: 0,
     causes: [],
+    ...(demand ? { demand } : {}),
   };
   const named = societyWorkName(state.domain.world, c, work);
   work.name = named.name;
@@ -140,8 +143,9 @@ export function planSocietyWorks(state: GenerationState) {
   for (const c of work.region.communities)
     for (const kind of proposedWorks(state, c)) {
       const candidate = makeWork(state, c, kind);
-      if (kind === "dam" || kind === "irrigation") anchorRiverWork(state, candidate);
-      if (work.round) placeColdAgeWork(state, c, candidate);
+      if (!candidate.demand && (kind === "dam" || kind === "irrigation"))
+        anchorRiverWork(state, candidate);
+      if (work.round && !candidate.demand) placeColdAgeWork(state, c, candidate);
       if (!existing.has(candidate.id)) {
         work.region.works.push(candidate);
         existing.add(candidate.id);
@@ -164,7 +168,7 @@ function addHarbors(state: GenerationState, existing: Set<string>) {
       return Math.hypot(p.x - c.position.x, p.y - c.position.y) < 10000;
     });
     if (near === undefined) continue;
-    work.position = gridPosition(grid, near);
+    if (!work.demand) work.position = gridPosition(grid, near);
     state.society!.region.works.push(work);
     existing.add(work.id);
   }
@@ -231,6 +235,7 @@ export function changeSample(state: GenerationState, channel: string, i: number,
   state.society!.changed.add(channel);
 }
 export function workSamples(state: GenerationState, work: SocietyWork) {
+  if (work.demand) return demandSamples(state, work);
   const samples: { i: number; fraction: number }[] = [];
   const { x, y } = work.position,
     r = work.radius;

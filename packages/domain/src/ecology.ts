@@ -29,8 +29,6 @@ export const biomes = [
   { name: "Rainforest", color: "#28674c" },
   { name: "Marsh", color: "#83a794" },
   { name: "Swamp", color: "#547c69" },
-  { name: "Altered woodland", color: "#76618e" },
-  { name: "Altered wetland", color: "#77768f" },
   // Living landscapes a magic system makes through its own mechanism (fifth pass):
   // Fire's quickening, Aurora's stillness and the fog of a Pressure upwelling coast.
   { name: "Ember grove", color: "#6f9f3c" },
@@ -53,7 +51,6 @@ export const biomeFamilies = [
   { kind: "rime", name: "Rime forest", color: "#7d98a4" },
   { kind: "glow", name: "Glow-lichen barrens", color: "#b9d4d6" },
   { kind: "fog", name: "Fog coast", color: "#9db3a1" },
-  { kind: "altered", name: "Altered land", color: "#76618e" },
 ] as const;
 
 export const ecologyLabels: Record<string, string> = {
@@ -79,22 +76,16 @@ export const ecologyLabels: Record<string, string> = {
   fireActivity: "Fire disturbance",
   broadleafCover: "Broadleaf canopy",
   coniferCover: "Conifer canopy",
-  alteredCover: "Magically altered canopy",
   broadleafSaplings: "Young broadleaf trees",
   coniferSaplings: "Young conifers",
-  alteredSaplings: "Young altered trees",
   grassSeed: "Grass and shrub seed bank",
   broadleafSeed: "Broadleaf seed bank",
   coniferSeed: "Conifer seed bank",
   wetlandSeed: "Wetland seed bank",
-  alteredSeed: "Altered seed bank",
   soilDepth: "Ecological soil depth",
   soilWater: "Plant-available soil water",
   mineralNutrients: "Available soil nitrogen",
   ecologicalDamage: "Ecological disturbance legacy",
-  ecologicalAlteration: "Persistent magical alteration",
-  coldAdaptation: "Inherited magical cold tolerance",
-  droughtAdaptation: "Inherited magical drought tolerance",
   ecologicalToxicity: "Habitat toxicity",
   grazers: "Grazing animal biomass",
   browsers: "Browsing animal biomass",

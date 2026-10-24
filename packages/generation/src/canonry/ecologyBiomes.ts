@@ -48,24 +48,13 @@ function strongest(fields: Systems, region: BiomeSummary) {
 function magicRules(state: GenerationState): BiomeRule[] {
   const work = state.physical!,
     map = work.map,
-    fields = (work.magic?.fields ?? []).filter((field) => field.definition.enabled),
-    named = (id?: string) => fields.find((f) => f.definition.id === id)?.definition.name ?? "";
-  const altering = fields.filter((f) => f.definition.effects.ecologicalAlteration > 0),
-    quickening = fields.filter((f) => f.definition.effects.quickening > 0),
+    fields = (work.magic?.fields ?? []).filter((field) => field.definition.enabled);
+  const quickening = fields.filter((f) => f.definition.effects.quickening > 0),
     stilling = fields.filter((f) => f.definition.effects.stillness > 0),
     fogging = fields.filter((f) => f.definition.effects.fog > 0);
   const canopy = (i: number) => map.BroadleafCover[i] + map.ConiferCover[i],
     cover = (i: number) => map.TreeCover[i] + map.GrassCover[i] + map.WetlandCover[i];
   const rules: BiomeRule[] = [];
-  if (altering.length)
-    rules.push({
-      kind: "altered",
-      share: 0.0005,
-      terms: [(i) => map.AlteredCover[i] + map.AlteredSaplings[i] - 0.2],
-      name: (r) =>
-        `${named(strongest(altering, r))}-altered ${r.wetness > 0.5 ? "wetland" : "woodland"}`,
-      system: (r) => strongest(altering, r),
-    });
   if (quickening.length)
     rules.push(
       {
@@ -150,11 +139,7 @@ export function biomeRules(state: GenerationState) {
     [temperature[i], moisture[i], wetness[i]] = [e.temperature, e.moisture, e.wetness];
   }
   const cover = (i: number) =>
-    map.BroadleafCover[i] +
-    map.ConiferCover[i] +
-    map.GrassCover[i] +
-    map.WetlandCover[i] +
-    map.AlteredCover[i];
+    map.BroadleafCover[i] + map.ConiferCover[i] + map.GrassCover[i] + map.WetlandCover[i];
   const rules: BiomeRule[] = [
     ...magicRules(state),
     {

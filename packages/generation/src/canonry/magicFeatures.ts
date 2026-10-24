@@ -51,8 +51,6 @@ function conditionReader(
     wetlandCover: map.WetlandCover,
     peatCarbon: map.PeatCarbon,
     oilCarbon: map.OilCarbon,
-    alteredCover: map.AlteredCover,
-    ecologicalAlteration: map.EcologicalAlteration,
     ecologicalToxicity: map.EcologicalToxicity,
     soilWater: map.SoilWater,
     soilDepth: map.SoilDepth,

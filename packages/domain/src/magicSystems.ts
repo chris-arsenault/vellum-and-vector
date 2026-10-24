@@ -85,9 +85,6 @@ export const magicSystemSchema = z.object({
       vegetationGrowth: finite.min(-1).max(5).default(0),
       fire: finite.min(0).max(1).default(0),
       organicPreservation: finite.min(-3).max(3).default(0),
-      ecologicalAlteration: finite.min(-1).max(1).default(0),
-      plantColdTolerance: finite.min(0).max(40).default(0),
-      plantDroughtTolerance: finite.min(0).max(1).default(0),
       animalToxicity: finite.min(0).max(1).default(0),
       seedDispersal: finite.min(-1).max(5).default(0),
     })
@@ -121,8 +118,6 @@ export const magicPhysicalFields = [
   "wetlandCover",
   "peatCarbon",
   "oilCarbon",
-  "alteredCover",
-  "ecologicalAlteration",
   "ecologicalToxicity",
   "soilWater",
   "soilDepth",
