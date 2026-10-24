@@ -7,6 +7,7 @@ import {
   generationSettingsSchema,
   resolveGenerationFeatures,
   applyCartographicSelection,
+  defaultWorldDimensions,
   type FeatureSelection,
   type GenerationRecipe,
 } from "@atlas/generation";
@@ -30,8 +31,7 @@ export function newGenerationDraft(): GenerationDraft {
   const draft = normalizeGenerationDraft({
     worldId: crypto.randomUUID(),
     name: "",
-    width: 4_000_000,
-    height: 3_000_000,
+    ...defaultWorldDimensions,
     recipe: generationRecipeSchema.parse({
       schemaVersion: 1,
       seed: 104729,

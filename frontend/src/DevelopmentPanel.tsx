@@ -11,6 +11,7 @@ import type { World } from "./types";
 import { HumanEraForm } from "./HumanEraForm";
 import { PhysicalHistoryForm } from "./PhysicalHistoryForm";
 import { inheritedGeneration } from "./generationJobs";
+import { bounds } from "./presentation";
 
 export function DevelopmentPanel({ world, editor }: { world: World; editor: EditorState }) {
   const generated = world.fields.some((field) => field.areaId === editor.area.id);
@@ -89,6 +90,7 @@ const parameterLabels: Record<string, string> = Object.fromEntries(
 function GenerationForm({ world, editor }: { world: World; editor: EditorState }) {
   const generate = useGenerate(world, editor.area.id);
   const previous = inheritedGeneration(world, editor.area.id);
+  const extent = bounds(editor.area.footprint);
   return (
     <form
       onSubmit={(event) => {
@@ -111,6 +113,8 @@ function GenerationForm({ world, editor }: { world: World; editor: EditorState }
         seed={previous?.seed ?? world.seed}
         initial={previous?.parameters}
         quality={previous?.quality}
+        width={extent[2] - extent[0]}
+        height={extent[3] - extent[1]}
       />
       <p className="hint">
         Authored features and painted fields are protected. Full physical epochs run at every detail

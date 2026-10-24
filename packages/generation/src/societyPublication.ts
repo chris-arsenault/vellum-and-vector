@@ -14,6 +14,7 @@ import { publishSocietyWorks } from "./societyWorkPublication";
 import { settlementHierarchy, type SettlementHierarchy } from "./societyHierarchy";
 import { isMajorSettlement, isWorldSociety } from "./societyMapScope";
 import { demandedKinds } from "./societyDemand";
+import { publishRuinFields } from "./societyRuins";
 
 export function societyPublications(input: AtlasGenerationInput): PublicationDefinition[] {
   const enabled = ["human.cultures", "human.politics", "built.layout"].some(
@@ -44,6 +45,7 @@ export function publishSettlements(state: GenerationState, context: MapProcessCo
       .map((c) => c.id)
   );
   publishSocietyWorks(state);
+  publishRuinFields(state);
   for (const c of region.communities) {
     const people = population(c),
       urban = Math.min(people, c.settlement?.population ?? 0);

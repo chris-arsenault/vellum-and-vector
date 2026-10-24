@@ -20,10 +20,8 @@ Society reads geography when it settles: each population unit takes the best
 site class its country offers (pass, Fire seat, river node, harbour, melt line,
 fishery coast, halo edge, plain node) and holds a fortress only when a route
 node or hazard gives a reason. At the World profile a unit's works are demands
-over the cells of the work's medium in its country, conserving the total of the
-located work they stand for; a finer profile realizes each inherited demand at
-the nearest cell of that medium. Located works exist from the Region profile
-down.
+of its country rather than located earthworks; what a demand does there and how
+a finer profile realizes it is [ADR 0005](0005-scale-contract.md).
 
 A human era can bind to a physical epoch. Bound to an epoch before the present,
 it runs inside that epoch as a mobile round whose camps become ruins and whose
@@ -33,9 +31,9 @@ crust. The binding is structural (the epoch before the final one), never a name.
 Non-magical couplings close the loop: living cover binds hillslope transport,
 burnt ground gullies, wetlands and peat hold runoff.
 
-Every quantity a profile generates is realized, latent (computed for a unit the
-profile resolves and read as forcing by a finer profile) or absent (not generated
-at this profile, nothing stored). Each process declares which it produces.
+Every quantity a profile generates is realized, latent or absent;
+[ADR 0005](0005-scale-contract.md) defines the states and what each pillar
+produces.
 
 ## Alternatives
 

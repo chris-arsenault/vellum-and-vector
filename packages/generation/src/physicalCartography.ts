@@ -136,7 +136,7 @@ export const physicalCartography: Record<string, CartographicControl | Cartograp
     initialOnly: true,
     defaultChoice: "scattered",
     explanation:
-      "The prominence of volcanic districts and crater landforms within the background landscape. All choices retain both kinds of landform.",
+      "The prominence of volcanic districts and crater landforms. Prevalence scales with map area; physical footprints stay in kilometres and history determines what survives.",
     choices: [
       choice("rare", "Rare", landmarks(0.25, 1, 1)),
       choice("scattered", "Scattered", landmarks(0.7, 2, 3)),

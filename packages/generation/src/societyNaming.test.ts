@@ -18,6 +18,7 @@ import { makeWork } from "./societyWorks";
 import { publishSocietyWorks } from "./societyWorkPublication";
 import { workTerms } from "./namingCultures";
 
+// eslint-disable-next-line max-lines-per-function -- The fixture assembles a complete society workspace.
 function fixture() {
   const state = landscape(),
     world = state.domain.world;
@@ -64,6 +65,7 @@ function fixture() {
     edges: [],
     river: new Float64Array(10),
     coast: new Float64Array(10),
+    mediumChanged: new Set(),
     inherited: false,
     changed: new Set(),
   };

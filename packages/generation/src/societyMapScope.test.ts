@@ -6,6 +6,7 @@ import { relocatePolitySeats, settlementHierarchy } from "./societyHierarchy";
 import { publishSettlements } from "./societyPublication";
 import { publishCultures } from "./societyCulturePublication";
 import { makeWork } from "./societyWorks";
+import { realizeDemands } from "./societyDemand";
 import type { MapProcessContext } from "./process";
 
 // Connected hinterlands, an isolated town and a sovereign seat share one publication fixture.
@@ -87,6 +88,7 @@ function fixture() {
     region,
     owner: new Int32Array(10),
     edges: [],
+    mediumChanged: new Set(),
     river: new Float64Array(10),
     coast: new Float64Array(10),
     inherited: false,
@@ -147,6 +149,10 @@ it("publishes only major global items while retaining latent society for explici
   expect(region).toEqual(before);
   world.areas.child = { ...world.areas.area, id: "child", parentId: "area", profile: "region" };
   state.domain.scope = { ...state.domain.scope, areaId: "child" };
+  // A demand is not a feature at any profile; the child realizes it on c1's land first.
+  state.society!.owner.fill(1, 5);
+  realizeDemands(state);
+  const realized = structuredClone(region);
   publishSettlements(state, { ...context, scope: state.domain.scope });
   const localWork = Object.values(world.features).find((f) => f.attributes.workId === work.id)!;
   expect(localWork).toMatchObject({ kind: "conservation", layerId: "landUse", areaId: "child" });
@@ -155,5 +161,6 @@ it("publishes only major global items while retaining latent society for explici
       (f) => f.attributes.communityId === "c1" && f.kind === "settlement"
     )?.areaId
   ).toBe("child");
-  expect(region).toEqual(before);
+  // Publication itself changes no society record; only realization did.
+  expect(region).toEqual(realized);
 });

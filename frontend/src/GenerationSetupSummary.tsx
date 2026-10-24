@@ -8,6 +8,7 @@ import {
 } from "./generationWorkflowPresentation";
 import { useWorkflowFields } from "./workflowFieldState";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
+import { GenerationWorkload } from "./GenerationResolution";
 
 export function GenerationSetupSummary({ flow }: { flow: GenerationWorkflow }) {
   return (
@@ -19,6 +20,15 @@ export function GenerationSetupSummary({ flow }: { flow: GenerationWorkflow }) {
       <p>
         {flow.draft.recipe.quality} detail · seed {flow.draft.recipe.seed}
       </p>
+      {flow.approach === "procedural" && (
+        <GenerationWorkload
+          width={flow.draft.width}
+          height={flow.draft.height}
+          quality={flow.draft.recipe.quality}
+          showWarning={flow.stage !== "world"}
+          profile={flow.options.source?.world.areas[flow.options.areaId!]?.profile ?? "world"}
+        />
+      )}
       {flow.setup?.context.inherited && (
         <p>Parent geography and completed history are inherited.</p>
       )}

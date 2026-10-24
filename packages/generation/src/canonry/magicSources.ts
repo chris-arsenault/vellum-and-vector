@@ -2,7 +2,8 @@ import type { GenerationState } from "../process";
 import type { MagicField } from "./magicState";
 import { nearestTriangle } from "./mesh";
 import { clamp, round } from "./math";
-import { worldCandidates } from "./worldSources";
+import { worldCandidates, separatedCandidates } from "./worldSources";
+import { areaBudget, mediumArea, referenceLandArea, referenceOceanArea } from "./worldScale";
 import type { PhysicalField } from "./field";
 import { hashUnit } from "./noise";
 import type { MagicSystem } from "@atlas/domain";
@@ -32,6 +33,12 @@ function geothermalSources(state: GenerationState, field: MagicField, seed: numb
   const map = state.physical!.map,
     p = field.definition.parameters;
   if (p.maximumSources === 0) return;
+  const budget = areaBudget(
+    p.maximumSources,
+    mediumArea(map, (i) => map.WaterKindCodes[i] !== 1),
+    referenceLandArea
+  );
+  if (budget === 0) return;
   const candidates = geothermalCandidates(state, field, seed);
   const selected: typeof candidates = [];
   for (const source of candidates) {
@@ -39,7 +46,7 @@ function geothermalSources(state: GenerationState, field: MagicField, seed: numb
     const spacing = p.sourceSpacing + ((1000 - map.HeatSourceDensity[i]) * 10_000) / 150;
     if (selected.some((j) => Math.hypot(source.x - j.x, source.y - j.y) < spacing)) continue;
     selected.push(source);
-    if (selected.length >= p.maximumSources) break;
+    if (selected.length >= budget) break;
   }
   if (!selected.length) {
     const i = strongestHeatSource(map.HeatSourceDensity, map.mesh.contentCount);
@@ -87,9 +94,13 @@ function strongestHeatSource(values: Int32Array, count: number) {
 }
 function oceanSource(state: GenerationState, field: MagicField, seed: number) {
   const map = state.physical!.map;
-  let best = -1,
-    score = -Infinity;
-  for (const source of worldCandidates(map.mesh, seed, 2048)) {
+  const budget = areaBudget(
+    1,
+    mediumArea(map, (i) => map.WaterKindCodes[i] === 1),
+    referenceOceanArea
+  );
+  const candidates = [];
+  for (const source of worldCandidates(map.mesh, seed, Math.max(2048, budget * 64))) {
     const i = nearestTriangle(map.mesh, source.x, source.y);
     if (i < 0 || i >= map.mesh.contentCount || map.WaterKindCodes[i] !== 1) continue;
     let depth = map.WaterDepths[i];
@@ -102,17 +113,21 @@ function oceanSource(state: GenerationState, field: MagicField, seed: number) {
             10_000) /
           map.mesh.degree[i];
     }
-    if (depth > score) {
-      best = i;
-      score = depth;
-    }
+    candidates.push({ ...source, i, score: depth });
   }
-  if (best >= 0) {
-    field.source[best] = 1000;
+  candidates.sort((a, b) => b.score - a.score || b.priority - a.priority);
+  const selected = separatedCandidates(
+    candidates,
+    budget,
+    field.definition.parameters.rayDistance / 2
+  );
+  for (const source of selected) {
+    const i = nearestTriangle(map.mesh, source.x, source.y);
+    field.source[i] = 1000;
     field.origins.push({
-      id: "deep-ocean",
-      x: map.mesh.x[best],
-      y: map.mesh.y[best],
+      id: `deep-ocean:${source.id}`,
+      x: source.x,
+      y: source.y,
       radius: field.definition.parameters.beamWidth,
       strength: 1000,
     });

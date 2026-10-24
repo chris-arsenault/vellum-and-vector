@@ -1,6 +1,5 @@
 import {
   gridPosition,
-  neighbors,
   population,
   semanticId,
   spatial,
@@ -15,7 +14,8 @@ import { applyNativeColdAgeWork } from "./societyNativeWorks";
 import { nearestCommunity } from "./societyPopulation";
 import { societyValue } from "./societySupport";
 import { isWorldSociety } from "./societyMapScope";
-import { demandSamples } from "./societyDemand";
+import { demandAmount, demandSamples, hasMedium } from "./societyDemand";
+import { coldAgeWorks, placeColdAgeWork } from "./societyColdAge";
 import { authoredFields } from "./mapAuthored";
 import { anchorRiverWork } from "./societyWaterUse";
 import { nearestSample, samplesInBox } from "./societySpatial";
@@ -29,13 +29,14 @@ export function makeWork(
 ): SocietyWork {
   // A World unit makes demands of its country; only a finer profile, or an explicit
   // position, locates a work.
-  const demand = position === undefined && isWorldSociety(state);
+  const demand = position === undefined && isWorldSociety(state),
+    radius = Math.min(5000, Math.sqrt(c.areaKm2) * 200);
   const work: SocietyWork = {
     id: semanticId(state.domain.world.id, "society-work", `${c.id}:${kind}`),
     communityId: c.id,
     kind,
     position: position ?? c.position,
-    radius: Math.min(5000, Math.sqrt(c.areaKm2) * 200),
+    radius,
     magnitude: 1,
     condition: 1,
     maintained: true,
@@ -43,7 +44,7 @@ export function makeWork(
     built: state.society!.region.history.at(-1)?.id ?? "Settlement",
     applied: 0,
     causes: [],
-    ...(demand ? { demand } : {}),
+    ...(demand ? { demand: demandAmount(state, c, kind, radius) } : {}),
   };
   const named = societyWorkName(state.domain.world, c, work);
   work.name = named.name;
@@ -69,62 +70,6 @@ function settledWorks(state: GenerationState, c: SocietyCommunity): SocietyWorkK
   if (v("slope") > 0.08 && state.society!.region.connections.length) kinds.push("pass");
   if (c.support.water < 0.5 && state.society!.river[i] > 0.4) kinds.push("dam");
   return kinds;
-}
-/**
- * The cold-age set of a mobile round: hunt the crowded herds, burn the groves open, dig into
- * the veins, quarry the prisms, build weirs in the bays. Small bands do all of it.
- */
-function coldAgeWorks(state: GenerationState, c: SocietyCommunity): SocietyWorkKind[] {
-  if (population(c) < 40) return [];
-  const i = nearestSample(state, c.position),
-    v = (name: string) => societyValue(state, name, i);
-  const kinds: SocietyWorkKind[] = [];
-  if (v("herbivores") > 0.001) kinds.push("hunting");
-  if (v("treeCover") > 0.25) kinds.push("burning");
-  if (coldAgeSite(state, c, "magic:fire:intensity", 100, 25_000) >= 0) kinds.push("tapping");
-  if (coldAgeSite(state, c, "magic:aurora:feature:prism", 1, 30_000) >= 0) kinds.push("quarrying");
-  if (state.society!.coast[i] > 0 && population(c) >= 100) kinds.push("weir");
-  return kinds;
-}
-/** The nearest sample within reach where a channel reaches a threshold, or -1. */
-function coldAgeSite(
-  state: GenerationState,
-  c: SocietyCommunity,
-  channel: string,
-  threshold: number,
-  reach: number,
-  accepts: (i: number) => boolean = () => true
-) {
-  const { x, y } = c.position;
-  let best = -1,
-    distance = reach;
-  for (const i of samplesInBox(state.surface, [x - reach, y - reach, x + reach, y + reach])) {
-    if (societyValue(state, channel, i) < threshold || !accepts(i)) continue;
-    const p = gridPosition(state.surface, i),
-      d = Math.hypot(p.x - x, p.y - y);
-    if (d < distance) [best, distance] = [i, d];
-  }
-  return best;
-}
-/** Where a cold-age work stands: the vein, the prism ridge, the shallow water of the bay. */
-function placeColdAgeWork(state: GenerationState, c: SocietyCommunity, work: SocietyWork) {
-  const grid = state.surface;
-  const at =
-    work.kind === "tapping"
-      ? coldAgeSite(state, c, "magic:fire:intensity", 100, 25_000)
-      : work.kind === "quarrying"
-        ? coldAgeSite(state, c, "magic:aurora:feature:prism", 1, 30_000)
-        : work.kind === "weir"
-          ? coldAgeSite(
-              state,
-              c,
-              "water",
-              1,
-              15_000,
-              (i) => societyValue(state, "waterDepth", i) < 30
-            )
-          : -1;
-  if (at >= 0) work.position = gridPosition(grid, at);
 }
 function needsWater(state: GenerationState, c: SocietyCommunity, i: number) {
   return c.support.water < 0.5 && state.society!.river[i] > 0.2;
@@ -154,20 +99,24 @@ export function planSocietyWorks(state: GenerationState) {
   if (!work.round) addHarbors(state, existing);
   addAuthoredWorks(state, existing);
 }
+/**
+ * A unit demands a harbour of the shore it holds: its coast medium, the same cells the demand
+ * is later realized on. A located harbour (a finer profile) snaps to shallow water near the
+ * seat.
+ */
 function addHarbors(state: GenerationState, existing: Set<string>) {
   const grid = state.surface;
-  const shores = Array.from(grid.active.keys()).filter(
-    (i) => societyValue(state, "water", i) === 1 && societyValue(state, "waterDepth", i) < 30
-  );
-  const owner = state.society!.owner;
-  for (const [unit, c] of state.society!.region.communities.entries()) {
+  const shores = isWorldSociety(state)
+    ? []
+    : Array.from(grid.active.keys()).filter(
+        (i) => societyValue(state, "water", i) === 1 && societyValue(state, "waterDepth", i) < 30
+      );
+  for (const c of state.society!.region.communities) {
     if (population(c) < 1000) continue;
     const work = makeWork(state, c, "harbor");
     if (existing.has(work.id)) continue;
     if (work.demand) {
-      // A unit demands a harbour of any shore it holds, not only one near its seat.
-      if (!shores.some((i) => owner[i] === unit || ring(grid, i).some((j) => owner[j] === unit)))
-        continue;
+      if (!hasMedium(state, work)) continue;
     } else {
       const near = shores.find((i) => {
         const p = gridPosition(grid, i);
@@ -180,8 +129,6 @@ function addHarbors(state: GenerationState, existing: Set<string>) {
     existing.add(work.id);
   }
 }
-const ring = (grid: GenerationState["surface"], i: number) =>
-  neighbors(grid, i, true, spatial.geometryCoverage(grid.scope.footprint));
 function addAuthoredWorks(state: GenerationState, existing: Set<string>) {
   const work = state.society!;
   for (const f of Object.values(state.domain.world.features)) {
@@ -212,18 +159,26 @@ function configureWork(candidate: SocietyWork, attributes: Record<string, unknow
   candidate.magnitude = parsed.magnitude;
   candidate.kind = parsed.workKind;
 }
+/**
+ * Present works at an inherited profile: authored works, and the works this area realized
+ * from inherited demands, act on the surface here without advancing an era.
+ */
 export function applyPresentWorks(state: GenerationState) {
-  const region = state.society!.region;
+  const region = state.society!.region,
+    area = state.domain.scope.areaId;
   addAuthoredWorks(state, new Set(region.works.map((w) => w.id)));
   for (const work of region.works) {
     if (work.previousShape) {
       applyWork(state, { ...work, ...work.previousShape, magnitude: 0, condition: 0 }, 0);
       delete work.previousShape;
     }
-    if (!work.authored || work.applied === work.magnitude * work.condition) continue;
+    const present = work.authored || work.realizedAt === area;
+    if (!present || work.applied === work.magnitude * work.condition) continue;
     applyWork(state, work, 0);
     work.causes.push(
-      "Present authored work refreshed its environmental dependencies without advancing an era."
+      work.authored
+        ? "Present authored work refreshed its environmental dependencies without advancing an era."
+        : "Realized work applied to this profile's surface without advancing an era."
     );
   }
 }
@@ -234,7 +189,18 @@ export function editableSamples(state: GenerationState, channel: string) {
     .map((a) => spatial.pointCoverage(a.footprint ?? a.source!.scope.footprint));
   return (i: number) => !authorities.some((covers) => covers(gridPosition(state.surface, i)));
 }
-export function changeSample(state: GenerationState, channel: string, i: number, value: number) {
+/**
+ * Edit one surface sample and record the channel. A work acts on a mesh-scale medium, so its
+ * edit may re-route water or re-propagate magic; a practice acts at its seat cell, which is
+ * below that scale, so its edit is synchronized but moves nothing else (ADR 0005).
+ */
+export function changeSample(
+  state: GenerationState,
+  channel: string,
+  i: number,
+  value: number,
+  cause: "work" | "practice" = "work"
+) {
   const values = state.surface.channels[channel];
   if (!values || !Number.isFinite(value) || values[i] === value) return;
   if (state.physical && channel === "elevation") {
@@ -242,6 +208,7 @@ export function changeSample(state: GenerationState, channel: string, i: number,
   }
   values[i] = value;
   state.society!.changed.add(channel);
+  if (cause === "work") state.society!.mediumChanged.add(channel);
 }
 export function workSamples(state: GenerationState, work: SocietyWork) {
   if (work.demand) return demandSamples(state, work);

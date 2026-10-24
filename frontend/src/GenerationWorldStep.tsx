@@ -1,10 +1,12 @@
 import type { GenerationRecipe } from "@atlas/generation";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 import { NumberField } from "./WorkflowFields";
+import { GenerationResolution } from "./GenerationResolution";
 
 export function GenerationWorldStep({ flow }: { flow: GenerationWorkflow }) {
   const { draft, change } = flow;
   const inherited = Boolean(flow.options.source);
+  const profile = flow.options.source?.world.areas[flow.options.areaId!]?.profile ?? "world";
   return (
     <>
       {flow.options.onManual && <StartingApproach flow={flow} />}
@@ -32,29 +34,22 @@ export function GenerationWorldStep({ flow }: { flow: GenerationWorkflow }) {
             change={(value) => change({ ...draft, [key]: value * 1000 })}
           />
         ))}
-        <label>
-          Detail level
-          <select
-            name="quality"
-            disabled={flow.approach === "blank"}
-            value={draft.recipe.quality}
-            onChange={(event) =>
-              change({
-                ...draft,
-                recipe: {
-                  ...draft.recipe,
-                  quality: event.target.value as GenerationRecipe["quality"],
-                },
-              })
-            }
-          >
-            {["draft", "standard", "fine"].map((quality) => (
-              <option key={quality} value={quality}>
-                {quality[0].toUpperCase() + quality.slice(1)}
-              </option>
-            ))}
-          </select>
-        </label>
+        <GenerationResolution
+          width={draft.width}
+          height={draft.height}
+          profile={profile}
+          disabled={flow.approach === "blank"}
+          quality={draft.recipe.quality}
+          change={(quality) =>
+            change({
+              ...draft,
+              recipe: {
+                ...draft.recipe,
+                quality: quality as GenerationRecipe["quality"],
+              },
+            })
+          }
+        />
         <NumberField
           label="Generation seed"
           fieldKey="world.seed"

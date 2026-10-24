@@ -1,5 +1,6 @@
 // FractureNetworkLayer.cs, Canonry 0f62584c; world-space steering replaces lattice directions.
 import type { PhysicalField } from "./field";
+import { areaBudget, mediumArea } from "./worldScale";
 import type { PhysicalContext } from "./context";
 import { hashSigned, hashUnit } from "./noise";
 import { round, truncate } from "./math";
@@ -151,7 +152,7 @@ export function fractureNetwork(map: PhysicalField, c: PhysicalContext) {
   const count =
     c.TectonicStrength === 0
       ? 0
-      : Math.max(1, truncate((c.Profile.FractureBranchCount * c.TectonicStrength) / 1000));
+      : areaBudget((c.Profile.FractureBranchCount * c.TectonicStrength) / 1000, mediumArea(map));
   if (count === 0) return;
   const candidates = worldCandidates(map.mesh, c.Seed, Math.max(1024, count * 256))
     .map((source) => ({

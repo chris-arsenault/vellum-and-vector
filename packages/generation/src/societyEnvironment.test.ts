@@ -4,6 +4,7 @@ import {
   createAdaptiveField,
   createAdaptiveTopology,
   gridPosition,
+  resolutionCells,
 } from "@atlas/domain";
 import { landscape, epoch } from "./mapFixtures";
 import { adaptivePhysicalMesh } from "./canonry/adaptiveMesh";
@@ -128,6 +129,69 @@ it("refreshes a dam reservoir and downstream routing without advancing geologica
     if (water === 2) expect(state.surface.channels.waterDepth[i]).toBeGreaterThan(0);
   expect(Number.isFinite(gridPosition(state.surface, 0).x)).toBe(true);
 });
+it("leaves water, terrain and the lake set untouched by a World dam demand", () => {
+  const { state, context } = fixture(),
+    map = state.physical!.map;
+  const c = state.society!.region.communities[0];
+  c.groups[0].count = 1000;
+  const demand = makeWork(state, c, "dam");
+  expect(demand.demand).toMatchObject({ unit: "cubic-metre/second" });
+  demand.magnitude = 3;
+  state.society!.region.works = [demand];
+  const elevation = map.Elevation.slice(),
+    water = map.WaterKindCodes.slice();
+  applySocietyWorks(state, context, 20);
+  refreshSocietyEnvironment(state, context, 20);
+  expect(map.EngineeredDams.size).toBe(0);
+  expect(map.Elevation).toEqual(elevation);
+  expect(map.WaterKindCodes).toEqual(water);
+  expect(Object.values(state.domain.world.features).some((f) => f.kind === "lake")).toBe(false);
+});
+it("realizes a World dam demand at the era's end only when its impoundment spans the mesh", () => {
+  const { state, context } = fixture(),
+    map = state.physical!.map;
+  const c = state.society!.region.communities[0];
+  c.groups[0].count = 1000;
+  const dam = makeWork(state, c, "dam");
+  dam.magnitude = 3;
+  state.society!.region.works = [dam];
+  applySocietyWorks(state, context, 20);
+  refreshSocietyEnvironment(state, context, 20, true);
+  const lakeCells = map.WaterKindCodes.filter((v) => v === 2).length;
+  if (dam.demand) {
+    // Below the resolution rule: nothing of the dam exists at World.
+    expect(map.EngineeredDams.size).toBe(0);
+    expect(lakeCells).toBe(0);
+  } else {
+    expect(dam.causes.at(-1)).toContain("Realized at World");
+    expect(map.EngineeredDams.size).toBeGreaterThan(0);
+    expect(lakeCells).toBeGreaterThanOrEqual(resolutionCells);
+    expect(dam.position).not.toEqual(c.position);
+  }
+});
+it("synchronizes a forge's seat heat without re-propagating Aurora, and re-propagates for a work on ice", () => {
+  const { state, context } = fixture();
+  initializeMagic(state);
+  const trace = vi.spyOn(propagation, "propagateMagic");
+  try {
+    const cold = (calls: typeof trace.mock.calls) =>
+      calls.some(([, field]) => field.definition.propagation === "cold-drainage");
+    expect(
+      state.physical!.magic!.fields.some((f) => f.definition.propagation === "cold-drainage")
+    ).toBe(true);
+    changeSample(state, "temperature", 0, 30, "practice");
+    changeSample(state, "iceThickness", 0, 0, "practice");
+    refreshSocietyEnvironment(state, context, 10, false);
+    expect(state.society!.changed.size).toBe(0);
+    expect(cold(trace.mock.calls)).toBe(false);
+    changeSample(state, "iceThickness", 1, 50, "work");
+    expect(state.society!.mediumChanged.has("iceThickness")).toBe(true);
+    refreshSocietyEnvironment(state, context, 10, false);
+    expect(cold(trace.mock.calls)).toBe(true);
+  } finally {
+    trace.mockRestore();
+  }
+});
 
 it("retains Pressure rays for inland earthworks and retraces them when ocean connectivity changes", () => {
   const { state, context } = fixture();
@@ -155,8 +219,10 @@ it("retains Pressure rays for inland earthworks and retraces them when ocean con
       trace.mock.calls.some(([, field]) => field.definition.propagation === "ocean-rays")
     ).toBe(true);
     trace.mockClear();
+    // A whole-field cold change is a change of Aurora's medium, so it is marked as a work's.
     state.surface.channels.temperature.fill(-20);
     state.society!.changed.add("temperature");
+    state.society!.mediumChanged.add("temperature");
     refreshSocietyEnvironment(state, context, 10, false);
     expect(
       trace.mock.calls.some(([, field]) => field.definition.propagation === "cold-drainage")

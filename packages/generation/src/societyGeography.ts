@@ -24,7 +24,14 @@ export interface SocietyWorkspace {
   /** The era of a mobile round inside an earlier epoch; camps, cold-age works, no publication. */
   round?: string;
   inherited: boolean;
+  /** Surface channels society edited since the last environmental refresh. */
   changed: Set<string>;
+  /**
+   * The subset of `changed` edited by a work on a mesh-scale medium (an earthwork, a tapped
+   * vein, a quarried prism). Only these re-route water or re-propagate magic (ADR 0005); a
+   * practice warming its seat cell does not.
+   */
+  mediumChanged: Set<string>;
   /** Elevation before local earthworks, for transferring only their terrain changes. */
   elevationBefore?: Float64Array;
   cycle?: { index: number; elapsed: number; final: boolean };
@@ -199,6 +206,7 @@ export function createSocietyGeography(
     ...(options.round ? { round: options.round } : {}),
     inherited: false,
     changed: new Set(),
+    mediumChanged: new Set(),
   };
   refreshSocietySupport(state);
   region.connections = connectionsFor(communities, owner, distances, edges);

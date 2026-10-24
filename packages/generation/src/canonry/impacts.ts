@@ -8,6 +8,7 @@ import { Feature } from "./codes";
 import { nearestTriangle } from "./mesh";
 import { worldCandidates, separatedCandidates, type WorldCandidate } from "./worldSources";
 import { deposit, rebuild } from "./surface";
+import { areaBudget, mediumArea } from "./worldScale";
 
 function impactCount(c: PhysicalContext): number {
   if (c.Profile.ImpactCraterCount === 0) return 0;
@@ -23,7 +24,7 @@ function impactCount(c: PhysicalContext): number {
   return configured;
 }
 function centers(map: PhysicalField, c: PhysicalContext): WorldCandidate[] {
-  const count = impactCount(c);
+  const count = areaBudget(impactCount(c), mediumArea(map));
   if (count === 0) return [];
   const ranked = worldCandidates(map.mesh, c.Seed, Math.max(256, count * 256)).sort(
     (a, b) => b.priority - a.priority

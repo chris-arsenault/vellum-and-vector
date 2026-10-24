@@ -100,8 +100,9 @@ function inheritOrigin(region: SocietyRegion, origin: SocietyCommunity): Heir[] 
 }
 /**
  * A located work comes with the ground it stands on. A demand comes with the unit's
- * country: the heir holding the largest share of the unit takes it at that share of its
- * magnitude, wherever the unit's seat was, and realizes it on its own medium afterwards.
+ * country: every heir of the unit inside this area carries it together, at the share of the
+ * unit's country they hold between them, and realization searches all their land for the
+ * site. Until then the heir with the largest share speaks for it.
  */
 function inheritWorks(
   state: GenerationState,
@@ -115,14 +116,19 @@ function inheritWorks(
       if (covered(w.position)) works.push(structuredClone(w));
       continue;
     }
-    const heir = (heirs.get(w.communityId) ?? []).sort((a, b) => b.share - a.share)[0];
-    if (!heir) continue;
+    const country = (heirs.get(w.communityId) ?? []).sort((a, b) => b.share - a.share);
+    if (!country.length) continue;
+    const share = Math.min(
+      1,
+      country.reduce((sum, heir) => sum + heir.share, 0)
+    );
     const work = structuredClone(w);
-    work.communityId = heir.c.id;
-    work.position = heir.c.position;
-    work.magnitude *= heir.share;
+    work.communityId = country[0].c.id;
+    work.country = country.map((heir) => heir.c.id);
+    work.position = country[0].c.position;
+    work.magnitude *= share;
     work.causes.push(
-      `Inherited at ${(heir.share * 100).toFixed(1)}% of the demand with the share of the unit's country this area holds.`
+      `Inherited at ${(share * 100).toFixed(1)}% of the demand, the share of the unit's country this area holds across ${country.length} heirs.`
     );
     works.push(work);
   }

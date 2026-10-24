@@ -47,9 +47,8 @@ function separated(candidates: Candidate[], count: number): Candidate[] {
     );
   return selected.map((i) => candidates[i]);
 }
-function anchors(sites: Candidate[], count: number, radius: number): number[] {
-  let candidates = sites.map((_, i) => i).filter((i) => radius2(sites[i]) <= radius * radius);
-  if (candidates.length < count) candidates = sites.map((_, i) => i);
+function anchors(sites: Candidate[], count: number): number[] {
+  const candidates = sites.map((_, i) => i);
   const chosen = [
     bestIndex(candidates, (i) => -radius2(sites[i]) / (0.8 + sites[i].priority * 0.4)),
   ];
@@ -106,12 +105,12 @@ function frontierSite(
     (i) => -assemblyDistance(sites, selected, i, assembly)
   );
 }
-function assemblies(sites: Candidate[], context: PhysicalContext, radius: number): Int32Array {
+function assemblies(sites: Candidate[], context: PhysicalContext): Int32Array {
   const profile = context.Profile,
     seed = context.EpochStableSeed;
   const count = clamp(round(sites.length * profile.ContinentalCrustFraction), 2, sites.length - 2);
   const result = new Int32Array(sites.length),
-    chosen = anchors(sites, profile.ContinentalAssemblyCount, radius);
+    chosen = anchors(sites, profile.ContinentalAssemblyCount);
   chosen.forEach((i, n) => {
     result[i] = n + 1;
   });
@@ -137,15 +136,14 @@ function assemblies(sites: Candidate[], context: PhysicalContext, radius: number
 }
 export function createProvinceSites(map: PhysicalField, context: PhysicalContext): ProvinceSite[] {
   const p = context.Profile,
-    seed = context.EpochStableSeed,
-    radius = map.mesh.contentRadius * 0.94;
+    seed = context.EpochStableSeed;
   const candidates = worldCandidates(
     map.mesh,
     seed,
     p.TectonicProvinceCount * p.TectonicSiteCandidateMultiplier
   );
   const selected = separated(candidates, p.TectonicProvinceCount);
-  const groups = assemblies(selected, context, radius);
+  const groups = assemblies(selected, context);
   return selected.map((site, i) => {
     const angle = hashUnit(seed ^ 0x5c27, i, 0) * Math.PI * 2;
     const speed = lerp(

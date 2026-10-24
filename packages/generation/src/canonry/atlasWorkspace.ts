@@ -20,6 +20,8 @@ import { createWorldMesh } from "./worldMesh";
 import { createAdaptiveWorldMesh } from "./adaptiveMesh";
 import { triangleSample, type TriangleSample } from "./triangleSampling";
 import { atlasPhysicalProfile, atlasQuality } from "./atlasProfile";
+import { generationResolution } from "../resolution";
+import { continentalWorldProfile } from "./worldScale";
 import type { PhysicalProfileOverrides } from "../physicalProfileConfiguration";
 import { atlasChannels, type ChannelBinding } from "./atlasChannels";
 import type { PhysicalProfile } from "./profile";
@@ -177,14 +179,16 @@ export function createAtlasWorkspace(
   parameters: Partial<AtlasParameters> = {},
   overrides: PhysicalProfileOverrides = {}
 ): AtlasPhysicalWorkspace {
-  const profile = atlasPhysicalProfile(parameters, overrides);
   const frame = spatial.bounds(state.domain.world.reference.domain);
+  const profile = continentalWorldProfile(atlasPhysicalProfile(parameters, overrides), frame);
   profile.WorldExtentY = [frame[1], frame[3]];
   profile.WorldExtentX = [frame[0], frame[2]];
   const bounds = state.surface.bounds;
-  const maximumSize =
-    (Math.max(bounds[2] - bounds[0], bounds[3] - bounds[1]) + 2 * profile.BoundaryPadding) /
-    Math.sqrt(atlasQuality[quality].baseCells);
+  const { cellArea, cellSpan } = generationResolution(
+    quality,
+    state.domain.world.areas[state.domain.scope.areaId].profile
+  );
+  const maximumSize = cellSpan;
   const featureSamples = { draft: 2, standard: 4, fine: 8 }[quality];
   const sampling = { maximumSize, minimumSize: maximumSize / 16, featureSamples };
   const covers = spatial.pointCoverage(state.domain.scope.footprint),
@@ -193,7 +197,9 @@ export function createAtlasWorkspace(
   const mesh = fixed
     ? createWorldMesh(
         bounds,
-        atlasQuality[quality].baseCells,
+        ((bounds[2] - bounds[0] + 2 * profile.BoundaryPadding) *
+          (bounds[3] - bounds[1] + 2 * profile.BoundaryPadding)) /
+          cellArea,
         profile.BoundaryPadding,
         (x, y) => covers({ x, y, z: 0 }),
         spatial.area(state.domain.scope.footprint),
@@ -219,7 +225,13 @@ function createChildMesh(
   sampling: AtlasPhysicalWorkspace["sampling"],
   padding: number
 ) {
-  const support = protectedSampling(state, sampling.maximumSize, padding);
+  const targetSize = sampling.maximumSize;
+  // The inherited exterior is context; only the requested interior needs the finer samples.
+  sampling.maximumSize = Math.max(targetSize, padding / 2);
+  const support = [
+    { footprint: state.surface.scope.footprint, size: targetSize },
+    ...protectedSampling(state, targetSize),
+  ];
   sampling.minimumSize = support.reduce(
     (size, patch) => Math.min(size, patch.size),
     sampling.minimumSize
@@ -239,7 +251,7 @@ function createChildMesh(
     state.domain.scope.footprint
   );
 }
-function protectedSampling(state: GenerationState, size: number, padding: number) {
+function protectedSampling(state: GenerationState, size: number) {
   const bounds = state.surface.bounds,
     span = Math.max(bounds[2] - bounds[0], bounds[3] - bounds[1]);
   const supports = authoredFields(state.domain)
@@ -257,10 +269,10 @@ function protectedSampling(state: GenerationState, size: number, padding: number
       footprint: field.footprint ?? field.source!.scope.footprint,
       size: field.resolution!,
     }));
-  if (span < 2 * padding)
+  if (span < 2 * size)
     supports.push({
       footprint: state.surface.scope.footprint,
-      size: (size * span) / (2 * padding),
+      size: span / 4,
     });
   return supports;
 }

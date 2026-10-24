@@ -28,9 +28,13 @@ that state instead of the former capped placeholder selection.
 World publication contains major centers and their routes, political territories,
 population and affiliation fields, and major historical events. World settlements
 carry their site class, reason and fortress flag and the work kinds their unit
-demands of its country; at World a work is a demand acting over the unit's cells
-of its medium rather than an earthwork at a point, and a finer profile realizes
-each inherited demand at the nearest cell of that medium. Settlements, ruins,
+demands of its country. At World a work is a demand rather than an earthwork at
+a point: an intensive demand (clearance, burning, hunting, conservation,
+irrigation, tapping, quarrying) acts over the unit's cells of its medium, a
+structural demand (dam, harbour, pass, weir) carries an amount and a unit and
+does nothing until a finer profile realizes it; the natures and units are
+declared in `societyWorkNatures` and the rule in
+[ADR 0005](adr/0005-scale-contract.md). Settlements, ruins,
 waterworks, transport sites, land use, magic practice sites, institutions and
 historical events have distinct layers and concrete feature kinds. A selected
 creation profile also limits scene features and detailed geometry, so
@@ -49,7 +53,10 @@ feature identities; it does not rerun old eras. The inspector exposes population
 composition, support and practice resources, while generation controls supply era
 duration, mobility and political capacity, and bind an era to a physical epoch:
 an era bound to an epoch before the present runs inside it as a mobile round
-whose camps become ruins and whose cold-age works persist. Existing geographic
+whose cold-age works persist. Its camps are latent sites the present prefers;
+one publishes as a World ruin only where it met the World's own settlement rule
+or where the present finds its ground marked by a sealed vein or a drowned weir
+line (a ruin field). Existing geographic
 inputs and focused work refreshes support this subsystem. The cross-pillar
 coupling decisions are recorded in
 [ADR 0004](adr/0004-coupling-through-each-systems-medium.md).
@@ -399,15 +406,25 @@ adapts them for the atlas rather than copying the game's frozen-world setting:
   Thermal forcing refreshes with climate; material feedback and elapsed storage
   advance once per epoch.
 
-| Quality  | Content triangles | GIS field samples |
-| -------- | ----------------: | ----------------: |
-| Draft    |            16,384 |         192 × 192 |
-| Standard |            65,536 |         384 × 384 |
-| Fine     |           262,144 |         768 × 768 |
+Detail presets specify physical area per terrain cell in km². The creation
+profile selects the physical scale; world dimensions determine how many cells
+are required. `resolution.ts` owns the presets and workload calculation shared
+by setup and generation. Setup shows live estimates for every preset and warns
+above the default world's Standard workload. This warning does not limit map
+size or detail. Numerical boundary support and authored refinement can add cells.
 
 All qualities execute the physical processes and configured epochs. Generation
-cost increases with numerical detail. Native scratch arrays are discarded before
-the result leaves the worker; no intermediate state is stored.
+cost increases with physical extent and numerical detail. Native scratch arrays
+are discarded before the result leaves the worker; no intermediate state is stored.
+
+Continental deformation and crust transitions follow the characteristic province
+size, so a larger world retains broad, irregular land masses. Candidate placement
+covers the complete rectangular domain. Continent and province totals remain
+creator choices. Impact, plume and fracture budgets express prevalence per
+reference world area. Fire core budgets follow land area, Pressure loci and wake
+budgets follow ocean area, and coastal impulse budgets follow shoreline length.
+Their footprint widths, spacing, travel distances and physical feedback retain
+metre units. Climate coverage remains an explicit latitude-frame choice.
 
 Regional refinement imports parent crust and accumulated material histories. It
 refines climate, drainage, erosion, ice and coasts without assembling a new set

@@ -128,7 +128,7 @@ export const atlasParameterDefinitions = {
   },
   impacts: {
     label: "Meteor impacts",
-    unit: "history budget",
+    unit: "history budget per 12 million km²",
     minimum: 0,
     default: 6,
     step: 1,

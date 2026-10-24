@@ -1,9 +1,9 @@
 import { expect, it } from "vitest";
-import { gridPosition, putChannel } from "@atlas/domain";
+import { gridPosition, putChannel, societyWorkNatures } from "@atlas/domain";
 import { landscape, epoch } from "./mapFixtures";
 import { initializePopulation } from "./societyPopulation";
 import { refreshSocietyConnections } from "./societyGeography";
-import { applySocietyWorks, makeWork, workSamples } from "./societyWorks";
+import { applySocietyWorks, makeWork, planSocietyWorks, workSamples } from "./societyWorks";
 import { demandSamples, realizeDemands, workMedium } from "./societyDemand";
 import type { MapProcessContext } from "./process";
 
@@ -47,7 +47,7 @@ it("makes World works demands that act over the unit's whole country, conserving
   const { state, context } = fixture("world"),
     c = state.society!.region.communities[unit];
   const demand = makeWork(state, c, "clearance");
-  expect(demand.demand).toBe(true);
+  expect(demand.demand).toMatchObject({ unit: "fraction" });
   const located = makeWork(state, c, "clearance", c.position);
   expect(located.demand).toBeUndefined();
   const spread = demandSamples(state, demand),
@@ -64,10 +64,44 @@ it("makes World works demands that act over the unit's whole country, conserving
     ),
     3
   );
+  expect(demand.demand!.amount).toBeCloseTo(spread[0].fraction, 9);
   state.society!.region.works = [{ ...demand, radius: 10000 }];
   applySocietyWorks(state, context, 100);
   const cleared = spread.filter((s) => state.surface.channels.treeCover[s.i] < 0.6);
   expect(cleared.length).toBe(spread.length);
+});
+
+it("gives a structural demand an amount and a unit but no samples or terrain change at World", () => {
+  const { state, context } = fixture("world"),
+    c = state.society!.region.communities[unit];
+  putChannel(state.surface, "slope", "gradient", new Float64Array(10).fill(0.2));
+  const before = state.surface.channels.elevation.slice();
+  const pass = makeWork(state, c, "pass"),
+    harbor = makeWork(state, c, "harbor"),
+    dam = makeWork(state, c, "dam");
+  for (const work of [pass, harbor, dam]) {
+    expect(societyWorkNatures[work.kind].nature).toBe("structural");
+    expect(work.demand).toMatchObject({ unit: societyWorkNatures[work.kind].unit });
+    expect(workSamples(state, work)).toEqual([]);
+  }
+  expect(pass.demand!.amount).toBe(1000); // the people whose routes cross the steep ground
+  state.society!.region.works = [pass, harbor, dam];
+  applySocietyWorks(state, context, 100);
+  expect(Array.from(state.surface.channels.elevation)).toEqual(Array.from(before));
+  expect(state.society!.changed.has("elevation")).toBe(false);
+});
+
+it("demands a harbour only of the shore the unit holds", () => {
+  const { state } = fixture("world"),
+    c = state.society!.region.communities[unit];
+  planSocietyWorks(state);
+  expect(state.society!.region.works.some((w) => w.kind === "harbor")).toBe(false);
+  const shore = Array.from(state.society!.owner).findIndex((o) => o === unit);
+  state.society!.coast[shore] = 1;
+  planSocietyWorks(state);
+  const harbor = state.society!.region.works.find((w) => w.kind === "harbor");
+  expect(harbor?.demand).toEqual({ amount: 1000, unit: "people" });
+  expect(harbor?.communityId).toBe(c.id);
 });
 
 it("filters a demand's cells by the kind's medium and realizes it at a finer profile", () => {
@@ -82,11 +116,10 @@ it("filters a demand's cells by the kind's medium and realizes it at a finer pro
   expect(land(0)).toBe(true);
   expect(pass(0)).toBe(false);
   expect(pass(steep)).toBe(true);
-  expect(demandSamples(state, makeWork(state, c, "pass")).map((s) => s.i)).toEqual([steep]);
   const demand = makeWork(state, c, "pass");
   state.society!.region.works = [demand];
   realizeDemands(state);
-  expect(demand.demand).toBe(true); // World keeps its demands.
+  expect(demand.demand).toBeDefined(); // World keeps its demands.
   state.domain.world.areas.area.profile = "local";
   realizeDemands(state);
   expect(demand.demand).toBeUndefined();
@@ -94,8 +127,8 @@ it("filters a demand's cells by the kind's medium and realizes it at a finer pro
   expect(demand.position).toEqual(gridPosition(state.surface, steep));
   // A demand with no medium in the refined area stays a demand.
   const weir = makeWork(state, c, "weir");
-  weir.demand = true;
+  weir.demand = { amount: 1, unit: "metre" };
   state.society!.region.works = [weir];
   realizeDemands(state);
-  expect(weir.demand).toBe(true);
+  expect(weir.demand).toBeDefined();
 });

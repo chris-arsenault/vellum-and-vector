@@ -20,7 +20,14 @@ export interface HumanRound {
   era: string;
   epoch: string;
   history: import("@atlas/domain").SocietyEraRecord[];
-  ruins: { x: number; y: number; name: string; siteKind: string }[];
+  ruins: {
+    x: number;
+    y: number;
+    name: string;
+    siteKind: string;
+    siteReason: string;
+    peak: number;
+  }[];
 }
 export interface GenerationState {
   society?: import("./societyGeography").SocietyWorkspace;

@@ -8,6 +8,7 @@ import { createSocietyGeography } from "./societyGeography";
 import { startingPopulations } from "./societySettlements";
 import { societyCycle } from "./societyEvolution";
 import { generatedFeature, putGenerated } from "./mapFeatures";
+import { isMajorRuin } from "./societyMapScope";
 
 type Era = GenerationSettings["humanEras"][number];
 /**
@@ -130,13 +131,18 @@ async function runEra(
   });
 }
 const lasting = (c: SocietyCommunity) => Boolean(c.founded) && (c.settlement?.peak ?? 0) >= 20;
-/** The era ends inside the epoch: camps that lasted are published as ruins and remembered. */
-function endRound(state: GenerationState, era: string, epoch: string): HumanRound {
+/**
+ * The era ends inside the epoch. Every camp that lasted is remembered as a latent site the
+ * present prefers; only a camp that met the World's own ruin rule is published as a feature
+ * (ADR 0005). The present realizes the others as ruin fields where a sealed vein or a
+ * drowned weir line marks the ground they stood on.
+ */
+export function endRound(state: GenerationState, era: string, epoch: string): HumanRound {
   const region = state.society!.region,
     camps = region.communities.filter(lasting);
   for (const c of camps) {
     c.status = "ruined";
-    putGenerated(state, ruinFeature(state, c, era, epoch));
+    if (isMajorRuin(c)) putGenerated(state, ruinFeature(state, c, era, epoch));
   }
   return {
     era,
@@ -147,6 +153,8 @@ function endRound(state: GenerationState, era: string, epoch: string): HumanRoun
       y: c.position.y,
       name: c.name,
       siteKind: c.site?.kind ?? "plain",
+      siteReason: c.site?.reason ?? "open country",
+      peak: c.settlement?.peak ?? 0,
     })),
   };
 }

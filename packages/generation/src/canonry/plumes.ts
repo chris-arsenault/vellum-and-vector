@@ -5,22 +5,20 @@ import { round } from "./math";
 import { hashUnit } from "./noise";
 import { nearestTriangle } from "./mesh";
 import { worldCandidates, separatedCandidates } from "./worldSources";
+import { areaBudget, mediumArea } from "./worldScale";
 
 export function mantlePlumeRoots(map: PhysicalField, context: PhysicalContext) {
   map.MantlePlumeRootStrength.fill(0);
   const p = context.Profile;
-  const candidates = worldCandidates(
-    map.mesh,
-    context.Seed,
-    Math.max(256, p.MantlePlumeCount * 256)
-  );
+  const count = areaBudget(p.MantlePlumeCount, mediumArea(map));
+  const candidates = worldCandidates(map.mesh, context.Seed, Math.max(256, count * 256));
   const ranked = candidates
     .map((source) => {
       const cell = nearestTriangle(map.mesh, source.x, source.y);
       return { ...source, priority: 1000 - map.TectonicStrain[cell] + source.priority * 420 };
     })
     .sort((a, b) => b.priority - a.priority);
-  const selected = separatedCandidates(ranked, p.MantlePlumeCount, p.MantlePlumeMinimumSpacing);
+  const selected = separatedCandidates(ranked, count, p.MantlePlumeMinimumSpacing);
   selected.forEach((source, rank) => {
     const position = selected.length <= 1 ? 0 : rank / (selected.length - 1);
     const floor = p.MantlePlumeMinimumShare / 1000;

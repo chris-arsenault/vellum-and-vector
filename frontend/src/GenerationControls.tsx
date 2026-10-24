@@ -6,6 +6,8 @@ import {
   type AtlasParameters,
   type AtlasParameterDefinition,
 } from "@atlas/generation";
+import type { Profile } from "@atlas/domain";
+import { GenerationResolution } from "./GenerationResolution";
 
 const settings = Object.entries(atlasParameterDefinitions).map(([key, value]) => {
   const definition: AtlasParameterDefinition = value;
@@ -53,32 +55,26 @@ function SettingField({
     </label>
   );
 }
-function DetailLevel({ quality, profile }: { quality: string; profile: string }) {
-  const options =
-    profile === "world"
-      ? [
-          "about 16,000 terrain samples",
-          "about 65,000 terrain samples",
-          "about 262,000 terrain samples",
-        ]
-      : ["coarse adaptive sampling", "medium adaptive sampling", "dense adaptive sampling"];
+function DetailLevel({
+  quality,
+  profile,
+  width,
+  height,
+}: {
+  quality: string;
+  profile: Profile;
+  width: number;
+  height: number;
+}) {
+  const [selected, setSelected] = useState(quality);
   return (
-    <>
-      <label>
-        Detail level
-        <select name="quality" defaultValue={quality}>
-          {["Draft", "Standard", "Fine"].map((name, i) => (
-            <option key={name} value={name.toLowerCase()}>
-              {name} · {options[i]}
-            </option>
-          ))}
-        </select>
-      </label>
-      <p className="hint">
-        Higher detail samples the same physical world more finely.{" "}
-        {profile === "world" && "Sample counts include the surrounding simulation margin."}
-      </p>
-    </>
+    <GenerationResolution
+      width={width}
+      height={height}
+      quality={selected}
+      profile={profile}
+      change={setSelected}
+    />
   );
 }
 export function GenerationControls({
@@ -86,11 +82,15 @@ export function GenerationControls({
   initial,
   quality = "standard",
   profile,
+  width,
+  height,
 }: {
   seed: number;
   initial?: Record<string, number>;
   quality?: string;
-  profile: string;
+  profile: Profile;
+  width: number;
+  height: number;
 }) {
   const [values, setValues] = useState({ ...defaultAtlasParameters, ...initial });
   const [preset, setPreset] = useState(initial ? "custom" : "balanced");
@@ -139,7 +139,7 @@ export function GenerationControls({
           coal and oil source potential require burial, heat and geological time.
         </p>
       </details>
-      <DetailLevel quality={quality} profile={profile} />
+      <DetailLevel quality={quality} profile={profile} width={width} height={height} />
       <label>
         Seed
         <input name="seed" type="number" defaultValue={seed} required />

@@ -40,9 +40,9 @@ export function publishSocietyWorks(state: GenerationState) {
   );
   for (const w of region.works) {
     if (w.authored && state.domain.world.features[w.id]) continue;
-    // Current generated works are local interventions, not global landmarks.
-    // Their records and environmental consequences remain in society state.
-    if (isWorldSociety(state)) {
+    // A demand is a latent quantity, not a feature, at every profile; the World publishes
+    // no generated works at all (ADR 0005).
+    if (isWorldSociety(state) || w.demand) {
       nameUnrecordedWork(state, w);
       continue;
     }

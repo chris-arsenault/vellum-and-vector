@@ -258,7 +258,7 @@ const effectLabels = {
 };
 const parameterLabels: Record<keyof MagicSystem["parameters"], string> = {
   sourceThreshold: "Minimum source density · 0–1,000",
-  maximumSources: "Maximum cores",
+  maximumSources: "Core-site budget per 5.76 million km² of land",
   sourceSpacing: "Core spacing / radial reach · metres",
   baseCost: "Propagation loss per kilometre",
   conductanceDivisor: "Fracture conductance divisor",
@@ -273,9 +273,9 @@ const parameterLabels: Record<keyof MagicSystem["parameters"], string> = {
   coastalRayDistance: "Coastal ray distance · metres",
   wakeDistance: "Wake travel distance · metres",
   beamWidth: "Ray / wake width · metres",
-  coastalSources: "Coastal wave sources",
+  coastalSources: "Coastal impulses per 20,000 km of shoreline",
   coastalSourceDistance: "Coastal source band · metres",
-  wakeSources: "Ancient wake sources",
+  wakeSources: "Wake paths per 6.24 million km² of ocean",
   coastalThreshold: "Pressure threshold at coast · 0–999",
   waveAmplification: "Wave amplification",
   currentAmplification: "Current amplification",

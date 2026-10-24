@@ -146,6 +146,47 @@ export type SocietyWorkKind =
   | "burning"
   | "quarrying"
   | "weir";
+/**
+ * How a work kind behaves at a profile whose mesh cannot hold it (ADR 0005). An intensive
+ * work is a fraction per cell with meaning, so at World it spreads as field forcing over its
+ * medium. A structural work is one thing or none, so at World it is a demand with an amount
+ * and a unit and no physical consequence until a finer profile locates it. A practice is a
+ * located record that forces one cell at its seat at every profile.
+ */
+export type SocietyWorkNature = "intensive" | "structural" | "practice";
+/** One labelled declaration per work kind: its nature and the unit its demand carries. */
+export const societyWorkNatures: Record<
+  SocietyWorkKind,
+  { nature: SocietyWorkNature; unit: string; carries: string }
+> = {
+  clearance: { nature: "intensive", unit: "fraction", carries: "cleared share of farmable land" },
+  burning: { nature: "intensive", unit: "fraction", carries: "burnt share of wooded land" },
+  hunting: { nature: "intensive", unit: "fraction", carries: "harvest pressure on herds" },
+  conservation: { nature: "intensive", unit: "fraction", carries: "restoration pressure" },
+  irrigation: {
+    nature: "intensive",
+    unit: "cubic-metre/second",
+    carries: "flux diverted from the unit's channels",
+  },
+  tapping: { nature: "intensive", unit: "fraction", carries: "conductance rise along veins" },
+  quarrying: { nature: "intensive", unit: "fraction", carries: "stored charge removed" },
+  dam: { nature: "structural", unit: "cubic-metre/second", carries: "regulated discharge" },
+  harbor: { nature: "structural", unit: "people", carries: "maritime traffic served" },
+  pass: { nature: "structural", unit: "people", carries: "route traffic across steep ground" },
+  weir: { nature: "structural", unit: "metre", carries: "shore worked" },
+  "fire-forge": { nature: "practice", unit: "celsius", carries: "heat budget at the seat" },
+  "aurora-archive": { nature: "practice", unit: "crystal", carries: "crystals and charge" },
+  "pressure-diving": { nature: "practice", unit: "charge", carries: "carried charge" },
+};
+/**
+ * A World unit's demand of its country: what the located work would amount to, in the
+ * kind's unit. A child realizes it and records the part it could not site as unmet.
+ */
+export interface SocietyDemand {
+  amount: number;
+  unit: string;
+  unmet?: number;
+}
 export interface SocietyWork {
   id: string;
   /** Assigned at construction; absent on unnamed authored input and older session fixtures. */
@@ -163,10 +204,18 @@ export interface SocietyWork {
   applied: number;
   /**
    * A World-profile work is a demand its unit makes of its country, not a located
-   * earthwork: it acts over the unit's cells of the kind's medium, and a finer profile
-   * realizes it at a site. Absent or false for located works.
+   * earthwork. An intensive demand acts over the unit's cells of the kind's medium; a
+   * structural demand has no effect until a finer profile realizes it at a site. Absent
+   * for located works.
    */
-  demand?: boolean;
+  demand?: SocietyDemand;
+  /**
+   * The heirs of the unit that made an inherited demand: the demand's country, searched as
+   * one for a site. Absent once realized, when `communityId` is the heir whose land holds it.
+   */
+  country?: string[];
+  /** The area whose generation located this work from an inherited demand. */
+  realizedAt?: string;
   previousShape?: { position: Position; radius: number; applied: number };
   causes: string[];
 }

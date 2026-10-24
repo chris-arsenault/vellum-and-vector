@@ -9,6 +9,7 @@ import type { GenerationState, MapProcessContext } from "./process";
 import { nearestSample } from "./societySpatial";
 import { societyValue } from "./societySupport";
 import { magicAt } from "./societyMagic";
+import { isWorldSociety } from "./societyMapScope";
 import { fieldInterpolator } from "@atlas/domain";
 
 interface Exposure {
@@ -151,7 +152,9 @@ export function resolveSocietyHazards(
         era,
         kind: exposure.kind,
         position: c.position,
-        radius: exposure.radius,
+        // At World a hazard is a rate on the unit and its footprint is the unit's; a point
+        // radius of a few kilometres only has meaning on a finer mesh (ADR 0005).
+        radius: isWorldSociety(state) ? unitRadius(c) : exposure.radius,
         magnitude: exposure.severity * (0.5 + context.random() * 1.5),
         casualties: 0,
         displaced: 0,
@@ -167,6 +170,10 @@ export function resolveSocietyHazards(
     description:
       "New triggered disturbances affect exposed people and works once; survivors retain their identities and travel along surviving connections.",
   });
+}
+/** The radius of a circle with the unit's country, in metres. */
+export function unitRadius(c: Pick<SocietyCommunity, "areaKm2">) {
+  return Math.sqrt((c.areaKm2 * 1e6) / Math.PI);
 }
 function applyAuthoredHazards(state: GenerationState, era: string) {
   for (const f of Object.values(state.domain.world.features)) {

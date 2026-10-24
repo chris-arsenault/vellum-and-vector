@@ -77,20 +77,24 @@ function fireUse(
     heat = (8 * used) / Math.max(1, demand);
   const editableHeat = editableSamples(state, "temperature"),
     editableIce = editableSamples(state, "iceThickness");
+  // The forge warms its seat cell: synchronized to the mesh, but below the scale that
+  // re-propagates a magic field.
   for (const { i, fraction } of workSamples(state, work)) {
     if (editableHeat(i))
       changeSample(
         state,
         "temperature",
         i,
-        societyValue(state, "temperature", i, 15) + (heat - practice.heatApplied) * fraction
+        societyValue(state, "temperature", i, 15) + (heat - practice.heatApplied) * fraction,
+        "practice"
       );
     if (editableIce(i))
       changeSample(
         state,
         "iceThickness",
         i,
-        Math.max(0, societyValue(state, "iceThickness", i) - heat * fraction * years * 0.02)
+        Math.max(0, societyValue(state, "iceThickness", i) - heat * fraction * years * 0.02),
+        "practice"
       );
   }
   practice.injuries += used * 0.002;

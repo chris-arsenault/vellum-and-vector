@@ -157,6 +157,15 @@ with no backend, persistence or MCP; preserve the existing backend source.
       this work from society delivery. B1 was stopped before runtime changes;
       its goals and design require separate agreement.
 
+- [ ] **11. Decide what an ice-age round's bands become.** On the default draft
+      World most lasting camps of the round reach the concentrated-resident
+      threshold that makes a present town a World feature, because a mobile
+      band grows under the same support and growth as a settled era. Under
+      [ADR 0005](adr/0005-scale-contract.md) those camps publish as World ruins
+      by the same rule as present towns, which is consistent; whether a round
+      should produce towns at all is a design question for the round, not for
+      the publication rule.
+
 The [product contract](product-spec.md) supplies the geographic and authoring
 requirements. [ADR 0003](adr/0003-frontend-session.md) defines the current execution
 and session boundary; the [generation design](generation-workflows.md) records

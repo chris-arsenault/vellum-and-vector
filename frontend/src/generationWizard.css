@@ -296,6 +296,15 @@
 .setup-summary [role="alert"] {
   color: #f1b1a2;
 }
+.setup-world-grid > .generation-workload {
+  grid-column: 1 / -1;
+}
+.generation-workload .warning {
+  padding: 10px 12px;
+  border-left: 3px solid #e6b66d;
+  background: #3d3529;
+  color: #f3d8a6;
+}
 .setup-issues {
   margin-top: 16px;
 }

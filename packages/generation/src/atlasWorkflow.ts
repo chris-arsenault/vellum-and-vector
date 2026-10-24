@@ -26,6 +26,7 @@ import { prepareGeneratedProcess } from "./mapFeatures";
 import { finalizeNamesProcess } from "./societyNaming";
 import { atlasPhysicalSequence } from "./canonry/atlasSequence";
 import { atlasQuality } from "./canonry/atlasProfile";
+import { generationResolution } from "./resolution";
 import { atlasParametersSchema, type AtlasParameters } from "./atlasParameters";
 import {
   generationSettingsSchema,
@@ -207,7 +208,6 @@ function initialState(source: DomainSnapshot, input: AtlasGenerationInput): Gene
   requireThat(area, "generation_area", "Choose an existing mapped area.");
   const quality = atlasQuality[input.quality as keyof typeof atlasQuality];
   requireThat(quality, "generation_quality", "Choose draft, standard or fine detail.");
-  const size = Math.sqrt(quality.baseCells);
   const scope = {
     worldId: domain.world.id,
     areaId: area.id,
@@ -220,9 +220,10 @@ function initialState(source: DomainSnapshot, input: AtlasGenerationInput): Gene
   };
   domain.scope = scope;
   const extent = spatial.bounds(area.footprint);
+  const { cellSpan } = generationResolution(input.quality, area.profile);
   // A child keeps its parent's boundary band. Fine numerical work occupies the
   // interior; parent samples remain authoritative at the established interface.
-  const band = Math.min(extent[2] - extent[0], extent[3] - extent[1]) / size;
+  const band = Math.min(cellSpan, (extent[2] - extent[0]) / 4, (extent[3] - extent[1]) / 4);
   const interior = area.boundary ? spatial.buffer(area.footprint, -band) : area.footprint;
   requireThat(
     interior && spatial.area(interior) > 0,
@@ -230,22 +231,21 @@ function initialState(source: DomainSnapshot, input: AtlasGenerationInput): Gene
     "Choose an extent with room for interior field samples."
   );
   const id = semanticId(domain.world.id, "surface", `${area.id}:${input.seed}`);
-  const aspect = Math.sqrt((extent[2] - extent[0]) / (extent[3] - extent[1]));
   const surface =
     area.profile !== "world" && area.profile !== "interior"
       ? createAdaptiveField(
           id,
           { ...scope, footprint: interior },
           createAdaptiveTopology(extent, {
-            maximumSize: Math.max(extent[2] - extent[0], extent[3] - extent[1]) / size,
-            minimumSize: Math.max(extent[2] - extent[0], extent[3] - extent[1]) / size,
+            maximumSize: cellSpan,
+            minimumSize: cellSpan,
           })
         )
       : createGrid(
           id,
           { ...scope, footprint: interior },
-          area.profile === "interior" ? size : Math.max(2, Math.ceil(size * aspect) + 1),
-          area.profile === "interior" ? size : Math.max(2, Math.ceil(size / aspect) + 1)
+          Math.max(2, Math.ceil((extent[2] - extent[0]) / cellSpan) + 1),
+          Math.max(2, Math.ceil((extent[3] - extent[1]) / cellSpan) + 1)
         );
   inheritSurface(source, surface, input);
   return {

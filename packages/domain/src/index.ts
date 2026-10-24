@@ -64,6 +64,7 @@ export * from "./adaptivePoint";
 export * from "./classSampler";
 export * from "./fieldContours";
 export * from "./snapshot";
+export * from "./scale";
 export * from "./society";
 export * from "./societyEditing";
 export * from "./societyFeatures";

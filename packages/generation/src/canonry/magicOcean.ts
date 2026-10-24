@@ -6,6 +6,21 @@ import { traceOceanBeam } from "./magicBeams";
 import { nearestTriangle } from "./mesh";
 import { worldCandidates } from "./worldSources";
 import { PriorityQueue } from "./priorityQueue";
+import { areaBudget, mediumArea, referenceOceanArea, referenceCoastLength } from "./worldScale";
+
+function coastlineLength(map: PhysicalField) {
+  let length = 0;
+  const mesh = map.mesh;
+  for (let i = 0; i < mesh.contentCount; i++) {
+    if (map.WaterKindCodes[i] !== 1) continue;
+    for (let edge = 0; edge < mesh.degree[i]; edge++) {
+      const at = i * mesh.stride + edge,
+        j = mesh.neighbors[at];
+      if (j >= 0 && map.WaterKindCodes[j] !== 1) length += mesh.faceLength[at];
+    }
+  }
+  return length;
+}
 
 function coastalCell(map: PhysicalField, i: number) {
   if (map.WaterKindCodes[i] !== 1) return false;
@@ -76,7 +91,7 @@ export function oceanPropagation(
   }
   for (const [index, i] of oceanSources(
     map,
-    p.coastalSources,
+    areaBudget(p.coastalSources, coastlineLength(map), referenceCoastLength),
     seed,
     p.coastalSourceDistance
   ).entries()) {
@@ -92,7 +107,12 @@ export function oceanPropagation(
         p.coastalRayDistance
       );
   }
-  for (const [index, i] of oceanSources(map, p.wakeSources, seed ^ 0x3359).entries())
+  const wakes = areaBudget(
+    p.wakeSources,
+    mediumArea(map, (i) => map.WaterKindCodes[i] === 1),
+    referenceOceanArea
+  );
+  for (const [index, i] of oceanSources(map, wakes, seed ^ 0x3359).entries())
     traceOceanBeam(
       map,
       field,

@@ -14,8 +14,8 @@ export function worldCandidates(mesh: PhysicalMesh, seed: number, count: number)
   const [x0, y0, x1, y1] = mesh.bounds;
   return Array.from({ length: count }, (_, id) => ({
     id,
-    x: x0 + (x1 - x0) * (0.03 + hashUnit(seed ^ 0x1b73, id, 0) * 0.94),
-    y: y0 + (y1 - y0) * (0.03 + hashUnit(seed ^ 0x2db9, id, 1) * 0.94),
+    x: x0 + (x1 - x0) * hashUnit(seed ^ 0x1b73, id, 0),
+    y: y0 + (y1 - y0) * hashUnit(seed ^ 0x2db9, id, 1),
     priority: hashUnit(seed ^ 0x4a91, id, 2),
   }));
 }

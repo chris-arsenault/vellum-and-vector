@@ -70,7 +70,7 @@ export const magicCartography: CartographicControl[] = [
     "fire",
     "cores",
     "Core-site prevalence",
-    "The distribution of geothermal core sites; the landscape determines which sites can form.",
+    "Core-site prevalence scales with land area; geothermal peaks and physical spacing determine which sites can form.",
     ["Isolated", "Scattered", "Plentiful"],
     [450, 300, 250].map((sourceThreshold, i) => ({
       parameters: {
@@ -182,7 +182,7 @@ export const magicCartography: CartographicControl[] = [
     "pressure",
     "wakes",
     "Ancient wake prevalence",
-    "The prevalence of historical wake paths, not a queue of new disasters.",
+    "The prevalence of historical wake paths scales with ocean area; their physical travel distances stay fixed.",
     ["Sparse", "Scattered", "Frequent"],
     [8, 16, 32].map((wakeSources) => ({ parameters: { wakeSources } }))
   ),
@@ -190,7 +190,7 @@ export const magicCartography: CartographicControl[] = [
     "pressure",
     "rogues",
     "Rogue-impact prevalence",
-    "The prevalence of Pressure-driven coastal impulses in the geographic history.",
+    "The prevalence of Pressure-driven coastal impulses scales with shoreline length in the geographic history.",
     ["Sparse", "Scattered", "Frequent"],
     [12, 24, 48].map((coastalSources) => ({ parameters: { coastalSources } }))
   ),

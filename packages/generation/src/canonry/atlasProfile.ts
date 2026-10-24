@@ -5,11 +5,7 @@ import { atlasParametersSchema, type AtlasParameters } from "../atlasParameters"
 import { latitudeAtY } from "./latitude";
 import type { PhysicalProfileOverrides } from "../physicalProfileConfiguration";
 
-export const atlasQuality = {
-  draft: { baseCells: 16384 },
-  standard: { baseCells: 65536 },
-  fine: { baseCells: 262144 },
-};
+export { atlasQuality } from "../resolution";
 export function atlasPhysicalProfile(
   parameters: Partial<AtlasParameters> = {},
   overrides: PhysicalProfileOverrides = {}

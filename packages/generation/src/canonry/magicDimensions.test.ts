@@ -14,16 +14,17 @@ import { classifyMagicFeatures, projectMagic } from "./magicFeatures";
 import { Feature } from "./codes";
 import { traceOceanBeam } from "./magicBeams";
 import { nearestTriangle } from "./mesh";
+import { areaBudget, mediumArea, referenceLandArea, referenceOceanArea } from "./worldScale";
 
-function scenario(samples = 4096) {
+function scenario(samples = 4096, width = 2_000_000, height = 1_000_000) {
   const state = landscape();
-  const size = 2_000_000 / Math.sqrt(samples);
+  const size = Math.sqrt((width * height) / samples);
   const map = createField(
     createAdaptiveWorldMesh(
-      [0, 0, 2_000_000, 1_000_000],
+      [0, 0, width, height],
       { maximumSize: size, minimumSize: size },
       0,
-      rectangle([0, 0, 2_000_000, 1_000_000])
+      rectangle([0, 0, width, height])
     )
   );
   state.domain.world.magicSystems = canonryMagicPresets();
@@ -38,6 +39,31 @@ function scenario(samples = 4096) {
   initializeMagic(state);
   return state;
 }
+
+it("scales Fire and deep-ocean source budgets with their physical medium, independent of sampling", () => {
+  for (const samples of [1024, 4096]) {
+    for (const scale of [1, 4]) {
+      const state = scenario(samples, 4_000_000 * scale, 3_000_000),
+        map = state.physical!.map;
+      const [fire, , pressure] = state.physical!.magic!.fields;
+      map.WaterKindCodes.fill(0);
+      map.HeatSourceDensity.fill(1000);
+      fire.definition.parameters.maximumSources = 4;
+      locateMagicSources(state, fire, 73);
+      expect(fire.origins).toHaveLength(areaBudget(4, mediumArea(map), referenceLandArea));
+      locateMagicSources(state, pressure, 73);
+      expect(pressure.origins).toHaveLength(0);
+
+      map.WaterKindCodes.fill(1);
+      map.WaterDepths.fill(3000);
+      locateMagicSources(state, pressure, 73);
+      expect(pressure.origins).toHaveLength(areaBudget(1, mediumArea(map), referenceOceanArea));
+      expect(pressure.source.filter((value) => value > 0)).toHaveLength(pressure.origins.length);
+      locateMagicSources(state, fire, 73);
+      expect(fire.origins).toHaveLength(0);
+    }
+  }
+});
 
 it("captures the same cold activity over a fixed physical travel distance", () => {
   const retained: number[] = [];
@@ -83,7 +109,8 @@ it("selects geothermal peaks rather than random points on a heat gradient", () =
   }
 });
 
-it("retains coastal source eligibility when the coastal sampling strip gets finer", () => {
+it("retains coastal source density and eligibility when the sampling strip gets finer", () => {
+  const counts: number[] = [];
   for (const samples of [4096, 16384]) {
     const state = scenario(samples),
       map = state.physical!.map;
@@ -98,14 +125,15 @@ it("retains coastal source eligibility when the coastal sampling strip gets fine
       wakeSources: 0,
     });
     propagateMagic(state, field, 42, 1);
-    expect(field.rogue.reduce((sum, value) => sum + value, 0)).toBe(30);
+    counts.push(field.rogue.reduce((sum, value) => sum + value, 0));
+    expect(counts.at(-1)).toBeGreaterThan(0);
     for (let i = 0; i < map.mesh.count; i++)
       if (field.rogue[i]) expect(-map.mesh.x[i]).toBeLessThan(200_000 + map.mesh.spacing);
   }
+  expect(counts[1]).toBe(counts[0]);
 });
 
 it("publishes wake membership over the physical beam width", () => {
-  const areas: number[] = [];
   // Resolve the beam radius with five and ten cells; a two-cell disk is only a coarse mask.
   for (const samples of [16384, 65536]) {
     const state = scenario(samples),
@@ -119,12 +147,22 @@ it("publishes wake membership over the physical beam width", () => {
       wakeDistance: 1,
       beamWidth: 100_000,
     });
-    propagateMagic(state, field, 42, 1);
+    // Measure the kernel at a fixed interior station, independently of edge-source placement.
+    const source = nearestTriangle(map.mesh, 0, 0);
+    traceOceanBeam(map, field, 42, source, 0, 150, 1, true);
     expect(field.wake).toEqual(Float64Array.from(field.intensity, (value) => Number(value > 0)));
-    areas.push(field.wake.reduce((sum, value, i) => sum + value * map.mesh.areas[i], 0));
+    const radius = field.definition.parameters.beamWidth / 2;
+    for (let i = 0; i < map.mesh.contentCount; i++) {
+      const distance = Math.hypot(
+        map.mesh.x[i] - map.mesh.x[source],
+        map.mesh.y[i] - map.mesh.y[source]
+      );
+      const halfDiagonal = Math.hypot(map.mesh.cellWidth[i], map.mesh.cellHeight[i]) / 2;
+      // Only cells intersecting the physical disk can be marked; every wholly interior cell is.
+      if (field.wake[i]) expect(distance).toBeLessThan(radius + halfDiagonal);
+      if (distance + halfDiagonal < radius) expect(field.wake[i]).toBe(1);
+    }
   }
-  expect(areas[1] / areas[0]).toBeGreaterThan(0.9);
-  expect(areas[1] / areas[0]).toBeLessThan(1.1);
 });
 
 it("records hot source chambers and removes inactive source cores", () => {
