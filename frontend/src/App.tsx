@@ -8,6 +8,7 @@ import { draftPreview, draftWorldSnapshot, type GenerationDraft } from "./genera
 import { useWorld, useWorlds } from "./useAtlas";
 import { Editor } from "./Editor";
 import { TemplateStudio } from "./TemplateStudio";
+import { LoreEncyclopedia } from "./LoreEncyclopedia";
 
 export function App() {
   return <Atlas />;
@@ -18,8 +19,10 @@ function Atlas() {
   const [selected, setSelected] = useState("");
   const [creating, setCreating] = useState(false);
   const [library, setLibrary] = useState(false);
+  const [lore, setLore] = useState(false);
   const selectedId = selected || firstWorld(worlds.data);
   const world = useWorld(selectedId);
+  if (lore) return <LoreEncyclopedia onClose={() => setLore(false)} />;
   if (loadingAtlas(worlds.isPending, world.isPending, selectedId, creating))
     return (
       <main className="welcome">
@@ -49,6 +52,7 @@ function Atlas() {
         worlds={worlds.data ?? []}
         changeWorld={setSelected}
         newWorld={() => setCreating(true)}
+        openLore={() => setLore(true)}
       />
     );
   return (
@@ -63,6 +67,9 @@ function Atlas() {
         </p>
         <button className="secondary" onClick={() => setLibrary(true)}>
           Independent template library
+        </button>
+        <button className="secondary" onClick={() => setLore(true)}>
+          Magic lore bible
         </button>
       </header>
       <CreateWorld

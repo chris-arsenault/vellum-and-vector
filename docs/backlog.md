@@ -171,7 +171,7 @@ with no backend, persistence or MCP; preserve the existing backend source.
       Hallowed) and two extensions of current ones (Fire gains fallen cores from
       impact craters, Pressure gains sea-born weather). Sources gain origin,
       renewal and shape attributes so one system can hold two origins with their
-      own propagation. The [magic lore bible](magic-lore-bible.md) carries each
+      own propagation. The [magic lore bible](lore/magic.md) carries each
       system's setting-neutral character, practice and cost. Society-sourced
       systems need a magic phase after a human era; Veil doors need nonlocal
       routing edges. Decide those two prerequisites before implementing any of

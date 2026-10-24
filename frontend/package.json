@@ -25,7 +25,9 @@
     "geostyler-style": "11.1.0",
     "ol": "10.11.0",
     "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "react-dom": "19.3.1",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1"
   },
   "devDependencies": {
     "@ahara/standards": "github:chris-arsenault/ahara-standards#30e038a09b01c8f72e509e3fb1e7aa76003cda3a",

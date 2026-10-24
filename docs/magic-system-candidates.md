@@ -7,7 +7,7 @@ target of seven systems: the three current ones extended, plus four new. None
 of the extensions or new systems is implemented. The current three are defined
 in the [product contract](product-spec.md#103-magical-generation--fire-aurora-and-pressure)
 and coupled through [ADR 0004](adr/0004-coupling-through-each-systems-medium.md).
-The [magic lore bible](magic-lore-bible.md) gives each of the seven its
+The [magic lore bible](lore/magic.md) gives each of the seven its
 setting-neutral character, practice, cost and lore.
 
 ## What a system must have

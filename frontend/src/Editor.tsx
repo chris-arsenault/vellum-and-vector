@@ -23,14 +23,21 @@ interface Props {
   worlds: { id: string; name: string }[];
   changeWorld: (id: string) => void;
   newWorld: () => void;
+  openLore: () => void;
 }
-export function Editor({ world, worlds, changeWorld, newWorld }: Props) {
+export function Editor({ world, worlds, changeWorld, newWorld, openLore }: Props) {
   const editor = useEditor(world);
   const [tab, setTab] = useState<string | null>(null);
   const toggle = (next: string) => setTab(tab === next ? null : next);
   return (
     <div className="app-shell">
-      <EditorHeader world={world} worlds={worlds} changeWorld={changeWorld} newWorld={newWorld} />
+      <EditorHeader
+        world={world}
+        worlds={worlds}
+        changeWorld={changeWorld}
+        newWorld={newWorld}
+        openLore={openLore}
+      />
       <nav className="map-navigation" aria-label="Workspace panels">
         <button
           aria-expanded={tab === "atlas"}
@@ -79,7 +86,7 @@ export function Editor({ world, worlds, changeWorld, newWorld }: Props) {
     </div>
   );
 }
-function EditorHeader({ world, worlds, changeWorld, newWorld }: Props) {
+function EditorHeader({ world, worlds, changeWorld, newWorld, openLore }: Props) {
   return (
     <header className="app-header">
       <Brand />
@@ -105,6 +112,9 @@ function EditorHeader({ world, worlds, changeWorld, newWorld }: Props) {
       <span className="header-meta" title="Reloading or closing this tab discards the session">
         Session only · not saved
       </span>
+      <button className="quiet" onClick={openLore}>
+        Lore
+      </button>
       <button
         className="quiet"
         onClick={async () => download(`${world.name}.geojson`, await exportWorld(world.id))}
