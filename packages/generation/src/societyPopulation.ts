@@ -135,6 +135,9 @@ export function evolvePopulation(
     description: `${record.id}: ${Math.round(record.before)} → ${Math.round(record.after)} people; ${Math.round(record.migrated)} relocated.`,
   });
 }
+/** Logistic growth per year with room to grow, and the yearly loss where nothing can be grown. */
+export const intrinsicGrowth = 0.012,
+  declineRate = 0.03;
 function growPopulation(state: GenerationState, years: number, record: SocietyEraRecord) {
   for (const c of state.society!.region.communities) {
     if (c.protected) continue;
@@ -144,8 +147,9 @@ function growPopulation(state: GenerationState, years: number, record: SocietyEr
       capacity > 0 && before > 0
         ? (capacity * before) /
           (before +
-            (capacity - before) * Math.exp(-0.012 * peopleTrait(state, c, "growth", 1) * years))
-        : before * Math.exp(-0.03 * years);
+            (capacity - before) *
+              Math.exp(-intrinsicGrowth * peopleTrait(state, c, "growth", 1) * years))
+        : before * Math.exp(-declineRate * years);
     const survivors = before * Math.exp(-years / 65);
     record.births += Math.max(0, after - survivors);
     record.deaths += before - Math.min(after, survivors);

@@ -68,8 +68,10 @@ it("feeds finite Fire heating back into growth and decline within one era", asyn
   expect(practice.heatApplied).toBe(0);
   const record = work.region.history[0];
   expect(work.region.history).toHaveLength(1);
-  expect(record.cycles).toBe(20);
-  expect(record.years).toBe(200);
+  // Cycles follow the pace of change: more than one, never more than the settled decade gives.
+  expect(record.cycles).toBeGreaterThan(1);
+  expect(record.cycles).toBeLessThanOrEqual(20);
+  expect(record.years).toBeCloseTo(200, 6);
   expect(record.before + record.births - record.deaths).toBeCloseTo(record.after, 5);
 });
 

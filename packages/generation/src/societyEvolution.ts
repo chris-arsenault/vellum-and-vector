@@ -9,6 +9,7 @@ import { fishWaters, learnPractices } from "./societyPractices";
 import { refreshSocietyEnvironment } from "./societyEnvironment";
 import { resolveSocietyHazards } from "./societyHazards";
 import { evolveSettlements } from "./societySettlements";
+import { settledCycle, societyStep } from "./societyTempo";
 
 /** One decadal cycle of feedback: people, works, magic use, learned practices, environment, hazards, settlements. */
 export function societyCycle(
@@ -25,12 +26,19 @@ export function societyCycle(
   useSocietyMagic(state, context, dt);
   learnPractices(state, context, dt);
   fishWaters(state, dt);
-  refreshSocietyEnvironment(state, context, dt, cycle.final);
+  // Water, dams and the GIS extraction of changed geography resolve when the settled history
+  // ends, not at every era's end: eras in between read the surface, not the features.
+  const lastEra = Number(context.epochs.at(-1)?.variables.lastEra ?? 1) > 0;
+  refreshSocietyEnvironment(state, context, dt, cycle.final && lastEra);
   resolveSocietyHazards(state, context, dt);
   evolveSettlements(state, context, dt);
   if (context.parameters.political) evolvePolitics(state, context, dt);
 }
-/** Decadal steps resolve feedback, not annual actors or a cap on elapsed history. */
+/**
+ * Cycles resolve feedback, not annual actors or a cap on elapsed history. Each cycle's
+ * length follows how fast the people are changing (`societyStep`), so a long settled
+ * history costs few cycles while founding years still resolve by the decade.
+ */
 export async function evolveSociety(
   state: GenerationState,
   context: MapProcessContext,
@@ -38,12 +46,14 @@ export async function evolveSociety(
 ) {
   const work = state.society!;
   if (work.inherited || years <= 0) return;
-  const steps = Math.ceil(years / 10),
-    dt = years / steps;
-  for (let i = 0; i < steps; i++) {
+  let elapsed = 0;
+  for (let index = 0; elapsed < years - 1e-9; index++) {
     requireThat(!context.cancelled(), "generation_cancelled", "Generation was cancelled.");
-    societyCycle(state, context, dt, { index: i, elapsed: (i + 1) * dt, final: i === steps - 1 });
-    context.progress((i + 1) / steps, `Societies: year ${Math.round((i + 1) * dt)} of ${years}`);
+    const dt = societyStep(state, years - elapsed, settledCycle);
+    elapsed += dt;
+    const final = elapsed >= years - 1e-9;
+    societyCycle(state, context, dt, { index, elapsed, final });
+    context.progress(elapsed / years, `Societies: year ${Math.round(elapsed)} of ${years}`);
     // Yield to worker cancellation messages between complete, unpublished steps.
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }

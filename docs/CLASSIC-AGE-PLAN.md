@@ -301,6 +301,59 @@ the fixed step on the same seed.
 Evidence: M0 inventory before/after with the span set to the D1 target;
 focused unit tests for the step rule; existing society suites.
 
+Sulion: `30c3990e-09aa-44fc-858f-3dbe1120ad8e`; expansion `661d8c4b-a4ad-40c8-91ba-d8775bcba065`.
+
+#### Execution steps
+
+1. Adaptive step rule (`4a8f7627-221f-4829-896b-8240b887ef6e`)
+   - File(s): `packages/generation/src/societyTempo.ts` (new),
+     `societyEvolution.ts` `evolveSociety`, `societyRound.ts` `runEra`,
+     `societyPopulation.ts` (export the growth and decline rates),
+     `societyTempo.test.ts`, `societyEvolution.test.ts` (the 20-cycle
+     expectation becomes a bound).
+   - Reference / outcome: D2. The step is the years in which the world's
+     people would change by about a fifth at the current logistic rates
+     (population-weighted `r(1 − N/K)`, the same rates `growPopulation`
+     uses), bounded to a settled decade and a long lifetime (10–60 years;
+     rounds 25–100), and the remaining years of the era are split evenly so no
+     cycle is a sliver. Deterministic: it reads state only.
+   - Change: `societyStep(state, remaining, bounds)`; both loops step with it,
+     report progress by elapsed years, and keep per-cycle indices for hazard
+     keys and era-record merging.
+   - Verify: unit tests (bounds, low fill steps shorter than high fill, steps
+     partition the era exactly); existing society suites pass.
+   - State / evidence: completed. `societyTempo.ts`: a quarter of the world's
+     people per cycle, settled bounds 10–80 years, round bounds 25–100; three
+     unit tests; 95 society tests pass; lint and typecheck clean.
+2. Behaviour agreement and span measurement (`bf2a7002-2e92-444a-b18a-37be1df65efe`) [depends on #1]
+   - File(s): `frontend/scripts/society-inventory.ts` (`ERAS`, `STEP`, `TRACE`
+     overrides and diagnostics), `societyProcesses.ts`/`societyEvolution.ts`
+     (end-of-history extraction once).
+   - Change: run the inventory on the 200-year default with the adaptive step
+     and compare with the M0 baseline (fill, urbanization, settlement counts
+     and sizes, founded/abandoned); then run a long span (about 300 + 600 +
+     400 years) and record cycles, seconds and fill. Tune the bounds or the
+     change target if the present cycles exceed about 30 or fill falls short.
+   - Verify: the tables in this document; present cycles within about 1.5× of
+     20; median fill ≥ 0.6 and best ≥ 0.9 on the long span.
+   - State / evidence: completed. Same working tree, seed 104729, 200-year
+     default: fixed 10-year step 20 cycles, fill 0.14, urbanization 8.0%,
+     largest capital 8,109, 352 inhabited; adaptive step 11 cycles, fill 0.14,
+     urbanization 7.4%, largest capital 7,677, 344 inhabited. Long span
+     (300 + 600 + 400 years, tuned bounds): 28 present cycles (13 + 10 + 5)
+     at 1–2.3 s each, fill 0.99 (median 0.99, min 0.75), urbanization 17.4%,
+     largest town 79,322, 393 of 432 inhabited catchments above the 5,000
+     World threshold (M2's problem to solve), 891 roads. Profiling the long
+     run showed each era's final cycle costing 25 s in the end-of-era water,
+     dam and GIS extraction; that work now runs once, when the last present
+     era ends (`lastEra` epoch variable), leaving one 24 s cycle per run. The
+     remaining one-off costs are route pathfinding at publication (30 s for
+     891 roads, M3) and the GIS extraction itself. A `process_failed`
+     diagnostic ("This method does not support GeometryCollection arguments")
+     appeared in one long run and not in the next two on the same seed while
+     other sessions were editing geometry code; the script now prints the
+     failing process and stack if it recurs.
+
 ### M2 — Cities drawn from their hinterlands [depends on M1]
 
 Scope: central-place allocation of urban residence (D3) within
@@ -312,6 +365,44 @@ conservation holds; no community exceeds its food bound; regional inheritance
 tests pass unchanged.
 Evidence: M0 inventory; society unit tests; a browser check of the default
 world's capital labels.
+
+#### Execution steps (expanded 2026-10-24; Sulion IDs added when the branch opens)
+
+1. Central-place targets
+   - File(s): `packages/generation/src/societyCentres.ts` (new),
+     `societySettlements.ts` (export `concentration` as the own-catchment
+     urban demand), `societyCentres.test.ts`.
+   - Reference / outcome: D3. Each community's town-dwelling demand is today's
+     `concentration`. It is allocated among centres reachable over the contact
+     graph (`communityDistances`) by attraction that grows with the centre's
+     current town size (a power above one, for primacy), a seat, harbour or
+     pass bonus, and decays with travel cost; a home share keeps part at home.
+     The result is a town target per community and, per centre, the
+     contributors and their shares.
+   - Change: `urbanTargets(state)` computing targets and contributions once
+     per cycle; bounded by the centre's food (its capacity less its people).
+   - Verify: unit test on a small fixture: the larger of two linked towns
+     receives a target above its own demand, the smaller below, and targets
+     never exceed the food bound.
+2. People move to the centres [depends on #1]
+   - File(s): `societyPopulation.ts` (`evolvePopulation`/`migratePopulation`),
+     `societySettlements.ts` (`evolveSettlements` uses the target).
+   - Change: after room-per-head migration, each centre whose target exceeds
+     its town draws the gap at the settlement relaxation rate from its
+     contributors in proportion to their shares, capped per contributor per
+     cycle; movers carry their groups. `updateOccupation` relaxes toward the
+     central-place target instead of the own-catchment value.
+   - Verify: conservation (`before + births − deaths = after`) in the existing
+     era-record test; the fixture test shows town residents concentrating
+     over cycles; society suites pass.
+3. Distribution on the default world [depends on #2]
+   - Change: inventory on the 1,300-year span and the 200-year default; tune
+     the attraction exponent, reach and bonuses toward D5; check the World
+     publication count (majors at or below about 15% of inhabited catchments)
+     and hierarchy roles; adjust `worldSettlementResidents` only if the
+     measured sizes demand it.
+   - Verify: D5 table recorded in this document; browser check of capital
+     labels on the default world.
 
 ### M3 — Roads between the places that matter [depends on M0; benefits from M1, M2]
 

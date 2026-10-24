@@ -142,11 +142,16 @@ export function societySequence(input: AtlasGenerationInput): ProcessSequence {
             kind: "epochs" as const,
             id: "human-eras",
             resetFacts: [],
-            epochs: eras.map((e) => ({
+            epochs: eras.map((e, i) => ({
               id: e.id,
               duration: e.years,
               parentEpoch: e.physicalEpoch,
-              variables: { mobility: e.mobility, politicalCapacity: e.politicalCapacity },
+              variables: {
+                mobility: e.mobility,
+                politicalCapacity: e.politicalCapacity,
+                // The settled history's geography is extracted once, when its last era ends.
+                lastEra: i === eras.length - 1 ? 1 : 0,
+              },
             })),
             body: [
               {

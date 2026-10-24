@@ -7,6 +7,7 @@ import { classifyMagicFeatures, projectMagic } from "./canonry/magicFeatures";
 import { createSocietyGeography } from "./societyGeography";
 import { startingPopulations } from "./societySettlements";
 import { societyCycle } from "./societyEvolution";
+import { roundCycle, societyStep } from "./societyTempo";
 import { generatedFeature, putGenerated } from "./mapFeatures";
 import { isMajorRuin } from "./societyMapScope";
 
@@ -107,16 +108,15 @@ async function runEra(
   projectEpoch(state, seed);
   const work = foundRound(state, context, era),
     inEra = roundContext(context, era, epoch);
-  // A band's generation is the cycle: coarser than the settled decade, and a round
+  // A band's generation is the shortest cycle: coarser than the settled decade, and a round
   // costs a fraction of a physical epoch instead of doubling it.
-  const steps = Math.ceil(era.years / 25),
-    dt = era.years / steps;
-  for (let i = 0; i < steps; i++) {
-    societyCycle(state, inEra, dt, { index: i, elapsed: (i + 1) * dt, final: i === steps - 1 });
-    context.progress(
-      (i + 1) / steps,
-      `${era.id}: year ${Math.round((i + 1) * dt)} of ${era.years}`
-    );
+  let elapsed = 0;
+  for (let index = 0; elapsed < era.years - 1e-9; index++) {
+    const dt = societyStep(state, era.years - elapsed, roundCycle);
+    elapsed += dt;
+    const final = elapsed >= era.years - 1e-9;
+    societyCycle(state, inEra, dt, { index, elapsed, final });
+    context.progress(elapsed / era.years, `${era.id}: year ${Math.round(elapsed)} of ${era.years}`);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
   delete work.cycle;

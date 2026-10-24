@@ -4,8 +4,11 @@
  *
  *   pnpm --dir frontend inventory:society
  *   SEED=7 WIDTH=4000000 HEIGHT=3000000 QUALITY=standard pnpm --dir frontend inventory:society
+ *   ERAS='[{"id":"Settlement","years":300,"physicalEpoch":null,"mobility":1,"politicalCapacity":1}]' \
+ *     pnpm --dir frontend inventory:society   # replaces the present eras, keeps bound rounds
+ *   STEP=10 pnpm --dir frontend inventory:society   # fixed cycle length, for comparison
  */
-import { generateAtlas, societyInventory } from "@atlas/generation";
+import { generateAtlas, societyInventory, roundCycle, settledCycle } from "@atlas/generation";
 import { newGenerationDraft, prepareDraft } from "../src/generationDraft";
 import { generationSnapshot } from "../src/generationJobs";
 
@@ -14,6 +17,19 @@ draft.width = Number(process.env.WIDTH ?? 3_000_000);
 draft.height = Number(process.env.HEIGHT ?? 2_000_000);
 if (process.env.SEED) draft.recipe.seed = Number(process.env.SEED);
 draft.recipe.quality = process.env.QUALITY === "standard" ? "standard" : "draft";
+if (process.env.ERAS) {
+  // Eras are the cultural feature's configuration; recipe settings are derived from it.
+  const cultural = draft.recipe.features!["human.cultures"];
+  const eras = (cultural.configuration?.eras ?? []) as { physicalEpoch?: string | null }[];
+  cultural.configuration = {
+    eras: [...eras.filter((era) => era.physicalEpoch), ...JSON.parse(process.env.ERAS)],
+  };
+}
+if (process.env.STEP) {
+  const step = Number(process.env.STEP);
+  settledCycle.min = settledCycle.max = step;
+  roundCycle.min = roundCycle.max = Math.max(step, 25);
+}
 draft.recipe.domains = ["physical", "magic", "cultural", "political", "built"];
 const { source, input, diagnostics } = prepareDraft(draft);
 const errors = diagnostics.filter((d) => d.severity === "error");
@@ -21,19 +37,27 @@ if (errors.length) throw new Error(errors.map((d) => d.message).join("\n"));
 
 // Timing from progress messages: each process reports Starting/Completed; society cycles
 // report "<era>: year X of Y" (rounds) or "Societies: year X of Y" (present eras).
+const seconds = (value: number) => Math.round(value * 10) / 10;
 const started = performance.now();
 const processes = new Map<string, { start: number; seconds: number }>();
 const cycles: { era: string; year: number; seconds: number }[] = [];
 let lastCycle = started;
+const warnings: string[] = [];
 const result = await generateAtlas(source, input, {
-  progress(_path, _fraction, message) {
+  diagnostic(d) {
+    const where = d.stack?.split("\n").slice(0, 3).join(" | ") ?? "";
+    warnings.push(`${d.severity} ${d.code} in ${d.process} (${d.outcome}): ${d.message} ${where}`);
+  },
+  progress(path, _fraction, message) {
     const now = performance.now();
+    if (process.env.TRACE && /human|Societies|Skipped/.test(message))
+      console.log(`+${seconds((now - started) / 1000)}s ${path.join("/")} ${message}`);
     const starting = /^Starting (\S+)/.exec(message),
       completed = /^Completed (\S+)/.exec(message),
       cycle = /^(.+?): year (\d+) of (\d+)/.exec(message);
     if (starting) processes.set(starting[1], { start: now, seconds: 0 });
     else if (completed && processes.has(completed[1]))
-      processes.get(completed[1])!.seconds = (now - processes.get(completed[1])!.start) / 1000;
+      processes.get(completed[1])!.seconds += (now - processes.get(completed[1])!.start) / 1000;
     else if (cycle) {
       cycles.push({ era: cycle[1], year: Number(cycle[2]), seconds: (now - lastCycle) / 1000 });
       lastCycle = now;
@@ -41,10 +65,10 @@ const result = await generateAtlas(source, input, {
     if (starting || cycle) lastCycle = now;
   },
 });
+if (warnings.length) console.log("DIAGNOSTICS\n" + warnings.join("\n"));
 const snapshot = generationSnapshot(result, input, crypto.randomUUID());
 const inventory = societyInventory(snapshot, input.areaId);
 
-const seconds = (value: number) => Math.round(value * 10) / 10;
 console.log(
   `world ${draft.width / 1000} x ${draft.height / 1000} km, seed ${draft.recipe.seed}, ${draft.recipe.quality}; ${seconds((performance.now() - started) / 1000)} s total`
 );
