@@ -166,6 +166,17 @@ with no backend, persistence or MCP; preserve the existing backend source.
       should produce towns at all is a design question for the round, not for
       the publication rule.
 
+- [ ] **12. Reach seven magic systems.** [Magic system candidates](magic-system-candidates.md)
+      consolidates ten candidates into four new systems (Greenwood, Salt, Veil,
+      Hallowed) and two extensions of current ones (Fire gains fallen cores from
+      impact craters, Pressure gains sea-born weather). Sources gain origin,
+      renewal and shape attributes so one system can hold two origins with their
+      own propagation. The [magic lore bible](magic-lore-bible.md) carries each
+      system's setting-neutral character, practice and cost. Society-sourced
+      systems need a magic phase after a human era; Veil doors need nonlocal
+      routing edges. Decide those two prerequisites before implementing any of
+      the four.
+
 The [product contract](product-spec.md) supplies the geographic and authoring
 requirements. [ADR 0003](adr/0003-frontend-session.md) defines the current execution
 and session boundary; the [generation design](generation-workflows.md) records

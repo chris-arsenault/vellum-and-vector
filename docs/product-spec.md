@@ -479,7 +479,9 @@ requirements. Social applications below are setting-independent adaptations.
 
 Creators place and shape sources, works and conditions of these systems and
 adjust meaningful system-specific parameters. Future magic systems may add their
-own world effects and processes through the shared generation structure. The
+own world effects and processes through the shared generation structure;
+[magic system candidates](magic-system-candidates.md) records the designs under
+consideration. The
 current three must remain first-class implementations with their own state,
 causal feedback and interactions. This does not require building a universal
 spell editor or speculative extension framework now. Do not import the reference

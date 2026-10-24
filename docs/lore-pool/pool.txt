@@ -1,0 +1,386 @@
+# family | tradition | source or concept | hook
+daoist | Daoism | Daodejing: water as the lowest and strongest | the soft overcomes the hard
+daoist | Daoism | Zhuangzi: the butcher Ding and the knife that never dulls | skill as following the grain
+daoist | Daoism | Zhuangzi: the useless tree | survival through uselessness
+daoist | Daoism | Neidan inner alchemy: three cinnabar fields | refining in stages
+daoist | Daoism | Huohou fire phasing | raising and lowering the fire in twelve stages
+daoist | Daoism | Dongtian grotto-heavens | caves as entrances to hidden paradises
+daoist | Daoism | Fulu talismanic writing | written charms that command spirits
+daoist | Daoism | Shanhaijing Classic of Mountains and Seas | a gazetteer of impossible places
+daoist | Daoism | Baopuzi: alchemy and immortality | elixirs from cinnabar and gold
+daoist | Daoism | Wuxing five phases | generation and conquest cycles
+daoist | Daoism | Fengshui: dragon veins (longmai) | the land's qi runs along ridges
+daoist | Daoism | Fengshui: the luopan compass and form school | reading a site by its surrounding forms
+daoist | Daoism | Qingming and grave-sweeping | the dead kept by the living's attention
+confucian | Confucianism | Analects: rectification of names | things go wrong when names are wrong
+confucian | Confucianism | Mencius: the sprouts of virtue | goodness as a seedling to be tended
+confucian | Confucianism | Xunzi: human nature is crooked wood | straightening by the press
+confucian | Confucianism | Liji Book of Rites: ancestral sacrifice | order kept through ritual repetition
+confucian | Confucianism | Zhongyong: centrality and the unmoving mean | holding the centre
+confucian | Confucianism | The Mandate of Heaven and its withdrawal | legitimacy shown by floods and famine
+chinese-folk | Chinese folk religion | Nüwa mends the sky with five-coloured stones | repair of a torn heaven
+chinese-folk | Chinese folk religion | Yu the Great tames the flood by dredging, not damming | channelling over blocking
+chinese-folk | Chinese folk religion | The Cowherd and the Weaver Girl, the bridge of magpies | a crossing that opens one night a year
+chinese-folk | Chinese folk religion | Hungry ghosts and the ghost month | the unfed dead loosed into the world
+chinese-folk | Chinese folk religion | The Kitchen God's annual report | a domestic witness that reports upward
+chinese-folk | Chinese folk religion | Dragon kings of the four seas | rain and sea owned by jurisdiction
+mohist-legalist | Chinese philosophy | Mozi: impartial care and standards | measuring by fixed standards
+mohist-legalist | Chinese philosophy | Han Feizi: the two handles | reward and punishment as the only levers
+mohist-legalist | Chinese philosophy | Sunzi: terrain types and the use of ground | nine kinds of ground
+mohist-legalist | Chinese philosophy | Shen Dao: position over virtue | power as a matter of where you stand
+buddhist-early | Buddhism (early and Theravada) | Dhammapada: mind precedes all things | the world as made by mind
+buddhist-early | Buddhism (early and Theravada) | Dependent origination | nothing arises alone
+buddhist-early | Buddhism (early and Theravada) | The fire sermon | everything is burning
+buddhist-early | Buddhism (early and Theravada) | Anicca: impermanence | all compounded things dissolve
+buddhist-early | Buddhism (early and Theravada) | The simile of the raft | the teaching as a tool to be left behind
+buddhist-early | Buddhism (early and Theravada) | The Jataka tales: lives before this one | moral debt across incarnations
+buddhist-early | Buddhism (early and Theravada) | Kasina meditation on coloured discs and elements | fixing attention on earth, water, fire, air
+buddhist-mahayana | Buddhism (Mahayana) | Yogacara storehouse consciousness | seeds and perfuming
+buddhist-mahayana | Buddhism (Mahayana) | Madhyamaka: emptiness of emptiness | no ground beneath the ground
+buddhist-mahayana | Buddhism (Mahayana) | Huayan: Indra's net | every jewel reflects every other
+buddhist-mahayana | Buddhism (Mahayana) | Lotus Sutra: the burning house | a lie told to save children
+buddhist-mahayana | Buddhism (Mahayana) | Pure Land: the western paradise reached by naming | a place entered by calling its name
+buddhist-mahayana | Buddhism (Mahayana) | Vimalakirti: the sickroom that holds a universe | a small room containing everything
+buddhist-mahayana | Buddhism (Mahayana) | Bodhisattva vow: refusing to leave until all are freed | staying behind by choice
+buddhist-zen | Buddhism (Zen) | Koan: the sound of one hand | questions that break the questioner
+buddhist-zen | Buddhism (Zen) | Dogen: mountains and rivers sutra | the landscape itself as scripture
+buddhist-zen | Buddhism (Zen) | Ox-herding pictures | ten stages of taming
+buddhist-zen | Buddhism (Zen) | Kintsugi and wabi-sabi | the repaired crack as the valued part
+buddhist-zen | Buddhism (Zen) | Dry landscape gardens | raked gravel standing for water
+buddhist-tibetan | Buddhism (Tibetan) | Beyul hidden valleys | refuges opened at the right time
+buddhist-tibetan | Buddhism (Tibetan) | Bardo Thodol | the interval between death and rebirth
+buddhist-tibetan | Buddhism (Tibetan) | Terma: hidden treasure texts | teachings buried for a later age
+buddhist-tibetan | Buddhism (Tibetan) | Sky burial | the body given to birds
+buddhist-tibetan | Buddhism (Tibetan) | Wind horse and prayer flags | prayers carried by wind
+buddhist-tibetan | Buddhism (Tibetan) | Sand mandala swept away | an image made to be destroyed
+buddhist-tibetan | Buddhism (Tibetan) | Tulku lineage: recognised rebirth | an office that reincarnates
+buddhist-tibetan | Buddhism (Tibetan) | Chod: feeding the body to demons | offering what fears you
+hindu-vedic | Hinduism (Vedic) | Rigveda: Purusha dismembered to make the world | creation by sacrifice of a body
+hindu-vedic | Hinduism (Vedic) | Rigveda: Indra kills Vritra and releases the waters | the dammed waters freed
+hindu-vedic | Hinduism (Vedic) | Agni as messenger between worlds | fire carries the offering up
+hindu-vedic | Hinduism (Vedic) | Varuna's nooses and rta | order kept by unseen bonds
+hindu-vedic | Hinduism (Vedic) | Soma: the pressed plant | a drink that is also a god
+hindu-vedic | Hinduism (Vedic) | The Nasadiya hymn: neither being nor non-being | the cosmogony that admits not knowing
+hindu-vedic | Hinduism (Vedic) | Vastu shastra | buildings laid out on a cosmic grid
+hindu-upanishadic | Hinduism (Upanishads and Vedanta) | Chandogya: the salt dissolved in water | the unseen that is everywhere tasted
+hindu-upanishadic | Hinduism (Upanishads and Vedanta) | Tat tvam asi | you are that
+hindu-upanishadic | Hinduism (Upanishads and Vedanta) | Katha Upanishad: Nachiketa questions Death | bargaining with death for knowledge
+hindu-upanishadic | Hinduism (Upanishads and Vedanta) | Advaita: the rope mistaken for a snake | error as superimposition
+hindu-upanishadic | Hinduism (Upanishads and Vedanta) | Nada Brahma, struck and unstruck sound | the sound that no collision makes
+hindu-upanishadic | Hinduism (Upanishads and Vedanta) | The five sheaths (koshas) | layered selves from food to bliss
+hindu-epic | Hinduism (epics and Puranas) | Mahabharata: Bhishma's bed of arrows and chosen hour of death | the dying who waits for the right season
+hindu-epic | Hinduism (epics and Puranas) | Bhagavad Gita: action without attachment to fruit | act and release the result
+hindu-epic | Hinduism (epics and Puranas) | Ramayana: the bridge to Lanka built of floating stones | a causeway of named stones
+hindu-epic | Hinduism (epics and Puranas) | Churning of the ocean of milk | poison and nectar from the same churning
+hindu-epic | Hinduism (epics and Puranas) | Ganga descends and is caught in Shiva's hair | a river too strong to land unbroken
+hindu-epic | Hinduism (epics and Puranas) | Yugas: the four declining ages | time as a long decay
+hindu-epic | Hinduism (epics and Puranas) | Shakti pithas: the goddess's body fallen across the land | holy sites as fallen body parts
+hindu-tantra | Hinduism (Tantra and yoga) | Kundalini: the coiled serpent at the base | a force that rises through centres
+hindu-tantra | Hinduism (Tantra and yoga) | Chakras as wheels | nodes along a channel
+hindu-tantra | Hinduism (Tantra and yoga) | Yantra: geometric diagrams of power | a drawn figure that is the deity
+hindu-tantra | Hinduism (Tantra and yoga) | Cremation-ground practice | working among the burning dead
+hindu-tantra | Hinduism (Tantra and yoga) | Mantra as sound-body | a word that is a thing
+hindu-bhakti | Hinduism (Bhakti) | Kabir: the weaver's songs | the divine in the warp and weft
+hindu-bhakti | Hinduism (Bhakti) | Mirabai: devotion against the household | love that leaves the house
+hindu-bhakti | Hinduism (Bhakti) | Kumbh Mela: the pitcher of nectar spilled at four places | pilgrimage to where drops fell
+hindu-bhakti | Hinduism (Bhakti) | Darshan: seeing and being seen by the image | sight as exchange
+jain | Jainism | Ahimsa extended to plants, water and air | harm to every living thing counted
+jain | Jainism | Anekantavada: the blind men and the elephant | many-sidedness of truth
+jain | Jainism | Karma as fine matter that sticks to the soul | sin as dust
+jain | Jainism | Sallekhana: the fast to death | a chosen slow ending
+jain | Jainism | The loka as a standing cosmic figure | the universe shaped like a body
+sikh | Sikhism | Guru Granth Sahib as living guru | a book that holds an office
+sikh | Sikhism | Langar: the shared kitchen | equality enacted by eating together
+sikh | Sikhism | Miri-piri: temporal and spiritual authority in two swords | two powers worn together
+sikh | Sikhism | The five Ks | identity carried as objects
+shinto | Shinto | Chinju no mori shrine groves | the kept grove as boundary
+shinto | Shinto | Kami in rocks, waterfalls, old trees | the sacred as a site
+shinto | Shinto | Shikinen sengu: rebuilding Ise every twenty years | permanence through renewal
+shinto | Shinto | Kegare and misogi: pollution and washing | impurity as a physical film
+shinto | Shinto | Torii gates | a threshold with nothing on either side
+shinto | Shinto | Yorishiro: objects that attract spirits | a thing made to be inhabited
+shinto | Shinto | Shimenawa ropes | marking what must not be crossed
+japanese-folk | Japanese folk | Yokai of the countryside: kappa, tengu, kitsune | spirits with jurisdictions
+japanese-folk | Japanese folk | Tsukumogami: tools that wake after a hundred years | age confers spirit
+japanese-folk | Japanese folk | Mono no aware | the sadness of passing things
+japanese-folk | Japanese folk | Hyakumonogatari: a hundred candles, a hundred tales | darkness grown story by story
+japanese-folk | Japanese folk | Onryo: the vengeful dead | grievance that outlasts the body
+korean | Korean tradition | Mudang shamanism and the gut ritual | spirits negotiated through dance
+korean | Korean tradition | Pungsu-jiri: geomancy of the peninsula | the land as a living body with veins
+korean | Korean tradition | Sansin mountain spirits | each mountain its own lord
+korean | Korean tradition | Dangsan trees: village guardian trees | the tree that stands for the village
+korean | Korean tradition | Han: unresolved collective grief | sorrow as a people's inheritance
+mongol-siberian | Mongol and Siberian tradition | Tengri the sky and the ovoo stone cairn | heaps built by passers-by
+mongol-siberian | Mongol and Siberian tradition | The shaman's drum as a horse | an instrument that is a mount
+mongol-siberian | Mongol and Siberian tradition | Yakut Olonkho epics: the three worlds on a tree | an axis connecting layers
+mongol-siberian | Mongol and Siberian tradition | Reindeer people and the master of animals | taking only what is given
+zoroastrian | Zoroastrianism | Atar: fire as the son of the wise lord | fire that must never be polluted
+zoroastrian | Zoroastrianism | The Chinvat bridge that widens or narrows | a crossing judged by the crosser
+zoroastrian | Zoroastrianism | Towers of silence | the dead exposed so as not to pollute earth or fire
+zoroastrian | Zoroastrianism | Asha and druj: truth and the lie as cosmic forces | order versus deceit
+zoroastrian | Zoroastrianism | Frashokereti: the final renovation | the world made fresh at the end
+hebrew-bible | Hebrew Bible | Genesis 1: separation of waters | creation as division
+hebrew-bible | Hebrew Bible | The flood and the rainbow covenant | a bow set in the cloud
+hebrew-bible | Hebrew Bible | Babel: the scattered tongues | a tower that fractured language
+hebrew-bible | Hebrew Bible | Jacob's ladder at Bethel | the gate of heaven marked with a stone
+hebrew-bible | Hebrew Bible | Lot's wife, the pillar of salt | looking back fixes you
+hebrew-bible | Hebrew Bible | The burning bush, holy ground | remove your sandals
+hebrew-bible | Hebrew Bible | Manna in the wilderness | bread that rots if hoarded
+hebrew-bible | Hebrew Bible | The pillar of cloud and fire | a guide that is weather
+hebrew-bible | Hebrew Bible | Jubilee and the sabbath of the land | the field rested every seventh year
+hebrew-bible | Hebrew Bible | Cities of refuge | places where pursuit stops
+hebrew-bible | Hebrew Bible | Removing a neighbour's landmark | the unmovable boundary stone
+hebrew-bible | Hebrew Bible | Covenant of salt | permanence sealed in salt
+hebrew-bible | Hebrew Bible | Abimelech sows Shechem with salt | the cursed ground
+hebrew-bible | Hebrew Bible | Elijah and the still small voice | not in wind, earthquake or fire
+hebrew-bible | Hebrew Bible | Ezekiel's valley of dry bones | the dead reassembled by a word
+hebrew-bible | Hebrew Bible | Ezekiel's river from the temple that heals the sea | a river that freshens as it flows
+hebrew-bible | Hebrew Bible | Jonah and the great fish | three days in the deep
+hebrew-bible | Hebrew Bible | Job: where were you when I laid the foundations | the world's measure withheld from the asker
+hebrew-bible | Hebrew Bible | Ecclesiastes: the rivers run to the sea and it is not full | repetition without gain
+hebrew-bible | Hebrew Bible | Song of Songs: the locked garden | enclosure as desire
+hebrew-bible | Hebrew Bible | Leviticus: the scapegoat sent into the wilderness | sin carried out and away
+hebrew-bible | Hebrew Bible | Isaiah: swords into ploughshares | tools remade
+hebrew-bible | Hebrew Bible | The Nephilim and the sons of God | strangers who left giants
+rabbinic | Rabbinic Judaism | Talmud: the oven of Akhnai | a voice from heaven overruled by majority
+rabbinic | Rabbinic Judaism | Eruv: the boundary that makes a town one house | a string that redefines space
+rabbinic | Rabbinic Judaism | Golem of Prague | clay animated by a written name
+rabbinic | Rabbinic Judaism | Shekhinah dwelling in exile | the divine presence as a displaced person
+rabbinic | Rabbinic Judaism | Genizah: burying worn texts | words too holy to destroy
+rabbinic | Rabbinic Judaism | The 36 hidden righteous | the world upheld by unknown people
+kabbalah | Kabbalah | Sefirot: the ten emanations | a tree of channels
+kabbalah | Kabbalah | Shevirat ha-kelim: the breaking of the vessels | light too strong for its containers
+kabbalah | Kabbalah | Tikkun: gathering the sparks | repair by collection
+kabbalah | Kabbalah | Tzimtzum: contraction to make room | withdrawal as creation
+kabbalah | Kabbalah | Gematria: numbers hidden in words | letters that count
+christian-nt | Christian New Testament | The temple veil torn | a barrier rent at a death
+christian-nt | Christian New Testament | Pentecost: tongues of fire and languages | fire that lets strangers understand
+christian-nt | Christian New Testament | The transfiguration on the mountain | a body shown as light
+christian-nt | Christian New Testament | Lazarus called from the tomb | the dead who come back changed
+christian-nt | Christian New Testament | Peter walking on water and sinking | footing that depends on faith
+christian-nt | Christian New Testament | The Gadarene swine | demons sent into animals into the sea
+christian-nt | Christian New Testament | The sower and the four soils | seed on path, rock, thorns, good ground
+christian-nt | Christian New Testament | Revelation: the new Jerusalem measured with a rod | a city whose dimensions are revealed
+christian-nt | Christian New Testament | Revelation: the sea gives up its dead | the ocean as a grave emptied
+christian-nt | Christian New Testament | Paul: seeing through a glass darkly | partial sight until the end
+christian-patristic | Christian patristic and medieval | Desert Fathers: the cell and the demon of noon | solitude as battlefield
+christian-patristic | Christian patristic and medieval | Augustine: the two cities | earthly and heavenly polities overlapping
+christian-patristic | Christian patristic and medieval | Relics and translation of saints' bodies | a body part that sanctifies a city
+christian-patristic | Christian patristic and medieval | Pilgrimage to Compostela and the scallop shell | a road marked by a shell
+christian-patristic | Christian patristic and medieval | Hildegard of Bingen: viriditas, greening power | the green force in all living things
+christian-patristic | Christian patristic and medieval | Julian of Norwich: the hazelnut | all that is made held in a hand
+christian-patristic | Christian patristic and medieval | The Cloud of Unknowing | approaching by not-knowing
+christian-patristic | Christian patristic and medieval | Dante: the ordered cosmos of circles | sin and virtue as terrain
+christian-patristic | Christian patristic and medieval | Beating the bounds of the parish | walking the boundary each year with rods
+christian-patristic | Christian patristic and medieval | Sanctuary knockers and the right of sanctuary | a door ring that stops the law
+christian-patristic | Christian patristic and medieval | The Harrowing of Hell | a descent to free the imprisoned
+christian-patristic | Christian patristic and medieval | Celtic peregrinatio: setting out with no destination | exile as vocation
+christian-apocrypha | Christian apocrypha and gnostic | Book of Enoch: the Watchers teach metallurgy | forbidden crafts from fallen angels
+christian-apocrypha | Christian apocrypha and gnostic | Gospel of Thomas: the kingdom spread upon the earth unseen | hidden in plain sight
+christian-apocrypha | Christian apocrypha and gnostic | Gnostic demiurge and the flawed world | a maker who did not know
+christian-apocrypha | Christian apocrypha and gnostic | Hymn of the Pearl | the self sent down and forgetting
+islamic | Islam | Quran: the two seas that meet and do not mix | a barrier in the water
+islamic | Islam | Quran: the ant and Solomon's hearing | a king who hears the smallest
+islamic | Islam | Quran: Dhul-Qarnayn's wall against Gog and Magog | a wall of iron and brass
+islamic | Islam | Quran: the sleepers in the cave | time stopped in a cave
+islamic | Islam | Qibla: the direction of prayer | a whole world oriented to one point
+islamic | Islam | Zamzam well | a spring that saved a child
+islamic | Islam | Jinn made of smokeless fire | beings of a different element
+islamic | Islam | Barzakh: the interval between death and judgement | a waiting between
+islamic-sufi | Islam (Sufism) | Rumi: the reed flute's lament | the cut reed that sings of its bed
+islamic-sufi | Islam (Sufism) | Attar: Conference of the Birds | a journey ending in a mirror
+islamic-sufi | Islam (Sufism) | Fana and baqa: annihilation and subsistence | losing the self and remaining
+islamic-sufi | Islam (Sufism) | Ibn Arabi: the imaginal world | a realm between sense and intellect
+islamic-sufi | Islam (Sufism) | Whirling as prayer | rotation that stills
+islamic-sufi | Islam (Sufism) | Al-Khidr the green one | a wanderer who is wherever grass grows
+greek-philo | Greek philosophy | Heraclitus: fire and flux | everything flows
+greek-philo | Greek philosophy | Thales: all is water | one element under all
+greek-philo | Greek philosophy | Anaximander: the boundless and the first map | the earth drawn for the first time
+greek-philo | Greek philosophy | Empedocles: love and strife mixing four roots | two forces, four elements
+greek-philo | Greek philosophy | Pythagoras: harmony of the spheres | number as sound as cosmos
+greek-philo | Greek philosophy | Plato's cave | shadows taken for things
+greek-philo | Greek philosophy | Plato's Atlantis: a land swallowed in a day | the drowned city as a warning
+greek-philo | Greek philosophy | Aristotle: Meteorologica, exhalations from the earth | winds, earthquakes and metals from vapours
+greek-philo | Greek philosophy | Stoic sympatheia: all things bound | one breath through the cosmos
+greek-philo | Greek philosophy | Stoic ekpyrosis: the periodic conflagration | the cosmos burnt and remade
+greek-philo | Greek philosophy | Neoplatonism: emanation from the One | light diminishing by distance
+greek-philo | Greek philosophy | Epicurus: atoms and the swerve | chance built into matter
+greek-religion | Greek religion and myth | Delphi: the omphalos and the vapours | a navel-stone that speaks
+greek-religion | Greek religion and myth | Persephone and the seasons | a kidnapping that makes winter
+greek-religion | Greek religion and myth | Prometheus: fire stolen for mortals | a gift that is punished
+greek-religion | Greek religion and myth | Orpheus turns back | the one glance that loses everything
+greek-religion | Greek religion and myth | Eleusinian mysteries: the thing shown | initiation around a grain
+greek-religion | Greek religion and myth | Lethe and Mnemosyne: the two springs | drink to forget, drink to remember
+greek-religion | Greek religion and myth | Hecate at the crossroads | the three-way turning as a place of power
+greek-religion | Greek religion and myth | Asclepius and dream-healing at Epidaurus | sleeping in the temple to be cured
+greek-religion | Greek religion and myth | The Styx and the oath that binds gods | a river you swear by
+greek-religion | Greek religion and myth | Temenos: the cut-off precinct | a boundary that makes ground sacred
+roman | Roman religion | Terminus: the god of boundary stones | a stone that refused to move for Jupiter
+roman | Roman religion | Genius loci | every place has its spirit
+roman | Roman religion | Augury and the templum: a frame of sky | reading birds inside a drawn rectangle
+roman | Roman religion | Lares and the crossroads shrines | household gods at the corners
+roman | Roman religion | The pomerium: the city's sacred furrow | a ploughed line no army crosses
+roman | Roman religion | Vesta's undying hearth | a fire tended by vow
+roman | Roman religion | Pliny: Natural History on springs and metals | encyclopaedic wonder about the earth
+norse | Norse and Germanic | Yggdrasil and the three wells | a tree fed by springs
+norse | Norse and Germanic | Odin hangs for the runes | knowledge bought by sacrifice of self to self
+norse | Norse and Germanic | Mimir's well: an eye for a drink | sight traded for wisdom
+norse | Norse and Germanic | Fimbulwinter | the three winters without summer
+norse | Norse and Germanic | The dwarves forge Gleipnir from impossible things | a bond made of what does not exist
+norse | Norse and Germanic | Land-taking: throwing the high-seat pillars overboard | letting the sea choose the home
+norse | Norse and Germanic | Landvaettir: land-wights and the dragon-prow ban | spirits offended by a ship's figurehead
+norse | Norse and Germanic | Draugar in their mounds | the dead who guard their hoard
+norse | Norse and Germanic | Seidr and the high seat | prophecy from a raised platform
+norse | Norse and Germanic | Hvergelmir, the roaring kettle | all rivers rise from one spring
+celtic | Celtic | The Otherworld entered through mounds and mist | sidhe and the hollow hills
+celtic | Celtic | Samhain: the thinning | the one night the boundary fails
+celtic | Celtic | Holy wells and clootie trees | rags tied at a spring
+celtic | Celtic | Geasa: binding taboos on heroes | a prohibition that is also a power
+celtic | Celtic | Dindsenchas: lore of places | every place-name is a story
+celtic | Celtic | The salmon of knowledge | wisdom eaten by accident
+celtic | Celtic | Sovereignty goddess and the land as bride | the king married to the country
+celtic | Celtic | Immrama: voyages to island after island | a sea of discrete wonders
+celtic | Celtic | Bog bodies and votive deposits | the marsh as a place of offering
+celtic | Celtic | Ogham on standing stones | letters named for trees
+slavic | Slavic | Baba Yaga's hut on hen's legs | a house that turns to face you
+slavic | Slavic | Rusalki at the rivers in spring | the drowned who water the fields
+slavic | Slavic | Domovoi the house spirit | a spirit moved with the embers
+slavic | Slavic | Koschei's death hidden in a needle in an egg | mortality nested and hidden
+slavic | Slavic | Perun and Veles: thunderer and serpent of the underworld | the yearly war of sky and deep
+slavic | Slavic | The firebird's feather | a light that costs its finder
+baltic-finnish | Baltic and Finnish | Kalevala: Vainamoinen sings the world | creation by song
+baltic-finnish | Baltic and Finnish | Kalevala: the Sampo mill broken and scattered into the sea | the salt of the sea from a broken mill
+baltic-finnish | Baltic and Finnish | Kalevala: Ilmarinen forges the sky | a smith who makes the firmament
+baltic-finnish | Baltic and Finnish | Finnish sauna spirits and the loyly | steam as a living breath
+baltic-finnish | Baltic and Finnish | Lithuanian Zemyna, earth kissed before planting | the ground greeted
+mesopotamian | Mesopotamian | Enuma Elish: Tiamat's body made into sky and earth | the world as a slain sea
+mesopotamian | Mesopotamian | Gilgamesh: the cedar forest and Humbaba | a guarded forest cut for glory
+mesopotamian | Mesopotamian | Gilgamesh: Utnapishtim and the plant of youth lost to a snake | immortality found in the deep and lost
+mesopotamian | Mesopotamian | Inanna's descent through seven gates | stripped at each threshold
+mesopotamian | Mesopotamian | The Apsu, the fresh deep beneath the earth | sweet water under the ground
+mesopotamian | Mesopotamian | Kudurru boundary stones with curses | a stone that curses its mover
+mesopotamian | Mesopotamian | Liver divination | the map of the gods in an organ
+mesopotamian | Mesopotamian | The Babylonian map of the world: the bitter river ring | a disc of land ringed by salt sea
+egyptian | Egyptian | Ma'at and the weighing of the heart | order as a feather's weight
+egyptian | Egyptian | The Nile flood and the nilometer | prosperity measured in cubits
+egyptian | Egyptian | Osiris dismembered and reassembled | a scattered god who makes the land fertile
+egyptian | Egyptian | The Duat and the solar barque's night journey | the sun's road under the earth
+egyptian | Egyptian | Natron and mummification | salt that keeps the body for eternity
+egyptian | Egyptian | The Field of Reeds | an afterlife that is a farmed landscape
+egyptian | Egyptian | Heka: the power in words and images | magic as the world's own engine
+egyptian | Egyptian | Deshret and Kemet: red land and black land | the whole country as two colours
+west-african | West African | Yoruba Ifa: the sixteen principal odu | divination by a binary cast
+west-african | West African | Yoruba orisha of iron, Ogun | the god who is in every blade and road
+west-african | West African | Dogon: the Nommo and the star Sirius | ancestors from the water
+west-african | West African | Akan: Sankofa, go back and fetch it | retrieval from the past as duty
+west-african | West African | Igbo: chi, the personal spirit | a double negotiated with before birth
+west-african | West African | Mami Wata | the water spirit of wealth and danger
+west-african | West African | Griot lineages | history kept in a family of singers
+bantu-southern-african | Southern and Central African | Zulu: the ancestors (amadlozi) and dreaming | the dead who advise in sleep
+bantu-southern-african | Southern and Central African | Shona: Great Zimbabwe and the mhondoro lion spirits | territorial spirits of the land
+bantu-southern-african | Southern and Central African | San rock art and the eland | trance images painted into stone
+bantu-southern-african | Southern and Central African | Kongo minkisi: power figures with nails | an object charged by each oath driven in
+bantu-southern-african | Southern and Central African | Ubuntu: a person through other persons | selfhood as relation
+ethiopian | Ethiopian and Nubian | Kebra Nagast: the Ark carried to Aksum | a holy object that moves a kingdom's centre
+ethiopian | Ethiopian and Nubian | Lalibela: churches cut downward into rock | a city carved into the ground
+ethiopian | Ethiopian and Nubian | Tabot and the yearly carrying of the altar | the altar walked to water
+mesoamerican | Mesoamerican | Popol Vuh: the hero twins in the ballcourt of the dead | games against the underworld
+mesoamerican | Mesoamerican | Cenotes as mouths of the underworld | sinkholes as sacred wells
+mesoamerican | Mesoamerican | The five suns | worlds ended by jaguar, wind, fire, water
+mesoamerican | Mesoamerican | Tlaloc and the mountains that hold rain | mountains as jars of water
+mesoamerican | Mesoamerican | The New Fire ceremony every 52 years | all fires put out and relit from one
+mesoamerican | Mesoamerican | Obsidian mirrors and Tezcatlipoca | the smoking mirror that shows
+mesoamerican | Mesoamerican | Milpa and the three sisters | fields that rest and companion-plant
+andean | Andean | Pachamama and the apus | earth mother and mountain lords
+andean | Andean | Ceque lines radiating from Cusco | sightlines as administrative geography
+andean | Andean | Huacas: sacred stones and places | the land as a scatter of holy objects
+andean | Andean | Quipu: knotted-string records | memory in knots
+andean | Andean | Ayni: reciprocity | nothing taken without return
+andean | Andean | The Nazca lines | figures drawn for the sky
+andean | Andean | Tinku ritual battle | a fight that feeds the earth
+north-american | North American Indigenous | Dine hozho: beauty and balance | restoring harmony by sandpainting
+north-american | North American Indigenous | Haudenosaunee: the Great Law of Peace and the tree of peace | weapons buried under a white pine
+north-american | North American Indigenous | Hopi: emergence through the sipapu | the world entered from below
+north-american | North American Indigenous | Lakota: the sacred pipe and the Black Hills | a landscape that is the heart
+north-american | North American Indigenous | Pacific Northwest potlatch | wealth destroyed for standing
+north-american | North American Indigenous | Anishinaabe: the seven fires prophecy | history as a sequence of fires
+north-american | North American Indigenous | Pueblo kiva and the kachina | masked spirits who bring rain
+north-american | North American Indigenous | Three sisters planting | corn, beans, squash as kin
+arctic | Arctic Indigenous | Inuit: Sedna at the bottom of the sea | the sea's animals held in her hair
+arctic | Arctic Indigenous | Inuit: inuksuit stone figures | stones that mean 'someone was here'
+arctic | Arctic Indigenous | Sami: the sieidi stones and the noaidi drum | offering stones and a painted drum-map
+arctic | Arctic Indigenous | Inuit: the qaggiq and the lamp | the soapstone lamp as the household's life
+oceanian | Oceanian | Polynesian wayfinding: star paths and swell reading | navigation by the sea's own signs
+oceanian | Oceanian | Maui fishes up the islands | land hauled from the sea
+oceanian | Oceanian | Mana and tapu | power and the prohibition that guards it
+oceanian | Oceanian | Maori whakapapa: genealogy back to the land | people descended from mountains
+oceanian | Oceanian | Pele and the volcano's hair | a goddess whose body is lava
+oceanian | Oceanian | Hawaiian ahupua'a | land divided from mountain to reef
+australian | Australian Aboriginal | Songlines | the land navigated by singing it
+australian | Australian Aboriginal | Dreaming tracks and the Rainbow Serpent | waterholes made by a serpent's passage
+australian | Australian Aboriginal | Tjukurpa: law and country as one | the law is in the land
+australian | Australian Aboriginal | Fire-stick farming | the country tended with fire
+australian | Australian Aboriginal | Churinga: engraved stones holding ancestors | an object that is an ancestor
+afro-diasporic | Afro-diasporic | Haitian Vodou: the crossroads and Papa Legba | the gate between worlds opened by a key
+afro-diasporic | Afro-diasporic | Candomble: the terreiro and the axe | power gathered in a house
+afro-diasporic | Afro-diasporic | The poteau-mitan centre post | the axis the spirits descend
+afro-diasporic | Afro-diasporic | Hoodoo: goofer dust and graveyard dirt | earth from the dead as material
+hermetic | Hermeticism and Western esoterica | Emerald Tablet: as above, so below | correspondence
+hermetic | Hermeticism and Western esoterica | Solve et coagula | dissolve and recombine
+hermetic | Hermeticism and Western esoterica | The four humours | the body as four fluids
+hermetic | Hermeticism and Western esoterica | Paracelsus: like cures like, and the signatures of plants | a plant's shape shows its use
+hermetic | Hermeticism and Western esoterica | Agrippa: the three books of occult philosophy | natural, celestial, ceremonial
+hermetic | Hermeticism and Western esoterica | Geomancy: the sixteen figures cast in sand | divination by dots
+hermetic | Hermeticism and Western esoterica | Grimoire circles and the hour of the operation | drawn boundaries and timing
+hermetic | Hermeticism and Western esoterica | Dee's Monas Hieroglyphica | one glyph containing all
+hermetic | Hermeticism and Western esoterica | Mesmer's animal magnetism | a fluid passed between bodies
+natural-philosophy | Early natural philosophy | Agricola: De re metallica | mines, ores and the kobolds in them
+natural-philosophy | Early natural philosophy | Kircher: Mundus Subterraneus | fires and waters beneath the earth
+natural-philosophy | Early natural philosophy | Burnet: Sacred Theory of the Earth | the earth as a ruined egg
+natural-philosophy | Early natural philosophy | Steno: strata as a record of time | the ground as a stacked history
+natural-philosophy | Early natural philosophy | Hutton: no vestige of a beginning | deep time
+natural-philosophy | Early natural philosophy | Gilbert: De Magnete and the earth as a magnet | lodestone and the great loadstone of the world
+natural-philosophy | Early natural philosophy | Miasma theory | bad air from rotting ground
+natural-philosophy | Early natural philosophy | Humboldt: isotherms | the first lines of equal temperature
+natural-philosophy | Early natural philosophy | Medieval bestiaries | animals as moral lessons
+natural-philosophy | Early natural philosophy | Theophrastus: On Stones | stones that attract, burn, and bleed
+cartographic | Cartography and travel | T-O maps and Jerusalem at the centre | the world as a diagram of faith
+cartographic | Cartography and travel | Portolan charts and rhumb lines | the coast drawn by sailors
+cartographic | Cartography and travel | Ptolemy's Geography and the oikoumene | the known world gridded
+cartographic | Cartography and travel | Mappa mundi monsters at the edge | here be strangers
+cartographic | Cartography and travel | Periplus of the Erythraean Sea | a coast as a list of ports and goods
+cartographic | Cartography and travel | Ibn Battuta's travels | the world as a chain of hospitalities
+cartographic | Cartography and travel | Marco Polo and the cities of Kublai | wonders reported and doubted
+cartographic | Cartography and travel | The Hereford map's Garden of Eden | paradise placed on the map
+cartographic | Cartography and travel | Chinese Yu Ji Tu grid map | a flood-tamer's map on a grid
+cartographic | Cartography and travel | Marshall Islands stick charts | swells modelled in sticks
+cartographic | Cartography and travel | Ordnance Survey benchmarks and triangulation | the land pinned by marks
+cartographic | Cartography and travel | The Domesday survey | every hide counted
+cartographic | Cartography and travel | Enclosure maps and commons | the drawing that took the field
+law-codes | Law and institutions | Code of Hammurabi: the river ordeal | the river judges the accused
+law-codes | Law and institutions | Laws of Manu: the four stages of life | a life in ordered seasons
+law-codes | Law and institutions | Brehon law: honour price | every injury priced
+law-codes | Law and institutions | Icelandic Althing at the law rock | law spoken from a stone
+law-codes | Law and institutions | Salic law and wergild | the dead paid for
+law-codes | Law and institutions | Medieval forest law and the royal forest | a legal forest that is not all trees
+law-codes | Law and institutions | Riparian rights and the mill race | water owned by use
+epic-literary | Epics and literature | Beowulf: the dragon's barrow and the cursed gold | hoard as curse
+epic-literary | Epics and literature | Gawain and the Green Knight: the green chapel | a holy place that is a mound
+epic-literary | Epics and literature | The Odyssey: the bag of winds | weather as a gift that is opened wrongly
+epic-literary | Epics and literature | The Aeneid: the golden bough and the descent | a branch that opens the underworld
+epic-literary | Epics and literature | Shahnameh: Zal raised by the Simurgh | a child nursed by a bird of the mountain
+epic-literary | Epics and literature | Journey to the West: the monkey under the mountain | imprisonment by landscape
+epic-literary | Epics and literature | One Thousand and One Nights: the City of Brass | a city sealed with its dead
+epic-literary | Epics and literature | Nibelungenlied: the hoard sunk in the Rhine | treasure given to the river
+epic-literary | Epics and literature | Sundiata: the baobab uprooted | strength shown by moving a tree
+epic-literary | Epics and literature | Tale of Genji: the fragrance of absence | people known by scent and by what they leave
+folk-practice | Folk practice | Dowsing and the forked rod | finding water by the body's twitch
+folk-practice | Folk practice | Wassailing the orchard | singing to trees for fruit
+folk-practice | Folk practice | Need-fire: all fires extinguished and one rekindled by friction | a village's fire renewed
+folk-practice | Folk practice | Corn dollies and the last sheaf | the spirit of the field kept over winter
+folk-practice | Folk practice | Witch bottles and apotropaic marks | charms buried at thresholds
+folk-practice | Folk practice | Telling the bees | the hive informed of a death
+folk-practice | Folk practice | Sin-eating | a meal that takes the dead's sins
+folk-practice | Folk practice | Rogation days and blessing the fields | the parish walked and blessed
+folk-practice | Folk practice | Well-dressing | springs decorated each year
+folk-practice | Folk practice | Mountain hut books and summit cairns | a record kept at the high place
