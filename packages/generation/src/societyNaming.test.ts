@@ -63,6 +63,7 @@ function fixture() {
     owner: new Int32Array(10).fill(0),
     edges: [],
     river: new Float64Array(10),
+    coast: new Float64Array(10),
     inherited: false,
     changed: new Set(),
   };

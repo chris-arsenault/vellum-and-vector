@@ -37,13 +37,20 @@ function contactPopulation(state: GenerationState) {
   return contact;
 }
 
+/** Residents a site draws beyond its farmland: a Fire core seats a large town, a pass or harbour a market. */
+function siteDraw(c: SocietyCommunity) {
+  const kind = c.site?.kind;
+  if (kind === "fire-seat") return 0.12;
+  if (kind === "pass" || kind === "harbour") return 0.03;
+  return 0;
+}
 function concentration(c: SocietyCommunity, contacts: number) {
   const people = population(c);
   const farming = c.support.farming / Math.max(1, c.support.capacity);
   const density = people / Math.max(1, people + c.areaKm2 * 2);
   const market = contacts / Math.max(1, people + contacts);
   // Local surplus and reachable customers support residents outside primary production.
-  return people * density * (0.025 + 0.2 * farming * market + 0.06 * c.support.water);
+  return people * density * (0.025 + siteDraw(c) + 0.2 * farming * market + 0.06 * c.support.water);
 }
 
 function updateOccupation(c: SocietyCommunity, target: number, years: number, label: string) {

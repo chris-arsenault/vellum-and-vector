@@ -21,7 +21,7 @@ import { riverChannelGeometry } from "./canonry/channelGeometry";
 import { oceanCurrents } from "./canonry/currents";
 import { advanceHumanEcology } from "./canonry/ecologyProcesses";
 import { refreshSocietySupport, refreshSocietyConnections } from "./societyGeography";
-import { channelAccess } from "./societySupport";
+import { channelAccess, coastalFishery } from "./societySupport";
 import { initializeMagic } from "./canonry/magicState";
 import { propagateMagic } from "./canonry/magicPropagation";
 import { classifyMagicFeatures, projectMagic } from "./canonry/magicFeatures";
@@ -115,6 +115,7 @@ export function refreshSocietyEnvironment(
     );
   }
   society.river = channelAccess(state);
+  society.coast = coastalFishery(state);
   if (society.changed.has("elevation")) refreshSocietyConnections(state);
   refreshSocietySupport(state);
   society.changed.clear();

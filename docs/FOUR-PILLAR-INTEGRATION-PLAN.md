@@ -350,6 +350,9 @@ recover across the epoch unless the stock was extirpated.
 
 ### Settlement location obeys geology
 
+Implemented 2026-10-24 as the sixth pass describes; the mechanism below is the
+design it follows.
+
 Current behavior, read from `societyGeography.ts` on 2026-10-23: community
 seeds are dry-land cells ranked by an exponential random draw weighted by local
 support capacity (farming, grazing, gathering, fishing), then thinned by a
@@ -960,6 +963,111 @@ carries the relief.
   user's correction asks for and is not done here.
 - Reach and rarity were tuned on one oceanic seed; a continental seed should
   be measured before the targets are called settled.
+
+## Sixth pass: settlement sites and society's reads of magic
+
+Implemented 2026-10-24 under "do the next major chunk of the plan", read as
+parent phase 7. Two of its three parts are delivered: settlement location obeys
+geology, and society responds to the magical fields and the coast. The third,
+society as field forcing (the third pass's demand budgets in place of located
+works at World), is a separate refactor of the works pipeline and is recorded
+as remaining below.
+
+### The unit and the site
+
+The spacing draw still makes the population units, with capacity setting their
+spacing. What changed is that the draw no longer decides where the settlement
+sits. After the units are drawn and the country divided among them, every land
+cell is ranked by the site class it offers, each unit takes the best-ranked class
+in its country, the highest opportunity × capacity cell within that class wins,
+and the random draw breaks exact ties only. The country is then divided again
+from the sites, so routes and territories follow the towns. A unit whose country
+offers nothing better than open plain keeps the cell its draw gave it and carries
+no site: plains are where people are, not where towns are.
+
+Site classes in order of reliability, each read from fields and features that
+already exist (no routing engine was added):
+
+1. **Pass.** A col: around the cell the ring of neighbours alternates high and
+   low at least twice, with 150 m of relief both up to the heights and down to the
+   lowlands. The published pass landform needs 1,000 m peaks and was absent from
+   the draft World, so the col test on the elevation grid is what finds passes at
+   World scale.
+2. **Fire seat.** Habitable ground beside a Fire core (the core cell itself is
+   too hot). The user's requirement that an on-land Fire source becomes a large
+   settlement is carried here and in the concentration below.
+3. **River node.** A junction (three channels entering by the cell's edges) or a
+   valley mouth (a flat river cell beside a steep one).
+4. **Harbour.** A shore cell with shelter (few sea neighbours, a bay rather than a
+   headland), low wave exposure, water at least 10 m deep beside it, no Pressure
+   surge above 400, and a bonus at a river mouth.
+5. **Melt line.** An Aurora melt-line cell, the one rich strip of a field.
+6. **Fishery coast.** A shore facing upwelling of 300 per mille or more.
+7. **Halo edge.** Quickening between 0.08 and 0.5: the living fringe of a Fire
+   halo, not its heart.
+8. **Plain node.** A hot spring, a lake shore, a river crossing or a marsh edge.
+
+Uninhabitable ground never becomes a site: ice, the heart of a core (quickening
+0.6 or more), the inside of an Aurora field (stillness 0.6 or more), the core
+cell. Capacity still decides how large a settlement grows; a pass or harbour
+draws residents beyond its farmland, and a Fire seat draws four times more.
+
+**The mountain fortress** is a conjunction, not a quota. A pass, or a river node
+in a gorge, may be held from a spur instead of its foot when the spur is
+defensible but reachable (100–500 m above the site, slope between 0.008 and
+0.05, not a summit) and there is a reason: a volatile Fire halo in the valley
+below, or Pressure surge on the coast below. Political pressure across a border
+is the third reason in the second pass and waits for the ice-age round, since
+borders do not exist when the first era settles. On the draft World one of eight
+pass towns is a fortress.
+
+Settlement features now publish `siteKind`, `siteReason` and `fortress`, and the
+inspection panel shows the reason in a sentence.
+
+### Society reads the magical fields and the coast
+
+- **Coastal fishing.** A shore cell's fishing livelihood adds the catch from the
+  sea beside it: the sea's fauna, twice more at full upwelling, and 30 percent
+  beside a crush zone. Until now only river cells fished.
+- **Quickening** lengthens the season: farming and grazing × (1 + 0.5 q).
+- **Stillness** leaves nothing to farm: farming × (1 − 0.8 s), grazing
+  × (1 − 0.5 s).
+- Plant production and herbivores, which quickening raised in the fifth pass,
+  were already read by gathering and grazing, so the halo edge was the richest
+  cold country before this pass and is now also a site.
+
+### Measured on the draft World
+
+Same world as the fifth pass (seed 104729, three epochs), 36 founded communities
+before and after, so the units did not change; where they settled did.
+
+|                                   | Before                   | After                                                                        |
+| --------------------------------- | ------------------------ | ---------------------------------------------------------------------------- |
+| On a river                        | 4                        | 14                                                                           |
+| On the coast (of which estuaries) | 16 (1)                   | 13 (3)                                                                       |
+| In the interior                   | 12                       | 6                                                                            |
+| Site classes taken                | none                     | 8 passes, 12 river nodes, 7 harbours, 5 Fire seats, 1 plain node; 1 fortress |
+| Nearest-neighbour spacing         | 79 km mean, spread 60 km | 49 km mean, spread 56 km                                                     |
+
+The spacing spread relative to its mean rose from 0.76 to 1.13: settlements now
+cluster along rivers and coasts and at passes with empty interiors between,
+instead of a near-even scatter. The six interior settlements are the plain draws.
+
+### What this pass leaves open
+
+- **Society as field forcing.** World society still proposes located works with
+  radii of a few kilometres on 11 to 13 km cells and withholds them from the map.
+  The third pass's design (demand budgets per unit, feedback as aggregate forcing
+  on the unit's cells, located works realized at Region) is the remaining part of
+  phase 7 and is a refactor of `societyWorks`, `societyEnvironment` and the
+  inheritance path; it should be its own branch.
+- **Across eras.** Sites are chosen when the society is created. The second
+  pass's rule that camps use magical and food sites and ignore passes and
+  harbours, and that present towns sit on ice-age ruins only where the site class
+  still holds, needs the ice-age round (phase 9) to have eras to differ between.
+- **The pass foot.** At World a pass town sits on the col cell itself; the
+  second pass puts it on the last flat ground below, one on each side if both
+  are populated. That is Region-scale placement.
 
 ## Proposed generation approach for discussion
 

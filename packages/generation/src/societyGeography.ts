@@ -9,15 +9,18 @@ import {
 } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
 import { RouteHeap } from "./mapRouting";
-import { channelAccess, dryLand, emptySupport, supportAt } from "./societySupport";
+import { channelAccess, coastalFishery, dryLand, emptySupport, supportAt } from "./societySupport";
 import { atlasName } from "./atlasNaming";
 import { nearestSocietySample } from "./societySpatial";
+import { chooseSettlementSites } from "./societySites";
 
 export interface SocietyWorkspace {
   region: SocietyRegion;
   owner: Int32Array;
   edges: { a: number; b: number; cost: number; distance: number }[];
   river: Float64Array;
+  /** Catch available from the sea beside each shore cell. */
+  coast: Float64Array;
   inherited: boolean;
   changed: Set<string>;
   /** Elevation before local earthworks, for transferring only their terrain changes. */
@@ -42,12 +45,18 @@ function landEdges(state: GenerationState) {
   }
   return edges;
 }
-function seedCells(state: GenerationState, river: Float64Array, context: MapProcessContext) {
+/** The territory floor: units spaced by capacity. Where each unit's settlement sits is decided after. */
+function seedCells(
+  state: GenerationState,
+  river: Float64Array,
+  coast: Float64Array,
+  context: MapProcessContext
+) {
   const grid = state.surface;
   const ranked = Array.from(grid.active.keys())
     .filter((i) => dryLand(state, i))
     .map((i) => {
-      const support = supportAt(state, i, river[i]);
+      const support = supportAt(state, i, river[i], coast[i]);
       return { i, score: -Math.log(Math.max(1e-12, context.random())) / (1 + support.capacity) };
     })
     .sort((a, b) => a.score - b.score || a.i - b.i);
@@ -64,8 +73,8 @@ function seedCells(state: GenerationState, river: Float64Array, context: MapProc
     if (
       near.some((j) => {
         const q = gridPosition(grid, j);
-        const density = supportAt(state, i, river[i]).capacity;
-        const other = supportAt(state, j, river[j]).capacity;
+        const density = supportAt(state, i, river[i], coast[i]).capacity;
+        const other = supportAt(state, j, river[j], coast[j]).capacity;
         const radius = spacing * (0.35 + 0.65 / (1 + Math.min(density, other) / 8));
         return Math.hypot(p.x - q.x, p.y - q.y) < radius;
       })
@@ -148,10 +157,19 @@ function community(state: GenerationState, cell: number): SocietyCommunity {
 export function createSocietyGeography(state: GenerationState, context: MapProcessContext) {
   context.progress(0, "Locating communities and traversable connections");
   const river = channelAccess(state),
+    coast = coastalFishery(state),
     edges = landEdges(state),
-    seeds = seedCells(state, river, context);
-  const { owner, distances } = assignCells(state, seeds, edges);
-  const communities = seeds.map((cell) => community(state, cell));
+    units = seedCells(state, river, coast, context);
+  // The draw makes the units; each unit then settles the site its geography offers,
+  // and the country is divided again from the sites.
+  const draft = assignCells(state, units, edges);
+  const chosen = chooseSettlementSites(state, context, draft.owner, units, river, coast);
+  const sites = chosen.map((choice) => choice.cell);
+  const { owner, distances } = assignCells(state, sites, edges);
+  const communities = sites.map((cell, index) => ({
+    ...community(state, cell),
+    ...(chosen[index]?.site ? { site: chosen[index].site! } : {}),
+  }));
   const region: SocietyRegion = {
     areaId: state.domain.scope.areaId,
     spaceId: state.domain.scope.spaceId,
@@ -162,7 +180,7 @@ export function createSocietyGeography(state: GenerationState, context: MapProce
     events: [],
     magic: [],
   };
-  state.society = { region, owner, edges, river, inherited: false, changed: new Set() };
+  state.society = { region, owner, edges, river, coast, inherited: false, changed: new Set() };
   refreshSocietySupport(state);
   region.connections = connectionsFor(communities, owner, distances, edges);
   return state.society;
@@ -219,7 +237,7 @@ export function refreshSocietySupport(state: GenerationState) {
     const c = work.region.communities[work.owner[i]];
     if (!c) continue;
     const area = state.surface.measures[i] / 1e6,
-      support = supportAt(state, i, work.river[i]);
+      support = supportAt(state, i, work.river[i], work.coast[i]);
     c.areaKm2 += area;
     for (const key of Object.keys(support) as (keyof SocietySupport)[])
       c.support[key] += support[key] * area;

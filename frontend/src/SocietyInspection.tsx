@@ -26,6 +26,7 @@ export function SocietyInspection({
     <details open>
       <summary>People and livelihoods</summary>
       <PoliticalSeat world={world} feature={feature} />
+      <SettlementSite feature={feature} />
       <p>
         {Math.round(urban).toLocaleString()} settlement residents · {community.status}
       </p>
@@ -62,6 +63,17 @@ export function SocietyInspection({
 }
 function label(world: World, id: string | null) {
   return id ? (world.entities[id]?.name ?? id) : "Unspecified";
+}
+/** Why the settlement sits where it does: the site class the geography offered its country. */
+function SettlementSite({ feature }: { feature: AtlasFeature }) {
+  const reason = feature.attributes.siteReason;
+  if (typeof reason !== "string") return null;
+  return (
+    <p>
+      {feature.attributes.fortress ? "Fortress site: " : "Site: "}
+      {reason}.
+    </p>
+  );
 }
 function PoliticalSeat({ world, feature }: { world: World; feature: AtlasFeature }) {
   if (feature.attributes.settlementRole === "capital")

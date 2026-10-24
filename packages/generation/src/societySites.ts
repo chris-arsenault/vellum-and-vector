@@ -1,0 +1,299 @@
+import {
+  gridPosition,
+  neighbors,
+  settlementSiteKinds,
+  spatial,
+  type SettlementSiteKind,
+  type SocietyCommunity,
+} from "@atlas/domain";
+import type { GenerationState, MapProcessContext } from "./process";
+import { dryLand, supportAt } from "./societySupport";
+
+/**
+ * Settlement sites obey geology. The population unit is the catchment the spacing draw
+ * made; the site is the one place inside it that the geography offers, taken in a fixed
+ * order of reliability: a pass, the ground beside a Fire core, a river node, a harbour,
+ * a melt line, a fishery coast, a halo edge, a node on the plain. Open plain is no site:
+ * a catchment with nothing better keeps its draw, so villages scatter and towns do not.
+ */
+export type SettlementSite = NonNullable<SocietyCommunity["site"]>;
+export interface SiteOpportunity {
+  kind: SettlementSiteKind;
+  score: number;
+  reason: string;
+}
+const rank = (kind: SettlementSiteKind) => settlementSiteKinds.indexOf(kind);
+const unit = (value: number) => Math.max(0, Math.min(1, value));
+
+class SiteReader {
+  readonly grid;
+  private readonly covers;
+  private readonly rings = new Map<number, number[]>();
+  constructor(readonly state: GenerationState) {
+    this.grid = state.surface;
+    this.covers = spatial.geometryCoverage(this.grid.scope.footprint);
+  }
+  value(name: string, i: number, fallback = 0) {
+    return this.grid.channels[name]?.[i] ?? fallback;
+  }
+  /** Eight neighbours in angular order, so a saddle shows as alternating high and low. */
+  ring(i: number) {
+    let ring = this.rings.get(i);
+    if (ring) return ring;
+    const p = gridPosition(this.grid, i);
+    ring = neighbors(this.grid, i, true, this.covers).sort((a, b) => {
+      const qa = gridPosition(this.grid, a),
+        qb = gridPosition(this.grid, b);
+      return Math.atan2(qa.y - p.y, qa.x - p.x) - Math.atan2(qb.y - p.y, qb.x - p.x);
+    });
+    this.rings.set(i, ring);
+    return ring;
+  }
+  /** The four edge neighbours: a junction counts channels that actually enter the cell. */
+  cross(i: number) {
+    return neighbors(this.grid, i, false, this.covers);
+  }
+  ocean(i: number) {
+    return this.value("water", i) === 1;
+  }
+  lake(i: number) {
+    return this.value("water", i) === 2;
+  }
+  river(i: number) {
+    return this.value("riverOrder", i) >= 1;
+  }
+  elevation(i: number) {
+    return this.value("elevation", i);
+  }
+  /** Ice in metres, from whichever ice channel the surface carries. */
+  ice(i: number) {
+    return this.grid.channels.iceThickness
+      ? this.value("iceThickness", i)
+      : this.value("ice", i) * 1000;
+  }
+  feature(system: string, rule: string, i: number) {
+    return this.value(`magic:${system}:feature:${rule}`, i) > 0;
+  }
+}
+
+/** A col: the ring alternates high and low at least twice, with real relief both ways. */
+function pass(r: SiteReader, i: number): SiteOpportunity | null {
+  const ring = r.ring(i);
+  if (ring.length < 6) return null;
+  const own = r.elevation(i);
+  let changes = 0,
+    highest = -Infinity,
+    lowest = Infinity;
+  for (let k = 0; k < ring.length; k++) {
+    const here = r.elevation(ring[k]) > own,
+      next = r.elevation(ring[(k + 1) % ring.length]) > own;
+    if (here !== next) changes++;
+    highest = Math.max(highest, r.elevation(ring[k]));
+    lowest = Math.min(lowest, r.elevation(ring[k]));
+  }
+  const rise = highest - own,
+    drop = own - lowest;
+  if (changes < 4 || rise < 150 || drop < 150) return null;
+  return {
+    kind: "pass",
+    score: unit(Math.min(rise, drop) / 600),
+    reason: `a col ${Math.round(rise)} m below the heights and ${Math.round(drop)} m above the lowlands on both sides`,
+  };
+}
+/** The last habitable ground beside a Fire core: the seat of a large settlement. */
+function fireSeat(r: SiteReader, i: number): SiteOpportunity | null {
+  if (r.feature("fire", "core", i) || !r.ring(i).some((j) => r.feature("fire", "core", j)))
+    return null;
+  return { kind: "fire-seat", score: 1 - r.value("quickening", i), reason: "beside a Fire core" };
+}
+function riverNode(r: SiteReader, i: number): SiteOpportunity | null {
+  if (!r.river(i)) return null;
+  const ring = r.ring(i),
+    riverNeighbours = r.cross(i).filter((j) => r.river(j)).length;
+  const junction = riverNeighbours >= 3,
+    mouth =
+      r.value("slope", i) < 0.004 && ring.some((j) => r.river(j) && r.value("slope", j) > 0.012);
+  if (!junction && !mouth) return null;
+  return {
+    kind: "river-node",
+    score: unit(Math.log1p(r.value("flow", i)) / 8) + (junction ? 0.3 : 0),
+    reason: junction ? "a river junction" : "where the river leaves the hills for the plain",
+  };
+}
+function harbour(r: SiteReader, i: number): SiteOpportunity | null {
+  const ring = r.ring(i),
+    sea = ring.filter((j) => r.ocean(j));
+  if (!sea.length) return null;
+  const shelter = sea.length <= 3 ? 1 : sea.length <= 4 ? 0.6 : 0.2,
+    lee = 1 - sea.reduce((s, j) => s + r.value("waveExposure", j), 0) / sea.length / 1000,
+    depth = Math.max(...sea.map((j) => r.value("waterDepth", j))) >= 10 ? 1 : 0.4,
+    surge = Math.max(...sea.map((j) => r.value("magic:pressure:intensity", j))) >= 400 ? 0.3 : 1,
+    estuary = r.river(i) ? 1.3 : 1;
+  const score = shelter * lee * depth * surge * estuary;
+  if (score < 0.35) return null;
+  return {
+    kind: "harbour",
+    score,
+    reason: `${sea.length <= 3 ? "a sheltered bay" : "a coast"}${r.river(i) ? " at a river mouth" : ""} with deep water near the shore`,
+  };
+}
+function meltLine(r: SiteReader, i: number): SiteOpportunity | null {
+  return r.feature("aurora", "melt", i)
+    ? {
+        kind: "melt-line",
+        score: 1,
+        reason: "on an Aurora melt line, the one rich strip of the field",
+      }
+    : null;
+}
+function fisheryCoast(r: SiteReader, i: number): SiteOpportunity | null {
+  const sea = r.ring(i).filter((j) => r.ocean(j));
+  if (!sea.length) return null;
+  const upwelling = Math.max(...sea.map((j) => r.value("upwelling", j)));
+  return upwelling >= 300
+    ? { kind: "fishery-coast", score: upwelling / 1000, reason: "facing an upwelling fishery" }
+    : null;
+}
+function haloEdge(r: SiteReader, i: number): SiteOpportunity | null {
+  const q = r.value("quickening", i);
+  return q >= 0.08 && q <= 0.5
+    ? { kind: "halo-edge", score: 1 - Math.abs(q - 0.3) * 2, reason: "at the edge of a Fire halo" }
+    : null;
+}
+function plainNode(r: SiteReader, i: number): SiteOpportunity | null {
+  const ring = r.ring(i);
+  const options: [number, string][] = [];
+  if (r.feature("fire", "spring", i)) options.push([0.7, "at a hot spring"]);
+  if (ring.some((j) => r.lake(j))) options.push([0.6, "on a lake shore"]);
+  if (r.river(i)) options.push([0.5, "at a river crossing"]);
+  if (ring.some((j) => r.value("wetlandCover", j) >= 0.3)) options.push([0.4, "at a marsh edge"]);
+  if (!options.length) return null;
+  const [score, reason] = options.sort((a, b) => b[0] - a[0])[0];
+  return { kind: "plain-node", score, reason };
+}
+/** Ground nobody settles: ice, the heart of a core, the inside of an Aurora field. */
+function uninhabitable(r: SiteReader, i: number) {
+  return (
+    r.ice(i) > 1 ||
+    r.value("quickening", i) >= 0.6 ||
+    r.value("stillness", i) >= 0.6 ||
+    r.feature("fire", "core", i)
+  );
+}
+const classifiers = [
+  pass,
+  fireSeat,
+  riverNode,
+  harbour,
+  meltLine,
+  fisheryCoast,
+  haloEdge,
+  plainNode,
+];
+/** The best site class each land cell offers, or null where nothing better than plain exists. */
+export function rankSites(state: GenerationState): (SiteOpportunity | null)[] {
+  const r = new SiteReader(state),
+    result: (SiteOpportunity | null)[] = new Array(state.surface.active.length).fill(null);
+  for (let i = 0; i < result.length; i++) {
+    if (!dryLand(state, i) || uninhabitable(r, i)) continue;
+    let best: SiteOpportunity | null = null;
+    for (const classify of classifiers) {
+      const site = classify(r, i);
+      if (site && (!best || rank(site.kind) < rank(best.kind))) best = site;
+    }
+    result[i] = best;
+  }
+  return result;
+}
+/**
+ * A fortress needs three things at once: a route to control (a pass, or a gorge beside a
+ * river node), a defensible spur that is still reachable, and a reason to hold it, which
+ * is a hazard in the country below. Scarcity comes from the conjunction, not a quota.
+ */
+function fortress(r: SiteReader, site: number, kind: SettlementSiteKind) {
+  const ring = r.ring(site);
+  const route =
+    kind === "pass" ||
+    (kind === "river-node" && [site, ...ring].some((j) => r.value("landform", j) === 16));
+  if (!route) return null;
+  const hazard = ring.some((j) => r.value("quickening", j) >= 0.15)
+    ? "a volatile Fire halo below"
+    : ring.some((j) => r.ocean(j) && r.value("magic:pressure:intensity", j) >= 300)
+      ? "Pressure surge on the coast below"
+      : null;
+  if (!hazard) return null;
+  const own = r.elevation(site);
+  const spur = ring.find((j) => {
+    const above = r.elevation(j) - own,
+      slope = r.value("slope", j);
+    return (
+      dryLand(r.state, j) &&
+      above >= 100 &&
+      above <= 500 &&
+      slope >= 0.008 &&
+      slope <= 0.05 &&
+      r.value("landform", j) !== 6
+    );
+  });
+  return spur === undefined ? null : { cell: spur, reason: hazard };
+}
+/**
+ * Each unit takes its best-ranked site class; within the class the highest opportunity
+ * times capacity wins, and the random draw only breaks ties. A unit with nothing but
+ * plain keeps the cell its draw gave it.
+ */
+export function chooseSettlementSites(
+  state: GenerationState,
+  context: MapProcessContext,
+  owner: Int32Array,
+  seeds: number[],
+  river: Float64Array,
+  coast: Float64Array
+): { cell: number; site: SettlementSite | null }[] {
+  const ranked = rankSites(state),
+    r = new SiteReader(state);
+  const best = seeds.map((seed) => ({
+    cell: seed,
+    site: null as SettlementSite | null,
+    key: [Infinity, 0],
+  }));
+  const ties = new Map<number, number>();
+  const draw = (i: number) => {
+    if (!ties.has(i)) ties.set(i, context.random());
+    return ties.get(i)!;
+  };
+  for (let i = 0; i < owner.length; i++) {
+    const k = owner[i],
+      site = ranked[i];
+    if (k < 0 || k >= best.length || !site) continue;
+    const capacity = supportAt(state, i, river[i], coast[i]).capacity,
+      key = [rank(site.kind), -site.score * (1 + capacity)];
+    const current = best[k];
+    if (!betterSite(key, current.key, () => draw(i) > draw(current.cell))) continue;
+    current.cell = i;
+    current.key = key;
+    current.site = { kind: site.kind, reason: site.reason, fortress: false };
+  }
+  return best.map((choice) => holdFromSpur(r, choice));
+}
+/** Lower rank wins; then higher weighted opportunity; the draw decides only an exact tie. */
+function betterSite(key: number[], current: number[], tie: () => boolean) {
+  if (key[0] !== current[0]) return key[0] < current[0];
+  if (key[1] !== current[1]) return key[1] < current[1];
+  return tie();
+}
+function holdFromSpur(
+  r: SiteReader,
+  choice: { cell: number; site: SettlementSite | null }
+): { cell: number; site: SettlementSite | null } {
+  const spur = choice.site && fortress(r, choice.cell, choice.site.kind);
+  if (!spur || !choice.site) return { cell: choice.cell, site: choice.site };
+  return {
+    cell: spur.cell,
+    site: {
+      ...choice.site,
+      fortress: true,
+      reason: `${choice.site.reason}; held from a spur above because of ${spur.reason}`,
+    },
+  };
+}

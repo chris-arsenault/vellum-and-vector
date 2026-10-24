@@ -65,6 +65,7 @@ export function publishSettlements(state: GenerationState, context: MapProcessCo
         status: c.status,
         founded: c.founded,
         representedAreaKm2: c.areaKm2,
+        ...siteAttributes(c),
         ...hierarchy.get(c.id),
         ...communityNameMetadata(c),
       }
@@ -116,6 +117,14 @@ function publishRoutes(
       )
     );
   }
+}
+/** Why the settlement sits where it does; open plain is the absence of a site. */
+function siteAttributes(c: SocietyCommunity) {
+  return {
+    siteKind: c.site?.kind ?? "plain",
+    siteReason: c.site?.reason ?? "open country, where its people are",
+    fortress: c.site?.fortress ?? false,
+  };
 }
 function communityNameMetadata(c: SocietyCommunity) {
   return {

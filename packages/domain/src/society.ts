@@ -23,6 +23,19 @@ export interface SocietySupport {
   water: number;
   capacity: number;
 }
+/** Site classes in order of reliability; a community takes the best class its country offers. */
+export const settlementSiteKinds = [
+  "pass",
+  "fire-seat",
+  "river-node",
+  "harbour",
+  "melt-line",
+  "fishery-coast",
+  "halo-edge",
+  "plain-node",
+  "plain",
+] as const;
+export type SettlementSiteKind = (typeof settlementSiteKinds)[number];
 export interface SocietyCommunity {
   id: string;
   name: string;
@@ -38,6 +51,12 @@ export interface SocietyCommunity {
   parentCommunity?: string;
   /** Concentrated residents are part of groups, never an additional population. */
   settlement?: { population: number; peak: number; recoveryYears: number };
+  /**
+   * The place inside the community's country that the geography offered for its
+   * settlement, chosen by site class; a fortress is a seat on a defensible spur above a
+   * route node, taken only when there is a reason to hold it.
+   */
+  site?: { kind: SettlementSiteKind; reason: string; fortress: boolean };
   isolationYears?: number;
   history?: SocietyOccupation[];
   naming?: { language: string | null; culture: string; era: string };
