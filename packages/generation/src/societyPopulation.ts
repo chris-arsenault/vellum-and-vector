@@ -29,6 +29,10 @@ export function initializePopulation(state: GenerationState, context: MapProcess
     inheritSociety(state, prior);
     work.inherited = true;
   } else {
+    // The rounds of earlier epochs are this society's earlier history.
+    work.region.history.push(
+      ...(state.rounds ?? []).flatMap((round) => structuredClone(round.history))
+    );
     const starts = startingPopulations(state, context);
     for (const [i, c] of work.region.communities.entries())
       c.groups = [

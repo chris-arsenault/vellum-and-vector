@@ -9,6 +9,7 @@ import { retainSocietyFootprints } from "./societyInheritance";
 import { applyPresentWorks } from "./societyWorks";
 import { refreshSocietyEnvironment } from "./societyEnvironment";
 import { societyEvolution } from "./societyEvolution";
+import { humanRoundProcess, presentHumanEras, resolvedHumanEras } from "./societyRound";
 
 function validatePopulation(state: GenerationState): Diagnostic[] {
   const communities = state.society?.region.communities ?? [];
@@ -93,6 +94,7 @@ export const populationProcesses = [
   politicsChange,
   ...societyFeedbackProcesses,
   societyEvolution,
+  humanRoundProcess,
 ];
 export const societyPresent: MapProcess = {
   contract: {
@@ -121,7 +123,12 @@ const invoke = (process: MapProcess) => ({
   version: process.contract.version,
 });
 export function societySequence(input: AtlasGenerationInput): ProcessSequence {
-  const eras = input.settings!.humanEras;
+  // Eras bound to an earlier epoch ran as rounds inside it; the present runs the rest,
+  // with their bindings resolved to the epochs that exist.
+  const eras = presentHumanEras({
+    ...input.settings!,
+    humanEras: resolvedHumanEras(input.settings!),
+  });
   const cultural = input.resolvedFeatures!.selection["human.cultures"]?.enabled;
   const political = input.resolvedFeatures!.selection["human.politics"]?.enabled;
   return [

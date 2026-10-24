@@ -11,6 +11,7 @@ import {
   type GenerationRecipe,
 } from "@atlas/generation";
 import {
+  beforePresentEpoch,
   canonryMagicPresets,
   requireThat,
   type DomainSnapshot,
@@ -41,6 +42,13 @@ export function newGenerationDraft(): GenerationDraft {
       settings: {
         epochs: defaultEpochs(),
         humanEras: [
+          {
+            id: "Ice age",
+            years: 400,
+            physicalEpoch: beforePresentEpoch,
+            mobility: 2,
+            politicalCapacity: 0.2,
+          },
           { id: "Settlement", years: 200, physicalEpoch: null, mobility: 1, politicalCapacity: 1 },
         ],
         magicSystems: canonryMagicPresets(),

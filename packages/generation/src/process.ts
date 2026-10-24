@@ -15,8 +15,17 @@ import type {
   ProductRequirement,
 } from "./productLedger";
 
+/** What a human round inside an earlier epoch left for the present society to find. */
+export interface HumanRound {
+  era: string;
+  epoch: string;
+  history: import("@atlas/domain").SocietyEraRecord[];
+  ruins: { x: number; y: number; name: string; siteKind: string }[];
+}
 export interface GenerationState {
   society?: import("./societyGeography").SocietyWorkspace;
+  /** Completed human rounds of earlier epochs; the present society reads their ruins and history. */
+  rounds?: HumanRound[];
   physical?: import("./canonry/atlasWorkspace").AtlasPhysicalWorkspace;
   domain: DomainSnapshot;
   surface: Grid;

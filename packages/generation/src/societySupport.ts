@@ -96,10 +96,9 @@ export function channelAccess(state: GenerationState) {
   const grid = state.surface,
     result = new Float64Array(grid.active.length);
   const size = Math.max(1000, grid.scope.resolution ?? 1000);
-  const buckets =
-    state.physical && state.society?.cycle
-      ? liveChannelBuckets(state.physical, size)
-      : channelBuckets(state, size);
+  const buckets = liveDrainage(state)
+    ? liveChannelBuckets(state.physical!, size)
+    : channelBuckets(state, size);
   for (let i = 0; i < result.length; i++) {
     const p = gridPosition(grid, i),
       x = Math.floor(p.x / size),
@@ -113,6 +112,14 @@ export function channelAccess(state: GenerationState) {
           );
   }
   return result;
+}
+/**
+ * The live mesh is read mid-cycle, and inside an epoch before any extraction, when it is
+ * the only drainage there is; otherwise the retained network is the record.
+ */
+function liveDrainage(state: GenerationState) {
+  if (!state.physical) return false;
+  return Boolean(state.society?.cycle) || !state.domain.world.drainage?.[state.domain.scope.areaId];
 }
 function channelBuckets(state: GenerationState, size: number) {
   const buckets = new Map<string, [number, number, number][]>();

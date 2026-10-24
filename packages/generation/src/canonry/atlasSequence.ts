@@ -5,7 +5,8 @@ import { resolveGenerationFeatures, type FeatureContributionContext } from "../f
 import { physicalFeatureDefinitions, physicalFeatureSequence } from "../physicalFeatures";
 import { nativeContracts } from "./contracts";
 import { atlasGenerationModules } from "../generationModules";
-import { worldGenerationSettings } from "../generationSettings";
+import { worldGenerationSettings, type GenerationSettings } from "../generationSettings";
+import { hasHumanRound } from "../societyRound";
 
 type Composition = FeatureContributionContext;
 
@@ -103,6 +104,16 @@ function geology(context: Composition, initial: boolean): ProcessSequence {
     ),
   ];
 }
+function humanRound(context: Composition): ProcessSequence {
+  const settings = context.input.settings;
+  const society = ["human.cultures", "human.politics", "built.layout"].some(
+    (id) => context.resolved.selection[id]?.enabled
+  );
+  if (!settings || !society || !hasHumanRound(settings as GenerationSettings)) return [];
+  return [
+    { kind: "process", id: "human.round", process: "human.round", version: "1", parameters: {} },
+  ];
+}
 function epochBody(context: Composition, inherited: boolean): ProcessSequence {
   return [
     invoke("canonry.begin-epoch"),
@@ -131,6 +142,9 @@ function epochBody(context: Composition, inherited: boolean): ProcessSequence {
     ...contributions("epoch.influence-history", context),
     ...contributions("epoch.ecology-respond", context),
     ...drainage("epoch.after-response-water", context, true),
+    // One human round inside an epoch with a bound era: people settle, use and exploit
+    // before the coasts are cut and the epoch's history is kept.
+    ...humanRound(context),
     ...contributions("epoch.coastal-forcing", context),
     ...nativeGroup("epoch.coasts", "epoch", context),
     ...contributions("epoch.ecology-burial", context),

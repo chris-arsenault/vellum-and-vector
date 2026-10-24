@@ -14,7 +14,7 @@ function validateCodes(map: PhysicalField, unclassified = false) {
       !range(map.LandformCodes[i], unclassified ? 0 : 1, 17) ||
       !range(map.WaterKindCodes[i], 0, 2) ||
       !range(map.BathymetricZoneCodes[i], 0, 4) ||
-      (map.FeatureFlags[i] & ~2047) !== 0
+      (map.FeatureFlags[i] & ~4095) !== 0
     )
       throw new Error("Physical geography contains an invalid primitive code.");
     validateRiverCodes(map, i);

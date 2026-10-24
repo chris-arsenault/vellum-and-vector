@@ -23,6 +23,20 @@ export interface SocietySupport {
   water: number;
   capacity: number;
 }
+/**
+ * A human era binds to a physical epoch by id, or structurally to the epoch before the
+ * present with this value, so the round follows the schedule whatever the epochs are named.
+ */
+export const beforePresentEpoch = "before-present";
+/** The epoch an era runs in: null is the present; a name that no longer exists is the present too. */
+export function boundEpoch(
+  physicalEpoch: string | null | undefined,
+  epochs: readonly { id: string }[]
+): string | null {
+  if (!physicalEpoch) return null;
+  if (physicalEpoch === beforePresentEpoch) return epochs.at(-2)?.id ?? null;
+  return epochs.some((epoch) => epoch.id === physicalEpoch) ? physicalEpoch : null;
+}
 /** Site classes in order of reliability; a community takes the best class its country offers. */
 export const settlementSiteKinds = [
   "pass",
@@ -126,7 +140,12 @@ export type SocietyWorkKind =
   | "conservation"
   | "fire-forge"
   | "aurora-archive"
-  | "pressure-diving";
+  | "pressure-diving"
+  // The cold-age set: works of a mobile round inside a glacial epoch.
+  | "tapping"
+  | "burning"
+  | "quarrying"
+  | "weir";
 export interface SocietyWork {
   id: string;
   /** Assigned at construction; absent on unnamed authored input and older session fixtures. */

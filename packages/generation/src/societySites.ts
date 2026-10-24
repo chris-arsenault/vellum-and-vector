@@ -190,20 +190,43 @@ const classifiers = [
   haloEdge,
   plainNode,
 ];
+/**
+ * A mobile band camps where food and warmth are: halo edges, melt lines, fishery coasts and
+ * river crossings. A pass or a harbour means nothing to it, and it never seats a core.
+ */
+const mobileClassifiers = [haloEdge, meltLine, fisheryCoast, riverNode, plainNode];
+export interface SiteOptions {
+  mobile: boolean;
+  /** Ruins of earlier rounds by cell: a site there is preferred within its class. */
+  ruins: Map<number, string>;
+}
+const settled: SiteOptions = { mobile: false, ruins: new Map() };
 /** The best site class each land cell offers, or null where nothing better than plain exists. */
-export function rankSites(state: GenerationState): (SiteOpportunity | null)[] {
+export function rankSites(
+  state: GenerationState,
+  options: SiteOptions = settled
+): (SiteOpportunity | null)[] {
   const r = new SiteReader(state),
-    result: (SiteOpportunity | null)[] = new Array(state.surface.active.length).fill(null);
+    result: (SiteOpportunity | null)[] = new Array(state.surface.active.length).fill(null),
+    kinds = options.mobile ? mobileClassifiers : classifiers;
   for (let i = 0; i < result.length; i++) {
     if (!dryLand(state, i) || uninhabitable(r, i)) continue;
-    let best: SiteOpportunity | null = null;
-    for (const classify of classifiers) {
-      const site = classify(r, i);
-      if (site && (!best || rank(site.kind) < rank(best.kind))) best = site;
-    }
-    result[i] = best;
+    result[i] = onRuins(bestClass(r, i, kinds), options.ruins.get(i));
   }
   return result;
+}
+function bestClass(r: SiteReader, i: number, kinds: typeof classifiers) {
+  let best: SiteOpportunity | null = null;
+  for (const classify of kinds) {
+    const site = classify(r, i);
+    if (site && (!best || rank(site.kind) < rank(best.kind))) best = site;
+  }
+  return best;
+}
+/** A camp of an earlier round makes a site more attractive within its class, never a class. */
+function onRuins(site: SiteOpportunity | null, ruin: string | undefined) {
+  if (!site || !ruin) return site;
+  return { ...site, score: site.score + 0.3, reason: `${site.reason}, on the ruins of ${ruin}` };
 }
 /**
  * A fortress needs three things at once: a route to control (a pass, or a gorge beside a
@@ -248,9 +271,10 @@ export function chooseSettlementSites(
   owner: Int32Array,
   seeds: number[],
   river: Float64Array,
-  coast: Float64Array
+  coast: Float64Array,
+  options: SiteOptions = settled
 ): { cell: number; site: SettlementSite | null }[] {
-  const ranked = rankSites(state),
+  const ranked = rankSites(state, options),
     r = new SiteReader(state);
   const best = seeds.map((seed) => ({
     cell: seed,
@@ -274,7 +298,8 @@ export function chooseSettlementSites(
     current.key = key;
     current.site = { kind: site.kind, reason: site.reason, fortress: false };
   }
-  return best.map((choice) => holdFromSpur(r, choice));
+  // A band on the move holds no fortress.
+  return best.map((choice) => (options.mobile ? choice : holdFromSpur(r, choice)));
 }
 /** Lower rank wins; then higher weighted opportunity; the draw decides only an exact tie. */
 function betterSite(key: number[], current: number[], tie: () => boolean) {

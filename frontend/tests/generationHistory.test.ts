@@ -240,22 +240,27 @@ test("keeps cultures and politics independent and configures operative cultural 
   await tuneGeneration(page, "Cultural distributions");
   const cultures = page.getByRole("checkbox", { name: "Cultural distributions", exact: true });
   await page.getByLabel("Starting cultures · count", { exact: true }).fill("2");
-  await page.getByLabel("Cultural duration · years", { exact: true }).fill("1200");
-  await page.getByLabel("Cultural mobility · multiplier", { exact: true }).fill("1.7");
-  await page.getByLabel("Political capacity · multiplier", { exact: true }).fill("0.6");
-  await page.getByLabel("Era name", { exact: true }).fill("River spread");
-  await page.getByRole("button", { name: "Apply era name", exact: true }).click();
+  // Two eras share their field labels; each era is its own named group.
+  const settlement = page.getByRole("group", { name: "Settlement", exact: true });
+  await settlement.getByLabel("Cultural duration · years", { exact: true }).fill("1200");
+  await settlement.getByLabel("Cultural mobility · multiplier", { exact: true }).fill("1.7");
+  await settlement.getByLabel("Political capacity · multiplier", { exact: true }).fill("0.6");
+  await settlement.getByLabel("Era name", { exact: true }).fill("River spread");
+  await settlement.getByRole("button", { name: "Apply era name", exact: true }).click();
   await page.getByRole("checkbox", { name: "Political territories", exact: true }).check();
   await page.getByLabel("Political pattern", { exact: true }).selectOption("broad");
   await cultures.uncheck();
   await expect(page.getByLabel("Political pattern", { exact: true })).toHaveValue("broad");
   await cultures.check();
-  await expect(page.getByLabel("Cultural duration · years", { exact: true })).toHaveValue("1200");
-  await expect(page.getByLabel("Cultural mobility · multiplier", { exact: true })).toHaveValue(
+  const renamed = page.getByRole("group", { name: "River spread", exact: true });
+  await expect(renamed.getByLabel("Cultural duration · years", { exact: true })).toHaveValue(
+    "1200"
+  );
+  await expect(renamed.getByLabel("Cultural mobility · multiplier", { exact: true })).toHaveValue(
     "1.7"
   );
-  await expect(page.getByLabel("Physical regime", { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Political capacity · multiplier", { exact: true })).toHaveValue(
+  await expect(renamed.getByLabel("Physical regime", { exact: true })).toBeVisible();
+  await expect(renamed.getByLabel("Political capacity · multiplier", { exact: true })).toHaveValue(
     "0.6"
   );
   await stage(page, /Review & generate/).click();
@@ -268,9 +273,15 @@ test("keeps cultures and politics independent and configures operative cultural 
   await expect(reviewed).toContainText("mobility 1.7×");
   const field = await openRecipe(page),
     recipe = JSON.parse(await field.inputValue());
-  expect(recipe.features["human.cultures"].configuration.eras).toEqual([
-    { id: "River spread", years: 1200, mobility: 1.7, politicalCapacity: 0.6 },
-  ]);
+  const eras = recipe.features["human.cultures"].configuration.eras;
+  expect(eras).toHaveLength(2);
+  expect(eras[0]).toMatchObject({ id: "Ice age", physicalEpoch: "before-present" });
+  expect(eras[1]).toEqual({
+    id: "River spread",
+    years: 1200,
+    mobility: 1.7,
+    politicalCapacity: 0.6,
+  });
   await page.getByRole("button", { name: "Generate world", exact: true }).click();
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
   const input = await page.evaluate(

@@ -371,8 +371,14 @@
   max-width: 360px;
 }
 .setup-human-era {
+  margin: 0;
   padding: 8px 0;
+  border: 0;
   border-bottom: 1px solid #405452;
+}
+.setup-human-era > legend {
+  padding: 0;
+  font-weight: 600;
 }
 .setup-magic-configuration label:not(.check):not(.workflow-number-field) {
   display: grid;

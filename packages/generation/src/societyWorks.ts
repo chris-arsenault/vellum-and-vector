@@ -50,6 +50,9 @@ export function makeWork(
   return work;
 }
 function proposedWorks(state: GenerationState, c: SocietyCommunity): SocietyWorkKind[] {
+  return state.society!.round ? coldAgeWorks(state, c) : settledWorks(state, c);
+}
+function settledWorks(state: GenerationState, c: SocietyCommunity): SocietyWorkKind[] {
   if (population(c) < 500) return [];
   const i = nearestSample(state, c.position),
     v = (name: string) => societyValue(state, name, i);
@@ -61,6 +64,64 @@ function proposedWorks(state: GenerationState, c: SocietyCommunity): SocietyWork
   if (v("slope") > 0.08 && state.society!.region.connections.length) kinds.push("pass");
   if (c.support.water < 0.5 && state.society!.river[i] > 0.4) kinds.push("dam");
   return kinds;
+}
+/**
+ * The cold-age set of a mobile round: hunt the crowded herds, burn the groves open, dig into
+ * the veins, quarry the prisms, build weirs in the bays. Small bands do all of it.
+ */
+function coldAgeWorks(state: GenerationState, c: SocietyCommunity): SocietyWorkKind[] {
+  if (population(c) < 40) return [];
+  const i = nearestSample(state, c.position),
+    v = (name: string) => societyValue(state, name, i);
+  const kinds: SocietyWorkKind[] = [];
+  if (v("herbivores") > 0.001) kinds.push("hunting");
+  if (v("treeCover") > 0.25) kinds.push("burning");
+  if (coldAgeSite(state, c, "magic:fire:intensity", 100, 25_000) >= 0) kinds.push("tapping");
+  if (coldAgeSite(state, c, "magic:aurora:feature:prism", 1, 30_000) >= 0) kinds.push("quarrying");
+  if (state.society!.coast[i] > 0 && population(c) >= 100) kinds.push("weir");
+  return kinds;
+}
+/** The nearest sample within reach where a channel reaches a threshold, or -1. */
+function coldAgeSite(
+  state: GenerationState,
+  c: SocietyCommunity,
+  channel: string,
+  threshold: number,
+  reach: number,
+  accepts: (i: number) => boolean = () => true
+) {
+  const { x, y } = c.position;
+  let best = -1,
+    distance = reach;
+  for (const i of samplesInBox(state.surface, [x - reach, y - reach, x + reach, y + reach])) {
+    if (societyValue(state, channel, i) < threshold || !accepts(i)) continue;
+    const p = gridPosition(state.surface, i),
+      d = Math.hypot(p.x - x, p.y - y);
+    if (d < distance) [best, distance] = [i, d];
+  }
+  return best;
+}
+/** Where a cold-age work stands: the vein, the prism ridge, the shallow water of the bay. */
+function placeColdAgeWork(state: GenerationState, c: SocietyCommunity, work: SocietyWork) {
+  const grid = state.surface;
+  const at =
+    work.kind === "tapping"
+      ? coldAgeSite(state, c, "magic:fire:intensity", 100, 25_000)
+      : work.kind === "quarrying"
+        ? coldAgeSite(state, c, "magic:aurora:feature:prism", 1, 30_000)
+        : work.kind === "weir"
+          ? coldAgeSite(
+              state,
+              c,
+              "water",
+              1,
+              15_000,
+              (i) => societyValue(state, "waterDepth", i) < 30
+            )
+          : -1;
+  if (at >= 0) work.position = gridPosition(grid, at);
+  // A band's works are small and near its camp.
+  work.radius = Math.min(work.radius, 6000);
 }
 function needsWater(state: GenerationState, c: SocietyCommunity, i: number) {
   return c.support.water < 0.5 && state.society!.river[i] > 0.2;
@@ -80,12 +141,13 @@ export function planSocietyWorks(state: GenerationState) {
     for (const kind of proposedWorks(state, c)) {
       const candidate = makeWork(state, c, kind);
       if (kind === "dam" || kind === "irrigation") anchorRiverWork(state, candidate);
+      if (work.round) placeColdAgeWork(state, c, candidate);
       if (!existing.has(candidate.id)) {
         work.region.works.push(candidate);
         existing.add(candidate.id);
       }
     }
-  addHarbors(state, existing);
+  if (!work.round) addHarbors(state, existing);
   addAuthoredWorks(state, existing);
 }
 function addHarbors(state: GenerationState, existing: Set<string>) {
@@ -217,20 +279,96 @@ function applyWork(state: GenerationState, work: SocietyWork, years: number) {
     if (permitted.get(name)!(i)) changeSample(state, name, i, value);
   };
   for (const { i, fraction } of workSamples(state, work)) {
-    const v = (name: string) => societyValue(state, name, i),
-      amount = target * fraction;
     const edit = (name: string, value: number) => change(name, i, value);
-    if (work.kind === "pass") edit("elevation", v("elevation") - 8 * delta * fraction);
-    if (work.kind === "harbor") edit("elevation", v("elevation") + 5 * delta * fraction);
-    if (work.kind === "dam") edit("elevation", v("elevation") + 6 * delta * fraction);
-    if (work.kind === "irrigation") irrigate(state, i, amount, edit);
-    if (work.kind === "clearance") clearLand(state, i, amount, years, edit);
-    if (work.kind === "hunting")
-      for (const animal of ["herbivores", "grazers", "browsers"])
-        edit(animal, v(animal) * Math.exp((-amount * years) / 150));
-    if (work.kind === "conservation") conserve(state, i, amount, years, edit);
+    applyWorkSample(
+      state,
+      work,
+      i,
+      { amount: target * fraction, rise: delta * fraction, years },
+      edit
+    );
   }
   work.applied = target;
+}
+interface WorkDose {
+  /** Work applied at this sample, for effects that scale with elapsed years. */
+  amount: number;
+  /** Change in applied work at this sample, for one-off terrain and conductance changes. */
+  rise: number;
+  years: number;
+}
+/** Settled works shape terrain, water, cover and herds; the cold-age set digs, burns, quarries and builds weirs. */
+function applyWorkSample(
+  state: GenerationState,
+  work: SocietyWork,
+  i: number,
+  { amount, rise, years }: WorkDose,
+  edit: (name: string, value: number) => void
+) {
+  const v = (name: string) => societyValue(state, name, i);
+  const terrain: Partial<Record<SocietyWorkKind, number>> = {
+    pass: -8,
+    harbor: 5,
+    dam: 6,
+    weir: 4,
+  };
+  if (terrain[work.kind]) edit("elevation", v("elevation") + terrain[work.kind]! * rise);
+  // Tapping cracks the sinter and opens the fracture: conductance rises, Fire reaches further.
+  if (work.kind === "tapping") edit("fracture", Math.min(1, v("fracture") + 0.25 * rise));
+  if (work.kind === "weir" || work.kind === "quarrying")
+    applyNativeColdAgeWork(state, work, i, amount, years);
+  applyLivingWork(state, work, i, amount, years, edit);
+}
+/** Works on water, cover and herds, which act over the years they are kept up. */
+function applyLivingWork(
+  state: GenerationState,
+  work: SocietyWork,
+  i: number,
+  amount: number,
+  years: number,
+  edit: (name: string, value: number) => void
+) {
+  const v = (name: string) => societyValue(state, name, i);
+  switch (work.kind) {
+    case "irrigation":
+      return irrigate(state, i, amount, edit);
+    case "clearance":
+      return clearLand(state, i, amount, years, edit);
+    case "burning":
+      return clearLand(state, i, amount * 1.5, years, edit);
+    case "hunting":
+      for (const animal of ["herbivores", "grazers", "browsers"])
+        edit(animal, v(animal) * Math.exp((-amount * years) / 150));
+      return;
+    case "conservation":
+      return conserve(state, i, amount, years, edit);
+    default:
+      return;
+  }
+}
+/**
+ * Consequences that live in the physical workspace rather than a published channel: a weir
+ * marks its seabed as a shoal that reflects Pressure rays after the sea drowns it; quarrying
+ * a prism ridge removes the charge that holds its ice still.
+ */
+function applyNativeColdAgeWork(
+  state: GenerationState,
+  work: SocietyWork,
+  i: number,
+  amount: number,
+  years: number
+) {
+  const physical = state.physical;
+  if (!physical) return;
+  const cell = physical.samples[i];
+  if (cell === undefined || cell < 0) return;
+  if (work.kind === "weir") physical.map.FeatureFlags[cell] |= 1 << 11;
+  if (work.kind === "quarrying") {
+    const removed = Math.exp((-amount * years) / 100);
+    for (const field of physical.magic?.fields ?? [])
+      if (field.definition.effects.icePersistence > 0) field.stored[cell] *= removed;
+    physical.map.IcePersistence[cell] *= removed;
+  }
 }
 function irrigate(
   state: GenerationState,

@@ -11,6 +11,8 @@ export const Feature = {
   VolcanicCone: 1 << 8,
   VolcanicCaldera: 1 << 9,
   LavaPlain: 1 << 10,
+  /** Seabed raised by human work (a weir, a breakwater); reflects Pressure rays even when drowned. */
+  Shoal: 1 << 11,
 };
 export const Landform = {
   Plain: 1,

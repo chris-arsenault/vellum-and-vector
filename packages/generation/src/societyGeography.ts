@@ -21,6 +21,8 @@ export interface SocietyWorkspace {
   river: Float64Array;
   /** Catch available from the sea beside each shore cell. */
   coast: Float64Array;
+  /** The era of a mobile round inside an earlier epoch; camps, cold-age works, no publication. */
+  round?: string;
   inherited: boolean;
   changed: Set<string>;
   /** Elevation before local earthworks, for transferring only their terrain changes. */
@@ -154,7 +156,11 @@ function community(state: GenerationState, cell: number): SocietyCommunity {
     causes: [],
   };
 }
-export function createSocietyGeography(state: GenerationState, context: MapProcessContext) {
+export function createSocietyGeography(
+  state: GenerationState,
+  context: MapProcessContext,
+  options: { mobile?: boolean; round?: string } = {}
+) {
   context.progress(0, "Locating communities and traversable connections");
   const river = channelAccess(state),
     coast = coastalFishery(state),
@@ -163,7 +169,10 @@ export function createSocietyGeography(state: GenerationState, context: MapProce
   // The draw makes the units; each unit then settles the site its geography offers,
   // and the country is divided again from the sites.
   const draft = assignCells(state, units, edges);
-  const chosen = chooseSettlementSites(state, context, draft.owner, units, river, coast);
+  const chosen = chooseSettlementSites(state, context, draft.owner, units, river, coast, {
+    mobile: options.mobile ?? false,
+    ruins: options.round ? new Map() : roundRuins(state),
+  });
   const sites = chosen.map((choice) => choice.cell);
   const { owner, distances } = assignCells(state, sites, edges);
   const communities = sites.map((cell, index) => ({
@@ -180,10 +189,29 @@ export function createSocietyGeography(state: GenerationState, context: MapProce
     events: [],
     magic: [],
   };
-  state.society = { region, owner, edges, river, coast, inherited: false, changed: new Set() };
+  state.society = {
+    region,
+    owner,
+    edges,
+    river,
+    coast,
+    ...(options.round ? { round: options.round } : {}),
+    inherited: false,
+    changed: new Set(),
+  };
   refreshSocietySupport(state);
   region.connections = connectionsFor(communities, owner, distances, edges);
   return state.society;
+}
+/** Camps of earlier rounds, as the cell each stands on; a present town prefers to sit on them. */
+function roundRuins(state: GenerationState) {
+  const ruins = new Map<number, string>();
+  for (const round of state.rounds ?? [])
+    for (const ruin of round.ruins) {
+      const cell = nearestSocietySample(state.surface, ruin, (i) => dryLand(state, i));
+      if (cell >= 0 && !ruins.has(cell)) ruins.set(cell, ruin.name);
+    }
+  return ruins;
 }
 function connectionsFor(
   communities: SocietyCommunity[],

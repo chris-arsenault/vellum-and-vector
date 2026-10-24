@@ -1,4 +1,5 @@
 import {
+  beforePresentEpoch,
   requireThat,
   type EcologyEpoch,
   type Epoch,
@@ -82,9 +83,12 @@ export function replaceDraftEpochs(
       ...cultures.configuration,
       eras: eras.map((era) => ({
         ...era,
+        // A structural binding follows the schedule by itself; a named one follows its epoch.
         physicalEpoch:
-          parsed.find((epoch) => (identities[epoch.id] ?? epoch.id) === era.physicalEpoch)?.id ??
-          null,
+          era.physicalEpoch === beforePresentEpoch
+            ? beforePresentEpoch
+            : (parsed.find((epoch) => (identities[epoch.id] ?? epoch.id) === era.physicalEpoch)
+                ?.id ?? null),
       })),
     },
   };

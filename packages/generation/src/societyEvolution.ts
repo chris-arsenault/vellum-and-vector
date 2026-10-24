@@ -9,6 +9,24 @@ import { refreshSocietyEnvironment } from "./societyEnvironment";
 import { resolveSocietyHazards } from "./societyHazards";
 import { evolveSettlements } from "./societySettlements";
 
+/** One decadal cycle of feedback: people, works, magic use, environment, hazards, settlements. */
+export function societyCycle(
+  state: GenerationState,
+  context: MapProcessContext,
+  dt: number,
+  cycle: { index: number; elapsed: number; final: boolean }
+) {
+  const work = state.society!;
+  work.cycle = cycle;
+  evolvePopulation(state, context, dt);
+  if (context.parameters.cultural) diffuseCultures(state, context, dt);
+  applySocietyWorks(state, context, dt);
+  useSocietyMagic(state, context, dt);
+  refreshSocietyEnvironment(state, context, dt, cycle.final);
+  resolveSocietyHazards(state, context, dt);
+  evolveSettlements(state, context, dt);
+  if (context.parameters.political) evolvePolitics(state, context, dt);
+}
 /** Decadal steps resolve feedback, not annual actors or a cap on elapsed history. */
 export async function evolveSociety(
   state: GenerationState,
@@ -21,15 +39,7 @@ export async function evolveSociety(
     dt = years / steps;
   for (let i = 0; i < steps; i++) {
     requireThat(!context.cancelled(), "generation_cancelled", "Generation was cancelled.");
-    work.cycle = { index: i, elapsed: (i + 1) * dt, final: i === steps - 1 };
-    evolvePopulation(state, context, dt);
-    if (context.parameters.cultural) diffuseCultures(state, context, dt);
-    applySocietyWorks(state, context, dt);
-    useSocietyMagic(state, context, dt);
-    refreshSocietyEnvironment(state, context, dt, work.cycle.final);
-    resolveSocietyHazards(state, context, dt);
-    evolveSettlements(state, context, dt);
-    if (context.parameters.political) evolvePolitics(state, context, dt);
+    societyCycle(state, context, dt, { index: i, elapsed: (i + 1) * dt, final: i === steps - 1 });
     context.progress((i + 1) / steps, `Societies: year ${Math.round((i + 1) * dt)} of ${years}`);
     // Yield to worker cancellation messages between complete, unpublished steps.
     await new Promise<void>((resolve) => setTimeout(resolve, 0));

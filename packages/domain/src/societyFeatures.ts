@@ -12,6 +12,10 @@ export const societyWorkLayers: Record<SocietyWorkKind, string> = {
   "fire-forge": "magicPractices",
   "aurora-archive": "magicPractices",
   "pressure-diving": "magicPractices",
+  tapping: "magicPractices",
+  burning: "landUse",
+  quarrying: "magicPractices",
+  weir: "waterworks",
 };
 /** Legacy authored works remain editable; newly published works use their concrete kind. */
 export function isSocietyWork(feature: Pick<AtlasFeature, "kind" | "attributes">) {

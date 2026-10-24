@@ -460,7 +460,8 @@ polities or borders, settlements as camps and seasonal stations. Its works are
 the cold-age set: tapping, burning, hunting, prism quarrying, larders, weirs
 and breakwaters. The era ends inside the epoch; its works stop being
 maintained; their physical consequences persist and advect. Default schedule:
-an "Ice age" era bound to Cold age, then "Settlement" in Present.
+an "Ice age" era bound to the epoch before the present, then "Settlement" in
+the present (implemented in the seventh pass).
 
 Present-day society reads the inherited works as ruins and sites, the altered
 conductance through the Fire field, the altered bathymetry through the
@@ -1068,6 +1069,110 @@ instead of a near-even scatter. The six interior settlements are the plain draws
 - **The pass foot.** At World a pass town sits on the col cell itself; the
   second pass puts it on the last flat ground below, one on each side if both
   are populated. That is Region-scale placement.
+
+## Seventh pass: the ice-age round
+
+Implemented 2026-10-24 under "Execute the next major chunk", read as parent
+phase 9. One human round now runs before the last epoch, as the second pass
+required.
+
+### Binding and schedule
+
+A human era bound to an earlier epoch runs inside that epoch as a round, in the
+epoch loop after the ecology has responded and the water has been re-routed,
+before the coasts are cut and the epoch's history is kept. An era bound to the
+final epoch, or to no epoch, runs with the present society as before. The
+binding is the `physicalEpoch` era setting, until now legacy metadata, and it
+takes either an epoch's name or the structural value "before the present",
+which resolves to whatever epoch precedes the final one when the world
+generates (user correction, 2026-10-24: nothing about the round is tied to an
+epoch called "Cold age"). A named binding whose epoch no longer exists runs in
+the present. The default schedule is "Ice age" (400 years, mobility 2,
+political capacity 0.2) bound before the present, then "Settlement" (200 years)
+in the present; the Cultural pattern control carries both in every choice.
+
+### What a round is
+
+The epoch's geography is projected onto the surface, magic classified and
+projected with it, and a society is founded on it as mobile bands: the spacing
+draw makes the units, but camps take the mobile site classes only, halo edge,
+melt line, fishery coast, river node, plain node, never a pass, a harbour or a
+core, and never a fortress. The round then runs its era in 25-year cycles with
+the same feedback as a settled era (population, works, magic use, environment,
+hazards, settlements), with no cultures or politics, and publishes nothing
+during the round: the epoch's own extraction follows.
+
+Its works are the cold-age set, proposed by bands of 40 or more:
+
+- **Hunting** the crowded herds (existing work).
+- **Burning** groves open for game and travel: clearance at one and a half
+  times the settled rate.
+- **Tapping** a vein within 25 km: cracks the sinter and opens the fracture, so
+  conductance rises by a quarter of the work's strength and Fire reaches further
+  along it; heavy tapping fills the conduit's budget sooner, so it seals (a
+  Basalt scar) through the existing mechanism rather than a new one.
+- **Quarrying** a prism ridge within 30 km: removes the stored charge and the
+  ice persistence it gave, so that ridge's ice melts on the ordinary schedule.
+- **Weirs** in shallow water within 15 km of a coastal band: raise the seabed
+  and mark it as a shoal, a new feature flag that reflects Pressure rays after
+  the sea has drowned it, which is the drowned-weir scene.
+
+When the epoch moves on the era ends: every camp that lasted (founded, peak of
+20 or more) is marked ruined and published as a settlement on the ruins layer
+with its era, epoch, site kind and reason; the round's history records are
+remembered; the society workspace is dropped so the present founds its own.
+Works stop being maintained and are not carried; their consequences are already
+in conductance, cover, herds, charge, elevation and the shoal flags, all of
+which travel with the crust.
+
+### What the present finds
+
+The present society's history begins with the round's records, so a world with
+two eras has two. A present unit's site ranking gives a cell with an ice-age
+camp a bonus within its class and names the ruin in the site reason; a camp
+whose ground offers no present site class stays a ruin field. Era-dependent
+sites, deferred in the sixth pass, are therefore delivered in their first form:
+camps choose by the mobile ranking, towns by the settled one.
+
+### Measured on the draft World
+
+Same world as the fifth and sixth passes. The round adds 24 s to a 48 s
+generation.
+
+|                                  | Value                                                                                |
+| -------------------------------- | ------------------------------------------------------------------------------------ |
+| Ice-age camps left as ruins      | 24 (16 at river nodes, 2 at plain nodes, 1 at a halo edge, 5 on open plain)          |
+| Cold-age works left unmaintained | 137 across the camps                                                                 |
+| Present settlements on ruins     | 1 of 27                                                                              |
+| Fire veins in the present        | 3 cells against 9 without the round: tapped segments filled their budgets and sealed |
+| Frost prisms in the present      | 8 cells against 3: quarrying moved the melt margins                                  |
+
+### What this pass leaves open
+
+- The round's works are not published as features and the round's region is
+  not kept; only its ruins and history are. A "ruin field" feature for a
+  sealed, tapped vein with camps at its root (the tapped-vein scene) would
+  make the inheritance legible without society records.
+- Rounds consume the same random stream as the present, so a world with a
+  round settles differently from the same world without one. Deterministic
+  for a seed, but not separable.
+- Cold-age works use the settled works' magnitudes and radii capped at 6 km;
+  the third pass's demand budgets would size them from the band instead.
+
+## Deferred work register
+
+Pieces set aside while phases 3 to 8 were delivered, gathered in one place so
+each is done or consciously dropped. The plan carries them as phase 11.
+
+| Piece                                                                                                                                                   | Deferred from               | What it needs                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------- |
+| Society as field forcing: demand budgets per unit instead of located works at World, located works realized at Region (third pass)                      | Phase 7                     | Its own branch over the works, environment and inheritance pipeline        |
+| Thawed-river tongue: Fire heat carried down the drainage so a river below a wellspring stays open                                                       | Phase 6                     | The water pass carrying a magical quantity                                 |
+| Melt-line fen: Aurora's one-pulse release of preserved matter at the field edge                                                                         | Phase 8                     | A memory of last epoch's stillness                                         |
+| Era-dependent sites (camps on magical and food sites; present towns on ruins only where the class still holds) and the pass town at the foot of the col | Phase 7                     | Phase 9 eras; Region-scale placement                                       |
+| Removal of the dormant generic altered ecology (plant group, cover, biome names)                                                                        | User correction, first pass | A cleanup pass over ecology groups, establishment, biomes and publications |
+| Reach and rarity measured on a continental seed                                                                                                         | Phase 5                     | One measured generation of a land-heavy seed                               |
+| User review of the fifth-pass Fire, Aurora and Pressure sections                                                                                        | Phase 4 outcome             | The user                                                                   |
 
 ## Proposed generation approach for discussion
 

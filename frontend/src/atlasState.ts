@@ -1,5 +1,6 @@
 import {
   areaSpace,
+  beforePresentEpoch,
   createWorldBlueprint,
   canonryMagicPresets,
   FactDependencies,
@@ -152,6 +153,14 @@ export function createWorldSnapshot(input: WorldCreationInput, id: string = cryp
     generations: [],
     epochs: defaultEpochs(),
     humanEras: [
+      // One mobile round inside the epoch before the present, whatever it is, then settlement.
+      {
+        id: "Ice age",
+        years: 400,
+        physicalEpoch: beforePresentEpoch,
+        mobility: 2,
+        politicalCapacity: 0.2,
+      },
       { id: "Settlement", years: 200, physicalEpoch: null, mobility: 1, politicalCapacity: 1 },
     ],
   };

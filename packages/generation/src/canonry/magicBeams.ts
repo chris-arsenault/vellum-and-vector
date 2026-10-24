@@ -3,6 +3,7 @@ import type { PhysicalField } from "./field";
 import type { MagicField } from "./magicState";
 import { nearestTriangle } from "./mesh";
 import { hashSigned, hashUnit } from "./noise";
+import { Feature } from "./codes";
 
 function kernelWeight(map: PhysicalField, i: number, x: number, y: number, radius: number) {
   const mesh = map.mesh;
@@ -82,6 +83,12 @@ function paintBeam(
     if (wake && weights[index] > 0) field.wake[i] = 1;
   });
 }
+/** Land reflects a ray, and so does a shoal people built, long after the sea drowned it. */
+function reflects(map: PhysicalField, cell: number) {
+  return (
+    cell < 0 || map.WaterKindCodes[cell] !== 1 || (map.FeatureFlags[cell] & Feature.Shoal) !== 0
+  );
+}
 /** Integrate physical rays; headings never snap to sampling-cell neighbors. */
 export function traceOceanBeam(
   map: PhysicalField,
@@ -113,7 +120,7 @@ export function traceOceanBeam(
     const nx = x + Math.cos(angle) * travel,
       ny = y + Math.sin(angle) * travel;
     const next = nearestTriangle(map.mesh, nx, ny);
-    if (next < 0 || map.WaterKindCodes[next] !== 1) {
+    if (reflects(map, next)) {
       if (wake || ++bounces > 4) break;
       angle += Math.PI * (0.58 + hashUnit(seed, Math.floor(x / 10_000), bounces) * 0.62);
       energy -= 90;

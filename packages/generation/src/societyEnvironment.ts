@@ -53,6 +53,8 @@ function synchronizeChannel(state: GenerationState, binding: ChannelBinding) {
     if (name === "elevation") {
       if (!before) map.Elevation[i] += map.BaseSeaLevel;
       map.BedrockElevation[i] = map.Elevation[i] - map.SedimentThickness[i];
+      // The landscape invariant is exact equality; rebuild the surface from its parts.
+      map.Elevation[i] = map.BedrockElevation[i] + map.SedimentThickness[i];
     }
   }
 }
@@ -146,8 +148,9 @@ function refreshNative(
     atlasChannels.filter((b) => available.has(b.name)),
     available
   );
-  // Numerical feedback runs every cycle; GIS extraction is only needed at publication.
-  if (publish) publishEnvironmentalChanges(state, context, available);
+  // Numerical feedback runs every cycle; GIS extraction is only needed at publication, and a
+  // round inside an earlier epoch publishes nothing: the epoch's own extraction follows.
+  if (publish && !state.society!.round) publishEnvironmentalChanges(state, context, available);
 }
 function ensureEnvironmentalWorkspace(
   state: GenerationState,

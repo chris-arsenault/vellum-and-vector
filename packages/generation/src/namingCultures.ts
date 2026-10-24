@@ -224,6 +224,10 @@ export const workTerms = {
     "Archive|Memory Hall|Crystal House|Repository|Reading Hall|Vault|Conservatory|Library",
   "pressure-diving":
     "Diving Station|Deepwell|Descent|Sounding House|Diving Bell|Sink|Landing|Depthworks",
+  tapping: "Tapping|Firepit|Vent Cut|Pit Houses|Warm Digs|Sinter Cut|Firecrack|Fire Pits",
+  burning: "Burn|Burnt Ground|Firebreak|Char|Ash Field|Clearing|Burned Grove|Firing",
+  quarrying: "Prism Quarry|Crystal Cut|Quarry|Ice Cut|Shard Pit|Prism Works|Cold Quarry|Cutting",
+  weir: "Weir|Fish Weir|Breakwater|Tide Trap|Stone Weir|Fish Walls|Shoal Works|Trap Wall",
 } satisfies Record<SocietyWorkKind, string>;
 
 /** GIS naming vocabulary is independent of the reference game's entity taxonomy. */

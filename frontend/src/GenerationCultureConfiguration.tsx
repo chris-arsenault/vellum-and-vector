@@ -1,4 +1,5 @@
 import type { SetupFeature } from "@atlas/generation";
+import { beforePresentEpoch } from "@atlas/domain";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 import { NumberField } from "./WorkflowFields";
 import { WorkflowCommittedName } from "./WorkflowCommittedName";
@@ -41,44 +42,7 @@ export function GenerationCultureConfiguration({
             selection controls which identities and territories are generated.
           </small>
           {eras.map((era, index) => (
-            <div className="setup-human-era" key={index}>
-              <div className="setup-setting-grid">
-                <WorkflowCommittedName
-                  label="Era name"
-                  fieldKey={`human.eras.${index}.name`}
-                  value={era.id}
-                  commit={(name) => flow.change(renameHumanEra(flow.draft, index, name))}
-                />
-                <NumberField
-                  label="Cultural duration"
-                  unit="years"
-                  fieldKey={`human.eras.${index}.years`}
-                  value={era.years}
-                  min={Number.MIN_VALUE}
-                  change={(years) => flow.change(updateHumanEra(flow.draft, index, { years }))}
-                />
-                <NumberField
-                  label="Cultural mobility"
-                  unit="multiplier"
-                  fieldKey={`human.eras.${index}.mobility`}
-                  value={era.mobility}
-                  min={0}
-                  change={(mobility) =>
-                    flow.change(updateHumanEra(flow.draft, index, { mobility }))
-                  }
-                />
-                <EraConditions flow={flow} era={era} index={index} />
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  removeIndex("human.eras", index);
-                  flow.change(removeHumanEra(flow.draft, index));
-                }}
-              >
-                Remove era
-              </button>
-            </div>
+            <HumanEra key={index} flow={flow} era={era} index={index} removeIndex={removeIndex} />
           ))}
           <button type="button" onClick={() => flow.change(addHumanEra(flow.draft))}>
             Add era
@@ -86,6 +50,58 @@ export function GenerationCultureConfiguration({
         </fieldset>
       )}
     </>
+  );
+}
+/** One era as a named group, so two eras' identical fields stay addressable. */
+function HumanEra({
+  flow,
+  era,
+  index,
+  removeIndex,
+}: {
+  flow: GenerationWorkflow;
+  era: OperativeEra;
+  index: number;
+  removeIndex: (prefix: string, index: number) => void;
+}) {
+  return (
+    <fieldset className="setup-human-era" key={index}>
+      <legend>{era.id}</legend>
+      <div className="setup-setting-grid">
+        <WorkflowCommittedName
+          label="Era name"
+          fieldKey={`human.eras.${index}.name`}
+          value={era.id}
+          commit={(name) => flow.change(renameHumanEra(flow.draft, index, name))}
+        />
+        <NumberField
+          label="Cultural duration"
+          unit="years"
+          fieldKey={`human.eras.${index}.years`}
+          value={era.years}
+          min={Number.MIN_VALUE}
+          change={(years) => flow.change(updateHumanEra(flow.draft, index, { years }))}
+        />
+        <NumberField
+          label="Cultural mobility"
+          unit="multiplier"
+          fieldKey={`human.eras.${index}.mobility`}
+          value={era.mobility}
+          min={0}
+          change={(mobility) => flow.change(updateHumanEra(flow.draft, index, { mobility }))}
+        />
+        <EraConditions flow={flow} era={era} index={index} />
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          removeIndex("human.eras", index);
+          flow.change(removeHumanEra(flow.draft, index));
+        }}
+      >
+        Remove era
+      </button>
+    </fieldset>
   );
 }
 function EraConditions({
@@ -121,6 +137,9 @@ function EraConditions({
           }
         >
           <option value="">Present conditions</option>
+          <option value={beforePresentEpoch}>
+            Epoch before the present (now {draftEpochs(flow.draft).at(-2)?.id ?? "none"})
+          </option>
           {draftEpochs(flow.draft).map((e) => (
             <option value={e.id} key={e.id}>
               {e.id}

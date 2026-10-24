@@ -89,10 +89,10 @@ it("shows actual magical source/effect/activity values, including zero coastal f
 it("shows duration, mobility, political capacity and physical regime as operative changes", () => {
   const draft = newGenerationDraft(),
     baseline = prepareDraft(draft).input.settings!;
-  const changed = prepareDraft(updateHumanEra(draft, 0, { years: 375, mobility: 1.2 })).input
+  const changed = prepareDraft(updateHumanEra(draft, 1, { years: 375, mobility: 1.2 })).input
     .settings!;
-  changed.humanEras[0].physicalEpoch = "Cold age";
-  changed.humanEras[0].politicalCapacity = 7;
+  changed.humanEras[1].physicalEpoch = "Cold age";
+  changed.humanEras[1].politicalCapacity = 7;
   expect(generationConfigurationChanges("human.cultures", changed, baseline)).toEqual([
     {
       label: "Settlement",

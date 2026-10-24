@@ -1,4 +1,10 @@
-import { defaultEcologyEpoch, sameValue, type EcologyEpoch, type Epoch } from "@atlas/domain";
+import {
+  beforePresentEpoch,
+  defaultEcologyEpoch,
+  sameValue,
+  type EcologyEpoch,
+  type Epoch,
+} from "@atlas/domain";
 import type { GenerationSettings } from "@atlas/generation";
 
 export interface ConfigurationChange {
@@ -103,7 +109,14 @@ function eraChanges(
     { key: "years" as const, value: `duration ${era.years} years` },
     { key: "mobility" as const, value: `mobility ${era.mobility}×` },
     { key: "politicalCapacity" as const, value: `political capacity ${era.politicalCapacity}×` },
-    { key: "physicalEpoch" as const, value: `physical regime ${era.physicalEpoch ?? "present"}` },
+    {
+      key: "physicalEpoch" as const,
+      value: `physical regime ${
+        era.physicalEpoch === beforePresentEpoch
+          ? "before the present"
+          : (era.physicalEpoch ?? "present")
+      }`,
+    },
   ];
   return fields.filter(({ key }) => era[key] !== before?.[key]).map(({ value }) => value);
 }

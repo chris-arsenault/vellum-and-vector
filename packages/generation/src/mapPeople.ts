@@ -4,6 +4,12 @@ import { publishPolitics } from "./societyPoliticalPublication";
 import { dryLand } from "./societySupport";
 import type { GenerationState, MapProcess, MapProcessContext } from "./process";
 import { generationBindings } from "./generationBindings";
+import { presentHumanEras, resolvedHumanEras } from "./societyRound";
+import type { GenerationSettings } from "./generationSettings";
+
+/** The present eras with bindings resolved to existing epoch ids. */
+const presentEras = (settings: GenerationSettings) =>
+  presentHumanEras({ ...settings, humanEras: resolvedHumanEras(settings) });
 import { initializeCultures, diffuseCultures } from "./societyCulture";
 import { publishCultures } from "./societyCulturePublication";
 import { atlasName, geographicNamingCulture } from "./atlasNaming";
@@ -105,7 +111,9 @@ export const culturalProcess: MapProcess = {
     extract(state, context) {
       const standalone = !state.society;
       initializeCultures(state, context);
-      const eras = context.inputs?.features ? generationBindings(context).settings.humanEras : [];
+      const eras = context.inputs?.features
+        ? presentEras(generationBindings(context).settings)
+        : [];
       if (standalone)
         for (const era of eras)
           diffuseCultures(
@@ -148,7 +156,9 @@ export const politicalProcess: MapProcess = {
       const standalone = !state.society?.region.politics;
       initializePolitics(state, context);
       if (standalone) {
-        const eras = context.inputs?.features ? generationBindings(context).settings.humanEras : [];
+        const eras = context.inputs?.features
+          ? presentEras(generationBindings(context).settings)
+          : [];
         for (const era of eras)
           evolvePolitics(
             state,
