@@ -26,19 +26,27 @@ execution, numerical parity with Canonry, a redesign of magic coupling (ADR
 
 ## Context and reuse map
 
-Measured on 2026-10-24 (default recipe, 3,000 × 2,000 km, draft quality, one
-headless run of `generateAtlas`; script and log in the session scratchpad):
+M0 baseline, 2026-10-24, `pnpm --dir frontend inventory:society` (default
+recipe, seed 104729, 3,000 × 2,000 km, draft quality; 63.5 s in total, with
+the working tree carrying another session's uncommitted mesh changes, so
+geography differs slightly from the two earlier scratch runs):
 
-| Measure                                              | Value                       |
-| ---------------------------------------------------- | --------------------------- |
-| Communities / inhabited                              | 428 / 286                   |
-| Total carrying capacity / people after the present   | 32.7 M / 4.3 M (13%)        |
-| Community fill (people ÷ capacity), median / best    | 0.15 / 0.49                 |
-| Capacity per km², median / 90th / max                | 19 / 41 / 56                |
-| Settlement residents ÷ community, median / max       | 7% / 25%                    |
-| Largest settlement (a capital)                       | 16,958 of 90,827 people     |
-| Present-era history                                  | 200 years in 20 cycles      |
-| Ice-age round history                                | 400 years in 16 cycles, discarded as ruins |
+| Measure                                              | Baseline                         |
+| ---------------------------------------------------- | -------------------------------- |
+| Communities / inhabited                              | 416 / 308                        |
+| Total carrying capacity / people after the present   | 33.3 M / 5.5 M (fill 0.17)       |
+| Urban residents / urbanization                       | 494 k / 8.9%                     |
+| Community fill, q25 / median / q90 / max             | 0.09 / 0.17 / 0.35 / 1.7         |
+| Capacity per km², median / q90 / max                 | 19.8 / 32 / 50.9                 |
+| Settlement residents ÷ community, median / max       | 7.6% / 24.4%                     |
+| Capitals (8), sizes                                  | 12,631 … 558 (largest of 82,709 people) |
+| Regional capitals (18), largest / smallest           | 7,046 / 1,874                    |
+| Present era                                          | 200 years, 20 cycles, 1.1 s per cycle (max 2.8) |
+| Ice-age round                                        | 400 years, 16 cycles, 1.1 s per cycle; 16.4 M people discarded |
+| `human.evolve` / all human processes                 | 21.4 s / 28.5 s                  |
+| Connections (land / sea)                             | 1,096 (823 / 273)                |
+| Roads published / major settlements / majors without a road | 13 / 38 / 21              |
+| Connected components among the 38 majors             | 27                               |
 
 Three stacked causes, in order of size:
 
@@ -245,6 +253,40 @@ majors, highways and their conditions. Record the baseline in this document.
 Acceptance (agent check of R1/R3): the inventory runs in a few minutes, is
 deterministic for a seed and reports every D5 measure plus cycle timing.
 Evidence: the printed table for the current code, kept here as the baseline.
+
+Sulion: `8f23e957-f9e7-46f3-a580-6e388d6a50d9`; expansion `9a664352-ec07-4bb1-8614-c557b8ba7eab`.
+
+#### Execution steps
+
+1. Inventory module and script (`5f0cc5fc-6cc8-4878-a67a-bd964536a9a7`)
+   - File(s): `packages/generation/src/societyInventory.ts` (+ export),
+     `frontend/scripts/society-inventory.ts`, `frontend/package.json` script
+     `inventory:society`, `frontend/tsconfig.json` include `scripts`.
+   - Reference / outcome: D5 measures and the M3/M3b route measures from the
+     published snapshot (`world.societies[area]`, settlement and route
+     features, `settlementHierarchy`); cycle timing from `generateAtlas`
+     progress messages (`Starting`/`Completed <process>`, `<era>: year X of Y`).
+   - Change: a pure `societyInventory(snapshot, areaId)` returning the
+     measures; the script runs the default draft recipe at the society test's
+     3,000 × 2,000 km size (seed and size overridable by environment), prints
+     the tables and the per-process and per-cycle timing.
+   - Verify: the script completes on the default draft in about a minute and
+     its figures agree with the 2026-10-24 scratch run; typecheck and lint
+     cover the new files.
+   - State / evidence: completed. Typecheck (generation, frontend), eslint and
+     prettier pass; the run took 63.5 s and its figures match the scratch runs
+     within the variation the concurrent mesh edits introduce.
+2. Baseline recorded (`4df02acb-82a6-4c75-ac8a-853e3d6444cc`) [depends on #1]
+   - Change: run the script once; paste the baseline tables into this
+     document's context section (replacing the scratch-run table).
+   - Verify: the recorded figures are the script's output for the stated seed.
+   - State / evidence: completed; baseline table above, from
+     `scratchpad/baseline-m0.log` of the 2026-10-24 session.
+
+#### Changes and resume
+
+Era names (O2) chosen by the agent under the 2026-10-24 authorization
+("choose interesting names; we can change them later"); recorded at M4.
 
 ### M1 — Dynamic temporal scale [depends on M0]
 

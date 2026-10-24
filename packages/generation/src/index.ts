@@ -33,3 +33,4 @@ export * from "./generationPresentation";
 export * from "./cartographicControls";
 export * from "./cartographicHistory";
 export * from "./setupProjection";
+export * from "./societyInventory";
