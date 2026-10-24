@@ -83,9 +83,13 @@ function magicalEcologyForcing(state: GenerationState, i: number) {
 function forcing(state: GenerationState, input: EcologyInput, context?: MapProcessContext) {
   const epoch = input.epochs[context?.epochIndices[0] ?? input.epochs.length - 1];
   const ecology = ecologyEpochSchema.parse(epoch?.ecology ?? {});
+  const map = state.physical!.map;
   return (i: number): EcologyForcing => {
     return {
       ...magicalEcologyForcing(state, i),
+      // Shared fields the magic feedback wrote; absent systems leave them at zero.
+      quickening: map.Quickening[i],
+      stillness: map.Stillness[i],
       productivity: (input.parameters?.vegetation ?? 1) * ecology.productivity,
       grazing: input.parameters?.grazing ?? 1,
       seasonality: ecology.seasonality,

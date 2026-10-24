@@ -89,6 +89,14 @@ export function marchAirColumns(
     const air = ocean(map, i)
       ? overSea(map, p, i, arriving, d, target)
       : overLand(map, p, i, u, arriving, d, rainout(i));
+    // Hot ground steams and lifts: the column gains moisture and drops a share of it.
+    const forcing = map.ExternalHeatForcing[i];
+    if (forcing > 0 && !ocean(map, i)) {
+      air.q += Math.max(0, target - air.q) * p.MagicSteamShare * Math.min(1, forcing / 200);
+      const lifted = air.q * (1 - Math.exp(-forcing / p.MagicLiftHeat));
+      air.q -= lifted;
+      air.orographic += lifted * (p.ColumnRainLength / Math.max(d, Math.sqrt(map.mesh.areas[i])));
+    }
     // Air relaxes toward a share of the forcing beneath it over MagicHeatAirLength,
     // so carried heat depends on distance travelled, not on how many cells it crosses.
     const keep = Math.exp(-(u < 0 ? Math.sqrt(map.mesh.areas[i]) : d) / p.MagicHeatAirLength);

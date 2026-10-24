@@ -12,14 +12,33 @@ const feature = (
   retains?: MagicCondition[][]
 ): MagicFeatureRule => ({ id, name, priority, seeds, ...(retains ? { retains } : {}) });
 
-// Canonry IceRemembers' three systems are data passed to the same process contracts.
+// Canonry IceRemembers' three systems are data passed to the same process contracts. The
+// reach and rarity below are the atlas's own (docs/FOUR-PILLAR-INTEGRATION-PLAN.md, fifth
+// pass): Canonry's defaults saturate a world this large, warm and oceanic.
 const firePreset = magicSystemSchema.parse({
   id: "fire",
   name: "Fire",
   source: "geothermal",
   propagation: "fracture",
   phase: "climate",
-  effects: { heat: 0.36, iceMelt: 0.5, rockResistance: 900, fire: 0.8 },
+  parameters: {
+    // Cores sit on separated heat maxima under land: about one per 10,000 km² at most.
+    sourceThreshold: 300,
+    maximumSources: 96,
+    sourceSpacing: 90_000,
+    // Steep through unfractured rock (under 10 km), long along a conductive vein (60-120 km).
+    baseCost: 3,
+    conductanceDivisor: 12,
+    conduitBudget: 2400,
+  },
+  effects: {
+    heat: 0.36,
+    iceMelt: 0.5,
+    rockResistance: 900,
+    fire: 0.3,
+    quickening: 1,
+    conduitOpening: 120,
+  },
   features: [
     feature("core", "Fire core", 90, [[at("source", 1), at("intensity", 1)]]),
     feature(
@@ -70,6 +89,8 @@ const firePreset = magicSystemSchema.parse({
       [[land, at("intensity", 560), { field: "slope", max: 0.0045 }]],
       [[land, at("intensity", 470), { field: "slope", max: 0.006 }]]
     ),
+    // A conduit that carried Fire to exhaustion: sinter and basalt, cold, and a site for ruins.
+    feature("scar", "Basalt scar", 30, [[land, at("sealed", 1)]]),
     feature(
       "halo",
       "Thawed halo",
@@ -93,7 +114,18 @@ const auroraPreset = magicSystemSchema.parse({
   source: "cold",
   propagation: "cold-drainage",
   phase: "post-glacial",
-  effects: { rockResistance: -520 },
+  effects: {
+    rockResistance: -520,
+    // Charged ice exhales cold air; the shadow is a few degrees, not a new ice age.
+    heat: -0.03,
+    stillness: 1,
+    icePersistence: 0.9,
+    organicPreservation: 1.5,
+    vegetationGrowth: -0.6,
+  },
+  // Charge stored in ice outlasts the cold epoch that gathered it, so relict fields
+  // survive a warm present on the ground that held the most.
+  history: { retention: 0.3, storage: 0.5 },
   features: [
     feature(
       "field",
@@ -148,11 +180,42 @@ const pressurePreset = magicSystemSchema.parse({
   name: "Pressure",
   source: "deep-ocean",
   propagation: "ocean-rays",
-  phase: "post-glacial",
-  effects: { coastalForcing: 1 },
+  // Rays are set once the ocean has its geometry, so the epoch's later climate passes
+  // see the water they move.
+  phase: "climate",
+  parameters: {
+    // Rays separate into visible spokes beyond about 200 km and fade within a basin.
+    rayCount: 128,
+    rayDistance: 2_000_000,
+    rayDecay: 8,
+    rayIntensity: 110,
+    beamWidth: 20_000,
+    coastalSources: 24,
+    coastalRayDistance: 300_000,
+    coastalSourceDistance: 100_000,
+    wakeSources: 16,
+    wakeDistance: 700_000,
+    wakeStrength: 150,
+  },
+  effects: {
+    coastalForcing: 1,
+    upwelling: 1,
+    seaSurface: -0.1,
+    wakeWarming: 30,
+    fog: 0.8,
+    animalToxicity: 0.5,
+  },
   features: [
     feature("locus", "Deep pressure locus", 95, [[at("source", 1)]]),
     feature("crush", "Crush zone", 60, [[at("intensity", 360)]], [[at("intensity", 270)]]),
+    // A ray that shoals lifts cold deep water: the fishery and the fog coast.
+    feature(
+      "front",
+      "Upwelling front",
+      58,
+      [[ocean, at("intensity", 250), at("upwelling", 250)]],
+      [[ocean, at("intensity", 160), at("upwelling", 160)]]
+    ),
     feature("wake", "Ancient wake", 55, [[at("wake", 1)]]),
     feature(
       "lattice",

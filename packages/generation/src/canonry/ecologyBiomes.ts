@@ -40,19 +40,22 @@ function strongest(fields: Systems, region: BiomeSummary) {
   }
   return best;
 }
-/** Systems whose rules alter vegetation or burn it, so their biomes follow their own effects. */
-function magicRules(state: GenerationState, temperature: Float64Array): BiomeRule[] {
+/**
+ * Living landscapes made by a system's own forcing: quickened country, stilled country and
+ * fog coasts. Each region is outlined from the forcing and the cover it produced, and named
+ * for the strongest system that carries that effect.
+ */
+function magicRules(state: GenerationState): BiomeRule[] {
   const work = state.physical!,
     map = work.map,
     fields = (work.magic?.fields ?? []).filter((field) => field.definition.enabled),
     named = (id?: string) => fields.find((f) => f.definition.id === id)?.definition.name ?? "";
   const altering = fields.filter((f) => f.definition.effects.ecologicalAlteration > 0),
-    burning = fields.filter((f) => f.definition.effects.fire > 0),
-    heating = fields.filter((f) => f.definition.effects.heat > 0);
-  const fire = (i: number) =>
-      burning.reduce((sum, f) => sum + (f.intensity[i] / 1000) * f.definition.effects.fire, 0),
-    // Applied magical warming in °C; climate already includes it in the temperature.
-    heat = (i: number) => (work.magic?.heat[i] ?? 0) / 10;
+    quickening = fields.filter((f) => f.definition.effects.quickening > 0),
+    stilling = fields.filter((f) => f.definition.effects.stillness > 0),
+    fogging = fields.filter((f) => f.definition.effects.fog > 0);
+  const canopy = (i: number) => map.BroadleafCover[i] + map.ConiferCover[i],
+    cover = (i: number) => map.TreeCover[i] + map.GrassCover[i] + map.WetlandCover[i];
   const rules: BiomeRule[] = [];
   if (altering.length)
     rules.push({
@@ -63,28 +66,47 @@ function magicRules(state: GenerationState, temperature: Float64Array): BiomeRul
         `${named(strongest(altering, r))}-altered ${r.wetness > 0.5 ? "wetland" : "woodland"}`,
       system: (r) => strongest(altering, r),
     });
-  // Fire's fire effect sets a floor under burning, so grass holds along its veins.
-  if (burning.length)
+  if (quickening.length)
+    rules.push(
+      {
+        kind: "ember",
+        share: 0.0003,
+        terms: [(i) => map.Quickening[i] - 0.25, (i) => canopy(i) - 0.3],
+        name: () => "Ember grove",
+        system: (r) => strongest(quickening, r),
+      },
+      {
+        kind: "thaw",
+        share: 0.0003,
+        terms: [(i) => map.Quickening[i] - 0.25, (i) => 0.3 - canopy(i), (i) => cover(i) - 0.12],
+        name: () => "Thaw meadow",
+        system: (r) => strongest(quickening, r),
+      }
+    );
+  if (stilling.length)
+    rules.push(
+      {
+        kind: "rime",
+        share: 0.0003,
+        terms: [(i) => map.Stillness[i] - 0.45, (i) => canopy(i) - 0.3],
+        name: () => "Rime forest",
+        system: (r) => strongest(stilling, r),
+      },
+      {
+        kind: "glow",
+        share: 0.0003,
+        terms: [(i) => map.Stillness[i] - 0.45, (i) => 0.12 - cover(i)],
+        name: () => "Glow-lichen barrens",
+        system: (r) => strongest(stilling, r),
+      }
+    );
+  if (fogging.length)
     rules.push({
-      kind: "ember",
-      share: 0.0005,
-      terms: [(i) => fire(i) - 0.25, (i) => map.GrassCover[i] - 0.3],
-      name: () => "Ember grassland",
-      system: (r) => strongest(burning, r),
-    });
-  // Ground above freezing only because of magical heat.
-  if (heating.length)
-    rules.push({
-      kind: "thaw",
-      share: 0.001,
-      terms: [(i) => (temperature[i] - 2) / 10, (i) => (2 - temperature[i] + heat(i)) / 10],
-      name: (r) =>
-        r.broadleaf + r.conifer >= 0.4
-          ? "Thaw forest"
-          : r.grass >= 0.4
-            ? "Thaw meadow"
-            : "Thaw ground",
-      system: (r) => strongest(heating, r),
+      kind: "fog",
+      share: 0.0003,
+      terms: [(i) => map.FogForcing[i] - 0.3, (i) => cover(i) - 0.12],
+      name: (r) => (r.broadleaf + r.conifer >= 0.4 ? "Moss forest" : "Fog heath"),
+      system: (r) => strongest(fogging, r),
     });
   return rules;
 }
@@ -134,7 +156,7 @@ export function biomeRules(state: GenerationState) {
     map.WetlandCover[i] +
     map.AlteredCover[i];
   const rules: BiomeRule[] = [
-    ...magicRules(state, temperature),
+    ...magicRules(state),
     {
       kind: "wetland",
       share: 0.001,

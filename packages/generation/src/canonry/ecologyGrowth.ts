@@ -29,9 +29,18 @@ function proposal(
   const toxicity = group.id === "altered" ? 0 : map.EcologicalToxicity[i] * 0.02;
   const fire = map.FireActivity[i] * f.fireRegime * (group.id === "grass" ? 0.003 : 0.025);
   const flood = map.FloodFrequency[i] * group.floodSensitivity;
-  const mortality = 1 / group.lifespan + (1 - suitable) / 100 + browsing + toxicity + fire + flood;
+  // Quickened plants mature early and die young; stilled plants stand past their span.
+  const turnover = (1 + 3 * f.quickening) * (1 - 0.85 * f.stillness);
+  const mortality =
+    turnover / group.lifespan + (1 - suitable) / 100 + browsing + toxicity + fire + flood;
   const rate =
-    (2 / group.maturity) * suitable * Math.max(0, 1 + f.growth) * f.productivity - mortality;
+    (2 / group.maturity) *
+      suitable *
+      Math.max(0, 1 + f.growth) *
+      f.productivity *
+      (1 + 2 * f.quickening) *
+      (1 - 0.7 * f.stillness) -
+    mortality;
   const cover = logistic(Math.max(previous, seed), rate, available, suitable);
   return {
     group,
@@ -43,6 +52,8 @@ function proposal(
     mature: 0,
     young: 0,
     retained: 0,
+    quickening: f.quickening,
+    stillness: f.stillness,
   };
 }
 type Proposal = ReturnType<typeof proposal>;
@@ -96,7 +107,10 @@ function growCohort(map: PhysicalField, i: number, p: Proposal) {
     (group.juvenile ? map[group.juvenile][i] * group.mass * 0.2 : 0);
   map.SoilCarbon[i] += Math.max(0, before - after);
   const viability = p.cover > 0.0001 ? unit(map[group.cover][i] * 0.3) : 0;
-  map[group.seed][i] = approach(map[group.seed][i], viability, p.elapsed, group.juvenile ? 80 : 20);
+  // Quickened plants seed heavily; stilled ones hardly set seed at all.
+  const seeding =
+    (group.juvenile ? 80 : 20) / Math.max(0.05, (1 + 2 * p.quickening) * (1 - 0.9 * p.stillness));
+  map[group.seed][i] = approach(map[group.seed][i], viability, p.elapsed, seeding);
 }
 export function updateTreeCover(map: PhysicalField, i: number) {
   map.TreeCover[i] = unit(
@@ -132,7 +146,9 @@ export function growCommunities(
         0
       ) *
       f.productivity *
-      Math.max(0, 1 + f.growth);
+      Math.max(0, 1 + f.growth) *
+      (1 + f.quickening) *
+      (1 - 0.5 * f.stillness);
     const light = Math.exp(-e.depth / 100),
       wet = e.water > 0 || e.wetness > 0.5;
     // Upwelling returns deep nutrients to the sunlit surface.

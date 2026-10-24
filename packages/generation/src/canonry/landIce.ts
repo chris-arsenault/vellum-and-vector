@@ -51,7 +51,18 @@ function dryLandBalance(map: PhysicalField, c: PhysicalContext, cutoff: number) 
       : balance >= cutoff
         ? 0
         : // Melting scales with the deficit, so warm climates clear relict ice quickly.
-          Math.max(0, map.IceThickness[i] - Math.max(p.IceAblationStep, cutoff - balance));
+          // Stored magical charge holds a thick field still against a marginal deficit; it
+          // cannot keep a glacier in a warm lowland, and a thinning skin of ice goes with
+          // the climate.
+          Math.max(
+            0,
+            map.IceThickness[i] -
+              Math.max(p.IceAblationStep, cutoff - balance) *
+                (1 -
+                  map.IcePersistence[i] *
+                    Math.max(0, 1 - (cutoff - balance) / 600) *
+                    clamp((map.IceThickness[i] - 150) / 150, 0, 1))
+          );
     map.MaximumIceThickness[i] = Math.max(map.MaximumIceThickness[i], map.IceThickness[i]);
   }
 }
@@ -91,7 +102,10 @@ function advanceLakes(map: PhysicalField, c: PhysicalContext) {
     queue: number[] = [];
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes[i] === 2)
-      map.IceThickness[i] = Math.max(0, map.IceThickness[i] - c.Profile.IceAblationStep);
+      map.IceThickness[i] = Math.max(
+        0,
+        map.IceThickness[i] - c.Profile.IceAblationStep * (1 - map.IcePersistence[i])
+      );
     else if (map.WaterKindCodes[i] === 0 && map.IceThickness[i] > 0) {
       reached[i] = 1;
       queue.push(i);

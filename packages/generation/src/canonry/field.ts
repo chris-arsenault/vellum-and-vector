@@ -139,6 +139,16 @@ const metricFields = [
   "MaximumGroundedIceFlux",
   "IceThickness",
   "MaximumIceThickness",
+  // Magic written into shared fields that the ordinary processes consume (0 to 1 unless
+  // noted): Fire's quickening of living processes; Aurora's stillness and the share of
+  // ice ablation its stored charge prevents; Pressure's upwelling (per-mille) and
+  // sea-surface temperature forcing (native units) and the fog share on facing coasts.
+  "Quickening",
+  "Stillness",
+  "IcePersistence",
+  "ExternalUpwelling",
+  "ExternalSeaSurfaceForcing",
+  "FogForcing",
 ] as const;
 export type PhysicalField = Record<(typeof integerFields)[number], Int32Array> &
   Record<(typeof elevationFields)[number], Float64Array> &

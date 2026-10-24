@@ -31,6 +31,14 @@ export const biomes = [
   { name: "Swamp", color: "#547c69" },
   { name: "Altered woodland", color: "#76618e" },
   { name: "Altered wetland", color: "#77768f" },
+  // Living landscapes a magic system makes through its own mechanism (fifth pass):
+  // Fire's quickening, Aurora's stillness and the fog of a Pressure upwelling coast.
+  { name: "Ember grove", color: "#6f9f3c" },
+  { name: "Thaw meadow", color: "#a9c86f" },
+  { name: "Rime forest", color: "#7d98a4" },
+  { name: "Glow-lichen barrens", color: "#b9d4d6" },
+  { name: "Fog heath", color: "#9db3a1" },
+  { name: "Moss forest", color: "#4e8470" },
 ] as const;
 export const biomeCode = (name: (typeof biomes)[number]["name"]) =>
   biomes.findIndex((biome) => biome.name === name);
@@ -40,8 +48,11 @@ export const biomeFamilies = [
   { kind: "grassland", name: "Grassland", color: "#afbd74" },
   { kind: "wetland", name: "Wetland", color: "#83a794" },
   { kind: "barren", name: "Barren land", color: "#ddc78d" },
-  { kind: "ember", name: "Ember grassland", color: "#c9774a" },
-  { kind: "thaw", name: "Thaw ground", color: "#9fc7b0" },
+  { kind: "ember", name: "Ember grove", color: "#6f9f3c" },
+  { kind: "thaw", name: "Thaw meadow", color: "#a9c86f" },
+  { kind: "rime", name: "Rime forest", color: "#7d98a4" },
+  { kind: "glow", name: "Glow-lichen barrens", color: "#b9d4d6" },
+  { kind: "fog", name: "Fog coast", color: "#9db3a1" },
   { kind: "altered", name: "Altered land", color: "#76618e" },
 ] as const;
 

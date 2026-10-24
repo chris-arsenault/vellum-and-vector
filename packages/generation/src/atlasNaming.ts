@@ -96,6 +96,9 @@ const biomeFamilies = new Set([
   "altered",
   "ember",
   "thaw",
+  "rime",
+  "glow",
+  "fog",
 ]);
 
 /** Adapt current GIS ecological family kinds to NameForge's biome kind + classified subkind. */

@@ -50,6 +50,14 @@ export const magicSystemSchema = z.object({
       coastalThreshold: finite.min(0).max(999).default(140),
       waveAmplification: finite.nonnegative().default(0.36),
       currentAmplification: finite.nonnegative().default(0.18),
+      // Energy a ray loses per 10 km of open water; reflections cost more.
+      rayDecay: finite.nonnegative().default(3),
+      // Intensity a ray at 1,000 energy deposits on the cell it crosses per beam step.
+      rayIntensity: finite.nonnegative().default(27.8),
+      // Intensity a wake leaves along its track, before the activity scale.
+      wakeStrength: finite.nonnegative().default(180),
+      // Accumulated intensity (summed over epochs) after which a Fire conduit seals.
+      conduitBudget: positive.default(2400),
     })
     .prefault({}),
   effects: z
@@ -58,6 +66,22 @@ export const magicSystemSchema = z.object({
       iceMelt: finite.default(0),
       rockResistance: finite.default(0),
       coastalForcing: finite.nonnegative().default(0),
+      // Fire: living processes run faster near the conduit; 0–1 at full intensity.
+      quickening: finite.min(0).max(1).default(0),
+      // Fire: conductance gained per epoch along an active conduit, in conductance units.
+      conduitOpening: finite.min(0).max(1000).default(0),
+      // Aurora: living processes slow and persist; 0–1 at full intensity.
+      stillness: finite.min(0).max(1).default(0),
+      // Aurora: share of ice ablation prevented by stored charge at full intensity; 0–1.
+      icePersistence: finite.min(0).max(1).default(0),
+      // Pressure: per-mille upwelling added where a ray shoals, per intensity unit.
+      upwelling: finite.min(0).max(3).default(0),
+      // Pressure: sea-surface temperature change per intensity unit on the upwelling band.
+      seaSurface: finite.min(-1).max(1).default(0),
+      // Pressure: sea-surface warming left in a wake, in native units (10 per °C).
+      wakeWarming: finite.min(0).max(200).default(0),
+      // Pressure: fog share on coasts facing an upwelling band; 0–1.
+      fog: finite.min(0).max(1).default(0),
       vegetationGrowth: finite.min(-1).max(5).default(0),
       fire: finite.min(0).max(1).default(0),
       organicPreservation: finite.min(-3).max(3).default(0),
@@ -104,6 +128,10 @@ export const magicPhysicalFields = [
   "soilDepth",
   "grazers",
   "browsers",
+  "upwelling",
+  "quickening",
+  "stillness",
+  "fog",
   "noise",
   "intensity",
   "history",
@@ -114,6 +142,7 @@ export const magicPhysicalFields = [
   "firstEpoch",
   "coastalFirstEpoch",
   "stored",
+  "sealed",
   "scatter",
 ] as const;
 

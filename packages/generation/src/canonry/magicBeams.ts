@@ -96,11 +96,20 @@ export function traceOceanBeam(
   let x = map.mesh.x[source],
     y = map.mesh.y[source],
     bounces = 0;
-  const step = field.definition.parameters.beamWidth / 2;
+  const p = field.definition.parameters,
+    step = p.beamWidth / 2;
   for (let distance = 0; distance < reach && energy > 0;) {
     const travel = Math.min(step, reach - distance);
     // A source station has a beam-width footprint, even when its ray terminates there.
-    paintBeam(map, field, x, y, wake ? energy : energy / 36, Math.max(travel, step), wake);
+    paintBeam(
+      map,
+      field,
+      x,
+      y,
+      wake ? energy : (energy * p.rayIntensity) / 1000,
+      Math.max(travel, step),
+      wake
+    );
     const nx = x + Math.cos(angle) * travel,
       ny = y + Math.sin(angle) * travel;
     const next = nearestTriangle(map.mesh, nx, ny);
@@ -117,7 +126,7 @@ export function traceOceanBeam(
             0.16 *
             travel) /
           10_000;
-      else energy -= ((3 + 2 * bounces) * travel) / 10_000;
+      else energy -= (p.rayDecay * (1 + bounces * 0.67) * travel) / 10_000;
     }
     distance += travel;
   }

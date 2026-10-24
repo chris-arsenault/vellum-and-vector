@@ -76,7 +76,7 @@ it("changes Fire core distribution, thermal footprint, thaw and resistant terrai
   expect(rock[1]).toBeGreaterThan(rock[0]);
 });
 
-it("changes Aurora's source envelope, ice capture and rock response without inventing cooling or fertility", () => {
+it("changes Aurora's source envelope, ice capture and rock response without inventing warmth or fertility", () => {
   const sources: number[] = [],
     capture: number[] = [],
     rock: number[] = [];
@@ -94,8 +94,9 @@ it("changes Aurora's source envelope, ice capture and rock response without inve
     terrain.physical!.magic!.fields[1].intensity.fill(500);
     magicRockFeedback(terrain);
     rock.push(terrain.physical!.map.RockResistance[0]);
-    expect(aurora.definition.effects.heat).toBe(0);
-    expect(aurora.definition.effects.vegetationGrowth).toBe(0);
+    // Aurora's stillness cools and slows; no control may turn it into warmth or growth.
+    expect(aurora.definition.effects.heat).toBeLessThanOrEqual(0);
+    expect(aurora.definition.effects.vegetationGrowth).toBeLessThanOrEqual(0);
   }
   expect(sources[1]).toBeGreaterThan(sources[0]);
   expect(capture[1]).toBeLessThan(capture[0]);
@@ -113,7 +114,7 @@ it("changes Pressure travel, coastal stress and historical impulses while keepin
     locateMagicSources(ocean, field, 73);
     propagateMagic(ocean, field, 73, 1);
     expect(field.origins).toHaveLength(1);
-    expect(field.definition.parameters.rayCount).toBe(1200);
+    expect(field.definition.parameters.rayCount).toBe(canonryMagicPresets()[2].parameters.rayCount);
     reach.push(field.intensity.reduce((sum, value) => sum + value, 0));
     const coast = scenario("pressure.stress", index);
     coast.physical!.magic!.fields[2].intensity.fill(300);

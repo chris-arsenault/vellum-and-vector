@@ -21,6 +21,12 @@ const intensive = [
   "RockResistance",
   "CrustSutureStrength",
   "ImpactHeat",
+  "Quickening",
+  "Stillness",
+  "IcePersistence",
+  "ExternalUpwelling",
+  "ExternalSeaSurfaceForcing",
+  "FogForcing",
 ] as const;
 const extensive = [
   ...ecologyCarbon,

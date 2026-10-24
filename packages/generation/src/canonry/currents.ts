@@ -167,6 +167,13 @@ export function oceanCurrents(map: PhysicalField, c: PhysicalContext) {
   wrapLinks(map, c.Profile, upstream, (k) => map.WaterKindCodes[k] === 1);
   const linkLength = linkDistance(map, c.Profile);
   seaSurfaceAnomaly(map, c, upstream);
+  // Water moved by an external force (a Pressure front) upwells and cools or warms the
+  // surface on top of the gyre circulation; the climate pass then carries it ashore.
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (map.WaterKindCodes[i] !== 1) continue;
+    map.Upwelling[i] = clamp(round(map.Upwelling[i] + map.ExternalUpwelling[i]), 0, 1000);
+    map.SeaSurfaceAnomaly[i] = round(map.SeaSurfaceAnomaly[i] + map.ExternalSeaSurfaceForcing[i]);
+  }
   transportOceanHeat(
     map,
     c.Profile.OceanCurrentHeatDistance,

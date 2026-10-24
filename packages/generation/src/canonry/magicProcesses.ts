@@ -1,9 +1,11 @@
 import type { GenerationState, MapProcess, MapProcessContext } from "../process";
-import { initializeMagic, systemSeed } from "./magicState";
+import { initializeMagic, systemSeed, type MagicField } from "./magicState";
 import { locateMagicSources, magicSourceStrategies } from "./magicSources";
 import { propagateMagic, magicPropagationStrategies } from "./magicPropagation";
 import {
   magicThermalFeedback,
+  magicLivingFeedback,
+  magicOceanFeedback,
   magicRockFeedback,
   magicCoastalFeedback,
   retainMagicHistory,
@@ -11,7 +13,7 @@ import {
 import { classifyMagicFeatures, effectiveMagicRules, projectMagic } from "./magicFeatures";
 import { generationBindings } from "../generationBindings";
 import type { ProcessBehavior } from "../processTraits";
-import { ecologyLabels, type MagicSystem } from "@atlas/domain";
+import { ecologyLabels, type Epoch, type MagicSystem } from "@atlas/domain";
 
 function evaluateMagic(
   state: GenerationState,
@@ -19,27 +21,49 @@ function evaluateMagic(
   phase: string,
   seed: number
 ) {
-  const epochs = generationBindings(context).settings.epochs;
-  const epoch = epochs[context.epochIndices[0] ?? epochs.length - 1];
+  const epochs = generationBindings(context).settings.epochs,
+    index = context.epochIndices[0] ?? epochs.length - 1;
   for (const field of state.physical!.magic!.fields) {
-    const definition = field.definition;
-    if (definition.phase !== phase) continue;
-    if (!definition.enabled) {
-      field.intensity.fill(0);
-      field.source.fill(0);
-      field.wake.fill(0);
-      field.rogue.fill(0);
-      continue;
-    }
-    const localSeed = systemSeed(seed, definition.id);
-    locateMagicSources(state, field, localSeed, context.epochIndices[0] ?? epochs.length - 1);
-    propagateMagic(
-      state,
-      field,
-      localSeed,
-      definition.strength * (epoch?.magicActivity?.[definition.id] ?? 1)
-    );
+    if (field.definition.phase === phase) evaluateField(state, field, seed, index, epochs[index]);
+    else if (field.definition.enabled && phase === "climate") lapseToStoredCharge(field);
   }
+}
+function evaluateField(
+  state: GenerationState,
+  field: MagicField,
+  seed: number,
+  index: number,
+  epoch: Epoch | undefined
+) {
+  const definition = field.definition;
+  if (!definition.enabled) {
+    field.intensity.fill(0);
+    field.source.fill(0);
+    field.wake.fill(0);
+    field.rogue.fill(0);
+    return;
+  }
+  const localSeed = systemSeed(seed, definition.id);
+  locateMagicSources(state, field, localSeed, index);
+  propagateMagic(
+    state,
+    field,
+    localSeed,
+    definition.strength * (epoch?.magicActivity?.[definition.id] ?? 1)
+  );
+}
+/**
+ * Between its own evaluations a system is present only as the charge it stored: the live
+ * field of the last epoch went with that epoch's climate, and it re-forms in its own phase.
+ */
+function lapseToStoredCharge(field: MagicField) {
+  for (let i = 0; i < field.intensity.length; i++)
+    field.intensity[i] = Math.min(1000, Math.round(field.stored[i]));
+}
+function applySharedForcing(state: GenerationState) {
+  magicThermalFeedback(state);
+  magicLivingFeedback(state);
+  magicOceanFeedback(state);
 }
 export function magicProcesses(systems: MagicSystem[] = []): MapProcess[] {
   const actions: Record<string, (state: GenerationState, context: MapProcessContext) => void> = {
@@ -51,13 +75,17 @@ export function magicProcesses(systems: MagicSystem[] = []): MapProcess[] {
         bound.settings.magicSystems
       );
     },
+    // Every evaluation re-applies the shared forcings of all systems, so a system evaluated
+    // in the other phase keeps its contribution and a changed one replaces its own.
     climate: (state, context) => {
       evaluateMagic(state, context, "climate", generationBindings(context).seed);
-      magicThermalFeedback(state);
+      applySharedForcing(state);
     },
     rocks: magicRockFeedback,
-    "post-glacial": (state, context) =>
-      evaluateMagic(state, context, "post-glacial", generationBindings(context).seed),
+    "post-glacial": (state, context) => {
+      evaluateMagic(state, context, "post-glacial", generationBindings(context).seed);
+      applySharedForcing(state);
+    },
     coast: magicCoastalFeedback,
     history: retainMagicHistory,
     classify: (state, context) => classifyMagicFeatures(state, generationBindings(context).seed),
@@ -90,7 +118,13 @@ function magicBehavior(
 function magicRequirements(id: string, systems: MagicSystem[]) {
   if (id === "initialize") return ["canonry:workspace"];
   const required = ["canonry:workspace", "atlas:magic-initialize"];
-  if (id === "climate") required.push("canonry:Temperature");
+  // Either evaluation re-applies every system's heat and melt, so both edit the climate
+  // when a system carries those effects; a system that only moves water does not.
+  if (
+    ["climate", "post-glacial"].includes(id) &&
+    systems.some((system) => system.enabled && (system.effects.heat || system.effects.iceMelt))
+  )
+    required.push("canonry:Temperature");
   if (id === "rocks") required.push("atlas:magic-climate");
   if (id === "coast") required.push("atlas:magic-post-glacial");
   if (id === "project") required.push("atlas:magic-classify");
@@ -98,8 +132,13 @@ function magicRequirements(id: string, systems: MagicSystem[]) {
 }
 function environmentalRequirements(id: string, systems: MagicSystem[]) {
   const selected = systems.filter((system) => system.enabled);
-  if (["climate", "post-glacial"].includes(id))
-    return selected.filter((system) => system.phase === id).flatMap(systemRequirements);
+  if (["climate", "post-glacial"].includes(id)) {
+    const required = selected.filter((system) => system.phase === id).flatMap(systemRequirements);
+    // Moving water needs the ocean's geometry; the next circulation pass reads the forcing.
+    if (selected.some((system) => system.effects.upwelling || system.effects.seaSurface))
+      required.push("canonry:Ocean");
+    return required;
+  }
   if (id === "coast" && selected.some((system) => system.effects.coastalForcing !== 0))
     return ["canonry:Ocean", "canonry:OceanCurrents"];
   return id === "classify" ? systems.flatMap(conditionRequirements) : [];
@@ -122,6 +161,7 @@ function conditionRequirements(system: MagicSystem) {
     fracture: ["canonry:FractureState"],
     landform: ["canonry:Landforms"],
     river: ["canonry:Rivers"],
+    upwelling: ["canonry:OceanCurrents"],
   };
   return effectiveMagicRules(system)
     .flatMap((rule) => [...rule.seeds, ...(rule.retains ?? [])].flat())

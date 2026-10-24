@@ -99,7 +99,7 @@ export function oceanPropagation(
       seed ^ Math.imul(index, 7919),
       i,
       hashUnit(seed ^ Math.imul(index, 7919), Math.round(map.mesh.x[i] / 10_000), 0) * Math.PI * 2,
-      180 * activity,
+      p.wakeStrength * activity,
       p.wakeDistance,
       true
     );

@@ -61,7 +61,10 @@ function ignition(
     45_000,
     2
   );
-  const risk = -Math.expm1(-years * 0.0008 * env.drought ** 2 * f.fireRegime * fuel);
+  // Quickened groves build thick, fast fuel, so natural fire runs through them often.
+  const risk = -Math.expm1(
+    -years * 0.0008 * env.drought ** 2 * f.fireRegime * (1 + 3 * f.quickening) * fuel
+  );
   return f.fire > 0 || noise < risk * 0.3 ? 0 : Infinity;
 }
 function fireTravel(map: PhysicalField, fuel: Float64Array, i: number, edge: number, j: number) {

@@ -96,10 +96,10 @@ test("walks through magic outcomes with Next and Back and returns from review to
   ).toHaveCount(4);
   await expect(
     magic.getByRole("group", { name: "Aurora", exact: true }).getByRole("combobox")
-  ).toHaveCount(3);
+  ).toHaveCount(4);
   await expect(
     magic.getByRole("group", { name: "Pressure", exact: true }).getByRole("combobox")
-  ).toHaveCount(4);
+  ).toHaveCount(5);
   await page.getByLabel("Thermal reach", { exact: true }).selectOption("2");
   await page.getByLabel("Ice-capture pattern", { exact: true }).selectOption("0");
   await page.getByLabel("Coastal stress", { exact: true }).selectOption("2");
@@ -151,7 +151,7 @@ test("keeps distinct magic outcomes and independent inclusion while retaining au
   await expect(page.getByLabel("Include Pressure", { exact: true })).not.toBeChecked();
   await page.getByLabel("Include Aurora", { exact: true }).check();
   await page.getByLabel("Thermal reach", { exact: true }).selectOption("2");
-  await page.getByLabel("Heat and thaw", { exact: true }).selectOption("2");
+  await page.getByLabel("Heat and quickening", { exact: true }).selectOption("2");
   await page.getByLabel("Ice-capture pattern", { exact: true }).selectOption("0");
   await page.getByLabel("Include Pressure", { exact: true }).uncheck();
   await expect(page.getByLabel("Coastal stress", { exact: true })).toHaveCount(0);
@@ -161,8 +161,16 @@ test("keeps distinct magic outcomes and independent inclusion while retaining au
   const changed = JSON.parse(await (await recipeEditor(page)).inputValue());
   const before = original.features["magic.configured"].configuration;
   const after = changed.features["magic.configured"].configuration;
-  expect(after.magicSystems[0].parameters).toMatchObject({ baseCost: 2, conductanceDivisor: 40 });
-  expect(after.magicSystems[0].effects).toMatchObject({ heat: 0.72, iceMelt: 1, fire: 1 });
+  expect(after.magicSystems[0].parameters).toMatchObject({
+    baseCost: 1.5,
+    conductanceDivisor: 20,
+  });
+  expect(after.magicSystems[0].effects).toMatchObject({
+    heat: 0.72,
+    iceMelt: 1,
+    quickening: 1,
+    fire: 0.5,
+  });
   expect(after.magicSystems[1].parameters).toMatchObject({
     iceRetention: 600,
     coldRetentionDistance: 4_000,

@@ -22,6 +22,10 @@ export interface EcologyForcing {
   droughtTolerance: number;
   toxicity: number;
   dispersal: number;
+  /** Fire: living processes run faster, 0 to 1. */
+  quickening: number;
+  /** Aurora: living processes slow and persist, 0 to 1. */
+  stillness: number;
 }
 export const neutralEcology: EcologyForcing = {
   growth: 0,
@@ -38,6 +42,8 @@ export const neutralEcology: EcologyForcing = {
   droughtTolerance: 0,
   toxicity: 0,
   dispersal: 0,
+  quickening: 0,
+  stillness: 0,
 };
 /** Potential evaporation in m/year at a mean temperature in °C, never below 0.25. */
 export const potentialEvaporation = (celsius: number) => Math.max(0.25, 0.3 + 0.045 * celsius);
@@ -88,11 +94,42 @@ export function classifyBiome(map: PhysicalField, i: number, env = environment(m
   if (env.frozen) return B("Ice");
   if (env.water === 1) return B("Ocean");
   if (env.submerged) return B("Freshwater");
-  if (map.AlteredCover[i] + map.AlteredSaplings[i] > 0.2)
-    return B(env.wetness > 0.5 ? "Altered wetland" : "Altered woodland");
+  const magical = magicalBiome(map, i, env);
+  if (magical !== null) return magical;
   if (env.wetness > 0.5) return B(map.TreeCover[i] > 0.2 ? "Swamp" : "Marsh");
   if (env.temperature < 2) return B("Tundra");
   return coverBiome(map, i, env);
+}
+/**
+ * Living landscapes a magic system makes through its own forcing. Each needs the forcing
+ * and the cover it produces; a bare quickened crag or a stilled meadow stays unnamed.
+ */
+function magicalBiome(map: PhysicalField, i: number, env: EcologyEnvironment) {
+  const trees = map.TreeCover[i],
+    cover = trees + map.GrassCover[i] + map.WetlandCover[i];
+  if (map.AlteredCover[i] + map.AlteredSaplings[i] > 0.2)
+    return B(env.wetness > 0.5 ? "Altered wetland" : "Altered woodland");
+  return (
+    quickenedBiome(map, i, trees, cover) ??
+    stilledBiome(map, i, trees, cover) ??
+    foggedBiome(map, i, trees, cover)
+  );
+}
+/** Fire's quickened country: a grove where the quickening grew trees, a meadow otherwise. */
+function quickenedBiome(map: PhysicalField, i: number, trees: number, cover: number) {
+  if (map.Quickening[i] < 0.25 || cover < 0.12) return null;
+  return B(trees >= 0.3 ? "Ember grove" : "Thaw meadow");
+}
+/** Aurora's stilled country: old trees standing in rime, or lichen on bare charged rock. */
+function stilledBiome(map: PhysicalField, i: number, trees: number, cover: number) {
+  if (map.Stillness[i] < 0.45) return null;
+  if (trees >= 0.3) return B("Rime forest");
+  return cover < 0.12 ? B("Glow-lichen barrens") : null;
+}
+/** The coast a Pressure front faces: fog-fed heath, or moss forest where trees took hold. */
+function foggedBiome(map: PhysicalField, i: number, trees: number, cover: number) {
+  if (map.FogForcing[i] < 0.3 || cover < 0.12) return null;
+  return B(trees >= 0.4 ? "Moss forest" : "Fog heath");
 }
 function coverBiome(map: PhysicalField, i: number, env: EcologyEnvironment) {
   const trees = map.TreeCover[i],

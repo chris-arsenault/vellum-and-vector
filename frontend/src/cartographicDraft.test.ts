@@ -142,7 +142,7 @@ it("keeps renamed clock identities, other systems and authored activity when app
   const configured = normalizeGenerationRecipe(draft.recipe).settings.magicSystems;
   expect(configured[2]).toEqual(systems[2]);
   expect(configured[0].history).toEqual(systems[0].history);
-  expect(configured[0].parameters).toMatchObject({ baseCost: 2, conductanceDivisor: 40 });
+  expect(configured[0].parameters).toMatchObject({ baseCost: 1.5, conductanceDivisor: 20 });
   expect(configured[1].parameters).toMatchObject({
     iceRetention: 600,
     coldRetentionDistance: 4_000,
@@ -178,8 +178,8 @@ it("keeps curated controls free of process-enable vectors and universal magical 
       );
   const magic = cartographicControls().filter((entry) => entry.system);
   expect(magic.filter((entry) => entry.system === "fire")).toHaveLength(4);
-  expect(magic.filter((entry) => entry.system === "aurora")).toHaveLength(3);
-  expect(magic.filter((entry) => entry.system === "pressure")).toHaveLength(4);
+  expect(magic.filter((entry) => entry.system === "aurora")).toHaveLength(4);
+  expect(magic.filter((entry) => entry.system === "pressure")).toHaveLength(5);
   expect(
     (
       newGenerationDraft().recipe.features!["magic.configured"].configuration!

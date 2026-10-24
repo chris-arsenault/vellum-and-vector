@@ -94,42 +94,53 @@ it("stops biome outlines exactly at the generated coast", () => {
   expect(covered / spatial.area(land)).toBeGreaterThan(0.999);
 });
 
-it("names Fire's ember grassland and thaw ground from its fire and heat effects", () => {
+it("names the living landscapes each system's own forcing produces", () => {
   const state = fixture(),
     map = state.physical!.map,
     count = map.mesh.count;
-  const system = (fire: number) => {
+  const system = (id: string, effects: Record<string, number>) => {
     const definition = magicSystemSchema.parse({
-      id: "fire",
-      name: "Fire",
+      id,
+      name: id,
       source: "geothermal",
       propagation: "fracture",
       phase: "climate",
-      effects: { heat: 0.36, fire },
+      effects,
     });
     const field = { definition, intensity: new Float64Array(count).fill(800) };
-    // Climate already carries the applied heat: 5 °C here, −5 °C without it.
     state.physical!.magic = {
       fields: [field],
-      heat: new Float64Array(count).fill(100),
+      heat: new Float64Array(count),
     } as unknown as NonNullable<typeof state.physical>["magic"];
   };
-  map.GrassCover.fill(0.6);
   map.Temperature.fill(350);
   map.Slope.fill(0.005);
-  for (const [fire, kind, name] of [
-    [0.8, "ember", "Ember grassland"],
-    [0, "thaw", "Thaw meadow"],
+  // [system, forcing field, canopy, grass, kind, name]: the forcing alone names nothing;
+  // the cover it produced decides between grove and meadow, forest and barrens.
+  for (const [id, forcing, canopy, grass, kind, name] of [
+    ["fire", "Quickening", 0.5, 0.2, "ember", "Ember grove"],
+    ["fire", "Quickening", 0, 0.6, "thaw", "Thaw meadow"],
+    ["aurora", "Stillness", 0.5, 0.1, "rime", "Rime forest"],
+    ["aurora", "Stillness", 0, 0, "glow", "Glow-lichen barrens"],
+    ["pressure", "FogForcing", 0, 0.6, "fog", "Fog heath"],
+    ["pressure", "FogForcing", 0.6, 0, "fog", "Moss forest"],
   ] as const) {
     state.domain.world.features = {};
-    system(fire);
+    system(id, { quickening: 1, stillness: 1, fog: 1 });
+    map.Quickening.fill(0);
+    map.Stillness.fill(0);
+    map.FogForcing.fill(0);
+    map[forcing].fill(0.8);
+    map.BroadleafCover.fill(canopy);
+    map.TreeCover.fill(canopy);
+    map.GrassCover.fill(grass);
     extractEcologicalFeatures(state);
     const features = Object.values(state.domain.world.features);
-    expect(features.length).toBeGreaterThan(0);
+    expect(features.length, name).toBeGreaterThan(0);
     for (const feature of features) {
       expect(feature.kind).toBe(kind);
       expect(feature.attributes.biome).toBe(name);
-      expect(feature.attributes.system).toBe("fire");
+      expect(feature.attributes.system).toBe(id);
     }
   }
 });

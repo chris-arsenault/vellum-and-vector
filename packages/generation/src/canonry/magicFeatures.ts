@@ -30,9 +30,14 @@ function conditionReader(
     wake: field.wake,
     rogue: field.rogue,
     stored: field.stored,
+    sealed: field.sealed,
     coastalHistory: field.coastalHistory,
     firstEpoch: field.firstEpoch,
     coastalFirstEpoch: field.coastalFirstEpoch,
+    upwelling: map.Upwelling,
+    quickening: map.Quickening,
+    stillness: map.Stillness,
+    fog: map.FogForcing,
     temperature: map.Temperature,
     ice: map.IceThickness,
     water: map.WaterKindCodes,
@@ -172,6 +177,10 @@ export function projectMagic(state: GenerationState) {
     putChannel(state.surface, key, unit, projectedMagicValues(state, values, quantity), quantity);
   project("naturalSurface", "category", magic.naturalSurface, "category");
   project("finalSurface", "category", magic.finalSurface, "category");
+  project("quickening", "ratio", work.map.Quickening, "intensive");
+  project("stillness", "ratio", work.map.Stillness, "intensive");
+  project("fog", "ratio", work.map.FogForcing, "intensive");
+  project("icePersistence", "ratio", work.map.IcePersistence, "intensive");
   for (const field of magic.fields) {
     for (const channel of publishedMagicChannels)
       project(

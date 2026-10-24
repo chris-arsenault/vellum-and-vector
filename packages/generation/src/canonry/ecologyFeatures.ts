@@ -21,6 +21,12 @@ const families: Record<string, string> = {
   Swamp: "wetland",
   "Altered woodland": "altered",
   "Altered wetland": "altered",
+  "Ember grove": "ember",
+  "Thaw meadow": "thaw",
+  "Rime forest": "rime",
+  "Glow-lichen barrens": "glow",
+  "Fog heath": "fog",
+  "Moss forest": "fog",
 };
 /** Authored biome samples decide their cells outright: positive for their family's rule only. */
 function authoredTerms(state: GenerationState, rule: BiomeRule): Term[] {

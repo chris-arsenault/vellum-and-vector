@@ -332,6 +332,9 @@ function allLandPressure() {
   return state;
 }
 
+/** The magic pass that evaluates the Pressure preset, whichever phase it is bound to. */
+const pressurePass = (state: GenerationState) =>
+  `canonry.magic-${state.domain.world.magicSystems![0].phase}`;
 function pressureRecipe(state: GenerationState, includeBathymetry = true) {
   const prepared = prepareAtlasGeneration(state.domain, {
     areaId: "area",
@@ -346,7 +349,7 @@ function pressureRecipe(state: GenerationState, includeBathymetry = true) {
     "canonry.ocean-distance",
     ...(includeBathymetry ? ["canonry.bathymetry"] : []),
     "canonry.magic-initialize",
-    "canonry.magic-post-glacial",
+    pressurePass(state),
   ];
   const configuration: ProcessConfiguration = {
     ...prepared.input.configuration!,
@@ -380,7 +383,7 @@ it("computes a valid empty ocean and bathymetry before finding no deep-ocean pre
   expect(pressure.origins).toEqual([]);
   expect(pressure.source.every((value) => value === 0)).toBe(true);
   expect(pressure.intensity.every((value) => value === 0)).toBe(true);
-  expect(output.state.facts.has("atlas:magic-post-glacial")).toBe(true);
+  expect(output.state.facts.has(pressurePass(initial).replace("canonry.", "atlas:"))).toBe(true);
   expect(initial.physical!.map.BathymetricZoneCodes.every((zone) => zone === 4)).toBe(true);
 });
 
@@ -391,7 +394,7 @@ it("rejects missing bathymetry before the pressure source operation can mutate m
     expect.objectContaining({
       code: "generation_prerequisite",
       severity: "error",
-      invocation: "canonry.magic-post-glacial",
+      invocation: pressurePass(initial),
       resource: "canonry:Bathymetry",
     }),
   ]);
@@ -402,8 +405,8 @@ it("rejects missing bathymetry before the pressure source operation can mutate m
       seedScope: "missing-bathymetry",
       progress: (_path, _fraction, message) => started.push(message),
     })
-  ).rejects.toThrow("canonry.magic-post-glacial requires fresh canonry:Bathymetry");
+  ).rejects.toThrow(`${pressurePass(initial)} requires fresh canonry:Bathymetry`);
   expect(started).toContain("Starting canonry.magic-initialize");
-  expect(started).not.toContain("Starting canonry.magic-post-glacial");
+  expect(started).not.toContain(`Starting ${pressurePass(initial)}`);
   expect(initial.physical!.magic).toBeUndefined();
 });

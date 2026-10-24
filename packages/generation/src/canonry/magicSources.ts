@@ -65,6 +65,11 @@ function geothermalCandidates(state: GenerationState, field: MagicField, seed: n
   const candidates = [];
   for (let i = 0; i < map.mesh.contentCount; i++) {
     if (map.HeatSourceDensity[i] < p.sourceThreshold) continue;
+    // Fire rises through fractures in the crust under land; the sea floor belongs to
+    // Pressure, and its heat shows as vents through the geothermal field, not as cores.
+    if (map.WaterKindCodes[i] === 1) continue;
+    // A conduit that sealed after carrying its budget no longer feeds a core.
+    if (field.sealed[i] > 0) continue;
     if (map.HeatSourceDensity[i] !== maximum && !isHeatMaximum(map, i, radius)) continue;
     const x = map.mesh.x[i],
       y = map.mesh.y[i];

@@ -83,7 +83,10 @@ Open **Layers** to switch between the **Surface**, **Topographic** and **Relief*
 maps. Surface, the default, paints natural and magical surface classes under the
 hillshade with a legend in the terrain appearance panel; generated magic places draw
 with a colour and mark per feature rule, so a hot spring, a vent and an Aurora field
-are distinguishable without switching presets.
+are distinguishable without switching presets. Living landscapes a magic system makes
+through its own forcing appear as surface classes and named biome regions: Fire's
+ember groves and thaw meadows, Aurora's rime forests and glow-lichen barrens, and the
+fog heath and moss forest on a coast facing a Pressure upwelling front.
 The compact drawer floats over the map and closes when you finish. **Add overlay**
 opens a separate floating chooser with searchable theme groups. **All fields**
 includes diagnostic channels. Checked fields stay in the overlay stack even when

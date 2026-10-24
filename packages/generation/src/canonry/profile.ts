@@ -297,6 +297,15 @@ export const physicalProfile = {
   MagicHeatAirLength: 300_000,
   MagicHeatAirShare: 0.5,
   MagicHeatAirSpread: 60_000,
+  // Hot ground is a moisture source and lifts the air over it: a column over strong
+  // magical heat gains up to MagicSteamShare of its saturation deficit and wrings out
+  // 1 − exp(−forcing/MagicLiftHeat) of its water, so the rain falls on the lee side.
+  MagicSteamShare: 0.6,
+  MagicLiftHeat: 250,
+  // Fog over an upwelling band drips onto the coast it faces (mm/year at full share)
+  // and cools it (native units at full share).
+  FogDrip: 300,
+  FogCooling: 20,
   // Pressure belts scale column rainout: convergence and the storm track raise
   // it, subtropical and polar subsidence lower it, never below MinimumRainout.
   // The equatorial convergence spreads over EquatorialConvergenceWidth degrees,

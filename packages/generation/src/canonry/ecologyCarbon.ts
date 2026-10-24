@@ -16,7 +16,9 @@ export function accumulateOrganicMatter(
     const preservation = Math.exp(-Math.max(-3, Math.min(3, f.preservation)));
     const temperature = Math.exp((env.temperature - 15) / 25);
     const wet = env.submerged ? 1 : env.wetness;
-    const decay = (0.03 * (1 - wet) + 0.0003 * wet) * temperature * preservation;
+    // Dead matter decays within a season under quickening and hardly at all when stilled.
+    const pace = (1 + 3 * f.quickening) * (1 - 0.9 * f.stillness);
+    const decay = (0.03 * (1 - wet) + 0.0003 * wet) * temperature * preservation * pace;
     const litter = map.Productivity[i] * (1 - map.FireActivity[i] * 0.8);
     map.SoilCarbon[i] = pool(map.SoilCarbon[i], litter * (1 - wet), decay, years);
     map.PeatCarbon[i] = pool(map.PeatCarbon[i], litter * wet, decay, years);

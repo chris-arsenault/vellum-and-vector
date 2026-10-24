@@ -13,10 +13,14 @@ export interface MagicField extends Record<MagicChannel, Float64Array> {
   origins: { id: string; x: number; y: number; radius: number; strength: number }[];
   features: Record<string, Uint8Array>;
 }
+/** Applied contributions are remembered so a re-evaluation replaces them instead of adding. */
 export interface MagicWorkspace {
   fields: MagicField[];
   heat: Float64Array;
   coastal: Float64Array;
+  upwelling: Float64Array;
+  seaSurface: Float64Array;
+  fog: Float64Array;
   naturalSurface: Float64Array;
   finalSurface: Float64Array;
 }
@@ -62,6 +66,9 @@ export function initializeMagic(
       : [],
     heat: new Float64Array(count),
     coastal: new Float64Array(count),
+    upwelling: new Float64Array(count),
+    seaSurface: new Float64Array(count),
+    fog: new Float64Array(count),
     naturalSurface: new Float64Array(count),
     finalSurface: new Float64Array(count),
   };

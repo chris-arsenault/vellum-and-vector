@@ -72,11 +72,11 @@ export const magicCartography: CartographicControl[] = [
     "Core-site prevalence",
     "The distribution of geothermal core sites; the landscape determines which sites can form.",
     ["Isolated", "Scattered", "Plentiful"],
-    [650, 500, 400].map((sourceThreshold, i) => ({
+    [450, 300, 250].map((sourceThreshold, i) => ({
       parameters: {
         sourceThreshold,
-        maximumSources: [24, 48, 96][i],
-        sourceSpacing: [120_000, 90_000, 60_000][i],
+        maximumSources: [32, 96, 160][i],
+        sourceSpacing: [150_000, 90_000, 60_000][i],
       },
     }))
   ),
@@ -86,18 +86,23 @@ export const magicCartography: CartographicControl[] = [
     "Thermal reach",
     "How far heat follows connected conductive veins from core sites.",
     ["Near veins", "Across districts", "Across regions"],
-    [12, 6, 2].map((baseCost, i) => ({
-      parameters: { baseCost, conductanceDivisor: [16, 26, 40][i] },
+    [6, 3, 1.5].map((baseCost, i) => ({
+      parameters: { baseCost, conductanceDivisor: [8, 12, 20][i] },
     }))
   ),
   control(
     "fire",
     "thaw",
-    "Heat and thaw",
-    "Thermal warming, ice melt and fire exposure from the same Fire field.",
+    "Heat and quickening",
+    "Thermal warming, ice melt, quickened life and fire exposure from the same Fire field.",
     ["Mild", "Pronounced", "Intense"],
     [0.09, 0.36, 0.72].map((heat, i) => ({
-      effects: { heat, iceMelt: [0.125, 0.5, 1][i], fire: [0.2, 0.8, 1][i] },
+      effects: {
+        heat,
+        iceMelt: [0.125, 0.5, 1][i],
+        quickening: [0.5, 1, 1][i],
+        fire: [0.1, 0.3, 0.5][i],
+      },
     }))
   ),
   control(
@@ -140,12 +145,28 @@ export const magicCartography: CartographicControl[] = [
     "Ocean influence extent",
     "The reach and width of Pressure paths through connected ocean, coastal impulses and wakes.",
     ["Nearby", "Basin-spanning", "Far-reaching"],
-    [1_200_000, 2_200_000, 3_600_000].map((rayDistance, i) => ({
+    [1_200_000, 2_000_000, 3_600_000].map((rayDistance, i) => ({
       parameters: {
         rayDistance,
-        coastalRayDistance: [400_000, 700_000, 1_100_000][i],
-        wakeDistance: [600_000, 1_000_000, 1_600_000][i],
-        beamWidth: [12_000, 18_000, 24_000][i],
+        rayDecay: [12, 8, 5][i],
+        coastalRayDistance: [200_000, 300_000, 500_000][i],
+        wakeDistance: [450_000, 700_000, 1_200_000][i],
+        beamWidth: [14_000, 20_000, 26_000][i],
+      },
+    }))
+  ),
+  control(
+    "pressure",
+    "water",
+    "Moved water",
+    "Upwelling, cold sea surface and fog where a front shoals; warm still water in its wakes.",
+    ["Faint", "Pronounced", "Strong"],
+    [0.4, 1, 2].map((upwelling, i) => ({
+      effects: {
+        upwelling,
+        seaSurface: [-0.04, -0.1, -0.2][i],
+        wakeWarming: [10, 30, 60][i],
+        fog: [0.3, 0.8, 1][i],
       },
     }))
   ),
@@ -163,7 +184,7 @@ export const magicCartography: CartographicControl[] = [
     "Ancient wake prevalence",
     "The prevalence of historical wake paths, not a queue of new disasters.",
     ["Sparse", "Scattered", "Frequent"],
-    [130, 260, 520].map((wakeSources) => ({ parameters: { wakeSources } }))
+    [8, 16, 32].map((wakeSources) => ({ parameters: { wakeSources } }))
   ),
   control(
     "pressure",
@@ -171,6 +192,21 @@ export const magicCartography: CartographicControl[] = [
     "Rogue-impact prevalence",
     "The prevalence of Pressure-driven coastal impulses in the geographic history.",
     ["Sparse", "Scattered", "Frequent"],
-    [100, 200, 400].map((coastalSources) => ({ parameters: { coastalSources } }))
+    [12, 24, 48].map((coastalSources) => ({ parameters: { coastalSources } }))
+  ),
+  control(
+    "aurora",
+    "stillness",
+    "Stillness",
+    "How far charged ice outlasts its climate and slows the life within it.",
+    ["Faint", "Pronounced", "Strong"],
+    [0.5, 0.9, 1].map((icePersistence, i) => ({
+      effects: {
+        icePersistence,
+        stillness: [0.5, 1, 1][i],
+        heat: [-0.02, -0.05, -0.1][i],
+        organicPreservation: [0.8, 1.5, 2.5][i],
+      },
+    }))
   ),
 ];

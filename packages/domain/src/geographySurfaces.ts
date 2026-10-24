@@ -39,6 +39,13 @@ export const naturalSurfaceNames = [
   "Barren",
   "Altered woodland",
   "Altered wetland",
+  "Ember grove",
+  "Thaw meadow",
+  "Rime forest",
+  "Glow-lichen barrens",
+  "Fog heath",
+  "Moss forest",
+  "Upwelling water",
 ] as const;
 export const surfaceCode = (name: (typeof naturalSurfaceNames)[number]) =>
   naturalSurfaceNames.indexOf(name);
@@ -86,6 +93,13 @@ export const naturalSurfaceColors: Record<NaturalSurfaceName, string> = {
   Barren: "#b5a58c",
   "Altered woodland": "#76618e",
   "Altered wetland": "#77768f",
+  "Ember grove": "#6f9f3c",
+  "Thaw meadow": "#a9c86f",
+  "Rime forest": "#7d98a4",
+  "Glow-lichen barrens": "#b9d4d6",
+  "Fog heath": "#9db3a1",
+  "Moss forest": "#4e8470",
+  "Upwelling water": "#3f8fa8",
 };
 /** Water surfaces whose depth shading says more than a flat class colour. */
 const bathymetricSurfaces: ReadonlySet<NaturalSurfaceName> = new Set<NaturalSurfaceName>([
@@ -97,6 +111,7 @@ const bathymetricSurfaces: ReadonlySet<NaturalSurfaceName> = new Set<NaturalSurf
   "Current channel",
   "Trench",
   "Delta",
+  "Upwelling water",
 ]);
 
 export type MagicPlaceSymbol = "circle" | "square" | "diamond" | "triangle" | "star" | "cross";
@@ -117,13 +132,17 @@ export const magicPlacePresentations: Record<string, MagicPlacePresentation> = {
   spring: { color: "#e9a23b", symbol: "circle", tint: 1 },
   vent: { color: "#5a3b2e", symbol: "square", tint: 1 },
   basalt: { color: "#4a4040", symbol: "square", tint: 1 },
-  halo: { color: "#8fbf5a", symbol: "circle", tint: 0.7 },
+  scar: { color: "#302826", symbol: "square", tint: 1 },
+  // The halo is the quickened country: the living cover shows through a warm cast.
+  halo: { color: "#d9a441", symbol: "circle", tint: 0.3 },
   field: { color: "#3fd9b5", symbol: "circle", tint: 0.8 },
   well: { color: "#a8f0ff", symbol: "star", tint: 1 },
   prism: { color: "#9fd8f0", symbol: "diamond", tint: 1 },
   melt: { color: "#5fb1a3", symbol: "triangle", tint: 1 },
   locus: { color: "#1d2f6b", symbol: "star", tint: 1 },
   crush: { color: "#44506a", symbol: "square", tint: 0.45 },
+  // Pale cold water, kept apart from Aurora's saturated teal and the fog coast's grey-green.
+  front: { color: "#a9cbdc", symbol: "triangle", tint: 0.55 },
   wake: { color: "#6d7f9c", symbol: "circle", tint: 0.35 },
   lattice: { color: "#5b86c7", symbol: "cross", tint: 0.5 },
   rogue: { color: "#e05a7a", symbol: "triangle", tint: 1 },

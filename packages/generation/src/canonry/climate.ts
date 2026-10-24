@@ -57,6 +57,7 @@ export function temperature(map: PhysicalField, c: PhysicalContext) {
         current +
         map.Warmth[i] +
         map.ExternalHeatForcing[i] -
+        round(map.FogForcing[i] * p.FogCooling) -
         round(map.Evapotranspiration[i] * 15),
       0,
       1000
@@ -95,8 +96,10 @@ export function snowShare(p: PhysicalProfile, mean: number, halfRange: number) {
 export function precipitation(map: PhysicalField, c: PhysicalContext) {
   const p = c.Profile;
   for (let i = 0; i < map.mesh.count; i++) {
+    // Fog drip on a coast facing an upwelling band is water the column did not carry.
     const total = clamp(
-      truncate((p.PrecipitationBaseline + map.ColumnPrecipitation[i]) * c.RainfallMultiplier),
+      truncate((p.PrecipitationBaseline + map.ColumnPrecipitation[i]) * c.RainfallMultiplier) +
+        truncate(map.FogForcing[i] * p.FogDrip),
       0,
       p.PrecipitationCeiling
     );

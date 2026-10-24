@@ -33,6 +33,14 @@ export const magicFieldDefinitions = {
   source: intensity,
   wake: intensity,
   rogue: intensity,
+  // A conduit that carried its budget of Fire and sealed; travels with the crust.
+  sealed: {
+    unit: "category",
+    quantity: "category" as const,
+    initial: 0,
+    carried: true,
+    publish: true,
+  },
   radii: { ...intensity, unit: "metre", publish: false },
 } satisfies Record<string, MagicFieldDefinition>;
 
@@ -48,6 +56,9 @@ export const publishedMagicChannels = magicChannels.filter(
 export const magicWorkspaceDefinitions = {
   heat: { quantity: "intensive" },
   coastal: { quantity: "intensive" },
+  upwelling: { quantity: "intensive" },
+  seaSurface: { quantity: "intensive" },
+  fog: { quantity: "intensive" },
   naturalSurface: { unit: "category", quantity: "category" },
   finalSurface: { unit: "category", quantity: "category" },
 } as const;

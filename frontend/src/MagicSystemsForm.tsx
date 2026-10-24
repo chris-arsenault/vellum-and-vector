@@ -250,6 +250,14 @@ const effectLabels = {
   plantDroughtTolerance: "Altered vegetation drought tolerance · 0–1",
   animalToxicity: "Habitat and forage toxicity · 0–1",
   seedDispersal: "Seed dispersal change · −1 stops spread",
+  quickening: "Quickening · living processes run faster, 0–1 at full intensity",
+  conduitOpening: "Conduit opening · conductance gained per active epoch, 0–1,000",
+  stillness: "Stillness · living processes slow and persist, 0–1 at full intensity",
+  icePersistence: "Ice persistence · share of melt prevented by stored charge, 0–1",
+  upwelling: "Upwelling where a ray shoals · per-mille per intensity unit, 0–3",
+  seaSurface: "Sea-surface temperature on the upwelling band · units per intensity, −1 to 1",
+  wakeWarming: "Wake warming · native units, 10 per °C",
+  fog: "Fog share on coasts facing an upwelling band · 0–1",
 };
 const parameterLabels: Record<keyof MagicSystem["parameters"], string> = {
   sourceThreshold: "Minimum source density · 0–1,000",
@@ -274,6 +282,10 @@ const parameterLabels: Record<keyof MagicSystem["parameters"], string> = {
   coastalThreshold: "Pressure threshold at coast · 0–999",
   waveAmplification: "Wave amplification",
   currentAmplification: "Current amplification",
+  rayDecay: "Ray energy lost per 10 km",
+  rayIntensity: "Intensity a full-strength ray deposits per step",
+  wakeStrength: "Intensity a wake leaves along its track",
+  conduitBudget: "Fire a conduit carries before it seals · summed intensity",
 };
 function PropagationSettings({
   system,

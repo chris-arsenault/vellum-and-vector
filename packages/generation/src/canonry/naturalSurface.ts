@@ -6,7 +6,7 @@ import { Feature, Landform } from "./codes";
 function frozenNeighbor(map: PhysicalField, i: number) {
   for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
     const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-    if (j >= 0 && map.WaterKindCodes[j] === 1 && map.IceThickness[j] > 0) return true;
+    if (j >= 0 && map.WaterKindCodes[j] === 1 && map.IceThickness[j] >= 50) return true;
   }
   return false;
 }
@@ -21,7 +21,10 @@ function oceanSurface(map: PhysicalField, i: number): (typeof naturalSurfaceName
     map.TectonicStrain[i] >= 430
   )
     return "Trench";
-  if (map.OceanCurrentStrength[i] >= 560) return "Current channel";
+  // Cold deep water at the surface, whether a gyre's eastern boundary or a Pressure front.
+  if (map.Upwelling[i] >= 450) return "Upwelling water";
+  // Only an intensified boundary current reads as a channel; open-ocean drift is "Ocean".
+  if (map.OceanCurrentStrength[i] >= 780) return "Current channel";
   return [2, 3].includes(map.BathymetricZoneCodes[i]) ? "Shelf" : "Ocean";
 }
 function specialOcean(map: PhysicalField, i: number): (typeof naturalSurfaceNames)[number] | null {
@@ -65,26 +68,32 @@ function legacyLandClimate(map: PhysicalField, i: number): (typeof naturalSurfac
     return "Cold steppe";
   return "Tundra";
 }
+/**
+ * Living cover is the land surface; bare relief shows only where the ground is bare. The
+ * generated biome already follows slope and soil, so a wooded ridge reads as its forest
+ * and a rock ridge as rock, instead of every cell near a river or on a ridge losing its
+ * cover to a relief label.
+ */
 function landRelief(map: PhysicalField, i: number): (typeof naturalSurfaceNames)[number] {
-  if (map.RiverOrders[i] >= 1) return "River valley";
-  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-    if (j >= 0 && map.RiverChannelOrders[j] >= 1) return "River valley";
-  }
-  if (map.Slope[i] >= 0.0235) return "Scree field";
+  const bare = map.TreeCover[i] + map.GrassCover[i] + map.WetlandCover[i] < 0.12;
+  // Bare coastal lowland the sea has washed at some point: seabed left dry, not a desert coast.
+  if (bare && map.BathymetricZoneCodes[i] === 1 && map.WaveExposureHistory[i] > 0)
+    return "Exposed shelf";
+  if (bare && map.Slope[i] >= 0.0235) return "Scree field";
   if (
+    bare &&
     [Landform.Ridge, Landform.Peak, Landform.Pass, Landform.ImpactRim].includes(
       map.LandformCodes[i]
     )
   )
     return "Ridge";
+  if (!map.EcologyInitialized && map.RiverOrders[i] >= 1) return "River valley";
   return landClimate(map, i);
 }
 function landSurface(map: PhysicalField, i: number): (typeof naturalSurfaceNames)[number] {
   const fluvial = fluvialSurface(map, i);
   if (fluvial) return fluvial;
   if (map.WaterKindCodes[i] === 2) return "Lake";
-  if (map.BathymetricZoneCodes[i] === 1) return "Exposed shelf";
   if (map.LandformCodes[i] === Landform.Moraine) return "Moraine";
   if (map.IceThickness[i] >= 300) return "Glacier";
   if (map.IceThickness[i] >= 250) return "Snowfield";
@@ -97,8 +106,9 @@ function fluvialSurface(
   if (map.DeltaIntensity[i] > 0) return "Delta";
   if (map.LandformCodes[i] === Landform.Waterfall) return "Waterfall";
   if (map.LandformCodes[i] === Landform.Gorge) return "Gorge";
-  if (map.RiverChannelStrength[i] > 0) return "River channel";
-  if (map.FloodplainIntensity[i] > 0) return "Floodplain";
+  // Only a trunk river's channel is wider than the cover around it at mesh scale.
+  if (map.RiverChannelStrength[i] > 0 && map.RiverOrders[i] >= 4) return "River channel";
+  if (map.FloodplainIntensity[i] >= 250) return "Floodplain";
   return null;
 }
 export function classifyNaturalSurface(state: GenerationState) {
