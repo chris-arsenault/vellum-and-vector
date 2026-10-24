@@ -1,10 +1,17 @@
-import { requireThat, sameValue, cloneSnapshot, type ParameterValues } from "@atlas/domain";
+import {
+  DomainError,
+  requireThat,
+  sameValue,
+  cloneSnapshot,
+  type ParameterValues,
+} from "@atlas/domain";
 import {
   MapProcessRegistry,
   verifyReconciliationBindings,
   type CompletedBoundary,
   type GenerationState,
   type GenerationCause,
+  type GenerationDiagnostic,
   type MapProcessContext,
   type ProcessConfiguration,
   type ProcessSequence,
@@ -23,12 +30,14 @@ import {
 } from "./productLedger";
 import { executeProcessBehavior } from "./processTraits";
 import { preparePublicationLayers } from "./publication";
+import { processDiagnostics, processFailureDiagnostics, stageEnabled } from "./processRecovery";
 
 export interface MapRunnerOptions {
   seed: string;
   seedScope: string;
   cancelled?(): boolean;
   progress?(path: string[], fraction: number, message: string): void;
+  diagnostic?(diagnostic: GenerationDiagnostic): void;
   // Optional completed-epoch/final observation. Serialize before resolving:
   // numerical workspace is shared and the following epoch mutates it.
   saveBoundary?(boundary: CompletedBoundary): Promise<void>;
@@ -141,23 +150,56 @@ export class MapRunner {
     validate: () => void,
     products: ProductLedger
   ) {
-    const spatialChanged = await this.applyProcess(
-      state,
-      stage,
-      options,
-      causes,
-      original,
-      products
-    );
-    if (spatialChanged === null) {
+    if (!stageEnabled(stage)) {
       options.progress?.(stage.path, 1, `Skipped ${stage.invocation!.process}`);
-      return;
+      return true;
     }
-    if (spatialChanged) {
-      options.progress?.(stage.path, 0.98, `Checking geography after ${stage.invocation!.process}`);
+    const process = this.registry.get(stage.invocation!.process, stage.invocation!.version);
+    const record = processDiagnostics(state, stage, options.diagnostic);
+    const missing = processRequirements(process.contract).filter(
+      (input) => !products.accepts(input)
+    );
+    if (missing.length) {
+      record(
+        missing.map((input) => ({
+          code: "stale_fact",
+          message: `Skipped ${process.contract.id}: requires fresh ${input.product} in the current map/epoch.`,
+          severity: "warning",
+          invocation: null,
+          resource: input.product,
+        })),
+        "skipped"
+      );
+      options.progress?.(stage.path, 1, `Skipped ${process.contract.id}`);
+      return false;
+    }
+    const parameters = invocationParameters(process.contract, this.configuration, stage);
+    products.checkProviders(process.contract);
+    try {
+      const diagnostics = await this.applyProcess(
+        state,
+        stage,
+        options,
+        causes,
+        original,
+        products,
+        parameters,
+        validate
+      );
+      record(diagnostics, "retained");
+    } catch (error) {
+      this.checkCancelled(options);
+      if (error instanceof DomainError && error.code === "generation_cancelled") throw error;
+      record(processFailureDiagnostics(error), "omitted", error);
+      [...process.contract.produces, ...process.contract.invalidates].forEach((product) =>
+        products.invalidate(product, stage.path.join("/"))
+      );
       validate();
+      options.progress?.(stage.path, 1, `Skipped ${process.contract.id}`);
+      return false;
     }
-    options.progress?.(stage.path, 1, `Completed ${stage.invocation!.process}`);
+    options.progress?.(stage.path, 1, `Completed ${process.contract.id}`);
+    return true;
   }
   private async applyProcess(
     state: GenerationState,
@@ -165,25 +207,13 @@ export class MapRunner {
     options: MapRunnerOptions,
     causes: GenerationCause[],
     original: GenerationState["domain"],
-    products: ProductLedger
+    products: ProductLedger,
+    parameters: ParameterValues,
+    validate: () => void
   ) {
     const invocation = stage.invocation!,
-      process = this.registry.get(invocation.process, invocation.version),
-      variables = Object.assign(
-        {},
-        ...stage.epochs.map((epoch) => epoch.variables)
-      ) as ParameterValues;
-    if (invocation.when && variables[invocation.when.variable] !== invocation.when.equals)
-      return null;
+      process = this.registry.get(invocation.process, invocation.version);
     bindNativeFacts(state, products);
-    for (const input of processRequirements(process.contract))
-      requireThat(
-        products.accepts(input),
-        "stale_fact",
-        `${stage.path.join("/")} requires fresh ${input.product} in the current map/epoch.`
-      );
-    const parameters = invocationParameters(process.contract, this.configuration, stage);
-    products.checkProviders(process.contract);
     const context = this.context(state, stage, parameters, options, causes, products, original);
     options.progress?.(stage.path, 0, `Starting ${process.contract.id}`);
     await executeProcessBehavior(process, state, context);
@@ -191,19 +221,24 @@ export class MapRunner {
     options.progress?.(stage.path, 0.95, `Validating ${process.contract.id}`);
     if (!process.contract.workspaceOnly) composeAuthoredSamples(state, original);
     const diagnostics = process.validate(state, context);
-    requireThat(
-      diagnostics.every((d) => d.severity !== "error"),
-      "process_output_invalid",
-      diagnostics.map((d) => d.message).join(" ")
-    );
+    if (diagnostics.some((d) => d.severity === "error"))
+      throw new DomainError(
+        "process_output_invalid",
+        diagnostics.map((d) => d.message).join(" "),
+        diagnostics
+      );
     for (const product of process.contract.reconciliation?.guarantees ?? [])
       requireThat(
         products.facts.has(product),
         "reconciliation_guarantee",
         `${stage.path.join("/")} must retain fresh ${product} after either reconciliation outcome.`
       );
+    if (!process.contract.workspaceOnly) {
+      options.progress?.(stage.path, 0.98, `Checking geography after ${process.contract.id}`);
+      validate();
+    }
     products.commit(process.contract, stage.path.join("/"));
-    return !process.contract.workspaceOnly;
+    return diagnostics;
   }
   private context(
     state: GenerationState,
@@ -290,7 +325,7 @@ export class MapRunner {
         "Reconciliation subplans contain ordinary operations, not further conditional branches."
       );
       this.checkCancelled(options);
-      await this.runProcess(
+      const completed = await this.runProcess(
         state,
         stage,
         options,
@@ -298,6 +333,11 @@ export class MapRunner {
         original,
         () => validateWorkingMap(state, original),
         products
+      );
+      requireThat(
+        completed,
+        "reconciliation_failed",
+        "A reconciliation operation was omitted; its parent outputs remain unavailable."
       );
     }
   }

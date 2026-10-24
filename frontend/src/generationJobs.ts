@@ -104,11 +104,17 @@ export function inheritedGeneration(
 }
 type WorkerResult =
   | { kind: "progress"; path: string[]; fraction: number; message: string }
+  | { kind: "diagnostic"; diagnostic: Diagnostic }
   | { kind: "completed"; result: CompletedBoundary }
   | { kind: "failed"; error: string; diagnostics?: Diagnostic[] };
 function receive(id: string, message: WorkerResult) {
   const active = running.get(id);
   if (!active) return;
+  if (message.kind === "diagnostic") {
+    appendDiagnostics(active.job, [message.diagnostic]);
+    changed("jobs");
+    return;
+  }
   if (message.kind === "progress") {
     logProgress(
       active.job,
@@ -119,7 +125,7 @@ function receive(id: string, message: WorkerResult) {
     return;
   }
   if (message.kind === "failed") {
-    active.job.diagnostics = message.diagnostics;
+    appendDiagnostics(active.job, message.diagnostics ?? []);
     finish(id, "failed", message.error);
     return;
   }
@@ -131,6 +137,7 @@ function receive(id: string, message: WorkerResult) {
   }
 }
 function complete(id: string, active: RunningJob, result: CompletedBoundary) {
+  appendDiagnostics(active.job, result.state.diagnostics ?? []);
   logProgress(active.job, "Publishing fields and coverage in the editor", 0.997);
   changed("jobs");
   requireThat(
@@ -146,8 +153,7 @@ function complete(id: string, active: RunningJob, result: CompletedBoundary) {
       session(active.job.worldId).snapshot,
       warnings
     );
-  for (const warning of warnings) console.warn(`[atlas generation ${id}] ${warning.message}`);
-  if (warnings.length) active.job.diagnostics = warnings;
+  appendDiagnostics(active.job, warnings);
   const entry = session(active.job.worldId);
   const areaId = active.input.areaId;
   entry.causes[areaId] = [
@@ -158,6 +164,10 @@ function complete(id: string, active: RunningJob, result: CompletedBoundary) {
       : []),
   ];
   publish(active.job.worldId, candidate, "generate", id);
+}
+function appendDiagnostics(job: GenerationJob, diagnostics: Diagnostic[]) {
+  const entries = [...(job.diagnostics ?? []), ...diagnostics];
+  job.diagnostics = [...new Map(entries.map((entry) => [JSON.stringify(entry), entry])).values()];
 }
 function finish(id: string, status: string, error: string | null = null) {
   const active = running.get(id);

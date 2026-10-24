@@ -40,10 +40,9 @@ physically consistent simulation underneath every edit.
   connections. Keep creation profiles, geographic extent, numerical detail and
   display zoom separate. Finer development stays sparse and geographically
   anchored; this is not an infinite zoom-generation ladder.
-- Preserve distinct Fire, Aurora and Pressure mechanisms. The separate
-  [four-pillar workshop](FOUR-PILLAR-INTEGRATION-PLAN.md), Sulion
-  `4cdb5d6a-442b-4f36-9fd2-e9371a64d70d`, retains its own design-only authority.
-  This plan does not authorize its proposed climate, ecology or history changes.
+- Preserve distinct Fire, Aurora and Pressure mechanisms as decided in
+  [ADR 0004](adr/0004-coupling-through-each-systems-medium.md). This plan does
+  not authorize changes to that coupling.
 
 ### Agent proposals, not additional user requirements
 

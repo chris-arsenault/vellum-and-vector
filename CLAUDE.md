@@ -5,9 +5,10 @@
 Read and follow [AGENTS.md](AGENTS.md) for the product direction, application
 boundaries and working instructions. The [README](README.md) provides setup and
 deployment context. The [product contract](docs/product-spec.md) defines behavior;
-the [spatial ADR](docs/adr/0001-spatial-authority.md) and
-[application ADR](docs/adr/0002-relational-spatial-storage.md) record implementation
-direction. User requirements and explicitly agreed boundaries govern revisions
+the [spatial ADR](docs/adr/0001-spatial-authority.md),
+[application ADR](docs/adr/0002-relational-spatial-storage.md) and
+[coupling ADR](docs/adr/0004-coupling-through-each-systems-medium.md) record
+implementation direction. User requirements and explicitly agreed boundaries govern revisions
 to agent-derived choices in those documents and the plan.
 
 ## Project overview

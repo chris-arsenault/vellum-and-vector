@@ -5,6 +5,7 @@ import type {
   CompletedBoundary,
   AtlasGenerationInput,
   PublicationDefinition,
+  GenerationDiagnostic,
 } from "@atlas/generation";
 
 /** UI journeys receive small completed fields; algorithms run in the headless suite. */
@@ -14,10 +15,12 @@ export async function installGenerationFixture(
   terrain = false,
   life = false,
   ecologicalFeatures: AtlasFeature[] = [],
-  society?: SocietyRegion
+  society?: SocietyRegion,
+  diagnostics: GenerationDiagnostic[] = []
 ) {
   await page.addInitScript(
-    ({ hold, terrain, life, ecologicalFeatures, society }) => {
+    ({ hold, terrain, life, ecologicalFeatures, society, diagnosticsJson }) => {
+      const diagnostics = JSON.parse(diagnosticsJson) as GenerationDiagnostic[];
       const pending = new Set<() => void>();
       Object.assign(window, {
         completeGenerationFixture() {
@@ -155,6 +158,7 @@ export async function installGenerationFixture(
                     facts: new Set(Object.keys(channels)),
                     history: [],
                     publications,
+                    diagnostics,
                   },
                 };
                 worker.onmessage?.(
@@ -162,6 +166,10 @@ export async function installGenerationFixture(
                 );
               };
               pending.add(complete);
+              for (const diagnostic of diagnostics)
+                worker.onmessage?.(
+                  new MessageEvent("message", { data: { kind: "diagnostic", diagnostic } })
+                );
               worker.onmessage?.(
                 new MessageEvent("message", {
                   data: {
@@ -199,7 +207,14 @@ export async function installGenerationFixture(
         return undefined;
       }
     },
-    { hold, terrain, life, ecologicalFeatures, society }
+    {
+      hold,
+      terrain,
+      life,
+      ecologicalFeatures,
+      society,
+      diagnosticsJson: JSON.stringify(diagnostics),
+    }
   );
 }
 

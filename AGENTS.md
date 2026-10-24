@@ -139,3 +139,18 @@ behavior from future architecture in documentation and status updates.
 Assess changes through representative map behavior, geographic output and
 focused domain and browser checks. Keep scope tied to the atlas's authoring
 workflows and the product's physical-plausibility requirements.
+
+### Documentation
+
+- `docs/*-PLAN.md` files are working copies of open plans. The last step of
+  every plan moves its durable content into the product contract, the
+  generation guide, an ADR or the backlog, then deletes the plan file and every
+  reference to it. A closed plan has no file; never edit or cite one.
+- Durable documentation describes mechanisms at lower fidelity than a plan: no
+  provenance chains, measurement tables, parameter sweeps, parameter lists or
+  high/middle/low configurations.
+- Parameters, thresholds and value sweeps live in code, declared so that a
+  reader finds them as easily as in a table (one labelled declaration per
+  control, as in `packages/generation/src/magicCartography.ts`).
+- When code and durable documentation disagree, delete the documentation's
+  claim rather than equalizing it; the code is the record.

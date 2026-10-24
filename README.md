@@ -7,11 +7,17 @@ connected world. The current application runs entirely in the browser.
 
 The [product contract](docs/product-spec.md) defines the behavior. Project
 implementation guidance lives in [AGENTS.md](AGENTS.md), with decisions in the
-[spatial ADR](docs/adr/0001-spatial-authority.md) and
+[spatial ADR](docs/adr/0001-spatial-authority.md),
 [frontend session ADR](docs/adr/0003-frontend-session.md), which supersedes the
-earlier backend and persistence direction.
+earlier backend and persistence direction, and
+[coupling ADR](docs/adr/0004-coupling-through-each-systems-medium.md) for how
+society, magic, climate and geology shape one another.
 
-Open product work is tracked in the [backlog](docs/backlog.md).
+Open product work is tracked in the [backlog](docs/backlog.md). Files named
+`docs/*-PLAN.md` are the working copies of plans still open; a closed plan's
+file is deleted once its durable content has moved. Durable documentation
+describes mechanisms and leaves parameter values to the code, per the
+[documentation rules](AGENTS.md#documentation).
 
 ## Authoring workflow
 
@@ -32,7 +38,8 @@ Feature choices change geography; layer visibility changes display. Coupled
 operations such as glacial sculpting appear as one choice. Rivers and incision
 remain independent. Dependency messages link to their providers and offer explicit
 repairs. One shared epoch selector connects physical, ecological and magical
-controls. Review shows resolved choices and output layers; execution traits and
+controls, and a human era can bind to a physical epoch so that it runs inside
+it. Review shows resolved choices and output layers; execution traits and
 causal order sit behind **Execution details**.
 
 Advanced JSON configuration edits the same feature-owned recipe. Applying JSON
@@ -72,8 +79,10 @@ its last vertex, and Escape to cancel. Hold Space to pan without discarding an
 unfinished drawing. The Pan tool provides ordinary drag navigation. Magnetic
 snapping uses existing feature vertices and edges.
 
-For magic, draw a source and its reach, configure heating, cooling, rock hardening
-or coastal forcing, and apply it to the current geography. Sources can be selected,
+For magic, draw a source and its reach, configure its effects (heating, cooling,
+rock hardening, coastal forcing, quickening, conduit opening, stillness, ice
+persistence, upwelling, sea surface, wake warming, fog) and apply it to the
+current geography. Sources can be selected,
 moved and edited, with propagation, decay, storage, interactions and starting epoch
 settings. **Library** retains templates and the supporting analysis, connection
 and schema tools. Templates can be placed on the map; precise placement and access

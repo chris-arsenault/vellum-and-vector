@@ -111,6 +111,7 @@ it("names the living landscapes each system's own forcing produces", () => {
     state.physical!.magic = {
       fields: [field],
       heat: new Float64Array(count),
+      melt: new Float64Array(count),
     } as unknown as NonNullable<typeof state.physical>["magic"];
   };
   map.Temperature.fill(350);

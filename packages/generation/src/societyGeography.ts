@@ -171,7 +171,8 @@ export function createSocietyGeography(
   const draft = assignCells(state, units, edges);
   const chosen = chooseSettlementSites(state, context, draft.owner, units, river, coast, {
     mobile: options.mobile ?? false,
-    ruins: options.round ? new Map() : roundRuins(state),
+    // A round, like the present, finds the camps of the rounds before it.
+    ruins: roundRuins(state),
   });
   const sites = chosen.map((choice) => choice.cell);
   const { owner, distances } = assignCells(state, sites, edges);

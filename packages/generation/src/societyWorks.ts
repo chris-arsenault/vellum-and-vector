@@ -1,5 +1,6 @@
 import {
   gridPosition,
+  neighbors,
   population,
   semanticId,
   spatial,
@@ -10,6 +11,7 @@ import {
   type SocietyWorkKind,
 } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
+import { applyNativeColdAgeWork } from "./societyNativeWorks";
 import { nearestCommunity } from "./societyPopulation";
 import { societyValue } from "./societySupport";
 import { isWorldSociety } from "./societyMapScope";
@@ -123,8 +125,6 @@ function placeColdAgeWork(state: GenerationState, c: SocietyCommunity, work: Soc
             )
           : -1;
   if (at >= 0) work.position = gridPosition(grid, at);
-  // A band's works are small and near its camp.
-  work.radius = Math.min(work.radius, 6000);
 }
 function needsWater(state: GenerationState, c: SocietyCommunity, i: number) {
   return c.support.water < 0.5 && state.society!.river[i] > 0.2;
@@ -159,20 +159,29 @@ function addHarbors(state: GenerationState, existing: Set<string>) {
   const shores = Array.from(grid.active.keys()).filter(
     (i) => societyValue(state, "water", i) === 1 && societyValue(state, "waterDepth", i) < 30
   );
-  for (const c of state.society!.region.communities) {
+  const owner = state.society!.owner;
+  for (const [unit, c] of state.society!.region.communities.entries()) {
     if (population(c) < 1000) continue;
     const work = makeWork(state, c, "harbor");
     if (existing.has(work.id)) continue;
-    const near = shores.find((i) => {
-      const p = gridPosition(grid, i);
-      return Math.hypot(p.x - c.position.x, p.y - c.position.y) < 10000;
-    });
-    if (near === undefined) continue;
-    if (!work.demand) work.position = gridPosition(grid, near);
+    if (work.demand) {
+      // A unit demands a harbour of any shore it holds, not only one near its seat.
+      if (!shores.some((i) => owner[i] === unit || ring(grid, i).some((j) => owner[j] === unit)))
+        continue;
+    } else {
+      const near = shores.find((i) => {
+        const p = gridPosition(grid, i);
+        return Math.hypot(p.x - c.position.x, p.y - c.position.y) < 10000;
+      });
+      if (near === undefined) continue;
+      work.position = gridPosition(grid, near);
+    }
     state.society!.region.works.push(work);
     existing.add(work.id);
   }
 }
+const ring = (grid: GenerationState["surface"], i: number) =>
+  neighbors(grid, i, true, spatial.geometryCoverage(grid.scope.footprint));
 function addAuthoredWorks(state: GenerationState, existing: Set<string>) {
   const work = state.society!;
   for (const f of Object.values(state.domain.world.features)) {
@@ -261,9 +270,11 @@ export function applySocietyWorks(
 ) {
   if (state.society!.inherited) return;
   planSocietyWorks(state);
+  // A band of 40 keeps up its cold-age works; a settled work needs a hundred hands.
+  const hands = state.society!.round ? 40 : 100;
   for (const work of state.society!.region.works) {
     const c = state.society!.region.communities.find((c) => c.id === work.communityId);
-    const maintained = work.maintained && c && population(c) > 100;
+    const maintained = work.maintained && c && population(c) >= hands;
     work.condition *= maintained ? 1 : Math.exp(-years / 80);
     applyWork(state, work, years);
   }
@@ -349,30 +360,6 @@ function applyLivingWork(
       return conserve(state, i, amount, years, edit);
     default:
       return;
-  }
-}
-/**
- * Consequences that live in the physical workspace rather than a published channel: a weir
- * marks its seabed as a shoal that reflects Pressure rays after the sea drowns it; quarrying
- * a prism ridge removes the charge that holds its ice still.
- */
-function applyNativeColdAgeWork(
-  state: GenerationState,
-  work: SocietyWork,
-  i: number,
-  amount: number,
-  years: number
-) {
-  const physical = state.physical;
-  if (!physical) return;
-  const cell = physical.samples[i];
-  if (cell === undefined || cell < 0) return;
-  if (work.kind === "weir") physical.map.FeatureFlags[cell] |= 1 << 11;
-  if (work.kind === "quarrying") {
-    const removed = Math.exp((-amount * years) / 100);
-    for (const field of physical.magic?.fields ?? [])
-      if (field.definition.effects.icePersistence > 0) field.stored[cell] *= removed;
-    physical.map.IcePersistence[cell] *= removed;
   }
 }
 function irrigate(

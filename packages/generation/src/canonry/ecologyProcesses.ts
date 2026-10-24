@@ -17,6 +17,7 @@ import { initializeEcology } from "./ecologyEstablishment";
 import { authoritativeCanopy, updateTreeCover, normalizeCommunities } from "./ecologyGrowth";
 import { plantGroups, livingPlantCarbon } from "./ecologyGroups";
 import { applyToxicity } from "./ecologyMagic";
+import { heldCharge } from "./magicFeedback";
 import { erosionHistory } from "./ecologySoils";
 import { riverWarmth } from "./riverWarmth";
 import { generationBindings } from "../generationBindings";
@@ -60,10 +61,13 @@ export const ecologicalMagicEffects = Object.keys(
 ) as (keyof typeof ecologicalMagicEffectBindings)[];
 
 function magicalEcologyForcing(state: GenerationState, i: number) {
-  const result = { growth: 0, fire: 0, preservation: 0, toxicity: 0, dispersal: 0 };
+  const result = { growth: 0, fire: 0, preservation: 0, toxicity: 0, dispersal: 0 },
+    map = state.physical!.map;
   for (const field of state.physical!.magic?.fields ?? []) {
     if (!field.definition.enabled) continue;
-    const intensity = field.intensity[i] / 1000;
+    // A charge-holding system acts on the living only through the charge its ice holds,
+    // the same gate its cooling and stillness pass.
+    const intensity = (field.intensity[i] / 1000) * heldCharge(map, field, i);
     for (const effect of ecologicalMagicEffects)
       result[ecologicalMagicEffectBindings[effect]] += intensity * field.definition.effects[effect];
   }

@@ -33,6 +33,13 @@ export interface GenerationState {
   history: EpochHistory[];
   causes?: GenerationCause[];
   publications?: import("./publication").PublicationDefinition[];
+  diagnostics?: GenerationDiagnostic[];
+}
+export interface GenerationDiagnostic extends Diagnostic {
+  process: string;
+  epochs: GenerationEpoch[];
+  outcome: "omitted" | "skipped" | "retained";
+  stack?: string;
 }
 export interface FieldSummary {
   unit: string;

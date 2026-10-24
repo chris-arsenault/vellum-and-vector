@@ -131,12 +131,17 @@ it("the shared executor blocks a native consumer after an atlas operation invali
   native.contract.requires = ["canonry:Elevation"];
   const registry = new MapProcessRegistry().register(change).register(native);
   const plan = configuration([invoke(change), invoke(native)]);
-  await expect(new MapRunner(plan, registry).run(nativeState(), options)).rejects.toThrow(
-    "canonry:Elevation"
+  const result = await new MapRunner(plan, registry).run(nativeState(), options);
+  expect(result.state.diagnostics).toContainEqual(
+    expect.objectContaining({
+      code: "stale_fact",
+      resource: "canonry:Elevation",
+      outcome: "skipped",
+    })
   );
   expect(called).toBe(false);
 });
-it("preflight and runtime reject prior-epoch response while retaining carried inputs", async () => {
+it("preflight diagnoses and runtime skips prior-epoch response while retaining carried inputs", async () => {
   const produce = process("response");
   produce.contract.produces = ["response"];
   produce.contract.products = [
@@ -160,7 +165,15 @@ it("preflight and runtime reject prior-epoch response while retaining carried in
   expect(errors[0]).toMatchObject({ resource: "response" });
   const state = landscape();
   state.facts.add("material");
-  await expect(new MapRunner(config, registry).run(state, options)).rejects.toThrow("response");
+  const result = await new MapRunner(config, registry).run(state, options);
+  expect(result.state.diagnostics).toContainEqual(
+    expect.objectContaining({
+      code: "stale_fact",
+      resource: "response",
+      outcome: "skipped",
+    })
+  );
+  expect(result.state.facts.has("material")).toBe(true);
 });
 
 it("runs conditional reconciliation through the same executor, inputs and ledger with named child paths", async () => {

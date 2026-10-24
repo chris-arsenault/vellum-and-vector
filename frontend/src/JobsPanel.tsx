@@ -34,13 +34,16 @@ export function JobsPanel({ world }: { world: World }) {
           <p>{job.stage}</p>
           <progress aria-label="Generation progress" value={job.progress} max="1" />
           {job.error && <p className="error">{job.error}</p>}
-          {job.diagnostics?.slice(0, 3).map((item, i) => (
-            <p key={i} className={item.severity === "error" ? "error" : "hint"}>
-              {item.message}
-            </p>
-          ))}
-          {(job.diagnostics?.length ?? 0) > 3 && (
-            <p className="hint">And {job.diagnostics!.length - 3} more.</p>
+          {!!job.diagnostics?.length && (
+            <details>
+              <summary>Inspect diagnostics ({job.diagnostics.length})</summary>
+              {job.diagnostics.map((item, i) => (
+                <details key={i}>
+                  <summary>{item.message}</summary>
+                  <pre>{JSON.stringify(item, null, 2)}</pre>
+                </details>
+              ))}
+            </details>
           )}
           {["running", "queued"].includes(job.status) && (
             <button className="quiet" onClick={() => control.mutate(job.id)}>

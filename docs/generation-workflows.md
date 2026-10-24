@@ -13,9 +13,8 @@ them. Future magic systems remain open through the shared process structure;
 extension must preserve the current three's specific behavior. The representation described in the
 implementation history below remains existing code, not a requirement to express
 every behavior through a generic vocabulary or avoid system-specific operations.
-The [society plan](SOCIETY-GENERATION-PLAN.md#society-environment-and-magic-feedback)
-records the bounded society implementation and distinguishes source motivations,
-implemented social operations and deferred four-pillar work.
+Society's reads of magic and the coupling between the pillars are decided in
+[ADR 0004](adr/0004-coupling-through-each-systems-medium.md).
 
 **Society delivery — 2026-10-23:** `world.societies[areaId]` retains aggregate
 communities, joint population groups, connections, completed eras, political
@@ -26,14 +25,16 @@ sovereignty, administration, control and claims. Settlements and roads consume
 that state instead of the former capped placeholder selection.
 
 World publication contains major centers and their routes, political territories,
-population and affiliation fields, and major historical events. Smaller communities
-and works remain latent society records; zoom does not turn them into global map
-features. Settlements, ruins, waterworks, transport sites, land use, magic practice
-sites, institutions and historical events have distinct layers and concrete feature
-kinds. A selected creation profile also limits scene features and detailed geometry,
-so materializing a Region does not expose its local features on the World map.
-Regional terrain refinement and decisions about realizing latent sites remain
-separately scoped work, with creator authoring able to shape that geography.
+population and affiliation fields, and major historical events. World settlements
+carry their site class, reason and fortress flag and the work kinds their unit
+demands of its country; at World a work is a demand acting over the unit's cells
+of its medium rather than an earthwork at a point, and a finer profile realizes
+each inherited demand at the nearest cell of that medium. Settlements, ruins,
+waterworks, transport sites, land use, magic practice sites, institutions and
+historical events have distinct layers and concrete feature kinds. A selected
+creation profile also limits scene features and detailed geometry, so
+materializing a Region does not expose its local features on the World map.
+Creator authoring can shape the refined geography.
 
 Local society queries use the existing sampling topology. Earthworks transfer
 elevation changes to the existing native mesh without resampling untouched terrain;
@@ -45,23 +46,25 @@ Present edits synchronize residents and works with the retained society records.
 Refinement subdivides population catchments and retains completed history and
 feature identities; it does not rerun old eras. The inspector exposes population
 composition, support and practice resources, while generation controls supply era
-duration, mobility and political capacity. Existing geographic inputs and focused
-work refreshes support this subsystem. Wider magic/ecology repair, cross-pillar
-design and balance are explicitly deferred, including backlog item 10.
+duration, mobility and political capacity, and bind an era to a physical epoch:
+an era bound to an epoch before the present runs inside it as a mobile round
+whose camps become ruins and whose cold-age works persist. Existing geographic
+inputs and focused work refreshes support this subsystem. The cross-pillar
+coupling decisions are recorded in
+[ADR 0004](adr/0004-coupling-through-each-systems-medium.md).
 
 The current module contracts, feature-owned recipes, validity model and output
 registration are described in [Generation modules and recipes](generation-modules.md).
 
-The working [generation control mappings](generation-control-mappings.md) record
-the 2026-10-22 implementation: physical and living map outcomes, independent cultural
-and political patterns, and distinct Fire, Aurora and Pressure controls. They
-follow the magic source authority and product contract above. Global magic
-imprint, identical per-system ecological menus and fixed decision totals are
-withdrawn. All three systems support independent inclusion; contributor-level
-omission checks close the coastal-feedback leak. The document records executable
-coefficient vectors, bounded geographic calibration and the distinction between
-implemented geography and the separate proposed social mechanisms. Wizard
-ordering and layout are unchanged.
+Curated generation controls map a creator's outcome choice to the coefficients
+that produce it: physical and living map outcomes, independent cultural and
+political patterns, and distinct Fire, Aurora and Pressure controls that follow
+the magic source authority and product contract above. Each control is declared
+once with its alternatives and the values each alternative sets, in
+`frontend/src/cartographicDraft.ts` for the physical and living controls and in
+`packages/generation/src/magicCartography.ts` for the magic controls; those
+declarations are the record of the values. All three systems support
+independent inclusion.
 
 This is the generation direction for Vellum & Vector. The
 [product contract](product-spec.md#10-procedural-generation-domains) defines
@@ -168,9 +171,22 @@ interface GenerationProcess<Parameters> {
 ```
 
 The runner resolves settings, checks required facts, applies the process,
-validates its result and updates produced/invalidated facts. An invalid result
-fails the run without publishing its partial geography. A long numerical process
-can split work internally to report progress and observe cancellation.
+validates its result and updates produced/invalidated facts. If execution or
+output validation fails, it records diagnostics, invalidates the process's
+affected facts and continues when the working map still satisfies its existing
+invariants. Processes with unavailable prerequisites are skipped without
+consuming stale buffers. Completed work remains in place; failed processes do
+not establish fresh output facts.
+
+The result retains structured diagnostics with the process, invocation, epoch
+ancestry, error code, message, stack where available and whether output was
+omitted, skipped or retained with a warning. The worker streams these diagnostics
+to the job inspector while running; they remain inspectable after completion or
+failure. Recoverable errors do not open an error dialog or discard valid results.
+Invalid configuration or inherited geography, cancellation, worker termination
+and failures that leave the working map unsafe to publish still stop the run.
+A long numerical process can split work internally to report progress and
+observe cancellation.
 
 ## Profile configuration and parameters
 
@@ -438,8 +454,9 @@ investigation found generation, projection and display gaps documented below.
    epoch duration and ordering, and extract geographic features from the native
    fields. Check declining impacts and retained ice/erosion histories.
 2. Configurable magic and causal integration: port fracture propagation, cold
-   drainage and ocean rays; apply heat, ice, resistance and coastal feedback in
-   the physical sequence. Presets use declarative source, propagation, effect,
+   drainage and ocean rays; apply heat, ice, resistance, coastal, living (quickening,
+   stillness) and ocean (upwelling, sea surface, fog) feedback in the physical
+   sequence. Presets use declarative source, propagation, effect,
    feature and interaction definitions. Retain and advect accumulated histories.
 3. Workflow and publication: configure and combine those systems through the
    existing generation and magic surfaces, expose natural/final geography and
@@ -476,9 +493,11 @@ hysteresis and interactions, including thermal war rims, steam fractures and
 pressure/Aurora breaches. Configurations participate in the generation hash.
 
 Each epoch advects accumulated activity, first occurrence, storage and coastal
-history with Canonry's crust source map. Climate-phase fields alter heat and rock
-before hydrology; post-glacial fields contribute coastal forcing and material
-feedback carried into the following epoch. Final classification retains every
+history with Canonry's crust source map. Climate-phase fields (Fire, Pressure)
+alter heat, moved water and rock before hydrology; post-glacial fields (Aurora)
+act through the charge their ice holds and carry ice persistence into the
+following epoch; every evaluation re-applies the shared forcings. Final
+classification retains every
 feature mask, natural geography, physical materials and a priority-selected
 surface. An inland refinement has no fabricated pressure locus. A warm present
 may have no active Aurora while preserving its glacial activity history.
@@ -2086,14 +2105,16 @@ climate, drainage, erosion, ice and magic. The biome field describes living cove
 `landform` continues to describe relief. A plain can carry forest or grassland.
 The **Biomes and life** layer contains cover, productivity, functional animal
 biomass and organic source fields. A categorical Biomes overlay is visible by
-default. Forests, woodland, swamps, marshes, grassland, savanna, desert, tundra and
-barren land also become selectable polygons. Default vector colors follow the
+default. Forests, woodland, swamps, marshes, grassland, savanna, desert, tundra,
+barren land and the magical biomes (Ember grove, Thaw meadow, Rime forest,
+Glow-lichen barrens, Fog heath, Moss forest) also become selectable polygons.
+Default vector colors follow the
 biome palette. GeoStyler starts with biome-specific rules, so editing symbols
 retains the classification. Categorical legends use composed coverage, including
 authored patches and finer field parts, rather than hidden base samples.
 
-Five functional plant groups compete: grass/shrubs, broadleaf trees, conifers,
-wetland plants and magically altered trees. Woody groups have separate young and
+Four functional plant groups compete: grass/shrubs, broadleaf trees, conifers and
+wetland plants. Woody groups have separate young and
 mature cover. Temperature extremes, drought, waterlogging, light, soil depth and
 available nitrogen affect establishment, growth and mortality. Broadleaf and
 conifer groups have different cold, heat and waterlogging responses. Soil depth,
@@ -2107,7 +2128,7 @@ direction, waterborne transport and configured migration strength. Ice
 interrupts colonization.
 
 Propagules also cross the sea (`ecologyCrossing.ts`). Grass and wetland groups
-travel with the wind; tree and altered groups raft on currents. Arrival waits
+travel with the wind; tree groups raft on currents. Arrival waits
 `interval × exp(effective distance / reach)`, where the carrier shortens
 distances downwind or down-current and islands act as stepping stones. Nearby
 downwind islands colonize within decades, upwind and remote islands much later,
@@ -2233,11 +2254,11 @@ responses; it does not resolve seasonal weather, every fire, population cycles o
 the full succession sequence inside a long epoch. Coefficients are atlas-scale
 approximations, not calibrated ecosystem predictions. Animal feeding and soil
 nitrogen are coarse resource constraints, not complete energy or nutrient budgets.
-Altered vegetation shares one functional group per cell, so distinct magical
-lineages do not remain separate populations. Authored woodland and sampled fields
+Magic shapes the same four groups through quickening, stillness and fog rather
+than through a lineage of its own. Authored woodland and sampled fields
 remain geographic authorities. Refinement inherits the existing community without
 replaying its age. Completed causes record biome transitions, fire-affected cover,
-altered canopy, animal biomass and migration. Numerical state follows existing
+animal biomass and migration. Numerical state follows existing
 material transport, adaptive transfer, inheritance and atomic publication.
 
 Organic geology remains a downstream consequence. Waterlogging preserves litter
@@ -2247,4 +2268,3 @@ gas potential. Source transformations conserve represented carbon. Each cell has
 one mixed buried horizon; there is no stratigraphic column, petroleum migration,
 reservoir/trap simulation or recoverable reserve estimate. A forest-to-swamp-to-
 buried-source history is one supported consequence among many ecological histories.
-The model and research rationale are recorded in [ECOLOGY-PLAN.md](ECOLOGY-PLAN.md).

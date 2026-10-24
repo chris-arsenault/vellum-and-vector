@@ -125,7 +125,8 @@ function harbour(r: SiteReader, i: number): SiteOpportunity | null {
     sea = ring.filter((j) => r.ocean(j));
   if (!sea.length) return null;
   const shelter = sea.length <= 3 ? 1 : sea.length <= 4 ? 0.6 : 0.2,
-    lee = 1 - sea.reduce((s, j) => s + r.value("waveExposure", j), 0) / sea.length / 1000,
+    // Wave exposure is published as a 0..1 ratio of the native 0..1000.
+    lee = 1 - sea.reduce((s, j) => s + r.value("waveExposure", j), 0) / sea.length,
     depth = Math.max(...sea.map((j) => r.value("waterDepth", j))) >= 10 ? 1 : 0.4,
     surge = Math.max(...sea.map((j) => r.value("magic:pressure:intensity", j))) >= 400 ? 0.3 : 1,
     estuary = r.river(i) ? 1.3 : 1;
@@ -149,9 +150,10 @@ function meltLine(r: SiteReader, i: number): SiteOpportunity | null {
 function fisheryCoast(r: SiteReader, i: number): SiteOpportunity | null {
   const sea = r.ring(i).filter((j) => r.ocean(j));
   if (!sea.length) return null;
+  // Upwelling is published as a 0..1 ratio; 0.3 is the native 300 a front lifts.
   const upwelling = Math.max(...sea.map((j) => r.value("upwelling", j)));
-  return upwelling >= 300
-    ? { kind: "fishery-coast", score: upwelling / 1000, reason: "facing an upwelling fishery" }
+  return upwelling >= 0.3
+    ? { kind: "fishery-coast", score: upwelling, reason: "facing an upwelling fishery" }
     : null;
 }
 function haloEdge(r: SiteReader, i: number): SiteOpportunity | null {
@@ -299,9 +301,31 @@ export function chooseSettlementSites(
     current.site = { kind: site.kind, reason: site.reason, fortress: false };
   }
   // A band on the move holds no fortress and camps on the col itself.
-  return best.map((choice, k) =>
-    options.mobile ? choice : passFoot(r, holdFromSpur(r, choice), owner, k, seeds[k])
+  if (options.mobile) return best;
+  return distinctSeats(
+    r,
+    best,
+    best.map((choice, k) => passFoot(r, holdFromSpur(r, choice), owner, k, seeds[k]))
   );
+}
+/**
+ * A spur or pass-foot move must not put two seats on one cell, since a seat's cell is its
+ * identity, nor on ground no one can live on; a move that would is undone.
+ */
+function distinctSeats(
+  r: SiteReader,
+  before: { cell: number; site: SettlementSite | null }[],
+  after: { cell: number; site: SettlementSite | null }[]
+) {
+  const taken = new Set(before.map((choice) => choice.cell));
+  return after.map((choice, k) => {
+    if (choice.cell === before[k].cell) return choice;
+    const occupied =
+      taken.has(choice.cell) || after.some((o, j) => j !== k && o.cell === choice.cell);
+    if (occupied || uninhabitable(r, choice.cell)) return before[k];
+    taken.add(choice.cell);
+    return choice;
+  });
 }
 /**
  * A pass town sits at the foot of the pass, on the last flat ground below the col and on

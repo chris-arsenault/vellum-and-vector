@@ -47,7 +47,8 @@ export function environment(map: PhysicalField, i: number, forcing = neutralEcol
   const temperature = (map.Temperature[i] + warmth) / 10 - 30;
   const depth = map.WaterDepths[i] / 1024;
   const water = map.WaterKindCodes[i];
-  const frozen = map.IceThickness[i] > 1 && warmth < 50;
+  // Warm river water keeps a reach open through a skin of ice, not under a glacier.
+  const frozen = map.IceThickness[i] > 1 && !(warmth >= 50 && map.IceThickness[i] <= 50);
   const warmSeason = unit((temperature + 8) / 18) * unit((52 - temperature) / 18);
   const rain = (map.Rainfall[i] + map.Snowfall[i]) / 1000;
   // Plant water is the aridity index: precipitation over evaporative demand,
@@ -98,11 +99,12 @@ export function classifyBiome(map: PhysicalField, i: number, env = environment(m
 }
 /**
  * Living landscapes a magic system makes through its own forcing. Each needs the forcing
- * and the cover it produces; a bare quickened crag or a stilled meadow stays unnamed.
+ * and the cover it produces; a bare quickened crag or a stilled meadow stays unnamed. The
+ * canopy is the mature broadleaf and conifer cover, the same measure the region rules use.
  */
 function magicalBiome(map: PhysicalField, i: number) {
-  const trees = map.TreeCover[i],
-    cover = trees + map.GrassCover[i] + map.WetlandCover[i];
+  const trees = map.BroadleafCover[i] + map.ConiferCover[i],
+    cover = map.TreeCover[i] + map.GrassCover[i] + map.WetlandCover[i];
   return (
     quickenedBiome(map, i, trees, cover) ??
     stilledBiome(map, i, trees, cover) ??

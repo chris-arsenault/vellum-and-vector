@@ -4,6 +4,7 @@ import {
   spatial,
   type SocietyRegion,
   type SocietyCommunity,
+  type SocietyWork,
 } from "@atlas/domain";
 import type { GenerationState } from "./process";
 import { refreshSocietyConnections, refreshSocietySupport } from "./societyGeography";
@@ -41,34 +42,13 @@ function refineSociety(state: GenerationState, prior: SocietyRegion) {
   const work = state.society!,
     region = work.region;
   retainSocietyFootprints(state);
+  const heirs = new Map<string, Heir[]>();
   for (const origin of prior.communities) {
-    if (!origin.footprint) continue;
-    const area = spatial.area(origin.footprint);
-    if (area <= 0) continue;
-    const home = region.communities.find(
-      (c) => c.footprint && spatial.pointCoverage(c.footprint)(origin.position)
-    );
-    for (const c of region.communities) {
-      if (!c.footprint || !spatial.intersects(origin.footprint, c.footprint)) continue;
-      const overlap = spatial.intersection(origin.footprint, c.footprint);
-      if (!overlap) continue;
-      const fraction = inheritedFraction(origin, c === home, spatial.area(overlap) / area);
-      c.groups = mergePopulation([
-        ...c.groups,
-        ...origin.groups.map((g) => ({ ...g, count: g.count * fraction })),
-      ]);
-      c.causes.push(
-        `Inherited ${(fraction * 100).toFixed(2)}% of ${origin.name}; completed history retained.`
-      );
-      c.parentCommunity = origin.id;
-      c.protected ||= origin.protected;
-      if (c === home) carryIdentity(c, origin);
-    }
+    if (!origin.footprint || spatial.area(origin.footprint) <= 0) continue;
+    heirs.set(origin.id, inheritOrigin(region, origin));
   }
   region.history = structuredClone(prior.history);
-  region.works = structuredClone(
-    prior.works.filter((w) => spatial.pointCoverage(state.domain.scope.footprint)(w.position))
-  );
+  region.works = inheritWorks(state, prior, heirs);
   region.events = structuredClone(
     prior.events.filter((e) =>
       spatial.intersects(
@@ -83,6 +63,70 @@ function refineSociety(state: GenerationState, prior: SocietyRegion) {
   inheritPolitics(region, prior);
   refreshSocietyConnections(state);
   realizeDemands(state);
+}
+interface Heir {
+  c: SocietyCommunity;
+  share: number;
+}
+/**
+ * Each community whose footprint overlaps the origin's inherits people by the share of the
+ * origin's country it holds; the one holding the origin's seat carries its identity.
+ */
+function inheritOrigin(region: SocietyRegion, origin: SocietyCommunity): Heir[] {
+  const area = spatial.area(origin.footprint!),
+    home = region.communities.find(
+      (c) => c.footprint && spatial.pointCoverage(c.footprint)(origin.position)
+    ),
+    heirs: Heir[] = [];
+  for (const c of region.communities) {
+    if (!c.footprint || !spatial.intersects(origin.footprint!, c.footprint)) continue;
+    const overlap = spatial.intersection(origin.footprint!, c.footprint);
+    if (!overlap) continue;
+    const share = spatial.area(overlap) / area;
+    heirs.push({ c, share });
+    const fraction = inheritedFraction(origin, c === home, share);
+    c.groups = mergePopulation([
+      ...c.groups,
+      ...origin.groups.map((g) => ({ ...g, count: g.count * fraction })),
+    ]);
+    c.causes.push(
+      `Inherited ${(fraction * 100).toFixed(2)}% of ${origin.name}; completed history retained.`
+    );
+    c.parentCommunity = origin.id;
+    c.protected ||= origin.protected;
+    if (c === home) carryIdentity(c, origin);
+  }
+  return heirs;
+}
+/**
+ * A located work comes with the ground it stands on. A demand comes with the unit's
+ * country: the heir holding the largest share of the unit takes it at that share of its
+ * magnitude, wherever the unit's seat was, and realizes it on its own medium afterwards.
+ */
+function inheritWorks(
+  state: GenerationState,
+  prior: SocietyRegion,
+  heirs: Map<string, Heir[]>
+): SocietyWork[] {
+  const covered = spatial.pointCoverage(state.domain.scope.footprint),
+    works: SocietyWork[] = [];
+  for (const w of prior.works) {
+    if (!w.demand) {
+      if (covered(w.position)) works.push(structuredClone(w));
+      continue;
+    }
+    const heir = (heirs.get(w.communityId) ?? []).sort((a, b) => b.share - a.share)[0];
+    if (!heir) continue;
+    const work = structuredClone(w);
+    work.communityId = heir.c.id;
+    work.position = heir.c.position;
+    work.magnitude *= heir.share;
+    work.causes.push(
+      `Inherited at ${(heir.share * 100).toFixed(1)}% of the demand with the share of the unit's country this area holds.`
+    );
+    works.push(work);
+  }
+  return works;
 }
 function inheritedFraction(origin: SocietyCommunity, located: boolean, areaFraction: number) {
   const total = population(origin),

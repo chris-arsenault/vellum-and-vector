@@ -80,7 +80,8 @@ export function coastalFishery(state: GenerationState) {
       upwelling = Math.max(...sea.map((j) => societyValue(state, "upwelling", j))),
       crushed =
         Math.max(...sea.map((j) => societyValue(state, "magic:pressure:intensity", j))) >= 360;
-    result[i] = (0.5 + 4 * fauna + (2 * upwelling) / 1000) * (crushed ? 0.3 : 1);
+    // Upwelling is a 0..1 ratio on the surface: a full front doubles the catch.
+    result[i] = (0.5 + 4 * fauna + 2 * upwelling) * (crushed ? 0.3 : 1);
   }
   return result;
 }

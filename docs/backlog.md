@@ -44,12 +44,13 @@ with no backend, persistence or MCP; preserve the existing backend source.
 
       Delivered as bounded aggregate society generation: population and migration,
       joint affiliations and diffusion, political reach/collapse/recovery, present
-      authoring and inherited refinement. See the [society plan](SOCIETY-GENERATION-PLAN.md).
+      authoring and inherited refinement.
       The subsequent population correction replaces whole-era single-pass updates
       with repeated environmental feedback and settlement establishment,
       abandonment and recovery. Local histories distinguish settlement residents
       from rural catchment populations; unoccupied catchments are not towns.
-      Four-pillar integration and balance remain separate, undesigned work.
+      Four-pillar integration followed; see
+      [ADR 0004](adr/0004-coupling-through-each-systems-medium.md).
 
 - [x] **4. Fix map interaction behavior.** Reported symptom: attempts to interact
       with the map pan it instead of performing the selected action. Make selection,
@@ -81,17 +82,20 @@ with no backend, persistence or MCP; preserve the existing backend source.
       and processes: physical motivations, media, propagation, feedback and
       interference. Adapt social uses without importing named setting lore.
       Retain source shaping and system-specific controls, and leave future magic
-      systems open through shared process contracts. See [the product contract](product-spec.md#103-magical-generation--fire-aurora-and-pressure)
-      and [society feedback plan](SOCIETY-GENERATION-PLAN.md#society-environment-and-magic-feedback).
+      systems open through shared process contracts. See [the product contract](product-spec.md#103-magical-generation--fire-aurora-and-pressure).
 
       Implemented automatic and placed sources, fracture transport, cold drainage
       and ice retention, ocean rays and wakes, heat/ice/rock/coastal feedback,
       advected history, configurable feature regions and cross-system interactions.
-      Those mechanisms currently use declarative definitions, per-epoch activity,
-      storage and source timing. Society now retains finite core extraction/use,
-      crystal charge and reader access, depth-limited Pressure practice, and
-      aggregate injuries/strain. This does not close the wider magic/ecology gaps
-      in item 10 or establish four-pillar balance.
+      Each system also has its own living and climatic medium
+      ([ADR 0004](adr/0004-coupling-through-each-systems-medium.md)): Fire's
+      quickening and conduit evolution, Aurora's stored charge,
+      stillness and ice persistence, Pressure's climate-phase upwelling, sea
+      surface, fog and wake warming. Those mechanisms use declarative
+      definitions, per-epoch activity, storage and source timing. Society retains
+      finite core extraction/use, crystal charge and reader access, depth-limited
+      Pressure practice, and aggregate injuries/strain, and reads magic in its
+      site choice. Item 10's magic/ecology gaps are closed by that plan.
 
 - [x] **8. Expose meaningful generation parameters beyond detail level.** Provide
       understandable controls for the applicable physical, magical, cultural and
@@ -125,7 +129,7 @@ with no backend, persistence or MCP; preserve the existing backend source.
       replacement plan.**
 
 - [x] **10. Rework the interaction between magic and ecology.** Delivered
-      2026-10-24 by the [four-pillar plan](FOUR-PILLAR-INTEGRATION-PLAN.md):
+      2026-10-24 ([ADR 0004](adr/0004-coupling-through-each-systems-medium.md)):
       each system acts through its own medium (quickening, stillness, fog) and
       names its own biomes; the generic altered group, cover and biome names are
       removed. Original statement kept below. Magic reaches
@@ -145,9 +149,9 @@ with no backend, persistence or MCP; preserve the existing backend source.
       saying what. Replace it with effects and names that follow the
       responsible system's rules.
 
-      **Sequencing correction, 2026-10-23:** complete the
-      [society generation plan](SOCIETY-GENERATION-PLAN.md) through M4, including
-      E1's society/environmental feedback, before this item. Address it in the
+      **Sequencing correction, 2026-10-23:** complete the society generation
+      plan through M4, including E1's society/environmental feedback, before
+      this item. Address it in the
       separately designed society–magic–physical–geology discussion, alongside
       the other cross-system gaps. The latest user correction explicitly excludes
       this work from society delivery. B1 was stopped before runtime changes;

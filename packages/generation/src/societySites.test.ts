@@ -32,7 +32,7 @@ function country() {
     water[i] = 1;
     elevation[i] = -20;
     waterDepth[i] = 25;
-    waveExposure[i] = i % 21 === 17 ? 150 : 700;
+    waveExposure[i] = i % 21 === 17 ? 0.15 : 0.7;
   }
   // The river runs from the col east along row 4 into the bay.
   for (let x = 11; x <= 16; x++) {

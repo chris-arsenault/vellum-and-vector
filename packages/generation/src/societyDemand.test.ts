@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { putChannel } from "@atlas/domain";
+import { gridPosition, putChannel } from "@atlas/domain";
 import { landscape, epoch } from "./mapFixtures";
 import { initializePopulation } from "./societyPopulation";
 import { refreshSocietyConnections } from "./societyGeography";
@@ -73,13 +73,17 @@ it("makes World works demands that act over the unit's whole country, conserving
 it("filters a demand's cells by the kind's medium and realizes it at a finer profile", () => {
   const { state } = fixture("world"),
     c = state.society!.region.communities[unit];
+  // A pass acts only on steep ground: give the unit one such cell away from its seat.
+  const steep = 7;
+  putChannel(state.surface, "slope", "gradient", new Float64Array(10).fill(0.01));
+  state.surface.channels.slope[steep] = 0.2;
   const land = workMedium(state, "clearance"),
-    shore = workMedium(state, "harbor");
+    pass = workMedium(state, "pass");
   expect(land(0)).toBe(true);
-  expect(Array.from(state.society!.owner).some((o, i) => o === unit && shore(i))).toBe(
-    Array.from(state.society!.coast).some((v, i) => v > 0 && state.society!.owner[i] === unit)
-  );
-  const demand = makeWork(state, c, "clearance");
+  expect(pass(0)).toBe(false);
+  expect(pass(steep)).toBe(true);
+  expect(demandSamples(state, makeWork(state, c, "pass")).map((s) => s.i)).toEqual([steep]);
+  const demand = makeWork(state, c, "pass");
   state.society!.region.works = [demand];
   realizeDemands(state);
   expect(demand.demand).toBe(true); // World keeps its demands.
@@ -87,5 +91,11 @@ it("filters a demand's cells by the kind's medium and realizes it at a finer pro
   realizeDemands(state);
   expect(demand.demand).toBeUndefined();
   expect(demand.causes.at(-1)).toContain("Realized at this profile");
-  expect(state.surface.active[state.surface.channels.elevation.findIndex(() => true)]).toBeTruthy();
+  expect(demand.position).toEqual(gridPosition(state.surface, steep));
+  // A demand with no medium in the refined area stays a demand.
+  const weir = makeWork(state, c, "weir");
+  weir.demand = true;
+  state.society!.region.works = [weir];
+  realizeDemands(state);
+  expect(weir.demand).toBe(true);
 });

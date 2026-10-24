@@ -86,7 +86,7 @@ export function groupSuitability(
   f: EcologyForcing
 ) {
   const e = environment(map, i, f);
-  if (e.submerged || map.IceThickness[i] > 1) return 0;
+  if (e.submerged || e.frozen) return 0;
   const cold = group.id === "conifer" ? -28 : group.id === "grass" ? -20 : -12;
   const warmth = unit((e.summer + 4) / 18) * unit((55 - e.summer) / 15);
   const frost = unit((e.winter - cold) / 15);

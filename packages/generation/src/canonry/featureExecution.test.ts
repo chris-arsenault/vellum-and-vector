@@ -387,7 +387,7 @@ it("computes a valid empty ocean and bathymetry before finding no deep-ocean pre
   expect(initial.physical!.map.BathymetricZoneCodes.every((zone) => zone === 4)).toBe(true);
 });
 
-it("rejects missing bathymetry before the pressure source operation can mutate magic", async () => {
+it("skips missing bathymetry before the pressure source operation can mutate magic", async () => {
   const initial = allLandPressure(),
     { registry, configuration } = pressureRecipe(initial, false);
   expect(preflight(configuration, registry)).toEqual([
@@ -399,13 +399,19 @@ it("rejects missing bathymetry before the pressure source operation can mutate m
     }),
   ]);
   const started: string[] = [];
-  await expect(
-    new MapRunner(configuration, registry).run(initial, {
-      seed: "73",
-      seedScope: "missing-bathymetry",
-      progress: (_path, _fraction, message) => started.push(message),
+  const result = await new MapRunner(configuration, registry).run(initial, {
+    seed: "73",
+    seedScope: "missing-bathymetry",
+    progress: (_path, _fraction, message) => started.push(message),
+  });
+  expect(result.state.diagnostics).toContainEqual(
+    expect.objectContaining({
+      code: "stale_fact",
+      resource: "canonry:Bathymetry",
+      outcome: "skipped",
+      invocation: pressurePass(initial),
     })
-  ).rejects.toThrow(`${pressurePass(initial)} requires fresh canonry:Bathymetry`);
+  );
   expect(started).toContain("Starting canonry.magic-initialize");
   expect(started).not.toContain(`Starting ${pressurePass(initial)}`);
   expect(initial.physical!.magic).toBeUndefined();

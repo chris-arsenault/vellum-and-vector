@@ -124,11 +124,12 @@ const invoke = (process: MapProcess) => ({
 });
 export function societySequence(input: AtlasGenerationInput): ProcessSequence {
   // Eras bound to an earlier epoch ran as rounds inside it; the present runs the rest,
-  // with their bindings resolved to the epochs that exist.
-  const eras = presentHumanEras({
-    ...input.settings!,
-    humanEras: resolvedHumanEras(input.settings!),
-  });
+  // with their bindings resolved to the epochs that exist. Without the physical domain no
+  // epoch is replayed, so every era runs with the present rather than vanishing.
+  const resolved = { ...input.settings!, humanEras: resolvedHumanEras(input.settings!) };
+  const eras = input.domains.includes("physical")
+    ? presentHumanEras(resolved)
+    : resolved.humanEras.map((era) => ({ ...era, physicalEpoch: null }));
   const cultural = input.resolvedFeatures!.selection["human.cultures"]?.enabled;
   const political = input.resolvedFeatures!.selection["human.politics"]?.enabled;
   return [

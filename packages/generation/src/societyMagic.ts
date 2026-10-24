@@ -54,7 +54,8 @@ function workFor(
   const region = state.society!.region;
   const existing = region.works.find((w) => w.communityId === c.id && w.kind === kind);
   if (existing) return existing;
-  const work = makeWork(state, c, kind);
+  // A practice happens at its forge, archive or dive: located at every profile.
+  const work = makeWork(state, c, kind, c.position);
   region.works.push(work);
   return work;
 }

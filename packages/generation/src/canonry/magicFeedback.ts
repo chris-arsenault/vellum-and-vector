@@ -19,7 +19,7 @@ type Field = NonNullable<NonNullable<GenerationState["physical"]>["magic"]>["fie
  * field (intensity past 600) or to strong relict charge (stored past 300), and only where
  * at least a skin of ice remains. Other systems act at their full intensity.
  */
-function heldCharge(map: PhysicalField, field: Field, i: number) {
+export function heldCharge(map: PhysicalField, field: Field, i: number) {
   if (!field.definition.effects.icePersistence) return 1;
   const strength = Math.max((field.stored[i] - 300) / 150, (field.intensity[i] - 600) / 300);
   return unit(strength) * unit(map.IceThickness[i] / 50);
@@ -48,7 +48,11 @@ export function magicThermalFeedback(state: GenerationState) {
     magic.heat[i] = round(heat);
     map.ExternalHeatForcing[i] += magic.heat[i] - previous;
     map.Temperature[i] = clamp(map.Temperature[i] - previous + magic.heat[i], 0, 1000);
-    map.IceThickness[i] = Math.max(0, map.IceThickness[i] - round(melt));
+    // Melt is a removal, not a level: within one epoch each cell loses at most the largest
+    // melt any evaluation asked for, so the climate and post-glacial passes do not both melt.
+    const owed = Math.max(0, round(melt) - magic.melt[i]);
+    magic.melt[i] = Math.max(magic.melt[i], round(melt));
+    map.IceThickness[i] = Math.max(0, map.IceThickness[i] - owed);
   }
 }
 /**
@@ -140,7 +144,14 @@ export function magicOceanFeedback(state: GenerationState) {
       const e = field.definition.effects;
       return field.definition.enabled && (e.upwelling || e.seaSurface || e.wakeWarming || e.fog);
     });
-  if (!fields.length && !magic.upwelling.some(Boolean) && !magic.fog.some(Boolean)) return;
+  // With no moving system left, one last pass clears whatever an earlier one applied.
+  if (
+    !fields.length &&
+    !magic.upwelling.some(Boolean) &&
+    !magic.seaSurface.some(Boolean) &&
+    !magic.fog.some(Boolean)
+  )
+    return;
   const moved = movedWater(map, fields),
     fog = settledFog(map, moved.fog);
   for (let i = 0; i < map.mesh.count; i++) {
@@ -255,6 +266,8 @@ export function retainMagicHistory(state: GenerationState, context: MapProcessCo
   const map = state.physical!.map,
     index = coastalEpoch(context);
   map.IcePersistence.fill(0);
+  // The next epoch's ice is new ice; its melt starts from nothing.
+  state.physical!.magic!.melt.fill(0);
   for (const field of state.physical!.magic!.fields) {
     if (!field.definition.enabled) continue;
     const retention = field.definition.history,

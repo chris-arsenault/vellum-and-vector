@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { createWorld, session } from "./atlasState";
 import { cancelGeneration, listJobs, startGeneration, generationSnapshot } from "./generationJobs";
-import { createAdaptiveField, createAdaptiveTopology, putChannel } from "@atlas/domain";
+import { createAdaptiveField, createAdaptiveTopology, createGrid, putChannel } from "@atlas/domain";
 import { atlasPublicationDefinitions } from "@atlas/generation";
 
 class TestWorker {
@@ -17,6 +17,66 @@ class TestWorker {
 }
 
 afterEach(() => vi.unstubAllGlobals());
+
+it.each(["completed", "failed"])("retains streamed diagnostics when generation is %s", (status) => {
+  vi.stubGlobal("Worker", TestWorker);
+  const world = createWorld({ name: "Recoverable errors", seed: 42, width: 10000, height: 10000 });
+  const domain = session(world.id).snapshot;
+  const input = { areaId: domain.scope.areaId, domains: ["physical"], quality: "draft", seed: 42 };
+  startGeneration(world.id, {
+    ...input,
+    expectedVersion: world.version,
+    operationId: crypto.randomUUID(),
+  });
+  const diagnostic = {
+    code: "process_failed",
+    message: "Contour omitted",
+    severity: "error",
+    invocation: "canonry.features",
+    resource: null,
+    process: "canonry.features",
+    epochs: [],
+    outcome: "omitted",
+    stack: "Error: Contour omitted",
+  };
+  const worker = TestWorker.latest;
+  worker.onmessage!({ data: { kind: "diagnostic", diagnostic } });
+  expect(listJobs(world.id)[0].diagnostics).toContainEqual(diagnostic);
+  expect(listJobs(world.id)[0].status).toBe("running");
+  if (status === "completed") {
+    const surface = createGrid("recovered", domain.scope, 2, 2);
+    putChannel(surface, "elevation", "metre", new Float64Array(4).fill(10));
+    worker.onmessage!({
+      data: {
+        kind: "completed",
+        result: {
+          kind: "final",
+          configurationHash: "recovered",
+          ancestry: [],
+          state: {
+            domain: structuredClone(domain),
+            surface,
+            facts: new Set(["elevation"]),
+            history: [],
+            diagnostics: [diagnostic],
+            publications: atlasPublicationDefinitions(input, world),
+          },
+        },
+      },
+    });
+    expect(
+      session(world.id).snapshot.world.fields.some((field) => field.channels?.includes("elevation"))
+    ).toBe(true);
+  } else {
+    worker.onmessage!({
+      data: { kind: "failed", error: "Unrecoverable failure", diagnostics: [diagnostic] },
+    });
+  }
+  const job = listJobs(world.id)[0];
+  expect(job.status).toBe(status);
+  expect(job.error).toBe(status === "completed" ? null : "Unrecoverable failure");
+  expect(job.diagnostics?.filter((entry) => entry.code === "process_failed")).toEqual([diagnostic]);
+});
 
 it("retains the active stage and error when a worker fails", () => {
   vi.stubGlobal("Worker", TestWorker);

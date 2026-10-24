@@ -18,9 +18,9 @@ type Era = GenerationSettings["humanEras"][number];
  * as ruins for the present to find. An era bound to the final epoch, or to no epoch, runs
  * with the present society instead.
  */
-export function roundEra(settings: GenerationSettings, epochId: string, epochIndex: number) {
-  if (epochIndex >= settings.epochs.length - 1) return undefined;
-  return settings.humanEras.find(
+export function roundEras(settings: GenerationSettings, epochId: string, epochIndex: number) {
+  if (epochIndex >= settings.epochs.length - 1) return [];
+  return settings.humanEras.filter(
     (era) => boundEpoch(era.physicalEpoch, settings.epochs) === epochId
   );
 }
@@ -86,16 +86,26 @@ function roundContext(context: MapProcessContext, era: Era, epoch: string): MapP
     epochIndices: [...context.epochIndices, 0],
   };
 }
+/** Every era bound to this epoch runs in turn; a later one finds the earlier one's camps. */
 async function runHumanRound(state: GenerationState, context: MapProcessContext) {
   const bound = generationBindings(context),
     epoch = context.epochs[0],
     index = context.epochIndices[0] ?? -1;
-  const era = epoch && index >= 0 ? roundEra(bound.settings, epoch.id, index) : undefined;
-  if (!era || !state.physical) return;
-  context.progress(0, `${era.id}: people enter the ${epoch.id}`);
-  projectEpoch(state, bound.seed);
+  if (!epoch || index < 0 || !state.physical) return;
+  for (const era of roundEras(bound.settings, epoch.id, index))
+    await runEra(state, context, era, epoch.id, bound.seed);
+}
+async function runEra(
+  state: GenerationState,
+  context: MapProcessContext,
+  era: Era,
+  epoch: string,
+  seed: number
+) {
+  context.progress(0, `${era.id}: people enter the ${epoch}`);
+  projectEpoch(state, seed);
   const work = foundRound(state, context, era),
-    inEra = roundContext(context, era, epoch.id);
+    inEra = roundContext(context, era, epoch);
   // A band's generation is the cycle: coarser than the settled decade, and a round
   // costs a fraction of a physical epoch instead of doubling it.
   const steps = Math.ceil(era.years / 25),
@@ -109,14 +119,14 @@ async function runHumanRound(state: GenerationState, context: MapProcessContext)
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
   delete work.cycle;
-  const round = endRound(state, era.id, epoch.id);
+  const round = endRound(state, era.id, epoch);
   (state.rounds ??= []).push(round);
   delete state.society;
   context.recordCause({
     kind: "domain",
     process: "human.round",
     subjects: round.ruins.map((ruin) => ruin.name),
-    description: `${era.id} (${era.years} years inside the ${epoch.id}): ${round.ruins.length} camps left as ruins; ${work.region.works.length} works stop being maintained and their consequences in conductance, cover, herds, charge and seabed travel on with the crust.`,
+    description: `${era.id} (${era.years} years inside the ${epoch}): ${round.ruins.length} camps left as ruins; ${work.region.works.length} works stop being maintained and their consequences in conductance, cover, herds, charge and seabed travel on with the crust.`,
   });
 }
 const lasting = (c: SocietyCommunity) => Boolean(c.founded) && (c.settlement?.peak ?? 0) >= 20;
@@ -174,7 +184,8 @@ export const humanRoundProcess: MapProcess = {
     requires: ["canonry:workspace"],
     produces: ["atlas:human-round"],
     invalidates: [],
-    workspaceOnly: true,
+    // The round publishes ruins and a people, so its results are validated like any pass.
+    workspaceOnly: false,
   },
   behavior: { kind: "model-pass", applyPass: runHumanRound },
   validate: () => [],

@@ -407,20 +407,31 @@ requirements. Social applications below are setting-independent adaptations.
 
 - **Captured Fire:** Fire-cores are mineral stores of geothermal energy, mined
   from veins and released by cracking. Geographic Fire follows fracture
-  conductance, heats terrain, melts ice and hardens rock. Society uses cores for
-  heating, forging, cutting and excavation; release can rupture structures and
-  injure practitioners. Extraction, access and depletion have social consequences.
+  conductance, heats terrain, melts ice and hardens rock; it is a wellspring of
+  life as well as heat, quickening growth, turnover, seeding and decay around
+  its cores (Ember grove, Thaw meadow), opening the conduits it flows through
+  until a spent vein seals, and carrying warmth down the rivers below it.
+  Society uses cores for heating, forging, cutting and excavation; release can
+  rupture structures and injure practitioners. Extraction, access and depletion
+  have social consequences.
 - **Aurora-light:** Aurora accumulates toward colder terrain and is retained in
-  thick ice; its geological influence weakens rock. Aurora-crystals collect and
-  store charge for slow perception, distant seeing, preservation and ice-memory
-  reading. Cognitive strain is a proposed cost of sustained practice. It is not an offensive
-  beam, generic fertility source or interchangeable fuel for Fire.
+  thick ice; its geological influence weakens rock. It acts through the charge
+  its ice holds: stored charge keeps ice from ablating, casts a cold shadow of a
+  few degrees, and stills the life within (slow growth and turnover, preserved
+  matter; Rime forest, Glow-lichen barrens), releasing what it preserved where
+  the field retreats. Aurora-crystals collect and store charge for slow
+  perception, distant seeing, preservation and ice-memory reading. Cognitive
+  strain is a proposed cost of sustained practice. It is not an offensive beam,
+  generic fertility source or interchangeable fuel for Fire.
 - **Pressure-depth:** A deep-ocean pressure locus drives geographic pressure
   propagation. Ocean paths, reflection and overlapping rays produce crush zones,
-  coastal stress and wake/rogue-impact history. Practitioners descend into deep
-  water, carrying charge for subsonic communication and directed force.
-  Depth tolerance constrains access; costs of sustained practice remain an
-  adaptation proposal. The source's named deity and current are not required.
+  coastal stress and wake/rogue-impact history, and a front moves water: where a
+  ray shoals it lifts cold deep water (upwelling, a cold sea surface, fog on the
+  coast it faces; Fog heath, Moss forest), and its wakes leave warm still water,
+  so a large front changes the local climate. Practitioners descend into deep
+  water, carrying charge for subsonic communication and directed force. Depth
+  tolerance constrains access; costs of sustained practice remain an adaptation
+  proposal. The source's named deity and current are not required.
 - **Interference:** The disciplines do not combine cleanly. Preserve Fire/Aurora
   interference, dissipation of carried Pressure near Aurora-crystals, and
   destructive Fire/Pressure contact. Geographic thermal war rims, steam fractures
@@ -439,8 +450,9 @@ every system fit one generic vocabulary.
 
 Magic feeds physical processes at the correct causal stage. Society can change
 access, extraction, use and local physical conditions, and those changes feed
-back into the appropriate system. The [society plan](SOCIETY-GENERATION-PLAN.md)
-separates proposed social operations from implemented geographic behavior.
+back into the appropriate system. Proposed social operations are distinguished
+from implemented geographic behavior; [ADR 0004](adr/0004-coupling-through-each-systems-medium.md)
+records how the pillars couple.
 
 ### 10.4 Cultural generation — new independent axis
 

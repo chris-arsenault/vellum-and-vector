@@ -44,9 +44,8 @@ artifact hashing/copying before building further runtime integration on them.
 The existing Sulion root is retained and expanded:
 `4b9a54d3-7ec3-42d6-98ee-ec3f97dc6f83`. Its earlier phase descriptions record the
 partial storage/hosting approach; the milestone bodies and current phase notes
-below define the remaining work. [ATLAS-PLAN.md](ATLAS-PLAN.md) records prototype
-history. Earlier completion labels establish neither replacement functionality
-nor conformance to the current contracts.
+below define the remaining work. Earlier completion labels establish neither
+replacement functionality nor conformance to the current contracts.
 
 ## Implementation assessment and reuse
 

@@ -94,9 +94,11 @@ it("forcing projection produces its real inputs without inventing flow or draina
     "flow",
     "drainage",
   ]);
-  await expect(new MapRunner(invalid, registry).run(state, options)).rejects.toThrow(
-    "requires fresh flow"
-  );
+  const skipped = await new MapRunner(invalid, registry).run(state, options);
+  expect(skipped.state.diagnostics).toEqual([
+    expect.objectContaining({ code: "stale_fact", resource: "flow", outcome: "skipped" }),
+    expect.objectContaining({ code: "stale_fact", resource: "drainage", outcome: "skipped" }),
+  ]);
 });
 it.each([true, false])(
   "full projection declares routing only when selected (%s)",

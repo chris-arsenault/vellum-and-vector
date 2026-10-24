@@ -181,7 +181,7 @@ it("keeps nested history ancestry and does not activate physical sources from un
   ]);
 });
 
-it("rejects stale climatic inputs after a changing epoch instead of consuming old buffers", async () => {
+it("skips stale climatic inputs after a changing epoch without consuming old buffers", async () => {
   const initial = landscape();
   putChannel(initial.surface, "temperature", "celsius", new Float64Array(10).fill(-10));
   initial.facts.add("temperature");
@@ -194,15 +194,32 @@ it("rejects stale climatic inputs after a changing epoch instead of consuming ol
       body: [invoke(precipitationProcess)],
     },
   ]);
-  await expect(new MapRunner(config, registry()).run(initial, options)).rejects.toThrow(
-    /requires fresh temperature/
+  const precipitation = await new MapRunner(config, registry()).run(initial, options);
+  expect(precipitation.state.diagnostics).toContainEqual(
+    expect.objectContaining({
+      code: "stale_fact",
+      resource: "temperature",
+      outcome: "skipped",
+    })
   );
-  await expect(
-    new MapRunner(configuration([invoke(temperatureProcess)]), registry()).run(initial, options)
-  ).rejects.toThrow(/requires fresh heat/);
+  expect(precipitation.state.surface.channels.precipitation).toBeUndefined();
+  const temperature = await new MapRunner(
+    configuration([invoke(temperatureProcess)]),
+    registry()
+  ).run(initial, options);
+  expect(temperature.state.diagnostics).toContainEqual(
+    expect.objectContaining({
+      code: "stale_fact",
+      resource: "heat",
+      outcome: "skipped",
+    })
+  );
+  expect(temperature.state.surface.channels.temperature).toEqual(
+    initial.surface.channels.temperature
+  );
 });
 
-it("rejects duplicate elapsed-time advances and negative melt factors", async () => {
+it("omits duplicate elapsed-time advances and rejects invalid parameter configuration", async () => {
   const body = [
     invoke(resetForcingProcess),
     invoke(temperatureProcess),
@@ -214,9 +231,16 @@ it("rejects duplicate elapsed-time advances and negative melt factors", async ()
     configuration([
       { kind: "epochs", id: "physical", resetFacts: [], epochs: [epoch("glacial", 1)], body },
     ]);
-  await expect(new MapRunner(wrap(body), registry()).run(landscape(), options)).rejects.toThrow(
-    /once per epoch/
+  const result = await new MapRunner(wrap(body), registry()).run(landscape(), options);
+  expect(result.state.diagnostics).toContainEqual(
+    expect.objectContaining({
+      outcome: "omitted",
+      invocation: "physical/second",
+      message: expect.stringContaining("once per epoch"),
+    })
   );
+  const single = await new MapRunner(wrap(body.slice(0, 4)), registry()).run(landscape(), options);
+  expect(result.state.surface.channels.ice).toEqual(single.state.surface.channels.ice);
   await expect(
     new MapRunner(
       wrap(body.slice(0, 3).concat(invoke(iceBalanceProcess, "negative", { meltFactor: -1 }))),

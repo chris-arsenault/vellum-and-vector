@@ -13,8 +13,8 @@ const feature = (
 ): MagicFeatureRule => ({ id, name, priority, seeds, ...(retains ? { retains } : {}) });
 
 // Canonry IceRemembers' three systems are data passed to the same process contracts. The
-// reach and rarity below are the atlas's own (docs/FOUR-PILLAR-INTEGRATION-PLAN.md, fifth
-// pass): Canonry's defaults saturate a world this large, warm and oceanic.
+// reach and rarity below are the atlas's own (docs/adr/0004): Canonry's defaults saturate
+// a world this large, warm and oceanic.
 const firePreset = magicSystemSchema.parse({
   id: "fire",
   name: "Fire",
@@ -120,8 +120,8 @@ const auroraPreset = magicSystemSchema.parse({
     heat: -0.03,
     stillness: 1,
     icePersistence: 0.9,
+    // Stillness is the only growth term; preservation is what the cold leaves behind.
     organicPreservation: 1.5,
-    vegetationGrowth: -0.6,
   },
   // Charge stored in ice outlasts the cold epoch that gathered it, so relict fields
   // survive a warm present on the ground that held the most.

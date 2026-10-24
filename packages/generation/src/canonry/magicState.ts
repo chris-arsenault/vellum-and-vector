@@ -17,6 +17,8 @@ export interface MagicField extends Record<MagicChannel, Float64Array> {
 export interface MagicWorkspace {
   fields: MagicField[];
   heat: Float64Array;
+  /** Ice removed in the current epoch, so a second evaluation melts only what is owed. */
+  melt: Float64Array;
   coastal: Float64Array;
   upwelling: Float64Array;
   seaSurface: Float64Array;
@@ -65,6 +67,7 @@ export function initializeMagic(
       ? structuredClone(definitions).map((system) => createMagicField(state, system))
       : [],
     heat: new Float64Array(count),
+    melt: new Float64Array(count),
     coastal: new Float64Array(count),
     upwelling: new Float64Array(count),
     seaSurface: new Float64Array(count),

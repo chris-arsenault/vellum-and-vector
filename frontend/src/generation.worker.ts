@@ -1,12 +1,21 @@
-import { generateAtlas, type AtlasGenerationInput } from "@atlas/generation";
+import {
+  generateAtlas,
+  type AtlasGenerationInput,
+  type GenerationDiagnostic,
+} from "@atlas/generation";
 import { DomainError, type DomainSnapshot } from "@atlas/domain";
 
 self.onmessage = async (
   event: MessageEvent<{ snapshot: DomainSnapshot; input: AtlasGenerationInput }>
 ) => {
   let stage = "Preparing geography";
+  const diagnostics: GenerationDiagnostic[] = [];
   try {
     const result = await generateAtlas(event.data.snapshot, event.data.input, {
+      diagnostic(diagnostic) {
+        diagnostics.push(diagnostic);
+        self.postMessage({ kind: "diagnostic", diagnostic });
+      },
       progress(path, fraction, message) {
         stage = `${path.join(" / ")}: ${message}`;
         self.postMessage({ kind: "progress", path, fraction, message });
@@ -20,8 +29,10 @@ self.onmessage = async (
     self.postMessage({
       kind: "failed",
       error: `${stage}: ${error instanceof Error ? error.message : String(error)}`,
-      diagnostics:
-        error instanceof DomainError && Array.isArray(error.details) ? error.details : [],
+      diagnostics: [
+        ...diagnostics,
+        ...(error instanceof DomainError && Array.isArray(error.details) ? error.details : []),
+      ],
     });
   }
 };

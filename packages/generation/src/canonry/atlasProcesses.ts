@@ -339,6 +339,7 @@ function epochStartProcess(): MapProcess {
         map.ExternalCoastalForcing.fill(0);
         map.GlacialMeltwater.fill(0);
         state.physical!.magic?.heat.fill(0);
+        state.physical!.magic?.melt.fill(0);
         state.physical!.magic?.coastal.fill(0);
       },
     },
