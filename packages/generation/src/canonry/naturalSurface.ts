@@ -106,6 +106,8 @@ function fluvialSurface(
   if (map.DeltaIntensity[i] > 0) return "Delta";
   if (map.LandformCodes[i] === Landform.Waterfall) return "Waterfall";
   if (map.LandformCodes[i] === Landform.Gorge) return "Gorge";
+  // A river carrying a wellspring's warmth stays open and green through the cold.
+  if (map.RiverOrders[i] >= 1 && map.RiverWarmth[i] >= 50) return "Warm-water reach";
   // Only a trunk river's channel is wider than the cover around it at mesh scale.
   if (map.RiverChannelStrength[i] > 0 && map.RiverOrders[i] >= 4) return "River channel";
   if (map.FloodplainIntensity[i] >= 250) return "Floodplain";

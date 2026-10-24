@@ -147,6 +147,10 @@ export function runoff(map: PhysicalField, c: PhysicalContext) {
     const evaporation = map.EcologyInitialized
       ? Math.max((available * loss) / 1000, ecologicalLoss)
       : (available * loss) / 1000 + ecologicalLoss;
-    map.Runoff[i] = truncate(Math.max(0, available - evaporation));
+    // Wetlands and peat hold water back, so the floods below them are flatter.
+    const held = map.EcologyInitialized
+      ? Math.min(0.45, 0.3 * map.WetlandCover[i] + map.PeatCarbon[i] / 60)
+      : 0;
+    map.Runoff[i] = truncate(Math.max(0, available - evaporation) * (1 - held));
   }
 }

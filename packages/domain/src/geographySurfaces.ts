@@ -46,6 +46,7 @@ export const naturalSurfaceNames = [
   "Fog heath",
   "Moss forest",
   "Upwelling water",
+  "Warm-water reach",
 ] as const;
 export const surfaceCode = (name: (typeof naturalSurfaceNames)[number]) =>
   naturalSurfaceNames.indexOf(name);
@@ -100,6 +101,7 @@ export const naturalSurfaceColors: Record<NaturalSurfaceName, string> = {
   "Fog heath": "#9db3a1",
   "Moss forest": "#4e8470",
   "Upwelling water": "#3f8fa8",
+  "Warm-water reach": "#7fc29a",
 };
 /** Water surfaces whose depth shading says more than a flat class colour. */
 const bathymetricSurfaces: ReadonlySet<NaturalSurfaceName> = new Set<NaturalSurfaceName>([

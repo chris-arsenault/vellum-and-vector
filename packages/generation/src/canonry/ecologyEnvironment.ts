@@ -48,11 +48,13 @@ export const neutralEcology: EcologyForcing = {
 /** Potential evaporation in m/year at a mean temperature in °C, never below 0.25. */
 export const potentialEvaporation = (celsius: number) => Math.max(0.25, 0.3 + 0.045 * celsius);
 export function environment(map: PhysicalField, i: number, forcing = neutralEcology) {
-  const temperature = map.Temperature[i] / 10 - 30;
+  // A river carrying magical warmth is warmer than its banks and does not freeze.
+  const warmth = map.RiverOrders[i] >= 1 ? map.RiverWarmth[i] : 0;
+  const temperature = (map.Temperature[i] + warmth) / 10 - 30;
   const depth = map.WaterDepths[i] / 1024;
   const water = map.WaterKindCodes[i];
-  const frozen = map.IceThickness[i] > 1;
-  const warmth = unit((temperature + 8) / 18) * unit((52 - temperature) / 18);
+  const frozen = map.IceThickness[i] > 1 && warmth < 50;
+  const warmSeason = unit((temperature + 8) / 18) * unit((52 - temperature) / 18);
   const rain = (map.Rainfall[i] + map.Snowfall[i]) / 1000;
   // Plant water is the aridity index: precipitation over evaporative demand,
   // about 1.4 m/year at 25 °C. Column humidity is not surface humidity: heavy
@@ -80,7 +82,7 @@ export function environment(map: PhysicalField, i: number, forcing = neutralEcol
     depth,
     water,
     frozen,
-    warmth,
+    warmth: warmSeason,
     moisture,
     wetness,
     submerged,

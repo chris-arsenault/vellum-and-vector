@@ -149,6 +149,8 @@ const metricFields = [
   "ExternalUpwelling",
   "ExternalSeaSurfaceForcing",
   "FogForcing",
+  // Magical heat carried down the drainage (native units): the thawed river below a wellspring.
+  "RiverWarmth",
 ] as const;
 export type PhysicalField = Record<(typeof integerFields)[number], Int32Array> &
   Record<(typeof elevationFields)[number], Float64Array> &

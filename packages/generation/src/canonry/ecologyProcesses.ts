@@ -18,6 +18,7 @@ import { authoritativeCanopy, updateTreeCover, normalizeCommunities } from "./ec
 import { plantGroups, livingPlantCarbon } from "./ecologyGroups";
 import { alterEcology } from "./ecologyMagic";
 import { erosionHistory } from "./ecologySoils";
+import { riverWarmth } from "./riverWarmth";
 import { generationBindings } from "../generationBindings";
 import { atlasParametersSchema, type AtlasParameters } from "../atlasParameters";
 import type { Epoch } from "@atlas/domain";
@@ -164,6 +165,7 @@ function present(
 ) {
   const map = state.physical!.map;
   initializeEcology(map, seed, true);
+  riverWarmth(map);
   const restore = coverAuthority(state);
   const magic = input ? forcing(state, input, context) : null;
   if (magic) alterEcology(map, 0, magic);
@@ -349,6 +351,8 @@ function advance(
   const f = forcing(state, input, context);
   const map = state.physical!.map,
     before = map.BiomeCodes.slice();
+  // The epoch's drainage is routed by now; carry the wellsprings' warmth down it first.
+  riverWarmth(map);
   evolveVegetation(
     map,
     years,

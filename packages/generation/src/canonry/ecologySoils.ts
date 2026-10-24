@@ -55,9 +55,22 @@ export function evolveSoils(
         300 / replenishment
       );
     soilWater(map, i, years, f);
+    meltRelease(map, i);
     map.EcologyErosion[i] = erosionHistory(map, i);
     map.EcologyIce[i] = map.IceThickness[i];
   }
+}
+/**
+ * The melt-line fen: where stillness has fallen since the ground was last seen, the matter
+ * it preserved comes out in one pulse, as nutrients and soil carbon returned to use.
+ */
+function meltRelease(map: PhysicalField, i: number) {
+  const release = Math.max(0, map.EcologyStillness[i] - map.Stillness[i]);
+  if (release > 0) {
+    map.MineralNutrients[i] += release * (0.05 + map.SoilCarbon[i] * 0.004);
+    map.SoilCarbon[i] *= 1 - 0.3 * release;
+  }
+  map.EcologyStillness[i] = map.Stillness[i];
 }
 function soilWater(map: PhysicalField, i: number, years: number, f: EcologyForcing) {
   const e = environment(map, i, f);

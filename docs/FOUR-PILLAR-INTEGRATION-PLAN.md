@@ -1159,6 +1159,64 @@ generation.
 - Cold-age works use the settled works' magnitudes and radii capped at 6 km;
   the third pass's demand budgets would size them from the band instead.
 
+## Eighth pass: the couplings between the other pillars
+
+Implemented 2026-10-24 under "execute the next major chunk", read as parent
+phase 10: the non-magical couplings of the second pass, the two magical
+water-and-time couplings deferred to it, and the scale declarations.
+
+### Ecology holds the ground and the water
+
+- **Cover binds slopes.** Hillslope transport already steepened the stable
+  gradient a little for trees. Now living cover binds the material a slope can
+  shed: the per-cell transport budget falls by up to 60 percent with full tree
+  cover (grass and wetland count half), and grass as well as trees steepens the
+  stable gradient. Cleared or burnt land moves; wooded land stands.
+- **Burnt ground gullies.** Fluvial resistance already grew with roots; the
+  season's fire activity now halves that root term, so a burn is followed by
+  incision and the sediment it yields.
+- **Wetlands and peat hold water.** Runoff from a cell falls by 30 percent of
+  its wetland cover plus its peat carbon over 60, capped at 45 percent, so the
+  floods below a marsh are flatter and the channels they feed are weaker.
+
+Peat and reef as built material, and albedo or evapotranspiration feedbacks,
+remain excluded as in the second pass.
+
+### The thawed river and the melt fen
+
+- **Thawed-river tongue (Fire → water → ecology).** Magical heat forcing enters
+  the drainage where it is applied and is carried down the flow targets, fading
+  to a third every 60 km; a river cell carries the strongest warmth that reaches
+  it. The ecology reads a river cell's temperature with that warmth added and
+  does not count it frozen above 50 units, so reeds, fish and waterfowl live
+  along it through the cold. The natural classifier names it **Warm-water
+  reach**, and the `riverWarmth` channel is published with the rivers.
+- **Melt-line fen (Aurora → ecology over time).** The ecology remembers the
+  stillness each cell stood under. Where stillness has fallen since, the matter
+  it preserved comes out in one pulse: nutrients rise by the fall times a share
+  of the soil carbon, and that carbon returns to use. The rich strip appears
+  where a field has retreated, which is the melt line.
+
+### Scale declarations
+
+The third pass's three states are now the product's words: the specification's
+authorship and materialization states read **latent** (a quantity this profile
+computed for a unit it resolves, which a finer profile reads as forcing) and
+**absent** (not generated at this profile, nothing stored or hidden) in place of
+the single "unmaterialized". The per-pillar table of what is realized, latent
+and absent at World, and where each absent thing is first realized, stands in
+the third pass as the declaration each process is held to; no registry of
+declarations was added, since nothing would read it yet. The one declaration
+that changed code is society's, in the sixth pass: open plain is where people
+are and not where towns are, so a unit with no site keeps its draw.
+
+### Measured on the draft World
+
+Same world as before. The couplings are gentle at World scale by design:
+scree and ridge cells rose from 42 and 88 to 44 and 89, barren land from 233 to
+250 cells, and nine river cells below Fire wellsprings are now warm-water
+reaches that stay open and green. Generation time is unchanged within noise.
+
 ## Deferred work register
 
 Pieces set aside while phases 3 to 8 were delivered, gathered in one place so
@@ -1167,8 +1225,8 @@ each is done or consciously dropped. The plan carries them as phase 11.
 | Piece                                                                                                                                                   | Deferred from               | What it needs                                                              |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------- |
 | Society as field forcing: demand budgets per unit instead of located works at World, located works realized at Region (third pass)                      | Phase 7                     | Its own branch over the works, environment and inheritance pipeline        |
-| Thawed-river tongue: Fire heat carried down the drainage so a river below a wellspring stays open                                                       | Phase 6                     | The water pass carrying a magical quantity                                 |
-| Melt-line fen: Aurora's one-pulse release of preserved matter at the field edge                                                                         | Phase 8                     | A memory of last epoch's stillness                                         |
+| Thawed-river tongue: Fire heat carried down the drainage so a river below a wellspring stays open                                                       | Phase 6                     | Delivered in the eighth pass                                               |
+| Melt-line fen: Aurora's one-pulse release of preserved matter at the field edge                                                                         | Phase 8                     | Delivered in the eighth pass                                               |
 | Era-dependent sites (camps on magical and food sites; present towns on ruins only where the class still holds) and the pass town at the foot of the col | Phase 7                     | Phase 9 eras; Region-scale placement                                       |
 | Removal of the dormant generic altered ecology (plant group, cover, biome names)                                                                        | User correction, first pass | A cleanup pass over ecology groups, establishment, biomes and publications |
 | Reach and rarity measured on a continental seed                                                                                                         | Phase 5                     | One measured generation of a land-heavy seed                               |

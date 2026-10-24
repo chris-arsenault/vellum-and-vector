@@ -517,7 +517,8 @@ These are different authoring interactions over a **shared domain model**; none 
 
 The system must distinguish at least:
 
-- **Unmaterialized:** Fine-scale content has not been generated; coarse inherited geography may still be displayed.
+- **Latent:** A quantity, budget or propensity this profile computed for a unit it resolves (a cell, catchment, reach or coast segment), which a finer profile reads as forcing and may realize as features. No geometry finer than the mesh; nothing is hidden.
+- **Absent:** Not generated at this profile. Nothing stored, nothing hidden; a finer profile generates it from the latent quantities and its own terrain. Coarse inherited geography may still be displayed.
 - **Generated:** Content exists and can be selectively regenerated.
 - **Authored:** Explicit user/agent edits exist.
 - **Protected/locked:** Content or boundary conditions may not be overwritten by ordinary generation.

@@ -72,7 +72,7 @@ const nativeOwnership: Ownership[] = [
     "climate",
     ["temperature", "moisture", "windEast", "windNorth", "windSpeed", "rainfall", "snowfall"],
   ],
-  ["water.routing", "rivers", ["runoff", "waterBody", "basin", "catchmentArea"]],
+  ["water.routing", "rivers", ["runoff", "waterBody", "basin", "catchmentArea", "riverWarmth"]],
   ["ocean.geography", "rivers", ["water", "waterDepth", "oceanDistance"]],
   ["ocean.geography", "geology", ["bathymetry"]],
   [

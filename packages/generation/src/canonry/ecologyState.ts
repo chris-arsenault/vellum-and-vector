@@ -62,6 +62,8 @@ export const ecologyScalars = [
   "AquaticFauna",
   "OrganicBurialDepth",
   "OrganicMaturity",
+  // The stillness the ground stood under last time; its fall releases preserved matter.
+  "EcologyStillness",
 ] as const;
 export const ecologyBindings = [
   ["biome", "BiomeCodes", "category"],

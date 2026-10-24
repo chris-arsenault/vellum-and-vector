@@ -70,16 +70,20 @@ export function hillslopeFlux(map: PhysicalField, p: PhysicalProfile) {
   const mesh = map.mesh,
     plan = faces(map, p);
   const heights = Float64Array.from(map.Elevation, (v) => v / 1024);
+  // Living cover holds slopes: roots steepen the stable gradient and bind the material a
+  // slope can shed, so cleared or burnt land moves and wooded land stands.
+  const binding = (i: number) =>
+    clamp(map.TreeCover[i] + 0.5 * map.GrassCover[i] + 0.5 * map.WetlandCover[i], 0, 1);
   const stable = Float64Array.from(
     map.RockResistance,
     (v, i) =>
       p.MassWastingStableGradient *
       clamp(0.55 + (v / 1000) * 0.45, 0.55, 1.45) *
-      (1 + map.TreeCover[i] * 0.2)
+      (1 + map.TreeCover[i] * 0.2 + map.GrassCover[i] * 0.1)
   );
   const budget = Float64Array.from(
     mesh.areas,
-    (area) => p.MaximumHillslopeTransport * Math.sqrt(area)
+    (area, i) => p.MaximumHillslopeTransport * Math.sqrt(area) * (1 - 0.6 * binding(i))
   );
   const spent = new Float64Array(mesh.count);
   // A bounded ring contains each face at most once. This is solver work, not a
