@@ -126,7 +126,9 @@ with no backend, persistence or MCP; preserve the existing backend source.
       part of this future work.
 
       **Deferred: outside the current continuous-terrain and adaptive-generation
-      replacement plan.**
+      replacement plan.** Planned 2026-10-24 in
+      [LANDMARKS-PLAN.md](LANDMARKS-PLAN.md) (Sulion
+      `df565123-7512-4dee-9155-7da7c54bbca8`); not started.
 
 - [x] **10. Rework the interaction between magic and ecology.** Delivered
       2026-10-24 ([ADR 0004](adr/0004-coupling-through-each-systems-medium.md)):
@@ -175,7 +177,8 @@ with no backend, persistence or MCP; preserve the existing backend source.
       system's setting-neutral character, practice and cost. Society-sourced
       systems need a magic phase after a human era; Veil doors need nonlocal
       routing edges. Decide those two prerequisites before implementing any of
-      the four.
+      the four. The [seven magic systems plan](MAGIC-SYSTEMS-PLAN.md) reviews
+      the bible against the implementation and sequences the work (2026-10-24).
 
 - [ ] **13. Keep a child's epochs from moving its parent's cell means.** A Region
       over a mountain belt ends its epochs with its land about 150 m away, on

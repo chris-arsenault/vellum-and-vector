@@ -488,8 +488,9 @@ cells sets how rugged the child's texture is and which way its ridges run, the
 texture is added below the parent's cell at the child's wavelengths, each parent
 cell keeps its mean height, and the inherited boundary band is untouched. It then
 refines climate, drainage, erosion, ice and coasts on that surface without
-assembling a new set of continents or replaying global plate movement. The native work boundary can
-receive drainage outside the write extent, so an inland patch does not require
+assembling a new set of continents or replaying global plate movement. The
+native work boundary can receive drainage outside the write extent, so an
+inland patch does not require
 a fabricated ocean. Inherited ocean distances retain metre units. The authored
 area boundary, protected samples and contracted network crossings stay fixed.
 This uses current inherited material history; it does not reconstruct a separate
