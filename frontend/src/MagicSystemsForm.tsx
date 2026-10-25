@@ -17,6 +17,7 @@ import { magicControlKeys, removedMagicParameterFields } from "./generationMagic
 import { magicSourceOptions, magicPropagationOptions } from "@atlas/generation";
 import { SetupDisclosure } from "./SetupDisclosure";
 import { MagicConfluencesEditor } from "./MagicConfluencesEditor";
+import { effectLabels, parameterLabels, renewalLabels } from "./magicLabels";
 
 export function MagicSystemsForm({ editor }: { editor: EditorState }) {
   const [systems, setSystems] = useState(editor.world.magicSystems ?? canonryMagicPresets());
@@ -315,61 +316,6 @@ function SystemFeedback({
     </>
   );
 }
-const renewalLabels: Record<MagicRenewal, string> = {
-  "conduit-fed": "Conduit-fed · produces while open, seals after its budget",
-  accumulating: "Accumulating · gathers across epochs",
-  continuous: "Continuous · a standing source",
-  finite: "Finite · a stock that only runs down",
-  kept: "Kept · maintained by people, decays when abandoned",
-  emergent: "Emergent · arises from other systems' fields",
-};
-const effectLabels = {
-  heat: "Heat per intensity unit · 10 units = 1 °C",
-  iceMelt: "Ice removed per intensity unit · negative values add ice",
-  rockResistance: "Rock resistance change at full intensity · negative values weaken rock",
-  coastalForcing: "Coastal forcing · multiplier",
-  vegetationGrowth: "Plant growth change at full intensity · −1 to 5",
-  fire: "Vegetation burned at full intensity · 0–1",
-  organicPreservation: "Organic preservation · −3 accelerates decay, 3 slows decay",
-  animalToxicity: "Habitat and forage toxicity · 0–1",
-  seedDispersal: "Seed dispersal change · −1 stops spread",
-  quickening: "Quickening · living processes run faster, 0–1 at full intensity",
-  conduitOpening: "Conduit opening · conductance gained per active epoch, 0–1,000",
-  stillness: "Stillness · living processes slow and persist, 0–1 at full intensity",
-  icePersistence: "Ice persistence · share of melt prevented by stored charge, 0–1",
-  upwelling: "Upwelling where a ray shoals · per-mille per intensity unit, 0–3",
-  seaSurface: "Sea-surface temperature on the upwelling band · units per intensity, −1 to 1",
-  wakeWarming: "Wake warming · native units, 10 per °C",
-  fog: "Fog share on coasts facing an upwelling band · 0–1",
-};
-const parameterLabels: Record<keyof MagicSystem["parameters"], string> = {
-  sourceThreshold: "Minimum source density · 0–1,000",
-  maximumSources: "Core-site budget per 5.76 million km² of land",
-  sourceSpacing: "Core spacing / radial reach · metres",
-  baseCost: "Propagation loss per kilometre",
-  conductanceDivisor: "Fracture conductance divisor",
-  baseInput: "Cold accumulation input",
-  logScale: "Cold accumulation logarithmic scale",
-  iceRetention: "Ice retention depth · metres",
-  coldRetentionDistance: "Ice capture reference travel distance · metres",
-  accumulationArea: "Cold accumulation reference area · m²",
-  featureNoiseScale: "Feature variation wavelength · metres",
-  rayCount: "Standing rays per core",
-  rayDistance: "Ray travel distance · metres",
-  coastalRayDistance: "Coastal ray distance · metres",
-  wakeDistance: "Wake travel distance · metres",
-  beamWidth: "Ray / wake width · metres",
-  coastalSources: "Coastal impulses per 20,000 km of shoreline",
-  coastalSourceDistance: "Coastal source band · metres",
-  wakeSources: "Wake paths per 6.24 million km² of ocean",
-  coastalThreshold: "Pressure threshold at coast · 0–999",
-  waveAmplification: "Wave amplification",
-  currentAmplification: "Current amplification",
-  rayDecay: "Ray energy lost per 10 km",
-  rayIntensity: "Intensity a full-strength ray deposits per step",
-  wakeStrength: "Intensity a wake leaves along its track",
-  conduitBudget: "Fire a conduit carries before it seals · summed intensity",
-};
 function PropagationSettings({
   system,
   change,

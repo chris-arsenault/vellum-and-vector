@@ -1,6 +1,8 @@
 import { expect, it } from "vitest";
 import { createWorldBlueprint } from "./worldCreation";
 import { describeFeature, availableFeatureTypes, typePresentation } from "./featureCatalogue";
+import { canonryMagicPresets } from "./magicPresets";
+import { canonryConfluencePresets } from "./magicConfluences";
 import { readAtlasFeatures } from "./featureReads";
 import { composeFootprint } from "./composition";
 import { rectangle, spatial } from "./spatial";
@@ -64,8 +66,12 @@ function feature(world: World, kind: string, layerId: string, attributes = {}): 
 it("distinguishes every preset magic rule and preserves custom system identities", () => {
   const world = fixture();
   const types = availableFeatureTypes(world, [], true).filter((t) => t.layerId === "magic");
-  expect(types).toHaveLength(20);
-  expect(new Set(types.map((t) => t.id)).size).toBe(20);
+  // Every preset rule of every system plus every preset meeting between them.
+  const expected =
+    canonryMagicPresets().reduce((sum, system) => sum + system.features.length, 0) +
+    canonryConfluencePresets().length;
+  expect(types).toHaveLength(expected);
+  expect(new Set(types.map((t) => t.id)).size).toBe(expected);
   const custom = describeFeature(
     world,
     feature(world, "rain:spring", "magic", { system: "rain", rule: "spring" })

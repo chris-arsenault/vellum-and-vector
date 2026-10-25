@@ -1,0 +1,80 @@
+import type { MagicOrigin } from "@atlas/domain";
+import type { GenerationState } from "../process";
+import type { PhysicalField } from "./field";
+import { originStocks, stockKey, type MagicField } from "./magicState";
+import { clamp, units } from "./math";
+
+/**
+ * How much of a cell's stock the ground still exposes: whole on bare rock, none once the
+ * sediment over it is deeper than the burial depth.
+ */
+export function exposure(map: PhysicalField, i: number, buryDepth: number) {
+  return clamp(1 - map.SedimentThickness[i] / units(buryDepth), 0, 1);
+}
+/**
+ * The share of exposed held stock an evaluation releases: a base share plus the cracking
+ * agents at work in the cell, tectonic strain, the load of ice, frost on exposed ground and
+ * the impact's own shock in the epoch the stock arrived.
+ */
+export function releaseShare(map: PhysicalField, field: MagicField, i: number, epochIndex: number) {
+  const p = field.definition.parameters;
+  let share = p.fallenRelease + (p.strainCracking * map.TectonicStrain[i]) / 1000;
+  share += p.iceCracking * clamp(map.IceThickness[i] / p.iceCrackDepth, 0, 1);
+  if (map.Temperature[i] < 273 && map.IceThickness[i] <= 0) share += p.frostCracking;
+  if (field.arrival[i] === epochIndex) share += p.impactShock;
+  return clamp(share, 0, 1);
+}
+/**
+ * Once per epoch, after the field's history is kept: what the finite origins released is
+ * gone, river-carried stocks move a share one cell down the drainage and leave the budget
+ * when they reach the sea, and a fresh ejecta fan keeps its ground barren.
+ */
+export function advanceStocks(state: GenerationState, field: MagicField, epochIndex: number) {
+  const map = state.physical!.map;
+  for (const origin of field.definition.origins) {
+    for (const stock of originStocks(origin)) {
+      const values = field.stocks[stockKey(origin, stock)];
+      if (origin.renewal === "finite" && stock === originStocks(origin)[0]) consume(field, values);
+      if (stock.carriers.includes("river")) field.lost += carryDownstream(map, field, values);
+    }
+    if (origin.source === "impact") barrenFan(map, field, epochIndex);
+  }
+}
+function consume(field: MagicField, values: Float64Array) {
+  for (let i = 0; i < values.length; i++) values[i] *= 1 - field.releasing[i];
+}
+/** Placers: a share of the stock on a river cell moves to the cell the river flows to. */
+function carryDownstream(map: PhysicalField, field: MagicField, values: Float64Array) {
+  const mobility = field.definition.parameters.placerMobility,
+    moved = new Float64Array(values.length);
+  let lost = 0;
+  for (let i = 0; i < values.length; i++) {
+    if (values[i] <= 0 || map.WaterKindCodes[i] === 1) continue;
+    const share = values[i] * mobility * (map.RiverOrders[i] > 0 ? 1 : 0.25),
+      target = map.FlowTargets[i];
+    if (share <= 0 || target < 0) continue;
+    values[i] -= share;
+    if (map.WaterKindCodes[target] === 1) lost += share;
+    else moved[target] += share;
+  }
+  for (let i = 0; i < values.length; i++) values[i] += moved[i];
+  return lost;
+}
+/** The ejecta fan stays barren for the declared epochs after the fall, then recovers. */
+function barrenFan(map: PhysicalField, field: MagicField, epochIndex: number) {
+  const p = field.definition.parameters;
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (field.arrival[i] < 0) continue;
+    const age = epochIndex - field.arrival[i];
+    if (age < 0 || age >= p.fanBarrenEpochs) continue;
+    const depth = clamp(map.ImpactEjectaThickness[i] / units(p.fanBarrenDepth), 0, 1);
+    map.EcologicalToxicity[i] = Math.max(
+      map.EcologicalToxicity[i],
+      depth * (1 - age / p.fanBarrenEpochs)
+    );
+  }
+}
+/** The first declared stock of an origin: where its held cores sit. */
+export function heldStock(field: MagicField, origin: MagicOrigin) {
+  return field.stocks[stockKey(origin, originStocks(origin)[0])];
+}

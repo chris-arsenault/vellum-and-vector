@@ -28,8 +28,14 @@ export const magicFeatureSchema = z.object({
     .optional(),
 });
 
-export const magicSources = ["geothermal", "cold", "deep-ocean", "placed"] as const;
-export const magicPropagations = ["fracture", "cold-drainage", "ocean-rays", "radial"] as const;
+export const magicSources = ["geothermal", "cold", "deep-ocean", "placed", "impact"] as const;
+export const magicPropagations = [
+  "fracture",
+  "cold-drainage",
+  "ocean-rays",
+  "radial",
+  "local",
+] as const;
 /**
  * How an origin's stock is renewed: fed while its conduit is open and sealed after a budget,
  * accumulating across epochs, continuous from a standing source, a finite stock that only
@@ -91,6 +97,31 @@ const parameterSchema = z.object({
   wakeStrength: finite.nonnegative().default(180),
   // Accumulated intensity (summed over epochs) after which a Fire conduit seals.
   conduitBudget: positive.default(2400),
+  // Stock an impact leaves per cubic metre of ejecta, in intensity·m².
+  fallenDensity: finite.nonnegative().default(0.1),
+  // Share of exposed held stock a finite origin releases per epoch with no cracking agent.
+  fallenRelease: finite.min(0).max(1).default(0.04),
+  // Release added per unit of tectonic strain, ice load (at the crack depth) and frost.
+  strainCracking: finite.nonnegative().default(0.3),
+  iceCracking: finite.nonnegative().default(0.5),
+  iceCrackDepth: positive.default(300),
+  frostCracking: finite.nonnegative().default(0.05),
+  // Release added in the epoch the stock arrives, from the impact's own shock.
+  impactShock: finite.min(0).max(1).default(0.3),
+  // Share of impact heat that is a coreless source, decaying with the epochs since.
+  impactHeatShare: finite.min(0).max(1).default(0.6),
+  // Share of a river-carried stock that moves one cell downstream per epoch.
+  placerMobility: finite.min(0).max(1).default(0.15),
+  // Sediment depth (metres) beneath which a stock is inert.
+  buryDepth: positive.default(20),
+  // Strain at which a sealed conduit reopens, and the budget share it reopens with.
+  reopenStrain: finite.min(0).max(1000).default(600),
+  reopenShare: finite.min(0).max(1).default(0.4),
+  // Share of exposed spent stock that feeds the source again.
+  exhumedRelease: finite.min(0).max(1).default(0.3),
+  // Epochs an ejecta fan stays barren, and the ejecta depth (metres) that makes it so.
+  fanBarrenEpochs: finite.nonnegative().default(3),
+  fanBarrenDepth: positive.default(2),
 });
 // Overrides carry no defaults of their own, so a reparse keeps an origin's overrides sparse.
 const parameterOverrideSchema = z.object(
@@ -125,6 +156,7 @@ const legacyRenewal: Record<MagicSource, MagicRenewal> = {
   cold: "accumulating",
   "deep-ocean": "continuous",
   placed: "kept",
+  impact: "finite",
 };
 const systemShape = z.object({
   id: z.string().min(1),
@@ -261,22 +293,39 @@ function validateOrigins(system: MagicSystem) {
       throw new Error(`Origin ${origin.id} of ${system.id} needs distinct stock identities.`);
   return origins;
 }
-function knownConditionField(field: string, systems: Set<string>, origins: Set<string>) {
+function knownConditionField(
+  field: string,
+  systems: Set<string>,
+  origins: Set<string>,
+  stocks: Set<string>
+) {
   if (magicPhysicalFields.some((known) => known === field)) return true;
   if (field.startsWith("system:")) return systems.has(field.slice(7));
   if (field.startsWith("source:")) return origins.has(field.slice(7));
+  if (field.startsWith("stock:")) return stocks.has(field.slice(6));
   return false;
+}
+/** The stock keys a system's rules may read: `<origin>/<stock>`, with `held` implied. */
+export function systemStockKeys(system: MagicSystem) {
+  return new Set(
+    system.origins.flatMap((origin) =>
+      (origin.stocks.length ? origin.stocks : [{ id: "held" }]).map(
+        (stock) => `${origin.id}/${stock.id}`
+      )
+    )
+  );
 }
 export function validateMagicSystems(systems: MagicSystem[]) {
   const ids = new Set(systems.map((system) => system.id));
   if (ids.size !== systems.length) throw new Error("Magic systems need distinct identities.");
   for (const system of systems) {
-    const origins = validateOrigins(system);
+    const origins = validateOrigins(system),
+      stocks = systemStockKeys(system);
     const conditions = system.features.flatMap((rule) =>
       [...rule.seeds, ...(rule.retains ?? [])].flat()
     );
     for (const test of conditions)
-      if (!knownConditionField(test.field, ids, origins))
+      if (!knownConditionField(test.field, ids, origins, stocks))
         throw new Error(`Unknown magic condition field: ${test.field}`);
   }
 }

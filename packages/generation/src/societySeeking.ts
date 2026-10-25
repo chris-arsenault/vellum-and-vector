@@ -23,7 +23,8 @@ export function practiceOpportunity(state: GenerationState, c: SocietyCommunity)
   const i = nearestSample(state, c.position),
     offered: PracticeShares = livelihoodShares(c.support);
   if (i < 0) return offered;
-  const fire = magicAt(state, "quickens", i),
+  // A seat whose conduit has sealed offers Fire people nothing: the vein is cold, and they go.
+  const fire = magicAt(state, "quickens", i, "sealed") > 0 ? 0 : magicAt(state, "quickens", i),
     aurora = magicAt(state, "stills", i);
   const dive = accessibleDive(state, c, 200),
     pressure = dive >= 0 ? magicAt(state, "moves-water", dive) : 0;

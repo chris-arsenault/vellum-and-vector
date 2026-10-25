@@ -1,6 +1,7 @@
 import {
   gridPosition,
   population,
+  type MagicSystem,
   type SocietyCommunity,
   type SocietyMagicPractice,
 } from "@atlas/domain";
@@ -10,14 +11,38 @@ import { nearestSample } from "./societySpatial";
 import { societyValue } from "./societySupport";
 import { peopleTrait } from "./societyTraits";
 import { practiceSkill } from "./societySkill";
-import { accessibleDive, magicAt } from "./societyMagicAccess";
+import { accessibleDive, magicAt, magicSystemForRole } from "./societyMagicAccess";
+import { drawStock } from "./canonry/magicState";
 
 export { magicAt } from "./societyMagicAccess";
+/** Stock amount (intensity·m²) one core-equivalent of the practice ledger stands for. */
+const stockPerCore = 1e7;
+/** The held stock of the system that quickens, read at a sample from its published channels. */
+function heldStockAt(state: GenerationState, i: number) {
+  const system = magicSystemForRole(state.domain.world.magicSystems, "quickens");
+  if (!system) return 0;
+  let total = 0;
+  for (const origin of system.origins)
+    total += societyValue(state, `magic:${system.id}:stock:${origin.id}/${heldId(origin)}`, i);
+  return total;
+}
+const heldId = (origin: MagicSystem["origins"][number]) => origin.stocks[0]?.id ?? "held";
+/** Mining takes cores out of the mesh where the field is live in this generation. */
+function drawHeldStock(state: GenerationState, sample: number, amount: number) {
+  const work = state.physical,
+    system = magicSystemForRole(state.domain.world.magicSystems, "quickens"),
+    field = work?.magic?.fields.find((entry) => entry.definition.id === system?.id);
+  if (!field || sample < 0 || amount <= 0) return;
+  drawStock(field, work!.samples[sample], amount);
+}
 function initialPractice(state: GenerationState, c: SocietyCommunity): SocietyMagicPractice {
   const i = nearestSample(state, c.position),
     ice = societyValue(state, "iceThickness", i);
-  // A one-time mineral estimate. Extraction consumes this deposit; field intensity is not fuel.
-  const deposit = Math.max(0, magicAt(state, "quickens", i)) * Math.min(c.areaKm2, 100) * 100;
+  // The deposit is the held stock under the seat (vein cores and fallen cores alike) plus a
+  // mineral estimate from the field; extraction draws the stock down on the mesh.
+  const deposit =
+    Math.max(0, magicAt(state, "quickens", i)) * Math.min(c.areaKm2, 100) * 100 +
+    heldStockAt(state, i) / stockPerCore;
   return {
     communityId: c.id,
     coreDeposit: deposit,
@@ -65,6 +90,7 @@ function fireUse(
   );
   practice.coreDeposit -= extracted;
   practice.coreSupply += extracted;
+  drawHeldStock(state, nearestSample(state, c.position), extracted * stockPerCore);
   const demand = population(c) * years * 0.0005,
     used = Math.min(practice.coreSupply, demand);
   practice.coreSupply -= used;

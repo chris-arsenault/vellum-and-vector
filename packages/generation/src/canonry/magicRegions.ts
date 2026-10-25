@@ -1,5 +1,6 @@
 import type { MagicCondition, MagicFeatureRule } from "@atlas/domain";
 import type { GenerationState } from "../process";
+import type { PhysicalField } from "./field";
 import type { MagicField } from "./magicState";
 import { meshUnitNoise as unitNoise, hashUnit } from "./noise";
 
@@ -20,7 +21,38 @@ export function conditionReader(
     const own = field.originSources[key.slice(7)];
     return (i: number) => own?.[i] ?? 0;
   }
-  const values: Record<string, ArrayLike<number>> = {
+  // A stock is an amount; a rule reads it as strength per unit area, like a source.
+  if (key.startsWith("stock:")) {
+    const held = field.stocks[key.slice(6)],
+      areas = map.mesh.areas;
+    return (i: number) => (held ? held[i] / areas[i] : 0);
+  }
+  if (key === "elevation") return (i: number) => (map.Elevation[i] - map.BaseSeaLevel) / 1024;
+  if (key === "slope") return (i: number) => map.Slope[i];
+  if (key === "noise")
+    return (i: number) =>
+      unitNoise(
+        map.mesh,
+        map.mesh.x[i],
+        map.mesh.y[i],
+        test.salt ?? 0x621d,
+        field.definition.parameters.featureNoiseScale,
+        1
+      );
+  if (key === "scatter")
+    return (i: number) =>
+      hashUnit(
+        seed ^ (test.salt ?? 0),
+        Math.floor(map.mesh.x[i] / field.definition.parameters.featureNoiseScale),
+        Math.floor(map.mesh.y[i] / field.definition.parameters.featureNoiseScale) ^
+          (test.index ?? 0)
+      );
+  const array = channelValues(map, field)[key];
+  return (i: number) => array?.[i] ?? 0;
+}
+/** The named per-cell channels a condition may read directly. */
+function channelValues(map: PhysicalField, field: MagicField): Record<string, ArrayLike<number>> {
+  return {
     intensity: field.intensity,
     history: field.history,
     source: field.source,
@@ -54,28 +86,6 @@ export function conditionReader(
     grazers: map.Grazers,
     browsers: map.Browsers,
   };
-  if (key === "elevation") return (i: number) => (map.Elevation[i] - map.BaseSeaLevel) / 1024;
-  if (key === "slope") return (i: number) => map.Slope[i];
-  if (key === "noise")
-    return (i: number) =>
-      unitNoise(
-        map.mesh,
-        map.mesh.x[i],
-        map.mesh.y[i],
-        test.salt ?? 0x621d,
-        field.definition.parameters.featureNoiseScale,
-        1
-      );
-  if (key === "scatter")
-    return (i: number) =>
-      hashUnit(
-        seed ^ (test.salt ?? 0),
-        Math.floor(map.mesh.x[i] / field.definition.parameters.featureNoiseScale),
-        Math.floor(map.mesh.y[i] / field.definition.parameters.featureNoiseScale) ^
-          (test.index ?? 0)
-      );
-  const array = values[key];
-  return (i: number) => array?.[i] ?? 0;
 }
 function matcher(
   state: GenerationState,

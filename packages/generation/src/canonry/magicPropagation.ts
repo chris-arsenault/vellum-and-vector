@@ -153,6 +153,14 @@ export const magicPropagationStrategies: Record<MagicPropagation, PropagationStr
     scaleResult: true,
     propagate: radialPropagation,
   },
+  // Heat where the cores lie and nowhere else: a stock in gravel, not a conduit.
+  local: {
+    label: "Where the stock lies",
+    requires: [],
+    parameters: [],
+    scaleResult: true,
+    propagate: (_state, field) => field.intensity.set(field.source),
+  },
 };
 export function propagateMagic(
   state: GenerationState,
@@ -188,10 +196,14 @@ export function propagateMagic(
       wakePaths: [],
     };
   // Each origin propagates from its own sources with its own strategy; the field is the
-  // maximum of their intensities, wakes and rogues and the sum of what they retained.
-  if (activity > 0)
-    for (const origin of field.definition.origins)
-      propagateOrigin(state, field, origin, seed, activity, merged);
+  // maximum of their intensities, wakes and rogues and the sum of what they retained. A
+  // source channel set directly, without locating, belongs to the first origin.
+  if (activity > 0) {
+    const external = sourceSetDirectly(field);
+    field.definition.origins.forEach((origin, index) =>
+      propagateOrigin(state, field, origin, seed, activity, merged, external && index === 0)
+    );
+  }
   field.wake.set(merged.wake);
   field.rogue.set(merged.rogue);
   field.retained.set(merged.retained);
@@ -211,6 +223,13 @@ interface MergedRun {
   parents: Int32Array | undefined;
   wakePaths: number[][][];
 }
+/** Whether the shared source channel holds strength no origin located. */
+function sourceSetDirectly(field: MagicField) {
+  const own = Object.values(field.originSources);
+  for (let i = 0; i < field.source.length; i++)
+    if (field.source[i] > 0 && own.every((values) => values[i] < field.source[i])) return true;
+  return false;
+}
 /** Run one origin's strategy on cleared channels and fold its result into the merge. */
 function propagateOrigin(
   state: GenerationState,
@@ -218,7 +237,8 @@ function propagateOrigin(
   origin: MagicSystem["origins"][number],
   seed: number,
   activity: number,
-  merged: MergedRun
+  merged: MergedRun,
+  ownsShared: boolean
 ) {
   const strategy = magicPropagationStrategies[origin.propagation];
   field.intensity.fill(0);
@@ -229,11 +249,11 @@ function propagateOrigin(
   field.wakePaths = [];
   const source = field.source,
     located = field.located,
-    single = field.definition.origins.length === 1;
+    shared = field.definition.origins.length === 1 || ownsShared;
   // One origin owns the whole source channel, which callers may have set directly; several
   // origins each propagate from their own.
-  field.source = single ? source : field.originSources[origin.id];
-  field.located = single ? located : located.filter((point) => point.origin === origin.id);
+  field.source = shared ? source : field.originSources[origin.id];
+  field.located = shared ? located : located.filter((point) => point.origin === origin.id);
   try {
     withOrigin(field, origin, () => strategy.propagate(state, field, seed, activity));
   } finally {

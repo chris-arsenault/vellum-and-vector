@@ -61,8 +61,10 @@ it("publishes every system rule with meaningful sites, retained courses and exte
   }
   extractMagicPlaces(state);
   const features = Object.values(state.domain.world.features);
-  // The three meetings are confluences now and publish from their own evaluation.
-  expect(features).toHaveLength(17);
+  // Every system rule publishes a place; the meetings are confluences with their own places.
+  expect(features).toHaveLength(
+    state.domain.world.magicSystems!.reduce((sum, system) => sum + system.features.length, 0)
+  );
   for (const f of features) {
     const system = state.domain.world.magicSystems!.find((s) => s.id === f.attributes.system)!;
     const rule = system.features.find((r) => r.id === f.attributes.rule)!;

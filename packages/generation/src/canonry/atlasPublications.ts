@@ -2,6 +2,7 @@ import {
   builtinLayers,
   confluenceEffective,
   requireThat,
+  systemStockKeys,
   type Layer,
   type MagicConfluence,
   type MagicSystem,
@@ -221,6 +222,17 @@ function systemPublications(system: MagicSystem, configured: boolean): Publicati
   return [
     ...publishedMagicChannels.map((channel) => configuredChannel(system.id, channel, publish)),
     field(`magic:${system.id}:coverage`, "ratio", "magic", publish, owners),
+    ...[...systemStockKeys(system)].map((key) => {
+      const stock = field(
+        `magic:${system.id}:stock:${key}`,
+        "intensity-square-metre",
+        "magic",
+        publish,
+        owners
+      );
+      stock.quantity = "extensive";
+      return stock;
+    }),
     ...system.features.flatMap((rule) => {
       const active = configured && (system.enabled || independentInteraction(rule, system.id));
       return [

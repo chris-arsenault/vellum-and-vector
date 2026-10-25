@@ -41,6 +41,10 @@ export const magicFieldDefinitions = {
     carried: true,
     publish: true,
   },
+  // The epoch a finite stock arrived in the cell (an impact's fall); travels with the crust.
+  arrival: occurrence,
+  // The share of a cell's held stock the last evaluation released as source.
+  releasing: { ...intensity, unit: "ratio", publish: false },
   radii: { ...intensity, unit: "metre", publish: false },
 } satisfies Record<string, MagicFieldDefinition>;
 

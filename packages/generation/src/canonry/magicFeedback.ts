@@ -3,7 +3,8 @@ import type { PhysicalField } from "./field";
 import { clamp, rockResistance, round } from "./math";
 import { Feature } from "./codes";
 import { generationBindings } from "../generationBindings";
-import { magicBudget } from "./magicState";
+import { magicBudget, originStocks } from "./magicState";
+import { advanceStocks } from "./magicStocks";
 import type { MagicSystem } from "@atlas/domain";
 
 export const coastalMagicParameters: (keyof MagicSystem["parameters"])[] = [
@@ -51,9 +52,12 @@ export function magicThermalFeedback(state: GenerationState) {
     map.Temperature[i] = clamp(map.Temperature[i] - previous + magic.heat[i], 0, 1000);
     // Melt is a removal, not a level: within one epoch each cell loses at most the largest
     // melt any evaluation asked for, so the climate and post-glacial passes do not both melt.
-    const owed = Math.max(0, round(melt) - magic.melt[i]);
+    const owed = Math.min(map.IceThickness[i], Math.max(0, round(melt) - magic.melt[i]));
     magic.melt[i] = Math.max(magic.melt[i], round(melt));
     map.IceThickness[i] = Math.max(0, map.IceThickness[i] - owed);
+    // Ice melted from below pools under the glacier and leaves as meltwater: the runoff
+    // pass cuts its outburst channels below the margin.
+    if (owed > 0) map.GlacialMeltwater[i] = clamp(map.GlacialMeltwater[i] + round(owed), 0, 1000);
   }
 }
 /**
@@ -206,6 +210,14 @@ function evolveConduit(map: PhysicalField, field: Field, i: number, floor: numbe
   if (field.history[i] + intensity >= field.definition.parameters.conduitBudget) {
     field.sealed[i] = 1;
     map.FractureConductance[i] = floor;
+    // The conduit's cores stay in the rock as hardened ore.
+    const origin = field.definition.origins.find((entry) => entry.renewal === "conduit-fed"),
+      spent = origin && field.stocks[`${origin.id}/spent`],
+      held = origin && field.stocks[`${origin.id}/${originStocks(origin)[0].id}`];
+    if (spent && held) {
+      spent[i] += held[i];
+      held[i] = 0;
+    }
     return;
   }
   map.FractureConductance[i] = Math.min(
@@ -271,6 +283,7 @@ export function retainMagicHistory(state: GenerationState, context: MapProcessCo
   state.physical!.magic!.melt.fill(0);
   for (const field of state.physical!.magic!.fields) {
     if (!field.definition.enabled) continue;
+    advanceStocks(state, field, index);
     const retention = field.definition.history,
       persistence = field.definition.effects.icePersistence;
     let active = 0,
@@ -301,7 +314,7 @@ export function retainMagicHistory(state: GenerationState, context: MapProcessCo
       kind: "domain",
       process: "canonry.magic-history",
       subjects: [],
-      description: `${field.definition.name}: epoch ${index + 1}, ${Math.round(active / 1_000_000)} affected km², peak intensity ${maximum}; budget created ${units(budget.created)}, in reservoirs ${units(budget.carried)}, stored ${units(budget.stored)}, released ${units(budget.released)} intensity·km²; accumulated activity, first occurrence and reservoirs travel with the crust.`,
+      description: `${field.definition.name}: epoch ${index + 1}, ${Math.round(active / 1_000_000)} affected km², peak intensity ${maximum}; budget created ${units(budget.created)}, in reservoirs ${units(budget.carried)}, stored ${units(budget.stored)}, released ${units(budget.released)}, lost ${units(budget.lost)} intensity·km²; accumulated activity, first occurrence and reservoirs travel with the crust.`,
     });
   }
 }

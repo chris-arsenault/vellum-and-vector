@@ -4,8 +4,8 @@ const at = (field: string, min: number): MagicCondition => ({ field, min });
 const oneOf = (field: string, values: number[]): MagicCondition => ({ field, values });
 const land = oneOf("water", [0, 2]);
 const ocean = oneOf("water", [1]);
-const siteRules = new Set(["core", "spring", "vent", "well", "locus", "rogue", "breach"]);
-const courseRules = new Set(["vein", "wake", "steam"]);
+const siteRules = new Set(["core", "spring", "vent", "well", "locus", "rogue", "breach", "crater"]);
+const courseRules = new Set(["vein", "wake", "steam", "placer"]);
 const feature = (
   id: string,
   name: string,
@@ -43,7 +43,21 @@ const firePreset = magicSystemSchema.parse({
       source: "geothermal",
       propagation: "fracture",
       renewal: "conduit-fed",
-      stocks: [{ id: "held", reservoir: "held", carriers: ["crust"] }],
+      stocks: [
+        { id: "held", reservoir: "held", carriers: ["crust"] },
+        // A sealed conduit's cores stay in the rock as hardened ore: carried with the crust,
+        // exhumed by erosion, and washed into placers below.
+        { id: "spent", reservoir: "spent", carriers: ["crust", "river"] },
+      ],
+    },
+    // Fallen cores: meteoritic metal in the crust around a crater and in the gravels below,
+    // a finite stock that cracking agents release and panning draws down.
+    {
+      id: "fallen",
+      source: "impact",
+      propagation: "local",
+      renewal: "finite",
+      stocks: [{ id: "held", reservoir: "held", carriers: ["crust", "river"] }],
     },
   ],
   phase: "climate",
@@ -118,6 +132,18 @@ const firePreset = magicSystemSchema.parse({
     ),
     // A conduit that carried Fire to exhaustion: sinter and basalt, cold, and a site for ruins.
     feature("scar", "Basalt scar", 30, [[land, at("sealed", 1)]]),
+    // The fallen field: a crater lake over the stock, the barren fan around it, the gravel
+    // bands below it, and the compass that swings wherever its metal lies.
+    feature("crater", "Crater lake", 85, [[oneOf("water", [2]), at("stock:fallen/held", 1)]]),
+    feature("fan", "Ejecta fan", 28, [[land, at("source:fallen", 1)]]),
+    feature(
+      "placer",
+      "Placer band",
+      60,
+      [[land, at("river", 1), at("stock:fallen/held", 1)]],
+      [[land, at("river", 1), at("stock:fallen/held", 0.2)]]
+    ),
+    feature("deviation", "Compass deviation", 5, [[at("stock:fallen/held", 0.5)]]),
     feature(
       "halo",
       "Thawed halo",

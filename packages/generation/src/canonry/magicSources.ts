@@ -7,8 +7,9 @@ import { worldCandidates, separatedCandidates } from "./worldSources";
 import { areaBudget, mediumArea, referenceLandArea, referenceOceanArea } from "./worldScale";
 import type { PhysicalField } from "./field";
 import { hashUnit } from "./noise";
-import type { MagicSource, MagicSystem } from "@atlas/domain";
+import type { MagicOrigin, MagicSource, MagicSystem } from "@atlas/domain";
 import { originStocks, stockKey, systemSeed, withOrigin } from "./magicState";
+import { exposure, heldStock, releaseShare } from "./magicStocks";
 
 function isHeatMaximum(map: PhysicalField, start: number, radius: number) {
   const { mesh, HeatSourceDensity: density } = map;
@@ -34,9 +35,15 @@ function isHeatMaximum(map: PhysicalField, start: number, radius: number) {
   return true;
 }
 
-function geothermalSources(state: GenerationState, field: MagicField, seed: number) {
+function geothermalSources(
+  state: GenerationState,
+  field: MagicField,
+  seed: number,
+  context?: LocateContext
+) {
   const map = state.physical!.map,
     p = field.definition.parameters;
+  if (context) exhumedSpent(map, field, context.origin);
   if (p.maximumSources === 0) return;
   const budget = areaBudget(
     p.maximumSources,
@@ -75,6 +82,21 @@ function geothermalSources(state: GenerationState, field: MagicField, seed: numb
     });
   }
 }
+/**
+ * Old mountains are Fire country: the spent ore of sealed conduits, carried with the crust
+ * and buried, feeds the source again at reduced strength where erosion has exposed it.
+ */
+function exhumedSpent(map: PhysicalField, field: MagicField, origin: MagicOrigin) {
+  const spent = field.stocks[`${origin.id}/spent`],
+    p = field.definition.parameters;
+  if (!spent) return;
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (spent[i] <= 0 || map.WaterKindCodes[i] === 1) continue;
+    const strength =
+      (exposure(map, i, p.buryDepth) * spent[i] * p.exhumedRelease) / map.mesh.areas[i];
+    if (strength >= 1) field.source[i] = Math.max(field.source[i], clamp(round(strength), 1, 1000));
+  }
+}
 function geothermalCandidates(state: GenerationState, field: MagicField, seed: number) {
   const map = state.physical!.map,
     p = field.definition.parameters;
@@ -86,8 +108,13 @@ function geothermalCandidates(state: GenerationState, field: MagicField, seed: n
     // Fire rises through fractures in the crust under land; the sea floor belongs to
     // Pressure, and its heat shows as vents through the geothermal field, not as cores.
     if (map.WaterKindCodes[i] === 1) continue;
-    // A conduit that sealed after carrying its budget no longer feeds a core.
-    if (field.sealed[i] > 0) continue;
+    // A conduit that sealed after carrying its budget no longer feeds a core, unless new
+    // strain across it has cracked the seal: then it reopens with part of its budget left.
+    if (field.sealed[i] > 0) {
+      if (map.TectonicStrain[i] < p.reopenStrain) continue;
+      field.sealed[i] = 0;
+      field.history[i] = Math.min(field.history[i], p.conduitBudget * (1 - p.reopenShare));
+    }
     if (map.HeatSourceDensity[i] !== maximum && !isHeatMaximum(map, i, radius)) continue;
     const x = map.mesh.x[i],
       y = map.mesh.y[i];
@@ -181,12 +208,90 @@ function coldSources(state: GenerationState, field: MagicField) {
         Math.max(0, map.Elevation[i] / 1024) / 10
     );
 }
+interface LocateContext {
+  origin: MagicOrigin;
+  epochIndex: number;
+}
 interface SourceStrategy {
   label: string;
   requires: string[];
   parameters: (keyof MagicSystem["parameters"])[];
   radiusParameter?: keyof MagicSystem["parameters"];
-  locate(state: GenerationState, field: MagicField, seed: number): void;
+  /** The strategy seeds and draws its own stock; the locate step must not mirror over it. */
+  managesStock?: boolean;
+  locate(state: GenerationState, field: MagicField, seed: number, context: LocateContext): void;
+}
+/**
+ * Fallen cores. Each impact seeds a finite stock once, on the crater and its ejecta in
+ * proportion to the ejecta's thickness and elongated downwind. Every evaluation the exposed
+ * stock releases a share set by the cracking agents at work, and that release is the source;
+ * the impact's own heat is a coreless source that fades with the epochs since the fall.
+ */
+function impactSources(
+  state: GenerationState,
+  field: MagicField,
+  _seed: number,
+  { origin, epochIndex }: LocateContext
+) {
+  const map = state.physical!.map,
+    p = field.definition.parameters,
+    held = heldStock(field, origin);
+  for (const event of map.events) {
+    if (event.kind !== "impact" || event.epoch > epochIndex) continue;
+    field.located.push({
+      origin: "",
+      id: event.id,
+      x: event.x,
+      y: event.y,
+      radius: event.radius,
+      strength: 1000,
+    });
+    if (!field.seeded.has(event.id)) seedFallenStock(map, field, held, event, epochIndex);
+  }
+  for (let i = 0; i < map.mesh.count; i++) {
+    field.releasing[i] = 0;
+    let strength = 0;
+    if (held[i] > 0) {
+      field.releasing[i] = exposure(map, i, p.buryDepth) * releaseShare(map, field, i, epochIndex);
+      strength = (held[i] * field.releasing[i]) / map.mesh.areas[i];
+    }
+    if (map.ImpactHeat[i] > 0) {
+      const since = Math.max(0, epochIndex - Math.max(0, field.arrival[i]));
+      strength = Math.max(strength, (map.ImpactHeat[i] * p.impactHeatShare) / (1 + since));
+    }
+    if (strength > 0) field.source[i] = clamp(round(strength), 1, 1000);
+  }
+}
+function seedFallenStock(
+  map: PhysicalField,
+  field: MagicField,
+  held: Float64Array,
+  event: PhysicalField["events"][number],
+  epochIndex: number
+) {
+  field.seeded.add(event.id);
+  const centre = nearestTriangle(map.mesh, event.x, event.y);
+  if (centre < 0) return;
+  const p = field.definition.parameters,
+    wx = map.WindX[centre] / 1000,
+    wy = map.WindY[centre] / 1000;
+  let total = 0;
+  for (let i = 0; i < map.mesh.count; i++) {
+    const dx = meshDeltaX(map.mesh, map.mesh.x[i] - event.x),
+      dy = map.mesh.y[i] - event.y,
+      distance = Math.hypot(dx, dy);
+    if (distance > event.radius * 2.4) continue;
+    const ejecta = map.ImpactEjectaThickness[i] / 1024,
+      downwind = distance > 0 ? Math.max(0, (dx * wx + dy * wy) / distance) : 0,
+      amount = ejecta * map.mesh.areas[i] * p.fallenDensity * (1 + 0.6 * downwind);
+    if (amount <= 0) continue;
+    held[i] += amount;
+    total += amount;
+    field.arrival[i] = Math.max(field.arrival[i], epochIndex);
+  }
+  // The body itself: a fifth again of the fan's stock lies in the crater.
+  held[centre] += total * 0.2;
+  field.arrival[centre] = Math.max(field.arrival[centre], epochIndex);
 }
 /** The operation and its contract/applicability share one strategy declaration. */
 export const magicSourceStrategies: Record<MagicSource, SourceStrategy> = {
@@ -215,6 +320,26 @@ export const magicSourceStrategies: Record<MagicSource, SourceStrategy> = {
     requires: [],
     parameters: [],
     locate: () => undefined,
+  },
+  impact: {
+    label: "Fallen cores around impact craters",
+    requires: ["canonry:Impacts", "canonry:Wind"],
+    managesStock: true,
+    parameters: [
+      "fallenDensity",
+      "fallenRelease",
+      "strainCracking",
+      "iceCracking",
+      "iceCrackDepth",
+      "frostCracking",
+      "impactShock",
+      "impactHeatShare",
+      "placerMobility",
+      "buryDepth",
+      "fanBarrenEpochs",
+      "fanBarrenDepth",
+    ],
+    locate: impactSources,
   },
 };
 /**
@@ -245,7 +370,8 @@ export function locateMagicSources(
       magicSourceStrategies[origin.source].locate(
         state,
         field,
-        index === 0 ? seed : systemSeed(seed, origin.id)
+        index === 0 ? seed : systemSeed(seed, origin.id),
+        { origin, epochIndex }
       );
       if (index === 0) placedSources(state, field, epochIndex);
     });
@@ -259,10 +385,12 @@ export function locateMagicSources(
   });
   field.source.set(merged);
   field.radii.set(radii);
-  // Each origin's located strength is an amount of the system held in its first reservoir:
-  // strength times the cell's area, so the stock can be carried and its budget closed.
+  // An origin whose strategy does not keep a stock of its own holds its located strength as
+  // an amount in its first reservoir: strength times the cell's area, so the stock can be
+  // carried and its budget closed. A finite origin's stock is the source, not the mirror.
   const areas = state.physical!.map.mesh.areas;
   for (const origin of field.definition.origins) {
+    if (magicSourceStrategies[origin.source].managesStock) continue;
     const own = field.originSources[origin.id],
       held = field.stocks[stockKey(origin, originStocks(origin)[0])];
     for (let i = 0; i < count; i++) held[i] = own[i] * areas[i];

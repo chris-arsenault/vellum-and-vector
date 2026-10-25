@@ -1019,6 +1019,74 @@ the Fire budget closes.
 Evidence: unit tests on cracking agents, the track, burial and exhumation, placers and
 outburst floods; one short-scenario generation on a seed with impacts and drift, compared
 before and after.
+Sulion: `068c26f3-4a64-44d5-8070-c15711765b54`; expansion opened 2026-10-25 (IDs in the
+Sulion tree).
+
+#### Execution steps (M1c)
+
+Design fixed at expansion. Stocks are amounts per cell (strength times area) and every
+mutation of a stock happens once per epoch in a stock advance run with the history pass,
+so re-evaluations inside an epoch never double-count; locate only reads stocks to make
+sources and records what it released. The fallen origin has source `impact` and propagation
+`local` (intensity is the source where the cores lie, no spread): at each impact event not
+yet seeded, stock lands on the crater and its ejecta cells in proportion to ejecta
+thickness, elongated downwind along the wind, scaled by a density parameter, and the
+arrival epoch is recorded in a new carried channel. Each evaluation the fallen source in a
+cell is its exposed held stock (exposure falls to zero as sediment buries it) times a
+release share, the sum of a base share and the cracking agents present (tectonic strain,
+ice load, frost on exposed ground, impact shock in the arrival epoch), capped at one, per
+unit area; impact heat adds a coreless source that decays with the epochs since. The
+advance moves a share of every river-carried stock down the flow targets (placers), removes
+what was released from the finite stock, converts a sealing vein's held stock to spent, and
+re-applies the fan's toxicity for a declared number of epochs after arrival. The vein
+origin gains a spent reservoir on the crust and river carriers: exposed spent stock feeds
+the vein source at a reduced strength and travels as placers; a sealed conduit under strain
+above a threshold reopens with a share of its budget left. Fire melt under ice is added to
+glacial meltwater so the runoff pass cuts its channels. Society: the Fire practice's deposit
+reads the held stocks at its seat and extraction draws them down on the mesh; a seat whose
+vein has sealed offers no Fire to seekers. Classes read `stock:<origin>/<stock>` and
+`source:<origin>` conditions.
+
+1. Schema and presets: `magicSystems.ts` (sources, propagations, parameters, `stock:`
+   conditions), `magicPresets.ts`, `magicFieldDefinitions.ts` (arrival), form labels.
+2. Fallen origin and stock dynamics: `magicSources.ts` (impact strategy), `magicPropagation.ts`
+   (local), new `canonry/magicStocks.ts` (advance), `magicFeedback.ts` (advance from the
+   history pass), `magicRegions.ts` (stock conditions).
+3. Vein as material: `magicFeedback.ts` (seal to spent, meltwater), `magicSources.ts`
+   (exposed spent as source, reopening).
+4. Society and publication: `magicState.ts` (stock channels published and inherited,
+   `drawStock`), `atlasPublications.ts`, `magicFeatures.ts`, `societyMagic.ts`,
+   `societySeeking.ts`.
+5. Exit checks and record.
+
+#### Changes and resume (M1c)
+
+Completed 2026-10-25. Evidence: `magicStocks.test.ts` checks that an impact seeds a finite
+fallen stock from its ejecta once, heavier downwind, with the crater as a located point
+and the release as the source where the cores lie; that the stock runs down epoch by epoch
+and never renews, faster under a glacier; that burial under deep sediment stops release;
+that river-carried stock moves downstream and leaves the budget at the sea; that a sealing
+conduit's cores become spent ore which feeds the source again at reduced strength while the
+core itself yields to another peak; that strain across the seal reopens the conduit with
+part of its budget; and that Fire under ice melts it from below and writes glacial
+meltwater only where the vein is. The characterization snapshot of the three presets is
+unchanged. 135 generation and domain tests and 31 frontend unit tests pass; typecheck,
+eslint on packages and changed frontend files, and Prettier are clean. Material choices
+made while building: every stock mutation happens once per epoch in the stock advance run
+from the history pass, and locate only reads stocks and records the release share, so
+re-evaluations inside an epoch never double-count; the M1a source mirror now skips origins
+whose strategy manages its own stock, which the first draft missed and which reset the
+fallen stock on every locate; a source channel set directly without locating belongs to
+the first origin, so callers that seed `source` by hand keep working with a two-origin
+Fire; the fallen origin's propagation is `local` (heat where the cores lie) rather than
+radial, which is cheaper and truer to gravel; the vein's `held` stays a mirror of its
+located strength and its finiteness is the existing conduit budget, with the new `spent`
+reservoir carrying the sealed ore; the ember road is verified by its pieces (sealing to
+spent, crust carriage, reopening under strain, exhumed spent as source) and not by a
+multi-epoch drift scenario, which M8's full-world run will show. The Fire practice's deposit
+now reads the held stocks under the seat and extraction draws them down on the mesh; a
+sealed seat offers Fire people nothing, so they move. Labels moved to `magicLabels.ts` to
+keep the form under the file-length limit.
 
 ### M1d — Aurora as material
 
@@ -1244,5 +1312,7 @@ agent. The user authorized execution of every phase the same day. M1a completed
 carriage of declared stocks; society reads by role; the form edits origins). M1b completed
 2026-10-25 (confluences as processes with coverage, strain, displacement and field writes;
 the three meetings moved out of the Pressure preset; confluence hazards; coverage and
-confluence channels published; a confluence editor). M1c to M8 pending. Next action:
-plan-phase expands M1c.
+confluence channels published; a confluence editor). M1c completed 2026-10-25 (the fallen
+origin with its finite stock, placers, burial, cracking agents and fan; spent ore, reopening
+and exhumation for the vein; Fire melt as glacial meltwater; panning and sealed-seat
+migration in society). M1d to M8 pending. Next action: plan-phase expands M1d.

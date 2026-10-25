@@ -37,6 +37,10 @@ export interface MagicField extends Record<MagicChannel, Float64Array> {
   originSources: Record<string, Float64Array>;
   /** Amount of the system per cell in each origin reservoir, keyed by `stockKey`. */
   stocks: Record<string, Float64Array>;
+  /** Impact events whose fall has already seeded a finite stock. */
+  seeded: Set<string>;
+  /** Stock that left the budget: washed to the sea, extracted, released and spent. */
+  lost: number;
   features: Record<string, Uint8Array>;
   /** Share of each member cell a rule's class occupies, by rule id. */
   coverage: Record<string, Float64Array>;
@@ -97,6 +101,8 @@ function createMagicField(state: GenerationState, definition: MagicSystem): Magi
     located: [],
     originSources: {},
     stocks: {},
+    seeded: new Set(),
+    lost: 0,
     features: {},
     coverage: {},
     systemCoverage: new Float64Array(count),
@@ -107,17 +113,38 @@ function createMagicField(state: GenerationState, definition: MagicSystem): Magi
       field.stocks[stockKey(origin, stock)] = new Float64Array(count);
   }
   if (!definition.enabled || !state.physical!.inherited) return field;
-  for (const channel of carriedMagicChannels) {
-    const key = magicKey(field, channel);
-    if (!state.surface.channels[key]) continue;
-    const valueAt = fieldInterpolator(
-      state.surface,
-      key,
+  const inherit = (key: string, into: Float64Array, category: boolean) => {
+    if (!state.surface.channels[key]) return;
+    const valueAt = fieldInterpolator(state.surface, key, category);
+    for (let i = 0; i < count; i++) into[i] = valueAt(nativePosition(state.physical!, i));
+  };
+  for (const channel of carriedMagicChannels)
+    inherit(
+      magicKey(field, channel),
+      field[channel],
       magicFieldDefinitions[channel].quantity === "category"
     );
-    for (let i = 0; i < count; i++) field[channel][i] = valueAt(nativePosition(state.physical!, i));
-  }
+  for (const [key, values] of Object.entries(field.stocks))
+    inherit(magicKey(field, `stock:${key}`), values, false);
+  // Falls the parent already seeded arrive with their stock, not again.
+  for (const event of state.physical!.map.events)
+    if (event.kind === "impact") field.seeded.add(event.id);
   return field;
+}
+/**
+ * Take an amount of a system's held stock out of the world at a cell, as mining or panning
+ * does, drawing the reservoirs down in proportion. Returns what was drawn.
+ */
+export function drawStock(field: MagicField, cell: number, amount: number) {
+  const held = field.definition.origins
+    .map((origin) => field.stocks[stockKey(origin, originStocks(origin)[0])])
+    .filter((values) => values[cell] > 0);
+  const available = held.reduce((sum, values) => sum + values[cell], 0);
+  if (available <= 0 || amount <= 0) return 0;
+  const drawn = Math.min(amount, available);
+  for (const values of held) values[cell] -= (drawn * values[cell]) / available;
+  field.lost += drawn;
+  return drawn;
 }
 export function initializeMagic(
   state: GenerationState,
@@ -195,7 +222,7 @@ export function carryAmount(map: PhysicalField, values: Float64Array) {
  * releases now. A test closes it; the history record carries it.
  */
 export function magicBudget(field: MagicField, map: PhysicalField) {
-  const totals = { created: 0, carried: 0, stored: 0, released: 0 };
+  const totals = { created: 0, carried: 0, stored: 0, released: 0, lost: field.lost };
   for (let i = 0; i < map.mesh.contentCount; i++) {
     const area = map.mesh.areas[i];
     totals.created += field.source[i] * area;
