@@ -70,7 +70,14 @@ function prepareQueries(at: Scalar, level: number) {
   };
   // Only stations and completed crossings survive a root solve. Bisection probes
   // are local to that solve and do not accumulate across the entire map.
-  return { sample, cross };
+  return {
+    sample,
+    cross,
+    clear() {
+      stations.clear();
+      crossings.clear();
+    },
+  };
 }
 function boundary(box: Bounds, adjacent: Bounds[]) {
   const [x0, y0, x1, y1] = box,
@@ -282,8 +289,15 @@ export function fieldContour(
   tolerance = 100
 ): Geometry | null {
   const edges: Edge[] = [];
-  const { sample, cross } = prepareQueries(at, level);
+  const { sample, cross, clear } = prepareQueries(at, level);
+  let row = NaN;
   for (const box of contourBoxes(source, selected)) {
+    // Regular cells arrive in row order. Completed row queries need not stay live;
+    // shared crossings are recomputed in canonical endpoint order when needed again.
+    if (!("leaves" in source) && box[1] !== row) {
+      clear();
+      row = box[1];
+    }
     const center: Point = [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2];
     const adjacent: Bounds[] = [];
     if ("leaves" in source) {
@@ -311,7 +325,12 @@ function* contourBoxes(source: AdaptiveTopology | RegularGrid, leaves?: Iterable
     dy = (y1 - y0) / (source.height - 1);
   for (let y = 0; y < source.height - 1; y++)
     for (let x = 0; x < source.width - 1; x++)
-      yield [x0 + x * dx, y0 + y * dy, x0 + (x + 1) * dx, y0 + (y + 1) * dy] as Bounds;
+      yield [
+        x0 + x * dx,
+        y0 + y * dy,
+        x === source.width - 2 ? x1 : x0 + (x + 1) * dx,
+        y === source.height - 2 ? y1 : y0 + (y + 1) * dy,
+      ] as Bounds;
 }
 /** Reconstruction uses incident-cell gradients, so include their complete three-face stencil. */
 export function contourSupport(topology: AdaptiveTopology, members: Iterable<number>) {

@@ -20,6 +20,7 @@ self.onmessage = async (
   const diagnostics: GenerationDiagnostic[] = [];
   try {
     const result = await generateAtlas(event.data.snapshot, event.data.input, {
+      yieldControl: () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
       diagnostic(diagnostic) {
         diagnostics.push(diagnostic);
         self.postMessage({ kind: "diagnostic", diagnostic });

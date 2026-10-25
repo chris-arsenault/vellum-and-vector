@@ -38,6 +38,8 @@ export interface MapRunnerOptions {
   cancelled?(): boolean;
   progress?(path: string[], fraction: number, message: string): void;
   diagnostic?(diagnostic: GenerationDiagnostic): void;
+  /** Adapter scheduling between processes; the shared working map stays in memory. */
+  yieldControl?(): Promise<void>;
   // Optional completed-epoch/final observation. Serialize before resolving:
   // numerical workspace is shared and the following epoch mutates it.
   saveBoundary?(boundary: CompletedBoundary): Promise<void>;
@@ -75,6 +77,7 @@ export class MapRunner {
     options.progress?.(["prepare"], 0, "Validating inherited geography");
     validate();
     for (const [stageIndex, stage] of this.stages.entries()) {
+      await options.yieldControl?.();
       this.checkCancelled(options);
       if (stage.kind === "epochStart") {
         causes.push([]);
@@ -88,6 +91,19 @@ export class MapRunner {
           ancestry: structuredClone(stage.epochs),
           causes: causes.pop()!,
         });
+        this.checkCancelled(options);
+        products.enterEpoch(stage.path.join("/"));
+        validate();
+        await observeBoundary(
+          options,
+          {
+            configurationHash,
+            kind: "epoch",
+            ancestry: structuredClone(stage.epochs),
+            state,
+          },
+          products
+        );
       } else {
         await this.runProcess(
           state,
@@ -108,20 +124,6 @@ export class MapRunner {
         );
       }
       this.checkCancelled(options);
-      if (stage.kind === "epochEnd") {
-        products.enterEpoch(stage.path.join("/"));
-        validate();
-        await observeBoundary(
-          options,
-          {
-            configurationHash,
-            kind: "epoch",
-            ancestry: structuredClone(stage.epochs),
-            state,
-          },
-          products
-        );
-      }
     }
     options.progress?.(["finalize"], 0.99, "Validating completed geography");
     validate();

@@ -125,3 +125,26 @@ it("propagates cancellation and invalid inherited geography", async () => {
     new MapRunner(configuration([]), new MapProcessRegistry()).run(invalid, options)
   ).rejects.toThrow("pinned context");
 });
+
+it("allows the adapter to yield between stages and cancels before applying the next process", async () => {
+  let cancelled = false;
+  const applied: string[] = [];
+  const first = process("first", () => {
+    applied.push("first");
+  });
+  const second = process("second", () => {
+    applied.push("second");
+  });
+  const registry = new MapProcessRegistry().register(first).register(second);
+  await expect(
+    new MapRunner(configuration([invoke(first), invoke(second)]), registry).run(landscape(), {
+      ...options,
+      cancelled: () => cancelled,
+      async yieldControl() {
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
+        if (applied.length) cancelled = true;
+      },
+    })
+  ).rejects.toThrow("cancelled");
+  expect(applied).toEqual(["first"]);
+});

@@ -70,28 +70,21 @@ const categories = [
   "VolcanicLastActiveEpoch",
   "FeatureFlags",
 ] as const;
-const weighted = [...intensive, ...extensive] as const;
-type Channel =
-  | (typeof intensive)[number]
-  | (typeof extensive)[number]
-  | (typeof maxima)[number]
-  | (typeof categories)[number];
-type Accumulator = Record<Channel, Float64Array> & {
+type Accumulator = Record<(typeof categories)[number], Float64Array> & {
   assemblyContribution: Float64Array;
   sutureContribution: Float64Array;
 };
 function accumulator(count: number): Accumulator {
   const fields = Object.fromEntries(
-    [...intensive, ...extensive, ...maxima, ...categories].map((name) => [
+    categories.map((name) => [
       name,
-      new Float64Array(count),
+      new Float64Array(count).fill(name === "VolcanicLastActiveEpoch" ? -1 : 0),
     ])
   );
   return {
     ...fields,
     assemblyContribution: new Float64Array(count),
     sutureContribution: new Float64Array(count),
-    VolcanicLastActiveEpoch: new Float64Array(count).fill(-1),
   } as Accumulator;
 }
 function addAssembly(
@@ -134,16 +127,13 @@ function addSuture(
   a.CrustSuturePairIds[target] = pair;
   a.sutureContribution[target] = contribution;
 }
-function addSource(
+function addCategories(
   a: Accumulator,
   map: PhysicalField,
   source: number,
   target: number,
   weight: number
 ) {
-  const areaWeight = (weight * map.mesh.areas[source]) / map.mesh.areas[target];
-  for (const name of weighted) a[name][target] += map[name][source] * areaWeight;
-  for (const name of maxima) a[name][target] = Math.max(a[name][target], map[name][source]);
   addAssembly(a, map, source, target, weight);
   addSuture(a, map, source, target, weight);
   if (weight >= weightScale / 20) {
@@ -172,21 +162,7 @@ function freshValue(name: (typeof intensive)[number]): number {
   if (name === "CrustThickness") return units(1000);
   return name === "RockResistance" ? 1000 : 0;
 }
-function completeTarget(a: Accumulator, map: PhysicalField, target: number, arrival: number) {
-  const boundary = map.TectonicBoundaryCodes[target];
-  for (const name of intensive)
-    map[name][target] = finalize(a[name][target], arrival, freshValue(name), boundary, false);
-  for (const name of extensive) {
-    const value = finalize(a[name][target], arrival, 0, boundary, true);
-    map[name][target] =
-      name === "TectonicActivityHistory" ? clamp(value, -2147483648, 2147483647) : value;
-  }
-  for (const name of maxima) map[name][target] = a[name][target];
-  if (boundary === 1 && arrival > weightScale)
-    map.ConvergentCrustSurplus[target] = truncate(
-      (a.CrustThickness[target] - truncate(a.CrustThickness[target] / arrival) * weightScale) /
-        weightScale
-    );
+function completeCategories(a: Accumulator, map: PhysicalField, target: number) {
   map.CrustAssemblyIds[target] =
     map.CrustContinentalFraction[target] > 0 ? a.CrustAssemblyIds[target] : 0;
   map.CrustSuturePairIds[target] =
@@ -198,16 +174,81 @@ function completeTarget(a: Accumulator, map: PhysicalField, target: number, arri
     map.VolcanicLastActiveEpoch[target] = -1;
   }
 }
-export function transportHistory(map: PhysicalField, plan: TransportPlan) {
-  const a = accumulator(map.mesh.count);
-  const biomes = map.BiomeCodes.slice();
+
+/** Each source channel stays intact until its complete scatter has been accumulated. */
+function accumulateChannel(
+  map: PhysicalField,
+  plan: TransportPlan,
+  name: (typeof intensive)[number] | (typeof extensive)[number] | (typeof maxima)[number],
+  scratch: Float64Array,
+  areaWeights?: Float64Array
+) {
+  scratch.fill(0);
+  const values = map[name];
   for (let source = 0; source < map.mesh.count; source++)
     for (let offset = plan.offsets[source]; offset < plan.offsets[source + 1]; offset++) {
       const target = plan.targets[offset];
-      if (target >= 0) addSource(a, map, source, target, plan.weights[offset]);
+      if (target < 0) continue;
+      if (areaWeights) scratch[target] += values[source] * areaWeights[offset];
+      else scratch[target] = Math.max(scratch[target], values[source]);
     }
+}
+function completeIntensive(
+  map: PhysicalField,
+  plan: TransportPlan,
+  name: (typeof intensive)[number],
+  scratch: Float64Array
+) {
   for (let target = 0; target < map.mesh.count; target++) {
-    completeTarget(a, map, target, plan.arrivals[target]);
+    const arrival = plan.arrivals[target],
+      boundary = map.TectonicBoundaryCodes[target];
+    if (name === "CrustThickness" && boundary === 1 && arrival > weightScale)
+      map.ConvergentCrustSurplus[target] = truncate(
+        (scratch[target] - truncate(scratch[target] / arrival) * weightScale) / weightScale
+      );
+    map[name][target] = finalize(scratch[target], arrival, freshValue(name), boundary, false);
+  }
+}
+function completeExtensive(
+  map: PhysicalField,
+  plan: TransportPlan,
+  name: (typeof extensive)[number],
+  scratch: Float64Array
+) {
+  for (let target = 0; target < map.mesh.count; target++) {
+    const value = finalize(scratch[target], plan.arrivals[target], 0, 0, true);
+    map[name][target] =
+      name === "TectonicActivityHistory" ? clamp(value, -2147483648, 2147483647) : value;
+  }
+}
+export function transportHistory(map: PhysicalField, plan: TransportPlan) {
+  const a = accumulator(map.mesh.count),
+    scratch = new Float64Array(map.mesh.count),
+    areaWeights = new Float64Array(plan.weights.length);
+  const biomes = map.BiomeCodes.slice();
+  // Resolve labels before their source fractions/strengths are transported in place.
+  for (let source = 0; source < map.mesh.count; source++)
+    for (let offset = plan.offsets[source]; offset < plan.offsets[source + 1]; offset++) {
+      const target = plan.targets[offset];
+      if (target < 0) continue;
+      areaWeights[offset] =
+        (plan.weights[offset] * map.mesh.areas[source]) / map.mesh.areas[target];
+      addCategories(a, map, source, target, plan.weights[offset]);
+    }
+  for (const name of intensive) {
+    accumulateChannel(map, plan, name, scratch, areaWeights);
+    completeIntensive(map, plan, name, scratch);
+  }
+  for (const name of extensive) {
+    accumulateChannel(map, plan, name, scratch, areaWeights);
+    completeExtensive(map, plan, name, scratch);
+  }
+  for (const name of maxima) {
+    accumulateChannel(map, plan, name, scratch);
+    map[name].set(scratch);
+  }
+  for (let target = 0; target < map.mesh.count; target++) {
+    completeCategories(a, map, target);
     const source = plan.dominant[target];
     map.BiomeCodes[target] = source >= 0 ? biomes[source] : 0;
   }

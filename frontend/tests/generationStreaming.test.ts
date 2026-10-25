@@ -71,6 +71,29 @@ test("displays arriving fields before the completion notification", async ({ pag
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
 });
 
+test("completes real Draft generation through the browser worker", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto("/");
+  await page.getByLabel("World name", { exact: true }).fill("Scheduled Draft atlas");
+  await page.getByLabel("Width · km", { exact: true }).fill("1000");
+  await page.getByLabel("Height · km", { exact: true }).fill("750");
+  await page.getByLabel("Detail level").selectOption("draft");
+  await page.getByRole("button", { name: /Review & generate/ }).click();
+  await page.getByRole("button", { name: "Generate world", exact: true }).click();
+  await expect(page.locator(".job-row strong").first()).toHaveText(/completed|failed/, {
+    timeout: 90000,
+  });
+  expect(await page.locator(".job-row .error").allTextContents()).toEqual([]);
+  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
+  await expect(page.getByRole("application", { name: "World map canvas" })).toHaveAttribute(
+    "aria-busy",
+    "false"
+  );
+  await expect(page.locator(".map-instruction")).not.toContainText("Generation preview");
+  expect(errors).toEqual([]);
+});
+
 test("delivers real Fine generation through transferable messages", async ({ page }) => {
   test.skip(!process.env.ATLAS_STREAMING_FINE, "Opt-in full Fine generation");
   test.setTimeout(600000);

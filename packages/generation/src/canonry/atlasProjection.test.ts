@@ -104,3 +104,17 @@ it("keeps declared internal forcing inputs available independently of final publ
   expect(state.surface.channels.physicalMaterial).toBeUndefined();
   expect(state.surface.channels.erosion).toBeUndefined();
 });
+
+it("updates existing projection buffers as the shared physical workspace advances", () => {
+  const { state, map, channels, bindings } = fixture();
+  projectNative(state, false, false, bindings, channels);
+  const elevation = state.surface.channels.elevation,
+    temperature = state.surface.channels.temperature;
+  map.Elevation.fill(1024 * 210);
+  map.Temperature.fill(350);
+  projectNative(state, false, false, bindings, channels);
+  expect(state.surface.channels.elevation).toBe(elevation);
+  expect(state.surface.channels.temperature).toBe(temperature);
+  expect(elevation.every((v) => v === 200)).toBe(true);
+  expect(temperature.every((v) => v === 5)).toBe(true);
+});

@@ -3,6 +3,7 @@ import { createAdaptiveTopology, adaptiveGeometry } from "./adaptiveTopology";
 import { fieldContour, contourSupport } from "./fieldContours";
 import { adaptivePointSampler } from "./adaptivePoint";
 import { point, rectangle, spatial } from "./spatial";
+import { createGrid } from "./grids";
 
 const topology = () =>
   createAdaptiveTopology([0, 0, 1000, 1000], {
@@ -10,6 +11,41 @@ const topology = () =>
     minimumSize: 15.625,
     refine: ([x, y, right, top]) => x < 530 && right > 450 && y < 800 && top > 100,
   });
+
+it("keeps contours and holes joined when regular-grid sampling advances between rows", () => {
+  const grid = createGrid(
+    "row-contours",
+    {
+      worldId: "world",
+      areaId: "area",
+      spaceId: "surface",
+      crsId: "metre",
+      footprint: rectangle([0, 0, 1000, 1000]),
+      revision: 1,
+      time: "present",
+      resolution: null,
+    },
+    81,
+    61
+  );
+  const shore = fieldContour(grid, (x, y) => x + y * 0.1 - 500, undefined, 0, 0.1)!;
+  expect(spatial.area(shore)).toBeCloseTo(550000, 1);
+  expect(spatial.covers(shore, point({ x: 900, y: 100, z: 0 }))).toBe(true);
+  expect(spatial.covers(shore, point({ x: 100, y: 900, z: 0 }))).toBe(false);
+  const annulus = fieldContour(
+    grid,
+    (x, y) => {
+      const distance = Math.hypot(x - 500, y - 500);
+      return Math.min(350 - distance, distance - 100);
+    },
+    undefined,
+    0,
+    0.1
+  )!;
+  expect(spatial.area(annulus) / (Math.PI * (350 ** 2 - 100 ** 2))).toBeCloseTo(1, 3);
+  expect(spatial.covers(annulus, point({ x: 500, y: 500, z: 0 }))).toBe(false);
+  expect(spatial.covers(annulus, point({ x: 700, y: 500, z: 0 }))).toBe(true);
+});
 it("reuses shared fan stations within a contour and discards samples between contours", () => {
   const tree = createAdaptiveTopology([0, 0, 1000, 1000], { maximumSize: 125, minimumSize: 125 });
   const calls = new Map<string, number>();

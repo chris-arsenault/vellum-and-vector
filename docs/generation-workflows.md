@@ -390,6 +390,21 @@ typed causal consequences without duplicating every intermediate field. The
 epoch/final callback samples an independent display grid before generation
 continues; transferring that preview never detaches live workspace arrays.
 
+Plate advection transports carried fields one at a time through reusable scratch
+space. It resolves category provenance before updating source fractions and
+strengths, retaining material conservation, historical maxima and new-crust rules.
+
+World-to-display interpolation builds compact typed weights in batches rather
+than retaining JavaScript sample objects for every display cell. Repeated physical
+projections reuse the working surface's channel buffers. The browser adapter yields
+between process stages so the worker returns to its event loop during a run.
+Individual processes still operate on the shared in-memory geography; this is
+not disk-backed generation or a saved execution state.
+
+Regular-grid contour extraction releases sampled-point and crossing caches as it
+advances between rows. The contour edges remain available for polygon assembly;
+shared crossings retain canonical endpoint order when recomputed.
+
 The worker prepares field publication and sends numerical resource descriptions,
 then transfers each backing buffer once, preserving shared views and topology.
 World records arrive in batches. The editor installs available fields and records

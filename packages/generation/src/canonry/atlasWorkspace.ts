@@ -18,7 +18,7 @@ import { createField, type PhysicalField } from "./field";
 import { nearestTriangle } from "./mesh";
 import { createWorldMesh } from "./worldMesh";
 import { createAdaptiveWorldMesh } from "./adaptiveMesh";
-import { triangleSample, type TriangleSample } from "./triangleSampling";
+import { projectionInterpolation, type ProjectionInterpolation } from "./atlasSampling";
 import { atlasPhysicalProfile, atlasQuality } from "./atlasProfile";
 import { generationResolution } from "../resolution";
 import { continentalWorldProfile } from "./worldScale";
@@ -35,7 +35,7 @@ export interface AtlasPhysicalWorkspace {
   map: PhysicalField;
   profile: PhysicalProfile;
   samples: Int32Array;
-  interpolation?: TriangleSample[];
+  interpolation?: ProjectionInterpolation;
   fixed: { binding: ChannelBinding; values: Float64Array }[];
   inherited: boolean;
   sampling: { maximumSize: number; minimumSize: number; featureSamples: number };
@@ -288,12 +288,16 @@ export function refreshWorkspaceSamples(
   prepared?: ReturnType<typeof prepareAdaptiveTransfer>
 ) {
   if (!work.map.mesh.topology) {
-    work.interpolation = Array.from(state.surface.active, (_, i) => {
-      const p = gridPosition(state.surface, i),
-        mesh = work.map.mesh;
-      return triangleSample(mesh, p.x - mesh.origin[0], p.y - mesh.origin[1]);
-    });
-    work.samples = Int32Array.from(work.interpolation, (sample) => sample.cell);
+    work.interpolation = projectionInterpolation(
+      work.map.mesh,
+      state.surface.active.length,
+      (i) => {
+        const p = gridPosition(state.surface, i),
+          mesh = work.map.mesh;
+        return [p.x - mesh.origin[0], p.y - mesh.origin[1]];
+      }
+    );
+    work.samples = work.interpolation.samples;
     return;
   }
   const previous = state.surface,

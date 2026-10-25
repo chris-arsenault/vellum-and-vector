@@ -38,7 +38,8 @@ function projectChannel(state: GenerationState, binding: ChannelBinding) {
   const values = projectedValues(
       work,
       map[binding.native],
-      binding.unit === "category" || binding.unit === "cell-index"
+      binding.unit === "category" || binding.unit === "cell-index",
+      grid.channels[binding.name]
     ),
     datum = binding.datum ? map.BaseSeaLevel : 0;
   const scale = binding.scale,
@@ -166,6 +167,7 @@ function projectWaterLevels(work: AtlasPhysicalWorkspace, emit: DerivedEmitter) 
     new Float64Array(work.samples.length).fill((map.EffectiveSeaLevel - map.BaseSeaLevel) / 1024)
   );
 }
+
 export function nativeAtSurfacePosition(state: GenerationState, i: number): number {
   const p = gridPosition(state.surface, i);
   return nativeIndexAtSurface(state, p.x, p.y);
