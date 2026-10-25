@@ -102,6 +102,9 @@ async function createWorld(page: Page, width = 1, height = 1) {
   await page.getByLabel("Width · km").fill(String(width));
   await page.getByLabel("Height · km").fill(String(height));
   await page.getByRole("radio", { name: "Blank world", exact: true }).check();
+  // These journeys draw up to and beyond the chart edge; on a cylinder that is the far side of
+  // the world, which worldBoundary.test.ts covers.
+  await page.getByLabel("Map boundary", { exact: true }).selectOption("0");
   await page.getByRole("button", { name: "Create world", exact: true }).click();
   await expect(map(page)).toBeVisible();
 }
@@ -196,6 +199,9 @@ test("place, move and reshape features; pan during an unfinished route and cance
 test("terrain strokes, cultural distributions, political claims and magical sources use the map", async ({
   page,
 }) => {
+  // Two field strokes and a magic edit each repaint every WebGL raster layer, which software
+  // rendering in CI browsers does slowly.
+  test.setTimeout(240_000);
   await installGenerationFixture(page);
   await createWorld(page);
   await page.getByRole("button", { name: "Edit this map by hand", exact: true }).click();

@@ -11,7 +11,7 @@ import {
   type Bounds,
   type RegionCandidate,
 } from "@atlas/domain";
-import type { Geometry } from "geojson";
+import type { Geometry, LineString } from "geojson";
 import type { Tool, World, Position } from "./types";
 import { readScene } from "./atlasReads";
 import { session } from "./atlasState";
@@ -168,6 +168,13 @@ function regionDrawing(o: Options, d: Draft, c: Context, enter: (id: string) => 
     regionDraw: (geometry: Geometry) => d.attempt(() => drawRegion(o, d, c, propose, geometry)),
   };
 }
+/** A cut that crosses the chart seam arrives as the pieces on each side; each one divides. */
+function cutLines(geometry: Geometry): LineString[] {
+  if (geometry.type === "LineString") return [geometry];
+  if (geometry.type === "MultiLineString")
+    return geometry.coordinates.map((coordinates) => ({ type: "LineString", coordinates }));
+  return [];
+}
 function drawRegion(
   o: Options,
   d: Draft,
@@ -175,7 +182,8 @@ function drawRegion(
   propose: (lines: Geometry[], position: Position | null) => void,
   geometry: Geometry
 ) {
-  if (geometry.type === "LineString") {
+  const lines = cutLines(geometry);
+  if (lines.length) {
     const boundaries = [
       c.available(),
       ...regionSources(o.world, o.areaId).map((s) => s.footprint),
@@ -183,7 +191,7 @@ function drawRegion(
     ];
     const tolerance =
       (o.mapEngine?.map.getView().getResolution() ?? (c.viewport[2] - c.viewport[0]) / 800) * 12;
-    const next = [...d.cuts, snapRegionCut(geometry, boundaries, tolerance)];
+    const next = [...d.cuts, ...lines.map((line) => snapRegionCut(line, boundaries, tolerance))];
     d.setCuts(next);
     propose(next, null);
     o.setTool("regionPick");

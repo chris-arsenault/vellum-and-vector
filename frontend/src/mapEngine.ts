@@ -46,13 +46,7 @@ export function createMap(
     source: new VectorSource({ wrapX }),
     properties: { title: "Area boundaries" },
   });
-  const preview = new VectorLayer({
-    source: new VectorSource({ wrapX }),
-    style: new Style({
-      stroke: new Stroke({ color: "#f8d589", width: 3, lineDash: [8, 5] }),
-      fill: new Fill({ color: "#f8d58933" }),
-    }),
-  });
+  const preview = previewLayer(wrapX);
   const regions = new VectorLayer({ source: new VectorSource({ wrapX }) });
   const drawn = new VectorLayer({
     source: new VectorSource({ wrapX }),
@@ -69,7 +63,11 @@ export function createMap(
     view: new View({
       projection,
       multiWorld: wrapX,
-      ...(wrapX ? { extent: [-Infinity, extent[1], Infinity, extent[3]] } : {}),
+      // Keep the centre between the poles only; constraining the whole viewport snaps a small
+      // world's fit and pan, so screen positions no longer follow the pointer.
+      ...(wrapX
+        ? { extent: [-Infinity, extent[1], Infinity, extent[3]], constrainOnlyCenter: true }
+        : {}),
       center: [(extent[0] + extent[2]) / 2, (extent[1] + extent[3]) / 2],
       resolution: (extent[2] - extent[0]) / 800,
     }),
@@ -98,6 +96,15 @@ export function createMap(
   };
   map.on("moveend", () => syncSnapping(engine));
   return engine;
+}
+function previewLayer(wrapX: boolean) {
+  return new VectorLayer({
+    source: new VectorSource({ wrapX }),
+    style: new Style({
+      stroke: new Stroke({ color: "#f8d589", width: 3, lineDash: [8, 5] }),
+      fill: new Fill({ color: "#f8d58933" }),
+    }),
+  });
 }
 function sheetLayer(drawn: VectorLayer) {
   const layer = new VectorLayer({

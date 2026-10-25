@@ -22,7 +22,9 @@ export function setDrawingViewport(engine: MapEngine, drawn: boolean, footprint:
       resolution: previous.getResolution(),
       rotation: previous.getRotation(),
       multiWorld: wrap,
-      ...(!drawn && wrap ? { extent: [-Infinity, extent[1], Infinity, extent[3]] } : {}),
+      ...(!drawn && wrap
+        ? { extent: [-Infinity, extent[1], Infinity, extent[3]], constrainOnlyCenter: true }
+        : {}),
     })
   );
   engine.map
