@@ -115,7 +115,8 @@ test("configures a first world, preserves choices, explains dependencies and sen
 test("procedural refinement configures a new region with fixed parent history", async ({
   page,
 }) => {
-  await installGenerationFixture(page);
+  // A region inherits fixed history only from a parent whose fields were generated.
+  await installGenerationFixture(page, { fields: true });
   await page.goto("/");
   await page.getByLabel("World name").fill("Regional atlas");
   await page.getByRole("radio", { name: "Blank world", exact: true }).check();

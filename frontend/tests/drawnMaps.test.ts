@@ -81,8 +81,9 @@ async function createAtlas(page: Page) {
   await page.getByRole("checkbox", { name: "Territory & claims", exact: true }).check();
   await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
+  // The road leaves from beside the capital, so clicking the capital selects only the capital.
   await authoredLine(page, "routes", "Draw road", "Old Road", [
-    [35000, 50000],
+    [42000, 46000],
     [60000, 40000],
     [85000, 60000],
   ]);

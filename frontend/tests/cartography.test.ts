@@ -32,7 +32,6 @@ test("landscape and history choices survive generation and pass to a new child a
   ).toBeDisabled();
   await page.getByText("Last generation settings", { exact: true }).click();
   await expect(page.locator(".right-panel dl")).toContainText("Starting cultures · count2");
-  await page.getByText("Generate or regenerate systems", { exact: true }).click();
   await page.getByText("Land, climate, life & erosion controls", { exact: true }).click();
   await expect(page.getByLabel("Baseline temperature · °C", { exact: true })).toHaveValue("25");
   await expect(page.getByLabel("Detail level")).toHaveValue("draft");
@@ -167,6 +166,9 @@ test("magical sources are drawn, edited, moved and applied", async ({ page }) =>
   await installGenerationFixture(page);
   await createWorld(page, "Magical sources");
   await page.getByRole("button", { name: "Edit this map by hand", exact: true }).click();
+  // Applying magic needs a field to apply it to.
+  await page.getByRole("button", { name: "Start blank field", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Paint on map", exact: true })).toBeVisible();
   await page.getByLabel("Working layer").selectOption("magic");
   await page.getByRole("button", { name: "Draw source & reach", exact: true }).click();
   await canvas(page).click({ position: { x: 330, y: 320 } });

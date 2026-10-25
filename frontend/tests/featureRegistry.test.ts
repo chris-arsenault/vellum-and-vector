@@ -62,7 +62,9 @@ test("the registry browses, sorts, filters and edits named features", async ({ p
 });
 
 test("feature types toggle individually and a saved view restores them", async ({ page }) => {
+  // The layer drawer's type toggles and saved views read the completed layer styles.
   await generatedWorld(page, "Type world", {
+    fields: true,
     features: [
       pointFeature("Falls", "waterfall", "geology"),
       pointFeature("Spring", "fire:spring", "magic", { system: "fire", rule: "spring" }),
@@ -74,10 +76,17 @@ test("feature types toggle individually and a saved view restores them", async (
   await page.getByText("Session map views", { exact: true }).click();
   await page.getByLabel("View name", { exact: true }).fill("Springs only");
   await page.getByRole("button", { name: "Save map view", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Springs only", exact: true })).toBeVisible();
+  // A saved view is a live composition: later edits belong to the view saved last.
+  await page.getByLabel("View name", { exact: true }).fill("Everything");
+  await page.getByRole("button", { name: "Save map view", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Everything", exact: true })).toBeVisible();
   await page.getByLabel("Show Waterfalls", { exact: true }).check();
   await page.getByRole("button", { name: "Springs only", exact: true }).click();
   await expect(page.getByLabel("Show Waterfalls", { exact: true })).not.toBeChecked();
   await expect(page.getByLabel("Show Hot spring", { exact: true })).toBeChecked();
+  await page.getByRole("button", { name: "Everything", exact: true }).click();
+  await expect(page.getByLabel("Show Waterfalls", { exact: true })).toBeChecked();
 });
 
 test("reshaping a site's footprint keeps its point, and undo restores it", async ({ page }) => {
