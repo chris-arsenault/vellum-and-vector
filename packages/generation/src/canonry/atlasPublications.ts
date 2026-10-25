@@ -269,7 +269,7 @@ function geographicPublications(
     ["built.layout", "landUse", ["clearance", "hunting", "conservation"]],
     ["built.layout", "magicPractices", ["fire-forge", "aurora-archive", "pressure-diving"]],
     ["built.layout", "historicalEvents", ["societyEvent"]],
-    ["built.layout", "roads", ["road"], true],
+    ["built.layout", "roads", ["road", "lane"], true],
     ["built.layout", "structures", ["building", "room", "door", "furniture", "wall"]],
   ];
   const result: PublicationDefinition[] = groups.map(([owner, target, featureKinds, network]) => ({

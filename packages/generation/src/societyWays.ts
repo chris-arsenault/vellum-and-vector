@@ -19,16 +19,20 @@ const marketTravel = 0.1;
 export const wayClasses = { track: 100, road: 1000 } as const;
 /** How much faster a road is than the raw terrain: its cost falls to this share of the base. */
 const roadSpeed = 0.6;
+/** A built highway runs straight over open country: faster still. */
+const highwaySpeed = 0.45;
 
-export function wayClass(link: Pick<SocietyConnection, "wear">) {
+export function wayClass(link: Pick<SocietyConnection, "wear" | "highway">) {
+  if (link.highway) return "highway";
   const wear = link.wear ?? 0;
   if (wear >= wayClasses.road) return "road";
   if (wear >= wayClasses.track) return "track";
   return null;
 }
 /** The cost a way charges now: the base lowered by how worn it is; the sea is not worn. */
-export function wornCost(link: Pick<SocietyConnection, "distance" | "wear" | "kind">) {
+export function wornCost(link: Pick<SocietyConnection, "distance" | "wear" | "kind" | "highway">) {
   if (link.kind === "sea") return link.distance;
+  if (link.highway) return link.distance * highwaySpeed;
   const worn = Math.min(1, (link.wear ?? 0) / wayClasses.road);
   return link.distance * (1 - (1 - roadSpeed) * worn);
 }

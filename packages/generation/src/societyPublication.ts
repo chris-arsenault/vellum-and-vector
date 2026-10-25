@@ -4,6 +4,7 @@ import {
   representationId,
   type AtlasFeature,
   type SocietyCommunity,
+  type SocietyRegion,
 } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
 import type { PublicationDefinition } from "./publication";
@@ -89,7 +90,8 @@ type RoadClass = NonNullable<ReturnType<typeof wayClass>>;
  * reachable: its least-cost way to the nearest other major, and a capital's ways to its
  * polity's regional capitals, publish as tracks even where traffic has not worn them yet.
  * Links below the track threshold stay latent for a finer profile. A regional map shows
- * every way between inhabited places, as before.
+ * every way between inhabited places, as before. A sea way publishes by the same classes as
+ * a shipping lane between the harbours at its ends.
  */
 function realizedWays(
   state: GenerationState,
@@ -102,12 +104,12 @@ function realizedWays(
   for (const [i, link] of region.connections.entries()) {
     const a = communities.get(link.from)!,
       b = communities.get(link.to)!;
-    if (link.kind === "sea" || !connectedSettlements(a, b)) continue;
+    if (!connectedSettlements(a, b)) continue;
     const cls = isWorldSociety(state) ? wayClass(link) : (wayClass(link) ?? "track");
     if (cls) realized.set(i, cls);
   }
   for (const i of connectivityFloor(state, mapped, hierarchy))
-    if (!realized.has(i) && region.connections[i].kind !== "sea") realized.set(i, "track");
+    if (!realized.has(i)) realized.set(i, "track");
   return realized;
 }
 /** Links on the least-cost paths that join each major to its nearest major and each capital to its regional capitals. */
@@ -160,34 +162,46 @@ function publishRoutes(
       a = communities.get(link.from)!,
       b = communities.get(link.to)!;
     context.progress(done++ / Math.max(1, realized.size), "Laying the roads people made");
-    const path = findRoute(state.surface, a.position, b.position, "road");
+    const kind = link.kind === "sea" ? "lane" : "road";
+    // A highway is the straight shot its builders surveyed; every other way follows the land.
+    const path = link.highway
+      ? [a.position, b.position]
+      : findRoute(state.surface, a.position, b.position, link.kind === "sea" ? "sea" : "road");
     if (path.length < 2) continue;
     putGeneratedNetwork(
       state,
       generatedFeature(
         state,
-        `road:${a.id}:${b.id}`,
-        `${a.name}–${b.name}`,
-        "road",
+        `${kind}:${a.id}:${b.id}`,
+        link.highway?.name ?? `${a.name}–${b.name}`,
+        kind,
         "roads",
         { type: "LineString", coordinates: path.map((p) => [p.x, p.y]) },
-        {
-          fromCommunity: a.id,
-          toCommunity: b.id,
-          travelCost: link.travelCost,
-          roadClass: cls,
-          wear: Math.round(link.wear ?? 0),
-          wayKind: link.kind,
-          routePopulation: Math.min(a.settlement?.population ?? 0, b.settlement?.population ?? 0),
-          strategic: [a, b].some((c) =>
-            ["capital", "regionalCapital", "marketTown"].includes(
-              hierarchy.get(c.id)!.settlementRole
-            )
-          ),
-        }
+        wayAttributes(link, cls, [a, b], hierarchy)
       )
     );
   }
+}
+function wayAttributes(
+  link: SocietyRegion["connections"][number],
+  roadClass: RoadClass,
+  ends: [SocietyCommunity, SocietyCommunity],
+  hierarchy: Map<string, SettlementHierarchy>
+) {
+  const [a, b] = ends;
+  return {
+    fromCommunity: a.id,
+    toCommunity: b.id,
+    travelCost: link.travelCost,
+    roadClass,
+    wear: Math.round(link.wear ?? 0),
+    wayKind: link.kind,
+    ...(link.highway ? { builtBy: link.highway.polity, built: link.highway.built } : {}),
+    routePopulation: Math.min(a.settlement?.population ?? 0, b.settlement?.population ?? 0),
+    strategic: ends.some((c) =>
+      ["capital", "regionalCapital", "marketTown"].includes(hierarchy.get(c.id)!.settlementRole)
+    ),
+  };
 }
 /** Why the settlement sits where it does; open plain is the absence of a site. */
 function siteAttributes(c: SocietyCommunity) {

@@ -521,6 +521,50 @@ default worlds show none or one or two per continent.
 Evidence: M0 inventory counts lanes and highways and reports highway
 conditions; browser check of lanes and a highway where one exists.
 
+Sulion: `a3d17862-23eb-492e-b97e-ab689916de0f`; expansion `6351645a-5efc-48c9-a024-3432cd1decc7`
+(steps `da6a1a99-0959-4586-bd70-6a0eb32e3b5f`, `e9b72790-1100-4820-8197-a8a0bed14fdb`).
+
+#### Execution steps
+
+1. Shipping lanes
+   - File(s): `mapRouting.ts` (sea cost: ocean cells only, shallow coastal
+     water cheaper than deep, a land cell at either end allowed at a high
+     charge so a lane reaches its harbour), `societyPublication.ts` (sea
+     links publish as `lane` features by the same wear classes; the
+     connectivity floor's sea links publish as lanes), `featureCatalogue.ts`
+     (`lane` kind in the routes layer), `vectorStyles.ts` (already dashed).
+   - Verify: inventory counts lanes; island majors join the mainland's
+     components; a routing test keeps a lane on water and near the coast.
+2. Grand highways [depends on #1]
+   - File(s): `societyWorks.ts` or a `societyHighways.ts` (a structural work
+     kind `highway` proposed by a polity whose seat has a worn road-class
+     trunk way to one of its regional capitals, when the polity's support
+     and political capacity are high and the straight line between the two
+     crosses open low-relief country; one per polity, dated and named),
+     `societyPublication.ts` (publish as `roadClass` highway with straight
+     geometry), domain work-kind declarations.
+   - Verify: inventory counts highways and prints their conditions; on the
+     default world most runs show none or one or two per continent.
+   - State / evidence (both steps): completed 2026-10-25. Lanes: sea links
+     publish by the same wear classes as `lane` features in the routes
+     layer, routed over water with shallow coastal water at base cost, deep
+     water up to double, and a land cell at four times so a lane reaches its
+     harbour; the connectivity floor's sea links publish too. The `lane` kind
+     is registered in the catalogue and the built-layout output binding.
+     Highways (`societyHighways.ts`, a connection-level record rather than a
+     structural work kind, which would have touched every work mechanism for
+     one rare feature): raised each cycle on a land way worn past one and a
+     half times the road class whose two ends an active polity controls from
+     its seat, when the polity feeds at least 60% of its people, the era's
+     political capacity is at least one, the polity has fewer than two, and
+     the straight line between the ends runs over dry, low (150 m relief),
+     gentle, open country; the way then takes the straight geometry, costs 45%
+     of its base, is named "<Polity> Way", dated, and recorded as a cause;
+     it outlives its builder. 900-year run (seed 104729): 594 tracks, 7 roads,
+     53 lanes, 1 highway; 0 of 94 majors without a route and all 94 in one
+     connected component (lanes join the islands). Routing test for lanes;
+     two highway tests; 107 society and routing tests pass.
+
 ### M4 — Default age, political scale and documentation [depends on M1, M2, M3, M3b; O2]
 
 Scope: default era list and per-era mobility/political capacity (D4); era

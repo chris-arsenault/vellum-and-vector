@@ -40,6 +40,7 @@ export const featureDefinitions: Definition[] = [
   ["settlement", "ruins", "Ruins and abandoned settlements", "Settlements and sites", "Ruins"],
   ["poi", "pois", "Places of interest", "Settlements and sites", "Named sites"],
   ["road", "roads", "Roads and routes", "Transport and water infrastructure", "Routes"],
+  ["lane", "roads", "Shipping lanes", "Transport and water infrastructure", "Routes"],
   ["harbor", "transportSites", "Harbors", "Transport and water infrastructure", "Transport sites"],
   ["pass", "transportSites", "Passes", "Transport and water infrastructure", "Transport sites"],
   ["dam", "waterworks", "Dams", "Transport and water infrastructure", "Waterworks"],

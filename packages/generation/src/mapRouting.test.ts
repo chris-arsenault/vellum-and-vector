@@ -103,3 +103,26 @@ it("follows a river bank instead of cutting across the open interfluve", () => {
   const onBank = route.filter((p) => Math.abs(p.y - riverY) < 1e-6).length;
   expect(onBank).toBeGreaterThan(route.length / 2);
 });
+
+it("keeps a lane on the water and along the shallow coast between two harbours", () => {
+  const state = landscape();
+  const grid = createGrid("sea", state.domain.scope, 60, 30);
+  // Land in the top five rows, a shallow shelf below it, deep water further south.
+  putChannel(
+    grid,
+    "elevation",
+    "metre",
+    Float64Array.from(grid.active, (_, i) => {
+      const y = Math.floor(i / grid.width);
+      return y < 5 ? 50 : y < 9 ? -50 : -3000;
+    })
+  );
+  const start = gridPosition(grid, 4 * grid.width + 3),
+    end = gridPosition(grid, 4 * grid.width + 56);
+  const route = findRoute(grid, start, end, "sea");
+  const y0 = gridPosition(grid, 0).y,
+    dy = gridPosition(grid, grid.width).y - y0;
+  const rows = route.map((p) => Math.round((p.y - y0) / dy));
+  expect(rows.filter((row) => row >= 5 && row <= 8).length).toBeGreaterThan(route.length - 4);
+  expect(rows.every((row) => row <= 8)).toBe(true);
+});

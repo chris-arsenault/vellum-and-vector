@@ -11,6 +11,7 @@ import { resolveSocietyHazards } from "./societyHazards";
 import { evolveSettlements } from "./societySettlements";
 import { settledCycle, societyStep } from "./societyTempo";
 import { wearWays } from "./societyWays";
+import { raiseHighways } from "./societyHighways";
 
 /** One decadal cycle of feedback: people, works, magic use, learned practices, environment, hazards, settlements. */
 export function societyCycle(
@@ -35,7 +36,10 @@ export function societyCycle(
   evolveSettlements(state, context, dt);
   // The cycle's travel wears the ways; worn ways are cheaper for every process next cycle.
   wearWays(state, dt);
-  if (context.parameters.political) evolvePolitics(state, context, dt);
+  if (context.parameters.political) {
+    evolvePolitics(state, context, dt);
+    raiseHighways(state, context);
+  }
 }
 /**
  * Cycles resolve feedback, not annual actors or a cap on elapsed history. Each cycle's

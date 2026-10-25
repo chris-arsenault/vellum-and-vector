@@ -97,19 +97,31 @@ export function findRoute(grid: Grid, from: Position, to: Position, kind: string
   return [];
 }
 function routeCost(grid: Grid, from: number, to: number, kind: string) {
-  const heights =
-    kind === "river"
-      ? (grid.channels.drainageElevation ?? grid.channels.elevation)
-      : grid.channels.elevation;
   const a = gridPosition(grid, from),
     b = gridPosition(grid, to),
     distance = Math.hypot(a.x - b.x, a.y - b.y);
-  const rise = heights[to] - heights[from];
-  if (kind === "river")
-    return rise > 1e-6 ? Infinity : distance * (1 + 1 / (1 + (grid.channels.flow?.[to] ?? 0)));
+  if (kind === "river") return riverCost(grid, from, to, distance);
+  if (kind === "sea") return distance * seaFactor(grid, to);
   if (kind === "road" && oceanCell(grid, to)) return Infinity;
+  const rise = grid.channels.elevation[to] - grid.channels.elevation[from];
   const slope = 1 + (Math.abs(rise) / Math.max(1, distance)) * 20;
   return distance * slope * (kind === "road" ? landFactor(grid, from, to) : 1);
+}
+/** A river runs downhill only, and the more water it carries the easier it is to follow. */
+function riverCost(grid: Grid, from: number, to: number, distance: number) {
+  const heights = grid.channels.drainageElevation ?? grid.channels.elevation;
+  if (heights[to] - heights[from] > 1e-6) return Infinity;
+  return distance * (1 + 1 / (1 + (grid.channels.flow?.[to] ?? 0)));
+}
+/**
+ * A pre-modern lane hugs the coast: shallow water beside the shore costs its distance, deep
+ * open water up to twice that. A land cell costs four times, so a lane reaches its harbour
+ * over the shore cell and no further.
+ */
+function seaFactor(grid: Grid, to: number) {
+  if (!oceanCell(grid, to)) return 4;
+  const depth = Math.max(0, -grid.channels.elevation[to]);
+  return 1 + Math.min(1, depth / 1000);
 }
 /** A road along a river bank costs this share of open ground: the valley floor is the way. */
 const riverBankFactor = 0.7;
