@@ -41,6 +41,28 @@ it("uses meaningful reference choices while preserving the authored magic recipe
   expect(prepareDraft(draft).input.settings!.magicSystems).toEqual(canonryMagicPresets());
 });
 
+it("defaults to compound continents and keeps island-world assemblies dispersed", () => {
+  const configured = (draft: ReturnType<typeof newGenerationDraft>) => {
+    const prepared = prepareDraft(draft);
+    return atlasPhysicalProfile(
+      prepared.input.parameters,
+      configuredPhysicalProfile(prepared.input.resolvedFeatures!)
+    );
+  };
+  expect(configured(newGenerationDraft())).toMatchObject({
+    ContinentalAssemblyCount: 4,
+    TectonicProvinceCount: 42,
+    ContinentalCrustFraction: 0.35,
+    ContinentalAssemblyClustering: 1,
+    QualityTargets: { OceanCoverage: { target: 0.65 } },
+  });
+  expect(prepareDraft(newGenerationDraft()).input.parameters!.mapBoundary).toBe(1);
+  expect(configured(choose(newGenerationDraft(), "land-and-sea", "islands"))).toMatchObject({
+    ContinentalAssemblyCount: 10,
+    ContinentalAssemblyClustering: 0,
+  });
+});
+
 it("rejects unowned coefficients and invalid physical coefficient dimensions at the recipe boundary", () => {
   for (const [owner, key, value] of [
     ["physical.coastal-construction", "CoastalDetailScale", 0],

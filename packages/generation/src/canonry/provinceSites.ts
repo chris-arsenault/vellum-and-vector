@@ -60,7 +60,9 @@ function anchors(
   count: number,
   areas: Float64Array,
   target: number,
-  width: number
+  width: number,
+  clustering: number,
+  provinceArea: number
 ): number[] {
   const indices = sites.map((_, i) => i);
   // Seed each requested assembly without spending its whole area budget on a large block.
@@ -69,14 +71,33 @@ function anchors(
   const chosen = [
     bestIndex(candidates, (i) => -radius2(sites[i]) / (0.8 + sites[i].priority * 0.4)),
   ];
+  const regions = Math.ceil(Math.sqrt(count));
   while (chosen.length < count)
     chosen.push(
       bestIndex(
         candidates.filter((i) => !chosen.includes(i)),
-        (i) => minimumDistance(sites, i, chosen, width)
+        (i) => anchorScore(sites, i, chosen, regions, width, clustering, provinceArea)
       )
     );
   return chosen;
+}
+function anchorScore(
+  sites: Candidate[],
+  i: number,
+  chosen: number[],
+  regions: number,
+  width: number,
+  clustering: number,
+  provinceArea: number
+) {
+  const separation = minimumDistance(sites, i, chosen, width);
+  if (chosen.length < regions || clustering === 0) return separation;
+  // Neighboring assemblies retain separate identities and motion while growing into
+  // compound continental regions. Only the region roots maximize global separation.
+  const parent = chosen[(chosen.length - regions) % regions];
+  return (
+    separation * Math.exp((-clustering * distance2(sites[i], sites[parent], width)) / provinceArea)
+  );
 }
 function assemblyDistance(
   sites: Candidate[],
@@ -129,13 +150,22 @@ function assemblies(
   sites: Candidate[],
   areas: Float64Array,
   context: PhysicalContext,
-  width: number
+  width: number,
+  provinceArea: number
 ): Int32Array {
   const profile = context.Profile,
     seed = context.EpochStableSeed;
   const target = areas.reduce((sum, area) => sum + area, 0) * profile.ContinentalCrustFraction;
   const result = new Int32Array(sites.length),
-    chosen = anchors(sites, profile.ContinentalAssemblyCount, areas, target, width);
+    chosen = anchors(
+      sites,
+      profile.ContinentalAssemblyCount,
+      areas,
+      target,
+      width,
+      profile.ContinentalAssemblyClustering,
+      provinceArea
+    );
   chosen.forEach((i, n) => {
     result[i] = n + 1;
   });
@@ -190,7 +220,15 @@ export function createProvinceSites(map: PhysicalField, context: PhysicalContext
     .sort((a, b) => b.priority - a.priority)
     .slice(0, p.TectonicProvinceCount);
   const width = map.mesh.periodic?.width ?? 0;
-  const groups = assemblies(selected, territoryAreas(selected, candidates, width), context, width);
+  const bounds = map.mesh.bounds;
+  const provinceArea = ((bounds[2] - bounds[0]) * (bounds[3] - bounds[1])) / selected.length;
+  const groups = assemblies(
+    selected,
+    territoryAreas(selected, candidates, width),
+    context,
+    width,
+    provinceArea
+  );
   const motionOf = (salt: number, key: number): [number, number] => {
     const angle = hashUnit(seed ^ salt, key, 0) * Math.PI * 2;
     const speed = lerp(

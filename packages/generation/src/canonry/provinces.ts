@@ -76,10 +76,12 @@ function assemblyGap(
     b = sites[s.second].assembly;
   if (a === 0 || b === 0 || a === b) return 0;
   const p = context.Profile;
+  // Only divergence opens a continental rift. Transform contacts preserve crust.
+  if (relativeMotion(sites, s, mesh) <= p.TectonicConvergenceThreshold) return 0;
   const raw =
     clamp(1 - boundaryDistance(sites, s, mesh) / Math.max(0.001, p.RidgeWidth * 1.4), 0, 1) *
     p.ContinentalAssemblySeparationDepth;
-  return raw > 0 && relativeMotion(sites, s, mesh) < -p.TectonicConvergenceThreshold ? 0 : raw;
+  return raw;
 }
 function assignBoundary(
   map: PhysicalField,
@@ -173,7 +175,7 @@ function assignTriangle(
   potential -= gap;
   if (site.assembly > 0 && gap > 0)
     potential = Math.min(potential, p.ContinentalCrustPotentialFloor - gap);
-  const rifted = site.assembly > 0 && gap >= p.ContinentalAssemblySeparationDepth * 0.12;
+  const rifted = site.assembly > 0 && gap > 0 && gap >= p.ContinentalAssemblySeparationDepth * 0.12;
   if (!context.IsEvolutionEpoch)
     map.CrustAssemblyIds[i] = initialAssembly(sites, s, site, composition, rifted);
   if (rifted) {

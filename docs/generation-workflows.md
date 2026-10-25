@@ -516,11 +516,15 @@ Their footprint widths, spacing, travel distances and physical feedback retain
 metre units. Climate coverage remains an explicit latitude-frame choice.
 
 Initial province sites are independently distributed, allowing unequal blocks
-and locally clustered boundaries. Continental assemblies grow from distributed
-anchors with unequal area budgets. Uniform world-space samples estimate the
+and locally clustered boundaries. Continental assemblies grow from anchors with
+unequal area budgets. The default groups neighboring assemblies into compound
+continental regions, leaving broad ocean interiors between them; the island-world
+choice disperses assemblies instead. Uniform world-space samples estimate the
 unwarped territory areas independently of terrain sampling; whole-block selection,
 warping and crust transitions make the resulting continental fraction approximate.
-Assembly motion remains coherent. Active boundaries and inter-assembly rifts use
+Assembly motion remains coherent within each assembly while neighboring assemblies
+retain distinct motion. Initial inter-assembly gaps require divergence; sliding
+and converging contacts preserve continental material. Active boundaries and rifts use
 distance to the shared site bisector in the warped coordinate frame, keeping
 closely spaced sites from marking distant interiors as active margins.
 

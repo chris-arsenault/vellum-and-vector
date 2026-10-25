@@ -55,7 +55,7 @@ export const atlasParameterDefinitions = {
     unit: "fraction",
     minimum: 0.05,
     maximum: 0.95,
-    default: 0.48,
+    default: 0.35,
     step: 0.01,
     group: "geology",
   },

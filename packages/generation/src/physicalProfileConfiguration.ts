@@ -5,6 +5,7 @@ import { physicalProfile } from "./canonry/profile";
 /** Only the existing coefficients used by curated outcomes are configurable here. */
 const owners = {
   "physical.foundation": [
+    "ContinentalAssemblyClustering",
     "ContinentalAssemblySeparationDepth",
     "ContinentalWarpStrength",
     "InteriorReliefStrength",
@@ -44,6 +45,7 @@ const owners = {
 type ProfileCoefficient = (typeof owners)[keyof typeof owners][number];
 export type PhysicalProfileOverrides = Partial<Record<ProfileCoefficient, number>>;
 const coefficientSchemas: Partial<Record<ProfileCoefficient, z.ZodNumber>> = {
+  ContinentalAssemblyClustering: z.number().min(0).max(1),
   CoastalDetailScale: z.number().finite().positive(),
   MantlePlumeCount: z.number().int().nonnegative(),
   ContinentalAssemblySeparationDepth: z.number().min(0).max(1),

@@ -9,9 +9,11 @@ export const physicalProfile = {
   TectonicProvinceCount: 14,
   TectonicSiteCandidateMultiplier: 24,
   ContinentalAssemblyCount: 4,
+  // Cohesion of assembly seeds within compound continental regions; zero disperses them.
+  ContinentalAssemblyClustering: 1,
   // Relative variation in initial assembly area budgets; motion stays coherent within each.
   ContinentalAssemblyGrowthVariation: 0.8,
-  ContinentalCrustFraction: 0.48,
+  ContinentalCrustFraction: 0.35,
   ContinentalTransitionWidth: 260_000,
   ContinentalAssemblySeparationDepth: 0.38,
   ContinentalCrustPotentialFloor: 0.62,
@@ -406,7 +408,7 @@ export const physicalProfile = {
   // Share of conductance above the floor that survives each later epoch.
   FractureRetentionPerEpoch: 400,
   QualityTargets: {
-    OceanCoverage: { target: 0.52, minimum: 0.38, maximum: 0.66 },
+    OceanCoverage: { target: 0.65, minimum: 0.38, maximum: 0.66 },
     InlandLakeBodyCount: { minimum: 2, maximum: 80 },
   },
 };

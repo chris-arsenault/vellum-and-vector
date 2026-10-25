@@ -14,11 +14,16 @@ const land = (
   landFraction: number,
   seaLevel: number,
   separation: number,
-  warp: number
+  warp: number,
+  clustering: number
 ): FeatureSelection => ({
   "physical.foundation": {
     settings: { continents, provinces, landFraction },
-    ...profile({ ContinentalAssemblySeparationDepth: separation, ContinentalWarpStrength: warp }),
+    ...profile({
+      ContinentalAssemblySeparationDepth: separation,
+      ContinentalWarpStrength: warp,
+      ContinentalAssemblyClustering: clustering,
+    }),
   },
   "physical.climate": { settings: { seaLevel } },
 });
@@ -63,11 +68,11 @@ export const physicalCartography: Record<string, CartographicControl | Cartograp
     initialOnly: true,
     defaultChoice: "broken",
     explanation:
-      "Large interiors, broken continental shores or a fragmented maritime world. Final coastlines follow the terrain and water.",
+      "Multiple crust assemblies form compound continental regions with open oceans, broad interiors, or a dispersed island world. Final coasts follow the terrain and water.",
     choices: [
-      choice("broad", "Broad continents", land(2, 24, 0.68, -60, 0.2, 100_000)),
-      choice("broken", "Broken continents", land(4, 42, 0.48, 0, 0.38, 180_000)),
-      choice("islands", "Island world", land(10, 70, 0.28, 60, 0.5, 260_000)),
+      choice("broad", "Broad continents", land(2, 24, 0.68, -60, 0.2, 100_000, 1)),
+      choice("broken", "Broken continents", land(4, 42, 0.35, 0, 0.38, 180_000, 1)),
+      choice("islands", "Island world", land(10, 70, 0.28, 60, 0.5, 260_000, 0)),
     ],
   },
   "physical.mountains": terrainCartography,
