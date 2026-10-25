@@ -85,7 +85,8 @@ export function components(
   includes: (i: number) => boolean,
   publish: (members: number[], geometry?: Geometry) => void,
   polygonal = false,
-  maximum = Infinity
+  maximum = Infinity,
+  weight?: (i: number) => number
 ) {
   const map = state.physical!.map,
     visited = new Int32Array(map.mesh.contentCount).fill(-1),
@@ -99,15 +100,22 @@ export function components(
       regions.push(piece);
     }
   }
-  const shapes = polygonal ? regionShapes(state, visited) : new Map<number, Geometry>();
+  const shapes = polygonal ? regionShapes(state, visited, weight) : new Map<number, Geometry>();
   regions.forEach((members, i) => publish(members, shapes.get(i)));
 }
 /**
- * A region's outline at half membership. Where pieces of a split region touch, the outline
- * follows the region's share less its largest neighbour's, so three pieces meeting at a point
- * all reach zero there and the pieces tile without gaps.
+ * A region's outline at half membership, or at half its peak coverage where the members
+ * carry a weight. Where pieces of a split region touch, the outline follows the region's
+ * share less its largest neighbour's, so three pieces meeting at a point all reach zero
+ * there and the pieces tile without gaps.
  */
-function labelContour(state: GenerationState, labels: Int32Array, label: number, leaves: number[]) {
+function labelContour(
+  state: GenerationState,
+  labels: Int32Array,
+  label: number,
+  leaves: number[],
+  weight?: (i: number) => number
+) {
   const mesh = state.physical!.map.mesh,
     touching = new Set<number>();
   for (const i of leaves)
@@ -115,17 +123,18 @@ function labelContour(state: GenerationState, labels: Int32Array, label: number,
       const other = labels[mesh.neighbors[i * mesh.stride + edge]];
       if (other >= 0 && other !== label) touching.add(other);
     }
-  if (!touching.size)
-    return membershipContour(state, leaves, (cell) => Number(labels[cell] === label));
-  const terms = [label, ...touching].map(
-    (value) => (cell: number) => Number(labels[cell] === value)
+  const peak = weight ? Math.max(1e-9, ...leaves.map(weight)) : 1,
+    share = (cell: number) => (labels[cell] === label ? (weight ? weight(cell) / peak : 1) : 0);
+  if (!touching.size) return membershipContour(state, leaves, share);
+  const terms = [label, ...touching].map((value) =>
+    value === label ? share : (cell: number) => Number(labels[cell] === value)
   );
   return combinedContour(state, leaves, terms, ([own, ...others]) => {
     const shared = others.reduce((sum, value) => sum + value, 0);
     return own - Math.max(0.5 * (1 - shared), ...others);
   });
 }
-function regionShapes(state: GenerationState, labels: Int32Array) {
+function regionShapes(state: GenerationState, labels: Int32Array, weight?: (i: number) => number) {
   const members = new Map<number, number[]>();
   labels.forEach((label, cell) => {
     if (label < 0) return;
@@ -135,7 +144,7 @@ function regionShapes(state: GenerationState, labels: Int32Array) {
   const result = new Map<number, Geometry>(),
     water = state.physical!.map.WaterKindCodes;
   for (const [label, leaves] of members) {
-    const outline = labelContour(state, labels, label, leaves),
+    const outline = labelContour(state, labels, label, leaves, weight),
       wet = water[leaves[0]] !== 0;
     // Enclosed gaps of the same medium join the region; islands and lakes stay open.
     const shape = clipRegion(
@@ -270,15 +279,18 @@ export function extractMagicPlaces(state: GenerationState) {
           extent,
           null
         ),
-      true
+      true,
+      Infinity,
+      (i) => held.coverage[i]
     );
   for (const field of magic?.fields ?? [])
     for (const rule of field.definition.features) {
-      const members = field.features[rule.id];
+      const members = field.features[rule.id],
+        coverage = field.coverage[rule.id];
       if (!members) continue;
       components(
         state,
-        (i) => Boolean(members[i]),
+        (i) => Boolean(members[i]) && (coverage?.[i] ?? 1) > 0,
         (region, extent) =>
           publishPlace(
             state,
@@ -299,7 +311,9 @@ export function extractMagicPlaces(state: GenerationState) {
             extent,
             extent ? magicPlaceGeometry(state, field, rule.id, region, extent) : null
           ),
-        true
+        true,
+        Infinity,
+        coverage ? (i) => coverage[i] : undefined
       );
     }
 }

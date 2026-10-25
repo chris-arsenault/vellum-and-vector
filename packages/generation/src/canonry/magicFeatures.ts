@@ -23,6 +23,8 @@ export function independentInteraction(
     conditions.every((test) => !local.has(test.field))
   );
 }
+/** A second class shows through the first where it holds this share of the cell. */
+export const secondSurfaceFloor = 0.2;
 export function effectiveMagicRules(system: MagicField["definition"]) {
   return system.features.filter(
     (rule) => system.enabled || independentInteraction(rule, system.id)
@@ -58,22 +60,41 @@ export function classifyMagicFeatures(state: GenerationState, seed = state.domai
   const magic = state.physical!.magic!;
   coverSystems(state, seed);
   evaluateConfluences(state, seed, false);
-  const priority = new Float64Array(magic.finalSurface.length).fill(-Infinity);
+  const count = magic.finalSurface.length,
+    held = new Float64Array(count).fill(-Infinity),
+    priority = new Float64Array(count).fill(-Infinity),
+    second = new Float64Array(count);
+  magic.secondSurface.fill(-1);
   const sources = surfaceRuleSources(
     magic.fields.map((field) => field.definition),
     magic.confluences.definitions
   );
+  // The class with the largest coverage takes the cell, priority breaking ties; the next
+  // largest is the second code where it holds at least the floor of the ground.
+  const place = (i: number, code: number, rulePriority: number, share: number) => {
+    if (share > held[i] || (share === held[i] && rulePriority > priority[i])) {
+      if (held[i] >= secondSurfaceFloor) {
+        magic.secondSurface[i] = magic.finalSurface[i];
+        second[i] = held[i];
+      }
+      magic.finalSurface[i] = code;
+      held[i] = share;
+      priority[i] = rulePriority;
+    } else if (share > second[i] && share >= secondSurfaceFloor) {
+      magic.secondSurface[i] = code;
+      second[i] = share;
+    }
+  };
   const paint = (
     code: number,
     rulePriority: number,
     members: Uint8Array,
     coverage?: Float64Array
   ) => {
-    for (let i = 0; i < members.length; i++)
-      if (members[i] && (coverage?.[i] ?? 1) > 0 && rulePriority > priority[i]) {
-        magic.finalSurface[i] = code;
-        priority[i] = rulePriority;
-      }
+    for (let i = 0; i < members.length; i++) {
+      const share = coverage?.[i] ?? 1;
+      if (members[i] && share > 0) place(i, code, rulePriority, share);
+    }
   };
   for (const field of magic.fields)
     for (const rule of effectiveMagicRules(field.definition))
@@ -104,6 +125,7 @@ export function projectMagic(state: GenerationState) {
     putChannel(state.surface, key, unit, projectedMagicValues(state, values, quantity), quantity);
   project("naturalSurface", "category", magic.naturalSurface, "category");
   project("finalSurface", "category", magic.finalSurface, "category");
+  project("secondSurface", "category", magic.secondSurface, "category");
   project("quickening", "ratio", work.map.Quickening, "intensive");
   project("stillness", "ratio", work.map.Stillness, "intensive");
   project("fog", "ratio", work.map.FogForcing, "intensive");

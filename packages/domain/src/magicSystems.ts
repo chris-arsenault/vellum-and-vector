@@ -158,11 +158,13 @@ const parameterSchema = z.object({
   stormFrontGradient: positive.default(30),
   // A stand is old growth past this canopy age (years) with at least this tree cover, or
   // peat at least this deep (peat carbon).
-  standAge: finite.nonnegative().default(600),
+  standAge: finite.nonnegative().default(800),
   standCover: finite.min(0).max(1).default(0.6),
   peatDepth: finite.nonnegative().default(10),
   // Root cost per kilometre through full cover, and the cover below which thin soil is bare rock.
-  rootCost: positive.default(2),
+  // At 6 a full stand reaches 170 km through unbroken forest; the seven-system world run
+  // showed 2 covering three quarters of the land and 4 still two thirds.
+  rootCost: positive.default(6),
   rootFloor: finite.min(0).max(1).default(0.12),
   // A spring needs this much flow accumulation on rock no harder than this.
   springFlow: finite.nonnegative().default(40),
@@ -176,7 +178,7 @@ const parameterSchema = z.object({
   strataShare: finite.nonnegative().default(0.02),
   // Planted sap per square metre that counts as a full grove, and the share of sap a cell
   // without a stand loses per epoch.
-  groveSap: positive.default(400),
+  groveSap: positive.default(600),
   sapLoss: finite.min(0).max(1).default(0.3),
   // Cracked cores per square metre at a forge that make a full source, and the share of
   // the cracked stock that cools away per epoch.
@@ -213,10 +215,17 @@ const parameterSchema = z.object({
   // Hallowed: person-years per square metre at a seat that make a full source, the bonus a
   // seat earns per way converging on it, kept-years per square metre that make a full line,
   // and traveller-years per square metre that make a walked way a pilgrimage road.
-  tenureFull: positive.default(2),
+  // Hallowed: person-years at a seat that make a full source, kept-years on a cell that make
+  // a full line, and traveller-years on a cell that make a pilgrimage road. Whole amounts per
+  // cell, not per area: a seat and a line are point and line facts. The seven-system world
+  // run put the ninetieth percentile of seats near thirty-five million person-years, the
+  // oldest near two hundred million, and the busiest hundredth of ways above a million
+  // traveller-years; with the tenth-of-full floor on lines, these make rings of the oldest
+  // twentieth of seats and pilgrimage roads of the few great ways.
+  tenureFull: positive.default(150_000_000),
   pilgrimageBonus: finite.nonnegative().default(0.1),
-  lineFull: positive.default(0.005),
-  roadFull: positive.default(50),
+  lineFull: positive.default(10_000),
+  roadFull: positive.default(10_000_000),
   // The ring a full seat wards, metres, and the share of Aurora's stored charge that adds to
   // the field where the two meet.
   wardReach: positive.default(40_000),

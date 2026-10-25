@@ -179,17 +179,15 @@ with no backend, persistence or MCP; preserve the existing backend source.
       round's survivors should seed the present remains open on its own merits
       (2026-10-25).
 
-- [ ] **12. Reach seven magic systems.** [Magic system candidates](magic-system-candidates.md)
-      consolidates ten candidates into four new systems (Greenwood, Salt, Veil,
-      Hallowed) and two extensions of current ones (Fire gains fallen cores from
-      impact craters, Pressure gains sea-born weather). Sources gain origin,
-      renewal and shape attributes so one system can hold two origins with their
-      own propagation. The [magic lore bible](lore/magic.md) carries each
-      system's setting-neutral character, practice and cost. Society-sourced
-      systems need a magic phase after a human era; Veil doors need nonlocal
-      routing edges. Decide those two prerequisites before implementing any of
-      the four. The [seven magic systems plan](MAGIC-SYSTEMS-PLAN.md) reviews
-      the bible against the implementation and sequences the work (2026-10-24).
+- [x] **12. Reach seven magic systems.** Done 2026-10-25 by the
+      [seven magic systems plan](MAGIC-SYSTEMS-PLAN.md): Greenwood, Salt,
+      Hallowed and Veil implemented, Fire extended with fallen and forge cores
+      and Pressure with sea-born weather, every system a material with origins,
+      stocks and carriers, meetings as processes, people as carrier and source,
+      a society phase and door edges ([ADR 0007](adr/0007-magic-systems-are-materials.md)).
+      The [magic lore bible](lore/magic.md) carries each system's character.
+      Mirages, detour routes, vow practice and door-keeper economies stay as
+      reads with no field behind them.
 
 - [ ] **13. Keep a child's epochs from moving its parent's cell means.** A Region
       over a mountain belt ends its epochs with its land about 150 m away, on

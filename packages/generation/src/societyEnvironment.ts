@@ -250,19 +250,17 @@ function ensureEnvironmentalWorkspace(
     bound.parameters
   );
 }
-function publishEnvironmentalChanges(
-  state: GenerationState,
-  context: MapProcessContext,
-  available: Set<string>
-) {
+/**
+ * The generated river, lake, ecology and magic features of this area that nothing else
+ * holds onto are dropped before the surface is extracted again after people acted.
+ */
+function dropReplaceableFeatures(state: GenerationState) {
   const world = state.domain.world,
     area = state.domain.scope.areaId;
-  const physical = generationBindings(context).domains.includes("physical");
-  const has = (layer: string) => world.fields.some((f) => f.layerId === layer) || physical;
   const previous = Object.values(world.features).filter(
     (f) =>
       f.areaId === area &&
-      ["rivers", "lakes", "ecology"].includes(f.layerId) &&
+      ["rivers", "lakes", "ecology", "magic"].includes(f.layerId) &&
       f.state === "generated" &&
       !f.protected &&
       !Object.values(world.areas).some((a) =>
@@ -278,6 +276,17 @@ function publishEnvironmentalChanges(
     for (const r of Object.values(world.networkReaches ?? {}))
       if (r.featureId === f.id) delete world.networkReaches![r.id];
   }
+}
+function publishEnvironmentalChanges(
+  state: GenerationState,
+  context: MapProcessContext,
+  available: Set<string>
+) {
+  const world = state.domain.world,
+    area = state.domain.scope.areaId;
+  const physical = generationBindings(context).domains.includes("physical");
+  const has = (layer: string) => world.fields.some((f) => f.layerId === layer) || physical;
+  dropReplaceableFeatures(state);
   const drainage = world.drainage?.[area];
   extractNativeGeography(state, context, {
     oceans: false,
@@ -286,7 +295,8 @@ function publishEnvironmentalChanges(
     fractures: false,
     lakes: available.has("water") && has("rivers"),
     landforms: false,
-    magic: false,
+    // People make magic (forges, pans, wards, doors): its places are extracted again after them.
+    magic: Boolean(state.physical?.magic?.fields.length) && has("magic"),
     ecology: available.has("productivity") && has("ecology"),
     rivers: available.has("riverOrder"),
     landmarks: false,

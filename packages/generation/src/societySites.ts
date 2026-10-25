@@ -71,7 +71,10 @@ class SiteReader {
       ? this.value("iceThickness", i)
       : this.value("ice", i) * 1000;
   }
+  /** A class holds a site where its coverage passes a tenth; membership stands in where none is published. */
   feature(system: string, rule: string, i: number) {
+    const coverage = this.grid.channels[`magic:${system}:coverage:${rule}`];
+    if (coverage) return coverage[i] >= 0.1;
     return this.value(`magic:${system}:feature:${rule}`, i) > 0;
   }
 }

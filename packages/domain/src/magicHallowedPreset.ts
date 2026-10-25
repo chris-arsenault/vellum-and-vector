@@ -32,9 +32,7 @@ export const hallowedPreset = magicSystemSchema.parse({
       covers(150, 1000)
     ),
     feature("line", "Ward line", 86, [[land, at("source:line", 1), at("intensity", 100)]]),
-    // The ring of a seat nobody keeps: what the stored charge still holds.
-    feature("fading", "Fading halo", 20, [
-      [land, at("intensity", 50), { field: "source", max: 0 }],
-    ]),
+    // A seat nobody keeps fades by the history's retention: its ring thins in coverage until
+    // it is gone, so the fading halo is the ring itself at low coverage.
   ],
 });

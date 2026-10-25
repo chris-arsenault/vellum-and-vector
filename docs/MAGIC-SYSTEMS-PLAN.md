@@ -1787,6 +1787,79 @@ where its coverage passes the floor; docs describe mechanisms and leave values t
 Evidence: `make ci`; the full-world run's log kept under `frontend/.artifacts/generation`;
 doc review.
 
+#### Execution steps (M8)
+
+Design fixed at expansion. The seven systems and their couplings exist; M8 gives every
+system its curated controls, lets the drawn map show the mixtures the model keeps, reads
+coverage where society and the outliner still read membership, brings the durable
+documents to the implemented state, and runs one full world with all seven to see that
+none saturates it. Controls: each new system gets three or four controls in the pattern of
+the existing ones (Greenwood's stands, roots and verdure; Salt's seep, dust and glass;
+Hallowed's reach, tenure and warding; Veil's tearing, doors and wildness), each a patch of
+preset parameters or effects. Presentation: the final surface takes the class with the
+largest coverage in the cell, priority breaking ties, and a `secondSurface` channel takes
+the next class where its coverage passes a floor; the frontend hatches the second code over
+the first, so a minority class shows where it holds a fifth of the ground. Magic places are
+outlined at half of the region's peak coverage rather than at membership, so a class that
+thins toward its edge is drawn where it holds. A society site reads a class where its
+coverage passes a tenth, falling back to membership where no coverage is published.
+Documents: the product contract's magic section becomes the seven systems with their
+mechanisms; the agent instructions and generation module notes stop naming three; the
+bible's status line records the implementation and its meeting table gains the Pressure
+and Salt row and Veil's responses, with the Salt and Veil pages amended; backlog item 12
+closes; a new ADR 0007 records the material model (origins, stocks, carriers, meetings as
+processes, coverage, the society phase, warding and doors) as a refinement of ADR 0004,
+since the change is a model and not a tuning. The full-world run is a generation scenario
+with all seven enabled on a 4,000 by 3,000 km draft world with the default eras, writing
+each system's active share, located sources, doors and meetings to the generation
+artifacts directory, and asserting that the three physical systems are present and no
+system holds more than half the land; reach is retuned from its log if one does. The
+magic step's UI is reviewed through its unit tests and the preset list it renders.
+
+1. Controls and presentation: `magicCartography.ts`, `magicFeatures.ts` (largest coverage,
+   second surface), `magicState.ts`/`magicFieldDefinitions.ts`/`atlasPublications.ts`
+   (the channel), `rasterTiles.ts` and `rasterPresentation.ts` (the hatch),
+   `geographicRegions.ts` (coverage contours), `societySites.ts` (coverage floor).
+2. Documents: `product-spec.md` 10.3, `AGENTS.md`, `generation-modules.md`, `backlog.md`,
+   `lore/magic.md`, `lore/magic/salt.md`, `lore/magic/veil.md`,
+   `magic-system-candidates.md`, `adr/0007-magic-systems-are-materials.md`, `CLAUDE.md`.
+3. Full-world run: `sevenSystems.generation.test.ts` and its log; retune if a system
+   saturates.
+4. Exit checks: whole frontend suite, packages suite, the generation scenario, typecheck,
+   lint, Prettier; record; close the plan; commit.
+
+#### Changes and resume (M8)
+
+Completed 2026-10-25. Evidence: `sevenSystems.generation.test.ts` generates a 4,000 by
+3,000 km draft world with all seven systems and the default eras in about seven minutes and
+writes its log to `frontend/.artifacts/generation/seven-systems.json`; the final run has
+every system present, coverage shares of the land (interpolated to the surface) of Fire
+0.50, Greenwood 0.51, Hallowed 0.40, Salt 0.13, Aurora 0.14, Veil 0.17 and Pressure 0.04,
+498 Fire places, 218 Greenwood, 166 Salt, 357 Hallowed, 221 Veil, 27 meeting places of five
+kinds, a second class on 38 percent of cells, and 197 settlements. Four runs tuned it:
+Greenwood's roots reached three quarters of the land at the first cost and were raised to
+six, with planted sap needing more to be a grove; Hallowed's per-area thresholds let every
+track outweigh every city at World cell sizes and became whole amounts per cell (a seat and
+a line are point and line facts), with a floor under lines so a path a world has walked is
+not a faint ward everywhere, and the tenure full point set from the run's percentiles so
+only the oldest twentieth of seats ward rings; Aurora's reinforcement of a ward became
+proportional to the ward, since a flat addition had turned every faint road into a full
+line across Aurora country. Two defects the run exposed were fixed: the displaced amount a
+ward removed had landed on every rim in the world as one pool, and now lands on the rim of
+the ring it came from (rings and rims are labelled components); and magic places had been
+extracted before the present's people acted, so forges, pans, wards and doors had no places,
+and the society publication now drops and re-extracts them. Hallowed's fading-halo class was
+removed: a lapsed ring fades by its coverage and needs no class that would also mark every
+living ring's cells. Controls: four new systems have three controls each. Presentation: the
+final surface takes the largest coverage with priority as tiebreak and a `secondSurface`
+code hatched over it in the frontend where the next class holds a fifth; magic places are
+outlined at half their peak coverage; sites read coverage at a tenth. Documents: the product
+contract's 10.3 is the seven systems with their mechanisms; the agent instructions,
+generation module notes and candidates design stop naming three; the bible's status line
+and meeting table and the Salt and Veil pages carry the implemented meetings; backlog 12 is
+closed and 16 records the deferred detachment; ADR 0007 records the model. The three
+landmark-test failures predate this plan and remain.
+
 ## Sulion mapping
 
 Root `95ca0671-e12f-46ff-8bed-f1c630865ffe` (Seven magic systems).
@@ -1852,5 +1925,8 @@ applied to every other system with the rim taking what is removed; fracture, bri
 and coast barriers with their displacement; the first society-phase system). M7 completed
 2026-10-25 (Veil derived from every pair's strain and the meetings' coverage; tears, wild
 zones that move ground and cover within a bound, doors paired from stable tears with their
-closing conditions, door edges in the society graph). M8 pending. Next action: plan-phase
-expands M8.
+closing conditions, door edges in the society graph). M8 completed 2026-10-25 (controls for
+every system, the largest-coverage surface with a hatched second class, coverage contours
+and site floors, the documents brought current with ADR 0007, and a seven-system world run
+that tuned Greenwood's reach and Hallowed's thresholds and exposed two defects now fixed).
+The plan is complete.

@@ -169,10 +169,9 @@ export const magicPlacePresentations: Record<string, MagicPlacePresentation> = {
   pan: { color: "#e8e2d2", symbol: "square", tint: 1 },
   flat: { color: "#cfd9e3", symbol: "diamond", tint: 1 },
   dust: { color: "#d9cfae", symbol: "circle", tint: 0.4 },
-  // Hallowed: the ring and the line take a pale gold; the fading halo barely tints.
+  // Hallowed: the ring and the line take a pale gold; a fading ring thins by its coverage.
   ring: { color: "#e9dcae", symbol: "circle", tint: 0.5 },
   line: { color: "#b89b5e", symbol: "cross", tint: 1 },
-  fading: { color: "#c9c2b0", symbol: "circle", tint: 0.25 },
   // Veil: the tear tints violet, the wild zone takes a brighter violet, the door a pale one.
   tear: { color: "#6f3fa0", symbol: "cross", tint: 0.5 },
   wild: { color: "#b48ad6", symbol: "triangle", tint: 1 },

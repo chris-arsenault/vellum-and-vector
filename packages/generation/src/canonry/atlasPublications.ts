@@ -182,6 +182,7 @@ const derived: readonly [channel: string, unit: string, layer: string, owners: s
   ["naturalRock", "ratio", "geology", ["physical.foundation"]],
   ["naturalSurface", "category", "geology", ["physical.landforms", "magic.configured"]],
   ["finalSurface", "category", "geology", ["physical.landforms", "magic.configured"]],
+  ["secondSurface", "category", "geology", ["physical.landforms", "magic.configured"]],
   ["quickening", "ratio", "magic", ["magic.configured"]],
   ["stillness", "ratio", "magic", ["magic.configured"]],
   ["fog", "ratio", "magic", ["magic.configured"]],

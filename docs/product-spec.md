@@ -8,12 +8,13 @@ reload, and generation stops when the tab closes. [ADR 0003](adr/0003-frontend-s
 supersedes this document's backend, durable-job, recovery and service requirements
 for current work. Geographic authoring behavior remains the product direction.
 
-**Magic direction — clarified 2026-10-22:** Fire, Aurora and Pressure are
+**Magic direction — clarified 2026-10-22, completed 2026-10-25:** the seven
+magic systems (Fire, Aurora, Pressure, Greenwood, Salt, Hallowed, Veil) are
 first-class world effects and processes with distinct physical motivations.
 Use Canonry as a mechanism reference without importing its named setting lore.
-Future magic systems remain open; extensibility must preserve the current three's
-specific behavior. Source placement, system-specific settings and shaping remain;
-see section 10.3 and [magic source authority](../AGENTS.md#magic-source-authority).
+Each system keeps its specific behavior; none is reduced to generic effects.
+Source placement, system-specific settings and shaping remain; see section 10.3
+and [magic source authority](../AGENTS.md#magic-source-authority).
 
 ## Product, Domain, and Generation Design — Implementation-Agent Handoff
 
@@ -63,7 +64,7 @@ The requirements and invariants below supersede architectural suggestions from e
 - Keep creation profiles distinct from geographic nesting. Geographic regions support arbitrary nesting down to a useful minimum size within the same map type; names do not prescribe ranks or generation behavior. A user can skip unused creation profiles.
 - Leave large parts of the world ungenerated or under-detailed indefinitely.
 - Support procedural generation at most levels and direct editing at all appropriate levels. The balance should shift toward manual creation at small scales.
-- Preserve Canonry's causal geography and the distinct Fire, Aurora and Pressure systems, including historical effects and system-specific creator controls.
+- Preserve Canonry's causal geography and the seven distinct magic systems, including historical effects and system-specific creator controls.
 - Make physical consistency the default. Traits and inherited constraints limit refinement; exceptions must have explicit authored or supernatural causes.
 - Support political, cultural, and arbitrary future GIS overlays, with independent generation and editing capabilities.
 - Support reusable standalone **templates**, later inserted into geographically anchored maps.
@@ -514,60 +515,80 @@ naturally emerging landforms and their detection are unchanged.
 
 **Do not assume Canonry already supports arbitrary selected-region refinement.** Its current latent-world geography is generated globally, then exposed and summarized at different rendering/gameplay resolutions. Sparse _generation_ with stable child boundaries is new work.
 
-### 10.3 Magical generation — Fire, Aurora and Pressure
+### 10.3 Magical generation — the seven systems
 
-These are three distinct authored systems, not examples of interchangeable
-source/effect combinations. Read Canonry's [lore bible, section 7](../../the-canonry-game/docs/lore/lore-bible.md#7-the-three-fires--magic-system)
-and [physical generation design, sections 8–11](../../the-canonry-game/docs/design/physical-microgeography-worldgen.md#8-fracture-network-and-fire),
-alongside the corresponding implementations. Lore explains motivations;
-implementation establishes which geographic mechanisms exist. Named gods,
-peoples, artifacts, places and events are reference context, not atlas content
-requirements. Social applications below are setting-independent adaptations.
+Seven distinct authored systems, not examples of interchangeable source/effect
+combinations: Fire, Aurora, Pressure, Greenwood, Salt, Hallowed and Veil. The
+[magic lore bible](lore/magic.md) carries each system's setting-neutral
+character, practice and cost; [ADR 0007](adr/0007-magic-systems-are-materials.md)
+records the model they share. Lore explains motivations; implementation
+establishes which geographic mechanisms exist. Named gods, peoples, artifacts,
+places and events are reference context, not atlas content requirements. Social
+applications below are setting-independent adaptations.
 
-- **Captured Fire:** Fire-cores are mineral stores of geothermal energy, mined
-  from veins and released by cracking. Geographic Fire follows fracture
-  conductance, heats terrain, melts ice and hardens rock; it is a wellspring of
-  life as well as heat, quickening growth, turnover, seeding and decay around
-  its cores (Ember grove, Thaw meadow), opening the conduits it flows through
-  until a spent vein seals, and carrying warmth down the rivers below it.
-  Society uses cores for heating, forging, cutting and excavation; release can
-  rupture structures and injure practitioners. Extraction, access and depletion
-  have social consequences.
-- **Aurora-light:** Aurora accumulates toward colder terrain and is retained in
-  thick ice; its geological influence weakens rock. It acts through the charge
-  its ice holds: stored charge keeps ice from ablating, casts a cold shadow of a
-  few degrees, and stills the life within (slow growth and turnover, preserved
-  matter; Rime forest, Glow-lichen barrens), releasing what it preserved where
-  the field retreats. Aurora-crystals collect and store charge for slow
-  perception, distant seeing, preservation and ice-memory reading. Cognitive
-  strain is a proposed cost of sustained practice. It is not an offensive beam,
-  generic fertility source or interchangeable fuel for Fire.
-- **Pressure-depth:** A deep-ocean pressure locus drives geographic pressure
-  propagation. Ocean paths, reflection and overlapping rays produce crush zones,
-  coastal stress and wake/rogue-impact history, and a front moves water: where a
-  ray shoals it lifts cold deep water (upwelling, a cold sea surface, fog on the
-  coast it faces; Fog heath, Moss forest), and its wakes leave warm still water,
-  so a large front changes the local climate. Practitioners descend into deep
-  water, carrying charge for subsonic communication and directed force. Depth
-  tolerance constrains access; costs of sustained practice remain an adaptation
-  proposal. The source's named deity and current are not required.
-- **Interference:** The disciplines do not combine cleanly. Preserve Fire/Aurora
-  interference, dissipation of carried Pressure near Aurora-crystals, and
-  destructive Fire/Pressure contact. Geographic thermal war rims, steam fractures
-  and Pressure/Aurora breaches retain their separate causes and physical substrate.
-- **History:** Retain and advect geographic consequences where geology moves
-  them. Numerical activity history is distinct from the lore's readable ice-memory.
+Every system is a material: stocks in named reservoirs that the world's own
+transports carry (crust, ice, rivers, groundwater, wind, currents, animals and
+people), with origins that make it, a medium it propagates through and a forcing
+it writes into the shared physical fields the ordinary processes consume. Each
+cell carries shares of every class rather than one winner, and the meetings
+between systems are processes of their own, never a blend or a net of their
+parents.
+
+- **Fire:** vein cores on fracture-fed geothermal maxima, fallen cores in the
+  crust and gravels around impact craters, and forge cores where people crack
+  what they mined and carried. Fire follows fracture conductance, heats terrain,
+  melts ice and hardens rock, quickens the living, opens the conduits it flows
+  through until a spent vein seals, and carries warmth down the rivers below it;
+  spent ore rides the crust and is exhumed, placers wash downstream.
+- **Aurora:** charge accumulating toward colder terrain and held in ice, ground,
+  moraine and shelf; ice carries it and dumps it where it ends, meltwater takes a
+  share. Stored charge keeps ice from ablating, casts a cold shadow, stills the
+  life within and cuts deeper under charged sliding ice; thawing ground settles.
+- **Pressure:** a deep-ocean locus whose rays, reflections and wakes crush,
+  stress coasts and move water: upwelling and a cold sea surface where a ray
+  shoals, fog on the coast it faces, warm still water in its wakes, and storms
+  raised on sharp sea fronts that the air columns carry inland as rain, scour
+  and dunes.
+- **Greenwood:** sap and groundwater. Old stands and deep peat are its sources,
+  springs on soft rock below a catchment its wells; it travels between roots
+  through connected cover, rides in the gut of grazing herds, is gathered and
+  planted by trade, is buried as peat into a stratum the crust carries and an
+  aquifer leaches. Verdure grows forest past its climate, deepens soil and
+  braids the rivers that cross it; springs drawn past their recharge collapse.
+- **Salt:** brine, bed and dust. Made where the ground records mass death and
+  where a lake died in a closed basin; brine seeps down the drainage, is flushed
+  by moisture and kept by peat, crusts to bed at pits; bed dissolves on wet
+  ground, blows as dust on bare ground, domes under strain and burns under
+  Fire. Salting thins cover, starves soil, turns grazers away and dries the air;
+  deep bed fuses the pan to glass.
+- **Hallowed:** made by people. Kept seats ward rings that reach with their
+  tenure; kept frontiers, works and pilgrim roads are lines. Inside a ward every
+  other system is scaled down and what is removed lands on the rim; fractures,
+  brine, storms and coasts are turned and their burden displaced; rivers and
+  coasts hold inside. An abandoned seat fades.
+- **Veil:** derived from the strain between every other system. Strain above a
+  floor is a tear; a tear that shifts is a wild zone whose ground and cover move
+  within a bound; stable tears far apart pair into doors that join distant
+  places in the travel graph. Aurora's charge closes a door, a Fire release
+  ruptures it, a ward seals it.
+- **Meetings:** each named meeting is a confluence with its own process, hazard
+  and class, taking coverage from the systems that made it: Shatter rim, Boiling
+  shore, Breach, Overgrowth rot, Frozen Deepwood, Brackish wending, Preserved
+  barrow, Fired crust, Standing-dead front and Brine shore. Hallowed and Veil
+  are the any-system meetings.
+- **Society:** people are a carrier and a source. Trade moves cores, seed and
+  salt along the ways; extraction, hunting, clearance and burning act on the
+  stocks and their media; tenure, walked routes, kept lines and the dead are
+  recorded on the ground for the society-phase systems to read.
+- **History:** every stock and record rides the crust where geology moves it.
+  Numerical activity history is distinct from the lore's readable ice-memory.
 
 Creators place and shape sources, works and conditions of these systems and
-adjust meaningful system-specific parameters. Future magic systems may add their
-own world effects and processes through the shared generation structure;
-[magic system candidates](magic-system-candidates.md) records the designs under
-consideration. The
-current three must remain first-class implementations with their own state,
-causal feedback and interactions. This does not require building a universal
-spell editor or speculative extension framework now. Do not import the reference
-game's named lore or global ice age, or erase established mechanisms to make
-every system fit one generic vocabulary.
+adjust meaningful system-specific parameters through curated controls. All
+seven remain first-class implementations with their own state, causal feedback
+and interactions; no universal spell editor or speculative extension framework
+is implied. Do not import the reference game's named lore or global ice age, or
+erase established mechanisms to make every system fit one generic vocabulary.
 
 Magic feeds physical processes at the correct causal stage. Society can change
 access, extraction, use and local physical conditions, and those changes feed
@@ -779,16 +800,16 @@ Canonry's full-generation pipeline was designed for globally constructed fields 
 
 ### 15.3 Decision table for implementation agents
 
-| Decision                        | Product constraint                                  | Recommended starting point                                                   | Must be proven before committing                                             |
-| ------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| World geometry                  | Exact spatial reference at all levels               | Planar metre chart with explicit edge identification                         | Transformation validity, area/distance correctness, future CRS extensibility |
-| Authoritative features          | Persistent IDs, geometry, queries, overlays         | GIS vector model, likely spatial DB                                          | Cross-scale feature identity; custom world CRS and local coordinates         |
-| Generated fields                | Causal simulation, multiple resolutions             | Adapt Canonry field model plus tiled/coarse/fine artifacts                   | Edge/halo consistency, generation costs, versioned output                    |
-| Region ownership                | No conflicting detail in overlaps                   | Explicit nonoverlapping materialization ownership; overlapping views allowed | Correct handling of arbitrarily drawn selection and existing generated areas |
-| Political/cultural spatial data | Overlap, claims, diffusion                          | Polygons + fields + relations rather than exclusive polygons                 | Query and visualization of many-to-many coverage                             |
-| Local site/interior geometry    | Small-unit precision and world anchoring            | Local frames with GIS anchor plus vertical metadata                          | Invertible transforms, valid entrances, cross-map connections                |
-| Long jobs                       | Minutes/hour acceptable with transparent progress   | Persisted server jobs with stage reporting and cancel                        | Consistent results, no partial published state, resource/cost controls       |
-| Magic shaping                   | Authored Fire, Aurora and Pressure; reproducibility | System-specific controls over existing process contracts                     | Distinct media, costs, interference and causal geographic feedback           |
+| Decision                        | Product constraint                                | Recommended starting point                                                   | Must be proven before committing                                             |
+| ------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| World geometry                  | Exact spatial reference at all levels             | Planar metre chart with explicit edge identification                         | Transformation validity, area/distance correctness, future CRS extensibility |
+| Authoritative features          | Persistent IDs, geometry, queries, overlays       | GIS vector model, likely spatial DB                                          | Cross-scale feature identity; custom world CRS and local coordinates         |
+| Generated fields                | Causal simulation, multiple resolutions           | Adapt Canonry field model plus tiled/coarse/fine artifacts                   | Edge/halo consistency, generation costs, versioned output                    |
+| Region ownership                | No conflicting detail in overlaps                 | Explicit nonoverlapping materialization ownership; overlapping views allowed | Correct handling of arbitrarily drawn selection and existing generated areas |
+| Political/cultural spatial data | Overlap, claims, diffusion                        | Polygons + fields + relations rather than exclusive polygons                 | Query and visualization of many-to-many coverage                             |
+| Local site/interior geometry    | Small-unit precision and world anchoring          | Local frames with GIS anchor plus vertical metadata                          | Invertible transforms, valid entrances, cross-map connections                |
+| Long jobs                       | Minutes/hour acceptable with transparent progress | Persisted server jobs with stage reporting and cancel                        | Consistent results, no partial published state, resource/cost controls       |
+| Magic shaping                   | Seven authored systems; reproducibility           | System-specific controls over existing process contracts                     | Distinct media, costs, interference and causal geographic feedback           |
 
 If a decision cannot be resolved by a narrow prototype or documented trade-off, record it as an architecture decision rather than burying it in code.
 

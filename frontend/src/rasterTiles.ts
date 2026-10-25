@@ -104,24 +104,26 @@ export function rasterTileSource(
 
 const hexColor = (hex: string) => [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
 function surfacePainter(raster: Raster, classes: SurfaceCategory[]) {
-  const surfaceAt = raster.surface?.channels.finalSurface
-    ? classInterpolator(raster.surface, "finalSurface")
-    : null;
-  const naturalAt = raster.surface?.channels.naturalSurface
-    ? classInterpolator(raster.surface, "naturalSurface")
-    : null;
+  const interpolator = (channel: string) =>
+    raster.surface?.channels[channel] ? classInterpolator(raster.surface, channel) : null;
+  const surfaceAt = interpolator("finalSurface"),
+    secondAt = interpolator("secondSurface"),
+    naturalAt = interpolator("naturalSurface");
   const painted = new Map(
     classes
       .filter((c) => !c.bathymetric)
       .map((c) => [c.code, { rgb: hexColor(c.color), tint: c.tint }])
   );
-  return (p: Position, terrain: number[]) => {
+  const wash = (base: number[], cls: { rgb: number[]; tint: number } | undefined) =>
+    cls ? base.map((channel, i) => channel + (cls.rgb[i] - channel) * cls.tint) : base;
+  return (p: Position, terrain: number[], dx = 0) => {
     const natural = naturalAt ? painted.get(Math.round(naturalAt(p))) : undefined;
     const base = natural?.rgb ?? terrain;
-    const surface = surfaceAt ? painted.get(Math.round(surfaceAt(p))) : undefined;
-    return surface
-      ? base.map((channel, i) => channel + (surface.rgb[i] - channel) * surface.tint)
-      : base;
+    // A minority class that holds a share of the cell shows as a diagonal hatch over the first.
+    const hatched = secondAt && dx > 0 && Math.floor((p.x + p.y) / (3 * dx)) % 2 === 0;
+    const second = hatched ? painted.get(Math.round(secondAt(p))) : undefined;
+    if (second) return wash(base, second);
+    return wash(base, surfaceAt ? painted.get(Math.round(surfaceAt(p))) : undefined);
   };
 }
 function terrainPainter(
@@ -139,7 +141,7 @@ function terrainPainter(
     const relative =
       water === 1 ? Math.min(-Number.EPSILON, value - seaLevel) : Math.max(0, value - seaLevel);
     let color =
-      water === 2 ? [73, 139, 153] : surfaceAt(p, terrainColor(relative, minimum - seaLevel));
+      water === 2 ? [73, 139, 153] : surfaceAt(p, terrainColor(relative, minimum - seaLevel), dx);
     const ice = Math.min(1, (iceAt?.(p) ?? 0) * (water ? 2 : 1.5));
     color = color.map((channel, i) => channel + ([226, 237, 232][i] - channel) * ice);
     if (water !== 2) {

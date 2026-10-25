@@ -161,11 +161,16 @@ it("writes final-surface codes that the shared surface catalogue names", () => {
     )
   );
   expect(magic.finalSurface.every((code) => code < 100 || catalogue.has(code))).toBe(true);
-  // Boiling shore (priority 110) owns its cells unless the higher-priority Breach also holds.
+  // The largest coverage takes the cell and the next holds the second code: where Boiling
+  // shore holds a fifth of a cell it is drawn as one or the other.
   const steam = magicSurfaceCode(sources, "confluence", "steam")!,
-    cells = magic.confluences.states.steam.members,
-    breach = magic.confluences.states.breach?.members;
-  expect(cells.some((value, i) => value === 1 && !breach?.[i])).toBe(true);
+    { members: cells, coverage } = magic.confluences.states.steam;
+  expect(cells.some(Boolean)).toBe(true);
+  for (let i = 0; i < cells.length; i++) {
+    if (!cells[i] || coverage[i] < 0.2) continue;
+    expect([magic.finalSurface[i], magic.secondSurface[i]]).toContain(steam);
+  }
+  // Every class present in a cell is a share of it, and the drawn code is one of them.
   for (let i = 0; i < cells.length; i++)
-    if (cells[i] && !breach?.[i]) expect(magic.finalSurface[i]).toBe(steam);
+    if (cells[i] && coverage[i] > 0) expect(magic.finalSurface[i]).toBeGreaterThanOrEqual(100);
 });

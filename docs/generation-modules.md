@@ -211,18 +211,17 @@ to allocation, remeshing, advection, inheritance and projection; those adapters
 no longer infer semantics from field-name suffixes.
 
 These are current implementation mechanics. Per the user's 2026-10-22
-clarification, Fire, Aurora and Pressure are first-class world processes;
-system-specific code is permitted and future systems remain open. Read
-[magic source authority](../AGENTS.md#magic-source-authority) and
-[the product contract](product-spec.md#103-magical-generation--fire-aurora-and-pressure).
-Future systems can add their own state, causal operations and publications using
-the shared contracts. Extension must not reduce the current three to generic
-effects or import Canonry's named setting lore. No speculative extension framework
-or universal spell-composition language is required for the current work.
+clarification, the seven magic systems are first-class world processes;
+system-specific code is permitted. Read
+[magic source authority](../AGENTS.md#magic-source-authority),
+[the product contract](product-spec.md#103-magical-generation--the-seven-systems)
+and [ADR 0007](adr/0007-magic-systems-are-materials.md). No system is reduced to
+generic effects and Canonry's named setting lore is not imported. No speculative
+extension framework or universal spell-composition language exists.
 
 An existing module-composition fixture executes an extensive inventory through
 two epochs, changes its configuration, disables it and publishes a new layer.
-It tests the shared runner, not completeness of the three magic systems.
+It tests the shared runner, not completeness of the magic systems.
 A separate bundled worker runs the complete
 recipe using the production worker handler and real structured-clone messages;
 the Node test bridge supplies the browser messaging API, while browser journeys

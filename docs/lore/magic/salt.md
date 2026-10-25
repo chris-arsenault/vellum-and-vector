@@ -54,7 +54,9 @@ _Court record. The witness had been buried for eighty years._
 **Interference.** Aurora over Salt ground produces undeath: bodies preserved by Salt cannot decay,
 and the dead do not rest. Fire burns Salt ground clean, so Fire-using communities burn battlefields
 to remove it. Greenwood and Salt compete along their shared boundary. Hallowed stops Salt at its
-boundary.
+boundary, and brine pools before the line. Pressure makes Salt coasts: a lagoon closed behind a
+still Pressure shore dries to a sabkha, which is a dead lake and so a pan, and the storms the
+same sea raises lift its dust inland.
 
 ---
 

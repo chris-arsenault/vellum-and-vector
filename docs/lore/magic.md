@@ -9,9 +9,10 @@ offer beliefs and customs that a world author can adapt without adopting a parti
 Peoples, gods, places and events are left to the author. "Practitioner" means anyone who works with
 a system, regardless of species.
 
-Fire, Aurora and Pressure are implemented as described in the
-[product contract](../product-spec.md#103-magical-generation--fire-aurora-and-pressure). Their
-proposed extensions and the four new systems remain designs.
+All seven are implemented as described in the
+[product contract](../product-spec.md#103-magical-generation--the-seven-systems); the model
+they share, materials with origins, stocks and carriers whose meetings are processes of their
+own, is [ADR 0007](../adr/0007-magic-systems-are-materials.md).
 
 ## The seven
 
@@ -44,19 +45,20 @@ maintenance of the boundaries they protect.
 
 ## How the seven touch
 
-| Meeting              | What the map shows                                      |
-| -------------------- | ------------------------------------------------------- |
-| Fire / Aurora        | rim of cracked ground, Veil where fields change sharply |
-| Fire / Pressure      | steam fractures and a broken coast                      |
-| Fire / Greenwood     | rot halo, steam fractures at springs                    |
-| Fire / Salt          | burnt-clean ground, the one way to end a Barrow heath   |
-| Aurora / Pressure    | breached coast, Veil where fields change sharply        |
-| Aurora / Greenwood   | frozen forest front                                     |
-| Aurora / Salt        | undeath: preserved dead on the Barrow heath             |
-| Pressure / Greenwood | salted coastal springs                                  |
-| Greenwood / Salt     | dying trees, Veil where fields change sharply           |
-| Hallowed / any       | weaker effects inside, concentrated effects at the rim  |
-| Veil / any           | closed by Aurora, ruptured by Fire, sealed by Hallowed  |
+| Meeting              | What the map shows                                                                                                                                 |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Fire / Aurora        | rim of cracked ground, Veil where fields change sharply                                                                                            |
+| Fire / Pressure      | steam fractures and a broken coast                                                                                                                 |
+| Fire / Greenwood     | rot halo, steam fractures at springs                                                                                                               |
+| Fire / Salt          | burnt-clean ground, the one way to end a Barrow heath                                                                                              |
+| Aurora / Pressure    | breached coast, Veil where fields change sharply                                                                                                   |
+| Aurora / Greenwood   | frozen forest front                                                                                                                                |
+| Aurora / Salt        | undeath: preserved dead on the Barrow heath                                                                                                        |
+| Pressure / Greenwood | salted coastal springs                                                                                                                             |
+| Pressure / Salt      | brine shore: a lagoon closed behind a still coast dries to a sabkha, and its storms lift the dust                                                  |
+| Greenwood / Salt     | dying trees, Veil where fields change sharply                                                                                                      |
+| Hallowed / any       | weaker effects inside, concentrated effects at the rim                                                                                             |
+| Veil / any           | closed by Aurora, ruptured by Fire, sealed by Hallowed; knit shut by Greenwood over epochs, held open on Salt ground; carried Pressure cannot pass |
 
 ## Adjacent sources
 

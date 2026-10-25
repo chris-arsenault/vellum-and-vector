@@ -209,4 +209,129 @@ export const magicCartography: CartographicControl[] = [
       },
     }))
   ),
+  control(
+    "greenwood",
+    "stands",
+    "Old-growth threshold",
+    "How old and how closed a canopy, or how deep a peat, must be before it is a stand.",
+    ["Ancient only", "Old growth", "Any mature wood"],
+    [1600, 800, 400].map((standAge, i) => ({
+      parameters: { standAge, standCover: [0.75, 0.6, 0.45][i], peatDepth: [20, 10, 5][i] },
+    }))
+  ),
+  control(
+    "greenwood",
+    "roots",
+    "Reach between roots",
+    "How far Greenwood travels through connected living cover from its stands and springs.",
+    ["Within the wood", "Across the country", "Across regions"],
+    [12, 6, 3].map((rootCost, i) => ({
+      parameters: { rootCost, rootFloor: [0.2, 0.12, 0.06][i] },
+    }))
+  ),
+  control(
+    "greenwood",
+    "verdure",
+    "Verdure",
+    "Forest past its climate, deeper soil and braided rivers from the same Greenwood field.",
+    degree,
+    [0.5, 1, 1].map((verdure, i) => ({
+      effects: { verdure },
+      parameters: { groveSap: [1200, 600, 400][i] },
+    }))
+  ),
+  control(
+    "salt",
+    "seep",
+    "Brine seep",
+    "How far brine travels down the drainage before the air flushes it or a pit crusts it.",
+    ["Short", "Down the valley", "To the basin floor"],
+    [0.3, 0.5, 0.7].map((seepShare, i) => ({
+      parameters: { seepShare, brineFlush: [0.8, 0.6, 0.4][i] },
+    }))
+  ),
+  control(
+    "salt",
+    "dust",
+    "Salt dust",
+    "How much of an exposed bed the wind lifts and how far it blows before it settles.",
+    ["Still", "Blowing", "Storm-borne"],
+    [0.05, 0.15, 0.3].map((dustShare, i) => ({
+      parameters: { dustShare, dustSettle: [0.7, 0.5, 0.3][i] },
+    }))
+  ),
+  control(
+    "salt",
+    "glass",
+    "Glass flats and drying",
+    "How deep a bed fuses the pan to glass, and how much the air dries over salted ground.",
+    degree,
+    [1200, 800, 500].map((glassBed, i) => ({
+      parameters: { glassBed, desiccation: [0.3, 0.5, 0.7][i] },
+    }))
+  ),
+  control(
+    "hallowed",
+    "reach",
+    "Sanctuary reach",
+    "How wide a ring a long-kept seat wards, and how long a seat must be kept to ward one.",
+    ["Close", "District", "Province"],
+    [20_000, 40_000, 80_000].map((wardReach, i) => ({
+      parameters: { wardReach, tenureFull: [300_000_000, 150_000_000, 75_000_000][i] },
+    }))
+  ),
+  control(
+    "hallowed",
+    "lines",
+    "Kept lines and pilgrim roads",
+    "How many kept years make a frontier a ward line, and how worn a way must be to be a pilgrimage road.",
+    ["Rare", "Common", "Everywhere"],
+    [20_000, 10_000, 5000].map((lineFull, i) => ({
+      parameters: { lineFull, roadFull: [20_000_000, 10_000_000, 5_000_000][i] },
+    }))
+  ),
+  control(
+    "hallowed",
+    "warding",
+    "Warding",
+    "How much of every other system a ring removes inside and lays on its rim, and how hard the rock holds within.",
+    degree,
+    [0.5, 1, 1].map((warding, i) => ({
+      effects: { warding, rockResistance: [150, 300, 600][i] },
+    }))
+  ),
+  control(
+    "veil",
+    "tearing",
+    "Tearing",
+    "How much strain between systems tears the ground, and how much makes a full tear.",
+    ["Only at the fiercest fronts", "At strong fronts", "At any front"],
+    [0.1, 0.05, 0.02].map((tearFloor, i) => ({
+      parameters: { tearFloor, tearFull: [0.5, 0.4, 0.25][i] },
+    }))
+  ),
+  control(
+    "veil",
+    "doors",
+    "Doors",
+    "How strong and how far apart stable tears must be to pair into a door, and how many a world holds.",
+    ["Few and far", "Some", "Many"],
+    [600, 400, 250].map((doorStrain, i) => ({
+      parameters: {
+        doorStrain,
+        doorDistance: [600_000, 300_000, 150_000][i],
+        doorCount: [3, 6, 12][i],
+      },
+    }))
+  ),
+  control(
+    "veil",
+    "wildness",
+    "Wild zones",
+    "How far a wild zone moves its ground and its cover between surveys.",
+    degree,
+    [10, 20, 40].map((wildRelief, i) => ({
+      parameters: { wildRelief, wildShuffle: [0.15, 0.3, 0.5][i] },
+    }))
+  ),
 ];

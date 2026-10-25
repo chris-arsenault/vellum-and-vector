@@ -7,6 +7,8 @@ import { clamp, rockResistance, round } from "./math";
 
 const wards = (field: MagicField) =>
   field.definition.enabled && field.definition.effects.warding > 0;
+/** The least strength a kept line or a pilgrimage road has; a fainter way is only a track. */
+const lineFloor = 100;
 
 /**
  * Hallowed's seats: every inhabited seat with person-years on its cell is a source, by the
@@ -32,7 +34,8 @@ export function tenureSources(
     if (c.status !== "inhabited") continue;
     const cell = nativeIndexAtSurface(state, c.position.x, c.position.y);
     if (cell < 0 || map.Tenure[cell] <= 0) continue;
-    const tenure = map.Tenure[cell] / map.mesh.areas[cell] / p.tenureFull,
+    // A seat is a point fact: its person-years count whole, whatever the cell's size.
+    const tenure = map.Tenure[cell] / p.tenureFull,
       strength = clamp(
         round(1000 * tenure * (1 + p.pilgrimageBonus * (ways.get(c.id) ?? 0))),
         1,
@@ -55,11 +58,13 @@ export function keptLineSources(state: GenerationState, field: MagicField) {
     p = field.definition.parameters;
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes[i] !== 0) continue;
-    const area = map.mesh.areas[i],
-      kept = map.KeptLine[i] / area / p.lineFull,
-      road = map.WalkedRoute[i] / area / p.roadFull,
+    // A line is a line whatever cell it crosses: kept-years and traveller-years count whole.
+    // Below a tenth of a full line a track is only a track: without the floor every path a
+    // world has walked wards the land a little, and nothing else is itself anywhere.
+    const kept = map.KeptLine[i] / p.lineFull,
+      road = map.WalkedRoute[i] / p.roadFull,
       strength = clamp(round(1000 * Math.max(kept, road)), 0, 1000);
-    if (strength >= 1) field.source[i] = strength;
+    if (strength >= lineFloor) field.source[i] = strength;
   }
 }
 /**
@@ -85,7 +90,9 @@ export function wardPropagation(state: GenerationState, field: MagicField) {
     fire = others.find((other) => other.definition.effects.conduitOpening > 0);
   for (let i = 0; i < map.mesh.count; i++) {
     if (field.intensity[i] <= 0) continue;
-    if (stills) field.intensity[i] += p.auroraReinforce * stills.stored[i];
+    // Held charge reinforces a ward in proportion to the ward that is there to reinforce.
+    if (stills)
+      field.intensity[i] += p.auroraReinforce * stills.stored[i] * (field.intensity[i] / 1000);
     if (fire && fire.source[i] > 0) field.intensity[i] = 0;
     field.intensity[i] = Math.min(1000, field.intensity[i]);
   }
@@ -99,45 +106,76 @@ export function applyWarding(state: GenerationState, field: MagicField) {
   const map = state.physical!.map,
     magic = state.physical!.magic;
   if (!magic || wards(field) || !magic.fields.some(wards)) return;
-  const displaced = removeInside(map, field);
-  if (displaced > 0) landOnRim(map, magic, field, displaced);
+  const displaced = removeInside(map, magic, (i) => field.intensity[i] * map.Warding[i]);
+  for (let i = 0; i < map.mesh.count; i++)
+    if (map.Warding[i] > 0) field.intensity[i] = round(field.intensity[i] * (1 - map.Warding[i]));
+  landOnRim(map, magic, displaced, (i, added) => {
+    field.intensity[i] = clamp(round(field.intensity[i] + added), 0, 1000);
+  });
 }
-/** Scale the field down inside the warding; return the amount removed, as intensity times area. */
-function removeInside(map: PhysicalField, field: MagicField) {
-  let displaced = 0;
+/** What each ring removes, as an amount per ring: the removed value times the cell's area. */
+function removeInside(map: PhysicalField, magic: MagicWorkspace, removed: (i: number) => number) {
+  const displaced = new Map<number, number>();
   for (let i = 0; i < map.mesh.count; i++) {
-    const w = map.Warding[i];
-    if (w <= 0) continue;
-    const removed = field.intensity[i] * w;
-    field.intensity[i] = round(field.intensity[i] - removed);
-    displaced += removed * map.mesh.areas[i];
+    const ring = magic.wardLabel[i];
+    if (ring < 0) continue;
+    displaced.set(ring, (displaced.get(ring) ?? 0) + removed(i) * map.mesh.areas[i]);
   }
   return displaced;
 }
-/** Lay an amount of intensity times area on the rim cells, by their area. */
+/** Lay each ring's amount on that ring's own rim cells, by their area. */
 function landOnRim(
   map: PhysicalField,
   magic: MagicWorkspace,
-  field: MagicField,
-  displaced: number
+  displaced: Map<number, number>,
+  land: (i: number, added: number) => void
 ) {
-  let rimArea = 0;
-  for (let i = 0; i < map.mesh.count; i++) if (magic.wardRim[i]) rimArea += map.mesh.areas[i];
-  if (rimArea <= 0) return;
-  const added = displaced / rimArea;
-  for (let i = 0; i < map.mesh.count; i++)
-    if (magic.wardRim[i]) field.intensity[i] = clamp(round(field.intensity[i] + added), 0, 1000);
-}
-/** The rim: cells with no warding that touch a cell with any. */
-export function markRim(map: PhysicalField, magic: MagicWorkspace) {
-  magic.wardRim.fill(0);
+  const rimArea = new Map<number, number>();
   for (let i = 0; i < map.mesh.count; i++) {
-    if (map.Warding[i] > 0) continue;
-    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-      if (j >= 0 && map.Warding[j] > 0) {
-        magic.wardRim[i] = 1;
-        break;
+    const ring = magic.rimLabel[i];
+    if (ring >= 0) rimArea.set(ring, (rimArea.get(ring) ?? 0) + map.mesh.areas[i]);
+  }
+  for (let i = 0; i < map.mesh.count; i++) {
+    const ring = magic.rimLabel[i];
+    if (ring < 0) continue;
+    const amount = displaced.get(ring) ?? 0,
+      area = rimArea.get(ring) ?? 0;
+    if (amount > 0 && area > 0) land(i, amount / area);
+  }
+}
+/**
+ * The rings and their rims: every connected patch of warding is one ring, and a cell with
+ * no warding that touches a ring is that ring's rim, so what a ring holds back lands beside
+ * it and not on a sanctuary across the world.
+ */
+export function markRim(map: PhysicalField, magic: MagicWorkspace) {
+  const { mesh } = map;
+  magic.wardRim.fill(0);
+  magic.wardLabel.fill(-1);
+  magic.rimLabel.fill(-1);
+  let rings = 0;
+  for (let start = 0; start < mesh.count; start++) {
+    if (map.Warding[start] <= 0 || magic.wardLabel[start] >= 0) continue;
+    labelRing(map, magic, start, rings);
+    rings++;
+  }
+}
+/** Flood one ring from a warded cell, marking its cells and the rim cells around it. */
+function labelRing(map: PhysicalField, magic: MagicWorkspace, start: number, ring: number) {
+  const { mesh } = map,
+    queue = [start];
+  magic.wardLabel[start] = ring;
+  for (let head = 0; head < queue.length; head++) {
+    const i = queue[head];
+    for (let edge = 0; edge < mesh.degree[i]; edge++) {
+      const j = mesh.neighbors[i * mesh.stride + edge];
+      if (j < 0) continue;
+      if (map.Warding[j] > 0 && magic.wardLabel[j] < 0) {
+        magic.wardLabel[j] = ring;
+        queue.push(j);
+      } else if (map.Warding[j] <= 0 && magic.rimLabel[j] < 0) {
+        magic.rimLabel[j] = ring;
+        magic.wardRim[j] = 1;
       }
     }
   }
@@ -152,16 +190,10 @@ export function hallowedWrites(state: GenerationState) {
     magic = state.physical!.magic!,
     fields = magic.fields.filter(wards);
   if (!fields.length) return;
-  let storm = 0,
-    rimArea = 0;
-  for (let i = 0; i < map.mesh.count; i++) {
-    if (map.Warding[i] > 0) storm += map.StormTrack[i] * map.Warding[i] * map.mesh.areas[i];
-    else if (magic.wardRim[i]) rimArea += map.mesh.areas[i];
-  }
-  if (storm > 0 && rimArea > 0)
-    for (let i = 0; i < map.mesh.count; i++)
-      if (magic.wardRim[i])
-        map.StormForcing[i] = clamp(round(map.StormForcing[i] + storm / rimArea), 0, 1000);
+  const storm = removeInside(map, magic, (i) => map.StormTrack[i] * map.Warding[i]);
+  landOnRim(map, magic, storm, (i, added) => {
+    map.StormForcing[i] = clamp(round(map.StormForcing[i] + added), 0, 1000);
+  });
   for (const field of fields) spillBelow(map, field);
 }
 function spillBelow(map: PhysicalField, field: MagicField) {

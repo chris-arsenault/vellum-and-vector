@@ -71,6 +71,7 @@ export const magicWorkspaceDefinitions = {
   fog: { quantity: "intensive" },
   naturalSurface: { unit: "category", quantity: "category" },
   finalSurface: { unit: "category", quantity: "category" },
+  secondSurface: { unit: "category", quantity: "category" },
 } as const;
 export const magicWorkspaceChannels = Object.keys(
   magicWorkspaceDefinitions

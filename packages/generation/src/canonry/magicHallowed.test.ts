@@ -88,7 +88,8 @@ function scenario() {
     changed: new Set(),
     mediumChanged: new Set(),
   } as SocietyWorkspace;
-  map.Tenure[centre] = 2 * map.mesh.areas[centre];
+  // Three hundred million person-years: a seat kept long past the full-source tenure.
+  map.Tenure[centre] = 300_000_000;
   const evaluate = (id: string) => {
     locateMagicSources(state, field(id), 1, 0);
     propagateMagic(state, field(id), 1, 1);
@@ -239,7 +240,8 @@ it("breaks the line where a Fire conduit opens, and Aurora's held charge reinfor
   const plain = hallowed.intensity[ringCell];
   aurora.stored[ringCell] = 400;
   s.evaluate("hallowed");
-  expect(hallowed.intensity[ringCell]).toBe(plain + 120);
+  // Three tenths of the held charge, in proportion to the ward already there.
+  expect(Math.abs(hallowed.intensity[ringCell] - plain * 1.12)).toBeLessThanOrEqual(1);
   fire.source[s.centre] = 500;
   s.evaluate("hallowed");
   expect(hallowed.intensity[s.centre]).toBe(0);

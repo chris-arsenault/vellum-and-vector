@@ -41,7 +41,7 @@ export function categoryPalette(world: World, channel: string): SurfaceCategory[
       tint: 1,
     }));
   if (channel === "naturalSurface") return surfaceCategories();
-  if (channel === "finalSurface")
+  if (channel === "finalSurface" || channel === "secondSurface")
     return surfaceCategories(
       world.magicSystems ?? [],
       world.confluences ?? canonryConfluencePresets()
@@ -67,6 +67,7 @@ export function fieldLabel(world: World, channel: string) {
   const names: Record<string, string> = {
     flow: "River flow",
     finalSurface: "Land cover",
+    secondSurface: "Land cover · second class",
     naturalSurface: "Natural land cover",
   };
   if (!id) return names[channel] ?? readable(channel);

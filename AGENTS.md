@@ -88,13 +88,16 @@ modules remain independent of that browser adapter.
 
 ### Magic source authority
 
-Per the user's 2026-10-22 clarification, the current Fire, Aurora and Pressure
-systems are first-class world effects and processes. Preserve their distinct
-physical motivations, media, propagation, feedback and interactions. Future magic
-systems remain open: the current three are not a closed universe, and extension
-must not require flattening them into interchangeable generic effects. Use shared
-process contracts where useful and system-specific behavior where needed. Do not
-build speculative extension machinery before a concrete system needs it.
+Per the user's 2026-10-22 clarification, the magic systems are first-class world
+effects and processes: Fire, Aurora, Pressure, Greenwood, Salt, Hallowed and Veil
+(seven, no more, per the 2026-10-24 direction). Preserve their distinct physical
+motivations, media, propagation, feedback and interactions; each is a material
+with stocks the world's own carriers move
+([ADR 0007](docs/adr/0007-magic-systems-are-materials.md)), and their meetings
+are processes of their own, never nets or blends. Extension must not require
+flattening them into interchangeable generic effects. Use shared process
+contracts where useful and system-specific behavior where needed. Do not build
+speculative extension machinery before a concrete system needs it.
 
 Before designing magic behavior, read the corresponding bodies in
 `../the-canonry-game/docs/lore/lore-bible.md` (especially section 7),

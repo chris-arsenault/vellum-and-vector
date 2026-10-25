@@ -54,8 +54,10 @@ _From a traveller's account of the door-roads._
 
 **Interference.** Veil depends on interference between other systems. Aurora-crystals close doors,
 Fire releases rupture them, and Hallowed wards seal them. A practitioner's stored Pressure charge
-cannot pass through a door. New boundaries between systems can create more Veil where the
-interference is strong enough.
+cannot pass through a door. Greenwood roots knit a tear shut over epochs, since living ground
+relaxes the strain that made it; Salt ground holds a tear open, since nothing on it changes. New
+boundaries between systems can create more Veil where the interference is strong enough, and
+where two meetings hold the same ground the world tears there.
 
 ---
 

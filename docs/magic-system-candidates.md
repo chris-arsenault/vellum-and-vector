@@ -3,10 +3,13 @@
 Design for the magic systems beyond Fire, Aurora and Pressure. Opened
 2026-10-24 from the question "which established tropes do the three not cover,
 and what would cover them in a mapping product?" Consolidated the same day to a
-target of seven systems: the three current ones extended, plus four new. None
-of the extensions or new systems is implemented. The current three are defined
-in the [product contract](product-spec.md#103-magical-generation--fire-aurora-and-pressure)
-and coupled through [ADR 0004](adr/0004-coupling-through-each-systems-medium.md).
+target of seven systems: the three current ones extended, plus four new. All
+seven were implemented on 2026-10-25 by the
+[seven magic systems plan](MAGIC-SYSTEMS-PLAN.md); this document is the design
+record behind them. The systems are defined in the
+[product contract](product-spec.md#103-magical-generation--the-seven-systems),
+coupled through [ADR 0004](adr/0004-coupling-through-each-systems-medium.md) and
+modelled as materials by [ADR 0007](adr/0007-magic-systems-are-materials.md).
 The [magic lore bible](lore/magic.md) gives each of the seven its
 setting-neutral character, practice, cost and lore.
 

@@ -63,9 +63,14 @@ export interface MagicWorkspace {
   fog: Float64Array;
   naturalSurface: Float64Array;
   finalSurface: Float64Array;
+  /** The next class by coverage where it holds the floor of the cell, or -1. */
+  secondSurface: Float64Array;
   confluences: ConfluenceWorkspace;
   /** Cells just outside a Hallowed ring: where what the ward holds back lands. */
   wardRim: Uint8Array;
+  /** The ring each warded cell belongs to, and the ring each rim cell touches; -1 for none. */
+  wardLabel: Int32Array;
+  rimLabel: Int32Array;
 }
 export function configuredSystems(state: GenerationState) {
   return state.domain.world.magicSystems ?? canonryMagicPresets();
@@ -212,7 +217,10 @@ export function initializeMagic(
     fog: new Float64Array(count),
     naturalSurface: new Float64Array(count),
     finalSurface: new Float64Array(count),
+    secondSurface: new Float64Array(count).fill(-1),
     wardRim: new Uint8Array(count),
+    wardLabel: new Int32Array(count).fill(-1),
+    rimLabel: new Int32Array(count).fill(-1),
   };
 }
 /**
