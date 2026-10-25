@@ -45,7 +45,7 @@ it("rejects own-channel conditions and treats an absent system as never holding"
     systems: ["fire", "aurora"],
     seeds: [[{ field: "system:fire", min: 1 }]],
   };
-  const absent = magicConfluenceSchema.parse({ ...base, systems: ["fire", "veil"] });
+  const absent = magicConfluenceSchema.parse({ ...base, systems: ["fire", "mist"] });
   expect(() => validateMagicConfluences([absent], systems)).not.toThrow();
   expect(confluenceEffective(absent, systems)).toBe(false);
   expect(() =>

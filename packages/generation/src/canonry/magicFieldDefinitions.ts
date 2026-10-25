@@ -49,6 +49,8 @@ export const magicFieldDefinitions = {
   subsided: { ...intensity, unit: "metre", carried: true },
   // Ground raised so far by a salt dome, metres; bounded, and travels with the crust.
   domed: { ...intensity, unit: "metre", carried: true },
+  // The share of a tear that moved since the last epoch: a wild zone where it is high.
+  wild: { ...intensity, unit: "ratio" },
   radii: { ...intensity, unit: "metre", publish: false },
 } satisfies Record<string, MagicFieldDefinition>;
 

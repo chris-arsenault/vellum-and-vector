@@ -48,7 +48,12 @@ function polityOf(state: GenerationState, id: string) {
 }
 /** A way busy enough to pave, on land, not yet a highway. */
 function busyWay(link: SocietyConnection) {
-  return !link.highway && link.kind !== "sea" && (link.wear ?? 0) >= highwayTraffic;
+  return (
+    !link.highway &&
+    link.kind !== "sea" &&
+    link.kind !== "door" &&
+    (link.wear ?? 0) >= highwayTraffic
+  );
 }
 /** The polity that holds both ends of a way from its seat, if it can afford a highway. */
 function builder(

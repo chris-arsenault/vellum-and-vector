@@ -1695,6 +1695,81 @@ cost and trade reach behave like a port's; the named closing conditions remove a
 Evidence: unit tests on strain, tear detection, perturbation bounds and pairing; society
 connection tests; a short-scenario generation.
 
+#### Execution steps (M7)
+
+Design fixed at expansion, from the Veil page and the code after M6. Veil is derived: a
+post-glacial system placed last in the preset order so its evaluation reads every other
+system's field of the epoch. Its `tear` origin (source `strain`) measures, per cell, the
+sum over every pair of enabled systems of the strain measure the confluences already use
+(both strengths times how sharply their gap turns across the cell's edges) plus the
+coverage of any meeting holding the cell at the last evaluation, relaxed by Greenwood's
+verdure (living ground knits a tear) and held on salted ground at its previous strength
+(nothing changes there, so strain does not relax). A tear is the strain above a floor,
+scaled to full at a declared strain. Its previous strength is the held stock the locate
+mirrors, so the share of a tear that moved since the last epoch is written to a new `wild`
+channel on the field: a wild zone is a tear that shifts. The `door` origin (source
+`pairing`) pairs stable tears, strong enough and not wild, by nearest strength at a
+distance at least the declared span, up to a declared count, keeping last epoch's pairs
+whose ends still qualify; a cell closed by Aurora's stored charge, ruptured by an open or
+hot Fire (which also makes it wild), or sealed by a ward cannot be a door. Both origins
+propagate `local`: Veil has no reach of its own. Its effect `tearing` is written to a
+`Tearing` channel in the shared living feedback. Writes at the post-glacial pass: wild
+cells have their bedrock moved by a hashed amount within the declared bound, which is
+about a cell's relief in a thousand years, and a share of their tree and grass cover
+exchanged, so streams change course and a forest edge moves without a flood or a fire;
+door cells are chilled, lowered once into a pool within a bound and ringed with forced
+grass and saplings. Doors reach society as edges of kind `door` between the surface cells
+under their ends at a fixed crossing cost, added when connections are built (not when
+territories are assigned, so a country does not reach through a door), unworn like the sea,
+never a highway and not drawn as a way; trade ledgers cross them while a practitioner's
+carried Pressure charge is no ledger and never moves. A `door-house` site class seats a
+town at a door. Classes tear, wild and door; the unreliable-region mark and alternate
+positions stay with M8's drawing.
+
+1. System and measure: `magicSystems.ts` (sources strain and pairing, effect tearing,
+   parameters, the `wild` channel as a readable condition), `magicVeilPreset.ts`,
+   `magicVeil.ts` (strain, tears, wild, pairing, closing, the writes), `magicState.ts`
+   (`doors` on the field, `wild` channel), `magicRegions.ts` (wild readable),
+   `magicFeedback.ts` (Tearing), `field.ts`/`transportHistory.ts`, publications.
+2. Society: `societyGeography.ts` (door edges into connections), `society.ts` and
+   `societyWays.ts`/`societyHighways.ts`/`societyPublication.ts` (the door kind),
+   `societySites.ts` (door-house).
+3. Classes and names: rules, palette, labels, preset tests.
+4. Exit checks: `magicVeil.test.ts` (one system makes no Veil; a Fire and Aurora front
+   tears along its rim; a meeting's coverage raises it; a tear that moves is wild and its
+   ground moves within the bound while a still one does not; stable far tears pair into a
+   door with a pool, a chill and a ring; Aurora closes, Fire ruptures, a ward seals,
+   verdure relaxes, salt holds; a disabled Veil changes nothing); society test for a door
+   connection between distant communities; characterization snapshot; whole frontend suite,
+   packages suite, typecheck, lint, Prettier; record and commit.
+
+#### Changes and resume (M7)
+
+Completed 2026-10-25. Evidence: `magicVeil.test.ts` shows a world with one other system
+tearing nowhere and a Fire and Aurora front tearing at full strength along the edges of its
+overlap band and nowhere away from it, the new tear wholly wild and still the next epoch; a
+meeting's coverage tearing a cell on its own and verdure relaxing the same cell to a
+fraction; a wild cell's bedrock moved within the twenty-metre bound and its tree and grass
+cover exchanged while a far cell and the settled tear stand; two Aurora blobs on a Fire
+country pairing their far edges into doors, each door chilling its cells, sinking a pool
+once and ringing itself with grass; Aurora's stored charge closing a door's end, a ward
+sealing one, a Fire release rupturing one and making it wild, and salted ground holding a
+tear at full strength after the strain that made it is gone; and a disabled Veil changing
+nothing. The society test shows a door joining two communities at the crossing cost and
+the way staying unworn. Design choices made while building: the strain measure is the one
+the confluences already use, summed over every pair of other systems plus the meetings'
+coverage of the last evaluation, so Veil adds no second notion of a front; a tear's
+previous strength is the held stock the locate mirrors, so wildness needs no channel of
+its own beyond the `wild` share; rupture is a Fire release at the cell (an open source), not
+Fire's presence, since a Fire and Aurora front always has Fire under its tears and the
+bible's doors form at exactly such fronts; a door's ends are the surface cells under them
+and join the connection graph only, so a country's territory never reaches through a door;
+door ways are not drawn, since the door's two places are what the map shows. The
+unreliable-region mark and alternate feature positions stay with M8's drawing. 988 of 993
+frontend-run tests pass (the three landmark failures predate this plan; the two remaining
+were the snapshot and a test fixture that used "veil" as an absent system, both updated);
+typecheck, lint and Prettier clean.
+
 ### M8 — Seven-system reconciliation and presentation
 
 Scope: curated controls for every system; presets for all seven in the catalogue and
@@ -1774,5 +1849,8 @@ brine, bed and dust moved by drainage, crusting, wind and strain; glass, desicca
 Fire burning; salting in ecology; raking, salt trade and the necropolis; four meetings;
 three biomes). M6 completed 2026-10-25 (Hallowed from kept seats and kept lines; warding
 applied to every other system with the rim taking what is removed; fracture, brine, storm
-and coast barriers with their displacement; the first society-phase system). M7 and M8
-pending. Next action: plan-phase expands M7.
+and coast barriers with their displacement; the first society-phase system). M7 completed
+2026-10-25 (Veil derived from every pair's strain and the meetings' coverage; tears, wild
+zones that move ground and cover within a bound, doors paired from stable tears with their
+closing conditions, door edges in the society graph). M8 pending. Next action: plan-phase
+expands M8.

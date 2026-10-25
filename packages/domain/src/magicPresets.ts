@@ -1,6 +1,7 @@
 import { magicSystemSchema } from "./magicSystems";
 import { at, covers, feature, land, ocean, oneOf } from "./magicPresetHelpers";
 import { hallowedPreset } from "./magicHallowedPreset";
+import { veilPreset } from "./magicVeilPreset";
 
 // Canonry IceRemembers' three systems are data passed to the same process contracts. The
 // reach and rarity below are the atlas's own (docs/adr/0004): Canonry's defaults saturate
@@ -404,5 +405,6 @@ export function canonryMagicPresets() {
     greenwoodPreset,
     saltPreset,
     hallowedPreset,
+    veilPreset,
   ]);
 }

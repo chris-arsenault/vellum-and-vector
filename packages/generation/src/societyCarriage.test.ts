@@ -14,6 +14,8 @@ import { applySocietyWorks } from "./societyWorks";
 import { besiegeLost } from "./societySiege";
 import { recordSocietyOnMesh } from "./societyRecord";
 import { resolveSocietyHazards } from "./societyHazards";
+import { refreshSocietyConnections } from "./societyGeography";
+import { wearWays } from "./societyWays";
 import { nearestSample } from "./societySpatial";
 import { atlasChannels } from "./canonry/atlasChannels";
 import { createAdaptiveWorldMesh } from "./canonry/adaptiveMesh";
@@ -244,6 +246,21 @@ it("keeps the frontier at both seats of a way two polities hold, and forgets an 
   region.politics.control[b.id] = "P";
   recordSocietyOnMesh(state, 10);
   expect(map.KeptLine[cellOf(a)]).toBeCloseTo(10 * Math.exp(-10 / 150), 9);
+});
+
+it("connects two communities through a Veil door at the crossing cost, without wearing it", () => {
+  const { state, a, b, cellOf, field, region } = fixture();
+  const veil = field("veil");
+  veil.doors = [{ a: cellOf(a), b: cellOf(b) }];
+  veil.definition.parameters.doorTravel = 100;
+  refreshSocietyConnections(state);
+  const door = region.connections.find((link) => link.kind === "door");
+  expect(door).toBeDefined();
+  expect(new Set([door!.from, door!.to])).toEqual(new Set([a.id, b.id]));
+  expect(door!.travelCost).toBeLessThan(2000);
+  state.society!.traffic = new Float64Array(region.connections.length).fill(5000);
+  wearWays(state, 10);
+  expect(door!.travelCost).toBe(door!.distance);
 });
 
 it("kills where a confluence covers the ground a community stands on", () => {

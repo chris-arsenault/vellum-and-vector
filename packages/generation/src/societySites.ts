@@ -198,6 +198,12 @@ function healingWell(r: SiteReader, i: number): SiteOpportunity | null {
     ? { kind: "healing-well", score: 0.9, reason: "at a Greenwood spring" }
     : null;
 }
+/** A Veil door: the house and its keepers, and a crossing that makes an inland town a port. */
+function doorHouse(r: SiteReader, i: number): SiteOpportunity | null {
+  return r.feature("veil", "door", i)
+    ? { kind: "door-house", score: 0.85, reason: "at a Veil door, the house of a crossing" }
+    : null;
+}
 /** Inside a Hallowed ring: the ground on which nothing is harmed, and the pilgrims who come to it. */
 function sanctuary(r: SiteReader, i: number): SiteOpportunity | null {
   return r.feature("hallowed", "ring", i)
@@ -215,6 +221,7 @@ const classifiers = [
   fireSeat,
   riverNode,
   harbour,
+  doorHouse,
   sanctuary,
   meltLine,
   healingWell,

@@ -31,7 +31,7 @@ export function wayClass(link: Pick<SocietyConnection, "wear" | "highway">) {
 }
 /** The cost a way charges now: the base lowered by how worn it is; the sea is not worn. */
 export function wornCost(link: Pick<SocietyConnection, "distance" | "wear" | "kind" | "highway">) {
-  if (link.kind === "sea") return link.distance;
+  if (link.kind === "sea" || link.kind === "door") return link.distance;
   if (link.highway) return link.distance * highwaySpeed;
   const worn = Math.min(1, (link.wear ?? 0) / wayClasses.road);
   return link.distance * (1 - (1 - roadSpeed) * worn);

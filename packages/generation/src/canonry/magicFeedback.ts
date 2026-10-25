@@ -79,7 +79,8 @@ export function magicLivingFeedback(state: GenerationState) {
       stillness = 0,
       verdure = 0,
       salting = 0,
-      warding = 0;
+      warding = 0,
+      tearing = 0;
     for (const field of fields) {
       const share = field.intensity[i] / 1000;
       quickening += share * field.definition.effects.quickening;
@@ -87,12 +88,14 @@ export function magicLivingFeedback(state: GenerationState) {
       verdure += share * field.definition.effects.verdure;
       salting += share * field.definition.effects.salting;
       warding += share * field.definition.effects.warding;
+      tearing += share * field.definition.effects.tearing;
     }
     map.Quickening[i] = unit(quickening);
     map.Stillness[i] = unit(stillness);
     map.Verdure[i] = unit(verdure);
     map.Salting[i] = unit(salting);
     map.Warding[i] = unit(warding);
+    map.Tearing[i] = unit(tearing);
     // Greenwood divides the river that crosses it into wetland channels: the braided reach.
     if (map.Verdure[i] > 0.3 && map.RiverOrders[i] >= 1 && map.WaterKindCodes[i] === 0) {
       map.WetlandCover[i] = Math.max(map.WetlandCover[i], 0.5 * map.Verdure[i]);

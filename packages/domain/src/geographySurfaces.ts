@@ -173,6 +173,10 @@ export const magicPlacePresentations: Record<string, MagicPlacePresentation> = {
   ring: { color: "#e9dcae", symbol: "circle", tint: 0.5 },
   line: { color: "#b89b5e", symbol: "cross", tint: 1 },
   fading: { color: "#c9c2b0", symbol: "circle", tint: 0.25 },
+  // Veil: the tear tints violet, the wild zone takes a brighter violet, the door a pale one.
+  tear: { color: "#6f3fa0", symbol: "cross", tint: 0.5 },
+  wild: { color: "#b48ad6", symbol: "triangle", tint: 1 },
+  door: { color: "#f2d6ff", symbol: "star", tint: 1 },
   // Salt's meetings with Aurora, Fire, Greenwood and Pressure.
   preserved: { color: "#8c9fb3", symbol: "star", tint: 1 },
   fired: { color: "#e36f3a", symbol: "diamond", tint: 1 },

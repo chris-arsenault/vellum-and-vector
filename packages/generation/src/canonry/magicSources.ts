@@ -13,6 +13,7 @@ import { impactSources } from "./magicFallenSources";
 import { aquiferSources, forgeSources, verdantSources } from "./magicGreenwoodSources";
 import { deadLakeSources, deathSources } from "./magicSaltSources";
 import { keptLineSources, tenureSources } from "./magicHallowed";
+import { pairingSources, strainSources } from "./magicVeil";
 
 function isHeatMaximum(map: PhysicalField, start: number, radius: number) {
   const { mesh, HeatSourceDensity: density } = map;
@@ -322,6 +323,18 @@ export const magicSourceStrategies: Record<MagicSource, SourceStrategy> = {
     requires: [],
     parameters: ["lineFull", "roadFull"],
     locate: keptLineSources,
+  },
+  strain: {
+    label: "Strain between every other system",
+    requires: [],
+    parameters: ["tearFloor", "tearFull", "wildShift", "knitVerdure", "holdSalting"],
+    locate: strainSources,
+  },
+  pairing: {
+    label: "Stable tears paired into doors",
+    requires: [],
+    parameters: ["doorStrain", "doorDistance", "doorMatch", "doorCount"],
+    locate: pairingSources,
   },
 };
 /**

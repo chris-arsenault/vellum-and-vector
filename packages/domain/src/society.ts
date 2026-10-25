@@ -46,6 +46,7 @@ export const settlementSiteKinds = [
   "fire-seat",
   "river-node",
   "harbour",
+  "door-house",
   "sanctuary",
   "melt-line",
   "fishery-coast",
@@ -97,7 +98,8 @@ export interface SocietyConnection {
   distance: number;
   /** What the way costs to travel now: the base, lowered as use wears it into a road. */
   travelCost: number;
-  kind: "land" | "river" | "sea";
+  /** A door is a Veil crossing between two distant cells: unworn, never a highway, never drawn as a way. */
+  kind: "land" | "river" | "sea" | "door";
   /** Yearly travellers the way remembers; decides whether it publishes as a track or a road. */
   wear?: number;
   /** A grand highway a polity raised along this way: straight, fast, and outliving its builder. */

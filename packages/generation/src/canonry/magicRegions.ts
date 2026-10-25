@@ -60,6 +60,7 @@ function channelValues(map: PhysicalField, field: MagicField): Record<string, Ar
     rogue: field.rogue,
     stored: field.stored,
     sealed: field.sealed,
+    wild: field.wild,
     coastalHistory: field.coastalHistory,
     firstEpoch: field.firstEpoch,
     coastalFirstEpoch: field.coastalFirstEpoch,

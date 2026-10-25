@@ -174,6 +174,8 @@ const metricFields = [
   // rim; and the kept-years of the lines people keep walking, forgetting over a memory.
   "Warding",
   "KeptLine",
+  // Veil's tearing (0 to 1): the ground where other systems strain against each other.
+  "Tearing",
   // Magical heat carried down the drainage (native units): the thawed river below a wellspring.
   "RiverWarmth",
 ] as const;

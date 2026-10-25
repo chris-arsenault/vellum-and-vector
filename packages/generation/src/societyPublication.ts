@@ -162,6 +162,8 @@ function publishRoutes(
       a = communities.get(link.from)!,
       b = communities.get(link.to)!;
     context.progress(done++ / Math.max(1, realized.size), "Laying the roads people made");
+    // A door is a crossing, not a way over the land between its ends: its doors are the places.
+    if (link.kind === "door") continue;
     const kind = link.kind === "sea" ? "lane" : "road";
     // A highway is the straight shot its builders surveyed; every other way follows the land.
     const path = link.highway

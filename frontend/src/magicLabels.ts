@@ -31,6 +31,7 @@ export const effectLabels = {
   verdure: "Verdure · forest past its climate, deeper soil, braided rivers, 0–1",
   salting: "Salting · thinned cover, infertile soil, grazers turned away, drier air, 0–1",
   warding: "Warding · other systems scaled down inside, their removed share laid on the rim, 0–1",
+  tearing: "Tearing · ground torn where other systems strain against each other, 0–1",
 };
 export const parameterLabels: Record<keyof MagicSystem["parameters"], string> = {
   sourceThreshold: "Minimum source density · 0–1,000",
@@ -121,4 +122,18 @@ export const parameterLabels: Record<keyof MagicSystem["parameters"], string> = 
   wardReach: "Ring a full seat wards · metres",
   auroraReinforce: "Aurora's stored charge added to the ward where they meet · share",
   wardSpill: "Resistance the first reach below a ward loses at full warding · 0–1,000",
+  tearFloor: "Strain between systems at which the ground tears · 0–1",
+  tearFull: "Strain at which a tear is full · 0–1",
+  wildShift: "Change in a tear's strength between epochs that makes it wholly wild · share",
+  doorStrain: "Strength a stable tear needs to be a door · 0–1,000",
+  doorDistance: "Least span between a door's two ends · metres",
+  doorMatch: "Strength difference a door's ends may have · 0–1,000",
+  doorCount: "Most doors a world holds · count",
+  wildRelief: "Ground a wild zone moves per epoch · metres",
+  wildShuffle: "Cover a wild zone exchanges between trees and grass per epoch · share",
+  doorChill: "Cold a door's pool leaves on its cell · native units, 10 per °C",
+  doorPool: "Pool a door sinks into its cell · metres",
+  doorTravel: "What a door costs to cross · metres of travel",
+  knitVerdure: "Strain Greenwood's verdure relaxes at full verdure · share",
+  holdSalting: "Share of its last strength a tear keeps on fully salted ground · share",
 };

@@ -48,7 +48,7 @@ function participants(state: GenerationState, confluence: MagicConfluence) {
  * Strain between two fields in a cell: how strong both are and how sharply their gap turns
  * across the cell's edges. A smooth overlap strains little; a front strains much.
  */
-function strainAt(map: PhysicalField, a: MagicField, b: MagicField, i: number) {
+export function strainAt(map: PhysicalField, a: MagicField, b: MagicField, i: number) {
   const gap = (a.intensity[i] - b.intensity[i]) / 1000;
   let front = 0;
   for (let edge = 0; edge < map.mesh.degree[i]; edge++) {

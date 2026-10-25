@@ -176,6 +176,7 @@ it("keeps renamed clock identities, other systems and authored activity when app
     "greenwood",
     "salt",
     "hallowed",
+    "veil",
   ]);
 });
 

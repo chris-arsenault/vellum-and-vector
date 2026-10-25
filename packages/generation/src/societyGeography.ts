@@ -14,6 +14,7 @@ import { practiceSkill } from "./societySkill";
 import { atlasName } from "./atlasNaming";
 import { nearestSocietySample } from "./societySpatial";
 import { chooseSettlementSites } from "./societySites";
+import { doorEdges } from "./societyDoors";
 
 export interface SocietyEdge {
   a: number;
@@ -21,7 +22,7 @@ export interface SocietyEdge {
   cost: number;
   distance: number;
   /** Absent for a land edge. A sea edge from a dry cell to a sea cell is a launch. */
-  kind?: "river" | "sea";
+  kind?: "river" | "sea" | "door";
 }
 export interface SocietyWorkspace {
   region: SocietyRegion;
@@ -282,7 +283,10 @@ export function createSocietyGeography(
     deathsRecorded: new Set(),
   };
   refreshSocietySupport(state);
-  region.connections = connectionsFor(state, communities, owner, distances, edges);
+  region.connections = connectionsFor(state, communities, owner, distances, [
+    ...edges,
+    ...doorEdges(state),
+  ]);
   return state.society;
 }
 /** Camps of earlier rounds, as the cell each stands on; a present town prefers to sit on them. */
@@ -392,7 +396,10 @@ export function refreshSocietyConnections(state: GenerationState) {
   for (let index = communities.length; index < seeds.length; index++)
     communities.push(community(state, seeds[index]));
   work.owner = owner;
-  work.region.connections = connectionsFor(state, communities, owner, distances, work.edges);
+  work.region.connections = connectionsFor(state, communities, owner, distances, [
+    ...work.edges,
+    ...doorEdges(state),
+  ]);
 }
 /** Sum each country's yields, each livelihood raised by the skill its people's practice earns. */
 export function refreshSocietySupport(state: GenerationState) {

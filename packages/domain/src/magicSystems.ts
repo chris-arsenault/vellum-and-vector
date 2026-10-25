@@ -41,6 +41,8 @@ export const magicSources = [
   "dead-lake",
   "tenure",
   "kept-line",
+  "strain",
+  "pairing",
 ] as const;
 export const magicPropagations = [
   "fracture",
@@ -221,6 +223,29 @@ const parameterSchema = z.object({
   auroraReinforce: finite.min(0).max(1).default(0.3),
   // Resistance the first reach below a ward loses at full warding, per epoch.
   wardSpill: finite.nonnegative().default(200),
+  // Veil: strain at which a tear forms and at which it is full; the change in a tear's
+  // strength between epochs (as a share) that makes it wholly wild.
+  tearFloor: finite.min(0).max(1).default(0.05),
+  tearFull: finite.min(0).max(1).default(0.4),
+  wildShift: finite.min(0).max(1).default(0.3),
+  // Doors: the strength a stable tear needs, the least span between a pair's ends (metres),
+  // the strength difference a pair tolerates, and the most doors a world holds.
+  doorStrain: finite.min(0).max(1000).default(400),
+  doorDistance: positive.default(300_000),
+  doorMatch: finite.nonnegative().default(150),
+  doorCount: z.number().int().nonnegative().default(6),
+  // A wild zone moves its ground within this relief per epoch (metres) and exchanges this
+  // share of its cover; a door chills its cell (native units), sinks a pool (metres) and
+  // costs this much to cross (metres of travel).
+  wildRelief: finite.nonnegative().default(20),
+  wildShuffle: finite.min(0).max(1).default(0.3),
+  doorChill: finite.nonnegative().default(30),
+  doorPool: finite.nonnegative().default(3),
+  doorTravel: positive.default(5000),
+  // Verdure relaxes strain by this share at full verdure; salted ground holds a tear at this
+  // share of its last strength at full salting.
+  knitVerdure: finite.min(0).max(1).default(0.8),
+  holdSalting: finite.min(0).max(1).default(1),
 });
 // Overrides carry no defaults of their own, so a reparse keeps an origin's overrides sparse.
 const parameterOverrideSchema = z.object(
@@ -263,6 +288,8 @@ const legacyRenewal: Record<MagicSource, MagicRenewal> = {
   "dead-lake": "accumulating",
   tenure: "kept",
   "kept-line": "kept",
+  strain: "emergent",
+  pairing: "emergent",
 };
 const systemShape = z.object({
   id: z.string().min(1),
@@ -310,6 +337,8 @@ const systemShape = z.object({
       // Hallowed: every other system is scaled down inside and the amount removed lands on
       // the rim; rivers and coasts hold inside. 0–1 at full intensity.
       warding: finite.min(0).max(1).default(0),
+      // Veil: the ground tears where other systems strain against each other; 0–1.
+      tearing: finite.min(0).max(1).default(0),
       vegetationGrowth: finite.min(-1).max(5).default(0),
       fire: finite.min(0).max(1).default(0),
       organicPreservation: finite.min(-3).max(3).default(0),
@@ -400,6 +429,7 @@ export const magicPhysicalFields = [
   "coastalFirstEpoch",
   "stored",
   "sealed",
+  "wild",
   "scatter",
 ] as const;
 

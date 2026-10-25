@@ -43,6 +43,8 @@ export interface MagicField extends Record<MagicChannel, Float64Array> {
   lost: number;
   /** Stock people drew from each cell since the last advance; an overdrawn spring collapses. */
   drawn: Float64Array;
+  /** Veil's doors: pairs of stable tears, as the cells at their two ends. */
+  doors: { a: number; b: number }[];
   features: Record<string, Uint8Array>;
   /** Share of each member cell a rule's class occupies, by rule id. */
   coverage: Record<string, Float64Array>;
@@ -118,6 +120,7 @@ function createMagicField(state: GenerationState, definition: MagicSystem): Magi
     ...channels,
     definition,
     located: [],
+    doors: [],
     originSources: {},
     stocks: {},
     seeded: new Set(),

@@ -86,6 +86,7 @@ const ownChannels = new Set([
   "coastalFirstEpoch",
   "stored",
   "sealed",
+  "wild",
 ]);
 /** Whether every system a confluence reads is present and enabled. */
 export function confluenceEffective(confluence: MagicConfluence, systems: MagicSystem[]) {

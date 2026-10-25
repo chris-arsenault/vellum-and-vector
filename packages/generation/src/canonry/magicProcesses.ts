@@ -20,6 +20,7 @@ import { evaluateConfluences } from "./magicConfluences";
 import { stormWrites } from "./magicWeather";
 import { saltWrites } from "./magicSalt";
 import { hallowedWrites } from "./magicHallowed";
+import { veilWrites } from "./magicVeil";
 import { generationBindings } from "../generationBindings";
 import type { ProcessBehavior } from "../processTraits";
 import { ecologyLabels, type Epoch, type MagicConfluence, type MagicSystem } from "@atlas/domain";
@@ -134,6 +135,7 @@ export function magicProcesses(
       stormWrites(state);
       saltWrites(state);
       hallowedWrites(state);
+      veilWrites(state, context.epochIndices[0] ?? 0);
     },
     coast: magicCoastalFeedback,
     history: retainMagicHistory,
