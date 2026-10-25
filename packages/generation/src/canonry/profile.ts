@@ -384,6 +384,8 @@ export const physicalProfile = {
   GlacierThicknessThreshold: 250,
   GlacierFluxThreshold: 120_000_000,
   IceTransportYears: 1000,
+  // Extra erosive power of sliding ice at full Aurora charge, per mille.
+  ChargedIceErosion: 600,
   MinimumIceBalance: 80,
   GeothermalVentThreshold: 720,
   MantlePlumeCount: 3,

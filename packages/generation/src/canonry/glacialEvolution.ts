@@ -16,10 +16,12 @@ export function glacialErosion(map: PhysicalField, c: PhysicalContext) {
       map.GroundedIce[i] === 0
     )
       continue;
+    // Charge in sliding ice weakens the bed it touches; cold-based ice never reaches here.
     const power =
-      1 +
-      (map.IceFlux[i] - p.GlacierFluxThreshold) / Math.max(1, p.GlacierFluxThreshold) +
-      map.IceThickness[i] / Math.max(1, p.GlacierThicknessThreshold);
+      (1 +
+        (map.IceFlux[i] - p.GlacierFluxThreshold) / Math.max(1, p.GlacierFluxThreshold) +
+        map.IceThickness[i] / Math.max(1, p.GlacierThicknessThreshold)) *
+      (1 + (p.ChargedIceErosion / 1000) * map.IceCharge[i]);
     const resistance = map.CrustTypeCodes[i] === 2 ? 4 : 3;
     const cut = units(
       clamp(

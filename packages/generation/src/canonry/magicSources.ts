@@ -306,6 +306,8 @@ export const magicSourceStrategies: Record<MagicSource, SourceStrategy> = {
     label: "Cold terrain & high ground",
     requires: ["canonry:Temperature", "canonry:Elevation"],
     parameters: ["baseInput"],
+    // Its stocks are the charge in ice, ground, moraine and shelf, kept by the stock advance.
+    managesStock: true,
     locate: coldSources,
   },
   "deep-ocean": {

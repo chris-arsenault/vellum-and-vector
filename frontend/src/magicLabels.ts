@@ -70,4 +70,11 @@ export const parameterLabels: Record<keyof MagicSystem["parameters"], string> = 
   exhumedRelease: "Exposed spent stock feeding the source again · share",
   fanBarrenEpochs: "Epochs an ejecta fan stays barren",
   fanBarrenDepth: "Ejecta depth that makes a fan barren · metres",
+  relictStrength: "Held charge acting without ice · share of its iced strength",
+  iceCarry: "Ice reservoir moving a cell along the flow per epoch · share",
+  meltwaterLoss: "Ice reservoir lost with full meltwater per epoch · share",
+  iceChargeSaturation: "Charge per metre of ice at full charge · intensity·m² per m³",
+  thawSubsidence: "Ground lowered per 1,000 of thawed charge · metres",
+  thawSubsidenceLimit: "Most a cell subsides from thaw · metres",
+  shelfSaturation: "Shelf charge per square metre that holds sea ice fully",
 };

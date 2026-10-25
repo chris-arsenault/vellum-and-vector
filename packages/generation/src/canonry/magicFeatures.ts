@@ -108,6 +108,7 @@ export function projectMagic(state: GenerationState) {
   project("stillness", "ratio", work.map.Stillness, "intensive");
   project("fog", "ratio", work.map.FogForcing, "intensive");
   project("icePersistence", "ratio", work.map.IcePersistence, "intensive");
+  project("iceCharge", "ratio", work.map.IceCharge, "intensive");
   project("magic:strain", "ratio", magic.confluences.strain, "intensive");
   for (const field of magic.fields) {
     for (const channel of publishedMagicChannels)

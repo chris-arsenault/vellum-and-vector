@@ -35,10 +35,77 @@ export function advanceStocks(state: GenerationState, field: MagicField, epochIn
     for (const stock of originStocks(origin)) {
       const values = field.stocks[stockKey(origin, stock)];
       if (origin.renewal === "finite" && stock === originStocks(origin)[0]) consume(field, values);
+      if (stock.reservoir === "ice") gatherIntoIce(field, values);
+      if (stock.reservoir === "ground") mirrorGround(map, field, values);
       if (stock.carriers.includes("river")) field.lost += carryDownstream(map, field, values);
+      if (stock.carriers.includes("ice")) field.lost += carryWithIce(map, field, origin, values);
     }
     if (origin.source === "impact") barrenFan(map, field, epochIndex);
   }
+}
+/** The charge this epoch's propagation captured in the ice joins the ice reservoir. */
+function gatherIntoIce(field: MagicField, ice: Float64Array) {
+  for (let i = 0; i < ice.length; i++) ice[i] += field.retained[i];
+}
+/** The ground reservoir is the stored charge as an amount; the history pass keeps `stored`. */
+function mirrorGround(map: PhysicalField, field: MagicField, ground: Float64Array) {
+  for (let i = 0; i < ground.length; i++) ground[i] = field.stored[i] * map.mesh.areas[i];
+}
+/**
+ * Charge in ice is englacial debris: it rides the ice flow one cell per epoch by the carriage
+ * share, is dumped into the moraine where the ice ends on land and onto the shelf where it
+ * reaches the sea, and a share leaves with the meltwater. Ice that has gone drops its charge
+ * where it stood. The concentration left in the ice is written as `IceCharge`.
+ */
+function carryWithIce(
+  map: PhysicalField,
+  field: MagicField,
+  origin: MagicOrigin,
+  ice: Float64Array
+) {
+  const p = field.definition.parameters,
+    moraine = field.stocks[`${origin.id}/moraine`],
+    shelf = field.stocks[`${origin.id}/shelf`],
+    moved = new Float64Array(ice.length);
+  let lost = 0;
+  for (let i = 0; i < ice.length; i++) {
+    if (ice[i] <= 0) continue;
+    const melt = ice[i] * p.meltwaterLoss * clamp(map.GlacialMeltwater[i] / 1000, 0, 1);
+    ice[i] -= melt;
+    lost += melt;
+    if (map.IceThickness[i] <= 0) {
+      drop(map, i, ice[i], moraine, shelf, () => (lost += ice[i]));
+      ice[i] = 0;
+      continue;
+    }
+    const target = map.IceFlowTargets[i];
+    if (target < 0) continue;
+    const share = ice[i] * p.iceCarry;
+    ice[i] -= share;
+    if (map.IceThickness[target] > 0 && map.WaterKindCodes[target] !== 1) moved[target] += share;
+    else drop(map, target, share, moraine, shelf, () => (lost += share));
+  }
+  for (let i = 0; i < ice.length; i++) {
+    ice[i] += moved[i];
+    map.IceCharge[i] =
+      ice[i] > 0 && map.IceThickness[i] > 0
+        ? clamp(ice[i] / (map.mesh.areas[i] * map.IceThickness[i] * p.iceChargeSaturation), 0, 1)
+        : 0;
+  }
+  return lost;
+}
+/** Where ice lets its charge go: the shelf at sea, the moraine on land, or out of the budget. */
+function drop(
+  map: PhysicalField,
+  i: number,
+  amount: number,
+  moraine: Float64Array | undefined,
+  shelf: Float64Array | undefined,
+  lose: () => void
+) {
+  const sink = map.WaterKindCodes[i] === 1 ? shelf : moraine;
+  if (sink) sink[i] += amount;
+  else lose();
 }
 function consume(field: MagicField, values: Float64Array) {
   for (let i = 0; i < values.length; i++) values[i] *= 1 - field.releasing[i];

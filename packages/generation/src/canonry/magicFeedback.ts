@@ -1,9 +1,10 @@
 import type { GenerationState, MapProcessContext } from "../process";
 import type { PhysicalField } from "./field";
-import { clamp, rockResistance, round } from "./math";
+import { clamp, rockResistance, round, units } from "./math";
 import { Feature } from "./codes";
+import { rebuild } from "./surface";
 import { generationBindings } from "../generationBindings";
-import { magicBudget, originStocks } from "./magicState";
+import { magicBudget, originStocks, reservoirStock } from "./magicState";
 import { advanceStocks } from "./magicStocks";
 import type { MagicSystem } from "@atlas/domain";
 
@@ -24,7 +25,10 @@ type Field = NonNullable<NonNullable<GenerationState["physical"]>["magic"]>["fie
 export function heldCharge(map: PhysicalField, field: Field, i: number) {
   if (!field.definition.effects.icePersistence) return 1;
   const strength = Math.max((field.stored[i] - 300) / 150, (field.intensity[i] - 600) / 300);
-  return unit(strength) * unit(map.IceThickness[i] / 50);
+  // Relict charge in the ground keeps acting after the ice has gone, at a reduced strength,
+  // so a deglaciated valley stays cold until the charge has thawed away.
+  const relict = field.definition.parameters.relictStrength * unit((field.stored[i] - 300) / 150);
+  return unit(strength) * Math.max(unit(map.IceThickness[i] / 50), relict);
 }
 export function magicThermalFeedback(state: GenerationState) {
   const work = state.physical!,
@@ -271,6 +275,40 @@ export function magicCoastalFeedback(state: GenerationState, context?: MapProces
   }
 }
 /**
+ * Thawing ground charge on bare land lets the ground settle, like thermokarst: a bounded
+ * subsidence per cell that leaves the small closed basins Salt's dead lakes will read.
+ */
+function thawSubsidence(map: PhysicalField, field: Field, i: number, thawed: number) {
+  if (thawed <= 0 || map.IceThickness[i] > 0 || map.WaterKindCodes[i] !== 0) return;
+  const p = field.definition.parameters,
+    room = p.thawSubsidenceLimit - field.subsided[i];
+  if (room <= 0) return;
+  const metres = Math.min(room, (p.thawSubsidence * thawed) / 1000);
+  if (metres <= 0) return;
+  field.subsided[i] += metres;
+  map.BedrockElevation[i] -= units(metres);
+  rebuild(map, i);
+}
+/**
+ * Only the charge of a strong field (stored from intensities near the field rule's seed
+ * level) holds ice; the wide cold drainage below that leaves ice to the climate. Charge the
+ * glaciers calved onto a shelf holds the sea ice there.
+ */
+function holdIce(
+  map: PhysicalField,
+  field: Field,
+  i: number,
+  persistence: number,
+  shelf: Float64Array | undefined
+) {
+  const held = unit((field.stored[i] - 300) / 150),
+    shelved =
+      shelf && map.WaterKindCodes[i] === 1
+        ? unit(shelf[i] / (map.mesh.areas[i] * field.definition.parameters.shelfSaturation))
+        : 0;
+  map.IcePersistence[i] = Math.max(map.IcePersistence[i], persistence * Math.max(held, shelved));
+}
+/**
  * Accumulate history and storage. Stored Aurora charge is what the next epoch's ice
  * model respects: the share of ablation it prevents is written here, from the charge
  * that will be present when that ice model runs.
@@ -288,8 +326,11 @@ export function retainMagicHistory(state: GenerationState, context: MapProcessCo
       persistence = field.definition.effects.icePersistence;
     let active = 0,
       maximum = 0;
+    const shelf = reservoirStock(field, "shelf"),
+      p = field.definition.parameters;
     for (let i = 0; i < map.mesh.count; i++) {
-      const value = field.intensity[i];
+      const value = field.intensity[i],
+        before = field.stored[i];
       field.history[i] += value;
       // Only this epoch's own activity is stored; the charge carried in from earlier
       // epochs decays by retention instead of being stored again.
@@ -297,24 +338,19 @@ export function retainMagicHistory(state: GenerationState, context: MapProcessCo
         field.stored[i] * retention.retention +
         Math.max(0, value - field.stored[i]) * retention.storage;
       if (value > 0 && field.firstEpoch[i] < 0) field.firstEpoch[i] = index;
-      // Only the charge of a strong field (stored from intensities near the field rule's
-      // seed level) holds ice; the wide cold drainage below that leaves ice to the climate.
-      if (persistence > 0)
-        map.IcePersistence[i] = Math.max(
-          map.IcePersistence[i],
-          persistence * unit((field.stored[i] - 300) / 150)
-        );
+      if (p.thawSubsidence > 0) thawSubsidence(map, field, i, before - field.stored[i]);
+      if (persistence > 0) holdIce(map, field, i, persistence, shelf);
       if (i >= map.mesh.contentCount) continue;
       active += value > 0 ? map.mesh.areas[i] : 0;
       maximum = Math.max(maximum, value);
     }
     const budget = magicBudget(field, map),
-      units = (value: number) => Math.round(value / 1_000_000);
+      km2 = (value: number) => Math.round(value / 1_000_000);
     context.recordCause({
       kind: "domain",
       process: "canonry.magic-history",
       subjects: [],
-      description: `${field.definition.name}: epoch ${index + 1}, ${Math.round(active / 1_000_000)} affected km², peak intensity ${maximum}; budget created ${units(budget.created)}, in reservoirs ${units(budget.carried)}, stored ${units(budget.stored)}, released ${units(budget.released)}, lost ${units(budget.lost)} intensity·km²; accumulated activity, first occurrence and reservoirs travel with the crust.`,
+      description: `${field.definition.name}: epoch ${index + 1}, ${km2(active)} affected km², peak intensity ${maximum}; budget created ${km2(budget.created)}, in reservoirs ${km2(budget.carried)}, stored ${km2(budget.stored)}, released ${km2(budget.released)}, lost ${km2(budget.lost)} intensity·km²; accumulated activity, first occurrence and reservoirs travel with the crust.`,
     });
   }
 }

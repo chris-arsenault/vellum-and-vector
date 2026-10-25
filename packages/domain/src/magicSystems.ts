@@ -122,6 +122,19 @@ const parameterSchema = z.object({
   // Epochs an ejecta fan stays barren, and the ejecta depth (metres) that makes it so.
   fanBarrenEpochs: finite.nonnegative().default(3),
   fanBarrenDepth: positive.default(2),
+  // Strength at which held charge acts with no ice over it, as a share of its iced strength.
+  relictStrength: finite.min(0).max(1).default(0.5),
+  // Share of the ice reservoir that moves one cell along the ice flow per epoch.
+  iceCarry: finite.min(0).max(1).default(0.8),
+  // Share of the ice reservoir lost with full glacial meltwater per epoch.
+  meltwaterLoss: finite.min(0).max(1).default(0.2),
+  // Charge per metre of ice (intensity·m² per m³) at which the ice counts as fully charged.
+  iceChargeSaturation: positive.default(2),
+  // Ground lowered per unit of thawed charge (metres per 1,000 of stored lost) and its bound.
+  thawSubsidence: finite.nonnegative().default(3),
+  thawSubsidenceLimit: finite.nonnegative().default(6),
+  // Shelf charge per square metre at which sea ice is fully held.
+  shelfSaturation: positive.default(500),
 });
 // Overrides carry no defaults of their own, so a reparse keeps an origin's overrides sparse.
 const parameterOverrideSchema = z.object(

@@ -1107,6 +1107,62 @@ deeper than the same trough on the same seed without Aurora, and cold-based cell
 unchanged; shelves beside a calving Aurora coast hold charge; the Aurora budget closes.
 Evidence: unit tests on ice carriage, deposition, thaw, erosion amplification and the lake
 record; one short-scenario generation with glaciation, compared before and after.
+Sulion: `4889fdb3-d627-4cb3-bdb5-faca36b1b34e`; expansion opened 2026-10-25 (IDs in the
+Sulion tree).
+
+#### Execution steps (M1d)
+
+Design fixed at expansion. The Aurora origin declares four reservoirs: `ice` (carried by
+ice), `ground` (crust), `moraine` (crust) and `shelf` (current). The ice reservoir is the
+charge the glaciers hold: each epoch's captured charge (the existing `retained` channel)
+joins it in the stock advance, then it rides the ice flow one cell along the flow targets
+by a carriage share, is dumped into the moraine reservoir where the ice ends on land, into
+the shelf reservoir where it reaches the sea, and loses a share to glacial meltwater. The
+charge already in a cell's ice at the start of an epoch joins that cell's accumulation in
+the cold propagation, so a glacier that carried charge in brings it to the field. The
+ground reservoir mirrors the existing stored charge times area; moraine charge is relict
+charge that stays where the ice left it. A new physical channel `IceCharge` (the ice
+reservoir's concentration per metre of ice, 0–1) is written in the advance and read by
+glacial erosion, which cuts deeper under charged sliding ice and not at all under
+cold-based ice. Held charge acts without ice at the relict strength, so a deglaciated valley
+keeps its cold and stillness and the melt-line release that already exists in the soils
+pass (`meltRelease`) fires as the stillness falls. Where ground charge thaws (stored falls)
+on bare land, the ground subsides by a declared amount per unit of thaw, bounded per cell by
+a carried `subsided` channel, so the small closed basins Salt will read form. Shelf charge
+raises ice persistence on ocean cells.
+
+1. Reservoirs, channels and parameters: `magicPresets.ts`, `magicSystems.ts`,
+   `magicFieldDefinitions.ts`, `field.ts`, `transportHistory.ts`, `profile.ts`, labels.
+2. Ice carriage and the live field: `magicStocks.ts`, `magicPropagation.ts`,
+   `magicSources.ts` (cold manages its stock), `magicFeatures.ts` (publish IceCharge).
+3. Relict cold, fjords and thaw: `magicFeedback.ts` (held charge, subsidence, shelf
+   persistence), `glacialEvolution.ts`.
+4. Exit checks and record.
+
+#### Changes and resume (M1d)
+
+Completed 2026-10-25. Evidence: `magicAurora.test.ts` checks that charge in the ice rides
+the flow one cell per epoch by the carriage share, writes a positive ice charge where it
+lies, is dumped into the moraine where the ice ends on land and onto the shelf where it
+reaches the sea, and loses its meltwater share from the budget; that a deglaciated valley
+keeps stillness through relict charge at the relict strength, more under ice, and none when
+the relict strength is zero; that glacial erosion cuts deeper under charged sliding ice and
+not at all under cold-based ice; that thawing ground subsides up to the declared bound and
+iced ground does not; and that the soils pass releases the preserved matter when stillness
+falls. The characterization snapshot of the three presets is unchanged; 144 generation and
+domain tests pass with typecheck, eslint and Prettier clean. Material choices made while
+building: the existing `retained` channel (charge captured in ice this epoch) feeds the ice
+reservoir and the existing `stored` channel is the ground reservoir, so the new reservoirs
+reuse the two quantities the code already tracked rather than adding parallel ones; the
+charge a glacier already holds joins the cell's accumulation in the cold propagation, which
+leaves the first evaluation of a seed identical and changes later epochs only where ice
+carried charge in; the ice charge the erosion pass reads is a new physical channel
+(`IceCharge`) written in the stock advance, with the amplification a physical-profile value
+(`ChargedIceErosion`); the melt-line release was already in `ecologySoils.meltRelease` and
+is now covered by a test instead of re-implemented; thaw subsidence is bounded by a carried
+`subsided` channel so a cell can never sink past its limit however many epochs it thaws.
+Shelf charge raises ice persistence on ocean cells, which only the land-ice ablation pass
+reads today, so its effect on sea ice waits for a sea-ice read of persistence.
 
 ### M2 — Pressure weather
 
@@ -1315,4 +1371,6 @@ the three meetings moved out of the Pressure preset; confluence hazards; coverag
 confluence channels published; a confluence editor). M1c completed 2026-10-25 (the fallen
 origin with its finite stock, placers, burial, cracking agents and fan; spent ore, reopening
 and exhumation for the vein; Fire melt as glacial meltwater; panning and sealed-seat
-migration in society). M1d to M8 pending. Next action: plan-phase expands M1d.
+migration in society). M1d completed 2026-10-25 (Aurora's ice, ground, moraine and shelf
+reservoirs; ice carriage; relict cold; charged ice erosion; thaw subsidence). M2 to M8
+pending. Next action: plan-phase expands M2.

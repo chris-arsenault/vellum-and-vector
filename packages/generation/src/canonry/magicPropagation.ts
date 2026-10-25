@@ -6,7 +6,7 @@ import { hashUnit } from "./noise";
 import { edgeLeadingTo, triangleIdentity } from "./mesh";
 import { oceanPropagation } from "./magicOcean";
 import type { MagicPropagation, MagicSystem } from "@atlas/domain";
-import { withOrigin } from "./magicState";
+import { reservoirStock, withOrigin } from "./magicState";
 
 function fracturePropagation(state: GenerationState, field: MagicField, activity: number) {
   const map = state.physical!.map,
@@ -65,7 +65,12 @@ function coldTarget(state: GenerationState, i: number, seed: number) {
 function coldPropagation(state: GenerationState, field: MagicField, seed: number) {
   const map = state.physical!.map,
     p = field.definition.parameters;
-  const accumulation = Float64Array.from(field.source, (value, i) => value * map.mesh.areas[i]);
+  // Charge the glaciers already hold joins the cell's own fall before it drains coldward.
+  const iceStock = reservoirStock(field, "ice");
+  const accumulation = Float64Array.from(
+    field.source,
+    (value, i) => value * map.mesh.areas[i] + (iceStock?.[i] ?? 0)
+  );
   const order = Array.from({ length: map.mesh.count }, (_, i) => i).sort(
     (a, b) => map.Temperature[b] - map.Temperature[a] || b - a
   );

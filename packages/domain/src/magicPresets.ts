@@ -164,7 +164,22 @@ const firePreset = magicSystemSchema.parse({
 const auroraPreset = magicSystemSchema.parse({
   id: "aurora",
   name: "Aurora",
-  origins: [{ id: "field", source: "cold", propagation: "cold-drainage", renewal: "accumulating" }],
+  // Charge in the ice rides the glaciers; what thaws stays in the ground and travels with
+  // the crust; what the ice dropped lies in the moraines; what calved sits on the shelves.
+  origins: [
+    {
+      id: "field",
+      source: "cold",
+      propagation: "cold-drainage",
+      renewal: "accumulating",
+      stocks: [
+        { id: "ice", reservoir: "ice", carriers: ["ice"] },
+        { id: "ground", reservoir: "ground", carriers: ["crust"] },
+        { id: "moraine", reservoir: "moraine", carriers: ["crust"] },
+        { id: "shelf", reservoir: "shelf", carriers: ["current"] },
+      ],
+    },
+  ],
   phase: "post-glacial",
   effects: {
     rockResistance: -520,

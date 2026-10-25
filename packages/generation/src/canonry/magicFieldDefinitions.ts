@@ -45,6 +45,8 @@ export const magicFieldDefinitions = {
   arrival: occurrence,
   // The share of a cell's held stock the last evaluation released as source.
   releasing: { ...intensity, unit: "ratio", publish: false },
+  // Ground lowered so far by thawing charge, metres; bounded, and travels with the crust.
+  subsided: { ...intensity, unit: "metre", carried: true },
   radii: { ...intensity, unit: "metre", publish: false },
 } satisfies Record<string, MagicFieldDefinition>;
 

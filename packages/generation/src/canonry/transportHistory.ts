@@ -23,6 +23,7 @@ const intensive = [
   "Quickening",
   "Stillness",
   "IcePersistence",
+  "IceCharge",
   "ExternalUpwelling",
   "ExternalSeaSurfaceForcing",
   "FogForcing",

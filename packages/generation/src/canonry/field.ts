@@ -149,6 +149,8 @@ const metricFields = [
   "Quickening",
   "Stillness",
   "IcePersistence",
+  // Aurora's charge concentration in the ice, 0 to 1: charged sliding ice cuts deeper.
+  "IceCharge",
   "ExternalUpwelling",
   "ExternalSeaSurfaceForcing",
   "FogForcing",
