@@ -213,6 +213,14 @@ with no backend, persistence or MCP; preserve the existing backend source.
       and authored-protection rules. A painted border or clipping land at the
       map edge does not establish an ocean boundary.
 
+- [ ] **16. Salt beds shaping the fold belt above them.** A thick Salt bed
+      buried in an early epoch and later carried under a collision acts as a
+      detachment in nature: the belt above it folds broad and low. The Salt
+      system carries, domes and dissolves its beds but does not change the
+      orogeny over them. Reach into the mountain-building module only with a
+      concrete requirement; the effect shows on few seeds
+      ([magic systems plan](MAGIC-SYSTEMS-PLAN.md)).
+
 The [product contract](product-spec.md) supplies the geographic and authoring
 requirements. [ADR 0003](adr/0003-frontend-session.md) defines the current execution
 and session boundary; the [generation design](generation-workflows.md) records

@@ -37,6 +37,8 @@ export const magicSources = [
   "aquifer",
   "impact",
   "forge",
+  "death",
+  "dead-lake",
 ] as const;
 export const magicPropagations = [
   "fracture",
@@ -45,6 +47,7 @@ export const magicPropagations = [
   "radial",
   "roots",
   "local",
+  "brine",
 ] as const;
 /**
  * How an origin's stock is renewed: fed while its conduit is open and sealed after a budget,
@@ -174,6 +177,34 @@ const parameterSchema = z.object({
   // the cracked stock that cools away per epoch.
   forgeStrength: positive.default(250),
   forgeCooling: finite.min(0).max(1).default(0.5),
+  // Salt: stock made per death and per metre of a dried lake's depth (per square metre of
+  // its bed), and the salt per square metre that is full intensity.
+  saltPerDeath: finite.nonnegative().default(5_000_000),
+  saltPerLakeMetre: finite.nonnegative().default(40),
+  saltFull: positive.default(400),
+  // Brine: share flushed per epoch at full air moisture on oxygenated ground, share that seeps
+  // one cell down the drainage, and share that crusts to bed at a pit or a lake floor.
+  brineFlush: finite.min(0).max(1).default(0.6),
+  seepShare: finite.min(0).max(1).default(0.5),
+  crustShare: finite.min(0).max(1).default(0.5),
+  // Bed: share an exposed bed on wet ground dissolves back to brine per epoch, share an
+  // exposed bed on bare ground loses to the wind, and the share of dust that settles per epoch.
+  dissolveShare: finite.min(0).max(1).default(0.3),
+  dustShare: finite.min(0).max(1).default(0.15),
+  dustSettle: finite.min(0).max(1).default(0.5),
+  // Bed per square metre that fuses the ground to glass, and the resistance it adds per epoch.
+  glassBed: positive.default(800),
+  glassResistance: finite.nonnegative().default(300),
+  // Share of the air's moisture salted ground removes at full salting.
+  desiccation: finite.min(0).max(1).default(0.5),
+  // A buried bed under this much strain domes: metres risen per epoch, the bound, and the
+  // share of the bed that seeps to the ring as brine.
+  domeStrain: finite.min(0).max(1000).default(600),
+  domeRise: finite.nonnegative().default(3),
+  domeLimit: finite.nonnegative().default(60),
+  domeSeep: finite.min(0).max(1).default(0.05),
+  // Share of every Salt reservoir Fire at full intensity burns away per epoch.
+  saltBurn: finite.min(0).max(1).default(0.8),
 });
 // Overrides carry no defaults of their own, so a reparse keeps an origin's overrides sparse.
 const parameterOverrideSchema = z.object(
@@ -212,6 +243,8 @@ const legacyRenewal: Record<MagicSource, MagicRenewal> = {
   verdant: "accumulating",
   aquifer: "continuous",
   forge: "accumulating",
+  death: "accumulating",
+  "dead-lake": "accumulating",
 };
 const systemShape = z.object({
   id: z.string().min(1),
@@ -253,6 +286,9 @@ const systemShape = z.object({
       // Greenwood: the life carried in sap and groundwater that grows forest past its
       // climate, deepens soil and braids rivers; 0–1 at full intensity.
       verdure: finite.min(0).max(1).default(0),
+      // Salt: the preserving residue that thins cover, starves soil, turns grazers away and
+      // dries the air over it; 0–1 at full intensity.
+      salting: finite.min(0).max(1).default(0),
       vegetationGrowth: finite.min(-1).max(5).default(0),
       fire: finite.min(0).max(1).default(0),
       organicPreservation: finite.min(-3).max(3).default(0),

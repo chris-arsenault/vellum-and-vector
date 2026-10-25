@@ -10,7 +10,8 @@ function populationResponse(value: number, capacity: number, years: number, time
 }
 
 function forage(map: PhysicalField, i: number, browser: boolean) {
-  const palatable = unit(1 - map.EcologicalToxicity[i] * 0.5);
+  // Grazers avoid salted ground as they avoid poisoned ground.
+  const palatable = unit(1 - map.EcologicalToxicity[i] * 0.5 - map.Salting[i]);
   const food = browser
     ? map.TreeCover[i] * 0.018
     : map.GrassCover[i] * 0.08 + map.WetlandCover[i] * 0.025;
@@ -25,7 +26,7 @@ function consume(
   browser: boolean
 ) {
   const e = environment(map, i);
-  const danger = e.frozen || e.submerged ? 1 : map.EcologicalToxicity[i];
+  const danger = e.frozen || e.submerged ? 1 : Math.max(map.EcologicalToxicity[i], map.Salting[i]);
   const predation = map.Predators[i] * 0.4;
   const target = (capacity[i] / (1 + predation * 30)) * (1 - danger);
   const before = population[i];

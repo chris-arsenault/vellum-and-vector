@@ -19,6 +19,10 @@ it("ships the three meetings as presets that validate against the preset systems
     "rot",
     "frozen",
     "brackish",
+    "preserved",
+    "fired",
+    "standing-dead",
+    "brine-shore",
   ]);
   expect(() => validateMagicConfluences(confluences, systems)).not.toThrow();
   expect(confluences[0].effects.fractureConductance).toBeGreaterThan(0);
@@ -41,7 +45,7 @@ it("rejects own-channel conditions and treats an absent system as never holding"
     systems: ["fire", "aurora"],
     seeds: [[{ field: "system:fire", min: 1 }]],
   };
-  const absent = magicConfluenceSchema.parse({ ...base, systems: ["fire", "salt"] });
+  const absent = magicConfluenceSchema.parse({ ...base, systems: ["fire", "veil"] });
   expect(() => validateMagicConfluences([absent], systems)).not.toThrow();
   expect(confluenceEffective(absent, systems)).toBe(false);
   expect(() =>

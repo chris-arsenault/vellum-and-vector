@@ -1491,6 +1491,93 @@ Aurora field over a barrow preserves it; Fire over salting removes it.
 Evidence: unit tests on origin detection, seep, retention, flushing and desiccation;
 ecology tests on salting; a short-scenario generation with a bound era and a hazard.
 
+#### Execution steps (M5)
+
+Design fixed at expansion, from the Salt page and the code as it stands after M4. Salt is a
+post-glacial system of two origins that share one material: `death` turns the mesh's
+`MassDeath` record into brine where the dead lie, consuming the record (the dead are what
+the Salt is made of), and `dead-lake` turns a carried lake memory into bed where a lake
+stood and the ground is a dry depression now, consuming the memory. Both propagate by
+`brine`: the intensity is the salt per area in a cell's brine, bed and dust, so the field is
+where the material is and nowhere else. The material moves in the stock advance each
+epoch, the way Aurora's charge and Greenwood's sap do. Brine flushes by the share declared
+times the air's moisture where the ground is not anoxic (wetland cover and peat keep it),
+seeps one cell down the flow targets, is lost to the sea, and crusts to bed at a pit. Bed
+under sediment is inert; exposed on wet ground it dissolves back to brine and the ground
+drops a bounded sink; exposed on dry ground the wind lifts a share to the downwind cell as
+dust, and dust settles to bed by a share each epoch or blows on, so the reach is geometric
+and bounded. Bed buried under strain beyond a threshold domes: the ground rises by a
+bounded amount per epoch and brine seeps to the ring, the brine springs of coupling 10.
+Fire burns Salt: every reservoir loses a share times the quickening system's intensity each
+epoch, the one sink besides the sea. The lake memory is a carried channel `LakeMemory`
+written at the history pass (the depth while a cell is a lake), so a lake that dies between
+epochs is found by the memory it left. Fire's river warmth adds to runoff evaporation by a
+profile share, so a Fire country's basins get less water and die sooner (coupling 12).
+Writes: `Salting` beside Quickening and Verdure (the shared living feedback), read by
+ecology as thinning (mortality), infertility (productivity), avoidance (forage and danger
+for grazers) and a lower infiltration (the soil's water); a Salt pass after the storm
+writes fuses the ground to glass where bed per area passes the glass threshold (rock
+resistance up, soil gone) and draws the air's moisture down in proportion to salting, the
+desiccation ecology and the after-response water see this epoch. Society: a `salts` role;
+raking gathers bed under a seat into a `salt` ledger that trade carries and deposits as bed
+where it is sold, so salt trade salts the necropolises it supplies; `necropolis` is a site
+class on a killing ground. Confluences: Preserved barrow (Aurora), Fired crust (Fire),
+Standing-dead front (Greenwood) and Brine shore (Pressure) join the presets with their own
+effects and the barrow's hazard. Classes ground, pan, flat, dust and barrow; biomes Barrow
+heath, Salt pan and Glass flat; palette entries; the Salt detachment effect stays deferred.
+Mirages and detour routes are presentation and travel-cost reads with no field behind them
+and are left to M8 with the rest of the drawing.
+
+1. System and material: `magicSystems.ts` (sources death and dead-lake, propagation brine,
+   effect salting, parameters), `magicPresets.ts` (Salt), `magicSaltSources.ts` (both
+   origins consuming their records), `magicPropagation.ts` (brine), `magicStocks.ts`
+   (brine, bed and dust advances; dome), `field.ts`/`transportHistory.ts` (`Salting`,
+   `LakeMemory`), `magicFeedback.ts` (Salting in the living feedback; lake memory at
+   history), `magicSalt.ts` (glass, desiccation, Fire burning), `climate.ts` (warm runoff).
+2. Living and society reads: `ecologyEnvironment.ts`, `ecologyProcesses.ts`,
+   `ecologyGrowth.ts`, `ecologyAnimals.ts`, `ecologySoils.ts`; `societyMagicAccess.ts`
+   (salts role), `societyMagic.ts` (raking and the salt ledger), `societySites.ts` and
+   `society.ts` (necropolis); `societyRecord.ts` marks death-origin systems touched.
+3. Meetings, classes and names: `magicConfluences.ts` presets, `ecology.ts`,
+   `ecologyBiomes.ts`, `ecologyFeatures.ts`, `namingCultures.ts`, `atlasNaming.ts`,
+   `atlasPublications.ts`, `geographySurfaces.ts`, `magicLabels.ts`, preset tests.
+4. Exit checks: `magicSalt.test.ts` (death record to brine with the record consumed; seep,
+   retention, flushing, crusting; dust downwind and settling; a dried lake to bed; glass
+   and desiccation; ecology thinning and avoidance; Fire burning; a dome within its bound;
+   a disabled Salt leaving nothing); society test for the necropolis and salt trade;
+   characterization snapshot (Salt zeros on the bare scenario); whole frontend suite,
+   packages suite, typecheck, lint, Prettier; record and commit.
+
+#### Changes and resume (M5)
+
+Completed 2026-10-25. Evidence: `magicSalt.test.ts` shows the dead a cell records becoming
+brine at the declared rate with the record consumed and a second evaluation making nothing
+more, full intensity and salting on the cell and none beside it; brine seeping one cell down
+the drainage, crusting to bed at a pit over two epochs, flushed on wet oxygenated ground and
+kept by peat; an exposed bed losing its share to the wind with half settling one cell on and
+the rest blowing a cell further, and a wooded bed held down; a remembered lake leaving its
+bed by depth once dry in a basin and the memory consumed; a deep bed fusing the ground
+(resistance up, soil gone) and halving the air's moisture over it while the next cell keeps
+its own; Fire burning four fifths of a bed at full intensity and fusing the ground; a buried
+bed under strain doming to its sixty-metre bound over forty epochs with brine in the ring,
+and the same bed unstrained staying put; and a disabled Salt leaving nothing. The society
+tests show rakers taking bed from under a seat, trade carrying it down the way and laying it
+at the market, none without the way, the siege's dead marking Salt for re-evaluation, and a
+necropolis seated on a killing ground. The characterization snapshot adds Salt's zeros on
+the bare scenario and keeps the four older presets exactly. Design choices made while
+building: both origins consume the records they read (the dead, the lake memory), so Salt
+accumulates without re-making itself from the same deaths each epoch; the brine
+propagation is the material per area summed over both origins, so the two origins' salt is
+one field; dust settles half and blows half each epoch, which bounds its reach without a
+distance parameter; the bed under the sea dissolves into the budget's loss; the brine
+strategy requires only the flow routing, since the wind arrays exist with or without a wind
+pass (the whole frontend suite caught the `canonry:Wind` requirement again, as it did for
+M1c); fallen-core sources moved to `magicFallenSources.ts` to keep the source module under
+its line limit. The Salt detachment effect on orogeny stays deferred and is recorded in the
+backlog. Mirages and detour routes are left to M8 with the rest of the drawing. 933 of 936
+frontend-run tests pass (the three landmark failures predate this plan), typecheck, lint and
+Prettier clean.
+
 ### M6 — Hallowed
 
 Scope: the system as the Composition block gives it: tenure, pilgrimage and bound-line
@@ -1607,4 +1694,7 @@ confluences, the healing-well site). M4 completed 2026-10-25 (people as carrier:
 ledgers, the forge origin, seed gathering and planting, clearance water and sap; people as
 source: tenure, walked routes and mass death on the mesh, the siege event; the society
 phase in the environmental refresh), with the frontend-suite regressions from M1a to M3
-repaired on a sub-branch. M5 to M8 pending. Next action: plan-phase expands M5.
+repaired on a sub-branch. M5 completed 2026-10-25 (Salt from the dead and dead lakes;
+brine, bed and dust moved by drainage, crusting, wind and strain; glass, desiccation and
+Fire burning; salting in ecology; raking, salt trade and the necropolis; four meetings;
+three biomes). M6 to M8 pending. Next action: plan-phase expands M6.

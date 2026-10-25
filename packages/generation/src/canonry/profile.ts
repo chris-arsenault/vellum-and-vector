@@ -341,6 +341,9 @@ export const physicalProfile = {
   // bare ground loses DuneMobility of its sediment downwind.
   StormScour: 0.3,
   DuneMobility: 0.3,
+  // A river carrying magical warmth loses WarmRiverEvaporation of its water to the air at
+  // full warmth, so the closed lake it ends in gets less and dies sooner.
+  WarmRiverEvaporation: 0.3,
   // Fog over an upwelling band drips onto the coast it faces (mm/year at full share)
   // and cools it (native units at full share).
   FogDrip: 300,

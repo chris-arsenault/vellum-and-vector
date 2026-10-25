@@ -26,6 +26,9 @@ const families: Record<string, string> = {
   "Fog heath": "fog",
   "Moss forest": "fog",
   Deepwood: "deepwood",
+  "Barrow heath": "barrow",
+  "Salt pan": "pan",
+  "Glass flat": "flat",
   "Wending fen": "wending",
   "Well meadow": "well",
 };

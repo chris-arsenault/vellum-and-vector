@@ -84,6 +84,7 @@ function forcing(state: GenerationState, input: EcologyInput, context?: MapProce
       quickening: map.Quickening[i],
       stillness: map.Stillness[i],
       verdure: map.Verdure[i],
+      salting: map.Salting[i],
       productivity: (input.parameters?.vegetation ?? 1) * ecology.productivity,
       grazing: input.parameters?.grazing ?? 1,
       seasonality: ecology.seasonality,

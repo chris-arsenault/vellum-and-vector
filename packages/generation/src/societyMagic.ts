@@ -238,11 +238,36 @@ function greenwoodUse(
   if (planted <= 0) return;
   p.seed -= depositAt(state, "greens", "sap", i, planted);
 }
+/**
+ * Salt in people's hands: rakers take bed from the pan under their seat into a ledger that
+ * trade carries, and a community lays down a share of the salt it holds where it stands, so
+ * the salt trade salts the necropolises it supplies.
+ */
+function saltUse(
+  state: GenerationState,
+  c: SocietyCommunity,
+  p: SocietyMagicPractice,
+  years: number
+) {
+  const i = nearestSample(state, c.position),
+    bed = reservoirAt(state, "salts", "bed", i);
+  p.salt ??= 0;
+  if (bed > 0) {
+    const wanted = Math.min(bed * raking.share * years, population(c) * years * raking.perHead);
+    p.salt += drawAt(state, "salts", "bed", i, wanted);
+  }
+  const laid = p.salt * (1 - Math.exp(-saltLaying * years));
+  if (laid <= 0) return;
+  p.salt -= depositAt(state, "salts", "bed", i, laid);
+}
+/** Share of the bed under a seat raked per year, and the most per head; share of carried salt laid per year. */
+const raking = { share: 0.002, perHead: 2e4 };
+const saltLaying = 0.05;
 /** What a way carries in a year relative to the base: distance decay, more on a worn road. */
 function wayFlow(link: { travelCost: number; wear?: number }) {
   return Math.exp(-link.travelCost / 200000) * (1 + Math.min(1, (link.wear ?? 0) / 1000));
 }
-const tradedLedgers = ["coreSupply", "seed"] as const;
+const tradedLedgers = ["coreSupply", "seed", "salt"] as const;
 /**
  * Trade carries the ledgers people hold along the ways between communities, each toward the
  * poorer end in proportion to the way's flow: cores from the mines to the forges, seed from
@@ -277,6 +302,7 @@ export function useSocietyMagic(state: GenerationState, context: MapProcessConte
     auroraUse(state, c, p, years, skill);
     pressureUse(state, c, p, years, skill);
     greenwoodUse(state, c, p, years);
+    saltUse(state, c, p, years);
   }
   tradeStocks(state, years);
   context.recordCause({

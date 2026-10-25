@@ -41,6 +41,10 @@ export const biomes = [
   { name: "Deepwood", color: "#2f6b3a" },
   { name: "Wending fen", color: "#6e9a7c" },
   { name: "Well meadow", color: "#9cc26a" },
+  // Salt's residue: the memorial heath on a killing ground, the pan, the fused flat.
+  { name: "Barrow heath", color: "#9a8f7a" },
+  { name: "Salt pan", color: "#e8e2d2" },
+  { name: "Glass flat", color: "#cfd9e3" },
 ] as const;
 export const biomeCode = (name: (typeof biomes)[number]["name"]) =>
   biomes.findIndex((biome) => biome.name === name);
@@ -58,6 +62,9 @@ export const biomeFamilies = [
   { kind: "deepwood", name: "Deepwood", color: "#2f6b3a" },
   { kind: "wending", name: "Wending fen", color: "#6e9a7c" },
   { kind: "well", name: "Well meadow", color: "#9cc26a" },
+  { kind: "barrow", name: "Barrow heath", color: "#9a8f7a" },
+  { kind: "pan", name: "Salt pan", color: "#e8e2d2" },
+  { kind: "flat", name: "Glass flat", color: "#cfd9e3" },
 ] as const;
 
 export const ecologyLabels: Record<string, string> = {

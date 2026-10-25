@@ -2,19 +2,20 @@ import { gridPosition, type MagicSystem, type SocietyCommunity } from "@atlas/do
 import type { GenerationState } from "./process";
 import { samplesInBox } from "./societySpatial";
 import { societyValue } from "./societySupport";
-import { depositReservoir, drawReservoir, reservoirStock } from "./canonry/magicState";
+import { depositReservoir, drawReservoir, reservoirAmount } from "./canonry/magicState";
 
 /**
  * What society asks of a system is a role its effects declare, never its name or the way
  * it propagates: the system that quickens is mined and forged, the one that stills is
  * read through its crystals, the one that moves water is dived.
  */
-export type MagicRole = "quickens" | "stills" | "moves-water" | "greens";
+export type MagicRole = "quickens" | "stills" | "moves-water" | "greens" | "salts";
 export const magicRoles: Record<MagicRole, (effects: MagicSystem["effects"]) => boolean> = {
   quickens: (e) => e.quickening > 0,
   stills: (e) => e.stillness > 0,
   "moves-water": (e) => e.upwelling > 0 || e.seaSurface !== 0 || e.fog > 0 || e.wakeWarming > 0,
   greens: (e) => e.verdure > 0,
+  salts: (e) => e.salting > 0,
 };
 /** The enabled system that fills this role, or none. */
 export function magicSystemForRole(systems: MagicSystem[] | undefined, role: MagicRole) {
@@ -50,7 +51,7 @@ export function reservoirAt(
 ) {
   const field = magicFieldForRole(state, role),
     cell = cellOf(state, sample);
-  return field && cell >= 0 ? (reservoirStock(field, reservoir)?.[cell] ?? 0) : 0;
+  return field && cell >= 0 ? reservoirAmount(field, reservoir, cell) : 0;
 }
 /**
  * People take an amount of a system's reservoir out of the mesh under a sample: mining takes

@@ -198,6 +198,12 @@ function healingWell(r: SiteReader, i: number): SiteOpportunity | null {
     ? { kind: "healing-well", score: 0.9, reason: "at a Greenwood spring" }
     : null;
 }
+/** A killing ground: the memorial garden a Salt tradition rakes, and the court beside the graves. */
+function necropolis(r: SiteReader, i: number): SiteOpportunity | null {
+  return r.feature("salt", "ground", i)
+    ? { kind: "necropolis", score: 0.6, reason: "on a killing ground, the memorial garden" }
+    : null;
+}
 const classifiers = [
   pass,
   fireSeat,
@@ -205,6 +211,7 @@ const classifiers = [
   harbour,
   meltLine,
   healingWell,
+  necropolis,
   fisheryCoast,
   haloEdge,
   plainNode,

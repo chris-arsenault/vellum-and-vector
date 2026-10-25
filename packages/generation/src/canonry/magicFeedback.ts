@@ -6,6 +6,7 @@ import { rebuild } from "./surface";
 import { generationBindings } from "../generationBindings";
 import { magicBudget, originStocks, reservoirStock } from "./magicState";
 import { advanceStocks } from "./magicStocks";
+import { rememberLakes } from "./magicSaltSources";
 import type { MagicSystem } from "@atlas/domain";
 
 export const coastalMagicParameters: (keyof MagicSystem["parameters"])[] = [
@@ -75,16 +76,19 @@ export function magicLivingFeedback(state: GenerationState) {
   for (let i = 0; i < map.mesh.count; i++) {
     let quickening = 0,
       stillness = 0,
-      verdure = 0;
+      verdure = 0,
+      salting = 0;
     for (const field of fields) {
       const share = field.intensity[i] / 1000;
       quickening += share * field.definition.effects.quickening;
       stillness += share * field.definition.effects.stillness * heldCharge(map, field, i);
       verdure += share * field.definition.effects.verdure;
+      salting += share * field.definition.effects.salting;
     }
     map.Quickening[i] = unit(quickening);
     map.Stillness[i] = unit(stillness);
     map.Verdure[i] = unit(verdure);
+    map.Salting[i] = unit(salting);
     // Greenwood divides the river that crosses it into wetland channels: the braided reach.
     if (map.Verdure[i] > 0.3 && map.RiverOrders[i] >= 1 && map.WaterKindCodes[i] === 0) {
       map.WetlandCover[i] = Math.max(map.WetlandCover[i], 0.5 * map.Verdure[i]);
@@ -364,6 +368,8 @@ export function retainMagicHistory(state: GenerationState, context: MapProcessCo
   map.IcePersistence.fill(0);
   // The next epoch's ice is new ice; its melt starts from nothing.
   state.physical!.magic!.melt.fill(0);
+  // The lakes of this epoch are remembered, so one that dies by the next is found by Salt.
+  rememberLakes(map);
   for (const field of state.physical!.magic!.fields) {
     if (!field.definition.enabled) continue;
     advanceStocks(state, field, index);

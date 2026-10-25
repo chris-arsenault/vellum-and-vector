@@ -47,6 +47,8 @@ export const magicFieldDefinitions = {
   releasing: { ...intensity, unit: "ratio", publish: false },
   // Ground lowered so far by thawing charge, metres; bounded, and travels with the crust.
   subsided: { ...intensity, unit: "metre", carried: true },
+  // Ground raised so far by a salt dome, metres; bounded, and travels with the crust.
+  domed: { ...intensity, unit: "metre", carried: true },
   radii: { ...intensity, unit: "metre", publish: false },
 } satisfies Record<string, MagicFieldDefinition>;
 

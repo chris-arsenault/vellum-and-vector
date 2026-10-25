@@ -101,6 +101,9 @@ const biomeFamilies = new Set([
   "deepwood",
   "wending",
   "well",
+  "barrow",
+  "pan",
+  "flat",
 ]);
 
 /** Adapt current GIS ecological family kinds to NameForge's biome kind + classified subkind. */

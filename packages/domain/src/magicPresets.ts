@@ -377,6 +377,62 @@ const greenwoodPreset = magicSystemSchema.parse({
     feature("sinkhole", "Sinkhole field", 70, [[land, at("sealed", 1), at("source:spring", 0)]]),
   ],
 });
+/** Brine, bed and dust: the one material of Salt, in each origin's own reservoirs. */
+const saltStocks = () => [
+  { id: "brine", reservoir: "brine", carriers: ["crust"] },
+  { id: "bed", reservoir: "bed", carriers: ["crust", "wind", "people"] },
+  { id: "dust", reservoir: "dust", carriers: ["wind"] },
+];
+const saltPreset = magicSystemSchema.parse({
+  id: "salt",
+  name: "Salt",
+  // The dead the ground records become brine where they lie; a lake that died in a closed
+  // basin leaves its bed. Both seep, crust, blow and ride the crust as one material.
+  origins: ["death", "dead-lake"].map((id) => ({
+    id,
+    source: id,
+    propagation: "brine",
+    renewal: "accumulating",
+    stocks: saltStocks(),
+  })),
+  phase: "post-glacial",
+  parameters: {},
+  // Salt acts on the living through salting alone: thinning, infertility, avoidance, drying.
+  effects: { salting: 1 },
+  // Salt does not decay; what is not flushed or burned is still there next epoch.
+  history: { retention: 1, storage: 0.2 },
+  features: [
+    // Where the dead lie: the brine of the killing and the bed it crusts to.
+    feature(
+      "ground",
+      "Killing ground",
+      60,
+      [
+        [land, at("stock:death/brine", 5)],
+        [land, at("stock:death/bed", 5)],
+      ],
+      undefined,
+      covers(50, 800)
+    ),
+    feature("pan", "Salt pan", 55, [[land, at("intensity", 200)]], undefined, covers(200, 900)),
+    // Bed deep enough to fuse the ground: the flat that mirages stand on.
+    feature("flat", "Glass flat", 90, [
+      [land, at("stock:dead-lake/bed", 800)],
+      [land, at("stock:death/bed", 800)],
+    ]),
+    feature(
+      "dust",
+      "Salt dust",
+      30,
+      [
+        [land, at("stock:death/dust", 10)],
+        [land, at("stock:dead-lake/dust", 10)],
+      ],
+      undefined,
+      { field: "intensity", floor: 20, full: 400 }
+    ),
+  ],
+});
 export function canonryMagicPresets() {
-  return structuredClone([firePreset, auroraPreset, pressurePreset, greenwoodPreset]);
+  return structuredClone([firePreset, auroraPreset, pressurePreset, greenwoodPreset, saltPreset]);
 }

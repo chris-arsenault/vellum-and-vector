@@ -11,9 +11,13 @@ import { nativeIndexAtSurface } from "./canonry/atlasWorkspace";
  */
 export function recordSocietyOnMesh(state: GenerationState, years: number) {
   if (!state.physical || !state.society || years <= 0) return;
-  recordSeats(state, years);
-  recordEvents(state);
+  const deaths = recordSeats(state, years) + recordEvents(state);
   walkRoutes(state, years);
+  // A system made of the dead is re-evaluated when there are new dead to make it from.
+  if (deaths > 0)
+    for (const system of state.domain.world.magicSystems ?? [])
+      if (system.enabled && system.origins.some((origin) => origin.source === "death"))
+        (state.society.magicTouched ??= new Set()).add(system.id);
 }
 function cellAt(state: GenerationState, p: Pick<Position, "x" | "y">) {
   return nativeIndexAtSurface(state, p.x, p.y);
@@ -22,26 +26,34 @@ function cellAt(state: GenerationState, p: Pick<Position, "x" | "y">) {
 function recordSeats(state: GenerationState, years: number) {
   const map = state.physical!.map,
     society = state.society!;
+  let deaths = 0;
   for (const c of society.region.communities) {
     const cell = cellAt(state, c.position);
     if (cell < 0) continue;
     if (c.status === "inhabited") map.Tenure[cell] += population(c) * years;
     const fell = society.dieOff?.get(c.id) ?? 0;
-    if (fell > 0) map.MassDeath[cell] += fell;
+    if (fell <= 0) continue;
+    map.MassDeath[cell] += fell;
+    deaths += fell;
   }
   society.dieOff?.clear();
+  return deaths;
 }
 /** Each event's casualties, once, where the event struck. */
 function recordEvents(state: GenerationState) {
   const map = state.physical!.map,
     society = state.society!,
     recorded = (society.deathsRecorded ??= new Set());
+  let deaths = 0;
   for (const event of society.region.events) {
     if (recorded.has(event.id) || event.casualties <= 0) continue;
     recorded.add(event.id);
     const cell = cellAt(state, event.position);
-    if (cell >= 0) map.MassDeath[cell] += event.casualties;
+    if (cell < 0) continue;
+    map.MassDeath[cell] += event.casualties;
+    deaths += event.casualties;
   }
+  return deaths;
 }
 /** Every cell under a way takes the way's yearly travellers for the years of the cycle. */
 function walkRoutes(state: GenerationState, years: number) {

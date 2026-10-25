@@ -32,8 +32,15 @@ function proposal(
   const flood = map.FloodFrequency[i] * group.floodSensitivity;
   // Quickened plants mature early and die young; stilled plants stand past their span.
   const turnover = (1 + 3 * f.quickening) * (1 - 0.85 * f.stillness);
+  // Salted ground thins what grows on it: the residue is a standing mortality.
   const mortality =
-    turnover / group.lifespan + (1 - suitable) / 100 + browsing + toxicity + fire + flood;
+    turnover / group.lifespan +
+    (1 - suitable) / 100 +
+    browsing +
+    toxicity +
+    fire +
+    flood +
+    0.05 * f.salting;
   const rate =
     (2 / group.maturity) *
       suitable *
@@ -41,7 +48,8 @@ function proposal(
       f.productivity *
       (1 + 2 * f.quickening) *
       (1 - 0.7 * f.stillness) *
-      (1 + f.verdure) -
+      (1 + f.verdure) *
+      (1 - 0.8 * f.salting) -
     mortality;
   const cover = logistic(Math.max(previous, seed), rate, available, suitable);
   return {
@@ -149,7 +157,9 @@ export function growCommunities(
       f.productivity *
       Math.max(0, 1 + f.growth) *
       (1 + f.quickening) *
-      (1 - 0.5 * f.stillness);
+      (1 - 0.5 * f.stillness) *
+      // Salted soil is infertile.
+      (1 - 0.8 * f.salting);
     const light = Math.exp(-e.depth / 100),
       wet = e.water > 0 || e.wetness > 0.5;
     // Upwelling returns deep nutrients to the sunlit surface.

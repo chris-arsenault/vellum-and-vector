@@ -145,9 +145,12 @@ export function runoff(map: PhysicalField, c: PhysicalContext) {
           map.Evapotranspiration[i] * 1000 + available * map.Infiltration[i] * 0.08
         )
       : available * vegetationLoss;
-    const evaporation = map.EcologyInitialized
-      ? Math.max((available * loss) / 1000, ecologicalLoss)
-      : (available * loss) / 1000 + ecologicalLoss;
+    // Magical warmth carried down the channel evaporates more of what the channel carries.
+    const warmLoss = truncate((available * map.RiverWarmth[i] * p.WarmRiverEvaporation) / 1000);
+    const evaporation =
+      (map.EcologyInitialized
+        ? Math.max((available * loss) / 1000, ecologicalLoss)
+        : (available * loss) / 1000 + ecologicalLoss) + warmLoss;
     // Wetlands and peat hold water back, so the floods below them are flatter.
     const held = map.EcologyInitialized
       ? Math.min(0.45, 0.3 * map.WetlandCover[i] + map.PeatCarbon[i] / 60)

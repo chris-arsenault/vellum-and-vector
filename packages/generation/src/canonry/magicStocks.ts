@@ -4,6 +4,7 @@ import type { PhysicalField } from "./field";
 import { originStocks, stockKey, type MagicField } from "./magicState";
 import { clamp, units } from "./math";
 import { rebuild } from "./surface";
+import { seepBrine, settleDust, weatherBed } from "./magicSaltStocks";
 
 /**
  * How much of a cell's stock the ground still exposes: whole on bare rock, none once the
@@ -49,6 +50,9 @@ const reservoirAdvances: Record<
   stratum: buryPeat,
   sap: decaySap,
   forge: coolForge,
+  brine: seepBrine,
+  bed: weatherBed,
+  dust: settleDust,
 };
 function advanceStock(
   map: PhysicalField,

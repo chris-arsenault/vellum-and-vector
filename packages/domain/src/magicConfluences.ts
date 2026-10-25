@@ -101,7 +101,64 @@ const at = (field: string, min: number) => ({ field, min });
  * surface palette and saved maps already know (war, steam, breach).
  */
 export function canonryConfluencePresets(): MagicConfluence[] {
-  return [...elementalMeetings(), ...greenwoodMeetings()];
+  return [...elementalMeetings(), ...greenwoodMeetings(), ...saltMeetings()];
+}
+/** Salt meeting Aurora, Fire, Greenwood and Pressure. */
+function saltMeetings(): MagicConfluence[] {
+  return [
+    magicConfluenceSchema.parse({
+      id: "preserved",
+      name: "Preserved barrow",
+      systems: ["aurora", "salt"],
+      priority: 96,
+      cartography: "area",
+      seeds: [[at("system:aurora", 300), at("system:salt", 200), { field: "water", values: [0] }]],
+      // Undeath: nothing decays, nothing grows, nothing erodes. The ground holds; the hazard
+      // is the dead themselves.
+      effects: { rockResistance: 200, toxicity: 0.3 },
+      hazard: {
+        kind: "undead",
+        rate: 0.001,
+        severity: 0.3,
+        radius: 2000,
+        cause: "Aurora held a Salt barrow still and its dead did not rest.",
+      },
+    }),
+    magicConfluenceSchema.parse({
+      id: "fired",
+      name: "Fired crust",
+      systems: ["fire", "salt"],
+      priority: 97,
+      cartography: "area",
+      seeds: [[at("system:fire", 300), at("system:salt", 200), { field: "water", values: [0] }]],
+      // Salting fused to glass and shed: a scoured surface that recovers within an epoch.
+      effects: { rockResistance: 300, soilRemoval: 0.5 },
+    }),
+    magicConfluenceSchema.parse({
+      id: "standing-dead",
+      name: "Standing-dead front",
+      systems: ["greenwood", "salt"],
+      priority: 93,
+      cartography: "area",
+      seeds: [
+        [at("system:greenwood", 300), at("system:salt", 200), { field: "water", values: [0] }],
+      ],
+      // Trees die without falling where verdure and salting meet; the front moves with them.
+      effects: { toxicity: 0.5 },
+    }),
+    magicConfluenceSchema.parse({
+      id: "brine-shore",
+      name: "Brine shore",
+      systems: ["pressure", "salt"],
+      priority: 94,
+      cartography: "area",
+      seeds: [
+        [at("system:pressure", 300), at("system:salt", 200), { field: "water", values: [0] }],
+      ],
+      // A sabkha behind a still Pressure coast: brine fog, and the storms lift its dust.
+      effects: { fog: 0.3, toxicity: 0.2 },
+    }),
+  ];
 }
 /** Fire, Aurora and Pressure meeting one another. */
 function elementalMeetings(): MagicConfluence[] {

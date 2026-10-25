@@ -80,7 +80,10 @@ function soilWater(map: PhysicalField, i: number, years: number, f: EcologyForci
   const rain = map.Rainfall[i] / 1000;
   const supply =
     rain * (1 - f.seasonality * 0.6) + e.wetness * 0.3 + map.GlacialMeltwater[i] / 3000;
-  map.Infiltration[i] = unit(0.2 + roots * 0.45 + map.SoilDepth[i] * 0.15);
+  // A salt crust sheds the rain it would have taken in.
+  map.Infiltration[i] = unit(
+    (0.2 + roots * 0.45 + map.SoilDepth[i] * 0.15) * (1 - 0.6 * f.salting)
+  );
   const demand = Math.max(0, e.summer + 5) * 0.012 * (0.2 + roots);
   map.SoilWater[i] = approach(
     map.SoilWater[i],

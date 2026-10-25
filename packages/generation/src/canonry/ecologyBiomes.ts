@@ -100,7 +100,44 @@ function magicRules(state: GenerationState): BiomeRule[] {
     });
   const greening = fields.filter((f) => f.definition.effects.verdure > 0);
   if (greening.length) rules.push(...verdantRules(map, greening, canopy, cover));
+  const salting = fields.filter((f) => f.definition.effects.salting > 0);
+  if (salting.length) rules.push(...saltRules(map, salting, cover));
   return rules;
+}
+/** Salt's country: the fused flat first, then the bare pan, then the heath on a killing ground. */
+function saltRules(
+  map: PhysicalField,
+  salting: Systems,
+  cover: (i: number) => number
+): BiomeRule[] {
+  const system = (r: BiomeSummary) => strongest(salting, r);
+  return [
+    {
+      kind: "flat",
+      share: 0.0003,
+      terms: [
+        (i) => map.Salting[i] - 0.3,
+        (i) => map.RockResistance[i] - 950,
+        (i) => 0.12 - cover(i),
+      ],
+      name: () => "Glass flat",
+      system,
+    },
+    {
+      kind: "pan",
+      share: 0.0003,
+      terms: [(i) => map.Salting[i] - 0.3, (i) => 0.12 - cover(i)],
+      name: () => "Salt pan",
+      system,
+    },
+    {
+      kind: "barrow",
+      share: 0.0003,
+      terms: [(i) => map.Salting[i] - 0.3, (i) => cover(i) - 0.12],
+      name: () => "Barrow heath",
+      system,
+    },
+  ];
 }
 /** Greenwood's country: the Deepwood, the fen a river braids through it, the meadow at a spring. */
 function verdantRules(

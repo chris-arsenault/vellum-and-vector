@@ -25,6 +25,8 @@ export interface EcologyForcing {
   stillness: number;
   /** Greenwood: life in sap and groundwater that grows past the climate, 0 to 1. */
   verdure: number;
+  /** Salt: the residue that thins cover, starves soil and turns grazers away, 0 to 1. */
+  salting: number;
 }
 export const neutralEcology: EcologyForcing = {
   growth: 0,
@@ -41,6 +43,7 @@ export const neutralEcology: EcologyForcing = {
   quickening: 0,
   stillness: 0,
   verdure: 0,
+  salting: 0,
 };
 /** Potential evaporation in m/year at a mean temperature in °C, never below 0.25. */
 export const potentialEvaporation = (celsius: number) => Math.max(0.25, 0.3 + 0.045 * celsius);

@@ -6,7 +6,7 @@ import { hashUnit } from "./noise";
 import { edgeLeadingTo, triangleIdentity } from "./mesh";
 import { oceanPropagation } from "./magicOcean";
 import type { MagicPropagation, MagicSystem } from "@atlas/domain";
-import { reservoirStock, withOrigin } from "./magicState";
+import { reservoirAmount, reservoirStock, withOrigin } from "./magicState";
 
 function fracturePropagation(state: GenerationState, field: MagicField, activity: number) {
   const map = state.physical!.map,
@@ -212,7 +212,43 @@ export const magicPropagationStrategies: Record<MagicPropagation, PropagationStr
     scaleResult: true,
     propagate: (_state, field) => field.intensity.set(field.source),
   },
+  // Salt is where its material is: the brine, bed and dust per area of every origin, moved
+  // between evaluations by the seep, the crust, the wind and the crust's own motion.
+  brine: {
+    label: "Brine, bed and dust where the material lies",
+    // The wind is read from the workspace as the carriers find it; no producer is required
+    // of it, since a world with no wind pass lifts no dust and is otherwise whole.
+    requires: ["canonry:FlowRouting"],
+    parameters: [
+      "saltFull",
+      "brineFlush",
+      "seepShare",
+      "crustShare",
+      "dissolveShare",
+      "dustShare",
+      "dustSettle",
+      "glassBed",
+      "glassResistance",
+      "desiccation",
+      "domeStrain",
+      "domeRise",
+      "domeLimit",
+      "domeSeep",
+      "saltBurn",
+    ],
+    scaleResult: true,
+    propagate: (state, field) => brinePropagation(state, field),
+  },
 };
+function brinePropagation(state: GenerationState, field: MagicField) {
+  const areas = state.physical!.map.mesh.areas,
+    full = field.definition.parameters.saltFull;
+  for (let i = 0; i < field.intensity.length; i++) {
+    let salt = 0;
+    for (const reservoir of ["brine", "bed", "dust"]) salt += reservoirAmount(field, reservoir, i);
+    field.intensity[i] = clamp(round((1000 * salt) / areas[i] / full), 0, 1000);
+  }
+}
 export function propagateMagic(
   state: GenerationState,
   field: MagicField,

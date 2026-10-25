@@ -166,6 +166,10 @@ const metricFields = [
   "Tenure",
   "WalkedRoute",
   "MassDeath",
+  // Salt's salting: the preserving residue on the ground (0 to 1), and the depth of water a
+  // cell held while it was a lake, which outlives the lake for Salt's dead-lake origin.
+  "Salting",
+  "LakeMemory",
   // Magical heat carried down the drainage (native units): the thawed river below a wellspring.
   "RiverWarmth",
 ] as const;

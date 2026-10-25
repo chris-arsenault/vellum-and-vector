@@ -18,6 +18,7 @@ import {
 } from "./magicFeatures";
 import { evaluateConfluences } from "./magicConfluences";
 import { stormWrites } from "./magicWeather";
+import { saltWrites } from "./magicSalt";
 import { generationBindings } from "../generationBindings";
 import type { ProcessBehavior } from "../processTraits";
 import { ecologyLabels, type Epoch, type MagicConfluence, type MagicSystem } from "@atlas/domain";
@@ -128,6 +129,7 @@ export function magicProcesses(
       coverSystems(state, seed);
       evaluateConfluences(state, seed, true);
       stormWrites(state);
+      saltWrites(state);
     },
     coast: magicCoastalFeedback,
     history: retainMagicHistory,

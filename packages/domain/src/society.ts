@@ -50,6 +50,7 @@ export const settlementSiteKinds = [
   "fishery-coast",
   "halo-edge",
   "healing-well",
+  "necropolis",
   "plain-node",
   "plain",
 ] as const;
@@ -260,6 +261,8 @@ export interface SocietyMagicPractice {
   strain: number;
   /** Greenwood seed the community carries: gathered where its seat stands on sap, traded, planted. */
   seed?: number;
+  /** Salt the community carries: raked from the bed under its seat, traded, laid down where sold. */
+  salt?: number;
 }
 export function population(community: Pick<SocietyCommunity, "groups">) {
   return community.groups.reduce((sum, group) => sum + group.count, 0);

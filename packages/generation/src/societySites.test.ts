@@ -130,3 +130,18 @@ it("holds a pass from a spur only when a hazard lies below it", () => {
   expect(held[0].cell).toBe(cell(9, 3));
   expect(held[0].site?.reason).toContain("Fire halo");
 });
+
+it("seats a necropolis on a Salt killing ground where the plain offered nothing", () => {
+  const { state, grid, cell } = country();
+  expect(rankSites(state)[cell(3, 7)]).toBeNull();
+  putChannel(
+    state.surface,
+    "magic:salt:feature:ground",
+    "category",
+    Float64Array.from({ length: grid.active.length }, (_, i) => (i === cell(3, 7) ? 1 : 0))
+  );
+  const sites = rankSites(state);
+  expect(sites[cell(3, 7)]?.kind).toBe("necropolis");
+  expect(sites[cell(3, 7)]?.reason).toContain("killing ground");
+  expect(sites[cell(3, 8)]).toBeNull();
+});

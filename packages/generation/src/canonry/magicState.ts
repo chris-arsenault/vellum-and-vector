@@ -84,6 +84,14 @@ export function reservoirStock(field: MagicField, reservoir: string) {
       if (stock.reservoir === reservoir) return field.stocks[stockKey(origin, stock)];
   return undefined;
 }
+/** What every origin holds in the named reservoir at a cell, as one amount. */
+export function reservoirAmount(field: MagicField, reservoir: string, cell: number) {
+  let total = 0;
+  for (const origin of field.definition.origins)
+    for (const stock of originStocks(origin))
+      if (stock.reservoir === reservoir) total += field.stocks[stockKey(origin, stock)][cell];
+  return total;
+}
 /**
  * Run a strategy with this origin's parameter overrides in place of the system's. Strategies
  * read `field.definition.parameters`; an origin without overrides costs nothing here.

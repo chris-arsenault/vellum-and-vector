@@ -164,6 +164,16 @@ export const magicPlacePresentations: Record<string, MagicPlacePresentation> = {
   rot: { color: "#8a6a2b", symbol: "diamond", tint: 1 },
   frozen: { color: "#bfe6d9", symbol: "star", tint: 1 },
   brackish: { color: "#7c9a8e", symbol: "triangle", tint: 1 },
+  // Salt: the killing ground, the pan and the glass flat take the whole colour; dust tints.
+  ground: { color: "#9a8f7a", symbol: "square", tint: 1 },
+  pan: { color: "#e8e2d2", symbol: "square", tint: 1 },
+  flat: { color: "#cfd9e3", symbol: "diamond", tint: 1 },
+  dust: { color: "#d9cfae", symbol: "circle", tint: 0.4 },
+  // Salt's meetings with Aurora, Fire, Greenwood and Pressure.
+  preserved: { color: "#8c9fb3", symbol: "star", tint: 1 },
+  fired: { color: "#e36f3a", symbol: "diamond", tint: 1 },
+  "standing-dead": { color: "#8c7b4a", symbol: "triangle", tint: 1 },
+  "brine-shore": { color: "#c7b7c9", symbol: "circle", tint: 1 },
 };
 const spareColors = ["#d1495b", "#f2a541", "#2e86ab", "#8e44ad", "#1b998b", "#c9a227"];
 export function magicPlacePresentation(ruleId: string): MagicPlacePresentation {

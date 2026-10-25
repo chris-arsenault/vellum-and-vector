@@ -20,7 +20,7 @@ import { createAdaptiveWorldMesh } from "./canonry/adaptiveMesh";
 import { createField } from "./canonry/field";
 import { nearestTriangle } from "./canonry/mesh";
 import { atlasPhysicalProfile } from "./canonry/atlasProfile";
-import { initializeMagic } from "./canonry/magicState";
+import { initializeMagic, reservoirAmount } from "./canonry/magicState";
 import { locateMagicSources } from "./canonry/magicSources";
 import { propagateMagic } from "./canonry/magicPropagation";
 
@@ -190,6 +190,8 @@ it("besieges the towns a fallen polity lost and records the dead, the tenure and
   recordSocietyOnMesh(state, 10);
   expect(map.MassDeath[cellOf(a)]).toBeCloseTo(siege.casualties, 6);
   expect(map.MassDeath[cellOf(b)]).toBe(50);
+  // New dead: the system made of them is re-evaluated at the next refresh.
+  expect(state.society!.magicTouched!.has("salt")).toBe(true);
   expect(map.Tenure[cellOf(a)]).toBe(0);
   expect(map.Tenure[cellOf(b)]).toBeCloseTo(population(b) * 10, 6);
   expect(map.WalkedRoute[cellOf(a)]).toBe(5000);
@@ -200,6 +202,27 @@ it("besieges the towns a fallen polity lost and records the dead, the tenure and
   expect(map.MassDeath[cellOf(b)]).toBe(50);
   expect(map.Tenure[cellOf(b)]).toBeCloseTo(population(b) * 20, 6);
   expect(map.WalkedRoute[cellOf(b)]).toBe(10000);
+});
+
+it("rakes the pan under a seat, trades the salt down the road and lays it where it is sold", () => {
+  const run = (connected: boolean) => {
+    const { state, context, a, b, cellOf, field, map, region } = fixture();
+    if (!connected) region.connections = [];
+    const salt = field("salt");
+    salt.stocks["dead-lake/bed"][cellOf(a)] = 600 * map.mesh.areas[cellOf(a)];
+    for (let cycle = 0; cycle < 20; cycle++) useSocietyMagic(state, context, 10);
+    return {
+      laid: reservoirAmount(salt, "bed", cellOf(b)),
+      raked: practice(state, a.id).salt ?? 0,
+      state,
+    };
+  };
+  const traded = run(true);
+  expect(traded.laid).toBeGreaterThan(0);
+  expect(traded.state.society!.magicTouched!.has("salt")).toBe(true);
+  const alone = run(false);
+  expect(alone.laid).toBe(0);
+  expect(alone.raked).toBeGreaterThan(0);
 });
 
 it("kills where a confluence covers the ground a community stands on", () => {

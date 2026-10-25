@@ -188,6 +188,7 @@ const derived: readonly [channel: string, unit: string, layer: string, owners: s
   ["icePersistence", "ratio", "magic", ["magic.configured"]],
   ["iceCharge", "ratio", "magic", ["magic.configured"]],
   ["verdure", "ratio", "magic", ["magic.configured"]],
+  ["salting", "ratio", "magic", ["magic.configured"]],
   ["heat", "celsius", "magic", ["magic.local"]],
   ["storedHeat", "celsius", "magic", ["magic.local"]],
   ["coastalPressure", "ratio", "magic", ["magic.local"]],
@@ -215,6 +216,24 @@ function locatedMagic(world: World | undefined, features: ResolvedFeatures) {
   return definitions;
 }
 
+/** The biome families the ecology layer publishes, by the feature kind of their outlining rule. */
+const biomeFeatureKinds = [
+  "ember",
+  "thaw",
+  "rime",
+  "glow",
+  "fog",
+  "deepwood",
+  "wending",
+  "well",
+  "barrow",
+  "pan",
+  "flat",
+  "wetland",
+  "forest",
+  "grassland",
+  "barren",
+];
 function geographicPublications(
   features: ResolvedFeatures,
   input: AtlasGenerationInput
@@ -232,24 +251,7 @@ function geographicPublications(
       ["peak", "range", "valley", "cirque", "fjord", "moraine", "waterfall", "gorge"],
     ],
     ["physical.river-networks", "rivers", ["river"], true],
-    [
-      "ecology.living",
-      "ecology",
-      [
-        "ember",
-        "thaw",
-        "rime",
-        "glow",
-        "fog",
-        "deepwood",
-        "wending",
-        "well",
-        "wetland",
-        "forest",
-        "grassland",
-        "barren",
-      ],
-    ],
+    ["ecology.living", "ecology", biomeFeatureKinds],
     ["human.cultures", "cultures", ["culturalOrigin"]],
     ["human.cultures", "institutions", ["institution"]],
     ["human.politics", "sovereignty", ["sovereignty"]],
