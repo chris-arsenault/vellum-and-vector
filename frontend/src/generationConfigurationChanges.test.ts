@@ -95,7 +95,7 @@ it("shows duration, mobility, political capacity and physical regime as operativ
   changed.humanEras[1].politicalCapacity = 7;
   expect(generationConfigurationChanges("human.cultures", changed, baseline)).toEqual([
     {
-      label: "Settlement",
+      label: "Hearthfall",
       value: "duration 375 years; mobility 1.2×; political capacity 7×; physical regime Cold age",
     },
   ]);

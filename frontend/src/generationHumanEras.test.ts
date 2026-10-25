@@ -8,7 +8,7 @@ import {
   updateHumanEra,
 } from "./generationHumanEras";
 
-// The default schedule is an ice-age round bound to the Cold age, then present settlement.
+// The default schedule is an ice-age round bound to the Cold age, then three settled eras.
 it("renames operative cultural eras while retaining their imported compatibility metadata", () => {
   const draft = newGenerationDraft();
   const shaped = updateHumanEra(draft, 1, { physicalEpoch: "Cold age", politicalCapacity: 2.5 });
@@ -18,9 +18,14 @@ it("renames operative cultural eras while retaining their imported compatibility
     id: "Early settlement",
     physicalEpoch: "Cold age",
     politicalCapacity: 2.5,
-    years: 200,
+    years: 300,
   });
-  expect(draftHumanEras(draft).map((era) => era.id)).toEqual(["Ice age", "Settlement"]);
+  expect(draftHumanEras(draft).map((era) => era.id)).toEqual([
+    "Ice age",
+    "Hearthfall",
+    "Age of Crowns",
+    "Lantern Age",
+  ]);
 });
 
 it("keeps duration and mobility at their owner and permits independent correction", () => {
@@ -41,13 +46,14 @@ it("clears a selected physical regime instead of restoring imported metadata", (
 
 it("adds distinct eras and removes only the selected era and its metadata", () => {
   const draft = addHumanEra(newGenerationDraft());
-  expect(draftHumanEras(draft)).toHaveLength(3);
+  expect(draftHumanEras(draft)).toHaveLength(5);
   const before = structuredClone(draft);
-  expect(() => renameHumanEra(draft, 2, "Settlement")).toThrow();
+  expect(() => renameHumanEra(draft, 4, "Hearthfall")).toThrow();
   expect(draft).toEqual(before);
-  const removed = removeHumanEra(removeHumanEra(draft, 0), 0);
+  let removed = draft;
+  for (let i = 0; i < 4; i++) removed = removeHumanEra(removed, 0);
   expect(draftHumanEras(removed)).toEqual([
-    { id: "Era 3", years: 200, mobility: 1, physicalEpoch: null, politicalCapacity: 1 },
+    { id: "Era 5", years: 200, mobility: 1, physicalEpoch: null, politicalCapacity: 1 },
   ]);
   expect(removed.recipe.settings.humanEras).toEqual([]);
 });

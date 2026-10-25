@@ -1,5 +1,6 @@
-import { beforePresentEpoch, ecologyEpochSchema } from "@atlas/domain";
+import { ecologyEpochSchema } from "@atlas/domain";
 import { choice, type CartographicControl } from "./cartographicControls";
+import { defaultHumanEras } from "./generationSettings";
 
 export const domainCartography: Record<string, CartographicControl> = {
   "ecology.living": {
@@ -42,13 +43,19 @@ export const domainCartography: Record<string, CartographicControl> = {
       choice(["distinct", "overlapping", "mixed"][index], label, {
         "human.cultures": {
           settings: { cultureCount: [3, 6, 9][index] },
-          // One mobile round inside the Cold age precedes settlement in every pattern.
+          // The default history in every pattern; a shorter, slower one keeps centres distinct,
+          // a longer, more mobile one mixes them. Capacity stays with the imported setting so
+          // an authored value is operative.
           configuration: {
-            eras: [
-              // Capacity stays with the imported setting so an authored value is operative.
-              { id: "Ice age", years: 400, mobility: 2, physicalEpoch: beforePresentEpoch },
-              { id: "Settlement", years: [50, 200, 800][index], mobility: [0.25, 1, 1.5][index] },
-            ],
+            eras: defaultHumanEras().map((era) => {
+              const scale = era.physicalEpoch ? 1 : [0.25, 1, 1.5][index];
+              return {
+                id: era.id,
+                years: Math.round(era.years * scale),
+                mobility: era.mobility * scale,
+                physicalEpoch: era.physicalEpoch,
+              };
+            }),
           },
         },
       })

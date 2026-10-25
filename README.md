@@ -246,6 +246,11 @@ changes. Select the relevant file with `pnpm test:generation <file>`. The suite
 generates draft-quality worlds, three files at a time. The Standard and Fine
 world-scale comparison takes more than ten minutes; it runs only through
 `pnpm test:scale`. Neither suite is part of default CI.
+`pnpm --dir frontend inventory:society` generates one world headlessly (about a
+minute at draft quality) and prints its demographic and route measures: fill,
+urbanization, settlement sizes by role, roads by class and cycle timing. `ERAS`,
+`SEED`, `WIDTH`, `HEIGHT`, `QUALITY`, `STEP` and `TRACE` environment variables
+vary the run.
 
 Browser workflow tests use small completed-field fixtures, with one real worker
 check for interior generation and publication. They test interaction; physical

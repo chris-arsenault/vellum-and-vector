@@ -86,6 +86,34 @@ inputs and focused work refreshes support this subsystem. The cross-pillar
 coupling decisions are recorded in
 [ADR 0004](adr/0004-coupling-through-each-systems-medium.md).
 
+The settled eras run as cycles whose length follows the pace of change: each
+cycle spans the years in which the world's people would change by a fixed
+share at the current logistic rates, bounded below by a settled decade and
+above by a long lifetime, with wider bounds for a mobile round. A long history
+therefore costs about as many cycles as a short one, and the end-of-history
+water, dam and geography extraction runs once, when the last settled era ends.
+The default history is one ice-age round followed by three settled eras with
+rising political capacity, enough for the land to fill and kingdoms to
+consolidate; the era form changes names, durations and variables. Towns draw
+on their hinterlands: each catchment's town-dwellers are allocated among the
+few centres within reach of it by the centre's current size, a seat, harbour
+or pass, and travel cost, with a local share kept in the catchment's own chief
+town and its latent small towns; centres draw their share as real migration,
+bounded by the food their own catchment holds, so one town in a region becomes
+the city of its hinterland. Ways are made by use: every connection remembers
+its yearly travellers, from migrants, from hinterland town-dwellers walking the
+least-cost path to their centre and from market traffic between its towns, and
+a worn way costs less to travel for every later process. At World a land or
+river way publishes as a track or a road by that wear, whatever the rank of
+its ends, with a floor that keeps every major settlement and every capital's
+regional capitals connected; a worn sea way publishes as a shipping lane that
+hugs the shallow coast; and a strong polity raises a straight, named highway
+along its seat's busiest road where the line between the two ends crosses
+open, low country. Road geometry follows river banks and valley floors, pays
+for forest, sodden ground and river crossings, and finds saddles through the
+slope term. `pnpm --dir frontend inventory:society` prints a generated world's
+demographic and route measures headlessly.
+
 The current module contracts, feature-owned recipes, validity model and output
 registration are described in [Generation modules and recipes](generation-modules.md).
 

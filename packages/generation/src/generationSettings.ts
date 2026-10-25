@@ -4,6 +4,7 @@ import {
   magicSystemSchema,
   validateMagicSystems,
   canonryMagicPresets,
+  beforePresentEpoch,
   type World,
   type Epoch,
   type MagicSystem,
@@ -11,6 +12,28 @@ import {
 
 const nonnegative = z.number().finite().nonnegative();
 const strength = nonnegative.max(1);
+/**
+ * The default human history: one mobile round inside the epoch before the present, whatever
+ * it is, then three settled eras that carry the world to the classic age, roughly medieval
+ * approaching renaissance. Hearthfall settles the land; the Age of Crowns fills it and lets
+ * kingdoms consolidate; the Lantern Age brings the high courts and the great roads. Political
+ * capacity rises across them so reach and great works come late. Eras are a creator's choice
+ * in the era form; these names are a starting point.
+ */
+export function defaultHumanEras(): NonNullable<World["humanEras"]> {
+  return [
+    {
+      id: "Ice age",
+      years: 400,
+      physicalEpoch: beforePresentEpoch,
+      mobility: 2,
+      politicalCapacity: 0.2,
+    },
+    { id: "Hearthfall", years: 300, physicalEpoch: null, mobility: 1, politicalCapacity: 0.6 },
+    { id: "Age of Crowns", years: 500, physicalEpoch: null, mobility: 0.8, politicalCapacity: 1.2 },
+    { id: "Lantern Age", years: 300, physicalEpoch: null, mobility: 1, politicalCapacity: 1.5 },
+  ];
+}
 export const generationEpochSchema = z
   .object({
     id: z.string().trim().min(1),

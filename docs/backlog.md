@@ -166,7 +166,11 @@ with no backend, persistence or MCP; preserve the existing backend source.
       [ADR 0005](adr/0005-scale-contract.md) those camps publish as World ruins
       by the same rule as present towns, which is consistent; whether a round
       should produce towns at all is a design question for the round, not for
-      the publication rule.
+      the publication rule. The round's people are discarded when it ends; the
+      settled eras start again from founders. With the adaptive cycle and the
+      three default settled eras the land fills without them, so whether the
+      round's survivors should seed the present remains open on its own merits
+      (2026-10-25).
 
 - [ ] **12. Reach seven magic systems.** [Magic system candidates](magic-system-candidates.md)
       consolidates ten candidates into four new systems (Greenwood, Salt, Veil,
