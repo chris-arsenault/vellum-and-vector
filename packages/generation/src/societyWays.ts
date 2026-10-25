@@ -13,10 +13,10 @@ import type { GenerationState } from "./process";
 const wearMemory = 150;
 /** Travel cost over which market traffic between two towns falls by e. */
 const marketReach = 100000;
-/** The share of the smaller town's size that travels to the other town each year. */
-const marketTravel = 0.02;
+/** Yearly travellers between two towns, as a share of the geometric mean of their sizes. */
+const marketTravel = 0.1;
 /** Yearly travellers that make a way a track, a road; a highway is built, not worn (M3b). */
-export const wayClasses = { track: 50, road: 500 } as const;
+export const wayClasses = { track: 100, road: 1000 } as const;
 /** How much faster a road is than the raw terrain: its cost falls to this share of the base. */
 const roadSpeed = 0.6;
 

@@ -142,7 +142,11 @@ function geographicStyle(feature: AtlasFeature, style: LayerStyle, resolution: n
       color,
       width: featureStrokeWidth(feature, resolution),
       lineDash:
-        feature.kind === "fault" ? [6, 4] : feature.layerId === "claims" ? [7, 5] : undefined,
+        feature.kind === "fault"
+          ? [6, 4]
+          : feature.layerId === "claims"
+            ? [7, 5]
+            : routeLineDash(feature),
     }),
     fill: new Fill({ color: color + (feature.layerId === "geology" ? "18" : "64") }),
     image: new Circle({
@@ -193,8 +197,21 @@ function profiledLineStyles(feature: AtlasFeature, base: Style, color: string, r
 }
 function physicalStrokeWidth(feature: AtlasFeature, resolution: number) {
   if (feature.kind === "fault") return 1;
+  if (feature.layerId === "roads") return routeStrokeWidth(feature);
   if (feature.kind !== "river") return 2;
   return channelStrokeWidth(riverWidth(feature), resolution);
+}
+/** Routes read by class: a track is thin, a road fuller, a highway bold, a lane light. */
+const routeWidths: Record<string, number> = { track: 0.9, road: 1.8, highway: 2.8, lane: 1.2 };
+function routeStrokeWidth(feature: AtlasFeature) {
+  if (feature.kind === "lane") return routeWidths.lane;
+  return routeWidths[String(feature.attributes.roadClass ?? "road")] ?? routeWidths.road;
+}
+/** Tracks and sea lanes are broken lines; roads and highways are solid. */
+function routeLineDash(feature: AtlasFeature) {
+  if (feature.layerId !== "roads") return undefined;
+  if (feature.kind === "lane") return [6, 6];
+  return feature.attributes.roadClass === "track" ? [3, 3] : undefined;
 }
 function riverWidth(feature: AtlasFeature) {
   const samples = feature.attributes.widths;

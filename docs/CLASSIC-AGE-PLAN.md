@@ -443,9 +443,19 @@ Evidence: M0 inventory extended with roads by class, roads per major settlement,
 connected components among majors and the process's share of cycle time; a
 browser check of the roads layer over relief and rivers.
 
-#### Execution steps (expanded 2026-10-24; Sulion IDs added when the branch opens)
+Sulion: `af2201c2-022e-4817-b698-b94cfce00e77`; expansion `37f55984-0487-4b52-a396-7c9034e8d598`
+(steps `c49dcd23-2e54-4397-a4fd-f8efca3552a9`, `2db755c8-5f18-4098-a81c-a38131bf667a`,
+`b5d54841-2592-4f03-83c4-fea98724346c`).
 
-1. Ways wear with use
+#### Execution steps
+
+1. Ways wear with use — completed 2026-10-25 (commit df53f49):
+   `societyWays.ts` keeps each connection's yearly travellers as an average
+   with a 150-year memory (migrants per link from `migratePopulation`,
+   hinterland flows walked along each centre's least-cost tree from
+   `communityRoutes`, market traffic between the two towns); track at 50 and
+   road at 500 travellers a year; a road's cost falls to 60% of its base.
+   Three unit tests; 100 society tests pass.
    - File(s): `packages/domain/src/society.ts` (`SocietyConnection.wear`),
      `packages/generation/src/societyWays.ts` (new), `societyCentres.ts`
      (return each centre's predecessor tree so hinterland flows can be walked
@@ -462,6 +472,17 @@ browser check of the roads layer over relief and rivers.
    - Verify: unit test on a line of communities with one city: the links on
      the path to the city wear more than side links; wear decays when traffic
      stops; `travelCost` never rises above the base nor below its floor.
+   Steps 2 and 3 completed 2026-10-25 on the same 900-year world (seed
+   104729): before, 77 roads joined only adjacent majors and 16 of 88 majors
+   had none, in 27 components; after publication by wear with the floor,
+   229 tracks, 3 majors without a road (sea-only sites), 21 components; after
+   retuning market traffic (a tenth of the geometric mean of the two towns a
+   year; track at 100, road at 1,000 travellers a year) and terrain-following
+   A* routing, 594 tracks and 8 roads, 2 majors without a road, 10 components
+   among 94 majors (the remaining ones are separate landmasses, for M3b's
+   lanes); the whole settlement-and-route publication process took 3.3 s
+   for 602 ways against 30 s for 891 before A*. Four routing tests (coast, hole,
+   saddle, river bank) and 104 society tests pass.
 2. Publication by class with a connectivity floor [depends on #1]
    - File(s): `societyPublication.ts` `publishRoutes`, `societyMapScope.ts`
      (class thresholds), `frontend/src/vectorStyles.ts` (width by class),

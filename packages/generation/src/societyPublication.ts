@@ -10,6 +10,8 @@ import type { PublicationDefinition } from "./publication";
 import type { AtlasGenerationInput } from "./atlasWorkflow";
 import { generatedFeature, putGenerated, putGeneratedNetwork } from "./mapFeatures";
 import { findRoute } from "./mapRouting";
+import { communityRoutes } from "./societyContact";
+import { wayClass } from "./societyWays";
 import { publishSocietyWorks } from "./societyWorkPublication";
 import { settlementHierarchy, type SettlementHierarchy } from "./societyHierarchy";
 import { isMajorSettlement, isWorldSociety } from "./societyMapScope";
@@ -79,6 +81,70 @@ export function publishSettlements(state: GenerationState, context: MapProcessCo
   }
   publishRoutes(state, context, mapped, hierarchy);
 }
+type RoadClass = NonNullable<ReturnType<typeof wayClass>>;
+/**
+ * Which ways the map shows. At World a land or river way publishes when its use has worn it
+ * to a track or a road, whatever the rank of the places at its ends, so roads run through
+ * minor country between the towns that made them. A floor keeps every major settlement
+ * reachable: its least-cost way to the nearest other major, and a capital's ways to its
+ * polity's regional capitals, publish as tracks even where traffic has not worn them yet.
+ * Links below the track threshold stay latent for a finer profile. A regional map shows
+ * every way between inhabited places, as before.
+ */
+function realizedWays(
+  state: GenerationState,
+  mapped: Set<string>,
+  hierarchy: Map<string, SettlementHierarchy>
+) {
+  const region = state.society!.region;
+  const communities = new Map(region.communities.map((c) => [c.id, c]));
+  const realized = new Map<number, RoadClass>();
+  for (const [i, link] of region.connections.entries()) {
+    const a = communities.get(link.from)!,
+      b = communities.get(link.to)!;
+    if (link.kind === "sea" || !connectedSettlements(a, b)) continue;
+    const cls = isWorldSociety(state) ? wayClass(link) : (wayClass(link) ?? "track");
+    if (cls) realized.set(i, cls);
+  }
+  for (const i of connectivityFloor(state, mapped, hierarchy))
+    if (!realized.has(i) && region.connections[i].kind !== "sea") realized.set(i, "track");
+  return realized;
+}
+/** Links on the least-cost paths that join each major to its nearest major and each capital to its regional capitals. */
+function connectivityFloor(
+  state: GenerationState,
+  mapped: Set<string>,
+  hierarchy: Map<string, SettlementHierarchy>
+) {
+  const region = state.society!.region,
+    communities = region.communities;
+  const majors = communities.flatMap((c, i) =>
+    mapped.has(c.id) && c.founded && c.status === "inhabited" ? [i] : []
+  );
+  const routes = communityRoutes(region),
+    links = new Set<number>();
+  const walk = (tree: ReturnType<typeof routes>, from: number, to: number) => {
+    for (let cur = from, steps = 0; cur !== to && cur >= 0 && steps < communities.length; steps++) {
+      if (tree.via[cur] >= 0) links.add(tree.via[cur]);
+      cur = tree.previous[cur];
+    }
+  };
+  for (const i of majors) {
+    const tree = routes(i);
+    const nearest = majors
+      .filter((j) => j !== i && Number.isFinite(tree.distance[j]))
+      .reduce<number>((a, j) => (a < 0 || tree.distance[j] < tree.distance[a] ? j : a), -1);
+    if (nearest >= 0) walk(tree, nearest, i);
+    const role = hierarchy.get(communities[i].id)!;
+    if (role.settlementRole !== "capital") continue;
+    for (const j of majors) {
+      const other = hierarchy.get(communities[j].id)!;
+      if (other.settlementRole === "regionalCapital" && other.polityId === role.polityId)
+        walk(tree, j, i);
+    }
+  }
+  return [...links];
+}
 function publishRoutes(
   state: GenerationState,
   context: MapProcessContext,
@@ -87,15 +153,13 @@ function publishRoutes(
 ) {
   const region = state.society!.region;
   const communities = new Map(region.communities.map((c) => [c.id, c]));
-  for (const [i, link] of region.connections.entries()) {
-    const a = communities.get(link.from)!,
+  const realized = realizedWays(state, mapped, hierarchy);
+  let done = 0;
+  for (const [i, cls] of realized) {
+    const link = region.connections[i],
+      a = communities.get(link.from)!,
       b = communities.get(link.to)!;
-    if (!connectedSettlements(a, b)) continue;
-    if (!mapped.has(a.id) || !mapped.has(b.id)) continue;
-    context.progress(
-      i / Math.max(1, region.connections.length),
-      "Connecting inhabited communities"
-    );
+    context.progress(done++ / Math.max(1, realized.size), "Laying the roads people made");
     const path = findRoute(state.surface, a.position, b.position, "road");
     if (path.length < 2) continue;
     putGeneratedNetwork(
@@ -111,6 +175,9 @@ function publishRoutes(
           fromCommunity: a.id,
           toCommunity: b.id,
           travelCost: link.travelCost,
+          roadClass: cls,
+          wear: Math.round(link.wear ?? 0),
+          wayKind: link.kind,
           routePopulation: Math.min(a.settlement?.population ?? 0, b.settlement?.population ?? 0),
           strategic: [a, b].some((c) =>
             ["capital", "regionalCapital", "marketTown"].includes(

@@ -61,3 +61,45 @@ it("keeps roads out of footprint holes even when samples on either side are acti
     })
   ).toBe(true);
 });
+
+it("takes a ridge through its saddle rather than over its crest", () => {
+  const state = landscape();
+  const grid = createGrid("ridge", state.domain.scope, 60, 60);
+  // A north–south ridge across the middle, with a low saddle near the southern end.
+  putChannel(
+    grid,
+    "elevation",
+    "metre",
+    Float64Array.from(grid.active, (_, i) => {
+      const x = i % grid.width,
+        y = Math.floor(i / grid.width);
+      if (x < 27 || x > 33) return 100;
+      return y >= 48 && y <= 51 ? 140 : 900;
+    })
+  );
+  const start = gridPosition(grid, 10 * grid.width + 5),
+    end = gridPosition(grid, 10 * grid.width + 55);
+  const route = findRoute(grid, start, end, "road");
+  const crossing = route.find((p) => Math.abs(p.x - gridPosition(grid, 30).x) < 1e-6);
+  expect(crossing).toBeDefined();
+  expect(crossing!.y).toBeGreaterThan(gridPosition(grid, 47 * grid.width).y);
+});
+
+it("follows a river bank instead of cutting across the open interfluve", () => {
+  const state = landscape();
+  const grid = createGrid("river", state.domain.scope, 60, 20);
+  putChannel(grid, "elevation", "metre", new Float64Array(grid.active.length).fill(100));
+  // A river runs west–east along row 15; the straight line between the towns is row 10.
+  putChannel(
+    grid,
+    "riverOrder",
+    "ratio",
+    Float64Array.from(grid.active, (_, i) => (Math.floor(i / grid.width) === 15 ? 2 : 0))
+  );
+  const start = gridPosition(grid, 10 * grid.width + 2),
+    end = gridPosition(grid, 10 * grid.width + 57);
+  const route = findRoute(grid, start, end, "road");
+  const riverY = gridPosition(grid, 15 * grid.width).y;
+  const onBank = route.filter((p) => Math.abs(p.y - riverY) < 1e-6).length;
+  expect(onBank).toBeGreaterThan(route.length / 2);
+});

@@ -71,18 +71,27 @@ export function findRoute(grid: Grid, from: Position, to: Position, kind: string
   const costs = new Float64Array(grid.active.length).fill(Infinity);
   const previous = new Int32Array(grid.active.length).fill(-1),
     queue = new RouteHeap();
+  // A*: no step costs less than its distance times the cheapest land factor, so the straight
+  // distance to the end, so scaled, never overestimates and the search stays near the way.
+  const goal = gridPosition(grid, end),
+    cheapest = kind === "road" ? riverBankFactor : 1;
+  const remaining = (cell: number) => {
+    const p = gridPosition(grid, cell);
+    return Math.hypot(p.x - goal.x, p.y - goal.y) * cheapest;
+  };
   costs[start] = 0;
-  queue.push({ cell: start, cost: 0 });
+  queue.push({ cell: start, cost: remaining(start) });
   for (let entry = queue.pop(); entry; entry = queue.pop()) {
-    if (entry.cost !== costs[entry.cell]) continue;
+    const here = costs[entry.cell];
+    if (entry.cost !== here + remaining(entry.cell)) continue;
     if (entry.cell === end) return routePoints(grid, previous, start, end, from, to);
     for (const next of neighbors(grid, entry.cell, true, covers)) {
       const step = routeCost(grid, entry.cell, next, kind);
-      const cost = entry.cost + step;
+      const cost = here + step;
       if (cost >= costs[next]) continue;
       costs[next] = cost;
       previous[next] = entry.cell;
-      queue.push({ cell: next, cost });
+      queue.push({ cell: next, cost: cost + remaining(next) });
     }
   }
   return [];
@@ -99,8 +108,30 @@ function routeCost(grid: Grid, from: number, to: number, kind: string) {
   if (kind === "river")
     return rise > 1e-6 ? Infinity : distance * (1 + 1 / (1 + (grid.channels.flow?.[to] ?? 0)));
   if (kind === "road" && oceanCell(grid, to)) return Infinity;
-  return distance * (1 + (Math.abs(rise) / Math.max(1, distance)) * 20);
+  const slope = 1 + (Math.abs(rise) / Math.max(1, distance)) * 20;
+  return distance * slope * (kind === "road" ? landFactor(grid, from, to) : 1);
 }
+/** A road along a river bank costs this share of open ground: the valley floor is the way. */
+const riverBankFactor = 0.7;
+/**
+ * What the land between two cells asks of a road beyond its slope: forest and marsh slow it,
+ * a river bank speeds it, and a crossing pays for its ford or bridge. Saddles need no term of
+ * their own; the slope term finds them.
+ */
+function landFactor(grid: Grid, from: number, to: number) {
+  const river = (i: number) => (grid.channels.riverOrder?.[i] ?? 0) >= 1;
+  if (river(from) && river(to)) return Math.min(groundFactor(grid, to), riverBankFactor);
+  return groundFactor(grid, to) + (river(from) !== river(to) ? crossingCharge : 0);
+}
+/** Open ground is one; forest and flat sodden ground ask more of a road. */
+function groundFactor(grid: Grid, to: number) {
+  const c = grid.channels;
+  const trees = c.treeCover?.[to] ?? 0,
+    sodden = (c.moisture?.[to] ?? 0) >= 0.95 && (c.slope?.[to] ?? 1) < 0.01;
+  return 1 + 0.8 * trees + (sodden ? 0.6 : 0);
+}
+/** A river crossing, as extra lengths of the step that crosses it. */
+const crossingCharge = 0.6;
 function oceanCell(grid: Grid, index: number) {
   return grid.channels.water?.[index] === 1 || grid.channels.elevation[index] < 0;
 }
