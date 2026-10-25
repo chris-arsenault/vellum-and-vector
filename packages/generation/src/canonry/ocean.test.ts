@@ -27,8 +27,11 @@ it("sets the water budget at the first flood and keeps it when the land later si
     firstBudget = map.BaseOceanVolume;
   expect(firstBudget).toBeGreaterThan(0);
   expect(oceanVolume(map)).toBeCloseTo(firstBudget, -6);
-  expect(firstOcean / map.mesh.contentCount).toBeGreaterThan(0.45);
-  expect(firstOcean / map.mesh.contentCount).toBeLessThan(0.6);
+  // The coarse ramp floods whole columns around the configured coverage target.
+  expect(firstOcean / map.mesh.contentCount).toBeCloseTo(
+    context.Profile.QualityTargets.OceanCoverage.target,
+    1
+  );
 
   // A later formation flood re-measures the budget on the planet formation has built: the deep
   // basin sinks, the shoreline cells that set the area target do not.
