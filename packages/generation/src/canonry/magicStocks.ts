@@ -42,11 +42,13 @@ export function advanceStocks(state: GenerationState, field: MagicField, epochIn
 /** What a reservoir does in the advance, then what its carriers do. */
 const reservoirAdvances: Record<
   string,
-  (map: PhysicalField, field: MagicField, values: Float64Array) => void
+  (map: PhysicalField, field: MagicField, values: Float64Array, origin: MagicOrigin) => void
 > = {
   ice: (_map, field, values) => gatherIntoIce(field, values),
   ground: mirrorGround,
   stratum: buryPeat,
+  sap: decaySap,
+  forge: coolForge,
 };
 function advanceStock(
   map: PhysicalField,
@@ -56,10 +58,24 @@ function advanceStock(
 ) {
   const values = field.stocks[stockKey(origin, stock)];
   if (origin.renewal === "finite" && stock === originStocks(origin)[0]) consume(field, values);
-  reservoirAdvances[stock.reservoir]?.(map, field, values);
+  reservoirAdvances[stock.reservoir]?.(map, field, values, origin);
   if (stock.carriers.includes("river")) field.lost += carryDownstream(map, field, values);
   if (stock.carriers.includes("ice")) field.lost += carryWithIce(map, field, origin, values);
   if (stock.carriers.includes("animal")) carryInTheGut(map, field, values);
+}
+/** Sap a cell holds without a stand of its own is spent by the share declared, per epoch. */
+function decaySap(_map: PhysicalField, field: MagicField, sap: Float64Array, origin: MagicOrigin) {
+  const own = field.originSources[origin.id],
+    keep = 1 - field.definition.parameters.sapLoss;
+  for (let i = 0; i < sap.length; i++) if (own[i] <= 0) sap[i] *= keep;
+}
+/** Cracked cores cool: a share of the forge stock is gone each epoch. */
+function coolForge(_map: PhysicalField, field: MagicField, cracked: Float64Array) {
+  const keep = 1 - field.definition.parameters.forgeCooling;
+  for (let i = 0; i < cracked.length; i++) {
+    field.lost += cracked[i] * (1 - keep);
+    cracked[i] *= keep;
+  }
 }
 /** Peat under sediment becomes a stratum the crust carries and an aquifer can leach. */
 function buryPeat(map: PhysicalField, field: MagicField, stratum: Float64Array) {

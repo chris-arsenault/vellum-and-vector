@@ -88,7 +88,7 @@ it("rejects duplicate origin ids and unknown origin conditions, and accepts know
 it("gives the Canonry presets named origins that reparse unchanged", () => {
   const presets = canonryMagicPresets();
   expect(presets.map((system) => system.origins.map((origin) => origin.id))).toEqual([
-    ["vein", "fallen"],
+    ["vein", "fallen", "forge"],
     ["field"],
     ["locus"],
     ["stand", "spring"],

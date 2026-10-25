@@ -49,6 +49,12 @@ export interface SocietyWorkspace {
   urban?: import("./societyCentres").UrbanAllocation;
   /** People who travelled each connection this cycle, by index into `region.connections`. */
   traffic?: Float64Array;
+  /** Systems whose stocks people drew or deposited this cycle; the refresh re-evaluates them. */
+  magicTouched?: Set<string>;
+  /** Each community's net population fall this cycle: a die-off the mesh records as deaths. */
+  dieOff?: Map<string, number>;
+  /** Events whose casualties the mesh already records. */
+  deathsRecorded?: Set<string>;
 }
 /**
  * Travel on land costs its distance and thirty times its rise. Along a river both banks
@@ -271,6 +277,9 @@ export function createSocietyGeography(
     inherited: false,
     changed: new Set(),
     mediumChanged: new Set(),
+    magicTouched: new Set(),
+    dieOff: new Map(),
+    deathsRecorded: new Set(),
   };
   refreshSocietySupport(state);
   region.connections = connectionsFor(state, communities, owner, distances, edges);

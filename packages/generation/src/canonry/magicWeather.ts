@@ -2,7 +2,7 @@ import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import { alignedNeighbor } from "./atmosphere";
 import { clamp } from "./math";
-import { deposit, erode } from "./surface";
+import { rebuild } from "./surface";
 
 /**
  * What a storm track does to the ground it crosses, once per epoch after the climate pass:
@@ -25,14 +25,21 @@ export function stormWrites(state: GenerationState) {
 }
 const bare = (map: PhysicalField, i: number) =>
   map.TreeCover[i] + map.GrassCover[i] + map.WetlandCover[i] < 0.12;
-/** Sand leaves a bare cell for its downwind neighbour; the sea swallows what reaches it. */
+/**
+ * Sand leaves a bare cell for its downwind neighbour; the sea swallows what reaches it. The
+ * sand is sediment the budget already counted when it was first laid down, so the move
+ * changes thicknesses and nothing in the produced, deposited and exported totals.
+ */
 function driveDunes(map: PhysicalField, i: number, share: number) {
   const moving = map.SedimentThickness[i] * share;
   if (moving <= 0) return;
   const target = alignedNeighbor(map, i, map.WindX[i] / 1000, map.WindY[i] / 1000);
   if (target < 0) return;
-  erode(map, i, moving);
-  if (map.WaterKindCodes[target] === 1)
-    map.SedimentExportedTotal += (moving / 1024) * map.mesh.areas[i];
-  else deposit(map, target, (moving * map.mesh.areas[i]) / map.mesh.areas[target]);
+  map.SedimentThickness[i] -= moving;
+  rebuild(map, i);
+  if (map.WaterKindCodes[target] === 1) return;
+  const landed = (moving * map.mesh.areas[i]) / map.mesh.areas[target];
+  map.SedimentThickness[target] += landed;
+  map.CumulativeDeposition[target] += landed;
+  rebuild(map, target);
 }

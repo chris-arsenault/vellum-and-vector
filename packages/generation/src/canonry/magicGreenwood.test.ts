@@ -4,7 +4,7 @@ import { landscape } from "../mapFixtures";
 import { createAdaptiveWorldMesh } from "./adaptiveMesh";
 import { createField } from "./field";
 import { atlasPhysicalProfile } from "./atlasProfile";
-import { drawStock, initializeMagic } from "./magicState";
+import { drawReservoir, initializeMagic } from "./magicState";
 import { locateMagicSources } from "./magicSources";
 import { propagateMagic } from "./magicPropagation";
 import { magicLivingFeedback } from "./magicFeedback";
@@ -143,7 +143,7 @@ it("collapses an overdrawn spring, seals it, and carries sap in the gut toward t
   const recharge = greenwood.originSources.spring[spring] * map.mesh.areas[spring];
   expect(recharge).toBeGreaterThan(0);
   const bedrock = map.BedrockElevation[spring];
-  drawStock(greenwood, spring, recharge * 0.8);
+  drawReservoir(greenwood, "aquifer", spring, recharge * 0.8);
   advanceStocks(state, greenwood, 0);
   expect(greenwood.sealed[spring]).toBe(1);
   expect(map.BedrockElevation[spring]).toBeLessThan(bedrock);

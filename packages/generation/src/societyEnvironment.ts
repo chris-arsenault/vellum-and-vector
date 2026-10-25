@@ -27,6 +27,7 @@ import { initializeMagic } from "./canonry/magicState";
 import { propagateMagic } from "./canonry/magicPropagation";
 import { classifyMagicFeatures, projectMagic } from "./canonry/magicFeatures";
 import { magicChannels } from "./canonry/magicFieldDefinitions";
+import { evaluateSocietyMagic } from "./canonry/magicProcesses";
 import { systemHasRole } from "./societyMagicAccess";
 import { irrigateChannels } from "./societyWaterUse";
 import { workSamples } from "./societyWorks";
@@ -297,11 +298,24 @@ function refreshMagicPathways(
   context: MapProcessContext,
   oceanChanged: boolean
 ) {
-  const work = state.physical!,
-    changed = state.society!.mediumChanged;
+  const work = state.physical!;
   if (!work.magic) restorePresentMagic(state);
   const seed = generationBindings(context).seed;
-  for (const field of work.magic!.fields) {
+  repropagateMovedMedia(state, seed, oceanChanged);
+  // The society phase: systems made of what people did, and systems whose stocks people
+  // drew or deposited this cycle (cracked cores at a forge, planted seed, cleared sap).
+  const touched = state.society!.magicTouched;
+  evaluateSocietyMagic(state, context, touched);
+  touched?.clear();
+  // Reclassify current interaction conditions; this does not create or replay a historical event.
+  classifyMagicFeatures(state, seed);
+  if (Object.keys(state.surface.channels).some((name) => name.startsWith("magic:")))
+    projectMagic(state);
+}
+/** Systems whose medium a work moved this cycle propagate again through the moved medium. */
+function repropagateMovedMedia(state: GenerationState, seed: number, oceanChanged: boolean) {
+  const changed = state.society!.mediumChanged;
+  for (const field of state.physical!.magic!.fields) {
     if (!field.definition.enabled) continue;
     // Aurora follows cold and ice: it re-propagates when a work changed that medium, not
     // when a forge warmed the one cell at its seat.
@@ -313,10 +327,6 @@ function refreshMagicPathways(
     const coast = systemHasRole(field.definition, "moves-water") && oceanChanged;
     if (cold || coast) propagateMagic(state, field, seed, field.definition.strength);
   }
-  // Reclassify current interaction conditions; this does not create or replay a historical event.
-  classifyMagicFeatures(state, seed);
-  if (Object.keys(state.surface.channels).some((name) => name.startsWith("magic:")))
-    projectMagic(state);
 }
 function restorePresentMagic(state: GenerationState) {
   initializeMagic(state);

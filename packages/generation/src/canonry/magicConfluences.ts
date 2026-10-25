@@ -158,7 +158,19 @@ function actOnWaterAndLife(map: PhysicalField, i: number, c: number, e: Confluen
     );
   if (e.fog) map.FogForcing[i] = Math.max(map.FogForcing[i], e.fog * c);
   if (e.iceMelt) map.IceThickness[i] = Math.max(0, map.IceThickness[i] - e.iceMelt * c);
-  if (e.debris) deposit(map, i, units(e.debris * c));
+  if (e.debris) collapseDebris(map, i, units(e.debris * c));
   if (e.toxicity) map.EcologicalToxicity[i] = Math.max(map.EcologicalToxicity[i], e.toxicity * c);
+}
+/**
+ * Collapse debris is the cell's own rock broken where it lies: the bedrock surface drops by
+ * the depth and the same depth of sediment covers it, so the sediment budget gains what it
+ * deposits and the elevation stands.
+ */
+function collapseDebris(map: PhysicalField, i: number, depth: number) {
+  if (depth <= 0) return;
+  map.BedrockElevation[i] -= depth;
+  map.SurfaceRockLoad[i] -= depth;
+  map.SedimentProducedTotal += (depth / 1024) * map.mesh.areas[i];
+  deposit(map, i, depth);
 }
 export type ConfluenceSystems = Pick<MagicSystem, "id" | "enabled">[];

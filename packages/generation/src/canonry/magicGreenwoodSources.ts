@@ -7,10 +7,19 @@ import { clamp, round } from "./math";
 /**
  * Greenwood's stands: old growth (a canopy past the stand age with cover past the floor) and
  * deep peat. Both are living matter that has had time; the strength rises with age and depth.
+ * Sap that herds and people carried to a cell is a grove in the making: planted sap per area
+ * counts toward a full grove's strength, so a herd road or a market at the end of a Deepwood
+ * road becomes a source of its own. A stand refills its sap; the strategy keeps the stock.
  */
-export function verdantSources(state: GenerationState, field: MagicField) {
+export function verdantSources(
+  state: GenerationState,
+  field: MagicField,
+  _seed: number,
+  context: LocateContext
+) {
   const map = state.physical!.map,
-    p = field.definition.parameters;
+    p = field.definition.parameters,
+    sap = field.stocks[`${context.origin.id}/sap`];
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes[i] !== 0 || map.IceThickness[i] > 0) continue;
     const canopy = map.BroadleafCover[i] + map.ConiferCover[i];
@@ -22,7 +31,41 @@ export function verdantSources(state: GenerationState, field: MagicField) {
         strength,
         400 + 300 * clamp(map.PeatCarbon[i] / Math.max(1e-9, p.peatDepth) - 1, 0, 1)
       );
+    if (sap) {
+      const grove = clamp(sap[i] / map.mesh.areas[i] / p.groveSap, 0, 1);
+      strength = Math.max(strength, 500 * grove);
+      if (strength > 0) sap[i] = Math.max(sap[i], strength * map.mesh.areas[i]);
+    }
     if (strength > 0) field.source[i] = clamp(round(strength), 1, 1000);
+  }
+}
+/**
+ * Forge cores: the cracked stock people's trade left at their forges is a source where it
+ * lies, at full strength once the cracked cores per area reach the declared amount.
+ */
+export function forgeSources(
+  state: GenerationState,
+  field: MagicField,
+  _seed: number,
+  { origin }: LocateContext
+) {
+  const map = state.physical!.map,
+    p = field.definition.parameters,
+    cracked = field.stocks[`${origin.id}/cracked`];
+  if (!cracked) return;
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (cracked[i] <= 0) continue;
+    const strength = round((1000 * cracked[i]) / map.mesh.areas[i] / p.forgeStrength);
+    if (strength < 1) continue;
+    field.source[i] = clamp(strength, 1, 1000);
+    field.located.push({
+      origin: origin.id,
+      id: `forge:${i}`,
+      x: map.mesh.x[i],
+      y: map.mesh.y[i],
+      radius: Math.sqrt(map.mesh.areas[i]),
+      strength: field.source[i],
+    });
   }
 }
 /** The world has no carbonate channel; its published karst proxy is continental, unvolcanic crust. */

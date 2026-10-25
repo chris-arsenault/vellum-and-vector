@@ -142,12 +142,17 @@ function createMagicField(state: GenerationState, definition: MagicSystem): Magi
   return field;
 }
 /**
- * Take an amount of a system's held stock out of the world at a cell, as mining or panning
- * does, drawing the reservoirs down in proportion. Returns what was drawn.
+ * Take an amount of a system's stock in one reservoir out of the world at a cell, as mining,
+ * panning or gathering does, drawing that reservoir's stocks down in proportion across the
+ * origins that hold it. Returns what was drawn.
  */
-export function drawStock(field: MagicField, cell: number, amount: number) {
+export function drawReservoir(field: MagicField, reservoir: string, cell: number, amount: number) {
   const held = field.definition.origins
-    .map((origin) => field.stocks[stockKey(origin, originStocks(origin)[0])])
+    .flatMap((origin) =>
+      originStocks(origin)
+        .filter((stock) => stock.reservoir === reservoir)
+        .map((stock) => field.stocks[stockKey(origin, stock)])
+    )
     .filter((values) => values[cell] > 0);
   const available = held.reduce((sum, values) => sum + values[cell], 0);
   if (available <= 0 || amount <= 0) return 0;
@@ -156,6 +161,23 @@ export function drawStock(field: MagicField, cell: number, amount: number) {
   field.lost += drawn;
   field.drawn[cell] += drawn;
   return drawn;
+}
+/** Mining and panning take held cores; a forge's cracked stock and a spring are not ore. */
+export function drawStock(field: MagicField, cell: number, amount: number) {
+  return drawReservoir(field, "held", cell, amount);
+}
+/** Put an amount of a system back into one reservoir at a cell, as planting or cracking does. */
+export function depositReservoir(
+  field: MagicField,
+  reservoir: string,
+  cell: number,
+  amount: number
+) {
+  const values = reservoirStock(field, reservoir);
+  if (!values || amount <= 0) return 0;
+  values[cell] += amount;
+  field.lost -= amount;
+  return amount;
 }
 export function initializeMagic(
   state: GenerationState,

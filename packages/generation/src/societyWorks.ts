@@ -12,7 +12,8 @@ import {
 import type { GenerationState, MapProcessContext } from "./process";
 import { applyNativeColdAgeWork } from "./societyNativeWorks";
 import { nearestCommunity } from "./societyPopulation";
-import { societyValue } from "./societySupport";
+import { societyValue, soilWaterCapacity } from "./societySupport";
+import { drawShareAt } from "./societyMagicAccess";
 import { isWorldSociety } from "./societyMapScope";
 import { demandAmount, demandSamples, hasMedium } from "./societyDemand";
 import { coldAgeWorks, placeColdAgeWork } from "./societyColdAge";
@@ -340,6 +341,11 @@ function irrigate(
   edit("flow", available - diverted);
   edit("soilWater", societyValue(state, "soilWater", i) + diverted * 0.02);
 }
+/**
+ * Clearing and burning take the trees and what lives in them: the Greenwood's sap under the
+ * cleared ground goes with the cover, and with no canopy to draw it the soil's water rises
+ * toward what the soil can hold, the water table a Salt brine climbs.
+ */
 function clearLand(
   state: GenerationState,
   i: number,
@@ -357,6 +363,12 @@ function clearLand(
   ])
     edit(channel, societyValue(state, channel, i) * (1 - fraction));
   edit("grassCover", Math.min(1, societyValue(state, "grassCover", i) + fraction * 0.3));
+  const capacity = soilWaterCapacity(state, i);
+  edit(
+    "soilWater",
+    Math.min(capacity, societyValue(state, "soilWater", i) + fraction * 0.3 * capacity)
+  );
+  drawShareAt(state, "greens", "sap", i, fraction);
 }
 function conserve(
   state: GenerationState,

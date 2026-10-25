@@ -259,6 +259,7 @@ function SystemPropagation({
         >
           <option value="climate">Climate, before rivers & glaciers</option>
           <option value="post-glacial">After glacial reconciliation</option>
+          <option value="society">Society, once people have acted</option>
         </select>
       </label>
     </>

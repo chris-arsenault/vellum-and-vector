@@ -72,6 +72,31 @@ function applySharedForcing(state: GenerationState) {
   magicLivingFeedback(state);
   magicOceanFeedback(state);
 }
+/**
+ * The society phase: once people have acted in a cycle, systems made of what they did are
+ * evaluated, and systems whose stocks people drew or deposited are located and propagated
+ * again, then every system's shared forcing is re-applied. Without people it never runs, so
+ * a world with no human era has no society-phase magic and the rest is unchanged.
+ */
+export function evaluateSocietyMagic(
+  state: GenerationState,
+  context: MapProcessContext,
+  touched: Set<string> = new Set()
+) {
+  const bound = generationBindings(context),
+    epochs = bound.settings.epochs,
+    index = context.epochIndices[0] ?? epochs.length - 1;
+  let changed = false;
+  for (const field of state.physical!.magic!.fields) {
+    const definition = field.definition;
+    if (!definition.enabled || !(definition.phase === "society" || touched.has(definition.id)))
+      continue;
+    evaluateField(state, field, bound.seed, index, epochs[index]);
+    changed = true;
+  }
+  if (changed) applySharedForcing(state);
+  return changed;
+}
 export function magicProcesses(
   systems: MagicSystem[] = [],
   confluences: MagicConfluence[] = []

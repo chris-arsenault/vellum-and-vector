@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { canonryConfluencePresets, confluenceEffective } from "@atlas/domain";
 import { newGenerationDraft, prepareDraft } from "./generationDraft";
 import { draftHumanEras, updateHumanEra } from "./generationHumanEras";
 import {
@@ -139,11 +140,17 @@ it("removes deleted magical system activity without discarding unrelated regimes
   expect(prepareDraft(draft).input.settings!.magicSystems).toEqual(systems);
 });
 
-it("keeps an invalid magical definition edit visible and diagnoses cross-system references", () => {
+it("keeps a system's removal visible and leaves the meetings that read it ineffective", () => {
   const original = configured();
   const systems = original.recipe.settings.magicSystems.filter((system) => system.id !== "fire");
   const draft = setDraftMagicSystems(original, systems);
   expect(draft.recipe.features!["magic.configured"].configuration!.magicSystems).toEqual(systems);
   expect(draftEpochs(draft)[0].magicActivity).toEqual({ pressure: 0.4 });
-  expect(() => prepareDraft(draft)).toThrow(/system:fire/);
+  // Meetings travel with any system list: one that reads the removed system simply never holds.
+  const settings = prepareDraft(draft).input.settings!,
+    effective = (settings.confluences ?? canonryConfluencePresets()).filter((confluence) =>
+      confluenceEffective(confluence, settings.magicSystems)
+    );
+  expect(effective.length).toBeGreaterThan(0);
+  expect(effective.every((confluence) => !confluence.systems.includes("fire"))).toBe(true);
 });

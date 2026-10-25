@@ -258,6 +258,8 @@ export interface SocietyMagicPractice {
   depthLimit: number;
   injuries: number;
   strain: number;
+  /** Greenwood seed the community carries: gathered where its seat stands on sap, traded, planted. */
+  seed?: number;
 }
 export function population(community: Pick<SocietyCommunity, "groups">) {
   return community.groups.reduce((sum, group) => sum + group.count, 0);

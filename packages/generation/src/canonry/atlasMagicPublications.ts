@@ -41,6 +41,7 @@ export function configuredMagicPublications(
   return [
     ...systems.flatMap((system) => systemPublications(system, configured, tools)),
     tools.field("magic:strain", "ratio", "magic", configured, owners),
+    ...societyPublications(configured, tools),
     ...(input.settings?.confluences ?? []).flatMap((confluence) =>
       confluencePublications(
         confluence,
@@ -49,6 +50,19 @@ export function configuredMagicPublications(
       )
     ),
   ];
+}
+/** What people left on the ground for society-sourced magic to read: amounts, like stocks. */
+export const societyChannels = [
+  ["tenure", "person-year"],
+  ["walkedRoute", "traveller-year"],
+  ["massDeath", "people"],
+] as const;
+function societyPublications(publish: boolean, tools: PublicationTools) {
+  return societyChannels.map(([channel, unit]) => {
+    const definition = tools.field(channel, unit, "magic", publish, owners);
+    definition.quantity = "extensive";
+    return definition;
+  });
 }
 function configuredChannel(
   system: string,

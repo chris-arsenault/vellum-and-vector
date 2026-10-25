@@ -2,6 +2,7 @@ import { gridPosition, type MagicSystem, type SocietyCommunity } from "@atlas/do
 import type { GenerationState } from "./process";
 import { samplesInBox } from "./societySpatial";
 import { societyValue } from "./societySupport";
+import { depositReservoir, drawReservoir, reservoirStock } from "./canonry/magicState";
 
 /**
  * What society asks of a system is a role its effects declare, never its name or the way
@@ -26,6 +27,79 @@ export function systemHasRole(system: MagicSystem, role: MagicRole) {
 export function magicAt(state: GenerationState, role: MagicRole, i: number, channel = "intensity") {
   const system = magicSystemForRole(state.domain.world.magicSystems, role);
   return system ? societyValue(state, `magic:${system.id}:${channel}`, i) / 1000 : 0;
+}
+/** The live field of the enabled system in a role, where the mesh is live in this generation. */
+export function magicFieldForRole(state: GenerationState, role: MagicRole) {
+  const system = magicSystemForRole(state.domain.world.magicSystems, role);
+  return state.physical?.magic?.fields.find((field) => field.definition.id === system?.id);
+}
+/** The mesh cell under a surface sample, or -1 without a live mesh. */
+function cellOf(state: GenerationState, sample: number) {
+  const cell = state.physical?.samples[sample];
+  return sample >= 0 && cell !== undefined ? cell : -1;
+}
+function touch(state: GenerationState, systemId: string) {
+  if (state.society) (state.society.magicTouched ??= new Set()).add(systemId);
+}
+/** The stock of a system's reservoir under a sample, as an amount. */
+export function reservoirAt(
+  state: GenerationState,
+  role: MagicRole,
+  reservoir: string,
+  sample: number
+) {
+  const field = magicFieldForRole(state, role),
+    cell = cellOf(state, sample);
+  return field && cell >= 0 ? (reservoirStock(field, reservoir)?.[cell] ?? 0) : 0;
+}
+/**
+ * People take an amount of a system's reservoir out of the mesh under a sample: mining takes
+ * held cores, gathering takes sap, clearance burns it. Returns what was taken.
+ */
+export function drawAt(
+  state: GenerationState,
+  role: MagicRole,
+  reservoir: string,
+  sample: number,
+  amount: number
+) {
+  const field = magicFieldForRole(state, role),
+    cell = cellOf(state, sample);
+  if (!field || cell < 0 || amount <= 0) return 0;
+  const drawn = drawReservoir(field, reservoir, cell, amount);
+  if (drawn > 0) touch(state, field.definition.id);
+  return drawn;
+}
+/** Take a share of what the reservoir holds under the sample. */
+export function drawShareAt(
+  state: GenerationState,
+  role: MagicRole,
+  reservoir: string,
+  sample: number,
+  share: number
+) {
+  return drawAt(
+    state,
+    role,
+    reservoir,
+    sample,
+    reservoirAt(state, role, reservoir, sample) * share
+  );
+}
+/** People leave an amount of a system in a reservoir under a sample: cracked cores, planted seed. */
+export function depositAt(
+  state: GenerationState,
+  role: MagicRole,
+  reservoir: string,
+  sample: number,
+  amount: number
+) {
+  const field = magicFieldForRole(state, role),
+    cell = cellOf(state, sample);
+  if (!field || cell < 0 || amount <= 0) return 0;
+  const deposited = depositReservoir(field, reservoir, cell, amount);
+  if (deposited > 0) touch(state, field.definition.id);
+  return deposited;
 }
 /** The nearest ocean sample within a community's reach that lies between 50 m and its depth limit. */
 export function accessibleDive(state: GenerationState, c: SocietyCommunity, limit: number) {

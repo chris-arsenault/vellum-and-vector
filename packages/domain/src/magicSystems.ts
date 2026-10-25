@@ -36,6 +36,7 @@ export const magicSources = [
   "verdant",
   "aquifer",
   "impact",
+  "forge",
 ] as const;
 export const magicPropagations = [
   "fracture",
@@ -165,6 +166,14 @@ const parameterSchema = z.object({
   animalCarry: finite.min(0).max(1).default(0.1),
   // Share of buried peat carbon that becomes stratum stock per epoch.
   strataShare: finite.nonnegative().default(0.02),
+  // Planted sap per square metre that counts as a full grove, and the share of sap a cell
+  // without a stand loses per epoch.
+  groveSap: positive.default(400),
+  sapLoss: finite.min(0).max(1).default(0.3),
+  // Cracked cores per square metre at a forge that make a full source, and the share of
+  // the cracked stock that cools away per epoch.
+  forgeStrength: positive.default(250),
+  forgeCooling: finite.min(0).max(1).default(0.5),
 });
 // Overrides carry no defaults of their own, so a reparse keeps an origin's overrides sparse.
 const parameterOverrideSchema = z.object(
@@ -202,6 +211,7 @@ const legacyRenewal: Record<MagicSource, MagicRenewal> = {
   impact: "finite",
   verdant: "accumulating",
   aquifer: "continuous",
+  forge: "accumulating",
 };
 const systemShape = z.object({
   id: z.string().min(1),
@@ -212,7 +222,8 @@ const systemShape = z.object({
   source: z.enum(magicSources).optional(),
   propagation: z.enum(magicPropagations).optional(),
   origins: z.array(magicOriginSchema).default([]),
-  phase: z.enum(["climate", "post-glacial"]),
+  // A society-phase system is evaluated when people have acted, each society cycle.
+  phase: z.enum(["climate", "post-glacial", "society"]),
   strength: finite.nonnegative().default(1),
   parameters: parameterSchema.prefault({}),
   effects: z

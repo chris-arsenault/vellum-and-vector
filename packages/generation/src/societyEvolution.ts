@@ -12,6 +12,7 @@ import { evolveSettlements } from "./societySettlements";
 import { settledCycle, societyStep } from "./societyTempo";
 import { wearWays } from "./societyWays";
 import { raiseHighways } from "./societyHighways";
+import { recordSocietyOnMesh } from "./societyRecord";
 
 /** One decadal cycle of feedback: people, works, magic use, learned practices, environment, hazards, settlements. */
 export function societyCycle(
@@ -40,6 +41,8 @@ export function societyCycle(
     evolvePolitics(state, context, dt);
     raiseHighways(state, context);
   }
+  // What the cycle's people left on the ground: tenure, walked ways and the dead.
+  recordSocietyOnMesh(state, dt);
 }
 /**
  * Cycles resolve feedback, not annual actors or a cap on elapsed history. Each cycle's

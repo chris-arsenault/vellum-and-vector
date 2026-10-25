@@ -69,6 +69,15 @@ const firePreset = magicSystemSchema.parse({
       renewal: "finite",
       stocks: [{ id: "held", reservoir: "held", carriers: ["crust", "river"] }],
     },
+    // Forge cores: cores people mined and carried are cracked in a city's forges, and a
+    // core releases where it is cracked. A city that imports cores becomes a Fire source.
+    {
+      id: "forge",
+      source: "forge",
+      propagation: "local",
+      renewal: "accumulating",
+      stocks: [{ id: "cracked", reservoir: "forge", carriers: ["crust", "people"] }],
+    },
   ],
   phase: "climate",
   parameters: {
@@ -324,7 +333,7 @@ const greenwoodPreset = magicSystemSchema.parse({
       propagation: "roots",
       renewal: "accumulating",
       stocks: [
-        { id: "sap", reservoir: "sap", carriers: ["animal"] },
+        { id: "sap", reservoir: "sap", carriers: ["animal", "people"] },
         { id: "stratum", reservoir: "stratum", carriers: ["crust"] },
       ],
     },
@@ -338,11 +347,8 @@ const greenwoodPreset = magicSystemSchema.parse({
   ],
   phase: "post-glacial",
   parameters: { baseCost: 2 },
-  effects: {
-    verdure: 1,
-    vegetationGrowth: 0.5,
-    seedDispersal: 1,
-  },
+  // Greenwood acts on the living through verdure alone, its own medium: no generic growth term.
+  effects: { verdure: 1 },
   history: { retention: 0.6, storage: 0.4 },
   features: [
     feature(
@@ -353,7 +359,8 @@ const greenwoodPreset = magicSystemSchema.parse({
       undefined,
       covers(300, 900)
     ),
-    feature("spring", "Greenwood spring", 80, [[land, at("source:spring", 1)]]),
+    // The rule is the wellspring; "spring" is Fire's hot spring in the palette and geometry.
+    feature("wellspring", "Greenwood spring", 80, [[land, at("source:spring", 1)]]),
     // A spring on bare ground: the oasis that next epoch's roots carry on from.
     feature("oasis", "Oasis", 85, [
       [land, at("source:spring", 1), { field: "treeCover", max: 0.12 }],

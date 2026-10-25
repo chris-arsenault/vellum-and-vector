@@ -169,7 +169,7 @@ it("keeps renamed clock identities, other systems and authored activity when app
     iceRetention: 600,
     coldRetentionDistance: 4_000,
   });
-  expect(configured.map((entry) => entry.id)).toEqual(["fire", "aurora", "pressure"]);
+  expect(configured.map((entry) => entry.id)).toEqual(["fire", "aurora", "pressure", "greenwood"]);
 });
 
 it("prepares all eight magic inclusion combinations without silently reactivating omitted systems", () => {

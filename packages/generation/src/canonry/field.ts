@@ -160,6 +160,12 @@ const metricFields = [
   "StormTrack",
   // Greenwood's verdure: the life in sap and groundwater that ecology grows from (0 to 1).
   "Verdure",
+  // What people left on the ground, as amounts the crust carries: person-years at inhabited
+  // seats, traveller-years along the ways between them, and the dead of events and die-offs.
+  // Hallowed is made of the first two; Salt's death origin reads the third.
+  "Tenure",
+  "WalkedRoute",
+  "MassDeath",
   // Magical heat carried down the drainage (native units): the thawed river below a wellspring.
   "RiverWarmth",
 ] as const;

@@ -157,6 +157,11 @@ function growPopulation(state: GenerationState, years: number, record: SocietyEr
     const survivors = before * Math.exp(-years / 65);
     record.births += Math.max(0, after - survivors);
     record.deaths += before - Math.min(after, survivors);
+    // A net fall is a die-off: more died than were born, and the ground remembers them.
+    if (after < before) {
+      const dieOff = (state.society!.dieOff ??= new Map());
+      dieOff.set(c.id, (dieOff.get(c.id) ?? 0) + before - after);
+    }
     for (const g of c.groups) g.count *= before > 0 ? after / before : 0;
   }
 }

@@ -10,7 +10,7 @@ import { hashUnit } from "./noise";
 import type { MagicOrigin, MagicSource, MagicSystem } from "@atlas/domain";
 import { originStocks, stockKey, systemSeed, withOrigin } from "./magicState";
 import { exposure, heldStock, releaseShare } from "./magicStocks";
-import { aquiferSources, verdantSources } from "./magicGreenwoodSources";
+import { aquiferSources, forgeSources, verdantSources } from "./magicGreenwoodSources";
 
 function isHeatMaximum(map: PhysicalField, start: number, radius: number) {
   const { mesh, HeatSourceDensity: density } = map;
@@ -325,9 +325,11 @@ export const magicSourceStrategies: Record<MagicSource, SourceStrategy> = {
     locate: () => undefined,
   },
   verdant: {
-    label: "Old stands and deep peat",
+    label: "Old stands, deep peat and planted sap",
     requires: ["ecology"],
-    parameters: ["standAge", "standCover", "peatDepth"],
+    parameters: ["standAge", "standCover", "peatDepth", "groveSap", "sapLoss"],
+    // Its sap is refilled by stands and added to by herds and people; the advance decays it.
+    managesStock: true,
     locate: verdantSources,
   },
   aquifer: {
@@ -338,7 +340,9 @@ export const magicSourceStrategies: Record<MagicSource, SourceStrategy> = {
   },
   impact: {
     label: "Fallen cores around impact craters",
-    requires: ["canonry:Impacts", "canonry:Wind"],
+    // Reads the impact events and the wind the workspace already holds; a world without
+    // impacts or an un-run wind simply seeds nothing, so Fire's pass needs no producer here.
+    requires: [],
     managesStock: true,
     parameters: [
       "fallenDensity",
@@ -355,6 +359,13 @@ export const magicSourceStrategies: Record<MagicSource, SourceStrategy> = {
       "fanBarrenDepth",
     ],
     locate: impactSources,
+  },
+  forge: {
+    label: "Forges where people crack carried cores",
+    requires: [],
+    parameters: ["forgeStrength", "forgeCooling"],
+    managesStock: true,
+    locate: forgeSources,
   },
 };
 /**

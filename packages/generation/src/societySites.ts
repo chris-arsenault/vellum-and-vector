@@ -194,7 +194,7 @@ function uninhabitable(r: SiteReader, i: number) {
 }
 /** A Greenwood spring: water that heals and fertilises, and a town that must not overdraw it. */
 function healingWell(r: SiteReader, i: number): SiteOpportunity | null {
-  return r.feature("greenwood", "spring", i) || r.feature("greenwood", "oasis", i)
+  return r.feature("greenwood", "wellspring", i) || r.feature("greenwood", "oasis", i)
     ? { kind: "healing-well", score: 0.9, reason: "at a Greenwood spring" }
     : null;
 }

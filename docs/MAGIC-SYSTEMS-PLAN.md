@@ -1357,6 +1357,114 @@ Evidence: society tests on trade carriage, extraction, hunting and clearance; se
 composition tests; one short-scenario generation with a bound era, compared with and
 without people.
 
+#### Execution steps (M4)
+
+Design fixed at expansion, from the society code as it is. Society acts on the mesh
+through two existing doors: works and practices edit surface channels that
+`refreshSocietyEnvironment` synchronizes to the mesh each cycle, and Fire mining already
+draws stock on the mesh directly (`drawStock`). M4 keeps both and adds no new engine.
+
+- **People as carrier.** The practice ledger already moves cores between communities
+  (`distributeCores`). It becomes `tradeStocks`: every carried ledger (core supply,
+  Greenwood seed) diffuses along connections in proportion to the way's flow, the base
+  distance decay times a wear factor from `wearWays`. Cores cracked at a forge are deposited
+  on the mesh as Fire's third origin: `forge` (source `forge`, propagation `local`, stock
+  `cracked` in reservoir `forge`, carriers crust and people). The forge strategy reads its
+  own stock, so Fire's ordinary climate evaluation and the present's refresh both locate
+  it; the stock cools by a share per epoch. Greenwood seed is gathered where a seat stands
+  on sap, traded, and a share planted at each seat into the sap reservoir, which becomes a
+  source term of the stand origin: planted sap per area counts as a grove, so a market at
+  the end of a Deepwood road grows a grove by the roots and verdure the ordinary evaluation
+  gives it. The verdant strategy manages its stock (stands refill their sap; sap without a
+  stand decays per epoch) rather than mirroring it. Clearance and burning draw sap at the
+  cells they clear, and clearance lifts the soil water toward its capacity, which is the
+  water table Salt's rise will read. Hunting already lowers the herds Greenwood's animal
+  carrier reads; the step proves the chain to the mesh.
+- **People as source.** `recordSocietyOnMesh` runs at the end of every society cycle and
+  writes three extensive channels the crust carries: `Tenure` (person-years at inhabited
+  seats), `WalkedRoute` (traveller-years along each connection, rasterized onto the mesh
+  cells between its ends) and `MassDeath` (casualties of every event once, plus each
+  community's net population fall in a cycle as a die-off). A polity whose status falls
+  from active to fragmented or collapsed besieges the settled communities it claimed and
+  lost, as a located `siege` event through `applySocietyEvent`, so casualties, displacement
+  and ruin follow the existing rules. Confluence hazards already kill through the same path.
+- **Society phase.** The phase enum gains `society`. Society-phase systems are evaluated by
+  `refreshSocietyEnvironment` each cycle, inside a round and in the present alike, after
+  the cycle's synchronization and before classification; systems whose stocks society
+  touched this cycle (`magicTouched`) are relocated and re-propagated there too. No
+  separate epoch pass: a round runs inside the epoch before coasts, burial, storage and
+  history, so those passes see what the people did. Society-phase systems without a human
+  era are never evaluated and leave nothing. Hallowed (M6) and Salt's death origin (M5)
+  are the consumers.
+
+1. Carrier: `societyMagic.ts` (crack cores to the forge stock, gather and plant seed,
+   `tradeStocks`), `magicSources.ts` (forge strategy), `magicPresets.ts` (forge origin,
+   seed carrier on sap), `magicGreenwoodSources.ts` (planted sap as a grove source, managed
+   stock), `magicStocks.ts` (forge cooling, sap decay), `magicState.ts` (`drawReservoir`,
+   `drawStock` on held reservoirs only), `societyWorks.ts` (clearance water and sap draw),
+   schema parameters and labels.
+2. Source: `societyRecord.ts` (tenure, routes, deaths on the mesh), `societySiege.ts`,
+   `societyPolitics.ts` (status transitions), `societyEvolution.ts` (record at cycle end),
+   `societyPopulation.ts` (die-off per community), `field.ts`, `transportHistory.ts`,
+   `magicFeatures.ts` and `atlasPublications.ts` (channels published).
+3. Phase: `magicSystems.ts` (`society`), `magicProcesses.ts` (exported society evaluation),
+   `societyEnvironment.ts` (`refreshMagicPathways` evaluates touched and society-phase
+   systems), `MagicSystemsForm.tsx` option, `generation-workflows.md` paragraph.
+4. Exit checks: `societyCarriage.test.ts` on the acceptance list (forge source after trade
+   and none without; grove at a road's end; hunting lowers the herds on the mesh; cleared
+   ground wetter and its sap drawn; collapse writes a siege and deaths, tenure at a seat,
+   routes between; confluence hazard casualties); characterization snapshot unchanged
+   (no people); targeted suites, typecheck, lint, Prettier; record and commit.
+
+#### Changes and resume (M4)
+
+Completed 2026-10-25. Evidence: `societyCarriage.test.ts` shows that cores mined at one
+community and traded down the way to a city with no vein are cracked there, leave a forge
+stock on the city's cell, and make Fire's forge origin a located source with intensity at
+the city, and that the same city with no way has none of it; that seed gathered on a seat
+standing on sap is traded and planted into sap at the market, which Greenwood's stand
+origin then counts as a grove source, and that an unconnected market stays bare; that a
+settled community's works hunt the herds down on the surface channels the mesh binds to
+`Grazers`, clear cover, lift the soil water toward capacity and draw the sap under the
+cleared ground; that a polity falling from active to collapsed besieges the settled town it
+lost and spares the one it still controls, and that the recording pass writes the siege's
+dead once at the town, a die-off at its neighbour, person-years at the inhabited seat and
+traveller-years on both ends of the way, accruing across cycles; and that a confluence
+covering a community's ground kills there through the hazard path. The characterization
+snapshot is unchanged: a world with no people has no forge stock and its magic totals are
+what they were. Design choices made while building: society writes its consequences to the
+mesh directly, as mining already did, rather than through surface channels, because
+tenure, routes and deaths have no surface producer and are read by magic alone; the
+society phase evaluates inside the environmental refresh each cycle rather than as a
+separate epoch pass, since the round already runs before coasts, burial and history; the
+verdant strategy keeps its own sap stock so planted and herd-carried sap survive the next
+locate; `drawStock` is restricted to the `held` reservoir and `drawReservoir` names any
+other, so mining never takes a forge's cracked cores or a spring's water; the trade flow is
+the way's distance decay times a wear factor from the roads people made.
+
+The exit checks ran the whole frontend suite for the first time since M1a (it also runs
+the packages' tests) and found 20 failures accumulated across M1a to M3, repaired on a
+Sulion sub-branch before this commit: the impact strategy no longer requires `canonry:Wind`
+and `canonry:Impacts` as products (both are workspace arrays Fire reads whether or not a
+producer ran; the requirement had blocked every curated outcome with a prerequisite
+error); storm dunes and confluence collapse debris broke the sediment budget (dunes
+re-counted moved sand as deposited and exported, debris deposited rock from nowhere), which
+made `canonry.runoff` fail from the second epoch and left the real draft world without
+hydrology or any published magic place, so dunes now move thickness without touching the
+totals and debris turns the cell's own bedrock into produced sediment; Greenwood's preset
+dropped the generic `vegetationGrowth` and `seedDispersal` effects (verdure is its medium,
+and the curated-controls test holds the no-generic-menu requirement); the palette gained
+entries for every rule since M1c (crater, fan, placer, deviation, stand, wellspring, oasis,
+verdant, sinkhole, rot, frozen, brackish) and Greenwood's spring rule became `wellspring`
+so it no longer shares Fire's hot-spring colour and geometry; the ecology publication and
+naming registered the deepwood, wending and well biome kinds; three frontend tests were
+updated for four presets, origin-based parameter applicability and meetings that read a
+removed system being ineffective rather than an error. The three `landmarks.test.ts`
+failures (the anchor fixture finds four separated interior sites where it asks for six)
+fail at their own delivery commit `61d67d0` in a detached worktree and are not this plan's;
+reported to the user, left as they are. 901 of 904 frontend-run tests and 688 of 691
+package tests pass; typecheck, lint and Prettier clean.
+
 ### M5 — Salt
 
 Scope: the system as the Composition block gives it: death and dead-lake origins, with the
@@ -1495,4 +1603,8 @@ completed 2026-10-25 (storm genesis on sharp sea fronts, the pulse carried inlan
 air columns with Aurora pinning, scour and dunes on the track, seasonal harbours). M3
 completed 2026-10-25 (Greenwood with stand and spring origins, roots propagation, verdure
 in ecology and soils, braided reaches, karst collapse, herd carriage, three biomes, three
-confluences, the healing-well site). M4 to M8 pending. Next action: plan-phase expands M4.
+confluences, the healing-well site). M4 completed 2026-10-25 (people as carrier: trade
+ledgers, the forge origin, seed gathering and planting, clearance water and sap; people as
+source: tenure, walked routes and mass death on the mesh, the siege event; the society
+phase in the environmental refresh), with the frontend-suite regressions from M1a to M3
+repaired on a sub-branch. M5 to M8 pending. Next action: plan-phase expands M5.

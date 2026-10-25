@@ -14,6 +14,7 @@ import { communityReach } from "./societyContact";
 import { generationBindings } from "./generationBindings";
 import { namePolity } from "./societyNaming";
 import { relocatePolitySeats } from "./societyHierarchy";
+import { besiegeLost } from "./societySiege";
 
 export function initializePolitics(state: GenerationState, context: MapProcessContext) {
   if (!state.society) initializePopulation(state, context);
@@ -198,8 +199,10 @@ function recordPoliticalChanges(state: GenerationState, years: number, era: stri
         ? "fragmented"
         : "active";
     const cause = `${era}: support ${p.support.toFixed(2)}, ${controlled.length} communities under effective control; older claims retained.`;
+    const previous = p.status;
     p.status = status;
     p.causes.push(cause);
+    besiegeLost(state, p, previous, era);
     politics.history.push({ era, polity: p.id, status, communities: controlled, cause });
     politics.isolation[p.id] = status === "active" ? 0 : (politics.isolation[p.id] ?? 0) + years;
     if (politics.isolation[p.id] < 100) continue;

@@ -91,4 +91,8 @@ export const parameterLabels: Record<keyof MagicSystem["parameters"], string> = 
   sinkDepth: "Ground lost when a spring collapses · metres",
   animalCarry: "Stock herbivores carry toward their grazing per epoch · share",
   strataShare: "Buried peat becoming stratum stock per epoch · share",
+  groveSap: "Planted sap per square metre that makes a full grove · intensity",
+  sapLoss: "Sap a cell without a stand loses per epoch · share",
+  forgeStrength: "Cracked cores per square metre that make a full forge source · intensity",
+  forgeCooling: "Cracked cores that cool away per epoch · share",
 };

@@ -1,7 +1,6 @@
 import {
   gridPosition,
   population,
-  type MagicSystem,
   type SocietyCommunity,
   type SocietyMagicPractice,
 } from "@atlas/domain";
@@ -11,29 +10,43 @@ import { nearestSample } from "./societySpatial";
 import { societyValue } from "./societySupport";
 import { peopleTrait } from "./societyTraits";
 import { practiceSkill } from "./societySkill";
-import { accessibleDive, magicAt, magicSystemForRole } from "./societyMagicAccess";
-import { drawStock } from "./canonry/magicState";
+import {
+  accessibleDive,
+  depositAt,
+  drawAt,
+  magicAt,
+  magicSystemForRole,
+  reservoirAt,
+} from "./societyMagicAccess";
 
 export { magicAt } from "./societyMagicAccess";
 /** Stock amount (intensity·m²) one core-equivalent of the practice ledger stands for. */
 const stockPerCore = 1e7;
+/** Share of the sap under a seat a community gathers per year, and the most per head. */
+const seedGathering = { share: 0.002, perHead: 5e4 };
+/** Share of carried seed a community plants at its seat per year. */
+const seedPlanting = 0.05;
 /** The held stock of the system that quickens, read at a sample from its published channels. */
 function heldStockAt(state: GenerationState, i: number) {
   const system = magicSystemForRole(state.domain.world.magicSystems, "quickens");
   if (!system) return 0;
   let total = 0;
   for (const origin of system.origins)
-    total += societyValue(state, `magic:${system.id}:stock:${origin.id}/${heldId(origin)}`, i);
+    for (const stock of origin.stocks)
+      if (stock.reservoir === "held")
+        total += societyValue(state, `magic:${system.id}:stock:${origin.id}/${stock.id}`, i);
   return total;
 }
-const heldId = (origin: MagicSystem["origins"][number]) => origin.stocks[0]?.id ?? "held";
 /** Mining takes cores out of the mesh where the field is live in this generation. */
 function drawHeldStock(state: GenerationState, sample: number, amount: number) {
-  const work = state.physical,
-    system = magicSystemForRole(state.domain.world.magicSystems, "quickens"),
-    field = work?.magic?.fields.find((entry) => entry.definition.id === system?.id);
-  if (!field || sample < 0 || amount <= 0) return;
-  drawStock(field, work!.samples[sample], amount);
+  drawAt(state, "quickens", "held", sample, amount);
+}
+/**
+ * Cores cracked in the forge release where they are cracked: the stock moves from the ledger
+ * people carried to the forge reservoir on the mesh, and the forge origin finds it there.
+ */
+function crackCores(state: GenerationState, sample: number, used: number) {
+  depositAt(state, "quickens", "forge", sample, used * stockPerCore);
 }
 function initialPractice(state: GenerationState, c: SocietyCommunity): SocietyMagicPractice {
   const i = nearestSample(state, c.position),
@@ -95,6 +108,7 @@ function fireUse(
     used = Math.min(practice.coreSupply, demand);
   practice.coreSupply -= used;
   practice.coreUsed += used;
+  crackCores(state, nearestSample(state, c.position), used);
   if (used <= 0 && practice.heatApplied <= 0) return;
   const work = workFor(state, c, "fire-forge"),
     heat = (8 * used) / Math.max(1, demand);
@@ -199,19 +213,54 @@ function pressureUse(
     `${p.divers.toFixed(1)} practitioners reach ${depth.toFixed(0)} m within a ${p.depthLimit} m tolerance; directed force and subsonic contact consumed ${spent.toFixed(1)} carried charge.`,
   ];
 }
-function distributeCores(state: GenerationState, years: number) {
+/**
+ * Greenwood in people's hands: a community whose seat stands on sap gathers seed from it,
+ * and every community plants a share of the seed it carries at its seat. Seed traded down a
+ * road out of a Deepwood founds groves at the markets that receive it.
+ */
+function greenwoodUse(
+  state: GenerationState,
+  c: SocietyCommunity,
+  p: SocietyMagicPractice,
+  years: number
+) {
+  const i = nearestSample(state, c.position),
+    sap = reservoirAt(state, "greens", "sap", i);
+  p.seed ??= 0;
+  if (sap > 0) {
+    const wanted = Math.min(
+      sap * seedGathering.share * years,
+      population(c) * years * seedGathering.perHead
+    );
+    p.seed += drawAt(state, "greens", "sap", i, wanted);
+  }
+  const planted = p.seed * (1 - Math.exp(-seedPlanting * years));
+  if (planted <= 0) return;
+  p.seed -= depositAt(state, "greens", "sap", i, planted);
+}
+/** What a way carries in a year relative to the base: distance decay, more on a worn road. */
+function wayFlow(link: { travelCost: number; wear?: number }) {
+  return Math.exp(-link.travelCost / 200000) * (1 + Math.min(1, (link.wear ?? 0) / 1000));
+}
+const tradedLedgers = ["coreSupply", "seed"] as const;
+/**
+ * Trade carries the ledgers people hold along the ways between communities, each toward the
+ * poorer end in proportion to the way's flow: cores from the mines to the forges, seed from
+ * the Deepwood to the markets.
+ */
+function tradeStocks(state: GenerationState, years: number) {
   const region = state.society!.region,
     practices = new Map(region.magic.map((p) => [p.communityId, p]));
   for (const link of region.connections) {
     const a = practices.get(link.from),
       b = practices.get(link.to);
     if (!a || !b) continue;
-    const surplus =
-      (a.coreSupply - b.coreSupply) *
-      (1 - Math.exp(-years / 35)) *
-      Math.exp(-link.travelCost / 200000);
-    a.coreSupply -= surplus;
-    b.coreSupply += surplus;
+    const share = (1 - Math.exp(-years / 35)) * wayFlow(link);
+    for (const ledger of tradedLedgers) {
+      const surplus = ((a[ledger] ?? 0) - (b[ledger] ?? 0)) * share;
+      a[ledger] = (a[ledger] ?? 0) - surplus;
+      b[ledger] = (b[ledger] ?? 0) + surplus;
+    }
   }
 }
 export function useSocietyMagic(state: GenerationState, context: MapProcessContext, years: number) {
@@ -227,13 +276,14 @@ export function useSocietyMagic(state: GenerationState, context: MapProcessConte
     fireUse(state, c, p, years, skill);
     auroraUse(state, c, p, years, skill);
     pressureUse(state, c, p, years, skill);
+    greenwoodUse(state, c, p, years);
   }
-  distributeCores(state, years);
+  tradeStocks(state, years);
   context.recordCause({
     kind: "domain",
     process: "human.magic-use",
     subjects: [],
     description:
-      "Fire use consumes mined cores; Aurora access depends on cold crystals and rested readers; Pressure practice requires reachable ocean depth. Their costs and media remain distinct.",
+      "Fire use consumes mined cores and cracks them at the forge; Aurora access depends on cold crystals and rested readers; Pressure practice requires reachable ocean depth; Greenwood seed is gathered, traded and planted. Their costs and media remain distinct.",
   });
 }

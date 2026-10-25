@@ -133,6 +133,10 @@ export const magicPlacePresentations: Record<string, MagicPlacePresentation> = {
   scar: { color: "#302826", symbol: "square", tint: 1 },
   // The halo is the quickened country: the living cover shows through a warm cast.
   halo: { color: "#d9a441", symbol: "circle", tint: 0.3 },
+  // Fallen Fire: the crater, its ejecta fan and the placer gravels below.
+  crater: { color: "#7a3b2f", symbol: "star", tint: 1 },
+  fan: { color: "#c98f6a", symbol: "triangle", tint: 0.6 },
+  placer: { color: "#d8b14a", symbol: "diamond", tint: 1 },
   // Aurora marks the existing ground; its place symbols retain the full class colour.
   field: { color: "#3fd9b5", symbol: "circle", tint: 0.25 },
   well: { color: "#a8f0ff", symbol: "star", tint: 0.6 },
@@ -145,9 +149,21 @@ export const magicPlacePresentations: Record<string, MagicPlacePresentation> = {
   wake: { color: "#6d7f9c", symbol: "circle", tint: 0.35 },
   lattice: { color: "#5b86c7", symbol: "cross", tint: 0.5 },
   rogue: { color: "#e05a7a", symbol: "triangle", tint: 1 },
+  // A storm track turned aside: pale steel over the country it crosses.
+  deviation: { color: "#9cb3d6", symbol: "circle", tint: 0.5 },
   war: { color: "#c23a7e", symbol: "star", tint: 1 },
   steam: { color: "#d9c3e6", symbol: "diamond", tint: 1 },
   breach: { color: "#8f5ce0", symbol: "cross", tint: 1 },
+  // Greenwood: deep greens for the stands, bright for the wells; verdant country tints.
+  stand: { color: "#2f6b3a", symbol: "square", tint: 1 },
+  wellspring: { color: "#7fd36b", symbol: "circle", tint: 1 },
+  oasis: { color: "#b7e07a", symbol: "circle", tint: 1 },
+  verdant: { color: "#5c9e4f", symbol: "circle", tint: 0.3 },
+  sinkhole: { color: "#6e5a3c", symbol: "square", tint: 1 },
+  // Greenwood's meetings with Fire, Aurora and Pressure.
+  rot: { color: "#8a6a2b", symbol: "diamond", tint: 1 },
+  frozen: { color: "#bfe6d9", symbol: "star", tint: 1 },
+  brackish: { color: "#7c9a8e", symbol: "triangle", tint: 1 },
 };
 const spareColors = ["#d1495b", "#f2a541", "#2e86ab", "#8e44ad", "#1b998b", "#c9a227"];
 export function magicPlacePresentation(ruleId: string): MagicPlacePresentation {

@@ -631,7 +631,12 @@ Each epoch advects accumulated activity, first occurrence, storage and coastal
 history with Canonry's crust source map. Climate-phase fields (Fire, Pressure)
 alter heat, moved water and rock before hydrology; post-glacial fields (Aurora)
 act through the charge their ice holds and carry ice persistence into the
-following epoch; every evaluation re-applies the shared forcings. Final
+following epoch; every evaluation re-applies the shared forcings. Society-phase
+fields are made of what people did: each society cycle, inside a round or in the
+present, the environmental refresh records tenure, walked ways and the dead on
+the mesh, evaluates society-phase systems and re-evaluates any system whose
+stocks people drew or deposited (cores cracked at a forge, seed planted, sap
+cleared), then reclassifies. A world without a human era never runs it. Final
 classification retains every
 feature mask, natural geography, physical materials and a priority-selected
 surface. An inland refinement has no fabricated pressure locus. A warm present

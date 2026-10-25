@@ -85,11 +85,14 @@ export function coastalFishery(state: GenerationState) {
   }
   return result;
 }
-function storedSoilWater(state: GenerationState, i: number) {
+/** The water a cell's soil can hold, metres: its depth times a porosity that rises with carbon. */
+export function soilWaterCapacity(state: GenerationState, i: number) {
   const depth = societyValue(state, "soilDepth", i, 0.3);
   const carbon = Math.min(1, societyValue(state, "soilCarbon", i) / 30);
-  const capacity = depth * (0.12 + carbon * 0.15);
-  return societyValue(state, "soilWater", i) / Math.max(0.01, capacity);
+  return depth * (0.12 + carbon * 0.15);
+}
+function storedSoilWater(state: GenerationState, i: number) {
+  return societyValue(state, "soilWater", i) / Math.max(0.01, soilWaterCapacity(state, i));
 }
 
 /** Sample every retained channel, including reaches omitted from visible cartography. */
