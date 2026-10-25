@@ -380,9 +380,15 @@ space filters. Selectable columns retain numerical values, units and explicit
 unknowns; settlement residents remain distinct from community population.
 Custom attributes and separately owned authored magic sources are included.
 
-Each semantic identity has one row. Discovery retains hidden features and opens
-existing finer maps or interiors through the inspector without changing saved
-visibility or generating detail. Current-map and viewport reads respect composed
+Each semantic identity has one row. An authored landmark
+([ADR 0006](adr/0006-landmarks-are-injected-causes.md)) is one such identity:
+before generation its row is the authored record with its target measures;
+after generation its row is the generated realization under the authored name,
+carrying target and measured signature, maintenance total and captured river,
+typed by its catalogue kind under Terrain and geology. A detected peak, gorge or
+waterfall standing on the landmark is not a second row. Discovery retains hidden
+features and opens existing finer maps or interiors through the inspector
+without changing saved visibility or generating detail. Current-map and viewport reads respect composed
 geometry, profile eligibility and located spaces. Edits, undo and delivered
 initial-generation features refresh the registry; incomplete delivery is marked.
 
@@ -492,6 +498,17 @@ Preserve the concepts and, where suitable, adapt the algorithms for:
 - Drainage conditioning, lake water balance, river network continuity, fluvial erosion, floodplains and deltas.
 - Glaciation, glacier flow, glacial erosion/deposition, retreat and inherited landforms.
 - Material and surface classifications that do not erase underlying physical fields.
+
+Authored landmarks extend this generator without a second engine
+([ADR 0006](adr/0006-landmarks-are-injected-causes.md)). A creator places a
+named landmark of a catalogued kind (great mountain, great canyon, great ring
+structure, great escarpment, great falls) at a location and epoch with its
+defining measures in physical units; generation injects the kind's causes at
+that epoch and restores the measured signature at the end of every later epoch,
+booking each correction. The surrounding geography responds through the same
+processes as everywhere else, water is captured rather than fabricated, and
+naturally emerging landforms and their detection are unchanged.
+
 - Named geological feature extraction where supported (rivers, lakes, peaks, craters) and additional generalized GIS features in the new product.
 - Deterministic seeds and structural correctness; rendered geographic review as a complementary quality gate.
 

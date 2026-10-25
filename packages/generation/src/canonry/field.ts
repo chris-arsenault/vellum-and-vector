@@ -112,6 +112,8 @@ const elevationFields = [
   "ImpactRimUplift",
   "ImpactEjectaThickness",
   "VolcanicConstructionHistory",
+  // Cumulative correction that held authored landmarks to their signatures.
+  "LandmarkMaintenance",
   "Slope",
   "WaterDepths",
   "WaterSurfaceElevations",
@@ -161,7 +163,7 @@ export type PhysicalField = Record<(typeof integerFields)[number], Int32Array> &
     EngineeredDams: Set<number>;
     events: {
       id: string;
-      kind: "impact" | "plume" | "volcano";
+      kind: "impact" | "plume" | "volcano" | "landmark";
       x: number;
       y: number;
       radius: number;

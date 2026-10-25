@@ -102,6 +102,7 @@ export function activeLocatedSources(source: DomainSnapshot, input: AtlasGenerat
     return target !== null && spatial.distance(point(magic.source), target) < magic.radius;
   });
 }
+export { landmarksInExtent } from "./landmarkSelection";
 export function locatedMagicRequirements(
   source: DomainSnapshot,
   input: AtlasGenerationInput

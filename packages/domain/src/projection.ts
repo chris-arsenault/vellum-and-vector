@@ -26,12 +26,16 @@ function geography(world: World, writes: DomainWrite[]) {
 }
 function semantics(world: World, writes: DomainWrite[]) {
   const magic = new Map(world.magic.map((m) => [m.id, m])),
+    landmarks = new Map((world.landmarks ?? []).map((l) => [l.id, l])),
     views = new Map(world.views.map((v) => [v.id, v]));
   for (const { value } of writes.filter((w) => w.kind === "magic"))
     magic.set(value.id, structuredClone(value));
+  for (const { value } of writes.filter((w) => w.kind === "landmark"))
+    landmarks.set(value.id, structuredClone(value));
   for (const { value } of writes.filter((w) => w.kind === "view"))
     views.set(value.id, structuredClone(value));
   world.magic = [...magic.values()];
+  world.landmarks = [...landmarks.values()];
   world.views = [...views.values()];
   for (const { value } of writes.filter((w) => w.kind === "entity"))
     world.entities[value.id] = structuredClone(value);
@@ -68,6 +72,9 @@ function removeObjects(world: World, removes: ChangeSet["removes"]) {
   world.fields = world.fields.filter((f) => !fields.has(f.id));
   world.magic = world.magic.filter(
     (m) => !removes.some((r) => r.kind === "magic" && r.id === m.id)
+  );
+  world.landmarks = (world.landmarks ?? []).filter(
+    (l) => !removes.some((r) => r.kind === "landmark" && r.id === l.id)
   );
   world.views = world.views.filter((v) => !removes.some((r) => r.kind === "view" && r.id === v.id));
   const representations = new Set(

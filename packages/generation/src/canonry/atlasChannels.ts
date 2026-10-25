@@ -52,6 +52,7 @@ export const atlasChannels: ChannelBinding[] = [
   height("deposition", "CumulativeDeposition"),
   height("glacialDeposition", "CumulativeGlacialDeposition"),
   height("volcanicConstruction", "VolcanicConstructionHistory"),
+  height("landmarkMaintenance", "LandmarkMaintenance"),
   height("impactExcavation", "ImpactExcavation"),
   height("impactRim", "ImpactRimUplift"),
   height("impactEjecta", "ImpactEjectaThickness"),

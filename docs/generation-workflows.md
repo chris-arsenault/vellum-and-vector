@@ -663,6 +663,24 @@ them, so pieces meet at drainage divides. Pieces of one region tile it exactly.
 Enclosed gaps smaller than a region's least named size join it unless they hold
 water or another named region.
 
+Authored landmarks ([ADR 0006](adr/0006-landmarks-are-injected-causes.md))
+run inside the epoch loop. `physical.landmarks` contributes `landmark.emplace`
+after each epoch's impacts and `landmark.maintain` before its history when a
+landmark lies in the extent. Emplacement reads `world.landmarks`, walks each
+landmark back through the plate drift of the epochs still to come, and writes
+its kind's causes: a mountain is constructed rock with resistant core, heat,
+fractures and volcanic activity; a canyon is resistant rims with a channel cut
+as incision and a river captured along a corridor; a ring structure is a dome of
+alternating resistance or an authored impact; an escarpment is a fault trace
+with the two sides offset; a falls is caprock and a step on a river. Maintenance
+measures each kind's signature on the mesh and applies the smallest correction
+through the same quantities, booking it in `LandmarkMaintenance`. Extraction
+publishes one `landmark` feature per record under the landmark's id with target
+and measured signature, drops detected landforms standing on the landmark's
+claimed cells, and keeps the landmark's fault trace out of the faults layer.
+The great falls is latent at World: its step is held cell to cell and its lip,
+plunge pool and gorge belong to regional refinement.
+
 ## Generation and display findings (2026-10-18)
 
 The core physical operations and all three magical propagation mechanisms are
@@ -1478,7 +1496,9 @@ repeated expensive worlds without a concrete unresolved question.
   craters, volcanoes, shores and valleys remain products of the existing processes.
   Do not add an independent river-bed lowering or bank-shaping model to drawing.
 - Waterfalls and gorges remain emergent consequences and detections of physical
-  and magical evolution. Landmark injection stays in backlog item 9.
+  and magical evolution. Landmark injection was delivered afterwards as
+  [ADR 0006](adr/0006-landmarks-are-injected-causes.md) and does not change
+  this rule: an authored landmark injects causes and holds a measured signature.
 - Render the committed field with standard OpenLayers view-resolution tiles.
   Terrain, lake geometry, relief and thematic layers must describe the generated
   world. Panning and zooming do not run new generation.

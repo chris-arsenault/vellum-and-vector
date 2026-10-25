@@ -202,16 +202,23 @@ function SubjectCanvas({ world, editor }: { world: World; editor: EditorState })
             geometry: spatial.buffer(point(editor.magicDraft.source), editor.magicDraft.radius),
           } as import("./types").AtlasFeature,
         ]
-      : editor.drawing
-        ? [{ id: "drawing", geometry: editor.drawing } as import("./types").AtlasFeature]
-        : editor.selection
-          ? [
-              {
-                id: "region-selection",
-                geometry: editor.selection,
-              } as import("./types").AtlasFeature,
-            ]
-          : editor.proposedFeatures;
+      : editor.landmarkDraft && !editor.landmarkDraft.id
+        ? [
+            {
+              id: "landmark-draft",
+              geometry: editor.landmarkDraft.geometry,
+            } as import("./types").AtlasFeature,
+          ]
+        : editor.drawing
+          ? [{ id: "drawing", geometry: editor.drawing } as import("./types").AtlasFeature]
+          : editor.selection
+            ? [
+                {
+                  id: "region-selection",
+                  geometry: editor.selection,
+                } as import("./types").AtlasFeature,
+              ]
+            : editor.proposedFeatures;
   return (
     <MapCanvas
       world={world}

@@ -120,7 +120,8 @@ function selectedEvent(
   event: Event,
   selected: { impacts: boolean; volcanism: boolean }
 ): false | { relief?: number } {
-  if (event.kind === "plume") return false;
+  // Plume roots have no surface form; landmark events publish through their own record.
+  if (event.kind === "plume" || event.kind === "landmark") return false;
   if (event.kind !== "impact") return selected.volcanism && {};
   const relief = craterRelief(state, event);
   return selected.impacts && relief >= state.physical!.profile.ImpactVisibleRelief && { relief };
@@ -129,7 +130,8 @@ function extractFaults(state: GenerationState) {
   const { map } = state.physical!,
     [x0, y0] = map.mesh.origin;
   for (const fault of map.faults) {
-    if (fault.coordinates.length < 2) continue;
+    // A landmark's own fault trace publishes as the landmark, not as a second fault row.
+    if (fault.coordinates.length < 2 || fault.id.startsWith("landmark:")) continue;
     const line = {
       type: "LineString" as const,
       coordinates: unwrapCoordinates(

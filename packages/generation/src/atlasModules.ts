@@ -2,6 +2,7 @@ import { atlasGenerationModules, type GenerationModule } from "./generationModul
 import { physicalFeatureDefinitions } from "./physicalFeatures";
 import { domainFeatureDefinitions } from "./domainFeatures";
 import { atlasNativeProcesses } from "./canonry/atlasProcesses";
+import { landmarkProcesses } from "./canonry/landmarkProcesses";
 import { ecologyProcesses } from "./canonry/ecologyProcesses";
 import { magicProcesses } from "./canonry/magicProcesses";
 import { advectAtlasMagic } from "./canonry/atlasMagic";
@@ -32,7 +33,7 @@ atlasGenerationModules.register({
 atlasGenerationModules.register({
   id: "atlas.physical",
   features: physicalFeatureDefinitions,
-  processes: (source, input) => atlasNativeProcesses(input, source),
+  processes: (source, input) => [...atlasNativeProcesses(input, source), ...landmarkProcesses],
   publications: (input, world) =>
     atlasPublicationDefinitions(
       input,

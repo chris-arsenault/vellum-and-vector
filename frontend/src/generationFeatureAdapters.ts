@@ -12,6 +12,7 @@ import {
   GenerationLocatedSources,
 } from "./GenerationMagicConfiguration";
 import { GenerationCultureConfiguration } from "./GenerationCultureConfiguration";
+import { GenerationLandmarks } from "./GenerationLandmarks";
 import {
   physicalChanges,
   ecologyChanges,
@@ -119,6 +120,7 @@ const builtins: GenerationFeatureAdapter[] = [
     ownsField: (key) => key.startsWith("magic."),
   },
   { id: "magic.local", Editor: GenerationLocatedSources },
+  { id: "physical.landmarks", Editor: GenerationLandmarks },
   {
     id: "human.cultures",
     Editor: GenerationCultureConfiguration,

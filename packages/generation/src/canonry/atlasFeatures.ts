@@ -20,6 +20,7 @@ import { extractEcologicalFeatures } from "./ecologyFeatures";
 import { extractReliefFeatures, extractValleys } from "./reliefFeatures";
 import { physicalDistance } from "./physicalMetric";
 import { extractOceans } from "./oceanFeatures";
+import { dropClaimedFeatures, extractLandmarks, landmarkClaims } from "./landmarkFeatures";
 
 function riverReach(state: GenerationState, start: number, incoming: Int32Array) {
   const map = state.physical!.map,
@@ -202,6 +203,7 @@ export interface GeographicDeliveries {
   magic: boolean;
   ecology: boolean;
   rivers: boolean;
+  landmarks: boolean;
 }
 const allDeliveries: GeographicDeliveries = {
   oceans: true,
@@ -213,6 +215,7 @@ const allDeliveries: GeographicDeliveries = {
   magic: true,
   ecology: true,
   rivers: true,
+  landmarks: true,
 };
 export function extractNativeGeography(
   state: GenerationState,
@@ -231,6 +234,11 @@ export function extractNativeGeography(
   if (deliveries.ecology) extractEcologicalFeatures(state);
   if (deliveries.rivers) extractRiverGeography(state, context, deliveries.landforms);
   else delete state.domain.world.drainage?.[state.domain.scope.areaId];
+  // Last: a detected landform on a landmark is the landmark, published once under its identity.
+  if (deliveries.landmarks) {
+    dropClaimedFeatures(state, landmarkClaims(state));
+    extractLandmarks(state);
+  }
 }
 function extractRiverGeography(
   state: GenerationState,

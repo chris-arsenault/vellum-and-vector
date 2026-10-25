@@ -8,6 +8,7 @@ import { clockConfiguration } from "./featureConfiguration";
 import type { GenerationSlot } from "./generationSlots";
 import { physicalProfileConfiguration } from "./physicalProfileConfiguration";
 export { acceptedEmptyByConsumer } from "./physicalInputs";
+import { landmarkFeature } from "./landmarkFeature";
 
 type Operations = Record<string, (string | [string, ParameterValues])[]>;
 type FeatureOptions = {
@@ -140,6 +141,7 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
     },
     { settings: ["impacts", "impactSize"], requires: ["physical.foundation"], absent: ["Impacts"] }
   ),
+  landmarkFeature,
   definition(
     "physical.hillslopes",
     "Hillslope transport",

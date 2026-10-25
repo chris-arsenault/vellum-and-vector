@@ -34,5 +34,6 @@ export * from "./generationPresentation";
 export * from "./cartographicControls";
 export * from "./cartographicHistory";
 export * from "./setupProjection";
+export { landmarksInExtent } from "./landmarkSelection";
 export * from "./societyInventory";
 export * from "./societyTempo";

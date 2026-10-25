@@ -39,6 +39,7 @@ export function initializeLandscape(map: PhysicalField) {
     "GeothermalHistory",
     "VolcanicActivity",
     "VolcanicConstructionHistory",
+    "LandmarkMaintenance",
     "ExternalHeatForcing",
     "ExternalCoastalForcing",
     "ExternalCoastalForcingHistory",

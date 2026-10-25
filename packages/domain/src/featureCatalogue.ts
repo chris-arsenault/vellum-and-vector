@@ -1,5 +1,6 @@
 import type { AtlasFeature, LayerStyle, World } from "./model";
 import { canonryMagicPresets } from "./magicPresets";
+import { landmarkKind } from "./landmarks";
 
 type Definition = [string, string, string, string, string];
 export interface FeatureTypeStyle {
@@ -21,6 +22,7 @@ export const featureDefinitions: Definition[] = [
   ["volcano", "geology", "Volcanoes", "Terrain and geology", "Volcanic and impact"],
   ["crater", "geology", "Craters", "Terrain and geology", "Volcanic and impact"],
   ["caldera", "geology", "Calderas", "Terrain and geology", "Volcanic and impact"],
+  ["landmark", "geology", "Landmark", "Terrain and geology", "Landmarks"],
   ["fault", "faults", "Fault traces", "Terrain and geology", "Tectonics"],
   ["waterfall", "geology", "Waterfalls", "Water and coasts", "Watercourses"],
   ["river", "rivers", "Rivers", "Water and coasts", "Watercourses"],
@@ -119,7 +121,12 @@ function featureSubtype(feature: Classification) {
     return roles[String(a.settlementRole ?? "settlement")] ?? String(a.settlementRole);
   if (feature.layerId === "ecology" && typeof a.biome === "string") return a.biome;
   if (feature.kind === "societyEvent" && typeof a.eventKind === "string") return a.eventKind;
-  return "";
+  return landmarkSubtype(feature);
+}
+function landmarkSubtype(feature: Classification) {
+  const kind = feature.attributes.landmarkKind;
+  if (feature.kind !== "landmark" || typeof kind !== "string") return "";
+  return landmarkKind(kind)?.label ?? kind;
 }
 function magicType(world: World, feature: Classification): FeatureType | null {
   if (feature.layerId !== "magic") return null;

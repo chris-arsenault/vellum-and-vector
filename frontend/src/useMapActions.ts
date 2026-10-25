@@ -3,7 +3,13 @@ import { bounds, frameAt, rectangle } from "./presentation";
 import { makeCommand } from "./useAtlas";
 import { session } from "./atlasState";
 import { brushChannel, drawingDefinition, type Workspace } from "./cartography";
-import { drawnFeature, magicInput, regionExtent, sourceFootprint } from "./mapAuthoring";
+import {
+  drawnFeature,
+  landmarkInput,
+  magicInput,
+  regionExtent,
+  sourceFootprint,
+} from "./mapAuthoring";
 import type { EditorEditing, EditorSessionState } from "./useEditor";
 import type { AtlasFeature, Position, Template, Tool, World } from "./types";
 
@@ -12,9 +18,13 @@ export function useMapActions(world: World, state: EditorSessionState, editing: 
     state.setGeometryRole("primary");
     state.setSelected(feature);
     const source = world.magic.find((source) => source.id === feature?.id);
+    const landmark = world.landmarks.find((landmark) => landmark.id === feature?.id);
     if (source) {
       state.setMagicDraft({ id: source.id, source: source.source, radius: source.radius });
       state.setPanel("magic");
+    } else if (landmark) {
+      state.setLandmarkDraft({ id: landmark.id, geometry: landmark.geometry });
+      state.setPanel("landmark");
     } else state.setPanel("inspect");
   };
   const extent = (geometry: Geometry) => {
@@ -40,6 +50,7 @@ export function useMapActions(world: World, state: EditorSessionState, editing: 
     if (tool.startsWith("region")) state.setPanel("regions");
     else if (["refine", "refinePolygon", "extentEdit"].includes(tool)) state.setPanel("refine");
     else if (tool === "magic") state.setPanel("magic");
+    else if (tool === "landmark" || tool === "landmarkPath") state.setPanel("landmark");
     else if (!["select", "pan", "move", "reshape"].includes(tool)) state.setPanel("author");
   };
   return {
@@ -144,6 +155,7 @@ function enterArea(world: World, state: EditorSessionState, id: string) {
   state.setBrush({ ...state.brush, radius: (box[2] - box[0]) / 30 });
   state.setWorkspace(area.profile === "interior" ? "interior" : "terrain");
   state.setMagicDraft(null);
+  state.setLandmarkDraft(null);
   state.setTemplateToPlace(null);
 }
 function geometryActions(world: World, state: EditorSessionState, editing: EditorEditing) {
@@ -154,6 +166,18 @@ function geometryActions(world: World, state: EditorSessionState, editing: Edito
         return;
       }
       const source = world.magic.find((source) => source.id === feature.id);
+      const landmark = world.landmarks.find((landmark) => landmark.id === feature.id);
+      if (landmark && geometry.type === landmark.geometry.type) {
+        editing.commit.mutate(
+          makeCommand(world, "putLandmark", {
+            ...landmarkInput(landmark),
+            areaId: landmark.areaId ?? state.areaId,
+            geometry,
+          }),
+          { onSuccess: () => state.setLandmarkDraft({ id: landmark.id, geometry }) }
+        );
+        return;
+      }
       if (source && geometry.type === "Point")
         editing.commit.mutate(
           makeCommand(world, "putMagicSource", {
@@ -199,15 +223,8 @@ function completeDrawing(
     extent(geometry);
     return;
   }
-  if (state.tool === "magic") {
-    const footprint = sourceFootprint(geometry);
-    state.setMagicDraft({
-      id: null,
-      ...footprint,
-      source: { ...footprint.source, z: state.area.frame.origin.z },
-    });
-    state.setTool("select");
-    state.setPanel("magic");
+  if (["landmark", "landmarkPath", "magic"].includes(state.tool)) {
+    beginInputDraft(state, geometry);
     return;
   }
   if (state.tool === "hill") {
@@ -251,6 +268,20 @@ function completeDrawing(
       state.setTool("select");
     },
   });
+}
+/** A drawn world-level input opens its panel for naming and measures before it is saved. */
+function beginInputDraft(state: EditorSessionState, geometry: Geometry) {
+  if (state.tool === "magic") {
+    const footprint = sourceFootprint(geometry);
+    state.setMagicDraft({
+      id: null,
+      ...footprint,
+      source: { ...footprint.source, z: state.area.frame.origin.z },
+    });
+  } else state.setLandmarkDraft({ id: null, geometry });
+  const panel = state.tool === "magic" ? "magic" : "landmark";
+  state.setTool("select");
+  state.setPanel(panel);
 }
 function placeCommunity(
   world: World,

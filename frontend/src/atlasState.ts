@@ -70,6 +70,7 @@ export function indexSnapshot(snapshot: DomainSnapshot): DomainSnapshot {
     ["layer", Object.values(world.layers)],
     ["field", world.fields],
     ["magic", world.magic],
+    ["landmark", (world.landmarks ??= [])],
     ["view", world.views],
     ["connection", Object.values(world.connections ?? {})],
     ["node", Object.values(world.networkNodes ?? {})],
@@ -114,6 +115,8 @@ export function registerWorldSnapshot(snapshot: DomainSnapshot) {
   return world;
 }
 export function restoreSessionWorld(saved: SessionWorld) {
+  // Maps saved before landmarks existed carry no array; the record is otherwise unchanged.
+  saved.snapshot.world.landmarks ??= [];
   worlds.set(saved.snapshot.world.id, saved);
   changed();
 }
@@ -157,6 +160,7 @@ export function createWorldSnapshot(input: WorldCreationInput, id: string = cryp
     entities: {},
     templates: {},
     magic: [],
+    landmarks: [],
     magicSystems: canonryMagicPresets(),
     views: [],
     generations: [],

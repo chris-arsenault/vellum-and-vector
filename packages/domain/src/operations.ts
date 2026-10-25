@@ -27,6 +27,7 @@ export const objectKinds = [
   "coverage",
   "fieldPatch",
   "magic",
+  "landmark",
   "view",
 ] as const;
 export type ObjectKind = (typeof objectKinds)[number];
@@ -71,6 +72,7 @@ export type DomainWrite =
   | { kind: "coverage"; value: import("./coverage").MaterializedCoverage }
   | { kind: "fieldPatch"; value: FieldPatch }
   | { kind: "magic"; value: World["magic"][number] }
+  | { kind: "landmark"; value: World["landmarks"][number] }
   | { kind: "view"; value: World["views"][number] };
 export type FactInvalidation = { fact: string; cause: string } & (
   { scope: "world" } | { scope: "spatial"; footprint: Geometry; spaceId: string }

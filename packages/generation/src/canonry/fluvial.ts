@@ -9,7 +9,8 @@ import { resolveLandTargets } from "./flowGuidance";
 import { contributingArea, sourceToOutletOrder } from "./flowGraph";
 import { cellTravel, physicalDistance } from "./physicalMetric";
 
-function recordCut(map: PhysicalField, i: number, requested: number) {
+/** A channel cut: eroded, remembered as incision, and booked as sediment supply. */
+export function recordCut(map: PhysicalField, i: number, requested: number) {
   const amount = erode(map, i, requested);
   map.CumulativeFluvialErosion[i] += amount;
   map.SedimentSupply[i] += amount;

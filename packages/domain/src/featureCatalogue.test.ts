@@ -36,6 +36,7 @@ function fixture() {
     entities: {},
     templates: {},
     magic: [],
+    landmarks: [],
     epochs: [],
     generations: [],
     views: [],

@@ -287,6 +287,7 @@ function publishEnvironmentalChanges(
     magic: false,
     ecology: available.has("productivity") && has("ecology"),
     rivers: available.has("riverOrder"),
+    landmarks: false,
   });
   if (!available.has("riverOrder") && drainage) world.drainage![area] = drainage;
 }

@@ -41,6 +41,7 @@ export * from "./authoring";
 export * from "./fieldComposition";
 export * from "./fieldIntents";
 export * from "./settingsIntents";
+export * from "./landmarks";
 export * from "./regionViews";
 export * from "./regionGeometry";
 export * from "./networkGeometry";

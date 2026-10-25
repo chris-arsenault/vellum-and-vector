@@ -53,6 +53,7 @@ const nativeOwnership: Ownership[] = [
   ["physical.geothermal", "geology", ["geothermal", "geothermalHistory"]],
   ["physical.impacts", "geology", ["impactExcavation", "impactRim", "impactEjecta"]],
   ["physical.volcanism", "geology", ["volcanicConstruction", "volcanicLastActiveEpoch"]],
+  ["physical.landmarks", "geology", ["landmarkMaintenance"]],
   ["physical.river-incision", "geology", ["fluvialErosion"]],
   [
     [
@@ -242,6 +243,7 @@ function geographicPublications(
   const groups: readonly [owner: string, target: string, kinds: string[], network?: boolean][] = [
     ["physical.impacts", "geology", ["crater"]],
     ["physical.volcanism", "geology", ["volcano", "caldera"]],
+    ["physical.landmarks", "geology", ["landmark"]],
     ["physical.fractures", "faults", ["fault"]],
     ["water.routing", "lakes", ["lake"]],
     ["ocean.geography", "oceans", ["ocean"]],

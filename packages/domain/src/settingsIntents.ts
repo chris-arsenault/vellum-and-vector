@@ -7,6 +7,7 @@ import { requireIdentity, requireRelations, invalidateFacts } from "./authoringB
 import { spatial, point } from "./spatial";
 import type { World } from "./model";
 import { registerMagicSystemIntents } from "./magicSystemIntents";
+import { registerLandmarkIntents } from "./landmarkIntents";
 import { rasterPresentationSchema, symbolStyleSchema } from "./viewSchemas";
 import { locatedMagicEffects } from "./magicEffects";
 import { regionViewSchema, validateRegionView } from "./regionViews";
@@ -227,6 +228,7 @@ export function registerSettingsIntents(registry: IntentRegistry): void {
   registerMagicSystemIntents(registry);
   registerMagic(registry);
   registerRemoveMagic(registry);
+  registerLandmarkIntents(registry);
   registerViews(registry);
   registry.register({
     kind: "setWorldSettings",

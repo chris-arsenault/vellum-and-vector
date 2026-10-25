@@ -49,6 +49,8 @@ export type Tool =
   | "language"
   | "religion"
   | "magic"
+  | "landmark"
+  | "landmarkPath"
   | "template"
   | "surveyPoint"
   | "surveyLine"

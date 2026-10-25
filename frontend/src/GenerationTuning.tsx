@@ -38,7 +38,9 @@ export function GenerationTuning({ flow }: { flow: GenerationWorkflow }) {
         >
           {flow
             .setup!.features.filter(
-              (item) => item.id !== "magic.local" || flow.setup!.context.locatedSources > 0
+              (item) =>
+                (item.id !== "magic.local" || flow.setup!.context.locatedSources > 0) &&
+                (item.id !== "physical.landmarks" || flow.setup!.context.landmarks > 0)
             )
             .map((item) => (
               <option key={item.id} value={item.id}>

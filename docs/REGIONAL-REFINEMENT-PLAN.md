@@ -355,6 +355,13 @@ tributaries while remaining recognizable within its parent geography.
    drainage together on irregular footprints, including externally supplied
    river flow, receiving waters, new tributaries and river-aligned borders. Do
    not replay completed geological history or add unrelated major features.
+   Read the parent's authored landmarks (`world.landmarks` and the published
+   `landmark` features with their target and measured signatures,
+   [ADR 0006](adr/0006-landmarks-are-injected-causes.md)) and realize what the World left
+   latent within the parent's cells: a great falls' lip, plunge pool and gorge
+   retreat below its step; a horn's faces and arêtes on a great mountain; the
+   ring ridges of a dome. The World holds each landmark's cell-scale measures;
+   B2 adds the sub-cell form and must not move or lower them.
 3. **B3 — Finish the geographic refinement experience.** Connect region selection to
    useful refinement choices, progress, cancellation and publication. Inspect a
    river/relief region, its neighbor and a smaller recursive refinement, with

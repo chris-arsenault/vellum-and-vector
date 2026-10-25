@@ -370,6 +370,7 @@ function finishProcess(original: DomainSnapshot): MapProcess {
           magic: enabled("magic.configured") || enabled("magic.local"),
           ecology: enabled("ecology.living"),
           rivers: enabled("physical.river-networks"),
+          landmarks: enabled("physical.landmarks"),
         });
         const generated = new Set(
           Object.values(state.domain.world.features)

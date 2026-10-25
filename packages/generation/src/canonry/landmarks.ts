@@ -1,0 +1,110 @@
+// Authored landmarks: injected causes at an epoch and a maintained signature afterwards.
+// Everything here writes the same quantities impacts, plumes and orogeny write; later
+// passes act on landmark cells as on any other cell.
+import { landmarkKind, type Landmark } from "@atlas/domain";
+import type { PhysicalField } from "./field";
+import type { PhysicalProfile } from "./profile";
+import { placeLandmark, realizedAt, type Placed } from "./landmarkGeometry";
+import { landmarkKinds } from "./landmarkKinds";
+import { note, type LandmarkLedger, type LandmarkRecord } from "./landmarkLedger";
+
+export type { LandmarkLedger, LandmarkRecord } from "./landmarkLedger";
+export { placeLandmark, plateDriftSteps, realizedAt } from "./landmarkGeometry";
+export { captureRiver } from "./landmarkCanyon";
+
+const impactInvalidations = ["Lakes", "FlowRouting", "Rivers", "Validated", "DrainageConditioning"];
+/** Products a landmark pass invalidates: the same ones an impact at that position invalidates. */
+export const landmarkInvalidations = impactInvalidations.map((product) => `canonry:${product}`);
+
+/** The guaranteed measures: catalogue parameters the kind measures back, advisory ones excluded. */
+function targetMeasures(map: PhysicalField, placed: Placed) {
+  const kind = landmarkKind(placed.landmark.kind)!,
+    measured = new Set(Object.keys(landmarkKinds[kind.id]?.measure(map, placed) ?? {}));
+  return Object.fromEntries(
+    kind.parameters
+      .filter((p) => !p.advisory && measured.has(p.key))
+      .map((p) => [p.key, placed.parameters[p.key]])
+  );
+}
+export function landmarkRecord(map: PhysicalField, placed: Placed): LandmarkRecord {
+  return {
+    id: placed.landmark.id,
+    kind: placed.landmark.kind,
+    realized: realizedAt(map, placed),
+    emplacedAtEpoch: placed.landmark.emplacedAtEpoch,
+    target: targetMeasures(map, placed),
+    measured: {},
+    maintenance: 0,
+    capture: null,
+    corridor: [],
+    notes: [],
+  };
+}
+function recordFor(map: PhysicalField, placed: Placed, ledger: LandmarkLedger) {
+  const record = ledger.get(placed.landmark.id) ?? landmarkRecord(map, placed);
+  ledger.set(placed.landmark.id, record);
+  return record;
+}
+/** Inject the landmark's causes at its epoch and record the event. */
+export function emplaceLandmark(
+  map: PhysicalField,
+  p: PhysicalProfile,
+  landmark: Landmark,
+  epoch: number,
+  ledger: LandmarkLedger,
+  drift: number[] = []
+) {
+  const placed = placeLandmark(map, landmark, drift, epoch);
+  if (!placed) return null;
+  const record = recordFor(map, placed, ledger),
+    kind = landmarkKinds[landmark.kind];
+  kind?.emplace(map, p, placed, epoch, record);
+  map.events.push({
+    id: `landmark:${landmark.id}`,
+    kind: "landmark",
+    x: placed.center[0],
+    y: placed.center[1],
+    radius: landmarkKind(landmark.kind)!.reach(placed.parameters),
+    epoch,
+    strength: 1000,
+  });
+  kind?.capture?.(map, placed, record);
+  record.measured = kind?.measure(map, placed, record) ?? {};
+  if (!record.realized)
+    note(record, "Below this mesh's resolution: causes written at cell scale, signature latent.");
+  return record;
+}
+/** Shortfalls of the guaranteed measures, in their units; empty when the signature holds. */
+export function signatureShortfall(record: LandmarkRecord, measured: Record<string, number>) {
+  const shortfall: Record<string, number> = {};
+  for (const [key, target] of Object.entries(record.target)) {
+    const value = measured[key];
+    // A centimetre of slack keeps float arithmetic from reporting a met measure as short.
+    if (!Number.isFinite(value) || value < target - 0.01) shortfall[key] = target - (value || 0);
+  }
+  return shortfall;
+}
+/** Measure the signature and apply the smallest correction that restores it. */
+export function maintainLandmark(
+  map: PhysicalField,
+  p: PhysicalProfile,
+  landmark: Landmark,
+  epoch: number,
+  ledger: LandmarkLedger,
+  drift: number[] = []
+) {
+  const placed = placeLandmark(map, landmark, drift, epoch);
+  if (!placed) return null;
+  const record = recordFor(map, placed, ledger),
+    kind = landmarkKinds[landmark.kind];
+  if (!kind) return record;
+  const holds = record.realized || kind.holdsLatent === true;
+  let corrected = 0;
+  if (holds) corrected += kind.capture?.(map, placed, record) ?? 0;
+  const shortfall = signatureShortfall(record, kind.measure(map, placed, record));
+  if (holds && Object.keys(shortfall).length)
+    corrected += kind.maintain(map, p, placed, shortfall, epoch, record) / 1024;
+  record.maintenance += corrected;
+  record.measured = kind.measure(map, placed, record);
+  return record;
+}

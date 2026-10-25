@@ -320,6 +320,8 @@ export interface World {
     dependsOn: string[] | null;
     startsAtEpoch: number;
   }[];
+  /** Authored major landmarks; generation injects their causes at `emplacedAtEpoch`. */
+  landmarks: import("./landmarks").Landmark[];
   epochs: Epoch[];
   humanEras?: {
     id: string;

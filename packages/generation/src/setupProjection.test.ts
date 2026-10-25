@@ -1,5 +1,13 @@
 import { expect, it } from "vitest";
-import { builtinLayers, putChannel, rectangle, canonryMagicPresets } from "@atlas/domain";
+import {
+  builtinLayers,
+  putChannel,
+  rectangle,
+  canonryMagicPresets,
+  spatial,
+  type Landmark,
+} from "@atlas/domain";
+import { landmarksInExtent } from "./featureDependencies";
 import { atlasFeatureDefinitions, prepareAtlasGeneration } from "./atlasWorkflow";
 import { atlasGenerationModules } from "./atlasModules";
 import { landscape, source as locatedSource } from "./mapFixtures";
@@ -44,8 +52,8 @@ it("projects each capability's operative controls and diagnostic ownership witho
   const resolved = prepared(),
     view = projectGenerationSetup(resolved);
   expect(resolved.diagnostics).toEqual([]);
-  expect(view.features).toHaveLength(32);
-  expect(new Set(view.features.map((item) => item.id)).size).toBe(32);
+  expect(view.features).toHaveLength(33);
+  expect(new Set(view.features.map((item) => item.id)).size).toBe(33);
   expect(
     atlasFeatureDefinitions.flatMap((item) => item.cartography ?? []).map((item) => item.id)
   ).toContain("terrain");
@@ -168,6 +176,40 @@ it("reports only located sources affecting this extent and does not imply that s
   const view = projectGenerationSetup(resolved);
   expect(view.context.locatedSources).toBe(1);
   expect(feature(view, "magic.local").status).toBe("active");
+});
+
+it("counts the landmarks forming in this extent and says that setup does not create them", () => {
+  const empty = projectGenerationSetup(prepared());
+  expect(empty.context.landmarks).toBe(0);
+  expect(feature(empty, "physical.landmarks")).toMatchObject({
+    status: "unavailable",
+    reason: expect.stringContaining("does not create landmarks"),
+  });
+  const state = world();
+  const [x0, y0, x1, y1] = spatial.bounds(state.domain.world.areas.area.footprint);
+  const landmark = (overrides: Partial<Landmark>): Landmark => ({
+    id: crypto.randomUUID(),
+    name: "Kibo",
+    kind: "volcanic-mountain",
+    geometry: { type: "Point", coordinates: [(x0 + x1) / 2, (y0 + y1) / 2] },
+    parameters: { summit: 5900, prominence: 4000, baseRadius: 30 },
+    emplacedAtEpoch: 0,
+    ...overrides,
+  });
+  state.domain.world.landmarks = [
+    landmark({}),
+    landmark({ emplacedAtEpoch: 3 }),
+    landmark({ geometry: { type: "Point", coordinates: [x1 + 1e6, y1 + 1e6] } }),
+  ];
+  const resolved = prepareAtlasGeneration(state.domain, {
+    areaId: "area",
+    seed: 73,
+    quality: "draft",
+    domains: ["physical"],
+  });
+  const view = projectGenerationSetup(resolved);
+  expect(view.context.landmarks).toBe(1);
+  expect(landmarksInExtent(resolved.source, resolved.input).map((l) => l.name)).toEqual(["Kibo"]);
 });
 
 const survey: GenerationModule = {

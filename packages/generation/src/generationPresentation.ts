@@ -31,6 +31,7 @@ export interface FeatureApplicability {
   epochControls?: EpochControl[];
   initialOnlySettings?: readonly string[];
   requiresLocatedSources?: boolean;
+  requiresLandmarks?: boolean;
   publicationProfiles?: Record<string, readonly string[]>;
 }
 export interface SetupSetting {
@@ -55,6 +56,6 @@ export interface SetupFeature {
   invocationIds: string[];
 }
 export interface GenerationSetup {
-  context: { inherited: boolean; locatedSources: number };
+  context: { inherited: boolean; locatedSources: number; landmarks: number };
   features: SetupFeature[];
 }

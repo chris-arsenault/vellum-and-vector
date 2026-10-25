@@ -2,6 +2,7 @@ import type { Geometry } from "geojson";
 import { areaSpace, composeFeature, composeFootprint } from "./composition";
 import { profiles, type AtlasFeature, type World } from "./model";
 import { spatial } from "./spatial";
+import { authoredLandmarkFeatures } from "./landmarks";
 
 /** Sources stay owned by world.magic; readers and selection share their semantic identities. */
 export function authoredMagicFeatures(world: World): AtlasFeature[] {
@@ -33,6 +34,7 @@ export function authoredMagicFeatures(world: World): AtlasFeature[] {
 export function canonicalFeatures(world: World) {
   const result = new Map(Object.values(world.features).map((f) => [f.id, f]));
   for (const source of authoredMagicFeatures(world)) result.set(source.id, source);
+  for (const landmark of authoredLandmarkFeatures(world)) result.set(landmark.id, landmark);
   return [...result.values()];
 }
 export function featureIntersects(

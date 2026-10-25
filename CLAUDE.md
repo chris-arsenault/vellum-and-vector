@@ -7,9 +7,10 @@ boundaries and working instructions. The [README](README.md) provides setup and
 deployment context. The [product contract](docs/product-spec.md) defines behavior;
 the [spatial ADR](docs/adr/0001-spatial-authority.md),
 [application ADR](docs/adr/0002-relational-spatial-storage.md),
-[coupling ADR](docs/adr/0004-coupling-through-each-systems-medium.md) and
-[scale contract ADR](docs/adr/0005-scale-contract.md) record implementation
-direction. User requirements and explicitly agreed boundaries govern revisions
+[coupling ADR](docs/adr/0004-coupling-through-each-systems-medium.md),
+[scale contract ADR](docs/adr/0005-scale-contract.md) and
+[landmarks ADR](docs/adr/0006-landmarks-are-injected-causes.md) record
+implementation direction. User requirements and explicitly agreed boundaries govern revisions
 to agent-derived choices in those documents and the plan.
 
 ## Project overview

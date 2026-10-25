@@ -76,6 +76,7 @@ export function landscape(): GenerationState {
       entities: {},
       templates: {},
       magic: [],
+      landmarks: [],
       epochs: [],
       generations: [],
       views: [],

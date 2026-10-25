@@ -110,7 +110,7 @@ with no backend, persistence or MCP; preserve the existing backend source.
       spread history, magical source settings and retained session configurations.
       Further political and cultural controls belong with the generators in item 3.
 
-- [ ] **9. Inject and preserve major landscape landmarks during epochs.** Provide
+- [x] **9. Inject and preserve major landscape landmarks during epochs.** Provide
       an optional generation process for deliberately introducing exceptional
       landscapes at chosen points within the epoch sequence: Niagara-scale falls,
       a Grand Canyon-scale gorge, a Matterhorn-like peak, and other epic locations.
@@ -122,13 +122,20 @@ with no backend, persistence or MCP; preserve the existing backend source.
       Keep naturally emerging landforms and their existing generation and feature
       detection routes available alongside deliberate injection. Injected landmarks
       participate in the shared causal generation system and remain identifiable
-      through later evolution. Design the preservation and integration behavior as
-      part of this future work.
+      through later evolution.
 
-      **Deferred: outside the current continuous-terrain and adaptive-generation
-      replacement plan.** Planned 2026-10-24 in
-      [LANDMARKS-PLAN.md](LANDMARKS-PLAN.md) (Sulion
-      `df565123-7512-4dee-9155-7da7c54bbca8`); not started.
+      Delivered 2026-10-25 ([ADR 0006](adr/0006-landmarks-are-injected-causes.md)):
+      a landmark catalogue (two great mountains, great canyon, two great ring
+      structures, great escarpment, great falls), placement tools and panel, local
+      saves and wizard listing; emplacement and maintenance processes in the
+      physical epochs with the maintenance booked; river capture; one registry
+      row per landmark with target and measured signature; the great falls held
+      cell to cell at World and left to regional refinement to realize. The
+      remaining Region-scale realization is carried by the terrain and rivers
+      subplan of the regional refinement plan. Observed cost: a 4,500 m volcanic
+      cone pays roughly a fifth of its relief per epoch to isostatic subsidence;
+      the other kinds hold with corrections only where sea level or deposition
+      moves their reference bands.
 
 - [x] **10. Rework the interaction between magic and ecology.** Delivered
       2026-10-24 ([ADR 0004](adr/0004-coupling-through-each-systems-medium.md)):

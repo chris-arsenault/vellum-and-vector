@@ -71,6 +71,16 @@ export function sourceFootprint(geometry: Geometry): { source: Position; radius:
   const [x0, y0, x1, y1] = spatial.bounds(geometry);
   return { source: { x: (x0 + x1) / 2, y: (y0 + y1) / 2, z: 0 }, radius: (x1 - x0) / 2 };
 }
+export function landmarkInput(landmark: World["landmarks"][number]) {
+  return {
+    id: landmark.id,
+    name: landmark.name,
+    kind: landmark.kind,
+    geometry: landmark.geometry,
+    parameters: landmark.parameters,
+    emplacedAtEpoch: landmark.emplacedAtEpoch,
+  };
+}
 export function magicInput(source: World["magic"][number]) {
   return {
     id: source.id,

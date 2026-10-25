@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { Geometry } from "geojson";
 import type { Position, Template } from "./types";
 import type { Workspace } from "./cartography";
 
@@ -13,6 +14,10 @@ export function useCartographicState() {
     id: string | null;
     source: Position;
     radius: number;
+  } | null>(null);
+  const [landmarkDraft, setLandmarkDraft] = useState<{
+    id: string | null;
+    geometry: Geometry;
   } | null>(null);
   const [templateToPlace, setTemplateToPlace] = useState<Template | null>(null);
   const [interactionError, setInteractionError] = useState<Error | null>(null);
@@ -31,6 +36,8 @@ export function useCartographicState() {
     setEntityId,
     magicDraft,
     setMagicDraft,
+    landmarkDraft,
+    setLandmarkDraft,
     templateToPlace,
     setTemplateToPlace,
     interactionError,

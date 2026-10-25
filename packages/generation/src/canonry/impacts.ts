@@ -122,11 +122,22 @@ function applyImpact(
   source: WorldCandidate,
   radius: number
 ) {
-  const center = nearestTriangle(map.mesh, source.x, source.y);
-  map.FeatureFlags[center] |= Feature.ImpactCenter;
   const scale = (radius / Math.max(radius, p.ImpactMaximumRadius)) ** 0.3;
   const depth = Math.max(1, round(((p.ElevationScale * p.ImpactDepthRatio) / 1000) * scale));
   const rim = Math.max(1, round(((p.ElevationScale * p.ImpactRimHeightRatio) / 1000) * scale));
+  shapeImpact(map, p, source, radius, depth, rim);
+}
+/** Excavate, raise the rim, shock the rock and spread ejecta for a crater of the given measures (metres). */
+export function shapeImpact(
+  map: PhysicalField,
+  p: PhysicalProfile,
+  source: { x: number; y: number },
+  radius: number,
+  depth: number,
+  rim: number
+) {
+  const center = nearestTriangle(map.mesh, source.x, source.y);
+  map.FeatureFlags[center] |= Feature.ImpactCenter;
   const share = 1 - clamp(map.WaterDepths[center] / units(p.ImpactOceanShockDepth), 0, 1);
   let excavation = 0;
   const candidates: [number, number][] = [];

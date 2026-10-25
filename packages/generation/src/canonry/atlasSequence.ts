@@ -91,6 +91,7 @@ function geology(context: Composition, initial: boolean): ProcessSequence {
         "epoch.mountains",
         "epoch.volcanism",
         "epoch.impacts",
+        "epoch.landmarks",
       ];
   return [
     ...slots.flatMap((slot) => nativeGroup(slot, occurrence, context, { initial })),
@@ -150,6 +151,8 @@ function epochBody(context: Composition, inherited: boolean): ProcessSequence {
     ...nativeGroup("epoch.coasts", "epoch", context),
     ...contributions("epoch.ecology-burial", context),
     ...contributions("epoch.storage", context),
+    // Landmarks hold their signatures at the World mesh before the epoch's history is kept.
+    ...(!inherited ? contributions("epoch.landmark-maintenance", context) : []),
     ...nativeGroup("epoch.history", "epoch", context),
   ];
 }

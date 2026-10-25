@@ -1,6 +1,7 @@
 import { type Profile } from "@atlas/domain";
 import { atlasFeatureDefinitions, type prepareAtlasGeneration } from "./atlasWorkflow";
 import { activeLocatedSources } from "./featureDependencies";
+import { landmarksInExtent } from "./landmarkSelection";
 import type { GenerationFeature } from "./features";
 import type { GenerationSetup, SetupFeature, SetupSetting } from "./generationPresentation";
 import { inheritedChannelNames } from "./canonry/inheritedFacts";
@@ -30,6 +31,7 @@ export function projectGenerationSetup(
       Boolean(area.parentId) || (!input.domains.includes("physical") && channels.length > 0),
     channels,
     locatedSources: activeLocatedSources(source, input).length,
+    landmarks: landmarksInExtent(source, input).length,
   };
   const invocations = inspectSequence(prepared, definitions);
   const publications = (input.configuration!.inputs?.publications ??
@@ -38,7 +40,11 @@ export function projectGenerationSetup(
     projectFeature(feature, prepared, context, invocations, publications, definitions)
   );
   return {
-    context: { inherited: context.inherited, locatedSources: context.locatedSources },
+    context: {
+      inherited: context.inherited,
+      locatedSources: context.locatedSources,
+      landmarks: context.landmarks,
+    },
     features,
   };
 }
@@ -163,12 +169,8 @@ function featureStatus(
 ): Pick<SetupFeature, "status" | "reason"> {
   if (!enabled)
     return { status: "off", reason: "Off in this request; configured values are retained." };
-  if (feature.applicability?.requiresLocatedSources && context.locatedSources === 0)
-    return {
-      status: "unavailable",
-      reason:
-        "No located magical sources affect this extent. Enabling this capability does not create sources.",
-    };
+  const missing = missingAuthoredInputs(feature, context);
+  if (missing) return { status: "unavailable", reason: missing };
   if (invocations.some((item) => item.scheduled)) return { status: "active", reason: null };
   const inherited =
     context.inherited &&
@@ -183,6 +185,14 @@ function featureStatus(
         status: "unavailable",
         reason: "This profile and generation context schedule no operations for this capability.",
       };
+}
+/** Capabilities that act on map-placed inputs report their absence rather than creating them. */
+function missingAuthoredInputs(feature: GenerationFeature, context: SetupContext) {
+  if (feature.applicability?.requiresLocatedSources && context.locatedSources === 0)
+    return "No located magical sources affect this extent. Enabling this capability does not create sources.";
+  if (feature.applicability?.requiresLandmarks && context.landmarks === 0)
+    return "No landmarks are placed in this extent. Enabling this capability does not create landmarks.";
+  return null;
 }
 function projectSetting(
   feature: GenerationFeature,

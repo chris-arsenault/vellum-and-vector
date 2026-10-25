@@ -66,6 +66,7 @@ function state(width = 9, height = width): GenerationState {
     entities: {},
     templates: {},
     magic: [],
+    landmarks: [],
     epochs: [],
     generations: [],
     views: [],

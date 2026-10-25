@@ -150,14 +150,21 @@ function geographicStyle(feature: AtlasFeature, style: LayerStyle, resolution: n
     }),
     fill: new Fill({ color: color + (feature.layerId === "geology" ? "18" : "64") }),
     image: new Circle({
-      radius: feature.layerId === "geology" ? 2 : feature.kind === "settlement" ? 4 : 5,
+      radius: pointRadius(feature),
       fill: new Fill({ color }),
       stroke: new Stroke({ color: "#233638", width: 1.5 }),
     }),
   });
   return profiledLineStyles(feature, result, color, resolution);
 }
+/** A landmark stands out from the detected landforms around it. */
+function pointRadius(feature: AtlasFeature) {
+  if (feature.kind === "landmark") return 6;
+  if (feature.layerId === "geology") return 2;
+  return feature.kind === "settlement" ? 4 : 5;
+}
 function featureStrokeWidth(feature: AtlasFeature, resolution: number) {
+  if (feature.kind === "landmark") return 2.5;
   return feature.layerId === "geology"
     ? Math.min(1, 0.4 + 600 / resolution)
     : physicalStrokeWidth(feature, resolution);

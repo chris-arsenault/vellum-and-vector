@@ -12,7 +12,7 @@ import GeoJSON from "ol/format/GeoJSON.js";
 import VectorSource from "ol/source/Vector.js";
 import type Feature from "ol/Feature.js";
 import type { AtlasFeature, World } from "./types";
-import { magicFeatures } from "./magicFeatures";
+import { authoredInputFeatures } from "./magicFeatures";
 
 interface RecordEntry {
   signature: string;
@@ -91,14 +91,10 @@ export class SceneIndex {
     this.footprint = world.areas[this.areaId].footprint;
     const signature = signatures(world),
       space = areaSpace(world, this.areaId);
-    const wanted = new Set<string>();
+    const wanted = new Set<string>(),
+      landmarks = new Set(world.landmarks.map((landmark) => landmark.id));
     for (const feature of Object.values(world.features)) {
-      if (areaSpace(world, feature.areaId) !== space) continue;
-      if (
-        profiles.indexOf(world.areas[feature.areaId].profile) >
-        profiles.indexOf(world.areas[this.areaId].profile)
-      )
-        continue;
+      if (!this.presentable(world, feature, space, landmarks)) continue;
       wanted.add(feature.id);
       this.updateFeature(world, feature, signature(feature));
     }
@@ -108,8 +104,16 @@ export class SceneIndex {
         this.records.delete(id);
       }
     this.all = [...this.records.values()].flatMap((r) => (r.feature ? [r.feature] : []));
-    this.magic = magicFeatures(world, this.areaId, this.footprint);
+    this.magic = authoredInputFeatures(world, this.areaId, this.footprint);
     this.all.push(...this.magic);
+  }
+  /** Features of this space at or above this profile; a landmark's realization is read with its record. */
+  private presentable(world: World, feature: AtlasFeature, space: string, landmarks: Set<string>) {
+    if (landmarks.has(feature.id) || areaSpace(world, feature.areaId) !== space) return false;
+    return (
+      profiles.indexOf(world.areas[feature.areaId].profile) <=
+      profiles.indexOf(world.areas[this.areaId].profile)
+    );
   }
   private updateFeature(world: World, raw: AtlasFeature, signature: string) {
     const previous = this.records.get(raw.id);
