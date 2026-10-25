@@ -128,7 +128,8 @@ function SessionViews({ world, editor }: { world: World; editor: EditorState }) 
             areaId: editor.area.id,
             layers: editor.styles,
             raster: editor.rasterView,
-            regionId: editor.region?.id,
+            // Command data holds values only; an absent region is no key, not undefined.
+            ...(editor.region ? { regionId: editor.region.id } : {}),
           })
         }
       >

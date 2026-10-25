@@ -4,6 +4,9 @@ import { installGenerationFixture } from "./generationFixture";
 test("session world, generation, skipped refinement, editing and located template", async ({
   page,
 }) => {
+  // One journey through three nested areas, overlays and a placed template: each area change
+  // repaints every WebGL raster layer, which software rendering in CI browsers does slowly.
+  test.setTimeout(300_000);
   await installGenerationFixture(page);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -67,7 +70,7 @@ test("session world, generation, skipped refinement, editing and located templat
   await page.screenshot({ path: "test-results/atlas-interior.png" });
   await page.reload();
   await expect(page.getByLabel("World name")).toBeVisible();
-  await expect(page.getByText("This session lives in this tab.", { exact: false })).toBeVisible();
+  await expect(page.getByText("Unsaved changes stay in this tab.", { exact: false })).toBeVisible();
   expect(serviceRequests).toEqual([]);
   expect(errors).toEqual([]);
 });

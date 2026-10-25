@@ -52,7 +52,11 @@ export function createMap(target: HTMLElement, reference: World["reference"]) {
     view: new View({
       projection,
       multiWorld: wrapX,
-      ...(wrapX ? { extent: [-Infinity, extent[1], Infinity, extent[3]] } : {}),
+      // Keep the centre between the poles only; constraining the whole viewport snaps a small
+      // world's fit and pan, so screen positions no longer follow the pointer.
+      ...(wrapX
+        ? { extent: [-Infinity, extent[1], Infinity, extent[3]], constrainOnlyCenter: true }
+        : {}),
       center: [(extent[0] + extent[2]) / 2, (extent[1] + extent[3]) / 2],
       resolution: (extent[2] - extent[0]) / 800,
     }),

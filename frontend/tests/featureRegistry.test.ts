@@ -127,10 +127,11 @@ test("reshape a site's footprint without moving its point and undo the edit", as
   const canvas = page.getByRole("application", { name: "World map canvas" });
   await expect(canvas).toHaveAttribute("aria-busy", "false");
   const box = (await canvas.boundingBox())!;
-  const a = await pointerCoordinate(page, box.x + 150, box.y + 150),
-    b = await pointerCoordinate(page, box.x + 250, box.y + 250);
-  const px = box.x + 150 + (100 - a[0]) / ((b[0] - a[0]) / 100),
-    py = box.y + 150 + (100 - a[1]) / ((b[1] - a[1]) / 100);
+  // Measure the map scale inside the chart: beyond its edge a cylinder world shows its far side.
+  const a = await pointerCoordinate(page, box.x + 400, box.y + 400),
+    b = await pointerCoordinate(page, box.x + 500, box.y + 500);
+  const px = box.x + 400 + (100 - a[0]) / ((b[0] - a[0]) / 100),
+    py = box.y + 400 + (100 - a[1]) / ((b[1] - a[1]) / 100);
   await page.mouse.move(px, py);
   await page.mouse.down();
   await page.mouse.move(px + 20, py - 20, { steps: 8 });
