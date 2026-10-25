@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { readScene, readRaster } from "./atlasReads";
 import { bounds } from "./presentation";
 import { areaSpace, spatial } from "@atlas/domain";
@@ -6,8 +6,11 @@ import { profiles, type Area, type AtlasFeature, type World } from "./types";
 
 export function useMapData(world: World, areaId: string, extent: number[] | null = null) {
   const scene = useScene(world, areaId, extent);
+  // Keep the last raster list while a revision or area change refetches: an empty list would
+  // dispose every WebGL layer and re-upload every tile once the same grids come back.
   const raster = useQuery({
     queryKey: ["fields", world.id, areaId, world.version],
+    placeholderData: keepPreviousData,
     queryFn: () =>
       world.fields
         .filter((field) => areaSpace(world, field.areaId) === areaSpace(world, areaId))
@@ -105,6 +108,7 @@ export function useRasters(
       channel,
     ],
     enabled: viewport !== null,
+    placeholderData: keepPreviousData,
     queryFn: () => fields.map((f) => readRaster(world.id, f.id, channel)),
   });
 }
