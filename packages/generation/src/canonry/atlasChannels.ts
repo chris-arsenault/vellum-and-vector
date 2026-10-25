@@ -97,6 +97,8 @@ export const atlasChannels: ChannelBinding[] = [
   scalar("oceanCurrent", "OceanCurrentStrength"),
   { name: "seaSurfaceAnomaly", native: "SeaSurfaceAnomaly", unit: "celsius", scale: 0.1 },
   scalar("upwelling", "Upwelling"),
+  scalar("stormForcing", "StormForcing"),
+  scalar("stormTrack", "StormTrack"),
   { name: "riverWarmth", native: "RiverWarmth", unit: "celsius", scale: 0.1 },
   category("province", "CrustProvinceIds"),
   category("assembly", "CrustAssemblyIds"),

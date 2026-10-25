@@ -272,6 +272,8 @@ const pressurePreset = magicSystemSchema.parse({
     seaSurface: -0.1,
     wakeWarming: 30,
     fog: 0.8,
+    // A warm wake under cold air raises a storm that carries the sea's weather inland.
+    storm: 0.7,
     animalToxicity: 0.5,
   },
   features: [

@@ -120,22 +120,32 @@ function riverNode(r: SiteReader, i: number): SiteOpportunity | null {
     reason: junction ? "a river junction" : "where the river leaves the hills for the plain",
   };
 }
-function harbour(r: SiteReader, i: number): SiteOpportunity | null {
-  const ring = r.ring(i),
-    sea = ring.filter((j) => r.ocean(j));
-  if (!sea.length) return null;
+/** How a stretch of sea serves a harbour: shelter, lee, depth, surge, and the storm season. */
+function harbourWaters(r: SiteReader, sea: number[]) {
+  const peak = (channel: string) => Math.max(...sea.map((j) => r.value(channel, j)));
   const shelter = sea.length <= 3 ? 1 : sea.length <= 4 ? 0.6 : 0.2,
     // Wave exposure is published as a 0..1 ratio of the native 0..1000.
     lee = 1 - sea.reduce((s, j) => s + r.value("waveExposure", j), 0) / sea.length,
-    depth = Math.max(...sea.map((j) => r.value("waterDepth", j))) >= 10 ? 1 : 0.4,
-    surge = Math.max(...sea.map((j) => r.value("magic:pressure:intensity", j))) >= 400 ? 0.3 : 1,
-    estuary = r.river(i) ? 1.3 : 1;
-  const score = shelter * lee * depth * surge * estuary;
+    depth = peak("waterDepth") >= 10 ? 1 : 0.4,
+    surge = peak("magic:pressure:intensity") >= 400 ? 0.3 : 1,
+    // A harbour on a storm track is closed for the season the storms run.
+    seasonal = peak("stormTrack") >= 0.3;
+  return { score: shelter * lee * depth * surge * (seasonal ? 0.6 : 1), seasonal };
+}
+function harbour(r: SiteReader, i: number): SiteOpportunity | null {
+  const sea = r.ring(i).filter((j) => r.ocean(j));
+  if (!sea.length) return null;
+  const waters = harbourWaters(r, sea),
+    estuary = r.river(i),
+    score = waters.score * (estuary ? 1.3 : 1);
   if (score < 0.35) return null;
+  const where = sea.length <= 3 ? "a sheltered bay" : "a coast",
+    mouth = estuary ? " at a river mouth" : "",
+    closed = waters.seasonal ? ", closed in the storm season" : "";
   return {
     kind: "harbour",
     score,
-    reason: `${sea.length <= 3 ? "a sheltered bay" : "a coast"}${r.river(i) ? " at a river mouth" : ""} with deep water near the shore`,
+    reason: `${where}${mouth} with deep water near the shore${closed}`,
   };
 }
 function meltLine(r: SiteReader, i: number): SiteOpportunity | null {

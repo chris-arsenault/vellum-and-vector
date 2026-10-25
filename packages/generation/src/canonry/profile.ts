@@ -330,6 +330,17 @@ export const physicalProfile = {
   // 1 − exp(−forcing/MagicLiftHeat) of its water, so the rain falls on the lee side.
   MagicSteamShare: 0.6,
   MagicLiftHeat: 250,
+  // A storm pulse raised at sea relaxes over StormLength as the column travels, faster by
+  // StormPinning where Aurora stills the air; it pushes the column toward saturation by
+  // StormMoistureShare of the deficit and wrings out 1 − exp(−pulse/StormLift) of its water.
+  StormLength: 400_000,
+  StormPinning: 0.8,
+  StormMoistureShare: 0.8,
+  StormLift: 0.5,
+  // On the track, soil thins by StormScour of itself at full pulse on a 1-in-20 slope and
+  // bare ground loses DuneMobility of its sediment downwind.
+  StormScour: 0.3,
+  DuneMobility: 0.3,
   // Fog over an upwelling band drips onto the coast it faces (mm/year at full share)
   // and cools it (native units at full share).
   FogDrip: 300,

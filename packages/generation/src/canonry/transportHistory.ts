@@ -27,6 +27,8 @@ const intensive = [
   "ExternalUpwelling",
   "ExternalSeaSurfaceForcing",
   "FogForcing",
+  "StormForcing",
+  "StormTrack",
   "RiverWarmth",
   "EcologyStillness",
 ] as const;

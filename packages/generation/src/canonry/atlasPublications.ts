@@ -1,13 +1,4 @@
-import {
-  builtinLayers,
-  confluenceEffective,
-  requireThat,
-  systemStockKeys,
-  type Layer,
-  type MagicConfluence,
-  type MagicSystem,
-  type World,
-} from "@atlas/domain";
+import { builtinLayers, requireThat, type Layer, type World } from "@atlas/domain";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
 import { resolveGenerationFeatures, type ResolvedFeatures } from "../features";
 import { physicalFeatureDefinitions } from "../physicalFeatures";
@@ -15,12 +6,7 @@ import { domainFeatureDefinitions } from "../domainFeatures";
 import type { FieldPublicationDefinition, PublicationDefinition } from "../publication";
 import { atlasChannels, type ChannelBinding } from "./atlasChannels";
 import { ecologyBindings } from "./ecologyState";
-import { independentInteraction } from "./magicFeatures";
-import {
-  magicFieldDefinitions,
-  publishedMagicChannels,
-  type MagicChannel,
-} from "./magicFieldDefinitions";
+import { configuredMagicPublications } from "./atlasMagicPublications";
 
 type Ownership = readonly [
   owner: string | readonly string[],
@@ -80,7 +66,16 @@ const nativeOwnership: Ownership[] = [
   [
     "physical.climate",
     "climate",
-    ["temperature", "moisture", "windEast", "windNorth", "windSpeed", "rainfall", "snowfall"],
+    [
+      "temperature",
+      "moisture",
+      "windEast",
+      "windNorth",
+      "windSpeed",
+      "rainfall",
+      "snowfall",
+      "stormTrack",
+    ],
   ],
   ["water.routing", "rivers", ["runoff", "waterBody", "basin", "catchmentArea", "riverWarmth"]],
   ["ocean.geography", "rivers", ["water", "waterDepth", "oceanDistance"]],
@@ -88,7 +83,7 @@ const nativeOwnership: Ownership[] = [
   [
     "physical.ocean-circulation",
     "rivers",
-    ["oceanCurrent", "waveExposure", "seaSurfaceAnomaly", "upwelling"],
+    ["oceanCurrent", "waveExposure", "seaSurfaceAnomaly", "upwelling", "stormForcing"],
   ],
   [
     "physical.land-ice",
@@ -197,57 +192,8 @@ const derived: readonly [channel: string, unit: string, layer: string, owners: s
   ["coastalPressure", "ratio", "magic", ["magic.local"]],
 ];
 
-function configuredChannel(system: string, channel: MagicChannel, publish: boolean) {
-  const metadata = magicFieldDefinitions[channel];
-  const definition = field(`magic:${system}:${channel}`, metadata.unit, "magic", publish, [
-    "magic.configured",
-  ]);
-  definition.quantity = metadata.quantity;
-  return definition;
-}
-
 function configuredMagic(input: AtlasGenerationInput, features: ResolvedFeatures) {
-  const configured = enabled(features, "magic.configured"),
-    systems = input.settings?.magicSystems ?? [];
-  return [
-    ...systems.flatMap((system) => systemPublications(system, configured)),
-    field("magic:strain", "ratio", "magic", configured, owners),
-    ...(input.settings?.confluences ?? []).flatMap((confluence) =>
-      confluencePublications(confluence, configured && confluenceEffective(confluence, systems))
-    ),
-  ];
-}
-const owners = ["magic.configured"];
-function systemPublications(system: MagicSystem, configured: boolean): PublicationDefinition[] {
-  const publish = configured && system.enabled;
-  return [
-    ...publishedMagicChannels.map((channel) => configuredChannel(system.id, channel, publish)),
-    field(`magic:${system.id}:coverage`, "ratio", "magic", publish, owners),
-    ...[...systemStockKeys(system)].map((key) => {
-      const stock = field(
-        `magic:${system.id}:stock:${key}`,
-        "intensity-square-metre",
-        "magic",
-        publish,
-        owners
-      );
-      stock.quantity = "extensive";
-      return stock;
-    }),
-    ...system.features.flatMap((rule) => {
-      const active = configured && (system.enabled || independentInteraction(rule, system.id));
-      return [
-        field(`magic:${system.id}:feature:${rule.id}`, "category", "magic", active, owners),
-        field(`magic:${system.id}:coverage:${rule.id}`, "ratio", "magic", active, owners),
-      ];
-    }),
-  ];
-}
-function confluencePublications(confluence: MagicConfluence, active: boolean) {
-  return [
-    field(`magic:confluence:${confluence.id}:members`, "category", "magic", active, owners),
-    field(`magic:confluence:${confluence.id}:coverage`, "ratio", "magic", active, owners),
-  ];
+  return configuredMagicPublications(input, features, { field, enabled });
 }
 
 function locatedMagic(world: World | undefined, features: ResolvedFeatures) {

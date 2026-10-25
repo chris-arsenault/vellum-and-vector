@@ -74,6 +74,7 @@ export function moisture(map: PhysicalField, c: PhysicalContext) {
     column = marchAirColumns(map, c, (i) => beltRainout(p, latitudeAt(p, map, i)));
   for (let i = 0; i < map.mesh.count; i++) {
     map.ColumnPrecipitation[i] = column.precipitation[i];
+    map.StormTrack[i] = round(1000 * column.storm[i]);
     if (map.WaterKindCodes[i] !== 0) {
       map.Moisture[i] = 1000;
       continue;

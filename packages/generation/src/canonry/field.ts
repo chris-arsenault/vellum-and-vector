@@ -154,6 +154,10 @@ const metricFields = [
   "ExternalUpwelling",
   "ExternalSeaSurfaceForcing",
   "FogForcing",
+  // Pressure's storms: energy raised on a sea front (0–1,000) and the pulse the air columns
+  // carry inland from it (0–1,000), the track the weather follows.
+  "StormForcing",
+  "StormTrack",
   // Magical heat carried down the drainage (native units): the thawed river below a wellspring.
   "RiverWarmth",
 ] as const;

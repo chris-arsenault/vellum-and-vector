@@ -1183,6 +1183,56 @@ halo on the track strengthens the storm and an Aurora field holds a front in pla
 Without Pressure, climate is as before.
 Evidence: unit tests on genesis, pulse and track deposition; a short-scenario comparison of
 precipitation, soil and cover with and without weather.
+Sulion: `3ab78ce9-22c3-4a18-9cca-9cf588d31b1e`; expansion opened 2026-10-25 (IDs in the
+Sulion tree).
+
+#### Execution steps (M2)
+
+Design fixed at expansion, following the material model's assumption that a storm rides
+the existing air columns. Genesis: in the moved-water feedback, an ocean cell with a wake or
+an upwelling front writes `StormForcing` (0–1,000) from the system's new `storm` effect
+times the sharpness of the sea-surface front there (the largest neighbour difference of the
+sea-surface anomaly against the system's `stormFrontGradient` parameter), raised where Fire
+heat stands in the air above it (heat columns feed the storm). March: the air column carries
+a storm pulse downwind the way it carries magical heat, relaxing over a storm length; the
+pulse pushes the column's moisture toward saturation and adds lift, so the existing rainout
+with distance and uplift makes the windward slope wet and the lee dry; where Aurora stills
+the air the pulse relaxes faster, which pins the front and drops its rain there. The
+carried pulse is written to `StormTrack` and published. Writes after the climate pass, in
+the post-glacial magic action: soil thins on the track in proportion to slope (scour), and
+bare ground on the track loses a share of its sediment to the downwind neighbour (dunes).
+Society: a harbour on a strong track is a seasonal harbour with reduced reliability.
+Sky-reading as a practice is left to M4's society work.
+
+1. Storm genesis and channels: `magicSystems.ts` (storm effect, front gradient),
+   `magicPresets.ts`, `magicFeedback.ts` (genesis in moved water), `field.ts`,
+   `transportHistory.ts`, `atlasChannels.ts`, labels.
+2. Storm march: `airColumn.ts`, `climate.ts` (write the track), `profile.ts` (storm length,
+   rain efficiency, pinning).
+3. Storm writes: new `canonry/magicWeather.ts` (scour, dunes) run from the post-glacial
+   action; `societySites.ts` (seasonal harbour).
+4. Exit checks and record.
+
+#### Changes and resume (M2)
+
+Completed 2026-10-25. Evidence: `magicWeather.test.ts` checks that a storm is raised only
+on the sharp edge of a warm wake at sea and nowhere the sea is flat, and more where Fire
+heat stands in the air; that with the storm the windward slope gains more rain than the lee
+and the track fades inland; that Aurora stillness on the windward cells pins the pulse so
+the land beyond gets less track and less rain; and that the track scours soil on steep
+ground, leaves flat ground's soil alone, drives a bare cell's sand to its downwind
+neighbour and leaves covered sand in place. The characterization snapshot is unchanged;
+148 generation and domain tests pass with typecheck and Prettier clean and eslint clean
+after the refactors noted below. Material choices made while building: storm genesis
+lives in the moved-water feedback (the Pressure system already writes the sea surface
+there) and reads the sea-surface front's sharpness rather than its level, as the material
+model asked; the pulse rides the air column exactly as carried magical heat does, so the
+windward and lee pattern is the existing orographic rainout and no second weather model
+was built; the pulse relaxes faster under Stillness, which is the pinning; scour and dunes
+run once per epoch from the post-glacial magic action after the climate pass has written
+the track; the storm track and forcing are published channels (`stormTrack`,
+`stormForcing`) under the climate and ocean-circulation product owners, which society's
+harbour site reads to mark a seasonal harbour. Sky-reading as a practice is left to M4.
 
 ### M3 — Greenwood
 
@@ -1372,5 +1422,7 @@ confluence channels published; a confluence editor). M1c completed 2026-10-25 (t
 origin with its finite stock, placers, burial, cracking agents and fan; spent ore, reopening
 and exhumation for the vein; Fire melt as glacial meltwater; panning and sealed-seat
 migration in society). M1d completed 2026-10-25 (Aurora's ice, ground, moraine and shelf
-reservoirs; ice carriage; relict cold; charged ice erosion; thaw subsidence). M2 to M8
-pending. Next action: plan-phase expands M2.
+reservoirs; ice carriage; relict cold; charged ice erosion; thaw subsidence). M2
+completed 2026-10-25 (storm genesis on sharp sea fronts, the pulse carried inland by the
+air columns with Aurora pinning, scour and dunes on the track, seasonal harbours). M3 to
+M8 pending. Next action: plan-phase expands M3.

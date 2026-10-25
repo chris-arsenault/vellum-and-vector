@@ -135,6 +135,9 @@ const parameterSchema = z.object({
   thawSubsidenceLimit: finite.nonnegative().default(6),
   // Shelf charge per square metre at which sea ice is fully held.
   shelfSaturation: positive.default(500),
+  // Sea-surface anomaly difference between neighbours (native units, 10 per °C) that makes a
+  // front sharp enough to raise a full storm.
+  stormFrontGradient: positive.default(30),
 });
 // Overrides carry no defaults of their own, so a reparse keeps an origin's overrides sparse.
 const parameterOverrideSchema = z.object(
@@ -205,6 +208,8 @@ const systemShape = z.object({
       wakeWarming: finite.min(0).max(200).default(0),
       // Pressure: fog share on coasts facing an upwelling band; 0–1.
       fog: finite.min(0).max(1).default(0),
+      // Pressure: storm energy a sharp warm front at sea sends inland on the wind; 0–1.
+      storm: finite.min(0).max(1).default(0),
       vegetationGrowth: finite.min(-1).max(5).default(0),
       fire: finite.min(0).max(1).default(0),
       organicPreservation: finite.min(-3).max(3).default(0),

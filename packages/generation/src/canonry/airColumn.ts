@@ -41,6 +41,8 @@ export interface AirColumn {
   precipitation: Float64Array;
   airHeat: Float64Array;
   maritime: Float64Array;
+  /** The storm pulse carried in the column, 0 to 1: the track a sea storm follows inland. */
+  storm: Float64Array;
 }
 const ocean = (map: PhysicalField, i: number) => map.WaterKindCodes[i] === 1;
 function height(map: PhysicalField, i: number) {
@@ -65,7 +67,8 @@ export function marchAirColumns(
     marine = new Float64Array(n),
     maritime = new Float64Array(n),
     magic = new Float64Array(n),
-    carried = new Float64Array(n);
+    carried = new Float64Array(n),
+    storm = new Float64Array(n);
   const { order, boundary } = sourceOrder(map.UpwindTargets),
     distance = linkDistance(map, p);
   // Wrapped air closes loops around the world; a second pass lets each loop's
@@ -77,7 +80,7 @@ export function marchAirColumns(
       advance(i, u);
     }
   spreadAcrossWind(map, p, carried, airHeat);
-  return { moisture, precipitation, airHeat, maritime };
+  return { moisture, precipitation, airHeat, maritime, storm };
 
   function advance(i: number, u: number) {
     const target = saturation(p, map.Temperature[i]) * p.OceanColumnHumidity;
@@ -89,14 +92,8 @@ export function marchAirColumns(
     const air = ocean(map, i)
       ? overSea(map, p, i, arriving, d, target)
       : overLand(map, p, i, u, arriving, d, rainout(i));
-    // Hot ground steams and lifts: the column gains moisture and drops a share of it.
-    const forcing = map.ExternalHeatForcing[i];
-    if (forcing > 0 && !ocean(map, i)) {
-      air.q += Math.max(0, target - air.q) * p.MagicSteamShare * Math.min(1, forcing / 200);
-      const lifted = air.q * (1 - Math.exp(-forcing / p.MagicLiftHeat));
-      air.q -= lifted;
-      air.orographic += lifted * (p.ColumnRainLength / Math.max(d, Math.sqrt(map.mesh.areas[i])));
-    }
+    steamFromGround(i, d, air, target);
+    rideStorm(i, u, d, air, target);
     // Air relaxes toward a share of the forcing beneath it over MagicHeatAirLength,
     // so carried heat depends on distance travelled, not on how many cells it crosses.
     const keep = Math.exp(-(u < 0 ? Math.sqrt(map.mesh.areas[i]) : d) / p.MagicHeatAirLength);
@@ -110,6 +107,33 @@ export function marchAirColumns(
     airHeat[i] = air.heat;
     maritime[i] = air.sea;
     magic[i] = carried[i] + map.ExternalHeatForcing[i] * p.MagicHeatAirShare * (1 - keep);
+  }
+  /** Lift a share of the column's water out as rain on this cell and the next. */
+  function wringOut(i: number, d: number, air: Air, share: number) {
+    const lifted = air.q * share;
+    air.q -= lifted;
+    air.orographic += lifted * (p.ColumnRainLength / Math.max(d, Math.sqrt(map.mesh.areas[i])));
+  }
+  /** Hot ground steams and lifts: the column gains moisture and drops a share of it. */
+  function steamFromGround(i: number, d: number, air: Air, target: number) {
+    const forcing = map.ExternalHeatForcing[i];
+    if (forcing <= 0 || ocean(map, i)) return;
+    air.q += Math.max(0, target - air.q) * p.MagicSteamShare * Math.min(1, forcing / 200);
+    wringOut(i, d, air, 1 - Math.exp(-forcing / p.MagicLiftHeat));
+  }
+  /**
+   * A storm raised at sea rides the column inland: it relaxes over the storm length, faster
+   * where Aurora stills the air (the front is pinned and drops its rain there), pushes the
+   * column toward saturation and, over land, wrings out a share of its water as it goes.
+   */
+  function rideStorm(i: number, u: number, d: number, air: Air, target: number) {
+    const pinned = Math.max(0, 1 - map.Stillness[i] * p.StormPinning),
+      keepStorm = Math.exp(-(u < 0 ? 0 : d) / p.StormLength) * pinned,
+      arriving = u < 0 ? 0 : storm[u] * keepStorm;
+    storm[i] = Math.min(1, arriving + map.StormForcing[i] / 1000);
+    if (storm[i] <= 0) return;
+    air.q += Math.max(0, target - air.q) * p.StormMoistureShare * storm[i];
+    if (!ocean(map, i)) wringOut(i, d, air, 1 - Math.exp(-storm[i] / p.StormLift));
   }
 }
 /**

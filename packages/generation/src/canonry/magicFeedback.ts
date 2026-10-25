@@ -99,33 +99,63 @@ interface OceanForcing {
   upwelling: Float64Array;
   seaSurface: Float64Array;
   fog: Float64Array;
+  storm: Float64Array;
 }
-/** Upwelling, sea-surface forcing and fog source per ocean cell from every moving system. */
+/** Upwelling, sea-surface forcing, fog source and storm energy per ocean cell from every moving system. */
 function movedWater(map: PhysicalField, fields: Field[]): OceanForcing {
   const n = map.mesh.count,
     forcing = {
       upwelling: new Float64Array(n),
       seaSurface: new Float64Array(n),
       fog: new Float64Array(n),
+      storm: new Float64Array(n),
     };
   for (let i = 0; i < n; i++) {
     if (map.WaterKindCodes[i] !== 1) continue;
     const shoaling = shoals(map, i);
-    for (const field of fields) {
-      const e = field.definition.effects,
-        lift = field.intensity[i] - frontThreshold;
-      if (shoaling && lift > 0) {
-        forcing.upwelling[i] += lift * e.upwelling;
-        forcing.seaSurface[i] += lift * e.seaSurface;
-        forcing.fog[i] = Math.max(forcing.fog[i], unit(lift / 400) * e.fog);
-      } else if (field.wake[i] > 0 && field.intensity[i] > 0)
-        forcing.seaSurface[i] += e.wakeWarming;
-    }
+    for (const field of fields) moveWaterAt(map, forcing, field, i, shoaling);
     forcing.upwelling[i] = clamp(round(forcing.upwelling[i]), 0, 1000);
     // A front cools the surface by a few degrees, never into a sea of its own.
     forcing.seaSurface[i] = clamp(round(forcing.seaSurface[i]), -60, 60);
+    forcing.storm[i] = clamp(round(forcing.storm[i]), 0, 1000);
   }
   return forcing;
+}
+/** One system's moved water at one ocean cell: a shoaling front lifts, a wake warms, both may storm. */
+function moveWaterAt(
+  map: PhysicalField,
+  forcing: OceanForcing,
+  field: Field,
+  i: number,
+  shoaling: boolean
+) {
+  const e = field.definition.effects,
+    lift = field.intensity[i] - frontThreshold,
+    front = shoaling && lift > 0,
+    wake = field.wake[i] > 0 && field.intensity[i] > 0;
+  if (front) {
+    forcing.upwelling[i] += lift * e.upwelling;
+    forcing.seaSurface[i] += lift * e.seaSurface;
+    forcing.fog[i] = Math.max(forcing.fog[i], unit(lift / 400) * e.fog);
+  } else if (wake) forcing.seaSurface[i] += e.wakeWarming;
+  if ((front || wake) && e.storm > 0)
+    forcing.storm[i] = Math.max(forcing.storm[i], stormEnergy(map, field, i));
+}
+/**
+ * Storms are born on sharp warm fronts, as they cluster along the real warm currents: the
+ * energy is the system's storm effect times how sharply the sea-surface anomaly turns at
+ * the cell, raised where Fire heat stands in the air above it.
+ */
+function stormEnergy(map: PhysicalField, field: Field, i: number) {
+  let front = 0;
+  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
+    if (j >= 0)
+      front = Math.max(front, Math.abs(map.SeaSurfaceAnomaly[i] - map.SeaSurfaceAnomaly[j]));
+  }
+  const sharpness = unit(front / field.definition.parameters.stormFrontGradient),
+    fed = 1 + unit(Math.max(0, map.ExternalHeatForcing[i]) / 200);
+  return 1000 * field.definition.effects.storm * sharpness * fed;
 }
 /** Fog settles on the land cells that touch an upwelling band. */
 function settledFog(map: PhysicalField, source: Float64Array) {
@@ -151,7 +181,10 @@ export function magicOceanFeedback(state: GenerationState) {
     map = work.map,
     fields = magic.fields.filter((field) => {
       const e = field.definition.effects;
-      return field.definition.enabled && (e.upwelling || e.seaSurface || e.wakeWarming || e.fog);
+      return (
+        field.definition.enabled &&
+        (e.upwelling || e.seaSurface || e.wakeWarming || e.fog || e.storm)
+      );
     });
   // With no moving system left, one last pass clears whatever an earlier one applied.
   if (
@@ -167,6 +200,7 @@ export function magicOceanFeedback(state: GenerationState) {
     map.ExternalUpwelling[i] = moved.upwelling[i];
     map.ExternalSeaSurfaceForcing[i] = moved.seaSurface[i];
     map.FogForcing[i] = fog[i];
+    map.StormForcing[i] = moved.storm[i];
     if (map.WaterKindCodes[i] === 1) {
       map.Upwelling[i] = clamp(
         round(map.Upwelling[i] + moved.upwelling[i] - magic.upwelling[i]),

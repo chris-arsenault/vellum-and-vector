@@ -27,6 +27,7 @@ export const effectLabels = {
   seaSurface: "Sea-surface temperature on the upwelling band · units per intensity, −1 to 1",
   wakeWarming: "Wake warming · native units, 10 per °C",
   fog: "Fog share on coasts facing an upwelling band · 0–1",
+  storm: "Storm energy a sharp warm front sends inland · 0–1",
 };
 export const parameterLabels: Record<keyof MagicSystem["parameters"], string> = {
   sourceThreshold: "Minimum source density · 0–1,000",
@@ -77,4 +78,5 @@ export const parameterLabels: Record<keyof MagicSystem["parameters"], string> = 
   thawSubsidence: "Ground lowered per 1,000 of thawed charge · metres",
   thawSubsidenceLimit: "Most a cell subsides from thaw · metres",
   shelfSaturation: "Shelf charge per square metre that holds sea ice fully",
+  stormFrontGradient: "Sea-surface front that raises a full storm · 10 units per °C",
 };
