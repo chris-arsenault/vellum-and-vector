@@ -159,10 +159,24 @@ export function magicPlacePresentation(ruleId: string): MagicPlacePresentation {
 }
 
 export const magicSurfaceBase = 100;
-interface SurfaceRuleSource {
+export interface SurfaceRuleSource {
   id: string;
   name: string;
   features: { id: string; name: string }[];
+}
+/** The pseudo-system under which every confluence takes its surface code and place kind. */
+export const confluenceSourceId = "confluence";
+/**
+ * Surface code sources in their fixed order: the systems, then the meetings between them as
+ * one source. A code names the same class in generation and presentation.
+ */
+export function surfaceRuleSources(
+  systems: readonly SurfaceRuleSource[],
+  confluences: readonly { id: string; name: string }[] = []
+): SurfaceRuleSource[] {
+  return confluences.length
+    ? [...systems, { id: confluenceSourceId, name: "Interactions", features: [...confluences] }]
+    : [...systems];
 }
 /**
  * Final-surface codes above the natural range, one per feature rule in system order.
@@ -192,7 +206,10 @@ export interface SurfaceCategory {
   system?: string;
   rule?: string;
 }
-export function surfaceCategories(systems: readonly SurfaceRuleSource[] = []): SurfaceCategory[] {
+export function surfaceCategories(
+  systems: readonly SurfaceRuleSource[] = [],
+  confluences: readonly { id: string; name: string }[] = []
+): SurfaceCategory[] {
   const natural = naturalSurfaceNames.map((name, code) => ({
     code,
     name,
@@ -202,7 +219,7 @@ export function surfaceCategories(systems: readonly SurfaceRuleSource[] = []): S
   }));
   const magic: SurfaceCategory[] = [];
   let code = magicSurfaceBase;
-  for (const system of systems)
+  for (const system of surfaceRuleSources(systems, confluences))
     for (const rule of system.features) {
       const presentation = magicPlacePresentation(rule.id);
       magic.push({

@@ -26,7 +26,7 @@ function fixture(disabled: string[] = []) {
     seed: 1,
     quality: "draft",
     domains: ["physical"],
-    settings: { epochs: [], humanEras: [], magicSystems: [] },
+    settings: { epochs: [], humanEras: [], magicSystems: [], confluences: [] },
     resolvedFeatures: {
       parameters: atlasParametersSchema.parse({}),
       diagnostics: [],

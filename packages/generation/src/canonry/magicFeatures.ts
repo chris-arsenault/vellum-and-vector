@@ -1,135 +1,17 @@
-import { magicSurfaceCode, putChannel, type MagicCondition } from "@atlas/domain";
+import { magicSurfaceCode, putChannel, surfaceRuleSources } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import type { MagicField } from "./magicState";
 import { magicKey } from "./magicState";
 import { classifyNaturalSurface } from "./naturalSurface";
-import { meshUnitNoise as unitNoise, hashUnit } from "./noise";
 import { projectedValues } from "./atlasSampling";
+import { growRegion, ruleCoverage } from "./magicRegions";
+import { activeConfluences, evaluateConfluences } from "./magicConfluences";
 import {
   magicChannels,
   magicFieldDefinitions,
   publishedMagicChannels,
 } from "./magicFieldDefinitions";
 
-function conditionReader(
-  state: GenerationState,
-  field: MagicField,
-  test: MagicCondition,
-  seed: number
-) {
-  const { map, magic } = state.physical!;
-  const key = test.field;
-  if (key.startsWith("system:")) {
-    const participant = magic!.fields.find((candidate) => candidate.definition.id === key.slice(7));
-    return (i: number) => (participant?.definition.enabled ? participant.intensity[i] : NaN);
-  }
-  if (key.startsWith("source:")) {
-    const own = field.originSources[key.slice(7)];
-    return (i: number) => own?.[i] ?? 0;
-  }
-  const values: Record<string, ArrayLike<number>> = {
-    intensity: field.intensity,
-    history: field.history,
-    source: field.source,
-    wake: field.wake,
-    rogue: field.rogue,
-    stored: field.stored,
-    sealed: field.sealed,
-    coastalHistory: field.coastalHistory,
-    firstEpoch: field.firstEpoch,
-    coastalFirstEpoch: field.coastalFirstEpoch,
-    upwelling: map.Upwelling,
-    quickening: map.Quickening,
-    stillness: map.Stillness,
-    fog: map.FogForcing,
-    temperature: map.Temperature,
-    ice: map.IceThickness,
-    water: map.WaterKindCodes,
-    moisture: map.Moisture,
-    geothermal: map.Geothermal,
-    fracture: map.FractureConductance,
-    landform: map.LandformCodes,
-    river: map.RiverOrders,
-    biome: map.BiomeCodes,
-    treeCover: map.TreeCover,
-    wetlandCover: map.WetlandCover,
-    peatCarbon: map.PeatCarbon,
-    oilCarbon: map.OilCarbon,
-    ecologicalToxicity: map.EcologicalToxicity,
-    soilWater: map.SoilWater,
-    soilDepth: map.SoilDepth,
-    grazers: map.Grazers,
-    browsers: map.Browsers,
-  };
-  if (key === "elevation") return (i: number) => (map.Elevation[i] - map.BaseSeaLevel) / 1024;
-  if (key === "slope") return (i: number) => map.Slope[i];
-  if (key === "noise")
-    return (i: number) =>
-      unitNoise(
-        map.mesh,
-        map.mesh.x[i],
-        map.mesh.y[i],
-        test.salt ?? 0x621d,
-        field.definition.parameters.featureNoiseScale,
-        1
-      );
-  if (key === "scatter")
-    return (i: number) =>
-      hashUnit(
-        seed ^ (test.salt ?? 0),
-        Math.floor(map.mesh.x[i] / field.definition.parameters.featureNoiseScale),
-        Math.floor(map.mesh.y[i] / field.definition.parameters.featureNoiseScale) ^
-          (test.index ?? 0)
-      );
-  const array = values[key];
-  return (i: number) => array?.[i] ?? 0;
-}
-function matcher(
-  state: GenerationState,
-  field: MagicField,
-  groups: MagicCondition[][],
-  seed: number
-) {
-  const conditions = groups.map((group) =>
-    group.map((test) => {
-      const read = conditionReader(state, field, test, seed);
-      return (i: number) => {
-        const value = read(i);
-        return (
-          value >= (test.min ?? -Infinity) &&
-          value <= (test.max ?? Infinity) &&
-          (!test.values || test.values.includes(value))
-        );
-      };
-    })
-  );
-  return (i: number) => conditions.some((group) => group.every((includes) => includes(i)));
-}
-function growRegion(
-  state: GenerationState,
-  field: MagicField,
-  rule: MagicField["definition"]["features"][number],
-  seed: number
-) {
-  const map = state.physical!.map;
-  const included = new Uint8Array(map.mesh.count),
-    queue: number[] = [];
-  const isSeed = matcher(state, field, rule.seeds, seed),
-    retains = matcher(state, field, rule.retains ?? rule.seeds, seed);
-  for (let i = 0; i < map.mesh.count; i++)
-    if (isSeed(i)) {
-      included[i] = 1;
-      queue.push(i);
-    }
-  for (let head = 0; head < queue.length; head++)
-    for (let edge = 0; edge < map.mesh.degree[queue[head]]; edge++) {
-      const j = map.mesh.neighbors[queue[head] * map.mesh.stride + edge];
-      if (j < 0 || included[j] || !retains(j)) continue;
-      included[j] = 1;
-      queue.push(j);
-    }
-  return included;
-}
 export function independentInteraction(
   rule: MagicField["definition"]["features"][number],
   owner: string
@@ -146,26 +28,68 @@ export function effectiveMagicRules(system: MagicField["definition"]) {
     (rule) => system.enabled || independentInteraction(rule, system.id)
   );
 }
+/**
+ * Grow every effective rule of every system and measure its coverage. A system's coverage in
+ * a cell is the most any of its classes occupies there. Confluences read this, so it runs
+ * before them in each evaluation and again at classification.
+ */
+export function coverSystems(state: GenerationState, seed: number) {
+  const magic = state.physical!.magic!;
+  for (const field of magic.fields) {
+    field.features = {};
+    field.coverage = {};
+    field.systemCoverage.fill(0);
+    for (const rule of effectiveMagicRules(field.definition)) {
+      const members = growRegion(state, field, rule, seed),
+        coverage = ruleCoverage(state, field, rule, members, seed);
+      field.features[rule.id] = members;
+      field.coverage[rule.id] = coverage;
+      for (let i = 0; i < coverage.length; i++)
+        field.systemCoverage[i] = Math.max(field.systemCoverage[i], coverage[i]);
+    }
+  }
+}
+/**
+ * The presentation raster: one code per cell, the highest-priority class among the systems'
+ * rules and the confluences. The model beneath keeps every class and its coverage.
+ */
 export function classifyMagicFeatures(state: GenerationState, seed = state.domain.world.seed) {
   classifyNaturalSurface(state);
   const magic = state.physical!.magic!;
+  coverSystems(state, seed);
+  evaluateConfluences(state, seed, false);
   const priority = new Float64Array(magic.finalSurface.length).fill(-Infinity);
-  const definitions = magic.fields.map((field) => field.definition);
-  for (const field of magic.fields) {
-    field.features = {};
-    const effective = new Set(effectiveMagicRules(field.definition));
-    for (const rule of field.definition.features) {
-      if (!effective.has(rule)) continue;
-      const surfaceCode = magicSurfaceCode(definitions, field.definition.id, rule.id)!;
-      const members = growRegion(state, field, rule, seed);
-      field.features[rule.id] = members;
-      for (let i = 0; i < members.length; i++)
-        if (members[i] && rule.priority > priority[i]) {
-          magic.finalSurface[i] = surfaceCode;
-          priority[i] = rule.priority;
-        }
-    }
-  }
+  const sources = surfaceRuleSources(
+    magic.fields.map((field) => field.definition),
+    magic.confluences.definitions
+  );
+  const paint = (
+    code: number,
+    rulePriority: number,
+    members: Uint8Array,
+    coverage?: Float64Array
+  ) => {
+    for (let i = 0; i < members.length; i++)
+      if (members[i] && (coverage?.[i] ?? 1) > 0 && rulePriority > priority[i]) {
+        magic.finalSurface[i] = code;
+        priority[i] = rulePriority;
+      }
+  };
+  for (const field of magic.fields)
+    for (const rule of effectiveMagicRules(field.definition))
+      paint(
+        magicSurfaceCode(sources, field.definition.id, rule.id)!,
+        rule.priority,
+        field.features[rule.id],
+        field.coverage[rule.id]
+      );
+  for (const held of Object.values(magic.confluences.states))
+    paint(
+      magicSurfaceCode(sources, "confluence", held.definition.id)!,
+      held.definition.priority,
+      held.members,
+      held.coverage
+    );
 }
 export function projectMagic(state: GenerationState) {
   const work = state.physical!,
@@ -184,6 +108,7 @@ export function projectMagic(state: GenerationState) {
   project("stillness", "ratio", work.map.Stillness, "intensive");
   project("fog", "ratio", work.map.FogForcing, "intensive");
   project("icePersistence", "ratio", work.map.IcePersistence, "intensive");
+  project("magic:strain", "ratio", magic.confluences.strain, "intensive");
   for (const field of magic.fields) {
     for (const channel of publishedMagicChannels)
       project(
@@ -192,8 +117,17 @@ export function projectMagic(state: GenerationState) {
         field[channel],
         magicFieldDefinitions[channel].quantity
       );
-    for (const [id, members] of Object.entries(field.features))
+    project(magicKey(field, "coverage"), "ratio", field.systemCoverage, "intensive");
+    for (const [id, members] of Object.entries(field.features)) {
       project(magicKey(field, `feature:${id}`), "category", members, "category");
+      project(magicKey(field, `coverage:${id}`), "ratio", field.coverage[id], "intensive");
+    }
+  }
+  for (const confluence of activeConfluences(state)) {
+    const held = magic.confluences.states[confluence.id];
+    if (!held) continue;
+    project(`magic:confluence:${confluence.id}:members`, "category", held.members, "category");
+    project(`magic:confluence:${confluence.id}:coverage`, "ratio", held.coverage, "intensive");
   }
 }
 function projectedMagicValues(

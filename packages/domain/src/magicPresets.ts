@@ -11,7 +11,8 @@ const feature = (
   name: string,
   priority: number,
   seeds: MagicCondition[][],
-  retains?: MagicCondition[][]
+  retains?: MagicCondition[][],
+  coverage?: MagicFeatureRule["coverage"]
 ): MagicFeatureRule => ({
   id,
   name,
@@ -19,6 +20,13 @@ const feature = (
   seeds,
   cartography: siteRules.has(id) ? "site" : courseRules.has(id) ? "course" : "area",
   ...(retains ? { retains } : {}),
+  ...(coverage ? { coverage } : {}),
+});
+// A class covers its cell in proportion to its intensity above the retain threshold.
+const covers = (floor: number, full = 1000): MagicFeatureRule["coverage"] => ({
+  field: "intensity",
+  floor,
+  full,
 });
 
 // Canonry IceRemembers' three systems are data passed to the same process contracts. The
@@ -64,7 +72,8 @@ const firePreset = magicSystemSchema.parse({
       "Thermal vein",
       20,
       [[land, at("intensity", 320), at("fracture", 430)]],
-      [[land, at("intensity", 230), at("fracture", 320)]]
+      [[land, at("intensity", 230), at("fracture", 320)]],
+      covers(230, 800)
     ),
     feature(
       "spring",
@@ -149,7 +158,8 @@ const auroraPreset = magicSystemSchema.parse({
       "Aurora field",
       40,
       [[at("intensity", 470), at("ice", 260)]],
-      [[at("intensity", 380), at("ice", 180)]]
+      [[at("intensity", 380), at("ice", 180)]],
+      covers(380, 900)
     ),
     feature(
       "well",
@@ -232,7 +242,8 @@ const pressurePreset = magicSystemSchema.parse({
       "Upwelling front",
       58,
       [[ocean, at("intensity", 250), at("upwelling", 250)]],
-      [[ocean, at("intensity", 160), at("upwelling", 160)]]
+      [[ocean, at("intensity", 160), at("upwelling", 160)]],
+      covers(160, 700)
     ),
     feature("wake", "Ancient wake", 55, [[at("wake", 1)]]),
     feature(
@@ -243,13 +254,8 @@ const pressurePreset = magicSystemSchema.parse({
       [[at("intensity", 95), at("noise", 0.28)]]
     ),
     feature("rogue", "Rogue wave impact", 50, [[at("rogue", 1)]]),
-    feature("war", "Thermal war rim", 100, [[at("system:fire", 260), at("system:aurora", 340)]]),
-    feature("steam", "Steam fracture", 110, [
-      [at("system:fire", 390), at("intensity", 420), at("fracture", 520)],
-    ]),
-    feature("breach", "Pressure aurora breach", 120, [
-      [at("intensity", 390), at("system:aurora", 430), ocean, at("ice", 220)],
-    ]),
+    // The meetings with Fire and Aurora (Shatter rim, Boiling shore, Breach) are confluences
+    // in the shared list, not rules of this system: see canonryConfluencePresets.
   ],
 });
 export function canonryMagicPresets() {

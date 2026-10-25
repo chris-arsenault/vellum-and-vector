@@ -37,7 +37,7 @@ function fixture() {
   initializeMagic(state);
   return state;
 }
-it("publishes all twenty magic rules with meaningful sites, retained courses and extents", () => {
+it("publishes every system rule with meaningful sites, retained courses and extents", () => {
   const state = fixture(),
     mesh = state.physical!.map.mesh;
   const members = [0, 1, 2];
@@ -61,7 +61,8 @@ it("publishes all twenty magic rules with meaningful sites, retained courses and
   }
   extractMagicPlaces(state);
   const features = Object.values(state.domain.world.features);
-  expect(features).toHaveLength(20);
+  // The three meetings are confluences now and publish from their own evaluation.
+  expect(features).toHaveLength(17);
   for (const f of features) {
     const system = state.domain.world.magicSystems!.find((s) => s.id === f.attributes.system)!;
     const rule = system.features.find((r) => r.id === f.attributes.rule)!;
@@ -99,7 +100,15 @@ it("uses a named interaction participant's course without borrowing unrelated pr
   fire.parents = new Int32Array(count).fill(-1);
   fire.parents[1] = 0;
   const extent = state.domain.scope.footprint;
-  expect(magicPlaceGeometry(state, pressure, "steam", [0, 1], extent)?.geometry.type).toContain(
+  // A course rule that names Fire as a participant borrows Fire's conduit parents.
+  pressure.definition.features.push({
+    id: "borrowed",
+    name: "Borrowed course",
+    priority: 1,
+    cartography: "course",
+    seeds: [[{ field: "system:fire", min: 1 }]],
+  });
+  expect(magicPlaceGeometry(state, pressure, "borrowed", [0, 1], extent)?.geometry.type).toContain(
     "LineString"
   );
   const rule = {

@@ -290,6 +290,8 @@ export interface NetworkReach {
 export interface World {
   societies?: Record<string, import("./society").SocietyRegion>;
   magicSystems?: import("./magicSystems").MagicSystem[];
+  /** Meetings between systems as processes; absent means the Canonry presets. */
+  confluences?: import("./magicConfluences").MagicConfluence[];
   featureCount?: number;
   id: string;
   name: string;

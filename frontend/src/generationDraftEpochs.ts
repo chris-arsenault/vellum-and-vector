@@ -3,6 +3,7 @@ import {
   requireThat,
   type EcologyEpoch,
   type Epoch,
+  type MagicConfluence,
   type MagicSystem,
   type ParameterValues,
   type World,
@@ -228,6 +229,14 @@ export function updateMagicActivity(
   });
 }
 
+export function setDraftConfluences(draft: GenerationDraft, confluences: MagicConfluence[]) {
+  return updateFeature(draft, "magic.configured", {
+    configuration: {
+      ...configuration(draft, "magic.configured"),
+      confluences: confluences as unknown as ParameterValues[string],
+    },
+  });
+}
 export function setDraftMagicSystems(draft: GenerationDraft, systems: MagicSystem[]) {
   const ids = new Set(systems.map((system) => system.id));
   const previous = configuration(draft, "magic.configured").activity as Record<

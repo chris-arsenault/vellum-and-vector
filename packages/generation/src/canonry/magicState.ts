@@ -1,4 +1,5 @@
 import {
+  canonryConfluencePresets,
   canonryMagicPresets,
   fieldInterpolator,
   originParameters,
@@ -9,6 +10,7 @@ import {
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import { weightScale } from "./transportPlan";
+import { createConfluenceWorkspace, type ConfluenceWorkspace } from "./magicConfluences";
 import { nativePosition } from "./atlasWorkspace";
 import {
   carriedMagicChannels,
@@ -36,6 +38,10 @@ export interface MagicField extends Record<MagicChannel, Float64Array> {
   /** Amount of the system per cell in each origin reservoir, keyed by `stockKey`. */
   stocks: Record<string, Float64Array>;
   features: Record<string, Uint8Array>;
+  /** Share of each member cell a rule's class occupies, by rule id. */
+  coverage: Record<string, Float64Array>;
+  /** The most any of the system's classes occupies in a cell, after meetings took theirs. */
+  systemCoverage: Float64Array;
 }
 /** Applied contributions are remembered so a re-evaluation replaces them instead of adding. */
 export interface MagicWorkspace {
@@ -49,9 +55,13 @@ export interface MagicWorkspace {
   fog: Float64Array;
   naturalSurface: Float64Array;
   finalSurface: Float64Array;
+  confluences: ConfluenceWorkspace;
 }
 export function configuredSystems(state: GenerationState) {
   return state.domain.world.magicSystems ?? canonryMagicPresets();
+}
+export function configuredConfluences(state: GenerationState) {
+  return state.domain.world.confluences ?? canonryConfluencePresets();
 }
 export const magicKey = (field: MagicField, channel: string) =>
   `magic:${field.definition.id}:${channel}`;
@@ -88,6 +98,8 @@ function createMagicField(state: GenerationState, definition: MagicSystem): Magi
     originSources: {},
     stocks: {},
     features: {},
+    coverage: {},
+    systemCoverage: new Float64Array(count),
   };
   for (const origin of definition.origins) {
     field.originSources[origin.id] = new Float64Array(count);
@@ -110,13 +122,15 @@ function createMagicField(state: GenerationState, definition: MagicSystem): Magi
 export function initializeMagic(
   state: GenerationState,
   enabled = true,
-  definitions = configuredSystems(state)
+  definitions = configuredSystems(state),
+  confluences = configuredConfluences(state)
 ) {
   const count = state.physical!.map.mesh.count;
   state.physical!.magic = {
     fields: enabled
       ? structuredClone(definitions).map((system) => createMagicField(state, system))
       : [],
+    confluences: createConfluenceWorkspace(enabled ? structuredClone(confluences) : [], count),
     heat: new Float64Array(count),
     melt: new Float64Array(count),
     coastal: new Float64Array(count),

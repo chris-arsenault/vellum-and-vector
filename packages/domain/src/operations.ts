@@ -89,7 +89,7 @@ export interface ChangeSet {
   highImpact: boolean;
   worldMetadata?: Pick<
     World,
-    "name" | "seed" | "epochs" | "humanEras" | "magicSystems" | "societies"
+    "name" | "seed" | "epochs" | "humanEras" | "magicSystems" | "confluences" | "societies"
   >;
   templateInstances?: import("./templates").TemplateInstance[];
   fieldArtifacts?: { reference: ResourceReference; grid: import("./grids").Grid }[];

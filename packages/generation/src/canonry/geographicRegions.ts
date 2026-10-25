@@ -245,6 +245,33 @@ export function extractNamedLandforms(state: GenerationState) {
 }
 export function extractMagicPlaces(state: GenerationState) {
   const magic = state.physical!.magic;
+  for (const held of Object.values(magic?.confluences.states ?? {}))
+    components(
+      state,
+      (i) => Boolean(held.members[i]) && held.coverage[i] > 0,
+      (region, extent) =>
+        publishPlace(
+          state,
+          `confluence:${held.definition.id}`,
+          held.definition.name,
+          region,
+          "magic",
+          {
+            system: "confluence",
+            rule: held.definition.id,
+            systems: held.definition.systems.join(","),
+            meanCoverage:
+              region.reduce((sum, i) => sum + held.coverage[i], 0) / Math.max(1, region.length),
+            maximumStrain: region.reduce(
+              (peak, i) => Math.max(peak, magic!.confluences.strain[i]),
+              0
+            ),
+          },
+          extent,
+          null
+        ),
+      true
+    );
   for (const field of magic?.fields ?? [])
     for (const rule of field.definition.features) {
       const members = field.features[rule.id];

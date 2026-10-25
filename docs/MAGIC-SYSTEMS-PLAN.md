@@ -914,6 +914,83 @@ Evidence: unit tests on coverage derivation, displacement, the sum bound and eac
 confluence's field writes; the existing magic dimension, inclusion and biome tests pass;
 one short-scenario generation compared before and after on a seed where Fire meets
 Aurora.
+Sulion: `3823c280-db91-4775-afce-c0fb0c69872b`; expansion opened 2026-10-25 (IDs in the
+Sulion tree).
+
+#### Execution steps (M1b)
+
+Design fixed at expansion. A confluence is a record in a shared `confluences` list
+(`world.confluences`, defaulting to the Canonry presets, bound through the
+`magic.configured` configuration beside `magicSystems`): `systems` it reads (two or more),
+a coverage `floor` each parent must reach, a `strain` scale, seed and retain conditions in
+the existing rule grammar reading `system:<id>` and physical fields only, `effects` on the
+physical fields (fracture conductance, rock resistance, relief roughening in metres, soil
+removal share, coastal forcing, fog, ice melt in metres, debris in metres, toxicity), an
+optional `hazard` (kind, rate per year at full coverage, severity, radius, cause), and a
+surface priority and cartography. It is effective only when every system it reads is
+enabled. Coverage: a rule may declare `coverage: { field, floor, full }`, a linear map of
+that field from floor to full inside its grown region; without it a member cell has
+coverage 1, so membership is unchanged. A system's coverage in a cell is the maximum over
+its rules. Strain in a cell is the product of the two parents' intensities (as fractions)
+times the largest neighbour difference of their intensity gap (as a fraction). Confluence
+coverage is the smaller parent coverage times `clamp(0.25 + strain × scale, 0, 1)`, so a
+meeting whose conditions hold always has some coverage and a sharp front has more. The
+confluence's coverage is subtracted from its parents' rule coverages in the cell, and if
+the coverages of all systems and confluences in a cell sum past one they scale down
+together. Effects are applied once per evaluation where confluence coverage is positive,
+scaled by it: fracture and rock through the existing clamps, relief as a bounded signed
+noise on bedrock, soil as a share removed, coastal forcing into the external coastal
+forcing, fog into `FogForcing`, ice melt from `IceThickness`, debris deposited as sediment,
+toxicity into `EcologicalToxicity`. Confluences are evaluated in the post-glacial action
+after both phases have run, in every epoch and at present; classification at present
+reads the same members and coverage for surface codes and places. Surface codes list the
+confluences after the systems as one source named Interactions. The three Pressure rules
+war, steam and breach move to presets named Shatter rim, Boiling shore and Breach with
+their ids kept so existing presentation and saved maps keep their colours.
+
+1. Confluence schema and presets: `packages/domain/src/magicConfluences.ts`, `model.ts`,
+   `operations.ts`, `magicSystemIntents.ts`, `featureCatalogue.ts`, `geographySurfaces.ts`;
+   `generationSettings.ts`, `featureConfiguration.ts`, `atlasPublication.ts`. Verify: domain
+   tests on parse, validation against system ids and own-channel conditions; settings test.
+2. Coverage: `magicState.ts` (per-rule and per-system coverage), `magicFeatures.ts` (mapping
+   after growth), `magicFieldDefinitions.ts`/`atlasPublications.ts` (channels), presets
+   declare coverage on vein, halo, field, front. Verify: characterization unchanged;
+   coverage test.
+3. Evaluation and processes: new `canonry/magicConfluences.ts`; `magicProcesses.ts` runs it
+   in the post-glacial action; `magicFeatures.ts` classifies confluences into
+   `finalSurface`; `geographicRegions.ts` publishes confluence places. Verify: unit tests on
+   strain, coverage, displacement, sum bound, each effect; the acceptance scenario.
+4. Hazards, publications, frontend: `societyHazards.ts` reads confluence hazards;
+   `atlasPublications.ts` channels and feature kinds; `rasterPresentation.ts`,
+   `atlasState.ts`, `GenerationMagicConfiguration.tsx`, `MagicSystemsForm.tsx` (a confluence
+   editor), `generationDraftEpochs.ts`. Verify: hazard test, frontend typecheck and tests.
+5. Exit checks and record.
+
+#### Changes and resume (M1b)
+
+Completed 2026-10-25. Evidence: `magicConfluences.test.ts` (generation) checks that where
+Fire and Aurora meet the Shatter rim takes coverage from both parents, every cell's
+coverages sum to at most one, fractures open, rock weakens, soil goes and bedrock roughens
+only where the rim holds, a sharp front strains more than a gentle one, the next Fire
+propagation reaches at least as far after the rim opened its fractures, disabling Fire
+leaves no rim and Aurora whole, and a rule's declared coverage maps from floor to full;
+the domain tests check presets, effectiveness, validation and surface codes; the
+characterization snapshot of the three presets is unchanged; 118 generation and domain
+tests and 22 frontend unit tests pass; typecheck, eslint on packages and on the changed
+frontend files, and Prettier are clean. Material choices made while building: a
+confluence that names a system the world lacks validates and simply never holds, so the
+preset meetings travel with any system list (the earlier plan to reject unknown systems
+broke every fixture with a custom system); coverage is published per rule
+(`magic:<system>:coverage:<rule>`) and per system (`magic:<system>:coverage`), strain as
+`magic:strain`, and each confluence as `magic:confluence:<id>:members` and `:coverage`;
+confluence places publish as areas under the kind `confluence:<id>` and the catalogue lists
+them under Interactions; the three former Pressure rules keep their ids (war, steam,
+breach) so saved maps and the palette keep their colours; society hazards are now the
+confluences' declared hazards scaled by coverage at the community, replacing three
+hard-coded exposures; the magic step and the world form carry a confluence editor (enable,
+floor, strain scale, effects, hazard rate). Condition reading moved to `magicRegions.ts`
+so confluences and rules share one grower. Course geometry for Boiling shore is not
+rebuilt in this milestone; confluence places are areas until M8's presentation pass.
 
 ### M1c — Fire as material
 
@@ -1164,5 +1241,8 @@ rebuilt from a structural phase into people as carrier and source; and the three
 decisions (Brine shore, Veil's responses, the Salt detachment deferral) were taken by the
 agent. The user authorized execution of every phase the same day. M1a completed
 2026-10-25 (origins, renewal and stocks on the schema; per-origin generation; crust
-carriage of declared stocks; society reads by role; the form edits origins). M1b to M8
-pending. Next action: plan-phase expands M1b.
+carriage of declared stocks; society reads by role; the form edits origins). M1b completed
+2026-10-25 (confluences as processes with coverage, strain, displacement and field writes;
+the three meetings moved out of the Pressure preset; confluence hazards; coverage and
+confluence channels published; a confluence editor). M1c to M8 pending. Next action:
+plan-phase expands M1c.

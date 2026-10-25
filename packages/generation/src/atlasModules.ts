@@ -45,7 +45,9 @@ atlasGenerationModules.register(
   domainModule("ecology.living", (_source, input) => ecologyProcesses(input))
 );
 atlasGenerationModules.register(
-  domainModule("magic.configured", (_source, input) => magicProcesses(input.settings?.magicSystems))
+  domainModule("magic.configured", (_source, input) =>
+    magicProcesses(input.settings?.magicSystems, input.settings?.confluences)
+  )
 );
 atlasGenerationModules.register(
   domainModule("magic.local", () => [

@@ -1,6 +1,7 @@
 import {
   areaSpace,
   createWorldBlueprint,
+  canonryConfluencePresets,
   canonryMagicPresets,
   FactDependencies,
   requireThat,
@@ -162,6 +163,7 @@ export function createWorldSnapshot(input: WorldCreationInput, id: string = cryp
     magic: [],
     landmarks: [],
     magicSystems: canonryMagicPresets(),
+    confluences: canonryConfluencePresets(),
     views: [],
     generations: [],
     epochs: defaultEpochs(),

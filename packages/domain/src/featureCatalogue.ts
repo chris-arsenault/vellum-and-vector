@@ -1,5 +1,7 @@
 import type { AtlasFeature, LayerStyle, World } from "./model";
 import { canonryMagicPresets } from "./magicPresets";
+import { canonryConfluencePresets } from "./magicConfluences";
+import { confluenceSourceId } from "./geographySurfaces";
 import { landmarkKind } from "./landmarks";
 
 type Definition = [string, string, string, string, string];
@@ -144,8 +146,19 @@ function magicType(world: World, feature: Classification): FeatureType | null {
 }
 function magicClassification(world: World, feature: Classification) {
   const systemId = String(feature.attributes.system ?? feature.kind.split(":")[0]);
-  const system = (world.magicSystems ?? defaults).find((s) => s.id === systemId);
   const ruleId = String(feature.attributes.rule ?? feature.kind.split(":")[1] ?? "source");
+  if (systemId === confluenceSourceId) {
+    const confluence = (world.confluences ?? canonryConfluencePresets()).find(
+      (entry) => entry.id === ruleId
+    );
+    return {
+      systemId,
+      system: { name: "Interactions" },
+      ruleId,
+      rule: confluence && { name: confluence.name, seeds: confluence.seeds },
+    };
+  }
+  const system = (world.magicSystems ?? defaults).find((s) => s.id === systemId);
   const rule = system?.features.find((r) => r.id === ruleId);
   return { systemId, system, ruleId, rule };
 }
@@ -165,6 +178,12 @@ export function availableFeatureTypes(world: World, features: AtlasFeature[], em
           layerId: "magic",
           attributes: { system: system.id, rule: rule.id },
         });
+    for (const confluence of world.confluences ?? canonryConfluencePresets())
+      add({
+        kind: `${confluenceSourceId}:${confluence.id}`,
+        layerId: "magic",
+        attributes: { system: confluenceSourceId, rule: confluence.id },
+      });
   }
   features.forEach(add);
   return [...types.values()].sort((a, b) => a.path.join(" / ").localeCompare(b.path.join(" / ")));

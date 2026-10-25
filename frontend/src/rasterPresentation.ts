@@ -2,6 +2,7 @@ import type { FieldStyle, Raster, RasterPresentation, World } from "./types";
 import { rasterLimits } from "./rasterTiles";
 import {
   biomes,
+  canonryConfluencePresets,
   ecologyLabels,
   fieldCategories,
   spatial,
@@ -40,7 +41,11 @@ export function categoryPalette(world: World, channel: string): SurfaceCategory[
       tint: 1,
     }));
   if (channel === "naturalSurface") return surfaceCategories();
-  if (channel === "finalSurface") return surfaceCategories(world.magicSystems ?? []);
+  if (channel === "finalSurface")
+    return surfaceCategories(
+      world.magicSystems ?? [],
+      world.confluences ?? canonryConfluencePresets()
+    );
   return null;
 }
 export const surfacePalette = (world: World) => categoryPalette(world, "finalSurface")!;

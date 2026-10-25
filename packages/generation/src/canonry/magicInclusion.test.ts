@@ -144,11 +144,20 @@ it("retains Fire/Aurora contact with Pressure absent and requires the actual par
   for (let mask = 0; mask < 8; mask++) {
     const state = scenario(mask),
       fields = state.physical!.magic!.fields;
-    // Controlled overlap isolates participation from geography and distribution.
+    // Controlled overlap isolates participation from geography and distribution. The
+    // meetings live in the shared confluence list and need every participant enabled.
     for (const field of fields) field.intensity.fill(500);
     classifyMagicFeatures(state);
-    expect(fields[2].features.war.every((value) => value === Number((mask & 3) === 3))).toBe(true);
-    if (!(mask & 4)) expect(fields[2].features.steam).toBeUndefined();
+    const held = state.physical!.magic!.confluences.states;
+    if ((mask & 3) === 3) {
+      expect(held.war).toBeDefined();
+      expect(held.war.members.every((value) => value === 1)).toBe(true);
+      expect(held.war.coverage.every((value) => value > 0)).toBe(true);
+    } else expect(held.war).toBeUndefined();
+    if (!(mask & 4)) {
+      expect(held.steam).toBeUndefined();
+      expect(held.breach).toBeUndefined();
+    }
     fields[2].definition.features = [
       {
         id: "zero",

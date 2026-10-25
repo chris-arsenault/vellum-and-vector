@@ -3,6 +3,7 @@ export * from "./featureCatalogue";
 export * from "./featureReads";
 export * from "./drainage";
 export * from "./magicSystems";
+export * from "./magicConfluences";
 export * from "./magicEffects";
 export * from "./magicPresets";
 export * from "./geographySurfaces";

@@ -1,4 +1,7 @@
 import {
+  canonryConfluencePresets,
+  canonryMagicPresets,
+  confluenceEffective,
   mergePopulation,
   population,
   semanticId,
@@ -8,7 +11,6 @@ import {
 import type { GenerationState, MapProcessContext } from "./process";
 import { nearestSample } from "./societySpatial";
 import { societyValue } from "./societySupport";
-import { magicAt } from "./societyMagic";
 import { isWorldSociety } from "./societyMapScope";
 import { fieldInterpolator } from "@atlas/domain";
 
@@ -22,10 +24,7 @@ interface Exposure {
 function exposures(state: GenerationState, c: SocietyCommunity): Exposure[] {
   const i = nearestSample(state, c.position),
     v = (name: string) => societyValue(state, name, i);
-  const fire = magicAt(state, "quickens", i),
-    aurora = magicAt(state, "stills", i),
-    pressure = magicAt(state, "moves-water", i);
-  return [...physicalExposures(v), ...magicalExposures(fire, aurora, pressure, v)];
+  return [...physicalExposures(v), ...magicalExposures(state, i)];
 }
 function physicalExposures(v: (name: string) => number): Exposure[] {
   return [
@@ -52,35 +51,26 @@ function physicalExposures(v: (name: string) => number): Exposure[] {
     },
   ];
 }
-function magicalExposures(
-  fire: number,
-  aurora: number,
-  pressure: number,
-  v: (name: string) => number
-): Exposure[] {
-  return [
-    {
-      kind: "thermal-fracture",
-      rate: fire > 0.26 && aurora > 0.34 ? 0.001 : 0,
-      severity: 0.3,
-      radius: 2000,
-      cause: "Fire heat met Aurora-bearing ice, producing a thermal fracture.",
-    },
-    {
-      kind: "steam-fracture",
-      rate: fire > 0.39 && pressure > 0.42 && v("fracture") > 0.52 ? 0.002 : 0,
-      severity: 0.4,
-      radius: 3000,
-      cause: "Ocean Pressure entered conductive Fire fractures.",
-    },
-    {
-      kind: "pressure-ice-breach",
-      rate: pressure > 0.39 && aurora > 0.43 && v("iceThickness") > 20 ? 0.002 : 0,
-      severity: 0.4,
-      radius: 5000,
-      cause: "Pressure reached charged coastal ice.",
-    },
-  ];
+/**
+ * Each meeting between systems names its own hazard; a community is exposed to it in
+ * proportion to the meeting's coverage of the ground it stands on.
+ */
+function magicalExposures(state: GenerationState, i: number): Exposure[] {
+  const systems = state.domain.world.magicSystems ?? canonryMagicPresets();
+  return (state.domain.world.confluences ?? canonryConfluencePresets()).flatMap((confluence) => {
+    if (!confluence.hazard || !confluenceEffective(confluence, systems)) return [];
+    const coverage = societyValue(state, `magic:confluence:${confluence.id}:coverage`, i);
+    if (coverage <= 0) return [];
+    return [
+      {
+        kind: confluence.hazard.kind,
+        rate: confluence.hazard.rate * coverage,
+        severity: confluence.hazard.severity,
+        radius: confluence.hazard.radius,
+        cause: confluence.hazard.cause,
+      },
+    ];
+  });
 }
 function relocateSurvivors(state: GenerationState, source: SocietyCommunity, fraction: number) {
   const region = state.society!.region;

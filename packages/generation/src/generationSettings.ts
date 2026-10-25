@@ -4,10 +4,14 @@ import {
   magicSystemSchema,
   validateMagicSystems,
   canonryMagicPresets,
+  magicConfluenceSchema,
+  validateMagicConfluences,
+  canonryConfluencePresets,
   beforePresentEpoch,
   type World,
   type Epoch,
   type MagicSystem,
+  type MagicConfluence,
 } from "@atlas/domain";
 
 const nonnegative = z.number().finite().nonnegative();
@@ -64,9 +68,15 @@ export const generationSettingsSchema = z
     epochs: z.array(generationEpochSchema).min(1),
     humanEras: z.array(humanEraSchema),
     magicSystems: z.array(magicSystemSchema),
+    confluences: z.array(magicConfluenceSchema).default(() => canonryConfluencePresets()),
   })
   .strict()
   .superRefine((settings, context) => {
+    try {
+      validateMagicConfluences(settings.confluences, settings.magicSystems);
+    } catch (error) {
+      context.addIssue({ code: "custom", path: ["confluences"], message: String(error) });
+    }
     for (const [path, entries] of [
       ["epochs", settings.epochs],
       ["humanEras", settings.humanEras],
@@ -84,11 +94,13 @@ export interface GenerationSettings {
   epochs: Epoch[];
   humanEras: NonNullable<World["humanEras"]>;
   magicSystems: MagicSystem[];
+  confluences: MagicConfluence[];
 }
 export function worldGenerationSettings(world: World) {
   return generationSettingsSchema.parse({
     epochs: world.epochs,
     humanEras: world.humanEras ?? [],
     magicSystems: world.magicSystems ?? canonryMagicPresets(),
+    confluences: world.confluences ?? canonryConfluencePresets(),
   });
 }

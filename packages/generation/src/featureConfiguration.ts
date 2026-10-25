@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { ecologyEpochSchema, requireThat, type ParameterValues } from "@atlas/domain";
+import {
+  ecologyEpochSchema,
+  requireThat,
+  validateMagicConfluences,
+  type ParameterValues,
+} from "@atlas/domain";
 import type { GenerationFeature } from "./features";
 import { terrainHistorySchema, terrainEpochs, landscapeEpoch } from "./cartographicHistory";
 import {
@@ -26,6 +31,7 @@ const ecologySchema = z
 const magicSchema = z
   .object({
     magicSystems: generationSettingsSchema.shape.magicSystems,
+    confluences: generationSettingsSchema.shape.confluences,
     activity: z.record(z.string(), z.record(z.string(), z.number().finite().nonnegative())),
   })
   .strict();
@@ -128,6 +134,7 @@ export const magicConfiguration: Configuration = {
   configuration: magicSchema,
   configurationFromLegacy: (settings) => ({
     magicSystems: legacy(settings).magicSystems,
+    confluences: legacy(settings).confluences,
     activity: Object.fromEntries(
       legacy(settings).epochs.map((epoch) => [epoch.id, epoch.magicActivity ?? {}])
     ),
@@ -137,11 +144,12 @@ export const magicConfiguration: Configuration = {
     epochs: { path: "activity", shape: "record", extension: "magicActivity" },
   },
   configurationBinding: {
-    fields: ["magicSystems"],
+    fields: ["magicSystems", "confluences"],
     epochFields: ["magicActivity"],
     bind(configuration, settings) {
       const bound = magicSchema.parse(configuration);
       checkEpochs(Object.keys(bound.activity), settings);
+      validateMagicConfluences(bound.confluences, bound.magicSystems);
       const systems = new Set(bound.magicSystems.map((system) => system.id));
       for (const activity of Object.values(bound.activity))
         for (const id of Object.keys(activity))
@@ -152,6 +160,7 @@ export const magicConfiguration: Configuration = {
           );
       return {
         magicSystems: bound.magicSystems,
+        confluences: bound.confluences,
         epochs: settings.epochs.map((epoch) => ({
           ...epoch,
           magicActivity: bound.activity[epoch.id] ?? {},

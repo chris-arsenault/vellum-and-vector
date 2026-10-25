@@ -10,10 +10,16 @@ import {
   magicCoastalFeedback,
   retainMagicHistory,
 } from "./magicFeedback";
-import { classifyMagicFeatures, effectiveMagicRules, projectMagic } from "./magicFeatures";
+import {
+  classifyMagicFeatures,
+  coverSystems,
+  effectiveMagicRules,
+  projectMagic,
+} from "./magicFeatures";
+import { evaluateConfluences } from "./magicConfluences";
 import { generationBindings } from "../generationBindings";
 import type { ProcessBehavior } from "../processTraits";
-import { ecologyLabels, type Epoch, type MagicSystem } from "@atlas/domain";
+import { ecologyLabels, type Epoch, type MagicConfluence, type MagicSystem } from "@atlas/domain";
 
 function evaluateMagic(
   state: GenerationState,
@@ -65,14 +71,19 @@ function applySharedForcing(state: GenerationState) {
   magicLivingFeedback(state);
   magicOceanFeedback(state);
 }
-export function magicProcesses(systems: MagicSystem[] = []): MapProcess[] {
+export function magicProcesses(
+  systems: MagicSystem[] = [],
+  confluences: MagicConfluence[] = []
+): MapProcess[] {
+  void confluences;
   const actions: Record<string, (state: GenerationState, context: MapProcessContext) => void> = {
     initialize: (state, context) => {
       const bound = generationBindings(context);
       initializeMagic(
         state,
         bound.features.selection["magic.configured"]?.enabled ?? bound.domains.includes("magic"),
-        bound.settings.magicSystems
+        bound.settings.magicSystems,
+        bound.settings.confluences
       );
     },
     // Every evaluation re-applies the shared forcings of all systems, so a system evaluated
@@ -82,9 +93,14 @@ export function magicProcesses(systems: MagicSystem[] = []): MapProcess[] {
       applySharedForcing(state);
     },
     rocks: magicRockFeedback,
+    // Both phases have run by now, so the meetings between systems are evaluated here and
+    // act on the ground once per epoch, before ecology responds and the coasts are cut.
     "post-glacial": (state, context) => {
-      evaluateMagic(state, context, "post-glacial", generationBindings(context).seed);
+      const seed = generationBindings(context).seed;
+      evaluateMagic(state, context, "post-glacial", seed);
       applySharedForcing(state);
+      coverSystems(state, seed);
+      evaluateConfluences(state, seed, true);
     },
     coast: magicCoastalFeedback,
     history: retainMagicHistory,

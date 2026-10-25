@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  canonryConfluencePresets,
   canonryMagicPresets,
   magicRenewals,
   type MagicOrigin,
@@ -15,14 +16,18 @@ import { useWorkflowFields } from "./workflowFieldState";
 import { magicControlKeys, removedMagicParameterFields } from "./generationMagicControls";
 import { magicSourceOptions, magicPropagationOptions } from "@atlas/generation";
 import { SetupDisclosure } from "./SetupDisclosure";
+import { MagicConfluencesEditor } from "./MagicConfluencesEditor";
 
 export function MagicSystemsForm({ editor }: { editor: EditorState }) {
   const [systems, setSystems] = useState(editor.world.magicSystems ?? canonryMagicPresets());
+  const [confluences, setConfluences] = useState(
+    editor.world.confluences ?? canonryConfluencePresets()
+  );
   return (
     <form
       onSubmit={(event) => {
         event.preventDefault();
-        editor.execute("setMagicSystems", { systems });
+        editor.execute("setMagicSystems", { systems, confluences });
       }}
     >
       <h3>Systems that shape this world</h3>
@@ -31,6 +36,7 @@ export function MagicSystemsForm({ editor }: { editor: EditorState }) {
         Pressure travels through oceans and changes coasts. Combine or alter these examples below.
       </p>
       <MagicSystemsEditor systems={systems} change={setSystems} />
+      <MagicConfluencesEditor confluences={confluences} systems={systems} change={setConfluences} />
       <button className="primary" disabled={editor.commit.isPending}>
         Save magical systems
       </button>

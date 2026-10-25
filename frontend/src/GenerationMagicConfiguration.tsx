@@ -1,15 +1,23 @@
 import {
   areaSpace,
+  canonryConfluencePresets,
   point,
   spatial,
   locatedMagicEffectDefinitions,
+  type MagicConfluence,
   type MagicSystem,
 } from "@atlas/domain";
 import type { SetupFeature } from "@atlas/generation";
 import { MagicSystemsEditor } from "./MagicSystemsForm";
+import { MagicConfluencesEditor } from "./MagicConfluencesEditor";
 import { NumberField } from "./WorkflowFields";
 import { selectedDraftEpoch, epochFieldPrefix } from "./generationEpochFields";
-import { draftEpochs, setDraftMagicSystems, updateMagicActivity } from "./generationDraftEpochs";
+import {
+  draftEpochs,
+  setDraftConfluences,
+  setDraftMagicSystems,
+  updateMagicActivity,
+} from "./generationDraftEpochs";
 import { useWorkflowFields } from "./workflowFieldState";
 import type { GenerationWorkflow } from "./useGenerationWorkflow";
 
@@ -22,6 +30,8 @@ export function GenerationMagicConfiguration({
 }) {
   const systems = flow.draft.recipe.features!["magic.configured"].configuration!
     .magicSystems as unknown as MagicSystem[];
+  const confluences = (flow.draft.recipe.features!["magic.configured"].configuration!.confluences ??
+    canonryConfluencePresets()) as unknown as MagicConfluence[];
   const epoch = selectedDraftEpoch(flow);
   const fields = useWorkflowFields();
   const changeSystems = (next: MagicSystem[]) => {
@@ -52,6 +62,11 @@ export function GenerationMagicConfiguration({
     <fieldset className="setup-magic-configuration" disabled={!feature.configurationEditable}>
       <legend>Systems, sources and effects</legend>
       <MagicSystemsEditor systems={systems} change={changeSystems} focusField={flow.targetField} />
+      <MagicConfluencesEditor
+        confluences={confluences}
+        systems={systems}
+        change={(next) => flow.change(setDraftConfluences(flow.draft, next))}
+      />
       <h4>{epoch.id} · magical activity</h4>
       <div className="setup-setting-grid">
         {systems.map((system) => (

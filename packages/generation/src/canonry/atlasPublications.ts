@@ -1,4 +1,12 @@
-import { builtinLayers, requireThat, type Layer, type World } from "@atlas/domain";
+import {
+  builtinLayers,
+  confluenceEffective,
+  requireThat,
+  type Layer,
+  type MagicConfluence,
+  type MagicSystem,
+  type World,
+} from "@atlas/domain";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
 import { resolveGenerationFeatures, type ResolvedFeatures } from "../features";
 import { physicalFeatureDefinitions } from "../physicalFeatures";
@@ -197,25 +205,36 @@ function configuredChannel(system: string, channel: MagicChannel, publish: boole
 }
 
 function configuredMagic(input: AtlasGenerationInput, features: ResolvedFeatures) {
-  const definitions: PublicationDefinition[] = [];
-  for (const system of input.settings?.magicSystems ?? []) {
-    const publish = enabled(features, "magic.configured") && system.enabled;
-    for (const channel of publishedMagicChannels) {
-      definitions.push(configuredChannel(system.id, channel, publish));
-    }
-    for (const rule of system.features)
-      definitions.push(
-        field(
-          `magic:${system.id}:feature:${rule.id}`,
-          "category",
-          "magic",
-          enabled(features, "magic.configured") &&
-            (system.enabled || independentInteraction(rule, system.id)),
-          ["magic.configured"]
-        )
-      );
-  }
-  return definitions;
+  const configured = enabled(features, "magic.configured"),
+    systems = input.settings?.magicSystems ?? [];
+  return [
+    ...systems.flatMap((system) => systemPublications(system, configured)),
+    field("magic:strain", "ratio", "magic", configured, owners),
+    ...(input.settings?.confluences ?? []).flatMap((confluence) =>
+      confluencePublications(confluence, configured && confluenceEffective(confluence, systems))
+    ),
+  ];
+}
+const owners = ["magic.configured"];
+function systemPublications(system: MagicSystem, configured: boolean): PublicationDefinition[] {
+  const publish = configured && system.enabled;
+  return [
+    ...publishedMagicChannels.map((channel) => configuredChannel(system.id, channel, publish)),
+    field(`magic:${system.id}:coverage`, "ratio", "magic", publish, owners),
+    ...system.features.flatMap((rule) => {
+      const active = configured && (system.enabled || independentInteraction(rule, system.id));
+      return [
+        field(`magic:${system.id}:feature:${rule.id}`, "category", "magic", active, owners),
+        field(`magic:${system.id}:coverage:${rule.id}`, "ratio", "magic", active, owners),
+      ];
+    }),
+  ];
+}
+function confluencePublications(confluence: MagicConfluence, active: boolean) {
+  return [
+    field(`magic:confluence:${confluence.id}:members`, "category", "magic", active, owners),
+    field(`magic:confluence:${confluence.id}:coverage`, "ratio", "magic", active, owners),
+  ];
 }
 
 function locatedMagic(world: World | undefined, features: ResolvedFeatures) {
@@ -285,9 +304,12 @@ function geographicPublications(
   result.push({
     kind: "geography",
     layer: layer("magic"),
-    featureKinds: (input.settings?.magicSystems ?? []).flatMap((system) =>
-      system.features.map((rule) => `${system.id}:${rule.id}`)
-    ),
+    featureKinds: [
+      ...(input.settings?.magicSystems ?? []).flatMap((system) =>
+        system.features.map((rule) => `${system.id}:${rule.id}`)
+      ),
+      ...(input.settings?.confluences ?? []).map((confluence) => `confluence:${confluence.id}`),
+    ],
     publish: enabled(features, "magic.configured"),
     owners: ["magic.configured"],
   });

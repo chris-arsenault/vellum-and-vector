@@ -1,5 +1,10 @@
 import { expect, it } from "vitest";
-import { canonryMagicPresets, magicSurfaceCode, magicSystemSchema } from "@atlas/domain";
+import {
+  canonryMagicPresets,
+  magicSurfaceCode,
+  magicSystemSchema,
+  surfaceRuleSources,
+} from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { createAdaptiveWorldMesh } from "./adaptiveMesh";
 import { createField } from "./field";
@@ -126,30 +131,41 @@ it("classifies nonexclusive interactions from editable conditions on multiple sy
     magic = state.physical!.magic!;
   for (const field of magic.fields) field.intensity.fill(500);
   classifyMagicFeatures(state, 42);
-  const pressure = magic.fields[2];
-  expect(pressure.features.war.every((value) => value === 1)).toBe(true);
-  expect(pressure.features.steam.some((value) => value === 1)).toBe(true);
-  pressure.definition.features.find((rule) => rule.id === "war")!.seeds[0][0].min = 700;
+  const held = () => magic.confluences.states,
+    [fire, aurora] = magic.fields;
+  // The rim holds where both conditions pass and both parents have a class to give up.
+  expect(held().war.members.some((value) => value === 1)).toBe(true);
+  for (let i = 0; i < held().war.members.length; i++)
+    if (held().war.members[i]) {
+      expect(fire.systemCoverage[i]).toBeGreaterThan(0);
+      expect(aurora.systemCoverage[i]).toBeGreaterThan(0);
+    }
+  expect(held().steam.members.some((value) => value === 1)).toBe(true);
+  magic.confluences.definitions.find((rule) => rule.id === "war")!.seeds[0][0].min = 700;
   classifyMagicFeatures(state, 42);
-  expect(pressure.features.war.every((value) => value === 0)).toBe(true);
-  expect(pressure.features.steam.some((value) => value === 1)).toBe(true);
+  expect(held().war.members.every((value) => value === 0)).toBe(true);
+  expect(held().steam.members.some((value) => value === 1)).toBe(true);
 });
 it("writes final-surface codes that the shared surface catalogue names", () => {
   const state = scenario(),
     magic = state.physical!.magic!;
   for (const field of magic.fields) field.intensity.fill(500);
   classifyMagicFeatures(state, 42);
-  const systems = magic.fields.map((field) => field.definition);
+  const sources = surfaceRuleSources(
+    magic.fields.map((field) => field.definition),
+    magic.confluences.definitions
+  );
   const catalogue = new Set(
-    systems.flatMap((system) =>
-      system.features.map((rule) => magicSurfaceCode(systems, system.id, rule.id))
+    sources.flatMap((system) =>
+      system.features.map((rule) => magicSurfaceCode(sources, system.id, rule.id))
     )
   );
   expect(magic.finalSurface.every((code) => code < 100 || catalogue.has(code))).toBe(true);
-  // Steam fracture (priority 110) owns its cells unless the higher-priority breach also matches.
-  const steam = magicSurfaceCode(systems, "pressure", "steam")!,
-    { steam: cells, breach } = magic.fields[2].features;
-  expect(cells.some((value, i) => value === 1 && !breach[i])).toBe(true);
+  // Boiling shore (priority 110) owns its cells unless the higher-priority Breach also holds.
+  const steam = magicSurfaceCode(sources, "confluence", "steam")!,
+    cells = magic.confluences.states.steam.members,
+    breach = magic.confluences.states.breach?.members;
+  expect(cells.some((value, i) => value === 1 && !breach?.[i])).toBe(true);
   for (let i = 0; i < cells.length; i++)
-    if (cells[i] && !breach[i]) expect(magic.finalSurface[i]).toBe(steam);
+    if (cells[i] && !breach?.[i]) expect(magic.finalSurface[i]).toBe(steam);
 });

@@ -18,6 +18,14 @@ export const magicFeatureSchema = z.object({
   priority: finite.default(1),
   seeds: z.array(z.array(condition).min(1)).min(1),
   retains: z.array(z.array(condition).min(1)).optional(),
+  /**
+   * How much of a member cell the class occupies: the named field mapped linearly from
+   * `floor` (none) to `full` (the whole cell). Without it a member cell is wholly covered.
+   */
+  coverage: z
+    .object({ field: z.string().min(1), floor: finite, full: finite })
+    .refine((range) => range.full > range.floor, "Coverage needs full above floor")
+    .optional(),
 });
 
 export const magicSources = ["geothermal", "cold", "deep-ocean", "placed"] as const;
