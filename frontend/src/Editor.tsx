@@ -219,7 +219,7 @@ function SubjectCanvas({ world, editor }: { world: World; editor: EditorState })
       styles={editor.styles}
       raster={editor.raster.data}
       baseRaster={editor.baseRaster.data}
-      presentation={editor.rasterView}
+      presentation={{ raster: editor.rasterView, cartography: editor.cartography }}
       onEngine={editor.setMapEngine}
       tool={editor.tool}
       selection={{

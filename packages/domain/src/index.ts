@@ -74,6 +74,7 @@ export * from "./societyEditing";
 export * from "./societyFeatures";
 export * from "./societyLanguages";
 export * from "./societyPractices";
+export * from "./cartographicPresentation";
 export * from "./drainageRefinement";
 export {
   canonicalPosition,

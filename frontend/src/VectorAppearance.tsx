@@ -113,27 +113,29 @@ export function VectorAppearance({
   return (
     <section className="vector-appearance" aria-label={`Appearance ${name}`}>
       <h3>{name}</h3>
-      <div className="appearance-grid">
-        <label>
-          Color
-          <input
-            type="color"
-            value={presentation.color}
-            onChange={(e) => actions.color(e.target.value)}
-          />
-        </label>
-        <label>
-          {size.label}
-          <input
-            type="number"
-            min="0.1"
-            max="40"
-            step="0.1"
-            value={size.value}
-            onChange={(e) => actions.width(Number(e.target.value))}
-          />
-        </label>
-      </div>
+      {editor.cartography.mode === "raster" && (
+        <div className="appearance-grid">
+          <label>
+            Color
+            <input
+              type="color"
+              value={presentation.color}
+              onChange={(e) => actions.color(e.target.value)}
+            />
+          </label>
+          <label>
+            {size.label}
+            <input
+              type="number"
+              min="0.1"
+              max="40"
+              step="0.1"
+              value={size.value}
+              onChange={(e) => actions.width(Number(e.target.value))}
+            />
+          </label>
+        </div>
+      )}
       <label>
         Opacity
         <input
@@ -153,12 +155,16 @@ export function VectorAppearance({
         />
         Labels
       </label>
-      <button className="secondary" onClick={advanced}>
-        Advanced symbol rules
-      </button>
-      <button className="quiet" onClick={() => actions.update({ symbols: undefined })}>
-        Reset symbols
-      </button>
+      {editor.cartography.mode === "raster" && (
+        <>
+          <button className="secondary" onClick={advanced}>
+            Advanced symbol rules
+          </button>
+          <button className="quiet" onClick={() => actions.update({ symbols: undefined })}>
+            Reset symbols
+          </button>
+        </>
+      )}
     </section>
   );
 }

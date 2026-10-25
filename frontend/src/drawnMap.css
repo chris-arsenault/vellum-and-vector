@@ -1,0 +1,70 @@
+.cartographic-panel {
+  padding: 0.8rem;
+  border: 1px solid var(--border, #64756d);
+  border-radius: 6px;
+  margin-bottom: 0.8rem;
+  display: grid;
+  gap: 0.5rem;
+}
+.cartographic-panel label {
+  display: grid;
+  gap: 0.3rem;
+}
+.cartographic-panel label:has(input[type="checkbox"]) {
+  display: flex;
+  align-items: center;
+}
+.cartographic-panel select,
+.cartographic-panel input:not([type="checkbox"]) {
+  width: 100%;
+}
+.map-frame.drawn-map {
+  background: #eee4c9;
+}
+.drawn-map .coordinates,
+.drawn-map .map-instruction {
+  background: #f6eedbd9;
+  color: #493e31;
+}
+.drawn-map .ol-zoom {
+  top: 34px;
+  left: 34px;
+  right: auto;
+}
+.drawn-map .fit-map {
+  top: 104px;
+  left: 34px;
+  right: auto;
+}
+.drawn-label-numbers {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+.drawn-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.5rem 0;
+}
+.cartographic-finishing,
+.drawn-fields,
+.drawn-sheet-panel {
+  border-top: 1px solid #8a826744;
+  padding-top: 0.55rem;
+}
+.cartographic-export-surface {
+  position: fixed;
+  left: -100000px;
+  top: 0;
+}
+.drawn-map .ol-scale-line,
+.drawn-map .coordinates {
+  display: none;
+}
+.drawn-map .map-instruction {
+  bottom: 2px;
+  background: transparent;
+  font-size: 10px;
+  opacity: 0.65;
+}

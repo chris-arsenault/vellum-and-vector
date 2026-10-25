@@ -1,6 +1,6 @@
 import GeoJSON from "ol/format/GeoJSON.js";
 import { DragBox, DragPan, Draw, Modify, Select, Snap, Translate } from "ol/interaction.js";
-import { primaryAction } from "ol/events/condition.js";
+import { primaryAction, singleClick } from "ol/events/condition.js";
 import { fromCircle } from "ol/geom/Polygon.js";
 import Circle from "ol/geom/Circle.js";
 import Feature from "ol/Feature.js";
@@ -93,7 +93,8 @@ function canonicalEvents(engine: MapEngine, tool: Tool, original: MapEvents): Ma
   const reference = engine.reference;
   return {
     ...original,
-    draw: (shape) => original.draw(canonicalDrawing(engine, tool, shape)),
+    draw: (shape) =>
+      original.draw(tool.startsWith("label") ? shape : canonicalDrawing(engine, tool, shape)),
     extent: (shape) => original.extent(canonicalGeometry(reference, shape)),
     modify: (feature, shape, role) =>
       original.modify(feature, canonicalGeometry(reference, shape), role),
@@ -199,6 +200,7 @@ function featureTools(
   const active: (Select | Modify | Translate)[] = [];
   if (!["select", "reshape", "move"].includes(tool)) return active;
   const select = new Select({
+    condition: (event) => singleClick(event) && insideDrawnSubject(engine, event.coordinate),
     filter: (feature) => feature.get("typeVisible") !== false,
     layers: (layer) => engine.vectors.getLayers().getArray().includes(layer),
     hitTolerance: 8,
@@ -227,6 +229,12 @@ function featureTools(
   }
   return active;
 }
+function insideDrawnSubject(engine: MapEngine, coordinate: number[]) {
+  if (!engine.drawn.getVisible()) return true;
+  const covers = engine.drawn.get("covers") as ((p: Position) => boolean) | null;
+  const p = canonicalPosition(engine.reference, { x: coordinate[0], y: coordinate[1], z: 0 });
+  return !covers || covers(p);
+}
 function footprintHandle(feature: Feature) {
   const domain = feature.get("domain") as AtlasFeature;
   if (!domain.footprint) return feature;
@@ -245,12 +253,15 @@ function commitGeometry(feature: import("ol/Feature.js").default, events: () => 
   events().modify(domain, geometry, footprint ? "footprint" : undefined);
 }
 function installDrawing(tool: Tool, events: () => MapEvents, panning: () => boolean) {
-  const type =
-    tool === "refinePolygon" || tool === "regionOutline"
-      ? "Polygon"
-      : tool === "sculpt" || tool === "regionCut"
-        ? "LineString"
-        : drawingTools[tool]?.geometry;
+  const special = {
+    refinePolygon: "Polygon",
+    regionOutline: "Polygon",
+    sculpt: "LineString",
+    regionCut: "LineString",
+    labelPath: "LineString",
+    labelPlace: "Point",
+  } as const;
+  const type = special[tool as keyof typeof special] ?? drawingTools[tool]?.geometry;
   if (!type) return null;
   const draw = new Draw({
     type,

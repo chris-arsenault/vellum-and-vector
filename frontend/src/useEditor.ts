@@ -11,6 +11,7 @@ import { useMapActions } from "./useMapActions";
 import type { MapEngine } from "./mapEngine";
 import { defaultRasterPresentation, defaultFieldStyle } from "./rasterPresentation";
 import { useRegions, isRegionTool } from "./useRegions";
+import { useComposition } from "./useComposition";
 
 function useEditorState(world: World) {
   const [selectedAreaId, setAreaId] = useState(
@@ -94,10 +95,13 @@ function initialBrush(area: Area) {
 }
 export function useEditor(world: World) {
   const state = useEditorState(world);
-  const { area, savedStyles, viewport, setViewport, setStyles, setChannel } = state;
-  const editing = useEditing(world, state);
-  const styles = useMemo(() => completeStyles(world, savedStyles), [world, savedStyles]);
-  const actions = useMapActions(world, state, editing);
+  const { area, savedStyles, viewport, setViewport, setChannel } = state;
+  const composition = useComposition(world, state);
+  const styledState = { ...state, setStyles: composition.setStyles };
+  const editing = useEditing(world, styledState);
+  const sourceStyles = composition.compositionLayers ?? savedStyles;
+  const styles = useMemo(() => completeStyles(world, sourceStyles), [world, sourceStyles]);
+  const actions = useMapActions(world, styledState, editing);
   const regions = useRegions({ ...state, world, commit: editing.commit });
   return {
     ...state,
@@ -109,17 +113,22 @@ export function useEditor(world: World) {
     viewport: setViewport,
     ...actions,
     ...regions,
+    ...composition,
     enter: (id: string) => {
       regions.cancelRegion();
       actions.enter(id);
     },
     draw: (geometry: Geometry) =>
-      isRegionTool(state.tool) ? regions.regionDraw(geometry) : actions.draw(geometry),
+      isRegionTool(state.tool)
+        ? regions.regionDraw(geometry)
+        : state.tool.startsWith("label")
+          ? finishLabel(state, composition, geometry)
+          : actions.draw(geometry),
     selectExtent: (geometry: Geometry) =>
       state.tool === "regionEdit" ? regions.regionDraw(geometry) : actions.selectExtent(geometry),
     cancel: () => (isRegionTool(state.tool) ? regions.cancelRegion() : actions.cancel()),
     preset: (name: string) => {
-      setStyles(defaultStyles(world, name));
+      composition.setStyles(defaultStyles(world, name));
       setChannel(presetChannel(world, name));
       const selected = presetChannel(world, name);
       state.setRasterView((view) => ({
@@ -218,6 +227,24 @@ function magicalChannel(world: World) {
 export type EditorState = ReturnType<typeof useEditor>;
 export type EditorSessionState = ReturnType<typeof useEditorState>;
 export type EditorEditing = ReturnType<typeof useEditing>;
+
+function finishLabel(
+  state: EditorSessionState,
+  composition: ReturnType<typeof useComposition>,
+  geometry: Geometry
+) {
+  if (!state.selected || !["Point", "LineString"].includes(geometry.type)) return;
+  const own = { ...composition.cartography.overrides[state.selected.id] };
+  delete own.anchor;
+  delete own.path;
+  if (geometry.type === "Point") own.anchor = [geometry.coordinates[0], geometry.coordinates[1]];
+  if (geometry.type === "LineString") own.path = geometry.coordinates.map(([x, y]) => [x, y]);
+  composition.finishCartography({
+    ...composition.cartography,
+    overrides: { ...composition.cartography.overrides, [state.selected.id]: own },
+  });
+  state.setTool("select");
+}
 
 export function newFeature(
   area: Area,

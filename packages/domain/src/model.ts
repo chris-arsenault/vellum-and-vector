@@ -348,6 +348,7 @@ export interface World {
     region?: { parentId: string | null; footprint: Geometry };
     regionId?: string;
     raster?: RasterPresentation;
+    cartography?: import("./cartographicPresentation").CartographicPresentation;
   }[];
   connections?: Record<string, Connection>;
   networkNodes?: Record<string, NetworkNode>;

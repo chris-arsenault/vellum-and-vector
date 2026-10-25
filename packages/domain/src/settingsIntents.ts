@@ -10,6 +10,7 @@ import { registerMagicSystemIntents } from "./magicSystemIntents";
 import { rasterPresentationSchema, symbolStyleSchema } from "./viewSchemas";
 import { locatedMagicEffects } from "./magicEffects";
 import { regionViewSchema, validateRegionView } from "./regionViews";
+import { cartographicPresentationSchema } from "./cartographicPresentation";
 
 const magicSchema = z.object({
   systemId: z.string().min(1).optional(),
@@ -60,6 +61,7 @@ const viewSchema = z.object({
   raster: rasterPresentationSchema.optional(),
   region: regionViewSchema.optional(),
   regionId: uuid.optional(),
+  cartography: cartographicPresentationSchema.optional(),
 });
 
 function validateMagicGraph(values: World["magic"]) {

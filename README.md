@@ -113,8 +113,31 @@ The **Adjust terrain appearance** icon beside the base choices controls lighting
 exaggeration and contour interval.
 These display settings do not change the geography. Satellite appearance is deferred.
 
-**Session map views** retain the base, field overlays and vector styles together.
-Use **Save map** to retain the world and its saved views across reloads.
+**Session map views** retain the geographic subject, base, field overlays, vector
+styles and cartographic finishing together. **Save map view** creates a separate
+composition; opening it restores its subject and appearance. Use **Save map** to
+retain the world and its saved views across reloads.
+
+For a drawn map, choose **Layers → Presentation → Drawn map** on the current map
+or a region selected through **Regions**. Choose an ink-and-wash or monochrome
+treatment and a physical, political, cultural or infrastructure subject. Terrain
+illustrations use existing relief, water and woodland geography. The selected
+region supplies the map footprint and ancestry; choosing a region or changing
+the drawing never generates finer geography.
+
+Political maps distinguish sovereign territory from optional control and claims.
+**Social distributions** adds independent cultural, language and religious
+hatches and population dots. Several distributions can coexist on the same map.
+Select a feature to adjust its label, draw a label curve, change its symbol or
+suppress its illustration. Close the drawer when drawing on the map. Finishing
+edits use the saved composition and Undo while source feature positions remain
+unchanged.
+
+**Finished sheet** supplies a title, frame, legend, compass and scale.
+**Download map PNG** renders the same composition at the chosen image dimensions
+entirely in the browser. Export does not include selection highlighting or editor
+controls. The raster investigation presentation remains available for numerical
+fields and advanced GIS symbol rules.
 
 ## Architecture
 

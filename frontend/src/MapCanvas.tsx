@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import GeoJSON from "ol/format/GeoJSON.js";
 import type { Area, AtlasFeature, LayerStyle, Optional, Raster, Tool, World } from "./types";
 import { createMap, fitArea, updateFeatures, applyMapUpdate, type MapEngine } from "./mapEngine";
@@ -9,6 +9,8 @@ import { toolInstruction } from "./cartography";
 import { useGenerationPreview } from "./useAtlas";
 import { updateRegionMap, type RegionPresentation } from "./regionMap";
 import { canonicalPosition } from "@atlas/domain";
+import type { CartographicPresentation } from "@atlas/domain";
+import { updateDrawnMap, type DrawnMapInput } from "./drawnMap";
 interface Props {
   world: World;
   area: Area;
@@ -24,7 +26,7 @@ interface Props {
     region?: RegionPresentation;
   };
   proposal: AtlasFeature[];
-  presentation: RasterPresentation;
+  presentation: { raster: RasterPresentation; cartography: CartographicPresentation };
   onEngine: (engine: MapEngine | null) => void;
 }
 
@@ -39,34 +41,25 @@ export function MapCanvas({
   proposal,
   features,
   selection,
-  presentation,
+  presentation: appearance,
   onEngine,
 }: Props) {
+  const { raster: presentation, cartography } = appearance;
   const region = selection.region;
   const target = useRef<HTMLDivElement>(null);
   const coordinates = useRef<HTMLOutputElement>(null);
-  const [engine, setEngine] = useState<MapEngine | null>(null);
-  const [reference] = useState(world.reference);
   const callbacks = useRef(events);
   useEffect(() => {
     callbacks.current = events;
   }, [events]);
-  useEffect(() => {
-    if (!target.current) return;
-    const next = createMap(target.current, reference);
-    setEngine(next);
-    onEngine(next);
-    observeMap(next, target, coordinates, callbacks);
-    return () => {
-      next.map.setTarget(undefined);
-      next.map.getAllLayers().forEach((layer) => layer.dispose());
-      next.map.dispose();
-      onEngine(null);
-    };
-  }, [reference, onEngine]);
-  useEffect(() => {
-    if (engine) applyMapUpdate(engine, () => updateFeatures(engine, world, area, styles, features));
-  }, [engine, world, area, styles, features]);
+  const { engine, mount } = useCanvasEngine(
+    world.reference,
+    onEngine,
+    target,
+    coordinates,
+    callbacks
+  );
+  useFeaturePresentation(engine, { world, area, styles, features, view: cartography, region });
   const previewLabel = useGenerationRaster(
     engine,
     world,
@@ -77,13 +70,106 @@ export function MapCanvas({
   );
   const subject = region ? { id: region.id ?? area.id, footprint: region.footprint } : area;
   useAreaFit(engine, subject, callbacks);
-  useEffect(() => {
-    if (engine && region) updateRegionMap(engine, region);
-  }, [engine, region]);
+  useDrawnPresentation(engine, {
+    world,
+    region,
+    area,
+    view: cartography,
+    features,
+    styles,
+    base: baseRaster ?? [],
+    rasters: raster ?? [],
+  });
   useFeatureTools(engine, tool, selection, callbacks, world.version);
   usePreview(engine, proposal);
   return (
-    <div className="map-frame">
+    <CanvasSurface
+      engine={engine}
+      target={mount}
+      coordinates={coordinates}
+      tool={tool}
+      previewLabel={previewLabel}
+      subject={subject}
+      cartography={cartography}
+    />
+  );
+}
+function useDrawnPresentation(engine: MapEngine | null, input: DrawnMapInput) {
+  useEffect(() => {
+    if (!engine) return;
+    if (input.region) updateRegionMap(engine, input.region);
+    updateDrawnMap(engine, input);
+  }, [engine, input]);
+}
+function useFeaturePresentation(
+  engine: MapEngine | null,
+  input: Pick<DrawnMapInput, "world" | "area" | "styles" | "features" | "view" | "region">
+) {
+  const { world, area, styles, features, view, region } = input;
+  useEffect(() => {
+    if (engine)
+      applyMapUpdate(engine, () =>
+        updateFeatures(
+          engine,
+          world,
+          area,
+          styles,
+          features,
+          view,
+          region?.footprint ?? area.footprint
+        )
+      );
+  }, [engine, world, area, styles, features, view, region]);
+}
+function useCanvasEngine(
+  initialReference: World["reference"],
+  onEngine: Props["onEngine"],
+  targetRef: import("react").RefObject<HTMLDivElement | null>,
+  coordinates: import("react").RefObject<HTMLOutputElement | null>,
+  callbacks: import("react").RefObject<MapEvents>
+) {
+  const [reference] = useState(initialReference);
+  const [engine, setEngine] = useState<MapEngine | null>(null);
+  const mount = useCallback(
+    (element: HTMLDivElement | null) => {
+      if (!element) return;
+      targetRef.current = element;
+      const next = createMap(element, reference);
+      setEngine(next);
+      onEngine(next);
+      observeMap(next, targetRef, coordinates, callbacks);
+      return () => {
+        next.map.setTarget(undefined);
+        next.map.getAllLayers().forEach((layer) => layer.dispose());
+        next.map.dispose();
+        onEngine(null);
+        targetRef.current = null;
+      };
+    },
+    [reference, onEngine, targetRef, coordinates, callbacks]
+  );
+  return { engine, mount };
+}
+interface SurfaceProps {
+  engine: MapEngine | null;
+  target: import("react").RefCallback<HTMLDivElement>;
+  coordinates: import("react").RefObject<HTMLOutputElement | null>;
+  tool: Tool;
+  previewLabel: string | null | undefined;
+  subject: Pick<Area, "id" | "footprint">;
+  cartography: CartographicPresentation;
+}
+function CanvasSurface({
+  engine,
+  target,
+  coordinates,
+  tool,
+  previewLabel,
+  subject,
+  cartography,
+}: SurfaceProps) {
+  return (
+    <div className={`map-frame${cartography.mode === "drawn" ? " drawn-map" : ""}`}>
       <div
         className="map"
         ref={target}

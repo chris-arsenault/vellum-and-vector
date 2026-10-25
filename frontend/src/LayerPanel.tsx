@@ -6,6 +6,7 @@ import { RasterPanel } from "./RasterPanel";
 import { defaultRasterPresentation } from "./rasterPresentation";
 import { VectorAppearance } from "./VectorAppearance";
 import { FeatureDrawOrder } from "./FeatureDrawOrder";
+import { CartographicPanel } from "./CartographicPanel";
 
 const SymbolEditor = lazy(() => import("./SymbolEditor"));
 export function LayerPanel({ world, editor }: { world: World; editor: EditorState }) {
@@ -25,18 +26,21 @@ export function LayerPanel({ world, editor }: { world: World; editor: EditorStat
   const style = editor.styles.find((style) => style.layerId === vector);
   return (
     <div className="layer-panel">
-      <label className="view-preset">
-        Preset
-        <select
-          aria-label="View preset"
-          defaultValue="physical"
-          onChange={(event) => editor.preset(event.target.value)}
-        >
-          {["physical", "political", "cultural", "magical", "infrastructure"].map((preset) => (
-            <option key={preset}>{preset}</option>
-          ))}
-        </select>
-      </label>
+      <CartographicPanel editor={editor} />
+      {editor.cartography.mode === "raster" && (
+        <label className="view-preset">
+          Preset
+          <select
+            aria-label="View preset"
+            defaultValue="physical"
+            onChange={(event) => editor.preset(event.target.value)}
+          >
+            {["physical", "political", "cultural", "magical", "infrastructure"].map((preset) => (
+              <option key={preset}>{preset}</option>
+            ))}
+          </select>
+        </label>
+      )}
       <LayerBrowser editor={editor} edit={edit} target={target} />
       {target && !target.startsWith("field:") && (
         <div className="contextual-style" ref={appearance}>
@@ -121,16 +125,7 @@ function SessionViews({ world, editor }: { world: World; editor: EditorState }) 
       <button
         className="secondary"
         disabled={!name.trim()}
-        onClick={() =>
-          editor.execute("setView", {
-            id: crypto.randomUUID(),
-            name: name.trim(),
-            areaId: editor.area.id,
-            layers: editor.styles,
-            raster: editor.rasterView,
-            regionId: editor.region?.id,
-          })
-        }
+        onClick={() => editor.saveComposition(name.trim())}
       >
         Save map view
       </button>
@@ -143,8 +138,8 @@ function SessionViews({ world, editor }: { world: World; editor: EditorState }) 
               onClick={() => {
                 editor.enter(view.areaId);
                 if (view.regionId) editor.enterRegion(view.regionId);
-                editor.setStyles(view.layers);
                 editor.setRasterView(view.raster ?? defaultRasterPresentation());
+                editor.openComposition(view);
               }}
             >
               {view.name}

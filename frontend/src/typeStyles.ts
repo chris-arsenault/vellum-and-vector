@@ -6,21 +6,35 @@ import type OLGeometry from "ol/geom/Geometry.js";
 import type { Geometry } from "geojson";
 import { asArray } from "ol/color.js";
 import type { AtlasFeature, LayerStyle, World } from "./types";
-import type { FeatureTypeStyle } from "@atlas/domain";
+import type { CartographicPresentation, FeatureTypeStyle } from "@atlas/domain";
 import { describeFeature, typePresentation } from "@atlas/domain";
 import { featureStyle } from "./vectorStyles";
+import { cartographicFeatureStyle } from "./drawnStyles";
 const footprints = new WeakMap<Geometry, OLGeometry>();
 
 /** Apply type visibility outside both the default and the GeoStyler renderers. */
-export function typeStyle(world: World, base: LayerStyle, parsed?: StyleLike): StyleLike {
+export function typeStyle(
+  world: World,
+  base: LayerStyle,
+  parsed?: StyleLike,
+  cartography?: CartographicPresentation,
+  footprint?: Geometry
+): StyleLike {
   return (feature, resolution) => {
     const domain = feature.get("domain") as AtlasFeature;
     const type = describeFeature(world, domain),
       effective = typePresentation(type, base);
     if (!effective.visible || !matchesTextFilter(domain, base)) return [];
-    const output = parsed
-      ? parsedOutput(parsed, feature as Feature, resolution)
-      : featureStyle(domain, effective, resolution);
+    const output = styledFeature(
+      world,
+      domain,
+      effective,
+      feature as Feature,
+      resolution,
+      parsed,
+      cartography,
+      footprint
+    );
     if (!output) return [];
     const styles = Array.isArray(output) ? output : [output];
     const own = base.types?.[type.id] ?? {};
@@ -35,6 +49,26 @@ export function typeStyle(world: World, base: LayerStyle, parsed?: StyleLike): S
       );
     return rendered;
   };
+}
+function styledFeature(
+  world: World,
+  domain: AtlasFeature,
+  effective: LayerStyle,
+  feature: Feature,
+  resolution: number,
+  parsed?: StyleLike,
+  cartography?: CartographicPresentation,
+  footprint?: Geometry
+) {
+  if (cartography?.mode === "drawn")
+    return cartographicFeatureStyle(domain, effective, resolution, {
+      world,
+      view: cartography,
+      footprint,
+    });
+  return parsed
+    ? parsedOutput(parsed, feature, resolution)
+    : featureStyle(domain, effective, resolution);
 }
 function matchesTextFilter(domain: AtlasFeature, base: LayerStyle) {
   return (

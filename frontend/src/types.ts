@@ -15,6 +15,8 @@ export interface Raster {
   lakes?: { geometry: import("geojson").Geometry; level: number }[];
 }
 export type Tool =
+  | "labelPlace"
+  | "labelPath"
   | "select"
   | "pan"
   | "reshape"

@@ -24,6 +24,7 @@ interface Options {
   selectedRegionId: string | null;
   setRegionId: (id: string | null) => void;
   setAreaId: (id: string) => void;
+  setSelected: (feature: import("./types").AtlasFeature | null) => void;
   setTool: (tool: Tool) => void;
   setPanel: (panel: string) => void;
   viewport: number[] | null;
@@ -91,6 +92,7 @@ export function useRegions(o: Options) {
     const target = o.world.views.find((v) => v.id === id && v.region);
     if (target) o.setAreaId(target.areaId);
     o.setRegionId(target?.id ?? null);
+    o.setSelected(null);
     d.clear();
     o.setTool("select");
     o.setPanel("regions");
@@ -210,6 +212,7 @@ function regionCommands(o: Options, d: Draft, c: Context, enter: (id: string | n
         {
           onSuccess: () => {
             o.setRegionId(id);
+            o.setSelected(null);
             d.clear();
             o.setTool("select");
           },

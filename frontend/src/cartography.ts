@@ -223,6 +223,8 @@ export function toolLabel(tool: Tool): string {
     (
       {
         select: "Select",
+        labelPlace: "Place label",
+        labelPath: "Draw label curve",
         pan: "Pan map",
         move: "Move feature",
         reshape: "Reshape",
@@ -244,6 +246,8 @@ export function toolInstruction(tool: Tool): string {
     (
       {
         select: "Select a feature; double-click an area to enter it.",
+        labelPlace: "Click to place the selected feature's label in this composition.",
+        labelPath: "Draw the label's course; double-click or press Enter to finish.",
         pan: "Drag to move around the map.",
         move: "Drag the selected feature to move it.",
         reshape: "Drag vertices; Alt-click a vertex to remove it.",

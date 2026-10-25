@@ -47,7 +47,7 @@ on the geographic map remains in scope; generating its internal map does not.
   reorganizes planning; it does not authorize implementation or agent delegation.
 - **Independent first delivery:** regional selection and a rough recursive
   hierarchy must be useful on the existing map before the rest of refinement is
-  delivered. The current Cartographic map mode plan is an immediate consumer;
+  delivered. Cartographic presentation consumes that region contract;
   neither selection nor that presentation needs new terrain generation.
 - **2026-10-24 correction:** hierarchical subdivision comes first. Regions follow
   geography or social constructs and may combine rivers, shorelines,
@@ -311,12 +311,12 @@ about structural-edit locks does not block refinement of untouched regions.
 Both consume the existing region identities and source map rather than inventing
 a competing hierarchy or map model.
 
-The first consumer is the separately tracked **Cartographic map mode**
-plan, `51af6b95-6ff3-4e1e-9203-c4990e6c912e`, reviewed on 2026-10-24. That plan's
-drawn-map presentation, coloured political-atlas experiment and later compositions
-use existing atlas geography. Region selection supplies its geographic subject,
-footprint and hierarchy. Saved layer compositions retain their selected region;
-the cartographic renderer can consume that subject without waiting for refinement.
+Cartographic presentation uses existing atlas geography, as described in
+[product specification 7.2](product-spec.md#72-visualization). Region selection
+supplies its geographic subject, footprint and hierarchy. Saved compositions
+retain their selected region and drawing settings. Illustration, clipping,
+typography and sheet layout consume that subject independently of refinement;
+they do not introduce another hierarchy or change geographic editing authority.
 
 After B's geography inputs and outputs are settled, C and D can develop their
 respective designs together. D's placement behavior can use existing inherited

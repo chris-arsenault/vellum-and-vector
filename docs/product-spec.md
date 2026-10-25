@@ -320,6 +320,28 @@ physical heights, water boundaries and authored patch ownership retain their
 domain authority. Elevation colouring keeps dry summits rocky; snow and ice use
 their own surface and physical fields.
 
+The drawn presentation uses the same region subjects, source-area reads and
+selectable features as raster investigation. Ink-and-wash and monochrome
+treatments combine territory washes, existing watercourses and routes, terrain
+illustrations and ranked labels. Physical, political, cultural and infrastructure
+compositions share this presentation. Control and claims keep separate boundary
+treatments; cultural, language and religious fields can overlap as independent
+hatches, while population uses proportional dots.
+
+Geographic subjects supply stable identity, footprint and ancestry. Display masks
+preserve holes and disconnected parts without changing source geometry. A drawn
+sheet presents one chart with paper margins; raster presentation retains its
+navigation constraints. Symbol density and label eligibility describe depiction,
+never generation detail. Terrain marks derive from existing elevation, water,
+woodland features and cover fields, with room around inhabited places.
+
+Composition-specific finishing moves labels, draws their courses, chooses symbols
+and suppresses illustrations while preserving geographic feature identity and
+position. Saved views retain those settings through existing view commands,
+history, undo and explicit local map saves. Multiple compositions may reference
+the same geographic region. Optional sheet furniture and local PNG export use
+the same drawing, with no hosted renderer or new geographic data source.
+
 ### 7.3 Political and cultural modeling
 
 **Political geography must not be reduced to a single mutually exclusive territory layer.** Distinguish, at minimum:
@@ -742,7 +764,7 @@ Canonry's full-generation pipeline was designed for globally constructed fields 
 
 | Decision                        | Product constraint                                  | Recommended starting point                                                   | Must be proven before committing                                             |
 | ------------------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| World geometry                  | Exact spatial reference at all levels               | Planar metre chart with explicit edge identification                        | Transformation validity, area/distance correctness, future CRS extensibility |
+| World geometry                  | Exact spatial reference at all levels               | Planar metre chart with explicit edge identification                         | Transformation validity, area/distance correctness, future CRS extensibility |
 | Authoritative features          | Persistent IDs, geometry, queries, overlays         | GIS vector model, likely spatial DB                                          | Cross-scale feature identity; custom world CRS and local coordinates         |
 | Generated fields                | Causal simulation, multiple resolutions             | Adapt Canonry field model plus tiled/coarse/fine artifacts                   | Edge/halo consistency, generation costs, versioned output                    |
 | Region ownership                | No conflicting detail in overlaps                   | Explicit nonoverlapping materialization ownership; overlapping views allowed | Correct handling of arbitrarily drawn selection and existing generated areas |
@@ -865,9 +887,8 @@ These issues need engineering decisions/prototypes, but **do not block the produ
 5. **Magic fidelity and social use:** Represent fire-core extraction and release, Aurora crystal/ice-memory practices, depth-dependent Pressure use and their distinct costs and interference at atlas scale. Distinguish lore-supported additions from existing implementations.
 6. **Political/cultural generation fidelity:** Select plausible initial algorithms and scale-dependent state without inventing a full agent-based history simulation.
 7. **Large-region resource budget:** Implement deterministic job execution, reproducible intermediate state, bounded resource use, cancel/restart, stage reporting, and failure recovery.
-8. **Cartographic styling:** Establish presentation presets/symbols/generalization independently of geographic truth; exact visual styles and hand-drawing palettes are deferred.
-9. **Template updates:** Defaults for propagating improvements to already placed instances; never silently rewrite existing instances.
-10. **Cross-area reconciliation UX:** Start with locked boundaries and impact-reporting; more automatic propagation can come later if demonstrated safe.
+8. **Template updates:** Defaults for propagating improvements to already placed instances; never silently rewrite existing instances.
+9. **Cross-area reconciliation UX:** Start with locked boundaries and impact-reporting; more automatic propagation can come later if demonstrated safe.
 
 Agent teams should document design decisions with invariants, alternatives, constraints, and a smallest proving prototype. They should not replace this product scope with a conventional raster map painter or a purely GIS dataset viewer.
 
