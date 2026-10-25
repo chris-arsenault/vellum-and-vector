@@ -240,8 +240,9 @@ test("keeps cultures and politics independent and configures operative cultural 
   await tuneGeneration(page, "Cultural distributions");
   const cultures = page.getByRole("checkbox", { name: "Cultural distributions", exact: true });
   await page.getByLabel("Starting cultures · count", { exact: true }).fill("2");
-  // Two eras share their field labels; each era is its own named group.
-  const settlement = page.getByRole("group", { name: "Settlement", exact: true });
+  // Eras share their field labels; each era is its own named group. Hearthfall is the first
+  // settled era of the default classic-age history.
+  const settlement = page.getByRole("group", { name: "Hearthfall", exact: true });
   await settlement.getByLabel("Cultural duration · years", { exact: true }).fill("1200");
   await settlement.getByLabel("Cultural mobility · multiplier", { exact: true }).fill("1.7");
   await settlement.getByLabel("Political capacity · multiplier", { exact: true }).fill("0.6");
@@ -274,11 +275,13 @@ test("keeps cultures and politics independent and configures operative cultural 
   const field = await openRecipe(page),
     recipe = JSON.parse(await field.inputValue());
   const eras = recipe.features["human.cultures"].configuration.eras;
-  expect(eras).toHaveLength(2);
+  // The classic-age default: the ice-age round, then three settled eras.
+  expect(eras).toHaveLength(4);
   expect(eras[0]).toMatchObject({ id: "Ice age", physicalEpoch: "before-present" });
   expect(eras[1]).toEqual({
     id: "River spread",
     years: 1200,
+    physicalEpoch: null,
     mobility: 1.7,
     politicalCapacity: 0.6,
   });

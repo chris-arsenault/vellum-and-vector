@@ -44,15 +44,36 @@ export function chartCopies(reference: Reference, geometry: Geometry): Geometry[
   );
 }
 
+/** The simple shapes of one dimension in a clip result, so a one-piece clip stays simple. */
 function parts(geometry: Geometry, dimension: "point" | "line" | "polygon"): Geometry[] {
   if (geometry.type === "GeometryCollection")
     return geometry.geometries.flatMap((g) => parts(g, dimension));
-  return geometry.type.toLowerCase().includes(dimension) ? [geometry] : [];
+  if (!geometry.type.toLowerCase().includes(dimension)) return [];
+  if (geometry.type === "MultiLineString")
+    return geometry.coordinates.map((coordinates) => ({ type: "LineString", coordinates }));
+  if (geometry.type === "MultiPolygon")
+    return geometry.coordinates.map((coordinates) => ({ type: "Polygon", coordinates }));
+  if (geometry.type === "MultiPoint")
+    return geometry.coordinates.map((coordinates) => ({ type: "Point", coordinates }));
+  return [geometry];
 }
 
+/** A collapsed or otherwise invalid shape cannot be clipped; its consumer reports it. */
+function clippable(geometry: Geometry) {
+  try {
+    spatial.canonical(geometry);
+    return true;
+  } catch {
+    return false;
+  }
+}
 /** Split geography at the chart seam, keeping all pieces under one feature identity. */
 export function canonicalGeometry(reference: Reference, geometry: Geometry): Geometry {
-  if (reference.boundaryMode !== "cylinder" || spatial.covers(reference.domain, geometry))
+  if (
+    reference.boundaryMode !== "cylinder" ||
+    !clippable(geometry) ||
+    spatial.covers(reference.domain, geometry)
+  )
     return geometry;
   if (geometry.type === "Point") {
     const [x, y, z = 0] = geometry.coordinates;
