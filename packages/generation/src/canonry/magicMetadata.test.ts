@@ -1,5 +1,11 @@
 import { expect, it } from "vitest";
-import { createAdaptiveField, createAdaptiveTopology, magicSystemSchema } from "@atlas/domain";
+import {
+  createAdaptiveField,
+  createAdaptiveTopology,
+  magicPropagations,
+  magicSources,
+  magicSystemSchema,
+} from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { prepareAtlasGeneration } from "../atlasWorkflow";
 import { publishGenerationProducts } from "../publication";
@@ -54,12 +60,8 @@ function fixture() {
 }
 
 it("offers every schema strategy through its executable declaration and preserves existing labels", () => {
-  expect(magicSourceOptions.map((option) => option.value)).toEqual(
-    magicSystemSchema.shape.source.options
-  );
-  expect(magicPropagationOptions.map((option) => option.value)).toEqual(
-    magicSystemSchema.shape.propagation.options
-  );
+  expect(magicSourceOptions.map((option) => option.value)).toEqual([...magicSources]);
+  expect(magicPropagationOptions.map((option) => option.value)).toEqual([...magicPropagations]);
   expect(magicSourceOptions.find((option) => option.value === "deep-ocean")!.label).toBe(
     "Deep ocean locus"
   );
@@ -75,7 +77,7 @@ it("offers every schema strategy through its executable declaration and preserve
 
 it("uses source and propagation declarations for both input contracts and applicable parameters", () => {
   const system = fixture().domain.world.magicSystems![0];
-  system.source = "deep-ocean";
+  system.origins[0].source = "deep-ocean";
   expect(magicParameterKeys(system)).toEqual(["beamWidth", "featureNoiseScale"]);
   const process = magicProcesses([system]).find(
     (process) => process.contract.id === "canonry.magic-climate"
@@ -83,8 +85,8 @@ it("uses source and propagation declarations for both input contracts and applic
   expect(process.contract.requires).toEqual(
     expect.arrayContaining(["canonry:Ocean", "canonry:Bathymetry"])
   );
-  system.source = "placed";
-  system.propagation = "cold-drainage";
+  system.origins[0].source = "placed";
+  system.origins[0].propagation = "cold-drainage";
   expect(magicParameterKeys(system)).toEqual(
     expect.arrayContaining([
       "logScale",

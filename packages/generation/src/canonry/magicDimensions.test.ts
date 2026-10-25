@@ -50,17 +50,17 @@ it("scales Fire and deep-ocean source budgets with their physical medium, indepe
       map.HeatSourceDensity.fill(1000);
       fire.definition.parameters.maximumSources = 4;
       locateMagicSources(state, fire, 73);
-      expect(fire.origins).toHaveLength(areaBudget(4, mediumArea(map), referenceLandArea));
+      expect(fire.located).toHaveLength(areaBudget(4, mediumArea(map), referenceLandArea));
       locateMagicSources(state, pressure, 73);
-      expect(pressure.origins).toHaveLength(0);
+      expect(pressure.located).toHaveLength(0);
 
       map.WaterKindCodes.fill(1);
       map.WaterDepths.fill(3000);
       locateMagicSources(state, pressure, 73);
-      expect(pressure.origins).toHaveLength(areaBudget(1, mediumArea(map), referenceOceanArea));
-      expect(pressure.source.filter((value) => value > 0)).toHaveLength(pressure.origins.length);
+      expect(pressure.located).toHaveLength(areaBudget(1, mediumArea(map), referenceOceanArea));
+      expect(pressure.source.filter((value) => value > 0)).toHaveLength(pressure.located.length);
       locateMagicSources(state, fire, 73);
-      expect(fire.origins).toHaveLength(0);
+      expect(fire.located).toHaveLength(0);
     }
   }
 });

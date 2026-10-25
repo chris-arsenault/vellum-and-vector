@@ -55,7 +55,7 @@ it("changes Fire core distribution, thermal footprint, thaw and resistant terrai
     const cores = scenario("fire.cores", index),
       field = cores.physical!.magic!.fields[0];
     locateMagicSources(cores, field, 73);
-    counts.push(field.origins.length);
+    counts.push(field.located.length);
     const reach = scenario("fire.reach", index),
       fire = reach.physical!.magic!.fields[0];
     fire.source[Math.floor(fire.source.length / 2)] = 1000;
@@ -113,7 +113,7 @@ it("changes Pressure travel, coastal stress and historical impulses while keepin
       field = ocean.physical!.magic!.fields[2];
     locateMagicSources(ocean, field, 73);
     propagateMagic(ocean, field, 73, 1);
-    expect(field.origins).toHaveLength(1);
+    expect(field.located).toHaveLength(1);
     expect(field.definition.parameters.rayCount).toBe(canonryMagicPresets()[2].parameters.rayCount);
     reach.push(field.intensity.reduce((sum, value) => sum + value, 0));
     const coast = scenario("pressure.stress", index);

@@ -42,6 +42,7 @@ export function plateAdvection(map: PhysicalField, context: PhysicalContext) {
   if (step <= 0) return;
   advectGeometry(map, step);
   const plan = buildTransportPlan(map, step);
+  map.transportPlan = plan;
   transportHistory(map, plan);
   for (let i = 0; i < map.mesh.count; i++) {
     map.CrustThickness[i] = clamp(

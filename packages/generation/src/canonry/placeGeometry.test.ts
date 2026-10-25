@@ -44,7 +44,9 @@ it("publishes all twenty magic rules with meaningful sites, retained courses and
   for (const field of state.physical!.magic!.fields) {
     field.intensity.fill(800);
     field.source[0] = 1000;
-    field.origins = [{ id: "origin", x: mesh.x[0], y: mesh.y[0], radius: 100, strength: 1000 }];
+    field.located = [
+      { origin: "vein", id: "origin", x: mesh.x[0], y: mesh.y[0], radius: 100, strength: 1000 },
+    ];
     field.parents = new Int32Array(mesh.count).fill(-1);
     field.parents[1] = 0;
     field.parents[2] = 1;

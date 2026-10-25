@@ -175,9 +175,11 @@ it("synchronizes a forge's seat heat without re-propagating Aurora, and re-propa
   const trace = vi.spyOn(propagation, "propagateMagic");
   try {
     const cold = (calls: typeof trace.mock.calls) =>
-      calls.some(([, field]) => field.definition.propagation === "cold-drainage");
+      calls.some(([, field]) => field.definition.origins[0].propagation === "cold-drainage");
     expect(
-      state.physical!.magic!.fields.some((f) => f.definition.propagation === "cold-drainage")
+      state.physical!.magic!.fields.some(
+        (f) => f.definition.origins[0].propagation === "cold-drainage"
+      )
     ).toBe(true);
     changeSample(state, "temperature", 0, 30, "practice");
     changeSample(state, "iceThickness", 0, 0, "practice");
@@ -208,7 +210,7 @@ it("retains Pressure rays for inland earthworks and retraces them when ocean con
       water.map((v) => Number(v === 1))
     );
     expect(
-      trace.mock.calls.some(([, field]) => field.definition.propagation === "ocean-rays")
+      trace.mock.calls.some(([, field]) => field.definition.origins[0].propagation === "ocean-rays")
     ).toBe(false);
     state.surface.channels.elevation.forEach((_height, i) =>
       changeSample(state, "elevation", i, -100)
@@ -216,7 +218,7 @@ it("retains Pressure rays for inland earthworks and retraces them when ocean con
     state.society!.changed.add("elevation");
     refreshSocietyEnvironment(state, context, 10, false);
     expect(
-      trace.mock.calls.some(([, field]) => field.definition.propagation === "ocean-rays")
+      trace.mock.calls.some(([, field]) => field.definition.origins[0].propagation === "ocean-rays")
     ).toBe(true);
     trace.mockClear();
     // A whole-field cold change is a change of Aurora's medium, so it is marked as a work's.
@@ -225,7 +227,9 @@ it("retains Pressure rays for inland earthworks and retraces them when ocean con
     state.society!.mediumChanged.add("temperature");
     refreshSocietyEnvironment(state, context, 10, false);
     expect(
-      trace.mock.calls.some(([, field]) => field.definition.propagation === "cold-drainage")
+      trace.mock.calls.some(
+        ([, field]) => field.definition.origins[0].propagation === "cold-drainage"
+      )
     ).toBe(true);
   } finally {
     trace.mockRestore();

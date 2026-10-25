@@ -379,8 +379,8 @@ it("computes a valid empty ocean and bathymetry before finding no deep-ocean pre
   expect(map.BathymetricZoneCodes.every((zone) => zone === 0)).toBe(true);
   expect(output.state.facts.has("canonry:Ocean")).toBe(true);
   expect(output.state.facts.has("canonry:Bathymetry")).toBe(true);
-  expect(pressure.definition.source).toBe("deep-ocean");
-  expect(pressure.origins).toEqual([]);
+  expect(pressure.definition.origins[0].source).toBe("deep-ocean");
+  expect(pressure.located).toEqual([]);
   expect(pressure.source.every((value) => value === 0)).toBe(true);
   expect(pressure.intensity.every((value) => value === 0)).toBe(true);
   expect(output.state.facts.has(pressurePass(initial).replace("canonry.", "atlas:"))).toBe(true);

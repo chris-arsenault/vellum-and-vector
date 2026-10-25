@@ -19,48 +19,117 @@ export const magicFeatureSchema = z.object({
   seeds: z.array(z.array(condition).min(1)).min(1),
   retains: z.array(z.array(condition).min(1)).optional(),
 });
-export const magicSystemSchema = z.object({
+
+export const magicSources = ["geothermal", "cold", "deep-ocean", "placed"] as const;
+export const magicPropagations = ["fracture", "cold-drainage", "ocean-rays", "radial"] as const;
+/**
+ * How an origin's stock is renewed: fed while its conduit is open and sealed after a budget,
+ * accumulating across epochs, continuous from a standing source, a finite stock that only
+ * runs down, kept by maintenance, or emergent from other systems' fields.
+ */
+export const magicRenewals = [
+  "conduit-fed",
+  "accumulating",
+  "continuous",
+  "finite",
+  "kept",
+  "emergent",
+] as const;
+/** The world's own transports a stock can ride between evaluations. */
+export const magicCarriers = [
+  "crust",
+  "ice",
+  "river",
+  "groundwater",
+  "wind",
+  "current",
+  "animal",
+  "people",
+  "door",
+] as const;
+export type MagicSource = (typeof magicSources)[number];
+export type MagicPropagation = (typeof magicPropagations)[number];
+export type MagicRenewal = (typeof magicRenewals)[number];
+export type MagicCarrier = (typeof magicCarriers)[number];
+
+const parameterSchema = z.object({
+  sourceThreshold: finite.default(300),
+  maximumSources: z.number().int().nonnegative().default(900),
+  sourceSpacing: finite.nonnegative().default(45_000),
+  baseCost: positive.default(4),
+  conductanceDivisor: positive.default(26),
+  baseInput: finite.nonnegative().default(360),
+  logScale: finite.nonnegative().default(66),
+  iceRetention: positive.default(1200),
+  coldRetentionDistance: positive.default(10_000),
+  accumulationArea: positive.default(100_000_000),
+  featureNoiseScale: positive.default(70_000),
+  rayCount: z.number().int().nonnegative().default(1200),
+  rayDistance: positive.default(4_400_000),
+  coastalRayDistance: positive.default(1_300_000),
+  wakeDistance: positive.default(1_900_000),
+  beamWidth: positive.default(20_000),
+  coastalSources: z.number().int().nonnegative().default(200),
+  coastalSourceDistance: positive.default(100_000),
+  wakeSources: z.number().int().nonnegative().default(260),
+  coastalThreshold: finite.min(0).max(999).default(140),
+  waveAmplification: finite.nonnegative().default(0.36),
+  currentAmplification: finite.nonnegative().default(0.18),
+  // Energy a ray loses per 10 km of open water; reflections cost more.
+  rayDecay: finite.nonnegative().default(3),
+  // Intensity a ray at 1,000 energy deposits on the cell it crosses per beam step.
+  rayIntensity: finite.nonnegative().default(27.8),
+  // Intensity a wake leaves along its track, before the activity scale.
+  wakeStrength: finite.nonnegative().default(180),
+  // Accumulated intensity (summed over epochs) after which a Fire conduit seals.
+  conduitBudget: positive.default(2400),
+});
+// Overrides carry no defaults of their own, so a reparse keeps an origin's overrides sparse.
+const parameterOverrideSchema = z.object(
+  Object.fromEntries(Object.keys(parameterSchema.shape).map((key) => [key, finite.optional()])) as {
+    [K in keyof typeof parameterSchema.shape]: z.ZodOptional<typeof finite>;
+  }
+);
+/** An amount of the system held in one reservoir per cell and moved by the named carriers. */
+export const magicStockSchema = z.object({
+  id: z.string().min(1),
+  reservoir: z.string().min(1),
+  carriers: z.array(z.enum(magicCarriers)).default([]),
+});
+/**
+ * One way a system is created and spreads. A system holds one effect set and one rule set;
+ * its origins differ in where they are located, how they propagate and how they renew.
+ */
+export const magicOriginSchema = z.object({
+  id: z.string().min(1),
+  source: z.enum(magicSources),
+  propagation: z.enum(magicPropagations),
+  renewal: z.enum(magicRenewals).default("continuous"),
+  // Overrides of the system's parameters for this origin alone.
+  parameters: parameterOverrideSchema.default({}),
+  stocks: z.array(magicStockSchema).default([]),
+});
+export type MagicOrigin = z.infer<typeof magicOriginSchema>;
+export type MagicStock = z.infer<typeof magicStockSchema>;
+
+const legacyRenewal: Record<MagicSource, MagicRenewal> = {
+  geothermal: "conduit-fed",
+  cold: "accumulating",
+  "deep-ocean": "continuous",
+  placed: "kept",
+};
+const systemShape = z.object({
   id: z.string().min(1),
   name: z.string().trim().min(1),
   enabled: z.boolean().default(true),
-  source: z.enum(["geothermal", "cold", "deep-ocean", "placed"]),
-  propagation: z.enum(["fracture", "cold-drainage", "ocean-rays", "radial"]),
+  // A system saved before origins existed names one source and one propagation; they
+  // become its single origin and are dropped from the parsed system.
+  source: z.enum(magicSources).optional(),
+  propagation: z.enum(magicPropagations).optional(),
+  origins: z.array(magicOriginSchema).default([]),
   phase: z.enum(["climate", "post-glacial"]),
   strength: finite.nonnegative().default(1),
-  parameters: z
-    .object({
-      sourceThreshold: finite.default(300),
-      maximumSources: z.number().int().nonnegative().default(900),
-      sourceSpacing: finite.nonnegative().default(45_000),
-      baseCost: positive.default(4),
-      conductanceDivisor: positive.default(26),
-      baseInput: finite.nonnegative().default(360),
-      logScale: finite.nonnegative().default(66),
-      iceRetention: positive.default(1200),
-      coldRetentionDistance: positive.default(10_000),
-      accumulationArea: positive.default(100_000_000),
-      featureNoiseScale: positive.default(70_000),
-      rayCount: z.number().int().nonnegative().default(1200),
-      rayDistance: positive.default(4_400_000),
-      coastalRayDistance: positive.default(1_300_000),
-      wakeDistance: positive.default(1_900_000),
-      beamWidth: positive.default(20_000),
-      coastalSources: z.number().int().nonnegative().default(200),
-      coastalSourceDistance: positive.default(100_000),
-      wakeSources: z.number().int().nonnegative().default(260),
-      coastalThreshold: finite.min(0).max(999).default(140),
-      waveAmplification: finite.nonnegative().default(0.36),
-      currentAmplification: finite.nonnegative().default(0.18),
-      // Energy a ray loses per 10 km of open water; reflections cost more.
-      rayDecay: finite.nonnegative().default(3),
-      // Intensity a ray at 1,000 energy deposits on the cell it crosses per beam step.
-      rayIntensity: finite.nonnegative().default(27.8),
-      // Intensity a wake leaves along its track, before the activity scale.
-      wakeStrength: finite.nonnegative().default(180),
-      // Accumulated intensity (summed over epochs) after which a Fire conduit seals.
-      conduitBudget: positive.default(2400),
-    })
-    .prefault({}),
+  parameters: parameterSchema.prefault({}),
   effects: z
     .object({
       heat: finite.default(0),
@@ -99,9 +168,42 @@ export const magicSystemSchema = z.object({
     .prefault({}),
   features: z.array(magicFeatureSchema).default([]),
 });
+export const magicSystemSchema = systemShape
+  .superRefine((system, context) => {
+    if (!system.origins.length && !(system.source && system.propagation))
+      context.addIssue({
+        code: "custom",
+        message: "A magic system needs at least one origin.",
+        path: ["origins"],
+      });
+  })
+  .transform(({ source, propagation, ...system }) => ({
+    ...system,
+    origins: system.origins.length
+      ? system.origins
+      : [
+          {
+            id: source!,
+            source: source!,
+            propagation: propagation!,
+            renewal: legacyRenewal[source!],
+            parameters: {},
+            stocks: [],
+          },
+        ],
+  }));
 export type MagicSystem = z.infer<typeof magicSystemSchema>;
+export type MagicSystemInput = z.input<typeof magicSystemSchema>;
 export type MagicFeatureRule = z.infer<typeof magicFeatureSchema>;
 export type MagicCondition = z.infer<typeof condition>;
+
+/** The system's parameters with this origin's overrides applied. */
+export function originParameters(system: MagicSystem, origin: MagicOrigin) {
+  const merged = { ...system.parameters } as MagicSystem["parameters"];
+  for (const [key, value] of Object.entries(origin.parameters))
+    if (value !== undefined) (merged as Record<string, number>)[key] = value;
+  return merged;
+}
 
 export const magicPhysicalFields = [
   "temperature",
@@ -142,15 +244,31 @@ export const magicPhysicalFields = [
   "scatter",
 ] as const;
 
+function validateOrigins(system: MagicSystem) {
+  const origins = new Set(system.origins.map((origin) => origin.id));
+  if (origins.size !== system.origins.length)
+    throw new Error(`Magic system ${system.id} needs distinct origin identities.`);
+  for (const origin of system.origins)
+    if (new Set(origin.stocks.map((stock) => stock.id)).size !== origin.stocks.length)
+      throw new Error(`Origin ${origin.id} of ${system.id} needs distinct stock identities.`);
+  return origins;
+}
+function knownConditionField(field: string, systems: Set<string>, origins: Set<string>) {
+  if (magicPhysicalFields.some((known) => known === field)) return true;
+  if (field.startsWith("system:")) return systems.has(field.slice(7));
+  if (field.startsWith("source:")) return origins.has(field.slice(7));
+  return false;
+}
 export function validateMagicSystems(systems: MagicSystem[]) {
   const ids = new Set(systems.map((system) => system.id));
   if (ids.size !== systems.length) throw new Error("Magic systems need distinct identities.");
-  for (const system of systems)
-    for (const rule of system.features)
-      for (const group of [...rule.seeds, ...(rule.retains ?? [])])
-        for (const test of group) {
-          const known = magicPhysicalFields.some((field) => field === test.field);
-          if (!known && !(test.field.startsWith("system:") && ids.has(test.field.slice(7))))
-            throw new Error(`Unknown magic condition field: ${test.field}`);
-        }
+  for (const system of systems) {
+    const origins = validateOrigins(system);
+    const conditions = system.features.flatMap((rule) =>
+      [...rule.seeds, ...(rule.retains ?? [])].flat()
+    );
+    for (const test of conditions)
+      if (!knownConditionField(test.field, ids, origins))
+        throw new Error(`Unknown magic condition field: ${test.field}`);
+  }
 }

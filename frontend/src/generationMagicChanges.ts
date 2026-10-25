@@ -73,11 +73,35 @@ function systemChanges(system: MagicSystem, previous?: MagicSystem): Configurati
   return [...changes, ...ruleChanges(system, previous)];
 }
 
-const headerKeys = ["name", "enabled", "source", "propagation", "phase", "strength"] as const;
+const headerKeys = ["name", "enabled", "phase", "strength"] as const;
 function systemHeaderChanges(system: MagicSystem, previous?: MagicSystem) {
-  return headerKeys
-    .filter((key) => system[key] !== previous?.[key])
-    .map((key) => headerValue(system, key));
+  return [
+    ...headerKeys
+      .filter((key) => system[key] !== previous?.[key])
+      .map((key) => headerValue(system, key)),
+    ...originChanges(system, previous),
+  ];
+}
+type Origin = MagicSystem["origins"][number];
+const sameOrigin = (a: Origin, b: Origin | undefined) =>
+  b?.source === a.source && b.propagation === a.propagation && b.renewal === a.renewal;
+function originChanges(system: MagicSystem, previous?: MagicSystem) {
+  const changed = system.origins
+    .filter(
+      (origin) =>
+        !sameOrigin(
+          origin,
+          previous?.origins.find((o) => o.id === origin.id)
+        )
+    )
+    .map(
+      (origin) =>
+        `origin ${origin.id}: source ${origin.source}, propagation ${origin.propagation}, ${origin.renewal}`
+    );
+  const removed = (previous?.origins ?? [])
+    .filter((origin) => !system.origins.some((entry) => entry.id === origin.id))
+    .map((origin) => `origin ${origin.id} removed`);
+  return [...changed, ...removed];
 }
 function headerValue(system: MagicSystem, key: (typeof headerKeys)[number]) {
   if (key === "enabled") return system.enabled ? "active" : "inactive";

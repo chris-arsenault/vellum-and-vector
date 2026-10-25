@@ -61,8 +61,8 @@ it("shows actual magical source/effect/activity values, including zero coastal f
   const baseline = prepareDraft(draft).input.settings!;
   const systems = structuredClone(baseline.magicSystems);
   const pressure = systems.find((system) => system.id === "pressure")!;
-  pressure.source = "placed";
-  pressure.propagation = "radial";
+  pressure.origins[0].source = "placed";
+  pressure.origins[0].propagation = "radial";
   pressure.effects.coastalForcing = 0;
   pressure.parameters.sourceSpacing = 12345;
   pressure.features = [];
@@ -76,8 +76,7 @@ it("shows actual magical source/effect/activity values, including zero coastal f
     baseline
   );
   const summary = changes.find((change) => change.label === pressure.name)!.value;
-  expect(summary).toContain("source placed");
-  expect(summary).toContain("propagation radial");
+  expect(summary).toContain("origin locus: source placed, propagation radial");
   expect(summary).toContain("coastal forcing 0×");
   expect(summary).toContain("source spacing 12345 m");
   expect(changes).toContainEqual({

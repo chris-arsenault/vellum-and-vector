@@ -7,7 +7,8 @@ import { worldCandidates, separatedCandidates } from "./worldSources";
 import { areaBudget, mediumArea, referenceLandArea, referenceOceanArea } from "./worldScale";
 import type { PhysicalField } from "./field";
 import { hashUnit } from "./noise";
-import type { MagicSystem } from "@atlas/domain";
+import type { MagicSource, MagicSystem } from "@atlas/domain";
+import { originStocks, stockKey, systemSeed, withOrigin } from "./magicState";
 
 function isHeatMaximum(map: PhysicalField, start: number, radius: number) {
   const { mesh, HeatSourceDensity: density } = map;
@@ -64,7 +65,8 @@ function geothermalSources(state: GenerationState, field: MagicField, seed: numb
   for (const source of selected) {
     const i = source.i;
     field.source[i] = clamp(720 + Math.trunc(map.HeatSourceDensity[i] / 3), 1, 1000);
-    field.origins.push({
+    field.located.push({
+      origin: "",
       id: `geothermal:${seed}:${source.id}`,
       x: source.x,
       y: source.y,
@@ -134,7 +136,8 @@ function oceanSource(state: GenerationState, field: MagicField, seed: number) {
   for (const source of selected) {
     const i = nearestTriangle(map.mesh, source.x, source.y);
     field.source[i] = 1000;
-    field.origins.push({
+    field.located.push({
+      origin: "",
       id: `deep-ocean:${source.id}`,
       x: source.x,
       y: source.y,
@@ -157,7 +160,8 @@ function placedSources(state: GenerationState, field: MagicField, epochIndex: nu
     if (i >= 0) {
       field.source[i] = clamp(round(source.strength), 0, 1000);
       field.radii[i] = source.radius;
-      field.origins.push({
+      field.located.push({
+        origin: "",
         id: source.id,
         x: source.source.x - work.map.mesh.origin[0],
         y: source.source.y - work.map.mesh.origin[1],
@@ -185,7 +189,7 @@ interface SourceStrategy {
   locate(state: GenerationState, field: MagicField, seed: number): void;
 }
 /** The operation and its contract/applicability share one strategy declaration. */
-export const magicSourceStrategies: Record<MagicSystem["source"], SourceStrategy> = {
+export const magicSourceStrategies: Record<MagicSource, SourceStrategy> = {
   geothermal: {
     label: "Geothermal maxima & placed cores",
     requires: ["canonry:Geothermal"],
@@ -213,16 +217,54 @@ export const magicSourceStrategies: Record<MagicSystem["source"], SourceStrategy
     locate: () => undefined,
   },
 };
+/**
+ * Locate every origin. Each runs its own strategy on a cleared source channel with its own
+ * parameters and seed; the field's source is the maximum over origins and keeps the radius
+ * of the origin that set it. Sources placed on the map join the first origin. A system with
+ * one origin locates exactly as it did before origins existed.
+ */
 export function locateMagicSources(
   state: GenerationState,
   field: MagicField,
   seed: number,
   epochIndex = 0
 ) {
+  const count = field.source.length;
   field.source.fill(0);
   field.radii.fill(0);
-  field.origins = [];
+  field.located = [];
+  for (const origin of field.definition.origins) field.originSources[origin.id].fill(0);
   if (!field.definition.enabled) return;
-  magicSourceStrategies[field.definition.source].locate(state, field, seed);
-  placedSources(state, field, epochIndex);
+  const merged = new Float64Array(count),
+    radii = new Float64Array(count);
+  field.definition.origins.forEach((origin, index) => {
+    field.source.fill(0);
+    field.radii.fill(0);
+    const before = field.located.length;
+    withOrigin(field, origin, () => {
+      magicSourceStrategies[origin.source].locate(
+        state,
+        field,
+        index === 0 ? seed : systemSeed(seed, origin.id)
+      );
+      if (index === 0) placedSources(state, field, epochIndex);
+    });
+    for (let n = before; n < field.located.length; n++) field.located[n].origin = origin.id;
+    field.originSources[origin.id].set(field.source);
+    for (let i = 0; i < count; i++)
+      if (field.source[i] > merged[i]) {
+        merged[i] = field.source[i];
+        radii[i] = field.radii[i];
+      }
+  });
+  field.source.set(merged);
+  field.radii.set(radii);
+  // Each origin's located strength is an amount of the system held in its first reservoir:
+  // strength times the cell's area, so the stock can be carried and its budget closed.
+  const areas = state.physical!.map.mesh.areas;
+  for (const origin of field.definition.origins) {
+    const own = field.originSources[origin.id],
+      held = field.stocks[stockKey(origin, originStocks(origin)[0])];
+    for (let i = 0; i < count; i++) held[i] = own[i] * areas[i];
+  }
 }

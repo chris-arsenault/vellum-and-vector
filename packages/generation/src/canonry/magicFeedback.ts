@@ -3,6 +3,7 @@ import type { PhysicalField } from "./field";
 import { clamp, rockResistance, round } from "./math";
 import { Feature } from "./codes";
 import { generationBindings } from "../generationBindings";
+import { magicBudget } from "./magicState";
 import type { MagicSystem } from "@atlas/domain";
 
 export const coastalMagicParameters: (keyof MagicSystem["parameters"])[] = [
@@ -294,11 +295,13 @@ export function retainMagicHistory(state: GenerationState, context: MapProcessCo
       active += value > 0 ? map.mesh.areas[i] : 0;
       maximum = Math.max(maximum, value);
     }
+    const budget = magicBudget(field, map),
+      units = (value: number) => Math.round(value / 1_000_000);
     context.recordCause({
       kind: "domain",
       process: "canonry.magic-history",
       subjects: [],
-      description: `${field.definition.name}: epoch ${index + 1}, ${Math.round(active / 1_000_000)} affected km², peak intensity ${maximum}; accumulated activity and first occurrence travel with the crust.`,
+      description: `${field.definition.name}: epoch ${index + 1}, ${Math.round(active / 1_000_000)} affected km², peak intensity ${maximum}; budget created ${units(budget.created)}, in reservoirs ${units(budget.carried)}, stored ${units(budget.stored)}, released ${units(budget.released)} intensity·km²; accumulated activity, first occurrence and reservoirs travel with the crust.`,
     });
   }
 }

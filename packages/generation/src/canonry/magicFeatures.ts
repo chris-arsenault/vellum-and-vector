@@ -23,6 +23,10 @@ function conditionReader(
     const participant = magic!.fields.find((candidate) => candidate.definition.id === key.slice(7));
     return (i: number) => (participant?.definition.enabled ? participant.intensity[i] : NaN);
   }
+  if (key.startsWith("source:")) {
+    const own = field.originSources[key.slice(7)];
+    return (i: number) => own?.[i] ?? 0;
+  }
   const values: Record<string, ArrayLike<number>> = {
     intensity: field.intensity,
     history: field.history,

@@ -23,10 +23,10 @@ export function practiceOpportunity(state: GenerationState, c: SocietyCommunity)
   const i = nearestSample(state, c.position),
     offered: PracticeShares = livelihoodShares(c.support);
   if (i < 0) return offered;
-  const fire = magicAt(state, "fracture", i),
-    aurora = magicAt(state, "cold-drainage", i);
+  const fire = magicAt(state, "quickens", i),
+    aurora = magicAt(state, "stills", i);
   const dive = accessibleDive(state, c, 200),
-    pressure = dive >= 0 ? magicAt(state, "ocean-rays", dive) : 0;
+    pressure = dive >= 0 ? magicAt(state, "moves-water", dive) : 0;
   for (const [id, value] of [
     ["fire-forge", fire],
     ["aurora-archive", aurora],

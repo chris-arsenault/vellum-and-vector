@@ -1,5 +1,13 @@
 import { useState } from "react";
-import { canonryMagicPresets, type MagicSystem } from "@atlas/domain";
+import {
+  canonryMagicPresets,
+  magicRenewals,
+  type MagicOrigin,
+  type MagicPropagation,
+  type MagicRenewal,
+  type MagicSource,
+  type MagicSystem,
+} from "@atlas/domain";
 import type { EditorState } from "./useEditor";
 import { MagicRuleEditor } from "./MagicRuleEditor";
 import { NumberField as NumberSetting } from "./WorkflowFields";
@@ -131,22 +139,24 @@ function SystemSettings({
     </>
   );
 }
-function SystemPropagation({
-  system,
+/** One origin's source, propagation and renewal; a system with several lists them all. */
+function OriginSettings({
+  origin,
+  removable,
   change,
 }: {
-  system: MagicSystem;
-  change: (next: MagicSystem) => void;
+  origin: MagicOrigin;
+  removable: boolean;
+  change: (next: MagicOrigin | null) => void;
 }) {
   return (
-    <>
+    <fieldset className="magic-origin">
+      <legend>Origin · {origin.id}</legend>
       <label>
         Source selection
         <select
-          value={system.source}
-          onChange={(event) =>
-            change({ ...system, source: event.target.value as MagicSystem["source"] })
-          }
+          value={origin.source}
+          onChange={(event) => change({ ...origin, source: event.target.value as MagicSource })}
         >
           {magicSourceOptions.map(({ value, label }) => (
             <option key={value} value={value}>
@@ -158,9 +168,9 @@ function SystemPropagation({
       <label>
         Propagation
         <select
-          value={system.propagation}
+          value={origin.propagation}
           onChange={(event) =>
-            change({ ...system, propagation: event.target.value as MagicSystem["propagation"] })
+            change({ ...origin, propagation: event.target.value as MagicPropagation })
           }
         >
           {magicPropagationOptions.map(({ value, label }) => (
@@ -170,6 +180,68 @@ function SystemPropagation({
           ))}
         </select>
       </label>
+      <label>
+        Renewal
+        <select
+          value={origin.renewal}
+          onChange={(event) => change({ ...origin, renewal: event.target.value as MagicRenewal })}
+        >
+          {magicRenewals.map((value) => (
+            <option key={value} value={value}>
+              {renewalLabels[value]}
+            </option>
+          ))}
+        </select>
+      </label>
+      {removable && (
+        <button type="button" className="quiet" onClick={() => change(null)}>
+          Remove this origin
+        </button>
+      )}
+    </fieldset>
+  );
+}
+const newOrigin = (n: number): MagicOrigin => ({
+  id: `origin-${n}`,
+  source: "placed",
+  propagation: "radial",
+  renewal: "kept",
+  parameters: {},
+  stocks: [],
+});
+function SystemPropagation({
+  system,
+  change,
+}: {
+  system: MagicSystem;
+  change: (next: MagicSystem) => void;
+}) {
+  const replace = (index: number, origin: MagicOrigin | null) =>
+    change({
+      ...system,
+      origins: origin
+        ? system.origins.map((entry, n) => (n === index ? origin : entry))
+        : system.origins.filter((_, n) => n !== index),
+    });
+  return (
+    <>
+      {system.origins.map((origin, index) => (
+        <OriginSettings
+          key={origin.id}
+          origin={origin}
+          removable={system.origins.length > 1}
+          change={(next) => replace(index, next)}
+        />
+      ))}
+      <button
+        type="button"
+        className="secondary"
+        onClick={() =>
+          change({ ...system, origins: [...system.origins, newOrigin(system.origins.length + 1)] })
+        }
+      >
+        Add an origin
+      </button>
       <label>
         Acts during
         <select
@@ -237,6 +309,14 @@ function SystemFeedback({
     </>
   );
 }
+const renewalLabels: Record<MagicRenewal, string> = {
+  "conduit-fed": "Conduit-fed · produces while open, seals after its budget",
+  accumulating: "Accumulating · gathers across epochs",
+  continuous: "Continuous · a standing source",
+  finite: "Finite · a stock that only runs down",
+  kept: "Kept · maintained by people, decays when abandoned",
+  emergent: "Emergent · arises from other systems' fields",
+};
 const effectLabels = {
   heat: "Heat per intensity unit · 10 units = 1 °C",
   iceMelt: "Ice removed per intensity unit · negative values add ice",

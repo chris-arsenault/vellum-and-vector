@@ -51,7 +51,7 @@ it("places deep-ocean sources from the requested seed independently of source-wo
   second.domain.world.seed = 99999;
   for (const state of [first, second])
     locateMagicSources(state, state.physical!.magic!.fields[2], 73);
-  const origins = (state: ReturnType<typeof scenario>) => state.physical!.magic!.fields[2].origins;
+  const origins = (state: ReturnType<typeof scenario>) => state.physical!.magic!.fields[2].located;
   expect(origins(first)).toHaveLength(1);
   expect(origins(first)).toEqual(origins(second));
 });

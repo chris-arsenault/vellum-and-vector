@@ -115,14 +115,16 @@ function propagationParents(
   return (
     field.parents ??
     state.physical!.magic?.fields.find(
-      (f) => participants.has(f.definition.id) && f.definition.propagation === "fracture"
+      (f) =>
+        participants.has(f.definition.id) &&
+        f.definition.origins.some((origin) => origin.propagation === "fracture")
     )?.parents
   );
 }
 function sourcePoint(state: GenerationState, field: MagicField, ruleId: string, members: number[]) {
   if (!["core", "locus"].includes(ruleId)) return null;
   const [x0, y0] = state.physical!.map.mesh.origin;
-  for (const source of field.origins) {
+  for (const source of field.located) {
     const geometry: Geometry = { type: "Point", coordinates: [source.x + x0, source.y + y0] };
     if (
       members.includes(nearestTriangle(state.physical!.map.mesh, source.x, source.y)) &&

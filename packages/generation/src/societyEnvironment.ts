@@ -27,6 +27,7 @@ import { initializeMagic } from "./canonry/magicState";
 import { propagateMagic } from "./canonry/magicPropagation";
 import { classifyMagicFeatures, projectMagic } from "./canonry/magicFeatures";
 import { magicChannels } from "./canonry/magicFieldDefinitions";
+import { systemHasRole } from "./societyMagicAccess";
 import { irrigateChannels } from "./societyWaterUse";
 import { workSamples } from "./societyWorks";
 import { damCandidateCell } from "./societyDemand";
@@ -305,11 +306,11 @@ function refreshMagicPathways(
     // Aurora follows cold and ice: it re-propagates when a work changed that medium, not
     // when a forge warmed the one cell at its seat.
     const cold =
-      field.definition.propagation === "cold-drainage" &&
+      systemHasRole(field.definition, "stills") &&
       (changed.has("iceThickness") || changed.has("temperature"));
     // Pressure rays trace connected ocean cells. Inland relief does not alter that path;
     // a newly closed or opened coast still requires propagation.
-    const coast = field.definition.propagation === "ocean-rays" && oceanChanged;
+    const coast = systemHasRole(field.definition, "moves-water") && oceanChanged;
     if (cold || coast) propagateMagic(state, field, seed, field.definition.strength);
   }
   // Reclassify current interaction conditions; this does not create or replay a historical event.

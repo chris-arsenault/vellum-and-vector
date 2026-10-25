@@ -5,7 +5,8 @@ import { clamp, round } from "./math";
 import { hashUnit } from "./noise";
 import { edgeLeadingTo, triangleIdentity } from "./mesh";
 import { oceanPropagation } from "./magicOcean";
-import type { MagicSystem } from "@atlas/domain";
+import type { MagicPropagation, MagicSystem } from "@atlas/domain";
+import { withOrigin } from "./magicState";
 
 function fracturePropagation(state: GenerationState, field: MagicField, activity: number) {
   const map = state.physical!.map,
@@ -94,7 +95,7 @@ function coldPropagation(state: GenerationState, field: MagicField, seed: number
 function radialPropagation(state: GenerationState, field: MagicField) {
   const work = state.physical!,
     map = work.map;
-  for (const source of field.origins) {
+  for (const source of field.located) {
     const radius = source.radius || Math.max(1, field.definition.parameters.sourceSpacing);
     for (let i = 0; i < map.mesh.count; i++) {
       const distance = Math.hypot(map.mesh.x[i] - source.x, map.mesh.y[i] - source.y);
@@ -113,7 +114,7 @@ interface PropagationStrategy {
   scaleResult: boolean;
   propagate(state: GenerationState, field: MagicField, seed: number, activity: number): void;
 }
-export const magicPropagationStrategies: Record<MagicSystem["propagation"], PropagationStrategy> = {
+export const magicPropagationStrategies: Record<MagicPropagation, PropagationStrategy> = {
   fracture: {
     label: "Through connected fractures",
     requires: ["canonry:FractureState"],
@@ -169,19 +170,83 @@ export function propagateMagic(
     field.source.fill(0);
     field.stored.fill(0);
     field.radii.fill(0);
-    field.origins = [];
+    field.located = [];
     return;
   }
   if (activity <= 0) {
     field.source.fill(0);
-    field.origins = [];
+    field.located = [];
     field.radii.fill(0);
   }
-  const strategy = magicPropagationStrategies[field.definition.propagation];
-  if (activity > 0) strategy.propagate(state, field, seed, activity);
-  const scalar = strategy.scaleResult ? activity : 1;
-  for (let i = 0; i < field.intensity.length; i++) {
-    field.intensity[i] = clamp(round(field.intensity[i] * scalar + field.stored[i]), 0, 1000);
+  const count = field.intensity.length,
+    merged: MergedRun = {
+      intensity: new Float64Array(count),
+      wake: new Float64Array(count),
+      rogue: new Float64Array(count),
+      retained: new Float64Array(count),
+      parents: undefined,
+      wakePaths: [],
+    };
+  // Each origin propagates from its own sources with its own strategy; the field is the
+  // maximum of their intensities, wakes and rogues and the sum of what they retained.
+  if (activity > 0)
+    for (const origin of field.definition.origins)
+      propagateOrigin(state, field, origin, seed, activity, merged);
+  field.wake.set(merged.wake);
+  field.rogue.set(merged.rogue);
+  field.retained.set(merged.retained);
+  if (merged.parents) field.parents = merged.parents;
+  else delete field.parents;
+  field.wakePaths = merged.wakePaths;
+  for (let i = 0; i < count; i++) {
+    field.intensity[i] = clamp(round(merged.intensity[i] + field.stored[i]), 0, 1000);
     field.wake[i] *= Number(field.intensity[i] > 0);
   }
+}
+interface MergedRun {
+  intensity: Float64Array;
+  wake: Float64Array;
+  rogue: Float64Array;
+  retained: Float64Array;
+  parents: Int32Array | undefined;
+  wakePaths: number[][][];
+}
+/** Run one origin's strategy on cleared channels and fold its result into the merge. */
+function propagateOrigin(
+  state: GenerationState,
+  field: MagicField,
+  origin: MagicSystem["origins"][number],
+  seed: number,
+  activity: number,
+  merged: MergedRun
+) {
+  const strategy = magicPropagationStrategies[origin.propagation];
+  field.intensity.fill(0);
+  field.wake.fill(0);
+  field.rogue.fill(0);
+  field.retained.fill(0);
+  delete field.parents;
+  field.wakePaths = [];
+  const source = field.source,
+    located = field.located,
+    single = field.definition.origins.length === 1;
+  // One origin owns the whole source channel, which callers may have set directly; several
+  // origins each propagate from their own.
+  field.source = single ? source : field.originSources[origin.id];
+  field.located = single ? located : located.filter((point) => point.origin === origin.id);
+  try {
+    withOrigin(field, origin, () => strategy.propagate(state, field, seed, activity));
+  } finally {
+    field.source = source;
+    field.located = located;
+  }
+  const scalar = strategy.scaleResult ? activity : 1;
+  for (let i = 0; i < merged.intensity.length; i++) {
+    merged.intensity[i] = Math.max(merged.intensity[i], field.intensity[i] * scalar);
+    merged.wake[i] = Math.max(merged.wake[i], field.wake[i]);
+    merged.rogue[i] = Math.max(merged.rogue[i], field.rogue[i]);
+    merged.retained[i] += field.retained[i];
+  }
+  merged.parents ??= field.parents;
+  merged.wakePaths.push(...field.wakePaths);
 }

@@ -17,14 +17,14 @@ function initialPractice(state: GenerationState, c: SocietyCommunity): SocietyMa
   const i = nearestSample(state, c.position),
     ice = societyValue(state, "iceThickness", i);
   // A one-time mineral estimate. Extraction consumes this deposit; field intensity is not fuel.
-  const deposit = Math.max(0, magicAt(state, "fracture", i)) * Math.min(c.areaKm2, 100) * 100;
+  const deposit = Math.max(0, magicAt(state, "quickens", i)) * Math.min(c.areaKm2, 100) * 100;
   return {
     communityId: c.id,
     coreDeposit: deposit,
     coreSupply: 0,
     coreUsed: 0,
     heatApplied: 0,
-    crystals: magicAt(state, "cold-drainage", i) * Math.min(1000, ice),
+    crystals: magicAt(state, "stills", i) * Math.min(1000, ice),
     charge: 0,
     readers: 0,
     memoryAccess: 0,
@@ -109,7 +109,7 @@ function auroraUse(
 ) {
   if (p.crystals <= 0) return;
   const i = nearestSample(state, c.position),
-    intensity = magicAt(state, "cold-drainage", i);
+    intensity = magicAt(state, "stills", i);
   const cold = Math.max(0, Math.min(1, -societyValue(state, "temperature", i) / 10));
   const retained = Math.min(1, societyValue(state, "iceThickness", i) / 10) * cold;
   p.crystals *= Math.exp((-years * (1 - retained)) / 200);
@@ -147,8 +147,9 @@ function pressureUse(
   const depth = societyValue(state, "waterDepth", at);
   const ocean = societyValue(state, "water", at) === 1;
   const enabled = ocean && depth >= 50 && depth <= p.depthLimit;
-  const intensity = enabled ? magicAt(state, "ocean-rays", at) : 0;
-  p.divers = intensity > 0 ? (population(c) * 0.002 * skill("pressure-diving")) / (1 + p.strain) : 0;
+  const intensity = enabled ? magicAt(state, "moves-water", at) : 0;
+  p.divers =
+    intensity > 0 ? (population(c) * 0.002 * skill("pressure-diving")) / (1 + p.strain) : 0;
   p.pressureCharge = Math.max(
     0,
     p.pressureCharge * Math.exp(-years / 5) + intensity * p.divers * (1 - Math.exp(-years / 5))

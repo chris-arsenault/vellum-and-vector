@@ -22,9 +22,9 @@ interface Exposure {
 function exposures(state: GenerationState, c: SocietyCommunity): Exposure[] {
   const i = nearestSample(state, c.position),
     v = (name: string) => societyValue(state, name, i);
-  const fire = magicAt(state, "fracture", i),
-    aurora = magicAt(state, "cold-drainage", i),
-    pressure = magicAt(state, "ocean-rays", i);
+  const fire = magicAt(state, "quickens", i),
+    aurora = magicAt(state, "stills", i),
+    pressure = magicAt(state, "moves-water", i);
   return [...physicalExposures(v), ...magicalExposures(fire, aurora, pressure, v)];
 }
 function physicalExposures(v: (name: string) => number): Exposure[] {

@@ -27,8 +27,17 @@ const feature = (
 const firePreset = magicSystemSchema.parse({
   id: "fire",
   name: "Fire",
-  source: "geothermal",
-  propagation: "fracture",
+  // Vein cores: fracture-hosted ore fed while the conduit is open, held in the rock and
+  // carried with the crust. The fallen origin joins in M1c of docs/MAGIC-SYSTEMS-PLAN.md.
+  origins: [
+    {
+      id: "vein",
+      source: "geothermal",
+      propagation: "fracture",
+      renewal: "conduit-fed",
+      stocks: [{ id: "held", reservoir: "held", carriers: ["crust"] }],
+    },
+  ],
   phase: "climate",
   parameters: {
     // Cores sit on separated heat maxima under land: about one per 10,000 km² at most.
@@ -120,8 +129,7 @@ const firePreset = magicSystemSchema.parse({
 const auroraPreset = magicSystemSchema.parse({
   id: "aurora",
   name: "Aurora",
-  source: "cold",
-  propagation: "cold-drainage",
+  origins: [{ id: "field", source: "cold", propagation: "cold-drainage", renewal: "accumulating" }],
   phase: "post-glacial",
   effects: {
     rockResistance: -520,
@@ -187,8 +195,9 @@ const auroraPreset = magicSystemSchema.parse({
 const pressurePreset = magicSystemSchema.parse({
   id: "pressure",
   name: "Pressure",
-  source: "deep-ocean",
-  propagation: "ocean-rays",
+  origins: [
+    { id: "locus", source: "deep-ocean", propagation: "ocean-rays", renewal: "continuous" },
+  ],
   // Rays are set once the ocean has its geometry, so the epoch's later climate passes
   // see the water they move.
   phase: "climate",

@@ -810,6 +810,87 @@ close on a seed; existing configurations and saved maps load.
 Evidence: schema and migration tests; the magic dimension and inclusion tests pass; one
 short-scenario generation compared before and after and found identical; saved-map
 reopening checked.
+Sulion: `c6498e4a-f19e-418e-81a3-005444f44adf`; expansion `e37a0d5c-c117-404e-b104-de57655649a3`.
+
+#### Execution steps (M1a)
+
+1. Schema: origins, renewal, stocks. Step `fa8d7bf1-ecf2-4558-8403-f9ead7f48a29`.
+   - Files: `packages/domain/src/magicSystems.ts`, `magicPresets.ts`, a new
+     `magicSystems.test.ts`.
+   - Outcome: `MagicSystem.origins[]` with `id`, `source`, `propagation`, `renewal`,
+     `parameters` overrides and `stocks[]` (`id`, `reservoir`, `carriers[]`); a legacy
+     `source`/`propagation` pair parses into one origin and is dropped from the output type;
+     validation rejects duplicate origin or stock ids and accepts `source:<origin>` rule
+     conditions. Presets declare their origins by name (vein, field, locus); Fire's vein
+     declares a held stock on the crust carrier.
+   - Verify: domain tests for legacy parse, preset parse, duplicate rejection and the
+     condition field; the whole repo typechecks only after step 2, so steps 1 and 2 share the
+     typecheck.
+2. Generation per origin. Step `99a3cbc3-92bf-4244-ae6d-963f1eda9288`.
+   - Files: `canonry/magicSources.ts`, `magicPropagation.ts`, `magicOcean.ts`,
+     `magicBeams.ts`, `magicState.ts`, `magicFeatures.ts`, `magicProcesses.ts`,
+     `magicMetadata.ts`, `placeGeometry.ts`, `canonry/magic.test.ts`.
+   - Outcome: each origin locates and propagates with its own strategy and merged
+     parameters; the field's intensity, wake and rogue are the maximum over origins and
+     retained the sum; per-origin source channels feed `source:<origin>` conditions; located
+     source points carry their origin; process requirements and parameter metadata come from
+     every origin. The located-point list is renamed from `origins` to `located` so it does
+     not collide with the schema.
+   - Verify: a characterization test records inline checksums of the three presets'
+     intensity, wake and source totals on the magic test scenario before the change and must
+     match after; a two-origin test system locates both and takes the maximum; the existing
+     41 magic tests pass.
+3. Stocks and crust carriage. Step `7ded86ec-94d3-4880-829f-da63f7fb58a1`.
+   - Files: `canonry/magicState.ts`, `magicSources.ts`, `advection.ts`, `field.ts`,
+     `transportPlan.ts` or `transportHistory.ts`, `magicFeedback.ts`.
+   - Outcome: a stock channel per origin reservoir (extensive, amount per cell); the default
+     reservoir mirrors the origin's source times area after locate; plate advection stashes
+     its transport plan on the field so `advectMagic` carries declared crust stocks by the
+     plan's weights (conserving the total) while other carried channels keep the dominant
+     copy; `magicBudget` totals (created, carried, stored, released) are recorded in the
+     history cause.
+   - Verify: a unit test advects a stock through a synthetic plan and checks conservation
+     and arrival; a budget test on the scenario closes within rounding.
+4. Society reads by role. Step `5d07c797-07b4-4efa-adae-603a8676bcc2`.
+   - Files: `societyMagicAccess.ts`, `societySeeking.ts`, `societyHazards.ts`,
+     `societyMagic.ts`, `societyEnvironment.ts`, `canonry/placeGeometry.ts`.
+   - Outcome: `magicAt(state, role, i)` where role is quickens, stills or moves-water,
+     resolved from a system's effects; the society environment re-propagates by role; vein
+     geometry asks origins for a fracture propagation.
+   - Verify: society tests that touch magic (seeking, hazards, practices, environment,
+     sites) pass.
+5. Form and configuration follow the schema. Step `51769ad5-de84-40e7-8a10-082cb5ad2e68`.
+   - Files: `frontend/src/MagicSystemsForm.tsx`, `GenerationMagicConfiguration.tsx`,
+     `generationMagicControls.ts`.
+   - Outcome: the form edits a list of origins (source, propagation, renewal; add and
+     remove) in place of the single pair; summaries name each origin's propagation;
+     controls are keyed from every origin.
+   - Verify: frontend typecheck; `generationMagicControls.test.ts` and
+     `magicClimate.generation.test.ts` pass.
+6. Exit checks and record. Step `354e0f29-b5c0-46d7-8239-9a8679dadf51`.
+   - Verify: targeted vitest for magic, society and frontend; `pnpm typecheck`; eslint on
+     changed packages; saved-map reopening covered by the existing inheritance tests. Plan
+     document and Sulion updated; commit on main.
+
+#### Changes and resume (M1a)
+
+Completed 2026-10-25. Evidence: a characterization test (`magicCharacterization.test.ts`)
+recorded the three presets' source, intensity, wake and retained totals on the magic
+scenario before the change and matches after it; domain tests cover the legacy parse,
+overrides, duplicate rejection and `source:<origin>` conditions; a two-origin test locates
+both origins and takes the maximum; a synthetic transport plan carries a crust stock with
+its total conserved; the budget test closes created against carried. 97 generation and
+domain tests across magic, society, bindings and ecology pass, 22 frontend unit tests pass,
+and the frontend magic climate scenario passes (86 s). Typecheck, eslint on packages and on
+the changed frontend files, and Prettier are clean. Material choices made while building:
+a system with one origin propagates from the shared `source` channel so callers that set
+it directly keep working, and several origins each propagate from their own; origin
+parameter overrides are applied by swapping the field's definition for the strategy call
+rather than threading parameters through every strategy; the transport plan is kept on
+the physical field (`transportPlan`) after plate advection, which is the one new field
+property. The pre-existing frontend lint failures in `frontend/.artifacts` bundles and
+`TemplateDrawing.tsx` are not part of this work. The generation guide's description of a
+system as one source and one propagation is left for M8's documentation pass.
 
 ### M1b — Composition: coverage and confluences
 
@@ -1081,5 +1162,7 @@ carry its reservoirs and carriers. On the user's review the same day, M1 was spl
 M1a (schema and stocks), M1c (Fire as material) and M1d (Aurora as material); M4 was
 rebuilt from a structural phase into people as carrier and source; and the three open
 decisions (Brine shore, Veil's responses, the Salt detachment deferral) were taken by the
-agent. M1a to M8 pending; nothing is implemented. Next action: authorization of M1a or
-M1b; then plan-phase expands the authorized milestone.
+agent. The user authorized execution of every phase the same day. M1a completed
+2026-10-25 (origins, renewal and stocks on the schema; per-origin generation; crust
+carriage of declared stocks; society reads by role; the form edits origins). M1b to M8
+pending. Next action: plan-phase expands M1b.

@@ -40,7 +40,8 @@ export function GenerationMagicConfiguration({
         <ul>
           {systems.map((system) => (
             <li key={system.id}>
-              {system.name} · {system.enabled ? "active" : "inactive"} · {system.propagation} ·{" "}
+              {system.name} · {system.enabled ? "active" : "inactive"} ·{" "}
+              {system.origins.map((origin) => `${origin.id}: ${origin.propagation}`).join(", ")} ·{" "}
               {epoch.id} activity {epoch.magicActivity?.[system.id] ?? 1}×
             </li>
           ))}

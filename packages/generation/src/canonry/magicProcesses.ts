@@ -144,10 +144,10 @@ function environmentalRequirements(id: string, systems: MagicSystem[]) {
   return id === "classify" ? systems.flatMap(conditionRequirements) : [];
 }
 function systemRequirements(system: MagicSystem) {
-  return [
-    ...magicSourceStrategies[system.source].requires,
-    ...magicPropagationStrategies[system.propagation].requires,
-  ];
+  return system.origins.flatMap((origin) => [
+    ...magicSourceStrategies[origin.source].requires,
+    ...magicPropagationStrategies[origin.propagation].requires,
+  ]);
 }
 function conditionRequirements(system: MagicSystem) {
   const fields: Record<string, string[]> = {

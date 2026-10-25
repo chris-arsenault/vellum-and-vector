@@ -1,13 +1,17 @@
 import { expect, it } from "vitest";
-import { canonryMagicPresets, magicSystemSchema } from "@atlas/domain";
+import { canonryMagicPresets, magicPropagations, magicSources } from "@atlas/domain";
 import { magicControlKeys } from "./generationMagicControls";
 
-const sources = magicSystemSchema.shape.source.options,
-  propagation = magicSystemSchema.shape.propagation.options;
+const sources = magicSources,
+  propagation = magicPropagations;
 it.each(sources.flatMap((source) => propagation.map((mode) => [source, mode] as const)))(
   "retains independent %s source controls with %s propagation",
   (source, mode) => {
-    const system = { ...canonryMagicPresets()[0], source, propagation: mode },
+    const preset = canonryMagicPresets()[0],
+      system = {
+        ...preset,
+        origins: [{ ...preset.origins[0], source, propagation: mode }],
+      },
       keys = magicControlKeys(system);
     expect(new Set(keys).size).toBe(keys.length);
     if (source === "geothermal")
@@ -23,7 +27,8 @@ it.each(sources.flatMap((source) => propagation.map((mode) => [source, mode] as 
 );
 it("exposes coastal response parameters for an active effect with any propagation strategy", () => {
   for (const mode of propagation) {
-    const system = { ...canonryMagicPresets()[0], propagation: mode };
+    const preset = canonryMagicPresets()[0],
+      system = { ...preset, origins: [{ ...preset.origins[0], propagation: mode }] };
     system.effects = { ...system.effects, coastalForcing: 0 };
     expect(magicControlKeys(system)).not.toContain("coastalThreshold");
     system.effects.coastalForcing = 1;
@@ -33,11 +38,13 @@ it("exposes coastal response parameters for an active effect with any propagatio
   }
 });
 it("does not present cold source input or geothermal spacing as generic propagation controls", () => {
-  const system = {
-    ...canonryMagicPresets()[0],
-    source: "placed" as const,
-    propagation: "radial" as const,
-  };
+  const preset = canonryMagicPresets()[0],
+    system = {
+      ...preset,
+      origins: [
+        { ...preset.origins[0], source: "placed" as const, propagation: "radial" as const },
+      ],
+    };
   const keys = magicControlKeys(system);
   expect(keys).not.toContain("baseInput");
   expect(keys).not.toContain("sourceSpacing");

@@ -1,5 +1,6 @@
 // Canonry PhysicalGeographyField, commit 0f62584c. Plain arrays remain worker-local.
 import type { PhysicalMesh } from "./mesh";
+import type { TransportPlan } from "./transportPlan";
 import { ecologyScalars } from "./ecologyState";
 import { noWaterSurface } from "./math";
 
@@ -188,6 +189,8 @@ export type PhysicalField = Record<(typeof integerFields)[number], Int32Array> &
     EcologyInitialized: boolean;
     AccumulatedPlateDrift: number;
     LastPlateDriftStep: number;
+    /** The last plate drift's scatter, kept so amounts riding the crust can follow it. */
+    transportPlan: TransportPlan | null;
     DrainageTieDecisionTotal: number;
     DrainageDecisionTotal: number;
     FloodFlatFillTotal: number;
@@ -220,6 +223,7 @@ export function createField(mesh: PhysicalMesh): PhysicalField {
     EcologyInitialized: false,
     AccumulatedPlateDrift: 0,
     LastPlateDriftStep: 0,
+    transportPlan: null as TransportPlan | null,
     DrainageTieDecisionTotal: 0,
     DrainageDecisionTotal: 0,
     FloodFlatFillTotal: 0,
