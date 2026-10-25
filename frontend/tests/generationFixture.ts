@@ -13,19 +13,37 @@ const fixtureBundle = build({
   platform: "browser",
 }).then((result) => result.outputFiles[0].text);
 
-/** UI journeys use small fields; the fixture shares the real worker output adapter. */
-export async function installGenerationFixture(
-  page: Page,
-  hold = false,
-  terrain = false,
-  life = false,
-  ecologicalFeatures: AtlasFeature[] = [],
-  society?: SocietyRegion,
-  diagnostics: GenerationDiagnostic[] = []
-) {
-  const options = { hold, terrain, life, ecologicalFeatures, society, diagnostics };
+export interface GenerationFixtureOptions {
+  /** Keep the job running until `completeGenerationFixture` is called. */
+  hold?: boolean;
+  /**
+   * Publish the fixture's raster fields. Off by default: a journey that is not about the
+   * raster map renders nothing on the GPU and every later edit costs milliseconds.
+   */
+  fields?: boolean;
+  /** Shape the fixture elevation as a hill instead of a ramp (needs `fields`). */
+  terrain?: boolean;
+  /** Add ecology channels (needs `fields`). */
+  life?: boolean;
+  /** Features the fixture publishes as generated. */
+  features?: AtlasFeature[];
+  society?: SocietyRegion;
+  diagnostics?: GenerationDiagnostic[];
+}
+
+/** UI journeys use a 16×16 fixture grid; the fixture shares the real worker output adapter. */
+export async function installGenerationFixture(page: Page, options: GenerationFixtureOptions = {}) {
+  const runtime = {
+    hold: options.hold ?? false,
+    fields: options.fields ?? false,
+    terrain: options.terrain ?? false,
+    life: options.life ?? false,
+    ecologicalFeatures: options.features ?? [],
+    society: options.society,
+    diagnostics: options.diagnostics ?? [],
+  };
   await page.addInitScript({
-    content: `${await fixtureBundle}\nAtlasGenerationFixture.installGenerationFixtureRuntime(${JSON.stringify(options)});`,
+    content: `${await fixtureBundle}\nAtlasGenerationFixture.installGenerationFixtureRuntime(${JSON.stringify(runtime)});`,
   });
 }
 

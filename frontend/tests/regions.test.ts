@@ -217,7 +217,7 @@ test("pick an existing feature, adjust its region and remove unreferenced region
 });
 
 test("frames existing terrain as a region without another generation", async ({ page }) => {
-  await installGenerationFixture(page, false, true, true);
+  await installGenerationFixture(page, { fields: true, terrain: true, life: true });
   await create(page);
   await page.getByLabel("Detail level").selectOption("draft");
   await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();

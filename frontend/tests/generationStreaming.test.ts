@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { installGenerationFixture, completeGenerationFixture } from "./generationFixture";
 
-test("shows an epoch preview while generation continues and releases it on cancellation", async ({
+test("an epoch preview shows while generation continues and clears on cancellation", async ({
   page,
 }) => {
-  await installGenerationFixture(page, true);
+  await installGenerationFixture(page, { hold: true });
   await page.goto("/");
   await page.getByLabel("World name", { exact: true }).fill("Growing atlas");
   await page.getByRole("button", { name: /Review & generate/ }).click();
@@ -39,10 +39,12 @@ test("shows an epoch preview while generation continues and releases it on cance
   await expect(page.locator(".map-instruction")).not.toContainText("Generation preview");
 });
 
-test("displays arriving fields before the completion notification", async ({ page }) => {
-  await installGenerationFixture(page, true, true);
+test("arriving fields display before the completion notification", async ({ page }) => {
+  await installGenerationFixture(page, { hold: true, fields: true, terrain: true });
   await page.goto("/");
   await page.getByLabel("World name", { exact: true }).fill("Arriving fields");
+  await page.getByLabel("Width · km", { exact: true }).fill("1");
+  await page.getByLabel("Height · km", { exact: true }).fill("1");
   await page.getByRole("button", { name: /Review & generate/ }).click();
   await page.getByRole("button", { name: "Generate world", exact: true }).click();
   await page.evaluate(() => {

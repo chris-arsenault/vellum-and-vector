@@ -275,11 +275,16 @@ urbanization, settlement sizes by role, roads by class and cycle timing. `ERAS`,
 `SEED`, `WIDTH`, `HEIGHT`, `QUALITY`, `STEP` and `TRACE` environment variables
 vary the run.
 
-Browser workflow tests use small completed-field fixtures, with one real worker
-check for interior generation and publication. They test interaction; physical
-history stays headless. Reuse a completed run's ignored terrain artifacts in
-`frontend/.artifacts/generation/` when reviewing display changes instead of
-generating another world. Browser tests clear their own `test-results/` directory.
+Browser journeys test UI wiring only: that a control reaches the domain and a
+panel shows the result. They run on the smallest world that shows the control,
+generate only through the fixture in `frontend/tests/generationFixture.ts`, and
+publish raster fields only when the raster map is the subject (`fields: true`),
+because every later edit repaints those fields on a software GPU in CI. One
+journey (`frontend/tests/worker.test.ts`) exercises the real bundled worker on an
+interior layout. Generated geography itself is checked in node by
+`frontend/src/featureGeography.test.ts` and the generation suites. Shared steps
+live in `frontend/tests/harness.ts`. Browser tests clear their own
+`test-results/` directory.
 
 The opt-in navigation case replays an existing real generated world from ignored
 `frontend/.artifacts/generation/fixed-draft.bin` (or `fixed-standard.bin`). It uses

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { completeGenerationFixture, installGenerationFixture } from "./generationFixture";
 
-test("keeps every process diagnostic inspectable during generation and after publication", async ({
+test("every process diagnostic stays inspectable during generation and after publication", async ({
   page,
 }) => {
   const diagnostics = Array.from({ length: 5 }, (_, i) => ({
@@ -15,7 +15,7 @@ test("keeps every process diagnostic inspectable during generation and after pub
     outcome: "omitted" as const,
     stack: `Error: failure ${i}`,
   }));
-  await installGenerationFixture(page, true, false, false, [], undefined, diagnostics);
+  await installGenerationFixture(page, { hold: true, diagnostics });
   await page.goto("/");
   await page.getByLabel("World name", { exact: true }).fill("Partial geography");
   await page.getByLabel("Detail level").selectOption("draft");

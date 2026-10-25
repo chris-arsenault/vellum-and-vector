@@ -1,13 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { AtlasFeature, PopulationGroup, SocietyRegion } from "@atlas/domain";
-import { readFile } from "node:fs/promises";
-import { installGenerationFixture } from "./generationFixture";
+import { canvas, exportMap, generatedWorld, pageErrors, panel } from "./harness";
 
 /** The legend items of a share bar on the inspection surface, by the bar's label. */
 function legend(page: Page, label: string) {
   return page.getByRole("img", { name: label, exact: true }).locator("..").getByRole("listitem");
 }
-
 function settlementFeature(): AtlasFeature {
   return {
     id: "d467baee-3162-4ea0-a00b-0770e0661a7a",
@@ -106,32 +104,30 @@ function societyState(feature: AtlasFeature): SocietyRegion {
     ],
   };
 }
-test("authors population groups and places a located work through the inspector", async ({
+/** A 4 × 1 km world whose only settlement sits at the map centre. */
+async function settlementWorld(page: Page, name: string, settlement: AtlasFeature) {
+  await generatedWorld(
+    page,
+    name,
+    { features: [settlement], society: societyState(settlement) },
+    { width: 4, height: 1 }
+  );
+  const box = (await canvas(page).boundingBox())!;
+  await canvas(page).click({ position: { x: box.width / 2, y: box.height / 2 } });
+  await expect(panel(page).locator("h2")).toHaveText("River town");
+}
+
+test("the settlement surface shows the community and its edits reach the export", async ({
   page,
 }) => {
+  const errors = pageErrors(page);
   const settlement = settlementFeature();
-  await installGenerationFixture(page, false, false, false, [settlement], societyState(settlement));
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("/");
-  await page.getByLabel("World name").fill("Society authoring");
-  await page.getByLabel("Width · km").fill("4");
-  await page.getByLabel("Height · km").fill("1");
-  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
-  await page.getByRole("button", { name: "Create world", exact: true }).click();
-  await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
-  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
-  await page.getByRole("button", { name: "Fit area", exact: true }).click();
-  const canvas = page.getByRole("application", { name: "World map canvas" });
-  const box = (await canvas.boundingBox())!;
-  await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
-  await expect(page.locator(".right-panel h2")).toHaveText("River town");
+  await settlementWorld(page, "Society authoring", settlement);
   await expect(page.getByTitle("200 settlement residents", { exact: true })).toBeVisible();
   await expect(page.getByTitle("800 rural residents", { exact: true })).toBeVisible();
   await expect(legend(page, "Naming-language use")).toHaveText(["River speech 100.0%"]);
   await page.getByText("Local population history", { exact: true }).click();
   await expect(page.getByRole("cell", { name: "Settlement / 10", exact: true })).toBeVisible();
-  await expect(page.getByRole("cell", { name: "Settlement / 20", exact: true })).toBeVisible();
   await page.getByText("Properties & relationships", { exact: true }).click();
   await page.getByLabel("People in group 1", { exact: true }).fill("1200");
   await page
@@ -145,9 +141,7 @@ test("authors population groups and places a located work through the inspector"
   await page.getByRole("combobox", { name: "Work", exact: true }).selectOption("conservation");
   await page.getByLabel("Radius (metres)", { exact: true }).fill("250");
   await page.getByRole("button", { name: "Place work", exact: true }).click();
-  const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export GIS", exact: true }).click();
-  const exported = JSON.parse(await readFile((await (await download).path())!, "utf8"));
+  const exported = await exportMap(page);
   expect(
     exported.features.find((f: { id: string }) => f.id === settlement.id).properties
   ).toMatchObject({
@@ -162,16 +156,11 @@ test("authors population groups and places a located work through the inspector"
     exported.features.find(
       (f: { properties: { kind: string } }) => f.properties.kind === "conservation"
     ).properties
-  ).toMatchObject({
-    workKind: "conservation",
-    layerId: "landUse",
-    radius: 250,
-    maintained: true,
-  });
+  ).toMatchObject({ workKind: "conservation", layerId: "landUse", radius: 250, maintained: true });
   expect(errors).toEqual([]);
 });
 
-test("inspects and edits mixed language shares without flattening the population", async ({
+test("mixed language shares are shown, edited and kept without flattening the population", async ({
   page,
 }) => {
   const settlement = settlementFeature();
@@ -180,19 +169,7 @@ test("inspects and edits mixed language shares without flattening the population
     "River speech": { knowledge: 1, use: 0.75 },
     "Coast speech": { knowledge: 0.4, use: 0.25 },
   };
-  await installGenerationFixture(page, false, false, false, [settlement], societyState(settlement));
-  await page.goto("/");
-  await page.getByLabel("World name").fill("Mixed languages");
-  await page.getByLabel("Width · km").fill("4");
-  await page.getByLabel("Height · km").fill("1");
-  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
-  await page.getByRole("button", { name: "Create world", exact: true }).click();
-  await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
-  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
-  await page.getByRole("button", { name: "Fit area", exact: true }).click();
-  const canvas = page.getByRole("application", { name: "World map canvas" });
-  const box = (await canvas.boundingBox())!;
-  await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
+  await settlementWorld(page, "Mixed languages", settlement);
   await expect(legend(page, "Languages residents know")).toHaveText([
     "River speech 100.0%",
     "Coast speech 40.0%",
@@ -210,10 +187,8 @@ test("inspects and edits mixed language shares without flattening the population
   await page.getByLabel("Know Coast speech (%)", { exact: true }).fill("60");
   await page.getByLabel("Naming use Coast speech (%)", { exact: true }).fill("40");
   await page.getByRole("button", { name: "Save feature", exact: true }).click();
-  await expect(page.locator(".right-panel h2")).toHaveText("River town");
-  const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export GIS", exact: true }).click();
-  const exported = JSON.parse(await readFile((await (await download).path())!, "utf8"));
+  await expect(panel(page).locator("h2")).toHaveText("River town");
+  const exported = await exportMap(page);
   expect(
     exported.features.find((f: { id: string }) => f.id === settlement.id).properties.groups
   ).toMatchObject([

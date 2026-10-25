@@ -1,28 +1,29 @@
 import { expect, test } from "@playwright/test";
-import { installGenerationFixture } from "./generationFixture";
-import { ecologicalPolygons } from "./ecologyFixture";
-import { readFile } from "node:fs/promises";
-import { createHash } from "node:crypto";
-import type { Page } from "@playwright/test";
 import { spatial } from "@atlas/domain";
+import { ecologicalPolygons } from "./ecologyFixture";
+import {
+  canvas,
+  createWorld,
+  exportMap,
+  generate,
+  generatedWorld,
+  installGenerationFixture,
+  mapImage,
+  openLayers,
+  pageErrors,
+  panel,
+} from "./harness";
 
 test.use({ actionTimeout: 15000 });
 
-test("keeps ecological fields as opt-in overlays beside named biome regions", async ({ page }) => {
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
-  await installGenerationFixture(page, false, true, true);
-  await page.goto("/");
-  await page.getByLabel("World name").fill("Living atlas");
-  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
-  await page.getByRole("button", { name: "Create world", exact: true }).click();
+test("the physical history form edits an epoch's ecological regime", async ({ page }) => {
+  const errors = pageErrors(page);
+  await createWorld(page, "Living atlas");
   await page.getByText("Configure physical history", { exact: true }).click();
   await page.getByLabel("History starting point").selectOption("ecological");
   const dry = page
     .locator("details")
-    .filter({
-      has: page.locator("summary", { hasText: /^Dry fire age$/ }),
-    })
+    .filter({ has: page.locator("summary", { hasText: /^Dry fire age$/ }) })
     .last();
   await dry.locator("summary").first().click();
   await dry.getByText("Ecological regime", { exact: true }).click();
@@ -32,62 +33,44 @@ test("keeps ecological fields as opt-in overlays beside named biome regions", as
   await dry.getByLabel("Wildfire regime · multiplier", { exact: true }).fill("2.5");
   await page.getByRole("button", { name: "Save physical history", exact: true }).click();
   await expect(page.locator(".map-status")).toContainText("Revision 2");
-  await page.getByRole("button", { name: "Develop", exact: true }).click();
-  await page.getByText("Land, climate, life & erosion controls", { exact: true }).click();
-  await page.getByLabel("Vegetation productivity · multiplier", { exact: true }).fill("1.5");
-  await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
-  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
-  await page.getByRole("button", { name: "Layers", exact: true }).click();
+  expect(errors).toEqual([]);
+});
+
+test("ecological fields are opt-in overlays beside named biome regions", async ({ page }) => {
+  const errors = pageErrors(page);
+  await installGenerationFixture(page, { fields: true, life: true });
+  await createWorld(page, "Living overlays");
+  await generate(page);
+  await openLayers(page);
   // Named biomes are vector regions; the per-cell category is not drawn by default.
   await expect(
     page.locator(".active-overlays").getByRole("checkbox", { name: "Show Biomes", exact: true })
   ).toHaveCount(0);
   await page.getByRole("button", { name: "+ Add overlay", exact: true }).click();
-  await page.getByLabel("Search overlays").fill("broadleafSaplings");
-  await page.getByRole("checkbox", { name: "Add Young broadleaf trees", exact: true }).check();
   await page.getByLabel("Search overlays").fill("treeCover");
   await page.getByRole("checkbox", { name: "Add Tree cover", exact: true }).check();
   await page.getByRole("button", { name: "Done", exact: true }).click();
-  await expect(
-    page.getByRole("checkbox", { name: "Show Young broadleaf trees", exact: true })
-  ).toBeVisible();
   await page.getByRole("button", { name: "Style Tree cover", exact: true }).click();
   await expect(page.locator(".field-style legend")).toHaveText("Tree cover");
-  await page.screenshot({ path: "test-results/ecological-atlas.png" });
   expect(errors).toEqual([]);
 });
 
-test("selects, protects, exports and refines extracted ecological polygons with thematic display", async ({
-  page,
-}) => {
+test("extracted ecological polygons select, protect, export and refine", async ({ page }) => {
+  const errors = pageErrors(page);
   const features = ecologicalPolygons();
-  await installGenerationFixture(page, false, false, true, features);
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("/");
-  await page.getByLabel("World name").fill("Ecological GIS");
-  await page.getByLabel("Width · km").fill("4");
-  await page.getByLabel("Height · km").fill("1");
-  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
-  await page.getByRole("button", { name: "Create world", exact: true }).click();
-  await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
-  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
-  await page.getByRole("button", { name: "Fit area", exact: true }).click();
-  await page.getByRole("button", { name: "Layers", exact: true }).click();
-  const canvas = page.getByRole("application", { name: "World map canvas" });
-  const visible = await imageHash(page);
+  await generatedWorld(page, "Ecological GIS", { features }, { width: 4, height: 1 });
+  await openLayers(page);
+  const visible = await mapImage(page);
   const ecology = page.getByRole("checkbox", { name: "Show Ecology", exact: true });
   await ecology.click();
   await expect(ecology).not.toBeChecked();
-  await expect.poll(() => imageHash(page)).not.toBe(visible);
+  await expect.poll(() => mapImage(page)).not.toBe(visible);
   await ecology.click();
-  await expect(ecology).toBeChecked();
-  await page.getByRole("button", { name: "Layers", exact: true }).click();
+  await openLayers(page);
   await expect(page.getByRole("complementary", { name: "Map appearance" })).toHaveCount(0);
-  await page.screenshot({ path: "test-results/ecological-vectors-wide.png" });
-  const box = (await canvas.boundingBox())!;
+  const box = (await canvas(page).boundingBox())!;
   const position = { x: box.width * 0.2, y: box.height * 0.47 };
-  await canvas.hover({ position });
+  await canvas(page).hover({ position });
   const coordinates = page.locator(".coordinates");
   await expect(coordinates).toHaveText(/^-?[\d.]+ E · -?[\d.]+ N · m$/);
   const [x, y] = (await coordinates.textContent())!.match(/-?[\d.]+/g)!.map(Number);
@@ -99,22 +82,20 @@ test("selects, protects, exports and refines extracted ecological polygons with 
   );
   expect(forests).toHaveLength(1);
   const forest = forests[0];
-  await canvas.click({ position });
-  await expect(page.locator(".right-panel h2")).toHaveText(forest.name);
+  await canvas(page).click({ position });
+  await expect(panel(page).locator("h2")).toHaveText(forest.name);
   await page.getByText("Properties & relationships", { exact: true }).click();
   await expect(page.getByLabel("biome", { exact: true })).toHaveValue("Temperate forest");
   await page.getByLabel("Name", { exact: true }).fill("Old growth wood");
   await page.getByLabel("Protect authored feature", { exact: true }).check();
   await page.getByRole("button", { name: "Save feature", exact: true }).click();
-  await expect(page.locator(".right-panel h2")).toHaveText("Old growth wood");
+  await expect(panel(page).locator("h2")).toHaveText("Old growth wood");
   await page.getByRole("button", { name: "Refine this footprint", exact: true }).click();
   await page.getByRole("combobox", { name: "Develop as", exact: true }).selectOption("region");
   await page.getByLabel("Place name", { exact: true }).fill("Woodland region");
   await page.getByRole("button", { name: "Create mapped area", exact: true }).click();
   await expect(page.locator(".breadcrumbs")).toContainText("Woodland region");
-  await page.getByRole("button", { name: "Fit area", exact: true }).click();
-  await page.screenshot({ path: "test-results/ecological-vectors-refined.png" });
-  const exported = await exportGIS(page);
+  const exported = await exportMap(page);
   expect(
     exported.features.find((f: { id: string }) => f.id === forest.id).properties
   ).toMatchObject({ name: "Old growth wood", protected: true, biome: "Temperate forest" });
@@ -126,13 +107,3 @@ test("selects, protects, exports and refines extracted ecological polygons with 
   expect(exported.areas.some((a: { profile: string }) => a.profile === "region")).toBe(true);
   expect(errors).toEqual([]);
 });
-
-async function imageHash(page: Page) {
-  const image = await page.getByRole("application", { name: "World map canvas" }).screenshot();
-  return createHash("sha256").update(image).digest("hex");
-}
-async function exportGIS(page: Page) {
-  const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Export GIS", exact: true }).click();
-  return JSON.parse(await readFile((await (await download).path())!, "utf8"));
-}

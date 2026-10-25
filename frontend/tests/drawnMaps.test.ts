@@ -42,30 +42,35 @@ const rectangle = (w: number, s: number, e: number, n: number): AtlasFeature["ge
 });
 async function createAtlas(page: Page) {
   await mkdir(".artifacts/cartographic-mode", { recursive: true });
-  await installGenerationFixture(page, false, true, true, [
-    feature(
-      "11111111-1111-4111-8111-111111111111",
-      "The Western March",
-      "sovereignty",
-      "sovereignty",
-      rectangle(0, 0, 50000, 100000)
-    ),
-    feature(
-      "22222222-2222-4222-8222-222222222222",
-      "The Eastern Reach",
-      "sovereignty",
-      "sovereignty",
-      rectangle(50000, 0, 100000, 100000)
-    ),
-    feature(
-      "33333333-3333-4333-8333-333333333333",
-      "Cairnwatch",
-      "settlement",
-      "settlements",
-      { type: "Point", coordinates: [35000, 50000] },
-      { settlementRole: "capital", population: 42000 }
-    ),
-  ]);
+  await installGenerationFixture(page, {
+    fields: true,
+    terrain: true,
+    life: true,
+    features: [
+      feature(
+        "11111111-1111-4111-8111-111111111111",
+        "The Western March",
+        "sovereignty",
+        "sovereignty",
+        rectangle(0, 0, 50000, 100000)
+      ),
+      feature(
+        "22222222-2222-4222-8222-222222222222",
+        "The Eastern Reach",
+        "sovereignty",
+        "sovereignty",
+        rectangle(50000, 0, 100000, 100000)
+      ),
+      feature(
+        "33333333-3333-4333-8333-333333333333",
+        "Cairnwatch",
+        "settlement",
+        "settlements",
+        { type: "Point", coordinates: [35000, 50000] },
+        { settlementRole: "capital", population: 42000 }
+      ),
+    ],
+  });
   await page.goto("/");
   await page.getByLabel("World name").fill("Drawn atlas");
   await page.getByLabel("Width · km").fill("100");

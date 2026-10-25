@@ -12,6 +12,7 @@ import type {
 /** Small generated fields use the production publication and transfer path. */
 export function installGenerationFixtureRuntime({
   hold,
+  fields,
   terrain,
   life,
   ecologicalFeatures,
@@ -19,6 +20,7 @@ export function installGenerationFixtureRuntime({
   diagnostics,
 }: {
   hold: boolean;
+  fields: boolean;
   terrain: boolean;
   life: boolean;
   ecologicalFeatures: AtlasFeature[];
@@ -92,32 +94,36 @@ export function installGenerationFixtureRuntime({
               return i % size < 5 ? 10 : i % size < 11 ? 7 : 15;
             };
             const channels: Grid["channels"] = {};
-            for (const name of [
-              "elevation",
-              "temperature",
-              "flow",
-              "water",
-              "naturalSurface",
-              "finalSurface",
-              "bedrock",
-              "sediment",
-              "rock",
-              "province",
-              "continentalFraction",
-              "fracture",
-              "geothermal",
-              "impactExcavation",
-              "volcanicConstruction",
-              "glacialErosion",
-              "glacialDeposition",
-              "coastalErosion",
-              "deposition",
-              ...(life ? ["biome", "treeCover", "broadleafSaplings", "soilWater"] : []),
-              ...snapshot.world.magicSystems!.flatMap((system) => [
-                `magic:${system.id}:history`,
-                `magic:${system.id}:coastalHistory`,
-              ]),
-            ]) {
+            // Without fields the fixture publishes features and society only: no raster map.
+            const fixtureChannels = !fields
+              ? []
+              : [
+                  "elevation",
+                  "temperature",
+                  "flow",
+                  "water",
+                  "naturalSurface",
+                  "finalSurface",
+                  "bedrock",
+                  "sediment",
+                  "rock",
+                  "province",
+                  "continentalFraction",
+                  "fracture",
+                  "geothermal",
+                  "impactExcavation",
+                  "volcanicConstruction",
+                  "glacialErosion",
+                  "glacialDeposition",
+                  "coastalErosion",
+                  "deposition",
+                  ...(life ? ["biome", "treeCover", "broadleafSaplings", "soilWater"] : []),
+                  ...snapshot.world.magicSystems!.flatMap((system) => [
+                    `magic:${system.id}:history`,
+                    `magic:${system.id}:coastalHistory`,
+                  ]),
+                ];
+            for (const name of fixtureChannels) {
               if (!fieldPublications.has(name))
                 throw new Error(`Register a publication descriptor for fixture channel ${name}.`);
               channels[name] = Float64Array.from({ length: size * size }, (_, i) => {

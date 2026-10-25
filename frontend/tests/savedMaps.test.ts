@@ -1,32 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { SessionWorld } from "../src/atlasState";
 import { completeGenerationFixture, installGenerationFixture } from "./generationFixture";
-
-async function createBlank(page: Page, name: string) {
-  await page.getByLabel("World name").fill(name);
-  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
-  await page.getByRole("button", { name: "Create world", exact: true }).click();
-}
-
-async function placePoint(page: Page, name: string, x = 250) {
-  await page
-    .getByRole("toolbar", { name: "Map tools" })
-    .getByRole("button", { name: "Place point", exact: true })
-    .click();
-  await page.getByLabel("Feature name").fill(name);
-  await page
-    .getByRole("application", { name: "World map canvas" })
-    .click({ position: { x, y: 250 } });
-  await expect(
-    page.locator(".right-panel").getByRole("heading", { name, exact: true })
-  ).toBeVisible();
-}
+import { createWorld, generate, pageErrors, placePoint } from "./harness";
 
 async function save(page: Page) {
   await page.getByRole("button", { name: "Save map", exact: true }).click();
   await expect(page.locator(".header-meta")).toHaveText("Saved locally");
 }
-
 async function open(page: Page, name: string) {
   await page.getByRole("button", { name: "Saved maps", exact: true }).click();
   await page
@@ -38,7 +18,6 @@ async function open(page: Page, name: string) {
     name
   );
 }
-
 async function storedData(page: Page, id: string) {
   return page.evaluate(async (worldId) => {
     const database = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -58,7 +37,6 @@ async function storedData(page: Page, id: string) {
             version: data.snapshot.world.version,
             features: Object.values(data.snapshot.world.features).map((feature) => feature.name),
             typed: grid?.channels.elevation instanceof Float64Array,
-            elevation: grid ? Array.from(grid.channels.elevation) : [],
             history: data.history.length,
             undo: data.undo.length,
           });
@@ -70,17 +48,13 @@ async function storedData(page: Page, id: string) {
   }, id);
 }
 
-test("reopens generated geography and authored edits after reload without generation", async ({
+test("a saved map reopens its generated fields and authored edits after reload", async ({
   page,
 }) => {
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
-  await installGenerationFixture(page, false, true, true);
-  await page.goto("/");
-  await createBlank(page, "Review atlas");
-  await page.getByLabel("Detail level").selectOption("draft");
-  await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
-  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
+  const errors = pageErrors(page);
+  await installGenerationFixture(page, { fields: true });
+  await createWorld(page, "Review atlas");
+  await generate(page);
   await placePoint(page, "Saved landmark");
   await save(page);
   const id = await page.getByLabel("World", { exact: true }).inputValue();
@@ -94,10 +68,6 @@ test("reopens generated geography and authored edits after reload without genera
   await expect(page.locator(".map-status")).toContainText("1 world features");
   await expect(page.locator(".job-row")).toHaveCount(0);
   expect(await page.evaluate(() => "generationFixtureInput" in window)).toBe(false);
-  await page.getByRole("button", { name: "Layers", exact: true }).click();
-  await page.getByRole("button", { name: "+ Add overlay", exact: true }).click();
-  await expect(page.getByRole("checkbox", { name: "Add Temperature", exact: true })).toBeVisible();
-  await page.keyboard.press("Escape");
   await save(page);
   expect(await storedData(page, id)).toEqual(before);
   await page.getByRole("button", { name: "Undo", exact: true }).click();
@@ -107,14 +77,14 @@ test("reopens generated geography and authored edits after reload without genera
   expect(errors).toEqual([]);
 });
 
-test("updates one save per world, preserves independent saves, and keeps the old save after a failed write", async ({
+test("one save per world, independent saves, and the old save survives a failed write", async ({
   page,
 }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Saved maps", exact: true }).click();
   await expect(page.getByRole("dialog")).toContainText("No saved maps yet");
   await page.keyboard.press("Escape");
-  await createBlank(page, "First map");
+  await createWorld(page, "First map");
   await save(page);
   const id = await page.getByLabel("World", { exact: true }).inputValue();
   await placePoint(page, "First edit");
@@ -133,28 +103,23 @@ test("updates one save per world, preserves independent saves, and keeps the old
   await expect(page.getByRole("alert")).toContainText("Storage quota reached");
   expect(await storedData(page, id)).toEqual(before);
   await page.reload();
-  await createBlank(page, "Second map");
+  await createWorld(page, "Second map");
   await save(page);
   await open(page, "First map");
   await expect(page.locator(".map-status")).toContainText("1 world features");
   await page.getByRole("button", { name: "Saved maps", exact: true }).click();
   await expect(page.locator(".saved-map-list button")).toHaveCount(2);
-  await page.screenshot({ path: "test-results/saved-maps-picker.png" });
   await page.setViewportSize({ width: 600, height: 900 });
   await expect(page.getByRole("button", { name: "Close saved maps" })).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(600);
-  await page.screenshot({ path: "test-results/saved-maps-picker-narrow.png" });
   await page.keyboard.press("Escape");
   await open(page, "Second map");
   await expect(page.locator(".map-status")).toContainText("0 world features");
 });
 
-test("finishes generation before saving and refuses to replace a world with running generation", async ({
-  page,
-}) => {
-  await installGenerationFixture(page, true);
-  await page.goto("/");
-  await createBlank(page, "Generating map");
+test("saving waits for generation and a running world cannot be replaced", async ({ page }) => {
+  await installGenerationFixture(page, { hold: true });
+  await createWorld(page, "Generating map");
   await save(page);
   await page.getByLabel("Detail level").selectOption("draft");
   await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();

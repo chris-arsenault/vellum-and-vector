@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { installGenerationFixture, completeGenerationFixture } from "./generationFixture";
 
-test.beforeEach(async ({ page }) => installGenerationFixture(page, true));
+test.beforeEach(async ({ page }) => installGenerationFixture(page, { hold: true }));
 
 test("editing, undo, cancellation and independent worlds work without services", async ({
   page,

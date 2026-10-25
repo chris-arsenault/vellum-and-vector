@@ -1,20 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { installGenerationFixture } from "./generationFixture";
+import { createWorld, generate, installGenerationFixture, openLayers, pageErrors } from "./harness";
 
-test("save a magic variant and inspect generated history fields", async ({ page }) => {
-  await installGenerationFixture(page);
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("/");
-  await page.getByLabel("World name").fill("Magic histories");
-  await page.getByLabel("Width · km").fill("100");
-  await page.getByLabel("Height · km").fill("100");
-  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
-  await page.getByRole("button", { name: "Create world", exact: true }).click();
-  await page.getByText("Configure physical history", { exact: true }).click();
-  await page.getByLabel("History starting point").selectOption("cycles");
-  await page.getByRole("button", { name: "Save physical history", exact: true }).click();
-  await expect(page.locator(".map-status")).toContainText("Revision 2");
+test("a magic variant is saved, reopened and named in the surface legend", async ({ page }) => {
+  const errors = pageErrors(page);
+  await installGenerationFixture(page, { fields: true });
+  await createWorld(page, "Magic histories");
   await page.getByRole("button", { name: "Configure magical systems", exact: true }).click();
   await page.getByText("Fire · active", { exact: true }).click();
   await page.getByRole("button", { name: "Make a variant", exact: true }).click();
@@ -27,7 +17,7 @@ test("save a magic variant and inspect generated history fields", async ({ page 
   await variant.getByLabel("Heat per intensity unit", { exact: false }).fill("-0.2");
   await variant.getByLabel("System name", { exact: true }).fill("Ice forging");
   await page.getByRole("button", { name: "Save magical systems", exact: true }).click();
-  await expect(page.locator(".map-status")).toContainText("Revision 3");
+  await expect(page.locator(".map-status")).toContainText("Revision 2");
   await page.getByRole("button", { name: "Develop", exact: true }).click();
   await page.getByRole("button", { name: "Configure magical systems", exact: true }).click();
   await page.getByText("Ice forging · active", { exact: true }).click();
@@ -37,21 +27,16 @@ test("save a magic variant and inspect generated history fields", async ({ page 
   await saved.getByText("Environmental feedback", { exact: true }).click();
   await expect(saved.getByLabel("Heat per intensity unit", { exact: false })).toHaveValue("-0.2");
   await page.getByRole("button", { name: "Develop", exact: true }).click();
-  await page.getByLabel("Landscape starting point").selectOption("canonry");
   await page.getByLabel("Detail level").selectOption("draft");
-  await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
-  const status = page.locator(".job-row strong").first();
-  await expect(status).toHaveText("completed");
-  await page.getByRole("button", { name: "Layers", exact: true }).click();
+  await generate(page);
+  await openLayers(page);
   await page.getByRole("button", { name: "+ Add overlay", exact: true }).click();
-  for (const channel of ["magic:pressure:coastalHistory", "magic:aurora:history", "finalSurface"]) {
-    await page.getByLabel("Search overlays").fill(channel);
-    await page
-      .getByLabel("Add map overlays")
-      .getByRole("checkbox", { name: /^Add / })
-      .first()
-      .check();
-  }
+  await page.getByLabel("Search overlays").fill("finalSurface");
+  await page
+    .getByLabel("Add map overlays")
+    .getByRole("checkbox", { name: /^Add / })
+    .first()
+    .check();
   await page.getByRole("button", { name: "Done", exact: true }).click();
   await page.getByRole("button", { name: "Style Land cover", exact: true }).click();
   await page.getByText("Surface codes", { exact: true }).click();

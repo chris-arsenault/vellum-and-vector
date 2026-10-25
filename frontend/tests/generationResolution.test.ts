@@ -4,7 +4,7 @@ import { installGenerationFixture } from "./generationFixture";
 test("updates km² resolution, cell counts and the non-blocking warning with world dimensions", async ({
   page,
 }) => {
-  await installGenerationFixture(page, true);
+  await installGenerationFixture(page, { hold: true });
   await page.goto("/");
   await page.getByLabel("World name", { exact: true }).fill("Planetary workload");
   const world = page.locator(".setup-content");
@@ -54,7 +54,7 @@ test("shows live workload warnings on a narrow screen without generating a large
 });
 
 test("updates the existing-map generation controls when detail changes", async ({ page }) => {
-  await installGenerationFixture(page, true);
+  await installGenerationFixture(page, { hold: true });
   await page.goto("/");
   await page.getByLabel("World name", { exact: true }).fill("Editable workload");
   await page.getByRole("radio", { name: "Blank world", exact: true }).check();
