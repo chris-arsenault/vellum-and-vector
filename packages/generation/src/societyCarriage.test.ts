@@ -225,6 +225,27 @@ it("rakes the pan under a seat, trades the salt down the road and lays it where 
   expect(alone.raked).toBeGreaterThan(0);
 });
 
+it("keeps the frontier at both seats of a way two polities hold, and forgets an unkept line", () => {
+  const { state, a, b, cellOf, map, region } = fixture();
+  region.politics = {
+    polities: [
+      { id: "P", seat: a.id, support: 1, status: "active", claims: [a.id], causes: [] },
+      { id: "Q", seat: b.id, support: 1, status: "active", claims: [b.id], causes: [] },
+    ],
+    sovereignty: {},
+    control: { [a.id]: "P", [b.id]: "Q" },
+    contested: {},
+    history: [],
+  };
+  recordSocietyOnMesh(state, 10);
+  expect(map.KeptLine[cellOf(a)]).toBe(10);
+  expect(map.KeptLine[cellOf(b)]).toBe(10);
+  // The frontier falls to one polity: the line is no longer kept and fades.
+  region.politics.control[b.id] = "P";
+  recordSocietyOnMesh(state, 10);
+  expect(map.KeptLine[cellOf(a)]).toBeCloseTo(10 * Math.exp(-10 / 150), 9);
+});
+
 it("kills where a confluence covers the ground a community stands on", () => {
   const { state, context, region } = fixture();
   putChannel(

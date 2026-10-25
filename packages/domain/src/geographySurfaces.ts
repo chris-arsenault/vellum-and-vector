@@ -169,6 +169,10 @@ export const magicPlacePresentations: Record<string, MagicPlacePresentation> = {
   pan: { color: "#e8e2d2", symbol: "square", tint: 1 },
   flat: { color: "#cfd9e3", symbol: "diamond", tint: 1 },
   dust: { color: "#d9cfae", symbol: "circle", tint: 0.4 },
+  // Hallowed: the ring and the line take a pale gold; the fading halo barely tints.
+  ring: { color: "#e9dcae", symbol: "circle", tint: 0.5 },
+  line: { color: "#b89b5e", symbol: "cross", tint: 1 },
+  fading: { color: "#c9c2b0", symbol: "circle", tint: 0.25 },
   // Salt's meetings with Aurora, Fire, Greenwood and Pressure.
   preserved: { color: "#8c9fb3", symbol: "star", tint: 1 },
   fired: { color: "#e36f3a", symbol: "diamond", tint: 1 },

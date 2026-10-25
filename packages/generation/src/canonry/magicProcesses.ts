@@ -19,6 +19,7 @@ import {
 import { evaluateConfluences } from "./magicConfluences";
 import { stormWrites } from "./magicWeather";
 import { saltWrites } from "./magicSalt";
+import { hallowedWrites } from "./magicHallowed";
 import { generationBindings } from "../generationBindings";
 import type { ProcessBehavior } from "../processTraits";
 import { ecologyLabels, type Epoch, type MagicConfluence, type MagicSystem } from "@atlas/domain";
@@ -95,8 +96,10 @@ export function evaluateSocietyMagic(
     evaluateField(state, field, bound.seed, index, epochs[index]);
     changed = true;
   }
-  if (changed) applySharedForcing(state);
-  return changed;
+  if (!changed) return false;
+  applySharedForcing(state);
+  hallowedWrites(state);
+  return true;
 }
 export function magicProcesses(
   systems: MagicSystem[] = [],
@@ -130,6 +133,7 @@ export function magicProcesses(
       evaluateConfluences(state, seed, true);
       stormWrites(state);
       saltWrites(state);
+      hallowedWrites(state);
     },
     coast: magicCoastalFeedback,
     history: retainMagicHistory,

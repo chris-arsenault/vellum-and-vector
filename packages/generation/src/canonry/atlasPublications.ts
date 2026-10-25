@@ -189,6 +189,7 @@ const derived: readonly [channel: string, unit: string, layer: string, owners: s
   ["iceCharge", "ratio", "magic", ["magic.configured"]],
   ["verdure", "ratio", "magic", ["magic.configured"]],
   ["salting", "ratio", "magic", ["magic.configured"]],
+  ["warding", "ratio", "magic", ["magic.configured"]],
   ["heat", "celsius", "magic", ["magic.local"]],
   ["storedHeat", "celsius", "magic", ["magic.local"]],
   ["coastalPressure", "ratio", "magic", ["magic.local"]],

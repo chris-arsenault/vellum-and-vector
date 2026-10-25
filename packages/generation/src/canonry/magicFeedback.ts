@@ -7,6 +7,7 @@ import { generationBindings } from "../generationBindings";
 import { magicBudget, originStocks, reservoirStock } from "./magicState";
 import { advanceStocks } from "./magicStocks";
 import { rememberLakes } from "./magicSaltSources";
+import { markRim, wardCoasts } from "./magicHallowed";
 import type { MagicSystem } from "@atlas/domain";
 
 export const coastalMagicParameters: (keyof MagicSystem["parameters"])[] = [
@@ -77,18 +78,21 @@ export function magicLivingFeedback(state: GenerationState) {
     let quickening = 0,
       stillness = 0,
       verdure = 0,
-      salting = 0;
+      salting = 0,
+      warding = 0;
     for (const field of fields) {
       const share = field.intensity[i] / 1000;
       quickening += share * field.definition.effects.quickening;
       stillness += share * field.definition.effects.stillness * heldCharge(map, field, i);
       verdure += share * field.definition.effects.verdure;
       salting += share * field.definition.effects.salting;
+      warding += share * field.definition.effects.warding;
     }
     map.Quickening[i] = unit(quickening);
     map.Stillness[i] = unit(stillness);
     map.Verdure[i] = unit(verdure);
     map.Salting[i] = unit(salting);
+    map.Warding[i] = unit(warding);
     // Greenwood divides the river that crosses it into wetland channels: the braided reach.
     if (map.Verdure[i] > 0.3 && map.RiverOrders[i] >= 1 && map.WaterKindCodes[i] === 0) {
       map.WetlandCover[i] = Math.max(map.WetlandCover[i], 0.5 * map.Verdure[i]);
@@ -98,6 +102,7 @@ export function magicLivingFeedback(state: GenerationState) {
       );
     }
   }
+  markRim(map, work.magic!);
 }
 /** Shelf, water shallower than 400 m, or a cell on the shore: where a ray lifts deep water. */
 function shoals(map: PhysicalField, i: number) {
@@ -278,6 +283,33 @@ function evolveConduit(map: PhysicalField, field: Field, i: number, floor: numbe
     map.FractureConductance[i] + round((field.definition.effects.conduitOpening * intensity) / 1000)
   );
 }
+/** The forcing one moving system puts on a shore cell from the sea beside it, or none. */
+function shoreForcing(map: PhysicalField, field: Field, i: number) {
+  const multiplier = field.definition.effects.coastalForcing;
+  if (!multiplier) return 0;
+  let pressure = 0,
+    wave = 0,
+    current = 0;
+  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
+    if (j < 0 || map.WaterKindCodes[j] !== 1) continue;
+    pressure = Math.max(pressure, field.intensity[j]);
+    wave = Math.max(wave, map.WaveExposure[j]);
+    current = Math.max(current, map.OceanCurrentStrength[j]);
+  }
+  const p = field.definition.parameters;
+  if (pressure < p.coastalThreshold) return 0;
+  return clamp(
+    round(
+      (((pressure - p.coastalThreshold) * 1000) / (1000 - p.coastalThreshold) +
+        wave * p.waveAmplification +
+        current * p.currentAmplification) *
+        multiplier
+    ),
+    1,
+    1000
+  );
+}
 function coastalEpoch(context?: MapProcessContext) {
   const count = context?.inputs?.features ? generationBindings(context).settings.epochs.length : 1;
   return context?.epochIndices[0] ?? Math.max(0, count - 1);
@@ -287,40 +319,25 @@ export function magicCoastalFeedback(state: GenerationState, context?: MapProces
     magic = work.magic!,
     map = work.map;
   const epoch = coastalEpoch(context);
-  const fields = magic.fields.filter((field) => field.definition.enabled);
+  const fields = magic.fields.filter((field) => field.definition.enabled),
+    totals = new Float64Array(map.mesh.count);
   for (let i = 0; i < map.mesh.count; i++) {
     let total = 0;
-    for (const field of fields) {
-      const multiplier = field.definition.effects.coastalForcing;
-      if (!multiplier || map.WaterKindCodes[i] !== 0) continue;
-      let pressure = 0,
-        wave = 0,
-        current = 0;
-      for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-        const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-        if (j < 0 || map.WaterKindCodes[j] !== 1) continue;
-        pressure = Math.max(pressure, field.intensity[j]);
-        wave = Math.max(wave, map.WaveExposure[j]);
-        current = Math.max(current, map.OceanCurrentStrength[j]);
+    if (map.WaterKindCodes[i] === 0)
+      for (const field of fields) {
+        const forcing = shoreForcing(map, field, i);
+        if (forcing <= 0) continue;
+        total += forcing;
+        field.coastalHistory[i] += forcing;
+        if (field.coastalFirstEpoch[i] < 0) field.coastalFirstEpoch[i] = epoch;
       }
-      const p = field.definition.parameters;
-      if (pressure < p.coastalThreshold) continue;
-      const forcing = clamp(
-        round(
-          (((pressure - p.coastalThreshold) * 1000) / (1000 - p.coastalThreshold) +
-            wave * p.waveAmplification +
-            current * p.currentAmplification) *
-            multiplier
-        ),
-        1,
-        1000
-      );
-      total += forcing;
-      field.coastalHistory[i] += forcing;
-      if (field.coastalFirstEpoch[i] < 0) field.coastalFirstEpoch[i] = epoch;
-    }
-    map.ExternalCoastalForcing[i] += clamp(total, 0, 1000) - magic.coastal[i];
-    magic.coastal[i] = clamp(total, 0, 1000);
+    totals[i] = clamp(total, 0, 1000);
+  }
+  // A warded shore holds: its forcing moves to the shore downdrift before it is applied.
+  wardCoasts(map, magic, totals);
+  for (let i = 0; i < map.mesh.count; i++) {
+    map.ExternalCoastalForcing[i] += totals[i] - magic.coastal[i];
+    magic.coastal[i] = totals[i];
   }
 }
 /**

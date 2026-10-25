@@ -144,4 +144,12 @@ it("seats a necropolis on a Salt killing ground where the plain offered nothing"
   expect(sites[cell(3, 7)]?.kind).toBe("necropolis");
   expect(sites[cell(3, 7)]?.reason).toContain("killing ground");
   expect(sites[cell(3, 8)]).toBeNull();
+  // A Hallowed ring is a sanctuary, and a surer seat than a killing ground.
+  putChannel(
+    state.surface,
+    "magic:hallowed:feature:ring",
+    "category",
+    Float64Array.from({ length: grid.active.length }, (_, i) => (i === cell(3, 7) ? 1 : 0))
+  );
+  expect(rankSites(state)[cell(3, 7)]?.kind).toBe("sanctuary");
 });

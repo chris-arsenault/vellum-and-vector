@@ -39,6 +39,8 @@ export const magicSources = [
   "forge",
   "death",
   "dead-lake",
+  "tenure",
+  "kept-line",
 ] as const;
 export const magicPropagations = [
   "fracture",
@@ -48,6 +50,7 @@ export const magicPropagations = [
   "roots",
   "local",
   "brine",
+  "ward",
 ] as const;
 /**
  * How an origin's stock is renewed: fed while its conduit is open and sealed after a budget,
@@ -205,6 +208,19 @@ const parameterSchema = z.object({
   domeSeep: finite.min(0).max(1).default(0.05),
   // Share of every Salt reservoir Fire at full intensity burns away per epoch.
   saltBurn: finite.min(0).max(1).default(0.8),
+  // Hallowed: person-years per square metre at a seat that make a full source, the bonus a
+  // seat earns per way converging on it, kept-years per square metre that make a full line,
+  // and traveller-years per square metre that make a walked way a pilgrimage road.
+  tenureFull: positive.default(2),
+  pilgrimageBonus: finite.nonnegative().default(0.1),
+  lineFull: positive.default(0.005),
+  roadFull: positive.default(50),
+  // The ring a full seat wards, metres, and the share of Aurora's stored charge that adds to
+  // the field where the two meet.
+  wardReach: positive.default(40_000),
+  auroraReinforce: finite.min(0).max(1).default(0.3),
+  // Resistance the first reach below a ward loses at full warding, per epoch.
+  wardSpill: finite.nonnegative().default(200),
 });
 // Overrides carry no defaults of their own, so a reparse keeps an origin's overrides sparse.
 const parameterOverrideSchema = z.object(
@@ -245,6 +261,8 @@ const legacyRenewal: Record<MagicSource, MagicRenewal> = {
   forge: "accumulating",
   death: "accumulating",
   "dead-lake": "accumulating",
+  tenure: "kept",
+  "kept-line": "kept",
 };
 const systemShape = z.object({
   id: z.string().min(1),
@@ -289,6 +307,9 @@ const systemShape = z.object({
       // Salt: the preserving residue that thins cover, starves soil, turns grazers away and
       // dries the air over it; 0–1 at full intensity.
       salting: finite.min(0).max(1).default(0),
+      // Hallowed: every other system is scaled down inside and the amount removed lands on
+      // the rim; rivers and coasts hold inside. 0–1 at full intensity.
+      warding: finite.min(0).max(1).default(0),
       vegetationGrowth: finite.min(-1).max(5).default(0),
       fire: finite.min(0).max(1).default(0),
       organicPreservation: finite.min(-3).max(3).default(0),

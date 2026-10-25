@@ -12,6 +12,7 @@ import { exposure } from "./magicStocks";
 import { impactSources } from "./magicFallenSources";
 import { aquiferSources, forgeSources, verdantSources } from "./magicGreenwoodSources";
 import { deadLakeSources, deathSources } from "./magicSaltSources";
+import { keptLineSources, tenureSources } from "./magicHallowed";
 
 function isHeatMaximum(map: PhysicalField, start: number, radius: number) {
   const { mesh, HeatSourceDensity: density } = map;
@@ -309,6 +310,18 @@ export const magicSourceStrategies: Record<MagicSource, SourceStrategy> = {
     parameters: ["saltPerLakeMetre", "saltFull"],
     managesStock: true,
     locate: deadLakeSources,
+  },
+  tenure: {
+    label: "Seats people have kept, by their tenure",
+    requires: [],
+    parameters: ["tenureFull", "pilgrimageBonus"],
+    locate: tenureSources,
+  },
+  "kept-line": {
+    label: "Lines people keep and roads pilgrims wear",
+    requires: [],
+    parameters: ["lineFull", "roadFull"],
+    locate: keptLineSources,
   },
 };
 /**

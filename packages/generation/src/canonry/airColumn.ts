@@ -127,7 +127,10 @@ export function marchAirColumns(
    * column toward saturation and, over land, wrings out a share of its water as it goes.
    */
   function rideStorm(i: number, u: number, d: number, air: Air, target: number) {
-    const pinned = Math.max(0, 1 - map.Stillness[i] * p.StormPinning),
+    const pinned = Math.max(
+        0,
+        1 - Math.max(map.Stillness[i] * p.StormPinning, map.Warding[i] * p.StormDeflection)
+      ),
       keepStorm = Math.exp(-(u < 0 ? 0 : d) / p.StormLength) * pinned,
       arriving = u < 0 ? 0 : storm[u] * keepStorm;
     storm[i] = Math.min(1, arriving + map.StormForcing[i] / 1000);

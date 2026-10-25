@@ -46,6 +46,7 @@ export const settlementSiteKinds = [
   "fire-seat",
   "river-node",
   "harbour",
+  "sanctuary",
   "melt-line",
   "fishery-coast",
   "halo-edge",

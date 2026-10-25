@@ -1599,6 +1599,81 @@ border breaks the line there.
 Evidence: unit tests on route propagation, warding displacement, pinning and decay; society
 tests on tenure; a short-scenario generation with a bound era.
 
+#### Execution steps (M6)
+
+Design fixed at expansion, from the Hallowed page and the code after M5. Hallowed is the
+first society-phase system: it is evaluated in the environmental refresh while people act
+and lapses to its stored charge between, so a kept sanctuary holds and an abandoned one
+fades by the history retention. Two origins instead of the block's three, since pilgrimage
+is a property of seats and roads rather than a place of its own: `tenure` locates at every
+inhabited seat with person-years on its cell (the mesh's `Tenure`), stronger where many
+ways converge on the seat (the pilgrimage bonus), and `kept-line` reads a new `KeptLine`
+channel of kept-years that the society recorder writes for frontier seats (a way whose two
+ends different polities control) and for kept works, forgetting over a memory so an
+unwalked line fades, together with walked routes past a threshold as pilgrimage roads. Both
+propagate by `ward`: a ring around each seat whose radius grows with its strength, lines
+where they lie, Aurora's stored charge adding to the field where the two meet, and an open
+Fire conduit (the quickening system's source) breaking the line at its cell. Its effect is
+`warding`, written to a `Warding` channel in the shared living feedback the way verdure is,
+and the rim is the cells just outside it. Warding is applied once in every other system's
+propagation: inside, intensity is scaled by one minus the warding and the amount removed,
+by area, lands on the rim cells, so the ground just outside a great sanctuary is the most
+dangerous in the world. Fire's fractures do not enter warded ground (the conduit is sealed
+and its budget unspent, so it opens at once when the ward lapses); brine pools and crusts
+before a ward as at a pit; a storm pulse is pinned inside by a profile share and the track
+energy inside lands on the rim's storm forcing; coastal forcing inside moves to the coast
+downdrift of the ring; rock resistance rises inside through the system's own effect and the
+first reach below the ring, where a channel leaves it, loses the same, so the sediment held
+back cuts there. Society: a `wards` role and a `sanctuary` site class on a ring. Classes
+ring, line and fading halo; no biome. Vow practice and temple-city economics are reads with
+no field behind them and stay with M8's ancillary work.
+
+1. System and medium: `magicSystems.ts` (sources tenure and kept-line, propagation ward,
+   effect warding, parameters), `magicPresets.ts`, `magicHallowed.ts` (sources, the ward
+   propagation, warding applied to other systems, the rim and the displaced writes),
+   `magicPropagation.ts` (fracture barrier; warding at the end of every propagation),
+   `magicSaltStocks.ts` (brine halt), `airColumn.ts` and `profile.ts` (storm pinning),
+   `magicFeedback.ts` (Warding in the living feedback; coastal forcing downdrift),
+   `field.ts`/`transportHistory.ts` (`Warding`, `KeptLine`), publications.
+2. Society: `societyRecord.ts` (kept lines), `societyMagicAccess.ts` (wards role),
+   `societySites.ts` and `society.ts` (sanctuary).
+3. Classes and names: rules ring, line and fading; palette; labels; preset tests.
+4. Exit checks: `magicHallowed.test.ts` (a tenured seat makes a ring and Fire inside is
+   weaker and on the rim stronger than without it; fractures stop at the ward and resume
+   when it lapses; brine pools before it; storm energy lands on the rim and the pulse is
+   pinned inside; coastal forcing moves downdrift; resistance up inside and down on the
+   reach below; a conduit breaks the line; Aurora reinforces; a lapsed ward fades over
+   history passes; a disabled Hallowed changes nothing); society test for kept lines and
+   the sanctuary; characterization snapshot; whole frontend suite, packages suite,
+   typecheck, lint, Prettier; record and commit.
+
+#### Changes and resume (M6)
+
+Completed 2026-10-25. Evidence: `magicHallowed.test.ts` shows a seat kept for two
+person-years per square metre warding a forty-kilometre ring with full warding at the seat,
+Fire at one strength everywhere scaled to nothing at the seat, down inside, up on every rim
+cell and untouched beyond; Fire's fractures stopping at the ward's half line and reaching
+the seat at once when the warding is gone; brine from a cell before the ward pooling and
+crusting there with none crossing; storm track energy inside landing on the rim's storm
+forcing while the seat's own stays nil; a channel leaving the ring taking the declared
+resistance from the first cell below while the seat's rock gains the system's own; a warded
+shore's forcing moving to the shore east along the current; Aurora's stored charge adding
+three tenths to the ward where they meet and an open conduit breaking it at its cell; a
+seat abandoned after one history pass holding half its charge and fading pass by pass; and
+a disabled Hallowed changing nothing. The society tests show the frontier kept at both
+seats of a way two polities hold and forgotten when one takes both, and a Hallowed ring
+seating a sanctuary above a killing ground. Design choices made while building: two
+origins rather than three, pilgrimage being a bonus of seats and a strength of roads; the
+rim is the set of cells with no warding touching a cell with any, computed when the warding
+is written, so a cell is never both inside and rim; warding is applied once at the end of
+every other system's propagation, so re-evaluations never compound it; coastal forcing is
+rerouted on the totals before they are applied, keeping the feedback's own-contribution
+bookkeeping exact; the ring's cell is found by the same surface-to-mesh lookup the society
+recorder uses, which the first fixture got wrong by picking a different triangle of the
+same square. Vow practice and temple-city economics stay with M8's ancillary reads. 967 of
+970 frontend-run tests pass (the three landmark failures predate this plan); typecheck,
+lint and Prettier clean.
+
 ### M7 — Veil
 
 Scope: the system as the Composition block gives it: strain from every pair of enabled
@@ -1697,4 +1772,7 @@ phase in the environmental refresh), with the frontend-suite regressions from M1
 repaired on a sub-branch. M5 completed 2026-10-25 (Salt from the dead and dead lakes;
 brine, bed and dust moved by drainage, crusting, wind and strain; glass, desiccation and
 Fire burning; salting in ecology; raking, salt trade and the necropolis; four meetings;
-three biomes). M6 to M8 pending. Next action: plan-phase expands M6.
+three biomes). M6 completed 2026-10-25 (Hallowed from kept seats and kept lines; warding
+applied to every other system with the rim taking what is removed; fracture, brine, storm
+and coast barriers with their displacement; the first society-phase system). M7 and M8
+pending. Next action: plan-phase expands M7.

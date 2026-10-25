@@ -32,6 +32,8 @@ const intensive = [
   "Verdure",
   "Salting",
   "LakeMemory",
+  "Warding",
+  "KeptLine",
   "RiverWarmth",
   "EcologyStillness",
 ] as const;

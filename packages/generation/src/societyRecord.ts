@@ -13,6 +13,7 @@ export function recordSocietyOnMesh(state: GenerationState, years: number) {
   if (!state.physical || !state.society || years <= 0) return;
   const deaths = recordSeats(state, years) + recordEvents(state);
   walkRoutes(state, years);
+  keepLines(state, years);
   // A system made of the dead is re-evaluated when there are new dead to make it from.
   if (deaths > 0)
     for (const system of state.domain.world.magicSystems ?? [])
@@ -68,6 +69,43 @@ function walkRoutes(state: GenerationState, years: number) {
     for (const cell of cellsAlong(state, a, b, map.mesh.spacing / 2))
       map.WalkedRoute[cell] += wear * years;
   }
+}
+/** Years over which an unkept line is forgotten. */
+const lineMemory = 150;
+const keptWorkKinds = new Set(["dam", "irrigation", "harbor", "pass", "weir"]);
+/**
+ * The lines people keep: a frontier, where a way's two ends are held by different polities,
+ * is kept at both seats; a work kept in condition keeps the bank or the pass it stands on.
+ * Every line forgets over the memory, so one nobody walks fades from the ground.
+ */
+function keepLines(state: GenerationState, years: number) {
+  const map = state.physical!.map,
+    keep = Math.exp(-years / lineMemory);
+  for (let i = 0; i < map.mesh.count; i++) map.KeptLine[i] *= keep;
+  const keptAt = (p: Pick<Position, "x" | "y">) => {
+    const cell = cellAt(state, p);
+    if (cell >= 0) map.KeptLine[cell] += years;
+  };
+  for (const seat of frontierSeats(state)) keptAt(seat);
+  for (const work of state.society!.region.works)
+    if (keptWorkKinds.has(work.kind) && work.condition > 0.5 && !work.demand) keptAt(work.position);
+}
+/** The seats at both ends of every way whose ends different polities control. */
+function frontierSeats(state: GenerationState) {
+  const region = state.society!.region,
+    control = region.politics?.control ?? {},
+    seats = new Map(region.communities.map((c) => [c.id, c.position])),
+    frontier: Position[] = [];
+  for (const link of region.connections) {
+    const a = control[link.from],
+      b = control[link.to];
+    if (!a || !b || a === b) continue;
+    for (const id of [link.from, link.to]) {
+      const seat = seats.get(id);
+      if (seat) frontier.push(seat);
+    }
+  }
+  return frontier;
 }
 function cellsAlong(
   state: GenerationState,

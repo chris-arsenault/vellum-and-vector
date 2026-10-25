@@ -62,6 +62,8 @@ export interface MagicWorkspace {
   naturalSurface: Float64Array;
   finalSurface: Float64Array;
   confluences: ConfluenceWorkspace;
+  /** Cells just outside a Hallowed ring: where what the ward holds back lands. */
+  wardRim: Uint8Array;
 }
 export function configuredSystems(state: GenerationState) {
   return state.domain.world.magicSystems ?? canonryMagicPresets();
@@ -207,6 +209,7 @@ export function initializeMagic(
     fog: new Float64Array(count),
     naturalSurface: new Float64Array(count),
     finalSurface: new Float64Array(count),
+    wardRim: new Uint8Array(count),
   };
 }
 /**

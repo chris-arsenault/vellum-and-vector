@@ -27,7 +27,8 @@ export function seepBrine(
     brine[i] -= flushed;
     field.lost += flushed;
     const target = map.FlowTargets[i];
-    if (target < 0 || map.WaterKindCodes[i] === 2) {
+    // A pit, a lake floor, or a ward across the drainage: the brine pools here and crusts.
+    if (target < 0 || map.WaterKindCodes[i] === 2 || map.Warding[target] >= 0.5) {
       const crust = brine[i] * p.crustShare;
       brine[i] -= crust;
       if (bed) bed[i] += crust;

@@ -198,6 +198,12 @@ function healingWell(r: SiteReader, i: number): SiteOpportunity | null {
     ? { kind: "healing-well", score: 0.9, reason: "at a Greenwood spring" }
     : null;
 }
+/** Inside a Hallowed ring: the ground on which nothing is harmed, and the pilgrims who come to it. */
+function sanctuary(r: SiteReader, i: number): SiteOpportunity | null {
+  return r.feature("hallowed", "ring", i)
+    ? { kind: "sanctuary", score: 0.8, reason: "inside a Hallowed ring, where nothing is harmed" }
+    : null;
+}
 /** A killing ground: the memorial garden a Salt tradition rakes, and the court beside the graves. */
 function necropolis(r: SiteReader, i: number): SiteOpportunity | null {
   return r.feature("salt", "ground", i)
@@ -209,6 +215,7 @@ const classifiers = [
   fireSeat,
   riverNode,
   harbour,
+  sanctuary,
   meltLine,
   healingWell,
   necropolis,

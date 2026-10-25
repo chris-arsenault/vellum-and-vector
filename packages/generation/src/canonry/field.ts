@@ -170,6 +170,10 @@ const metricFields = [
   // cell held while it was a lake, which outlives the lake for Salt's dead-lake origin.
   "Salting",
   "LakeMemory",
+  // Hallowed's warding (0 to 1): every other system is scaled down inside and lands on the
+  // rim; and the kept-years of the lines people keep walking, forgetting over a memory.
+  "Warding",
+  "KeptLine",
   // Magical heat carried down the drainage (native units): the thawed river below a wellspring.
   "RiverWarmth",
 ] as const;

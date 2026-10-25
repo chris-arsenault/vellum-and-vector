@@ -111,6 +111,7 @@ export function projectMagic(state: GenerationState) {
   project("iceCharge", "ratio", work.map.IceCharge, "intensive");
   project("verdure", "ratio", work.map.Verdure, "intensive");
   project("salting", "ratio", work.map.Salting, "intensive");
+  project("warding", "ratio", work.map.Warding, "intensive");
   project("tenure", "person-year", work.map.Tenure, "extensive");
   project("walkedRoute", "traveller-year", work.map.WalkedRoute, "extensive");
   project("massDeath", "people", work.map.MassDeath, "extensive");

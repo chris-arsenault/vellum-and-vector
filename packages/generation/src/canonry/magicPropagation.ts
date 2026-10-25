@@ -7,6 +7,7 @@ import { edgeLeadingTo, triangleIdentity } from "./mesh";
 import { oceanPropagation } from "./magicOcean";
 import type { MagicPropagation, MagicSystem } from "@atlas/domain";
 import { reservoirAmount, reservoirStock, withOrigin } from "./magicState";
+import { applyWarding, wardPropagation } from "./magicHallowed";
 
 function fracturePropagation(state: GenerationState, field: MagicField, activity: number) {
   const map = state.physical!.map,
@@ -25,7 +26,8 @@ function fracturePropagation(state: GenerationState, field: MagicField, activity
     if (field.intensity[i] !== value) continue;
     for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
       const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-      if (j < 0) continue;
+      // A ward seals the conduit: Fire does not enter, and its budget waits unspent.
+      if (j < 0 || map.Warding[j] >= 0.5) continue;
       const conductance = (map.FractureConductance[i] + map.FractureConductance[j]) / 2;
       const next =
         value -
@@ -239,6 +241,14 @@ export const magicPropagationStrategies: Record<MagicPropagation, PropagationStr
     scaleResult: true,
     propagate: (state, field) => brinePropagation(state, field),
   },
+  // Rings around kept seats and lines where they are kept; Aurora adds, an open conduit breaks.
+  ward: {
+    label: "Rings around kept seats, lines where they are kept",
+    requires: [],
+    parameters: ["wardReach", "auroraReinforce", "wardSpill"],
+    scaleResult: true,
+    propagate: (state, field) => wardPropagation(state, field),
+  },
 };
 function brinePropagation(state: GenerationState, field: MagicField) {
   const areas = state.physical!.map.mesh.areas,
@@ -301,6 +311,7 @@ export function propagateMagic(
     field.intensity[i] = clamp(round(merged.intensity[i] + field.stored[i]), 0, 1000);
     field.wake[i] *= Number(field.intensity[i] > 0);
   }
+  applyWarding(state, field);
 }
 interface MergedRun {
   intensity: Float64Array;

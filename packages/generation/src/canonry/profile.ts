@@ -341,6 +341,9 @@ export const physicalProfile = {
   // bare ground loses DuneMobility of its sediment downwind.
   StormScour: 0.3,
   DuneMobility: 0.3,
+  // A storm pulse is pinned by StormDeflection of the warding it crosses: Hallowed ground
+  // turns the track aside, and the energy lands on the ring's rim.
+  StormDeflection: 0.8,
   // A river carrying magical warmth loses WarmRiverEvaporation of its water to the air at
   // full warmth, so the closed lake it ends in gets less and dies sooner.
   WarmRiverEvaporation: 0.3,

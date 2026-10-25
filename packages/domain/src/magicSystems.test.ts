@@ -93,6 +93,7 @@ it("gives the Canonry presets named origins that reparse unchanged", () => {
     ["locus"],
     ["stand", "spring"],
     ["death", "dead-lake"],
+    ["seat", "line"],
   ]);
   expect(presets[0].origins[0].stocks.map((stock) => stock.id)).toEqual(["held", "spent"]);
   expect(presets[0].origins[1].stocks[0].carriers).toEqual(["crust", "river"]);

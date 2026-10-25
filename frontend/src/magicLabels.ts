@@ -30,6 +30,7 @@ export const effectLabels = {
   storm: "Storm energy a sharp warm front sends inland · 0–1",
   verdure: "Verdure · forest past its climate, deeper soil, braided rivers, 0–1",
   salting: "Salting · thinned cover, infertile soil, grazers turned away, drier air, 0–1",
+  warding: "Warding · other systems scaled down inside, their removed share laid on the rim, 0–1",
 };
 export const parameterLabels: Record<keyof MagicSystem["parameters"], string> = {
   sourceThreshold: "Minimum source density · 0–1,000",
@@ -113,4 +114,11 @@ export const parameterLabels: Record<keyof MagicSystem["parameters"], string> = 
   domeLimit: "Most a dome raises the ground · metres",
   domeSeep: "Bed a dome seeps to its ring as brine per epoch · share",
   saltBurn: "Salt Fire at full intensity burns away per epoch · share",
+  tenureFull: "Person-years per square metre at a seat that make a full source · person-years",
+  pilgrimageBonus: "Strength a seat gains per way converging on it · share",
+  lineFull: "Kept-years per square metre that make a full ward line · years",
+  roadFull: "Traveller-years per square metre that make a pilgrimage road · traveller-years",
+  wardReach: "Ring a full seat wards · metres",
+  auroraReinforce: "Aurora's stored charge added to the ward where they meet · share",
+  wardSpill: "Resistance the first reach below a ward loses at full warding · 0–1,000",
 };
