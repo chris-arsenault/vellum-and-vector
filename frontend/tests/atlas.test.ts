@@ -62,7 +62,11 @@ test("session world, generation, skipped refinement, editing and located templat
   await page.getByRole("button", { name: "Place Tavern plan on map", exact: true }).click();
   await canvas.click({ position: { x: 350, y: 350 } });
   await expect(page.locator(".job-row")).toHaveCount(3);
-  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
+  // Placing the template lays out its interior and repaints a fourth area's rasters; that takes
+  // longer than one expect budget on CI browsers.
+  await expect(page.locator(".job-row strong").first()).toHaveText("completed", {
+    timeout: 120_000,
+  });
   await page.getByRole("button", { name: "Atlas", exact: true }).click();
   await page.locator(".area-row").filter({ hasText: "Tavern plan" }).click();
   await expect(page.locator(".breadcrumbs")).toContainText("Tavern plan");
