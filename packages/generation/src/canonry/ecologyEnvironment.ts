@@ -23,6 +23,8 @@ export interface EcologyForcing {
   quickening: number;
   /** Aurora: living processes slow and persist, 0 to 1. */
   stillness: number;
+  /** Greenwood: life in sap and groundwater that grows past the climate, 0 to 1. */
+  verdure: number;
 }
 export const neutralEcology: EcologyForcing = {
   growth: 0,
@@ -38,6 +40,7 @@ export const neutralEcology: EcologyForcing = {
   dispersal: 0,
   quickening: 0,
   stillness: 0,
+  verdure: 0,
 };
 /** Potential evaporation in m/year at a mean temperature in °C, never below 0.25. */
 export const potentialEvaporation = (celsius: number) => Math.max(0.25, 0.3 + 0.045 * celsius);
@@ -108,8 +111,15 @@ function magicalBiome(map: PhysicalField, i: number) {
   return (
     quickenedBiome(map, i, trees, cover) ??
     stilledBiome(map, i, trees, cover) ??
-    foggedBiome(map, i, trees, cover)
+    foggedBiome(map, i, trees, cover) ??
+    verdantBiome(map, i, trees, cover)
   );
+}
+/** Greenwood's country: the Deepwood, the fen a river braids through it, the meadow at a spring. */
+function verdantBiome(map: PhysicalField, i: number, trees: number, cover: number) {
+  if (map.Verdure[i] < 0.3 || cover < 0.12) return null;
+  if (trees >= 0.5) return B("Deepwood");
+  return map.WetlandCover[i] >= 0.3 ? B("Wending fen") : B("Well meadow");
 }
 /** Fire's quickened country: a grove where the quickening grew trees, a meadow otherwise. */
 function quickenedBiome(map: PhysicalField, i: number, trees: number, cover: number) {

@@ -96,6 +96,14 @@ it("keeps every preset's located sources and propagated field exactly as before 
         "source": 1000,
         "wake": 27,
       },
+      {
+        "active": 0,
+        "id": "greenwood",
+        "intensity": 0,
+        "retained": 0,
+        "source": 0,
+        "wake": 0,
+      },
     ]
   `);
 });

@@ -36,9 +36,10 @@ export function evolveSoils(
       map.EcologicalDamage[i] * Math.exp((-years * f.recovery) / 300)
     );
     const weathering = (0.00015 + map.SoilCarbon[i] * 0.000005) * env.warmth * f.recovery;
+    // Greenwood deepens the soil it grows in.
     map.SoilDepth[i] = approach(
       map.SoilDepth[i],
-      Math.min(1.5, map.SedimentThickness[i] / 1024 + 0.3),
+      Math.min(1.5, map.SedimentThickness[i] / 1024 + 0.3) + f.verdure,
       years,
       1 / Math.max(1e-8, weathering)
     );

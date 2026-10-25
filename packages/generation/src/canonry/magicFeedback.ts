@@ -74,14 +74,25 @@ export function magicLivingFeedback(state: GenerationState) {
     fields = work.magic!.fields.filter((field) => field.definition.enabled);
   for (let i = 0; i < map.mesh.count; i++) {
     let quickening = 0,
-      stillness = 0;
+      stillness = 0,
+      verdure = 0;
     for (const field of fields) {
       const share = field.intensity[i] / 1000;
       quickening += share * field.definition.effects.quickening;
       stillness += share * field.definition.effects.stillness * heldCharge(map, field, i);
+      verdure += share * field.definition.effects.verdure;
     }
     map.Quickening[i] = unit(quickening);
     map.Stillness[i] = unit(stillness);
+    map.Verdure[i] = unit(verdure);
+    // Greenwood divides the river that crosses it into wetland channels: the braided reach.
+    if (map.Verdure[i] > 0.3 && map.RiverOrders[i] >= 1 && map.WaterKindCodes[i] === 0) {
+      map.WetlandCover[i] = Math.max(map.WetlandCover[i], 0.5 * map.Verdure[i]);
+      map.FloodplainIntensity[i] = Math.max(
+        map.FloodplainIntensity[i],
+        round(600 * map.Verdure[i])
+      );
+    }
   }
 }
 /** Shelf, water shallower than 400 m, or a cell on the shore: where a ray lifts deep water. */

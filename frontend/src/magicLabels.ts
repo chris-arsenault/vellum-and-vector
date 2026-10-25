@@ -28,6 +28,7 @@ export const effectLabels = {
   wakeWarming: "Wake warming · native units, 10 per °C",
   fog: "Fog share on coasts facing an upwelling band · 0–1",
   storm: "Storm energy a sharp warm front sends inland · 0–1",
+  verdure: "Verdure · forest past its climate, deeper soil, braided rivers, 0–1",
 };
 export const parameterLabels: Record<keyof MagicSystem["parameters"], string> = {
   sourceThreshold: "Minimum source density · 0–1,000",
@@ -79,4 +80,15 @@ export const parameterLabels: Record<keyof MagicSystem["parameters"], string> = 
   thawSubsidenceLimit: "Most a cell subsides from thaw · metres",
   shelfSaturation: "Shelf charge per square metre that holds sea ice fully",
   stormFrontGradient: "Sea-surface front that raises a full storm · 10 units per °C",
+  standAge: "Canopy age that makes an old stand · years",
+  standCover: "Tree cover an old stand needs · share",
+  peatDepth: "Peat carbon that makes a deep-peat stand",
+  rootCost: "Root cost per kilometre through full cover",
+  rootFloor: "Cover below which thin soil is bare rock · share",
+  springFlow: "Flow accumulation a spring needs",
+  springRock: "Hardest rock a spring rises through · 0–1,000",
+  overdrawShare: "Share of recharge drawn in an epoch that collapses a spring",
+  sinkDepth: "Ground lost when a spring collapses · metres",
+  animalCarry: "Stock herbivores carry toward their grazing per epoch · share",
+  strataShare: "Buried peat becoming stratum stock per epoch · share",
 };

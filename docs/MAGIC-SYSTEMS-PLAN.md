@@ -1258,6 +1258,74 @@ residue.
 Evidence: unit tests on propagation barriers, oasis chains, verdure forcing and collapse;
 ecology tests on growth beyond the band; a short-scenario generation compared with and
 without the system.
+Sulion: `5b4b3a5f-e2df-4521-b7db-7947be01a59e`; expansion opened 2026-10-25 (IDs in the
+Sulion tree).
+
+#### Execution steps (M3)
+
+Design fixed at expansion. Greenwood is a post-glacial system with two origins. The stand
+origin (source `verdant`) locates where the canopy is old (`CanopyAge` past a declared age
+with tree cover past a floor) or the peat is deep, and propagates by `roots`: a priority
+queue like Fire's fractures whose cost per metre falls with the living cover of the cells it
+crosses and which cannot enter bare rock (cover below a floor on thin soil), open water or
+ice. The spring origin (source `aquifer`) locates where recharge concentrates on soluble
+rock: land with a high flow accumulation, a slope break, rock resistance below a threshold
+(the world has no carbonate channel, so soft rock stands for karst) and a buried peat
+stratum beneath it; it propagates `local`, emerging only at the spring, and the roots carry
+it on. Its effect is `verdure`, written to a new physical channel `Verdure` the way
+quickening is, and the ecology reads it: suitability has a floor of the verdure (forest
+beyond its climate band), growth and seeding rise with it, establishment on bare ground
+starts from it (the oasis), soil deepens toward it, and river cells under verdure take
+wetland cover (the braided reach). Stocks: `sap` (default mirror, carried by animals in the
+gut along herbivore populations), `stratum` (buried peat accruing where peat lies under
+sediment, carried by the crust, read by the spring source) and `aquifer` (the spring's
+mirror, drawn down by society); a spring drawn past a share of its recharge in one epoch
+collapses: the cell seals, the ground drops by the sink depth within the subsided bound.
+Biomes Deepwood, Wending fen and Well meadow join the catalogue and the region rules;
+classes stand, spring, oasis and sinkhole; confluences Overgrowth rot, Frozen Deepwood and
+Brackish wending join the presets; a healing-well site class joins society's reads and a
+`greens` role joins its lookup. Tending practice and the lumber taboo are M4's.
+
+1. System, origins and media: `magicSystems.ts`, `magicPresets.ts`, `magicSources.ts`,
+   `magicPropagation.ts`, `magicFieldDefinitions.ts`, `field.ts`, `transportHistory.ts`,
+   `magicFeedback.ts` (Verdure), `magicRegions.ts`, `magicStocks.ts` (stratum, animal
+   carrier, overdraw collapse), `magicState.ts` (drawn), labels.
+2. Living and ground effects: `ecologyEnvironment.ts`, `ecologyProcesses.ts`,
+   `ecologyGrowth.ts`, `ecologySoils.ts`, a Greenwood living feedback for wetland channels.
+3. Biomes, classes, confluences and sites: `ecology.ts` (domain), `ecologyBiomes.ts`,
+   `ecologyFeatures.ts`, `namingCultures.ts`, `magicConfluences.ts` (presets),
+   `societySites.ts`, `society.ts`, `societyMagicAccess.ts`.
+4. Exit checks and record.
+
+#### Changes and resume (M3)
+
+Completed 2026-10-25. Evidence: `magicGreenwood.test.ts` checks that stands locate in old
+canopy and deep peat and springs on soft rock below a catchment with located points, and
+nowhere else; that roots spread through cover and stop at bare rock, at a lake and at ice
+and resume when the wall is removed; that verdure floors broadleaf suitability in a climate
+too cold for it, that the living feedback writes verdure from the field and braids a river
+reach into wetland and floodplain while dry country stays untouched; that a spring drawn
+past its recharge seals and drops its ground and rises no more, and that herds carry sap
+toward the ground they graze; and that a disabled Greenwood leaves no verdure. The
+characterization snapshot keeps the three original presets' totals exactly and adds
+Greenwood's zeros on the bare scenario. 163 generation and domain tests and 48 frontend
+unit tests pass; typecheck and Prettier clean; eslint clean after three structural
+refactors (the confluence presets split into elemental and Greenwood meetings, Greenwood's
+sources in `magicGreenwoodSources.ts`, and the stock advance dispatching per reservoir).
+Material choices made while building: the world has no carbonate channel, so the
+spring origin uses the same karst proxy the published `carbonate` ratio does (continental,
+unvolcanic crust) with soft rock resistance and a flow-accumulation floor; the spring
+propagates `local` and the roots carry it on, so one propagation strategy was added (roots)
+rather than two; verdure enters ecology as a floor under the climate's suitability verdict
+with shade still deciding who grows under whom, a growth multiplier, a seed-bank floor for
+establishment on bare ground, and a soil-depth target, which is the smallest set of hooks
+that gives forest past its climate, oases and deeper soil; the braided reach is written in
+the living feedback (wetland cover and floodplain intensity on river cells under verdure);
+the overdraw collapse reads a per-cell `drawn` tally that society's extraction writes and
+reuses the `sealed` and `subsided` channels; the animal carrier moves a stock to
+neighbouring cells in proportion to the herds there, which is the design's herd road at
+mesh scale. Tending practice and the lumber taboo are M4's; the Frozen Deepwood confluence
+is a class only, since Aurora's stillness already preserves the canopy it marks.
 
 ### M4 — Society as carrier and source
 
@@ -1424,5 +1492,7 @@ and exhumation for the vein; Fire melt as glacial meltwater; panning and sealed-
 migration in society). M1d completed 2026-10-25 (Aurora's ice, ground, moraine and shelf
 reservoirs; ice carriage; relict cold; charged ice erosion; thaw subsidence). M2
 completed 2026-10-25 (storm genesis on sharp sea fronts, the pulse carried inland by the
-air columns with Aurora pinning, scour and dunes on the track, seasonal harbours). M3 to
-M8 pending. Next action: plan-phase expands M3.
+air columns with Aurora pinning, scour and dunes on the track, seasonal harbours). M3
+completed 2026-10-25 (Greenwood with stand and spring origins, roots propagation, verdure
+in ecology and soils, braided reaches, karst collapse, herd carriage, three biomes, three
+confluences, the healing-well site). M4 to M8 pending. Next action: plan-phase expands M4.

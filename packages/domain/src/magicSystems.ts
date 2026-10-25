@@ -28,12 +28,21 @@ export const magicFeatureSchema = z.object({
     .optional(),
 });
 
-export const magicSources = ["geothermal", "cold", "deep-ocean", "placed", "impact"] as const;
+export const magicSources = [
+  "geothermal",
+  "cold",
+  "deep-ocean",
+  "placed",
+  "verdant",
+  "aquifer",
+  "impact",
+] as const;
 export const magicPropagations = [
   "fracture",
   "cold-drainage",
   "ocean-rays",
   "radial",
+  "roots",
   "local",
 ] as const;
 /**
@@ -138,6 +147,24 @@ const parameterSchema = z.object({
   // Sea-surface anomaly difference between neighbours (native units, 10 per °C) that makes a
   // front sharp enough to raise a full storm.
   stormFrontGradient: positive.default(30),
+  // A stand is old growth past this canopy age (years) with at least this tree cover, or
+  // peat at least this deep (peat carbon).
+  standAge: finite.nonnegative().default(600),
+  standCover: finite.min(0).max(1).default(0.6),
+  peatDepth: finite.nonnegative().default(10),
+  // Root cost per kilometre through full cover, and the cover below which thin soil is bare rock.
+  rootCost: positive.default(2),
+  rootFloor: finite.min(0).max(1).default(0.12),
+  // A spring needs this much flow accumulation on rock no harder than this.
+  springFlow: finite.nonnegative().default(40),
+  springRock: finite.nonnegative().default(700),
+  // A spring drawn past this share of its recharge in one epoch collapses its karst by this depth.
+  overdrawShare: finite.min(0).max(1).default(0.5),
+  sinkDepth: finite.nonnegative().default(4),
+  // Share of a stock herbivores carry to the cells they graze toward, per epoch.
+  animalCarry: finite.min(0).max(1).default(0.1),
+  // Share of buried peat carbon that becomes stratum stock per epoch.
+  strataShare: finite.nonnegative().default(0.02),
 });
 // Overrides carry no defaults of their own, so a reparse keeps an origin's overrides sparse.
 const parameterOverrideSchema = z.object(
@@ -173,6 +200,8 @@ const legacyRenewal: Record<MagicSource, MagicRenewal> = {
   "deep-ocean": "continuous",
   placed: "kept",
   impact: "finite",
+  verdant: "accumulating",
+  aquifer: "continuous",
 };
 const systemShape = z.object({
   id: z.string().min(1),
@@ -210,6 +239,9 @@ const systemShape = z.object({
       fog: finite.min(0).max(1).default(0),
       // Pressure: storm energy a sharp warm front at sea sends inland on the wind; 0–1.
       storm: finite.min(0).max(1).default(0),
+      // Greenwood: the life carried in sap and groundwater that grows forest past its
+      // climate, deepens soil and braids rivers; 0–1 at full intensity.
+      verdure: finite.min(0).max(1).default(0),
       vegetationGrowth: finite.min(-1).max(5).default(0),
       fire: finite.min(0).max(1).default(0),
       organicPreservation: finite.min(-3).max(3).default(0),
@@ -288,6 +320,7 @@ export const magicPhysicalFields = [
   "quickening",
   "stillness",
   "fog",
+  "verdure",
   "noise",
   "intensity",
   "history",

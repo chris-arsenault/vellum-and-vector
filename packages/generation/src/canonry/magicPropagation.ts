@@ -39,6 +39,44 @@ function fracturePropagation(state: GenerationState, field: MagicField, activity
     }
   }
 }
+/**
+ * Greenwood travels between roots: the cost of an edge falls as the living cover of the cell
+ * it enters rises, and a cell that is bare rock (cover below the floor on thin soil), open
+ * water or ice cannot be entered at all. The same priority queue as the fractures.
+ */
+function rootPropagation(state: GenerationState, field: MagicField, activity: number) {
+  const map = state.physical!.map,
+    p = field.definition.parameters;
+  const cover = (i: number) => map.TreeCover[i] + map.GrassCover[i] + map.WetlandCover[i];
+  const barrier = (i: number) =>
+    map.WaterKindCodes[i] !== 0 ||
+    map.IceThickness[i] > 0 ||
+    (cover(i) < p.rootFloor && map.SoilDepth[i] < 0.3);
+  field.parents = new Int32Array(map.mesh.count).fill(-1);
+  const queue = new PriorityQueue<{ index: number; value: number }>(
+    (a, b) => b.value - a.value || a.index - b.index
+  );
+  for (let i = 0; i < map.mesh.count; i++)
+    if (field.source[i] > 0) {
+      field.intensity[i] = clamp(round(field.source[i] * activity), 0, 1000);
+      queue.push({ index: i, value: field.intensity[i] });
+    }
+  while (queue.count) {
+    const { index: i, value } = queue.pop();
+    if (field.intensity[i] !== value) continue;
+    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
+      if (j < 0 || barrier(j)) continue;
+      const next =
+        value -
+        (p.rootCost * map.mesh.edgeLength[i * map.mesh.stride + edge]) / 1000 / (0.1 + cover(j));
+      if (next <= field.intensity[j]) continue;
+      field.intensity[j] = next;
+      field.parents[j] = i;
+      queue.push({ index: j, value: next });
+    }
+  }
+}
 function coldTarget(state: GenerationState, i: number, seed: number) {
   const map = state.physical!.map;
   let target = -1,
@@ -157,6 +195,14 @@ export const magicPropagationStrategies: Record<MagicPropagation, PropagationStr
     usesSourceRadius: true,
     scaleResult: true,
     propagate: radialPropagation,
+  },
+  // Life spreading between roots through connected cover; bare rock, open water and ice stop it.
+  roots: {
+    label: "Between roots through connected cover",
+    requires: ["ecology"],
+    parameters: ["rootCost", "rootFloor"],
+    scaleResult: false,
+    propagate: (state, field, _seed, activity) => rootPropagation(state, field, activity),
   },
   // Heat where the cores lie and nowhere else: a stock in gravel, not a conduit.
   local: {

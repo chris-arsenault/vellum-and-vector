@@ -95,5 +95,8 @@ export function groupSuitability(
   const shade = unit(1 - canopy(map, i) * (1 - group.shade));
   const soil = unit(map.SoilDepth[i] / (group.juvenile ? 0.3 : 0.06));
   const heatPreference = group.id === "conifer" ? unit((25 - e.temperature) / 12) : 1;
-  return warmth * frost * drought * wet * shade * soil * heatPreference;
+  const climate = warmth * frost * drought * wet * soil * heatPreference;
+  // Greenwood sustains growth past the climate band: verdure is a floor under the climate's
+  // verdict, while shade still decides who grows under whom.
+  return Math.max(climate, f.verdure) * shade;
 }

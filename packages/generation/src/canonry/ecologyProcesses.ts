@@ -83,6 +83,7 @@ function forcing(state: GenerationState, input: EcologyInput, context?: MapProce
       // Shared fields the magic feedback wrote; absent systems leave them at zero.
       quickening: map.Quickening[i],
       stillness: map.Stillness[i],
+      verdure: map.Verdure[i],
       productivity: (input.parameters?.vegetation ?? 1) * ecology.productivity,
       grazing: input.parameters?.grazing ?? 1,
       seasonality: ecology.seasonality,

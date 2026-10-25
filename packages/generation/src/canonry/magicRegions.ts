@@ -67,6 +67,7 @@ function channelValues(map: PhysicalField, field: MagicField): Record<string, Ar
     quickening: map.Quickening,
     stillness: map.Stillness,
     fog: map.FogForcing,
+    verdure: map.Verdure,
     temperature: map.Temperature,
     ice: map.IceThickness,
     water: map.WaterKindCodes,

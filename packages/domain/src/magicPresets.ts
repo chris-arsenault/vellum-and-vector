@@ -4,7 +4,17 @@ const at = (field: string, min: number): MagicCondition => ({ field, min });
 const oneOf = (field: string, values: number[]): MagicCondition => ({ field, values });
 const land = oneOf("water", [0, 2]);
 const ocean = oneOf("water", [1]);
-const siteRules = new Set(["core", "spring", "vent", "well", "locus", "rogue", "breach", "crater"]);
+const siteRules = new Set([
+  "core",
+  "spring",
+  "vent",
+  "well",
+  "locus",
+  "rogue",
+  "breach",
+  "crater",
+  "oasis",
+]);
 const courseRules = new Set(["vein", "wake", "steam", "placer"]);
 const feature = (
   id: string,
@@ -301,6 +311,65 @@ const pressurePreset = magicSystemSchema.parse({
     // in the shared list, not rules of this system: see canonryConfluencePresets.
   ],
 });
+// Greenwood: life carried in sap and groundwater. Old stands and deep peat are one origin,
+// springs on soft rock below a catchment the other; it spreads through connected cover and
+// cannot cross bare rock, open water or ice. Reach and rarity are the atlas's (ADR 0004).
+const greenwoodPreset = magicSystemSchema.parse({
+  id: "greenwood",
+  name: "Greenwood",
+  origins: [
+    {
+      id: "stand",
+      source: "verdant",
+      propagation: "roots",
+      renewal: "accumulating",
+      stocks: [
+        { id: "sap", reservoir: "sap", carriers: ["animal"] },
+        { id: "stratum", reservoir: "stratum", carriers: ["crust"] },
+      ],
+    },
+    {
+      id: "spring",
+      source: "aquifer",
+      propagation: "local",
+      renewal: "continuous",
+      stocks: [{ id: "aquifer", reservoir: "aquifer", carriers: ["groundwater"] }],
+    },
+  ],
+  phase: "post-glacial",
+  parameters: { baseCost: 2 },
+  effects: {
+    verdure: 1,
+    vegetationGrowth: 0.5,
+    seedDispersal: 1,
+  },
+  history: { retention: 0.6, storage: 0.4 },
+  features: [
+    feature(
+      "stand",
+      "Old stand",
+      40,
+      [[land, at("source:stand", 1), at("intensity", 300)]],
+      undefined,
+      covers(300, 900)
+    ),
+    feature("spring", "Greenwood spring", 80, [[land, at("source:spring", 1)]]),
+    // A spring on bare ground: the oasis that next epoch's roots carry on from.
+    feature("oasis", "Oasis", 85, [
+      [land, at("source:spring", 1), { field: "treeCover", max: 0.12 }],
+    ]),
+    feature(
+      "verdant",
+      "Verdant country",
+      15,
+      [[land, at("intensity", 250), at("verdure", 0.2)]],
+      [[land, at("intensity", 150), at("verdure", 0.1)]],
+      covers(150, 800)
+    ),
+    // A spring drawn past its recharge: the karst beneath it fell in.
+    feature("sinkhole", "Sinkhole field", 70, [[land, at("sealed", 1), at("source:spring", 0)]]),
+  ],
+});
 export function canonryMagicPresets() {
-  return structuredClone([firePreset, auroraPreset, pressurePreset]);
+  return structuredClone([firePreset, auroraPreset, pressurePreset, greenwoodPreset]);
 }

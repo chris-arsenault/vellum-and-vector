@@ -1,8 +1,9 @@
-import type { MagicOrigin } from "@atlas/domain";
+import type { MagicOrigin, MagicStock } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import { originStocks, stockKey, type MagicField } from "./magicState";
 import { clamp, units } from "./math";
+import { rebuild } from "./surface";
 
 /**
  * How much of a cell's stock the ground still exposes: whole on bare rock, none once the
@@ -32,15 +33,85 @@ export function releaseShare(map: PhysicalField, field: MagicField, i: number, e
 export function advanceStocks(state: GenerationState, field: MagicField, epochIndex: number) {
   const map = state.physical!.map;
   for (const origin of field.definition.origins) {
-    for (const stock of originStocks(origin)) {
-      const values = field.stocks[stockKey(origin, stock)];
-      if (origin.renewal === "finite" && stock === originStocks(origin)[0]) consume(field, values);
-      if (stock.reservoir === "ice") gatherIntoIce(field, values);
-      if (stock.reservoir === "ground") mirrorGround(map, field, values);
-      if (stock.carriers.includes("river")) field.lost += carryDownstream(map, field, values);
-      if (stock.carriers.includes("ice")) field.lost += carryWithIce(map, field, origin, values);
-    }
+    for (const stock of originStocks(origin)) advanceStock(map, field, origin, stock);
     if (origin.source === "impact") barrenFan(map, field, epochIndex);
+    if (origin.source === "aquifer") collapseOverdrawn(map, field, origin);
+  }
+  field.drawn.fill(0);
+}
+/** What a reservoir does in the advance, then what its carriers do. */
+const reservoirAdvances: Record<
+  string,
+  (map: PhysicalField, field: MagicField, values: Float64Array) => void
+> = {
+  ice: (_map, field, values) => gatherIntoIce(field, values),
+  ground: mirrorGround,
+  stratum: buryPeat,
+};
+function advanceStock(
+  map: PhysicalField,
+  field: MagicField,
+  origin: MagicOrigin,
+  stock: MagicStock
+) {
+  const values = field.stocks[stockKey(origin, stock)];
+  if (origin.renewal === "finite" && stock === originStocks(origin)[0]) consume(field, values);
+  reservoirAdvances[stock.reservoir]?.(map, field, values);
+  if (stock.carriers.includes("river")) field.lost += carryDownstream(map, field, values);
+  if (stock.carriers.includes("ice")) field.lost += carryWithIce(map, field, origin, values);
+  if (stock.carriers.includes("animal")) carryInTheGut(map, field, values);
+}
+/** Peat under sediment becomes a stratum the crust carries and an aquifer can leach. */
+function buryPeat(map: PhysicalField, field: MagicField, stratum: Float64Array) {
+  const p = field.definition.parameters;
+  for (let i = 0; i < stratum.length; i++) {
+    const buried = 1 - exposure(map, i, p.buryDepth);
+    if (buried > 0 && map.PeatCarbon[i] > 0)
+      stratum[i] += map.PeatCarbon[i] * map.mesh.areas[i] * p.strataShare * buried;
+  }
+}
+/**
+ * Herbivores carry a stock in the gut: a share of a grazed cell's stock goes to the
+ * neighbours in proportion to the herds there, so a herd road seeds the ground ahead of it.
+ */
+function carryInTheGut(map: PhysicalField, field: MagicField, values: Float64Array) {
+  const p = field.definition.parameters,
+    herds = (i: number) => map.Grazers[i] + map.Browsers[i],
+    moved = new Float64Array(values.length);
+  for (let i = 0; i < values.length; i++) {
+    if (values[i] <= 0 || herds(i) <= 0) continue;
+    const grazed = landNeighbours(map, i),
+      weight = grazed.reduce((sum, j) => sum + herds(j), 0);
+    if (weight <= 0) continue;
+    const share = values[i] * p.animalCarry * clamp(herds(i) / 1000, 0, 1);
+    values[i] -= share;
+    for (const j of grazed) moved[j] += (share * herds(j)) / weight;
+  }
+  for (let i = 0; i < values.length; i++) values[i] += moved[i];
+}
+function landNeighbours(map: PhysicalField, i: number) {
+  const cells: number[] = [];
+  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
+    if (j >= 0 && map.WaterKindCodes[j] === 0) cells.push(j);
+  }
+  return cells;
+}
+/** A spring drawn past a share of its recharge in one epoch collapses the karst beneath it. */
+function collapseOverdrawn(map: PhysicalField, field: MagicField, origin: MagicOrigin) {
+  const p = field.definition.parameters,
+    own = field.originSources[origin.id];
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (own[i] <= 0 || field.drawn[i] <= 0) continue;
+    const recharge = own[i] * map.mesh.areas[i];
+    if (field.drawn[i] < p.overdrawShare * recharge) continue;
+    field.sealed[i] = 1;
+    const room = Math.max(0, p.thawSubsidenceLimit - field.subsided[i]),
+      drop = Math.min(room, p.sinkDepth);
+    if (drop <= 0) continue;
+    field.subsided[i] += drop;
+    map.BedrockElevation[i] -= units(drop);
+    rebuild(map, i);
   }
 }
 /** The charge this epoch's propagation captured in the ice joins the ice reservoir. */

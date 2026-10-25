@@ -12,7 +12,14 @@ import {
 it("ships the three meetings as presets that validate against the preset systems", () => {
   const systems = canonryMagicPresets(),
     confluences = canonryConfluencePresets();
-  expect(confluences.map((c) => c.id)).toEqual(["war", "steam", "breach"]);
+  expect(confluences.map((c) => c.id)).toEqual([
+    "war",
+    "steam",
+    "breach",
+    "rot",
+    "frozen",
+    "brackish",
+  ]);
   expect(() => validateMagicConfluences(confluences, systems)).not.toThrow();
   expect(confluences[0].effects.fractureConductance).toBeGreaterThan(0);
   expect(confluences[0].hazard?.kind).toBe("thermal-fracture");

@@ -49,6 +49,7 @@ export const settlementSiteKinds = [
   "melt-line",
   "fishery-coast",
   "halo-edge",
+  "healing-well",
   "plain-node",
   "plain",
 ] as const;

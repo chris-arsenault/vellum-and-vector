@@ -101,6 +101,10 @@ const at = (field: string, min: number) => ({ field, min });
  * surface palette and saved maps already know (war, steam, breach).
  */
 export function canonryConfluencePresets(): MagicConfluence[] {
+  return [...elementalMeetings(), ...greenwoodMeetings()];
+}
+/** Fire, Aurora and Pressure meeting one another. */
+function elementalMeetings(): MagicConfluence[] {
   return [
     magicConfluenceSchema.parse({
       id: "war",
@@ -165,6 +169,54 @@ export function canonryConfluencePresets(): MagicConfluence[] {
         radius: 5000,
         cause: "Pressure reached charged coastal ice and breached it.",
       },
+    }),
+  ];
+}
+/** Greenwood meeting Fire, Aurora and Pressure. */
+function greenwoodMeetings(): MagicConfluence[] {
+  return [
+    magicConfluenceSchema.parse({
+      id: "rot",
+      name: "Overgrowth rot",
+      systems: ["fire", "greenwood"],
+      priority: 95,
+      cartography: "area",
+      seeds: [
+        [at("system:fire", 300), at("system:greenwood", 300), { field: "water", values: [0] }],
+      ],
+      // Verdure under quickening outruns structure: trees rot standing, the ground turns
+      // toxic with fungus, and the springs boil and fracture it with steam.
+      effects: { toxicity: 0.6, soilRemoval: 0.2, fractureConductance: 80, fog: 0.2 },
+      hazard: {
+        kind: "rot-fever",
+        rate: 0.0015,
+        severity: 0.25,
+        radius: 2500,
+        cause: "Fire quickened a Greenwood until it rotted and its springs boiled.",
+      },
+    }),
+    magicConfluenceSchema.parse({
+      id: "frozen",
+      name: "Frozen Deepwood",
+      systems: ["aurora", "greenwood"],
+      priority: 90,
+      cartography: "area",
+      seeds: [[at("system:aurora", 400), at("system:greenwood", 300), at("ice", 50)]],
+      // Forest preserved standing under held charge: canopy without growth or decay. The
+      // stillness already holds it; the meeting marks and keeps the front where the ice is.
+      effects: { iceMelt: 0 },
+    }),
+    magicConfluenceSchema.parse({
+      id: "brackish",
+      name: "Brackish wending",
+      systems: ["pressure", "greenwood"],
+      priority: 92,
+      cartography: "area",
+      seeds: [
+        [at("system:pressure", 300), at("system:greenwood", 300), { field: "water", values: [0] }],
+      ],
+      // Upwelling salts the coastal springs: the fen turns tidal marsh and the wells fail.
+      effects: { toxicity: 0.3, fog: 0.3 },
     }),
   ];
 }

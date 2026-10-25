@@ -8,11 +8,12 @@ import { societyValue } from "./societySupport";
  * it propagates: the system that quickens is mined and forged, the one that stills is
  * read through its crystals, the one that moves water is dived.
  */
-export type MagicRole = "quickens" | "stills" | "moves-water";
+export type MagicRole = "quickens" | "stills" | "moves-water" | "greens";
 export const magicRoles: Record<MagicRole, (effects: MagicSystem["effects"]) => boolean> = {
   quickens: (e) => e.quickening > 0,
   stills: (e) => e.stillness > 0,
   "moves-water": (e) => e.upwelling > 0 || e.seaSurface !== 0 || e.fog > 0 || e.wakeWarming > 0,
+  greens: (e) => e.verdure > 0,
 };
 /** The enabled system that fills this role, or none. */
 export function magicSystemForRole(systems: MagicSystem[] | undefined, role: MagicRole) {

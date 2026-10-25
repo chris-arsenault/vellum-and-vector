@@ -37,6 +37,10 @@ export const biomes = [
   { name: "Glow-lichen barrens", color: "#b9d4d6" },
   { name: "Fog heath", color: "#9db3a1" },
   { name: "Moss forest", color: "#4e8470" },
+  // Greenwood's verdure: the forest past its climate, the braided fen, the meadow at a spring.
+  { name: "Deepwood", color: "#2f6b3a" },
+  { name: "Wending fen", color: "#6e9a7c" },
+  { name: "Well meadow", color: "#9cc26a" },
 ] as const;
 export const biomeCode = (name: (typeof biomes)[number]["name"]) =>
   biomes.findIndex((biome) => biome.name === name);
@@ -51,6 +55,9 @@ export const biomeFamilies = [
   { kind: "rime", name: "Rime forest", color: "#7d98a4" },
   { kind: "glow", name: "Glow-lichen barrens", color: "#b9d4d6" },
   { kind: "fog", name: "Fog coast", color: "#9db3a1" },
+  { kind: "deepwood", name: "Deepwood", color: "#2f6b3a" },
+  { kind: "wending", name: "Wending fen", color: "#6e9a7c" },
+  { kind: "well", name: "Well meadow", color: "#9cc26a" },
 ] as const;
 
 export const ecologyLabels: Record<string, string> = {

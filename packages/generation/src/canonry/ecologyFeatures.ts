@@ -25,6 +25,9 @@ const families: Record<string, string> = {
   "Glow-lichen barrens": "glow",
   "Fog heath": "fog",
   "Moss forest": "fog",
+  Deepwood: "deepwood",
+  "Wending fen": "wending",
+  "Well meadow": "well",
 };
 /** Authored biome samples decide their cells outright: positive for their family's rule only. */
 function authoredTerms(state: GenerationState, rule: BiomeRule): Term[] {

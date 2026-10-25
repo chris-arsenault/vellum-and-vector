@@ -1,4 +1,5 @@
 import type { GenerationState } from "../process";
+import type { PhysicalField } from "./field";
 import { environment } from "./ecologyEnvironment";
 
 /** Area-weighted means over a biome region; they name the region, never shape it. */
@@ -97,7 +98,41 @@ function magicRules(state: GenerationState): BiomeRule[] {
       name: (r) => (r.broadleaf + r.conifer >= 0.4 ? "Moss forest" : "Fog heath"),
       system: (r) => strongest(fogging, r),
     });
+  const greening = fields.filter((f) => f.definition.effects.verdure > 0);
+  if (greening.length) rules.push(...verdantRules(map, greening, canopy, cover));
   return rules;
+}
+/** Greenwood's country: the Deepwood, the fen a river braids through it, the meadow at a spring. */
+function verdantRules(
+  map: PhysicalField,
+  greening: Systems,
+  canopy: (i: number) => number,
+  cover: (i: number) => number
+): BiomeRule[] {
+  const system = (r: BiomeSummary) => strongest(greening, r);
+  return [
+    {
+      kind: "deepwood",
+      share: 0.0003,
+      terms: [(i) => map.Verdure[i] - 0.3, (i) => canopy(i) - 0.5],
+      name: () => "Deepwood",
+      system,
+    },
+    {
+      kind: "wending",
+      share: 0.0003,
+      terms: [(i) => map.Verdure[i] - 0.3, (i) => map.WetlandCover[i] - 0.3],
+      name: () => "Wending fen",
+      system,
+    },
+    {
+      kind: "well",
+      share: 0.0003,
+      terms: [(i) => map.Verdure[i] - 0.3, (i) => 0.5 - canopy(i), (i) => cover(i) - 0.12],
+      name: () => "Well meadow",
+      system,
+    },
+  ];
 }
 function forestName(r: BiomeSummary) {
   const conifer = r.conifer / Math.max(1e-9, r.conifer + r.broadleaf);

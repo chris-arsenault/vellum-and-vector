@@ -41,6 +41,8 @@ export interface MagicField extends Record<MagicChannel, Float64Array> {
   seeded: Set<string>;
   /** Stock that left the budget: washed to the sea, extracted, released and spent. */
   lost: number;
+  /** Stock people drew from each cell since the last advance; an overdrawn spring collapses. */
+  drawn: Float64Array;
   features: Record<string, Uint8Array>;
   /** Share of each member cell a rule's class occupies, by rule id. */
   coverage: Record<string, Float64Array>;
@@ -110,6 +112,7 @@ function createMagicField(state: GenerationState, definition: MagicSystem): Magi
     stocks: {},
     seeded: new Set(),
     lost: 0,
+    drawn: new Float64Array(count),
     features: {},
     coverage: {},
     systemCoverage: new Float64Array(count),
@@ -151,6 +154,7 @@ export function drawStock(field: MagicField, cell: number, amount: number) {
   const drawn = Math.min(amount, available);
   for (const values of held) values[cell] -= (drawn * values[cell]) / available;
   field.lost += drawn;
+  field.drawn[cell] += drawn;
   return drawn;
 }
 export function initializeMagic(

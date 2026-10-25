@@ -158,6 +158,8 @@ const metricFields = [
   // carry inland from it (0–1,000), the track the weather follows.
   "StormForcing",
   "StormTrack",
+  // Greenwood's verdure: the life in sap and groundwater that ecology grows from (0 to 1).
+  "Verdure",
   // Magical heat carried down the drainage (native units): the thawed river below a wellspring.
   "RiverWarmth",
 ] as const;

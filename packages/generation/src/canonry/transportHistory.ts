@@ -29,6 +29,7 @@ const intensive = [
   "FogForcing",
   "StormForcing",
   "StormTrack",
+  "Verdure",
   "RiverWarmth",
   "EcologyStillness",
 ] as const;

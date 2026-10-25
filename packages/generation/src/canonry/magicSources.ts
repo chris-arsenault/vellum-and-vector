@@ -10,6 +10,7 @@ import { hashUnit } from "./noise";
 import type { MagicOrigin, MagicSource, MagicSystem } from "@atlas/domain";
 import { originStocks, stockKey, systemSeed, withOrigin } from "./magicState";
 import { exposure, heldStock, releaseShare } from "./magicStocks";
+import { aquiferSources, verdantSources } from "./magicGreenwoodSources";
 
 function isHeatMaximum(map: PhysicalField, start: number, radius: number) {
   const { mesh, HeatSourceDensity: density } = map;
@@ -208,7 +209,7 @@ function coldSources(state: GenerationState, field: MagicField) {
         Math.max(0, map.Elevation[i] / 1024) / 10
     );
 }
-interface LocateContext {
+export interface LocateContext {
   origin: MagicOrigin;
   epochIndex: number;
 }
@@ -322,6 +323,18 @@ export const magicSourceStrategies: Record<MagicSource, SourceStrategy> = {
     requires: [],
     parameters: [],
     locate: () => undefined,
+  },
+  verdant: {
+    label: "Old stands and deep peat",
+    requires: ["ecology"],
+    parameters: ["standAge", "standCover", "peatDepth"],
+    locate: verdantSources,
+  },
+  aquifer: {
+    label: "Springs on soft rock below a catchment",
+    requires: ["canonry:FlowRouting", "canonry:Elevation"],
+    parameters: ["springFlow", "springRock", "overdrawShare", "sinkDepth"],
+    locate: aquiferSources,
   },
   impact: {
     label: "Fallen cores around impact craters",

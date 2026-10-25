@@ -23,7 +23,8 @@ function proposal(
     previous = plantCover(map, group, i);
   // Below the fronts' presence threshold a group is locally extinct and must arrive again.
   const available = previous > 0.00001 ? years : Math.max(0, years - arrival.front.time[i]);
-  const seed = available > 0 ? 0.001 * Math.max(map[group.seed][i], 0.01) : 0;
+  // Verdure establishes on bare ground where no seed bank has formed: the oasis at a spring.
+  const seed = available > 0 ? 0.001 * Math.max(map[group.seed][i], 0.01 + 0.3 * f.verdure) : 0;
   const suitable = groupSuitability(map, group, i, f);
   const browsing = group.juvenile ? map.Browsers[i] * 0.7 : map.Grazers[i] * 2;
   const toxicity = map.EcologicalToxicity[i] * 0.02;
@@ -39,7 +40,8 @@ function proposal(
       Math.max(0, 1 + f.growth) *
       f.productivity *
       (1 + 2 * f.quickening) *
-      (1 - 0.7 * f.stillness) -
+      (1 - 0.7 * f.stillness) *
+      (1 + f.verdure) -
     mortality;
   const cover = logistic(Math.max(previous, seed), rate, available, suitable);
   return {
