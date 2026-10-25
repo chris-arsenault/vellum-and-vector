@@ -81,7 +81,9 @@ test("feature types toggle individually and a saved view restores them", async (
   await page.getByLabel("View name", { exact: true }).fill("Everything");
   await page.getByRole("button", { name: "Save map view", exact: true }).click();
   await expect(page.getByRole("button", { name: "Everything", exact: true })).toBeVisible();
-  await page.getByLabel("Show Waterfalls", { exact: true }).check();
+  // The toggle now writes through the saved view, so its state follows the committed command.
+  await page.getByLabel("Show Waterfalls", { exact: true }).click();
+  await expect(page.getByLabel("Show Waterfalls", { exact: true })).toBeChecked();
   await page.getByRole("button", { name: "Springs only", exact: true }).click();
   await expect(page.getByLabel("Show Waterfalls", { exact: true })).not.toBeChecked();
   await expect(page.getByLabel("Show Hot spring", { exact: true })).toBeChecked();
