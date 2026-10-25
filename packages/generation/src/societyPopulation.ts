@@ -1,5 +1,4 @@
 import {
-  mergePopulation,
   population,
   requireThat,
   populationGroupsSchema,
@@ -13,6 +12,8 @@ import { societyAncestor, inheritSociety } from "./societyInheritance";
 import { peopleTrait } from "./societyTraits";
 import { startingPopulations } from "./societySettlements";
 import { practiceOpportunities, seekerShares, seekingFactor } from "./societySeeking";
+import { drawToCentres, urbanTargets } from "./societyCentres";
+import { compactGroups } from "./societyGroups";
 
 export function initializePopulation(state: GenerationState, context: MapProcessContext) {
   const prior = societyAncestor(state);
@@ -114,9 +115,12 @@ export function evolvePopulation(
     years,
     Number(context.epochs.at(-1)?.variables.mobility ?? 1)
   );
+  // Where town-dwellers live: centres draw their hinterland's share as real migration.
+  work.urban = urbanTargets(state);
+  record.migrated += drawToCentres(state, years, work.urban);
   record.after = populationTotal(state);
   record.causes.push(
-    "Population responds to food, fresh water and terrain; migrants carry their joint affiliations along traversable connections."
+    "Population responds to food, fresh water and terrain; migrants carry their joint affiliations along traversable connections, and towns draw their hinterland's town-dwellers."
   );
   record.cycles = 1;
   const prior = work.region.history.at(-1);
@@ -161,11 +165,11 @@ export function migratePopulation(state: GenerationState, years: number, mobilit
   const index = new Map(communities.map((c, i) => [c.id, i]));
   const incoming: PopulationGroup[][] = communities.map(() => []),
     fractions = communities.map(() => 0);
-  const routes: { from: number; to: number; weight: number }[] = [];
+  const routes: { from: number; to: number; weight: number; link: number }[] = [];
   // Room per head decides where people are drawn; what they know how to do steers how many go.
   const offers = practiceOpportunities(state),
     seekers = seekerShares(communities);
-  for (const link of connections) {
+  for (const [linkIndex, link] of connections.entries()) {
     const a = index.get(link.from)!,
       b = index.get(link.to)!;
     const ca = communities[a],
@@ -180,22 +184,24 @@ export function migratePopulation(state: GenerationState, years: number, mobilit
       Math.abs(difference) *
       Math.exp(-link.travelCost / 200000) *
       seekingFactor(seekers[from], offers[to]);
-    routes.push({ from, to, weight });
+    routes.push({ from, to, weight, link: linkIndex });
     fractions[from] += weight;
   }
   const response = 1 - Math.exp((-years * mobility) / 120);
   const outgoing = communities.map((c) => population(c)),
     moved = communities.map(() => 0);
+  const traffic = (state.society!.traffic ??= new Float64Array(connections.length));
   for (const route of routes) {
     const fraction =
       (response * Math.min(0.5, fractions[route.from]) * route.weight) /
       Math.max(1e-12, fractions[route.from]);
     moved[route.from] += fraction;
+    traffic[route.link] += fraction * outgoing[route.from];
     for (const g of communities[route.from].groups)
       incoming[route.to].push({ ...g, count: g.count * fraction });
   }
   for (const [i, c] of communities.entries())
-    c.groups = mergePopulation([
+    c.groups = compactGroups([
       ...c.groups.map((g) => ({ ...g, count: g.count * (1 - moved[i]) })),
       ...incoming[i],
     ]);

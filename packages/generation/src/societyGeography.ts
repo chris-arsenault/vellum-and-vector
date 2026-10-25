@@ -45,6 +45,10 @@ export interface SocietyWorkspace {
   /** Elevation before local earthworks, for transferring only their terrain changes. */
   elevationBefore?: Float64Array;
   cycle?: { index: number; elapsed: number; final: boolean };
+  /** This cycle's central-place allocation of town-dwellers, read by settlements. */
+  urban?: import("./societyCentres").UrbanAllocation;
+  /** People who travelled each connection this cycle, by index into `region.connections`. */
+  traffic?: Float64Array;
 }
 /**
  * Travel on land costs its distance and thirty times its rise. Along a river both banks

@@ -366,7 +366,11 @@ tests pass unchanged.
 Evidence: M0 inventory; society unit tests; a browser check of the default
 world's capital labels.
 
-#### Execution steps (expanded 2026-10-24; Sulion IDs added when the branch opens)
+Sulion: `43efa16b-9eec-484b-9ef6-6c1849e3da0e`; expansion `60619808-e04d-457b-85d7-662a89e9c74f`
+(steps `c70fbdab-ab03-4cd4-b880-bb7111a7be36`, `a5c66dca-0dfa-448a-a9a3-0d53b4964cf6`,
+`176a8d56-b93d-4b57-9da4-12e783f3e327`).
+
+#### Execution steps
 
 1. Central-place targets
    - File(s): `packages/generation/src/societyCentres.ts` (new),
@@ -403,6 +407,25 @@ world's capital labels.
      measured sizes demand it.
    - Verify: D5 table recorded in this document; browser check of capital
      labels on the default world.
+   - State / evidence: completed 2026-10-25. The first full run hung for 37
+     minutes: every community sent slivers of every group to every centre in
+     reach, and the merged groups multiplied by cycle. Two bounds fixed it: a
+     catchment deals with its three strongest centres only, and a move of
+     under one person does not happen. A third, `compactGroups`
+     (`societyGroups.ts`), folds merged groups below one person into the
+     largest group of the same people after every migration, which cut the
+     per-cycle cost from 5.6 s back to about 1 s on a full world. Shares were
+     then retuned: 30% of a catchment's town-dwellers stay local and half of
+     those live in its chief town (the rest are latent small towns), 70% go
+     to centres, and a centre's town may not exceed half its catchment's
+     food. 900-year run (300 + 600), seed 104729, same tree: 23 present cycles
+     at 1 s each plus the 25 s end-of-history cycle; fill 0.97; capitals
+     123,277 / 118,635 / 83,601 / 76,665 / 56,695 / 12,585 / 11,581; regional
+     capitals 42,675 / 14,895 / 10,139 … 5,346; 65 unranked towns of 5,000 to
+     9,305; 88 major settlements of 421 inhabited (21%, against the 15% aim;
+     the World threshold is left at 5,000 for the user's map read);
+     urbanization 3.8% counting only mesh-scale towns. The 200-year default
+     is measured again in M4 with the default eras.
 
 ### M3 — Roads between the places that matter [depends on M0; benefits from M1, M2]
 
@@ -419,6 +442,50 @@ Links below the class threshold remain latent for regional refinement.
 Evidence: M0 inventory extended with roads by class, roads per major settlement,
 connected components among majors and the process's share of cycle time; a
 browser check of the roads layer over relief and rivers.
+
+#### Execution steps (expanded 2026-10-24; Sulion IDs added when the branch opens)
+
+1. Ways wear with use
+   - File(s): `packages/domain/src/society.ts` (`SocietyConnection.wear`),
+     `packages/generation/src/societyWays.ts` (new), `societyCentres.ts`
+     (return each centre's predecessor tree so hinterland flows can be walked
+     to the links they use), `societyPopulation.ts` (per-link migrant counts),
+     `societyEvolution.ts` (call order), `societyWays.test.ts`.
+   - Reference / outcome: D6. Per cycle each link's wear decays (about a
+     150-year memory) and gains the people who used it: migrants along the
+     link, market traffic between its two towns (geometric mean of their
+     town sizes, decaying with travel cost), and the hinterland's
+     town-dwellers walking the least-cost path to their centre. Worn links
+     cost less to travel (`travelCost` falls toward about half of the base
+     `distance` as wear reaches the road class), and migration, contact and
+     political reach read that cost next cycle.
+   - Verify: unit test on a line of communities with one city: the links on
+     the path to the city wear more than side links; wear decays when traffic
+     stops; `travelCost` never rises above the base nor below its floor.
+2. Publication by class with a connectivity floor [depends on #1]
+   - File(s): `societyPublication.ts` `publishRoutes`, `societyMapScope.ts`
+     (class thresholds), `frontend/src/vectorStyles.ts` (width by class),
+     `societyInventory.ts` (already counts by class).
+   - Change: a land or river link publishes when its wear passes the track
+     threshold, with `roadClass` track or road by wear, independent of
+     endpoint roles; then every major settlement without a published link
+     gets its least-cost path to the nearest major realized at track class,
+     and every polity capital its paths to the polity's regional capitals.
+     Sea links are left for M3b.
+   - Verify: inventory on the 1,300-year span: no major without a road,
+     major components close to the number of landmasses, roads form through
+     minor catchments; browser check.
+3. Roads follow the land [depends on #2]
+   - File(s): `mapRouting.ts` (`routeCost` for roads, A* with an admissible
+     distance heuristic), `societyPublication.ts`.
+   - Change: road cost = distance × slope term × land term, where the land
+     term rises with tree cover and standing water, falls along river banks
+     and channel access, and a river crossing pays a ford or bridge charge;
+     saddles fall out of the slope term. A* keeps publication of several
+     hundred roads within a few seconds.
+   - Verify: a unit test routes around a ridge through its saddle and along a
+     river bank rather than across the interfluve; publication timing in the
+     inventory.
 
 ### M3b — Shipping lanes and grand highways [depends on M3]
 

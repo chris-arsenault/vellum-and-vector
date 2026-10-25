@@ -90,9 +90,13 @@ export interface SocietyOccupation {
 export interface SocietyConnection {
   from: string;
   to: string;
+  /** The way's base cost over the terrain it crosses, before any wear. */
   distance: number;
+  /** What the way costs to travel now: the base, lowered as use wears it into a road. */
   travelCost: number;
   kind: "land" | "river" | "sea";
+  /** People-years of use the way remembers; decides whether it publishes as a road. */
+  wear?: number;
 }
 export interface SocietyEraRecord {
   id: string;

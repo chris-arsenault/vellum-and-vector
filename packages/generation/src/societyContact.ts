@@ -34,23 +34,39 @@ export function communityReach(region: SocietyRegion, start: number) {
 }
 /** Reuse one current travel graph when evaluating several centers in the same cycle. */
 export function communityDistances(region: SocietyRegion) {
+  const edges = contactEdges(region);
+  return (start: number) => routesFrom(edges, start).distance;
+}
+/**
+ * Least-cost routes from one community over the current contact graph: the distance to each
+ * community, the community before it on the way, and the connection (by index into
+ * `region.connections`) that last step used, so a flow can be charged to the ways it travels.
+ */
+export function communityRoutes(region: SocietyRegion) {
+  const edges = contactEdges(region);
+  return (start: number) => routesFrom(edges, start);
+}
+type ContactEdge = { to: number; cost: number; link: number };
+function contactEdges(region: SocietyRegion): ContactEdge[][] {
   const index = new Map(region.communities.map((c, i) => [c.id, i]));
   const cost = contactCosts(region);
-  const edges: { to: number; cost: number }[][] = region.communities.map(() => []);
-  for (const link of region.connections) {
-    const a = index.get(link.from),
-      b = index.get(link.to);
+  const edges: ContactEdge[][] = region.communities.map(() => []);
+  for (const [link, connection] of region.connections.entries()) {
+    const a = index.get(connection.from),
+      b = index.get(connection.to);
     if (a === undefined || b === undefined) continue;
-    const c = cost(link);
-    edges[a].push({ to: b, cost: c });
-    edges[b].push({ to: a, cost: c });
+    const c = cost(connection);
+    edges[a].push({ to: b, cost: c, link });
+    edges[b].push({ to: a, cost: c, link });
   }
-  return (start: number) => distancesFrom(edges, start);
+  return edges;
 }
-function distancesFrom(edges: { to: number; cost: number }[][], start: number) {
+function routesFrom(edges: ContactEdge[][], start: number) {
   const distance = new Float64Array(edges.length).fill(Infinity),
+    previous = new Int32Array(edges.length).fill(-1),
+    via = new Int32Array(edges.length).fill(-1),
     queue = new RouteHeap();
-  if (start < 0) return distance;
+  if (start < 0) return { distance, previous, via };
   distance[start] = 0;
   queue.push({ cell: start, cost: 0 });
   for (let entry = queue.pop(); entry; entry = queue.pop()) {
@@ -59,8 +75,10 @@ function distancesFrom(edges: { to: number; cost: number }[][], start: number) {
       const cost = entry.cost + edge.cost;
       if (cost >= distance[edge.to]) continue;
       distance[edge.to] = cost;
+      previous[edge.to] = entry.cell;
+      via[edge.to] = edge.link;
       queue.push({ cell: edge.to, cost });
     }
   }
-  return distance;
+  return { distance, previous, via };
 }

@@ -23,7 +23,7 @@ export function startingPopulations(state: GenerationState, context: MapProcessC
   return counts;
 }
 
-function contactPopulation(state: GenerationState) {
+export function contactPopulation(state: GenerationState) {
   const region = state.society!.region;
   const communities = new Map(region.communities.map((c) => [c.id, c]));
   const contact = new Map<string, number>();
@@ -44,7 +44,8 @@ function siteDraw(c: SocietyCommunity) {
   if (kind === "pass" || kind === "harbour") return 0.03;
   return 0;
 }
-function concentration(c: SocietyCommunity, contacts: number) {
+/** Residents a catchment's own people support outside primary production: its town-dwellers. */
+export function concentration(c: SocietyCommunity, contacts: number) {
   const people = population(c);
   const farming = c.support.farming / Math.max(1, c.support.capacity);
   const density = people / Math.max(1, people + c.areaKm2 * 2);
@@ -81,19 +82,29 @@ function updateStatus(c: SocietyCommunity, years: number) {
   else if (settlement.population < 20) c.status = "abandoned";
 }
 
+/**
+ * The cycle's central-place allocation decides where town-dwellers live; without one (a
+ * direct call outside the cycle) each catchment keeps its own.
+ */
+function townTargets(state: GenerationState) {
+  const targets = state.society!.urban?.targets;
+  if (targets) return targets;
+  const contact = contactPopulation(state);
+  return state.society!.region.communities.map((c) => concentration(c, contact.get(c.id) ?? 0));
+}
 export function evolveSettlements(
   state: GenerationState,
   context: MapProcessContext,
   years: number
 ) {
   if (state.society!.inherited) return;
-  const contact = contactPopulation(state);
+  const targets = townTargets(state);
   const era = context.epochs.at(-1)?.id ?? "Settlement";
   const year = state.society!.cycle?.elapsed ?? years;
-  for (const c of state.society!.region.communities) {
+  for (const [i, c] of state.society!.region.communities.entries()) {
     const label = `${era}, year ${year}`;
     if (dryLand(state, nearestSample(state, c.position)))
-      updateOccupation(c, concentration(c, contact.get(c.id) ?? 0), years, label);
+      updateOccupation(c, targets[i], years, label);
     else inundateSettlement(c, label);
     establishSettlement(state, c, `${era}, year ${year}`);
     recordOccupation(c, era, year);
