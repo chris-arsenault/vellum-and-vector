@@ -88,13 +88,12 @@ it("carries fractures with the moving plate", () => {
   const map = createField(createWorldMesh([-300_000, -100_000, 300_000, 100_000], 4000, 20_000));
   const p = atlasPhysicalProfile();
   p.PlateDriftPerEpoch = 100_000;
-  p.PlateDriftDecay = 1000;
   for (let i = 0; i < map.mesh.count; i++) {
     map.CrustThickness[i] = units(3000);
     map.CrustMotionX[i] = 1000;
     map.FractureConductance[i] = Math.abs(map.mesh.x[i]) < 15_000 ? 900 : 25;
   }
-  plateAdvection(map, physicalContext(7, 0, p, quiet, 0, 1));
+  plateAdvection(map, physicalContext(7, 0, p, { ...quiet, TectonicDurationMyr: 10 }, 0, 1));
   const at = (x: number) => map.FractureConductance[nearestTriangle(map.mesh, x, 0)];
   expect(at(100_000)).toBeGreaterThan(800);
   expect(at(0)).toBeLessThan(100);

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { tectonicDefaultMyr } from "./canonry/tectonicControls";
 import {
   ecologyEpochSchema,
   magicSystemSchema,
@@ -42,6 +43,7 @@ export const generationEpochSchema = z
   .object({
     id: z.string().trim().min(1),
     duration: z.number().finite().positive().default(1000),
+    tectonicDurationMyr: z.number().finite().nonnegative().default(tectonicDefaultMyr),
     tectonics: strength,
     hydrology: strength,
     ice: strength,

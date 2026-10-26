@@ -19,7 +19,7 @@ import { flowRouting } from "./canonry/routing";
 import { riverNetwork } from "./canonry/rivers";
 import { projectNative } from "./canonry/atlasProjection";
 import { defaultAtlasParameters } from "./atlasParameters";
-import { serializableBindings } from "./generationBindings";
+import { generationBindings, serializableBindings } from "./generationBindings";
 import { generationSettingsSchema } from "./generationSettings";
 import { initializePopulation } from "./societyPopulation";
 import { applySocietyWorks, changeSample, makeWork } from "./societyWorks";
@@ -108,6 +108,24 @@ function fixture() {
   initializePopulation(state, context);
   return { state, context };
 }
+it("keeps configured magic absent when fresh physical generation omitted it", () => {
+  const { state, context } = fixture(),
+    bound = generationBindings(context);
+  context.inputs = serializableBindings({
+    ...bound,
+    features: {
+      ...bound.features,
+      selection: { "magic.configured": { enabled: false, settings: {}, configuration: {} } },
+    },
+  });
+  changeSample(state, "elevation", 0, 10);
+  refreshSocietyEnvironment(state, context, 0, false);
+  expect(state.physical!.magic!.fields).toEqual([]);
+  expect(Object.keys(state.surface.channels).filter((name) => name.startsWith("magic:"))).toEqual(
+    []
+  );
+});
+
 it("refreshes a dam reservoir and downstream routing without advancing geological history", () => {
   const { state, context } = fixture(),
     map = state.physical!.map;

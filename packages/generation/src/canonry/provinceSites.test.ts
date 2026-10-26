@@ -6,42 +6,33 @@ import { createWorldMesh } from "./worldMesh";
 import { createProvinceSites } from "./provinceSites";
 import { continentalWorldProfile } from "./worldScale";
 import { tectonicProvinces } from "./provinces";
+import { tectonicSites } from "./tectonicState";
+import { siteMotion } from "./tectonicMotion";
 
-it("moves the provinces of one continental assembly together while assemblies differ", () => {
+it("moves mechanical plates coherently while keeping continental ancestry independent", () => {
   const profile = atlasPhysicalProfile({ continents: 4 });
   const map = createField(createWorldMesh([0, 0, 4_000_000, 3_000_000], 1024, 0));
-  const sites = createProvinceSites(map, physicalContext(73, 0, profile));
-  const byAssembly = new Map<number, typeof sites>();
-  for (const site of sites)
-    if (site.assembly > 0)
-      byAssembly.set(site.assembly, [...(byAssembly.get(site.assembly) ?? []), site]);
-  expect(byAssembly.size).toBe(4);
-  // Each province keeps (1 − coherence) of its own motion, so two provinces of one assembly
-  // can differ by at most that share of two opposed maximum motions.
-  const bound = (1 - profile.AssemblyMotionCoherence) * 2 * profile.TectonicMotionMaximum + 1e-9;
-  const means: [number, number][] = [];
-  for (const group of byAssembly.values()) {
-    for (const a of group)
-      for (const b of group)
-        expect(Math.hypot(a.motionX - b.motionX, a.motionY - b.motionY)).toBeLessThanOrEqual(bound);
-    means.push([
-      group.reduce((s, site) => s + site.motionX, 0) / group.length,
-      group.reduce((s, site) => s + site.motionY, 0) / group.length,
-    ]);
+  const sites = tectonicSites(map, physicalContext(73, 0, profile)),
+    plates = map.tectonics!.plates;
+  expect(new Set(sites.filter((site) => site.assembly > 0).map((site) => site.assembly)).size).toBe(
+    4
+  );
+  for (const site of sites) {
+    const plate = plates.find((plate) => plate.id === site.plate)!;
+    expect([site.motionX, site.motionY]).toEqual(siteMotion(map, site, plate));
   }
-  const spread = Math.max(
-    ...means.flatMap((a) => means.map((b) => Math.hypot(a[0] - b[0], a[1] - b[1])))
-  );
-  expect(spread).toBeGreaterThan(bound);
-  // Oceanic provinces still drift on their own.
-  const oceanic = sites.filter((site) => site.assembly === 0);
-  expect(oceanic.length).toBeGreaterThan(1);
-  const oceanicSpread = Math.max(
-    ...oceanic.flatMap((a) =>
-      oceanic.map((b) => Math.hypot(a.motionX - b.motionX, a.motionY - b.motionY))
-    )
-  );
-  expect(oceanicSpread).toBeGreaterThan(bound);
+  const origins = new Map<number, Set<number>>();
+  for (const site of sites)
+    if (site.assembly > 0) {
+      if (!origins.has(site.assembly)) origins.set(site.assembly, new Set());
+      origins.get(site.assembly)!.add(site.plate);
+    }
+  expect([...origins.values()].some((membership) => membership.size > 1)).toBe(true);
+  const mixed = plates.some((plate) => {
+    const members = sites.filter((site) => site.plate === plate.id);
+    return members.some((site) => site.assembly === 0) && members.some((site) => site.assembly > 0);
+  });
+  expect(mixed).toBe(true);
 });
 
 it("allocates unequal assembly territories while respecting an area-based crust budget", () => {

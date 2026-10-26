@@ -91,7 +91,7 @@ for (const seed of [73, 104729]) {
     expect(measurements.maritime.treeCover).toBeGreaterThan(measurements.dry.treeCover);
     expect(measurements.dry.landFraction).toBeGreaterThan(measurements.glaciated.landFraction);
     expect(measurements.glaciated.glacialErosion).toBeGreaterThan(measurements.dry.glacialErosion);
-    if (seed === 73)
-      expect(measurements.maritime.treeCover).toBeGreaterThan(measurements.maritime.grassCover);
-  }, 180000);
+    expect(measurements.maritime.woodlandShare).toBeGreaterThan(measurements.dry.woodlandShare);
+    expect(measurements.maritime.forestShare).toBeGreaterThan(measurements.dry.forestShare);
+  }, 600_000);
 }

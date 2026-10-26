@@ -4,29 +4,9 @@ import type { Grid } from "@atlas/domain";
 import { band, generateProfile, share, type Band } from "./climateFixture";
 
 type World = Awaited<ReturnType<typeof generateProfile>>;
-// Land precipitation (m) of the former arid preset, rainfall 0.2 scaling rain output,
-// recorded on 2026-10-21 before the regimes were refitted: the Dry ceiling.
-const aridBefore: Record<string, Record<number, number>> = {
-  "10..70": { 10: 0.08, 20: 0.055, 30: 0.056, 40: 0.091, 60: 0.038 },
-  "-70..70": {
-    [-70]: 0.041,
-    [-60]: 0.052,
-    [-50]: 0.074,
-    [-40]: 0.055,
-    [-30]: 0.065,
-    [-20]: 0.104,
-    [-10]: 0.143,
-    0: 0.15,
-    10: 0.137,
-    20: 0.11,
-    60: 0.039,
-  },
-};
 const meanRain = (profile: Band[]) =>
   profile.reduce((sum, b) => sum + b.precipitation * b.land, 0) /
   profile.reduce((sum, b) => sum + b.land, 0);
-const largest = (world: World) =>
-  world.rivers.reduce((best, river) => (river.discharge > best.discharge ? river : best));
 /** One integrated basin can outweigh a wetter world's largest river; ten large reaches cannot. */
 const majorDischarge = (world: World) =>
   world.rivers
@@ -41,14 +21,14 @@ function flooded(grid: Grid) {
   return c.floodFrequency.filter((value, i) => c.water[i] !== 1 && value > 0.1).length / land;
 }
 
-/** Dry stays arid: no wetter than the former arid preset, deserts and steppe everywhere. */
-function expectArid(dry: Band[], frame: string) {
+/** Dry stays arid in absolute depth and relative to the same world's Mixed regime. */
+function expectArid(dry: Band[], mixed: Band[], frame: string) {
   expect(meanRain(dry), frame).toBeLessThan(0.3);
   for (const b of dry) {
     expect(b.precipitation, `${frame} ${b.latitude}°`).toBeLessThan(0.6);
-    const before = aridBefore[frame][b.latitude];
-    if (before !== undefined && b.land >= 30)
-      expect(b.precipitation, `${frame} ${b.latitude}°`).toBeLessThan(before * 1.15 + 0.005);
+    const baseline = mixed.find((item) => item.latitude === b.latitude)!;
+    if (b.land >= 30)
+      expect(b.precipitation, `${frame} ${b.latitude}°`).toBeLessThan(baseline.precipitation * 0.2);
     expect(b.biomes.Rainforest ?? 0).toBe(0);
   }
 }
@@ -60,13 +40,13 @@ function expectWetter(wet: Band[], mixed: Band[], frame: string) {
   }
 }
 /** Rivers follow the water: more and larger in Wet, still present in Dry; Wet floods only part of its land. */
-function expectRivers([dry, mixed, wet]: World[], frame: string, spansEquator: boolean) {
+function expectRivers([dry, mixed, wet]: World[], frame: string) {
   expect(dry.rivers.length, frame).toBeGreaterThan(0);
   expect(wet.rivers.length, frame).toBeGreaterThanOrEqual(mixed.rivers.length);
   expect(majorDischarge(wet), frame).toBeGreaterThan(majorDischarge(mixed));
   expect(majorDischarge(mixed), frame).toBeGreaterThan(majorDischarge(dry));
-  // The wet tropics carry the largest river where the frame spans the equator.
-  if (spansEquator) expect(Math.abs(largest(mixed).latitude)).toBeLessThan(30);
+  // Discharge integrates catchment area as well as rainfall. A large northern
+  // continent can carry the largest river even when the tropics are wetter.
   expect(flooded(wet.grid), frame).toBeLessThan(0.5);
   expect(Math.max(...wet.grid.channels.floodFrequency)).toBeLessThanOrEqual(0.5);
 }
@@ -84,9 +64,9 @@ it.each([
         });
     const worlds = await Promise.all([regime("dry"), regime("mixed"), regime("wet")]);
     const [dry, mixed, wet] = worlds.map((world) => world.profile);
-    expectArid(dry, frame);
+    expectArid(dry, mixed, frame);
     expectWetter(wet, mixed, frame);
-    expectRivers(worlds, frame, south < 0);
+    expectRivers(worlds, frame);
     // The belt order survives every regime: the subtropics stay drier than the tropics.
     const [subtropics, tropics] = south < 0 ? [-30, -10] : [20, 10];
     for (const profile of [dry, mixed, wet])

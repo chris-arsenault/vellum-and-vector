@@ -105,12 +105,10 @@ function coldTarget(state: GenerationState, i: number, seed: number) {
 function coldPropagation(state: GenerationState, field: MagicField, seed: number) {
   const map = state.physical!.map,
     p = field.definition.parameters;
-  // Charge the glaciers already hold joins the cell's own fall before it drains coldward.
+  // Fresh fallout drains coldward. Existing charge stays in its ice carrier;
+  // it contributes local concentration without being captured a second time.
   const iceStock = reservoirStock(field, "ice");
-  const accumulation = Float64Array.from(
-    field.source,
-    (value, i) => value * map.mesh.areas[i] + (iceStock?.[i] ?? 0)
-  );
+  const accumulation = Float64Array.from(field.source, (value, i) => value * map.mesh.areas[i]);
   const order = Array.from({ length: map.mesh.count }, (_, i) => i).sort(
     (a, b) => map.Temperature[b] - map.Temperature[a] || b - a
   );
@@ -126,8 +124,10 @@ function coldPropagation(state: GenerationState, field: MagicField, seed: number
     // Local input is an intensity. Only transported charge represents an upstream
     // physical area; treating the local cell's whole inventory as inflow makes
     // coarse cells brighter even on identical terrain with no coldward transport.
-    const incoming = Math.max(0, accumulation[i] - field.source[i] * map.mesh.areas[i]);
-    const concentration = field.source[i] + incoming / p.accumulationArea;
+    const localIce = iceStock?.[i] ?? 0,
+      incoming = Math.max(0, accumulation[i] - field.source[i] * map.mesh.areas[i]);
+    const concentration =
+      field.source[i] + localIce / map.mesh.areas[i] + incoming / p.accumulationArea;
     field.intensity[i] = clamp(
       round(Math.log2(concentration + 1) * p.logScale) + Math.trunc(capacity / 4),
       0,

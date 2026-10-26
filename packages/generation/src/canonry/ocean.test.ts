@@ -3,7 +3,7 @@ import { atlasPhysicalProfile } from "./atlasProfile";
 import { physicalContext } from "./context";
 import { createField } from "./field";
 import { units } from "./math";
-import { oceanConnectivity } from "./ocean";
+import { oceanConnectivity, groundedIceWater } from "./ocean";
 import { createWorldMesh } from "./worldMesh";
 
 function oceanVolume(map: ReturnType<typeof createField>) {
@@ -63,4 +63,38 @@ it("sets the water budget at the first flood and keeps it when the land later si
   context.SeaLevelOffset = -40;
   oceanConnectivity(map, context);
   expect(map.EffectiveSeaLevel).toBe(map.BaseSeaLevel - units(40));
+});
+
+it("exchanges grounded ice with ocean water, excludes floating ice and never resets the final budget", () => {
+  const map = createField(createWorldMesh([0, 0, 400_000, 400_000], 1024, 0));
+  for (let i = 0; i < map.mesh.count; i++) map.Elevation[i] = units(map.mesh.x[i] / 200);
+  const context = physicalContext(1, 0, atlasPhysicalProfile());
+  oceanConnectivity(map, context);
+  const budget = map.BaseOceanVolume,
+    warmLevel = map.BaseSeaLevel;
+  map.CompletedEpochCount = 1;
+  for (let i = 0; i < map.mesh.count; i++) {
+    map.IceThickness[i] = 200;
+    map.GroundedIce[i] = map.mesh.x[i] > 100_000 ? 1 : 0;
+  }
+  oceanConnectivity(map, context);
+  const coldLevel = map.BaseSeaLevel;
+  expect(coldLevel).toBeLessThan(warmLevel);
+  expect((oceanVolume(map) + groundedIceWater(map)) / budget).toBeCloseTo(1, 5);
+  expect(map.BaseOceanVolume).toBe(budget);
+  oceanConnectivity(map, context);
+  expect(map.BaseSeaLevel).toBe(coldLevel);
+  map.GroundedIce.fill(0); // The remaining floating ice does not remove ocean water.
+  oceanConnectivity(map, context);
+  expect(map.BaseSeaLevel).toBeCloseTo(warmLevel, -1);
+  map.IceThickness.fill(0);
+  map.GlacialMeltwater.fill(1000); // Routing is a forcing, not another ocean inventory deposit.
+  oceanConnectivity(map, context);
+  expect(map.BaseSeaLevel).toBeCloseTo(warmLevel, -1);
+  map.Elevation[0] -= units(500);
+  oceanConnectivity(map, context);
+  expect(map.BaseOceanVolume).toBe(budget);
+  context.SeaLevelOffset = 40;
+  oceanConnectivity(map, context);
+  expect(map.EffectiveSeaLevel).toBe(map.BaseSeaLevel + units(40));
 });

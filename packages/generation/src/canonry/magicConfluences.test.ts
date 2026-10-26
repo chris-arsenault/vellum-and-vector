@@ -57,6 +57,20 @@ function meet(state: ReturnType<typeof scenario>, sharp: boolean) {
     { id: "chill", name: "Chill", priority: 5, seeds: [[{ field: "intensity", min: 200 }]] },
   ];
 }
+it("keeps confluence coastal impulses on dry terrain", () => {
+  const state = scenario(),
+    map = state.physical!.map;
+  meet(state, false);
+  state.physical!.magic!.confluences.definitions.find(
+    (entry) => entry.id === "war"
+  )!.effects.coastalForcing = 900;
+  for (let i = 0; i < map.mesh.count; i++) map.WaterKindCodes[i] = map.mesh.y[i] > 0 ? 1 : 0;
+  coverSystems(state, 7);
+  evaluateConfluences(state, 7, true);
+  expect(map.ExternalCoastalForcing.some((value) => value > 0)).toBe(true);
+  for (let i = 0; i < map.mesh.count; i++)
+    if (map.WaterKindCodes[i] !== 0) expect(map.ExternalCoastalForcing[i]).toBe(0);
+});
 it("takes coverage from both parents where they meet, bounds the sum, and acts on the ground", () => {
   const state = scenario(),
     map = state.physical!.map,

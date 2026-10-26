@@ -5,6 +5,7 @@ import type { Geometry } from "geojson";
 import { createRiverPaths, riverPath } from "../../packages/generation/src/canonry/riverPaths";
 import type { AtlasPhysicalWorkspace } from "../../packages/generation/src/canonry/atlasWorkspace";
 import type { PhysicalField } from "../../packages/generation/src/canonry/field";
+import { meshDeltaX, meshPointX } from "../../packages/generation/src/canonry/mesh";
 import { createWorld, session } from "./atlasState";
 
 async function generated() {
@@ -50,7 +51,8 @@ function* reaches(map: PhysicalField) {
 /** Dry until the mouth, then entering the water on the shore cell's edge with its receiving cell. */
 function expectMouth(map: PhysicalField, members: number[], line: number[][], shape: Geometry) {
   const covers = spatial.pointCoverage(shape),
-    wet = ([x, y]: number[]) => covers({ x, y, z: 0 }),
+    wet = ([x, y]: number[]) =>
+      covers({ x: meshPointX(map.mesh, x - map.mesh.origin[0]) + map.mesh.origin[0], y, z: 0 }),
     end = line.at(-1)!;
   expect(line.slice(0, -1).filter(wet)).toEqual([]);
   const [dx, dy] = [end[0] - line.at(-2)![0], end[1] - line.at(-2)![1]],
@@ -58,6 +60,8 @@ function expectMouth(map: PhysicalField, members: number[], line: number[][], sh
   expect(wet([end[0] + dx * step, end[1] + dy * step])).toBe(true);
   const a = centre(map, members.at(-2)!),
     b = centre(map, members.at(-1)!);
+  a.x = end[0] + meshDeltaX(map.mesh, a.x - end[0]);
+  b.x = a.x + meshDeltaX(map.mesh, b.x - a.x);
   const t =
     ((end[0] - a.x) * (b.x - a.x) + (end[1] - a.y) * (b.y - a.y)) /
     ((b.x - a.x) ** 2 + (b.y - a.y) ** 2);
@@ -109,7 +113,9 @@ it("presents the ocean and river mouths where generation placed them", async () 
     expect(reach.discharges).toHaveLength(reach.coordinates.length);
     if (reach.downstream === null) continue;
     const below = network[reach.downstream];
-    expect(below.coordinates[0]).toEqual(reach.coordinates.at(-1));
+    const end = reach.coordinates.at(-1)!;
+    expect(meshDeltaX(map.mesh, below.coordinates[0][0] - end[0])).toBe(0);
+    expect(below.coordinates[0][1]).toBe(end[1]);
     expect(below.discharges[0]).toBeGreaterThanOrEqual(reach.discharges.at(-1)!);
   }
 }, 300_000);

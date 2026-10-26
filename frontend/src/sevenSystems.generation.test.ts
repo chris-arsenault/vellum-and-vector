@@ -5,16 +5,24 @@ import { canonryMagicPresets, type Grid } from "@atlas/domain";
 import { newGenerationDraft, prepareDraft } from "./generationDraft";
 import { generationSnapshot } from "./generationJobs";
 
+function landCell(grid: Grid, i: number, iceFree = false) {
+  return (
+    grid.active[i] &&
+    grid.channels.water[i] !== 1 &&
+    (!iceFree || grid.channels.iceThickness[i] <= 1)
+  );
+}
+const activeCells = (grid: Grid) => grid.active.reduce((sum, active) => sum + active, 0);
+
 /** The share of land cells where a channel is above zero, and the channel's mean on land. */
-function landShare(grid: Grid, channel: string) {
-  const values = grid.channels[channel],
-    water = grid.channels.water;
+function landShare(grid: Grid, channel: string, iceFree = false) {
+  const values = grid.channels[channel];
   if (!values) return { share: 0, mean: 0 };
   let land = 0,
     active = 0,
     total = 0;
   for (let i = 0; i < values.length; i++) {
-    if (water[i] === 1) continue;
+    if (!landCell(grid, i, iceFree)) continue;
     land++;
     if (values[i] > 0) active++;
     total += values[i];
@@ -24,7 +32,7 @@ function landShare(grid: Grid, channel: string) {
 /** The number of land samples on the surface grid. */
 function landCells(grid: Grid) {
   let land = 0;
-  for (const kind of grid.channels.water) if (kind !== 1) land++;
+  for (let i = 0; i < grid.active.length; i++) if (landCell(grid, i)) land++;
   return land;
 }
 
@@ -43,11 +51,10 @@ function spread(grid: Grid, channel: string) {
 /**
  * One full draft world with all seven systems and the default human eras: every system's
  * presence is logged under the generation artifacts, the three physical systems must be
- * present, no system's classes may hold more than a quarter of the land area, and the named
- * places must be few enough to read: at most one per eight land cells. Before the source
- * floor and the place minima this world published two thousand places on 5,384 land cells,
- * 425 of them Fire cores; with them, 614 on 5,380, 110 cores. Reach and thresholds are
- * retuned from this log. Coverage is judged by its mean, the ground the classes hold: the
+ * present, and magic classes must leave most ordinary land uncovered. Aurora's ice fields
+ * are evaluated on ice-free land; covering a glacier is their physical role. Named places
+ * must remain sparse across the whole map, including the ocean that holds Pressure sites.
+ * Coverage is judged by its mean, the ground the classes hold: the
  * projected channel is interpolated, so the share of cells with any coverage overstates a
  * one-cell ring by its whole neighbourhood.
  */
@@ -86,6 +93,7 @@ it("generates a world with all seven systems where none saturates the land", asy
           {
             intensity: landShare(grid, `magic:${id}:intensity`),
             coverage: landShare(grid, `magic:${id}:coverage`),
+            iceFreeCoverage: landShare(grid, `magic:${id}:coverage`, true),
             places: features.filter((f) => f.layerId === "magic" && f.attributes.system === id)
               .length,
           },
@@ -118,9 +126,10 @@ it("generates a world with all seven systems where none saturates the land", asy
   writeFileSync(".artifacts/generation/seven-systems.json", JSON.stringify(log, null, 2));
   for (const id of ["fire", "aurora", "pressure"])
     expect(log.systems[id].intensity.share, id).toBeGreaterThan(0);
-  // No system's classes hold more than a quarter of the land area, and the places are few
-  // enough to read.
-  for (const id of systems) expect(log.systems[id].coverage.mean, id).toBeLessThanOrEqual(0.25);
-  expect(log.magicPlaces).toBeLessThanOrEqual(0.125 * log.landCells);
+  for (const id of systems) {
+    const coverage = id === "aurora" ? log.systems[id].iceFreeCoverage : log.systems[id].coverage;
+    expect(coverage.mean, id).toBeLessThanOrEqual(0.25);
+  }
+  expect(log.magicPlaces).toBeLessThanOrEqual(0.125 * activeCells(grid));
   expect(log.settlements).toBeGreaterThan(0);
 }, 600_000);

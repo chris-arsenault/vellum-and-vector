@@ -233,6 +233,21 @@ export function meshPoint(mesh: PhysicalMesh, x: number, y: number): [number, nu
   }
   return [meshPointX(mesh, x), y];
 }
+/** Short segment in a local chart, including the image on the opposite side of a pole. */
+export function meshLineDelta(mesh: PhysicalMesh, a: [number, number], b: [number, number]) {
+  let dx = meshDeltaX(mesh, b[0] - a[0]),
+    dy = b[1] - a[1];
+  if (!mesh.periodic?.poles) return [dx, dy];
+  const across = meshDeltaX(mesh, b[0] + mesh.periodic.width / 2 - a[0]);
+  for (const pole of [mesh.bounds[1], mesh.bounds[3]]) {
+    const vertical = 2 * pole - b[1] - a[1];
+    if (across * across + vertical * vertical < dx * dx + dy * dy) {
+      dx = across;
+      dy = vertical;
+    }
+  }
+  return [dx, dy];
+}
 export function edgeLeadingTo(mesh: PhysicalMesh, i: number, target: number): number {
   for (let edge = 0; edge < mesh.degree[i]; edge++)
     if (mesh.neighbors[i * mesh.stride + edge] === target) return edge;

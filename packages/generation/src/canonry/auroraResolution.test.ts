@@ -7,6 +7,7 @@ import { createMesh } from "./mesh";
 import { initializeMagic } from "./magicState";
 import { locateMagicSources } from "./magicSources";
 import { propagateMagic } from "./magicPropagation";
+import { advanceStocks } from "./magicStocks";
 
 function fixture() {
   const state = landscape(),
@@ -58,6 +59,34 @@ function drainage(steps: number, area: number, ice = 0) {
   propagateMagic(state, field, 73, 1);
   return { ...result, terminal: field.intensity[steps - 1] };
 }
+
+it("keeps a local ice reservoir's concentration independent of terrain cell area", () => {
+  const intensities: number[] = [];
+  for (const cellAreaKm2 of [800, 200, 50]) {
+    const { state, map, field } = fixture();
+    map.mesh.areas.fill(cellAreaKm2 * 1e6);
+    map.IceThickness.fill(300);
+    const ice = field.stocks["field/ice"];
+    for (let i = 0; i < ice.length; i++) ice[i] = 100 * map.mesh.areas[i];
+    locateMagicSources(state, field, 73);
+    propagateMagic(state, field, 73, 1);
+    intensities.push(field.intensity[0]);
+  }
+  expect(new Set(intensities).size).toBe(1);
+});
+
+it("keeps existing charge in its ice carrier without capturing it again as fresh fallout", () => {
+  const { state, map, field } = fixture();
+  map.IceThickness.fill(300);
+  const ice = field.stocks["field/ice"];
+  for (let i = 0; i < ice.length; i++) ice[i] = 100 * map.mesh.areas[i];
+  const before = ice.slice();
+  propagateMagic(state, field, 73, 1);
+  expect(field.intensity.some((value) => value > 0)).toBe(true);
+  expect(field.retained.every((value) => value === 0)).toBe(true);
+  advanceStocks(state, field, 0);
+  expect(ice).toEqual(before);
+});
 
 it("converges on the same cold sink while retaining concentration from its physical catchment", () => {
   const coarse = drainage(16, 400_000_000),

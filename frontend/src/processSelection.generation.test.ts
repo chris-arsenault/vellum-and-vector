@@ -27,7 +27,10 @@ it("generates coherent fresh geography with optional effects omitted and retains
   expect(output.state.surface.channels.volcanicConstruction).toBeUndefined();
   expect(output.state.surface.channels.biome).toBeUndefined();
   expect(output.state.surface.channels.floodplain).toBeUndefined();
-  expect(output.state.history).toHaveLength(1);
+  expect(output.state.history.map((entry) => entry.ancestry[0].id)).toEqual([
+    ...world.epochs.map((epoch) => epoch.id),
+    ...prepared.input.settings!.humanEras.map((era) => era.id),
+  ]);
   expect(
     Object.values(output.state.domain.world.features).some((feature) =>
       ["crater", "volcano", "forest"].includes(feature.kind)

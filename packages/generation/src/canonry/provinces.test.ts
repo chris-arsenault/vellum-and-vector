@@ -5,6 +5,7 @@ import { atlasPhysicalProfile } from "./atlasProfile";
 import { physicalContext } from "./context";
 import { createField } from "./field";
 import { createWorldMesh } from "./worldMesh";
+import { deformTectonicBonds } from "./tectonicFracture";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -23,6 +24,10 @@ it.each([1, 2, 3])("keeps a close pair's boundary localized for motion type %s",
   vi.spyOn(provinceSites, "createProvinceSites").mockReturnValue(closeSites(kind));
   const map = createField(createWorldMesh([-10000, -2000, 10000, 2000], 4096, 0));
   const profile = { ...atlasPhysicalProfile(), ContinentalWarpStrength: 0, RidgeWidth: 1000 };
+  tectonicProvinces(map, physicalContext(73, 0, profile));
+  const state = map.tectonics!;
+  state.bonds[0].extension = 0.3;
+  deformTectonicBonds(map, state, 0);
   tectonicProvinces(map, physicalContext(73, 0, profile));
   let active = 0,
     interior = 0;
@@ -45,15 +50,19 @@ it.each([1, 2, 3])("keeps a close pair's boundary localized for motion type %s",
   expect(interior).toBeGreaterThan(active);
 });
 
-it("keeps a close continental pair's rift out of its distant interiors", () => {
+it("keeps accumulated rift deformation out of distant continental interiors", () => {
   vi.spyOn(provinceSites, "createProvinceSites").mockReturnValue(closeSites(2, true));
   const map = createField(createWorldMesh([-10000, -2000, 10000, 2000], 4096, 0));
   const profile = { ...atlasPhysicalProfile(), ContinentalWarpStrength: 0, RidgeWidth: 1000 };
   tectonicProvinces(map, physicalContext(73, 0, profile));
+  map.tectonics!.bonds[0].extension = 0.3;
+  tectonicProvinces(map, physicalContext(73, 0, profile));
+  tectonicProvinces(map, physicalContext(73, 0, profile));
   for (let i = 0; i < map.mesh.contentCount; i++) {
     if (Math.abs(map.mesh.x[i]) < 400) {
       expect(map.CrustAssemblySeparation[i]).toBeGreaterThan(0);
-      expect(map.CrustContinentalFraction[i]).toBeLessThan(500);
+      expect(map.CrustRiftStrain[i]).toBeGreaterThan(0);
+      expect(map.CrustContinentalFraction[i]).toBe(1000);
     }
     if (Math.abs(map.mesh.x[i]) > 1500) {
       expect(map.CrustAssemblySeparation[i]).toBe(0);

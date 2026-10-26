@@ -354,7 +354,6 @@ it.each(["volcano", "crater"])(
     map.CrustMotionX.fill(1000);
     map.CrustMotionY.fill(0);
     p.PlateDriftPerEpoch = 250;
-    p.PlateDriftDecay = 1000;
     const event = map.events.find((e) => e.kind != "plume")!;
     const previous = event.x;
     plateAdvection(map, context);

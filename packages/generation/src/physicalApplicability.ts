@@ -29,7 +29,10 @@ export const physicalApplicability: Record<string, FeatureApplicability> = {
   },
   "physical.tectonic-history": {
     settingConsumers: { plateDrift: ["canonry.plate-advection"] },
-    epochControls: [strength("tectonics", "Epoch tectonic activity")],
+    epochControls: [
+      strength("tectonics", "Epoch tectonic activity"),
+      { key: "tectonicDurationMyr", label: "Geological interval", unit: "Myr", min: 0 },
+    ],
   },
   "physical.mountains": { epochControls: [strength("tectonics", "Epoch tectonic activity")] },
   "physical.volcanism": {

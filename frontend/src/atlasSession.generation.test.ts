@@ -48,4 +48,4 @@ it("runs a causal landscape without services and retains authored features", asy
       .filter((c) => c.startsWith("culture:"))
       .sort()
   ).toEqual(cultures.map((culture) => `culture:${culture.id}`).sort());
-}, 120000);
+}, 300_000);

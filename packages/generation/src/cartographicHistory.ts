@@ -9,8 +9,6 @@ const curve = z.tuple([
 export const terrainHistorySchema = z
   .object({
     tectonics: curve,
-    ice: curve,
-    glaciated: z.boolean(),
   })
   .strict();
 export type TerrainHistory = z.infer<typeof terrainHistorySchema>;
@@ -25,20 +23,12 @@ function at(values: readonly number[], index: number, count: number) {
 
 export function terrainEpochs(
   epochs: Epoch[],
-  history: z.infer<typeof terrainHistorySchema>,
-  temperature: number
+  history: z.infer<typeof terrainHistorySchema>
 ): Epoch[] {
-  return epochs.map((epoch, index) => {
-    const cold = at([0, 1, 0], index, epochs.length);
-    return {
-      ...epoch,
-      duration: history.glaciated && index === epochs.length - 1 ? 200 : 1000,
-      tectonics: at(history.tectonics, index, epochs.length),
-      ice: at(history.ice, index, epochs.length),
-      temperature: 15 + (history.glaciated ? (-12 - temperature) * cold : 0),
-      seaLevel: history.glaciated ? -60 * cold : 0,
-    };
-  });
+  return epochs.map((epoch, index) => ({
+    ...epoch,
+    tectonics: at(history.tectonics, index, epochs.length),
+  }));
 }
 
 export function landscapeEpoch(

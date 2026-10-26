@@ -84,13 +84,11 @@ export const clockConfiguration: Configuration = {
     fields: ["epochs"],
     prepare: (configuration, settings) =>
       projectClock({ epochs: settings.epochs.map(physicalOnly), ...configuration }, settings),
-    bind(configuration, settings, parameters) {
+    bind(configuration, settings) {
       const bound = clockSchema.parse(configuration);
       const projected = projectClock(configuration, settings);
       return {
-        epochs: bound.history
-          ? terrainEpochs(projected.epochs, bound.history, parameters.temperature)
-          : projected.epochs,
+        epochs: bound.history ? terrainEpochs(projected.epochs, bound.history) : projected.epochs,
       };
     },
   },

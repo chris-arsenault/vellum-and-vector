@@ -121,6 +121,13 @@ function lowestBoundary(map: PhysicalField) {
   for (const i of oceanSeeds(map)) boundary = Math.min(boundary, map.Elevation[i]);
   return boundary;
 }
+/** Water-equivalent volume held above the ocean in grounded land and lake ice. */
+export function groundedIceWater(map: PhysicalField) {
+  let volume = 0;
+  for (let i = 0; i < map.mesh.count; i++)
+    if (map.GroundedIce[i] !== 0) volume += map.IceThickness[i] * map.mesh.contentAreas[i] * 0.917;
+  return volume;
+}
 /**
  * Formation chooses the water budget: each formation flood sets the level that covers the
  * target share of the content area, so margins and shelves built during formation are part of
@@ -130,18 +137,18 @@ function lowestBoundary(map: PhysicalField) {
  */
 function seaLevel(map: PhysicalField, c: PhysicalContext) {
   const owned = !map.SeaLevelInitialized || map.BaseOceanVolume > 0;
-  if (owned && !c.IsEvolutionEpoch) {
+  if (owned && !c.IsEvolutionEpoch && map.CompletedEpochCount === 0) {
     const area = map.mesh.contentAreas.reduce((sum, value) => sum + value, 0);
     const target = area * c.Profile.QualityTargets.OceanCoverage.target;
     map.BaseSeaLevel = Math.max(
       connectedOceanLevel(map, target) + units(c.Profile.SeaLevel * c.Profile.ElevationScale),
       lowestBoundary(map) + units(1)
     );
-    map.BaseOceanVolume = connectedVolume(map, map.BaseSeaLevel);
+    map.BaseOceanVolume = connectedVolume(map, map.BaseSeaLevel) + groundedIceWater(map);
     map.SeaLevelInitialized = true;
   } else if (map.BaseOceanVolume > 0) {
     map.BaseSeaLevel = Math.max(
-      levelForVolume(map, map.BaseOceanVolume),
+      levelForVolume(map, Math.max(0, map.BaseOceanVolume - groundedIceWater(map))),
       lowestBoundary(map) + units(1)
     );
   }

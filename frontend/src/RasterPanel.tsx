@@ -42,7 +42,7 @@ export function RasterPanel({
     </section>
   );
 }
-function TerrainControls({
+export function TerrainControls({
   view,
   update,
 }: {

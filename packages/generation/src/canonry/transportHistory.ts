@@ -1,8 +1,9 @@
 // PlateAdvectionLayer.HistorySnapshot and TransportAccumulator, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
-import { clamp, truncate, units } from "./math";
+import { clamp, units } from "./math";
 import { weightScale, type TransportPlan } from "./transportPlan";
 import { ecologyCarbon, ecologyMemory, ecologyRatios } from "./ecologyState";
+import { captureCrustColumns, transportCrustColumns } from "./crustTransport";
 
 const intensive = [
   ...ecologyRatios,
@@ -13,10 +14,10 @@ const intensive = [
   "OrganicBurialDepth",
   "OrganicMaturity",
   "BedrockElevation",
-  "CrustThickness",
   "CrustSupportElevation",
-  "CrustContinentalFraction",
   "CrustAge",
+  "CrustRiftStrain",
+  "CrustRiftAgeMyr",
   "RockResistance",
   "CrustSutureStrength",
   "ImpactHeat",
@@ -54,6 +55,8 @@ const extensive = [
   "MineralNutrients",
   "MigrationFlux",
   "SurfaceRockLoad",
+  "OceanicSubduction",
+  "OceanicSubductionHistory",
   "SedimentThickness",
   "SedimentSupply",
   "CumulativeFluvialErosion",
@@ -78,12 +81,14 @@ const maxima = [
 ] as const;
 const categories = [
   "CrustAssemblyIds",
+  "CrustPlateIds",
   "CrustSuturePairIds",
   "VolcanicLastActiveEpoch",
   "FeatureFlags",
 ] as const;
 type Accumulator = Record<(typeof categories)[number], Float64Array> & {
   assemblyContribution: Float64Array;
+  plateContribution: Float64Array;
   sutureContribution: Float64Array;
 };
 function accumulator(count: number): Accumulator {
@@ -96,6 +101,7 @@ function accumulator(count: number): Accumulator {
   return {
     ...fields,
     assemblyContribution: new Float64Array(count),
+    plateContribution: new Float64Array(count),
     sutureContribution: new Float64Array(count),
   } as Accumulator;
 }
@@ -148,6 +154,10 @@ function addCategories(
 ) {
   addAssembly(a, map, source, target, weight);
   addSuture(a, map, source, target, weight);
+  if (weight > a.plateContribution[target]) {
+    a.CrustPlateIds[target] = map.CrustPlateIds[source];
+    a.plateContribution[target] = weight;
+  }
   if (weight >= weightScale / 20) {
     a.VolcanicLastActiveEpoch[target] = Math.max(
       a.VolcanicLastActiveEpoch[target],
@@ -171,10 +181,10 @@ function finalize(
 }
 function freshValue(name: (typeof intensive)[number]): number {
   if (name === "BedrockElevation" || name === "CrustSupportElevation") return units(-200);
-  if (name === "CrustThickness") return units(1000);
   return name === "RockResistance" ? 1000 : 0;
 }
 function completeCategories(a: Accumulator, map: PhysicalField, target: number) {
+  map.CrustPlateIds[target] = a.CrustPlateIds[target];
   map.CrustAssemblyIds[target] =
     map.CrustContinentalFraction[target] > 0 ? a.CrustAssemblyIds[target] : 0;
   map.CrustSuturePairIds[target] =
@@ -214,10 +224,6 @@ function completeIntensive(
   for (let target = 0; target < map.mesh.count; target++) {
     const arrival = plan.arrivals[target],
       boundary = map.TectonicBoundaryCodes[target];
-    if (name === "CrustThickness" && boundary === 1 && arrival > weightScale)
-      map.ConvergentCrustSurplus[target] = truncate(
-        (scratch[target] - truncate(scratch[target] / arrival) * weightScale) / weightScale
-      );
     map[name][target] = finalize(scratch[target], arrival, freshValue(name), boundary, false);
   }
 }
@@ -234,19 +240,25 @@ function completeExtensive(
   }
 }
 export function transportHistory(map: PhysicalField, plan: TransportPlan) {
+  const crust = captureCrustColumns(map);
   const a = accumulator(map.mesh.count),
     scratch = new Float64Array(map.mesh.count),
     areaWeights = new Float64Array(plan.weights.length);
   const biomes = map.BiomeCodes.slice();
   // Resolve labels before their source fractions/strengths are transported in place.
-  for (let source = 0; source < map.mesh.count; source++)
+  for (let source = 0; source < map.mesh.count; source++) {
+    let retained = 0;
     for (let offset = plan.offsets[source]; offset < plan.offsets[source + 1]; offset++) {
       const target = plan.targets[offset];
       if (target < 0) continue;
       areaWeights[offset] =
         (plan.weights[offset] * map.mesh.areas[source]) / map.mesh.areas[target];
       addCategories(a, map, source, target, plan.weights[offset]);
+      retained += plan.weights[offset] / weightScale;
     }
+    map.SedimentExportedTotal +=
+      (Math.max(0, 1 - retained) * map.SedimentSupply[source] * map.mesh.areas[source]) / 1024;
+  }
   for (const name of intensive) {
     accumulateChannel(map, plan, name, scratch, areaWeights);
     completeIntensive(map, plan, name, scratch);
@@ -259,6 +271,7 @@ export function transportHistory(map: PhysicalField, plan: TransportPlan) {
     accumulateChannel(map, plan, name, scratch);
     map[name].set(scratch);
   }
+  transportCrustColumns(map, plan, crust);
   for (let target = 0; target < map.mesh.count; target++) {
     completeCategories(a, map, target);
     const source = plan.dominant[target];

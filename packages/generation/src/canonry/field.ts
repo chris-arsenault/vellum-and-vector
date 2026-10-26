@@ -3,11 +3,15 @@ import type { PhysicalMesh } from "./mesh";
 import type { TransportPlan } from "./transportPlan";
 import { ecologyScalars } from "./ecologyState";
 import { noWaterSurface } from "./math";
+import type { TectonicState } from "./tectonicState";
+import type { LandmarkLedger } from "./landmarkLedger";
+import type { CrustBudget } from "./crustTransport";
 
 const integerFields = [
   "BiomeCodes",
   "CrustBasePotential",
   "CrustAssemblyIds",
+  "CrustPlateIds",
   "CrustAssemblySeparation",
   "CrustCollisionIntensity",
   "CrustSuturePairIds",
@@ -109,6 +113,10 @@ const elevationFields = [
   "CumulativeDeposition",
   "OrogenicConstruction",
   "ConvergentCrustSurplus",
+  "CrustContinentalColumn",
+  "CrustRootReserve",
+  "OceanicSubduction",
+  "OceanicSubductionHistory",
   "ImpactExcavation",
   "ImpactRimUplift",
   "ImpactEjectaThickness",
@@ -125,6 +133,8 @@ const floatFields = ["RidgeInfluence", "Uplift"] as const;
 const metricFields = [
   ...ecologyScalars,
   "OceanMarginDistance",
+  "CrustRiftStrain",
+  "CrustRiftAgeMyr",
   "OceanDistance",
   // Seasonal temperature half-range in °C; zero until temperature first runs.
   "Seasonality",
@@ -184,6 +194,10 @@ export type PhysicalField = Record<(typeof integerFields)[number], Int32Array> &
   Record<(typeof metricFields)[number], Float64Array> &
   Record<(typeof floatFields)[number], Float32Array> & {
     mesh: PhysicalMesh;
+    tectonics: TectonicState | null;
+    landmarkLedger: LandmarkLedger | null;
+    CrustColumnsInitialized: boolean;
+    crustBudget: CrustBudget;
     /** Present engineered barriers; natural-lake size filters do not erase their reservoirs. */
     EngineeredDams: Set<number>;
     events: {
@@ -230,6 +244,17 @@ export function createField(mesh: PhysicalMesh): PhysicalField {
   const field = {
     ...arrays,
     mesh,
+    tectonics: null,
+    landmarkLedger: null,
+    CrustColumnsInitialized: false,
+    crustBudget: {
+      oceanCreated: 0,
+      oceanConsumed: 0,
+      continentalExported: 0,
+      oceanExported: 0,
+      continentalAdjustment: 0,
+      oceanAdjustment: 0,
+    },
     events: [] as PhysicalField["events"],
     faults: [] as PhysicalField["faults"],
     AvailableFacts: new Set<string>(),

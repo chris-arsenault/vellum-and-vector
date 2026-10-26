@@ -30,6 +30,7 @@ import { nativeFeatureContract } from "../physicalFeatureSequence";
 import type { ResolvedFeatures } from "../features";
 import { generationBindings } from "../generationBindings";
 import { absenceInitialization } from "./absenceInitialization";
+import { plateAdvection } from "./advection";
 import { physicalProduct, nativeBehavior } from "./physicalProducts";
 import { atlasPublicationDefinitions, selectedAtlasChannels } from "./atlasPublications";
 import {
@@ -78,6 +79,14 @@ function prepareSpatialStep(
   return name === "fracture-network"
     ? ([name, salt, prepareAdaptiveFractures(state, c, "declared")] as const)
     : step;
+}
+function executionStep(state: GenerationState, step: NativeStep, iceLoad: boolean): NativeStep {
+  const [name, salt] = step;
+  if (iceLoad && name === "crustal-support")
+    return [name, salt, (map, context) => crustalSupport(map, context, true)];
+  if (name === "plate-advection")
+    return [name, salt, (map, context) => plateAdvection(map, context, () => advectMagic(state))];
+  return step;
 }
 function nativeProcess(
   step: NativeStep,
@@ -132,12 +141,8 @@ function nativeProcess(
       const map = work.map;
       restoreAuthoring(work);
       if (name === "temperature" && context.parameters.unforced) map.ExternalHeatForcing.fill(0);
-      const selected: NativeStep =
-        context.parameters.iceLoad && name === "crustal-support"
-          ? [name, source.salt, (map, c) => crustalSupport(map, c, true)]
-          : spatialStep;
+      const selected = executionStep(state, spatialStep, Boolean(context.parameters.iceLoad));
       applyNativeStep(map, c, selected, source);
-      if (name === "plate-advection") advectMagic(state);
       restoreAuthoring(work);
       if (name === "physical-epoch-history")
         context.recordCause({

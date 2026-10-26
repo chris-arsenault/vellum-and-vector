@@ -6,7 +6,9 @@ import { round } from "./math";
 import { ecologyEpochSchema, type Epoch } from "@atlas/domain";
 import { generationBindings } from "../generationBindings";
 import type { ProductLedger } from "../productLedger";
+import { tectonicDefaultMyr, tectonicReferenceMyr } from "./tectonicControls";
 export interface PhysicalEpoch {
+  TectonicDurationMyr?: number;
   StableName: string;
   TectonicStrength: number;
   HydrologyStrength: number;
@@ -16,6 +18,7 @@ export interface PhysicalEpoch {
   SeaLevelOffset: number;
 }
 export interface PhysicalContext {
+  TectonicDurationMyr: number;
   Products?: Pick<ProductLedger, "status">;
   RainfallMultiplier: number;
   Seed: number;
@@ -77,5 +80,8 @@ export function physicalContext(
     EpochCount,
     Profile,
     IsEvolutionEpoch: epoch !== null,
+    TectonicDurationMyr: epoch
+      ? (epoch.TectonicDurationMyr ?? tectonicDefaultMyr)
+      : tectonicReferenceMyr,
   };
 }

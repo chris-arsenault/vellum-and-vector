@@ -1,6 +1,7 @@
 // Shared generation-test support: a default-sized world, its latitudes and
 // land-area zonal profiles. Imported only by `*.generation.test.ts` files.
 import { mkdirSync, writeFileSync } from "node:fs";
+import { expect } from "vitest";
 import { atlasLatitude, generateAtlas, type AtlasParameters } from "@atlas/generation";
 import { biomes, gridPosition, type Grid } from "@atlas/domain";
 import { createWorld, session } from "./atlasState";
@@ -22,6 +23,7 @@ export interface Band {
   humidity: number;
   trees: number;
   biomes: Record<string, number>;
+  lowlandBiomes: Record<string, number>;
 }
 /** Land-area zonal means by ten-degree band; the evidence used by each climate milestone. */
 export function zonalProfile(grid: Grid, south: number, north: number): Band[] {
@@ -42,6 +44,7 @@ export function zonalProfile(grid: Grid, south: number, north: number): Band[] {
       humidity: 0,
       trees: 0,
       biomes: {},
+      lowlandBiomes: {},
     };
     band.land++;
     band.humidity += c.moisture[i];
@@ -53,6 +56,8 @@ export function zonalProfile(grid: Grid, south: number, north: number): Band[] {
     band.ice += Number(c.iceThickness[i] > 1);
     const name = biomes[c.biome[i]]?.name ?? "Unknown";
     band.biomes[name] = (band.biomes[name] ?? 0) + 1;
+    if (c.elevation[i] - c.seaLevel[i] < 1000)
+      band.lowlandBiomes[name] = (band.lowlandBiomes[name] ?? 0) + 1;
     bands.set(key, band);
   }
   return [...bands.values()]
@@ -119,13 +124,11 @@ export async function generateProfile(
     domains,
     parameters: { ...parameters, southLatitude: south, northLatitude: north },
   });
+  expect(result.state.diagnostics?.filter((entry) => entry.severity === "error") ?? []).toEqual([]);
   const profile = zonalProfile(result.state.surface, south, north);
   // Retained for inspection in the ignored test output directory.
-  mkdirSync("test-results", { recursive: true });
-  writeFileSync(
-    `test-results/climate-profile-${south}-${north}-${domains.join("-")}.txt`,
-    `${report(profile)}\n`
-  );
+  mkdirSync(".artifacts/climate", { recursive: true });
+  writeFileSync(`.artifacts/climate/${world.id}.txt`, `${report(profile)}\n`);
   return { profile, grid: result.state.surface, rivers: riverPeaks(result, south, north) };
 }
 export const band = (profile: Band[], latitude: number) =>

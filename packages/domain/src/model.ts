@@ -65,6 +65,8 @@ export interface FieldSample {
   values: Record<string, number>;
 }
 export interface Epoch {
+  /** Geological interval for plate motion, independent of model-year duration. */
+  tectonicDurationMyr?: number;
   ecology?: Partial<import("./ecology").EcologyEpoch>;
   duration?: number;
   impacts?: number;

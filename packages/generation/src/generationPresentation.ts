@@ -1,6 +1,7 @@
 import type { ParameterValues } from "@atlas/domain";
 import type { AtlasParameterDefinition } from "./atlasParameters";
 export type EpochValueKey =
+  | "tectonicDurationMyr"
   | "tectonics"
   | "hydrology"
   | "ice"

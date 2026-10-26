@@ -5,6 +5,7 @@ import { defaultFieldStyle } from "./rasterPresentation";
 import { OverlayStack, type OverlayActions } from "./OverlayStack";
 import { LayerCatalogue } from "./LayerCatalogue";
 import { FeatureThemes } from "./FeatureThemes";
+import { DrawnFieldsPanel } from "./DrawnFieldsPanel";
 
 function overlayActions(
   editor: EditorState,
@@ -52,7 +53,7 @@ export function LayerBrowser({
   const fields = editor.rasterView.fields.filter((field) => available.has(field.channel));
   return (
     <section className="layer-browser" aria-label="Map layers">
-      <BaseChoices editor={editor} edit={edit} />
+      {editor.cartography.mode === "raster" ? <>
       <div className="layer-section-title">
         <h3>Overlays</h3>
         <button className="quiet" popoverTarget={catalogue}>
@@ -67,12 +68,13 @@ export function LayerBrowser({
       />
       <OverlayStack editor={editor} fields={fields} actions={actions} target={target} edit={edit} />
       {!fields.length && <p className="empty-overlays">No overlays</p>}
+      </> : <DrawnFieldsPanel editor={editor} />}
       <FeatureThemes editor={editor} edit={edit} />
     </section>
   );
 }
 const baseLabels = { surface: "Surface", topographic: "Topographic", relief: "Relief" } as const;
-function BaseChoices({ editor, edit }: { editor: EditorState; edit: (target: string) => void }) {
+export function BaseChoices({ editor, edit }: { editor: EditorState; edit: (target: string) => void }) {
   return (
     <fieldset className="base-choices">
       <legend>Base map</legend>

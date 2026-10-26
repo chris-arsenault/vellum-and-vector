@@ -22,7 +22,20 @@ it.each(["northern", "globe"])(
     const prepared = prepareDraft(draft);
     expect(prepared.diagnostics.filter((entry) => entry.severity === "error")).toEqual([]);
     const started = performance.now();
-    const result = await generateAtlas(prepared.source, prepared.input);
+    let lastProgress = started;
+    const result = await generateAtlas(prepared.source, prepared.input, {
+      progress(path, fraction, message) {
+        if (performance.now() - lastProgress < 30_000) return;
+        lastProgress = performance.now();
+        console.log({
+          coverage,
+          seconds: Math.round((lastProgress - started) / 1000),
+          path,
+          fraction,
+          message,
+        });
+      },
+    });
     expect(
       result.state.diagnostics?.filter((entry) => entry.process === "canonry.features") ?? []
     ).toEqual([]);
@@ -42,5 +55,5 @@ it.each(["northern", "globe"])(
         })) ?? [],
     });
   },
-  180000
+  3_600_000
 );

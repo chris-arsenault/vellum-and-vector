@@ -2,7 +2,7 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
-import { buoyancy, clamp, thickness, toUnits, units } from "./math";
+import { clamp, units } from "./math";
 import { deposit } from "./surface";
 import { PriorityQueue } from "./priorityQueue";
 
@@ -81,56 +81,10 @@ function marginFrame(map: PhysicalField) {
   for (let i = 0; i < map.mesh.count; i++)
     if (!Number.isFinite(map.OceanMarginDistance[i])) map.OceanMarginDistance[i] = 0;
 }
-function convergentDepth(p: PhysicalProfile, distance: number, current: number): number {
-  const ambient = Math.max(p.ContinentalSlopeDepth, p.OceanicSubsidenceDepth + 200);
-  const trenchWidth = 50_000;
-  if (distance <= trenchWidth)
-    return Math.max(current, ambient + p.ConvergentTrenchDepth * smooth(distance / trenchWidth));
-  const recovery = clamp((distance - trenchWidth) / p.ContinentalSlopeWidth, 0, 1);
-  return recovery >= 1
-    ? current
-    : Math.max(current, ambient + p.ConvergentTrenchDepth * (1 - smooth(recovery)));
-}
-function desiredDepth(
-  p: PhysicalProfile,
-  margin: number,
-  distance: number,
-  current: number
-): number {
-  if (margin === 2) return convergentDepth(p, distance, current);
-  const width =
-    margin === 3 ? p.RiftedShelfWidth : margin === 4 ? p.TransformShelfWidth : p.PassiveShelfWidth;
-  const depth = p.ContinentalShelfDepth * (margin === 3 ? 1.35 : margin === 4 ? 1.15 : 1);
-  if (distance <= width) return Math.min(current, 12 + (depth - 12) * smooth(distance / width));
-  const step =
-    margin === 3
-      ? p.RiftedMarginMaximumGradient
-      : margin === 4
-        ? p.TransformMarginMaximumGradient
-        : p.PassiveMarginMaximumGradient;
-  const oceanward = distance - width,
-    ramp = p.ContinentalRiseMinimumWidth;
-  const rise =
-    oceanward <= ramp ? (step * oceanward * oceanward) / (2 * ramp) : step * (oceanward - ramp / 2);
-  return Math.min(current, depth + rise);
-}
-export function continentalMarginEvolution(map: PhysicalField, c: PhysicalContext) {
+export function continentalMarginEvolution(map: PhysicalField) {
+  // Crust support owns structural relief and subsidence. Distance from today's coast
+  // supplies a sediment frame, never a replacement crust column or bathymetric profile.
   marginFrame(map);
-  for (let i = 0; i < map.mesh.count; i++) {
-    const distance = map.OceanMarginDistance[i];
-    if (distance <= 0) continue;
-    const depth = Math.max(1, toUnits(map.EffectiveSeaLevel - map.Elevation[i]));
-    const desired =
-      map.EffectiveSeaLevel -
-      units(desiredDepth(c.Profile, map.CoastalMarginCodes[i], distance, depth));
-    const difference = toUnits(desired - map.Elevation[i]);
-    if (Math.abs(difference) < 0.5) continue;
-    const adjustment =
-      ((difference / (buoyancy(map.CrustContinentalFraction[i] / 1000) / 1000)) *
-        c.Profile.MarginEvolutionResponsePerMille) /
-      1000;
-    map.CrustThickness[i] = units(thickness(toUnits(map.CrustThickness[i]) + adjustment));
-  }
 }
 function capacity(map: PhysicalField, p: PhysicalProfile, i: number): number {
   const margin = map.CoastalMarginCodes[i],
@@ -142,10 +96,14 @@ function capacity(map: PhysicalField, p: PhysicalProfile, i: number): number {
     Math.ceil(Math.max(0, p.OceanicSubsidenceDepth + 200 - p.ContinentalShelfDepth) / step);
   if (distance <= 0 || distance > width + rise || (margin !== 1 && margin !== 3)) return 0;
   const influence = smooth(1 - (distance - 1) / (width + rise));
-  return Math.max(
-    0,
-    units(p.MarineSedimentCapacity * influence * (margin === 3 ? 0.72 : 1)) -
-      map.SedimentThickness[i]
+  const accommodation = Math.max(0, map.EffectiveSeaLevel - map.Elevation[i]);
+  return Math.min(
+    accommodation,
+    Math.max(
+      0,
+      units(p.MarineSedimentCapacity * influence * (margin === 3 ? 0.72 : 1)) -
+        map.SedimentThickness[i]
+    )
   );
 }
 export function marineSedimentation(map: PhysicalField, c: PhysicalContext) {

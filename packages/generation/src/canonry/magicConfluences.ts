@@ -150,7 +150,7 @@ function actOnRock(map: PhysicalField, i: number, c: number, e: ConfluenceEffect
 }
 /** Coast, fog, ice, debris and toxicity: the meeting's water and living medium. */
 function actOnWaterAndLife(map: PhysicalField, i: number, c: number, e: ConfluenceEffects) {
-  if (e.coastalForcing)
+  if (e.coastalForcing && map.WaterKindCodes[i] === 0)
     map.ExternalCoastalForcing[i] = clamp(
       map.ExternalCoastalForcing[i] + round(e.coastalForcing * c),
       0,

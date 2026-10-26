@@ -9,12 +9,19 @@ import { applyNativeStep } from "./contracts";
 import {
   emplaceLandmark,
   maintainLandmark,
+  landmarkRecord,
   placeLandmark,
   plateDriftSteps,
   signatureShortfall,
   type LandmarkLedger,
 } from "./landmarks";
-import { canyonCells } from "./landmarkCanyon";
+import { captureInto, canyonCells } from "./landmarkCanyon";
+import { nearestTriangle } from "./mesh";
+import { drainageConditioning } from "./drainageFlood";
+import { drainageGuidance } from "./flowGuidance";
+import { flowRouting } from "./routing";
+import { riverNetwork } from "./rivers";
+import { units } from "./math";
 
 const bounds: [number, number, number, number] = [0, 0, 2_000_000, 1_000_000];
 const epochs = [50, -300, 0].map((TemperatureOffset, index) => ({
@@ -200,18 +207,81 @@ it("holds every mesh-scale landmark's signature through warm, glacial and presen
 });
 
 it("captures the largest divertible river into the canyon and reports where it came from", () => {
-  const { map, ledger, landmarks } = evolve(seed, placeAll);
-  const canyon = landmarks.find((item) => item.kind === "canyon")!,
-    record = ledger.get(canyon.id)!;
-  expect(record.capture).not.toBeNull();
+  // Two east-draining valleys: the wet southern river can be incised into the
+  // lower northern canyon. Later climate is free to move or remove a river.
+  const map = createField(createWorldMesh([0, 0, 400_000, 300_000], 1024, 0)),
+    context = physicalContext(seed, 0, atlasPhysicalProfile());
+  for (let i = 0; i < map.mesh.count; i++) {
+    const x = map.mesh.x[i],
+      y = map.mesh.y[i];
+    map.Elevation[i] = units(
+      (y >= 0 ? 300 : 700) - x * 0.001 + (Math.abs(y) - 60_000) ** 2 * 0.00000005
+    );
+    map.BedrockElevation[i] = map.Elevation[i];
+    map.Runoff[i] = y < 0 ? 1000 : 20;
+    if (x > 180_000) map.WaterKindCodes[i] = 1;
+  }
+  const route = () => {
+    drainageConditioning(map, context);
+    drainageGuidance(map, context);
+    flowRouting(map, context);
+    riverNetwork(map, context);
+  };
+  route();
+  const head = nearestTriangle(map.mesh, 0, 60_000),
+    candidates = Array.from(map.RiverOrders.keys())
+      .filter(
+        (i) =>
+          map.RiverOrders[i] > 0 &&
+          map.mesh.y[i] < 0 &&
+          map.mesh.x[i] < 0 &&
+          Math.hypot(map.mesh.x[i] - map.mesh.x[head], map.mesh.y[i] - map.mesh.y[head]) < 150_000
+      )
+      .sort((a, b) => map.FlowAccumulation[b] - map.FlowAccumulation[a]);
+  expect(candidates.length).toBeGreaterThan(1);
+  const [largest, smaller] = candidates;
+  map.RiverOrders.fill(0);
+  map.RiverOrders[largest] = map.RiverOrders[smaller] = 1;
+  const placed = placeLandmark(
+      map,
+      landmark("canyon", path({ x: 200_000, y: 210_000 }, { x: 300_000, y: 210_000 }), {
+        depth: 900,
+        rimWidth: 20,
+        captureDistance: 150,
+      })
+    )!,
+    record = landmarkRecord(map, placed),
+    geometry = canyonCells(map, placed),
+    headReach = new Set(
+      geometry.floor
+        .filter((cell) => cell.station <= geometry.line.length / 3)
+        .map((cell) => cell.i)
+    ),
+    discharge = map.FlowAccumulation[largest],
+    runoff = map.Runoff.slice();
+  captureInto(map, record, {
+    head,
+    floor: new Set(geometry.floor.map((cell) => cell.i)),
+    floorWidth: map.mesh.spacing,
+    reach: 150_000,
+    label: "canyon head",
+  });
+  expect(record.capture).toEqual({
+    x: map.mesh.x[largest],
+    y: map.mesh.y[largest],
+    accumulation: discharge,
+  });
   expect(record.notes.some((text) => text.startsWith("Captured the river"))).toBe(true);
-  // At present the canyon's head reach carries the captured river's accumulation.
-  const placed = placeLandmark(map, canyon)!,
-    geometry = canyonCells(map, placed, record.corridor);
-  const head = geometry.floor
-    .filter((cell) => cell.station <= geometry.line.length / 3)
-    .map((cell) => map.FlowAccumulation[cell.i]);
-  expect(Math.max(...head)).toBeGreaterThanOrEqual(record.capture!.accumulation * 0.9);
+  expect(map.SedimentProducedTotal).toBeGreaterThan(0);
+  route();
+  let current = largest;
+  for (let n = 0; n < map.mesh.count && current >= 0 && !headReach.has(current); n++)
+    current = map.FlowTargets[current];
+  expect(headReach.has(current), "the captured river reaches the canyon head").toBe(true);
+  expect(Math.max(...Array.from(headReach, (i) => map.FlowAccumulation[i]))).toBeGreaterThanOrEqual(
+    discharge * 0.9
+  );
+  expect(map.Runoff).toEqual(runoff);
 });
 
 it("is deterministic and leaves the world untouched when no landmark is placed", () => {

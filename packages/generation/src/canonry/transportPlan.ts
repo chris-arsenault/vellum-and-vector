@@ -3,6 +3,8 @@ import type { PhysicalField } from "./field";
 import { nearestTriangle, meshDeltaX, meshPoint } from "./mesh";
 import { clamp, round } from "./math";
 import { adaptiveCell, visitAdaptiveOverlap, type Bounds } from "@atlas/domain";
+import { triangleOverlap } from "./triangleOverlap";
+import { tectonicTransport } from "./tectonicTransport";
 
 export const weightScale = 1_000_000;
 export interface TransportPlan {
@@ -31,7 +33,19 @@ function add(map: PhysicalField, plan: Builder, source: number, target: number, 
     plan.dominantWeight[target] = contribution;
   }
 }
-function scatter(map: PhysicalField, plan: Builder, source: number, x: number, y: number) {
+function scatter(
+  map: PhysicalField,
+  plan: Builder,
+  source: number,
+  x: number,
+  y: number,
+  move?: (x: number, y: number) => [number, number]
+) {
+  const volumes = triangleOverlap(map.mesh, source, x, y, move);
+  if (volumes) {
+    for (const [target, share] of volumes) add(map, plan, source, target, share * weightScale);
+    return;
+  }
   [x, y] = meshPoint(map.mesh, x, y);
   const mesh = map.mesh,
     nearest = nearestTriangle(mesh, x, y);
@@ -77,6 +91,7 @@ function scatterVolume(map: PhysicalField, plan: Builder, source: number, x: num
 }
 export function buildTransportPlan(map: PhysicalField, step: number): TransportPlan {
   const count = map.mesh.count;
+  const transform = tectonicTransport(map, step);
   const plan: Builder = {
     offsets: new Int32Array(count + 1),
     targets: [],
@@ -87,13 +102,14 @@ export function buildTransportPlan(map: PhysicalField, step: number): TransportP
   };
   for (let i = 0; i < count; i++) {
     plan.offsets[i] = plan.targets.length;
-    (map.mesh.topology ? scatterVolume : scatter)(
-      map,
-      plan,
-      i,
-      map.mesh.x[i] + (map.CrustMotionX[i] / 1000) * step,
-      map.mesh.y[i] + (map.CrustMotionY[i] / 1000) * step
-    );
+    const move = transform ? (x: number, y: number) => transform(i, x, y) : undefined;
+    const [x, y] = move
+      ? move(map.mesh.x[i], map.mesh.y[i])
+      : [
+          map.mesh.x[i] + (map.CrustMotionX[i] * step) / 1000,
+          map.mesh.y[i] + (map.CrustMotionY[i] * step) / 1000,
+        ];
+    (map.mesh.topology ? scatterVolume : scatter)(map, plan, i, x, y, move);
   }
   plan.offsets[count] = plan.targets.length;
   return {

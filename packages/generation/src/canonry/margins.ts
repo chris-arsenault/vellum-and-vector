@@ -4,6 +4,7 @@ import type { PhysicalContext } from "./context";
 import { clamp, round } from "./math";
 import { hashUnit } from "./noise";
 import { metricSearch } from "./metricSearch";
+import { tectonicOceanMaturityMyr } from "./tectonicControls";
 
 const unreachable = 2147483647;
 function expand(
@@ -52,7 +53,7 @@ function assignMarginsAndAge(
   const scale = Math.max(1, Math.min(oldest, p.CrustAgeSaturationDistance));
   const increment = Math.max(
     1,
-    round((map.LastPlateDriftStep * 1000) / Math.max(1, p.CrustAgeSaturationDistance))
+    round((context.TectonicDurationMyr * 1000) / tectonicOceanMaturityMyr)
   );
   for (let i = 0; i < map.mesh.count; i++) {
     map.MarginCodes[i] =

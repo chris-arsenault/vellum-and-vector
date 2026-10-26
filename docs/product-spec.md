@@ -500,6 +500,13 @@ Preserve the concepts and, where suitable, adapt the algorithms for:
 - Glaciation, glacier flow, glacial erosion/deposition, retreat and inherited landforms.
 - Material and surface classifications that do not erase underlying physical fields.
 
+Continental ancestry remains distinct from current moving plate membership.
+Geological history can split, transport and collide fragments, open and close
+basins, and construct subduction arcs. Initial land fraction sets formation's
+physical budget; later exposed land follows material, basin capacity and water
+exchange with grounded ice. Terrain choices preserve authored climate history.
+Geological intervals remain independent of the model years used by life and society.
+
 Authored landmarks extend this generator without a second engine
 ([ADR 0006](adr/0006-landmarks-are-injected-causes.md)). A creator places a
 named landmark of a catalogued kind (great mountain, great canyon, great ring

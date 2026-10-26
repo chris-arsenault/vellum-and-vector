@@ -17,6 +17,8 @@ it("keeps marine sediment allocation within fractional and continental-volume bu
   for (const exported of [0.125, 148_221_571_959_258.8, 1e18]) {
     const map = createField(createWorldMesh([0, 0, 4_000_000, 2_000_000], 4096, 0));
     map.CoastalMarginCodes.fill(1);
+    map.Elevation.fill(units(-300));
+    map.BedrockElevation.set(map.Elevation);
     for (let i = 0; i < map.mesh.count; i++) map.OceanMarginDistance[i] = 1 + (i % 97) * 10_000;
     map.SedimentProducedTotal = exported;
     map.SedimentExportedTotal = exported;

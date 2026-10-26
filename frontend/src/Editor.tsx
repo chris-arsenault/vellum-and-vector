@@ -3,7 +3,7 @@ import { point, spatial } from "@atlas/domain";
 import { Brand } from "./App";
 import { ErrorMessage } from "./ErrorMessage";
 import { MapCanvas } from "./MapCanvas";
-import { LayerPanel } from "./LayerPanel";
+import { MapPanel, type MapSection } from "./MapPanel";
 import { Inspector } from "./Inspector";
 import { WorkflowPanel } from "./WorkflowPanel";
 import { JobsPanel } from "./JobsPanel";
@@ -31,6 +31,7 @@ interface Props {
 export function Editor({ world, worlds, changeWorld, newWorld, openLore, openSaved }: Props) {
   const editor = useEditor(world);
   const [tab, setTab] = useState<string | null>(null);
+  const [mapSection, setMapSection] = useState<MapSection>("appearance");
   const toggle = (next: string) => setTab(tab === next ? null : next);
   return (
     <div className="app-shell">
@@ -51,21 +52,21 @@ export function Editor({ world, worlds, changeWorld, newWorld, openLore, openSav
           Atlas
         </button>
         <button
-          aria-expanded={tab === "layers"}
+          aria-expanded={tab === "map"}
           aria-controls="map-drawer"
-          onClick={() => toggle("layers")}
+          onClick={() => toggle("map")}
         >
-          Layers
+          Map
         </button>
       </nav>
       {tab && (
         <aside
           className="left-panel map-drawer"
           id="map-drawer"
-          aria-label={tab === "layers" ? "Map appearance" : "World atlas"}
+          aria-label={tab === "map" ? "Map settings" : "World atlas"}
         >
           <header className="drawer-heading">
-            <h2>{tab === "layers" ? "Map layers" : "Atlas"}</h2>
+            <h2>{tab === "map" ? "Map" : "Atlas"}</h2>
             <button className="quiet" aria-label="Close map drawer" onClick={() => setTab(null)}>
               ×
             </button>
@@ -82,7 +83,7 @@ export function Editor({ world, worlds, changeWorld, newWorld, openLore, openSav
               }
             />
           ) : (
-            <LayerPanel world={world} editor={editor} />
+            <MapPanel editor={editor} section={mapSection} choose={setMapSection} chooseRegion={() => {editor.openRegions(); setTab(null);}} />
           )}
           <div className="spatial-reference">
             <span className="eyebrow">WORLD REFERENCE</span>

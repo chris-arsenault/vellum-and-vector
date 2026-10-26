@@ -3,10 +3,8 @@ import type { World } from "./types";
 import type { EditorState } from "./useEditor";
 import { LayerBrowser } from "./LayerBrowser";
 import { RasterPanel } from "./RasterPanel";
-import { defaultRasterPresentation } from "./rasterPresentation";
 import { VectorAppearance } from "./VectorAppearance";
 import { FeatureDrawOrder } from "./FeatureDrawOrder";
-import { CartographicPanel } from "./CartographicPanel";
 
 const SymbolEditor = lazy(() => import("./SymbolEditor"));
 export function LayerPanel({ world, editor }: { world: World; editor: EditorState }) {
@@ -26,15 +24,15 @@ export function LayerPanel({ world, editor }: { world: World; editor: EditorStat
   const style = editor.styles.find((style) => style.layerId === vector);
   return (
     <div className="layer-panel">
-      <CartographicPanel editor={editor} />
       {editor.cartography.mode === "raster" && (
         <label className="view-preset">
-          Preset
+          Layer preset
           <select
             aria-label="View preset"
-            defaultValue="physical"
+            value=""
             onChange={(event) => editor.preset(event.target.value)}
           >
+            <option value="" disabled>Apply a preset…</option>
             {["physical", "political", "cultural", "magical", "infrastructure"].map((preset) => (
               <option key={preset}>{preset}</option>
             ))}
@@ -63,7 +61,6 @@ export function LayerPanel({ world, editor }: { world: World; editor: EditorStat
       {style && advanced && (
         <AdvancedSymbols editor={editor} presentation={style} close={() => setAdvanced(false)} />
       )}
-      <SessionViews world={world} editor={editor} />
     </div>
   );
 }
@@ -111,49 +108,6 @@ function AdvancedSymbols({
         />
       </label>
     </StyleDialog>
-  );
-}
-function SessionViews({ world, editor }: { world: World; editor: EditorState }) {
-  const [name, setName] = useState("Custom composition");
-  return (
-    <details className="session-views">
-      <summary>Session map views</summary>
-      <label>
-        View name
-        <input value={name} onChange={(event) => setName(event.target.value)} />
-      </label>
-      <button
-        className="secondary"
-        disabled={!name.trim()}
-        onClick={() => editor.saveComposition(name.trim())}
-      >
-        Save map view
-      </button>
-      {world.views
-        .filter((view) => !view.region)
-        .map((view) => (
-          <div key={view.id}>
-            <button
-              className="quiet"
-              onClick={() => {
-                editor.enter(view.areaId);
-                if (view.regionId) editor.enterRegion(view.regionId);
-                editor.setRasterView(view.raster ?? defaultRasterPresentation());
-                editor.openComposition(view);
-              }}
-            >
-              {view.name}
-            </button>
-            <button
-              className="quiet"
-              aria-label={`Remove ${view.name}`}
-              onClick={() => editor.execute("removeView", { id: view.id })}
-            >
-              ×
-            </button>
-          </div>
-        ))}
-    </details>
   );
 }
 function StyleDialog({

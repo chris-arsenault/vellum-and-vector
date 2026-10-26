@@ -51,8 +51,6 @@ function terrain(index: number): FeatureSelection {
             [1, 0.65, 0.25],
             [0.7, 0.3, 0.1],
           ][index],
-          ice: glaciated ? [0.2, 1, 0.3] : [0.25, 0.25, 0.25],
-          glaciated,
         },
       },
     },

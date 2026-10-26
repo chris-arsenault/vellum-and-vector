@@ -41,6 +41,7 @@ export function landmarkRecord(map: PhysicalField, placed: Placed): LandmarkReco
   };
 }
 function recordFor(map: PhysicalField, placed: Placed, ledger: LandmarkLedger) {
+  map.landmarkLedger = ledger;
   const record = ledger.get(placed.landmark.id) ?? landmarkRecord(map, placed);
   ledger.set(placed.landmark.id, record);
   return record;

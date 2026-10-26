@@ -47,9 +47,7 @@ export function draftEpochs(draft: GenerationDraft): Epoch[] {
     return combined;
   });
   const history = selection["physical.lifecycle"].configuration!.history as TerrainHistory | null;
-  const physical = history
-    ? terrainEpochs(epochs, history, selection["physical.climate"].settings!.temperature)
-    : epochs;
+  const physical = history ? terrainEpochs(epochs, history) : epochs;
   const ecology = selection["ecology.living"].configuration!;
   return physical.map((epoch, index) => ({
     ...epoch,

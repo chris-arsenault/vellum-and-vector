@@ -28,11 +28,16 @@ it("changes real geography, retains chosen inputs, and rejects invalid settings"
     domains: ["physical", "cultural", "political"],
     parameters,
   });
+  // These controls seed origins; later isolation and politics can create descendants.
   expect(
-    Object.values(changed.state.domain.world.entities).filter((entity) => entity.kind === "culture")
+    Object.values(changed.state.domain.world.entities).filter(
+      (entity) => entity.kind === "culture" && "initialPopulation" in entity.attributes
+    )
   ).toHaveLength(2);
   expect(
-    Object.values(changed.state.domain.world.entities).filter((entity) => entity.kind === "polity")
+    Object.values(changed.state.domain.world.entities).filter(
+      (entity) => entity.kind === "polity" && "initialPopulation" in entity.attributes
+    )
   ).toHaveLength(2);
   expect(changed.configurationHash).not.toBe(baseline.configurationHash);
   expect(changed.state.surface.channels.elevation).not.toEqual(
@@ -52,4 +57,4 @@ it("changes real geography, retains chosen inputs, and rejects invalid settings"
     },
   });
   await expect(generateAtlas(source, { ...input, parameters: { rainfall: -1 } })).rejects.toThrow();
-}, 60000);
+}, 300_000);

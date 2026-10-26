@@ -165,5 +165,9 @@ async function checkMagicPublication(
     crypto.randomUUID(),
     magical
   );
-  expect(published.numerical[ecology.id].channels.quickening.some((v) => v > 0.2)).toBe(true);
+  const magic = published.world.fields.find(
+    (field) => field.layerId === "magic" && field.channels?.includes("quickening")
+  )!;
+  expect(magic).toBeDefined();
+  expect(published.numerical[magic.id].channels.quickening.some((v) => v > 0.2)).toBe(true);
 }

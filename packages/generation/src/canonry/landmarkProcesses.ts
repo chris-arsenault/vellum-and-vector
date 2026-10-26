@@ -27,7 +27,7 @@ function drift(state: GenerationState, context: MapProcessContext) {
   const bound = generationBindings(context);
   return plateDriftSteps(
     state.physical!.profile,
-    bound.settings.epochs.length,
+    bound.settings.epochs,
     bound.features.selection["physical.tectonic-history"]?.enabled ?? false
   );
 }

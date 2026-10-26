@@ -4,6 +4,7 @@ import { clamp, round } from "./math";
 import { atlasParametersSchema, type AtlasParameters } from "../atlasParameters";
 import { latitudeAtY } from "./latitude";
 import type { PhysicalProfileOverrides } from "../physicalProfileConfiguration";
+import { tectonicDefaultMyr } from "./tectonicControls";
 
 export { atlasQuality } from "../resolution";
 export function atlasPhysicalProfile(
@@ -78,5 +79,6 @@ export function atlasEpoch(epoch: Epoch) {
     CoastalStrength: round(clamp(epoch.coasts, 0, 1) * 1000),
     TemperatureOffset: round((epoch.temperature - 15) * 10),
     SeaLevelOffset: round(epoch.seaLevel),
+    TectonicDurationMyr: epoch.tectonicDurationMyr ?? tectonicDefaultMyr,
   };
 }

@@ -7,6 +7,7 @@ import { SettlementSurface } from "./SettlementSurface";
 import { SocietyGroupEditor } from "./SocietyGroupEditor";
 import { SocietyWorkForm } from "./SocietyWorkForm";
 import type { PopulationGroup } from "@atlas/domain";
+import { CartographicFinishing } from "./CartographicFinishing";
 
 export function Inspector({ world, editor }: { world: World; editor: EditorState }) {
   const feature =
@@ -60,6 +61,7 @@ function FeatureInspection({
         />
       )}
       <GeometryTools editor={editor} feature={feature} />
+      {editor.cartography.mode === "drawn" && <CartographicFinishing editor={editor} />}
       <FeatureIdentity feature={feature} world={world} />
       <SocietyWorkForm feature={feature} editor={editor} />
       <FeatureEditor

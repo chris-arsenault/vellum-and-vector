@@ -10,6 +10,11 @@ import type { AtlasFeature } from "./types";
 
 function checkMagic(result: Awaited<ReturnType<typeof generateAtlas>>) {
   const grid = result.state.surface;
+  const physicalEpochs = new Set(result.state.domain.world.epochs.map((epoch) => epoch.id)),
+    physicalHistory = result.state.history.filter((entry) =>
+      physicalEpochs.has(entry.ancestry[0].id)
+    );
+  expect(physicalHistory).toHaveLength(physicalEpochs.size);
   for (const id of ["fire", "aurora", "pressure"]) {
     // Warm present-day terrain can lose Aurora while retaining its glacial history.
     if (id !== "aurora")
@@ -19,7 +24,7 @@ function checkMagic(result: Awaited<ReturnType<typeof generateAtlas>>) {
       ).toBe(true);
     expect(grid.channels[`magic:${id}:history`].some((value) => value > 0)).toBe(true);
     expect(
-      result.state.history.every((entry) =>
+      physicalHistory.every((entry) =>
         entry.causes.some(
           (cause) =>
             cause.kind === "domain" &&
@@ -129,6 +134,7 @@ it("evolves impacts, repeated ice ages and all three magic systems through share
     domains: ["physical", "magic", "cultural", "political", "built"],
   };
   const epochs: { ice: number; history: number; impacts: number }[] = [];
+  const physicalEpochs = new Set(source.world.epochs.map((epoch) => epoch.id));
   const started = performance.now();
   let stepStarted = started;
   const result = await generateAtlas(source, input, {
@@ -142,7 +148,7 @@ it("evolves impacts, repeated ice ages and all three magic systems through share
         );
     },
     async saveBoundary(boundary) {
-      if (boundary.kind !== "epoch") return;
+      if (boundary.kind !== "epoch" || !physicalEpochs.has(boundary.ancestry[0]?.id)) return;
       const map = boundary.state.physical!.map;
       epochs.push({
         ice: map.IceThickness.reduce((sum, value) => sum + value, 0),

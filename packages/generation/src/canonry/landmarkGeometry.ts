@@ -8,6 +8,8 @@ import { meshDeltaX, meshPoint, nearestTriangle } from "./mesh";
 import { rebuild } from "./surface";
 import { recordCut } from "./fluvial";
 import { physicalSampler } from "./physicalMetric";
+import { backtrackTectonicPoint } from "./tectonicIntegration";
+import { tectonicDefaultMyr, tectonicReferenceMyr } from "./tectonicControls";
 
 export type Point = [number, number];
 export interface Placed {
@@ -41,12 +43,17 @@ function toMesh(map: PhysicalField, [x, y]: number[]): Point {
   return meshPoint(map.mesh, x - map.mesh.origin[0], y - map.mesh.origin[1]);
 }
 /** Plate drift per epoch in metres, as `plateAdvection` applies it; empty when advection is off. */
-export function plateDriftSteps(p: PhysicalProfile, epochCount: number, enabled = true) {
+export function plateDriftSteps(
+  p: PhysicalProfile,
+  epochs: number | readonly { tectonicDurationMyr?: number }[],
+  enabled = true
+) {
   if (!enabled) return [];
-  return Array.from(
-    { length: epochCount },
-    (_, k) => p.PlateDriftPerEpoch * (p.PlateDriftDecay / 1000) ** k
-  );
+  const intervals =
+    typeof epochs === "number"
+      ? Array(epochs).fill(tectonicDefaultMyr)
+      : epochs.map((epoch) => epoch.tectonicDurationMyr ?? tectonicDefaultMyr);
+  return intervals.map((myr) => (p.PlateDriftPerEpoch * myr) / tectonicReferenceMyr);
 }
 /**
  * The landmark rides the crust like every other feature, so its authored position is where
@@ -55,6 +62,7 @@ export function plateDriftSteps(p: PhysicalProfile, epochCount: number, enabled 
 function backTrack(map: PhysicalField, point: Point, drift: number[], epoch: number): Point {
   const remaining = drift.slice(epoch + 1).filter((step) => step > 0);
   if (!remaining.length) return point;
+  if (map.tectonics) return backtrackTectonicPoint(map, point, remaining);
   const vx = physicalSampler(map.mesh, map.CrustMotionX),
     vy = physicalSampler(map.mesh, map.CrustMotionY);
   let [x, y] = point;

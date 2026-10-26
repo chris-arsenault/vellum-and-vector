@@ -3,8 +3,11 @@ import type { PhysicalContext } from "./context";
 import type { PhysicalField } from "./field";
 import { clamp, round } from "./math";
 import { meshNoise as fractalNoise } from "./noise";
-import { createProvinceSites, type ProvinceSite } from "./provinceSites";
+import type { ProvinceSite } from "./provinceSites";
+import { tectonicSites, tectonicBond } from "./tectonicState";
+import { tectonicRiftActivation } from "./tectonicControls";
 import { meshDeltaX, type PhysicalMesh } from "./mesh";
+import { siteMotion } from "./tectonicMotion";
 
 interface Selection {
   nearest: number;
@@ -65,23 +68,44 @@ function boundaryDistance(sites: ProvinceSite[], s: Selection, mesh: PhysicalMes
   // pairs appear active arbitrarily far from their shared boundary.
   return (s.secondDistance ** 2 - s.nearestDistance ** 2) / (2 * separation);
 }
-function assemblyGap(
-  sites: ProvinceSite[],
-  s: Selection,
-  context: PhysicalContext,
-  mesh: PhysicalMesh
-): number {
-  if (s.second < 0) return 0;
-  const a = sites[s.nearest].assembly,
-    b = sites[s.second].assembly;
-  if (a === 0 || b === 0 || a === b) return 0;
-  const p = context.Profile;
-  // Only divergence opens a continental rift. Transform contacts preserve crust.
-  if (relativeMotion(sites, s, mesh) <= p.TectonicConvergenceThreshold) return 0;
-  const raw =
-    clamp(1 - boundaryDistance(sites, s, mesh) / Math.max(0.001, p.RidgeWidth * 1.4), 0, 1) *
-    p.ContinentalAssemblySeparationDepth;
-  return raw;
+function boundarySelection(map: PhysicalField, selection: Selection, x: number, y: number) {
+  const state = map.tectonics!,
+    nearest = state.sites[selection.nearest];
+  selection.second = -1;
+  selection.secondDistance = Infinity;
+  for (let i = 0; i < state.sites.length; i++) {
+    if (i === selection.nearest) continue;
+    const site = state.sites[i],
+      bond = tectonicBond(state, selection.nearest, i);
+    const loading = bond?.active && bond.extension - bond.shortening >= tectonicRiftActivation;
+    if (site.plate === nearest.plate && !loading) continue;
+    const distance = Math.hypot(meshDeltaX(map.mesh, x - site.x), y - site.y);
+    if (distance < selection.secondDistance) {
+      selection.second = i;
+      selection.secondDistance = distance;
+    }
+  }
+}
+function clearBoundary(map: PhysicalField, i: number) {
+  for (const name of [
+    "TectonicBoundaryCodes",
+    "TectonicStrain",
+    "TectonicBoundaryPairIds",
+    "TectonicTangentX",
+    "TectonicTangentY",
+  ] as const)
+    map[name][i] = 0;
+}
+function boundaryCode(relative: number, extension: number, threshold: number) {
+  if (relative < -threshold) return 1;
+  if (relative > threshold) return 2;
+  if (relative > 0 && extension >= tectonicRiftActivation) return 2;
+  return 3;
+}
+function bondExtension(map: PhysicalField, s: Selection) {
+  const bond = tectonicBond(map.tectonics!, s.nearest, s.second);
+  if (!bond) return 0;
+  return Math.max(0, bond.extension - bond.shortening);
 }
 function assignBoundary(
   map: PhysicalField,
@@ -97,29 +121,24 @@ function assignBoundary(
     1
   );
   if (amount <= 0) {
-    for (const name of [
-      "TectonicBoundaryCodes",
-      "TectonicStrain",
-      "TectonicBoundaryPairIds",
-      "TectonicTangentX",
-      "TectonicTangentY",
-    ] as const)
-      map[name][i] = 0;
+    clearBoundary(map, i);
     return;
   }
   const relative = relativeMotion(sites, s, map.mesh);
-  map.TectonicBoundaryCodes[i] =
-    relative < -p.TectonicConvergenceThreshold
-      ? 1
-      : relative > p.TectonicConvergenceThreshold
-        ? 2
-        : 3;
+  const a = sites[s.nearest],
+    b = sites[s.second];
+  const speed = Math.hypot(b.motionX - a.motionX, b.motionY - a.motionY);
+  if (speed < 1e-6) {
+    clearBoundary(map, i);
+    return;
+  }
+  const extension = bondExtension(map, s);
+  map.TectonicBoundaryCodes[i] = boundaryCode(relative, extension, p.TectonicConvergenceThreshold);
   map.TectonicBoundaryPairIds[i] =
     ((Math.min(s.nearest, s.second) + 1) << 16) | (Math.max(s.nearest, s.second) + 1);
-  map.TectonicStrain[i] = unit(amount * clamp(0.48 + Math.abs(relative), 0, 1));
-  const a = sites[s.nearest],
-    b = sites[s.second],
-    dx = meshDeltaX(map.mesh, b.x - a.x),
+  map.TectonicStrain[i] = unit(amount * clamp(speed + extension, 0, 1));
+  map.CrustRiftStrain[i] = Math.max(map.CrustRiftStrain[i], extension * amount);
+  const dx = meshDeltaX(map.mesh, b.x - a.x),
     dy = b.y - a.y;
   const length = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
   let tx = -dy / length,
@@ -135,11 +154,18 @@ function initialAssembly(
   sites: ProvinceSite[],
   s: Selection,
   site: ProvinceSite,
-  composition: number,
-  rifted: boolean
+  composition: number
 ) {
-  if (rifted || composition <= 0) return 0;
+  if (composition <= 0) return 0;
   return site.assembly > 0 ? site.assembly : sites[s.nearestContinental].assembly;
+}
+function assignMotion(map: PhysicalField, i: number, nearest: number) {
+  const state = map.tectonics!,
+    site = state.sites[nearest],
+    plate = state.plates.find((plate) => plate.id === site.plate)!;
+  const [vx, vy] = siteMotion(map, { x: map.mesh.x[i], y: map.mesh.y[i] }, plate);
+  map.CrustMotionX[i] = motion(vx + site.compliance * (site.driveX - vx));
+  map.CrustMotionY[i] = motion(vy + site.compliance * (site.driveY - vy));
 }
 function assignTriangle(
   map: PhysicalField,
@@ -149,47 +175,41 @@ function assignTriangle(
 ) {
   const p = context.Profile,
     x = map.mesh.x[i],
-    y = map.mesh.y[i];
+    y = map.mesh.y[i],
+    seed = map.tectonics!.seed;
   const wx =
-    fractalNoise(map.mesh, x, y, context.Seed ^ 0x16f1, p.ContinentalWarpScale, 3) *
+    fractalNoise(map.mesh, x, y, seed ^ 0x16f1, p.ContinentalWarpScale, 3) *
     p.ContinentalWarpStrength;
   const wy =
-    fractalNoise(map.mesh, x, y, context.Seed ^ 0x62bd, p.ContinentalWarpScale, 3) *
+    fractalNoise(map.mesh, x, y, seed ^ 0x62bd, p.ContinentalWarpScale, 3) *
     p.ContinentalWarpStrength;
   const s = selectSites(sites, x + wx, y + wy, map.mesh),
     site = sites[s.nearest];
+  boundarySelection(map, s, x + wx, y + wy);
   map.CrustProvinceIds[i] = s.nearest + 1;
-  map.CrustMotionX[i] = motion(site.motionX);
-  map.CrustMotionY[i] = motion(site.motionY);
+  map.CrustPlateIds[i] = map.tectonics!.sites[s.nearest].plate;
+  assignMotion(map, i, s.nearest);
   const affinity = clamp(
     0.5 + (s.oceanicDistance - s.continentalDistance) / (p.ContinentalTransitionWidth * 2),
     0,
     1
   );
-  let potential =
+  const potential =
     site.assembly > 0
       ? Math.max(affinity, p.ContinentalCrustPotentialFloor)
       : Math.min(affinity, p.OceanicCrustPotentialCeiling);
-  const gap = assemblyGap(sites, s, context, map.mesh);
-  let composition = clamp(affinity - gap, 0, 1);
-  potential -= gap;
-  if (site.assembly > 0 && gap > 0)
-    potential = Math.min(potential, p.ContinentalCrustPotentialFloor - gap);
-  const rifted = site.assembly > 0 && gap > 0 && gap >= p.ContinentalAssemblySeparationDepth * 0.12;
   if (!context.IsEvolutionEpoch)
-    map.CrustAssemblyIds[i] = initialAssembly(sites, s, site, composition, rifted);
-  if (rifted) {
-    potential = Math.min(potential, p.OceanicCrustPotentialCeiling - gap);
-    composition = Math.min(composition, p.OceanicCrustPotentialCeiling - gap);
-  }
-  map.CrustAssemblySeparation[i] = unit(gap);
+    map.CrustAssemblyIds[i] = initialAssembly(sites, s, site, affinity);
+  map.CrustAssemblySeparation[i] = unit(
+    clamp(map.CrustRiftStrain[i], 0, 1) * p.ContinentalAssemblySeparationDepth
+  );
   map.CrustBasePotential[i] = unit(potential);
-  if (!context.IsEvolutionEpoch) map.CrustContinentalFraction[i] = unit(composition);
+  if (!context.IsEvolutionEpoch) map.CrustContinentalFraction[i] = unit(affinity);
   map.CrustTypeCodes[i] = map.CrustContinentalFraction[i] >= 500 ? 2 : 1;
   assignBoundary(map, i, sites, s, context);
 }
 export function tectonicProvinces(map: PhysicalField, context: PhysicalContext) {
-  const sites = createProvinceSites(map, context);
+  const sites = tectonicSites(map, context);
   for (let i = 0; i < map.mesh.count; i++) assignTriangle(map, context, sites, i);
   map.InitialTectonicBoundaryCodes.set(map.TectonicBoundaryCodes);
   map.InitialTectonicStrain.set(map.TectonicStrain);

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { atlasPhysicalProfile } from "./atlasProfile";
+import { atlasPhysicalProfile, atlasEpoch } from "./atlasProfile";
 import { physicalContext } from "./context";
 import { createField } from "./field";
 import { landmasses } from "./geography";
@@ -8,16 +8,37 @@ import { initialSteps } from "./sequence";
 import { createWorldMesh } from "./worldMesh";
 import { continentalWorldProfile } from "./worldScale";
 import { nearestTriangle } from "./mesh";
+import { physicalSchedule } from "./schedule";
+function layoutSchedule(history: boolean) {
+  const epochs = [15, -3, 15].map((temperature, i) =>
+    atlasEpoch({
+      id: String(i),
+      tectonics: [1, 0.65, 0.25][i],
+      temperature,
+      ice: i === 1 ? 1 : 0,
+      hydrology: 1,
+      coasts: 1,
+      seaLevel: 0,
+    })
+  );
+  return history
+    ? physicalSchedule(epochs)
+    : initialSteps.map((step) => ({ step, epoch: null, index: 0 }));
+}
 
-function layout(seed: number, landFraction: number) {
+function layout(seed: number, landFraction: number, history: boolean) {
   const bounds: [number, number, number, number] = [0, 0, 4e6, 3e6];
   const profile = continentalWorldProfile(
     atlasPhysicalProfile({ provinces: 42, landFraction }),
     bounds
   );
-  const map = createField(createWorldMesh(bounds, 8192, 0, undefined, undefined, undefined, true));
-  for (const [, salt, apply] of initialSteps)
-    apply(map, physicalContext(seed, salt, profile, null, 0, 3));
+  const map = createField(createWorldMesh(bounds, 4096, 0, undefined, undefined, undefined, true));
+  for (const {
+    step: [, salt, apply],
+    epoch,
+    index,
+  } of layoutSchedule(history))
+    apply(map, physicalContext(seed, salt, profile, epoch, index, 3));
   landmasses(map, physicalContext(seed, 0, profile));
   const distance = new Float64Array(map.mesh.count).fill(Infinity),
     roots: number[] = [];
@@ -44,15 +65,15 @@ function layout(seed: number, landFraction: number) {
       masses.set(map.LandmassIds[i], mass);
     }
   }
-  // A compound landmass must contain substantial material from multiple assemblies,
-  // rather than merely touch a stray transported cell with a different identity.
-  const compound = [...masses.values()].some(
-    (mass) => [...mass].filter(([id, area]) => id > 0 && area / total > 0.03).length >= 2
-  );
   const areas = [...masses.values()].map((mass) =>
     [...mass.values()].reduce((sum, area) => sum + area, 0)
   );
   const land = areas.reduce((sum, area) => sum + area, 0);
+  // Use the same substantial share of dry land throughout history. Water exchange
+  // changes exposed area, so a fixed fraction of the whole world is a different test.
+  const compound = [...masses.values()].some(
+    (mass) => [...mass].filter(([id, area]) => id > 0 && area / land >= 0.1).length >= 2
+  );
   return {
     water: water / total,
     wide: wide / total,
@@ -64,15 +85,15 @@ function layout(seed: number, landFraction: number) {
 
 it.each([0.35, 0.48])("retains the requested ocean budget at land fraction %s", (landFraction) => {
   for (const seed of [73, 104729, 42, 157]) {
-    const continental = layout(seed, landFraction);
+    const continental = layout(seed, landFraction, false);
     expect(continental.water).toBeGreaterThan(1 - landFraction - 0.04);
     expect(continental.water).toBeLessThan(1 - landFraction + 0.04);
   }
 });
 
-it("usually separates substantial continents while retaining compound crust and broad ocean", () => {
+it("develops substantial continents while retaining compound crust and broad ocean through history", () => {
   const seeds = [73, 104729, 42, 157, 271828, 65537, 7, 19];
-  const worlds = seeds.map((seed) => layout(seed, 0.35));
+  const worlds = seeds.map((seed) => layout(seed, 0.35, true));
   // Each substantial continent holds at least a tenth of all dry land. Islands cannot
   // make a nearly complete supercontinent pass the distribution check.
   expect(worlds.filter((world) => world.continents >= 2).length).toBeGreaterThanOrEqual(6);
@@ -82,7 +103,7 @@ it("usually separates substantial continents while retaining compound crust and 
   const defaultWorld = worlds[seeds.indexOf(104729)];
   expect(defaultWorld.continents).toBeGreaterThanOrEqual(2);
   expect(defaultWorld.dominant).toBeLessThan(0.8);
-});
+}, 120_000);
 
 it("counts pieces on opposite chart edges as one landmass when the cylinder joins them", () => {
   const map = createField(

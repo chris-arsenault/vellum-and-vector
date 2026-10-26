@@ -14,7 +14,12 @@ import {
   cartographicControls,
   cartographicValue,
 } from "./cartographicDraft";
-import { setDraftMagicSystems, draftEpochs, renameDraftEpoch } from "./generationDraftEpochs";
+import {
+  setDraftMagicSystems,
+  draftEpochs,
+  renameDraftEpoch,
+  updatePhysicalEpoch,
+} from "./generationDraftEpochs";
 
 const control = (id: string) => cartographicControls().find((control) => control.id === id)!;
 const choose = (draft: ReturnType<typeof newGenerationDraft>, id: string, value: string) =>
@@ -104,14 +109,14 @@ it("composes terrain, shore, climate and ecological history independently of sel
     "Present",
   ]);
   expect(first.settings.epochs[1]).toMatchObject({
-    temperature: -20,
-    seaLevel: -60,
+    temperature: -3,
+    seaLevel: 0,
     ice: 1,
     ecology: { seasonality: 0.2, rainfall: 0.8, productivity: 0.4, migration: 0.5, recovery: 1.5 },
   });
   expect(first.settings.epochs[1].ecology!.fire).toBeCloseTo(0.07);
   expect(first.settings.epochs[2]).toMatchObject({
-    duration: 200,
+    duration: 1000,
     temperature: 15,
     ecology: { productivity: 1.2, migration: 1.5, recovery: 4.5, fire: 0.35 },
   });
@@ -123,6 +128,29 @@ it("composes terrain, shore, climate and ecological history independently of sel
   });
   // Repeated normalization cannot multiply either baseline or history again.
   expect(normalizeGenerationRecipe(first)).toEqual(first);
+});
+
+it("keeps authored climate, ice, geological duration and water forcing when terrain changes", () => {
+  const draft = updatePhysicalEpoch(newGenerationDraft(), "Cold age", {
+    duration: 220,
+    tectonicDurationMyr: 45,
+    temperature: -10,
+    ice: 0.7,
+    seaLevel: 25,
+  });
+  for (const terrain of ["plains", "hills", "ranges", "glacial"]) {
+    const prepared = prepareDraft(choose(draft, "terrain", terrain));
+    expect(prepared.input.settings!.epochs[1]).toMatchObject({
+      duration: 220,
+      tectonicDurationMyr: 45,
+      temperature: -10,
+      ice: 0.7,
+      seaLevel: 25,
+    });
+  }
+  expect(
+    prepareDraft(newGenerationDraft()).input.settings!.epochs.map((epoch) => epoch.temperature)
+  ).toEqual([15, -3, 15]);
 });
 
 it("passes all owned native coefficients into the actual physical profile, preserving other decisions", () => {

@@ -339,7 +339,11 @@ export function magicCoastalFeedback(state: GenerationState, context?: MapProces
   // A warded shore holds: its forcing moves to the shore downdrift before it is applied.
   wardCoasts(map, magic, totals);
   for (let i = 0; i < map.mesh.count; i++) {
-    map.ExternalCoastalForcing[i] += totals[i] - magic.coastal[i];
+    map.ExternalCoastalForcing[i] = clamp(
+      map.ExternalCoastalForcing[i] + totals[i] - magic.coastal[i],
+      0,
+      1000
+    );
     magic.coastal[i] = totals[i];
   }
 }

@@ -459,9 +459,7 @@ composed into the native workspace before physical consumers run.
 The standalone `physicalProfile` retains Canonry's defaults. `atlasPhysicalProfile`
 adapts them for the atlas rather than copying the game's frozen-world setting:
 
-- Horizontal distances scale with mesh density against the reference seed's
-  1,188,888 physical triangles; elevations remain metres. The atlas uses 42
-  crustal provinces and four continental assemblies.
+- Geological causes use world metres and sampling-independent initial sites.
 - The native snow threshold of 300 represents zero Celsius, with ten native
   climate units per degree. Epoch temperature settings remain Celsius and sea
   levels remain metres relative to the world's calibrated sea datum.
@@ -472,30 +470,36 @@ adapts them for the atlas rather than copying the game's frozen-world setting:
   epoch's cone forms at the new head. Older cones go dormant and leave a chain.
   Fracture conductance moves with the plates, and 60 % of its excess over the
   floor heals each later epoch, so cooled conduits stop venting.
-- Magical storage follows the native dominant source mapping when crust moves.
-  Thermal forcing refreshes with climate; material feedback and elapsed storage
-  advance once per epoch.
-- A continental assembly moves as one plate: its provinces take most of their
-  motion from the assembly and keep a declared minority of their own, while
-  oceanic provinces drift independently. Thermal subsidence belongs to oceanic
-  composition and fades to nothing at the continental threshold, so an aged
-  platform keeps its height.
+- Crust-bound magical amounts follow every internal material transport. Thermal
+  forcing refreshes with climate; material feedback and elapsed storage advance
+  once per epoch.
+- Continental ancestry and current mechanical membership are separate. Persistent
+  regional driving and contact resistance move and rotate plates. Accumulated
+  extension can disconnect a plate into independently driven fragments; compressed
+  continental contacts can weld without merging their material origins. Geological
+  intervals have their own units, independently of ecological and societal years.
+  Motion and boundary geometry update throughout each interval.
 - Formation sets the water budget: each formation flood covers the share of the
   world that is not continental crust, so the land fraction a cartographer asks
-  for is the land the first flood leaves. Epoch floods hold that ocean volume and
-  move the sea instead of drowning or stranding land; an epoch's eustatic offset
-  applies on top. A child inherits its parent's datum and never moves it. Rivers
-  grade to the sea and never cut below it.
+  for is the land the first flood leaves. Once history begins, the inventory stays
+  fixed through the final present pass. Grounded ice removes its water-equivalent
+  volume from the ocean and melting returns it; floating sea ice does not. Explicit
+  epoch water-level offsets apply separately. The eventual exposed land fraction
+  can change as crust moves and basin capacity changes. A child inherits its
+  parent's datum and never moves it. Rivers grade to the sea and never cut below it.
 - A collision belt has a polarity: its hinterland is the side of the boundary
   holding more continental mass. The foreland rises to the crest within a
   narrower front; the hinterland carries the crest and a plateau shoulder that
-  spends part of the root budget flat behind the belt before letting go. Rank
-  sets height through the root budget; per-pass bedrock relief adds summit
-  texture. The terrain choice sets the budgets, the plateau width and share;
-  Mountain ranges is the default.
+  spreads retained continental shortening into roots behind the belt. Root
+  capacity and prominence shape that distribution; evolution cannot manufacture
+  continental material to reach a requested summit height. Surface construction
+  adds relief above the supported column. The terrain choice sets construction
+  budgets and plateau shape; Mountain ranges is the default.
 - Ice mass balance follows climate: the lapse rate already in the temperature
   field carries altitude, and the separate altitude bonus is zero except under
-  the Glacier-carved terrain choice.
+  the Glacier-carved terrain choice. Terrain selection preserves the shared
+  clock's temperature, ice, water forcing and elapsed times. The default clock
+  includes a cold age independently of terrain selection.
 
 Detail presets specify physical area per terrain cell in km². The creation
 profile selects the physical scale; world dimensions determine how many cells
@@ -519,10 +523,11 @@ metre units. Climate coverage remains an explicit latitude-frame choice.
 
 Initial province sites are independently distributed, allowing unequal blocks
 and locally clustered boundaries. Continental assemblies grow from anchors with
-unequal area budgets. The default groups neighboring assemblies into compound
-continental regions, leaving broad ocean interiors between them; the island-world
-choice disperses assemblies instead. Growth favors staying near each region's
-origin and leaving oceanic provinces between different regions. Province contacts
+unequal area budgets. Correlated growth follows province adjacency, without
+prescribed regional centers or exclusions between material origins. Mechanical
+territories are initialized independently: one plate can carry oceanic and
+continental provinces, and one material origin can span multiple plates.
+Province contacts
 come from their Voronoi topology, including neighbors across the cylindrical seam,
 so a narrow shared boundary does not disappear between area samples. The crust
 budget can still bring regions into contact, and later history can join or divide
@@ -530,11 +535,21 @@ landmasses; assembly totals are not a count of separate continents.
 Uniform world-space samples estimate the
 unwarped territory areas independently of terrain sampling; whole-block selection,
 warping and crust transitions make the resulting continental fraction approximate.
-Assembly motion remains coherent within each assembly while neighboring assemblies
-retain distinct motion. Initial inter-assembly gaps require divergence; sliding
-and converging contacts preserve continental material. Active boundaries and rifts use
+Finite cell overlap transports material columns and histories. Newly exposed gaps
+receive young oceanic crust; convergence consumes oceanic material and retains
+continental overlap for roots. Exports through open boundaries are accounted for.
+Rift strain and cooling travel with their material and alter physical support.
+Active boundaries and rifts use
 distance to the shared site bisector in the warped coordinate frame, keeping
 closely spaced sites from marking distant interiors as active margins.
+
+Marine margins retain transported highs, troughs and sills. Cooling, rift
+subsidence, flexural loads and supplied sediment alter their depths; distance
+from the current coast does not replace their crust with a standard floor profile.
+Actual oceanic consumption supplies volcanic construction on the overriding side,
+separately from plume chains. Constructed rock moves and loads the crust after
+activity stops. Shelf exposure, basin opening and closure can therefore change
+connections without drawing a new coastline template.
 
 Regional refinement imports parent crust and accumulated material histories. It
 first realizes the relief its parent left latent (`canonry.refine-relief`,

@@ -3,6 +3,7 @@ import type { Geometry } from "geojson";
 import { adaptivePhysicalMesh } from "./adaptiveMesh";
 import { createField, type PhysicalField } from "./field";
 import { reconcileRemeshedWater } from "./remeshWater";
+import { remeshLandmarkDrainage } from "./landmarkTransport";
 
 const indices = new Set([
   "AdvectionSourceIndex",
@@ -30,6 +31,7 @@ const indices = new Set([
 const categories = new Set([
   "BiomeCodes",
   "CrustAssemblyIds",
+  "CrustPlateIds",
   "CrustSuturePairIds",
   "CrustProvinceIds",
   "CrustTypeCodes",
@@ -100,5 +102,6 @@ export function remeshPhysical(
   for (let i = 0; i < mesh.count; i++)
     next.Elevation[i] = next.BedrockElevation[i] + next.SedimentThickness[i];
   reconcileRemeshedWater(map, next);
+  remeshLandmarkDrainage(map, next, transfer);
   return next;
 }

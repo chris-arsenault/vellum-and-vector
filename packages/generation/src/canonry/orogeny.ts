@@ -20,6 +20,8 @@ import {
   units,
 } from "./math";
 import { rebuild } from "./surface";
+import { adjustCrustColumn } from "./crustTransport";
+import { distributeOrogenicRoots } from "./orogenicRoots";
 
 function deformationLimit(
   context: PhysicalContext,
@@ -61,7 +63,7 @@ function changeThickness(
       ? Math.min(requested, Math.max(current, limit))
       : Math.max(requested, Math.min(current, limit))
   );
-  map.CrustThickness[i] = units(next);
+  adjustCrustColumn(map, i, units(next));
   return units(crustHeight(next, fraction) - crustHeight(current, fraction));
 }
 function recordActivity(map: PhysicalField, context: PhysicalContext, i: number, admitted: number) {
@@ -114,37 +116,21 @@ function constructSurface(
   );
   rebuild(map, i);
 }
-function distributedShortening(
-  map: PhysicalField,
-  context: PhysicalContext,
-  c: BoundaryComponent,
-  i: number,
-  weight: number
-) {
-  if (weight <= 0 || c.totalWeight <= 0 || c.shortening <= 0) return 0;
-  const retained = ((0.3 + c.collision * 0.7) * context.TectonicStrength) / 1000;
-  return (
-    (((c.shortening * retained * weight) / c.totalWeight) *
-      buoyancy(map.CrustContinentalFraction[i] / 1000)) /
-    1000
-  );
-}
 function constructTriangle(
   map: PhysicalField,
   context: PhysicalContext,
   c: BoundaryComponent,
   frame: OrogenicFrame,
   i: number,
-  step: number
+  step: number,
+  roots: Float64Array | null
 ) {
   const source = frame.source[i],
     section = crossSection(map, context, c, i, source, frame.distance[i], frame.side[i]);
   const weight = constructionWeight(map, context, c, frame, i, section);
-  let drive = step * (c.prominence / 1000) * weight;
-  if (context.IsEvolutionEpoch && c.code === 1)
-    drive += distributedShortening(map, context, c, i, weight);
-  if (Math.abs(drive) < 0.5) return;
-  const admitted = changeThickness(map, context, c, i, section, drive);
+  const drive = step * (c.prominence / 1000) * weight;
+  if (!roots && Math.abs(drive) < 0.5) return;
+  const admitted = roots ? roots[i] : changeThickness(map, context, c, i, section, drive);
   map.OrogenicConstruction[i] = admitted;
   recordActivity(map, context, i, admitted);
   constructSurface(map, context, c, i, source, section, admitted);
@@ -161,15 +147,11 @@ export function orogenicConstruction(map: PhysicalField, context: PhysicalContex
     ? (context.Profile.EpochOrogenicConstructionStep * context.TectonicStrength) / 1000
     : context.Profile.InitialOrogenicConstructionStep;
   if (step <= 0) return;
-  if (context.IsEvolutionEpoch)
-    for (let i = 0; i < map.mesh.count; i++) {
-      const id = map.OrogenicComponentIds[i];
-      if (id >= 0 && components[id].code === 1)
-        components[id].totalWeight +=
-          constructionWeight(map, context, components[id], frame, i) * map.mesh.areas[i];
-    }
+  const roots = context.IsEvolutionEpoch
+    ? distributeOrogenicRoots(map, context, components, frame)
+    : null;
   for (let i = 0; i < map.mesh.count; i++) {
     const id = map.OrogenicComponentIds[i];
-    if (id >= 0) constructTriangle(map, context, components[id], frame, i, step);
+    if (id >= 0) constructTriangle(map, context, components[id], frame, i, step, roots);
   }
 }

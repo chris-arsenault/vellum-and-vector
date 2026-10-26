@@ -200,7 +200,7 @@ export function defaultEpochs(): World["epochs"] {
       ice: 1,
       coasts: 1,
       temperature: -3,
-      seaLevel: -40,
+      seaLevel: 0,
     },
     {
       id: "Present",

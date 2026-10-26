@@ -309,8 +309,14 @@ function refreshMagicPathways(
   oceanChanged: boolean
 ) {
   const work = state.physical!;
-  if (!work.magic) restorePresentMagic(state);
-  const seed = generationBindings(context).seed;
+  const bound = generationBindings(context);
+  if (!work.magic) {
+    const inherited = Object.keys(state.surface.channels).some((name) => name.startsWith("magic:"));
+    if (bound.features.selection["magic.configured"]?.enabled === false && !inherited)
+      initializeMagic(state, false);
+    else restorePresentMagic(state);
+  }
+  const seed = bound.seed;
   repropagateMovedMedia(state, seed, oceanChanged);
   // The society phase: systems made of what people did, and systems whose stocks people
   // drew or deposited this cycle (cracked cores at a forge, planted seed, cleared sap).

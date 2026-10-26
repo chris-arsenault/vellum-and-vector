@@ -6,6 +6,7 @@ import { clamp, elevationLimit, round, units } from "./math";
 import { hashUnit } from "./noise";
 import { Feature } from "./codes";
 import { rebuild } from "./surface";
+import { subductionArcs } from "./volcanicArcs";
 
 /**
  * The plume head after `sequence` epochs. The crust moves over a fixed plume,
@@ -126,6 +127,7 @@ export function volcanicConstruction(map: PhysicalField, context: PhysicalContex
         constructTriangle(map, context, i, distance, strength, recorded, caldera);
     }
   }
+  subductionArcs(map, context);
 }
 function hasVolcanism(context: PhysicalContext) {
   return context.Profile.VolcanicConeHeight > 0 || context.Profile.VolcanicApronHeight > 0;

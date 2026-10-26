@@ -54,6 +54,8 @@ it("carries area-weighted material, fractional ecology, labels and maxima withou
 
 it("preserves convergent crust surplus and clears volcanic flags when transported construction is absent", () => {
   const { map, plan } = fixture();
+  // Continental overlap remains available for roots; oceanic overlap is subducted separately.
+  map.CrustContinentalFraction.fill(1000);
   map.TectonicBoundaryCodes[2] = 1;
   plan.arrivals[2] *= 2;
   plan.weights[0] *= 2;
@@ -63,6 +65,7 @@ it("preserves convergent crust surplus and clears volcanic flags when transporte
   map.FeatureFlags[1] |= 2;
   transportHistory(map, plan);
   expect(map.ConvergentCrustSurplus[2]).toBe(units(3500));
+  expect(map.CrustRootReserve[2]).toBe(units(3500));
   expect([...map.FeatureFlags]).toEqual([0, 0, 3, 3]);
   expect([...map.VolcanicLastActiveEpoch]).toEqual([-1, -1, -1, -1]);
   expect(map.CrustThickness[2]).toBe(units(3500));

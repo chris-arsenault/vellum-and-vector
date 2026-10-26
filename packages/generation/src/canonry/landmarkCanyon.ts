@@ -211,13 +211,14 @@ const riverAt = (map: PhysicalField, i: number) => ({
 });
 /** The largest river already running through the floor, if any, is the present capture. */
 function heldRiver(map: PhysicalField, floor: Set<number>, record: LandmarkRecord) {
+  let held = 0;
+  record.capture = null;
   for (const i of floor)
-    if (
-      map.RiverOrders[i] > 0 &&
-      (!record.capture || map.FlowAccumulation[i] >= record.capture.accumulation)
-    )
+    if (map.RiverOrders[i] > 0 && map.FlowAccumulation[i] > held) {
+      held = map.FlowAccumulation[i];
       record.capture = riverAt(map, i);
-  return record.capture?.accumulation ?? 0;
+    }
+  return held;
 }
 export interface CaptureTarget {
   /** The cell the captured river must reach. */
@@ -235,10 +236,11 @@ export interface CaptureTarget {
  * river qualifies the landmark keeps its local drainage and the record says so.
  */
 export function captureInto(map: PhysicalField, record: LandmarkRecord, target: CaptureTarget) {
-  if (!map.RiverOrders.some((order) => order > 0) || target.head < 0) return 0;
+  if (target.head < 0) return 0;
   const { head, floor, reach } = target,
     held = heldRiver(map, floor, record),
     steps = 4 * Math.ceil(reach / map.mesh.spacing) + 8;
+  if (!map.RiverOrders.some((order) => order > 0)) return 0;
   for (const best of riversNear(map, head, reach, floor)) {
     if (map.FlowAccumulation[best] <= held) break;
     if (flowsInto(map, best, floor, steps)) return 0;

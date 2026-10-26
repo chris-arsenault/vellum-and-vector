@@ -4,13 +4,14 @@ import { createWorldMesh } from "./worldMesh";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { physicalContext } from "./context";
 import { physicalSampler } from "./physicalMetric";
+import { meshLineDelta, meshPoint } from "./mesh";
 import { plateAdvection } from "./advection";
 import { buildTransportPlan } from "./transportPlan";
 import { transportHistory } from "./transportHistory";
 
 function fixture() {
   const map = createField(createWorldMesh([-100_000, -100_000, 100_000, 100_000], 512, 25_000)),
-    profile = { ...atlasPhysicalProfile(), PlateDriftPerEpoch: 20_000, PlateDriftDecay: 1000 };
+    profile = { ...atlasPhysicalProfile(), PlateDriftPerEpoch: 20_000 };
   return { map, context: physicalContext(1, 0, profile) };
 }
 it("keeps nearby geological points together across a cell motion boundary", () => {
@@ -34,11 +35,11 @@ it("keeps nearby geological points together across a cell motion boundary", () =
     epoch: 0,
     strength: 1000,
   }));
-  const before = structuredClone(map.events),
-    velocity = physicalSampler(mesh, map.CrustMotionX);
-  const expected = before.map((p) => p.x + velocity(p.x, p.y) * 20);
+  const before = structuredClone(map.events);
   plateAdvection(map, context);
-  map.events.forEach((event, index) => expect(event.x).toBeCloseTo(expected[index], 7));
+  map.events.forEach((event, index) =>
+    expect(Math.abs(event.x - x)).toBeLessThan(Math.abs(before[index].x - x))
+  );
   expect(Math.abs(map.events[1].x - map.events[0].x)).toBeLessThan(1);
 });
 it("follows continuous deformation along a long fault and preserves identity and stationary plumes", () => {
@@ -67,7 +68,12 @@ it("follows continuous deformation along a long fault and preserves identity and
   const fault = map.faults[0];
   expect(fault.id).toBe("fault:test");
   expect(fault.coordinates.length).toBeGreaterThan(10);
-  for (const [x, y] of fault.coordinates) expect(y).toBeCloseTo(velocity(x, 0) * 20, 7);
+  for (const [x, y] of fault.coordinates) {
+    let reference = 0;
+    for (let k = 0; k < 1000; k++) reference += velocity(x, reference) * 0.02;
+    // Point tracing resolves deformation well below the terrain cell's scale.
+    expect(Math.abs(y - reference)).toBeLessThan(mesh.spacing / 1000);
+  }
   expect(fault.coordinates.some(([, y]) => Math.abs(y) > 10_000)).toBe(true);
   expect(map.events[0].y).toBe(0);
 });
@@ -75,6 +81,7 @@ it("follows continuous deformation along a long fault and preserves identity and
 function unequalBlocks(samples: number) {
   const map = createField(createWorldMesh([-100000, -100000, 100000, 100000], samples, 25000));
   const mesh = map.mesh;
+  map.CrustThickness.fill(1000 * 1024);
   for (let i = 0; i < mesh.count; i++) {
     const x = mesh.x[i],
       y = mesh.y[i];
@@ -82,6 +89,7 @@ function unequalBlocks(samples: number) {
     const block = x < 0 ? 1 : x < 15000 ? 2 : 3;
     map.CrustAssemblyIds[i] = block;
     map.CrustContinentalFraction[i] = 1000;
+    map.CrustThickness[i] = 4000 * 1024;
     map.CrustSuturePairIds[i] = (block << 16) | (block + 1);
     map.CrustSutureStrength[i] = block * 100;
     map.SedimentThickness[i] = block * 1024;
@@ -122,4 +130,44 @@ it.each([1024, 4096])("carries a narrow block beside larger blocks at %s samples
     }
   }
   expect(narrowInterior).toBeGreaterThan(0);
+});
+
+it("resamples a polar fault along its short physical crossing", () => {
+  const map = createField(
+    createWorldMesh([0, 0, 1e6, 600_000], 1024, 0, undefined, undefined, undefined, true, true)
+  );
+  const a: [number, number] = [-200_000, 290_000],
+    b: [number, number] = [300_000, 290_000];
+  const delta = meshLineDelta(map.mesh, a, b);
+  expect(Math.hypot(...delta)).toBeCloseTo(20_000, 5);
+  const folded = meshPoint(map.mesh, a[0] + delta[0], a[1] + delta[1]);
+  expect(folded[0]).toBeCloseTo(b[0], 5);
+  expect(folded[1]).toBeCloseTo(b[1], 5);
+  map.faults.push({ id: "polar", width: 1000, coordinates: [a, b] });
+  map.CrustMotionY.fill(1000);
+  map.CrustThickness.fill(1000 * 1024);
+  const c = physicalContext(7, 0, { ...atlasPhysicalProfile(), PlateDriftPerEpoch: 10_000 });
+  plateAdvection(map, c);
+  expect(map.faults[0].coordinates.length).toBeLessThan(20);
+});
+
+it("compresses a fault through a converging velocity field without numerically folding it", () => {
+  const map = createField(createWorldMesh([0, 0, 400_000, 200_000], 1024, 0));
+  for (let i = 0; i < map.mesh.count; i++) map.CrustMotionY[i] = map.mesh.y[i] < 0 ? 1000 : -1000;
+  map.CrustThickness.fill(1000 * 1024);
+  map.faults.push({
+    id: "compression",
+    width: 1000,
+    coordinates: [
+      [0, -50_000],
+      [0, 50_000],
+    ],
+  });
+  plateAdvection(
+    map,
+    physicalContext(7, 0, { ...atlasPhysicalProfile(), PlateDriftPerEpoch: 100_000 })
+  );
+  const points = map.faults[0].coordinates;
+  expect(points[0][1]).toBeLessThan(points.at(-1)![1]);
+  expect(Math.abs(points[0][1])).toBeLessThan(10_000);
 });

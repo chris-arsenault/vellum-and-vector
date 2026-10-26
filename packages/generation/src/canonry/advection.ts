@@ -6,13 +6,24 @@ import { buildTransportPlan } from "./transportPlan";
 import { transportHistory } from "./transportHistory";
 import { rebuild } from "./surface";
 import { physicalSampler } from "./physicalMetric";
-import { meshDeltaX, meshPoint } from "./mesh";
+import { meshLineDelta, meshPoint } from "./mesh";
+import {
+  completeTectonicMotion,
+  prepareTectonicMotion,
+  tectonicInterval,
+} from "./tectonicIntegration";
+import { tectonicProvinces } from "./provinces";
+import { tectonicReferenceMyr } from "./tectonicControls";
+import { advectLandmarkDrainage } from "./landmarkTransport";
+import { geologicalPointMotion } from "./geologicalPointMotion";
 
 function advectGeometry(map: PhysicalField, distance: number) {
   const vx = physicalSampler(map.mesh, map.CrustMotionX),
     vy = physicalSampler(map.mesh, map.CrustMotionY);
-  const move = (x: number, y: number): [number, number] =>
-    meshPoint(map.mesh, x + (vx(x, y) / 1000) * distance, y + (vy(x, y) / 1000) * distance);
+  let maximumSpeed = 0;
+  for (let i = 0; i < map.mesh.count; i++)
+    maximumSpeed = Math.max(maximumSpeed, Math.hypot(map.CrustMotionX[i], map.CrustMotionY[i]));
+  const move = geologicalPointMotion(map.mesh, vx, vy, distance, maximumSpeed);
   for (const event of map.events)
     if (event.kind !== "plume") [event.x, event.y] = move(event.x, event.y);
   for (const fault of map.faults) {
@@ -20,11 +31,11 @@ function advectGeometry(map: PhysicalField, distance: number) {
     fault.coordinates.forEach((b, index) => {
       if (index === 0) return;
       const a = fault.coordinates[index - 1],
-        dx = meshDeltaX(map.mesh, b[0] - a[0]),
-        count = Math.ceil(Math.hypot(dx, b[1] - a[1]) / (map.mesh.spacing / 4));
+        [dx, dy] = meshLineDelta(map.mesh, a, b),
+        count = Math.ceil(Math.hypot(dx, dy) / (map.mesh.spacing / 4));
       for (let station = 0; station < count; station++) {
         const fraction = station / count;
-        result.push(move(a[0] + dx * fraction, a[1] + (b[1] - a[1]) * fraction));
+        result.push(move(...meshPoint(map.mesh, a[0] + dx * fraction, a[1] + dy * fraction)));
       }
     });
     if (fault.coordinates.length) result.push(move(...fault.coordinates.at(-1)!));
@@ -32,17 +43,12 @@ function advectGeometry(map: PhysicalField, distance: number) {
   }
 }
 
-export function plateAdvection(map: PhysicalField, context: PhysicalContext) {
-  const p = context.Profile;
-  const decay = (p.PlateDriftDecay / 1000) ** Math.max(0, context.EpochIndex);
-  const step = p.PlateDriftPerEpoch * decay;
-  map.AdvectionSourceIndex.fill(-1);
+function transportStep(map: PhysicalField, step: number) {
   map.ConvergentCrustSurplus.fill(0);
-  map.LastPlateDriftStep = step;
-  if (step <= 0) return;
   advectGeometry(map, step);
   const plan = buildTransportPlan(map, step);
   map.transportPlan = plan;
+  advectLandmarkDrainage(map, plan, step);
   transportHistory(map, plan);
   for (let i = 0; i < map.mesh.count; i++) {
     map.CrustThickness[i] = clamp(
@@ -53,5 +59,42 @@ export function plateAdvection(map: PhysicalField, context: PhysicalContext) {
     map.AdvectionSourceIndex[i] = plan.dominant[i];
     rebuild(map, i);
   }
-  map.AccumulatedPlateDrift += step;
+}
+export function plateAdvection(
+  map: PhysicalField,
+  context: PhysicalContext,
+  afterStep: () => void = () => {}
+) {
+  const rate = context.Profile.PlateDriftPerEpoch / tectonicReferenceMyr,
+    total = rate * context.TectonicDurationMyr;
+  map.AdvectionSourceIndex.fill(-1);
+  map.ConvergentCrustSurplus.fill(0);
+  map.LastPlateDriftStep = total;
+  map.OceanicSubduction.fill(0);
+  if (total <= 0) return;
+  if (!map.tectonics) {
+    transportStep(map, total);
+    afterStep();
+    map.AccumulatedPlateDrift += total;
+    return;
+  }
+  const surplus = new Float64Array(map.mesh.count),
+    evolved = { ...context, IsEvolutionEpoch: true };
+  let remaining = context.TectonicDurationMyr;
+  while (remaining > 1e-9) {
+    const myr = tectonicInterval(map, remaining, rate),
+      step = rate * myr;
+    prepareTectonicMotion(map, myr);
+    tectonicProvinces(map, evolved);
+    transportStep(map, step);
+    afterStep();
+    for (let i = 0; i < surplus.length; i++) surplus[i] += map.ConvergentCrustSurplus[i];
+    completeTectonicMotion(map, myr, step);
+    for (let i = 0; i < map.mesh.count; i++)
+      if (map.CrustRiftStrain[i] > 0) map.CrustRiftAgeMyr[i] += myr;
+    remaining -= myr;
+  }
+  map.ConvergentCrustSurplus.set(surplus);
+  tectonicProvinces(map, evolved);
+  map.AccumulatedPlateDrift += total;
 }
