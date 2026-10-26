@@ -73,9 +73,7 @@ export function communityPractices(groups: readonly PopulationGroup[]): Practice
   return result;
 }
 /** The livelihoods a country yields, as the distribution a people living from it would have. */
-export function livelihoodShares(
-  support: Pick<SocietySupport, LivelihoodChannel>
-): PracticeShares {
+export function livelihoodShares(support: Pick<SocietySupport, LivelihoodChannel>): PracticeShares {
   const total = livelihoodChannels.reduce((sum, id) => sum + Math.max(0, support[id]), 0);
   if (total <= 0) return {};
   return Object.fromEntries(

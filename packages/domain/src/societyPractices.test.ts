@@ -63,7 +63,10 @@ it("derives livelihood shares from support and relaxes toward them", () => {
 });
 
 it("validates authored practice shares against the listed practices", () => {
-  const valid = { ...group(10, ["farming", "fishing"]), practiceShares: { farming: 0.7, fishing: 0.3 } };
+  const valid = {
+    ...group(10, ["farming", "fishing"]),
+    practiceShares: { farming: 0.7, fishing: 0.3 },
+  };
   expect(populationGroupsSchema.safeParse([valid]).success).toBe(true);
   expect(
     populationGroupsSchema.safeParse([{ ...valid, practiceShares: { farming: 0.7 } }]).success

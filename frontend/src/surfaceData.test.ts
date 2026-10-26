@@ -42,8 +42,22 @@ it("orders share segments heaviest first and drops empty shares", () => {
 it("frames series on a shared axis with y from zero and projects points", () => {
   const frame = chartFrame(
     [
-      { id: "p", label: "People", points: [{ x: 10, y: 900 }, { x: 20, y: 1000 }] },
-      { id: "c", label: "Capacity", points: [{ x: 10, y: 1200 }, { x: 20, y: 1500 }] },
+      {
+        id: "p",
+        label: "People",
+        points: [
+          { x: 10, y: 900 },
+          { x: 20, y: 1000 },
+        ],
+      },
+      {
+        id: "c",
+        label: "Capacity",
+        points: [
+          { x: 10, y: 1200 },
+          { x: 20, y: 1500 },
+        ],
+      },
     ],
     100,
     40
@@ -58,7 +72,14 @@ it("frames series on a shared axis with y from zero and projects points", () => 
 });
 
 it("draws line and area paths in frame space", () => {
-  const series = { id: "p", label: "P", points: [{ x: 0, y: 0 }, { x: 10, y: 10 }] };
+  const series = {
+    id: "p",
+    label: "P",
+    points: [
+      { x: 0, y: 0 },
+      { x: 10, y: 10 },
+    ],
+  };
   const frame = chartFrame([series], 100, 50)!;
   expect(linePath(frame, series)).toBe("M0.0 50.0 L100.0 0.0");
   expect(areaPath(frame, series)).toBe("M0.0 50.0 L100.0 0.0 L100.0 50 L0.0 50 Z");

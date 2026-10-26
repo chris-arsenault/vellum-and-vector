@@ -31,6 +31,7 @@ export default ts.config(
   {
     ignores: [
       "dist/**",
+      ".artifacts/**",
       "node_modules/**",
       "test-results/**",
       "playwright-report/**",

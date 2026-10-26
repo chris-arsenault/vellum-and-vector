@@ -44,11 +44,13 @@ test("switching magic strategies removes hidden errors and preserves visible pen
   });
   await coreBudget.fill("");
   await fire.getByLabel("Propagation loss per kilometre", { exact: true }).fill("");
-  await fire.getByRole("combobox", { name: /^Source selection/ }).selectOption("placed");
+  // Fire has several origins; the vein is the one whose source and propagation own these fields.
+  const vein = fire.getByRole("group", { name: "Origin · vein" });
+  await vein.getByRole("combobox", { name: /^Source selection/ }).selectOption("placed");
   await expect(coreBudget).toHaveCount(0);
   await expect(page.locator(".setup-issues")).not.toContainText("Core-site budget");
   await expect(page.locator(".setup-issues")).toContainText("Propagation loss per kilometre");
-  await fire.getByRole("combobox", { name: /^Propagation/ }).selectOption("radial");
+  await vein.getByRole("combobox", { name: /^Propagation/ }).selectOption("radial");
   await expect(page.locator(".setup-issues")).toHaveCount(0);
   await page
     .getByRole("navigation", { name: "Generation steps" })

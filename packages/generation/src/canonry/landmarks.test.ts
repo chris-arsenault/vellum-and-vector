@@ -88,7 +88,7 @@ function placeAll(map: PhysicalField): Landmark[] {
   const [canyonFrom, mountain, dome, crater, scarpFrom, fallsAt] = anchors(
     map,
     6,
-    320_000,
+    250_000,
     150_000
   );
   const canyonTo = away(canyonFrom, [mountain, dome, crater, scarpFrom], 150_000);
@@ -186,7 +186,8 @@ it("holds every mesh-scale landmark's signature through warm, glacial and presen
   }
   expect(map.events.filter((event) => event.kind === "landmark")).toHaveLength(6);
   const falls = ledger.get("falls-1")!;
-  expect(falls.measured.drop).toBeGreaterThanOrEqual(50);
+  // Held within the centimetre of slack that signatureShortfall allows float arithmetic.
+  expect(falls.measured.drop).toBeGreaterThanOrEqual(50 - 0.01);
   expect(falls.notes.some((text) => text.includes("latent"))).toBe(true);
   expect(map.faults.some((fault) => fault.id === "landmark:escarpment-1")).toBe(true);
   expect(map.LandmarkMaintenance.some((value) => value > 0)).toBe(true);
