@@ -7,6 +7,7 @@ import perf from "eslint-plugin-react-perf";
 import a11y from "eslint-plugin-jsx-a11y";
 import sonar from "eslint-plugin-sonarjs";
 import prettier from "eslint-config-prettier";
+import { testPolicy } from "../testPolicy";
 import {
   noDirectFetch,
   noInlineStyles,
@@ -68,5 +69,6 @@ export default ts.config(
       "max-depth": ["warn", 4],
     },
   },
+  ...testPolicy,
   prettier
 );

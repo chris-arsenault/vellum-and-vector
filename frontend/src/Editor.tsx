@@ -3,7 +3,7 @@ import { point, spatial } from "@atlas/domain";
 import { Brand } from "./App";
 import { ErrorMessage } from "./ErrorMessage";
 import { MapCanvas } from "./MapCanvas";
-import { MapPanel, type MapSection } from "./MapPanel";
+import { MapDrawer, type MapSection } from "./MapPanel";
 import { Inspector } from "./Inspector";
 import { WorkflowPanel } from "./WorkflowPanel";
 import { JobsPanel } from "./JobsPanel";
@@ -16,7 +16,6 @@ import { ToolIcon } from "./ToolIcon";
 import { useJobs } from "./useAtlas";
 import { UndoButton } from "./UndoButton";
 import { paletteTools, toolLabel, workspaces, type Workspace } from "./cartography";
-import { AtlasPanel } from "./AtlasPanel";
 import { MapStorage } from "./MapStorage";
 import { RegionList } from "./RegionsPanel";
 
@@ -60,37 +59,20 @@ export function Editor({ world, worlds, changeWorld, newWorld, openLore, openSav
         </button>
       </nav>
       {tab && (
-        <aside
-          className="left-panel map-drawer"
-          id="map-drawer"
-          aria-label={tab === "map" ? "Map settings" : "World atlas"}
-        >
-          <header className="drawer-heading">
-            <h2>{tab === "map" ? "Map" : "Atlas"}</h2>
-            <button className="quiet" aria-label="Close map drawer" onClick={() => setTab(null)}>
-              ×
-            </button>
-          </header>
-          {tab === "atlas" ? (
-            <AtlasPanel
-              editor={editor}
-              maps={
-                <>
-                  <AtlasTree world={world} current={editor.area.id} enter={editor.enter} />
-                  <button onClick={editor.openRegions}>Choose a region</button>
-                  <RegionList editor={editor} />
-                </>
-              }
-            />
-          ) : (
-            <MapPanel editor={editor} section={mapSection} choose={setMapSection} chooseRegion={() => {editor.openRegions(); setTab(null);}} />
-          )}
-          <div className="spatial-reference">
-            <span className="eyebrow">WORLD REFERENCE</span>
-            <p>Planar · metres · east / north / up</p>
-            <small>{world.reference.verticalDatum}</small>
-          </div>
-        </aside>
+        <MapDrawer
+          editor={editor}
+          tab={tab}
+          section={mapSection}
+          choose={setMapSection}
+          close={() => setTab(null)}
+          maps={
+            <>
+              <AtlasTree world={world} current={editor.area.id} enter={editor.enter} />
+              <button onClick={editor.openRegions}>Choose a region</button>
+              <RegionList editor={editor} />
+            </>
+          }
+        />
       )}
       <MapWorkspace world={world} editor={editor} />
       <AuthoringPanel world={world} editor={editor} />

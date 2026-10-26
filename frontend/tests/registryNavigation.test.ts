@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./uiTest";
 
 test("world registry finds a finer place and opens its compatible map", async ({ page }) => {
   await createBlank(page);

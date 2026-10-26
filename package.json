@@ -9,7 +9,6 @@
     "typecheck": "pnpm -r --if-present typecheck",
     "test": "vitest run",
     "test:generation": "pnpm --dir frontend test:generation",
-    "test:scale": "pnpm --dir frontend test:scale",
     "lint": "eslint packages && pnpm --dir frontend run lint",
     "format": "prettier --write packages *.json *.ts *.yaml && pnpm --dir frontend run format",
     "build": "pnpm -r --if-present build"

@@ -53,28 +53,44 @@ export function LayerBrowser({
   const fields = editor.rasterView.fields.filter((field) => available.has(field.channel));
   return (
     <section className="layer-browser" aria-label="Map layers">
-      {editor.cartography.mode === "raster" ? <>
-      <div className="layer-section-title">
-        <h3>Overlays</h3>
-        <button className="quiet" popoverTarget={catalogue}>
-          + Add overlay
-        </button>
-      </div>
-      <LayerCatalogue
-        id={catalogue}
-        editor={editor}
-        update={actions.update}
-        remove={actions.remove}
-      />
-      <OverlayStack editor={editor} fields={fields} actions={actions} target={target} edit={edit} />
-      {!fields.length && <p className="empty-overlays">No overlays</p>}
-      </> : <DrawnFieldsPanel editor={editor} />}
+      {editor.cartography.mode === "raster" ? (
+        <>
+          <div className="layer-section-title">
+            <h3>Overlays</h3>
+            <button className="quiet" popoverTarget={catalogue}>
+              + Add overlay
+            </button>
+          </div>
+          <LayerCatalogue
+            id={catalogue}
+            editor={editor}
+            update={actions.update}
+            remove={actions.remove}
+          />
+          <OverlayStack
+            editor={editor}
+            fields={fields}
+            actions={actions}
+            target={target}
+            edit={edit}
+          />
+          {!fields.length && <p className="empty-overlays">No overlays</p>}
+        </>
+      ) : (
+        <DrawnFieldsPanel editor={editor} />
+      )}
       <FeatureThemes editor={editor} edit={edit} />
     </section>
   );
 }
 const baseLabels = { surface: "Surface", topographic: "Topographic", relief: "Relief" } as const;
-export function BaseChoices({ editor, edit }: { editor: EditorState; edit: (target: string) => void }) {
+export function BaseChoices({
+  editor,
+  edit,
+}: {
+  editor: EditorState;
+  edit: (target: string) => void;
+}) {
   return (
     <fieldset className="base-choices">
       <legend>Base map</legend>

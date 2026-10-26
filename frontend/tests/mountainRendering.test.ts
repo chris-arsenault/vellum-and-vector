@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./uiTest";
 import { build } from "esbuild";
 import { fileURLToPath } from "node:url";
 import type {} from "./mountainRenderingFixture";

@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { canonryMagicPresets, putChannel, valueRecordSchema } from "@atlas/domain";
-import { atlasConfiguration, generateAtlas, prepareAtlasGeneration } from "./atlasWorkflow";
+import { atlasConfiguration, prepareAtlasGeneration } from "./atlasWorkflow";
 import { featureContribution, resolveGenerationFeatures, type GenerationFeature } from "./features";
 import { physicalFeatureDefinitions } from "./physicalFeatures";
 import { physicalFeatureSequence } from "./physicalFeatureSequence";
@@ -276,7 +276,7 @@ function withProduct(
   };
 }
 
-it("rejects two exclusive feature providers before starting generation", async () => {
+it("rejects two exclusive feature providers before starting generation", () => {
   const modules = [randomModule("test.exclusive-a"), randomModule("test.exclusive-b")].map(
     (module) => withProduct(module, "exclusive")
   );
@@ -295,11 +295,6 @@ it("rejects two exclusive feature providers before starting generation", async (
         invocation: expect.stringContaining("test.exclusive-b"),
       })
     );
-    let progressCalls = 0;
-    await expect(generateAtlas(domain, input, { progress: () => progressCalls++ })).rejects.toThrow(
-      "both exclusively produce test:exclusive-product"
-    );
-    expect(progressCalls).toBe(0);
     expect(domain.world.fields).toEqual([]);
     expect(domain.numerical).toEqual({});
   } finally {

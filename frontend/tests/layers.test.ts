@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./uiTest";
 import {
   canvas,
   createWorld,
@@ -6,6 +6,7 @@ import {
   installGenerationFixture,
   mapImage,
   openLayers,
+  openMapSettings,
   pageErrors,
   tool,
 } from "./harness";
@@ -15,17 +16,21 @@ test.use({ actionTimeout: 15000 });
 test("the compact layer drawer leaves the map accessible on a narrow screen", async ({ page }) => {
   await page.setViewportSize({ width: 600, height: 900 });
   await createWorld(page, "Narrow map");
-  await openLayers(page);
+  await openMapSettings(page);
   await expect(page.getByRole("radio", { name: "Topographic", exact: true })).toBeVisible();
   await expect(page.locator(".overlay-row")).toHaveCount(0);
   const map = await canvas(page).boundingBox();
-  const drawer = await page.getByLabel("Map appearance", { exact: true }).boundingBox();
+  const drawer = await page
+    .getByRole("complementary", { name: "Map settings", exact: true })
+    .boundingBox();
   expect(map!.width).toBeGreaterThan(500);
   expect(drawer!.height).toBeLessThan(500);
   expect(drawer!.y - map!.y).toBeGreaterThan(120);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(600);
   await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
-  await expect(page.getByLabel("Map appearance", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("complementary", { name: "Map settings", exact: true })).toHaveCount(
+    0
+  );
 });
 
 test("overlays are chosen, hidden and legended without expanding the stack", async ({ page }) => {
@@ -77,6 +82,7 @@ test("base maps switch and field styles compose into a restorable view", async (
   await generate(page);
   await openLayers(page);
   await checkFaultControl(page);
+  await openMapSettings(page);
   await checkTerrainControl(page);
   await expect(page.getByRole("radio", { name: "Surface", exact: true })).toBeChecked();
   const surface = await mapImage(page);
@@ -85,6 +91,7 @@ test("base maps switch and field styles compose into a restorable view", async (
   await expect.poll(() => mapImage(page)).not.toBe(surface);
   await page.getByRole("radio", { name: "Relief", exact: true }).click();
   await expect(page.getByRole("radio", { name: "Relief", exact: true })).toBeChecked();
+  await openLayers(page);
   await page.getByRole("button", { name: "+ Add overlay", exact: true }).click();
   await page.getByRole("checkbox", { name: "Add Temperature", exact: true }).check();
   await page.getByRole("checkbox", { name: "Add River flow", exact: true }).check();
@@ -109,18 +116,24 @@ test("base maps switch and field styles compose into a restorable view", async (
   );
   await page.getByLabel("Range minimum").fill("-5");
   await page.getByRole("button", { name: "Apply range", exact: true }).click();
-  await page.getByText("Session map views", { exact: true }).click();
+  await openMapSettings(page, "Views");
   await page.getByLabel("View name", { exact: true }).fill("Heat and runoff");
   await page.getByRole("button", { name: "Save map view", exact: true }).click();
   await expect(page.getByRole("button", { name: "Heat and runoff", exact: true })).toBeVisible();
+  await openMapSettings(page);
   await page.getByRole("radio", { name: "Topographic", exact: true }).click();
+  await openLayers(page);
   await page.getByRole("checkbox", { name: "Show Temperature", exact: true }).click();
   await expect(
     page.getByRole("checkbox", { name: "Show Temperature", exact: true })
   ).not.toBeChecked();
+  await openMapSettings(page, "Views");
   await page.getByRole("button", { name: "Heat and runoff", exact: true }).click();
+  await openMapSettings(page);
   await expect(page.getByRole("radio", { name: "Relief", exact: true })).toBeChecked();
+  await openLayers(page);
   await expect(page.getByRole("checkbox", { name: "Show Temperature", exact: true })).toBeChecked();
+  await page.getByRole("button", { name: "Style Temperature", exact: true }).click();
   await expect(page.getByLabel("Value scale", { exact: true })).toHaveValue("log");
   await expect(page.getByLabel("Range maximum")).toHaveValue("25");
   await expectFieldOrder(page);
@@ -150,7 +163,7 @@ async function showLegends(page: Page) {
 async function checkTerrainControl(page: Page) {
   await page.getByRole("button", { name: "Adjust terrain appearance", exact: true }).click();
   await expect(page.getByRole("slider", { name: /Sun azimuth/ })).toBeVisible();
-  await page.getByRole("button", { name: "← Back to map layers", exact: true }).click();
+  await page.getByText("Terrain appearance", { exact: true }).click();
 }
 async function expectFieldOrder(page: Page) {
   const fields = page.locator(".active-overlays").getByRole("checkbox");
@@ -188,14 +201,19 @@ test("road symbols are styled with GeoStyler and kept in a session view", async 
   await dialog.getByRole("button", { name: "Apply style", exact: true }).click();
   await expect(dialog).not.toBeVisible();
   await expect.poll(() => mapImage(page)).not.toBe(original);
-  await page.getByText("Session map views", { exact: true }).click();
+  await openMapSettings(page, "Views");
   await page.getByLabel("View name", { exact: true }).fill("Wide roads");
   await page.getByRole("button", { name: "Save map view", exact: true }).click();
   await expect(page.getByRole("button", { name: "Wide roads", exact: true })).toBeVisible();
+  await openLayers(page);
+  await page.getByLabel("Search features").fill("Roads");
   await page.getByRole("button", { name: "Style Roads and routes", exact: true }).click();
   await page.getByRole("button", { name: "Advanced symbol rules", exact: true }).click();
   await dialog.getByRole("button", { name: "Reset to atlas style", exact: true }).click();
+  await openMapSettings(page, "Views");
   await page.getByRole("button", { name: "Wide roads", exact: true }).click();
+  await openLayers(page);
+  await page.getByLabel("Search features").fill("Roads");
   await page.getByRole("button", { name: "Style Roads and routes", exact: true }).click();
   await page.getByRole("button", { name: "Advanced symbol rules", exact: true }).click();
   await dialog.locator(".gs-symbolizer-wrapper button").click();

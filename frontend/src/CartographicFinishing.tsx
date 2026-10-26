@@ -3,8 +3,7 @@ import type { EditorState } from "./useEditor";
 
 export function CartographicFinishing({ editor }: { editor: EditorState }) {
   const feature = editor.selected;
-  if (!feature)
-    return <p className="hint">Select a feature to adjust its illustration or label.</p>;
+  if (!feature) return null;
   const own = editor.cartography.overrides[feature.id] ?? {};
   const update = (change: CartographicOverride) =>
     editor.finishCartography({
@@ -12,8 +11,8 @@ export function CartographicFinishing({ editor }: { editor: EditorState }) {
       overrides: { ...editor.cartography.overrides, [feature.id]: { ...own, ...change } },
     });
   return (
-    <section className="cartographic-finishing" aria-label="Feature map appearance">
-      <h3>Label and symbol</h3>
+    <details className="cartographic-finishing" aria-label="Feature map appearance">
+      <summary>Label and symbol</summary>
       <label>
         <input
           type="checkbox"
@@ -61,7 +60,7 @@ export function CartographicFinishing({ editor }: { editor: EditorState }) {
         Finishing changes this composition. Geographic position and source data stay unchanged. Undo
         reverses a finishing edit.
       </p>
-    </section>
+    </details>
   );
 }
 function PointSymbol({

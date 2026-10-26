@@ -1,6 +1,7 @@
 import js from "@eslint/js";
 import ts from "typescript-eslint";
 import prettier from "eslint-config-prettier";
+import { testPolicy } from "./testPolicy";
 
 export default ts.config(
   { ignores: ["**/dist/**", "**/node_modules/**", "backend/vendor/**"] },
@@ -15,5 +16,6 @@ export default ts.config(
       "max-depth": ["warn", 4],
     },
   },
+  ...testPolicy,
   prettier
 );

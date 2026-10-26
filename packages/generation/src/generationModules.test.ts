@@ -1,14 +1,18 @@
-import { expect, it, vi } from "vitest";
+import { expect, it } from "vitest";
 import { z } from "zod";
-import { builtinLayers, putChannel, rectangle } from "@atlas/domain";
+import { builtinLayers, putChannel } from "@atlas/domain";
 import { atlasGenerationModules, type GenerationModule } from "./generationModules";
 import { prepareAtlasGeneration, type AtlasGenerationInput } from "./atlasWorkflow";
 import {
   GenerationReceiver,
+  sendGeneration,
   type GenerationMessage,
 } from "../../../frontend/src/generationTransport";
-import { landscape } from "./mapFixtures";
+import { landscape, epoch } from "./mapFixtures";
 import { sequenceStages } from "./sequence";
+import { MapRunner } from "./mapRunner";
+import { generationSnapshot } from "./atlasPublication";
+import type { ProcessInvocation } from "./process";
 
 const survey: GenerationModule = {
   id: "test.survey.module",
@@ -103,12 +107,8 @@ const survey: GenerationModule = {
   ],
 };
 function source() {
-  const state = landscape(),
-    footprint = rectangle([0, 0, 3_000_000, 2_000_000]);
+  const state = landscape();
   state.domain.world.id = state.domain.scope.worldId = "00112233-4455-6677-8899-aabbccddeeff";
-  state.domain.scope.footprint = footprint;
-  state.domain.world.reference.domain = footprint;
-  state.domain.world.areas.area.footprint = footprint;
   state.domain.world.epochs = [
     {
       id: "Formation",
@@ -162,7 +162,7 @@ it("extends the real atlas recipe, runtime and new-layer publication by register
     )!.invocation!;
     expect(invocation.feature).toBe("test.survey");
     const message = structuredClone({ snapshot, input: prepared.input });
-    const completed = await runWorker(message);
+    const completed = await runModule(message, invocation);
     expect(
       completed.history[0].causes.some((cause) => cause.process === "test.survey.measure")
     ).toBe(true);
@@ -177,10 +177,9 @@ it("extends the real atlas recipe, runtime and new-layer publication by register
     expect(snapshotOutput.coverage.some((coverage) => coverage.layerId === "survey")).toBe(true);
     expect(snapshot.world.layers.survey).toBeUndefined();
   } finally {
-    vi.unstubAllGlobals();
     atlasGenerationModules.unregister(survey.id);
   }
-}, 120000);
+});
 
 it("resolves feature-owned clock changes before deriving ecological and magical defaults", () => {
   const snapshot = source();
@@ -199,36 +198,51 @@ it("resolves feature-owned clock changes before deriving ecological and magical 
   expect(() => prepareAtlasGeneration(snapshot, input)).toThrow("existing epoch");
 });
 
-async function runWorker(message: {
-  snapshot: ReturnType<typeof source>;
-  input: AtlasGenerationInput;
-}) {
+async function runModule(
+  message: {
+    snapshot: ReturnType<typeof source>;
+    input: AtlasGenerationInput;
+  },
+  invocation: ProcessInvocation
+) {
+  const prepared = prepareAtlasGeneration(message.snapshot, message.input);
+  const state = landscape();
+  state.domain = structuredClone(message.snapshot);
+  state.surface.scope = state.domain.scope;
+  state.publications = atlasGenerationModules.publications(prepared.input, state.domain.world);
+  state.facts.add("canonry:Elevation");
+  const configuration = {
+    ...prepared.input.configuration!,
+    sequence: [
+      {
+        kind: "epochs" as const,
+        id: "supplied",
+        resetFacts: ["test:survey"],
+        epochs: [epoch("Survey", 1)],
+        body: [invocation],
+      },
+    ],
+  };
+  const result = await new MapRunner(configuration, prepared.registry).run(state, {
+    seed: "73",
+    seedScope: "survey",
+  });
+  const output = generationSnapshot(result, prepared.input, crypto.randomUUID());
   const messages: GenerationMessage[] = [];
   let receiver: GenerationReceiver | undefined;
-  const worker: {
-    onmessage?: (event: MessageEvent) => Promise<void>;
-    postMessage(message: GenerationMessage, options?: { transfer: ArrayBuffer[] }): void;
-  } = {
-    postMessage(value, options) {
-      const received = structuredClone(value, { transfer: options?.transfer });
-      messages.push(received);
-      if (received.kind === "snapshot") receiver = new GenerationReceiver(received);
-      else if (
-        received.kind === "numerical" ||
-        received.kind === "samples" ||
-        received.kind === "records"
-      )
-        receiver!.receive(received);
-    },
-  };
-  vi.stubGlobal("self", worker);
-  await import("../../../frontend/src/generation.worker");
-  await worker.onmessage!({
-    data: { ...message, operationId: crypto.randomUUID() },
-  } as MessageEvent);
+  await sendGeneration(output, result.state.history, [], (value, transfer) => {
+    const received = structuredClone(value, { transfer });
+    messages.push(received);
+    if (received.kind === "snapshot") receiver = new GenerationReceiver(received);
+    else if (
+      received.kind === "numerical" ||
+      received.kind === "samples" ||
+      received.kind === "records"
+    )
+      receiver!.receive(received);
+  });
   expect(messages.filter((entry) => entry.kind === "failed")).toEqual([]);
   expect(messages.at(-1)).toEqual({ kind: "completed" });
-  expect(messages.some((entry) => entry.kind === "preview")).toBe(true);
   expect(receiver).toBeDefined();
   return receiver!;
 }

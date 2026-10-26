@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./uiTest";
 
 test.use({ actionTimeout: 15000 });
 

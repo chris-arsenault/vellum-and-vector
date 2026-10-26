@@ -1,5 +1,6 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./uiTest";
 import { installGenerationFixture, completeGenerationFixture } from "./generationFixture";
+import { openMapSettings } from "./harness";
 
 test("an epoch preview shows while generation continues and clears on cancellation", async ({
   page,
@@ -61,7 +62,7 @@ test("arriving fields display before the completion notification", async ({ page
   await completeGenerationFixture(page);
   await expect(page.locator(".job-row strong").first()).toHaveText("running");
   await expect(page.locator(".map-status")).toContainText("Generation in progress");
-  await page.getByRole("button", { name: "Layers", exact: true }).click();
+  await openMapSettings(page);
   await expect(
     page.getByRole("button", { name: "Adjust terrain appearance", exact: true })
   ).toBeVisible();
@@ -71,55 +72,4 @@ test("arriving fields display before the completion notification", async ({ page
   );
   await page.evaluate(() => (window as unknown as { finishStream(): void }).finishStream());
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
-});
-
-test("delivers real Fine generation through transferable messages", async ({ page }) => {
-  test.skip(!process.env.ATLAS_STREAMING_FINE, "Opt-in full Fine generation");
-  test.setTimeout(600000);
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
-  await page.addInitScript(() => {
-    const stats = { previews: 0, buffers: 0, bytes: 0, completedKeys: [] as string[] };
-    Object.assign(window, { generationTransfers: stats });
-    const NativeWorker = window.Worker;
-    window.Worker = new Proxy(NativeWorker, {
-      construct(target, args) {
-        const worker = Reflect.construct(target, args) as Worker;
-        if (String(args[0]).includes("generation.worker"))
-          worker.addEventListener("message", ({ data }) => {
-            if (data.kind === "preview") stats.previews++;
-            if (data.kind === "samples") {
-              const buffers = new Set<ArrayBuffer>(
-                (data.samples as { value: ArrayBufferView<ArrayBuffer> }[]).map(
-                  (sample) => sample.value.buffer
-                )
-              );
-              stats.buffers += buffers.size;
-              stats.bytes += [...buffers].reduce((sum, buffer) => sum + buffer.byteLength, 0);
-            }
-            if (data.kind === "completed") stats.completedKeys = Object.keys(data);
-          });
-        return worker;
-      },
-    });
-  });
-  await page.goto("/");
-  await page.getByLabel("World name", { exact: true }).fill("Fine streamed atlas");
-  await page.getByLabel("Detail level").selectOption("fine");
-  await page.getByRole("button", { name: /Review & generate/ }).click();
-  await page.getByRole("button", { name: "Generate world", exact: true }).click();
-  await expect(page.locator(".map-instruction")).toContainText("Generation preview", {
-    timeout: 300000,
-  });
-  await expect(page.locator(".job-row strong").first()).toHaveText(/completed|failed/, {
-    timeout: 540000,
-  });
-  expect(await page.locator(".job-row .error").allTextContents()).toEqual([]);
-  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
-  const transfers = await page.evaluate(() => Reflect.get(window, "generationTransfers"));
-  console.log("Fine worker delivery", transfers);
-  expect(transfers.previews).toBeGreaterThan(1);
-  expect(transfers.buffers).toBeGreaterThan(1);
-  expect(transfers.completedKeys).toEqual(["kind"]);
-  expect(errors).toEqual([]);
 });

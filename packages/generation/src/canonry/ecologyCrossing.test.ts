@@ -80,6 +80,25 @@ it("lets grazers found a population on a nearby island with forage", () => {
   expect(on(map, "downwind").some((i) => map.Grazers[i] > 0)).toBe(true);
 });
 
+it("colonises a supplied island that emerges after the mainland is already established", () => {
+  const map = archipelago(["mainland"]);
+  evolveVegetation(map, 1000);
+  const island = on(map, "downwind");
+  expect(island.length).toBeGreaterThan(0);
+  for (const i of island) {
+    expect(map.WaterKindCodes[i]).toBe(1);
+    map.WaterKindCodes[i] = 0;
+    map.WaterDepths[i] = 0;
+    map.Elevation[i] = units(100);
+    map.DrainageElevations[i] = map.Elevation[i];
+  }
+  evolveVegetation(map, 5000);
+  const occupied = island.filter(
+    (i) => map.TreeCover[i] + map.GrassCover[i] + map.WetlandCover[i] > 0.12
+  );
+  expect(occupied.length / island.length).toBeGreaterThan(0.5);
+});
+
 it("makes frequently flooded ground wetter, younger and less wooded", () => {
   const map = archipelago(["mainland"]);
   for (let i = 0; i < map.mesh.count; i++) {

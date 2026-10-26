@@ -4,8 +4,6 @@ import { createWorldMesh } from "./worldMesh";
 import { createField } from "./field";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { units } from "./math";
-import { nativeContracts, applyNativeStep } from "./contracts";
-import { physicalSchedule } from "./schedule";
 import { physicalContext } from "./context";
 import { flowRouting } from "./routing";
 import { oceanConnectivity } from "./ocean";
@@ -76,8 +74,6 @@ function patch(kind: string) {
     map.Elevation[i] = units(kind === "inland" ? 200 + map.mesh.x[i] / 10_000 : -1800);
   map.BedrockElevation.set(map.Elevation);
   map.CrustSupportElevation.set(map.Elevation);
-  for (const contract of Object.values(nativeContracts))
-    for (const fact of contract.produces) map.AvailableFacts.add(fact);
   return map;
 }
 it.each(["inland", "ocean"])(
@@ -85,25 +81,13 @@ it.each(["inland", "ocean"])(
   (kind) => {
     const map = patch(kind),
       profile = atlasPhysicalProfile();
-    const epoch = {
-      StableName: "refinement",
-      TectonicStrength: 0,
-      HydrologyStrength: 1000,
-      GlaciationStrength: 1000,
-      CoastalStrength: 1000,
-      TemperatureOffset: 0,
-      SeaLevelOffset: 0,
-    };
-    for (const instruction of physicalSchedule([epoch])) {
-      if (["initial-geology", "geology"].includes(instruction.phase)) continue;
-      const [name, salt, implementation] = instruction.step;
-      applyNativeStep(
-        map,
-        physicalContext(104729, salt, profile, instruction.epoch, instruction.index, 1),
-        [name, salt, implementation]
-      );
-    }
-    expect(map.AvailableFacts.has("Validated")).toBe(true);
+    const context = physicalContext(104729, 0, profile);
+    map.Runoff.fill(kind === "inland" ? 500 : 0);
+    oceanConnectivity(map, context);
+    drainageConditioning(map, context);
+    drainageGuidance(map, context);
+    flowRouting(map, context);
+    riverNetwork(map, context);
     expect(
       Array.from(map.WaterKindCodes).every((value) => value === (kind === "inland" ? 0 : 1))
     ).toBe(true);

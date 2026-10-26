@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./uiTest";
 import type { SessionWorld } from "../src/atlasState";
 import { completeGenerationFixture, installGenerationFixture } from "./generationFixture";
 import { createWorld, generate, pageErrors, placePoint } from "./harness";

@@ -629,20 +629,6 @@
   font-size: 9px;
   color: #75836c;
 }
-.session-views {
-  border-top: 1px solid #dce3d5;
-  padding-top: 5px;
-}
-.session-views summary {
-  font-size: 12px;
-  cursor: pointer;
-  font-weight: 600;
-  color: #435d3a;
-}
-.session-views label {
-  margin-top: 4px;
-  font-size: 11px;
-}
 .style-dialog {
   width: min(1000px, 92vw);
   max-height: 88vh;

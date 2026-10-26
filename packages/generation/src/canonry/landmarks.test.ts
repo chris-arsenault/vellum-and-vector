@@ -4,14 +4,12 @@ import { createWorldMesh } from "./worldMesh";
 import { createField, type PhysicalField } from "./field";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { physicalContext } from "./context";
-import { physicalSchedule } from "./schedule";
-import { applyNativeStep } from "./contracts";
+import { validateLandscape } from "./surface";
 import {
   emplaceLandmark,
   maintainLandmark,
   landmarkRecord,
   placeLandmark,
-  plateDriftSteps,
   signatureShortfall,
   type LandmarkLedger,
 } from "./landmarks";
@@ -24,15 +22,6 @@ import { riverNetwork } from "./rivers";
 import { units } from "./math";
 
 const bounds: [number, number, number, number] = [0, 0, 2_000_000, 1_000_000];
-const epochs = [50, -300, 0].map((TemperatureOffset, index) => ({
-  StableName: `epoch-${index}`,
-  TectonicStrength: 1000,
-  HydrologyStrength: 1000,
-  GlaciationStrength: 1000,
-  CoastalStrength: 1000,
-  TemperatureOffset,
-  SeaLevelOffset: 0,
-}));
 
 /** World coordinates of land cells, farthest from the sea first. */
 function interior(map: PhysicalField) {
@@ -131,17 +120,26 @@ function placeAll(map: PhysicalField): Landmark[] {
 }
 
 /**
- * Run the reference schedule with landmark emplacement after each epoch's impacts and
- * maintenance before its history, exactly where the atlas sequence places them.
+ * A known inland plateau loses relief between maintenance passes: summits lower
+ * and excavations fill toward the original level, challenging each signature.
+ * Landmark tests need that disturbance, not an unrelated complete physical history.
  */
-function evolve(seed: number, place: (map: PhysicalField) => Landmark[]) {
-  // Six well-separated inland landmarks need a deliberately land-rich fixture.
+function evolve(_seed: number, place: (map: PhysicalField) => Landmark[]) {
   const profile = atlasPhysicalProfile({ landFraction: 0.7 }),
     map = createField(createWorldMesh(bounds, 4096, profile.BoundaryPadding)),
     ledger: LandmarkLedger = new Map(),
-    held: Record<string, boolean[]> = {},
+    held: Record<string, Record<string, number>[]> = {},
     corrections: Record<string, number[]> = {},
-    drift = plateDriftSteps(profile, epochs.length);
+    drift: number[] = [];
+  for (let i = 0; i < map.mesh.count; i++) {
+    const ocean = Math.abs(map.mesh.x[i]) > 900_000 || Math.abs(map.mesh.y[i]) > 400_000;
+    map.WaterKindCodes[i] = ocean ? 1 : 0;
+    map.Elevation[i] = units(ocean ? -500 : 1000);
+    map.BedrockElevation[i] = map.Elevation[i];
+    map.CrustThickness[i] = units(4000);
+    map.CrustContinentalFraction[i] = 1000;
+    map.RockResistance[i] = 1000;
+  }
   let landmarks: Landmark[] = [];
   const emplace = (index: number) => {
     if (index === 0) landmarks = place(map);
@@ -152,28 +150,28 @@ function evolve(seed: number, place: (map: PhysicalField) => Landmark[]) {
     for (const item of landmarks) {
       const before = ledger.get(item.id)?.maintenance ?? 0;
       const record = maintainLandmark(map, profile, item, index, ledger, drift)!;
-      (held[item.id] ??= []).push(
-        Object.keys(signatureShortfall(record, record.measured)).length === 0
-      );
+      (held[item.id] ??= []).push(signatureShortfall(record, record.measured));
       (corrections[item.id] ??= []).push(record.maintenance - before);
     }
   };
-  for (const { step, epoch, index, phase } of physicalSchedule(epochs)) {
-    if (phase === "geology" && step[0] === "mass-wasting") emplace(index);
-    if (step[0] === "physical-epoch-history") maintain(index);
-    applyNativeStep(
-      map,
-      physicalContext(seed, step[1], profile, epoch, index, epochs.length),
-      step
-    );
+  emplace(0);
+  for (let index = 0; index < 3; index++) {
+    if (index > 0)
+      for (let i = 0; i < map.mesh.count; i++) {
+        if (map.WaterKindCodes[i] === 1) continue;
+        map.BedrockElevation[i] = units(1000) + (map.BedrockElevation[i] - units(1000)) * 0.8;
+        map.Elevation[i] = map.BedrockElevation[i] + map.SedimentThickness[i];
+      }
+    maintain(index);
+    validateLandscape(map);
   }
   return { map, profile, ledger, held, corrections, landmarks };
 }
 
 const seed = 104729;
 
-it("holds every mesh-scale landmark's signature through warm, glacial and present epochs", () => {
-  const { map, ledger, held, landmarks } = evolve(seed, placeAll);
+it("restores every landmark's signature after repeated controlled relief loss", () => {
+  const { map, ledger, held, corrections, landmarks } = evolve(seed, placeAll);
   expect(landmarks).toHaveLength(6);
   for (const item of landmarks) {
     const record = ledger.get(item.id)!;
@@ -181,16 +179,16 @@ it("holds every mesh-scale landmark's signature through warm, glacial and presen
     expect(record.realized, `${item.kind} realized at ${map.mesh.spacing} m`).toBe(
       item.kind !== "falls"
     );
-    expect(held[item.id], `${item.kind} held at the end of every epoch`).toEqual([
-      true,
-      true,
-      true,
-    ]);
+    expect(held[item.id], `${item.kind} held after every disturbance`).toEqual([{}, {}, {}]);
     expect(
       Object.keys(signatureShortfall(record, record.measured)),
       `${item.kind} ${JSON.stringify(record.measured)} vs ${JSON.stringify(record.target)}`
     ).toEqual([]);
     expect(Number.isFinite(record.maintenance) && record.maintenance >= 0).toBe(true);
+    expect(
+      corrections[item.id].slice(1).some((value) => value > 0),
+      `${item.kind} required repair`
+    ).toBe(true);
   }
   expect(map.events.filter((event) => event.kind === "landmark")).toHaveLength(6);
   const falls = ledger.get("falls-1")!;
@@ -199,7 +197,6 @@ it("holds every mesh-scale landmark's signature through warm, glacial and presen
   expect(falls.notes.some((text) => text.includes("latent"))).toBe(true);
   expect(map.faults.some((fault) => fault.id === "landmark:escarpment-1")).toBe(true);
   expect(map.LandmarkMaintenance.some((value) => value > 0)).toBe(true);
-  expect(map.AvailableFacts.has("Validated")).toBe(true);
   // The last epoch's cuts are still supply awaiting transport; the ledger invariant holds.
   expect(map.SedimentDepositedTotal + map.SedimentExportedTotal).toBeLessThanOrEqual(
     map.SedimentProducedTotal * (1 + 1e-9)

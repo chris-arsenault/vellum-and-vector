@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./uiTest";
 import { createWorld, generate, installGenerationFixture, openLayers, pageErrors } from "./harness";
 
 test("a magic variant is saved, reopened and named in the surface legend", async ({ page }) => {

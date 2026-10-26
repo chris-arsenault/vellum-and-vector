@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./uiTest";
 import { installGenerationFixture } from "./generationFixture";
 
 test("updates km² resolution, cell counts and the non-blocking warning with world dimensions", async ({

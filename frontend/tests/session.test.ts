@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./uiTest";
 import { installGenerationFixture, completeGenerationFixture } from "./generationFixture";
 
 test.beforeEach(async ({ page }) => installGenerationFixture(page, { hold: true }));

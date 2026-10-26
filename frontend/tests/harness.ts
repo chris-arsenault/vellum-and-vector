@@ -123,11 +123,23 @@ export async function clickWorld(
   else await canvas(page).click({ position });
 }
 
-/** Open the Layers drawer. */
-export async function openLayers(page: Page) {
-  await page.getByRole("button", { name: "Layers", exact: true }).click();
+/** Open a section of the map settings without depending on the last-open section. */
+export async function openMapSettings(
+  page: Page,
+  section: "Appearance" | "Layers" | "Sheet" | "Views" = "Appearance"
+) {
+  const map = page.getByRole("button", { name: "Map", exact: true });
+  if ((await map.getAttribute("aria-expanded")) !== "true") await map.click();
+  await page
+    .getByRole("navigation", { name: "Map sections" })
+    .getByRole("button", { name: section, exact: true })
+    .click();
 }
-/** Close the map drawer (Layers, Atlas or Regions). */
+/** Open the map's layer controls. */
+export async function openLayers(page: Page) {
+  await openMapSettings(page, "Layers");
+}
+/** Close the map or atlas drawer. */
 export async function closeDrawer(page: Page) {
   await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
 }

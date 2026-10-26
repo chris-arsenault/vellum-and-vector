@@ -1,6 +1,6 @@
 import "ol/ol.css";
 import { createWorld, session } from "../src/atlasState";
-import { readScene, readRaster } from "../src/atlasReads";
+import { readScene } from "../src/atlasReads";
 import { createMap, fitArea, updateFeatures } from "../src/mapEngine";
 import { updateRaster } from "../src/rasterLayers";
 import { defaultStyles } from "../src/presentation";
@@ -8,7 +8,6 @@ import { defaultFieldStyle, defaultRasterPresentation } from "../src/rasterPrese
 import { numericTileSampler } from "../src/numericTiles";
 import { terrainTile } from "../src/terrainTile";
 import { areaSpace, type Grid } from "@atlas/domain";
-import { refineScene } from "./performanceRefinement";
 import type { AtlasFeature, Raster, World, Area } from "../src/types";
 
 export interface PerformanceScene {
@@ -46,8 +45,8 @@ function loadScene(input: PerformanceScene, world: World, area: Area): Raster[] 
       areaId: area.id,
       spaceId: grid.scope.spaceId,
       layerId: "elevation",
-      algorithm: "completed-real-world",
-      source: { kind: "run", id: "performance-replay" },
+      algorithm: "constructed-rendering-fixture",
+      source: { kind: "run", id: "rendering-fixture" },
       channels: Object.keys(grid.channels),
       samples: grid.active.length,
     },
@@ -71,7 +70,7 @@ function loadScene(input: PerformanceScene, world: World, area: Area): Raster[] 
 function sampleRaster(raster: Raster) {
   const sample = numericTileSampler(raster);
   const start = performance.now();
-  const values = sample([1e6, 1e6, 1.4e6, 1.4e6], 258);
+  const values = sample([0, 0, 1000, 1000], 258);
   const sampled = performance.now();
   terrainTile(values, 258);
   return { sampling: sampled - start, gradients: performance.now() - sampled };
@@ -115,8 +114,13 @@ function boundaryEngine(
   return createMap(document.getElementById("map")!, world.reference);
 }
 function benchmark() {
-  let world = createWorld({ name: "Real Draft", seed: 104729, width: 4e6, height: 3e6 });
-  let area = Object.values(world.areas)[0];
+  const world = createWorld({
+    name: "Constructed rendering",
+    seed: 104729,
+    width: 1000,
+    height: 1000,
+  });
+  const area = Object.values(world.areas)[0];
   let engine = createMap(document.getElementById("map")!, world.reference);
   const view = defaultRasterPresentation();
   let data: Raster[] = [];
@@ -152,17 +156,6 @@ function benchmark() {
     },
     sample: () => sampleRaster(data.find((r) => r.channel === "elevation")!),
     observe: () => renderMap(engine),
-    async refine() {
-      ({ world, area } = await refineScene(world));
-      data = world.fields.flatMap((f) =>
-        (f.channels ?? []).map((channel) => readRaster(world.id, f.id, channel))
-      );
-      return render(() => {
-        scene();
-        appearance();
-        fitArea(engine, area);
-      });
-    },
     base() {
       return render(() => {
         view.base = view.base === "relief" ? "topographic" : "relief";

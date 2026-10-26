@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./uiTest";
+import { openMapSettings } from "./harness";
 import { readFile } from "node:fs/promises";
 import { installGenerationFixture } from "./generationFixture";
 
@@ -64,8 +65,7 @@ async function woodland(page: Page) {
   await expect(page.locator(".right-panel h2")).toHaveText("Wooded coast");
 }
 async function saveComposition(page: Page) {
-  await page.getByRole("button", { name: "Layers", exact: true }).click();
-  await page.getByText("Session map views", { exact: true }).click();
+  await openMapSettings(page, "Views");
   await page.getByLabel("View name").fill("My regional sheet");
   await page.getByRole("button", { name: "Save map view", exact: true }).click();
   await expect(page.getByRole("button", { name: "My regional sheet", exact: true })).toBeVisible();
@@ -81,8 +81,7 @@ async function reopenComposition(page: Page) {
     .getByRole("dialog")
     .getByRole("button", { name: /^Region desk Revision/ })
     .click();
-  await page.getByRole("button", { name: "Layers", exact: true }).click();
-  await page.getByText("Session map views", { exact: true }).click();
+  await openMapSettings(page, "Views");
   await page.getByRole("button", { name: "My regional sheet", exact: true }).click();
   await expect(page.locator(".breadcrumbs")).toContainText("No fixed rank");
   await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
@@ -206,8 +205,7 @@ test("pick an existing feature, adjust its region and remove unreferenced region
   await saveComposition(page);
   await page.getByText("Region details", { exact: true }).click();
   await expect(page.getByRole("button", { name: "Remove region", exact: true })).toBeDisabled();
-  await page.getByRole("button", { name: "Layers", exact: true }).click();
-  await page.getByText("Session map views", { exact: true }).click();
+  await openMapSettings(page, "Views");
   await page.getByRole("button", { name: "Remove My regional sheet", exact: true }).click();
   await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
   await page.getByRole("button", { name: "Remove region", exact: true }).click();

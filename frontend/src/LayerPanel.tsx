@@ -32,7 +32,9 @@ export function LayerPanel({ world, editor }: { world: World; editor: EditorStat
             value=""
             onChange={(event) => editor.preset(event.target.value)}
           >
-            <option value="" disabled>Apply a preset…</option>
+            <option value="" disabled>
+              Apply a preset…
+            </option>
             {["physical", "political", "cultural", "magical", "infrastructure"].map((preset) => (
               <option key={preset}>{preset}</option>
             ))}

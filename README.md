@@ -88,16 +88,17 @@ settings. **Library** retains templates and the supporting analysis, connection
 and schema tools. Templates can be placed on the map; precise placement and access
 bindings remain available.
 
-Open **Layers** to switch between the **Surface**, **Topographic** and **Relief** base
-maps. Surface, the default, paints natural and magical surface classes under the
+Open **Map → Appearance** to switch between the **Surface**, **Topographic** and
+**Relief** base maps. Surface, the default, paints natural and magical surface classes under the
 hillshade with a legend in the terrain appearance panel; generated magic places draw
 with a colour and mark per feature rule, so a hot spring, a vent and an Aurora field
 are distinguishable without switching presets. Living landscapes a magic system makes
 through its own forcing appear as surface classes and named biome regions: Fire's
 ember groves and thaw meadows, Aurora's rime forests and glow-lichen barrens, and the
 fog heath and moss forest on a coast facing a Pressure upwelling front.
-The compact drawer floats over the map and closes when you finish. **Add overlay**
-opens a separate floating chooser with searchable theme groups. **All fields**
+The compact drawer floats over the map and closes when you finish. **Map → Layers**
+holds visible features and overlays. **Add overlay** opens a separate floating
+chooser with searchable theme groups. **All fields**
 includes diagnostic channels. Checked fields stay in the overlay stack even when
 hidden; uncheck them in the chooser or use Remove to take them out of the stack.
 Active rows provide visibility, opacity and move-up/down buttons. Expand a row for
@@ -113,12 +114,12 @@ The **Adjust terrain appearance** icon beside the base choices controls lighting
 exaggeration and contour interval.
 These display settings do not change the geography. Satellite appearance is deferred.
 
-**Session map views** retain the geographic subject, base, field overlays, vector
-styles and cartographic finishing together. **Save map view** creates a separate
+**Map → Views** holds saved compositions. Views retain the geographic subject, base,
+field overlays, vector styles and cartographic finishing together. **Save map view** creates a separate
 composition; opening it restores its subject and appearance. Use **Save map** to
 retain the world and its saved views across reloads.
 
-For a drawn map, choose **Layers → Presentation → Drawn map** on the current map
+For a drawn map, choose **Map → Appearance → Drawn map** on the current map
 or a region selected through **Regions**. Choose an ink-and-wash or monochrome
 treatment and a physical, political, cultural or infrastructure subject. Terrain
 illustrations use existing relief, water and woodland geography. The selected
@@ -130,14 +131,14 @@ Generated shared borders use a common rounded depiction, and land washes stop at
 physical shorelines. Biomes combine distinct washes with tree, grass, reed, dune
 or rock motifs; named landmarks and sites have their own symbols. Fault traces
 are optional geological detail rather than ordinary atlas linework.
-**Social distributions** adds independent cultural, language and religious
-hatches and population dots. Several distributions can coexist on the same map.
-Select a feature to adjust its label, draw a label curve, change its symbol or
-suppress its illustration. Close the drawer when drawing on the map. Finishing
+Under **Map → Layers**, **Social distributions** adds independent cultural, language
+and religious hatches and population dots. Several distributions can coexist on the same map.
+Select a feature and open **Label and symbol** in **Inspect** to adjust its label,
+draw a label curve, change its symbol or suppress its illustration. Finishing
 edits use the saved composition and Undo while source feature positions remain
 unchanged.
 
-**Finished sheet** supplies a title, frame, legend, compass and scale.
+**Map → Sheet** supplies a title, frame, legend, compass and scale.
 **Download map PNG** renders the same composition at the chosen image dimensions
 entirely in the browser. Export does not include selection highlighting or editor
 controls. The raster investigation presentation remains available for numerical
@@ -266,48 +267,41 @@ pnpm test packages/generation/src/canonry/adaptiveGeology.test.ts
 pnpm --dir frontend test src/rasterTiles.test.ts
 ```
 
-When a complete-world check exposes a defect, reproduce it with a small algorithm
-or boundary test and fix that case before another integration run. Full generation
-is integration and geographic review evidence, not the feedback loop for small
-changes. Select the relevant file with `pnpm test:generation <file>`. The suite
-generates draft-quality worlds, three files at a time. The Standard and Fine
-world-scale comparison takes more than ten minutes; it runs only through
-`pnpm test:scale`. Neither suite is part of default CI.
-`pnpm --dir frontend inventory:society` generates one world headlessly (about a
-minute at draft quality) and prints its demographic and route measures: fill,
-urbanization, settlement sizes by role, roads by class and cycle timing. `ERAS`,
-`SEED`, `WIDTH`, `HEIGHT`, `QUALITY`, `STEP` and `TRACE` environment variables
-vary the run.
+When the shared integration check exposes a defect, reproduce it on constructed
+cells and call the relevant algorithm directly. A unit test's setup must specify
+the coast, ridge, river, ice stock or population it needs. It must not run a
+generator, a physical schedule or a seed sweep to find those preconditions.
 
-Browser journeys test UI wiring only: that a control reaches the domain and a
-panel shows the result. They run on the smallest world that shows the control,
-generate only through the fixture in `frontend/tests/generationFixture.ts`, and
-publish raster fields only when the raster map is the subject (`fields: true`),
-because every later edit repaints those fields on a software GPU in CI. One
-journey (`frontend/tests/worker.test.ts`) exercises the real bundled worker on an
-interior layout. Generated geography itself is checked in node by
-`frontend/src/featureGeography.test.ts` and the generation suites. Shared steps
-live in `frontend/tests/harness.ts`. Browser tests clear their own
-`test-results/` directory.
+`pnpm test:generation` is opt-in and generates **one shared Draft world**.
+Independent checks reuse it for physical history, water and rivers, ecological
+publication, all seven magic systems, society, naming, and authored protection.
+Add assertions to that result instead of adding generation calls. Use at most
+two full generations during a task, each checking multiple integrated outcomes.
+There are no Fine-generation tests or separate scale-generation suite.
 
-The opt-in navigation case replays an existing real generated world from ignored
-`frontend/.artifacts/generation/fixed-draft.bin` (or `fixed-standard.bin`). It uses
-actual OpenLayers sources and render events, measuring first frame and settled
-detail separately. It does not run in ordinary CI or add a page to normal builds:
+Browser tests import `test` from `frontend/tests/uiTest.ts`. Every journey receives
+the small generation fixture automatically, and a real generation worker throws
+before it can start. Fixture grids have 256 cells; a form may display larger
+world dimensions without generating them. Raster fields are opt-in when needed
+for the UI behavior under test. Geometry, magic, ecology and society algorithms
+belong in constructed Vitest cases. Worker transfer and publication use supplied
+arrays in `frontend/src/generationTransport.test.ts`.
+
+These boundaries are enforced by the unit test setup, standard ESLint restricted
+imports, and `frontend/src/testPolicy.test.ts`. The policy checks the single
+integration entry point and verifies that direct, aliased and dynamic generator
+attempts cannot enter routine tests. Do not bypass the guards or extend timeouts
+to accommodate generated setup.
+
+The opt-in rendering journey also uses a constructed 16×16 world:
 
 ```sh
-ATLAS_PERFORMANCE=1 ATLAS_RUN=review ATLAS_REPEATS=8 pnpm --dir frontend test:browser
-ATLAS_PERFORMANCE=1 ATLAS_SCENE=standard ATLAS_RUN=review pnpm --dir frontend test:browser
+ATLAS_PERFORMANCE=1 pnpm --dir frontend test:browser
 ```
 
-Raw measurements and local screenshots go to `frontend/.artifacts/navigation/`.
-Use `ATLAS_DPR=2` for high-DPI coverage and `ATLAS_PROFILE=1` for Chromium CPU
-sampling. `ATLAS_SAMPLING=1` separately times a real terrain tile;
-`ATLAS_REFINEMENT=1` generates and measures a region inherited from the replayed
-world through the normal worker/publication path. `ATLAS_INPUT=1` adds actual wheel
-gestures, including the normal debounce and animation. Record the browser/GPU environment when comparing results; software
-rendering costs differ from a desktop GPU. Navigation measurements directly change
-the view, excluding intentional wheel-zoom animation and debounce time.
+It checks actual OpenLayers rendering, navigation and layer switching without
+generation or a saved-world artifact. Browser tests own `test-results/`; any
+local diagnostic output from node tests belongs in ignored `.artifacts/`.
 
 ## Deployment
 

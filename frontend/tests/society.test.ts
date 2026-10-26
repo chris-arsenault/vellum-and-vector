@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./uiTest";
 import type { AtlasFeature, PopulationGroup, SocietyRegion } from "@atlas/domain";
 import { canvas, exportMap, generatedWorld, pageErrors, panel } from "./harness";
 

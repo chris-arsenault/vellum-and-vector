@@ -1,8 +1,9 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./uiTest";
 import { spatial } from "@atlas/domain";
 import { ecologicalPolygons } from "./ecologyFixture";
 import {
   canvas,
+  closeDrawer,
   createWorld,
   exportMap,
   generate,
@@ -66,8 +67,8 @@ test("extracted ecological polygons select, protect, export and refine", async (
   await expect(ecology).not.toBeChecked();
   await expect.poll(() => mapImage(page)).not.toBe(visible);
   await ecology.click();
-  await openLayers(page);
-  await expect(page.getByRole("complementary", { name: "Map appearance" })).toHaveCount(0);
+  await closeDrawer(page);
+  await expect(page.getByRole("complementary", { name: "Map settings" })).toHaveCount(0);
   const box = (await canvas(page).boundingBox())!;
   const position = { x: box.width * 0.2, y: box.height * 0.47 };
   await canvas(page).hover({ position });

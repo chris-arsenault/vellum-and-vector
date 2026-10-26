@@ -51,7 +51,8 @@ export function useMapActions(world: World, state: EditorSessionState, editing: 
     else if (["refine", "refinePolygon", "extentEdit"].includes(tool)) state.setPanel("refine");
     else if (tool === "magic") state.setPanel("magic");
     else if (tool === "landmark" || tool === "landmarkPath") state.setPanel("landmark");
-    else if (!["select", "pan", "move", "reshape"].includes(tool)) state.setPanel("author");
+    else if (!["select", "pan", "move", "reshape", "labelPath", "labelPlace"].includes(tool))
+      state.setPanel("author");
   };
   return {
     select,

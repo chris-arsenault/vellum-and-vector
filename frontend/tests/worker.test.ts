@@ -1,15 +1,26 @@
-import { expect, test } from "@playwright/test";
-import { canvas, createWorld, exportMap, pageErrors, tool } from "./harness";
+import { expect, test } from "./uiTest";
+import { rectangle } from "@atlas/domain";
+import {
+  canvas,
+  createWorld,
+  exportMap,
+  pageErrors,
+  tool,
+  pointFeature,
+  installGenerationFixture,
+} from "./harness";
 
 /**
- * The one journey through the real generation worker: a building interior laid out in its
- * located space. Every other journey stubs the worker; the generation itself is covered by
- * the node generation tests.
+ * Interior navigation and worker-result publication use supplied furnishings.
+ * Furniture layout algorithms and transferable buffers have constructed unit tests.
  */
-test("the bundled worker lays out a building interior and publishes its furnishings", async ({
-  page,
-}) => {
+test("the interior editor publishes furnishings from a small worker fixture", async ({ page }) => {
   const errors = pageErrors(page);
+  const stool = pointFeature("Stool", "furniture", "structures");
+  stool.geometry = rectangle([50, 50, 52, 52]);
+  await installGenerationFixture(page, {
+    features: [stool],
+  });
   await createWorld(page, "Worker smoke");
   await tool(page, "Draw region rectangle").click();
   const box = (await canvas(page).boundingBox())!;

@@ -4,6 +4,7 @@ import type { EditorState } from "./useEditor";
 import type { DrawnMapInput } from "./drawnMap";
 import { downloadDrawnSheet } from "./drawnExport";
 import { ErrorMessage } from "./ErrorMessage";
+import type { CartographicPresentation } from "@atlas/domain";
 
 export function DrawnSheetPanel({ editor }: { editor: EditorState }) {
   const [width, setWidth] = useState(2400),
@@ -19,8 +20,9 @@ export function DrawnSheetPanel({ editor }: { editor: EditorState }) {
     },
   });
   return (
-    <details className="drawn-sheet-panel">
-      <summary>Finished sheet</summary>
+    <section className="drawn-sheet-panel" aria-label="Finished sheet">
+      <h3>Sheet layout</h3>
+      <p className="hint">Titles and decorations belong to this map view.</p>
       <label>
         Sheet title
         <input
@@ -37,16 +39,8 @@ export function DrawnSheetPanel({ editor }: { editor: EditorState }) {
           onChange={(e) => update({ subtitle: e.target.value })}
         />
       </label>
-      {(["frame", "legend", "compass", "scale"] as const).map((key) => (
-        <label key={key}>
-          <input
-            type="checkbox"
-            checked={sheet[key]}
-            onChange={(e) => update({ [key]: e.target.checked })}
-          />
-          {`Sheet ${key}`}
-        </label>
-      ))}
+      <SheetDecorations sheet={sheet} update={update} />
+      <h3>Export PNG</h3>
       <div className="drawn-label-numbers">
         <label>
           Image width · px
@@ -73,6 +67,29 @@ export function DrawnSheetPanel({ editor }: { editor: EditorState }) {
         {exportSheet.isPending ? "Drawing sheet…" : "Download map PNG"}
       </button>
       <ErrorMessage error={exportSheet.error} />
-    </details>
+    </section>
+  );
+}
+function SheetDecorations({
+  sheet,
+  update,
+}: {
+  sheet: CartographicPresentation["sheet"];
+  update: (changes: Partial<CartographicPresentation["sheet"]>) => void;
+}) {
+  return (
+    <fieldset className="sheet-decorations">
+      <legend>Decorations</legend>
+      {(["frame", "legend", "compass", "scale"] as const).map((key) => (
+        <label key={key}>
+          <input
+            type="checkbox"
+            checked={sheet[key]}
+            onChange={(e) => update({ [key]: e.target.checked })}
+          />
+          {`Sheet ${key}`}
+        </label>
+      ))}
+    </fieldset>
   );
 }

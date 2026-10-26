@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./uiTest";
 import { readFile } from "node:fs/promises";
 import type { FeatureCollection } from "geojson";
 

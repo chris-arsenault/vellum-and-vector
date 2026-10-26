@@ -1,6 +1,7 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Page } from "./uiTest";
 import type { AtlasFeature } from "@atlas/domain";
 import { installGenerationFixture } from "./generationFixture";
+import { openMapSettings } from "./harness";
 import { readFile, copyFile, mkdir } from "node:fs/promises";
 
 function feature(
@@ -88,8 +89,8 @@ async function createAtlas(page: Page) {
     [60000, 40000],
     [85000, 60000],
   ]);
-  await page.getByRole("button", { name: "Layers", exact: true }).click();
-  await page.getByLabel("Presentation", { exact: true }).selectOption("drawn");
+  await openMapSettings(page);
+  await page.getByRole("radio", { name: "Drawn map", exact: true }).check();
   await expect(page.locator(".map-frame")).toHaveClass(/drawn-map/);
 }
 function drawingPlacesAndBiomes() {
@@ -153,14 +154,15 @@ test("drawn atlas reuses the canvas and switches back to raster", async ({ page 
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await createAtlas(page);
+  await page.screenshot({ path: ".artifacts/map-options/drawn-appearance.png" });
   await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
   await expect(page.getByRole("application", { name: "World map canvas" })).toHaveAttribute(
     "aria-busy",
     "false"
   );
   await page.screenshot({ path: ".artifacts/cartographic-mode/political-atlas.png" });
-  await page.getByRole("button", { name: "Layers", exact: true }).click();
-  await page.getByLabel("Presentation", { exact: true }).selectOption("raster");
+  await openMapSettings(page);
+  await page.getByRole("radio", { name: "Raster investigation", exact: true }).check();
   await expect(page.locator(".map-frame")).not.toHaveClass(/drawn-map/);
   expect(errors).toEqual([]);
 });
@@ -189,15 +191,13 @@ async function exported(page: Page) {
   return JSON.parse(await readFile((await (await pending).path())!, "utf8"));
 }
 async function saveView(page: Page, name: string) {
-  const section = page.locator(".session-views");
-  if (!(await section.evaluate((el) => (el as HTMLDetailsElement).open)))
-    await section.locator("summary").click();
+  await openMapSettings(page, "Views");
   await page.getByLabel("View name").fill(name);
   await page.getByRole("button", { name: "Save map view", exact: true }).click();
   await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
 }
 async function downloadSheet(page: Page) {
-  await page.getByText("Finished sheet", { exact: true }).click();
+  await openMapSettings(page, "Sheet");
   await page.getByLabel("Sheet title", { exact: true }).fill("Atlas of the Reach");
   await page.getByLabel("Image width · px", { exact: true }).fill("1200");
   await page.getByLabel("Image height · px", { exact: true }).fill("900");
@@ -232,23 +232,23 @@ test("finishes, undoes, exports and reopens independent drawn compositions", asy
   await page.getByRole("button", { name: "Fit area", exact: true }).click();
   await clickWorld(page, [35000, 50000], false, true);
   await expect(page.locator(".right-panel h2")).toHaveText("Cairnwatch");
-  await page.getByRole("button", { name: "Layers", exact: true }).click();
   await saveView(page, "Political sheet");
+  await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
+  await page.getByText("Label and symbol", { exact: true }).click();
   await page.getByLabel("Label horizontal offset · px", { exact: true }).fill("28");
   await expect(page.getByLabel("Label horizontal offset · px", { exact: true })).toHaveValue("28");
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   await expect(page.getByLabel("Label horizontal offset · px", { exact: true })).toHaveValue("0");
   await page.getByRole("button", { name: "Draw label curve", exact: true }).click();
-  await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
   const canvas = page.getByRole("application", { name: "World map canvas" });
   await canvas.click({ position: { x: 400, y: 400 } });
   await canvas.click({ position: { x: 500, y: 370 } });
   await canvas.dblclick({ position: { x: 650, y: 400 } });
-  await page.getByRole("button", { name: "Layers", exact: true }).click();
   await expect(page.getByText("Label follows an authored curve.", { exact: true })).toBeVisible();
   await page.getByLabel("Feature symbol", { exact: true }).selectOption("ruin");
   await downloadSheet(page);
-  await page.getByLabel("Drawing style", { exact: true }).selectOption("ink");
+  await openMapSettings(page);
+  await page.getByRole("radio", { name: "Monochrome ink", exact: true }).check();
   await saveView(page, "Ink sheet");
   await expect(page.getByRole("button", { name: "Political sheet", exact: true })).toBeVisible();
   const after = await exported(page);
@@ -262,11 +262,11 @@ test("finishes, undoes, exports and reopens independent drawn compositions", asy
     .getByRole("dialog")
     .getByRole("button", { name: /^Drawn atlas Revision/ })
     .click();
-  await page.getByRole("button", { name: "Layers", exact: true }).click();
-  await page.getByText("Session map views", { exact: true }).click();
+  await openMapSettings(page, "Views");
   await page.getByRole("button", { name: "Ink sheet", exact: true }).click();
-  await expect(page.getByLabel("Presentation", { exact: true })).toHaveValue("drawn");
-  await expect(page.getByLabel("Drawing style", { exact: true })).toHaveValue("ink");
+  await openMapSettings(page);
+  await expect(page.getByRole("radio", { name: "Drawn map", exact: true })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "Monochrome ink", exact: true })).toBeChecked();
   expect(errors).toEqual([]);
 });
 
@@ -294,7 +294,6 @@ test("drawn compositions reuse selected regions and preserve their source map", 
     "false"
   );
   await page.screenshot({ path: ".artifacts/cartographic-mode/region.png" });
-  await page.getByRole("button", { name: "Layers", exact: true }).click();
   await saveView(page, "Regional sheet");
   await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
   await page
@@ -302,11 +301,11 @@ test("drawn compositions reuse selected regions and preserve their source map", 
     .getByRole("button", { name: /Drawn atlas/ })
     .click();
   await expect(page.locator(".breadcrumbs")).not.toContainText("Three Hills");
-  await page.getByRole("button", { name: "Layers", exact: true }).click();
-  await page.getByText("Session map views", { exact: true }).click();
+  await openMapSettings(page, "Views");
   await page.getByRole("button", { name: "Regional sheet", exact: true }).click();
   await expect(page.locator(".breadcrumbs")).toContainText("Three Hills");
-  await expect(page.getByLabel("Presentation", { exact: true })).toHaveValue("drawn");
+  await openMapSettings(page);
+  await expect(page.getByRole("radio", { name: "Drawn map", exact: true })).toBeChecked();
   const after = await exported(page);
   expect(after.features).toEqual(before.features);
   expect(after.areas).toEqual(before.areas);

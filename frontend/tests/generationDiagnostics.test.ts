@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./uiTest";
 import { completeGenerationFixture, installGenerationFixture } from "./generationFixture";
 
 test("every process diagnostic stays inspectable during generation and after publication", async ({

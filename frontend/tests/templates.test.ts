@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./uiTest";
 import { canvas, createArea, createWorld, installGenerationFixture, pageErrors } from "./harness";
 
 test("a reusable template is drawn, saved and placed as a new area", async ({ page }) => {

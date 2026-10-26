@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./uiTest";
 import { rectangle } from "@atlas/domain";
 import {
   canvas,
@@ -6,6 +6,7 @@ import {
   exportMap,
   generatedWorld,
   openLayers,
+  openMapSettings,
   openRegistry,
   pageErrors,
   panel,
@@ -73,7 +74,7 @@ test("feature types toggle individually and a saved view restores them", async (
   await openLayers(page);
   await page.getByLabel("Show Waterfalls", { exact: true }).uncheck();
   await expect(page.getByLabel("Show Hot spring", { exact: true })).toBeChecked();
-  await page.getByText("Session map views", { exact: true }).click();
+  await openMapSettings(page, "Views");
   await page.getByLabel("View name", { exact: true }).fill("Springs only");
   await page.getByRole("button", { name: "Save map view", exact: true }).click();
   await expect(page.getByRole("button", { name: "Springs only", exact: true })).toBeVisible();
@@ -82,12 +83,17 @@ test("feature types toggle individually and a saved view restores them", async (
   await page.getByRole("button", { name: "Save map view", exact: true }).click();
   await expect(page.getByRole("button", { name: "Everything", exact: true })).toBeVisible();
   // The toggle now writes through the saved view, so its state follows the committed command.
+  await openLayers(page);
   await page.getByLabel("Show Waterfalls", { exact: true }).click();
   await expect(page.getByLabel("Show Waterfalls", { exact: true })).toBeChecked();
+  await openMapSettings(page, "Views");
   await page.getByRole("button", { name: "Springs only", exact: true }).click();
+  await openLayers(page);
   await expect(page.getByLabel("Show Waterfalls", { exact: true })).not.toBeChecked();
   await expect(page.getByLabel("Show Hot spring", { exact: true })).toBeChecked();
+  await openMapSettings(page, "Views");
   await page.getByRole("button", { name: "Everything", exact: true }).click();
+  await openLayers(page);
   await expect(page.getByLabel("Show Waterfalls", { exact: true })).toBeChecked();
 });
 

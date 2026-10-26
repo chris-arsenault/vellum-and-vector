@@ -147,8 +147,39 @@ Assess changes through representative map behavior, geographic output and
 focused domain and browser checks. Keep scope tied to the atlas's authoring
 workflows and the product's physical-plausibility requirements.
 
-Ask before running Fine generation for verification; these runs can take hours.
-Do not include them in routine verification without the user's authorization.
+### Test boundaries — hard requirements
+
+- Algorithm changes use constructed worlds: explicitly provide terrain, water,
+  climate, materials, stocks or society, then call the relevant process. Do not
+  generate a world or execute a physical schedule to obtain test preconditions.
+- Before writing a test, identify the behavior, its controlled preconditions and
+  the smallest set of real processes needed to observe it. Supply unrelated
+  upstream products directly. Test a perturbation and relevant unchanged state;
+  do not mock the algorithm being tested or merely assert fixture assignments.
+- Reproduce an integration failure in a constructed test before changing its
+  mechanism. Compare controlled inputs, analytic results, geometry, budgets and
+  state transitions; do not tune a seed's geography or weaken an assertion to
+  recover a passing result.
+- Browser tests test UI behavior on small supplied worlds. Import `test` from
+  `frontend/tests/uiTest.ts`; its automatic fixture uses at most 256 cells and
+  blocks real generation workers. Enable raster fields only for rendering tests.
+  A large dimension entered to test a form is configuration, not permission to
+  generate that world. Test physical and society algorithms in Vitest.
+- Select checks by the changed boundary. A pure algorithm change uses its
+  constructed Vitest cases and the routine unit suite. Run browser cases for
+  changed controls, rendering, editing or worker/UI publication; an algorithm
+  adjustment alone does not justify another browser suite.
+- End-to-end coverage shares one Draft generation in
+  `frontend/src/worldIntegration.generation.test.ts`. Add independent read-only
+  assertions to that shared result; never generate another world for one check.
+  A task may use at most two full generations, with multiple outcomes checked
+  per run. Do not rerun the end-to-end suite for each local change.
+- No Fine-generation tests. The unit setup rejects the full generator, ESLint
+  rejects generator and schedule imports in routine tests, and policy tests
+  enforce the single integration entry point. Do not bypass these checks,
+  rename expensive tests, add a second runner or increase timeouts to hide an
+  expensive setup. Use `pnpm --dir frontend test <file>` for focused feedback;
+  run the routine suite once the relevant constructed cases pass.
 
 ### Documentation
 

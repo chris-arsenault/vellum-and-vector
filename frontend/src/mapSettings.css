@@ -1,0 +1,308 @@
+.map-settings {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.map-context {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 6px;
+  flex-shrink: 0;
+}
+.map-context > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.map-context .eyebrow {
+  color: #738269;
+  letter-spacing: 1.1px;
+}
+.map-context strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.map-context small {
+  color: #6b7965;
+}
+.map-context > button {
+  flex-shrink: 0;
+}
+.map-drawer .map-scope-clip {
+  padding: 0 12px 8px;
+  margin: 0;
+  flex-shrink: 0;
+}
+.map-settings-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-bottom: 1px solid #cbd5c4;
+  padding: 0 8px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.map-drawer .map-settings-tabs button {
+  border: 0;
+  border-radius: 4px 4px 0 0;
+  background: transparent;
+  padding: 8px 4px;
+  border-bottom: 2px solid transparent;
+}
+.map-drawer .map-settings-tabs button[aria-pressed="true"] {
+  color: #263e2d;
+  background: #e9efdf;
+  border-bottom-color: #647d4d;
+  font-weight: 650;
+}
+.map-settings-content {
+  padding: 12px;
+  min-height: 0;
+  overflow: auto;
+}
+.map-settings-content > section {
+  display: grid;
+  gap: 12px;
+}
+.map-settings-content h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+}
+.map-settings-content .layer-panel {
+  padding: 0;
+  overflow: visible;
+}
+.map-settings-content .map-control-group {
+  padding: 10px 0 0;
+  margin: 0;
+  border: 0;
+  border-top: 1px solid #dbe1d5;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.map-settings legend {
+  font-weight: 650;
+  font-size: 12px;
+  margin-bottom: 7px;
+  padding: 0;
+}
+.map-settings input:not([type="checkbox"]):not([type="radio"]),
+.map-settings select {
+  width: 100%;
+  min-width: 0;
+}
+.map-settings .presentation-choices,
+.map-settings .drawing-style-choices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  min-width: 0;
+}
+.map-settings .presentation-choice {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 9px 7px;
+  margin: 0;
+  border: 1px solid #ced8c6;
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+}
+.map-settings .presentation-choice input {
+  margin-top: 2px;
+}
+.presentation-choice span {
+  display: grid;
+  gap: 4px;
+}
+.presentation-choice strong {
+  font-weight: 650;
+  font-size: 12px;
+}
+.presentation-choice small {
+  color: #697860;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.map-settings .presentation-choice:has(:checked),
+.map-settings .drawing-style-choice:has(:checked) {
+  border-color: #6a8257;
+  background: #f0f4e9;
+  box-shadow: inset 0 0 0 1px #6a825740;
+}
+.map-settings .drawing-style-choice {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  margin: 0;
+  border: 1px solid #ced8c6;
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+}
+.drawing-style-choice svg {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  width: 100%;
+  height: 54px;
+  border-radius: 2px;
+}
+.drawing-style-choice input {
+  grid-column: 1;
+  grid-row: 2;
+}
+.drawing-style-choice span {
+  grid-column: 2;
+  grid-row: 2;
+}
+.drawing-style-choice .style-water {
+  fill: #b4cfca;
+}
+.drawing-style-choice .style-land {
+  fill: #e9dbb9;
+  stroke: #8d8265;
+}
+.drawing-style-choice .style-marks {
+  fill: none;
+  stroke: #6c7754;
+  stroke-width: 1.1;
+}
+.drawing-style-choice.ink .style-water {
+  fill: #deddd0;
+}
+.drawing-style-choice.ink .style-land {
+  fill: #f0e8d3;
+}
+.drawing-style-choice.ink .style-marks {
+  stroke: #675942;
+}
+.map-settings .illustration-density {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  margin-top: 7px;
+}
+.illustration-density input {
+  grid-column: 1 / -1;
+}
+.map-settings .illustration-density output {
+  font-size: 11px;
+  color: #6b7965;
+}
+.map-settings .raster-appearance {
+  display: grid;
+  gap: 12px;
+}
+.map-settings .map-control-group summary {
+  font-weight: 650;
+  cursor: pointer;
+  padding-bottom: 8px;
+}
+.map-view-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid #dbe1d5;
+  padding: 6px 12px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #6b7965;
+}
+.map-view-status span {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.map-view-status button {
+  flex-shrink: 0;
+}
+.map-settings .sheet-decorations {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  gap: 6px;
+}
+.sheet-decorations label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+.map-settings .drawn-sheet-panel > h3:not(:first-child) {
+  padding-top: 12px;
+  border-top: 1px solid #dbe1d5;
+}
+.map-settings .save-map-view {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 7px;
+}
+.save-map-view > label {
+  min-width: 0;
+}
+.save-map-view > button {
+  height: 28px;
+  margin-bottom: 4px;
+}
+.saved-view-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.saved-view-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  border-top: 1px solid #dbe1d5;
+}
+.saved-view-list li > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.map-drawer .saved-view-list li > div > button {
+  text-align: left;
+  padding: 3px 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.map-drawer .saved-view-list button[aria-current="true"] {
+  color: #203b2b;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.saved-view-list small {
+  color: #6b7965;
+  font-size: 11px;
+}
+.saved-view-list li > button {
+  flex-shrink: 0;
+}
+.empty-views {
+  padding: 14px;
+  background: #eff3e9;
+  color: #6b7965;
+  border-radius: 4px;
+  text-align: center;
+}
+.map-views p,
+.map-sheet-intro p {
+  margin: 0;
+}

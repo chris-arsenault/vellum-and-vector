@@ -52,6 +52,8 @@ function FeatureInspection({
         {feature.kind} · {feature.state}
       </p>
       <h2>{feature.name}</h2>
+      <GeometryTools editor={editor} feature={feature} />
+      {editor.cartography.mode === "drawn" && <CartographicFinishing editor={editor} />}
       {feature.kind === "settlement" && (
         <SettlementSurface
           world={world}
@@ -60,8 +62,6 @@ function FeatureInspection({
           editor={editor}
         />
       )}
-      <GeometryTools editor={editor} feature={feature} />
-      {editor.cartography.mode === "drawn" && <CartographicFinishing editor={editor} />}
       <FeatureIdentity feature={feature} world={world} />
       <SocietyWorkForm feature={feature} editor={editor} />
       <FeatureEditor

@@ -198,7 +198,7 @@ it.each([["built"], ["built", "cultural"]])(
     });
     expect(prepared.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
     // Exercise the real configured workflow on the inherited fixture. Whole-world
-    // sampling is covered by society.generation.test.ts, not this publication check.
+    // End-to-end sampling is covered by the shared world integration case.
     const result = await new MapRunner(prepared.input.configuration!, prepared.registry).run(
       { ...state, domain: prepared.source },
       { seed: "42", seedScope: "society-publication" }
