@@ -35,6 +35,7 @@ export function Editor({ world, worlds, changeWorld, newWorld, openLore, openSav
   return (
     <div className="app-shell">
       <EditorHeader
+        areaId={editor.area.id}
         world={world}
         worlds={worlds}
         changeWorld={changeWorld}
@@ -79,7 +80,15 @@ export function Editor({ world, worlds, changeWorld, newWorld, openLore, openSav
     </div>
   );
 }
-function EditorHeader({ world, worlds, changeWorld, newWorld, openLore, openSaved }: Props) {
+function EditorHeader({
+  world,
+  worlds,
+  changeWorld,
+  newWorld,
+  openLore,
+  openSaved,
+  areaId,
+}: Props & { areaId: string }) {
   return (
     <header className="app-header">
       <Brand />
@@ -108,7 +117,7 @@ function EditorHeader({ world, worlds, changeWorld, newWorld, openLore, openSave
       </button>
       <button
         className="quiet"
-        onClick={async () => download(`${world.name}.geojson`, await exportWorld(world.id))}
+        onClick={async () => download(`${world.name}.geojson`, await exportWorld(world.id, areaId))}
       >
         Export GIS
       </button>
@@ -152,7 +161,7 @@ function MapWorkspace({ world, editor }: { world: World; editor: EditorState }) 
 function MapBreadcrumbs({ world, editor }: { world: World; editor: EditorState }) {
   return (
     <nav className="breadcrumbs" aria-label="Geographic lineage">
-      {lineage(world, editor.area.id).map((area) => (
+      {lineage(world, editor.region?.areaId ?? editor.area.id).map((area) => (
         <button key={area.id} onClick={() => editor.enter(area.id)}>
           {area.name}
           <small>{area.profile}</small>
@@ -341,7 +350,7 @@ function ToolButtons({
   choose: (tool: Tool) => void;
   palette: Tool[];
 }) {
-  const tools: Tool[] = ["select", "pan", "move", "reshape", ...palette, "refine"];
+  const tools: Tool[] = ["select", "pan", "move", "reshape", ...palette, "regionOutline", "refine"];
   return (
     <div className="tools" role="toolbar" aria-label="Map tools">
       {tools.map((id) => (

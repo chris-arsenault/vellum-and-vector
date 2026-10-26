@@ -9,6 +9,7 @@ import {
 } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { PhysicalMesh } from "./mesh";
+import { joinAdaptiveSeam } from "./adaptiveSeam";
 
 function physicalFaces(topology: AdaptiveTopology, cellToLeaf: Int32Array, leafToCell: Int32Array) {
   const degree = Int32Array.from(
@@ -96,15 +97,17 @@ export function createAdaptiveWorldMesh(
   bounds: Bounds,
   sampling: AdaptiveSampling,
   padding: number,
-  footprint: Geometry = rectangle(bounds)
+  footprint: Geometry = rectangle(bounds),
+  wrapX = false
 ) {
   const work: Bounds = [
-    bounds[0] - padding,
+    bounds[0] - (wrapX ? 0 : padding),
     bounds[1] - padding,
-    bounds[2] + padding,
+    bounds[2] + (wrapX ? 0 : padding),
     bounds[3] + padding,
   ];
   const mesh = adaptivePhysicalMesh(createAdaptiveTopology(work, sampling), footprint);
+  if (wrapX) joinAdaptiveSeam(mesh);
   mesh.bounds = [
     bounds[0] - mesh.origin[0],
     bounds[1] - mesh.origin[1],

@@ -100,7 +100,8 @@ export function publishPolitics(state: GenerationState) {
   for (const polity of politics.polities) {
     // What the polity is, read from the communities it holds; the territories carry the rest.
     const entity = state.domain.world.entities[polity.id];
-    if (entity) entity.attributes.character = polityCharacter(region, polity);
+    if (entity && (!state.society!.inherited || isWorldSociety(state)))
+      entity.attributes.character = polityCharacter(region, polity);
     const sovereign = new Set(
       Object.keys(politics.sovereignty).filter((id) => politics.sovereignty[id] === polity.id)
     );

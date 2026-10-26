@@ -1,8 +1,8 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { readScene, readRaster } from "./atlasReads";
 import { bounds } from "./presentation";
-import { areaSpace, spatial } from "@atlas/domain";
-import { profiles, type Area, type AtlasFeature, type World } from "./types";
+import { areaSpace, areaDepth, isDescendant, spatial } from "@atlas/domain";
+import { type Area, type AtlasFeature, type World } from "./types";
 
 export function useMapData(world: World, areaId: string, extent: number[] | null = null) {
   const scene = useScene(world, areaId, extent);
@@ -13,16 +13,16 @@ export function useMapData(world: World, areaId: string, extent: number[] | null
     placeholderData: keepPreviousData,
     queryFn: () =>
       world.fields
-        .filter((field) => areaSpace(world, field.areaId) === areaSpace(world, areaId))
-        .sort(
-          (a, b) =>
-            profiles.indexOf(world.areas[a.areaId].profile) -
-            profiles.indexOf(world.areas[b.areaId].profile)
+        .filter(
+          (field) =>
+            areaSpace(world, field.areaId) === areaSpace(world, areaId) &&
+            isDescendant(world.areas, areaId, field.areaId)
         )
+        .sort((a, b) => areaDepth(world.areas, a.areaId) - areaDepth(world.areas, b.areaId))
         .flatMap((field) =>
           (field.channels ?? [])
             .filter((channel) => channel !== "elevation" && !channel.startsWith("magicApplied:"))
-            .map((channel) => readRaster(world.id, field.id, channel))
+            .map((channel) => readRaster(world.id, field.id, channel, areaId))
         )
         .filter((raster) => raster.field.units[raster.channel] !== "cell-index"),
   });
@@ -80,6 +80,7 @@ export function useRasters(
         ]
       : (viewport ?? bounds(area.footprint));
   const fields = world.fields
+    .filter((field) => isDescendant(world.areas, areaId, field.areaId))
     .filter((f) => {
       if (f.channels && !f.channels.includes(channel)) return false;
       if (!f.channels && f.layerId !== channel && f.layerId !== "elevation") return false;
@@ -93,11 +94,7 @@ export function useRasters(
         box[3] >= extent[1]
       );
     })
-    .sort(
-      (a, b) =>
-        profiles.indexOf(world.areas[a.areaId].profile) -
-        profiles.indexOf(world.areas[b.areaId].profile)
-    );
+    .sort((a, b) => areaDepth(world.areas, a.areaId) - areaDepth(world.areas, b.areaId));
   return useQuery({
     queryKey: [
       "rasters",
@@ -109,6 +106,6 @@ export function useRasters(
     ],
     enabled: viewport !== null,
     placeholderData: keepPreviousData,
-    queryFn: () => fields.map((f) => readRaster(world.id, f.id, channel)),
+    queryFn: () => fields.map((f) => readRaster(world.id, f.id, channel, areaId)),
   });
 }

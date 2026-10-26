@@ -120,14 +120,14 @@ function projectFields(snapshot: DomainSnapshot, changes: ChangeSet) {
       const previous = numerical[field.value.id];
       numerical[field.value.id] = structuredClone(artifact.grid);
       for (const overlay of previous?.overlays ?? [])
-        overlayField(numerical[field.value.id], overlay.grid, overlay.channels);
+        overlayField(numerical[field.value.id], overlay.grid, overlay.channels, overlay.mapOnly);
     }
     for (const { value: patch } of changes.writes
       .filter((w) => w.kind === "fieldPatch")
       .filter((w) => w.value.resourceId === artifact.reference.id))
       if (numerical[patch.fieldId]) {
         numerical[patch.fieldId] = { ...numerical[patch.fieldId] };
-        overlayField(numerical[patch.fieldId], artifact.grid, patch.channels);
+        overlayField(numerical[patch.fieldId], artifact.grid, patch.channels, patch.mapOnly);
       }
   }
   return numerical;

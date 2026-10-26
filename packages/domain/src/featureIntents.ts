@@ -79,7 +79,11 @@ function profileChannels({ feature }: FeatureEdit): Set<string> {
     needed.add("flow");
   return needed;
 }
-function editContext(data: FeatureEdit, context: IntentContext, snapshot: DomainSnapshot) {
+export function featureEditContext(
+  data: FeatureEdit,
+  context: IntentContext,
+  snapshot: DomainSnapshot
+) {
   const area = snapshot.world.areas[data.areaId];
   requireThat(area, "missing_area", "Select a mapped area for the feature.");
   requireThat(
@@ -154,7 +158,7 @@ export function evaluateFeature(
   snapshot: DomainSnapshot,
   options: { reconcile?: boolean; deferComposition?: boolean; reconcileOwnBoundary?: boolean } = {}
 ): ChangeSet {
-  const { area, layer, geometry, previous } = editContext(data, context, snapshot);
+  const { area, layer, geometry, previous } = featureEditContext(data, context, snapshot);
   validateFeatureRelations(data, context, snapshot);
   const attributes = validateLayerAttributes(
     layer,

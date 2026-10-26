@@ -76,11 +76,20 @@ export function isDescendant(
   }
   return false;
 }
+export function areaDepth(areas: Record<string, Area>, id: string): number {
+  const seen = new Set<string>();
+  for (let next: string | null = id; next; next = areas[next]?.parentId ?? null) {
+    requireThat(!seen.has(next), "area_cycle", "Geographic ancestry contains a cycle.");
+    seen.add(next);
+  }
+  return seen.size - 1;
+}
 export function composeFeature(
   world: Pick<World, "id" | "areas" | "features"> & Partial<Pick<World, "reference">>,
   feature: AtlasFeature,
   path: string[] = [],
-  profile?: Profile
+  profile?: Profile,
+  areaId?: string
 ): Geometry | null {
   requireThat(
     !path.includes(feature.id),
@@ -112,7 +121,7 @@ export function composeFeature(
           "binding_space",
           "A line can follow geography in its own located space."
         );
-        const composed = composeFeature(world, target, [...path, feature.id], profile);
+        const composed = composeFeature(world, target, [...path, feature.id], profile, areaId);
         return composed ? geometryParts(gis.intersection(composed, ownArea.footprint)) : [];
       }),
       dimension,
@@ -122,6 +131,7 @@ export function composeFeature(
   const details = Object.entries(feature.detail)
     .filter(
       ([id, d]) =>
+        (!areaId || isDescendant(world.areas, areaId, id)) &&
         (!profile || profiles.indexOf(world.areas[id].profile) <= profiles.indexOf(profile)) &&
         !d.needsReconciliation &&
         d.state !== "stale" &&
@@ -129,9 +139,7 @@ export function composeFeature(
         areaSpace(world, id) === areaSpace(world, feature.areaId)
     )
     .sort(
-      ([a], [b]) =>
-        profiles.indexOf(world.areas[a].profile) - profiles.indexOf(world.areas[b].profile) ||
-        a.localeCompare(b)
+      ([a], [b]) => areaDepth(world.areas, a) - areaDepth(world.areas, b) || a.localeCompare(b)
     );
   for (const [id, detail] of details) {
     const footprint = world.areas[id].footprint;
@@ -146,9 +154,15 @@ export function composeFeature(
 }
 
 /** The physical/affected extent composes independently from a site's point or course. */
-export function composeFootprint(world: World, feature: AtlasFeature, profile?: Profile) {
+export function composeFootprint(
+  world: World,
+  feature: AtlasFeature,
+  profile?: Profile,
+  areaId?: string
+) {
   const initial = Object.entries(feature.detail).find(
     ([id, representation]) =>
+      (!areaId || isDescendant(world.areas, areaId, id)) &&
       representation.footprint &&
       (!profile || profiles.indexOf(world.areas[id].profile) <= profiles.indexOf(profile)) &&
       !representation.needsReconciliation &&
@@ -164,5 +178,11 @@ export function composeFootprint(world: World, feature: AtlasFeature, profile?: 
         : []
     )
   );
-  return composeFeature(world, { ...feature, geometry: base, detail, relations: [] }, [], profile);
+  return composeFeature(
+    world,
+    { ...feature, geometry: base, detail, relations: [] },
+    [],
+    profile,
+    areaId
+  );
 }

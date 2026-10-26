@@ -48,11 +48,23 @@ world was edited during the run, retain the edits and report that its generation
 result is out of date. The creator can generate again from the current state.
 There is no automatic retry.
 
-Child numerical generation samples its parent and evolves the interior. A band
-one sample wide retains the parent's numerical authority at the established area
-boundary. This uses the existing field coverage composition; it does not require
-a second boundary solver or changing a neighboring map. Existing contracted
-network features retain their identities and crossing geometry.
+Regional generation reads its ancestors and constructs finer present geography
+without replaying physical epochs or human eras. Existing crossings, landmarks,
+material quantities and located settlements retain their context and identities.
+One semantic Region profile supports arbitrary geographic nesting.
+
+Ordinary edits write mapped representations and surface overlays, with the
+procedural state retained separately as generation context. Local saves and undo
+include these drawings. A regional edit does not appear on its parent map; later
+parent painting preserves finer authored detail. These edits do not reconstruct
+terrain, water or population. Generation excludes map-only edits from its inputs
+and restores their drawings at publication. Structural feature edits and surface
+patches block intersecting geographic generation in the same located space;
+names and visual styles do not. Untouched descendants and neighboring regions
+remain eligible. Existing session undo restores eligibility together with the
+drawing, and local saves retain the original procedural representation underneath
+the edit. Removing a source feature from a map hides its representation rather
+than erasing its procedural records.
 
 ## Repository boundaries
 

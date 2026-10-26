@@ -5,6 +5,7 @@ import { requireThat } from "./errors";
 import { point, rectangle, spatial, type Bounds } from "./spatial";
 import { adaptiveCell, adaptiveLeafAt, type AdaptiveTopology } from "./adaptiveTopology";
 import type { AdaptiveField } from "./adaptiveField";
+import { seamNeighbors } from "./gridPeriodicity";
 import {
   sampleAdaptivePoint,
   adaptivePointSampler,
@@ -12,6 +13,7 @@ import {
 } from "./adaptivePoint";
 
 export interface FieldSamples {
+  periodicWidth?: number;
   id: string;
   scope: SpatialScope;
   bounds: Bounds;
@@ -30,7 +32,9 @@ export interface RegularGrid extends FieldSamples {
   topology?: never;
 }
 export type Grid = RegularGrid | AdaptiveField;
-export type GridSurface = Grid & { overlays?: { grid: GridSurface; channels: string[] }[] };
+export type GridSurface = Grid & {
+  overlays?: { grid: GridSurface; channels: string[]; mapOnly?: boolean }[];
+};
 
 export interface WaterBody {
   id: string;
@@ -152,7 +156,11 @@ export function neighbors(
   diagonal = false,
   covers = (geometry: Geometry) => spatial.covers(grid.scope.footprint, geometry)
 ): number[] {
-  if (grid.topology) return adaptiveNeighbors(grid, index, covers);
+  const seam = seamNeighbors(grid, index, covers);
+  if (grid.topology) {
+    const local = adaptiveNeighbors(grid, index, covers);
+    return seam.length ? local.concat(seam) : local;
+  }
   const x = index % grid.width,
     y = Math.floor(index / grid.width);
   const offsets = diagonal
@@ -172,7 +180,7 @@ export function neighbors(
         [0, -1],
         [0, 1],
       ];
-  return offsets
+  const local = offsets
     .filter(([dx, dy]) => x + dx >= 0 && x + dx < grid.width && y + dy >= 0 && y + dy < grid.height)
     .map(([dx, dy]) => (y + dy) * grid.width + x + dx)
     .filter((i) => grid.active[i] === 1)
@@ -187,6 +195,7 @@ export function neighbors(
         ],
       });
     });
+  return seam.length ? local.concat(seam) : local;
 }
 
 export function putChannel(

@@ -144,9 +144,10 @@ function spineMasks(map: PhysicalField) {
     map.RiverSpineEdgeMasks[target] |= 1 << targetEdge;
   }
 }
-export function riverNetwork(map: PhysicalField, c: PhysicalContext) {
+export function riverNetwork(map: PhysicalField, c: PhysicalContext, incoming?: Float64Array) {
   for (let i = 0; i < map.mesh.count; i++)
-    map.FlowAccumulation[i] = depthRateToDischarge(map.Runoff[i], map.mesh.areas[i]);
+    map.FlowAccumulation[i] =
+      depthRateToDischarge(map.Runoff[i], map.mesh.areas[i]) + (incoming?.[i] ?? 0);
   map.CatchmentArea.set(contributingArea(map.FlowTargets, map.mesh.areas));
   map.RiverOrders.fill(0);
   const order = sourceToOutletOrder(map);

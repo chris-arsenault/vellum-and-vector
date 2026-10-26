@@ -1,7 +1,8 @@
 import {
   builtinLayers,
+  canonicalGeometry,
+  unwrapCoordinates,
   population,
-  representationId,
   type AtlasFeature,
   type SocietyCommunity,
   type SocietyRegion,
@@ -9,7 +10,12 @@ import {
 import type { GenerationState, MapProcessContext } from "./process";
 import type { PublicationDefinition } from "./publication";
 import type { AtlasGenerationInput } from "./atlasWorkflow";
-import { generatedFeature, putGenerated, putGeneratedNetwork } from "./mapFeatures";
+import {
+  generatedFeature,
+  putGenerated,
+  putGeneratedNetwork,
+  putGeneratedDetail,
+} from "./mapFeatures";
 import { findRoute } from "./mapRouting";
 import { communityRoutes } from "./societyContact";
 import { wayClass } from "./societyWays";
@@ -170,18 +176,30 @@ function publishRoutes(
       ? [a.position, b.position]
       : findRoute(state.surface, a.position, b.position, link.kind === "sea" ? "sea" : "road");
     if (path.length < 2) continue;
-    putGeneratedNetwork(
+    const feature = generatedFeature(
       state,
-      generatedFeature(
-        state,
-        `${kind}:${a.id}:${b.id}`,
-        link.highway?.name ?? `${a.name}–${b.name}`,
-        kind,
-        "roads",
-        { type: "LineString", coordinates: path.map((p) => [p.x, p.y]) },
-        wayAttributes(link, cls, [a, b], hierarchy)
-      )
+      `${kind}:${a.id}:${b.id}`,
+      link.highway?.name ?? `${a.name}–${b.name}`,
+      kind,
+      "roads",
+      canonicalGeometry(state.domain.world.reference, {
+        type: "LineString",
+        coordinates: unwrapCoordinates(
+          path.map((p) => [p.x, p.y]),
+          state.surface.periodicWidth
+        ),
+      }),
+      wayAttributes(link, cls, [a, b], hierarchy)
     );
+    const retained = putGeneratedDetail(
+      state,
+      feature,
+      (f) =>
+        f.kind === kind &&
+        ((f.attributes.fromCommunity === a.id && f.attributes.toCommunity === b.id) ||
+          (f.attributes.fromCommunity === b.id && f.attributes.toCommunity === a.id))
+    );
+    if (!retained) putGeneratedNetwork(state, feature);
   }
 }
 function wayAttributes(
@@ -227,33 +245,12 @@ function connectedSettlements(
   return a.founded && b.founded && a.status === "inhabited" && b.status === "inhabited";
 }
 function putCommunity(state: GenerationState, feature: AtlasFeature, communityId: string) {
-  const world = state.domain.world;
-  const previous = Object.values(world.features).find(
-    (f) =>
-      f.kind === "settlement" &&
-      f.attributes.communityId === communityId &&
-      f.areaId !== feature.areaId
-  );
-  if (!previous) {
-    putGenerated(state, feature);
-    return;
-  }
-  const detail = previous.detail[feature.areaId];
   if (
-    previous.protected ||
-    previous.state === "authored" ||
-    detail?.protected ||
-    detail?.state === "authored"
+    !putGeneratedDetail(
+      state,
+      feature,
+      (f) => f.kind === "settlement" && f.attributes.communityId === communityId
+    )
   )
-    return;
-  previous.detail[feature.areaId] = {
-    id: representationId(world.id, previous.id, feature.areaId),
-    geometry: feature.geometry,
-    attributes: feature.attributes,
-    state: "generated",
-    protected: false,
-    needsReconciliation: false,
-    actor: "generator",
-    generationId: null,
-  };
+    putGenerated(state, feature);
 }

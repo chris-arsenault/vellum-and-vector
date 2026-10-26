@@ -32,7 +32,8 @@ export function validateAreaPlacement(
   const parent = world.areas[area.parentId];
   requireThat(parent, "missing_parent", "Choose a geographic parent for this area.");
   requireThat(
-    profiles.indexOf(area.profile) > profiles.indexOf(parent.profile),
+    profiles.indexOf(area.profile) > profiles.indexOf(parent.profile) ||
+      (area.profile === "region" && parent.profile === "region" && !!area.regionId),
     "refinement_profile",
     "Choose a finer creation profile; intermediate profiles may be skipped."
   );

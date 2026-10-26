@@ -3,6 +3,9 @@ import {
   semanticId,
   spatial,
   canonicalPosition,
+  isDescendant,
+  representationId,
+  lineParts,
   type AtlasFeature,
   type RegularGrid,
 } from "@atlas/domain";
@@ -81,6 +84,40 @@ export function putGenerated(state: GenerationState, feature: AtlasFeature) {
   state.domain.world.features[feature.id] = feature;
   return true;
 }
+/** A finer drawing of an existing subject keeps its original identity and network endpoints. */
+export function putGeneratedDetail(
+  state: GenerationState,
+  feature: AtlasFeature,
+  matches: (existing: AtlasFeature) => boolean
+) {
+  const world = state.domain.world;
+  const previous = Object.values(world.features).find(
+    (candidate) =>
+      candidate.areaId !== feature.areaId &&
+      isDescendant(world.areas, feature.areaId, candidate.areaId) &&
+      matches(candidate)
+  );
+  if (!previous) return false;
+  const detail = previous.detail[feature.areaId];
+  if (
+    previous.protected ||
+    previous.state === "authored" ||
+    detail?.protected ||
+    detail?.state === "authored"
+  )
+    return true;
+  previous.detail[feature.areaId] = {
+    id: representationId(world.id, previous.id, feature.areaId),
+    geometry: feature.geometry,
+    attributes: feature.attributes,
+    state: "generated",
+    protected: false,
+    needsReconciliation: false,
+    actor: "generator",
+    generationId: null,
+  };
+  return true;
+}
 function networkHeight(feature: AtlasFeature, index: number, coordinate: number[]) {
   const elevations = feature.attributes.elevations;
   return Array.isArray(elevations)
@@ -88,10 +125,24 @@ function networkHeight(feature: AtlasFeature, index: number, coordinate: number[
     : (coordinate[2] ?? 0);
 }
 export function putGeneratedNetwork(state: GenerationState, feature: AtlasFeature) {
-  if (!putGenerated(state, feature) || feature.geometry.type !== "LineString") return;
+  if (!putGenerated(state, feature)) return;
+  const parts = lineParts(feature.geometry);
+  for (const [part, coordinates] of parts.entries())
+    putNetworkPart(
+      state,
+      feature,
+      coordinates,
+      parts.length === 1 ? feature.id : `${feature.id}:${part}`
+    );
+}
+function putNetworkPart(
+  state: GenerationState,
+  feature: AtlasFeature,
+  coordinates: number[][],
+  key: string
+) {
   const world = state.domain.world,
-    coordinates = feature.geometry.coordinates;
-  const ends = [coordinates[0], coordinates.at(-1)!];
+    ends = [coordinates[0], coordinates.at(-1)!];
   const ids = ends.map((p) =>
     semanticId(
       world.id,
@@ -117,13 +168,13 @@ export function putGeneratedNetwork(state: GenerationState, feature: AtlasFeatur
       spaceId: state.domain.scope.spaceId,
       waterLevel: null,
     };
-  const reach = semanticId(world.id, "generated-reach", feature.id);
+  const reach = semanticId(world.id, "generated-reach", key);
   world.networkReaches[reach] = {
     id: reach,
     featureId: feature.id,
     start: ids[0],
     end: ids[1],
-    geometry: feature.geometry,
+    geometry: { type: "LineString", coordinates },
     flow: Number(feature.attributes.discharge ?? 0),
     endFlow: Array.isArray(feature.attributes.discharges)
       ? Number(feature.attributes.discharges.at(-1))

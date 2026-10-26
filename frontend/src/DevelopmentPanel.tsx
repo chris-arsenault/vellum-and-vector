@@ -24,7 +24,7 @@ export function DevelopmentPanel({ world, editor }: { world: World; editor: Edit
         around it.
       </p>
       {editor.area.profile !== "interior" && (
-        <button className="primary" onClick={() => editor.setTool("refine")}>
+        <button className="primary" onClick={() => editor.setTool("regionOutline")}>
           Draw a region to develop
         </button>
       )}
@@ -117,8 +117,8 @@ function GenerationForm({ world, editor }: { world: World; editor: EditorState }
         height={extent[3] - extent[1]}
       />
       <p className="hint">
-        Authored features and painted fields are protected. Full physical epochs run at every detail
-        level.
+        Completed world history stays fixed. Regional maps refine inherited geography without
+        running new physical or human eras.
       </p>
       <button className="primary" disabled={generate.isPending}>
         {generate.isPending ? "Starting…" : "Generate selected domains"}

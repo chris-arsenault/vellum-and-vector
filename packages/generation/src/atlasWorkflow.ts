@@ -13,6 +13,10 @@ import {
   DomainError,
   type DomainSnapshot,
   type Grid,
+  type SpatialScope,
+  rectangle,
+  proceduralSnapshot,
+  mappedGenerationDiagnostics,
 } from "@atlas/domain";
 import { MapRunner, type MapRunnerOptions } from "./mapRunner";
 import {
@@ -26,7 +30,6 @@ import { prepareGeneratedProcess } from "./mapFeatures";
 import { finalizeNamesProcess } from "./societyNaming";
 import { atlasPhysicalSequence } from "./canonry/atlasSequence";
 import { atlasQuality } from "./canonry/atlasProfile";
-import { generationResolution } from "./resolution";
 import { atlasParametersSchema, mapBoundaryName, type AtlasParameters } from "./atlasParameters";
 import {
   generationSettingsSchema,
@@ -45,6 +48,12 @@ import { serializableBindings } from "./generationBindings";
 import { inheritedChannelNames, inheritedNativeFacts } from "./canonry/inheritedFacts";
 import { societySequence } from "./societyProcesses";
 import { boundaryDiagnostics, migrateBoundarySelection, inheritMapBoundary } from "./worldBoundary";
+import {
+  regionalInputFields,
+  regionalInputChannels,
+  regionalResolution,
+  regionalInputDiagnostics,
+} from "./regionalInputs";
 
 export interface AtlasGenerationInput {
   areaId: string;
@@ -103,6 +112,8 @@ export function atlasRegistry(source: DomainSnapshot, input: AtlasGenerationInpu
 }
 
 export function prepareAtlasGeneration(source: DomainSnapshot, input: AtlasGenerationInput) {
+  const mappedDiagnostics = mappedGenerationDiagnostics(source, input.areaId);
+  source = proceduralSnapshot(source);
   input = structuredClone(input);
   input.features = migrateBoundarySelection(input.features);
   input = inheritMapBoundary(source, input);
@@ -122,6 +133,8 @@ export function prepareAtlasGeneration(source: DomainSnapshot, input: AtlasGener
   input = { ...input, configuration };
   const registry = atlasRegistry(source, input);
   const diagnostics = [
+    ...mappedDiagnostics,
+    ...regionalInputDiagnostics(source, input.areaId),
     ...boundaryDiagnostics(input),
     ...resolvedFeatures.diagnostics.filter((item) => item.code !== "feature_dependency"),
   ];
@@ -182,7 +195,11 @@ function configuredSource(source: DomainSnapshot, input: AtlasGenerationInput) {
     : mapBoundaryName(atlasParametersSchema.parse(input.parameters ?? {}).mapBoundary);
   return {
     ...source,
-    world: { ...source.world, ...settings, reference: { ...source.world.reference, boundaryMode } },
+    world: {
+      ...source.world,
+      ...(stable ? {} : settings),
+      reference: { ...source.world.reference, boundaryMode },
+    },
   };
 }
 function checkReviewedConfiguration(
@@ -220,7 +237,7 @@ function initialState(source: DomainSnapshot, input: AtlasGenerationInput): Gene
   requireThat(area, "generation_area", "Choose an existing mapped area.");
   const quality = atlasQuality[input.quality as keyof typeof atlasQuality];
   requireThat(quality, "generation_quality", "Choose draft, standard or fine detail.");
-  const scope = {
+  const scope: SpatialScope = {
     worldId: domain.world.id,
     areaId: area.id,
     spaceId: areaSpace(domain.world, area.id),
@@ -232,11 +249,15 @@ function initialState(source: DomainSnapshot, input: AtlasGenerationInput): Gene
   };
   domain.scope = scope;
   const extent = spatial.bounds(area.footprint);
-  const { cellSpan } = generationResolution(input.quality, area.profile);
+  const { cellSpan } = regionalResolution(source, area.id, input.quality);
+  scope.resolution = cellSpan;
   // A child keeps its parent's boundary band. Fine numerical work occupies the
   // interior; parent samples remain authoritative at the established interface.
   const band = Math.min(cellSpan, (extent[2] - extent[0]) / 4, (extent[3] - extent[1]) / 4);
-  const interior = area.boundary ? spatial.buffer(area.footprint, -band) : area.footprint;
+  const interior =
+    area.boundary && !["region", "local"].includes(area.profile)
+      ? spatial.buffer(area.footprint, -band)
+      : area.footprint;
   requireThat(
     interior && spatial.area(interior) > 0,
     "generation_extent",
@@ -249,8 +270,12 @@ function initialState(source: DomainSnapshot, input: AtlasGenerationInput): Gene
           id,
           { ...scope, footprint: interior },
           createAdaptiveTopology(extent, {
-            maximumSize: cellSpan,
+            maximumSize: Math.max(
+              cellSpan,
+              Math.max(extent[2] - extent[0], extent[3] - extent[1]) / 8
+            ),
             minimumSize: cellSpan,
+            refine: (box) => spatial.intersects(rectangle(box), area.footprint),
           })
         )
       : createGrid(
@@ -271,17 +296,10 @@ function initialState(source: DomainSnapshot, input: AtlasGenerationInput): Gene
 }
 function inheritSurface(source: DomainSnapshot, target: Grid, input: AtlasGenerationInput) {
   const world = source.world;
-  const available = world.fields.filter(
-    (f) =>
-      f.spaceId === target.scope.spaceId &&
-      !(input.domains.includes("physical") && f.areaId === input.areaId) &&
-      source.numerical[f.id] &&
-      spatial.covers(source.numerical[f.id].scope.footprint, target.scope.footprint)
+  const channels = regionalInputChannels(
+    regionalInputFields(source, input.areaId, input.domains.includes("physical"))
   );
-  for (const field of available) {
-    const grid = source.numerical[field.id];
-    resampleChannels(grid, target);
-  }
+  for (const [name, grid] of channels) resampleChannels(grid, target, [name]);
   requireThat(
     input.domains.includes("physical") ||
       target.channels.elevation ||
@@ -345,7 +363,7 @@ function configuredSequence(source: DomainSnapshot, input: AtlasGenerationInput)
         (id) => input.resolvedFeatures!.selection[id]?.enabled
       )
     )
-      sequence.push(...societySequence(input));
+      sequence.push(...societySequence(input, !!area.parentId));
     sequence.push(
       ...atlasGenerationModules.contribute(slot, input.resolvedFeatures!, {
         source,

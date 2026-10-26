@@ -5,6 +5,49 @@ uses in-memory inputs and streams validated output with transferable numerical
 buffers. Initial generation also displays sampled epoch previews. No persistent
 state, restart, recovery, backend or MCP is part of this product phase.
 
+## Geographic regional refinement
+
+Selected region subjects retain their original source and arbitrary hierarchy.
+An explicit refinement action links a finer geographic area to that subject,
+using its nearest refined ancestor. The regional sequence reads ancestor fields
+and retained drainage, builds conditioned relief and connected water, adapts local
+climate, and presents habitats and inherited magic without executing world epochs.
+No region label or nesting depth selects another map type.
+Seam-spanning regions retain short periodic field neighbors and travel distances.
+Their mapped ways split at the chart edge while retaining one feature identity
+and a shared network junction.
+
+Inherited magic quantities distinguish material amounts from sampled influence.
+Regional propagation reads retained sources and history; it does not locate new
+sources, renew material stocks or replay ocean impulses. Retained landmarks keep
+their signatures and identities. Society allocates rural residents by territorial
+overlap and keeps located residents at their known seats. Finer opportunities
+resolve existing local-town allocations; unmet works remain demands. Routes retain
+their wear, highways, shipping and door meanings without running another era.
+
+Ordinary map authoring uses linked feature representations and surface overlays.
+Procedural inputs omit those drawings, leaving terrain, drainage, material stocks
+and society unchanged. Publication restores the independent map edits. Rendering
+and exports compose the mapped result, scoped by geographic ancestry, while
+history and undo retain the original context. Shared two-dimensional anchors stay
+attached without imposing numerical river profiles or frozen physical samples
+on a creative edit. Replaced fine procedural representations remain under their
+drawings; removing a source feature hides its mapped representation.
+
+Preflight checks the original mapped snapshot before separating procedural
+inputs. Structural feature changes protect their original and current local
+geometry and surrounding footprints; surface painting protects its patch
+footprint. Geographic generation that intersects either in the same located
+space is unavailable, with an explanation naming the drawing and owning map.
+Names and presentation styles do not restrict generation. Untouched descendants
+and neighboring regions remain eligible, while existing finer drawings keep
+their precedence. Naming overrides follow newly generated geometry and attributes
+rather than retaining an obsolete shape. Undo or restoring the original structural
+feature drawing removes its restriction without a separate lock registry. A drawing is never
+treated as a newly reconstructed terrain, drainage or population simulation.
+
+## Geographic publication
+
 Published geography uses primary points, courses or areas according to its
 source. Peaks and channel drops are located points; volcano centers retain cone
 footprints. Gorges follow actual drainage through their classified extents.
@@ -72,7 +115,8 @@ Pressure pathways retrace when connected ocean cells change. This avoids both
 unrelated coast drift and needless propagation while preserving actual coastal
 changes and Aurora's temperature/ice dependencies.
 
-Present edits synchronize residents and works with the retained society records.
+Specialized population and work edits synchronize their retained society records.
+Ordinary mapped geometry and surface edits do not alter those records.
 Refinement subdivides population catchments and retains completed history and
 feature identities; it does not rerun old eras. The inspector exposes population
 composition read across the groups by culture, tradition, language and livelihood,

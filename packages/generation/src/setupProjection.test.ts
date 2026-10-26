@@ -142,8 +142,10 @@ it("uses actual regional consumers and inherited fields rather than blanket geol
   expect(feature(view, "physical.impacts").settings.every((item) => !item.active)).toBe(true);
   expect(feature(view, "physical.foundation").settings.every((item) => !item.active)).toBe(true);
   const climate = feature(view, "physical.climate");
-  expect(climate.settings.find((item) => item.key === "temperature")?.active).toBe(true);
-  expect(climate.settings.find((item) => item.key === "rainfall")?.active).toBe(true);
+  expect(climate.status).toBe("active");
+  // Regional climate adapts inherited present fields; global baseline controls do not rerun.
+  expect(climate.settings.find((item) => item.key === "temperature")?.active).toBe(false);
+  expect(climate.settings.find((item) => item.key === "rainfall")?.active).toBe(false);
   expect(climate.settings.find((item) => item.key === "seaLevel")).toMatchObject({
     owner: "physical.climate",
     controlFeature: "ocean.geography",

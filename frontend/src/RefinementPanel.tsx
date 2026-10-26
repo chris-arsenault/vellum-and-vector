@@ -39,7 +39,9 @@ function contextFeature(editor: EditorState) {
 }
 export function RefinementPanel({ world, editor }: { world: World; editor: EditorState }) {
   const create = useRefinement(world, editor),
-    available = profiles.slice(profiles.indexOf(editor.area.profile) + 1);
+    available = profiles
+      .slice(profiles.indexOf(editor.area.profile) + 1)
+      .filter((profile) => profile !== "region");
   const [profile, setProfile] = useState(
     editor.selected?.kind === "building" && available.includes("interior")
       ? "interior"
@@ -55,7 +57,7 @@ export function RefinementPanel({ world, editor }: { world: World; editor: Edito
   return (
     <section>
       <p className="eyebrow">LOCATE THE NEXT MAP</p>
-      <h2>Develop a region</h2>
+      <h2>Locate another map</h2>
       <p>Outline a place, adjust its boundary, then choose how to develop it.</p>
       <div role="group" aria-label="Region outline tools">
         <button onClick={() => editor.setTool("refine")} aria-pressed={editor.tool === "refine"}>

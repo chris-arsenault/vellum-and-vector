@@ -10,9 +10,9 @@ import type { PopulationGroup } from "@atlas/domain";
 import { CartographicFinishing } from "./CartographicFinishing";
 
 export function Inspector({ world, editor }: { world: World; editor: EditorState }) {
-  const feature =
-    editor.scene.data?.find((f) => f.id === editor.selected?.id) ??
-    (editor.selected && world.features[editor.selected.id] ? editor.selected : null);
+  const feature = editor.scene.data
+    ? editor.scene.data.find((f) => f.id === editor.selected?.id)
+    : editor.selected;
   if (!feature) return <AreaContext editor={editor} />;
   return <FeatureInspection world={world} editor={editor} feature={feature} />;
 }
@@ -52,6 +52,11 @@ function FeatureInspection({
         {feature.kind} · {feature.state}
       </p>
       <h2>{feature.name}</h2>
+      {feature.mapOnly && (
+        <p className="hint">
+          Edited on this map. Completed terrain and population history stay unchanged.
+        </p>
+      )}
       <GeometryTools editor={editor} feature={feature} />
       {editor.cartography.mode === "drawn" && <CartographicFinishing editor={editor} />}
       {feature.kind === "settlement" && (
@@ -71,8 +76,8 @@ function FeatureInspection({
         world={world}
       />
       {feature.geometry.type === "Point" && (
-        <button className="secondary" onClick={() => editor.refinePoi(feature)}>
-          Refine this place
+        <button className="secondary" onClick={() => editor.setTool("regionPick")}>
+          Choose a geographic region
         </button>
       )}
       {["Polygon", "MultiPolygon"].includes(feature.geometry.type) && (
@@ -80,6 +85,19 @@ function FeatureInspection({
           Refine this footprint
         </button>
       )}
+      <FeatureHistory feature={feature} world={world} />
+      <button
+        className="danger quiet"
+        onClick={() => editor.execute("deleteMapFeature", { featureId: feature.id })}
+      >
+        Delete feature
+      </button>
+    </section>
+  );
+}
+function FeatureHistory({ feature, world }: { feature: AtlasFeature; world: World }) {
+  return (
+    <>
       <details>
         <summary>Causes & relationships</summary>
         <ul>
@@ -100,13 +118,7 @@ function FeatureInspection({
           ))}
         </ul>
       </details>
-      <button
-        className="danger quiet"
-        onClick={() => editor.execute("deleteFeature", { featureId: feature.id })}
-      >
-        Delete feature
-      </button>
-    </section>
+    </>
   );
 }
 function GeometryTools({ editor, feature }: { editor: EditorState; feature: AtlasFeature }) {

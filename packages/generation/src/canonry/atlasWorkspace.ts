@@ -11,6 +11,7 @@ import {
   resampleChannels,
   gridPosition,
   rectangle,
+  isDescendant,
 } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { authoredFields } from "../mapAuthored";
@@ -67,6 +68,7 @@ export function parentChannels(state: GenerationState) {
       field.areaId === state.surface.scope.areaId
     )
       continue;
+    if (!isDescendant(state.domain.world.areas, state.surface.scope.areaId, field.areaId)) continue;
     if (!spatial.covers(grid.scope.footprint, state.surface.scope.footprint)) continue;
     for (const name of Object.keys(grid.channels)) {
       const previous = inputs.get(name);
@@ -135,7 +137,7 @@ function fixedInheritedBoundary(state: GenerationState, work: AtlasPhysicalWorks
   if (!work.inherited) return;
   const values = new Float64Array(work.map.mesh.count).fill(NaN);
   const footprint = state.surface.scope.footprint,
-    margin = work.map.mesh.spacing * 2;
+    margin = state.domain.scope.resolution ?? work.map.mesh.spacing;
   const interior = spatial.buffer(footprint, -margin);
   for (let i = 0; i < values.length; i++)
     if (!interior || !spatial.covers(interior, point(nativePosition(work, i))))
@@ -192,10 +194,14 @@ export function createAtlasWorkspace(
   profile.MapBoundary = mapBoundaryValue(state.domain.world.reference.boundaryMode);
   profile.WrapLongitude = Number(profile.MapBoundary === 1);
   const bounds = state.surface.bounds;
-  const { cellArea, cellSpan } = generationResolution(
+  const resolution = generationResolution(
     quality,
     state.domain.world.areas[state.domain.scope.areaId].profile
   );
+  const cellSpan = state.domain.world.areas[state.domain.scope.areaId].parentId
+      ? (state.domain.scope.resolution ?? resolution.cellSpan)
+      : resolution.cellSpan,
+    cellArea = cellSpan ** 2;
   const maximumSize = cellSpan;
   const featureSamples = { draft: 2, standard: 4, fine: 8 }[quality];
   const sampling = { maximumSize, minimumSize: maximumSize / 16, featureSamples };
@@ -258,8 +264,15 @@ function createChildMesh(
         ),
     },
     padding,
-    state.domain.scope.footprint
+    state.domain.scope.footprint,
+    crossesChartSeam(state)
   );
+}
+function crossesChartSeam(state: GenerationState) {
+  if (state.domain.world.reference.boundaryMode !== "cylinder") return false;
+  const [west, , east] = spatial.bounds(state.domain.world.reference.domain),
+    [low, , high] = spatial.bounds(state.domain.scope.footprint);
+  return Math.abs(low - west) < 1e-6 && Math.abs(high - east) < 1e-6;
 }
 function protectedSampling(state: GenerationState, size: number) {
   const bounds = state.surface.bounds,
@@ -322,6 +335,11 @@ export function refreshWorkspaceSamples(
     }
   } else resampleChannels(previous, next);
   state.surface = next;
+  retainPeriodicSurface(state, work);
+}
+function retainPeriodicSurface(state: GenerationState, work: AtlasPhysicalWorkspace) {
+  if (state.domain.world.areas[state.domain.scope.areaId].parentId && work.map.mesh.periodic)
+    state.surface.periodicWidth = work.map.mesh.periodic.width;
 }
 function channelQuantity(grid: Grid, name: string) {
   return (

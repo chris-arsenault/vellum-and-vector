@@ -43,8 +43,22 @@ export function RegionsPanel({ editor }: { editor: EditorState }) {
       )}
       <RegionList editor={editor} />
       {region && !regionDraft && (
-        <RegionDetails key={`${region.id}:${region.name}`} editor={editor} />
+        <>
+          <button
+            className="primary"
+            onClick={editor.refineSelectedRegion}
+            disabled={editor.commit.isPending}
+          >
+            Refine this region
+          </button>
+          <p className="hint">
+            Develop finer relief, rivers and places from the existing map. Selection alone changes
+            no geography.
+          </p>
+          <RegionDetails key={`${region.id}:${region.name}`} editor={editor} />
+        </>
       )}
+      <ErrorMessage error={editor.commit.error} />
       {!children.length && <p className="hint">No smaller regions chosen here yet.</p>}
       <p className="hint">
         Regions show the map's existing geography. Minimum useful width: {minimumRegionWidthMetres}{" "}
@@ -130,9 +144,13 @@ export function RegionList({ editor }: { editor: EditorState }) {
 }
 function RegionDetails({ editor }: { editor: EditorState }) {
   const [name, setName] = useState(editor.region!.name);
-  const attached = editor.world.views.some(
-    (v) => v.region?.parentId === editor.region!.id || v.regionId === editor.region!.id
+  const refined = Object.values(editor.world.areas).some(
+    (area) => area.regionId === editor.region!.id
   );
+  const attached =
+    editor.world.views.some(
+      (v) => v.region?.parentId === editor.region!.id || v.regionId === editor.region!.id
+    ) || refined;
   return (
     <details>
       <summary>Region details</summary>
@@ -148,11 +166,20 @@ function RegionDetails({ editor }: { editor: EditorState }) {
         </label>
         <button disabled={!name.trim() || editor.commit.isPending}>Rename</button>
       </form>
-      <button onClick={editor.adjustRegion}>Adjust outline</button>
+      <button disabled={refined} onClick={editor.adjustRegion}>
+        Adjust outline
+      </button>
+      {refined && (
+        <p className="hint">
+          A finer map uses this outline. Choose a new region for a different extent.
+        </p>
+      )}
       <button disabled={attached || editor.commit.isPending} onClick={editor.removeRegion}>
         Remove region
       </button>
-      {attached && <p className="hint">Retained by child regions or saved map views.</p>}
+      {attached && (
+        <p className="hint">Retained by a finer map, child regions or saved map views.</p>
+      )}
     </details>
   );
 }

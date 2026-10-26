@@ -4,7 +4,8 @@ import { requireThat } from "./errors";
 export function overlayField(
   base: GridSurface,
   patch: Grid,
-  channels = Object.keys(patch.channels)
+  channels = Object.keys(patch.channels),
+  mapOnly = false
 ): void {
   requireThat(
     base.scope.spaceId === patch.scope.spaceId && base.scope.crsId === patch.scope.crsId,
@@ -21,7 +22,11 @@ export function overlayField(
   }
   base.overlays = [
     ...(base.overlays ?? []),
-    { grid: patch, channels: channels.filter((c) => Object.hasOwn(base.channels, c)) },
+    {
+      grid: patch,
+      channels: channels.filter((c) => Object.hasOwn(base.channels, c)),
+      ...(mapOnly ? { mapOnly: true } : {}),
+    },
   ];
 }
 /** Keep authored patches at their own resolution; consumers use the shared evaluator. */

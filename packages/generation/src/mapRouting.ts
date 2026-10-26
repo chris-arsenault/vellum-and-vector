@@ -1,5 +1,6 @@
 import {
   gridPosition,
+  gridDistance,
   neighbors,
   requireThat,
   spatial,
@@ -53,7 +54,7 @@ function nearest(grid: Grid, point: Position) {
   for (let i = 0; i < grid.active.length; i++) {
     if (!grid.active[i]) continue;
     const p = gridPosition(grid, i),
-      candidate = Math.hypot(p.x - point.x, p.y - point.y);
+      candidate = gridDistance(grid, p, point);
     if (candidate < distance) {
       best = i;
       distance = candidate;
@@ -77,7 +78,7 @@ export function findRoute(grid: Grid, from: Position, to: Position, kind: string
     cheapest = kind === "road" ? riverBankFactor : 1;
   const remaining = (cell: number) => {
     const p = gridPosition(grid, cell);
-    return Math.hypot(p.x - goal.x, p.y - goal.y) * cheapest;
+    return gridDistance(grid, p, goal) * cheapest;
   };
   costs[start] = 0;
   queue.push({ cell: start, cost: remaining(start) });
@@ -99,7 +100,7 @@ export function findRoute(grid: Grid, from: Position, to: Position, kind: string
 function routeCost(grid: Grid, from: number, to: number, kind: string) {
   const a = gridPosition(grid, from),
     b = gridPosition(grid, to),
-    distance = Math.hypot(a.x - b.x, a.y - b.y);
+    distance = gridDistance(grid, a, b);
   if (kind === "river") return riverCost(grid, from, to, distance);
   if (kind === "sea") return distance * seaFactor(grid, to);
   if (kind === "road" && oceanCell(grid, to)) return Infinity;

@@ -1,7 +1,6 @@
 import {
   canonryConfluencePresets,
   canonryMagicPresets,
-  fieldInterpolator,
   originParameters,
   type MagicOrigin,
   type MagicStock,
@@ -11,7 +10,7 @@ import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import { weightScale } from "./transportPlan";
 import { createConfluenceWorkspace, type ConfluenceWorkspace } from "./magicConfluences";
-import { nativePosition } from "./atlasWorkspace";
+import { inheritMagicChannel } from "./magicInheritance";
 import {
   carriedMagicChannels,
   magicChannels,
@@ -141,23 +140,24 @@ function createMagicField(state: GenerationState, definition: MagicSystem): Magi
       field.stocks[stockKey(origin, stock)] = new Float64Array(count);
   }
   if (!definition.enabled || !state.physical!.inherited) return field;
-  const inherit = (key: string, into: Float64Array, category: boolean) => {
-    if (!state.surface.channels[key]) return;
-    const valueAt = fieldInterpolator(state.surface, key, category);
-    for (let i = 0; i < count; i++) into[i] = valueAt(nativePosition(state.physical!, i));
-  };
+  inheritMagicField(state, field);
+  return field;
+}
+function inheritMagicField(state: GenerationState, field: MagicField) {
   for (const channel of carriedMagicChannels)
-    inherit(
+    inheritMagicChannel(
+      state,
       magicKey(field, channel),
       field[channel],
-      magicFieldDefinitions[channel].quantity === "category"
+      magicFieldDefinitions[channel].quantity
     );
   for (const [key, values] of Object.entries(field.stocks))
-    inherit(magicKey(field, `stock:${key}`), values, false);
+    inheritMagicChannel(state, magicKey(field, `stock:${key}`), values, "extensive");
+  for (const [id, values] of Object.entries(field.originSources))
+    inheritMagicChannel(state, magicKey(field, `origin:${id}:source`), values);
   // Falls the parent already seeded arrive with their stock, not again.
   for (const event of state.physical!.map.events)
     if (event.kind === "impact") field.seeded.add(event.id);
-  return field;
 }
 /**
  * Take an amount of a system's stock in one reservoir out of the world at a cell, as mining,

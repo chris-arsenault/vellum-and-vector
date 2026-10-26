@@ -14,6 +14,7 @@ import { semanticId } from "./identity";
 import { validateCoverage, type MaterializedCoverage } from "./coverage";
 import { addLocatedAccess } from "./locatedAccess";
 import { refinedDrainageFeatures } from "./drainageRefinement";
+import { validateRegionRefinement } from "./regionRefinement";
 
 type AreaInput = z.infer<typeof createAreaSchema>;
 function areaRequirements(data: AreaInput, context: IntentContext) {
@@ -109,6 +110,7 @@ function areaCandidate(data: AreaInput, context: IntentContext, snapshot: Domain
   );
   const area: Area = {
     id: data.id,
+    ...(data.regionId ? { regionId: data.regionId } : {}),
     parentId: parent.id,
     name: data.name,
     profile: data.profile,
@@ -134,6 +136,7 @@ function areaCandidate(data: AreaInput, context: IntentContext, snapshot: Domain
   area.spaceId = areaSpace({ ...snapshot.world, areas }, area.id);
   area.traits = effectiveTraits(areas, area.id);
   validateAreaPlacement(snapshot.world, area);
+  validateRegionRefinement(snapshot.world, area);
   return area;
 }
 function validateContextFeature(data: AreaInput, snapshot: DomainSnapshot, area: Area) {

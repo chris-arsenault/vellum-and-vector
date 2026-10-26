@@ -21,6 +21,13 @@ export function usefulRegionSize(geometry: Geometry): boolean {
 export function regionViews(world: World, areaId: string): RegionView[] {
   return world.views.filter((v): v is RegionView => v.areaId === areaId && !!v.region);
 }
+export function regionSourceAreaId(
+  world: World,
+  regionId: string | null,
+  fallback: string
+): string {
+  return world.views.find((view) => view.id === regionId)?.areaId ?? fallback;
+}
 export function regionLineage(world: World, id: string | null): RegionView[] {
   const result: RegionView[] = [],
     seen = new Set<string>();
@@ -55,6 +62,27 @@ export function availableRegionFootprint(
   }
   return shape;
 }
+function validateRefinedOutline(
+  world: World,
+  id: string,
+  footprint: Geometry,
+  parentId: string | null
+) {
+  const refined = Object.values(world.areas).find((area) => area.regionId === id);
+  requireThat(
+    !refined ||
+      (spatial.covers(refined.footprint, footprint) &&
+        spatial.covers(footprint, refined.footprint)),
+    "region_refined_outline",
+    "Keep a refined region's outline attached to its mapped geography. Choose a new region for a different extent."
+  );
+  const previous = world.views.find((view) => view.id === id)?.region;
+  requireThat(
+    !refined || !previous || previous.parentId === parentId,
+    "region_refined_parent",
+    "A refined region retains its geographic ancestry. Choose a new region to move it under another parent."
+  );
+}
 export function validateRegionView(world: World, view: World["views"][number]) {
   if (view.regionId) {
     const subject = world.views.find((v) => v.id === view.regionId && v.region);
@@ -83,6 +111,7 @@ export function validateRegionView(world: World, view: World["views"][number]) {
     "A region retains its source map."
   );
   const footprint = spatial.canonical(view.region.footprint);
+  validateRefinedOutline(world, view.id, footprint, view.region.parentId);
   requireThat(
     ["Polygon", "MultiPolygon"].includes(footprint.type),
     "region_polygon",

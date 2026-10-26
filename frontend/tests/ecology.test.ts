@@ -92,9 +92,9 @@ test("extracted ecological polygons select, protect, export and refine", async (
   await page.getByRole("button", { name: "Save feature", exact: true }).click();
   await expect(panel(page).locator("h2")).toHaveText("Old growth wood");
   await page.getByRole("button", { name: "Refine this footprint", exact: true }).click();
-  await page.getByRole("combobox", { name: "Develop as", exact: true }).selectOption("region");
-  await page.getByLabel("Place name", { exact: true }).fill("Woodland region");
-  await page.getByRole("button", { name: "Create mapped area", exact: true }).click();
+  await page.getByLabel("Region name", { exact: false }).fill("Woodland region");
+  await page.getByRole("button", { name: "Keep region", exact: true }).click();
+  await page.getByRole("button", { name: "Refine this region", exact: true }).click();
   await expect(page.locator(".breadcrumbs")).toContainText("Woodland region");
   const exported = await exportMap(page);
   expect(

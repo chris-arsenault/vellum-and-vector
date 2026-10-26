@@ -72,6 +72,8 @@ export interface SocietyCommunity {
   parentCommunity?: string;
   /** Concentrated residents are part of groups, never an additional population. */
   settlement?: { population: number; peak: number; recoveryYears: number };
+  /** Local town residents unresolved at this scale; included in groups, never extra people. */
+  latentSettlementPopulation?: number;
   /**
    * The place inside the community's country that the geography offered for its
    * settlement, chosen by site class; a fortress is a seat on a defensible spur above a

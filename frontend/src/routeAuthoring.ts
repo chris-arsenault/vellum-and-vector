@@ -1,6 +1,6 @@
 import GeoJSON from "ol/format/GeoJSON.js";
 import {
-  evaluateFeature,
+  evaluateMapFeature,
   featureEditSchema,
   semanticId,
   materializeField,
@@ -8,6 +8,8 @@ import {
   spatial,
   areaSpace,
   requireThat,
+  canonicalGeometry,
+  unwrapCoordinates,
   type DomainSnapshot,
   type IntentContext,
   type Position,
@@ -57,12 +59,18 @@ export function routeNetwork(
     name: data.name,
     kind: data.kind,
     layerId: data.kind === "river" ? "rivers" : "roads",
-    geometry: { type: "LineString", coordinates: points.map((p) => [p.x, p.y]) },
+    geometry: canonicalGeometry(snapshot.world.reference, {
+      type: "LineString",
+      coordinates: unwrapCoordinates(
+        points.map((p) => [p.x, p.y]),
+        grid.periodicWidth
+      ),
+    }),
     attributes: { elevations, ...(data.kind === "river" ? { discharge: data.flow } : {}) },
     relations: [],
     protected: true,
   };
-  return evaluateFeature(
+  return evaluateMapFeature(
     featureEditSchema.parse({ areaId: context.scope.areaId, feature }),
     context,
     snapshot

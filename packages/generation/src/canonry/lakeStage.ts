@@ -16,7 +16,7 @@ export interface SupportedLake {
   depth: number;
   overflow: number;
 }
-export function contributingWater(map: PhysicalField): Float64Array {
+export function contributingWater(map: PhysicalField, incoming?: Float64Array): Float64Array {
   const count = map.mesh.count,
     order = new Int32Array(count).fill(-1),
     water = new Float64Array(count);
@@ -25,7 +25,7 @@ export function contributingWater(map: PhysicalField): Float64Array {
     if (rank < 0 || rank >= count || order[rank] >= 0)
       throw new Error("Priority-flood ranks are not a complete order.");
     order[rank] = i;
-    water[i] = depthRateToDischarge(map.Runoff[i], map.mesh.areas[i]);
+    water[i] = depthRateToDischarge(map.Runoff[i], map.mesh.areas[i]) + (incoming?.[i] ?? 0);
   }
   for (let rank = count - 1; rank >= 0; rank--) {
     const i = order[rank],

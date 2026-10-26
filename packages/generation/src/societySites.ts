@@ -1,5 +1,6 @@
 import {
   gridPosition,
+  gridDisplacement,
   neighbors,
   settlementSiteKinds,
   spatial,
@@ -44,7 +45,9 @@ class SiteReader {
     ring = neighbors(this.grid, i, true, this.covers).sort((a, b) => {
       const qa = gridPosition(this.grid, a),
         qb = gridPosition(this.grid, b);
-      return Math.atan2(qa.y - p.y, qa.x - p.x) - Math.atan2(qb.y - p.y, qb.x - p.x);
+      const da = gridDisplacement(this.grid, p, qa),
+        db = gridDisplacement(this.grid, p, qb);
+      return Math.atan2(da.y, da.x) - Math.atan2(db.y, db.x);
     });
     this.rings.set(i, ring);
     return ring;

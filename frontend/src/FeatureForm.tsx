@@ -112,7 +112,7 @@ function booleanDefaults(schema: Record<string, unknown>) {
 }
 function createFeature(world: World, editor: EditorState, feature: AtlasFeature, form: FormData) {
   const { geometry } = feature;
-  let kind = "putFeature";
+  let kind = "putMapFeature";
   let data: Record<string, unknown> = { areaId: editor.area.id, feature };
   if (geometry.type === "Point" && form.get("terrain") === "on") {
     kind = "putLandform";
@@ -151,7 +151,7 @@ function createFeature(world: World, editor: EditorState, feature: AtlasFeature,
   editor.commit.mutate(makeCommand(world, kind, data), {
     onSuccess: () => {
       editor.setDrawing(null);
-      editor.setSelected(kind === "putFeature" ? feature : null);
+      editor.setSelected(kind === "putMapFeature" ? feature : null);
       editor.setPanel("inspect");
     },
   });

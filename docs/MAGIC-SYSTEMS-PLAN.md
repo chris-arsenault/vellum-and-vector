@@ -26,8 +26,8 @@ corrections of 2026-10-25 recorded under Decisions.
 
 Non-goals: character-only magic (illusion, mind control), a universal spell editor, named
 setting lore from the reference game, and any backend or persistence
-([ADR 0003](adr/0003-frontend-session.md)). Regional refinement of magic belongs to the
-[regional refinement plan](REGIONAL-REFINEMENT-PLAN.md), subplan C.
+([ADR 0003](adr/0003-frontend-session.md)). Regional refinement of magic follows the
+[regional generation contract](generation-workflows.md#geographic-regional-refinement).
 
 ## Context and reuse map
 

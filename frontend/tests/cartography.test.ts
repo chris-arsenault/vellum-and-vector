@@ -2,6 +2,7 @@ import { expect, test } from "./uiTest";
 import {
   canvas,
   createWorld,
+  createArea,
   drag,
   exportMap,
   generate,
@@ -35,14 +36,12 @@ test("landscape and history choices survive generation and pass to a new child a
   await page.getByText("Land, climate, life & erosion controls", { exact: true }).click();
   await expect(page.getByLabel("Baseline temperature · °C", { exact: true })).toHaveValue("25");
   await expect(page.getByLabel("Detail level")).toHaveValue("draft");
-  await tool(page, "Draw region rectangle").click();
-  await drag(page, [260, 260], [450, 440]);
-  await page.getByLabel("Develop as").selectOption("site");
-  await page.getByLabel("Place name").fill("Warm child");
-  await page.getByRole("button", { name: "Create mapped area", exact: true }).click();
+  await createArea(page, "Warm child", [1000, 500, 3000, 1500]);
   await expect(page.locator(".breadcrumbs")).toContainText("Warm child");
-  await expect(page.getByLabel("Detail level")).toHaveValue("draft");
-  await expect(page.getByLabel("Baseline temperature · °C", { exact: true })).toHaveValue("25");
+  await page.getByRole("button", { name: "Refine this region", exact: true }).click();
+  await expect(page.getByLabel("Regional detail")).toHaveValue("draft");
+  await expect(page.getByLabel("Baseline temperature · °C", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("History starting point")).toHaveCount(0);
 });
 
 test("regions are drawn, adjusted and entered without coordinate entry", async ({ page }) => {
@@ -51,24 +50,28 @@ test("regions are drawn, adjusted and entered without coordinate entry", async (
   await page.keyboard.down("Space");
   await drag(page, [300, 300], [340, 340]);
   await page.keyboard.up("Space");
-  await expect(page.getByText(/Selected extent ·/)).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Selected outline" })).toHaveCount(0);
   await page.getByRole("button", { name: "Fit area", exact: true }).click();
-  await drag(page, [300, 300], [450, 440]);
-  await expect(page.getByText(/Selected extent ·/)).toBeVisible();
-  const before = await page.getByText(/Selected extent ·/).textContent();
-  await expect(tool(page, "Draw region rectangle")).not.toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "Adjust outline", exact: true }).click();
-  await drag(page, [450, 440], [480, 460]);
-  await expect(page.getByText(/Selected extent ·/)).not.toHaveText(before!);
-  await page.getByLabel("Develop as").selectOption("site");
-  await page.getByLabel("Place name").fill("River crossing");
-  await page.getByRole("button", { name: "Create mapped area", exact: true }).click();
+  await canvas(page).click({ position: { x: 300, y: 250 } });
+  await canvas(page).click({ position: { x: 650, y: 250 } });
+  await canvas(page).click({ position: { x: 650, y: 600 } });
+  await canvas(page).dblclick({ position: { x: 300, y: 600 } });
+  await expect(page.getByRole("heading", { name: "Selected outline" })).toBeVisible();
+  const before = await page.locator(".region-draft p").textContent();
+  await page.getByRole("button", { name: "Adjust selected outline", exact: true }).click();
+  await drag(page, [650, 600], [680, 620]);
+  await expect(page.locator(".region-draft p")).not.toHaveText(before!);
+  await page.getByLabel("Region name", { exact: false }).fill("River crossing");
+  await page.getByRole("button", { name: "Keep region", exact: true }).click();
   await expect(page.locator(".breadcrumbs")).toContainText("River crossing");
   const data = await exportMap(page),
-    site = data.areas.find((area: { profile: string }) => area.profile === "site");
-  expect(site.footprint.coordinates[0]).toHaveLength(5);
+    region = data.regions.find((region: { name: string }) => region.name === "River crossing");
+  expect(region.footprint.coordinates[0]).toHaveLength(5);
+  expect(data.areas).toHaveLength(1);
   await page.locator(".breadcrumbs button").first().click();
-  await canvas(page).dblclick({ position: { x: 360, y: 360 } });
+  await page.getByRole("button", { name: "Regions", exact: true }).click();
+  await page.getByRole("button", { name: "Pick region", exact: true }).click();
+  await canvas(page).click({ position: { x: 450, y: 450 } });
   await expect(page.locator(".breadcrumbs")).toContainText("River crossing");
 });
 

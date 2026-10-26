@@ -214,7 +214,9 @@ function registerViews(registry: IntentRegistry) {
         "Choose a saved view."
       );
       requireThat(
-        !snapshot.world.views.some((v) => v.region?.parentId === data.id || v.regionId === data.id),
+        !snapshot.world.views.some(
+          (v) => v.region?.parentId === data.id || v.regionId === data.id
+        ) && !Object.values(snapshot.world.areas).some((area) => area.regionId === data.id),
         "region_children",
         "Remove this region's children and saved map views before removing the region."
       );

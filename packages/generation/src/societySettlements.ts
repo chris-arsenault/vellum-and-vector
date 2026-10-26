@@ -1,4 +1,4 @@
-import { population, languageUse, type SocietyCommunity } from "@atlas/domain";
+import { population, languageUse, type SocietyCommunity, type SocietyRegion } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
 import { communityName } from "./societyNaming";
 import { nearestSample } from "./societySpatial";
@@ -24,7 +24,9 @@ export function startingPopulations(state: GenerationState, context: MapProcessC
 }
 
 export function contactPopulation(state: GenerationState) {
-  const region = state.society!.region;
+  return communityContacts(state.society!.region);
+}
+export function communityContacts(region: Pick<SocietyRegion, "communities" | "connections">) {
   const communities = new Map(region.communities.map((c) => [c.id, c]));
   const contact = new Map<string, number>();
   for (const route of region.connections) {

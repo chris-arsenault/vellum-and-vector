@@ -17,7 +17,7 @@ import { compactGroups } from "./societyGroups";
 
 export function initializePopulation(state: GenerationState, context: MapProcessContext) {
   const prior = societyAncestor(state);
-  const work = createSocietyGeography(state, context);
+  const work = createSocietyGeography(state, context, { retained: prior?.communities });
   const people = semanticId(state.domain.world.id, "people", "residents");
   state.domain.world.entities[people] ??= {
     id: people,
@@ -29,6 +29,8 @@ export function initializePopulation(state: GenerationState, context: MapProcess
   };
   if (prior) {
     inheritSociety(state, prior);
+    work.inherited = true;
+  } else if (state.domain.world.areas[state.domain.scope.areaId].parentId) {
     work.inherited = true;
   } else {
     // The rounds of earlier epochs are this society's earlier history.

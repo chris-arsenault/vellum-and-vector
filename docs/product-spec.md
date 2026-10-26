@@ -8,6 +8,15 @@ reload, and generation stops when the tab closes. [ADR 0003](adr/0003-frontend-s
 supersedes this document's backend, durable-job, recovery and service requirements
 for current work. Geographic authoring behavior remains the product direction.
 
+**Regional refinement and map authority — 2026-10-26:** Geographic regions can
+nest arbitrarily within the existing map type. Refinement elaborates retained
+terrain, drainage, living landscapes and society without replaying completed
+epochs or eras. Ordinary creative edits change linked two-dimensional map
+representations and surface overlays; they do not reconstruct the procedural
+world. This direction supersedes older requirements for physical consistency of
+every manual edit. Site, city-layout and interior development remain outside
+this regional flow.
+
 **Magic direction — clarified 2026-10-22, completed 2026-10-25:** the seven
 magic systems (Fire, Aurora, Pressure, Greenwood, Salt, Hallowed, Veil) are
 first-class world effects and processes with distinct physical motivations.
@@ -41,7 +50,7 @@ The product draws heavily on _The Canonry Game_'s deterministic, causal, multi-e
 
 **Core product rule:** A finished world map, from a continent map to a tavern floor plan, must have a traceable geographic parent and a resolvable world location. Only _templates_ may be authored independently of a world.
 
-**Core generation rule:** Child maps inherit constraints and boundary conditions, not an obligation to clone their parent's geometry. Users may reshape the interior freely where those constraints and physical laws permit. Established map-boundary interfaces remain locked during ordinary editing.
+**Core generation rule:** Regional maps elaborate inherited geography and retain meaningful connections. Direct map editing preserves spatial identity and shared two-dimensional anchors without requiring edited drawings to satisfy the simulation's numerical boundary conditions.
 
 **Core historical rule:** Generation may model the world's past at multiple scales. Once generation completes, history is fixed; normal editing changes the present, not the past.
 
@@ -65,7 +74,7 @@ The requirements and invariants below supersede architectural suggestions from e
 - Leave large parts of the world ungenerated or under-detailed indefinitely.
 - Support procedural generation at most levels and direct editing at all appropriate levels. The balance should shift toward manual creation at small scales.
 - Preserve Canonry's causal geography and the seven distinct magic systems, including historical effects and system-specific creator controls.
-- Make physical consistency the default. Traits and inherited constraints limit refinement; exceptions must have explicit authored or supernatural causes.
+- Make procedural geography physically plausible. Traits and inherited context guide generation; direct map drawings do not require inverse physical reconstruction.
 - Support political, cultural, and arbitrary future GIS overlays, with independent generation and editing capabilities.
 - Support reusable standalone **templates**, later inserted into geographically anchored maps.
 - Provide a persistent backend/domain model usable by both UI actions and agents.
@@ -79,7 +88,7 @@ The requirements and invariants below supersede architectural suggestions from e
 4. **Authorial intent outranks procedure.** Procedural systems respect explicitly authored, protected facts and declared exceptions.
 5. **Strong location identity.** Every committed world map and spatial feature resolves into the world's spatial reference, including indoor and vertical positions.
 6. **A layer is not a map.** World-level layers are observed through different map extents, scales, filters, and styles.
-7. **One editing semantics.** Direct tools, procedural jobs, and agents create the same domain operations with validation, preview, history, and undo where applicable.
+7. **Shared identity and history.** Direct map tools and procedural jobs use shared domain operations and undo while validating the representation each operation changes.
 8. **Dependencies are explicit.** A change identifies what it invalidates and what requires reconciliation; no unannounced large-area rewriting.
 9. **Cost follows requested detail.** Fine generation should only occur where explicitly materialized, not over the entire planet by default.
 10. **Do not build a civilization simulator by accident.** Political and cultural generation can be staged and historically causal without implementing Canonry's entire gameplay runtime.
@@ -138,6 +147,10 @@ Two distinctions are especially important:
 
 These are **defaults**, not strict size bands. A cave network may be geographically large; a small island may fit in a Local map. A site can have multiple subspaces and floors without inventing a sixth generic recursion level. A world may add more domain-specific profiles later, but profile count remains bounded and intentionally designed.
 
+This table retains the broader design baseline. Current geographic refinement uses
+World and recursively nested Region maps. It does not advance through this table
+or switch to another map type when a selected region becomes small.
+
 ### 4.2 Hierarchy invariants — accepted/baseline
 
 - A committed mapped area has exactly one geographic parent (except the World root), a creation profile, a geographic footprint or anchor, and a resolvable world transform.
@@ -195,8 +208,32 @@ as their subject. Selection frames the map and shows region outlines while reads
 continue to use the source map. Cartographic presentation consumes the selected
 identity, footprint and ancestor path; it owns illustration, clipping, typography
 and sheet layout. Explicit local Save map retains committed regions and view
-references, and GIS exports include region metadata. Regional terrain refinement
-and changes to map-editing authority remain separate work.
+references, and GIS exports include region metadata.
+
+### 4.6 Refine a selected geographic region
+
+An explicit Refine action links a finer mapped area to the existing region
+subject. The subject retains its original source and hierarchy; its nearest
+refined ancestor supplies procedural context. A child remains a geographic map
+at every nesting depth. Its resolution follows the requested detail, inherited
+sampling and useful footprint rather than a named administrative rank.
+
+Regional setup offers detail, seed and inherited magic/people choices. It does
+not offer another physical or human history. Parent terrain must exist before
+detail generation; selection and cartographic framing remain usable without it.
+Returning from setup or cancelling a job retains the selected subject. Completed
+regional output arrives through the existing worker and undoable publication.
+
+Terrain and water develop locally while major corridors, crossing identities and
+parent geography remain recognizable. Climate responds to finer relief; habitats
+and existing magical landscapes follow their own media without creating another
+history or renewing inherited material stocks. Known settlements retain their
+seats; unresolved local residents can become mapped towns where a finer site
+exists. This is allocation of existing people, not another settlement era.
+Routes retain their historical wear, shipping, highway and door meanings.
+
+Finer features and fields appear on their regional map and descendants. Returning
+to a parent map retains its own feature space, regardless of zoom.
 
 ---
 
@@ -400,12 +437,12 @@ initial-generation features refresh the registry; incomplete delivery is marked.
 
 ### 8.1 Trait classes
 
-| Class                  | Meaning                                                              | Examples                                                              |
-| ---------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| **Hard constraint**    | Enforced generation/edit bound unless an authorized exception exists | Maximum relief, frozen river crossing, coastal outlet requirement     |
-| **Soft tendency**      | Shapes likelihood/strength; not an invariant                         | Forested, volcanically active, river-rich                             |
-| **Derived trait**      | Computed from generated or authored data                             | Glaciated, densely inhabited, drought-prone                           |
-| **Exception/override** | Explicit reason to violate an inherited/default constraint           | Fire-heated refuge within a cold region, maintained ice-free crossing |
+| Class                  | Meaning                                                         | Examples                                                              |
+| ---------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------- |
+| **Hard constraint**    | Enforced procedural bound unless an authorized exception exists | Maximum relief, frozen river crossing, coastal outlet requirement     |
+| **Soft tendency**      | Shapes likelihood/strength; not an invariant                    | Forested, volcanically active, river-rich                             |
+| **Derived trait**      | Computed from generated or authored data                        | Glaciated, densely inhabited, drought-prone                           |
+| **Exception/override** | Explicit reason to violate an inherited/default constraint      | Fire-heated refuge within a cold region, maintained ice-free crossing |
 
 Traits should be typed, parameterizable, and scale-aware. A coarse `flat` constraint generally means a bound on regional relief/grade, not mathematically zero micro-relief at interior scale. `Cold` implies a climate envelope with permissible local variation, not identical temperature everywhere.
 
@@ -423,6 +460,11 @@ The default is **physical plausibility**, not absolute realism. Check topology, 
 
 Example: a river may meander or branch internally but must satisfy its required inlet/outlet elevations, network continuity, and water budget unless an authored magical mechanism explicitly changes them.
 
+These physical checks govern procedural results and specialized physical edits.
+Ordinary map edits validate geometry, location, identity and references. A drawn
+river bend or painted elevation does not need to reconstruct a feasible water
+budget, climate or society underneath it.
+
 ---
 
 ## 9. Boundary contracts and successive refinement
@@ -431,7 +473,11 @@ Example: a river may meander or branch internally but must satisfy its required 
 
 A child map must be generatable and editable without requiring the whole world to be regenerated. Establish **stable boundary conditions for each mapped area**, derived from its parent and neighboring authoritative features. These are **generation interfaces**, not physical walls or necessarily political borders.
 
-Boundary contracts are **immutable during ordinary local generation and editing**. They may change only through an explicit higher-impact operation that reports required reconciliation. This is an accepted product simplification for the initial implementation.
+Procedural refinement retains its inherited interfaces. Ordinary map editing
+keeps shared two-dimensional junctions and region crossings attached, but does
+not enforce frozen field samples, river elevations or discharge profiles against
+the drawing. Specialized physical reconciliation remains separate from ordinary
+creative work.
 
 ### 9.2 Initial boundary contract contents
 
@@ -449,14 +495,14 @@ For continuous fields, a boundary may require a profile/gradient or neighboring 
 
 ### 9.3 Refinement contract — normative behavior
 
-1. **Select:** User chooses parent, extent, and creation profile.
-2. **Resolve:** System gathers effective traits, relevant parent features, historical forcing, available layer data, and neighboring conditions.
-3. **Contract:** Establish a versioned boundary contract with crossing anchors and fixed environmental conditions.
-4. **Choose:** User selects generation domains, detail quality, manual/blank/template mode, and any lawful local specializations.
-5. **Generate or author:** Interior detail is created with deterministic inputs and source provenance. The area may remain mostly blank.
-6. **Validate:** Check inherited hard constraints, crossing topology, feature identity, hydrology, permitted exceptions, and protected authored content.
-7. **Commit:** Publish a coherent new area snapshot/transaction. Derived parent-scale presentation updates without creating competing semantic features.
-8. **Continue:** Later edits and regenerations use the same constraints and preserve protected work.
+1. **Select:** Choose a geographic subject and outline within its parent.
+2. **Resolve:** Gather the nearest inherited fields, drainage, landmarks, society and completed history.
+3. **Connect:** Retain crossing identities, geographic corridors and external water supply.
+4. **Choose:** Select regional detail, seed and applicable domains.
+5. **Refine:** Construct unresolved geography without advancing time.
+6. **Validate:** Check geographic scope, physical products, identity, connectivity and authored protection.
+7. **Publish:** Install the finer map as one coherent regional operation; preserve its source map and existing drawings.
+8. **Author:** Edit mapped representations directly with independent history and undo.
 
 ### 9.4 Allowed and disallowed examples
 
@@ -476,6 +522,36 @@ For continuous fields, a boundary may require a profile/gradient or neighboring 
 - Explicit boundary modification must identify impacted siblings, parents, connected features, and layers before commit.
 - Feature relations such as “political border follows river” should bind to river geometry/identity, not duplicate an unrelated approximate polyline.
 - Region creation boundaries can be arbitrary geographic polygons. A continuous river/forest/culture can cross them even though generation responsibility is partitioned.
+
+### 9.6 Direct mapped authoring
+
+Ordinary drawing, moving, reshaping and painting write map-only representations
+or sampled overlays. Existing procedural geometry, terrain arrays, drainage,
+material records and society remain context for generation. Shared feature IDs
+and references link those records to the drawings. Moving a town symbol also
+moves its attached mapped route endpoints in the same operation.
+
+Reads, selection, rendering and GIS downloads compose mapped geometry. Surface
+overlays stay scoped to their map; a child drawing does not appear on its parent,
+and later parent painting preserves existing child detail. Undo restores each
+mapped operation together. Local saves retain these representations and overlays.
+
+Generation excludes map-only edits from its inputs and retains their drawings at
+publication. Replaced fine procedural representations remain available underneath
+their drawings. Removing a feature from a map hides that representation and
+retains its source; existing finer drawings keep their precedence.
+
+Structural drawings restrict automatic geographic generation to untouched
+geography. A request that intersects an edited feature's original or current
+local geometry, surrounding footprint, or a painted surface patch is blocked
+in that located space, with the drawing and owning map identified. Moving a town
+includes its attached mapped routes. New drawings protect their current geometry;
+removing generated geography protects its former location. Names and visual
+styles do not impose this restriction. Existing children remain usable, and
+untouched children or neighboring regions can still refine from their original
+procedural context. Undo restores both the drawing and its generation eligibility;
+restoring a feature's original structural drawing also removes its restriction.
+No whole-region freeze or inverse simulation follows from a local edit.
 
 ---
 

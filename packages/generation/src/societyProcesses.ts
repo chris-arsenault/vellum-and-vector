@@ -10,6 +10,7 @@ import { applyPresentWorks } from "./societyWorks";
 import { refreshSocietyEnvironment } from "./societyEnvironment";
 import { societyEvolution } from "./societyEvolution";
 import { humanRoundProcess, presentHumanEras, resolvedHumanEras } from "./societyRound";
+import { realizeRegionalPlaces } from "./regionalSociety";
 
 function validatePopulation(state: GenerationState): Diagnostic[] {
   const communities = state.society?.region.communities ?? [];
@@ -109,8 +110,14 @@ export const societyPresent: MapProcess = {
     kind: "extract",
     extract(state, context) {
       if (!state.society!.inherited) return;
-      applyPresentWorks(state);
-      refreshSocietyEnvironment(state, context, 0);
+      if (state.domain.world.areas[state.domain.scope.areaId].parentId) {
+        applyPresentWorks(state);
+        refreshSocietyEnvironment(state, context, 0);
+        realizeRegionalPlaces(state);
+      } else {
+        applyPresentWorks(state);
+        refreshSocietyEnvironment(state, context, 0);
+      }
     },
   },
   validate: () => [],
@@ -122,7 +129,9 @@ const invoke = (process: MapProcess) => ({
   process: process.contract.id,
   version: process.contract.version,
 });
-export function societySequence(input: AtlasGenerationInput): ProcessSequence {
+export function societySequence(input: AtlasGenerationInput, regional = false): ProcessSequence {
+  if (regional)
+    return [invoke(populationInitialize), invoke(societyPresent), invoke(populationPublish)];
   // Eras bound to an earlier epoch ran as rounds inside it; the present runs the rest,
   // with their bindings resolved to the epochs that exist. Without the physical domain no
   // epoch is replayed, so every era runs with the present rather than vanishing.

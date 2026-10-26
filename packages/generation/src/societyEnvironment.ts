@@ -33,6 +33,8 @@ import { irrigateChannels } from "./societyWaterUse";
 import { workSamples } from "./societyWorks";
 import { damCandidateCell } from "./societyDemand";
 import { isWorldSociety } from "./societyMapScope";
+import { regionalIncomingWater } from "./canonry/regionalCorridors";
+import { refreshRegionalInfluence } from "./canonry/regionalMagic";
 
 function synchronizeNative(state: GenerationState) {
   for (const name of state.society!.changed) {
@@ -85,16 +87,19 @@ function refreshWater(state: GenerationState, context: MapProcessContext) {
       .flatMap((w) => workSamples(state, w).map(({ i }) => work.samples[i]))
   );
   // Repair present dependencies only. No tectonic motion, incision epochs or new geological events.
+  const incoming = state.domain.world.areas[state.domain.scope.areaId].parentId
+    ? regionalIncomingWater(state)
+    : undefined;
   for (const operation of [
     oceanConnectivity,
     bathymetry,
     oceanDistance,
     oceanCurrents,
     drainageConditioning,
-    lakeBasins,
+    (map: PhysicalField) => lakeBasins(map, c, incoming),
     drainageGuidance,
     flowRouting,
-    riverNetwork,
+    (map: PhysicalField) => riverNetwork(map, c, incoming),
     riverChannelGeometry,
   ])
     operation(work.map, c);
@@ -254,12 +259,13 @@ function ensureEnvironmentalWorkspace(
  * The generated river, lake, ecology and magic features of this area that nothing else
  * holds onto are dropped before the surface is extracted again after people acted.
  */
-function dropReplaceableFeatures(state: GenerationState) {
+export function dropReplaceableFeatures(state: GenerationState) {
   const world = state.domain.world,
     area = state.domain.scope.areaId;
   const previous = Object.values(world.features).filter(
     (f) =>
       f.areaId === area &&
+      f.kind !== "landmark" &&
       ["rivers", "lakes", "ecology", "magic"].includes(f.layerId) &&
       f.state === "generated" &&
       !f.protected &&
@@ -317,6 +323,13 @@ function refreshMagicPathways(
     else restorePresentMagic(state);
   }
   const seed = bound.seed;
+  if (state.domain.world.areas[state.domain.scope.areaId].parentId) {
+    refreshRegionalInfluence(state, seed);
+    classifyMagicFeatures(state, seed);
+    projectMagic(state);
+    state.society!.magicTouched?.clear();
+    return;
+  }
   repropagateMovedMedia(state, seed, oceanChanged);
   // The society phase: systems made of what people did, and systems whose stocks people
   // drew or deposited this cycle (cracked cores at a forge, planted seed, cleared sap).

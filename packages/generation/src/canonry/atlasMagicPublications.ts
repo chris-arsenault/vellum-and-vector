@@ -88,6 +88,15 @@ function systemPublications(
 ): PublicationDefinition[] {
   const publish = configured && system.enabled;
   return [
+    ...system.origins.map((origin) =>
+      tools.field(
+        `magic:${system.id}:origin:${origin.id}:source`,
+        "relative-intensity",
+        "magic",
+        publish,
+        owners
+      )
+    ),
     ...publishedMagicChannels.map((channel) =>
       configuredChannel(system.id, channel, publish, tools)
     ),

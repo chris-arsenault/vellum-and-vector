@@ -1,5 +1,9 @@
 import { useRef, useState, type SetStateAction } from "react";
-import { defaultCartographicPresentation, type CartographicPresentation } from "@atlas/domain";
+import {
+  defaultCartographicPresentation,
+  regionSourceAreaId,
+  type CartographicPresentation,
+} from "@atlas/domain";
 import type { LayerStyle, RasterPresentation, World } from "./types";
 import { makeCommand, useCommit } from "./useAtlas";
 import { defaultDrawnStyles } from "./drawnStyles";
@@ -21,9 +25,10 @@ export function useComposition(world: World, scope: Scope) {
   const [draft, setDraft] = useState(defaultCartographicPresentation);
   const commit = useCommit(world.id);
   const rasterStyles = useRef<LayerStyle[] | null>(null);
+  const sourceAreaId = regionSourceAreaId(world, scope.selectedRegionId, scope.areaId);
   const current = world.views.find(
     (v) =>
-      v.id === id && v.areaId === scope.areaId && (v.regionId ?? null) === scope.selectedRegionId
+      v.id === id && v.areaId === sourceAreaId && (v.regionId ?? null) === scope.selectedRegionId
   );
   const cartography = current ? (current.cartography ?? legacyPresentation) : draft;
   const layers = current?.layers ?? scope.savedStyles;
@@ -35,7 +40,7 @@ export function useComposition(world: World, scope: Scope) {
       makeCommand(world, "putView", {
         id: viewId,
         name,
-        areaId: scope.areaId,
+        areaId: sourceAreaId,
         layers: styleChange(value),
         raster: scope.rasterView,
         ...(scope.selectedRegionId ? { regionId: scope.selectedRegionId } : {}),

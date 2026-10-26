@@ -109,7 +109,7 @@ function normalize(snapshot: DomainSnapshot, command: Command): Record<string, u
         },
       },
     };
-  if (command.kind === "sculptField") {
+  if (["sculptField", "paintMapField"].includes(command.kind)) {
     return normalizeBrush(snapshot, area.id, data);
   }
   return data;

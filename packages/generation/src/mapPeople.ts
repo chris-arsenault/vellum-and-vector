@@ -109,6 +109,10 @@ export const culturalProcess: MapProcess = {
   behavior: {
     kind: "extract",
     extract(state, context) {
+      if (state.society?.inherited) {
+        publishCultures(state);
+        return;
+      }
       const standalone = !state.society;
       initializeCultures(state, context);
       const eras = context.inputs?.features
@@ -153,6 +157,10 @@ export const politicalProcess: MapProcess = {
   behavior: {
     kind: "extract",
     extract(state, context) {
+      if (state.society?.inherited) {
+        if (state.society.region.politics) publishPolitics(state);
+        return;
+      }
       const standalone = !state.society?.region.politics;
       initializePolitics(state, context);
       if (standalone) {

@@ -53,6 +53,7 @@ export const layerInputSchema = z.object({
 });
 export const createAreaSchema = z.object({
   id: uuid,
+  regionId: uuid.optional(),
   parentId: uuid,
   name: identifier,
   profile: z.enum(profiles),

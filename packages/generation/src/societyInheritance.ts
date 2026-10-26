@@ -11,6 +11,7 @@ import { refreshSocietyConnections, refreshSocietySupport } from "./societyGeogr
 import { territoryShape } from "./societyPoliticalPublication";
 import { inheritSocietyDrainage } from "./societyDrainage";
 import { realizeDemands } from "./societyDemand";
+import { localTownAllocations } from "./regionalSociety";
 
 export function societyAncestor(state: GenerationState) {
   const world = state.domain.world;
@@ -43,9 +44,10 @@ function refineSociety(state: GenerationState, prior: SocietyRegion) {
     region = work.region;
   retainSocietyFootprints(state);
   const heirs = new Map<string, Heir[]>();
+  const local = localTownAllocations(prior.communities, prior.connections);
   for (const origin of prior.communities) {
     if (!origin.footprint || spatial.area(origin.footprint) <= 0) continue;
-    heirs.set(origin.id, inheritOrigin(region, origin));
+    heirs.set(origin.id, inheritOrigin(region, origin, local.get(origin.id) ?? 0));
   }
   region.history = structuredClone(prior.history);
   region.works = inheritWorks(state, prior, heirs);
@@ -61,6 +63,7 @@ function refineSociety(state: GenerationState, prior: SocietyRegion) {
     prior.magic.filter((p) => region.communities.some((c) => c.id === p.communityId))
   );
   inheritPolitics(region, prior);
+  region.connections = structuredClone(prior.connections);
   refreshSocietyConnections(state);
   realizeDemands(state);
 }
@@ -72,7 +75,7 @@ interface Heir {
  * Each community whose footprint overlaps the origin's inherits people by the share of the
  * origin's country it holds; the one holding the origin's seat carries its identity.
  */
-function inheritOrigin(region: SocietyRegion, origin: SocietyCommunity): Heir[] {
+function inheritOrigin(region: SocietyRegion, origin: SocietyCommunity, latent: number): Heir[] {
   const area = spatial.area(origin.footprint!),
     home = region.communities.find(
       (c) => c.footprint && spatial.pointCoverage(c.footprint)(origin.position)
@@ -93,6 +96,7 @@ function inheritOrigin(region: SocietyRegion, origin: SocietyCommunity): Heir[] 
       `Inherited ${(fraction * 100).toFixed(2)}% of ${origin.name}; completed history retained.`
     );
     c.parentCommunity = origin.id;
+    c.latentSettlementPopulation = (c.latentSettlementPopulation ?? 0) + latent * share;
     c.protected ||= origin.protected;
     if (c === home) carryIdentity(c, origin);
   }
@@ -148,6 +152,7 @@ function carryIdentity(c: SocietyCommunity, origin: SocietyCommunity) {
   c.settlement = structuredClone(origin.settlement);
   c.history = structuredClone(origin.history);
   c.naming = structuredClone(origin.naming);
+  c.site = structuredClone(origin.site);
 }
 function inheritPolitics(region: SocietyRegion, prior: SocietyRegion) {
   if (!prior.politics) return;

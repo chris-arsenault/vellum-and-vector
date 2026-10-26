@@ -132,9 +132,9 @@ function markLake(
     map.LakeOverflow[outlet.member] = lake.overflow;
   }
 }
-export function lakeBasins(map: PhysicalField, c: PhysicalContext) {
+export function lakeBasins(map: PhysicalField, c: PhysicalContext, incoming?: Float64Array) {
   clearLakes(map);
-  const water = contributingWater(map),
+  const water = contributingWater(map, incoming),
     mask = new Uint8Array(map.mesh.count),
     marks = new Int32Array(map.mesh.count);
   for (let i = 0; i < mask.length; i++)

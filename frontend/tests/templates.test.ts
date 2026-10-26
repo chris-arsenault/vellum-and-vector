@@ -1,11 +1,17 @@
 import { expect, test } from "./uiTest";
-import { canvas, createArea, createWorld, installGenerationFixture, pageErrors } from "./harness";
+import {
+  canvas,
+  createPrototypeSite,
+  createWorld,
+  installGenerationFixture,
+  pageErrors,
+} from "./harness";
 
 test("a reusable template is drawn, saved and placed as a new area", async ({ page }) => {
   const errors = pageErrors(page);
   await installGenerationFixture(page);
   await createWorld(page, "Template atlas", { km: 10 });
-  await createArea(page, "Harbor", "site", [2000, 2000, 3000, 3000]);
+  await createPrototypeSite(page, "Harbor", [2000, 2000, 3000, 3000]);
   await page.getByRole("button", { name: "Library", exact: true }).click();
   const template = page.getByRole("img", { name: "Template room drawing canvas" });
   const box = (await template.boundingBox())!;

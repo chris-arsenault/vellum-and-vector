@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "./uiTest";
 import { installGenerationFixture } from "./generationFixture";
 import { tuneGeneration, sharedHistory } from "./generationSetup";
+import { createArea } from "./harness";
 
 const steps = (page: Page) => page.getByRole("navigation", { name: "Generation steps" });
 const stage = (page: Page, name: RegExp) => steps(page).getByRole("button", { name });
@@ -16,45 +17,9 @@ async function configureFirstHistory(page: Page) {
   await page.getByLabel(/Seasonal climate contrast/).fill("0.7");
 }
 
-async function rejectInheritedJsonChanges(page: Page) {
-  await page.getByText("Advanced JSON configuration", { exact: true }).click();
-  const field = page.getByLabel("Generation configuration", { exact: true });
-  const original = await field.inputValue();
-  for (const change of ["clock", "systems"]) {
-    const recipe = JSON.parse(original);
-    if (change === "clock")
-      recipe.features["physical.lifecycle"].configuration.epochs[0].duration++;
-    else recipe.features["magic.configured"].configuration.magicSystems[0].strength++;
-    const submitted = JSON.stringify(recipe);
-    await field.fill(submitted);
-    await page.getByRole("button", { name: "Apply configuration", exact: true }).click();
-    await expect(page.locator(".setup-json")).toContainText(
-      "Inherited and completed history stays fixed"
-    );
-    await expect(field).toHaveValue(submitted);
-    await expect(page.getByRole("button", { name: "Generate region", exact: true })).toBeDisabled();
-    await page.getByRole("button", { name: "Discard JSON edits", exact: true }).click();
-    await expect(field).toHaveValue(original);
-    await expect(page.getByRole("button", { name: "Generate region", exact: true })).toBeEnabled();
-  }
-}
-
 async function createProceduralRegion(page: Page) {
-  await page
-    .getByRole("toolbar")
-    .getByRole("button", { name: "Draw region rectangle", exact: true })
-    .click();
-  const panel = page.locator(".right-panel");
-  await panel.getByLabel("Develop as").selectOption("region");
-  await panel.getByLabel("Place name", { exact: true }).fill("New region");
-  await panel.getByLabel("Starting point").selectOption("procedural");
-  await panel.getByText("Enter a precise extent", { exact: true }).click();
-  await panel.getByLabel("East · m", { exact: true }).fill("10000");
-  await panel.getByLabel("North · m", { exact: true }).fill("10000");
-  await panel.getByLabel("Width · m", { exact: true }).fill("20000");
-  await panel.getByLabel("Height · m", { exact: true }).fill("20000");
-  await page.getByRole("button", { name: "Use entered extent", exact: true }).click();
-  await page.getByRole("button", { name: "Create mapped area", exact: true }).click();
+  await createArea(page, "New region", [10000, 10000, 30000, 30000]);
+  await page.getByRole("button", { name: "Refine this region", exact: true }).click();
 }
 
 test("configures a first world, preserves choices, explains dependencies and sends the reviewed request", async ({
@@ -119,6 +84,8 @@ test("procedural refinement configures a new region with fixed parent history", 
   await installGenerationFixture(page, { fields: true });
   await page.goto("/");
   await page.getByLabel("World name").fill("Regional atlas");
+  await page.getByLabel("Width · km").fill("100");
+  await page.getByLabel("Height · km").fill("100");
   await page.getByRole("radio", { name: "Blank world", exact: true }).check();
   await page.getByRole("button", { name: "Create world", exact: true }).click();
   await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
@@ -129,39 +96,23 @@ test("procedural refinement configures a new region with fixed parent history", 
         .generationFixtureInput
   );
   await createProceduralRegion(page);
-  const dialog = page.getByRole("dialog", { name: "Generate region", exact: true });
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel("Mapped area", { exact: true })).toHaveValue("New region");
-  await expect(dialog).toContainText("Regional atlas");
-  await expect(dialog).toContainText("locked crossings");
-  await expect(dialog.getByLabel("History starting point")).toHaveCount(0);
-  await dialog.getByLabel("Detail level").selectOption("draft");
-  await expect(stage(page, /Land$/)).toHaveCount(0);
-  await stage(page, /Landscape$/).click();
-  await expect(dialog.getByLabel("Terrain", { exact: true })).toHaveCount(0);
-  await expect(dialog.getByLabel("Living landscape", { exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Next", exact: true }).click();
-  await expect(stage(page, /Magic$/)).toHaveAttribute("aria-current", "step");
-  await expect(dialog.getByLabel("Include Fire", { exact: true })).toBeDisabled();
-  await expect(dialog.getByLabel("Thermal reach", { exact: true })).toBeDisabled();
-  await tuneGeneration(page, "Impact geography");
-  await expect(
-    dialog.getByRole("checkbox", { name: "Impact geography", exact: true })
-  ).toBeVisible();
-  await expect(
-    dialog.getByRole("checkbox", { name: "Impact geography", exact: true })
-  ).toBeDisabled();
-  await tuneGeneration(page, "Continental foundation");
-  await expect(dialog.getByLabel("Continental assemblies · count", { exact: true })).toBeDisabled();
-  await page.screenshot({ path: "test-results/artifacts/m3-region-desktop.png" });
+  const panel = page.locator(".regional-generation");
+  await expect(panel.getByRole("heading", { name: "New region" })).toBeVisible();
+  await expect(panel).toContainText("Regional atlas");
+  await expect(panel.getByLabel("History starting point")).toHaveCount(0);
+  await panel.getByLabel("Regional detail").selectOption("draft");
+  await expect(steps(page)).toHaveCount(0);
+  await expect(panel).toContainText("no new settlement era");
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(dialog.locator(".setup-actions")).toBeInViewport();
-  await page.screenshot({ path: "test-results/artifacts/m3-region-narrow.png" });
+  await panel
+    .getByRole("button", { name: "Generate regional detail", exact: true })
+    .scrollIntoViewIfNeeded();
+  await expect(
+    panel.getByRole("button", { name: "Generate regional detail", exact: true })
+  ).toBeInViewport();
   await page.setViewportSize({ width: 1500, height: 1000 });
-  await stage(page, /Review & generate/).click();
-  await rejectInheritedJsonChanges(page);
   await expect(page.locator(".job-row")).toHaveCount(1);
-  await dialog.getByRole("button", { name: "Generate region", exact: true }).click();
+  await panel.getByRole("button", { name: "Generate regional detail", exact: true }).click();
   await expect(page.locator(".job-row")).toHaveCount(2);
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
   const child = await page.evaluate(
@@ -173,18 +124,20 @@ test("procedural refinement configures a new region with fixed parent history", 
   expect(child.areaId).not.toBe(parent.areaId);
 });
 
-test("Escape cancels regional setup without starting generation or deleting the created area", async ({
+test("returns from regional setup without starting generation or deleting the created area", async ({
   page,
 }) => {
   await installGenerationFixture(page);
   await page.goto("/");
   await page.getByLabel("World name").fill("Regional cancellation");
+  await page.getByLabel("Width · km").fill("100");
+  await page.getByLabel("Height · km").fill("100");
   await page.getByRole("radio", { name: "Blank world", exact: true }).check();
   await page.getByRole("button", { name: "Create world", exact: true }).click();
   await createProceduralRegion(page);
-  await expect(page.getByRole("dialog", { name: "Generate region", exact: true })).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog", { name: "Generate region", exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Regional detail")).toBeVisible();
+  await page.getByRole("button", { name: "Return to region", exact: true }).click();
+  await expect(page.getByLabel("Regional detail")).toHaveCount(0);
   await expect(page.locator(".right-panel h2")).toHaveText("New region");
   await expect(page.locator(".breadcrumbs")).toContainText("New region");
   await expect(page.locator(".job-row")).toHaveCount(0);

@@ -1,9 +1,9 @@
 import { expect, test, type Page } from "./uiTest";
+import { createArea } from "./harness";
 
 test("world registry finds a finer place and opens its compatible map", async ({ page }) => {
   await createBlank(page);
   await region(page);
-  await page.getByRole("button", { name: "Edit this map by hand", exact: true }).click();
   await page
     .getByRole("toolbar", { name: "Map tools" })
     .getByRole("button", { name: "Place point", exact: true })
@@ -57,21 +57,5 @@ async function createBlank(page: Page) {
   await page.getByRole("button", { name: "Create world", exact: true }).click();
 }
 async function region(page: Page) {
-  await page
-    .getByRole("toolbar")
-    .getByRole("button", { name: "Draw region rectangle", exact: true })
-    .click();
-  await page.getByLabel("Develop as").selectOption("region");
-  await page.getByLabel("Place name", { exact: true }).fill("River region");
-  await page.getByText("Enter a precise extent", { exact: true }).click();
-  for (const [name, value] of [
-    ["East · m", "100"],
-    ["North · m", "100"],
-    ["Width · m", "500"],
-    ["Height · m", "500"],
-  ])
-    await page.getByLabel(name, { exact: true }).fill(value);
-  await page.getByRole("button", { name: "Use entered extent", exact: true }).click();
-  await page.getByRole("button", { name: "Create mapped area", exact: true }).click();
-  await expect(page.locator(".breadcrumbs")).toContainText("River region");
+  await createArea(page, "River region", [100, 100, 600, 600]);
 }

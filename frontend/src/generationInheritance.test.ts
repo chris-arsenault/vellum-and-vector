@@ -35,11 +35,31 @@ it("inherits impact history and fixed geography from supplied parent cells with 
   const prepared = prepareAtlasGeneration(domain, {
     ...input,
     areaId,
+    domains: ["physical", "magic", "built", "cultural", "political"],
     features: { "physical.impacts": { enabled: false } },
   });
   expect(
     sequenceStages(prepared.input.configuration!.sequence).map((stage) => stage.invocation?.process)
   ).not.toContain("canonry.impact-cratering");
+  expect(prepared.input.configuration!.sequence.some((step) => step.kind === "epochs")).toBe(false);
+  expect(prepared.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
   expect(state.domain.world.epochs).toEqual(before.world.epochs);
   expect(parent).toEqual(before);
+});
+
+it("explains missing parent geography without scheduling child geological history", () => {
+  const { source, input } = constructedWorld(),
+    areaId = crypto.randomUUID();
+  source.world.areas[areaId] = {
+    ...source.world.areas[input.areaId],
+    id: areaId,
+    parentId: input.areaId,
+    profile: "region",
+    footprint: rectangle([2200, 100, 3800, 900]),
+  };
+  const prepared = prepareAtlasGeneration(source, { ...input, areaId });
+  expect(prepared.diagnostics).toContainEqual(
+    expect.objectContaining({ code: "regional_parent", severity: "error" })
+  );
+  expect(prepared.input.configuration!.sequence.some((step) => step.kind === "epochs")).toBe(false);
 });

@@ -1,6 +1,6 @@
 import type { Area, State, World } from "./model";
 import { profiles } from "./model";
-import { areaSpace } from "./composition";
+import { areaSpace, isDescendant } from "./composition";
 import { Spatial } from "./spatial";
 import { requireThat } from "./errors";
 
@@ -50,6 +50,11 @@ export function validateCoverage(
   if (coverage.state === "unmaterialized") return;
   for (const other of existing) {
     if (!competing(coverage, other)) continue;
+    if (
+      isDescendant(world.areas, coverage.areaId, other.areaId) ||
+      isDescendant(world.areas, other.areaId, coverage.areaId)
+    )
+      continue;
     const overlap = gis.intersection(coverage.footprint, other.footprint);
     requireThat(
       overlap === null || gis.area(overlap) === 0,

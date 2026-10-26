@@ -9,6 +9,7 @@ export * from "./atlasWorkflow";
 export * from "./atlasPublication";
 export * from "./generationPreview";
 export * from "./resolution";
+export { regionalResolution } from "./regionalInputs";
 export * from "./atlasParameters";
 export { migrateBoundarySelection, inheritMapBoundary } from "./worldBoundary";
 export * from "./processCatalogue";

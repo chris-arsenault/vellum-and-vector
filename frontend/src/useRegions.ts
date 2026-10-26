@@ -8,6 +8,9 @@ import {
   snapRegionCut,
   spatial,
   usefulRegionSize,
+  refinedRegionArea,
+  regionRefinementInput,
+  regionSourceAreaId,
   type Bounds,
   type RegionCandidate,
 } from "@atlas/domain";
@@ -71,18 +74,19 @@ function useRegionDraft() {
 }
 type Draft = ReturnType<typeof useRegionDraft>;
 function regionContext(o: Options, d: Draft) {
-  const regions = regionViews(o.world, o.areaId);
+  const sourceAreaId = regionSourceAreaId(o.world, o.selectedRegionId, o.areaId);
+  const regions = regionViews(o.world, sourceAreaId);
   const region = regions.find((r) => r.id === o.selectedRegionId) ?? null;
   const parentId = d.editingId ? (region?.region.parentId ?? null) : (region?.id ?? null);
-  const footprint = regionFootprint(o.world, o.areaId, region?.id ?? null);
-  const parent = regionFootprint(o.world, o.areaId, parentId);
+  const footprint = regionFootprint(o.world, sourceAreaId, region?.id ?? null);
+  const parent = regionFootprint(o.world, sourceAreaId, parentId);
   const viewport = (o.viewport as Bounds | null) ?? spatial.bounds(footprint);
   const available = () => {
-    const shape = availableRegionFootprint(o.world, o.areaId, parentId, d.editingId);
+    const shape = availableRegionFootprint(o.world, sourceAreaId, parentId, d.editingId);
     if (!shape) throw new Error("This parent is fully subdivided. Open one of its regions.");
     return shape;
   };
-  return { region, regions, parentId, footprint, parent, viewport, available };
+  return { region, regions, parentId, footprint, parent, viewport, available, sourceAreaId };
 }
 type Context = ReturnType<typeof regionContext>;
 export function useRegions(o: Options) {
@@ -90,7 +94,9 @@ export function useRegions(o: Options) {
     c = regionContext(o, d);
   const enterRegion = (id: string | null) => {
     const target = o.world.views.find((v) => v.id === id && v.region);
-    if (target) o.setAreaId(target.areaId);
+    o.setAreaId(
+      target ? (refinedRegionArea(o.world, target.id)?.id ?? target.areaId) : c.sourceAreaId
+    );
     o.setRegionId(target?.id ?? null);
     o.setSelected(null);
     d.clear();
@@ -105,6 +111,25 @@ export function useRegions(o: Options) {
     regionError: d.regionError,
     regionCuts: d.cuts,
     regionTrail: regionLineage(o.world, c.region?.id ?? null),
+    refineSelectedRegion: () => {
+      if (!c.region) return;
+      const existing = refinedRegionArea(o.world, c.region.id);
+      if (existing) {
+        o.setAreaId(existing.id);
+        o.setPanel("configure-generation");
+        return;
+      }
+      o.commit.mutate(
+        makeCommand(o.world, "createArea", regionRefinementInput(o.world, c.region.id)),
+        {
+          onSuccess: (result) => {
+            o.setAreaId(refinedRegionArea(result.candidate, c.region!.id)!.id);
+            o.setPanel("configure-generation");
+            o.setTool("select");
+          },
+        }
+      );
+    },
     enterRegion,
     regionPresentation: {
       id: c.region?.id ?? null,
@@ -213,7 +238,7 @@ function regionCommands(o: Options, d: Draft, c: Context, enter: (id: string | n
         makeCommand(o.world, "putView", {
           id,
           name: name.trim() || `Region ${c.regions.length + 1}`,
-          areaId: o.areaId,
+          areaId: c.sourceAreaId,
           layers: [],
           region: { parentId: c.parentId, footprint: d.regionDraft.footprint },
         }),

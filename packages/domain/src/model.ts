@@ -1,4 +1,5 @@
 import type { Geometry } from "geojson";
+import type { MappedDrawing } from "./mapEligibility";
 
 export type Optional<T> = T | undefined;
 export type Profile = "world" | "region" | "local" | "site" | "interior";
@@ -81,6 +82,8 @@ export interface Epoch {
   seaLevel: number;
 }
 export interface Area {
+  /** Selected geographic subject whose finer representation this area owns. */
+  regionId?: string;
   spaceId?: string;
   context: string;
   id: string;
@@ -109,7 +112,7 @@ export interface Area {
   templateInstanceId?: string | null;
   recipeJobId?: string | null;
 }
-export interface Representation {
+export interface Representation extends MappedDrawing {
   footprint?: Geometry;
   id?: string;
   protected: boolean;
@@ -129,7 +132,7 @@ export interface Relation {
   targetId: string;
   kind: string;
 }
-export interface AtlasFeature {
+export interface AtlasFeature extends Pick<Representation, "mapOnly"> {
   footprint?: Geometry;
   id: string;
   name: string;
@@ -180,7 +183,7 @@ export interface FieldRef {
   footprint?: Geometry;
   spaceId?: string;
 }
-export interface FieldPatch {
+export interface FieldPatch extends Pick<Representation, "mapOnly"> {
   id: string;
   fieldId: string;
   areaId: string;

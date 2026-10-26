@@ -1,85 +1,197 @@
-import { useEffect, useRef } from "react";
-import { createPortal } from "react-dom";
-import { bounds } from "./presentation";
-import {
-  generationRecipeSchema,
-  atlasParametersSchema,
-  worldGenerationSettings,
-} from "@atlas/generation";
+import { useState } from "react";
+import { spatial } from "@atlas/domain";
+import { prepareAtlasGeneration, regionalResolution } from "@atlas/generation";
 import { session } from "./atlasState";
-import { GenerationWizard } from "./GenerationWizard";
-import { inheritedGeneration, startGeneration } from "./generationJobs";
-import type { GenerationDraft } from "./generationDraft";
-import type { PreparedSetup } from "./useGenerationWorkflow";
+import { inheritedGeneration } from "./generationJobs";
+import { useGenerate } from "./useAtlas";
+import { ErrorMessage } from "./ErrorMessage";
 import type { EditorState } from "./useEditor";
 import type { World } from "./types";
 
-export function RegionalGeneration({ world, editor }: { world: World; editor: EditorState }) {
-  const area = editor.area,
-    extent = bounds(area.footprint);
-  const previous = inheritedGeneration(world, area.id);
-  const availableDomains = [
-    ...new Set(
-      Object.keys(area.layers)
-        .map((id) => world.layers[id]?.generator)
-        .filter(Boolean)
+function useRegionalGeneration(world: World, editor: EditorState) {
+  const previous = inheritedGeneration(world, editor.area.id),
+    defaults = previous ?? { quality: "standard", seed: world.seed, domains: ["magic", "built"] },
+    [quality, setQuality] = useState(defaults.quality),
+    [seed, setSeed] = useState(defaults.seed ?? world.seed),
+    [magic, setMagic] = useState(defaults.domains.includes("magic")),
+    [people, setPeople] = useState(
+      defaults.domains.some((id) => ["built", "cultural", "political"].includes(id))
     ),
-  ];
-  const initial: GenerationDraft = {
-    name: area.name,
-    width: extent[2] - extent[0],
-    height: extent[3] - extent[1],
-    recipe: generationRecipeSchema.parse({
-      schemaVersion: 1,
-      seed: previous?.seed ?? world.seed,
-      quality: previous?.quality ?? "standard",
-      domains: availableDomains.length ? availableDomains : ["physical"],
-      parameters: atlasParametersSchema.parse(previous?.parameters ?? {}),
-      processes: {},
-      settings: worldGenerationSettings(world),
+    generate = useGenerate(world, editor.area.id),
+    domains = [
+      "physical",
+      ...(magic ? ["magic"] : []),
+      ...(people ? ["built", "cultural", "political"] : []),
+    ],
+    source = session(world.id).snapshot,
+    prepared = prepareAtlasGeneration(source, {
+      areaId: editor.area.id,
+      quality,
+      seed,
+      domains,
+      parameters: previous?.parameters,
     }),
+    errors = prepared.diagnostics.filter((item) => item.severity === "error"),
+    resolution = regionalResolution(source, editor.area.id, quality);
+  return {
+    quality,
+    setQuality,
+    seed,
+    setSeed,
+    magic,
+    setMagic,
+    people,
+    setPeople,
+    generate,
+    domains,
+    errors,
+    resolution,
+    parameters: previous?.parameters,
   };
-  const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const element = dialog.current!;
-    element.showModal();
-    return () => element.close();
-  }, []);
-  const generate = (_draft: GenerationDraft, prepared: PreparedSetup) => {
-    startGeneration(world.id, {
-      ...prepared.input,
-      operationId: crypto.randomUUID(),
-      expectedVersion: prepared.source.world.version,
-    });
-    editor.setPanel("generate");
-  };
-  return createPortal(
-    <dialog
-      ref={dialog}
-      className="setup-region-dialog"
-      aria-label="Generate region"
-      onCancel={(event) => {
+}
+type RegionalSetup = ReturnType<typeof useRegionalGeneration>;
+
+export function RegionalGeneration({ world, editor }: { world: World; editor: EditorState }) {
+  const setup = useRegionalGeneration(world, editor);
+  return (
+    <section className="regional-generation">
+      <RegionalContext world={world} editor={editor} setup={setup} />
+      <RegionalForm editor={editor} setup={setup} />
+    </section>
+  );
+}
+function RegionalContext({
+  world,
+  editor,
+  setup,
+}: {
+  world: World;
+  editor: EditorState;
+  setup: RegionalSetup;
+}) {
+  return (
+    <>
+      <p className="eyebrow">REFINE THE EXISTING MAP</p>
+      <h2>{editor.region?.name ?? editor.area.name}</h2>
+      <p>
+        Develop smaller valleys, tributaries and places from the parent geography. Completed history
+        stays fixed.
+      </p>
+      <p className="hint">
+        Climate and habitats follow the finer relief and connected water. Existing magical
+        landscapes retain their sources and history.
+      </p>
+      <p className="hint">
+        Known towns and routes keep their identities. Smaller places resolve from inherited
+        residents where the landscape offers a site; no new settlement era runs.
+      </p>
+      <p className="hint">
+        Generation uses the original geography. Structural map edits protect the geography they
+        touch; choose an untouched region to refine further. Names and styles remain editable.
+      </p>
+      {setup.magic && (
+        <p className="hint">
+          Inherited systems:{" "}
+          {(world.magicSystems ?? [])
+            .filter((system) => system.enabled)
+            .map((system) => system.name)
+            .join(", ") || "none"}
+          .
+        </p>
+      )}
+      <dl>
+        <div>
+          <dt>Parent map</dt>
+          <dd>{world.areas[editor.area.parentId!]?.name ?? world.name}</dd>
+        </div>
+        <div>
+          <dt>Selected area</dt>
+          <dd>
+            {(spatial.area(editor.area.footprint) / 1e6).toLocaleString(undefined, {
+              maximumFractionDigits: 1,
+            })}{" "}
+            km²
+          </dd>
+        </div>
+        <div>
+          <dt>Approximate terrain spacing</dt>
+          <dd>{Math.round(setup.resolution.cellSpan).toLocaleString()} m</dd>
+        </div>
+      </dl>
+    </>
+  );
+}
+function RegionalForm({ editor, setup }: { editor: EditorState; setup: RegionalSetup }) {
+  const {
+    quality,
+    setQuality,
+    seed,
+    setSeed,
+    magic,
+    setMagic,
+    people,
+    setPeople,
+    generate,
+    domains,
+    errors,
+    parameters,
+  } = setup;
+  return (
+    <form
+      onSubmit={(event) => {
         event.preventDefault();
-        editor.setPanel("generate");
+        generate.mutate(
+          { domains, quality, seed, parameters },
+          { onSuccess: () => editor.setPanel("generate") }
+        );
       }}
     >
-      <div className="setup-region-shell">
-        <header className="setup-page-header">
-          <div>
-            <h1>Generate {area.name}</h1>
-          </div>
-          <p className="hint">Parent history and authored geography remain authoritative.</p>
-        </header>
-        <GenerationWizard
-          key={area.id}
-          initial={initial}
-          source={session(world.id).snapshot}
-          areaId={area.id}
-          onGenerate={generate}
-          onCancel={() => editor.setPanel("generate")}
+      <label>
+        Regional detail
+        <select value={quality} onChange={(event) => setQuality(event.target.value)}>
+          <option value="draft">Draft</option>
+          <option value="standard">Standard</option>
+          <option value="fine">Fine</option>
+        </select>
+      </label>
+      <label>
+        Detail seed
+        <input
+          type="number"
+          step="1"
+          value={seed}
+          onChange={(event) => setSeed(Number(event.target.value))}
+          required
         />
-      </div>
-    </dialog>,
-    document.body
+      </label>
+      <label>
+        <input
+          type="checkbox"
+          checked={magic}
+          onChange={(event) => setMagic(event.target.checked)}
+        />
+        Refine inherited magical geography
+      </label>
+      <label>
+        <input
+          type="checkbox"
+          checked={people}
+          onChange={(event) => setPeople(event.target.checked)}
+        />
+        Develop inherited settlements and routes
+      </label>
+      {errors.map((item, index) => (
+        <p className="error" key={index}>
+          {item.message}
+        </p>
+      ))}
+      <button className="primary" disabled={generate.isPending || !!errors.length}>
+        Generate regional detail
+      </button>
+      <button type="button" onClick={() => editor.setPanel("regions")}>
+        Return to region
+      </button>
+      <ErrorMessage error={generate.error} />
+    </form>
   );
 }

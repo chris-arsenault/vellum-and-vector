@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "./uiTest";
-import { openMapSettings } from "./harness";
+import { openMapSettings, pointFeature } from "./harness";
 import { readFile } from "node:fs/promises";
-import { installGenerationFixture } from "./generationFixture";
+import { installGenerationFixture, completeGenerationFixture } from "./generationFixture";
 
 type Box = [number, number, number, number];
 const source: Box = [0, 0, 100_000, 100_000];
@@ -86,6 +86,63 @@ async function reopenComposition(page: Page) {
   await expect(page.locator(".breadcrumbs")).toContainText("No fixed rank");
   await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
 }
+
+test("refines a selected subject recursively with regional controls and cancellable jobs", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await installGenerationFixture(page, { fields: true, terrain: true, hold: true });
+  await create(page);
+  await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
+  await completeGenerationFixture(page);
+  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
+  const original = await exported(page);
+  await page.getByRole("button", { name: "Regions", exact: true }).click();
+  await outline(page, "River country", source, [
+    [20_000, 20_000],
+    [80_000, 20_000],
+    [80_000, 80_000],
+    [20_000, 80_000],
+  ]);
+  await page.getByRole("button", { name: "Refine this region", exact: true }).click();
+  await expect(page.getByLabel("Regional detail")).toBeVisible();
+  await expect(page.getByText("Configure physical history", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Generate regional detail", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Cancel generation", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel generation", exact: true }).click();
+  await expect(page.locator(".job-row strong")).toContainText(["cancelled", "completed"]);
+  await page.getByRole("button", { name: "Refine this region", exact: true }).click();
+  await page.getByRole("button", { name: "Generate regional detail", exact: true }).click();
+  await completeGenerationFixture(page);
+  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
+  const refined = await exported(page);
+  expect(refined.areas).toHaveLength(2);
+  expect(refined.areas.find((area: { parentId: string | null }) => !area.parentId)).toEqual(
+    original.areas[0]
+  );
+  await outline(
+    page,
+    "Inner river",
+    [20_000, 20_000, 80_000, 80_000],
+    [
+      [30_000, 30_000],
+      [60_000, 30_000],
+      [60_000, 60_000],
+      [30_000, 60_000],
+    ]
+  );
+  await page.getByRole("button", { name: "Refine this region", exact: true }).click();
+  await expect(page.getByLabel("Regional detail")).toBeVisible();
+  const nested = await exported(page);
+  expect(nested.areas.map((area: { profile: string }) => area.profile).sort()).toEqual([
+    "region",
+    "region",
+    "world",
+  ]);
+  expect(nested.regions).toHaveLength(2);
+  expect(errors).toEqual([]);
+});
 
 test("mixed-boundary regions and nested cartographic subjects work without regional generation", async ({
   page,
@@ -241,4 +298,61 @@ test("frames existing terrain as a region without another generation", async ({ 
   await page.getByRole("button", { name: "Regions", exact: true }).click();
   await clickWorld(page, 50_000, 50_000);
   await expect(page.locator(".breadcrumbs")).toContainText("Hill country");
+});
+
+test("regional generation explains structural overlap, permits renaming and follows undo", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await installGenerationFixture(page, {
+    fields: true,
+    terrain: true,
+    features: [pointFeature("Known falls", "waterfall", "geology", {}, [50_000, 50_000])],
+  });
+  await create(page);
+  await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
+  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
+  await page.getByRole("button", { name: "Regions", exact: true }).click();
+  await outline(page, "Falls country", source, [
+    [20_000, 20_000],
+    [80_000, 20_000],
+    [80_000, 80_000],
+    [20_000, 80_000],
+  ]);
+  await page.getByRole("button", { name: "Refine this region", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Generate regional detail", exact: true })
+  ).toBeEnabled();
+  await page.getByRole("button", { name: "Return to region", exact: true }).click();
+  await page.getByRole("button", { name: "Inspect", exact: true }).click();
+  await clickWorld(page, 50_000, 50_000, [20_000, 20_000, 80_000, 80_000]);
+  const panel = page.locator(".right-panel");
+  await expect(panel.locator("h2")).toHaveText("Known falls");
+  await panel.getByLabel("Name", { exact: true }).fill("Named falls");
+  await page.getByRole("button", { name: "Save feature", exact: true }).click();
+  await expect(panel.locator("h2")).toHaveText("Named falls");
+  await page.getByRole("button", { name: "Regions", exact: true }).click();
+  await page.getByRole("button", { name: "Refine this region", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Generate regional detail", exact: true })
+  ).toBeEnabled();
+  await page.getByRole("button", { name: "Return to region", exact: true }).click();
+  await page.getByRole("button", { name: "Inspect", exact: true }).click();
+  await page.getByRole("button", { name: "Delete feature", exact: true }).click();
+  await expect(panel.locator("h2")).toHaveText("Falls country");
+  await page.getByRole("button", { name: "Regions", exact: true }).click();
+  await page.getByRole("button", { name: "Refine this region", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Generate regional detail", exact: true })
+  ).toBeDisabled();
+  await expect(panel.locator(".error")).toContainText(
+    "overlaps “Named falls” edited on “Falls country”"
+  );
+  await expect(page.locator(".job-row")).toHaveCount(1);
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Generate regional detail", exact: true })
+  ).toBeEnabled();
+  expect(errors).toEqual([]);
 });

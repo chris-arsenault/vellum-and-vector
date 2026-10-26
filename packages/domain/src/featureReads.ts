@@ -1,5 +1,5 @@
 import type { Geometry } from "geojson";
-import { areaSpace, composeFeature, composeFootprint } from "./composition";
+import { areaSpace, composeFeature, composeFootprint, isDescendant } from "./composition";
 import { profiles, type AtlasFeature, type World } from "./model";
 import { spatial } from "./spatial";
 import { authoredLandmarkFeatures } from "./landmarks";
@@ -51,22 +51,25 @@ export function presentAtlasFeature(world: World, feature: AtlasFeature, areaId:
     owner = world.areas[feature.areaId];
   if (areaSpace(world, owner.id) !== areaSpace(world, areaId)) return null;
   if (profiles.indexOf(owner.profile) > profiles.indexOf(area.profile)) return null;
-  const geometry = composeFeature(world, feature, [], area.profile);
+  if (!isDescendant(world.areas, areaId, owner.id)) return null;
+  const geometry = composeFeature(world, feature, [], area.profile, areaId);
   if (!geometry) return null;
-  const footprint = composeFootprint(world, feature, area.profile);
+  const footprint = composeFootprint(world, feature, area.profile, areaId);
   if (!featureIntersects({ geometry, footprint: footprint ?? undefined }, area.footprint))
     return null;
   const result = {
     ...feature,
     geometry,
-    ...representationMetadata(feature, areaId),
+    ...representationMetadata(world, feature, areaId),
   };
   delete result.footprint;
   if (footprint) result.footprint = footprint;
   return result;
 }
-function representationMetadata(feature: AtlasFeature, areaId: string) {
-  const detail = feature.detail[areaId];
+function representationMetadata(world: World, feature: AtlasFeature, areaId: string) {
+  let id: string | null = areaId;
+  while (id && !feature.detail[id]) id = world.areas[id].parentId;
+  const detail = id ? feature.detail[id] : undefined;
   if (!detail || detail.needsReconciliation || ["stale", "unmaterialized"].includes(detail.state))
     return {};
   return {
@@ -75,6 +78,7 @@ function representationMetadata(feature: AtlasFeature, areaId: string) {
     actor: detail.actor,
     protected: detail.protected,
     generationId: detail.generationId,
+    ...(detail.mapOnly ? { mapOnly: true } : {}),
   };
 }
 export function readAtlasFeatures(world: World, areaId?: string, extent?: Geometry) {

@@ -228,7 +228,7 @@ export function toolLabel(tool: Tool): string {
         pan: "Pan map",
         move: "Move feature",
         reshape: "Reshape",
-        refine: "Draw region rectangle",
+        refine: "Locate another map",
         refinePolygon: "Draw region polygon",
         extentEdit: "Adjust region outline",
         regionPick: "Pick geographic region",

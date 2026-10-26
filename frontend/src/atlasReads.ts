@@ -8,6 +8,7 @@ import {
   gridSampler,
   requireThat,
   spatial,
+  mappedField,
   type AtlasFeature,
   type World,
 } from "@atlas/domain";
@@ -43,9 +44,16 @@ export function readScene(id: string, areaId: string, extent?: number[]) {
   return scene.read(extent);
 }
 
-export function readRaster(id: string, fieldId: string, channel: string): import("./types").Raster {
-  const grid = session(id).snapshot.numerical[fieldId];
-  requireThat(grid, "missing_field", "Choose an available field.");
+export function readRaster(
+  id: string,
+  fieldId: string,
+  channel: string,
+  areaId?: string
+): import("./types").Raster {
+  const snapshot = session(id).snapshot,
+    source = snapshot.numerical[fieldId];
+  requireThat(source, "missing_field", "Choose an available field.");
+  const grid = mappedField(source, snapshot.world, areaId);
   requireThat(grid.channels[channel], "missing_channel", `No ${channel} samples in this field.`);
   return {
     id: fieldId,
@@ -91,7 +99,7 @@ function terrainCompanions(id: string, elevation: import("@atlas/domain").Grid) 
   return result;
 }
 
-export function exportWorld(id: string) {
+export function exportWorld(id: string, areaId?: string) {
   const world = session(id).snapshot.world;
   return {
     type: "FeatureCollection",
@@ -113,25 +121,32 @@ export function exportWorld(id: string) {
       footprint,
       frame,
     })),
-    features: canonicalFeatures(world).map((feature) => ({
-      type: "Feature",
-      id: feature.id,
-      geometry: composeFeature(world, feature),
-      properties: {
-        ...feature.attributes,
-        name: feature.name,
-        kind: feature.kind,
-        layerId: feature.layerId,
-        footprint: composeFootprint(world, feature),
-        areaId: feature.areaId,
-        spaceId: areaSpace(world, feature.areaId),
-        state: feature.state,
-        protected: feature.protected,
-        actor: feature.actor,
-        relations: feature.relations,
-        causes: feature.causes,
-      },
-    })),
+    features: canonicalFeatures(world).flatMap((source) => {
+      const feature = areaId ? presentAtlasFeature(world, source, areaId) : source;
+      if (!feature) return [];
+      return [
+        {
+          type: "Feature",
+          id: feature.id,
+          geometry: areaId ? feature.geometry : composeFeature(world, feature),
+          properties: {
+            ...feature.attributes,
+            name: feature.name,
+            kind: feature.kind,
+            layerId: feature.layerId,
+            footprint: areaId ? feature.footprint : composeFootprint(world, feature),
+            representations: source.detail,
+            areaId: feature.areaId,
+            spaceId: areaSpace(world, feature.areaId),
+            state: feature.state,
+            protected: feature.protected,
+            actor: feature.actor,
+            relations: feature.relations,
+            causes: feature.causes,
+          },
+        },
+      ];
+    }),
   };
 }
 
@@ -238,7 +253,7 @@ function statistics(result: AnalysisResult, id: string, input: AnalysisInput) {
       !field.channels?.includes(input.channel ?? "")
     )
       continue;
-    const raster = readRaster(id, field.id, input.channel!);
+    const raster = readRaster(id, field.id, input.channel!, input.areaId);
     const grid = raster.field,
       valueAt = gridSampler(grid, input.channel!);
     const covers = spatial.pointCoverage(input.geometry),

@@ -36,6 +36,7 @@ const bodySchema = z.object({
 const fieldSchema = z
   .object({
     id: identifier,
+    periodicWidth: finite.positive().optional(),
     scope: scopeSchema,
     bounds: z.tuple([finite, finite, finite, finite]),
     active: z.instanceof(Uint8Array).refine((values) => values.every((value) => value <= 1)),

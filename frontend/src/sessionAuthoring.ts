@@ -2,6 +2,7 @@ import {
   createIntentRegistry,
   intentChanges,
   evaluateFeature,
+  evaluateMapFeature,
   stagedSnapshot,
   combineChanges,
   invalidateFacts,
@@ -215,7 +216,7 @@ function locatedEntity(
 function landform(snapshot: DomainSnapshot, context: IntentContext, data: Record<string, unknown>) {
   const field = snapshot.world.fields.find((f) => f.channels?.includes("elevation"));
   requireThat(field, "missing_field", "Generate elevation before sculpting a landform.");
-  const sculpt = evaluate(snapshot, context, "sculptField", {
+  const sculpt = evaluate(snapshot, context, "paintMapField", {
     fieldId: field.id,
     center: data.center,
     radius: data.radius,
@@ -248,7 +249,7 @@ function landform(snapshot: DomainSnapshot, context: IntentContext, data: Record
   };
   return combineChanges(context, snapshot, [
     sculpt,
-    evaluateFeature(
+    evaluateMapFeature(
       featureEditSchema.parse({ areaId: context.scope.areaId, feature }),
       context,
       stagedSnapshot(snapshot, sculpt)

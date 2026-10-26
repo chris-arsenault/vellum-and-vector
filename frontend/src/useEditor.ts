@@ -1,5 +1,4 @@
 import { useState, useMemo } from "react";
-import { DomainError } from "@atlas/domain";
 import { bounds, defaultStyles, frameAt } from "./presentation";
 import { makeCommand, useCommit } from "./useAtlas";
 import type { Area, AtlasFeature, LayerStyle, Tool, World } from "./types";
@@ -124,8 +123,17 @@ export function useEditor(world: World) {
         : state.tool.startsWith("label")
           ? finishLabel(state, composition, geometry)
           : actions.draw(geometry),
-    selectExtent: (geometry: Geometry) =>
-      state.tool === "regionEdit" ? regions.regionDraw(geometry) : actions.selectExtent(geometry),
+    selectExtent: (geometry: Geometry) => {
+      if (
+        state.selected?.kind === "building" ||
+        ["refine", "refinePolygon", "extentEdit"].includes(state.tool)
+      ) {
+        actions.selectExtent(geometry);
+        return;
+      }
+      state.setPanel("regions");
+      regions.regionDraw(geometry);
+    },
     cancel: () => (isRegionTool(state.tool) ? regions.cancelRegion() : actions.cancel()),
     preset: (name: string) => {
       composition.setStyles(defaultStyles(world, name));
@@ -139,70 +147,23 @@ export function useEditor(world: World) {
   };
 }
 function useEditing(world: World, state: ReturnType<typeof useEditorState>) {
-  const {
-    areaId,
-    pendingEdits,
-    reconciling,
-    setPendingEdits,
-    setProposedFeatures,
-    setPendingSculpt,
-    setTool,
-    setPanel,
-    setStyles,
-  } = state;
+  const { areaId, setStyles } = state;
   const commit = useCommit(world.id);
   function execute(kind: string, data: Record<string, unknown>) {
-    commit.mutate(makeCommand(world, kind, { areaId, ...data }), {
-      onError: (error) => {
-        if (
-          kind === "sculptField" &&
-          error instanceof DomainError &&
-          ["locked_boundary", "locked_field_boundary"].includes(error.code)
-        ) {
-          setPendingSculpt(data);
-          setTool("select");
-          setPanel("reconcile");
-        }
-      },
-    });
+    commit.mutate(
+      makeCommand(world, kind === "sculptField" ? "paintMapField" : kind, { areaId, ...data })
+    );
   }
   function saveFeature(feature: AtlasFeature) {
     const target = editArea(world, areaId, feature);
     const edit = { areaId: target, feature: scopedFootprint(world, target, feature) };
-    const stage = () => {
-      const edits = [...pendingEdits.filter((e) => e.feature.id !== feature.id), edit];
-      setPendingEdits(edits);
-      setProposedFeatures(edits.map((e) => e.feature));
-      setPanel("reconcile");
-      setTool("select");
-    };
-    if (reconciling) {
-      stage();
-      return;
-    }
-    commit.mutate(makeCommand(world, "putFeature", edit), {
+    commit.mutate(makeCommand(world, "putMapFeature", edit), {
       onSuccess: () =>
         setStyles((current) =>
           completeStyles(world, current).map((style) =>
             style.layerId === feature.layerId ? { ...style, visible: true } : style
           )
         ),
-      onError: (error) => {
-        if (
-          error instanceof DomainError &&
-          [
-            "locked_boundary",
-            "locked_field_boundary",
-            "locked_junction",
-            "attached_connection",
-            "attached_water_transfer",
-            "locked_flow",
-            "junction_water_level",
-            "water_budget",
-          ].includes(error.code)
-        )
-          stage();
-      },
     });
   }
   return { commit, execute, saveFeature };

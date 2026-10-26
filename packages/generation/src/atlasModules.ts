@@ -13,6 +13,9 @@ import { builtProcess } from "./mapBuilt";
 import { atlasPublicationDefinitions } from "./canonry/atlasPublications";
 import { populationProcesses } from "./societyProcesses";
 import { societyPublications } from "./societyPublication";
+import { regionalPhysicalProcesses } from "./canonry/regionalPhysical";
+import { regionalClimateProcess } from "./canonry/regionalClimate";
+import { regionalMagicProcesses } from "./canonry/regionalMagic";
 
 function domainModule(id: string, processes: GenerationModule["processes"]): GenerationModule {
   return {
@@ -33,7 +36,13 @@ atlasGenerationModules.register({
 atlasGenerationModules.register({
   id: "atlas.physical",
   features: physicalFeatureDefinitions,
-  processes: (source, input) => [...atlasNativeProcesses(input, source), ...landmarkProcesses],
+  processes: (source, input) => [
+    ...atlasNativeProcesses(input, source),
+    ...landmarkProcesses,
+    ...regionalPhysicalProcesses,
+    regionalClimateProcess,
+    ...regionalMagicProcesses,
+  ],
   publications: (input, world) =>
     atlasPublicationDefinitions(
       input,

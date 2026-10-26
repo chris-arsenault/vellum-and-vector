@@ -147,7 +147,7 @@ function publicationFixture(map: ReturnType<typeof fixture>) {
   state.surface = createGrid("marine-fixture", state.domain.scope, 5, 3);
   state.physical = {
     map,
-    profile: atlasPhysicalProfile({}, { ShelfBreakDepth: 800 }),
+    profile: { ...atlasPhysicalProfile(), ShelfBreakDepth: 800 },
     samples: new Int32Array(15),
     fixed: [],
     inherited: false,

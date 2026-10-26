@@ -147,6 +147,8 @@ export function projectMagic(state: GenerationState) {
         field[channel],
         magicFieldDefinitions[channel].quantity
       );
+    for (const [id, values] of Object.entries(field.originSources))
+      project(magicKey(field, `origin:${id}:source`), "relative-intensity", values, "intensive");
     project(magicKey(field, "coverage"), "ratio", field.systemCoverage, "intensive");
     for (const [key, values] of Object.entries(field.stocks))
       project(magicKey(field, `stock:${key}`), "intensity-square-metre", values, "extensive");

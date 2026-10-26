@@ -2,6 +2,7 @@ import { IntentRegistry } from "./intent";
 import { registerBasicIntents } from "./authoringBasics";
 import { registerAreaIntents } from "./areaIntents";
 import { registerFeatureIntents } from "./featureIntents";
+import { registerMapFeatureIntents } from "./mapFeatureIntents";
 import { registerFieldIntents } from "./fieldIntents";
 import { registerSettingsIntents } from "./settingsIntents";
 import { registerProtectionIntents } from "./protectionIntents";
@@ -15,6 +16,7 @@ export function createIntentRegistry(): IntentRegistry {
   registerBasicIntents(registry);
   registerAreaIntents(registry);
   registerFeatureIntents(registry);
+  registerMapFeatureIntents(registry);
   registerFieldIntents(registry);
   registerSettingsIntents(registry);
   registerProtectionIntents(registry);

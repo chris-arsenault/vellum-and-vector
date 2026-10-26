@@ -78,10 +78,24 @@ constraints. Contracts retain crossing identities/positions, relevant field-edge
 conditions, receiving connections and applicable epoch context. Same-detail
 materialization has one authoritative owner at each location and layer.
 
-Generate or author the interior against those interfaces. Preserve compatible
-crossings and protected work, and retain coarse geography outside the refined
-coverage. Explicit reconciliation previews affected parent, neighbor, network and
-thematic dependencies before changing an established interface.
+Procedural detail uses those interfaces and retains coarse geography outside its
+coverage. Geographic regions may nest under the same Region creation profile;
+profile names do not bound nesting or dispatch to site/interior generators.
+
+Ordinary creative edits target linked map-only representations and sampled
+overlays. Procedural geometry, numerical arrays and society remain independent
+generation context. Map composition, selection and export consume the drawings;
+generation omits them from inputs and retains them at publication. Shared
+two-dimensional anchors remain attached without imposing numerical boundary
+samples on map editing. Physical reconciliation remains a specialized operation.
+Structural edits block geographic generation requests intersecting their original
+or current local geometry or brush footprint in the same located space. Names
+and cartographic styles remain eligible. Existing finer drawings keep precedence;
+untouched descendants and neighboring regions can refine independently. Retain
+the replaced procedural representation and the original mapped shape alongside
+an edit, so composition, source reads and undo have distinct authority. Removing
+a mapped feature uses an intentionally empty representation rather than deleting
+its procedural source. No separate lock registry or inverse simulation is needed.
 
 Physical, magical, cultural, political and built data share this model. Cultural
 prevalence can overlap; claims, sovereignty, administration and effective control

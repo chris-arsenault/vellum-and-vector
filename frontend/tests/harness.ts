@@ -149,22 +149,56 @@ export async function openRegistry(page: Page) {
   await page.getByRole("button", { name: "Features", exact: true }).click();
 }
 
-/** Create a child area through the toolbar with a precise extent. */
+/** Choose an arbitrary geographic subject, then attach its finer geographic map. */
 export async function createArea(
   page: Page,
   name: string,
-  profile: "region" | "site" | "interior",
   extent: [number, number, number, number]
 ) {
-  await tool(page, "Draw region rectangle").click();
+  const data = await exportMap(page),
+    parent = data.areas.find((area: { parentId: string | null }) => !area.parentId);
+  const ring = parent.footprint.coordinates[0] as number[][];
+  const source: [number, number, number, number] = [
+    Math.min(...ring.map((p) => p[0])),
+    Math.min(...ring.map((p) => p[1])),
+    Math.max(...ring.map((p) => p[0])),
+    Math.max(...ring.map((p) => p[1])),
+  ];
+  await page.getByRole("button", { name: "Regions", exact: true }).click();
+  await page.getByRole("button", { name: "Draw outline", exact: true }).click();
+  const [w, s, e, n] = extent;
+  for (const [index, [x, y]] of [
+    [w, s],
+    [e, s],
+    [e, n],
+    [w, n],
+  ].entries())
+    await clickWorld(page, x, y, source, index === 3);
+  await page.getByLabel("Region name", { exact: false }).fill(name);
+  await page.getByRole("button", { name: "Keep region", exact: true }).click();
+  await page.getByRole("button", { name: "Refine this region", exact: true }).click();
+  await page.getByRole("button", { name: "Return to region", exact: true }).click();
+  await expect(page.locator(".breadcrumbs")).toContainText(name);
+}
+
+/** Keep the existing template prototype's separate site workflow outside regional refinement. */
+export async function createPrototypeSite(
+  page: Page,
+  name: string,
+  extent: [number, number, number, number]
+) {
+  await tool(page, "Locate another map").click();
   const side = panel(page);
-  await side.getByLabel("Develop as").selectOption(profile);
+  await side.getByLabel("Develop as").selectOption("site");
   await side.getByLabel("Place name", { exact: true }).fill(name);
   await side.getByText("Enter a precise extent", { exact: true }).click();
-  await side.getByLabel("East · m", { exact: true }).fill(String(extent[0]));
-  await side.getByLabel("North · m", { exact: true }).fill(String(extent[1]));
-  await side.getByLabel("Width · m", { exact: true }).fill(String(extent[2] - extent[0]));
-  await side.getByLabel("Height · m", { exact: true }).fill(String(extent[3] - extent[1]));
+  for (const [label, value] of [
+    ["East · m", extent[0]],
+    ["North · m", extent[1]],
+    ["Width · m", extent[2] - extent[0]],
+    ["Height · m", extent[3] - extent[1]],
+  ] as const)
+    await side.getByLabel(label, { exact: true }).fill(String(value));
   await page.getByRole("button", { name: "Use entered extent", exact: true }).click();
   await page.getByRole("button", { name: "Create mapped area", exact: true }).click();
   await expect(page.locator(".breadcrumbs")).toContainText(name);

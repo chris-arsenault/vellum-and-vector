@@ -19,6 +19,7 @@ import { validateAuthoredField, fieldFact } from "./fieldValidation";
 import { layerSupports } from "./builtinLayers";
 import { invalidateFacts, upsertArea } from "./authoringBasics";
 import { authoredFieldCoverage } from "./fieldOwnership";
+import { mappedField } from "./mapAuthority";
 
 const channelSchema = z.object({
   unit: z.string().min(1),
@@ -207,7 +208,12 @@ function brushScope(data: Sculpt, context: IntentContext) {
   );
   return { ...context.scope, footprint };
 }
-function sculpt(data: Sculpt, context: IntentContext, snapshot: DomainSnapshot): ChangeSet {
+function sculpt(
+  data: Sculpt,
+  context: IntentContext,
+  snapshot: DomainSnapshot,
+  mapOnly = false
+): ChangeSet {
   const field = snapshot.world.fields.find((f) => f.id === data.fieldId),
     source = snapshot.numerical[data.fieldId];
   requireThat(
@@ -216,7 +222,7 @@ function sculpt(data: Sculpt, context: IntentContext, snapshot: DomainSnapshot):
     "Load the selected sampled field before sculpting."
   );
   const area = fieldArea(snapshot, context, context.scope.areaId),
-    support = source;
+    support = mapOnly ? mappedField(source, snapshot.world, area.id) : source;
   const footprint = spatial.intersection(
     brushScope(data, context).footprint,
     support.scope.footprint
@@ -238,7 +244,7 @@ function sculpt(data: Sculpt, context: IntentContext, snapshot: DomainSnapshot):
   applyFieldBrush(data, support, grid);
   const layer = snapshot.world.layers[field.layerId];
   requireThat(layer, "missing_layer", "The field needs a registered layer.");
-  validateAuthoredField(snapshot, area, grid, layer);
+  if (!mapOnly) validateAuthoredField(snapshot, area, grid, layer);
   const changes = intentChanges(context, snapshot),
     reference = artifact(
       changes,
@@ -259,15 +265,17 @@ function sculpt(data: Sculpt, context: IntentContext, snapshot: DomainSnapshot):
       resourceId: reference.id,
       protected: false,
       createdVersion: snapshot.world.version + 1,
+      ...(mapOnly ? { mapOnly: true } : {}),
     },
   });
-  invalidateFacts(
-    changes,
-    context,
-    snapshot,
-    [field.layerId, fieldFact(layer, data.channel)],
-    grid.scope.footprint
-  );
+  if (!mapOnly)
+    invalidateFacts(
+      changes,
+      context,
+      snapshot,
+      [field.layerId, fieldFact(layer, data.channel)],
+      grid.scope.footprint
+    );
   return changes;
 }
 function brushField(
@@ -291,6 +299,27 @@ function brushField(
   );
 }
 export function registerFieldIntents(registry: IntentRegistry): void {
+  registerMappedBrush(registry);
+  registerSampledFields(registry);
+}
+function registerMappedBrush(registry: IntentRegistry) {
+  registry.register({
+    kind: "paintMapField",
+    version: 1,
+    description:
+      "Paint a mapped surface without changing procedural fields or frozen physical samples.",
+    schema: sculptSchema,
+    requirements: (data, context) => ({
+      ...intentReads(context, {
+        objects: [{ kind: "field", ids: [data.fieldId] }],
+        channels: [{ fieldId: data.fieldId, names: [data.channel], haloCells: 1 }],
+      }),
+      scope: brushScope(data, context),
+    }),
+    evaluate: (data, context, snapshot) => sculpt(data, context, snapshot, true),
+  });
+}
+function registerSampledFields(registry: IntentRegistry) {
   registry.register({
     kind: "createField",
     version: 1,

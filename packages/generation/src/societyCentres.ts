@@ -120,6 +120,7 @@ export function urbanTargets(state: GenerationState): UrbanAllocation {
     contributions: UrbanAllocation["contributions"] = communities.map(() => []);
   for (const [a, own] of communities.entries()) {
     const demand = concentration(own, contact.get(own.id) ?? 0);
+    own.latentSettlementPopulation = demand * localShare * (1 - chiefTownShare);
     const home = townPull(own, seats);
     let total = home;
     for (const w of weights[a].values()) total += w;

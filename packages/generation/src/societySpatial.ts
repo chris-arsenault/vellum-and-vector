@@ -1,5 +1,6 @@
 import {
   gridPosition,
+  gridDistance,
   visitAdaptiveOverlap,
   type Grid,
   type Bounds,
@@ -49,10 +50,10 @@ export function nearestSocietySample(
   for (;;) {
     let best = -1,
       distance = Infinity;
-    for (const i of samplesInBox(grid, [p.x - radius, p.y - radius, p.x + radius, p.y + radius])) {
+    for (const i of nearbySamples(grid, p, radius)) {
       if (!accepts(i)) continue;
       const q = gridPosition(grid, i),
-        d = Math.hypot(q.x - p.x, q.y - p.y);
+        d = gridDistance(grid, p, q);
       if (d < distance) {
         best = i;
         distance = d;
@@ -61,4 +62,12 @@ export function nearestSocietySample(
     if (distance <= radius || radius >= extent) return best;
     radius *= 2;
   }
+}
+function nearbySamples(grid: Grid, p: Pick<Position, "x" | "y">, radius: number) {
+  const shifts = grid.periodicWidth ? [-grid.periodicWidth, 0, grid.periodicWidth] : [0];
+  return new Set(
+    shifts.flatMap((shift) =>
+      samplesInBox(grid, [p.x + shift - radius, p.y - radius, p.x + shift + radius, p.y + radius])
+    )
+  );
 }

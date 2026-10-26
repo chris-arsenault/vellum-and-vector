@@ -253,7 +253,7 @@ function completeDrawing(
     placeCommunity(world, state, editing, feature);
     return;
   }
-  editing.commit.mutate(makeCommand(world, "putFeature", { areaId: state.areaId, feature }), {
+  editing.commit.mutate(makeCommand(world, "putMapFeature", { areaId: state.areaId, feature }), {
     onSuccess: () => {
       state.setSelected(feature);
       state.setDrawing(null);

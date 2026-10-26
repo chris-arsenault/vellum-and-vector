@@ -1,5 +1,6 @@
 import {
   gridPosition,
+  gridDistance,
   livelihoodChannels,
   neighbors,
   semanticId,
@@ -15,6 +16,11 @@ import { atlasName } from "./atlasNaming";
 import { nearestSocietySample } from "./societySpatial";
 import { chooseSettlementSites } from "./societySites";
 import { doorEdges } from "./societyDoors";
+import {
+  retainedSeatCells,
+  retainRegionalConnections,
+  regionalCommunitySpacing,
+} from "./regionalSociety";
 
 export interface SocietyEdge {
   a: number;
@@ -76,7 +82,7 @@ function landEdges(state: GenerationState) {
     for (const j of neighbors(grid, i, false, covers)) {
       if (j <= i || !dryLand(state, j)) continue;
       const b = gridPosition(grid, j),
-        distance = Math.hypot(a.x - b.x, a.y - b.y);
+        distance = gridDistance(grid, a, b);
       const rise = Math.abs(grid.channels.elevation[j] - grid.channels.elevation[i]);
       if (riverCell(state, i) && riverCell(state, j)) {
         edges.push({ a: i, b: j, distance, cost: distance * riverTravel, kind: "river" });
@@ -107,7 +113,7 @@ function seaEdges(state: GenerationState) {
     const a = gridPosition(grid, i);
     for (const j of neighbors(grid, i, false, covers)) {
       const b = gridPosition(grid, j),
-        distance = Math.hypot(a.x - b.x, a.y - b.y);
+        distance = gridDistance(grid, a, b);
       if (sea(j)) {
         if (j > i) edges.push({ a: i, b: j, distance, cost: distance * seaTravel, kind: "sea" });
       } else if (dryLand(state, j))
@@ -121,7 +127,8 @@ function seedCells(
   state: GenerationState,
   river: Float64Array,
   coast: Float64Array,
-  context: MapProcessContext
+  context: MapProcessContext,
+  retained?: SocietyCommunity[]
 ) {
   const grid = state.surface;
   const ranked = Array.from(grid.active.keys())
@@ -131,7 +138,7 @@ function seedCells(
       return { i, score: -Math.log(Math.max(1e-12, context.random())) / (1 + support.capacity) };
     })
     .sort((a, b) => a.score - b.score || a.i - b.i);
-  const spacing = communitySpacing(state);
+  const spacing = regionalCommunitySpacing(state, retained);
   const buckets = new Map<string, number[]>(),
     selected: number[] = [];
   for (const { i } of ranked) {
@@ -156,16 +163,6 @@ function seedCells(
     selected.push(i);
   }
   return selected;
-}
-function communitySpacing(state: GenerationState) {
-  const grid = state.surface;
-  const nominal = { world: 100000, region: 25000, local: 2500, site: 250, interior: 25 }[
-    state.domain.world.areas[state.domain.scope.areaId].profile
-  ];
-  return Math.min(
-    nominal,
-    Math.max(grid.bounds[2] - grid.bounds[0], grid.bounds[3] - grid.bounds[1]) / 3
-  );
 }
 /** Multi-source spread: every cell takes the owner of the seed it is cheapest to reach from. */
 class Spread {
@@ -237,13 +234,13 @@ function community(state: GenerationState, cell: number): SocietyCommunity {
 export function createSocietyGeography(
   state: GenerationState,
   context: MapProcessContext,
-  options: { mobile?: boolean; round?: string } = {}
+  options: { mobile?: boolean; round?: string; retained?: SocietyCommunity[] } = {}
 ) {
   context.progress(0, "Locating communities and traversable connections");
   const river = channelAccess(state),
     coast = coastalFishery(state),
     edges = landEdges(state),
-    units = seedCells(state, river, coast, context);
+    units = seedCells(state, river, coast, context, options.retained);
   // The draw makes the units; each unit then settles the site its geography offers,
   // and the country is divided again from the sites.
   const draft = assignCells(state, units, edges);
@@ -252,11 +249,17 @@ export function createSocietyGeography(
     // A round, like the present, finds the camps of the rounds before it.
     ruins: roundRuins(state),
   });
-  const sites = chosen.map((choice) => choice.cell);
+  const pinned = retainedSeatCells(state, options.retained);
+  const sites = [
+    ...pinned,
+    ...chosen.map((choice) => choice.cell).filter((cell) => !pinned.includes(cell)),
+  ];
   const { owner, distances } = assignCells(state, sites, edges);
-  const communities = sites.map((cell, index) => ({
+  const communities = sites.map((cell) => ({
     ...community(state, cell),
-    ...(chosen[index]?.site ? { site: chosen[index].site! } : {}),
+    ...(chosen.find((choice) => choice.cell === cell)?.site
+      ? { site: chosen.find((choice) => choice.cell === cell)!.site! }
+      : {}),
   }));
   const region: SocietyRegion = {
     areaId: state.domain.scope.areaId,
@@ -383,7 +386,8 @@ function seaConnections(
 /** Re-evaluate pass and reservoir access without replacing residents or their identities. */
 export function refreshSocietyConnections(state: GenerationState) {
   const work = state.society!,
-    communities = work.region.communities;
+    communities = work.region.communities,
+    previous = work.region.connections;
   const seeds = communities.map((c) =>
     nearestSocietySample(state.surface, c.position, (i) => dryLand(state, i))
   );
@@ -396,10 +400,15 @@ export function refreshSocietyConnections(state: GenerationState) {
   for (let index = communities.length; index < seeds.length; index++)
     communities.push(community(state, seeds[index]));
   work.owner = owner;
-  work.region.connections = connectionsFor(state, communities, owner, distances, [
+  const current = connectionsFor(state, communities, owner, distances, [
     ...work.edges,
     ...doorEdges(state),
   ]);
+  work.region.connections = retainRegionalConnections(
+    current,
+    previous,
+    new Set(communities.map((c) => c.id))
+  );
 }
 /** Sum each country's yields, each livelihood raised by the skill its people's practice earns. */
 export function refreshSocietySupport(state: GenerationState) {
