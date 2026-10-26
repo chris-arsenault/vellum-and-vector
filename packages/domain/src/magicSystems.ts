@@ -186,14 +186,15 @@ const parameterSchema = z.object({
   groveSap: positive.default(600),
   sapLoss: finite.min(0).max(1).default(0.3),
   // Cracked cores per square metre at a forge that make a full source, and the share of
-  // the cracked stock that cools away per epoch.
-  forgeStrength: positive.default(250),
+  // the cracked stock that cools away per epoch. At a quarter of this every town on a core
+  // road was a Fire core; at this a forge needs the trade of a city to be one.
+  forgeStrength: positive.default(1000),
   forgeCooling: finite.min(0).max(1).default(0.5),
   // Salt: stock made per death and per metre of a dried lake's depth (per square metre of
   // its bed), and the salt per square metre that is full intensity. At these a town's die-off
-  // of hundreds brines the ground without a source; a killing of thousands on one hundred
-  // square kilometres is a source, and a city's fall a full one.
-  saltPerDeath: finite.nonnegative().default(500_000),
+  // of tens brines the ground without a source; some hundreds dead on one hundred square
+  // kilometres in a cycle are a source, and a city's fall of thousands a full one.
+  saltPerDeath: finite.nonnegative().default(5_000_000),
   saltPerLakeMetre: finite.nonnegative().default(40),
   saltFull: positive.default(400),
   // Brine: share flushed per epoch at full air moisture on oxygenated ground, share that seeps

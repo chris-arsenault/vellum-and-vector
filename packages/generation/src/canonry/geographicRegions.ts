@@ -300,11 +300,19 @@ export function extractMagicPlaces(state: GenerationState) {
   for (const field of magic?.fields ?? [])
     for (const rule of field.definition.features) publishRulePlaces(state, field, rule);
 }
-/** Every component of one rule's class past its cartography's minimum, as a named place. */
+/**
+ * Every component of one rule's class past its cartography's minimum, as a named place. An
+ * area or a site complex that would span more of the land than a landform may is split along
+ * drainage divides into several named places, as forests and landforms are: one Aurora field
+ * over a tenth of the land, or one light well of five hundred cells, is not one place. A
+ * course keeps its whole length.
+ */
 function publishRulePlaces(state: GenerationState, field: MagicField, rule: MagicFeatureRule) {
-  const members = field.features[rule.id],
+  const cartography = rule.cartography ?? "area",
+    members = field.features[rule.id],
     coverage = field.coverage[rule.id],
-    minimum = placeMinimumCells[rule.cartography ?? "area"],
+    minimum = placeMinimumCells[cartography],
+    maximum = cartography === "course" ? Infinity : largestRegionShare * landArea(state),
     areas = state.physical!.map.mesh.areas;
   if (!members) return;
   components(
@@ -330,7 +338,7 @@ function publishRulePlaces(state: GenerationState, field: MagicField, rule: Magi
         extent ? magicPlaceGeometry(state, field, rule.id, region, extent) : null
       ),
     true,
-    Infinity,
+    maximum,
     coverage ? (i) => coverage[i] : undefined
   );
 }

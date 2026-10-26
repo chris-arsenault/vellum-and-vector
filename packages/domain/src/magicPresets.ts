@@ -79,10 +79,12 @@ const firePreset = magicSystemSchema.parse({
       "spring",
       "Hot spring",
       70,
+      // A hot spring is wet ground close enough to the conduit to run hot: the retained
+      // halo below grows the site, the seed keeps one spring field from being dozens.
       [
         ...[oneOf("water", [2]), at("river", 1), at("moisture", 650)].map((wet) => [
           land,
-          at("intensity", 430),
+          at("intensity", 560),
           wet,
         ]),
         [land, at("geothermal", 720), at("temperature", 335), at("moisture", 260)],
@@ -370,20 +372,16 @@ const saltPreset = magicSystemSchema.parse({
   // Salt does not decay; what is not flushed or burned is still there next epoch.
   history: { retention: 1, storage: 0.2 },
   features: [
-    // Where the dead lie: the brine of the killing and the bed it crusts to, read per square
-    // metre at the same salt that makes a death source (ADR 0007), so a town's ordinary
-    // die-offs brine the ground without naming it.
-    feature(
-      "ground",
-      "Killing ground",
-      60,
-      [
-        [land, at("stock:death/brine", 20)],
-        [land, at("stock:death/bed", 20)],
-      ],
-      undefined,
-      covers(50, 800)
-    ),
+    // Where the dead lie: the brine of the killing per square metre, from the salt that makes
+    // a death source (ADR 0007) to the salt of full intensity, so a town's ordinary die-offs
+    // brine the ground without naming it. The bed it crusts to is the pan's and the flat's.
+    // Coverage follows the brine itself: between evaluations Salt holds only its stored
+    // intensity, and a killing ground is the ground, not the field over it.
+    feature("ground", "Killing ground", 60, [[land, at("stock:death/brine", 20)]], undefined, {
+      field: "stock:death/brine",
+      floor: 20,
+      full: 400,
+    }),
     feature("pan", "Salt pan", 55, [[land, at("intensity", 200)]], undefined, covers(200, 900)),
     // Bed deep enough to fuse the ground: the flat that mirages stand on.
     feature("flat", "Glass flat", 90, [

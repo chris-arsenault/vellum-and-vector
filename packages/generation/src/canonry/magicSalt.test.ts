@@ -11,6 +11,7 @@ import { magicLivingFeedback } from "./magicFeedback";
 import { advanceStocks } from "./magicStocks";
 import { rememberLakes } from "./magicSaltSources";
 import { saltWrites } from "./magicSalt";
+import { coverSystems } from "./magicFeatures";
 import { groupSuitability, plantGroups } from "./ecologyGroups";
 import { neutralEcology } from "./ecologyEnvironment";
 import { alignedNeighbor } from "./atmosphere";
@@ -64,11 +65,11 @@ it("turns the dead the ground records into brine, consumes the record, and salts
   const s = scenario(),
     i = centre(s.map),
     area = s.map.mesh.areas[i];
-  // A city's fall: a hundred thousand dead on one cell.
-  s.map.MassDeath[i] = 100_000;
+  // A city's fall: twenty thousand dead on one cell.
+  s.map.MassDeath[i] = 20_000;
   evaluate(s);
   expect(s.map.MassDeath[i]).toBe(0);
-  expect(s.salt.stocks["death/brine"][i]).toBe(100_000 * 500_000);
+  expect(s.salt.stocks["death/brine"][i]).toBe(20_000 * 5_000_000);
   expect(s.salt.source[i]).toBe(1000);
   expect(s.salt.intensity[i]).toBe(1000);
   expect(s.map.Salting[i]).toBe(1);
@@ -78,6 +79,24 @@ it("turns the dead the ground records into brine, consumes the record, and salts
   evaluate(s);
   expect(s.salt.stocks["death/brine"][i]).toBe(before);
   expect(reservoirAmount(s.salt, "brine", i) / area).toBeGreaterThan(400);
+});
+
+it("names a killing ground by the brine in it, whatever the field holds between evaluations", () => {
+  const s = scenario(),
+    i = centre(s.map),
+    area = s.map.mesh.areas[i];
+  // Two thousand dead on the cell, a few dozen on the next: only the first is a killing.
+  s.map.MassDeath[i] = 2000;
+  s.map.MassDeath[east(s.map, i)] = 30;
+  evaluate(s);
+  const brine = s.salt.stocks["death/brine"][i] / area;
+  expect(brine).toBeGreaterThan(20);
+  // Between evaluations Salt lapses to its stored fifth; the ground is still salted.
+  s.salt.intensity.fill(0);
+  coverSystems(s.state, 1);
+  expect(s.salt.features.ground[i]).toBe(1);
+  expect(s.salt.coverage.ground[i]).toBeCloseTo(Math.min(1, (brine - 20) / 380), 6);
+  expect(s.salt.features.ground[east(s.map, i)]).toBe(0);
 });
 
 it("seeps brine downslope, keeps it on dry ground, flushes it on wet ground and crusts it at a pit", () => {

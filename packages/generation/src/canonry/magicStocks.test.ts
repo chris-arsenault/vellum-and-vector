@@ -118,20 +118,20 @@ it("makes no source of a trace: thin fallen stock, a cooling forge and a few dea
   expect(fan.every((i) => fire.originSources.fallen[i] === 0)).toBe(true);
   // Cores carried along the road: a little cracked stock on a cell is no forge.
   const cracked = fire.stocks["forge/cracked"];
-  cracked[5] = 2 * map.mesh.areas[5];
-  cracked[6] = 250 * map.mesh.areas[6];
+  cracked[5] = 20 * map.mesh.areas[5];
+  cracked[6] = 1000 * map.mesh.areas[6];
   locateMagicSources(state, fire, 42, 0);
   expect(fire.originSources.forge[5]).toBe(0);
   expect(fire.originSources.forge[6]).toBe(1000);
   expect(fire.located.filter((point) => point.origin === "forge").map((p) => p.x)).toEqual([
     map.mesh.x[6],
   ]);
-  expect(cracked[5]).toBe(2 * map.mesh.areas[5]);
-  // A hundred dead in a town make brine but no killing ground.
+  expect(cracked[5]).toBe(20 * map.mesh.areas[5]);
+  // A few dozen dead in a town make brine but no killing ground.
   const salt = state.physical!.magic!.fields.find((f) => f.definition.id === "salt")!;
-  map.MassDeath[7] = 100;
+  map.MassDeath[7] = 30;
   locateMagicSources(state, salt, 42, 0);
-  expect(salt.stocks["death/brine"][7]).toBe(100 * 500_000);
+  expect(salt.stocks["death/brine"][7]).toBe(30 * 5_000_000);
   expect(salt.source[7]).toBe(0);
 });
 

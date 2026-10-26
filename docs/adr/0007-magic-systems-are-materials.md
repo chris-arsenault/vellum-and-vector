@@ -46,9 +46,11 @@ stock, which moves, accumulates and feeds the field, but it is no source and
 seeds no site, so a trace a river or a trade road carried is never a labelled
 core. A class component is published as a named place only past a minimum of
 cells declared with its cartography (one for a site, more for a course or an
-area); below it the class stays on the map as coverage. Density is lowered by
-locating sites and keeping places whole, never by thinning stocks or
-intensities.
+area); below it the class stays on the map as coverage, and an area wider than
+a landform may be is split along drainage divides into several places. Density
+is lowered by locating sites and keeping places whole, never by thinning stocks
+or intensities, and the seven systems are judged against each other: no one of
+them may own the map's places.
 
 **Meetings are processes.** A confluence names the systems it reads, the
 coverage floor each must reach, its own writes to the physical fields, its own

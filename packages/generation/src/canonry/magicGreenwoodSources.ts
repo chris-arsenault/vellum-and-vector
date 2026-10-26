@@ -73,19 +73,24 @@ export function forgeSources(
     });
   }
 }
-/** Open ground on soft karst at a slope break where the flow first reaches the spring flow. */
-function springRises(map: PhysicalField, i: number, springFlow: number, springRock: number) {
+/** Open, unfrozen ground on soft karst at a slope break with the spring flow through it. */
+function springGround(map: PhysicalField, i: number, springFlow: number, springRock: number) {
   if (map.WaterKindCodes[i] !== 0 || map.IceThickness[i] > 0) return false;
   if (map.FlowAccumulation[i] < springFlow || map.RockResistance[i] > springRock) return false;
-  return map.Slope[i] <= 0.01 && karst(map, i) >= 0.35 && !fedFromAbove(map, i, springFlow);
+  return map.Slope[i] <= 0.01 && karst(map, i) >= 0.35;
 }
-/** Whether a cell already receives the spring flow from a cell draining into it: a reach, not a rise. */
-function fedFromAbove(map: PhysicalField, i: number, springFlow: number) {
+/**
+ * The spring is where the river comes onto spring ground: the first such cell along its
+ * course, not every reach it then runs along the karst.
+ */
+function springRises(map: PhysicalField, i: number, springFlow: number, springRock: number) {
+  if (!springGround(map, i, springFlow, springRock)) return false;
   for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
     const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-    if (j >= 0 && map.FlowTargets[j] === i && map.FlowAccumulation[j] >= springFlow) return true;
+    if (j >= 0 && map.FlowTargets[j] === i && springGround(map, j, springFlow, springRock))
+      return false;
   }
-  return false;
+  return true;
 }
 /** The world has no carbonate channel; its published karst proxy is continental, unvolcanic crust. */
 function karst(map: PhysicalField, i: number) {
@@ -97,8 +102,8 @@ function karst(map: PhysicalField, i: number) {
 /**
  * Greenwood's springs: where a catchment's recharge reaches the surface through soft, soluble
  * rock on a slope break, stronger where a buried peat stratum lies beneath. The spring is
- * where the water rises, the first cell whose flow reaches the spring flow, not every reach
- * the river then runs along. A spring whose karst has fallen in (sealed) rises no more.
+ * where the river comes onto that ground, not every reach it then runs along it. A spring
+ * whose karst has fallen in (sealed) rises no more.
  */
 export function aquiferSources(
   state: GenerationState,
