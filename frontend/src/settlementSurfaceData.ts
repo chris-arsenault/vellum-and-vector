@@ -1,5 +1,6 @@
 import {
   languageUse,
+  populationGroupsSchema,
   population,
   type AtlasFeature,
   type PopulationGroup,
@@ -9,11 +10,25 @@ import {
 } from "@atlas/domain";
 import { shareSegments, type Segment, type Series } from "./surfaceData";
 
-/** What the settlement surface reads: the community behind a settlement feature. */
+/** Retained context with the current map's independently authored resident description. */
 export function settlementCommunity(world: World, feature: AtlasFeature, areaId: string) {
   const region = world.societies?.[areaId] ?? world.societies?.[feature.areaId];
   const community = region?.communities.find((c) => c.id === feature.attributes.communityId);
-  return region && community ? { region, community } : null;
+  if (!region || !community) return null;
+  return { region, community: feature.mapOnly ? mappedCommunity(feature, community) : community };
+}
+function mappedCommunity(feature: AtlasFeature, community: SocietyCommunity) {
+  const groups = Array.isArray(feature.attributes.groups)
+    ? populationGroupsSchema.parse(feature.attributes.groups)
+    : community.groups;
+  const urban = Number(feature.attributes.population ?? community.settlement?.population ?? 0);
+  return {
+    ...community,
+    groups,
+    name: feature.name,
+    protected: feature.protected,
+    ...(community.settlement ? { settlement: { ...community.settlement, population: urban } } : {}),
+  };
 }
 export function entityName(world: World, id: string | null | undefined) {
   return id ? (world.entities[id]?.name ?? id) : "Unspecified";

@@ -10,6 +10,10 @@ test("editing, undo, cancellation and independent worlds work without services",
   await page.getByLabel("World name").fill("First world");
   await page.getByRole("radio", { name: "Blank world", exact: true }).check();
   await page.getByRole("button", { name: "Create world", exact: true }).click();
+  await page.getByLabel("Detail level").selectOption("draft");
+  await page.getByRole("button", { name: "Generate selected domains" }).click();
+  await page.getByRole("button", { name: "Cancel generation" }).click();
+  await expect(page.locator(".job-row strong").first()).toHaveText("cancelled");
   await page
     .getByRole("toolbar", { name: "Map tools" })
     .getByRole("button", { name: "Place point", exact: true })
@@ -21,9 +25,10 @@ test("editing, undo, cancellation and independent worlds work without services",
   const panel = page.locator(".right-panel");
   await expect(panel.getByRole("heading", { name: "Keep this place" })).toBeVisible();
   await page.getByRole("button", { name: "Develop", exact: true }).click();
-  await page.getByLabel("Detail level").selectOption("fine");
+  await page.getByLabel("Detail level").selectOption("draft");
   await page.getByRole("button", { name: "Generate selected domains" }).click();
-  await page.getByRole("button", { name: "Cancel generation" }).click();
+  await expect(panel.locator(".error")).toContainText("overlaps “Keep this place”");
+  await expect(page.getByRole("button", { name: "Cancel generation" })).toHaveCount(0);
   await expect(page.locator(".job-row strong").first()).toHaveText("cancelled");
   await expect(page.locator(".map-status")).toContainText("1 world features");
   await page.getByRole("button", { name: "Library", exact: true }).click();

@@ -206,13 +206,7 @@ function FeatureEditor({
           <SocietyGroupEditor
             world={world}
             groups={attributes.groups as PopulationGroup[]}
-            change={(groups) =>
-              setAttributes({
-                ...attributes,
-                groups,
-                population: groups.reduce((sum, g) => sum + g.count, 0),
-              })
-            }
+            change={(groups) => setAttributes({ ...attributes, groups })}
           />
         )}
         <AttributeEditor

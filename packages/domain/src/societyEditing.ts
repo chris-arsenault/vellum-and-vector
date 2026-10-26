@@ -85,6 +85,39 @@ export const societyWorkAttributesSchema = z.object({
   magnitude: z.number().finite().nonnegative(),
 });
 
+/** Reconcile the drawing's resident totals without changing the retained society. */
+export function editMappedResidents(feature: AtlasFeature, before: AtlasFeature) {
+  const old = before.attributes;
+  if (
+    feature.kind !== "settlement" ||
+    !Array.isArray(old.groups) ||
+    (sameValue(old.groups, feature.attributes.groups) &&
+      old.population === feature.attributes.population)
+  )
+    return;
+  const groups = populationGroupsSchema.parse(old.groups),
+    urban = Number(old.population ?? 0);
+  const community: Pick<SocietyCommunity, "groups" | "settlement"> = {
+    groups,
+    ...(old.communityPopulation !== undefined
+      ? {
+          settlement: { population: urban, peak: urban, recoveryYears: 0 },
+        }
+      : {}),
+  };
+  editResidentCounts(community, feature, old);
+  const total = population(community),
+    settlement = community.settlement?.population ?? total;
+  feature.attributes = {
+    ...feature.attributes,
+    groups: community.groups,
+    population: settlement,
+    settlementPopulation: settlement,
+    communityPopulation: total,
+    ruralPopulation: total - settlement,
+  };
+}
+
 /** Present authoring changes the retained residents, never the completed era records. */
 export function editSocietyFeature(
   snapshot: DomainSnapshot,
@@ -207,7 +240,7 @@ function editCommunity(
   );
 }
 function editResidentCounts(
-  c: SocietyCommunity,
+  c: Pick<SocietyCommunity, "groups" | "settlement">,
   feature: AtlasFeature,
   attributes?: Record<string, unknown>
 ) {
@@ -227,7 +260,7 @@ function editResidentCounts(
     if (c.settlement) c.settlement.population = count;
   }
 }
-function resizePopulation(c: SocietyCommunity, count: number) {
+function resizePopulation(c: Pick<SocietyCommunity, "groups" | "settlement">, count: number) {
   const before = population(c);
   requireThat(
     Number.isFinite(count) && count >= 0,

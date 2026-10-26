@@ -26,7 +26,7 @@ import { SettlementMagic, SettlementTies } from "./SettlementTies";
 /**
  * The settlement's surface: who lives here and on what, how that has gone, whose polity it
  * is, what magic it practises, what it built and whom it reaches. Every section reads the
- * society record behind the feature; the links select related features on the map.
+ * retained society with mapped resident edits; the links select related features on the map.
  */
 export function SettlementSurface({
   world,

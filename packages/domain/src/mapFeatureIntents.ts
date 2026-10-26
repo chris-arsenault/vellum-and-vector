@@ -11,6 +11,7 @@ import { sameValue } from "./values";
 import { moveMappedRoutes, writeMapRepresentation } from "./mapRouteEdits";
 import { updateNetworkTopology } from "./networkTopology";
 import { registerMapRemovalIntents } from "./mapRemoval";
+import { editMappedResidents } from "./societyEditing";
 
 export function evaluateMapFeature(
   data: FeatureEdit,
@@ -46,6 +47,7 @@ export function evaluateMapFeature(
   };
   if (previous) {
     const before = presentAtlasFeature(snapshot.world, previous, area.id)!;
+    editMappedResidents(feature, before);
     retainMappedAnchors(snapshot, area, previous, before.geometry, geometry);
     writeMapRepresentation(snapshot, changes, area, previous, feature, context.actor);
     if (previous.name !== feature.name || !sameValue(previous.relations, feature.relations))
