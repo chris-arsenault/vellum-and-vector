@@ -47,6 +47,21 @@ async function outline(page: Page, name: string, extent: Box, points: number[][]
     await clickWorld(page, p[0], p[1], extent, i === points.length - 1);
   await keep(page, name);
 }
+async function centralOutline(page: Page, name: string) {
+  await page.getByRole("button", { name: "Draw outline", exact: true }).click();
+  const box = (await canvas(page).boundingBox())!;
+  for (const [i, [x, y]] of [
+    [0.3, 0.3],
+    [0.7, 0.3],
+    [0.7, 0.7],
+    [0.3, 0.7],
+  ].entries()) {
+    const position = { x: box.width * x, y: box.height * y };
+    if (i === 3) await canvas(page).dblclick({ position });
+    else await canvas(page).click({ position });
+  }
+  await keep(page, name);
+}
 async function woodland(page: Page) {
   await page
     .getByRole("toolbar")
@@ -94,17 +109,17 @@ test("refines a selected subject recursively with regional controls and cancella
   page.on("pageerror", (error) => errors.push(error.message));
   await installGenerationFixture(page, { fields: true, terrain: true, hold: true });
   await create(page);
+  // Terrain supplies refinement inputs; raster rendering is covered by the framing journey.
+  await openMapSettings(page, "Appearance");
+  await page.getByRole("radio", { name: "Drawn map", exact: true }).check();
+  await page.getByLabel("Illustrated terrain", { exact: true }).uncheck();
+  await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
   await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
   await completeGenerationFixture(page);
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
   const original = await exported(page);
   await page.getByRole("button", { name: "Regions", exact: true }).click();
-  await outline(page, "River country", source, [
-    [20_000, 20_000],
-    [80_000, 20_000],
-    [80_000, 80_000],
-    [20_000, 80_000],
-  ]);
+  await centralOutline(page, "River country");
   await page.getByRole("button", { name: "Refine this region", exact: true }).click();
   await expect(page.getByLabel("Regional detail")).toBeVisible();
   await expect(page.getByText("Configure physical history", { exact: true })).toHaveCount(0);
@@ -121,17 +136,7 @@ test("refines a selected subject recursively with regional controls and cancella
   expect(refined.areas.find((area: { parentId: string | null }) => !area.parentId)).toEqual(
     original.areas[0]
   );
-  await outline(
-    page,
-    "Inner river",
-    [20_000, 20_000, 80_000, 80_000],
-    [
-      [30_000, 30_000],
-      [60_000, 30_000],
-      [60_000, 60_000],
-      [30_000, 60_000],
-    ]
-  );
+  await centralOutline(page, "Inner river");
   await page.getByRole("button", { name: "Refine this region", exact: true }).click();
   await expect(page.getByLabel("Regional detail")).toBeVisible();
   const nested = await exported(page);
