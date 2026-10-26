@@ -126,6 +126,10 @@ region supplies the map footprint and ancestry; choosing a region or changing
 the drawing never generates finer geography.
 
 Political maps distinguish sovereign territory from optional control and claims.
+Generated shared borders use a common rounded depiction, and land washes stop at
+physical shorelines. Biomes combine distinct washes with tree, grass, reed, dune
+or rock motifs; named landmarks and sites have their own symbols. Fault traces
+are optional geological detail rather than ordinary atlas linework.
 **Social distributions** adds independent cultural, language and religious
 hatches and population dots. Several distributions can coexist on the same map.
 Select a feature to adjust its label, draw a label curve, change its symbol or

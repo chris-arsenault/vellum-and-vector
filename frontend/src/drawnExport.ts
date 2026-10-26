@@ -1,5 +1,6 @@
 import { createMap, fitArea, updateFeatures } from "./mapEngine";
 import { updateDrawnMap, type DrawnMapInput } from "./drawnMap";
+import { drawingGeography } from "./drawnGeography";
 
 // Render the designed sheet at native pixel density, rather than enlarging a screenshot.
 export const sheetDesignWidth = 1200;
@@ -28,7 +29,8 @@ export async function renderDrawnSheet(
       input.styles,
       input.features,
       input.view,
-      input.region?.footprint ?? input.area.footprint
+      input.region?.footprint ?? input.area.footprint,
+      drawingGeography(input.features, input.base)
     );
     updateDrawnMap(engine, input);
     fitArea(engine, { footprint: input.region?.footprint ?? input.area.footprint });

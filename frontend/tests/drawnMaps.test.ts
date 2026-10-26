@@ -69,6 +69,7 @@ async function createAtlas(page: Page) {
         { type: "Point", coordinates: [35000, 50000] },
         { settlementRole: "capital", population: 42000 }
       ),
+      ...drawingPlacesAndBiomes(),
     ],
   });
   await page.goto("/");
@@ -90,6 +91,34 @@ async function createAtlas(page: Page) {
   await page.getByRole("button", { name: "Layers", exact: true }).click();
   await page.getByLabel("Presentation", { exact: true }).selectOption("drawn");
   await expect(page.locator(".map-frame")).toHaveClass(/drawn-map/);
+}
+function drawingPlacesAndBiomes() {
+  return [
+    feature(
+      "44444444-4444-4444-8444-444444444444",
+      "Blackspire",
+      "landmark",
+      "geology",
+      rectangle(62000, 62000, 68000, 68000),
+      { landmarkKind: "volcanic-mountain" }
+    ),
+    feature(
+      "66666666-6666-4666-8666-666666666666",
+      "Reedmere",
+      "wetland",
+      "ecology",
+      rectangle(30000, 20000, 48000, 40000),
+      { biome: "Marsh" }
+    ),
+    feature(
+      "77777777-7777-4777-8777-777777777777",
+      "Amber Steppe",
+      "grassland",
+      "ecology",
+      rectangle(55000, 10000, 90000, 40000),
+      { biome: "Grassland" }
+    ),
+  ];
 }
 async function clickWorld(page: Page, point: number[], twice = false, drawn = false) {
   const canvas = page.getByRole("application", { name: "World map canvas" });
@@ -134,6 +163,24 @@ test("drawn atlas reuses the canvas and switches back to raster", async ({ page 
   await page.getByLabel("Presentation", { exact: true }).selectOption("raster");
   await expect(page.locator(".map-frame")).not.toHaveClass(/drawn-map/);
   expect(errors).toEqual([]);
+});
+
+test("major landmarks and named sites have pickable drawn symbols", async ({ page }) => {
+  await createAtlas(page);
+  await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
+  await page.getByRole("button", { name: "Fit area", exact: true }).click();
+  await clickWorld(page, [65000, 65000], false, true);
+  await expect(page.locator(".right-panel h2")).toHaveText("Blackspire");
+  await page.getByLabel("Working layer").selectOption("places");
+  await page.getByRole("toolbar").getByRole("button", { name: "Place point", exact: true }).click();
+  await page.getByLabel("Feature name").fill("Old Standing Stone");
+  await clickWorld(page, [75000, 35000], false, true);
+  await expect(page.locator(".right-panel h2")).toHaveText("Old Standing Stone");
+  await page.getByRole("toolbar").getByRole("button", { name: "Select", exact: true }).click();
+  await clickWorld(page, [65000, 65000], false, true);
+  await expect(page.locator(".right-panel h2")).toHaveText("Blackspire");
+  await clickWorld(page, [75000, 35000], false, true);
+  await expect(page.locator(".right-panel h2")).toHaveText("Old Standing Stone");
 });
 
 async function exported(page: Page) {

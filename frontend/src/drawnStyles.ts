@@ -1,4 +1,6 @@
 import { Circle, Fill, Stroke, Style, Text } from "ol/style.js";
+import GeoJSON from "ol/format/GeoJSON.js";
+import Point from "ol/geom/Point.js";
 import type { AtlasFeature, LayerStyle, World } from "./types";
 import type { CartographicPresentation, CartographicOverride } from "@atlas/domain";
 import { drawnIcon, atlasColour } from "./drawnSymbols";
@@ -7,11 +9,17 @@ import { featureStyle } from "./vectorStyles";
 import { bounds, defaultStyles } from "./presentation";
 import { drawnLabelGeometry, labelScope } from "./drawnLabels";
 import type { Geometry } from "geojson";
+import type { DrawingGeography } from "./drawnGeography";
+import { biomeStyle } from "./drawnEcology";
+import { drawnPlace, placeMark, placeAnchor } from "./drawnPlaces";
+import { describeFeature } from "@atlas/domain";
+import { drawnMagic } from "./drawnMagic";
 
 export interface DrawnStyleContext {
   world: World;
   view: CartographicPresentation;
   footprint?: Geometry;
+  geography?: DrawingGeography;
 }
 const ink = "#53452f",
   paper = "#eee4c9",
@@ -20,8 +28,27 @@ export function defaultDrawnStyles(world: World, subject: CartographicPresentati
   return defaultStyles(world, subject).map((layer) => ({
     ...layer,
     opacity: 1,
+    ...(layer.layerId === "geology"
+      ? {
+          types: {
+            [describeFeature(world, { kind: "fault", layerId: "geology", attributes: {} }).id]: {
+              visible: false,
+            },
+          },
+        }
+      : {}),
     visible:
-      (layer.visible || layer.layerId === "roads") &&
+      (layer.visible ||
+        [
+          "roads",
+          "pois",
+          "magic",
+          "ruins",
+          "transportSites",
+          "waterworks",
+          "institutions",
+          "magicPractices",
+        ].includes(layer.layerId)) &&
       !["control", "claims", "administration"].includes(layer.layerId),
     labels: [
       "settlements",
@@ -32,6 +59,12 @@ export function defaultDrawnStyles(world: World, subject: CartographicPresentati
       "ecology",
       "pois",
       "ruins",
+      "magic",
+      "geology",
+      "transportSites",
+      "waterworks",
+      "institutions",
+      "magicPractices",
     ].includes(layer.layerId),
   }));
 }
@@ -48,13 +81,39 @@ export function cartographicFeatureStyle(
   resolution: number,
   context: DrawnStyleContext
 ): Style[] {
-  const override = context.view.overrides[feature.id];
-  if (override?.hidden) return [];
-  const result = illustrationStyle(feature, style, resolution, context);
+  if (!drawingVisible(feature, style, context)) return [];
+  const shape = context.geography?.get(feature.id);
+  if (shape === null) return [];
+  const depicted = shape ? { ...feature, geometry: shape } : feature;
+  const result = illustrationStyle(depicted, style, resolution, context);
   const name = cartographicName(feature, context.world);
-  if (style.labels && context.view.labels && !override?.labelHidden && name)
-    result.push(labelStyle(feature, name, context, resolution));
+  if (labelEnabled(feature, style, context) && name)
+    result.push(labelStyle(depicted, name, context, resolution));
+  if (shape && shape !== feature.geometry) applyDrawingShape(result, shape);
   return result;
+}
+function drawingVisible(f: AtlasFeature, style: LayerStyle, c: DrawnStyleContext) {
+  return !c.view.overrides[f.id]?.hidden && !hiddenFault(f, style, c);
+}
+function labelEnabled(f: AtlasFeature, style: LayerStyle, c: DrawnStyleContext) {
+  return style.labels && c.view.labels && !c.view.overrides[f.id]?.labelHidden;
+}
+const renderShapes = new WeakMap<Geometry, import("ol/geom/Geometry.js").default>();
+function applyDrawingShape(styles: Style[], shape: Geometry) {
+  let geometry = renderShapes.get(shape);
+  if (!geometry) {
+    geometry = new GeoJSON().readGeometry(shape)!;
+    renderShapes.set(shape, geometry);
+  }
+  for (const style of styles) if (!style.getGeometry()) style.setGeometry(geometry);
+}
+function hiddenFault(f: AtlasFeature, style: LayerStyle, c: DrawnStyleContext) {
+  // Older maps published the computational fault traces in geology, instead of the optional faults layer.
+  return (
+    f.kind === "fault" &&
+    f.layerId === "geology" &&
+    style.types?.[describeFeature(c.world, f).id]?.visible !== true
+  );
 }
 function illustrationStyle(
   f: AtlasFeature,
@@ -83,11 +142,10 @@ function shapeStyle(
   resolution: number,
   c: DrawnStyleContext
 ): Style[] {
-  if (f.kind === "settlement") return [settlement(f, c)];
-  if (f.layerId === "magic") {
-    const styles = featureStyle(f, { ...layer, labels: false }, resolution);
-    return Array.isArray(styles) ? styles : [styles];
-  }
+  const special = specialStyle(f, c);
+  if (special) return [special];
+  if (f.layerId === "magic")
+    return drawnMagic(f, layer, c.world, resolution, c.view.subject === "physical");
   if (["sovereignty", "control", "claims", "administration"].includes(f.layerId))
     return [territory(f, c)];
   if (f.kind === "river") return river(f, layer, resolution, c);
@@ -109,6 +167,13 @@ function shapeStyle(
       }),
     ];
   return [landmark(f, c)];
+}
+function specialStyle(f: AtlasFeature, c: DrawnStyleContext) {
+  if (f.kind === "settlement") return settlement(f, c);
+  if (f.kind === "fault")
+    return new Style({ stroke: new Stroke({ color: "#8d8170", width: 0.7, lineDash: [2, 5] }) });
+  if (f.kind === "ocean") return new Style({ fill: new Fill({ color: "#00000000" }) });
+  return biomeStyle(f, c.view.style === "ink") ?? drawnPlace(f, c.view.style === "ink");
 }
 function river(
   f: AtlasFeature,
@@ -175,13 +240,13 @@ function labelStyle(f: AtlasFeature, name: string, c: DrawnStyleContext, resolut
   const polity = f.layerId === "sovereignty";
   const width = labelPixelWidth(f, c, resolution);
   return new Style({
-    geometry: drawnLabelGeometry(f, c, own),
+    geometry: labelGeometry(f, c, own),
     zIndex: polity ? 1e9 : settlementPriority(f),
     text: labelVisible(f, name, own, width)
       ? new Text({
           text: polity ? name.toUpperCase() : name,
           font: labelFont(f, own, width, name.length),
-          placement: f.geometry.type.includes("Line") || own.path ? "line" : "point",
+          placement: labelPlacement(f, own),
           overflow: false,
           maxAngle: Math.PI / 5,
           padding: [3, 4, 3, 4],
@@ -194,6 +259,14 @@ function labelStyle(f: AtlasFeature, name: string, c: DrawnStyleContext, resolut
       : undefined,
   });
 }
+function labelGeometry(f: AtlasFeature, c: DrawnStyleContext, own: CartographicOverride) {
+  return !own.path && !own.anchor && placeMark(f)
+    ? new Point(placeAnchor(f))
+    : drawnLabelGeometry(f, c, own);
+}
+function labelPlacement(f: AtlasFeature, own: CartographicOverride) {
+  return own.path || (f.geometry.type.includes("Line") && !placeMark(f)) ? "line" : "point";
+}
 function labelFont(f: AtlasFeature, own: CartographicOverride, width: number, length: number) {
   const polity = f.layerId === "sovereignty",
     capital = f.attributes.settlementRole === "capital";
@@ -205,8 +278,13 @@ function labelFont(f: AtlasFeature, own: CartographicOverride, width: number, le
 function labelOffsets(f: AtlasFeature, own: CartographicOverride) {
   return {
     offsetX: own.offsetX ?? 0,
-    offsetY: own.offsetY ?? (f.kind === "settlement" && !own.anchor ? 9 : 0),
+    offsetY: own.offsetY ?? automaticLabelOffset(f, own),
   };
+}
+function automaticLabelOffset(f: AtlasFeature, own: CartographicOverride) {
+  if (own.anchor) return 0;
+  if (placeMark(f)) return 16;
+  return f.kind === "settlement" ? 12 : 0;
 }
 function labelVisible(f: AtlasFeature, name: string, own: CartographicOverride, width: number) {
   if (own.anchor || own.path || f.layerId !== "sovereignty") return true;

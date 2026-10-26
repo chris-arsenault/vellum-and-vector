@@ -5,7 +5,9 @@ import { Fill, Stroke, Style } from "ol/style.js";
 import { fieldInterpolator, spatial, presentedFeatureStyle } from "@atlas/domain";
 import type { Geometry, Point as GeoPoint } from "geojson";
 import type { DrawnMapInput } from "./drawnMap";
-import { drawnIcon } from "./drawnSymbols";
+import { drawnIcon, type DrawnIconKind } from "./drawnSymbols";
+import { biomeTreatment } from "./drawnEcology";
+import { drawingGeography } from "./drawnGeography";
 import { bounds } from "./presentation";
 import type { Raster } from "./types";
 import { terrainWater } from "./terrainWater";
@@ -18,7 +20,7 @@ export const illustratedTreeCover = 0.3;
 
 export interface TerrainMark {
   coordinate: [number, number];
-  kind: "mountain" | "tree";
+  kind: DrawnIconKind;
   size: number;
 }
 function jitter(x: number, y: number) {
@@ -33,7 +35,7 @@ export function terrainMarks(input: DrawnMapInput, footprint: Geometry): Terrain
   const step =
     Math.max(box[2] - box[0], box[3] - box[1]) / terrainSymbolsAcrossSubject / input.view.density;
   const samples = terrainSamplers(input),
-    forests = forestCover(input);
+    forests = biomeCover(input);
   const excluded = terrainExclusions(input);
   const enabled = {
     tree: layerVisible(input, "ecology"),
@@ -54,11 +56,19 @@ export function terrainMarks(input: DrawnMapInput, footprint: Geometry): Terrain
       if (clearings.some(([x, y]) => Math.abs(x - p.x) < step * 1.5 && Math.abs(y - p.y) < step))
         continue;
       const mark = markAt({ p, x, y, step, samples, forests });
-      if (mark && enabled[mark.kind] && !excluded.some((e) => e.kind === mark.kind && e.covers(p)))
-        marks.push(mark);
+      if (mark && terrainShown(mark, enabled, excluded, p)) marks.push(mark);
     }
   }
   return marks;
+}
+function terrainShown(
+  mark: TerrainMark,
+  enabled: Record<"mountain" | "tree", boolean>,
+  excluded: ReturnType<typeof terrainExclusions>,
+  p: { x: number; y: number; z: number }
+) {
+  const family = mark.kind === "mountain" ? "mountain" : "tree";
+  return enabled[family] && !excluded.some((e) => e.kind === family && e.covers(p));
 }
 function terrainExclusions(input: DrawnMapInput) {
   return input.features.flatMap((f) => {
@@ -93,7 +103,7 @@ function markAt({
   y: number;
   step: number;
   samples: ReturnType<typeof terrainSamplers>;
-  forests: ReturnType<typeof forestCover>;
+  forests: ReturnType<typeof biomeCover>;
 }): TerrainMark | null {
   const sample = samples.find((s) => s.covers(p));
   const elevation = sample?.height(p) ?? 0;
@@ -104,9 +114,10 @@ function markAt({
       kind: "mountain",
       size: 18 + Math.round(10 * Math.min(1, elevation / 4000)),
     };
-  const trees =
-    forests.some((f) => f.covers(p)) ||
-    samples.some((s) => s.tree && s.covers(p) && s.tree(p) >= illustratedTreeCover);
+  const biome = forests.find((f) => f.covers(p));
+  if (biome)
+    return { coordinate: [p.x, p.y], kind: biome.symbol, size: 18 + Math.round(jitter(y, x) * 4) };
+  const trees = samples.some((s) => s.tree && s.covers(p) && s.tree(p) >= illustratedTreeCover);
   return trees
     ? { coordinate: [p.x, p.y], kind: "tree", size: 15 + Math.round(jitter(y, x) * 5) }
     : null;
@@ -141,10 +152,15 @@ function treeSampler(rasters: Raster[], base: Raster) {
   const trees = rasters.find((r) => r.areaId === base.areaId && r.channel === "treeCover");
   return trees ? fieldInterpolator(trees.field, trees.channel) : null;
 }
-function forestCover(input: DrawnMapInput) {
-  return input.features
-    .filter((f) => f.kind === "forest" && !featureHidden(input, f))
-    .map((f) => ({ covers: spatial.pointCoverage(f.footprint ?? f.geometry) }));
+function biomeCover(input: DrawnMapInput) {
+  const geography = drawingGeography(input.features, input.base);
+  return input.features.flatMap((f) => {
+    const biome = biomeTreatment(f),
+      shape = geography.get(f.id);
+    return biome && shape && !featureHidden(input, f)
+      ? [{ symbol: biome.symbol, covers: spatial.pointCoverage(shape) }]
+      : [];
+  });
 }
 export function illustratedTerrain(input: DrawnMapInput, footprint: Geometry) {
   return terrainMarks(input, footprint).map((mark) => {

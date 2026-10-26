@@ -1,8 +1,9 @@
-import { spatial } from "@atlas/domain";
+import { spatial, presentedFeatureStyle } from "@atlas/domain";
 import type { DrawnMapInput } from "./drawnMap";
 import { atlasColour } from "./drawnSymbols";
 import { polityIdentity, cartographicName } from "./drawnStyles";
 import { fieldLabel } from "./rasterPresentation";
+import { biomeTreatment } from "./drawnEcology";
 
 export interface DrawnLegendEntry {
   name: string;
@@ -14,7 +15,7 @@ function geographicLegend(input: DrawnMapInput) {
   const footprint = input.region?.footprint ?? input.area.footprint;
   const visible = new Set(input.styles.filter((s) => s.visible).map((s) => s.layerId));
   for (const feature of input.features) {
-    if (!visible.has(feature.layerId) || input.view.overrides[feature.id]?.hidden) continue;
+    if (!legendVisible(input, feature)) continue;
     if (!spatial.intersects(footprint, feature.geometry)) continue;
     if (feature.layerId === "sovereignty")
       entries.set(polityIdentity(feature), {
@@ -24,8 +25,21 @@ function geographicLegend(input: DrawnMapInput) {
       });
     const line = lineLegend(feature.layerId);
     if (line) entries.set(feature.layerId, line);
+    const biome = biomeTreatment(feature);
+    if (biome)
+      entries.set(`biome:${biome.kind}`, { name: biome.name, color: biome.color, mark: "wash" });
   }
   return { entries, visible };
+}
+function legendVisible(input: DrawnMapInput, feature: DrawnMapInput["features"][number]) {
+  const layer = input.styles.find((s) => s.layerId === feature.layerId);
+  const own = input.view.overrides[feature.id];
+  return (
+    layer &&
+    presentedFeatureStyle(input.world, feature, layer).visible &&
+    !own?.hidden &&
+    !own?.illustrationHidden
+  );
 }
 const legendCache = new WeakMap<DrawnMapInput, DrawnLegendEntry[]>();
 export function drawnLegend(input: DrawnMapInput): DrawnLegendEntry[] {

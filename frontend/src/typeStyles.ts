@@ -10,6 +10,7 @@ import type { CartographicPresentation, FeatureTypeStyle } from "@atlas/domain";
 import { describeFeature, typePresentation } from "@atlas/domain";
 import { featureStyle } from "./vectorStyles";
 import { cartographicFeatureStyle } from "./drawnStyles";
+import type { DrawingGeography } from "./drawnGeography";
 const footprints = new WeakMap<Geometry, OLGeometry>();
 
 /** Apply type visibility outside both the default and the GeoStyler renderers. */
@@ -18,7 +19,8 @@ export function typeStyle(
   base: LayerStyle,
   parsed?: StyleLike,
   cartography?: CartographicPresentation,
-  footprint?: Geometry
+  footprint?: Geometry,
+  geography?: DrawingGeography
 ): StyleLike {
   return (feature, resolution) => {
     const domain = feature.get("domain") as AtlasFeature;
@@ -33,7 +35,8 @@ export function typeStyle(
       resolution,
       parsed,
       cartography,
-      footprint
+      footprint,
+      geography
     );
     if (!output) return [];
     const styles = Array.isArray(output) ? output : [output];
@@ -58,13 +61,15 @@ function styledFeature(
   resolution: number,
   parsed?: StyleLike,
   cartography?: CartographicPresentation,
-  footprint?: Geometry
+  footprint?: Geometry,
+  geography?: DrawingGeography
 ) {
   if (cartography?.mode === "drawn")
     return cartographicFeatureStyle(domain, effective, resolution, {
       world,
       view: cartography,
       footprint,
+      geography,
     });
   return parsed
     ? parsedOutput(parsed, feature, resolution)

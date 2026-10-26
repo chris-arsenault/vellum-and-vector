@@ -18,10 +18,10 @@ import { settlementPriority } from "./settlementStyles";
 import type { Area, AtlasFeature, LayerStyle, World } from "./types";
 import { RasterSources } from "./RasterSources";
 import type { CartographicPresentation } from "@atlas/domain";
-import { drawSheet } from "./drawnSheet";
+import { drawSheet, sheetPadding } from "./drawnSheet";
 import type { DrawnMapInput } from "./drawnMap";
 import type { Geometry } from "geojson";
-import { drawnMapPadding } from "./drawnViewport";
+import type { DrawingGeography } from "./drawnGeography";
 
 const format = new GeoJSON();
 export function createMap(
@@ -155,7 +155,8 @@ function syncVectorLayers(engine: MapEngine, world: World, styles: LayerStyle[])
       style,
       world,
       engine.vectors.get("cartography"),
-      engine.vectors.get("displayFootprint")
+      engine.vectors.get("displayFootprint"),
+      engine.vectors.get("drawingGeography")
     );
   }
   const collection = engine.vectors.getLayers();
@@ -175,17 +176,19 @@ function applyVectorStyle(
   style: LayerStyle,
   world: World,
   cartography?: CartographicPresentation,
-  footprint?: Geometry
+  footprint?: Geometry,
+  geography?: DrawingGeography
 ) {
-  if (sameVectorStyle(layer, style, world, cartography, footprint)) return;
+  if (sameVectorStyle(layer, style, world, cartography, footprint, geography)) return;
   layer.set("presentation", style);
   layer.set("styleSystems", world.magicSystems);
   layer.set("styleWorld", world);
   layer.set("cartography", cartography);
   layer.set("displayFootprint", footprint);
+  layer.set("drawingGeography", geography);
   if (!style.symbols || cartography?.mode === "drawn") {
     layer.set("symbols", null);
-    layer.setStyle(typeStyle(world, style, undefined, cartography, footprint));
+    layer.setStyle(typeStyle(world, style, undefined, cartography, footprint, geography));
     return;
   }
   if (layer.get("symbols") === style.symbols && layer.get("parsedStyle")) {
@@ -212,14 +215,16 @@ function sameVectorStyle(
   style: LayerStyle,
   world: World,
   cartography?: CartographicPresentation,
-  footprint?: Geometry
+  footprint?: Geometry,
+  geography?: DrawingGeography
 ) {
   return (
     layer.get("presentation") === style &&
     layer.get("styleWorld") === world &&
     layer.get("styleSystems") === world.magicSystems &&
     layer.get("cartography") === cartography &&
-    layer.get("displayFootprint") === footprint
+    layer.get("displayFootprint") === footprint &&
+    layer.get("drawingGeography") === geography
   );
 }
 
@@ -230,11 +235,13 @@ export function updateFeatures(
   styles: LayerStyle[],
   scene: AtlasFeature[],
   cartography?: CartographicPresentation,
-  footprint?: Geometry
+  footprint?: Geometry,
+  geography?: DrawingGeography
 ) {
   engine.vectors.set("cartography", cartography);
   engine.vectors.set("displayFootprint", cartography?.clip ? footprint : undefined);
   engine.vectors.set("world", world);
+  engine.vectors.set("drawingGeography", geography);
   syncVectorLayers(engine, world, styles);
   const wanted = new Set(scene.map((feature) => feature.id));
   for (const feature of engine.features.getFeatures()) {
@@ -352,6 +359,8 @@ function updateAreas(engine: MapEngine, world: World, area: Area) {
 }
 export function fitArea(engine: MapEngine, area: Pick<Area, "footprint">) {
   engine.map.getView().fit(bounds(area.footprint), {
-    padding: engine.drawn.getVisible() ? drawnMapPadding : [35, 35, 35, 35],
+    padding: engine.drawn.getVisible()
+      ? sheetPadding(engine.drawn.get("input"), engine.map.getSize()?.[0] ?? 1200)
+      : [35, 35, 35, 35],
   });
 }

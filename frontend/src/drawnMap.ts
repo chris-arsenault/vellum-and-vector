@@ -18,7 +18,7 @@ import { atlasColour } from "./drawnSymbols";
 import { polityIdentity } from "./drawnStyles";
 import { asArray } from "ol/color.js";
 import { setDrawingViewport } from "./drawnViewport";
-import { drawnOcean } from "./drawnWater";
+import { drawingGeography, drawingOceans } from "./drawnGeography";
 
 export interface DrawnMapInput {
   world: World;
@@ -58,11 +58,12 @@ function unchangedDrawing(engine: MapEngine, input: DrawnMapInput) {
 }
 function configureDrawnLayers(engine: MapEngine, input: DrawnMapInput, footprint: Geometry) {
   const drawn = input.view.mode === "drawn";
-  if (drawn !== engine.drawn.getVisible()) setDrawingViewport(engine, drawn, footprint);
   engine.drawn.set("input", input);
+  if (drawn !== engine.drawn.getVisible()) setDrawingViewport(engine, drawn, footprint);
   engine.image.setVisible(!drawn);
   engine.overlay.setVisible(!drawn);
   engine.drawn.setVisible(drawn);
+  engine.drawn.setZIndex(-100);
   engine.furniture.setVisible(drawn);
   engine.drawnMask.setVisible(drawn && input.view.clip);
   engine.areas.setVisible(!drawn);
@@ -70,34 +71,55 @@ function configureDrawnLayers(engine: MapEngine, input: DrawnMapInput, footprint
   const extent = drawn ? bounds(input.view.clip ? footprint : input.area.footprint) : undefined;
   engine.drawn.setExtent(extent);
   engine.drawnMask.setExtent(drawn ? bounds(input.world.reference.domain) : undefined);
-  for (const layer of engine.featureLayers.values()) layer.setExtent(extent);
+  for (const [id, layer] of engine.featureLayers) {
+    layer.setExtent(extent);
+    layer.setZIndex(drawn ? drawingLayerPriority(id) : 0);
+  }
+}
+// Land cover and territories sit below routes and located sites, for drawing and native picking.
+const drawingLayerPriorities: Record<string, number> = {
+  ecology: -40,
+  sovereignty: -30,
+  control: -30,
+  claims: -30,
+  administration: -30,
+  oceans: -25,
+  lakes: -25,
+  magic: -15,
+  geology: -10,
+  faults: -10,
+  roads: -8,
+  rivers: -8,
+};
+function drawingLayerPriority(id: string) {
+  return drawingLayerPriorities[id] ?? -5;
 }
 function addOcean(engine: MapEngine, input: DrawnMapInput, footprint: Geometry) {
   const source = engine.drawn.getSource()!;
-  for (const raster of input.base) {
-    const ocean = drawnOcean(raster);
-    if (ocean) {
-      source.addFeature(
-        painted(ocean, input.view.style === "ink" ? "#e1e1d2" : "#b4cfca", "#7b897b", -90)
-      );
-      const box = bounds(footprint);
-      source.addFeatures(coastEchoes(ocean, (box[2] - box[0]) / terrainSymbolsAcrossSubject));
-    }
+  for (const ocean of drawingOceans(input.features, input.base)) {
+    source.addFeature(
+      painted(ocean, input.view.style === "ink" ? "#e1e1d2" : "#b4cfca", "#7b897b", -90)
+    );
+    const box = bounds(footprint);
+    source.addFeatures(coastEchoes(ocean, (box[2] - box[0]) / terrainSymbolsAcrossSubject));
   }
 }
 export function territoryWashes(input: DrawnMapInput) {
   const layer = input.styles.find((s) => s.layerId === "sovereignty");
   if (!layer?.visible) return [];
+  const geography = drawingGeography(input.features, input.base);
   return input.features
     .filter((f) => f.layerId === "sovereignty")
     .flatMap((f) => {
       if (!territoryShown(input, f, layer)) return [];
+      const shape = geography.get(f.id);
+      if (!shape) return [];
       const type = describeFeature(input.world, f);
       const own = layer.types?.[type.id] ?? {};
       const color =
         own.color ?? (input.view.style === "ink" ? "#594b36" : atlasColour(polityIdentity(f)));
       const result = painted(
-        f.geometry,
+        shape,
         color + (input.view.style === "ink" ? "12" : "8c"),
         "#00000000",
         -70,

@@ -3,8 +3,8 @@ import Projection from "ol/proj/Projection.js";
 import type { Geometry } from "geojson";
 import type { MapEngine } from "./mapEngine";
 import { bounds } from "./presentation";
+import { sheetPadding } from "./drawnSheet";
 
-export const drawnMapPadding = [100, 55, 110, 55];
 /** Paper margins need space outside the geographic chart; raster views retain their constraints. */
 export function setDrawingViewport(engine: MapEngine, drawn: boolean, footprint: Geometry) {
   const previous = engine.map.getView();
@@ -27,7 +27,9 @@ export function setDrawingViewport(engine: MapEngine, drawn: boolean, footprint:
         : {}),
     })
   );
-  engine.map
-    .getView()
-    .fit(bounds(footprint), { padding: drawn ? drawnMapPadding : [35, 35, 35, 35] });
+  engine.map.getView().fit(bounds(footprint), {
+    padding: drawn
+      ? sheetPadding(engine.drawn.get("input"), engine.map.getSize()?.[0] ?? 1200)
+      : [35, 35, 35, 35],
+  });
 }

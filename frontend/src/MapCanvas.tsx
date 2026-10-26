@@ -11,6 +11,7 @@ import { updateRegionMap, type RegionPresentation } from "./regionMap";
 import { canonicalPosition } from "@atlas/domain";
 import type { CartographicPresentation } from "@atlas/domain";
 import { updateDrawnMap, type DrawnMapInput } from "./drawnMap";
+import { drawingGeography } from "./drawnGeography";
 interface Props {
   world: World;
   area: Area;
@@ -59,7 +60,15 @@ export function MapCanvas({
     coordinates,
     callbacks
   );
-  useFeaturePresentation(engine, { world, area, styles, features, view: cartography, region });
+  useFeaturePresentation(engine, {
+    world,
+    area,
+    styles,
+    features,
+    view: cartography,
+    region,
+    base: baseRaster,
+  });
   const previewLabel = useGenerationRaster(
     engine,
     world,
@@ -103,9 +112,11 @@ function useDrawnPresentation(engine: MapEngine | null, input: DrawnMapInput) {
 }
 function useFeaturePresentation(
   engine: MapEngine | null,
-  input: Pick<DrawnMapInput, "world" | "area" | "styles" | "features" | "view" | "region">
+  input: Pick<DrawnMapInput, "world" | "area" | "styles" | "features" | "view" | "region"> & {
+    base: Optional<Raster[]>;
+  }
 ) {
-  const { world, area, styles, features, view, region } = input;
+  const { world, area, styles, features, view, region, base } = input;
   useEffect(() => {
     if (engine)
       applyMapUpdate(engine, () =>
@@ -116,10 +127,11 @@ function useFeaturePresentation(
           styles,
           features,
           view,
-          region?.footprint ?? area.footprint
+          region?.footprint ?? area.footprint,
+          view.mode === "drawn" ? drawingGeography(features, base ?? undefined) : undefined
         )
       );
-  }, [engine, world, area, styles, features, view, region]);
+  }, [engine, world, area, styles, features, view, region, base]);
 }
 function useCanvasEngine(
   initialReference: World["reference"],

@@ -6,6 +6,15 @@ import { drawnLegend, type DrawnLegendEntry } from "./drawnLegend";
 type PaperContext = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 const ink = "#53452f",
   paper = "#eee4c9";
+export function sheetPadding(input: DrawnMapInput | undefined, width: number) {
+  const block = input?.view.sheet.legend ? legendBlock(input, width).blockHeight : 0;
+  return [100, 55, Math.max(110, block + 52), 55];
+}
+function legendBlock(input: DrawnMapInput, width: number) {
+  const columns = Math.max(1, Math.floor((width - 100) / 250));
+  const rows = Math.ceil(drawnLegend(input).length / columns);
+  return { columns, rows, blockHeight: rows * 18 + 22 };
+}
 export function drawSheet(event: RenderEvent, input: DrawnMapInput) {
   const ctx = event.context;
   if (!ctx || !("fillText" in ctx) || !event.frameState || !event.inversePixelTransform) return;
@@ -80,9 +89,7 @@ function compass(ctx: PaperContext, x: number, y: number) {
 function legend(ctx: PaperContext, input: DrawnMapInput, width: number, height: number) {
   const entries = drawnLegend(input);
   if (!entries.length) return;
-  const columns = Math.max(1, Math.floor((width - 100) / 250));
-  const rows = Math.ceil(entries.length / columns),
-    blockHeight = rows * 18 + 22;
+  const { columns, rows, blockHeight } = legendBlock(input, width);
   const y = height - blockHeight - 45;
   ctx.fillStyle = paper + "ed";
   ctx.fillRect(34, y, width - 68, blockHeight);
