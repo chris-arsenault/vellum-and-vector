@@ -64,11 +64,6 @@ it("closes polar cap faces without open drainage edges", () => {
       if (j < 0) expect(mesh.faceLength[i * mesh.stride + e]).toBe(0);
       else expect(edgeLeadingTo(mesh, j, i)).toBeGreaterThanOrEqual(0);
     }
-  const at = physicalSampler(
-    mesh,
-    Float64Array.from(mesh.x, (x) => Math.cos(x / 1e6))
-  );
-  expect(at(-1e6, 1e6)).toBeCloseTo(at(1e6, 1e6), 12);
 });
 
 it("joins opposite chart edges with reciprocal short physical links and retains world area", () => {

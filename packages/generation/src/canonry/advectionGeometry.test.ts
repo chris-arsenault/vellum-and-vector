@@ -4,7 +4,7 @@ import { createWorldMesh } from "./worldMesh";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { physicalContext } from "./context";
 import { physicalSampler } from "./physicalMetric";
-import { meshLineDelta, meshPoint } from "./mesh";
+import { meshLineDelta, meshPoint, meshDeltaX } from "./mesh";
 import { plateAdvection } from "./advection";
 import { buildTransportPlan } from "./transportPlan";
 import { transportHistory } from "./transportHistory";
@@ -132,14 +132,14 @@ it.each([1024, 4096])("carries a narrow block beside larger blocks at %s samples
   expect(narrowInterior).toBeGreaterThan(0);
 });
 
-it("resamples a polar fault along its short physical crossing", () => {
+it("keeps a cap-edge fault on its cylindrical longitudes during northward motion", () => {
   const map = createField(
     createWorldMesh([0, 0, 1e6, 600_000], 1024, 0, undefined, undefined, undefined, true, true)
   );
   const a: [number, number] = [-200_000, 290_000],
     b: [number, number] = [300_000, 290_000];
   const delta = meshLineDelta(map.mesh, a, b);
-  expect(Math.hypot(...delta)).toBeCloseTo(20_000, 5);
+  expect(Math.hypot(...delta)).toBeCloseTo(500_000, 5);
   const folded = meshPoint(map.mesh, a[0] + delta[0], a[1] + delta[1]);
   expect(folded[0]).toBeCloseTo(b[0], 5);
   expect(folded[1]).toBeCloseTo(b[1], 5);
@@ -148,7 +148,18 @@ it("resamples a polar fault along its short physical crossing", () => {
   map.CrustThickness.fill(1000 * 1024);
   const c = physicalContext(7, 0, { ...atlasPhysicalProfile(), PlateDriftPerEpoch: 10_000 });
   plateAdvection(map, c);
-  expect(map.faults[0].coordinates.length).toBeLessThan(20);
+  const points = map.faults[0].coordinates;
+  expect(points[0][0]).toBeCloseTo(a[0], 5);
+  expect(points.at(-1)![0]).toBeCloseTo(b[0], 5);
+  for (const point of points) expect(point[1]).toBeCloseTo(300_000, 5);
+  const length = points
+    .slice(1)
+    .reduce(
+      (sum, point, i) =>
+        sum + Math.hypot(meshDeltaX(map.mesh, point[0] - points[i][0]), point[1] - points[i][1]),
+      0
+    );
+  expect(length).toBeCloseTo(500_000, 5);
 });
 
 it("compresses a fault through a converging velocity field without numerically folding it", () => {

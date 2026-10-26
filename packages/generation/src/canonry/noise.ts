@@ -96,19 +96,6 @@ export function meshNoise(
 ) {
   const width = mesh.periodic?.width;
   if (!width) return fractalNoise(x, y, salt, scale, octaves);
-  if (mesh.periodic?.poles) {
-    const height = mesh.bounds[3] - mesh.bounds[1],
-      radius = Math.sqrt((width * height) / (4 * Math.PI));
-    const latitude = Math.PI * Math.max(-0.5, Math.min(0.5, y / height));
-    const angle = (x * 2 * Math.PI) / width,
-      ring = radius * Math.cos(latitude),
-      z = radius * Math.sin(latitude);
-    return (
-      (fractalNoise(ring * Math.cos(angle), z, salt, scale, octaves) +
-        fractalNoise(ring * Math.sin(angle), z, salt ^ 0x7d31, scale, octaves)) /
-      2
-    );
-  }
   const phase = ((x % width) + width) % width,
     t = phase / width;
   return lerp(

@@ -29,9 +29,11 @@ new worlds and identifies the chart's east and west edges. Nothing leaves edges
 open; absent metadata means Nothing for existing maps. Ocean surrounded is
 reserved and unavailable until its physical ocean rim is implemented. Cylinder
 uses reciprocal periodic physical adjacency, periodic geographic causes and
-short seam links. Pole-to-pole coverage shares polar reconstruction values and
-closes polar numerical faces. Distances and represented areas retain the existing
-metre chart approximation; they are not geodesic spherical measurements.
+short seam links. Pole-to-pole coverage retains cylindrical geometry and local
+terrain along closed north/south numerical faces. Distances and represented
+areas retain the existing metre chart approximation; they are not geodesic
+spherical measurements. True spherical worlds remain deferred in the
+[backlog](../backlog.md).
 
 Keep canonical features in the authoritative chart. Cut crossing geometry into
 parts while retaining its semantic identity, profiles and shared network

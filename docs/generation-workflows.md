@@ -924,8 +924,10 @@ with an explicit legacy longitude choice retain that choice.
 
 The setup's Latitude frame choice offers a northern band, both hemispheres
 and pole-to-pole coverage. It does not change the map boundary. Pole-to-pole
-cylinders share polar reconstruction values, close polar
-outlets and seed the connected ocean in the deepest basin. Physical
+cylinders retain local terrain and the same metre-scale noise up to their
+north/south edges. Those faces close drainage and reflect transported material
+locally; they do not merge longitudes into a single point or provide a shortcut
+through a spherical pole. The connected ocean starts in the deepest basin. Physical
 transport lengths stay in map kilometres; only the front-mixing width is capped
 at 6° of latitude, so a small full-globe map keeps distinct belts. A numerical
 patch without a world frame sits at the mid latitude.

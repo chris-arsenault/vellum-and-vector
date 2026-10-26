@@ -10,9 +10,7 @@ const rootThree = Math.sqrt(3);
 const prepared = new WeakMap<PhysicalMesh, ReturnType<typeof prepareVertices>>();
 
 function vertexKey(mesh: PhysicalMesh, v: number[]) {
-  const period = 6 * (mesh.periodic?.columns ?? 0),
-    pole = mesh.periodic?.poles;
-  if (pole && Math.abs(v[1]) === pole.rows) return `pole:${Math.sign(v[1])}`;
+  const period = 6 * (mesh.periodic?.columns ?? 0);
   return period ? `${((v[0] % period) + period) % period}:${v[1]}` : v.join(":");
 }
 

@@ -4,7 +4,7 @@ import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
 import type { BoundaryComponent, OrogenicFrame } from "./orogenicComponents";
 import { clamp } from "./math";
-import { meshUnitNoise, unitNoise } from "./noise";
+import { unitNoise } from "./noise";
 
 const gaussian = (value: number, center: number, width: number) =>
   Math.exp(-0.5 * ((value - center) / Math.max(0.001, width)) ** 2);
@@ -84,7 +84,6 @@ function alongNoise(
     y = map.mesh.y[i],
     width = map.mesh.periodic?.width;
   const offset = pair * (summit ? 310_000 : 190_000);
-  if (map.mesh.periodic?.poles) return meshUnitNoise(map.mesh, x, y, seed ^ pair, scale, 3);
   if (!width) return unitNoise(x * tx + y * ty, offset, seed, scale, 3);
   const phase = ((x % width) + width) % width,
     t = phase / width;

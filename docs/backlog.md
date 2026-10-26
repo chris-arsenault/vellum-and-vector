@@ -219,6 +219,24 @@ with no backend, persistence or MCP; preserve the existing backend source.
       concrete requirement; the effect shows on few seeds
       ([magic systems plan](MAGIC-SYSTEMS-PLAN.md)).
 
+- [ ] **17. Support true spherical worlds.** Generate a complete planet using
+      spherical distances, cell areas and adjacency, without physical boundaries
+      at the poles. Adapt physical operators, directional fields and conservative
+      material transport to the surface; move tectonic plates by rotations about
+      the planet's centre. Preserve feature identity and coherent authoring and
+      refinement across projection seams and poles, with local metre frames for
+      finer geography.
+
+      Recommended approach: an approximately uniform triangular spherical mesh
+      with projected atlas views first. A 3D globe viewer is separate work. Reuse
+      the process pipeline, epoch history and local physical rules where their
+      geometry permits. Establish geometry and conservation on small constructed
+      worlds before shared integration generation.
+
+      Deferred per the user's 2026-10-26 direction. For now, pole-to-pole coverage
+      uses cylindrical metre geometry with independent terrain along its closed
+      north/south edges; latitude coverage does not enable spherical geometry.
+
 The [product contract](product-spec.md) supplies the geographic and authoring
 requirements. [ADR 0003](adr/0003-frontend-session.md) defines the current execution
 and session boundary; the [generation design](generation-workflows.md) records

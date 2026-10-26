@@ -8,6 +8,7 @@ import { units } from "./math";
 import { physicalContext } from "./context";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { orogenicConstruction } from "./orogeny";
+import { meshDeltaX } from "./mesh";
 
 function world(poles = false) {
   const map = createField(
@@ -47,6 +48,30 @@ it.each([false, true])(
     expect(
       Math.abs(continental(map) + map.crustBudget.continentalExported - before) / before
     ).toBeLessThan(1e-11);
+  }
+);
+
+it.each([-1, 1])(
+  "reflects material locally at the %s closed latitude edge without losing volume",
+  (side) => {
+    const map = world(true),
+      mesh = map.mesh;
+    map.CrustMotionY.fill(side * 1000);
+    for (let i = 0; i < mesh.count; i++)
+      if (
+        Math.abs(mesh.x[i] - 800_000) < mesh.spacing &&
+        side * mesh.y[i] > 1_500_000 - mesh.spacing
+      )
+        map.SedimentThickness[i] = units(10);
+    const volume = () =>
+      map.SedimentThickness.reduce((sum, value, i) => sum + value * mesh.areas[i], 0);
+    const before = volume();
+    expect(before).toBeGreaterThan(0);
+    transportHistory(map, buildTransportPlan(map, mesh.spacing * 2));
+    expect(Math.abs(volume() - before) / before).toBeLessThan(1e-11);
+    for (let i = 0; i < mesh.count; i++)
+      if (map.SedimentThickness[i] > 0)
+        expect(Math.abs(meshDeltaX(mesh, mesh.x[i] - 800_000))).toBeLessThan(mesh.spacing * 3);
   }
 );
 

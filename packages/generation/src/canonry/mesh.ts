@@ -221,32 +221,19 @@ export function meshPointX(mesh: PhysicalMesh, x: number): number {
   if (!width) return x;
   return ((((x + width / 2) % width) + width) % width) - width / 2;
 }
-/** Crossing a pole continues on the opposite meridian, retaining the flat chart. */
+/** Closed latitude edges reflect overflow locally; longitude always remains cylindrical. */
 export function meshPoint(mesh: PhysicalMesh, x: number, y: number): [number, number] {
   if (mesh.periodic?.poles) {
     const height = mesh.bounds[3] - mesh.bounds[1];
     const band = Math.floor((y + height / 2) / height);
     const phase = (y + height / 2) / height - band;
-    x += (band * mesh.periodic.width) / 2;
     y = Math.abs(band % 2) ? height / 2 - phase * height : -height / 2 + phase * height;
-    if (Math.abs(Math.abs(y) - height / 2) < 1e-8) x = 0;
   }
   return [meshPointX(mesh, x), y];
 }
-/** Short segment in a local chart, including the image on the opposite side of a pole. */
+/** Short segment in the cylindrical chart, including repeated longitude images. */
 export function meshLineDelta(mesh: PhysicalMesh, a: [number, number], b: [number, number]) {
-  let dx = meshDeltaX(mesh, b[0] - a[0]),
-    dy = b[1] - a[1];
-  if (!mesh.periodic?.poles) return [dx, dy];
-  const across = meshDeltaX(mesh, b[0] + mesh.periodic.width / 2 - a[0]);
-  for (const pole of [mesh.bounds[1], mesh.bounds[3]]) {
-    const vertical = 2 * pole - b[1] - a[1];
-    if (across * across + vertical * vertical < dx * dx + dy * dy) {
-      dx = across;
-      dy = vertical;
-    }
-  }
-  return [dx, dy];
+  return [meshDeltaX(mesh, b[0] - a[0]), b[1] - a[1]];
 }
 export function edgeLeadingTo(mesh: PhysicalMesh, i: number, target: number): number {
   for (let edge = 0; edge < mesh.degree[i]; edge++)

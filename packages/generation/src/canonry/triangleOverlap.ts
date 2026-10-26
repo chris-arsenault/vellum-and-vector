@@ -49,7 +49,7 @@ function polarCap(mesh: PhysicalMesh, source: number, y: number) {
   if (!mesh.periodic?.poles) return false;
   const edge = mesh.bounds[3],
     reach = rootThree * mesh.periodic.poles.spacingY;
-  // The cap's singular point uses the existing topological scatter, not a flat triangle.
+  // A reflected control volume can fold at a closed edge; use the topology scatter there.
   return Math.abs(y) + reach >= edge || Math.abs(mesh.y[source]) + reach >= edge;
 }
 function targetOverlap(mesh: PhysicalMesh, cell: number, polygon: Point[], x: number, y: number) {
