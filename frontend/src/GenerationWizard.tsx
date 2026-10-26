@@ -8,6 +8,7 @@ import { RegionGenerationContext } from "./RegionGenerationContext";
 import { CartographicDecisions } from "./CartographicDecisions";
 import { GenerationTuning } from "./GenerationTuning";
 import { GenerationMagicStep } from "./GenerationMagicStep";
+import { GenerationPeopleStep } from "./GenerationPeopleStep";
 import { WorkflowFieldProvider } from "./WorkflowFields";
 import { useWorkflowFields } from "./workflowFieldState";
 import { workflowStages } from "./generationWorkflowPresentation";
@@ -131,6 +132,7 @@ function SetupContent({ flow, error }: { flow: GenerationWorkflow; error: unknow
 }
 function StageContent({ flow }: { flow: GenerationWorkflow }) {
   if (flow.stage === "magic") return <GenerationMagicStep flow={flow} />;
+  if (flow.stage === "people") return <GenerationPeopleStep flow={flow} />;
   if (flow.stage === "world") return <GenerationWorldStep flow={flow} />;
   if (flow.stage === "review") return <GenerationReview flow={flow} />;
   return <CartographicDecisions flow={flow} />;

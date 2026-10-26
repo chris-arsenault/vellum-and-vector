@@ -23,11 +23,16 @@ test("composes geographic outcomes and sends the complete reviewed recipe to gen
   await expect(page.locator(".setup-actions")).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await setupStep(page, /People & places/).click();
-  await page.getByRole("checkbox", { name: "Cultures", exact: true }).check();
+  // Cultural, political and built geography are included by default; each is independent.
+  await expect(page.getByRole("checkbox", { name: "Cultures", exact: true })).toBeChecked();
   await page.getByLabel("Cultural pattern", { exact: true }).selectOption("distinct");
+  await expect(page.getByLabel("Starting cultures · count", { exact: true })).toHaveValue("3");
+  await expect(page.getByRole("group", { name: "Hearthfall", exact: true })).toBeVisible();
+  await page.getByRole("checkbox", { name: "Political territories", exact: true }).uncheck();
+  await expect(page.getByLabel("Political pattern", { exact: true })).toHaveCount(0);
   await expect(
-    page.getByRole("checkbox", { name: "Political territories", exact: true })
-  ).not.toBeChecked();
+    page.getByRole("checkbox", { name: "Settlements and routes", exact: true })
+  ).toBeChecked();
   await setupStep(page, /Review & generate/).click();
   await expect(page.locator(".cartographic-review")).toContainText("Wide plains");
   await expect(page.locator(".cartographic-review")).toContainText("Humid woodland");

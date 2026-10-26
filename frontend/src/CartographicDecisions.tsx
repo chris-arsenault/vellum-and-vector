@@ -15,7 +15,6 @@ export function CartographicDecisions({ flow }: { flow: GenerationWorkflow }) {
   );
   return (
     <div className="cartographic-decisions">
-      {flow.stage === "people" && <PeopleContent flow={flow} />}
       {controls.map((control) => (
         <CartographicDecision key={control.id} flow={flow} control={control} />
       ))}
@@ -23,34 +22,15 @@ export function CartographicDecisions({ flow }: { flow: GenerationWorkflow }) {
   );
 }
 
-function PeopleContent({ flow }: { flow: GenerationWorkflow }) {
-  const content = [
-    { id: "human.cultures", label: "Cultures" },
-    { id: "human.politics", label: "Political territories" },
-    { id: "built.layout", label: "Settlements and routes" },
-  ];
-  return (
-    <fieldset>
-      <legend>Include in this map</legend>
-      {content.map(({ id, label }) => (
-        <label key={id} className="check">
-          <input
-            type="checkbox"
-            checked={Boolean(flow.setup?.features.find((feature) => feature.id === id)?.enabled)}
-            onChange={(event) => flow.feature(id, { enabled: event.target.checked })}
-          />
-          {label}
-        </label>
-      ))}
-    </fieldset>
-  );
-}
 export function CartographicDecision({
   flow,
   control,
+  adjust = true,
 }: {
   flow: GenerationWorkflow;
   control: CartographicControl;
+  /** Offer the advanced panel; off where the step already shows the affected settings. */
+  adjust?: boolean;
 }) {
   const fields = useWorkflowFields();
   const affected = controlFeatures(control);
@@ -87,7 +67,7 @@ export function CartographicDecision({
         </select>
       </label>
       <p>{control.explanation}</p>
-      {!control.system && (
+      {!control.system && adjust && (
         <button
           type="button"
           className="setup-link"

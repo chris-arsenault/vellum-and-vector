@@ -337,6 +337,13 @@ configuration travels to the worker and must match the resolved inputs. Complete
 settings participate in configuration identity and remain inspectable in the
 in-memory run record. JSON editing updates only the wizard draft.
 
+A new world includes cultural, political and built geography by default. The
+People & places step shows each of those capabilities as its own group: its
+inclusion, its curated pattern, the starting count the generator reads and,
+below them, the human era schedule the cultural and political histories run
+on. The advanced panel shows the same fields for one capability at a time, and
+the step hides its own copy while that capability is being adjusted there.
+
 The workflow edits version 2 `features`: `physical.impacts` omits the impact
 capability, `physical.river-incision` omits cutting while retaining river output,
 and `physical.glacial-sculpting` owns erosion, deposition and glacial relief

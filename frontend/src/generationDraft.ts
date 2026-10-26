@@ -39,7 +39,7 @@ export function newGenerationDraft(): GenerationDraft {
       schemaVersion: 1,
       seed: 104729,
       quality: "standard",
-      domains: ["physical", "magic", "built"],
+      domains: ["physical", "magic", "cultural", "political", "built"],
       parameters: defaultAtlasParameters,
       processes: {},
       settings: {

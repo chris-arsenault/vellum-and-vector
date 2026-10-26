@@ -84,6 +84,16 @@ it("preserves owned scalar and nested values when switching a feature off and on
   expect(prepareDraft(draft).input.parameters!.vegetation).toBe(0.6);
 });
 
+it("starts a new world with cultural, political and built geography included", () => {
+  const draft = newGenerationDraft();
+  expect(draft.recipe.domains).toEqual(
+    expect.arrayContaining(["physical", "magic", "cultural", "political", "built"])
+  );
+  const selection = prepareDraft(draft).input.resolvedFeatures!.selection;
+  for (const id of ["human.cultures", "human.politics", "built.layout"])
+    expect(selection[id].enabled, id).toBe(true);
+});
+
 it("preserves feature intent across domain gates and explicitly enables a new feature's domain", () => {
   let draft = updateDraftDomains(newGenerationDraft(), ["physical"]);
   expect(prepareDraft(draft).input.resolvedFeatures!.selection["human.cultures"].enabled).toBe(

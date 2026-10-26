@@ -53,7 +53,7 @@ export function GenerationTuning({ flow }: { flow: GenerationWorkflow }) {
   );
 }
 /** A categorical setting is a choice; every other setting keeps its validated number field. */
-function SettingControl({
+export function SettingControl({
   flow,
   setting: { key, owner, definition, value, active },
 }: {

@@ -38,8 +38,9 @@ export function GenerationCultureConfiguration({
         <fieldset disabled={!feature.configurationEditable}>
           <legend>Human eras</legend>
           <small className="hint">
-            Human eras advance population, cultural contact, works and political reach. Domain
-            selection controls which identities and territories are generated.
+            Human eras advance population, cultural contact, works and political reach; the
+            capabilities above decide which identities and territories they produce.{" "}
+            {scheduleSummary(eras)}
           </small>
           {eras.map((era, index) => (
             <HumanEra key={index} flow={flow} era={era} index={index} removeIndex={removeIndex} />
@@ -51,6 +52,21 @@ export function GenerationCultureConfiguration({
       )}
     </>
   );
+}
+/** How long the schedule runs: settled years in the present and years in rounds before it. */
+function scheduleSummary(eras: OperativeEra[]) {
+  const sum = (bound: boolean) =>
+    Math.round(
+      eras
+        .filter((era) => Boolean(era.physicalEpoch) === bound)
+        .reduce((total, era) => total + era.years, 0)
+    );
+  const settled = sum(false),
+    rounds = sum(true);
+  if (!eras.length) return "No eras: the present is settled without a human history.";
+  return `${settled.toLocaleString()} years of settled history in the present${
+    rounds ? ` after ${rounds.toLocaleString()} years of mobile rounds in earlier epochs` : ""
+  }.`;
 }
 /** One era as a named group, so two eras' identical fields stay addressable. */
 function HumanEra({
