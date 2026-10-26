@@ -101,6 +101,40 @@ it("releases a finite stock down to nothing over epochs, faster under ice and st
   void map;
 });
 
+it("makes no source of a trace: thin fallen stock, a cooling forge and a few dead stay stock", () => {
+  const state = scenario(),
+    map = state.physical!.map,
+    fire = state.physical!.magic!.fields[0];
+  // A fan a few centimetres deep: its stock lies in the ground and the compass still swings
+  // over it, but nothing is released at a strength worth a site.
+  fall(state, 0);
+  for (let i = 0; i < map.mesh.count; i++)
+    if (map.ImpactEjectaThickness[i] > 0) map.ImpactEjectaThickness[i] = units(0.05);
+  locateMagicSources(state, fire, 42, 0);
+  const held = fire.stocks["fallen/held"];
+  expect(sum(held)).toBeGreaterThan(0);
+  const fan = Array.from(held, (value, i) => i).filter((i) => held[i] > 0 && i !== 0);
+  expect(fan.length).toBeGreaterThan(0);
+  expect(fan.every((i) => fire.originSources.fallen[i] === 0)).toBe(true);
+  // Cores carried along the road: a little cracked stock on a cell is no forge.
+  const cracked = fire.stocks["forge/cracked"];
+  cracked[5] = 2 * map.mesh.areas[5];
+  cracked[6] = 250 * map.mesh.areas[6];
+  locateMagicSources(state, fire, 42, 0);
+  expect(fire.originSources.forge[5]).toBe(0);
+  expect(fire.originSources.forge[6]).toBe(1000);
+  expect(fire.located.filter((point) => point.origin === "forge").map((p) => p.x)).toEqual([
+    map.mesh.x[6],
+  ]);
+  expect(cracked[5]).toBe(2 * map.mesh.areas[5]);
+  // A hundred dead in a town make brine but no killing ground.
+  const salt = state.physical!.magic!.fields.find((f) => f.definition.id === "salt")!;
+  map.MassDeath[7] = 100;
+  locateMagicSources(state, salt, 42, 0);
+  expect(salt.stocks["death/brine"][7]).toBe(100 * 500_000);
+  expect(salt.source[7]).toBe(0);
+});
+
 it("keeps buried stock inert and washes river-carried stock downstream to the sea", () => {
   const state = scenario(),
     map = state.physical!.map,

@@ -2,15 +2,16 @@ import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import type { MagicField } from "./magicState";
 import type { LocateContext } from "./magicSources";
-import { exposure, heldStock, releaseShare } from "./magicStocks";
+import { exposure, heldStock, releaseShare, siteStrength } from "./magicStocks";
 import { meshDeltaX, nearestTriangle } from "./mesh";
-import { clamp, round } from "./math";
 
 /**
  * Fallen cores. Each impact seeds a finite stock once, on the crater and its ejecta in
  * proportion to the ejecta's thickness and elongated downwind. Every evaluation the exposed
- * stock releases a share set by the cracking agents at work, and that release is the source;
- * the impact's own heat is a coreless source that fades with the epochs since the fall.
+ * stock releases a share set by the cracking agents at work, and that release is the source
+ * where it reaches the source floor: the crater and the thick near fan, the far fan only in
+ * the epoch of the fall or under ice. The impact's own heat is a coreless source that fades
+ * with the epochs since the fall. Stock the rivers wash thin below is stock, not a source.
  */
 export function impactSources(
   state: GenerationState,
@@ -44,7 +45,8 @@ export function impactSources(
       const since = Math.max(0, epochIndex - Math.max(0, field.arrival[i]));
       strength = Math.max(strength, (map.ImpactHeat[i] * p.impactHeatShare) / (1 + since));
     }
-    if (strength > 0) field.source[i] = clamp(round(strength), 1, 1000);
+    const site = siteStrength(strength);
+    if (site > 0) field.source[i] = site;
   }
 }
 function seedFallenStock(

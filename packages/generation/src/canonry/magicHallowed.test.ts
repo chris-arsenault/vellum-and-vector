@@ -266,6 +266,17 @@ it("fades when the seat is abandoned, by the history's retention", () => {
   expect(held[2]).toBeGreaterThan(0);
 });
 
+it("makes no seat of a young town: tenure below the source floor wards nothing", () => {
+  const s = scenario(),
+    hallowed = s.field("hallowed");
+  // Five million person-years: a town, not a seat kept for ages.
+  s.map.Tenure[s.centre] = 5_000_000;
+  s.ward();
+  expect(hallowed.source[s.centre]).toBe(0);
+  expect(hallowed.located).toHaveLength(0);
+  expect(s.map.Warding.some(Boolean)).toBe(false);
+});
+
 it("changes nothing when Hallowed is disabled", () => {
   const s = scenario(),
     hallowed = s.field("hallowed"),

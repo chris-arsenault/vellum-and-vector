@@ -2,12 +2,13 @@ import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import type { MagicField } from "./magicState";
 import type { LocateContext } from "./magicSources";
-import { clamp, round } from "./math";
+import { siteStrength } from "./magicStocks";
 
 /**
  * Salt's death origin: the dead the ground records become brine where they lie. The record
  * is consumed, since the Salt is what is left of them; the source is the salt made this
- * evaluation per area, so a rule can mark the killing in the epoch it happened.
+ * evaluation per area, so a rule can mark the killing in the epoch it happened. A town's
+ * ordinary dead make brine but no source: only a killing past the source floor is a site.
  */
 export function deathSources(
   state: GenerationState,
@@ -25,7 +26,7 @@ export function deathSources(
     map.MassDeath[i] = 0;
     if (made <= 0) continue;
     brine[i] += made;
-    field.source[i] = clamp(round((1000 * made) / map.mesh.areas[i] / p.saltFull), 1, 1000);
+    field.source[i] = siteStrength((1000 * made) / map.mesh.areas[i] / p.saltFull);
   }
 }
 /**
@@ -50,7 +51,7 @@ export function deadLakeSources(
     map.LakeMemory[i] = 0;
     if (made <= 0) continue;
     bed[i] += made;
-    field.source[i] = clamp(round((1000 * made) / map.mesh.areas[i] / p.saltFull), 1, 1000);
+    field.source[i] = siteStrength((1000 * made) / map.mesh.areas[i] / p.saltFull);
   }
 }
 /** While a cell is a lake it remembers its depth; the memory outlives the water for Salt to read. */

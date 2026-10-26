@@ -37,6 +37,31 @@ function fixture() {
   initializeMagic(state);
   return state;
 }
+it("publishes a one-cell site but not a one-cell area or course: those stay coverage on the map", () => {
+  const state = fixture(),
+    mesh = state.physical!.map.mesh,
+    fire = state.physical!.magic!.fields[0];
+  fire.intensity.fill(800);
+  fire.source[0] = 1000;
+  fire.located = [
+    { origin: "vein", id: "origin", x: mesh.x[0], y: mesh.y[0], radius: 100, strength: 1000 },
+  ];
+  fire.parents = new Int32Array(mesh.count).fill(-1);
+  for (const rule of fire.definition.features) {
+    const values = new Uint8Array(mesh.count);
+    values[0] = 1;
+    fire.features[rule.id] = values;
+  }
+  extractMagicPlaces(state);
+  const rules = Object.values(state.domain.world.features).map((f) => String(f.attributes.rule));
+  expect(rules.sort()).toEqual(
+    fire.definition.features
+      .filter((rule) => rule.cartography === "site")
+      .map((rule) => rule.id)
+      .sort()
+  );
+});
+
 it("publishes every system rule with meaningful sites, retained courses and extents", () => {
   const state = fixture(),
     mesh = state.physical!.map.mesh;

@@ -277,7 +277,7 @@ export const magicCartography: CartographicControl[] = [
     "How wide a ring a long-kept seat wards, and how long a seat must be kept to ward one.",
     ["Close", "District", "Province"],
     [20_000, 40_000, 80_000].map((wardReach, i) => ({
-      parameters: { wardReach, tenureFull: [300_000_000, 150_000_000, 75_000_000][i] },
+      parameters: { wardReach, tenureFull: [600_000_000, 300_000_000, 150_000_000][i] },
     }))
   ),
   control(

@@ -64,10 +64,11 @@ it("turns the dead the ground records into brine, consumes the record, and salts
   const s = scenario(),
     i = centre(s.map),
     area = s.map.mesh.areas[i];
-  s.map.MassDeath[i] = 20_000;
+  // A city's fall: a hundred thousand dead on one cell.
+  s.map.MassDeath[i] = 100_000;
   evaluate(s);
   expect(s.map.MassDeath[i]).toBe(0);
-  expect(s.salt.stocks["death/brine"][i]).toBe(20_000 * 5_000_000);
+  expect(s.salt.stocks["death/brine"][i]).toBe(100_000 * 500_000);
   expect(s.salt.source[i]).toBe(1000);
   expect(s.salt.intensity[i]).toBe(1000);
   expect(s.map.Salting[i]).toBe(1);

@@ -8,7 +8,7 @@ import type { PhysicalField } from "./field";
 import { hashUnit } from "./noise";
 import type { MagicOrigin, MagicSource, MagicSystem } from "@atlas/domain";
 import { originStocks, stockKey, systemSeed, withOrigin } from "./magicState";
-import { exposure } from "./magicStocks";
+import { exposure, siteStrength } from "./magicStocks";
 import { impactSources } from "./magicFallenSources";
 import { aquiferSources, forgeSources, verdantSources } from "./magicGreenwoodSources";
 import { deadLakeSources, deathSources } from "./magicSaltSources";
@@ -88,7 +88,8 @@ function geothermalSources(
 }
 /**
  * Old mountains are Fire country: the spent ore of sealed conduits, carried with the crust
- * and buried, feeds the source again at reduced strength where erosion has exposed it.
+ * and buried, feeds the source again at reduced strength where erosion has exposed it. Ore
+ * washed thin into the valleys below stays ore and is no source.
  */
 function exhumedSpent(map: PhysicalField, field: MagicField, origin: MagicOrigin) {
   const spent = field.stocks[`${origin.id}/spent`],
@@ -96,9 +97,10 @@ function exhumedSpent(map: PhysicalField, field: MagicField, origin: MagicOrigin
   if (!spent) return;
   for (let i = 0; i < map.mesh.count; i++) {
     if (spent[i] <= 0 || map.WaterKindCodes[i] === 1) continue;
-    const strength =
-      (exposure(map, i, p.buryDepth) * spent[i] * p.exhumedRelease) / map.mesh.areas[i];
-    if (strength >= 1) field.source[i] = Math.max(field.source[i], clamp(round(strength), 1, 1000));
+    const strength = siteStrength(
+      (exposure(map, i, p.buryDepth) * spent[i] * p.exhumedRelease) / map.mesh.areas[i]
+    );
+    if (strength > 0) field.source[i] = Math.max(field.source[i], strength);
   }
 }
 function geothermalCandidates(state: GenerationState, field: MagicField, seed: number) {

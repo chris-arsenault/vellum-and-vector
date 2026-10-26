@@ -1,4 +1,4 @@
-import { spatial, point } from "@atlas/domain";
+import { spatial, point, type MagicFeatureRule } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
@@ -14,6 +14,7 @@ import {
 } from "./geographicContours";
 import { landArea, largestRegionShare, partitionRegion } from "./regionPartition";
 import { naturalPlaceGeometry, magicPlaceGeometry, type PlaceGeometry } from "./placeGeometry";
+import type { MagicField } from "./magicState";
 
 /** Largest enclosed gap, in square metres, that a landform or magic region absorbs. */
 const smallHole = 2_000_000_000;
@@ -252,6 +253,18 @@ export function extractNamedLandforms(state: GenerationState) {
       kind === "fjord" ? Infinity : maximum
     );
 }
+/**
+ * The fewest cells a class component needs to be a published place. A site is one located
+ * source, so one cell is a place. An area a cell or two wide, or a course of one cell, is a
+ * mark on the field and not a place: the class stays on the map as coverage whatever its
+ * size, and only the named, outlined place needs the extent (ADR 0005: outlines generalize
+ * a realized field at the minima declared with the rules).
+ */
+const placeMinimumCells: Record<NonNullable<MagicFeatureRule["cartography"]>, number> = {
+  site: 1,
+  course: 2,
+  area: 3,
+};
 export function extractMagicPlaces(state: GenerationState) {
   const magic = state.physical!.magic;
   for (const held of Object.values(magic?.confluences.states ?? {}))
@@ -259,6 +272,7 @@ export function extractMagicPlaces(state: GenerationState) {
       state,
       (i) => Boolean(held.members[i]) && held.coverage[i] > 0,
       (region, extent) =>
+        region.length >= placeMinimumCells.area &&
         publishPlace(
           state,
           `confluence:${held.definition.id}`,
@@ -284,36 +298,39 @@ export function extractMagicPlaces(state: GenerationState) {
       (i) => held.coverage[i]
     );
   for (const field of magic?.fields ?? [])
-    for (const rule of field.definition.features) {
-      const members = field.features[rule.id],
-        coverage = field.coverage[rule.id];
-      if (!members) continue;
-      components(
+    for (const rule of field.definition.features) publishRulePlaces(state, field, rule);
+}
+/** Every component of one rule's class past its cartography's minimum, as a named place. */
+function publishRulePlaces(state: GenerationState, field: MagicField, rule: MagicFeatureRule) {
+  const members = field.features[rule.id],
+    coverage = field.coverage[rule.id],
+    minimum = placeMinimumCells[rule.cartography ?? "area"],
+    areas = state.physical!.map.mesh.areas;
+  if (!members) return;
+  components(
+    state,
+    (i) => Boolean(members[i]) && (coverage?.[i] ?? 1) > 0,
+    (region, extent) =>
+      region.length >= minimum &&
+      publishPlace(
         state,
-        (i) => Boolean(members[i]) && (coverage?.[i] ?? 1) > 0,
-        (region, extent) =>
-          publishPlace(
-            state,
-            `${field.definition.id}:${rule.id}`,
-            rule.name,
-            region,
-            "magic",
-            {
-              system: field.definition.id,
-              rule: rule.id,
-              maximumIntensity: region.reduce((peak, i) => Math.max(peak, field.intensity[i]), 0),
-              accumulatedActivity:
-                region.reduce(
-                  (sum, i) => sum + field.history[i] * state.physical!.map.mesh.areas[i],
-                  0
-                ) / region.reduce((sum, i) => sum + state.physical!.map.mesh.areas[i], 0),
-            },
-            extent,
-            extent ? magicPlaceGeometry(state, field, rule.id, region, extent) : null
-          ),
-        true,
-        Infinity,
-        coverage ? (i) => coverage[i] : undefined
-      );
-    }
+        `${field.definition.id}:${rule.id}`,
+        rule.name,
+        region,
+        "magic",
+        {
+          system: field.definition.id,
+          rule: rule.id,
+          maximumIntensity: region.reduce((peak, i) => Math.max(peak, field.intensity[i]), 0),
+          accumulatedActivity:
+            region.reduce((sum, i) => sum + field.history[i] * areas[i], 0) /
+            region.reduce((sum, i) => sum + areas[i], 0),
+        },
+        extent,
+        extent ? magicPlaceGeometry(state, field, rule.id, region, extent) : null
+      ),
+    true,
+    Infinity,
+    coverage ? (i) => coverage[i] : undefined
+  );
 }

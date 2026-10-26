@@ -2,10 +2,23 @@ import type { MagicOrigin, MagicStock } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import { originStocks, stockKey, type MagicField } from "./magicState";
-import { clamp, units } from "./math";
+import { clamp, round, units } from "./math";
 import { rebuild } from "./surface";
 import { seepBrine, settleDust, weatherBed } from "./magicSaltStocks";
 
+/**
+ * The least strength a located source has, a twentieth of full. A source is a site: the
+ * release of a stock, the tenure of a seat or the cracking at a forge that falls short of the
+ * floor is still stock (it moves, accumulates and feeds the next evaluation) but it is not a
+ * source and seeds no site. Without the floor every trace a river or a trade road carried
+ * became a labelled core, and the world had a Fire core every few kilometres.
+ */
+export const sourceFloor = 50;
+/** The strength a located source publishes for a raw strength: rounded, bounded, or none below the floor. */
+export function siteStrength(strength: number) {
+  const rounded = round(strength);
+  return rounded < sourceFloor ? 0 : Math.min(1000, rounded);
+}
 /**
  * How much of a cell's stock the ground still exposes: whole on bare rock, none once the
  * sediment over it is deeper than the burial depth.

@@ -2,6 +2,7 @@ import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import { reservoirStock, type MagicField } from "./magicState";
 import type { LocateContext } from "./magicSources";
+import { siteStrength } from "./magicStocks";
 import { clamp, round } from "./math";
 
 /**
@@ -34,14 +35,18 @@ export function verdantSources(
     if (sap) {
       const grove = clamp(sap[i] / map.mesh.areas[i] / p.groveSap, 0, 1);
       strength = Math.max(strength, 500 * grove);
-      if (strength > 0) sap[i] = Math.max(sap[i], strength * map.mesh.areas[i]);
     }
-    if (strength > 0) field.source[i] = clamp(round(strength), 1, 1000);
+    const site = siteStrength(strength);
+    if (site === 0) continue;
+    field.source[i] = site;
+    // A stand refills its own sap; a planting below the floor is only what was carried there.
+    if (sap) sap[i] = Math.max(sap[i], site * map.mesh.areas[i]);
   }
 }
 /**
  * Forge cores: the cracked stock people's trade left at their forges is a source where it
- * lies, at full strength once the cracked cores per area reach the declared amount.
+ * lies, at full strength once the cracked cores per area reach the declared amount. Cores
+ * carried along the roads between forges are stock in transit, not a source.
  */
 export function forgeSources(
   state: GenerationState,
@@ -55,9 +60,9 @@ export function forgeSources(
   if (!cracked) return;
   for (let i = 0; i < map.mesh.count; i++) {
     if (cracked[i] <= 0) continue;
-    const strength = round((1000 * cracked[i]) / map.mesh.areas[i] / p.forgeStrength);
-    if (strength < 1) continue;
-    field.source[i] = clamp(strength, 1, 1000);
+    const strength = siteStrength((1000 * cracked[i]) / map.mesh.areas[i] / p.forgeStrength);
+    if (strength === 0) continue;
+    field.source[i] = strength;
     field.located.push({
       origin: origin.id,
       id: `forge:${i}`,
@@ -68,6 +73,20 @@ export function forgeSources(
     });
   }
 }
+/** Open ground on soft karst at a slope break where the flow first reaches the spring flow. */
+function springRises(map: PhysicalField, i: number, springFlow: number, springRock: number) {
+  if (map.WaterKindCodes[i] !== 0 || map.IceThickness[i] > 0) return false;
+  if (map.FlowAccumulation[i] < springFlow || map.RockResistance[i] > springRock) return false;
+  return map.Slope[i] <= 0.01 && karst(map, i) >= 0.35 && !fedFromAbove(map, i, springFlow);
+}
+/** Whether a cell already receives the spring flow from a cell draining into it: a reach, not a rise. */
+function fedFromAbove(map: PhysicalField, i: number, springFlow: number) {
+  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
+    if (j >= 0 && map.FlowTargets[j] === i && map.FlowAccumulation[j] >= springFlow) return true;
+  }
+  return false;
+}
 /** The world has no carbonate channel; its published karst proxy is continental, unvolcanic crust. */
 function karst(map: PhysicalField, i: number) {
   return (
@@ -77,8 +96,9 @@ function karst(map: PhysicalField, i: number) {
 }
 /**
  * Greenwood's springs: where a catchment's recharge reaches the surface through soft, soluble
- * rock on a slope break, stronger where a buried peat stratum lies beneath. A spring whose
- * karst has fallen in (sealed) rises no more.
+ * rock on a slope break, stronger where a buried peat stratum lies beneath. The spring is
+ * where the water rises, the first cell whose flow reaches the spring flow, not every reach
+ * the river then runs along. A spring whose karst has fallen in (sealed) rises no more.
  */
 export function aquiferSources(
   state: GenerationState,
@@ -90,9 +110,7 @@ export function aquiferSources(
     p = field.definition.parameters,
     stratum = reservoirStock(field, "stratum");
   for (let i = 0; i < map.mesh.count; i++) {
-    if (map.WaterKindCodes[i] !== 0 || map.IceThickness[i] > 0 || field.sealed[i] > 0) continue;
-    if (map.FlowAccumulation[i] < p.springFlow || map.RockResistance[i] > p.springRock) continue;
-    if (map.Slope[i] > 0.01 || karst(map, i) < 0.35) continue;
+    if (field.sealed[i] > 0 || !springRises(map, i, p.springFlow, p.springRock)) continue;
     const buried = stratum ? Math.min(300, stratum[i] / map.mesh.areas[i]) : 0;
     field.source[i] = clamp(round(600 + buried), 1, 1000);
     field.located.push({

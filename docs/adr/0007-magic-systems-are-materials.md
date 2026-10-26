@@ -40,6 +40,16 @@ half their peak coverage; society seats where coverage passes a tenth. Magic is
 never netted on a shared scalar: Fire is not a warming term that cancels
 Aurora's cold.
 
+**Sources are sites; places are coherent.** A located source has a declared
+least strength: a release, a tenure, a killing or a cracking below it is still
+stock, which moves, accumulates and feeds the field, but it is no source and
+seeds no site, so a trace a river or a trade road carried is never a labelled
+core. A class component is published as a named place only past a minimum of
+cells declared with its cartography (one for a site, more for a course or an
+area); below it the class stays on the map as coverage. Density is lowered by
+locating sites and keeping places whole, never by thinning stocks or
+intensities.
+
 **Meetings are processes.** A confluence names the systems it reads, the
 coverage floor each must reach, its own writes to the physical fields, its own
 hazard and class. Its coverage is the smaller parent's scaled by the strain

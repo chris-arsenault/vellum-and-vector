@@ -115,8 +115,10 @@ const parameterSchema = z.object({
   wakeStrength: finite.nonnegative().default(180),
   // Accumulated intensity (summed over epochs) after which a Fire conduit seals.
   conduitBudget: positive.default(2400),
-  // Stock an impact leaves per cubic metre of ejecta, in intensity·m².
-  fallenDensity: finite.nonnegative().default(0.1),
+  // Stock an impact leaves per cubic metre of ejecta, in intensity·m²: a metre of ejecta
+  // holds a tenth of a full source, so a fresh fan burns above the source floor at the fall
+  // and the crater's own stock feeds a core for epochs at the base release.
+  fallenDensity: finite.nonnegative().default(100),
   // Share of exposed held stock a finite origin releases per epoch with no cracking agent.
   fallenRelease: finite.min(0).max(1).default(0.04),
   // Release added per unit of tectonic strain, ice load (at the crack depth) and frost.
@@ -172,8 +174,11 @@ const parameterSchema = z.object({
   // A spring drawn past this share of its recharge in one epoch collapses its karst by this depth.
   overdrawShare: finite.min(0).max(1).default(0.5),
   sinkDepth: finite.nonnegative().default(4),
-  // Share of a stock herbivores carry to the cells they graze toward, per epoch.
-  animalCarry: finite.min(0).max(1).default(0.1),
+  // Share of a stock herbivores carry to the cells they graze toward, per epoch at full herds.
+  // At a tenth the ground beside every stand held sap enough for a grove of its own and groves
+  // ringed the forest two cells deep; at this the herds seed the wood's edge below a grove's
+  // strength, and a grove is where people plant.
+  animalCarry: finite.min(0).max(1).default(0.02),
   // Share of buried peat carbon that becomes stratum stock per epoch.
   strataShare: finite.nonnegative().default(0.02),
   // Planted sap per square metre that counts as a full grove, and the share of sap a cell
@@ -185,8 +190,10 @@ const parameterSchema = z.object({
   forgeStrength: positive.default(250),
   forgeCooling: finite.min(0).max(1).default(0.5),
   // Salt: stock made per death and per metre of a dried lake's depth (per square metre of
-  // its bed), and the salt per square metre that is full intensity.
-  saltPerDeath: finite.nonnegative().default(5_000_000),
+  // its bed), and the salt per square metre that is full intensity. At these a town's die-off
+  // of hundreds brines the ground without a source; a killing of thousands on one hundred
+  // square kilometres is a source, and a city's fall a full one.
+  saltPerDeath: finite.nonnegative().default(500_000),
   saltPerLakeMetre: finite.nonnegative().default(40),
   saltFull: positive.default(400),
   // Brine: share flushed per epoch at full air moisture on oxygenated ground, share that seeps
@@ -212,17 +219,15 @@ const parameterSchema = z.object({
   domeSeep: finite.min(0).max(1).default(0.05),
   // Share of every Salt reservoir Fire at full intensity burns away per epoch.
   saltBurn: finite.min(0).max(1).default(0.8),
-  // Hallowed: person-years per square metre at a seat that make a full source, the bonus a
-  // seat earns per way converging on it, kept-years per square metre that make a full line,
-  // and traveller-years per square metre that make a walked way a pilgrimage road.
   // Hallowed: person-years at a seat that make a full source, kept-years on a cell that make
   // a full line, and traveller-years on a cell that make a pilgrimage road. Whole amounts per
   // cell, not per area: a seat and a line are point and line facts. The seven-system world
   // run put the ninetieth percentile of seats near thirty-five million person-years, the
-  // oldest near two hundred million, and the busiest hundredth of ways above a million
-  // traveller-years; with the tenth-of-full floor on lines, these make rings of the oldest
-  // twentieth of seats and pilgrimage roads of the few great ways.
-  tenureFull: positive.default(150_000_000),
+  // ninety-ninth near ninety million, the oldest near two hundred million, and the busiest
+  // hundredth of ways above a million traveller-years. A seat below a twentieth of full is no
+  // source and a ring seeds at three tenths, so these make rings of the oldest hundredth of
+  // seats and pilgrimage roads of the few great ways.
+  tenureFull: positive.default(300_000_000),
   pilgrimageBonus: finite.nonnegative().default(0.1),
   lineFull: positive.default(10_000),
   roadFull: positive.default(10_000_000),

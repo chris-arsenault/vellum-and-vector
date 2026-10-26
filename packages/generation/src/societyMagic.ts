@@ -22,8 +22,12 @@ import {
 export { magicAt } from "./societyMagicAccess";
 /** Stock amount (intensity·m²) one core-equivalent of the practice ledger stands for. */
 const stockPerCore = 1e7;
-/** Share of the sap under a seat a community gathers per year, and the most per head. */
-const seedGathering = { share: 0.002, perHead: 5e4 };
+/**
+ * Share of the sap under a seat a community gathers per year, and the most per head. At this
+ * a market two centuries down the road from a full Deepwood seat has planted sap enough for
+ * a grove past the source floor.
+ */
+const seedGathering = { share: 0.004, perHead: 5e4 };
 /** Share of carried seed a community plants at its seat per year. */
 const seedPlanting = 0.05;
 /** The held stock of the system that quickens, read at a sample from its published channels. */

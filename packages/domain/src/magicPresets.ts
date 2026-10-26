@@ -63,7 +63,10 @@ const firePreset = magicSystemSchema.parse({
     conduitOpening: 120,
   },
   features: [
-    feature("core", "Fire core", 90, [[at("source", 1), at("intensity", 1)]]),
+    // A core is a located source of real strength: a vein on a heat maximum, a forge that
+    // cracks cores in quantity, a crater field in its burning epochs, rich exhumed ore. The
+    // fainter sources below it (a cooling forge, a thinning fan) show as intensity, not sites.
+    feature("core", "Fire core", 90, [[at("source", 300), at("intensity", 1)]]),
     feature(
       "vein",
       "Thermal vein",
@@ -116,17 +119,18 @@ const firePreset = magicSystemSchema.parse({
     // A conduit that carried Fire to exhaustion: sinter and basalt, cold, and a site for ruins.
     feature("scar", "Basalt scar", 30, [[land, at("sealed", 1)]]),
     // The fallen field: a crater lake over the stock, the barren fan around it, the gravel
-    // bands below it, and the compass that swings wherever its metal lies.
-    feature("crater", "Crater lake", 85, [[oneOf("water", [2]), at("stock:fallen/held", 1)]]),
+    // bands below it, and the compass that swings wherever its metal lies. Stock is read per
+    // square metre; at the default fallen density a thousand is ten metres of ejecta.
+    feature("crater", "Crater lake", 85, [[oneOf("water", [2]), at("stock:fallen/held", 1000)]]),
     feature("fan", "Ejecta fan", 28, [[land, at("source:fallen", 1)]]),
     feature(
       "placer",
       "Placer band",
       60,
-      [[land, at("river", 1), at("stock:fallen/held", 1)]],
-      [[land, at("river", 1), at("stock:fallen/held", 0.2)]]
+      [[land, at("river", 1), at("stock:fallen/held", 1000)]],
+      [[land, at("river", 1), at("stock:fallen/held", 200)]]
     ),
-    feature("deviation", "Compass deviation", 5, [[at("stock:fallen/held", 0.5)]]),
+    feature("deviation", "Compass deviation", 5, [[at("stock:fallen/held", 500)]]),
     feature(
       "halo",
       "Thawed halo",
@@ -366,14 +370,16 @@ const saltPreset = magicSystemSchema.parse({
   // Salt does not decay; what is not flushed or burned is still there next epoch.
   history: { retention: 1, storage: 0.2 },
   features: [
-    // Where the dead lie: the brine of the killing and the bed it crusts to.
+    // Where the dead lie: the brine of the killing and the bed it crusts to, read per square
+    // metre at the same salt that makes a death source (ADR 0007), so a town's ordinary
+    // die-offs brine the ground without naming it.
     feature(
       "ground",
       "Killing ground",
       60,
       [
-        [land, at("stock:death/brine", 5)],
-        [land, at("stock:death/bed", 5)],
+        [land, at("stock:death/brine", 20)],
+        [land, at("stock:death/bed", 20)],
       ],
       undefined,
       covers(50, 800)

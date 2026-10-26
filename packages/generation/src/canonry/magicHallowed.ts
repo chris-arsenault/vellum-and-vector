@@ -3,6 +3,7 @@ import type { PhysicalField } from "./field";
 import type { MagicField, MagicWorkspace } from "./magicState";
 import type { LocateContext } from "./magicSources";
 import { nativeIndexAtSurface } from "./atlasWorkspace";
+import { siteStrength } from "./magicStocks";
 import { clamp, rockResistance, round } from "./math";
 
 const wards = (field: MagicField) =>
@@ -11,9 +12,9 @@ const wards = (field: MagicField) =>
 const lineFloor = 100;
 
 /**
- * Hallowed's seats: every inhabited seat with person-years on its cell is a source, by the
- * tenure per area, stronger by a bonus for every way that converges on it (the pilgrimage).
- * The ring it wards reaches in proportion to its strength.
+ * Hallowed's seats: an inhabited seat kept past the source floor of the full tenure is a
+ * source, stronger by a bonus for every way that converges on it (the pilgrimage). A young
+ * town is no seat. The ring a seat wards reaches in proportion to its strength.
  */
 export function tenureSources(
   state: GenerationState,
@@ -25,22 +26,15 @@ export function tenureSources(
   if (!society) return;
   const map = state.physical!.map,
     p = field.definition.parameters,
-    ways = new Map<string, number>();
-  for (const link of society.region.connections) {
-    ways.set(link.from, (ways.get(link.from) ?? 0) + 1);
-    ways.set(link.to, (ways.get(link.to) ?? 0) + 1);
-  }
+    ways = waysConverging(society.region.connections);
   for (const c of society.region.communities) {
     if (c.status !== "inhabited") continue;
     const cell = nativeIndexAtSurface(state, c.position.x, c.position.y);
     if (cell < 0 || map.Tenure[cell] <= 0) continue;
     // A seat is a point fact: its person-years count whole, whatever the cell's size.
     const tenure = map.Tenure[cell] / p.tenureFull,
-      strength = clamp(
-        round(1000 * tenure * (1 + p.pilgrimageBonus * (ways.get(c.id) ?? 0))),
-        1,
-        1000
-      );
+      strength = siteStrength(1000 * tenure * (1 + p.pilgrimageBonus * (ways.get(c.id) ?? 0)));
+    if (strength === 0) continue;
     field.source[cell] = Math.max(field.source[cell], strength);
     field.located.push({
       origin: origin.id,
@@ -51,6 +45,15 @@ export function tenureSources(
       strength,
     });
   }
+}
+/** How many ways end at each community. */
+function waysConverging(connections: { from: string; to: string }[]) {
+  const ways = new Map<string, number>();
+  for (const link of connections) {
+    ways.set(link.from, (ways.get(link.from) ?? 0) + 1);
+    ways.set(link.to, (ways.get(link.to) ?? 0) + 1);
+  }
+  return ways;
 }
 /** Hallowed's lines: kept-years where people keep a frontier or a work, and the roads pilgrims wear. */
 export function keptLineSources(state: GenerationState, field: MagicField) {
