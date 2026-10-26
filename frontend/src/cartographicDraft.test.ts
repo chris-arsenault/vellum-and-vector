@@ -20,19 +20,23 @@ const control = (id: string) => cartographicControls().find((control) => control
 const choose = (draft: ReturnType<typeof newGenerationDraft>, id: string, value: string) =>
   applyCartographicChoice(draft, control(id), value);
 
-it("prepares every curated outcome through schemas, process dependencies and native profile bindings", () => {
-  const base = newGenerationDraft();
-  for (const definition of cartographicControls())
-    for (const choice of definition.choices) {
-      const draft = applyCartographicChoice(base, definition, choice.id);
-      const prepared = prepareDraft(draft);
-      expect(
-        prepared.diagnostics.filter((item) => item.severity === "error"),
-        `${definition.id}:${choice.id}`
-      ).toEqual([]);
-      expect(cartographicValue(draft, definition)).toBe(choice.id);
-    }
-});
+it.each(
+  cartographicControls().flatMap((definition) =>
+    definition.choices.map((choice) => ({
+      id: `${definition.id}:${choice.id}`,
+      definition,
+      choice,
+    }))
+  )
+)(
+  "prepares $id through schemas, dependencies and native profile bindings",
+  ({ definition, choice }) => {
+    const draft = applyCartographicChoice(newGenerationDraft(), definition, choice.id);
+    const prepared = prepareDraft(draft);
+    expect(prepared.diagnostics.filter((item) => item.severity === "error")).toEqual([]);
+    expect(cartographicValue(draft, definition)).toBe(choice.id);
+  }
+);
 
 it("uses meaningful reference choices while preserving the authored magic recipes", () => {
   const draft = newGenerationDraft();

@@ -15,6 +15,19 @@ const scope = (footprint: Geometry): SpatialScope => ({
   resolution: 1,
 });
 
+it("returns triangulation edges by source identity after precision normalization", () => {
+  const points = [
+    { x: 0.0000001, y: 0, z: 0 },
+    { x: 4, y: 0, z: 0 },
+    { x: 1, y: 3, z: 0 },
+  ];
+  const before = structuredClone(points);
+  const edges = spatial.delaunayEdges(points).map((edge) => edge.sort((a, b) => a - b).join(":"));
+  expect(new Set(edges)).toEqual(new Set(["0:1", "0:2", "1:2"]));
+  expect(points).toEqual(before);
+  expect(spatial.delaunayEdges([points[0], { x: 0, y: 0, z: 0 }])).toEqual([]);
+});
+
 const coverageFootprints: Geometry[] = [
   rectangle([0, 0, 10, 10]),
   {

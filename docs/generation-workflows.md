@@ -519,7 +519,13 @@ Initial province sites are independently distributed, allowing unequal blocks
 and locally clustered boundaries. Continental assemblies grow from anchors with
 unequal area budgets. The default groups neighboring assemblies into compound
 continental regions, leaving broad ocean interiors between them; the island-world
-choice disperses assemblies instead. Uniform world-space samples estimate the
+choice disperses assemblies instead. Growth favors staying near each region's
+origin and leaving oceanic provinces between different regions. Province contacts
+come from their Voronoi topology, including neighbors across the cylindrical seam,
+so a narrow shared boundary does not disappear between area samples. The crust
+budget can still bring regions into contact, and later history can join or divide
+landmasses; assembly totals are not a count of separate continents.
+Uniform world-space samples estimate the
 unwarped territory areas independently of terrain sampling; whole-block selection,
 warping and crust transitions make the resulting continental fraction approximate.
 Assembly motion remains coherent within each assembly while neighboring assemblies

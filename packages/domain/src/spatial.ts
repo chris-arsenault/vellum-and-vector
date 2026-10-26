@@ -1,4 +1,4 @@
-import type { Geometry, Position as Coordinate } from "geojson";
+import type { Geometry, MultiLineString, Position as Coordinate } from "geojson";
 import GeoJSONReader from "jsts/org/locationtech/jts/io/GeoJSONReader.js";
 import GeoJSONWriter from "jsts/org/locationtech/jts/io/GeoJSONWriter.js";
 import GeometryFactory from "jsts/org/locationtech/jts/geom/GeometryFactory.js";
@@ -16,6 +16,7 @@ import InteriorPointArea from "jsts/org/locationtech/jts/algorithm/InteriorPoint
 import STRtree from "jsts/org/locationtech/jts/index/strtree/STRtree.js";
 import Envelope from "jsts/org/locationtech/jts/geom/Envelope.js";
 import CoordinatePoint from "jsts/org/locationtech/jts/geom/Coordinate.js";
+import DelaunayTriangulationBuilder from "jsts/org/locationtech/jts/triangulate/DelaunayTriangulationBuilder.js";
 import type { Frame, Position } from "./model";
 import { frameSchema, geometrySchema } from "./schemas";
 import { requireThat } from "./errors";
@@ -91,6 +92,24 @@ export class Spatial {
 
   canonical(value: Geometry): Geometry {
     return this.write(this.read(value))!;
+  }
+
+  /** Edges reference the supplied points, after applying this spatial precision. */
+  delaunayEdges(points: Position[]): [number, number][] {
+    if (points.length < 2) return [];
+    const key = (x: number, y: number) =>
+      `${this.model.makePrecise(x)}:${this.model.makePrecise(y)}`;
+    const indices = new Map(points.map((p, i) => [key(p.x, p.y), i]));
+    if (indices.size < 2) return [];
+    const builder = new DelaunayTriangulationBuilder();
+    builder.setSites(this.read({ type: "MultiPoint", coordinates: points.map((p) => [p.x, p.y]) }));
+    const edges = this.writer.write(
+      builder.getEdges(new GeometryFactory(this.model, 0))
+    ) as MultiLineString;
+    return edges.coordinates.map(([a, b]) => [
+      indices.get(key(a[0], a[1]))!,
+      indices.get(key(b[0], b[1]))!,
+    ]);
   }
 
   covers(a: Geometry, b: Geometry): boolean {

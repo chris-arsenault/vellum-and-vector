@@ -4,6 +4,7 @@ import type { PhysicalContext } from "./context";
 import { lerp } from "./math";
 import { hashUnit } from "./noise";
 import { worldCandidates } from "./worldSources";
+import { provinceTerritories, type ProvinceTerritories } from "./provinceTerritories";
 
 interface Candidate {
   x: number;
@@ -14,6 +15,13 @@ export interface ProvinceSite extends Candidate {
   assembly: number;
   motionX: number;
   motionY: number;
+}
+interface RegionGrowth {
+  root: Candidate;
+  index: number;
+  count: number;
+  cohesion: number;
+  adjacent: Uint8Array;
 }
 const deltaX = (dx: number, width = 0) => (width ? dx - Math.round(dx / width) * width : dx);
 const distance2 = (a: Candidate, b: Candidate, width = 0) =>
@@ -42,29 +50,17 @@ function minimumDistance(
     Infinity
   );
 }
-function territoryAreas(sites: Candidate[], samples: Candidate[], width: number): Float64Array {
-  // Uniform world-space samples estimate unwarped territory area independently of the mesh.
-  // Every sample has the same represented area, so counts suffice for growth budgets.
-  const areas = new Float64Array(sites.length);
-  for (const sample of samples) {
-    let nearest = 0;
-    for (let i = 1; i < sites.length; i++)
-      if (distance2(sample, sites[i], width) < distance2(sample, sites[nearest], width))
-        nearest = i;
-    areas[nearest]++;
-  }
-  return areas;
-}
 function anchors(
   sites: Candidate[],
   count: number,
-  areas: Float64Array,
+  territory: ProvinceTerritories,
   target: number,
   width: number,
   clustering: number,
   provinceArea: number
 ): number[] {
   const indices = sites.map((_, i) => i);
+  const { areas } = territory;
   // Seed each requested assembly without spending its whole area budget on a large block.
   const smaller = indices.filter((i) => areas[i] <= target / count);
   const candidates = smaller.length >= count ? smaller : indices;
@@ -72,13 +68,23 @@ function anchors(
     bestIndex(candidates, (i) => -radius2(sites[i]) / (0.8 + sites[i].priority * 0.4)),
   ];
   const regions = Math.ceil(Math.sqrt(count));
-  while (chosen.length < count)
-    chosen.push(
-      bestIndex(
-        candidates.filter((i) => !chosen.includes(i)),
-        (i) => anchorScore(sites, i, chosen, regions, width, clustering, provinceArea)
-      )
+  const labels = new Int32Array(sites.length);
+  labels[chosen[0]] = 1;
+  while (chosen.length < count) {
+    const options = oceanSeparated(
+      candidates.filter((i) => !chosen.includes(i)),
+      labels,
+      chosen.length % regions,
+      regions,
+      clustering,
+      territory.adjacent
     );
+    const next = bestIndex(options, (i) =>
+      anchorScore(sites, i, chosen, regions, width, clustering, provinceArea)
+    );
+    chosen.push(next);
+    labels[next] = chosen.length;
+  }
   return chosen;
 }
 function anchorScore(
@@ -120,12 +126,21 @@ function frontierSite(
   assembly: number,
   anchor: number,
   direction: [number, number],
-  width: number
+  width: number,
+  region: RegionGrowth
 ): number {
   let best = -1,
     bestCost = Infinity;
-  for (let candidate = 0; candidate < sites.length; candidate++) {
-    if (selected[candidate] !== 0) continue;
+  const remaining = sites.map((_, i) => i).filter((i) => selected[i] === 0);
+  const candidates = oceanSeparated(
+    remaining,
+    selected,
+    region.index,
+    region.count,
+    region.cohesion,
+    region.adjacent
+  );
+  for (const candidate of candidates) {
     const frontier = assemblyDistance(sites, selected, candidate, assembly, false, width);
     if (assemblyDistance(sites, selected, candidate, assembly, true, width) < frontier * 0.62)
       continue;
@@ -134,33 +149,67 @@ function frontierSite(
     const length = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
     const alignment = Math.abs((dx / length) * direction[0] + (dy / length) * direction[1]);
     const distance = Math.sqrt(frontier);
-    const cost = distance * (1.12 - alignment * 0.48) - sites[candidate].priority * distance * 0.1;
+    const regionalDistance = Math.sqrt(distance2(sites[candidate], region.root, width));
+    const cost =
+      distance * (1.12 - alignment * 0.48) -
+      sites[candidate].priority * distance * 0.1 +
+      region.cohesion * regionalDistance;
     if (cost < bestCost) {
       best = candidate;
       bestCost = cost;
     }
   }
   if (best >= 0) return best;
-  return bestIndex(
-    sites.map((_, i) => i).filter((i) => selected[i] === 0),
-    (i) => -assemblyDistance(sites, selected, i, assembly, false, width)
+  return candidates.length
+    ? bestIndex(candidates, (i) => -assemblyDistance(sites, selected, i, assembly, false, width))
+    : -1;
+}
+function oceanSeparated(
+  candidates: number[],
+  selected: Int32Array,
+  region: number,
+  regionCount: number,
+  clustering: number,
+  adjacent: Uint8Array
+): number[] {
+  if (clustering === 0) return candidates;
+  // Keep oceanic provinces between continental regions when the crust budget leaves room.
+  // Nearby seed points alone do not describe the extent of irregular province territories.
+  const separated = candidates.filter((i) =>
+    selected.every(
+      (assembly, j) =>
+        assembly === 0 ||
+        (assembly - 1) % regionCount === region ||
+        !adjacent[i * selected.length + j]
+    )
   );
+  return separated.length ? separated : candidates;
+}
+function growthRegions(
+  sites: Candidate[],
+  chosen: number[],
+  cohesion: number,
+  adjacent: Uint8Array
+): RegionGrowth[] {
+  const roots = chosen.slice(0, Math.ceil(Math.sqrt(chosen.length))).map((i) => sites[i]);
+  return roots.map((root, index) => ({ root, index, count: roots.length, cohesion, adjacent }));
 }
 function assemblies(
   sites: Candidate[],
-  areas: Float64Array,
+  territory: ProvinceTerritories,
   context: PhysicalContext,
   width: number,
   provinceArea: number
 ): Int32Array {
   const profile = context.Profile,
     seed = context.EpochStableSeed;
+  const { areas } = territory;
   const target = areas.reduce((sum, area) => sum + area, 0) * profile.ContinentalCrustFraction;
   const result = new Int32Array(sites.length),
     chosen = anchors(
       sites,
       profile.ContinentalAssemblyCount,
-      areas,
+      territory,
       target,
       width,
       profile.ContinentalAssemblyClustering,
@@ -169,6 +218,12 @@ function assemblies(
   chosen.forEach((i, n) => {
     result[i] = n + 1;
   });
+  const regions = growthRegions(
+    sites,
+    chosen,
+    profile.ContinentalAssemblyClustering,
+    territory.adjacent
+  );
   const directions = chosen.map((_, i): [number, number] => {
     const angle = hashUnit(seed ^ 0x67d3, i, 0) * Math.PI * 2;
     return [Math.cos(angle), Math.sin(angle)];
@@ -185,7 +240,15 @@ function assemblies(
     const options = chosen
       .map((anchor, n) => ({
         n,
-        next: frontierSite(sites, result, n + 1, anchor, directions[n], width),
+        next: frontierSite(
+          sites,
+          result,
+          n + 1,
+          anchor,
+          directions[n],
+          width,
+          regions[n % regions.length]
+        ),
       }))
       .filter(
         ({ next }) => next >= 0 && Math.abs(total + areas[next] - target) < Math.abs(total - target)
@@ -224,7 +287,7 @@ export function createProvinceSites(map: PhysicalField, context: PhysicalContext
   const provinceArea = ((bounds[2] - bounds[0]) * (bounds[3] - bounds[1])) / selected.length;
   const groups = assemblies(
     selected,
-    territoryAreas(selected, candidates, width),
+    provinceTerritories(selected, candidates, width),
     context,
     width,
     provinceArea

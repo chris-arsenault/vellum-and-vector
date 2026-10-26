@@ -128,7 +128,8 @@ function placeAll(map: PhysicalField): Landmark[] {
  * maintenance before its history, exactly where the atlas sequence places them.
  */
 function evolve(seed: number, place: (map: PhysicalField) => Landmark[]) {
-  const profile = atlasPhysicalProfile(),
+  // Six well-separated inland landmarks need a deliberately land-rich fixture.
+  const profile = atlasPhysicalProfile({ landFraction: 0.7 }),
     map = createField(createWorldMesh(bounds, 4096, profile.BoundaryPadding)),
     ledger: LandmarkLedger = new Map(),
     held: Record<string, boolean[]> = {},
