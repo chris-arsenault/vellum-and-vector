@@ -1,8 +1,6 @@
 import {
-  languageShares,
   languageUse,
   population,
-  practiceShares,
   type AtlasFeature,
   type PopulationGroup,
   type SocietyCommunity,
@@ -42,19 +40,6 @@ export function supportSegments(c: SocietyCommunity): Segment[] {
     },
     practiceLabel
   );
-}
-export function practiceSegments(group: PopulationGroup): Segment[] {
-  return shareSegments(practiceShares(group), practiceLabel);
-}
-export function languageSegments(
-  world: World,
-  group: PopulationGroup,
-  channel: "knowledge" | "use"
-): Segment[] {
-  const shares = Object.fromEntries(
-    Object.entries(languageShares(group)).map(([id, share]) => [id, share[channel]])
-  );
-  return shareSegments(shares, (id) => entityName(world, id));
 }
 export function namingUseSegments(world: World, groups: PopulationGroup[]): Segment[] {
   return shareSegments(languageUse(groups), (id) => entityName(world, id));

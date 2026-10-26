@@ -120,6 +120,7 @@ export function ShareBar({
   total,
   format = (s) => percent(s.value / (total ?? sum(segments))),
   legend = true,
+  titled = false,
 }: {
   label: string;
   segments: Segment[];
@@ -127,10 +128,17 @@ export function ShareBar({
   /** The legend text for a segment; defaults to its share as a percentage. */
   format?: (segment: Segment) => string;
   legend?: boolean;
+  /** Show the label above the bar, for a run of bars whose context does not name them. */
+  titled?: boolean;
 }) {
   const placed = placeSegments(segments, total);
   return (
     <div className="share">
+      {titled && (
+        <div className="meter-head">
+          <span>{label}</span>
+        </div>
+      )}
       <div className="share-bar" role="img" aria-label={label}>
         {placed.map((s, i) => (
           <i
@@ -159,6 +167,52 @@ export function ShareBar({
 }
 function sum(segments: Segment[]) {
   return segments.reduce((s, x) => s + x.value, 0);
+}
+
+/**
+ * Shares that overlap, so no single bar can hold them: the residents who hold each
+ * tradition, who know each language. Each segment is its own lane from zero to its share
+ * of `total`, heaviest first, with the same legend as a share bar.
+ */
+export function OverlapBars({
+  label,
+  segments,
+  total = 1,
+  format = (s) => percent(s.value / total),
+}: {
+  label: string;
+  segments: Segment[];
+  total?: number;
+  format?: (segment: Segment) => string;
+}) {
+  return (
+    <div className="share">
+      <div className="meter-head">
+        <span>{label}</span>
+      </div>
+      <div className="lanes" role="img" aria-label={label}>
+        {segments.map((s, i) => (
+          <i
+            key={s.id}
+            className={`lane ${channelClass(s.id, i)}`}
+            title={`${s.label} ${format(s)}`}
+            style={{ "--w": `${Math.min(100, (100 * s.value) / total)}%` }}
+          />
+        ))}
+      </div>
+      <ul className="legend">
+        {segments.map((s, i) => (
+          <li key={s.id}>
+            <i className={`swatch ${channelClass(s.id, i)}`} />
+            <span>
+              {s.label} {format(s)}
+            </span>
+          </li>
+        ))}
+        {!segments.length && <li className="legend-empty">{label}: none</li>}
+      </ul>
+    </div>
+  );
 }
 
 /** Jumps to related features: each row selects something else on the map. */

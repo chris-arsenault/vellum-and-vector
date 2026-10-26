@@ -6,7 +6,15 @@ import {
   type PopulationGroup,
   type World,
 } from "@atlas/domain";
+import { useState } from "react";
 import { SocietyLanguageEditor } from "./SocietyLanguageEditor";
+import { groupRows } from "./settlementPeopleData";
+import { compact, percent } from "./surfaceData";
+
+/**
+ * The groups as an index, heaviest first, with one group's fields open at a time. A
+ * capital holds dozens of groups; stacking every group's fields made the form unusable.
+ */
 export function SocietyGroupEditor({
   world,
   groups,
@@ -16,65 +24,142 @@ export function SocietyGroupEditor({
   groups: PopulationGroup[];
   change: (groups: PopulationGroup[]) => void;
 }) {
+  const [opened, setOpened] = useState(0);
+  const open = groups[opened] ? opened : 0;
   const update = (i: number, patch: Partial<PopulationGroup>) =>
     change(groups.map((g, j) => (i === j ? { ...g, ...patch } : g)));
-  const entities = Object.values(world.entities);
   return (
     <fieldset>
       <legend>Population composition</legend>
-      {groups.map((g, i) => (
-        <div key={i}>
-          <label>
-            People in group {i + 1}
-            <input
-              type="number"
-              min="0"
-              step="any"
-              value={g.count}
-              onChange={(e) => update(i, { count: Number(e.target.value) })}
-            />
-          </label>
-          <label>
-            Culture
-            <select
-              value={g.culture ?? ""}
-              onChange={(e) => update(i, { culture: e.target.value || null })}
-            >
-              <option value="">Unspecified</option>
-              {entities
-                .filter((e) => e.kind === "culture")
-                .map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.name}
-                  </option>
-                ))}
-            </select>
-          </label>
-          <Affiliations world={world} group={g} change={(patch) => update(i, patch)} />
-          <label>
-            Practices (comma separated)
-            <input
-              value={g.practices.join(", ")}
-              onChange={(e) =>
-                update(
-                  i,
-                  practicePatch(
-                    g,
-                    e.target.value
-                      .split(",")
-                      .map((s) => s.trim())
-                      .filter(Boolean)
-                  )
-                )
-              }
-            />
-          </label>
-        </div>
-      ))}
-      <button type="button" onClick={() => change([...groups, emptyGroup(groups[0]?.people)])}>
+      {groups.length > 1 && (
+        <GroupIndex world={world} groups={groups} open={open} select={setOpened} />
+      )}
+      {groups[open] && (
+        <GroupFields
+          world={world}
+          group={groups[open]}
+          index={open}
+          update={(patch) => update(open, patch)}
+        />
+      )}
+      <button
+        type="button"
+        onClick={() => {
+          change([...groups, emptyGroup(groups[0]?.people)]);
+          setOpened(groups.length);
+        }}
+      >
         Add population group
       </button>
     </fieldset>
+  );
+}
+function GroupIndex({
+  world,
+  groups,
+  open,
+  select,
+}: {
+  world: World;
+  groups: PopulationGroup[];
+  open: number;
+  select: (index: number) => void;
+}) {
+  return (
+    <div className="group-scroll">
+      <table className="surface-table group-table">
+        <thead>
+          <tr>
+            <th>Group</th>
+            <th>Culture</th>
+            <th>Traditions</th>
+            <th className="num">People</th>
+          </tr>
+        </thead>
+        <tbody>
+          {groupRows(world, groups).map((row) => (
+            <tr key={row.index} aria-current={row.index === open ? "true" : undefined}>
+              <td>
+                <button
+                  type="button"
+                  className="surface-link"
+                  aria-label={`Edit group ${row.index + 1}`}
+                  onClick={() => select(row.index)}
+                >
+                  <span className="surface-link-label">{row.index + 1}</span>
+                </button>
+              </td>
+              <td>{row.culture}</td>
+              <td>{row.traditions.length ? row.traditions.join(", ") : "—"}</td>
+              <td className="num" title={percent(row.share, 1)}>
+                {compact(row.count)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+function GroupFields({
+  world,
+  group,
+  index,
+  update,
+}: {
+  world: World;
+  group: PopulationGroup;
+  index: number;
+  update: (patch: Partial<PopulationGroup>) => void;
+}) {
+  const entities = Object.values(world.entities);
+  return (
+    <div>
+      <label>
+        People in group {index + 1}
+        <input
+          type="number"
+          min="0"
+          step="any"
+          value={group.count}
+          onChange={(e) => update({ count: Number(e.target.value) })}
+        />
+      </label>
+      <label>
+        Culture
+        <select
+          value={group.culture ?? ""}
+          onChange={(e) => update({ culture: e.target.value || null })}
+        >
+          <option value="">Unspecified</option>
+          {entities
+            .filter((e) => e.kind === "culture")
+            .map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.name}
+              </option>
+            ))}
+        </select>
+      </label>
+      <Affiliations world={world} group={group} change={update} />
+      <label>
+        Practices (comma separated)
+        <input
+          value={group.practices.join(", ")}
+          onChange={(e) =>
+            update(
+              practicePatch(
+                group,
+                e.target.value
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter(Boolean)
+              )
+            )
+          }
+        />
+      </label>
+    </div>
   );
 }
 function emptyGroup(people = "residents"): PopulationGroup {

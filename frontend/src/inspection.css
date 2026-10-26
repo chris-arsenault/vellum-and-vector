@@ -394,18 +394,48 @@ details[open] > summary .surface-caret {
   font-variant-numeric: tabular-nums;
 }
 
-/* A population group: its weight, practices and languages as one card. */
-.group-card {
-  padding: 8px 10px 2px;
-  margin: 6px 0 10px;
+/* Overlapping shares: one lane per segment from zero to its share, heaviest on top. */
+.lanes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 1px 0;
+  border-radius: 3px;
+  background: var(--surface-track);
+}
+.lane {
+  display: block;
+  height: 3px;
+  width: var(--w);
+  min-width: 2px;
+  border-radius: 2px;
+  background: var(--ch);
+}
+
+/* The population groups as rows; the remainder row's button opens the minor ones. */
+.group-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.group-table {
+  margin-top: 6px;
+}
+.group-table .num {
+  text-align: right;
+  padding-left: 10px;
+  white-space: nowrap;
+}
+.group-table .num:last-child {
+  padding-right: 0;
+}
+.group-table .surface-link {
+  padding: 0;
+  min-height: 0;
+  font-size: inherit;
+}
+.group-table tr[aria-current="true"] td {
+  color: #ece8d7;
   background: #223437;
-  border-radius: 5px;
-}
-.group-card .meter {
-  margin-top: 0;
-}
-.group-card .share {
-  margin-bottom: 8px;
 }
 
 /* Facts */

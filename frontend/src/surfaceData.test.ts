@@ -92,6 +92,9 @@ it("labels numbers compactly and channels by fixed class", () => {
   expect(compact(2_100_000)).toBe("2.1M");
   expect(percent(0.256)).toBe("26%");
   expect(percent(0.256, 1)).toBe("25.6%");
+  expect(percent(0.003)).toBe("<1%");
+  expect(percent(0.0003, 1)).toBe("<0.1%");
+  expect(percent(0)).toBe("0%");
   expect(channelClass("farming", 3)).toBe("ch-farming");
   expect(channelClass("River speech", 9)).toBe("ch-1");
 });

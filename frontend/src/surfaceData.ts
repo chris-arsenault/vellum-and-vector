@@ -103,9 +103,11 @@ export function compact(value: number) {
   if (abs >= 1e3) return `${(value / 1e3).toFixed(abs >= 1e4 ? 0 : 1)}k`;
   return Math.round(value).toLocaleString();
 }
-/** A whole-percent label. */
+/** A percent label; a share too small to show at the given digits reads as less than one unit. */
 export function percent(share: number, digits = 0) {
-  return `${(100 * share).toFixed(digits)}%`;
+  const text = (100 * share).toFixed(digits);
+  if (share > 0 && Number(text) === 0) return `<${(1 / 10 ** digits).toFixed(digits)}%`;
+  return `${text}%`;
 }
 
 /**

@@ -1,18 +1,29 @@
-import type { PopulationGroup, SocietyCommunity, SocietyRegion, World } from "@atlas/domain";
-import { Facts, Meter, Section, ShareBar } from "./InspectionSurface";
+import type { SocietyCommunity, SocietyRegion, World } from "@atlas/domain";
+import { useState } from "react";
+import { Facts, OverlapBars, Section, ShareBar } from "./InspectionSurface";
 import { TrendChart } from "./TrendChart";
 import { compact, percent } from "./surfaceData";
 import {
   entityName,
-  languageSegments,
   namingUseSegments,
   occupationSeries,
-  population,
-  practiceSegments,
   stepLabel,
 } from "./settlementSurfaceData";
+import {
+  cultureSegments,
+  foldGroupRows,
+  groupRows,
+  knowledgeSegments,
+  residentPracticeSegments,
+  traditionShares,
+  type GroupRow,
+} from "./settlementPeopleData";
 
-/** Each population group: its weight, what it does and what it speaks; then naming use. */
+/**
+ * Who lives here, read across the population groups: by culture, by tradition, by
+ * language and by livelihood. The groups themselves, which partition the residents by
+ * people, culture and exact set of traditions, sit folded in a table underneath.
+ */
 export function SettlementPeoples({
   world,
   community,
@@ -20,16 +31,32 @@ export function SettlementPeoples({
   world: World;
   community: SocietyCommunity;
 }) {
-  const people = Math.max(1, population(community));
+  const groups = community.groups,
+    cultures = cultureSegments(world, groups);
   return (
-    <Section title="Peoples" meta={`${community.groups.length} groups`}>
-      {community.groups.map((group, i) => (
-        <GroupCard key={i} world={world} group={group} people={people} />
-      ))}
+    <Section
+      title="Peoples"
+      meta={`${groups.length} ${groups.length === 1 ? "group" : "groups"} · ${cultures.length} ${cultures.length === 1 ? "culture" : "cultures"}`}
+    >
+      <ShareBar label="Residents by culture" segments={cultures} titled />
+      <OverlapBars label="Traditions residents hold" segments={traditionShares(world, groups)} />
       <ShareBar
         label="Naming-language use"
-        segments={namingUseSegments(world, community.groups)}
+        segments={namingUseSegments(world, groups)}
         format={(s) => percent(s.value, 1)}
+        titled
+      />
+      <OverlapBars
+        label="Languages residents know"
+        segments={knowledgeSegments(world, groups)}
+        format={(s) => percent(s.value, 1)}
+      />
+      <ShareBar
+        label="Livelihoods and crafts of residents"
+        segments={residentPracticeSegments(groups)}
+        total={1}
+        format={(s) => percent(s.value)}
+        titled
       />
       {community.naming && (
         <Facts
@@ -38,40 +65,58 @@ export function SettlementPeoples({
           ]}
         />
       )}
+      <GroupTable rows={groupRows(world, groups)} />
     </Section>
   );
 }
-function GroupCard({
-  world,
-  group,
-  people,
-}: {
-  world: World;
-  group: PopulationGroup;
-  people: number;
-}) {
-  const culture = group.culture ? entityName(world, group.culture) : group.people;
+
+/** The groups heaviest first; those under a percent fold into one row until asked for. */
+function GroupTable({ rows }: { rows: GroupRow[] }) {
+  const [all, setAll] = useState(false);
+  if (!rows.length) return null;
+  const { shown, folded } = foldGroupRows(rows);
+  const listed = all ? rows : shown;
+  const foldedCount = folded.reduce((sum, row) => sum + row.count, 0),
+    foldedShare = folded.reduce((sum, row) => sum + row.share, 0);
   return (
-    <div className="group-card">
-      <Meter
-        label={`${culture}${group.religions.length ? ` · ${group.religions.map((id) => entityName(world, id)).join(", ")}` : ""}`}
-        value={group.count}
-        max={people}
-        text={`${compact(group.count)} · ${percent(group.count / people)}`}
-      />
-      <ShareBar
-        label={`Practices of ${culture}`}
-        segments={practiceSegments(group)}
-        total={1}
-        format={(s) => percent(s.value)}
-      />
-      <ShareBar
-        label={`Languages ${culture} know`}
-        segments={languageSegments(world, group, "knowledge")}
-        total={Math.max(1, ...languageSegments(world, group, "knowledge").map((s) => s.value))}
-        format={(s) => percent(s.value, 1)}
-      />
-    </div>
+    <details>
+      <summary>
+        {rows.length} population {rows.length === 1 ? "group" : "groups"}
+      </summary>
+      <div className="group-scroll">
+        <table className="surface-table group-table">
+          <thead>
+            <tr>
+              <th>Culture</th>
+              <th>Traditions</th>
+              <th className="num">People</th>
+              <th className="num">Share</th>
+            </tr>
+          </thead>
+          <tbody>
+            {listed.map((row) => (
+              <tr key={row.index} title={`Group ${row.index + 1} of the record`}>
+                <td>{row.culture}</td>
+                <td>{row.traditions.length ? row.traditions.join(", ") : "—"}</td>
+                <td className="num">{compact(row.count)}</td>
+                <td className="num">{percent(row.share, row.share < 0.01 ? 2 : 1)}</td>
+              </tr>
+            ))}
+            {folded.length > 0 && !all && (
+              <tr>
+                <td colSpan={2}>
+                  <button type="button" className="surface-link" onClick={() => setAll(true)}>
+                    <span className="surface-link-label">{folded.length} smaller groups</span>
+                  </button>
+                </td>
+                <td className="num">{compact(foldedCount)}</td>
+                <td className="num">{percent(foldedShare, 1)}</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </details>
   );
 }
 

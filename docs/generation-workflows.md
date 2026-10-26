@@ -75,7 +75,9 @@ changes and Aurora's temperature/ice dependencies.
 Present edits synchronize residents and works with the retained society records.
 Refinement subdivides population catchments and retains completed history and
 feature identities; it does not rerun old eras. The inspector exposes population
-composition, support and practice resources, while generation controls supply era
+composition read across the groups by culture, tradition, language and livelihood,
+with the groups themselves folded into a table and edited one at a time, beside
+support and practice resources, while generation controls supply era
 duration, mobility and political capacity, and bind an era to a physical epoch:
 an era bound to an epoch before the present runs inside it as a mobile round
 whose cold-age works persist. Its camps are latent sites the present prefers;
