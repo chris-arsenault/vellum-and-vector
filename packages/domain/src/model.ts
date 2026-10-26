@@ -309,6 +309,8 @@ export interface World {
   templates: Record<string, Template>;
   magic: {
     systemId?: string;
+    /** The landmark whose injected source this is; removed with it, hidden from source editing. */
+    landmarkId?: string;
     areaId?: string;
     spaceId?: string;
     scope?: Geometry | null;

@@ -107,8 +107,9 @@ it("carries mined cores down the road to a city with no vein, whose forge become
     if (!connected) region.connections = [];
     useSocietyMagic(state, context, 10);
     practice(state, a.id).coreDeposit = 500;
-    for (let cycle = 0; cycle < 20; cycle++) useSocietyMagic(state, context, 10);
     const fire = field("fire");
+    fire.stocks["vein/held"][cellOf(a)] = 500 * 10_000_000;
+    for (let cycle = 0; cycle < 20; cycle++) useSocietyMagic(state, context, 10);
     locateMagicSources(state, fire, 1, 0);
     propagateMagic(state, fire, 1, 1);
     return { used: practice(state, b.id).coreUsed, fire, cell: cellOf(b), state };

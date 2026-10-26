@@ -87,6 +87,8 @@ const landformTerms: Record<string, string> = {
   volcano: "Volcano",
   caldera: "Caldera",
   fault: "Fault",
+  dome: "Dome",
+  escarpment: "Escarpment",
 };
 const biomeFamilies = new Set([
   "forest",
@@ -125,6 +127,15 @@ export function nameGeographicFeature(
       kind: "landform",
       subkind: kind,
       term: landformTerms[kind],
+      position,
+      ...source,
+    });
+  if (kind === "ocean" && attributes.marineType === "sea")
+    return atlasName(world, {
+      key,
+      kind: "ocean",
+      subkind: "sea",
+      term: "Sea",
       position,
       ...source,
     });

@@ -32,8 +32,10 @@ import { mapBoundaryValue } from "../atlasParameters";
 
 export interface AtlasPhysicalWorkspace {
   magic?: import("./magicState").MagicWorkspace;
-  /** Authored landmarks emplaced in this run, with their measured signatures. */
+  /** Landmarks emplaced in this run, with their measured signatures. */
   landmarks?: import("./landmarks").LandmarkLedger;
+  /** The landmarks this run still has to site, with the epoch each forms in. */
+  landmarkRoster?: import("./landmarkSiting").RosterEntry[];
   map: PhysicalField;
   profile: PhysicalProfile;
   samples: Int32Array;

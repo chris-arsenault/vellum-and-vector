@@ -170,22 +170,6 @@ export const drawingTools: Partial<Record<Tool, DrawingTool>> = {
     layer: "magic",
     instruction: "Click the source, then click its reach. Configure its effects in the panel.",
   },
-  landmark: {
-    label: "Place landmark",
-    geometry: "Point",
-    kind: "landmark",
-    layer: "geology",
-    instruction:
-      "Click where a great mountain, ring structure or falls forms. Choose its kind and measures in the panel.",
-  },
-  landmarkPath: {
-    label: "Draw landmark path",
-    geometry: "LineString",
-    kind: "landmark",
-    layer: "geology",
-    instruction:
-      "Trace a canyon or escarpment; an escarpment drops on the right-hand side. Double-click or press Enter to finish.",
-  },
   template: {
     label: "Place template",
     geometry: "Point",
@@ -216,7 +200,7 @@ export const drawingTools: Partial<Record<Tool, DrawingTool>> = {
   },
 };
 const palettes: Record<Workspace, Tool[]> = {
-  terrain: ["sculpt", "hill", "landmark", "landmarkPath", "forest", "poi"],
+  terrain: ["sculpt", "hill", "forest", "poi"],
   water: ["river", "lake"],
   routes: ["road"],
   places: ["settlement", "building", "poi"],

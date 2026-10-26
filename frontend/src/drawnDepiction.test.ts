@@ -193,6 +193,17 @@ it("gives major non-city sites recognizable marks and anchors polygon sites insi
   expect(placeMark(site)).toBe("gorge");
   const [x, y] = placeAnchor(site);
   expect(spatial.pointCoverage(site.geometry)({ x, y, z: 0 })).toBe(true);
+  // A magic landmark is a place on the magic layer: marked as a site, never a tinted field.
+  const world = createWorld({ name: "Marks", seed: 1, width: 100000, height: 100000 });
+  const wellspring = feature(
+    "Emberwell",
+    { type: "Point", coordinates: [5000, 5000] },
+    "landmark",
+    "magic"
+  );
+  wellspring.attributes = { landmarkKind: "fire-wellspring", system: "fire" };
+  expect(placeMark(wellspring)).toBe("shrine");
+  expect(magicCartography(wellspring, world)).toBe("site");
 });
 it("keeps legacy mesh fault traces out of ordinary drawn maps but retains explicit fault styling", () => {
   const world = createWorld({ name: "Faults", seed: 1, width: 100000, height: 100000 });

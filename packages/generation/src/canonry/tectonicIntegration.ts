@@ -61,12 +61,34 @@ function inversePoint(map: PhysicalField, [x, y]: [number, number], frame: Motio
     plate.y + (-b * dx + a * dy) / determinant
   );
 }
+/** The frame's motion applied to a point: the inverse of `inversePoint`. */
+function forwardPoint(map: PhysicalField, [x, y]: [number, number], frame: MotionFrame) {
+  let nearest = frame.sites[0],
+    minimum = Infinity;
+  for (const site of frame.sites) {
+    const distance = meshDeltaX(map.mesh, site.x - x) ** 2 + (site.y - y) ** 2;
+    if (distance < minimum) {
+      minimum = distance;
+      nearest = site;
+    }
+  }
+  const plate = frame.plates.find((plate) => plate.id === nearest.plate)!,
+    angle = plate.spin * frame.distance,
+    share = nearest.compliance,
+    vx = plate.motionX * (1 - share) + nearest.driveX * share,
+    vy = plate.motionY * (1 - share) + nearest.driveY * share,
+    ox = meshDeltaX(map.mesh, x - plate.x),
+    oy = y - plate.y,
+    a = Math.cos(angle),
+    b = Math.sin(angle) - share * angle;
+  return meshPoint(
+    map.mesh,
+    plate.x + a * ox - b * oy + vx * frame.distance,
+    plate.y + b * ox + a * oy + vy * frame.distance
+  );
+}
 /** Forecast only the coarse mechanical state, not terrain, magic or ecology. */
-export function backtrackTectonicPoint(
-  map: PhysicalField,
-  point: [number, number],
-  distances: number[]
-): [number, number] {
+function forecastFrames(map: PhysicalField, distances: number[]) {
   const forecast = { ...map, tectonics: structuredClone(map.tectonics!) },
     frames: MotionFrame[] = [],
     rate = forecast.tectonics.rate;
@@ -82,6 +104,24 @@ export function backtrackTectonicPoint(
       remaining -= myr;
     }
   }
-  for (const frame of frames.reverse()) point = inversePoint(map, point, frame);
+  return frames;
+}
+/** Where a point that stands here at present stood before the drift still to come. */
+export function backtrackTectonicPoint(
+  map: PhysicalField,
+  point: [number, number],
+  distances: number[]
+): [number, number] {
+  for (const frame of forecastFrames(map, distances).reverse())
+    point = inversePoint(map, point, frame);
+  return point;
+}
+/** Where a point that stands here now will stand after the drift still to come. */
+export function advanceTectonicPoint(
+  map: PhysicalField,
+  point: [number, number],
+  distances: number[]
+): [number, number] {
+  for (const frame of forecastFrames(map, distances)) point = forwardPoint(map, point, frame);
   return point;
 }

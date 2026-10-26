@@ -124,18 +124,23 @@ with no backend, persistence or MCP; preserve the existing backend source.
       participate in the shared causal generation system and remain identifiable
       through later evolution.
 
-      Delivered 2026-10-25 ([ADR 0006](adr/0006-landmarks-are-injected-causes.md)):
-      a landmark catalogue (two great mountains, great canyon, two great ring
-      structures, great escarpment, great falls), placement tools and panel, local
-      saves and wizard listing; emplacement and maintenance processes in the
-      physical epochs with the maintenance booked; river capture; one registry
-      row per landmark with target and measured signature; the great falls held
-      cell to cell at World and left to regional refinement to realize. The
-      remaining Region-scale realization is carried by the terrain and rivers
-      subplan of the regional refinement plan. Observed cost: a 4,500 m volcanic
-      cone pays roughly a fifth of its relief per epoch to isostatic subsidence;
-      the other kinds hold with corrections only where sea level or deposition
-      moves their reference bands.
+      Delivered 2026-10-26 ([ADR 0006](adr/0006-landmarks-are-injected-causes.md)),
+      replacing a first delivery that asked the creator to place landmarks before
+      generation: the generator sites a configured number of landscape landmarks
+      (two great mountains, great canyon, two great ring structures, great
+      escarpment, great falls) and of magic landmarks (a great source of Fire,
+      Aurora, Pressure, Greenwood or Salt) during the physical epochs, from each
+      kind's reading of the terrain at its forming epoch; emplacement and
+      maintenance hold every signature with the maintenance booked; rivers are
+      captured; each landmark is named once and published as one registry row
+      with target and measured signature on the geology or magic layer; a rerun
+      keeps the landmarks it has, and creators edit or remove the result. The
+      great falls is held cell to cell at World and left to the terrain and
+      rivers subplan of the regional refinement plan to realize. Observed cost: a
+      tall volcanic cone pays a large share of its relief per epoch to isostatic
+      subsidence; the other kinds hold with corrections only where sea level or
+      deposition moves their reference bands. Hallowed and Veil have no initial
+      origin to inject and remain outside the magic count.
 
 - [x] **10. Rework the interaction between magic and ecology.** Delivered
       2026-10-24 ([ADR 0004](adr/0004-coupling-through-each-systems-medium.md)):

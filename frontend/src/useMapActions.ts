@@ -50,7 +50,6 @@ export function useMapActions(world: World, state: EditorSessionState, editing: 
     if (tool.startsWith("region")) state.setPanel("regions");
     else if (["refine", "refinePolygon", "extentEdit"].includes(tool)) state.setPanel("refine");
     else if (tool === "magic") state.setPanel("magic");
-    else if (tool === "landmark" || tool === "landmarkPath") state.setPanel("landmark");
     else if (!["select", "pan", "move", "reshape", "labelPath", "labelPlace"].includes(tool))
       state.setPanel("author");
   };
@@ -224,8 +223,8 @@ function completeDrawing(
     extent(geometry);
     return;
   }
-  if (["landmark", "landmarkPath", "magic"].includes(state.tool)) {
-    beginInputDraft(state, geometry);
+  if (state.tool === "magic") {
+    beginSourceDraft(state, geometry);
     return;
   }
   if (state.tool === "hill") {
@@ -270,19 +269,16 @@ function completeDrawing(
     },
   });
 }
-/** A drawn world-level input opens its panel for naming and measures before it is saved. */
-function beginInputDraft(state: EditorSessionState, geometry: Geometry) {
-  if (state.tool === "magic") {
-    const footprint = sourceFootprint(geometry);
-    state.setMagicDraft({
-      id: null,
-      ...footprint,
-      source: { ...footprint.source, z: state.area.frame.origin.z },
-    });
-  } else state.setLandmarkDraft({ id: null, geometry });
-  const panel = state.tool === "magic" ? "magic" : "landmark";
+/** A drawn source opens its panel for naming and settings before it is saved. */
+function beginSourceDraft(state: EditorSessionState, geometry: Geometry) {
+  const footprint = sourceFootprint(geometry);
+  state.setMagicDraft({
+    id: null,
+    ...footprint,
+    source: { ...footprint.source, z: state.area.frame.origin.z },
+  });
   state.setTool("select");
-  state.setPanel(panel);
+  state.setPanel("magic");
 }
 function placeCommunity(
   world: World,

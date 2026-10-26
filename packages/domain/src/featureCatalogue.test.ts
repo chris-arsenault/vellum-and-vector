@@ -65,7 +65,10 @@ function feature(world: World, kind: string, layerId: string, attributes = {}): 
 }
 it("distinguishes every preset magic rule and preserves custom system identities", () => {
   const world = fixture();
-  const types = availableFeatureTypes(world, [], true).filter((t) => t.layerId === "magic");
+  // Landmarks on the magic layer are catalogued once as a kind, not per system rule.
+  const types = availableFeatureTypes(world, [], true).filter(
+    (t) => t.layerId === "magic" && t.kind !== "landmark"
+  );
   // Every preset rule of every system plus every preset meeting between them.
   const expected =
     canonryMagicPresets().reduce((sum, system) => sum + system.features.length, 0) +

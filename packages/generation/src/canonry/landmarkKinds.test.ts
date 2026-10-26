@@ -49,3 +49,70 @@ it("raises a mountain to its summit and restores it after the summit is lowered"
   expect(map.LandmarkMaintenance[centre]).toBeGreaterThan(0);
   expect(map.Elevation[centre]).toBe(map.BedrockElevation[centre] + map.SedimentThickness[centre]);
 });
+
+/** Kinds drawn narrower than a cell of this mesh still measure from real cells on both sides. */
+const small: Landmark[] = [
+  {
+    id: "scarp",
+    name: "Scarp",
+    kind: "escarpment",
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [200_000, 300_000],
+        [300_000, 310_000],
+        [400_000, 300_000],
+      ],
+    },
+    parameters: { throw: 400, scarpWidth: 6 },
+    emplacedAtEpoch: 0,
+  },
+  {
+    id: "dome",
+    name: "Dome",
+    kind: "dome-ring",
+    geometry: { type: "Point", coordinates: [150_000, 150_000] },
+    parameters: { diameter: 40, ringCount: 3, ringRelief: 120 },
+    emplacedAtEpoch: 0,
+  },
+  {
+    id: "crater",
+    name: "Crater",
+    kind: "impact-ring",
+    geometry: { type: "Point", coordinates: [450_000, 150_000] },
+    parameters: { diameter: 40, rimHeight: 200, floorDepth: 300 },
+    emplacedAtEpoch: 0,
+  },
+];
+
+it("measures narrow kinds from whole cells and holds the realized ones after relief loss", () => {
+  const map = plateau(),
+    p = atlasPhysicalProfile(),
+    ledger: LandmarkLedger = new Map();
+  expect(map.mesh.spacing).toBeGreaterThan(6_000);
+  for (const landmark of small) {
+    const record = emplaceLandmark(map, p, landmark, 0, ledger)!;
+    for (const key of Object.keys(record.target))
+      expect(Number.isFinite(record.measured[key]), `${landmark.kind} ${key}`).toBe(true);
+  }
+  // The epoch's maintenance holds every realized signature, then relief relaxes toward the
+  // plateau and the next maintenance restores it.
+  for (let epoch = 0; epoch < 2; epoch++) {
+    if (epoch > 0)
+      for (let i = 0; i < map.mesh.count; i++) {
+        map.BedrockElevation[i] = units(500) + (map.BedrockElevation[i] - units(500)) * 0.6;
+        map.Elevation[i] = map.BedrockElevation[i] + map.SedimentThickness[i];
+      }
+    for (const landmark of small) {
+      const record = maintainLandmark(map, p, landmark, epoch, ledger)!;
+      if (!record.realized) continue;
+      for (const [key, target] of Object.entries(record.target))
+        expect(
+          record.measured[key],
+          `${landmark.kind} ${key} held in epoch ${epoch}`
+        ).toBeGreaterThanOrEqual(target - 0.01);
+    }
+  }
+  expect(ledger.get("scarp")!.realized).toBe(true);
+  expect(ledger.get("crater")!.realized).toBe(true);
+});

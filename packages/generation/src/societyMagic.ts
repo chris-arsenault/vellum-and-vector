@@ -15,6 +15,7 @@ import {
   depositAt,
   drawAt,
   magicAt,
+  magicFieldForRole,
   magicSystemForRole,
   reservoirAt,
 } from "./societyMagicAccess";
@@ -41,9 +42,10 @@ function heldStockAt(state: GenerationState, i: number) {
         total += societyValue(state, `magic:${system.id}:stock:${origin.id}/${stock.id}`, i);
   return total;
 }
-/** Mining takes cores out of the mesh where the field is live in this generation. */
-function drawHeldStock(state: GenerationState, sample: number, amount: number) {
-  drawAt(state, "quickens", "held", sample, amount);
+/** Live material is authoritative; society-only inputs retain their finite deposit ledger. */
+function drawHeldStock(state: GenerationState, sample: number, cores: number) {
+  if (!magicFieldForRole(state, "quickens")) return cores;
+  return drawAt(state, "quickens", "held", sample, cores * stockPerCore) / stockPerCore;
 }
 /**
  * Cores cracked in the forge release where they are cracked: the stock moves from the ledger
@@ -101,13 +103,13 @@ function fireUse(
   years: number,
   skill: Skill
 ) {
-  const extracted = Math.min(
+  const requested = Math.min(
     practice.coreDeposit,
     population(c) * years * 0.002 * skill("fire-forge")
   );
+  const extracted = drawHeldStock(state, nearestSample(state, c.position), requested);
   practice.coreDeposit -= extracted;
   practice.coreSupply += extracted;
-  drawHeldStock(state, nearestSample(state, c.position), extracted * stockPerCore);
   const demand = population(c) * years * 0.0005,
     used = Math.min(practice.coreSupply, demand);
   practice.coreSupply -= used;
@@ -272,6 +274,8 @@ function wayFlow(link: { travelCost: number; wear?: number }) {
   return Math.exp(-link.travelCost / 200000) * (1 + Math.min(1, (link.wear ?? 0) / 1000));
 }
 const tradedLedgers = ["coreSupply", "seed", "salt"] as const;
+/** Years over which a unit-flow way exchanges stock in response to its two ends' difference. */
+const tradeResponseYears = 35;
 /**
  * Trade carries the ledgers people hold along the ways between communities, each toward the
  * poorer end in proportion to the way's flow: cores from the mines to the forges, seed from
@@ -284,7 +288,9 @@ function tradeStocks(state: GenerationState, years: number) {
     const a = practices.get(link.from),
       b = practices.get(link.to);
     if (!a || !b) continue;
-    const share = (1 - Math.exp(-years / 35)) * wayFlow(link);
+    // Both ends change as stock moves: integrate their difference's decay toward equal shares.
+    // Faster ways change the rate, so a long cycle cannot overshoot or overdraw either end.
+    const share = -Math.expm1((-2 * years * wayFlow(link)) / tradeResponseYears) / 2;
     for (const ledger of tradedLedgers) {
       const surplus = ((a[ledger] ?? 0) - (b[ledger] ?? 0)) * share;
       a[ledger] = (a[ledger] ?? 0) - surplus;

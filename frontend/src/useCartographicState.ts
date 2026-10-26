@@ -15,8 +15,9 @@ export function useCartographicState() {
     source: Position;
     radius: number;
   } | null>(null);
+  /** The generated landmark whose record is open for editing; landmarks are never drawn new. */
   const [landmarkDraft, setLandmarkDraft] = useState<{
-    id: string | null;
+    id: string;
     geometry: Geometry;
   } | null>(null);
   const [templateToPlace, setTemplateToPlace] = useState<Template | null>(null);

@@ -1,5 +1,5 @@
 /* eslint-disable max-lines-per-function -- The browser worker fixture keeps its lifecycle in one closure. */
-import type { AtlasFeature, DomainSnapshot, Grid, SocietyRegion } from "@atlas/domain";
+import type { AtlasFeature, DomainSnapshot, Grid, Landmark, SocietyRegion } from "@atlas/domain";
 import { generationSnapshot } from "@atlas/generation";
 import { sendGeneration } from "../src/generationTransport";
 import type {
@@ -9,6 +9,18 @@ import type {
   GenerationDiagnostic,
 } from "@atlas/generation";
 
+/** The records a fixture run leaves in the world, as the real run would leave them. */
+function seedFixtureWorld(
+  snapshot: DomainSnapshot,
+  records: { society?: SocietyRegion; ecologicalFeatures: AtlasFeature[]; landmarks: Landmark[] }
+) {
+  const { areaId, spaceId } = snapshot.scope;
+  if (records.society) snapshot.world.societies = { [areaId]: { ...records.society, areaId } };
+  for (const feature of records.ecologicalFeatures)
+    snapshot.world.features[feature.id] = { ...feature, areaId };
+  for (const landmark of records.landmarks)
+    snapshot.world.landmarks.push({ ...landmark, areaId, spaceId });
+}
 /** Small generated fields use the production publication and transfer path. */
 export function installGenerationFixtureRuntime({
   hold,
@@ -16,6 +28,7 @@ export function installGenerationFixtureRuntime({
   terrain,
   life,
   ecologicalFeatures,
+  landmarks,
   society,
   diagnostics,
 }: {
@@ -24,6 +37,7 @@ export function installGenerationFixtureRuntime({
   terrain: boolean;
   life: boolean;
   ecologicalFeatures: AtlasFeature[];
+  landmarks: Landmark[];
   society?: SocietyRegion;
   diagnostics: GenerationDiagnostic[];
 }) {
@@ -68,15 +82,7 @@ export function installGenerationFixtureRuntime({
           complete = async () => {
             if (complete) pending.delete(complete);
             if (stopped) return;
-            if (society)
-              snapshot.world.societies = {
-                [snapshot.scope.areaId]: { ...society, areaId: snapshot.scope.areaId },
-              };
-            for (const feature of ecologicalFeatures)
-              snapshot.world.features[feature.id] = {
-                ...feature,
-                areaId: snapshot.scope.areaId,
-              };
+            seedFixtureWorld(snapshot, { society, ecologicalFeatures, landmarks });
             const footprint = snapshot.scope.footprint;
             if (footprint.type !== "Polygon") throw new Error("Fixture expects a polygon scope");
             const rings = footprint.coordinates.flat(2);

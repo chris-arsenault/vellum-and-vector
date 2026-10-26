@@ -1,125 +1,145 @@
-import { expect, test, type Page } from "./uiTest";
-import type { SessionWorld } from "../src/atlasState";
+import { expect, test } from "./uiTest";
+import type { AtlasGenerationInput } from "@atlas/generation";
 import {
   canvas,
   closeDrawer,
-  createWorld,
+  installGenerationFixture,
   openRegistry,
   pageErrors,
   panel,
+  pointFeature,
   status,
   tool,
 } from "./harness";
+import { setupStep, tuneGeneration } from "./generationSetup";
 
-async function storedLandmarks(page: Page, id: string) {
-  return page.evaluate(async (worldId) => {
-    const database = await new Promise<IDBDatabase>((resolve, reject) => {
-      const request = indexedDB.open("vellum-and-vector-maps", 1);
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
-    try {
-      return await new Promise<unknown[]>((resolve, reject) => {
-        const transaction = database.transaction("maps");
-        const request = transaction.objectStore("maps").get(worldId);
-        transaction.onabort = () => reject(transaction.error);
-        transaction.oncomplete = () => {
-          const data = request.result.data as SessionWorld;
-          resolve(
-            data.snapshot.world.landmarks.map((landmark) => [
-              landmark.name,
-              landmark.kind,
-              landmark.geometry.type,
-              landmark.emplacedAtEpoch,
-              landmark.parameters,
-            ])
-          );
-        };
-      });
-    } finally {
-      database.close();
-    }
-  }, id);
-}
+const km = 1000;
+const id = "6f1d2c3b-4a5e-4f60-8b7c-9d0e1f2a3b4c";
+/** What the generator leaves behind: the record it sited and the feature it published for it. */
+const sited = {
+  id,
+  name: "Kibo",
+  kind: "volcanic-mountain",
+  geometry: { type: "Point" as const, coordinates: [800 * km, 500 * km] },
+  parameters: { summit: 5895, prominence: 4000, baseRadius: 30 },
+  emplacedAtEpoch: 1,
+  origin: "generated" as const,
+};
+const published = {
+  ...pointFeature(
+    "Kibo",
+    "landmark",
+    "geology",
+    {
+      landmarkKind: "volcanic-mountain",
+      origin: "generated",
+      signature: "realized",
+      summit: 5890,
+      summitTarget: 5895,
+      prominence: 3990,
+      prominenceTarget: 4000,
+      maintenance: 640,
+    },
+    [800 * km, 500 * km]
+  ),
+  id,
+};
 
-test("landmarks are placed, measured, listed, saved and reopened", async ({ page }) => {
+/** A magic landmark the run sited: a Fire wellspring on the magic layer with its source held. */
+const wellspringId = "2a7b9c1d-3e4f-4a5b-8c6d-7e8f9a0b1c2d";
+const wellspring = {
+  id: wellspringId,
+  name: "Emberwell",
+  kind: "fire-wellspring",
+  geometry: { type: "Point" as const, coordinates: [400 * km, 300 * km] },
+  parameters: { intensity: 900, reach: 60 },
+  emplacedAtEpoch: 0,
+  origin: "generated" as const,
+};
+const wellspringFeature = {
+  ...pointFeature(
+    "Emberwell",
+    "landmark",
+    "magic",
+    {
+      landmarkKind: "fire-wellspring",
+      origin: "generated",
+      system: "fire",
+      signature: "realized",
+      intensity: 905,
+      intensityTarget: 900,
+      sourceStrength: 905,
+      maintenance: 0,
+    },
+    [400 * km, 300 * km]
+  ),
+  id: wellspringId,
+};
+
+test("landmarks are a generation count, sited by the run, then edited and removed from the result", async ({
+  page,
+}) => {
   const errors = pageErrors(page);
-  await createWorld(page, "Landmark atlas", { km: 2000 });
+  await installGenerationFixture(page, {
+    landmarks: [sited, wellspring],
+    features: [published, wellspringFeature],
+  });
+  await page.goto("/");
+  await page.getByLabel("World name", { exact: true }).fill("Landmark atlas");
+  await page.getByLabel("Width · km").fill("2000");
+  await page.getByLabel("Height · km").fill("1000");
+  await page.getByLabel("Detail level").selectOption("draft");
 
-  await tool(page, "Place landmark").click();
-  await expect(panel(page)).toContainText("Landmarks in this landscape");
-  await canvas(page).click({ position: { x: 700, y: 500 } });
-  await expect(panel(page).getByRole("heading", { name: "Configure this landmark" })).toBeVisible();
-  await page
-    .getByLabel("Landmark kind")
-    .selectOption({ label: "Great mountain · Volcanic mountain" });
-  await page.getByLabel("Landmark name").fill("Kibo");
-  await page.getByLabel("Summit elevation · m").fill("5895");
-  await page.getByLabel("Forms in").selectOption({ label: "Cold age" });
-  await page.getByRole("button", { name: "Save landmark", exact: true }).click();
-  await expect(status(page)).toContainText("Revision 2");
-  await expect(panel(page)).toContainText("Kibo");
-  await expect(panel(page)).toContainText("summit elevation 5895 m");
-  await expect(panel(page)).toContainText("forms in Cold age");
-
-  await tool(page, "Draw landmark path").click();
-  await canvas(page).click({ position: { x: 300, y: 300 } });
-  await canvas(page).click({ position: { x: 500, y: 330 } });
-  await canvas(page).dblclick({ position: { x: 650, y: 420 } });
-  await expect(panel(page).getByRole("heading", { name: "Configure this landmark" })).toBeVisible();
-  await expect(page.getByLabel("Landmark kind")).toHaveValue("canyon");
-  await page.getByLabel("Landmark name").fill("Long Cut");
-  // The measure field carries the catalogue range, so an out-of-range value never reaches the
-  // domain; the domain's own diagnostic is covered in src/landmarkAuthoring.test.ts.
-  await page.getByLabel("Depth below rim · m").fill("50");
-  await page.getByRole("button", { name: "Save landmark", exact: true }).click();
-  expect(
-    await page
-      .getByLabel("Depth below rim · m")
-      .evaluate((input: HTMLInputElement) => input.validity.rangeUnderflow)
-  ).toBe(true);
-  await expect(status(page)).toContainText("Revision 2");
-  await page.getByLabel("Depth below rim · m").fill("1600");
-  await page.getByRole("button", { name: "Save landmark", exact: true }).click();
-  await expect(status(page)).toContainText("Revision 3");
-  await expect(panel(page).getByRole("button", { name: "Edit landmark", exact: true })).toHaveCount(
-    2
-  );
-
-  await page.getByRole("button", { name: "Save map", exact: true }).click();
-  await expect(page.locator(".header-meta")).toHaveText("Saved locally");
-  const id = await page.getByLabel("World", { exact: true }).inputValue();
-  expect(await storedLandmarks(page, id)).toEqual([
-    ["Kibo", "volcanic-mountain", "Point", 1, { summit: 5895, prominence: 4000, baseRadius: 30 }],
-    ["Long Cut", "canyon", "LineString", 0, { depth: 1600, rimWidth: 15, captureDistance: 150 }],
-  ]);
-
-  await page.reload();
-  await expect(page.getByLabel("World name")).toBeVisible();
-  await page.getByRole("button", { name: "Saved maps", exact: true }).click();
-  await page
-    .getByRole("dialog", { name: "Saved maps", exact: true })
-    .getByRole("button", { name: /^Landmark atlas Revision/ })
-    .click();
+  // The count is a generator setting; the step says the run sites them.
+  await tuneGeneration(page, "Major landmarks");
+  const count = page.getByLabel("Major landscape landmarks · count", { exact: true });
+  await expect(count).toHaveValue("4");
+  await count.fill("2");
+  await expect(page.getByLabel("Major magic landmarks · count", { exact: true })).toHaveValue("3");
+  await expect(page.locator("main")).toContainText("No landmark stands in this extent yet");
+  await setupStep(page, /Review & generate/).click();
+  await page.getByRole("button", { name: "Generate world", exact: true }).click();
   await expect(canvas(page)).toBeVisible();
-  await tool(page, "Place landmark").click();
-  await expect(panel(page)).toContainText("Kibo");
-  await expect(panel(page)).toContainText("Long Cut");
-  await expect(panel(page)).toContainText("depth below rim 1600 m");
+  await expect(status(page)).toContainText("Revision 2");
+  const input = await page.evaluate(
+    () =>
+      (window as unknown as { generationFixtureInput: AtlasGenerationInput }).generationFixtureInput
+  );
+  expect(input.parameters).toMatchObject({ landscapeLandmarks: 2 });
 
-  // The registry shows one landmark row per identity, typed by its catalogue kind.
+  // Nothing is placed by hand: the terrain palette carries no landmark tool.
+  await expect(page.getByRole("toolbar", { name: "Map tools" })).toBeVisible();
+  await expect(tool(page, "Place landmark")).toHaveCount(0);
+  await expect(tool(page, "Draw landmark path")).toHaveCount(0);
+
+  // One registry row per landmark, typed by its kind, carrying target and measured values.
   await openRegistry(page);
   const registry = page.getByLabel("World feature registry");
   await page.getByLabel("Search registry").fill("Kibo");
   await expect(registry.locator("tbody tr")).toHaveCount(1);
   await expect(registry.locator("tbody tr").first()).toContainText("Volcanic mountain");
-  await page.getByLabel("Search registry").fill("");
+  // A magic landmark is one row too, typed by its kind on the magic layer.
+  await page.getByLabel("Search registry").fill("Emberwell");
+  await expect(registry.locator("tbody tr")).toHaveCount(1);
+  await expect(registry.locator("tbody tr").first()).toContainText("Great wellspring");
+  await page.getByLabel("Search registry").fill("Kibo");
+  await page.getByLabel("Show Kibo on map").click();
   await closeDrawer(page);
 
-  await panel(page).getByRole("button", { name: "Remove landmark", exact: true }).last().click();
-  await expect(panel(page).getByRole("button", { name: "Edit landmark", exact: true })).toHaveCount(
-    1
-  );
-  await expect(panel(page)).not.toContainText("Long Cut");
+  // Selecting the landmark opens its record for editing after generation.
+  await expect(panel(page)).toContainText("Landmarks in this landscape");
+  await expect(panel(page).getByRole("heading", { name: "Edit Kibo" })).toBeVisible();
+  await expect(panel(page)).toContainText("summit elevation 5895 m");
+  await page.getByLabel("Landmark name").fill("Kibo Peak");
+  await page.getByLabel("Summit elevation · m").fill("6000");
+  await page.getByRole("button", { name: "Save landmark", exact: true }).click();
+  await expect(status(page)).toContainText("Revision 3");
+  await expect(panel(page)).toContainText("Kibo Peak");
+  await expect(panel(page)).toContainText("summit elevation 6000 m");
+
+  await panel(page).getByRole("button", { name: "Remove landmark", exact: true }).first().click();
+  await expect(status(page)).toContainText("Revision 4");
+  await expect(panel(page)).not.toContainText("Kibo Peak");
+  await expect(panel(page)).toContainText("Emberwell");
   expect(errors).toEqual([]);
 });

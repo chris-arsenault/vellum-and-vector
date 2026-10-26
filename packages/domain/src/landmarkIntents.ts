@@ -20,6 +20,7 @@ const landmarkSchema = z.object({
   geometry: geometrySchema,
   parameters: z.record(z.string(), finite),
   emplacedAtEpoch: z.number().int().nonnegative().default(0),
+  origin: z.enum(["generated", "authored"]).optional(),
 });
 /** Facts a landmark's causes feed; the dependency graph carries them to climate, water and society. */
 const landmarkFacts = (id: string) => [`landmark:${id}`, "landmark", "elevation", "geology"];
@@ -99,6 +100,9 @@ export function registerLandmarkIntents(registry: IntentRegistry): void {
       requireThat(landmark, "missing_landmark", "Choose an existing landmark.");
       const changes = intentChanges(context, snapshot);
       changes.removes.push({ kind: "landmark", id: data.id });
+      // A magic landmark's injected source goes with it.
+      for (const source of snapshot.world.magic)
+        if (source.landmarkId === data.id) changes.removes.push({ kind: "magic", id: source.id });
       invalidateFacts(
         changes,
         context,

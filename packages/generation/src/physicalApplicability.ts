@@ -48,7 +48,12 @@ export const physicalApplicability: Record<string, FeatureApplicability> = {
     },
     epochControls: [{ key: "impacts", label: "Epoch impact activity", unit: "multiplier", min: 0 }],
   },
-  "physical.landmarks": { requiresLandmarks: true },
+  "physical.landmarks": {
+    settingConsumers: {
+      landscapeLandmarks: ["landmark.emplace"],
+      magicLandmarks: ["landmark.emplace"],
+    },
+  },
   "physical.fractures": { epochControls: [strength("tectonics", "Epoch tectonic activity")] },
   "ocean.geography": {
     epochControls: [{ key: "seaLevel", label: "Epoch sea level offset", unit: "m" }],

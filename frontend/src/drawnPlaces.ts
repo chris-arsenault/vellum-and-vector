@@ -32,6 +32,11 @@ const landmarks: Record<string, DrawnIconKind> = {
   "impact-ring": "crater",
   escarpment: "gorge",
   falls: "falls",
+  "fire-wellspring": "shrine",
+  "aurora-vault": "shrine",
+  "pressure-locus": "shrine",
+  "greenwood-heart": "shrine",
+  "salt-pan": "shrine",
 };
 export function placeMark(feature: AtlasFeature) {
   return feature.kind === "landmark"

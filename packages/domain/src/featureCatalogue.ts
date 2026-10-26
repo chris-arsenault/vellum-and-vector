@@ -25,6 +25,7 @@ export const featureDefinitions: Definition[] = [
   ["crater", "geology", "Craters", "Terrain and geology", "Volcanic and impact"],
   ["caldera", "geology", "Calderas", "Terrain and geology", "Volcanic and impact"],
   ["landmark", "geology", "Landmark", "Terrain and geology", "Landmarks"],
+  ["landmark", "magic", "Landmark", "Magic", "Landmarks"],
   ["fault", "faults", "Fault traces", "Terrain and geology", "Tectonics"],
   ["waterfall", "geology", "Waterfalls", "Water and coasts", "Watercourses"],
   ["river", "rivers", "Rivers", "Water and coasts", "Watercourses"],
@@ -131,7 +132,7 @@ function landmarkSubtype(feature: Classification) {
   return landmarkKind(kind)?.label ?? kind;
 }
 function magicType(world: World, feature: Classification): FeatureType | null {
-  if (feature.layerId !== "magic") return null;
+  if (feature.layerId !== "magic" || feature.kind === "landmark") return null;
   const { systemId, system, ruleId, rule } = magicClassification(world, feature);
   const interaction = rule?.seeds.flat().some((c) => c.field.startsWith("system:"));
   const label = feature.kind === "magicSource" ? "Authored sources" : (rule?.name ?? ruleId);

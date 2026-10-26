@@ -1,7 +1,11 @@
-import { spatial, translateGeometry } from "@atlas/domain";
+import { spatial } from "@atlas/domain";
 import type { Geometry, Polygon } from "geojson";
 import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
+import { combinedContour, areaGeometry } from "./geographicContours";
+import { marineRegions, type MarineRegion } from "./marineRegions";
+import { metricSearch } from "./metricSearch";
+import { units } from "./math";
 
 function polygons(shape: Geometry): Polygon[] {
   if (shape.type === "Polygon") return [shape];
@@ -10,45 +14,82 @@ function polygons(shape: Geometry): Polygon[] {
   if (shape.type === "GeometryCollection") return shape.geometries.flatMap(polygons);
   return [];
 }
-/** The chart cut does not name the two sides of the same sea as different oceans. */
-function oceanRegions(state: GenerationState, ocean: Geometry) {
-  const shapes: Geometry[] = polygons(ocean);
-  const width = state.physical?.map.mesh.periodic?.width;
-  if (!width) return shapes;
-  const groups: Geometry[] = [];
-  while (shapes.length) {
-    let shape = shapes.pop()!,
-      merged = true;
-    while (merged) {
-      merged = false;
-      for (let i = shapes.length - 1; i >= 0; i--) {
-        const other = shapes[i];
-        if (![-width, width].some((dx) => spatial.intersects(shape, translateGeometry(other, dx))))
-          continue;
-        shape = spatial.union(shape, other);
-        shapes.splice(i, 1);
-        merged = true;
-      }
-    }
-    groups.push(shape);
-  }
-  return groups;
+/** Extend labels onto land for interpolation; the authoritative sea clips every named extent. */
+function extendedLabels(state: GenerationState, labels: Int32Array) {
+  const mesh = state.physical!.map.mesh,
+    extended = labels.slice(),
+    distance = Float64Array.from(labels, (label) => (label < 0 ? Infinity : 0)),
+    seeds = [...labels.keys()].filter((i) => labels[i] >= 0);
+  metricSearch(mesh, seeds, distance, Infinity, (target, source) => {
+    extended[target] = extended[source];
+  });
+  return extended;
 }
-/** Name the existing connected sea outlines; no second ocean geometry is calculated. */
+
+function regionOutline(
+  state: GenerationState,
+  labels: Int32Array,
+  region: MarineRegion,
+  ocean: Geometry
+) {
+  const mesh = state.physical!.map.mesh,
+    members: number[] = [],
+    neighbours = new Set<number>();
+  for (let i = 0; i < labels.length; i++) {
+    if (labels[i] !== region.id) continue;
+    members.push(i);
+    for (let edge = 0; edge < mesh.degree[i]; edge++) {
+      const j = mesh.neighbors[i * mesh.stride + edge];
+      if (j >= 0 && labels[j] !== region.id) neighbours.add(labels[j]);
+    }
+  }
+  const terms = [region.id, ...neighbours].map((id) => (i: number) => Number(labels[i] === id));
+  const contour = combinedContour(
+    state,
+    members,
+    terms,
+    ([own, ...other]) => own - Math.max(0, ...other)
+  );
+  return areaGeometry(contour && spatial.intersection(contour, ocean));
+}
+
+function publishOcean(state: GenerationState, shape: Geometry, type: "ocean" | "sea") {
+  const key = spatial
+    .bounds(shape)
+    .map((v) => v.toFixed(3))
+    .join(":");
+  putGenerated(
+    state,
+    generatedFeature(state, `ocean:${key}`, "Ocean", "ocean", "oceans", shape, {
+      sourceAlgorithm: "canonry-0f62584c",
+      marineType: type,
+      area: spatial.area(shape),
+    })
+  );
+}
+
+/** Name geographic seas within connected water while retaining its existing shoreline. */
 export function extractOceans(state: GenerationState) {
   const ocean = state.surface.ocean;
   if (!ocean) return;
-  for (const shape of oceanRegions(state, ocean)) {
-    const key = spatial
-      .bounds(shape)
-      .map((v) => v.toFixed(3))
-      .join(":");
-    putGenerated(
-      state,
-      generatedFeature(state, `ocean:${key}`, "Ocean", "ocean", "oceans", shape, {
-        sourceAlgorithm: "canonry-0f62584c",
-        area: spatial.area(shape),
-      })
-    );
+  const work = state.physical;
+  if (!work) {
+    for (const shape of polygons(ocean)) publishOcean(state, shape, "ocean");
+    return;
+  }
+  const { labels, regions } = marineRegions(work.map, units(work.profile.ShelfBreakDepth));
+  if (regions.length === 1) return publishOcean(state, ocean, regions[0].type);
+  const extended = extendedLabels(state, labels);
+  // Cut smaller seas out of the existing outline; its remainder belongs to the broadest.
+  // Independent contour approximations must not leave gaps or overlapping water geography.
+  regions.sort((a, b) => a.area - b.area || a.id - b.id);
+  let remaining: Geometry | null = ocean;
+  for (const [index, region] of regions.entries()) {
+    if (!remaining) break;
+    const shape =
+      index === regions.length - 1 ? remaining : regionOutline(state, extended, region, remaining);
+    if (!shape) continue;
+    publishOcean(state, shape, region.type);
+    remaining = areaGeometry(spatial.difference(remaining, shape));
   }
 }

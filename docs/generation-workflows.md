@@ -691,23 +691,38 @@ them, so pieces meet at drainage divides. Pieces of one region tile it exactly.
 Enclosed gaps smaller than a region's least named size join it unless they hold
 water or another named region.
 
-Authored landmarks ([ADR 0006](adr/0006-landmarks-are-injected-causes.md))
-run inside the epoch loop. `physical.landmarks` contributes `landmark.emplace`
-after each epoch's impacts and `landmark.maintain` before its history when a
-landmark lies in the extent. Emplacement reads `world.landmarks`, walks each
-landmark back through the plate drift of the epochs still to come, and writes
-its kind's causes: a mountain is constructed rock with resistant core, heat,
-fractures and volcanic activity; a canyon is resistant rims with a channel cut
-as incision and a river captured along a corridor; a ring structure is a dome of
-alternating resistance or an authored impact; an escarpment is a fault trace
-with the two sides offset; a falls is caprock and a step on a river. Maintenance
-measures each kind's signature on the mesh and applies the smallest correction
-through the same quantities, booking it in `LandmarkMaintenance`. Extraction
-publishes one `landmark` feature per record under the landmark's id with target
-and measured signature, drops detected landforms standing on the landmark's
-claimed cells, and keeps the landmark's fault trace out of the faults layer.
-The great falls is latent at World: its step is held cell to cell and its lip,
-plunge pool and gorge belong to regional refinement.
+Major landmarks ([ADR 0006](adr/0006-landmarks-are-injected-causes.md)) run
+inside the epoch loop. `physical.landmarks` carries the counts of landscape and
+magic landmarks a world is owed and contributes `landmark.emplace` after each
+epoch's impacts and `landmark.maintain` before its history. At a top-level run
+the emplacement pass draws a seeded roster for the shortfall between the counts
+and the records already in the extent, each entry a kind and the epoch it forms
+in; at that epoch the kind's siting rule scores the physical field (plains for a
+cone, a plateau beside a large river for a canyon, a large river above base
+level for falls, a long fall of the land for a scarp, a heat maximum for a
+wellspring, deep ice for a vault, deep water for a locus, a wet wood for a
+heartwood, a dead lake in a dry basin for a pan), the best separated anchor is
+taken, measures are fitted to the site and the mesh, and the record is written to
+`world.landmarks` at the present-day position the remaining drift gives it.
+Records already present are walked back through the drift of the epochs still to
+come and re-formed. A landscape kind writes its causes: a mountain is
+constructed rock with resistant core, heat, fractures and volcanic activity; a
+canyon is resistant rims with a channel cut as incision and a river captured
+along a corridor; a ring structure is a dome of alternating resistance or an
+impact; an escarpment is a fault trace with the two sides offset; a falls is
+caprock and a step on a river. A magic kind writes a kept source record of its
+system into `world.magic`, which the system's own evaluation picks up.
+Maintenance measures each kind's signature from whole cells and applies the
+smallest correction through the same quantities, booking relief in
+`LandmarkMaintenance` and raising a source's strength to the cap its system's
+activity allows. Extraction re-measures at present, names each landmark once
+from the geography's vocabulary, publishes one `landmark` feature per record
+under the record's id (geology layer for landscape kinds, magic layer for magic
+kinds) with target and measured signature, drops detected landforms standing on
+a landscape landmark's claimed cells, and keeps the landmark's fault trace out
+of the faults layer. The great falls is latent at World: its step is held cell to
+cell and its lip, plunge pool and gorge belong to regional refinement. A child
+run re-forms its parent's landmarks and sites none.
 
 ## Generation and display findings (2026-10-18)
 
@@ -1528,7 +1543,7 @@ repeated expensive worlds without a concrete unresolved question.
 - Waterfalls and gorges remain emergent consequences and detections of physical
   and magical evolution. Landmark injection was delivered afterwards as
   [ADR 0006](adr/0006-landmarks-are-injected-causes.md) and does not change
-  this rule: an authored landmark injects causes and holds a measured signature.
+  this rule: a sited landmark injects causes and holds a measured signature.
 - Render the committed field with standard OpenLayers view-resolution tiles.
   Terrain, lake geometry, relief and thematic layers must describe the generated
   world. Panning and zooming do not run new generation.
@@ -2363,8 +2378,14 @@ type as its subkind, `ocean`, `river`, `lake`, `landform`, `settlement`, `polity
 `culture` and configured magical places. Existing ecological feature kinds such
 as `forest` and `wetland` retain their rendering and geometry contracts; the naming
 adapter maps them to `biome` and carries `attributes.biome` as the naming subkind.
-The shared sea outline also publishes named ocean polygons on the Oceans and seas
-layer. Naming does not alter classification, physical geometry or feature IDs.
+The Oceans and seas layer partitions the shared sea outline into named marine
+regions. Broad expanses remain distinct where their connecting passages narrow
+substantially; shallow sills support this distinction, while minor seafloor relief
+and changes below the sampling scale do not create more names. Smaller adjoining
+basins and shelf-dominated regions use the Sea descriptor. Detection follows the
+physical mesh across the cylindrical seam and does not use plate or province
+boundaries. Region extents partition the existing sea outline, preserving its
+shoreline and islands. The existing naming and authored-protection rules apply.
 
 Names depend on the world seed and stable geographic key, using a separate random
 stream. Seeded geographic naming traditions cover physical geography even without

@@ -178,13 +178,16 @@ it("reports only located sources affecting this extent and does not imply that s
   expect(feature(view, "magic.local").status).toBe("active");
 });
 
-it("counts the landmarks forming in this extent and says that setup does not create them", () => {
+it("counts the landmarks this extent already carries and keeps the generator's count control", () => {
   const empty = projectGenerationSetup(prepared());
   expect(empty.context.landmarks).toBe(0);
-  expect(feature(empty, "physical.landmarks")).toMatchObject({
-    status: "unavailable",
-    reason: expect.stringContaining("does not create landmarks"),
-  });
+  expect(feature(empty, "physical.landmarks")).toMatchObject({ status: "active" });
+  expect(
+    feature(empty, "physical.landmarks").settings.map((setting) => [setting.key, setting.active])
+  ).toEqual([
+    ["landscapeLandmarks", true],
+    ["magicLandmarks", true],
+  ]);
   const state = world();
   const [x0, y0, x1, y1] = spatial.bounds(state.domain.world.areas.area.footprint);
   const landmark = (overrides: Partial<Landmark>): Landmark => ({

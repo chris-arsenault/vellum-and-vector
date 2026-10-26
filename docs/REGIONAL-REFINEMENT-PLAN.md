@@ -1,8 +1,8 @@
 # Regional refinement and direct map authoring
 
-Status: updated 2026-10-24. Independent regional selection and hierarchy are
-implemented. The user has authorized committing and pushing this delivery;
-B–E remain planning-only.
+Status: updated 2026-10-26 after reviewing work since `1370a24`. Independent
+regional selection and hierarchy are delivered. The current request fixes the
+review's stock-accounting defects and refreshes this plan; B–E remain planning-only.
 
 Sulion root: `6bda9dba-ba6b-468a-a463-4dea05f96155`.
 
@@ -39,9 +39,10 @@ on the geographic map remains in scope; generating its internal map does not.
   linkage and translation without requiring the edited world to remain suitable
   for continued simulation. Locking an edited region was raised as a possibility,
   not a settled requirement.
-- **Current authorization:** implement independent selection/navigation subplan A
-  on existing geography, then commit and push that delivery. B–E remain
-  planning-only.
+- **Current authorization:** independent selection/navigation subplan A was
+  committed and pushed as `1370a24`. The current request addresses the two
+  stock-accounting defects found in the subsequent review and identifies needed
+  plan updates. It does not authorize implementing B–E or another publication.
 - **Delivery organization:** split the work into focused subplans so a few can
   progress at a time, each delivering a high-quality creator experience. This
   reorganizes planning; it does not authorize implementation or agent delegation.
@@ -78,9 +79,12 @@ on the geographic map remains in scope; generating its internal map does not.
   not be limited by named ranks, a fixed level count or the number of creation
   profiles. Refinement stays within the existing map type. Finer development remains
   sparse and geographically anchored; zoom alone does not generate it.
-- Preserve distinct Fire, Aurora and Pressure mechanisms as decided in
-  [ADR 0004](adr/0004-coupling-through-each-systems-medium.md). This plan does
-  not authorize changes to that coupling.
+- Preserve distinct implemented magic mechanisms under
+  [ADR 0004](adr/0004-coupling-through-each-systems-medium.md), the scale contract
+  in [ADR 0005](adr/0005-scale-contract.md) and the material model in
+  [ADR 0007](adr/0007-magic-systems-are-materials.md). Current inputs include Fire,
+  Aurora, Pressure, Greenwood, Salt, Hallowed and Veil. This plan does not
+  authorize redesigning their coupling or adding systems.
 
 ### Agent proposals, not additional user requirements
 
@@ -131,6 +135,55 @@ replace the assumption that depth and profile rank are the same. The relevant
 older contract is [product specification 4](product-spec.md#4-geographic-hierarchy-and-creation-profiles).
 The newer [scale contract](adr/0005-scale-contract.md) also needs to be read before
 later refinement work; it records mechanisms decided since the initial review.
+
+### Context refresh after the 2026-10-26 review
+
+The original observations above describe the starting mismatch. Work since
+`1370a24` adds drawn cartography, saved compositions, society hinterlands and
+transport, maintained landmark signatures, material magic and evolving crust.
+Those deliveries provide inputs and presentation mechanisms; they do not complete
+regional fractalization. Selected region views still need a deliberate bridge to
+the regional generation scope, and the child physical path still enters epochs.
+
+The following are agent-proposed updates to the pending subplans, grounded in
+the current implementation. They introduce no additional map types or fixed ranks.
+
+- **B1/B2:** use the delivered region view's stable identity, source area and
+  irregular footprint. Inventory retained fields, drainage, crust consequences
+  and landmark signatures before adding context. Carry neighboring and upstream
+  interfaces across ordinary borders and the cylindrical world's seam; a
+  multipolygon footprint must not become disconnected rectangular jobs. Preserve
+  the planar metre model; spherical generation is outside this plan.
+- **B1/C1:** classify each inherited value by meaning. Material stocks and
+  population are amounts to allocate without duplication; intensities, coverage
+  and classifications require their own sampling rules. Copying an amount into
+  every finer sample creates resources. Conservative allocation of actual
+  amounts does not require exact matching of every coarse terrain sample.
+- **C1/C2:** inherit each of the seven implemented systems' origin reservoirs,
+  carriers and coverage, plus existing confluences. Distinguish source sites
+  from carried stock and visible influence. Refinement can resolve finer local
+  responses but must not renew deposits, release another historical pulse,
+  advance ages or restart society practices simply because resolution changed.
+- **D1/D2:** reuse located urban centers, distributed rural people and hinterland
+  relationships; retain worn ways, shipping connections and built highways.
+  Allocate inherited people, practice resources and unmet demands across the
+  chosen footprint without duplicating them across descendants or replaying
+  migration, trade and society eras. Preserve existing site and network identities.
+- **E1/E2:** reuse the current composition, label and symbol finishing behavior.
+  A drawn composition remains a presentation of its selected region. That work
+  does not settle direct river/surface/settlement edits, their procedural linkage,
+  or generation eligibility after structural edits; those decisions remain open.
+
+Read [regionViews.ts](../packages/domain/src/regionViews.ts),
+[societyInheritance.ts](../packages/generation/src/societyInheritance.ts),
+[societySettlements.ts](../packages/generation/src/societySettlements.ts),
+[societyWays.ts](../packages/generation/src/societyWays.ts),
+[atlasMagicPublications.ts](../packages/generation/src/canonry/atlasMagicPublications.ts)
+and the relevant ADR bodies when expanding these phases. Landmark work is changing
+concurrently; B must reread its current contracts rather than duplicate that work.
+Algorithm checks use constructed geography and controlled stocks/populations;
+browser checks cover changed creator interactions. Reuse the single shared Draft
+integration result when integration coverage is needed, per repository test policy.
 
 ## Proposed design
 
@@ -226,7 +279,7 @@ Choose that order from actual mechanisms during milestone design.
 | Geology and terrain | Condition ridges, valleys, escarpments and surface character on broad relief, substrate and inherited geological consequences. Fractal or multiscale synthesis is an option, not the entire algorithm. Do not create another tectonic history or unrelated major mountains and craters.                                                                                                                        |
 | Drainage            | Reveal retained channels, refine valley corridors and channel paths, then connect newly generated tributaries. Carry upstream water entering the region and respect receiving rivers/lakes; do not derive the whole river's water solely from local rainfall. Shape terrain and drainage together so the network belongs to the landscape.                                                                     |
 | Climate and ecology | Downscale broad conditions through elevation, exposure, shelter, moisture and local hydrology. Develop coherent habitat patches from that context without replaying ecological age or erasing inherited biome character.                                                                                                                                                                                       |
-| Magic               | Refine existing influences and opportunities using system-specific mechanisms and causal ordering. Preserve fracture-connected Fire, cold/ice-dependent Aurora and ocean-connected Pressure rather than giving each region unrelated replacement sources or replaying old impulses. New four-pillar behaviors remain with that workshop.                                                                       |
+| Magic               | Refine existing material distributions and opportunities using each implemented system's origins, carriers, medium and confluences under ADR 0007. Preserve actual stocks and inherited state; do not give each region replacement sources, duplicate resources or replay elapsed release and renewal.                                                                                                         |
 | Society and places  | Materialize suitable latent records and synthesize missing local occupation from inherited people, affiliations, political context and environmental opportunities. Preserve existing centers; allocate smaller settlements and rural occupation without duplicating population or replaying completed eras. Retain distinct settlements, ruins, infrastructure, land use, practices, institutions and events. |
 | Map publication     | Produce a Region-specific feature set, representations, symbols and labels. World publication retains its major features and coarse geometry at every zoom. Zoom may style eligible features; it does not materialize a new semantic profile.                                                                                                                                                                  |
 
@@ -347,7 +400,9 @@ Outcome: an actual selected region gains coherent smaller landforms, valleys and
 tributaries while remaining recognizable within its parent geography.
 
 1. **B1 — Agree the regional geography inputs and output.** Consume the delivered region
-   identity; inventory current fields, drainage and the scale contract. Specify
+   identity, source area and footprint; inventory current fields, drainage,
+   retained crust context, landmark signatures and the scale contract. Distinguish
+   conserved amounts from sampled intensities, and include seam-crossing context. Specify
    inherited constraints, unresolved detail and the minimum publishable output.
    Agree with E how mapped overrides remain distinct from procedural inputs;
    do not make E's entire editing policy a prerequisite for untouched geography.
@@ -355,7 +410,7 @@ tributaries while remaining recognizable within its parent geography.
    drainage together on irregular footprints, including externally supplied
    river flow, receiving waters, new tributaries and river-aligned borders. Do
    not replay completed geological history or add unrelated major features.
-   Read the parent's authored landmarks (`world.landmarks` and the published
+   Read the parent's landmarks (`world.landmarks` and the published
    `landmark` features with their target and measured signatures,
    [ADR 0006](adr/0006-landmarks-are-injected-causes.md)) and realize what the World left
    latent within the parent's cells: a great falls' lip, plunge pool and gorge
@@ -380,12 +435,13 @@ Outcome: regional relief and water produce readable local climate and habitat
 patterns, including distinct existing magical effects, on the geographic map.
 
 1. **C1 — Agree environmental inheritance and visible scenes.** Consume B1's
-   output contract and current ADR 0004/0005 mechanisms. Define broad-to-local
+   output contract and current ADR 0004/0005/0007 mechanisms, including material
+   stocks, source sites, carriers, coverage and confluences. Define broad-to-local
    environmental variation through representative dry, wet, cold and magical
    scenes; do not redesign the already agreed cross-pillar coupling.
 2. **C2 — Generate connected regional living landscapes.** Elaborate climate,
    ecology and magic against refined relief and water. Preserve inherited age,
-   existing sources and influences crossing the selected boundary. Absent systems
+   actual material amounts, existing sources and influences crossing the selected boundary. Absent systems
    do not acquire effects, and local refinement does not repeat old events.
 3. **C3 — Finish environmental controls and map presentation.** Connect useful
    regional options, layers and inspection to actual B outputs. Review spatial
@@ -404,10 +460,11 @@ Outcome: smaller mapped settlements, routes and land uses become significant
 regional features grounded in inherited society and the refined environment.
 
 1. **D1 — Agree inheritance and place-development behavior.** Distinguish known
-   located centers from latent demands and population. Agree consumed B/C inputs;
+   located centers and their hinterlands from latent demands and distributed rural
+   population. Reuse current ways, shipping and highways. Agree consumed B/C inputs;
    retain affiliations, political context, naming, identities and completed eras.
 2. **D2 — Develop smaller places and their connections.** Materialize suitable
-   settlements, routes and land-use geography. Allocate people without duplication,
+   settlements, routes and land-use geography. Allocate people and practice resources without duplication,
    keep urban concentration distinct from rural distribution and preserve unmet
    demands when no suitable geographic opportunity exists.
 3. **D3 — Finish the populated regional map.** Integrate choices, symbols, labels
@@ -431,7 +488,9 @@ later refinement. This work can begin on existing generated geographic maps.
 
 1. **E1 — Settle map authority and post-edit refinement behavior.** Use the delivered region contract and B1
    contracts to resolve structural versus presentation edits, generation eligibility,
-   existing descendants and shared crossings. The structural-edit lock remains
+   existing descendants and shared crossings. Reuse delivered composition and
+   label/symbol finishing without treating them as completed geographic editing.
+   The structural-edit lock remains
    a user-owned design decision; it becomes blocking only before encoding that
    behavior, not for another track's unedited generation.
 2. **E2 — Deliver direct edits and undo on mapped geography.** Separate edited
@@ -522,8 +581,9 @@ and each included magic system's medium. Absent systems do not acquire effects;
 large inherited influences do not disappear or restart at the selected edge.
 
 Evidence: inspect contrasting regional environments, including magical geography
-where present; check focused inheritance and scoped feedback behavior. Re-read
-the four-pillar draft and magic source authority before designing new behavior.
+where present; check focused inheritance, stock allocation and scoped feedback
+behavior. Read current ADR 0007 and the implemented system contracts before
+designing refinement; historical workshop drafts are not additional requirements.
 
 ### M4 — Develop regional society and places [depends on M2, M3]
 
@@ -589,7 +649,7 @@ this working plan file and references, following repository documentation rules.
 | Further automatic development inside an authored region | Initially allow manual child development; do not promise procedural refinement from an arbitrary edited map. Determine whether this restriction fits the desired successive-refinement workflow.                  | User-owned scope choice in M0; affects M5/M6.                                      |
 | Inherited detail sufficient for refinement              | Existing fields, drainage and latent society appear useful, but source graphs and below-sample geography are not necessarily retained. Add only demonstrated missing inputs.                                      | Technical investigation in M0/M1; regional behavior in M2–M4 tests the assumption. |
 | Precise synthesis algorithms                            | Conditioned multiscale terrain and constrained drainage are starting proposals. Choose algorithms through representative geography rather than numerical parity.                                                  | Implementation design in M2, within the agreed product contract.                   |
-| Four-pillar evolution                                   | Its design may change the world context consumed here. Consume the agreed implemented mechanisms; do not make this plan wait on every speculative addition or implement that workshop implicitly.                 | Reassess at M3 against its current authority and source bodies.                    |
+| Evolving generation context                             | Consume current implemented material magic, society, crust and landmark contracts. Add retained context only where a concrete regional process needs it; do not recreate completed world-generation work.         | Reassess in B1/C1/D1 against current source bodies and ADRs.                       |
 
 The existing selection implementation resolves candidates from available source
 boundaries and authored cuts, keeps sibling borders and stops at useful geographic

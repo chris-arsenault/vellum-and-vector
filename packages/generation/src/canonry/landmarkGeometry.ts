@@ -8,7 +8,7 @@ import { meshDeltaX, meshPoint, nearestTriangle } from "./mesh";
 import { rebuild } from "./surface";
 import { recordCut } from "./fluvial";
 import { physicalSampler } from "./physicalMetric";
-import { backtrackTectonicPoint } from "./tectonicIntegration";
+import { advanceTectonicPoint, backtrackTectonicPoint } from "./tectonicIntegration";
 import { tectonicDefaultMyr, tectonicReferenceMyr } from "./tectonicControls";
 
 export type Point = [number, number];
@@ -69,6 +69,21 @@ function backTrack(map: PhysicalField, point: Point, drift: number[], epoch: num
   for (const step of remaining.reverse())
     [x, y] = meshPoint(map.mesh, x - (vx(x, y) / 1000) * step, y - (vy(x, y) / 1000) * step);
   return [x, y];
+}
+/**
+ * The present-day position of a site chosen on the mesh at this epoch: the drift of the
+ * epochs still to come carries it forward, as `backTrack` walks an authored position back.
+ */
+export function forwardTrack(map: PhysicalField, point: Point, drift: number[], epoch: number) {
+  const remaining = drift.slice(epoch + 1).filter((step) => step > 0);
+  if (!remaining.length) return point;
+  if (map.tectonics) return advanceTectonicPoint(map, point, remaining);
+  const vx = physicalSampler(map.mesh, map.CrustMotionX),
+    vy = physicalSampler(map.mesh, map.CrustMotionY);
+  let [x, y] = point;
+  for (const step of remaining)
+    [x, y] = meshPoint(map.mesh, x + (vx(x, y) / 1000) * step, y + (vy(x, y) / 1000) * step);
+  return [x, y] as Point;
 }
 export function placeLandmark(
   map: PhysicalField,
@@ -250,6 +265,8 @@ export function realizedAt(map: PhysicalField, placed: Placed) {
   const p = placed.parameters,
     span = map.mesh.spacing,
     length = pathMetrics(map, placed.path).total;
+  // A magic source is realized where its reach covers at least the cell it is injected in.
+  if (landmarkKind(placed.landmark.kind)?.system) return p.reach * 1000 >= span;
   switch (placed.landmark.kind) {
     case "volcanic-mountain":
     case "resistant-mountain":

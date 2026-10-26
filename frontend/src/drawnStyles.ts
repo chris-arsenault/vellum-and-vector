@@ -136,6 +136,17 @@ export function cartographicName(feature: AtlasFeature, world: World) {
   const entity = world.entities[polityIdentity(feature)];
   return entity?.name ?? feature.name;
 }
+/** A magic landmark is a major place, drawn with the landmark marks rather than as a field. */
+function magicStyle(
+  f: AtlasFeature,
+  layer: LayerStyle,
+  resolution: number,
+  c: DrawnStyleContext
+): Style[] {
+  const place = f.kind === "landmark" ? drawnPlace(f, c.view.style === "ink") : null;
+  if (place) return [place];
+  return drawnMagic(f, layer, c.world, resolution, c.view.subject === "physical");
+}
 function shapeStyle(
   f: AtlasFeature,
   layer: LayerStyle,
@@ -144,8 +155,7 @@ function shapeStyle(
 ): Style[] {
   const special = specialStyle(f, c);
   if (special) return [special];
-  if (f.layerId === "magic")
-    return drawnMagic(f, layer, c.world, resolution, c.view.subject === "physical");
+  if (f.layerId === "magic") return magicStyle(f, layer, resolution, c);
   if (["sovereignty", "control", "claims", "administration"].includes(f.layerId))
     return [territory(f, c)];
   if (f.kind === "river") return river(f, layer, resolution, c);

@@ -190,8 +190,6 @@ function featureStatus(
 function missingAuthoredInputs(feature: GenerationFeature, context: SetupContext) {
   if (feature.applicability?.requiresLocatedSources && context.locatedSources === 0)
     return "No located magical sources affect this extent. Enabling this capability does not create sources.";
-  if (feature.applicability?.requiresLandmarks && context.landmarks === 0)
-    return "No landmarks are placed in this extent. Enabling this capability does not create landmarks.";
   return null;
 }
 function projectSetting(

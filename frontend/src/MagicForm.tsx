@@ -61,29 +61,35 @@ function SourceList({ editor }: { editor: EditorState }) {
   return (
     <section>
       <h3>Located sources</h3>
-      {editor.world.magic.map((source) => (
-        <div key={source.id}>
-          <strong>{source.name}</strong>
-          <small>
-            {source.effect} · reach {source.radius.toFixed(0)} m
-          </small>
-          <button
-            className="quiet"
-            onClick={() => {
-              editor.setMagicDraft({ id: source.id, source: source.source, radius: source.radius });
-              editor.setTool("select");
-            }}
-          >
-            Edit source
-          </button>
-          <button
-            className="quiet"
-            onClick={() => editor.execute("removeMagicSource", { id: source.id })}
-          >
-            Remove source
-          </button>
-        </div>
-      ))}
+      {editor.world.magic
+        .filter((source) => !source.landmarkId)
+        .map((source) => (
+          <div key={source.id}>
+            <strong>{source.name}</strong>
+            <small>
+              {source.effect} · reach {source.radius.toFixed(0)} m
+            </small>
+            <button
+              className="quiet"
+              onClick={() => {
+                editor.setMagicDraft({
+                  id: source.id,
+                  source: source.source,
+                  radius: source.radius,
+                });
+                editor.setTool("select");
+              }}
+            >
+              Edit source
+            </button>
+            <button
+              className="quiet"
+              onClick={() => editor.execute("removeMagicSource", { id: source.id })}
+            >
+              Remove source
+            </button>
+          </div>
+        ))}
     </section>
   );
 }
@@ -293,7 +299,7 @@ function MagicHistory({ editor }: { editor: EditorState }) {
         Depends on these sources
         <select name="dependsOn" multiple defaultValue={source?.dependsOn ?? []}>
           {editor.world.magic
-            .filter((other) => other.id !== source?.id)
+            .filter((other) => other.id !== source?.id && !other.landmarkId)
             .map((other) => (
               <option key={other.id} value={other.id}>
                 {other.name}

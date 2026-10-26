@@ -25,6 +25,7 @@ import {
 import type { Kind } from "./landmarkKind";
 import { canyon } from "./landmarkCanyon";
 import { falls } from "./landmarkFalls";
+import { magicLandmarkKinds } from "./landmarkMagic";
 
 /* ---------- great mountain ---------- */
 
@@ -151,48 +152,57 @@ function ringGeometry(placed: Placed) {
     trough: (k: number) => spacing * (k + 1),
   };
 }
-const onCrest = (d: number, spacing: number) => Math.abs((d % spacing) / spacing - 0.5) < 0.25;
+/**
+ * The dome's cells split into crests and troughs by where each lies in the ring cycle. Both
+ * classes are always populated: when the cells are too few to fall on both phases, the half
+ * nearest a crest radius is the crest, so the relief is measured between real cells.
+ */
+function ringClasses(map: PhysicalField, placed: Placed) {
+  const { radius, spacing } = ringGeometry(placed),
+    cells: { i: number; phase: number }[] = [];
+  for (let i = 0; i < map.mesh.count; i++) {
+    const d = distance(map, i, placed.center);
+    if (d <= radius) cells.push({ i, phase: Math.abs((d % spacing) / spacing - 0.5) });
+  }
+  let split = 0.25;
+  if (!cells.some((c) => c.phase < split) || !cells.some((c) => c.phase >= split)) {
+    const phases = cells.map((c) => c.phase).sort((a, b) => a - b);
+    split = phases[Math.floor(phases.length / 2)] + 1e-9;
+  }
+  const crests = new Set(cells.filter((c) => c.phase < split).map((c) => c.i));
+  return { cells: cells.map((c) => c.i), crests, radius };
+}
 const domeRing: Kind = {
   emplace(map, p, placed) {
-    const { radius, count, spacing } = ringGeometry(placed),
+    const { count } = ringGeometry(placed),
+      { cells, crests, radius } = ringClasses(map, placed),
       height = units(placed.parameters.ringRelief * (count + 1)),
       realized = realizedAt(map, placed);
-    for (let i = 0; i < map.mesh.count; i++) {
+    for (const i of cells) {
       const d = distance(map, i, placed.center);
-      if (d > radius) continue;
       shiftBedrock(map, i, round(height * (1 - (d / radius) ** 2)));
-      const resistance = realized ? (onCrest(d, spacing) ? 3400 : 600) : 2000;
+      const resistance = realized ? (crests.has(i) ? 3400 : 600) : 2000;
       map.RockResistance[i] = Math.max(map.RockResistance[i], rockResistance(resistance));
     }
   },
   measure(map, placed) {
     // Ring relief is read from the cells the kind shapes: crest cells against trough cells.
-    const { radius, spacing } = ringGeometry(placed),
-      crests: number[] = [],
-      troughs: number[] = [];
-    for (let i = 0; i < map.mesh.count; i++) {
-      const d = distance(map, i, placed.center);
-      if (d > radius) continue;
-      (onCrest(d, spacing) ? crests : troughs).push(map.Elevation[i]);
-    }
-    return { ringRelief: (mean(crests) - mean(troughs)) / 1024 };
+    const { cells, crests } = ringClasses(map, placed),
+      up: number[] = [],
+      down: number[] = [];
+    for (const i of cells) (crests.has(i) ? up : down).push(map.Elevation[i]);
+    return { ringRelief: (mean(up) - mean(down)) / 1024 };
   },
   maintain(map, _p, placed, shortfall) {
     // Erosion exposes the rings: the soft troughs are cut. Where base level stops the cut,
     // the resistant crests stand up by the remainder instead.
     const needed = units(shortfall.ringRelief ?? 0);
     if (needed <= 0) return 0;
-    const { radius, spacing } = ringGeometry(placed),
-      crests: number[] = [];
+    const { cells, crests } = ringClasses(map, placed);
     let applied = 0,
       remainder = 0;
-    for (let i = 0; i < map.mesh.count; i++) {
-      const d = distance(map, i, placed.center);
-      if (d > radius) continue;
-      if (onCrest(d, spacing)) {
-        crests.push(i);
-        continue;
-      }
+    for (const i of cells) {
+      if (crests.has(i)) continue;
       const done = cut(map, i, needed);
       map.LandmarkMaintenance[i] += done;
       applied = Math.max(applied, done);
@@ -216,7 +226,8 @@ function craterBands(map: PhysicalField, placed: Placed) {
     band,
     floor: (d: number) => d <= Math.max(radius * 0.4, map.mesh.spacing * 0.6),
     rim: (d: number) => Math.abs(d - radius) <= band,
-    plain: (d: number) => d >= radius * 1.6 && d <= radius * 2.4,
+    plain: (d: number) =>
+      d >= radius * 1.6 && d <= Math.max(radius * 2.4, radius * 1.6 + map.mesh.spacing * 1.2),
   };
 }
 function craterMeasures(map: PhysicalField, placed: Placed) {
@@ -276,9 +287,10 @@ const impactRing: Kind = {
 
 /* ---------- great escarpment ---------- */
 
+/** The scarp is at least a cell wide on this mesh, so both sides are read from real cells. */
 function scarpCells(map: PhysicalField, placed: Placed) {
   const metrics = pathMetrics(map, placed.path),
-    width = placed.parameters.scarpWidth * 1000,
+    width = Math.max(placed.parameters.scarpWidth * 1000, map.mesh.spacing * 1.2),
     cells: { i: number; hit: PathHit }[] = [];
   for (let i = 0; i < map.mesh.count; i++) {
     const hit = nearestOnPath(map, metrics, map.mesh.x[i], map.mesh.y[i]);
@@ -316,15 +328,21 @@ const escarpment: Kind = {
     map.faults.push({ id: `landmark:${placed.landmark.id}`, coordinates: placed.path, width });
   },
   measure(map, placed) {
-    // Throw is read from the cells the fault moved: the upthrown band against the downthrown band.
+    // Throw is the offset the fault's cells show across the scarp: the slope of elevation
+    // against each cell's signed ramp, so a scarp narrower than a cell is still read from
+    // whole cells and a correction applied through the same ramp reads back in full.
     const { width, cells } = scarpCells(map, placed),
-      up: number[] = [],
-      down: number[] = [];
-    for (const { i, hit } of cells) {
-      if (hit.distance < width / 2) continue;
-      (hit.side > 0 ? up : down).push(map.Elevation[i]);
+      x = cells.map(({ hit }) => hit.side * clamp(hit.distance / (width / 2), 0, 1)),
+      y = cells.map(({ i }) => map.Elevation[i]),
+      mx = mean(x),
+      my = mean(y);
+    let covariance = 0,
+      variance = 0;
+    for (let k = 0; k < x.length; k++) {
+      covariance += (x[k] - mx) * (y[k] - my);
+      variance += (x[k] - mx) ** 2;
     }
-    return { throw: (mean(up) - mean(down)) / 1024 };
+    return { throw: variance > 0 ? (2 * covariance) / variance / 1024 : NaN };
   },
   maintain(map, p, placed, shortfall) {
     const needed = units(shortfall.throw ?? 0);
@@ -341,4 +359,5 @@ export const landmarkKinds: Record<string, Kind> = {
   "impact-ring": impactRing,
   escarpment,
   falls,
+  ...magicLandmarkKinds,
 };

@@ -32,7 +32,6 @@ export interface FeatureApplicability {
   epochControls?: EpochControl[];
   initialOnlySettings?: readonly string[];
   requiresLocatedSources?: boolean;
-  requiresLandmarks?: boolean;
   publicationProfiles?: Record<string, readonly string[]>;
 }
 export interface SetupSetting {

@@ -79,6 +79,7 @@ export function landmarkInput(landmark: World["landmarks"][number]) {
     geometry: landmark.geometry,
     parameters: landmark.parameters,
     emplacedAtEpoch: landmark.emplacedAtEpoch,
+    origin: landmark.origin,
   };
 }
 export function magicInput(source: World["magic"][number]) {

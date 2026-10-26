@@ -245,6 +245,7 @@ function geographicPublications(
     ["physical.impacts", "geology", ["crater"]],
     ["physical.volcanism", "geology", ["volcano", "caldera"]],
     ["physical.landmarks", "geology", ["landmark"]],
+    ["physical.landmarks", "magic", ["landmark"]],
     ["physical.fractures", "faults", ["fault"]],
     ["water.routing", "lakes", ["lake"]],
     ["ocean.geography", "oceans", ["ocean"]],

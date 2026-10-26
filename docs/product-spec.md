@@ -381,13 +381,14 @@ space filters. Selectable columns retain numerical values, units and explicit
 unknowns; settlement residents remain distinct from community population.
 Custom attributes and separately owned authored magic sources are included.
 
-Each semantic identity has one row. An authored landmark
+Each semantic identity has one row. A major landmark
 ([ADR 0006](adr/0006-landmarks-are-injected-causes.md)) is one such identity:
-before generation its row is the authored record with its target measures;
-after generation its row is the generated realization under the authored name,
-carrying target and measured signature, maintenance total and captured river,
-typed by its catalogue kind under Terrain and geology. A detected peak, gorge or
-waterfall standing on the landmark is not a second row. Discovery retains hidden
+its row is the generated realization under its name, carrying target and
+measured signature, maintenance total and captured river or source strength,
+typed by its catalogue kind under Terrain and geology for a landscape kind and
+under Magic for a magic kind. A detected peak, gorge or waterfall standing on the
+landmark is not a second row, and a magic landmark's injected source is not a
+located source of its own. Discovery retains hidden
 features and opens existing finer maps or interiors through the inspector
 without changing saved visibility or generating detail. Current-map and viewport reads respect composed
 geometry, profile eligibility and located spaces. Edits, undo and delivered
@@ -507,15 +508,18 @@ physical budget; later exposed land follows material, basin capacity and water
 exchange with grounded ice. Terrain choices preserve authored climate history.
 Geological intervals remain independent of the model years used by life and society.
 
-Authored landmarks extend this generator without a second engine
-([ADR 0006](adr/0006-landmarks-are-injected-causes.md)). A creator places a
-named landmark of a catalogued kind (great mountain, great canyon, great ring
-structure, great escarpment, great falls) at a location and epoch with its
-defining measures in physical units; generation injects the kind's causes at
-that epoch and restores the measured signature at the end of every later epoch,
-booking each correction. The surrounding geography responds through the same
-processes as everywhere else, water is captured rather than fabricated, and
-naturally emerging landforms and their detection are unchanged.
+Major landmarks extend this generator without a second engine
+([ADR 0006](adr/0006-landmarks-are-injected-causes.md)). A world is owed a
+configured number of major landscape landmarks (great mountain, great canyon,
+great ring structure, great escarpment, great falls) and major magic landmarks
+(a great source of each material magic system). The generator sites each at the
+epoch it forms in from the terrain of that moment, injects the kind's causes,
+restores the measured signature at the end of every later epoch and at present,
+booking each correction, names it and publishes it as one feature; a rerun keeps
+the landmarks it already has. The surrounding geography responds through the
+same processes as everywhere else, water is captured rather than fabricated, and
+naturally emerging landforms and their detection are unchanged. Creators rename,
+re-measure, move or remove the result; nothing is placed before generation.
 
 - Named geological feature extraction where supported (rivers, lakes, peaks, craters) and additional generalized GIS features in the new product.
 - Deterministic seeds and structural correctness; rendered geographic review as a complementary quality gate.

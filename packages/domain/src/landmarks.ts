@@ -28,7 +28,14 @@ export interface LandmarkKind {
   parameters: LandmarkParameter[];
   /** Horizontal reach of the landmark's causes in metres. */
   reach(parameters: Record<string, number>): number;
+  /** A magic kind injects a source of this system and publishes on the magic layer. */
+  system?: string;
+  /** The geographic term its name is built around. */
+  term?: string;
 }
+/** The layer a kind's features publish on. */
+export const landmarkLayer = (kind: Pick<LandmarkKind, "system"> | undefined) =>
+  kind?.system ? "magic" : "geology";
 export interface Landmark {
   id: string;
   name: string;
@@ -37,6 +44,8 @@ export interface Landmark {
   parameters: Record<string, number>;
   /** Index into `world.epochs`; the landmark forms after that epoch's seeded events. */
   emplacedAtEpoch: number;
+  /** Who first made the record: the generator siting it, or a creator editing the result. */
+  origin?: "generated" | "authored";
   areaId?: string;
   spaceId?: string;
 }
@@ -167,8 +176,87 @@ export const landmarkKinds: LandmarkKind[] = [
     ],
     reach: (p) => Math.max(1, p.captureDistance) * 1000,
   },
+  ...magicLandmarkKinds(),
 ];
 const kinds = new Map(landmarkKinds.map((kind) => [kind.id, kind]));
+
+/**
+ * A magic landmark is a kept source of one system at the greatest strength its setting
+ * allows: the generator injects the source and holds the intensity it releases at the site.
+ */
+function magicLandmarkKinds(): LandmarkKind[] {
+  const source = (label: string) => [
+    {
+      key: "intensity",
+      label: `${label} at the source`,
+      unit: "/1000",
+      min: 100,
+      max: 1000,
+      default: 900,
+    },
+    kilometres("reach", "Source reach", 10, 300, 60),
+  ];
+  const kind = (
+    id: string,
+    system: string,
+    label: string,
+    term: string,
+    description: string,
+    measure: string
+  ): LandmarkKind => ({
+    id,
+    label,
+    group: "Great magic source",
+    geometry: "Point",
+    description,
+    parameters: source(measure),
+    reach: (p) => p.reach * 1000,
+    system,
+    term,
+  });
+  return [
+    kind(
+      "fire-wellspring",
+      "fire",
+      "Great wellspring",
+      "Wellspring",
+      "A vein core of the greatest strength on a fracture-fed heat maximum; the fire runs its conduits for a hundred kilometres.",
+      "Fire"
+    ),
+    kind(
+      "aurora-vault",
+      "aurora",
+      "Great vault",
+      "Vault",
+      "Charge held in the deepest ice and frozen ground of a cold height, stilling the land around it.",
+      "Charge"
+    ),
+    kind(
+      "pressure-locus",
+      "pressure",
+      "Deep locus",
+      "Deep",
+      "A locus in the deep ocean whose rays, wakes and storms reach the coasts around it.",
+      "Pressure"
+    ),
+    kind(
+      "greenwood-heart",
+      "greenwood",
+      "Heartwood",
+      "Heartwood",
+      "The eldest stand and its spring, where sap and groundwater run deepest and the forest grows past its climate.",
+      "Sap"
+    ),
+    kind(
+      "salt-pan",
+      "salt",
+      "Great salt pan",
+      "Pan",
+      "A dead lake's bed in a closed arid basin: brine down the drainage, bed at the pit, dust on the wind.",
+      "Salting"
+    ),
+  ];
+}
 
 export function landmarkKind(id: string): LandmarkKind | undefined {
   return kinds.get(id);
@@ -217,7 +305,7 @@ export function authoredLandmarkFeatures(world: World): AtlasFeature[] {
     if (realized)
       return {
         ...realized,
-        name: landmark.name,
+        name: landmark.name || realized.name,
         attributes: {
           ...realized.attributes,
           landmarkKind: landmark.kind,
@@ -227,7 +315,7 @@ export function authoredLandmarkFeatures(world: World): AtlasFeature[] {
     return {
       id: landmark.id,
       areaId: landmark.areaId ?? root,
-      layerId: "geology",
+      layerId: landmarkLayer(landmarkKind(landmark.kind)),
       kind: "landmark",
       name: landmark.name,
       geometry: landmark.geometry,

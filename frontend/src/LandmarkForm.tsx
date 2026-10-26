@@ -1,17 +1,16 @@
 import { useState } from "react";
-import {
-  defaultLandmarkParameters,
-  landmarkKind,
-  landmarkKinds,
-  type Landmark,
-  type LandmarkKind,
-} from "@atlas/domain";
+import { landmarkKind, landmarkKinds, type Landmark, type LandmarkKind } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import { makeCommand } from "./useAtlas";
 import { ErrorMessage } from "./ErrorMessage";
 import type { EditorState } from "./useEditor";
 import { landmarkFeatures } from "./magicFeatures";
 
+/**
+ * The landmarks the generator sited in this world. A creator renames one, adjusts the measures
+ * it is held to, moves it or removes it; the next physical run keeps every record it finds and
+ * sites only what the configured count still lacks.
+ */
 export function LandmarkForm({ editor }: { editor: EditorState }) {
   const draft = editor.landmarkDraft;
   const landmark = editor.world.landmarks.find((l) => l.id === draft?.id);
@@ -19,33 +18,16 @@ export function LandmarkForm({ editor }: { editor: EditorState }) {
     <section>
       <h2>Landmarks in this landscape</h2>
       <p>
-        A landmark forms at a chosen epoch from injected causes; its defining measures are held
-        through every later epoch while the surroundings respond.
+        Major landmarks are sited by the generator during the physical epochs and held to their
+        measures through every later epoch. Set how many a world gets under the generator&apos;s
+        advanced settings; edit the result here.
       </p>
-      <div role="group" aria-label="Landmark placement">
-        <button className="primary" onClick={() => editor.setTool("landmark")}>
-          Place landmark
-        </button>
-        <button className="secondary" onClick={() => editor.setTool("landmarkPath")}>
-          Draw landmark path
-        </button>
-      </div>
-      {draft ? (
-        <LandmarkSettings
-          key={`${landmark?.id ?? "new"}:${draft.geometry.type}`}
-          editor={editor}
-          draft={draft}
-          landmark={landmark}
-        />
-      ) : (
-        <p>
-          Click a point for a mountain, ring structure or falls; trace a path for a canyon or
-          escarpment. Select an existing landmark to edit or move it.
-        </p>
-      )}
+      {draft && landmark ? (
+        <LandmarkSettings key={landmark.id} editor={editor} draft={draft} landmark={landmark} />
+      ) : null}
       <LandmarkList editor={editor} />
       <p className="hint">
-        Saving changes the landmark record. Regenerate the physical domain to form it; drainage,
+        Saving changes the landmark record. Regenerate the physical domain to re-form it; drainage,
         climate and ice respond in the same generation.
       </p>
       <ErrorMessage error={editor.commit.error} />
@@ -53,12 +35,18 @@ export function LandmarkForm({ editor }: { editor: EditorState }) {
   );
 }
 function LandmarkList({ editor }: { editor: EditorState }) {
+  const landmarks = editor.world.landmarks;
   return (
     <section>
-      <h3>Placed landmarks</h3>
-      {editor.world.landmarks.map((landmark) => (
+      <h3>Landmarks</h3>
+      {!landmarks.length && (
+        <p className="hint">
+          None yet. Generate the physical domain; the generator sites the configured number.
+        </p>
+      )}
+      {landmarks.map((landmark) => (
         <div key={landmark.id}>
-          <strong>{landmark.name}</strong>
+          <strong>{landmark.name || landmarkKind(landmark.kind)?.label}</strong>
           <small>{describeLandmark(editor, landmark)}</small>
           <button
             className="quiet"
@@ -96,29 +84,26 @@ function signature(kind: LandmarkKind, parameters: Record<string, number>) {
     .map((p) => `${p.label.toLowerCase()} ${parameters[p.key]} ${p.unit}`)
     .join(", ");
 }
-function initialKind(landmark: Landmark | undefined, choices: LandmarkKind[]) {
-  if (landmark) return landmark.kind;
-  return choices.length ? choices[0].id : "";
-}
 function LandmarkSettings({
   editor,
   draft,
   landmark,
 }: {
   editor: EditorState;
-  draft: { id: string | null; geometry: Geometry };
-  landmark: Landmark | undefined;
+  draft: { id: string; geometry: Geometry };
+  landmark: Landmark;
 }) {
   const choices = landmarkKinds.filter((kind) => kind.geometry === draft.geometry.type);
-  const [kindId, setKindId] = useState(() => initialKind(landmark, choices));
+  const [kindId, setKindId] = useState(landmark.kind);
   const kind = landmarkKind(kindId);
-  const [parameters, setParameters] = useState<Record<string, number>>(() =>
-    initialParameters(landmark, kind)
-  );
+  const [parameters, setParameters] = useState<Record<string, number>>(landmark.parameters);
   const chooseKind = (id: string) => {
     setKindId(id);
+    const next = landmarkKind(id);
     setParameters(
-      initialParameters(landmark?.kind === id ? landmark : undefined, landmarkKind(id))
+      id === landmark.kind
+        ? landmark.parameters
+        : Object.fromEntries((next?.parameters ?? []).map((p) => [p.key, p.default]))
     );
   };
   if (!kind) return <p>No landmark kind is drawn with a {draft.geometry.type.toLowerCase()}.</p>;
@@ -136,7 +121,7 @@ function LandmarkSettings({
         );
       }}
     >
-      <h3>{landmark ? `Edit ${landmark.name}` : "Configure this landmark"}</h3>
+      <h3>Edit {landmark.name || kind.label}</h3>
       <LandmarkIdentity
         editor={editor}
         landmark={landmark}
@@ -149,7 +134,7 @@ function LandmarkSettings({
       <button className="primary" disabled={editor.commit.isPending}>
         Save landmark
       </button>
-      {landmark && <MoveLandmark editor={editor} landmark={landmark} />}
+      <MoveLandmark editor={editor} landmark={landmark} />
       <button type="button" className="quiet" onClick={() => editor.setLandmarkDraft(null)}>
         Cancel landmark editing
       </button>
@@ -165,7 +150,7 @@ function LandmarkIdentity({
   chooseKind,
 }: {
   editor: EditorState;
-  landmark: Landmark | undefined;
+  landmark: Landmark;
   kind: LandmarkKind;
   kindId: string;
   choices: LandmarkKind[];
@@ -175,7 +160,7 @@ function LandmarkIdentity({
     <>
       <label>
         Landmark name
-        <input name="name" defaultValue={landmark?.name ?? kind.label} required />
+        <input name="name" defaultValue={landmark.name || kind.label} required />
       </label>
       <label>
         Landmark kind
@@ -190,7 +175,7 @@ function LandmarkIdentity({
       <p className="hint">{kind.description}</p>
       <label>
         Forms in
-        <select name="emplacedAtEpoch" defaultValue={landmark?.emplacedAtEpoch ?? 0}>
+        <select name="emplacedAtEpoch" defaultValue={landmark.emplacedAtEpoch}>
           {editor.world.epochs.map((epoch, index) => (
             <option key={epoch.id} value={index}>
               {epoch.id}
@@ -201,27 +186,24 @@ function LandmarkIdentity({
     </>
   );
 }
-function initialParameters(landmark: Landmark | undefined, kind: LandmarkKind | undefined) {
-  if (landmark) return landmark.parameters;
-  return kind ? defaultLandmarkParameters(kind) : {};
-}
 function saveLandmark(
   editor: EditorState,
-  draft: { id: string | null; geometry: Geometry },
-  landmark: Landmark | undefined,
+  draft: { id: string; geometry: Geometry },
+  landmark: Landmark,
   kind: string,
   parameters: Record<string, number>,
   form: FormData
 ) {
   editor.commit.mutate(
     makeCommand(editor.world, "putLandmark", {
-      id: landmark?.id ?? crypto.randomUUID(),
-      areaId: landmark?.areaId ?? editor.area.id,
+      id: landmark.id,
+      areaId: landmark.areaId ?? editor.area.id,
       name: String(form.get("name")),
       kind,
       geometry: draft.geometry,
       parameters,
       emplacedAtEpoch: Number(form.get("emplacedAtEpoch")),
+      origin: landmark.origin,
     }),
     { onSuccess: () => editor.setLandmarkDraft(null) }
   );
