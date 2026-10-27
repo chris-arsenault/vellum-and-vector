@@ -3,15 +3,16 @@ import {
   fixtureState,
   undoWorld,
   commitCommand,
-  readRaster,
   readScene,
 } from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
 import { makeCommand } from "./useAtlas";
-import { sample, type World } from "@atlas/domain";
+import { mappedField, sample, type World } from "@atlas/domain";
 
-async function elevation(world: World, fieldId: string, x = 500) {
-  return sample((await readRaster(world.id, fieldId, "elevation")).field, "elevation", {
+function elevation(world: World, fieldId: string, x = 500) {
+  // Each commit and undo already reads the published catalog and field resources back.
+  const field = mappedField(fixtureState(world.id).snapshot.numerical[fieldId], world);
+  return sample(field, "elevation", {
     x,
     y: 500,
     z: 0,
@@ -33,6 +34,8 @@ it("paints a complete stroke once, supports erase and smooth, and undoes all its
     )
   ).candidate;
   const fieldId = world.fields[0].id;
+  // Use the base field's 100 m cell spacing for this edit/undo fixture.
+  const radius = 100;
   const command = makeCommand(world, "sculptField", {
     areaId,
     channel: "elevation",
@@ -41,14 +44,12 @@ it("paints a complete stroke once, supports erase and smooth, and undoes all its
       { x: 200, y: 500, z: 0 },
       { x: 800, y: 500, z: 0 },
     ],
-    radius: 60,
+    radius,
     mode: "add",
     delta: 20,
   });
   world = (await commitCommand(world.id, command)).candidate;
-  const row = await Promise.all(
-    Array.from({ length: 11 }, (_, i) => elevation(world, fieldId, i * 100))
-  );
+  const row = Array.from({ length: 11 }, (_, i) => elevation(world, fieldId, i * 100));
   [0, 0, 20, 20, 20, 20, 20, 20, 20, 0, 0].forEach((expected, i) =>
     expect(row[i]).toBeCloseTo(expected, 0)
   );
@@ -61,16 +62,16 @@ it("paints a complete stroke once, supports erase and smooth, and undoes all its
         areaId,
         channel: "elevation",
         center: { x: 500, y: 500, z: 0 },
-        radius: 60,
+        radius,
         mode: "set",
         delta: 0,
       })
     )
   ).candidate;
-  expect(await elevation(world, fieldId)).toBeCloseTo(0, 0);
+  expect(elevation(world, fieldId)).toBeCloseTo(0, 0);
   expect(original.channels.elevation[60]).toBe(0);
   world = await undoWorld(world.id, fixtureState(world.id).history[0].operationId);
-  expect(await elevation(world, fieldId)).toBeCloseTo(20, 0);
+  expect(elevation(world, fieldId)).toBeCloseTo(20, 0);
   world = (
     await commitCommand(
       world.id,
@@ -78,19 +79,19 @@ it("paints a complete stroke once, supports erase and smooth, and undoes all its
         areaId,
         channel: "elevation",
         center: { x: 500, y: 500, z: 0 },
-        radius: 60,
+        radius,
         mode: "smooth",
         delta: 1,
       })
     )
   ).candidate;
-  expect(await elevation(world, fieldId)).toBeGreaterThan(0);
-  expect(await elevation(world, fieldId)).toBeLessThan(20);
+  expect(elevation(world, fieldId)).toBeGreaterThan(0);
+  expect(elevation(world, fieldId)).toBeLessThan(20);
   world = await undoWorld(world.id, fixtureState(world.id).history[0].operationId);
   await undoWorld(world.id, command.operationId);
-  expect(
-    await Promise.all(Array.from({ length: 11 }, (_, i) => elevation(world, fieldId, i * 100)))
-  ).toEqual(new Array(11).fill(0));
+  expect(Array.from({ length: 11 }, (_, i) => elevation(world, fieldId, i * 100))).toEqual(
+    new Array(11).fill(0)
+  );
 });
 
 it("keeps the full geometry of a feature crossing the viewport so editing cannot truncate it", async () => {

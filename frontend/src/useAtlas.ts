@@ -43,11 +43,13 @@ export function useHistory(world: Pick<World, "id" | "version">) {
 export function makeCommand(world: World, kind: string, data: Record<string, unknown>): Command {
   return { operationId: crypto.randomUUID(), expectedVersion: world.version, kind, data };
 }
-export function useCommit(worldId: string) {
+export function useCommit(worldId: string, scope?: string) {
   const cache = useQueryClient();
   return useMutation({
     mutationKey: ["command", worldId],
-    mutationFn: async (command: Command) => commitWorkspaceCommand(worldId, command),
+    scope: scope ? { id: scope } : undefined,
+    mutationFn: async (input: Command | (() => Promise<Command>)) =>
+      commitWorkspaceCommand(worldId, typeof input === "function" ? await input() : input),
     onSuccess: (result) => {
       cache.setQueryData(["world", worldId], result.candidate);
       return cache.invalidateQueries({ queryKey: ["history", worldId] });

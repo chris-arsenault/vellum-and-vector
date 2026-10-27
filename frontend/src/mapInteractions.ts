@@ -79,7 +79,6 @@ export function installMapTools(
       navigation.space = held;
     }
   );
-  map.getTargetElement()?.focus({ preventScroll: true });
   const unlisten = installMapNavigation(engine, tool, events, () => !navigation.space);
   return () => {
     editing();

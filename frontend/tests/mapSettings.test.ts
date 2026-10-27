@@ -23,12 +23,14 @@ test("map settings separate appearance, content, sheet and saved views", async (
   await expect(page.getByLabel("Sheet title", { exact: true })).toHaveCount(0);
   await snapshot(page, "layers");
   await openMapSettings(page, "Views");
-  await page.getByLabel("View name", { exact: true }).fill("Northern ink");
-  await page.getByRole("button", { name: "Save map view", exact: true }).click();
+  const viewName = page.getByLabel("View name", { exact: true });
+  await viewName.fill("Northern ink");
+  await viewName.press("Enter");
   await expect(page.getByRole("button", { name: "Northern ink", exact: true })).toHaveAttribute(
     "aria-current",
     "true"
   );
+  await expect(viewName).toBeFocused();
   await snapshot(page, "views");
   await page.getByLabel("View name", { exact: true }).fill("Fieldwork");
   await page.getByRole("button", { name: "Save map view", exact: true }).click();
