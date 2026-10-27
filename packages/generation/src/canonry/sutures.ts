@@ -3,6 +3,8 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, round } from "./math";
 import { PriorityQueue } from "./priorityQueue";
+import type { NumericalVector } from "@atlas/domain";
+import { workingArray, releaseWorking } from "./physicalNumerics";
 
 interface Contact {
   pair: number;
@@ -49,12 +51,16 @@ function findContact(
   map: PhysicalField,
   context: PhysicalContext,
   start: number,
-  visited: Int32Array,
-  distance: Float64Array,
+  visited: NumericalVector,
+  distance: NumericalVector,
   visit: number
 ): Contact | null {
   const p = context.Profile;
-  const queue = new PriorityQueue<{ i: number; d: number }>((a, b) => a.d - b.d || a.i - b.i);
+  const queue = new PriorityQueue<{ i: number; d: number }>(
+    (a, b) => a.d - b.d || a.i - b.i,
+    map.numerical,
+    ["i", "d"]
+  );
   const search = new MaterialSearch();
   visited[start] = visit;
   distance[start] = 0;
@@ -64,7 +70,10 @@ function findContact(
     if (d !== distance[i]) continue;
     search.observe(map, context, i, d);
     const contact = search.contact(p.ContinentalSutureDetectionReach);
-    if (contact) return contact;
+    if (contact) {
+      queue.close();
+      return contact;
+    }
     if (d >= p.ContinentalSutureDetectionReach) continue;
     for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
       const j = map.mesh.neighbors[i * map.mesh.stride + edge];
@@ -118,12 +127,13 @@ export function continentalSutures(map: PhysicalField, context: PhysicalContext)
         1000 +
           Math.trunc(((p.OrogenicCoreRockResistance - 1000) * map.CrustSutureStrength[i]) / 1000)
       );
-  const visited = new Int32Array(count),
-    distance = new Float64Array(count);
+  const visited = workingArray(map, "int32", "sutures:visited"),
+    distance = workingArray(map, "float64", "sutures:distance");
   let visit = 0;
   for (let i = 0; i < count; i++) {
     if (map.TectonicBoundaryCodes[i] !== 1 || map.TectonicStrain[i] <= 0) continue;
     const contact = findContact(map, context, i, visited, distance, ++visit);
     if (contact) recordCollision(map, context, i, contact);
   }
+  releaseWorking(map, visited, distance);
 }

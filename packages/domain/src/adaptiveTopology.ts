@@ -1,72 +1,38 @@
 import type { Bounds } from "./spatial";
 import { requireThat } from "./errors";
 import { adaptiveFaces } from "./adaptiveFaces";
+import type { NumericalVector, NumericalAllocator } from "./numericalVector";
+import { allocateNumerical } from "./numericalAllocation";
+import { buildAdaptiveTree } from "./adaptiveTreeBuild";
+import { balanceAdaptiveTree } from "./adaptiveTreeBalance";
+import { refineSelectedTree, refineWhereTree } from "./adaptiveTreeRefine";
 
-/** Serializable quadtree and reciprocal control-volume interfaces. */
+/** Quadtree and reciprocal control-volume interfaces, independent of numerical storage. */
 export interface AdaptiveTopology {
   bounds: Bounds;
-  boxes: Float64Array;
-  children: Int32Array;
-  levels: Uint8Array;
-  leaves: Int32Array;
-  leafIndex: Int32Array;
-  offsets: Int32Array;
-  neighbors: Int32Array;
-  faceLengths: Float64Array;
-  distances: Float64Array;
-  directionX: Float64Array;
-  directionY: Float64Array;
-  normalX: Int8Array;
-  normalY: Int8Array;
-}
-export interface AdaptiveNode {
-  bounds: Bounds;
-  level: number;
-  child: number;
+  boxes: NumericalVector;
+  children: NumericalVector;
+  levels: NumericalVector;
+  leaves: NumericalVector;
+  leafIndex: NumericalVector;
+  offsets: NumericalVector;
+  neighbors: NumericalVector;
+  faceLengths: NumericalVector;
+  distances: NumericalVector;
+  directionX: NumericalVector;
+  directionY: NumericalVector;
+  normalX: NumericalVector;
+  normalY: NumericalVector;
 }
 export interface AdaptiveSampling {
   maximumSize: number;
   minimumSize: number;
   refine?: (bounds: Bounds, level: number) => boolean;
 }
-export function splitAdaptiveNode(nodes: AdaptiveNode[], index: number) {
-  const node = nodes[index],
-    [x0, y0, x1, y1] = node.bounds;
-  const x = (x0 + x1) / 2,
-    y = (y0 + y1) / 2;
-  requireThat(
-    x > x0 && x < x1 && y > y0 && y < y1,
-    "adaptive_precision",
-    "Adaptive cells must remain distinguishable in world coordinates."
-  );
-  node.child = nodes.length;
-  for (const bounds of [
-    [x0, y0, x, y],
-    [x, y0, x1, y],
-    [x0, y, x, y1],
-    [x, y, x1, y1],
-  ])
-    nodes.push({ bounds: bounds as Bounds, level: node.level + 1, child: -1 });
-}
-export function assembleAdaptiveTopology(bounds: Bounds, nodes: AdaptiveNode[]): AdaptiveTopology {
-  const leaves = Int32Array.from(nodes.flatMap((node, i) => (node.child < 0 ? [i] : [])));
-  const leafIndex = new Int32Array(nodes.length).fill(-1);
-  leaves.forEach((node, i) => {
-    leafIndex[node] = i;
-  });
-  const tree = {
-    bounds,
-    boxes: Float64Array.from(nodes.flatMap((node) => node.bounds)),
-    children: Int32Array.from(nodes, (node) => node.child),
-    levels: Uint8Array.from(nodes, (node) => node.level),
-    leaves,
-    leafIndex,
-  };
-  return { ...tree, ...adaptiveFaces(tree) };
-}
 export function createAdaptiveTopology(
   bounds: Bounds,
-  sampling: AdaptiveSampling
+  sampling: AdaptiveSampling,
+  numerical?: NumericalAllocator
 ): AdaptiveTopology {
   requireThat(
     bounds.every(Number.isFinite) && bounds[2] > bounds[0] && bounds[3] > bounds[1],
@@ -80,76 +46,45 @@ export function createAdaptiveTopology(
     "adaptive_resolution",
     "Adaptive sampling requires positive physical resolutions."
   );
-  const nodes: AdaptiveNode[] = [{ bounds: [...bounds], level: 0, child: -1 }];
-  for (let i = 0; i < nodes.length; i++) {
-    const node = nodes[i],
-      size = Math.max(node.bounds[2] - node.bounds[0], node.bounds[3] - node.bounds[1]);
-    if (
-      size > sampling.maximumSize ||
-      (size > sampling.minimumSize && sampling.refine?.(node.bounds, node.level))
-    )
-      splitAdaptiveNode(nodes, i);
-  }
-  return balanceAdaptiveTopology(bounds, nodes);
+  const tree = buildAdaptiveTree(
+    bounds,
+    (box, level) => {
+      const size = Math.max(box[2] - box[0], box[3] - box[1]);
+      return (
+        size > sampling.maximumSize ||
+        (size > sampling.minimumSize && !!sampling.refine?.(box, level))
+      );
+    },
+    numerical
+  );
+  const balanced = balanceAdaptiveTree(tree, numerical);
+  return { ...balanced, ...adaptiveFaces(balanced, numerical) };
 }
-/** Grade adjacent cells 2:1 so a narrow feature is not reconstructed against a distant coarse sample. */
-function balanceAdaptiveTopology(bounds: Bounds, nodes: AdaptiveNode[]): AdaptiveTopology {
-  for (;;) {
-    const tree = assembleAdaptiveTopology(bounds, nodes),
-      split = new Set<number>();
-    for (let i = 0; i < tree.leaves.length; i++)
-      for (let at = tree.offsets[i]; at < tree.offsets[i + 1]; at++) {
-        const node = tree.leaves[i],
-          next = tree.leaves[tree.neighbors[at]];
-        if (tree.levels[next] > tree.levels[node] + 1) split.add(node);
-      }
-    if (!split.size) return tree;
-    for (const node of split) splitAdaptiveNode(nodes, node);
-  }
-}
-export function refineAdaptiveTopology(
-  source: AdaptiveTopology,
-  selected: Iterable<number>,
-  minimumSize: number
-): AdaptiveTopology {
+function validateMinimum(minimumSize: number) {
   requireThat(
     Number.isFinite(minimumSize) && minimumSize > 0,
     "adaptive_resolution",
     "Refinement requires a positive physical minimum size."
   );
-  const nodes: AdaptiveNode[] = Array.from(source.children, (child, i) => ({
-    child,
-    level: source.levels[i],
-    bounds: Array.from(source.boxes.subarray(i * 4, i * 4 + 4)) as Bounds,
-  }));
-  for (const i of new Set(selected)) {
-    const node = source.leaves[i],
-      b = nodes[node].bounds;
-    if (Math.max(b[2] - b[0], b[3] - b[1]) > minimumSize) splitAdaptiveNode(nodes, node);
-  }
-  return balanceAdaptiveTopology(source.bounds, nodes);
 }
-/** Request a complete physical support in one tree walk, then grade its interfaces once. */
+export function refineAdaptiveTopology(
+  source: AdaptiveTopology,
+  selected: Iterable<number>,
+  minimumSize: number,
+  numerical?: NumericalAllocator
+): AdaptiveTopology {
+  validateMinimum(minimumSize);
+  return refineSelectedTree(source, selected, minimumSize, numerical);
+}
+/** Refine requested support and grade its interfaces before building final adjacency. */
 export function refineAdaptiveWhere(
   source: AdaptiveTopology,
   minimumSize: number,
-  refine: (box: Bounds) => boolean
-) {
-  const nodes: AdaptiveNode[] = Array.from(source.children, (child, i) => ({
-    child,
-    level: source.levels[i],
-    bounds: Array.from(source.boxes.subarray(i * 4, i * 4 + 4)) as Bounds,
-  }));
-  let changed = false;
-  for (let i = 0; i < nodes.length; i++) {
-    const node = nodes[i],
-      b = node.bounds;
-    if (node.child < 0 && Math.max(b[2] - b[0], b[3] - b[1]) > minimumSize && refine(b)) {
-      splitAdaptiveNode(nodes, i);
-      changed = true;
-    }
-  }
-  return changed ? balanceAdaptiveTopology(source.bounds, nodes) : source;
+  refine: (box: Bounds) => boolean,
+  numerical?: NumericalAllocator
+): AdaptiveTopology {
+  validateMinimum(minimumSize);
+  return refineWhereTree(source, minimumSize, refine, numerical);
 }
 export function adaptiveCell(topology: AdaptiveTopology, leaf: number): Bounds {
   const at = topology.leaves[leaf] * 4,
@@ -169,14 +104,19 @@ export function adaptiveLeafAt(topology: AdaptiveTopology, x: number, y: number)
   }
   return topology.leafIndex[node];
 }
-export function adaptiveGeometry(topology: AdaptiveTopology) {
+export function adaptiveGeometry(topology: AdaptiveTopology, numerical?: NumericalAllocator) {
   const count = topology.leaves.length;
-  const x = new Float64Array(count),
-    y = new Float64Array(count);
-  const width = new Float64Array(count),
-    height = new Float64Array(count);
-  const areas = new Float64Array(count),
-    boundary = new Uint8Array(count);
+  const vector = (type: "float64" | "uint8", name: string) =>
+    allocateNumerical(
+      { type, length: count, lifetime: "run", name: `adaptive:${name}` },
+      numerical
+    );
+  const x = vector("float64", "x"),
+    y = vector("float64", "y"),
+    width = vector("float64", "width"),
+    height = vector("float64", "height"),
+    areas = vector("float64", "areas"),
+    boundary = vector("uint8", "boundary");
   for (let i = 0; i < count; i++) {
     const b = adaptiveCell(topology, i);
     x[i] = (b[0] + b[2]) / 2;

@@ -1,4 +1,10 @@
-import type { FieldStyle, Raster, RasterPresentation, World } from "./types";
+import {
+  resourceRaster,
+  type FieldStyle,
+  type Raster,
+  type RasterPresentation,
+  type World,
+} from "./types";
 import { rasterLimits } from "./rasterTiles";
 import {
   biomes,
@@ -108,7 +114,9 @@ export function rasterCategories(data: Raster[]): number[] {
   let covered: Geometry | null = null;
   for (const raster of data.slice().reverse()) {
     const visible = covered ? spatial.difference(raster.footprint, covered) : raster.footprint;
-    if (visible)
+    if (resourceRaster(raster)) {
+      for (const code of raster.field.channels[raster.channel]?.categories ?? []) result.add(code);
+    } else if (visible)
       for (const code of fieldCategories(raster.field, raster.channel, visible)) result.add(code);
     covered = covered ? spatial.union(covered, raster.footprint) : raster.footprint;
   }

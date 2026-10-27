@@ -12,8 +12,11 @@ import {
   type AtlasFeature,
   type Grid,
   type Layer,
+  type FeatureWorkspace,
 } from "@atlas/domain";
 import type { GenerationState } from "./process";
+import { generationFeatures, writeGenerationFeature } from "./generationFeatures";
+import { generationNetworks } from "./generationNetworks";
 
 interface PublicationBase {
   layer: Layer;
@@ -38,7 +41,8 @@ export type PublicationDefinition = FieldPublicationDefinition | GeographyPublic
 export function preparePublicationLayers(
   snapshot: DomainSnapshot,
   definitions: PublicationDefinition[],
-  areaId: string
+  areaId: string,
+  features?: FeatureWorkspace
 ) {
   const area = snapshot.world.areas[areaId];
   requireThat(area, "publication_area", "Bind publication to an existing mapped area.");
@@ -46,46 +50,61 @@ export function preparePublicationLayers(
   fieldDefinitions(definitions);
   for (const definition of definitions)
     if (definition.publish !== false && definition.layer.profiles.includes(area.profile))
-      installLayer(snapshot, definition.layer, areaId);
+      installLayer(snapshot, definition.layer, areaId, features);
 }
 
 /** Module-owned output bindings cross the worker boundary as plain data. */
 export function publishGenerationProducts(
-  state: Pick<GenerationState, "domain" | "surface" | "publications">,
+  state: Pick<
+    GenerationState,
+    "domain" | "surface" | "publications" | "features" | "sourceFeatures" | "networks"
+  >,
   runId: string,
   original?: DomainSnapshot,
   diagnostics: Diagnostic[] = []
 ) {
   const definitions = state.publications ?? [];
-  repairGeneratedAttributes(state.domain, diagnostics);
+  repairGeneratedAttributes(state, diagnostics);
   checkLayerDefinitions(definitions);
-  validateCandidateBindings(state.domain, definitions, original);
-  const layers = publishFields(state.domain, state.surface, definitions, runId);
-  for (const definition of definitions) {
-    if (definition.kind !== "geography" || definition.publish === false) continue;
-    const features = Object.values(state.domain.world.features).filter(
-      (feature) =>
-        feature.areaId === state.surface.scope.areaId &&
-        feature.state === "generated" &&
-        feature.layerId === definition.layer.id &&
-        definition.featureKinds.includes(feature.kind)
-    );
-    if (!features.length) continue;
-    validateGeographicRepresentation(state.domain, definition, features);
-    installLayer(state.domain, definition.layer, state.surface.scope.areaId);
-    layers.add(definition.layer.id);
-  }
+  validateCandidateBindings(state, definitions, original);
+  const layers = publishFields(state.domain, state.surface, definitions, runId, state.features);
+  publishGeographies(state, definitions, layers);
   for (const layer of layers) publishCoverage(state.domain, state.surface, layer, runId);
   return layers;
+}
+function publishGeographies(
+  state: Pick<GenerationState, "domain" | "surface" | "features" | "networks">,
+  definitions: PublicationDefinition[],
+  layers: Set<string>
+) {
+  for (const definition of definitions) {
+    if (definition.kind !== "geography" || definition.publish === false) continue;
+    let present = false;
+    for (const feature of generationFeatures(state, {
+      areaId: state.surface.scope.areaId,
+      layerId: definition.layer.id,
+    })) {
+      if (feature.state !== "generated" || !definition.featureKinds.includes(feature.kind))
+        continue;
+      validateGeographicRepresentation(state, definition, feature);
+      present = true;
+    }
+    if (!present) continue;
+    installLayer(state.domain, definition.layer, state.surface.scope.areaId, state.features);
+    layers.add(definition.layer.id);
+  }
 }
 
 /**
  * A generator value that cannot be stored (NaN, a Map, a typed array) becomes its nearest
  * storable value with a warning, so one faulty attribute does not discard the whole run.
  */
-function repairGeneratedAttributes(snapshot: DomainSnapshot, diagnostics: Diagnostic[]) {
-  for (const feature of Object.values(snapshot.world.features)) {
-    if (feature.areaId !== snapshot.scope.areaId || feature.state !== "generated") continue;
+function repairGeneratedAttributes(
+  state: Pick<GenerationState, "domain" | "features">,
+  diagnostics: Diagnostic[]
+) {
+  for (const feature of generationFeatures(state, { areaId: state.domain.scope.areaId })) {
+    if (feature.state !== "generated") continue;
     const problems: string[] = [];
     feature.attributes = storableValue(
       feature.attributes,
@@ -99,7 +118,8 @@ function repairGeneratedAttributes(snapshot: DomainSnapshot, diagnostics: Diagno
           "",
           problems
         ) as AtlasFeature["attributes"];
-    if (problems.length)
+    if (problems.length) {
+      writeGenerationFeature(state, feature);
       diagnostics.push({
         code: "repaired_attributes",
         message: `The ${feature.kind} ${feature.name} (${feature.id}) stored repaired attributes: ${problems.join("; ")}.`,
@@ -107,13 +127,14 @@ function repairGeneratedAttributes(snapshot: DomainSnapshot, diagnostics: Diagno
         invocation: null,
         resource: feature.id,
       });
+    }
   }
 }
 
 function validateGeographicRepresentation(
-  snapshot: DomainSnapshot,
+  state: Pick<GenerationState, "domain" | "networks">,
   definition: GeographyPublicationDefinition,
-  features: AtlasFeature[]
+  feature: AtlasFeature
 ) {
   const representation = definition.network ? "network" : "vector";
   requireThat(
@@ -122,28 +143,37 @@ function validateGeographicRepresentation(
     `Layer ${definition.layer.id} must support ${representation} outputs.`
   );
   if (!definition.network) return;
-  for (const feature of features) {
-    const reach = Object.values(snapshot.world.networkReaches ?? {}).find(
-      (reach) => reach.featureId === feature.id
-    );
+  const network = generationNetworks(state);
+  for (const reach of network.reaches({ featureId: feature.id })) {
     requireThat(
-      reach && snapshot.world.networkNodes?.[reach.start] && snapshot.world.networkNodes[reach.end],
+      network.node(reach.start) && network.node(reach.end),
       "publication_network",
       `Publish ${feature.id} with its network reach and endpoint nodes.`
     );
+    return;
   }
+  requireThat(
+    false,
+    "publication_network",
+    `Publish ${feature.id} with its network reach and endpoint nodes.`
+  );
 }
 
 function validateCandidateBindings(
-  snapshot: DomainSnapshot,
+  state: Pick<GenerationState, "domain" | "features" | "sourceFeatures">,
   definitions: PublicationDefinition[],
   original?: DomainSnapshot
 ) {
-  for (const feature of Object.values(snapshot.world.features)) {
+  for (const feature of generationFeatures(state)) {
     if (
-      feature.areaId !== snapshot.scope.areaId ||
+      feature.areaId !== state.domain.scope.areaId ||
       feature.state !== "generated" ||
-      sameValue(original?.world.features[feature.id], feature)
+      sameValue(
+        state.sourceFeatures
+          ? state.sourceFeatures.get(feature.id)
+          : original?.world.features[feature.id],
+        feature
+      )
     )
       continue;
     requireThat(
@@ -214,7 +244,12 @@ function fieldGroups(grid: Grid, definitions: PublicationDefinition[]) {
   return groups;
 }
 
-function installLayer(snapshot: DomainSnapshot, definition: Layer, areaId: string) {
+function installLayer(
+  snapshot: DomainSnapshot,
+  definition: Layer,
+  areaId: string,
+  features?: FeatureWorkspace
+) {
   const world = snapshot.world,
     area = world.areas[areaId],
     previous = world.layers[definition.id];
@@ -257,7 +292,7 @@ function installLayer(snapshot: DomainSnapshot, definition: Layer, areaId: strin
   validateLayerChange(
     previous,
     next,
-    Object.values(world.features).filter((feature) => feature.layerId === definition.id),
+    generationFeatures({ domain: snapshot, features }, { layerId: definition.id }),
     world.fields.filter((field) => field.layerId === definition.id).length
   );
   world.layers[definition.id] = next;
@@ -267,7 +302,8 @@ function publishFields(
   snapshot: DomainSnapshot,
   grid: Grid,
   definitions: PublicationDefinition[],
-  runId: string
+  runId: string,
+  features?: FeatureWorkspace
 ) {
   const layers = new Set<string>();
   for (const { layer, channels } of fieldGroups(grid, definitions).values()) {
@@ -278,7 +314,7 @@ function publishFields(
       ),
       existing = snapshot.world.fields.find((field) => field.id === fieldId);
     if (existing?.state === "authored" || existing?.state === "protected") continue;
-    installLayer(snapshot, layer, grid.scope.areaId);
+    installLayer(snapshot, layer, grid.scope.areaId, features);
     requireThat(
       layerSupports(snapshot.world.layers[layer.id], "field"),
       "publication_representation",

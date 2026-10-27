@@ -95,7 +95,7 @@ function submitDraft(
     String(form.get("kind")),
     properties.layerId
   );
-  if (editor.selected && !world.features[editor.selected.id]) feature.id = editor.selected.id;
+  if (editor.selected) feature.id = editor.selected.id;
   feature.attributes = {
     ...booleanDefaults(world.layers[properties.layerId].schema),
     ...properties.attributes,

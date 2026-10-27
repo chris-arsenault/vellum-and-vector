@@ -20,6 +20,7 @@ export interface DrawnStyleContext {
   view: CartographicPresentation;
   footprint?: Geometry;
   geography?: DrawingGeography;
+  features?: AtlasFeature[];
 }
 const ink = "#53452f",
   paper = "#eee4c9",

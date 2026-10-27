@@ -12,7 +12,7 @@ import {
 } from "@atlas/domain";
 import { categorical, tilePainter, rasterTileSource } from "./rasterTiles";
 import Projection from "ol/proj/Projection.js";
-import type { Raster } from "./types";
+import type { LoadedRaster as Raster } from "./types";
 
 function fixture(channel = "elevation"): Raster {
   const topology = createAdaptiveTopology([0, 0, 1000, 1000], {

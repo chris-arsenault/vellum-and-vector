@@ -1,4 +1,6 @@
 import type { PhysicalField } from "./field";
+import { allocateNumerical, type NumericalVector, type NumericalAllocator } from "@atlas/domain";
+import { workingArray, releaseWorking } from "./physicalNumerics";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
 import { toUnits } from "./math";
@@ -14,35 +16,48 @@ export function saturation(p: PhysicalProfile, temperature: number) {
  * upstream water). A closed loop is broken at the cell that entered it last,
  * which then starts from boundary values.
  */
-export function sourceOrder(sources: Int32Array) {
+export function sourceOrder(sources: NumericalVector, numerical?: NumericalAllocator) {
   const n = sources.length,
-    state = new Uint8Array(n),
-    boundary = new Uint8Array(n),
-    order: number[] = [];
+    array = (name: string, type: "uint8" | "int32") =>
+      allocateNumerical(
+        {
+          name: `source-order:${name}`,
+          type,
+          length: n,
+          lifetime: "process",
+        },
+        numerical
+      ),
+    state = array("state", "uint8"),
+    boundary = array("boundary", "uint8"),
+    order = array("order", "int32"),
+    path = array("path", "int32");
+  let tail = 0;
   for (let start = 0; start < n; start++) {
     if (state[start]) continue;
-    const path: number[] = [];
+    let length = 0;
     let current = start;
     while (current >= 0 && state[current] === 0) {
       state[current] = 1;
-      path.push(current);
+      path[length++] = current;
       current = sources[current];
     }
-    if (current >= 0 && state[current] === 1) boundary[path[path.length - 1]] = 1;
-    for (let k = path.length - 1; k >= 0; k--) {
+    if (current >= 0 && state[current] === 1) boundary[path[length - 1]] = 1;
+    for (let k = length - 1; k >= 0; k--) {
       state[path[k]] = 2;
-      order.push(path[k]);
+      order[tail++] = path[k];
     }
   }
+  numerical?.releaseUnused([state, path], []);
   return { order, boundary };
 }
 export interface AirColumn {
-  moisture: Float64Array;
-  precipitation: Float64Array;
-  airHeat: Float64Array;
-  maritime: Float64Array;
+  moisture: NumericalVector;
+  precipitation: NumericalVector;
+  airHeat: NumericalVector;
+  maritime: NumericalVector;
   /** The storm pulse carried in the column, 0 to 1: the track a sea storm follows inland. */
-  storm: Float64Array;
+  storm: NumericalVector;
 }
 const ocean = (map: PhysicalField, i: number) => map.WaterKindCodes[i] === 1;
 function height(map: PhysicalField, i: number) {
@@ -59,17 +74,16 @@ export function marchAirColumns(
   c: PhysicalContext,
   rainout: (i: number) => number
 ): AirColumn {
-  const p = c.Profile,
-    n = map.mesh.count;
-  const moisture = new Float64Array(n),
-    precipitation = new Float64Array(n),
-    airHeat = new Float64Array(n),
-    marine = new Float64Array(n),
-    maritime = new Float64Array(n),
-    magic = new Float64Array(n),
-    carried = new Float64Array(n),
-    storm = new Float64Array(n);
-  const { order, boundary } = sourceOrder(map.UpwindTargets),
+  const p = c.Profile;
+  const moisture = workingArray(map, "float64", "air:moisture"),
+    precipitation = workingArray(map, "float64", "air:precipitation"),
+    airHeat = workingArray(map, "float64", "air:heat"),
+    marine = workingArray(map, "float64", "air:marine"),
+    maritime = workingArray(map, "float64", "air:maritime"),
+    magic = workingArray(map, "float64", "air:magic"),
+    carried = workingArray(map, "float64", "air:carried"),
+    storm = workingArray(map, "float64", "air:storm");
+  const { order, boundary } = sourceOrder(map.UpwindTargets, map.numerical),
     distance = linkDistance(map, p);
   // Wrapped air closes loops around the world; a second pass lets each loop's
   // break read the air that arrived around it instead of a boundary column.
@@ -80,6 +94,7 @@ export function marchAirColumns(
       advance(i, u);
     }
   spreadAcrossWind(map, p, carried, airHeat);
+  releaseWorking(map, marine, magic, carried, order, boundary);
   return { moisture, precipitation, airHeat, maritime, storm };
 
   function advance(i: number, u: number) {
@@ -146,12 +161,13 @@ export function marchAirColumns(
 function spreadAcrossWind(
   map: PhysicalField,
   p: PhysicalProfile,
-  carried: Float64Array,
-  airHeat: Float64Array
+  carried: NumericalVector,
+  airHeat: NumericalVector
 ) {
   if (!carried.some((value) => value !== 0)) return;
-  const spread = smoothMetric(map.mesh, carried, p.MagicHeatAirSpread);
+  const spread = smoothMetric(map.mesh, carried, p.MagicHeatAirSpread, undefined, map.numerical);
   for (let i = 0; i < airHeat.length; i++) airHeat[i] += spread[i];
+  releaseWorking(map, spread);
 }
 interface Air {
   q: number;

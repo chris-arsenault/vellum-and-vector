@@ -7,6 +7,7 @@ import {
   type Bounds,
   linearFieldContour,
   spatial,
+  type NumericalAllocator,
 } from "@atlas/domain";
 import type { Geometry, Position } from "geojson";
 import type { GenerationState } from "../process";
@@ -15,9 +16,12 @@ import {
   triangleFans,
   triangleBoundary,
   triangleSupport,
+  triangleCellFans,
 } from "./triangleSampling";
 import { physicalSampler } from "./physicalMetric";
 import type { PhysicalMesh } from "./mesh";
+import { workingValues, releaseWorking } from "./physicalNumerics";
+import { meshWindowCells } from "./meshWindow";
 
 /** Polygon overlays can also return isolated boundary lines; these are not surface area. */
 export function areaGeometry(shape: Geometry | null): Geometry | null {
@@ -29,7 +33,7 @@ export function areaGeometry(shape: Geometry | null): Geometry | null {
 
 export function lakeFootprint(
   state: GenerationState,
-  members: number[],
+  members: Iterable<number>,
   body: number,
   level: number
 ) {
@@ -46,16 +50,18 @@ export function lakeFootprint(
       0
     );
   const footprint = linearFieldContour(
-    triangleFans(mesh, members, (i) => level - map.Elevation[i]),
+    triangleFans(mesh, members, (i) => level - map.Elevation[i], state.numerical),
     wet,
     0,
-    triangleBoundary(mesh, (i) => level - map.Elevation[i], members)
+    triangleBoundary(mesh, (i) => level - map.Elevation[i], members, state.numerical),
+    state.contours
   );
   const membership = linearFieldContour(
-    triangleFans(mesh, members, (i) => Number(map.WaterBodyIds[i] === body)),
+    triangleFans(mesh, members, (i) => Number(map.WaterBodyIds[i] === body), state.numerical),
     connected,
     0.1,
-    triangleBoundary(mesh, (i) => Number(map.WaterBodyIds[i] === body), members)
+    triangleBoundary(mesh, (i) => Number(map.WaterBodyIds[i] === body), members, state.numerical),
+    state.contours
   );
   return footprint && membership && spatial.intersection(footprint, membership);
 }
@@ -64,24 +70,22 @@ export function lakeFootprint(
 export function oceanFootprint(state: GenerationState) {
   const map = state.physical!.map,
     mesh = map.mesh,
-    depths = Float64Array.from(map.Elevation, (elevation, i) => {
-      const depth = map.EffectiveSeaLevel - elevation;
+    depths = workingValues(map, "float64", "ocean-contour-depth", (i) => {
+      const depth = map.EffectiveSeaLevel - map.Elevation[i];
       return map.WaterKindCodes[i] === 1 ? depth : -Math.abs(depth);
     }),
     depth = physicalSampler(mesh, depths),
     at = (x: number, y: number) => depth(x - mesh.origin[0], y - mesh.origin[1]);
   const shape = mesh.topology
-    ? fieldContour(mesh.topology, at, undefined, 0)
+    ? fieldContour(mesh.topology, at, undefined, 0, undefined, state.contours)
     : linearFieldContour(
-        triangleFans(
-          mesh,
-          Array.from({ length: mesh.count }, (_, i) => i),
-          (i) => depths[i]
-        ),
+        triangleFans(mesh, undefined, (i) => depths[i]),
         at,
         0,
-        triangleBoundary(mesh, (i) => depths[i])
+        triangleBoundary(mesh, (i) => depths[i]),
+        state.contours
       );
+  releaseWorking(map, depths);
   return areaGeometry(shape && spatial.intersection(shape, state.domain.scope.footprint));
 }
 
@@ -95,18 +99,20 @@ export function membershipSampler(state: GenerationState, includes: (cell: numbe
 /** Trace the physical field locally, including its complete interpolation support. */
 export function membershipContour(
   state: GenerationState,
-  members: number[],
+  members: Iterable<number>,
   includes: (cell: number) => number
 ) {
   const mesh = state.physical!.map.mesh,
     valueAt = membershipSampler(state, includes);
-  if (
-    mesh.topology ||
-    mesh.periodic ||
-    [...triangleSupport(mesh, members)].some((i) => mesh.boundary[i])
-  )
+  if (mesh.topology || supportTouchesBoundary(mesh, members, state.numerical))
     return geographicContour(state, members, valueAt);
-  return linearFieldContour(triangleFans(mesh, members, includes), valueAt);
+  return linearFieldContour(
+    triangleFans(mesh, members, includes, state.numerical),
+    valueAt,
+    undefined,
+    undefined,
+    state.contours
+  );
 }
 /**
  * Trace where several per-cell quantities, each interpolated on its own, combine above zero.
@@ -115,36 +121,70 @@ export function membershipContour(
  */
 export function combinedContour(
   state: GenerationState,
-  members: number[],
+  members: Iterable<number>,
   terms: ((cell: number) => number)[],
   combine: (values: number[]) => number
 ) {
   const mesh = state.physical!.map.mesh,
     samplers = terms.map((term) => membershipSampler(state, term)),
     valueAt = (x: number, y: number) => combine(samplers.map((sample) => sample(x, y)));
-  if (
-    mesh.topology ||
-    mesh.periodic ||
-    [...triangleSupport(mesh, members)].some((i) => mesh.boundary[i])
-  )
+  if (mesh.topology || supportTouchesBoundary(mesh, members, state.numerical))
     return geographicContour(state, members, valueAt, 0);
-  return linearFieldContour(combinedFans(mesh, members, terms, combine), valueAt, 0);
+  return linearFieldContour(
+    combinedFans(mesh, members, terms, combine, state.numerical),
+    valueAt,
+    0,
+    undefined,
+    state.contours
+  );
+}
+function supportTouchesBoundary(
+  mesh: PhysicalMesh,
+  members: Iterable<number>,
+  numerical?: NumericalAllocator
+) {
+  const support = triangleSupport(mesh, members, numerical);
+  try {
+    for (const cell of support) if (touchesChartBoundary(mesh, cell)) return true;
+    return false;
+  } finally {
+    support.close();
+  }
+}
+function touchesChartBoundary(mesh: PhysicalMesh, cell: number) {
+  if (mesh.boundary[cell]) return true;
+  if (!mesh.periodic) return false;
+  const y = mesh.y[cell] + mesh.origin[1];
+  if (y - mesh.cellHeight[cell] <= mesh.bounds[1] || y + mesh.cellHeight[cell] >= mesh.bounds[3])
+    return true;
+  for (let edge = 0; edge < mesh.degree[cell]; edge++) {
+    const neighbor = mesh.neighbors[cell * mesh.stride + edge];
+    if (neighbor >= 0 && Math.abs(mesh.x[neighbor] - mesh.x[cell]) > 2 * mesh.spacing) return true;
+  }
+  return false;
 }
 function* combinedFans(
   mesh: PhysicalMesh,
-  members: number[],
+  members: Iterable<number>,
   terms: ((cell: number) => number)[],
-  combine: (values: number[]) => number
+  combine: (values: number[]) => number,
+  numerical?: NumericalAllocator
 ) {
-  const fans = terms.map((term) => triangleFans(mesh, members, term));
-  for (;;) {
-    const triangles = fans.map((fan) => fan.next());
-    if (triangles[0].done) return;
-    yield triangles[0].value.map(([x, y], corner): [number, number, number] => [
-      x,
-      y,
-      combine(triangles.map((triangle) => triangle.value![corner][2])),
-    ]);
+  const support = triangleSupport(mesh, members, numerical);
+  const fans = terms.map((term) => triangleCellFans(mesh, support, term));
+  try {
+    for (;;) {
+      const triangles = fans.map((fan) => fan.next());
+      if (triangles[0].done) return;
+      yield triangles[0].value.map(([x, y], corner): [number, number, number] => [
+        x,
+        y,
+        combine(triangles.map((triangle) => triangle.value![corner][2])),
+      ]);
+    }
+  } finally {
+    for (const fan of fans) fan.return();
+    support.close();
   }
 }
 /**
@@ -164,18 +204,18 @@ export function fillSmallHoles(
         ? shape.coordinates
         : null;
   if (!polygons) return shape;
-  const mesh = state.physical!.map.mesh,
-    blocked: [number, number][] = [];
-  for (let i = 0; i < mesh.count; i++)
-    if (blocks(i)) blocked.push([mesh.x[i] + mesh.origin[0], mesh.y[i] + mesh.origin[1]]);
+  const mesh = state.physical!.map.mesh;
   const keep = (ring: Position[]) => {
     const hole: Geometry = { type: "Polygon", coordinates: [ring] };
     if (spatial.area(hole) >= maximum) return true;
-    const [x0, y0, x1, y1] = spatial.bounds(hole),
-      covers = spatial.pointCoverage(hole);
-    return blocked.some(
-      ([x, y]) => x >= x0 && x <= x1 && y >= y0 && y <= y1 && covers({ x, y, z: 0 })
-    );
+    const covers = spatial.pointCoverage(hole);
+    for (const cell of meshWindowCells(mesh, spatial.bounds(hole)))
+      if (
+        blocks(cell) &&
+        covers({ x: mesh.x[cell] + mesh.origin[0], y: mesh.y[cell] + mesh.origin[1], z: 0 })
+      )
+        return true;
+    return false;
   };
   const filled = polygons.map(([outer, ...holes]) => [outer, ...holes.filter(keep)]);
   return shape.type === "Polygon"
@@ -184,7 +224,7 @@ export function fillSmallHoles(
 }
 export function geographicContour(
   state: GenerationState,
-  members: number[],
+  members: Iterable<number>,
   valueAt: (x: number, y: number) => number,
   level = 0.5
 ) {
@@ -193,11 +233,10 @@ export function geographicContour(
     return fieldContour(
       mesh.topology,
       valueAt,
-      contourSupport(
-        mesh.topology,
-        members.map((i) => mesh.cellToLeaf[i])
-      ),
-      level
+      contourSupport(mesh.topology, memberLeaves(mesh, members), state.numerical),
+      level,
+      undefined,
+      state.contours
     );
   const bounds: Bounds = [Infinity, Infinity, -Infinity, -Infinity];
   for (const i of members) {
@@ -213,7 +252,16 @@ export function geographicContour(
       "contour",
       scope,
       Math.ceil((bounds[2] - bounds[0]) / spacing) + 1,
-      Math.ceil((bounds[3] - bounds[1]) / spacing) + 1
+      Math.ceil((bounds[3] - bounds[1]) / spacing) + 1,
+      bounds,
+      state.numerical
     );
-  return fieldContour(grid, valueAt, undefined, level);
+  try {
+    return fieldContour(grid, valueAt, undefined, level, undefined, state.contours);
+  } finally {
+    releaseWorking(state.physical!.map, grid.active, grid.measures);
+  }
+}
+function* memberLeaves(mesh: PhysicalMesh, members: Iterable<number>) {
+  for (const i of members) yield mesh.cellToLeaf[i];
 }

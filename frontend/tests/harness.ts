@@ -58,7 +58,9 @@ export async function generatedWorld(
 
 /** Start the current map's generation and wait for the fixture job to complete. */
 export async function generate(page: Page) {
+  const previous = await page.locator(".job-row").count();
   await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
+  await expect(page.locator(".job-row")).toHaveCount(previous + 1);
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
 }
 

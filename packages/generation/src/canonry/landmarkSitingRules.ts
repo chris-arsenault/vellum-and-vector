@@ -7,20 +7,23 @@ import { meshPoint, nearestTriangle } from "./mesh";
 import { metricSearch } from "./metricSearch";
 import { physicalSampler } from "./physicalMetric";
 import { distance, type Point } from "./landmarkGeometry";
+import type { NumericalVector } from "@atlas/domain";
+import { workingArray } from "./physicalNumerics";
+import { NumericalList } from "./numericalList";
 
 /** The field read once per siting pass. */
 export interface Terrain {
   map: PhysicalField;
   /** Metres to the nearest sea cell; Infinity on a field without sea. */
-  sea: Float64Array;
+  sea: NumericalVector;
   /** Metres to the nearest land cell; Infinity on a field without land. */
-  offshore: Float64Array;
+  offshore: NumericalVector;
   /** Content land cells. */
-  land: number[];
+  land: NumericalVector;
   /** Content sea cells. */
-  ocean: number[];
+  ocean: NumericalVector;
   /** River cells, largest flow first, above base level. */
-  rivers: number[];
+  rivers: NumericalVector;
 }
 export interface Site {
   center: number;
@@ -45,30 +48,39 @@ export const height = (map: PhysicalField, i: number) =>
 
 /** Geodesic metres from every cell to the nearest cell the predicate accepts. */
 function distanceTo(map: PhysicalField, accept: (i: number) => boolean) {
-  const values = new Float64Array(map.mesh.count).fill(Infinity),
-    seeds: number[] = [];
-  for (let i = 0; i < map.mesh.count; i++)
-    if (accept(i)) {
-      values[i] = 0;
-      seeds.push(i);
-    }
-  metricSearch(map.mesh, seeds, values, Infinity, () => {});
+  const values = workingArray(map, "float64", "landmark:distance").fill(Infinity);
+  function* seeds() {
+    for (let i = 0; i < map.mesh.count; i++)
+      if (accept(i)) {
+        values[i] = 0;
+        yield i;
+      }
+  }
+  metricSearch(map.mesh, seeds(), values, Infinity, () => {}, map.numerical);
   return values;
 }
 export function analyseTerrain(map: PhysicalField): Terrain {
   const sea = distanceTo(map, (i) => map.WaterKindCodes[i] === 1),
     offshore = distanceTo(map, (i) => map.WaterKindCodes[i] === 0);
-  const land: number[] = [],
-    ocean: number[] = [],
-    rivers: number[] = [];
+  const land = new NumericalList("int32", "landmark:land", map.numerical),
+    ocean = new NumericalList("int32", "landmark:ocean", map.numerical),
+    rivers = new NumericalList("int32", "landmark:rivers", map.numerical);
   for (let i = 0; i < map.mesh.contentCount; i++) {
     if (map.WaterKindCodes[i] === 1) ocean.push(i);
     if (map.WaterKindCodes[i] !== 0) continue;
     land.push(i);
     if (map.RiverOrders[i] > 0 && height(map, i) > 5) rivers.push(i);
   }
-  rivers.sort((a, b) => map.FlowAccumulation[b] - map.FlowAccumulation[a]);
-  return { map, sea, offshore, land, ocean, rivers };
+  return {
+    map,
+    sea,
+    offshore,
+    land: land.finish(),
+    ocean: ocean.finish(),
+    rivers: rivers
+      .finish()
+      .sort((a, b) => map.FlowAccumulation[b] - map.FlowAccumulation[a] || a - b),
+  };
 }
 
 /** Cells within the radius of a centre, found through the mesh rather than by scanning it. */

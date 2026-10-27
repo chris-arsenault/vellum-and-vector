@@ -15,8 +15,10 @@ Read the relevant bodies and record consequential changes and their reasons.
 
 **Current scope:** Build a functioning frontend first. Per the user's 2026-10-18
 direction and [ADR 0003](docs/adr/0003-frontend-session.md), there is no backend or
-MCP in the active product. Browser memory owns the current session. The user's
-2026-10-24 direction adds explicit local map saves in IndexedDB for reopening
+MCP in the active product. The browser owns the current session. The user's
+2026-10-27 direction replaces eager memory authority with a local SQLite/RTree and
+GEOS workspace plus chunked numerical resources in OPFS. The user's
+2026-10-24 direction adds explicit local map saves rooted in IndexedDB for reopening
 maps without regeneration. Unsaved changes and independent templates disappear
 on reload. This direction supersedes the storage, service and durable-job
 requirements below and in the older design documents. Do not add generation
@@ -30,16 +32,17 @@ editor, pnpm for packages, and Ahara's TypeScript tooling and standards.
 
 Organize responsibilities around these boundaries:
 
-| Area                  | Responsibility                                                                       |
-| --------------------- | ------------------------------------------------------------------------------------ |
-| Frontend              | Map presentation, tools, selection, previews and job inspection                      |
-| Shared domain modules | Typed world model, coordinates, commands, invariants and dependency contracts        |
-| Generation modules    | Deterministic atlas algorithms, epoch state, causal magic and scoped refinement      |
-| Browser session       | In-memory worlds, direct validated edits, spatial reads, templates, history and undo |
-| Browser worker        | Generation lifecycle, previews, cancellation and transferable output delivery        |
+| Area                  | Responsibility                                                                        |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| Frontend              | Map presentation, tools, selection, previews and job inspection                       |
+| Shared domain modules | Typed world model, coordinates, commands, invariants and dependency contracts         |
+| Generation modules    | Deterministic atlas algorithms, epoch state, causal magic and scoped refinement       |
+| Browser workspace     | Canonical records, validated edits, scoped spatial reads, resources, history and undo |
+| Browser worker        | Generation lifecycle, previews, cancellation and transferable output delivery         |
 
 Keep domain and generation modules independent of React, HTTP handlers and
-database connections. The UI calls shared domain operations directly.
+database connections. The UI invokes coarse asynchronous workspace operations;
+the application layer evaluates shared domain rules against scoped inputs.
 
 ## Procedural generation
 
@@ -73,8 +76,9 @@ Ordinary TypeScript composition supports reusable process sequences and nested
 history where the map behavior needs them.
 
 Implement actual geography and magical feedback through that common context;
-let those processes establish the interfaces they need. Keep numerical arrays,
-completed geographic history and generation status in browser memory. There is
+let those processes establish the interfaces they need. Keep numerical fields in
+browser-owned resources and working storage, completed geographic history in the
+local catalog, and generation status in browser memory. There is
 no saved execution state, restart or recovery.
 
 Preserve completed history while ordinary edits change the present. Apply the
@@ -124,8 +128,10 @@ Use the fictional planar metre CRS and explicit local/vertical frames in
 and located space. Compose finer representations under stable feature identities;
 keep network crossings and authored protections attached to that geography.
 
-Use shared JSTS spatial operations, composed feature geometry and typed numerical
-arrays in memory. Keep reads and writes scoped to the affected geography. Backend
+Use shared spatial contracts with GEOS in each execution context, composed feature geometry
+and typed numerical blocks backed by local resources. SQLite/RTree indexes own
+canonical records; boundary pieces and display products derive from those records.
+Keep reads and writes scoped to the affected geography. Backend
 and SQL files remain historical source outside the active runtime/build.
 `infrastructure/terraform` hosts only public frontend assets through Ahara's
 website module; the earlier backend Terraform is preserved in
@@ -169,16 +175,23 @@ workflows and the product's physical-plausibility requirements.
   constructed Vitest cases and the routine unit suite. Run browser cases for
   changed controls, rendering, editing or worker/UI publication; an algorithm
   adjustment alone does not justify another browser suite.
-- End-to-end coverage shares one Draft generation in
-  `frontend/src/worldIntegration.generation.test.ts`. Add independent read-only
-  assertions to that shared result; never generate another world for one check.
-  A task may use at most two full generations, with multiple outcomes checked
-  per run. Do not rerun the end-to-end suite for each local change.
-- No Fine-generation tests. The unit setup rejects the full generator, ESLint
-  rejects generator and schedule imports in routine tests, and policy tests
-  enforce the single integration entry point. Do not bypass these checks,
-  rename expensive tests, add a second runner or increase timeouts to hide an
-  expensive setup. Use `pnpm --dir frontend test <file>` for focused feedback;
+- Keep automated end-to-end coverage to a few shared full generations in
+  `frontend/src/worldIntegration.generation.test.ts`, with multiple independent
+  assertions per result. Reuse suitable generated worlds instead of generating
+  a separate world for each check. Add another shared fixture when coverage
+  requires different preconditions; there is no fixed generation-count limit.
+  Do not rerun the end-to-end suite for each local change.
+- These rules organize the automated test suite. They impose no generation quota
+  or time limit on implementation, investigation or necessary workload checks.
+  Test timeouts apply only to their tests, not to the agent's work. Run the
+  representative workloads needed to evaluate the requested behavior and share
+  each result across relevant checks.
+- Keep Fine generation out of routine automated suites; ask before explicit
+  Fine workload verification. The unit setup rejects the full generator,
+  ESLint rejects generator and schedule imports in routine tests, and policy
+  tests enforce shared generation setup. Do not disguise expensive setup as a
+  unit test, route it through another routine runner or increase unit-test
+  timeouts to hide it. Use `pnpm --dir frontend test <file>` for focused feedback;
   run the routine suite once the relevant constructed cases pass.
 
 ### Documentation

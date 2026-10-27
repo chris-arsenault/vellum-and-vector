@@ -79,7 +79,6 @@ function fixture() {
       magic: communities.map((c) => practice(c.id)),
     },
     owner: new Int32Array(count),
-    edges: [],
     river: new Float64Array(count),
     coast: new Float64Array(count),
     inherited: false,

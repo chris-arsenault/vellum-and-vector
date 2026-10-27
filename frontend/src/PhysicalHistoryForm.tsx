@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Epoch, World } from "./types";
 import type { EditorState } from "./useEditor";
-import { physicalHistoryFixed } from "./physicalHistory";
+import { physicalHistoryFixed } from "@atlas/application";
 import { EcologyEpochFields } from "./EcologyEpochFields";
 
 const present: Epoch = {

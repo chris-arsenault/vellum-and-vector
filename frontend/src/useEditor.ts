@@ -11,6 +11,8 @@ import type { MapEngine } from "./mapEngine";
 import { defaultRasterPresentation, defaultFieldStyle } from "./rasterPresentation";
 import { useRegions, isRegionTool } from "./useRegions";
 import { useComposition } from "./useComposition";
+import { useQuery } from "@tanstack/react-query";
+import { atlasWorkspace, workspaceScope } from "./atlasWorkspace";
 
 function useEditorState(world: World) {
   const [selectedAreaId, setAreaId] = useState(
@@ -93,7 +95,9 @@ function initialBrush(area: Area) {
   };
 }
 export function useEditor(world: World) {
-  const state = useEditorState(world);
+  const session = useEditorState(world);
+  const canonical = useSelectedFeature(world, session.areaId, session.selected);
+  const state = { ...session, selected: canonical };
   const { area, savedStyles, viewport, setViewport, setChannel } = state;
   const composition = useComposition(world, state);
   const styledState = { ...state, setStyles: composition.setStyles };
@@ -108,7 +112,7 @@ export function useEditor(world: World) {
     world,
     styles,
     viewportExtent: viewport,
-    ...useMapData(world, area.id, viewport),
+    ...useMapData(world, area.id, viewport, state.mapEngine?.map.getView().getResolution()),
     viewport: setViewport,
     ...actions,
     ...regions,
@@ -145,6 +149,19 @@ export function useEditor(world: World) {
       }));
     },
   };
+}
+function useSelectedFeature(world: World, areaId: string, selected: AtlasFeature | null) {
+  const query = useQuery({
+    queryKey: ["selected-feature", world.id, areaId, selected?.id, world.version],
+    gcTime: 0,
+    enabled: selected !== null,
+    queryFn: async () =>
+      (await atlasWorkspace()).readFeature(
+        workspaceScope(world, editArea(world, areaId, selected!)),
+        selected!.id
+      ),
+  });
+  return selected ? (query.data ?? (query.error ? null : selected)) : null;
 }
 function useEditing(world: World, state: ReturnType<typeof useEditorState>) {
   const { areaId, setStyles } = state;

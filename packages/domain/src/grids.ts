@@ -1,5 +1,7 @@
 import type { Geometry } from "geojson";
 import type { Position } from "./model";
+import type { NumericalVector, NumericalAllocator } from "./numericalVector";
+import { allocateNumerical, generateNumerical } from "./numericalAllocation";
 import type { SpatialScope } from "./schemas";
 import { requireThat } from "./errors";
 import { point, rectangle, spatial, type Bounds } from "./spatial";
@@ -17,9 +19,9 @@ export interface FieldSamples {
   id: string;
   scope: SpatialScope;
   bounds: Bounds;
-  active: Uint8Array;
-  measures: Float64Array;
-  channels: Record<string, Float64Array>;
+  active: NumericalVector;
+  measures: NumericalVector;
+  channels: Record<string, NumericalVector>;
   units: Record<string, string>;
   waterBodies?: WaterBody[] | null;
   /** Physical ocean extent; resampling elevation must not move its shoreline. */
@@ -81,7 +83,8 @@ export function createGrid(
   scope: SpatialScope,
   width: number,
   height: number,
-  sampleBounds?: Bounds
+  sampleBounds?: Bounds,
+  numerical?: NumericalAllocator
 ): RegularGrid {
   requireThat(
     Number.isInteger(width) && Number.isInteger(height) && width >= 2 && height >= 2,
@@ -94,8 +97,14 @@ export function createGrid(
     bounds: sampleBounds ?? spatial.bounds(scope.footprint),
     width,
     height,
-    active: new Uint8Array(width * height),
-    measures: new Float64Array(width * height),
+    active: allocateNumerical(
+      { type: "uint8", length: width * height, lifetime: "run", name: `${id}:active` },
+      numerical
+    ),
+    measures: allocateNumerical(
+      { type: "float64", length: width * height, lifetime: "run", name: `${id}:measures` },
+      numerical
+    ),
     channels: {},
     units: {},
   };
@@ -122,7 +131,7 @@ export function createGrid(
 
 function rectangularMeasures(grid: RegularGrid) {
   // Both coverage predicates establish that the footprint equals the sample
-  // rectangle. Match JSTS's fixed precision without clipping each whole cell.
+  // rectangle. Apply the declared precision without clipping each whole cell.
   const scale = 1 / spatial.precision,
     precise = (value: number) => Math.round(value * scale) / scale;
   grid.active.fill(1);
@@ -202,7 +211,7 @@ export function putChannel(
   grid: Grid,
   name: string,
   unit: string,
-  values: Float64Array,
+  values: NumericalVector,
   quantity: "intensive" | "extensive" | "category" = unit === "category" ? "category" : "intensive"
 ): void {
   requireThat(
@@ -210,6 +219,7 @@ export function putChannel(
     "invalid_channel",
     "Field channels require one finite value per sample."
   );
+  values.retain?.();
   grid.channels[name] = values;
   grid.units[name] = unit;
   (grid.quantities ??= {})[name] = quantity;
@@ -295,7 +305,8 @@ export function resample(
   source: GridSurface,
   target: Grid,
   channel: string,
-  discrete = false
+  discrete = false,
+  numerical?: NumericalAllocator
 ): void {
   requireThat(
     source.scope.crsId === target.scope.crsId && source.scope.spaceId === target.scope.spaceId,
@@ -312,7 +323,16 @@ export function resample(
     target,
     channel,
     source.units[channel],
-    Float64Array.from(target.active, (_active, i) => valueAt(gridPosition(target, i))),
+    generateNumerical(
+      {
+        type: "float64",
+        length: target.active.length,
+        lifetime: "run",
+        name: `${target.id}:${channel}`,
+      },
+      (i) => valueAt(gridPosition(target, i)),
+      numerical
+    ),
     source.quantities?.[channel]
   );
 }

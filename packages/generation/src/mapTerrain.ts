@@ -1,4 +1,14 @@
-import { gridPosition, putChannel, semanticId, requireThat, type Grid } from "@atlas/domain";
+import {
+  allocateNumerical,
+  gridPosition,
+  putChannel,
+  semanticId,
+  requireThat,
+  type Grid,
+  type NumericalVector,
+  type NumericalAllocator,
+} from "@atlas/domain";
+import { NumericalList } from "./canonry/numericalList";
 import { requireChannel } from "./mapFields";
 import {
   adjacency,
@@ -57,8 +67,8 @@ export const initializeTerrainProcess: MapProcess = {
     initialize(state, context) {
       const grid = state.surface,
         seed = Math.floor(context.random(true) * 4294967296);
-      const plates = provinces(grid, context),
-        fields = initialFields(grid);
+      const plates = provinces(grid, context, state.numerical),
+        fields = initialFields(grid, state.numerical);
       const scale = Math.max(grid.bounds[2] - grid.bounds[0], grid.bounds[3] - grid.bounds[1]);
       for (let i = 0; i < grid.active.length; i++) {
         checkProgress(context, i, grid.active.length, "Assembling persistent crustal provinces");
@@ -95,10 +105,16 @@ export const initializeTerrainProcess: MapProcess = {
   },
 };
 
-function provinces(grid: Grid, context: MapProcessContext): Province[] {
+function provinces(
+  grid: Grid,
+  context: MapProcessContext,
+  numerical?: NumericalAllocator
+): Province[] {
   const count = Number(context.parameters.provinces),
     speed = Number(context.parameters.plateSpeed);
-  const cells = Array.from(grid.active.keys()).filter((i) => grid.active[i]);
+  const active = new NumericalList("int32", "terrain:province-candidates", numerical);
+  for (let i = 0; i < grid.active.length; i++) if (grid.active[i]) active.push(i);
+  const cells = active.finish();
   requireThat(cells.length > 0, "physical_extent", "Terrain needs active mapped cells.");
   const chosen: Province[] = [];
   for (let n = 0; n < count; n++) {
@@ -115,6 +131,7 @@ function provinces(grid: Grid, context: MapProcessContext): Province[] {
       continental: context.random(true),
     });
   }
+  numerical?.release(cells);
   return chosen;
 }
 function separation(p: { x: number; y: number }, previous: Province[]) {
@@ -123,7 +140,10 @@ function separation(p: { x: number; y: number }, previous: Province[]) {
     Infinity
   );
 }
-function initialFields(grid: Grid): Record<string, Float64Array> {
+function initialFields(
+  grid: Grid,
+  numerical?: NumericalAllocator
+): Record<string, NumericalVector> {
   return Object.fromEntries(
     [
       "elevation",
@@ -136,7 +156,18 @@ function initialFields(grid: Grid): Record<string, Float64Array> {
       "crustMotionY",
       "uplift",
       "carbonate",
-    ].map((key) => [key, new Float64Array(grid.active.length)])
+    ].map((key) => [
+      key,
+      allocateNumerical(
+        {
+          type: "float64",
+          length: grid.active.length,
+          lifetime: "process",
+          name: `terrain:${key}`,
+        },
+        numerical
+      ),
+    ])
   );
 }
 function channelUnit(name: string) {
@@ -148,7 +179,7 @@ function initializeCell(
   grid: Grid,
   i: number,
   plates: Province[],
-  fields: Record<string, Float64Array>,
+  fields: Record<string, NumericalVector>,
   seed: number,
   scale: number,
   context: MapProcessContext
@@ -222,14 +253,22 @@ export const tectonicsProcess: MapProcess = {
         years = epochYears(context);
       const activity = Number(context.parameters.activity),
         rate = Number(context.parameters.upliftRate);
-      const uplift = new Float64Array(elevation.length),
+      const uplift = allocateNumerical(
+          {
+            type: "float64",
+            length: elevation.length,
+            lifetime: "process",
+            name: "terrain:uplift",
+          },
+          state.numerical
+        ),
         fracture = requireChannel(grid, "fracture", "ratio");
       if (context.parameters.advection) advect(state, mobile, years * activity, motionX, motionY);
       for (let i = 0; i < elevation.length; i++) {
         checkProgress(context, i, elevation.length, "Evolving crust motion and accumulated uplift");
         if (!mobile[i]) continue;
         const closure =
-          links[i].reduce((sum, j) => {
+          links(i).reduce((sum, j) => {
             const a = gridPosition(grid, i),
               b = gridPosition(grid, j),
               length = cellDistance(grid, i, j);
@@ -238,7 +277,7 @@ export const tectonicsProcess: MapProcess = {
               ((motionX[i] - motionX[j]) * (b.x - a.x) + (motionY[i] - motionY[j]) * (b.y - a.y)) /
                 Math.max(1, length)
             );
-          }, 0) / Math.max(1, links[i].length);
+          }, 0) / Math.max(1, links(i).length);
         uplift[i] = rate * Math.tanh(closure / 0.01) * activity;
         bedrock[i] += uplift[i] * years;
         elevation[i] = bedrock[i] + sediment[i];
@@ -260,10 +299,10 @@ export const tectonicsProcess: MapProcess = {
 
 function advect(
   state: GenerationState,
-  movable: Uint8Array,
+  movable: import("@atlas/domain").NumericalVector,
   years: number,
-  dx: Float64Array,
-  dy: Float64Array
+  dx: import("@atlas/domain").NumericalVector,
+  dy: import("@atlas/domain").NumericalVector
 ) {
   const grid = state.surface,
     channels = [

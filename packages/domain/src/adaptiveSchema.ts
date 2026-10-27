@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { finite } from "./schemas";
 import type { AdaptiveTopology } from "./adaptiveTopology";
+import { numericalSchema } from "./numericalSchema";
 
-const scalar = z.instanceof(Float64Array).refine((v) => v.every(Number.isFinite));
+const scalar = numericalSchema("float64").refine((v) => v.every(Number.isFinite));
 function validDimensions(t: AdaptiveTopology) {
   const nodes = t.children.length,
     count = t.leaves.length,
@@ -23,18 +24,18 @@ export const adaptiveTopologySchema: z.ZodType<AdaptiveTopology> = z
   .object({
     bounds: z.tuple([finite, finite, finite, finite]),
     boxes: scalar,
-    children: z.instanceof(Int32Array),
-    levels: z.instanceof(Uint8Array),
-    leaves: z.instanceof(Int32Array),
-    leafIndex: z.instanceof(Int32Array),
-    offsets: z.instanceof(Int32Array),
-    neighbors: z.instanceof(Int32Array),
+    children: numericalSchema("int32"),
+    levels: numericalSchema("uint8"),
+    leaves: numericalSchema("int32"),
+    leafIndex: numericalSchema("int32"),
+    offsets: numericalSchema("int32"),
+    neighbors: numericalSchema("int32"),
     faceLengths: scalar,
     distances: scalar,
     directionX: scalar,
     directionY: scalar,
-    normalX: z.instanceof(Int8Array),
-    normalY: z.instanceof(Int8Array),
+    normalX: numericalSchema("int8"),
+    normalY: numericalSchema("int8"),
   })
   .strict()
   .superRefine((t, context) => {

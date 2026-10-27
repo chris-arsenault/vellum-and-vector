@@ -7,6 +7,8 @@ import { units, truncate } from "./math";
 import { Landform as L } from "./codes";
 import { measureSlopes } from "./geography";
 import { physicalSampler } from "./physicalMetric";
+import { workingArray, releaseWorking } from "./physicalNumerics";
+import { orderedIndices } from "./numericalOrder";
 
 function shape(
   map: PhysicalField,
@@ -200,6 +202,7 @@ export function landformClassification(map: PhysicalField, c: PhysicalContext) {
   for (let i = 0; i < map.mesh.count; i++)
     if (rise[i] >= units(c.Profile.PeakMinimumProminence) && map.WaterKindCodes[i] === 0)
       map.LandformCodes[i] = L.Peak;
+  releaseWorking(map, rise);
 }
 /**
  * Each summit's prominence in elevation units: its height above the highest col on the way to
@@ -208,9 +211,9 @@ export function landformClassification(map: PhysicalField, c: PhysicalContext) {
  */
 export function prominence(map: PhysicalField) {
   const count = map.mesh.count,
-    parent = new Int32Array(count).fill(-1),
-    summit = new Int32Array(count),
-    rise = new Float64Array(count),
+    parent = workingArray(map, "int32", "prominence:parent").fill(-1),
+    summit = workingArray(map, "int32", "prominence:summit"),
+    rise = workingArray(map, "float64", "prominence:rise"),
     // Equal heights rank by cell index, so a flat summit has one deterministic top.
     above = (a: number, b: number) =>
       map.Elevation[a] > map.Elevation[b] || (map.Elevation[a] === map.Elevation[b] && a < b);
@@ -227,10 +230,9 @@ export function prominence(map: PhysicalField) {
     rise[summit[low]] = map.Elevation[summit[low]] - map.Elevation[cell];
     parent[low] = high;
   };
-  const order: number[] = [];
-  for (let i = 0; i < count; i++) if (map.Elevation[i] > map.EffectiveSeaLevel) order.push(i);
-  order.sort((a, b) => map.Elevation[b] - map.Elevation[a] || a - b);
+  const order = orderedIndices(map.Elevation, true, map.numerical);
   for (const cell of order) {
+    if (map.Elevation[cell] <= map.EffectiveSeaLevel) break;
     parent[cell] = cell;
     summit[cell] = cell;
     for (let edge = 0; edge < map.mesh.degree[cell]; edge++) {
@@ -238,8 +240,9 @@ export function prominence(map: PhysicalField) {
       if (j >= 0 && parent[j] >= 0) join(cell, j);
     }
   }
-  for (const cell of order)
-    if (root(cell) === cell)
+  for (let cell = 0; cell < count; cell++)
+    if (parent[cell] === cell)
       rise[summit[cell]] = map.Elevation[summit[cell]] - map.EffectiveSeaLevel;
+  releaseWorking(map, parent, summit, order);
   return rise;
 }

@@ -6,7 +6,10 @@ import {
   requireThat,
   spatial,
   type Grid,
+  generateNumerical,
+  type NumericalAllocator,
 } from "@atlas/domain";
+import { PriorityQueue } from "./canonry/priorityQueue";
 import type { GenerationState, MapProcessContext } from "./process";
 
 export const secondsPerYear = 365.25 * 24 * 60 * 60;
@@ -22,8 +25,8 @@ export function checkProgress(
   context.progress(index / Math.max(1, count), label);
 }
 
-export function adjacency(grid: Grid, diagonal = true): number[][] {
-  return Array.from(grid.active, (active, i) => (active ? neighbors(grid, i, diagonal) : []));
+export function adjacency(grid: Grid, diagonal = true) {
+  return (i: number) => (grid.active[i] ? neighbors(grid, i, diagonal) : []);
 }
 
 export function cellDistance(grid: Grid, a: number, b: number): number {
@@ -57,7 +60,7 @@ export function boundaryCell(grid: Grid, i: number): boolean {
 
 // Authoring masks and inherited boundary cells stay fixed while surrounding
 // material evolves. Their existing values remain the numerical interface.
-export function movableTerrain(state: GenerationState): Uint8Array {
+export function movableTerrain(state: GenerationState) {
   const grid = state.surface,
     area = state.domain.world.areas[grid.scope.areaId];
   const patches = state.domain.fieldPatches.filter(
@@ -72,14 +75,19 @@ export function movableTerrain(state: GenerationState): Uint8Array {
         (f.state === "authored" && !patches.some((p) => p.fieldId === f.id))) &&
       (f.channels ?? [f.layerId]).some((c) => ["elevation", "bedrock", "sediment"].includes(c))
   );
-  return Uint8Array.from(grid.active, (active, i) => {
-    if (!active || (area?.boundary && boundaryCell(grid, i))) return 0;
-    const location = point(gridPosition(grid, i));
-    return patches.some((p) => spatial.covers(p.footprint, location)) ||
-      fixedFields.some((f) => spatial.covers(f.footprint ?? area.footprint, location))
-      ? 0
-      : 1;
-  });
+  return generateNumerical(
+    { type: "uint8", length: grid.active.length, lifetime: "process", name: "terrain:movable" },
+    (i) => {
+      const active = grid.active[i];
+      if (!active || (area?.boundary && boundaryCell(grid, i))) return 0;
+      const location = point(gridPosition(grid, i));
+      return patches.some((p) => spatial.covers(p.footprint, location)) ||
+        fixedFields.some((f) => spatial.covers(f.footprint ?? area.footprint, location))
+        ? 0
+        : 1;
+    },
+    state.numerical
+  );
 }
 
 export function epochYears(context: MapProcessContext, fallback = 1): number {
@@ -110,36 +118,21 @@ export function smoothNoise(x: number, y: number, seed: number): number {
 }
 
 export class CellHeap {
-  private readonly cells: number[] = [];
-  constructor(private readonly heights: Float64Array) {}
-  private before(a: number, b: number) {
-    return this.heights[a] < this.heights[b] || (this.heights[a] === this.heights[b] && a < b);
+  private cells: PriorityQueue<{ cell: number }>;
+  constructor(heights: ArrayLike<number>, numerical?: NumericalAllocator) {
+    this.cells = new PriorityQueue(
+      (a, b) => heights[a.cell] - heights[b.cell] || a.cell - b.cell,
+      numerical,
+      ["cell"]
+    );
   }
   push(cell: number) {
-    let i = this.cells.length;
-    this.cells.push(cell);
-    while (i > 0) {
-      const parent = Math.floor((i - 1) / 2);
-      if (!this.before(cell, this.cells[parent])) break;
-      this.cells[i] = this.cells[parent];
-      i = parent;
-    }
-    this.cells[i] = cell;
+    this.cells.push({ cell });
   }
-  pop(): number | undefined {
-    const first = this.cells[0],
-      last = this.cells.pop();
-    if (last === undefined || this.cells.length === 0) return first;
-    let i = 0;
-    while (i * 2 + 1 < this.cells.length) {
-      let child = i * 2 + 1;
-      if (child + 1 < this.cells.length && this.before(this.cells[child + 1], this.cells[child]))
-        child++;
-      if (!this.before(this.cells[child], last)) break;
-      this.cells[i] = this.cells[child];
-      i = child;
-    }
-    this.cells[i] = last;
-    return first;
+  pop() {
+    return this.cells.count ? this.cells.pop().cell : undefined;
+  }
+  close() {
+    this.cells.close();
   }
 }

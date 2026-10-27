@@ -87,7 +87,6 @@ function fixture() {
   state.society = {
     region,
     owner: new Int32Array(10),
-    edges: [],
     mediumChanged: new Set(),
     river: new Float64Array(10),
     coast: new Float64Array(10),

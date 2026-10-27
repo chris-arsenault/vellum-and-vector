@@ -1,4 +1,4 @@
-import { population, putChannel, type Diagnostic } from "@atlas/domain";
+import { allocateNumerical, population, putChannel, type Diagnostic } from "@atlas/domain";
 import type { GenerationState, MapProcess, ProcessSequence } from "./process";
 import type { AtlasGenerationInput } from "./atlasWorkflow";
 import { initializePopulation, evolvePopulation } from "./societyPopulation";
@@ -70,8 +70,10 @@ export const populationPublish: MapProcess = {
     extract(state) {
       const work = state.society!,
         n = state.surface.active.length;
-      const density = new Float64Array(n),
-        capacity = new Float64Array(n);
+      const allocate = (name: string) =>
+        allocateNumerical({ type: "float64", length: n, lifetime: "run", name }, state.numerical);
+      const density = allocate("population-density"),
+        capacity = allocate("population-capacity");
       for (let i = 0; i < n; i++) {
         const c = work.region.communities[work.owner[i]];
         if (!c || c.areaKm2 <= 0) continue;

@@ -1,4 +1,5 @@
-import type { MagicOrigin } from "@atlas/domain";
+import type { MagicOrigin, NumericalVector } from "@atlas/domain";
+import { workingArray, releaseWorking } from "./physicalNumerics";
 import type { PhysicalField } from "./field";
 import type { MagicField } from "./magicState";
 import { exposure } from "./magicStocks";
@@ -14,12 +15,12 @@ import { rebuild } from "./surface";
 export function seepBrine(
   map: PhysicalField,
   field: MagicField,
-  brine: Float64Array,
+  brine: NumericalVector,
   origin: MagicOrigin
 ) {
   const p = field.definition.parameters,
     bed = field.stocks[`${origin.id}/bed`],
-    moved = new Float64Array(brine.length);
+    moved = workingArray(map, "float64", "magic:seep-brine", brine.length);
   for (let i = 0; i < brine.length; i++) {
     if (brine[i] <= 0) continue;
     const anoxic = clamp(map.WetlandCover[i] + map.PeatCarbon[i] / 20, 0, 1),
@@ -40,6 +41,7 @@ export function seepBrine(
     else moved[target] += share;
   }
   for (let i = 0; i < brine.length; i++) brine[i] += moved[i];
+  releaseWorking(map, moved);
 }
 /**
  * Bed between evaluations: inert under sediment unless strain domes it; dissolved to the
@@ -50,13 +52,13 @@ export function seepBrine(
 export function weatherBed(
   map: PhysicalField,
   field: MagicField,
-  bed: Float64Array,
+  bed: NumericalVector,
   origin: MagicOrigin
 ) {
   const p = field.definition.parameters,
     brine = field.stocks[`${origin.id}/brine`],
     dust = field.stocks[`${origin.id}/dust`],
-    moved = new Float64Array(bed.length);
+    moved = workingArray(map, "float64", "magic:weather-bed", bed.length);
   for (let i = 0; i < bed.length; i++) {
     if (bed[i] <= 0) continue;
     if (map.WaterKindCodes[i] === 1) {
@@ -69,16 +71,17 @@ export function weatherBed(
     else if (map.TectonicStrain[i] >= p.domeStrain) dome(map, field, i, bed, brine);
   }
   if (dust) for (let i = 0; i < bed.length; i++) dust[i] += moved[i];
+  releaseWorking(map, moved);
 }
 /** An exposed bed dissolves where the ground is wet and blows where it is bare and dry. */
 function weatherExposed(
   map: PhysicalField,
   field: MagicField,
   i: number,
-  bed: Float64Array,
-  brine: Float64Array | undefined,
+  bed: NumericalVector,
+  brine: NumericalVector | undefined,
   exposed: number,
-  moved: Float64Array
+  moved: NumericalVector
 ) {
   if (map.Moisture[i] > 500 && map.WaterKindCodes[i] === 0 && brine)
     dissolve(map, field, i, bed, brine, exposed);
@@ -106,8 +109,8 @@ function dissolve(
   map: PhysicalField,
   field: MagicField,
   i: number,
-  bed: Float64Array,
-  brine: Float64Array,
+  bed: NumericalVector,
+  brine: NumericalVector,
   exposed: number
 ) {
   const p = field.definition.parameters,
@@ -131,8 +134,8 @@ function dome(
   map: PhysicalField,
   field: MagicField,
   i: number,
-  bed: Float64Array,
-  brine: Float64Array | undefined
+  bed: NumericalVector,
+  brine: NumericalVector | undefined
 ) {
   const p = field.definition.parameters,
     room = Math.max(0, p.domeLimit - field.domed[i]),
@@ -157,12 +160,12 @@ function dome(
 export function settleDust(
   map: PhysicalField,
   field: MagicField,
-  dust: Float64Array,
+  dust: NumericalVector,
   origin: MagicOrigin
 ) {
   const p = field.definition.parameters,
     bed = field.stocks[`${origin.id}/bed`],
-    moved = new Float64Array(dust.length);
+    moved = workingArray(map, "float64", "magic:settle-dust", dust.length);
   for (let i = 0; i < dust.length; i++) {
     if (dust[i] <= 0) continue;
     const settled = dust[i] * p.dustSettle;
@@ -176,4 +179,5 @@ export function settleDust(
     else moved[target] += blown;
   }
   for (let i = 0; i < dust.length; i++) dust[i] += moved[i];
+  releaseWorking(map, moved);
 }

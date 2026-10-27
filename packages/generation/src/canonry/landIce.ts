@@ -4,6 +4,9 @@ import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
 import { clamp, toUnits, truncate } from "./math";
 import { canCarryIce, supportElevation } from "./glacierSurface";
+import type { NumericalVector } from "@atlas/domain";
+import { workingArray, releaseWorking } from "./physicalNumerics";
+import { NumericalQueue } from "./numericalQueue";
 
 function concavity(map: PhysicalField, i: number): number {
   let curvature = 0;
@@ -70,8 +73,8 @@ function advanceFrom(
   map: PhysicalField,
   c: PhysicalContext,
   source: number,
-  reached: Uint8Array,
-  queue: number[]
+  reached: NumericalVector,
+  queue: NumericalQueue
 ) {
   const p = c.Profile;
   for (let edge = 0; edge < map.mesh.degree[source]; edge++) {
@@ -98,8 +101,8 @@ function advanceFrom(
   }
 }
 function advanceLakes(map: PhysicalField, c: PhysicalContext) {
-  const reached = new Uint8Array(map.mesh.count),
-    queue: number[] = [];
+  const reached = workingArray(map, "uint8", "ice:reached"),
+    queue = new NumericalQueue(map.numerical);
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes[i] === 2)
       map.IceThickness[i] = Math.max(
@@ -111,7 +114,10 @@ function advanceLakes(map: PhysicalField, c: PhysicalContext) {
       queue.push(i);
     }
   }
-  for (let head = 0; head < queue.length; head++) advanceFrom(map, c, queue[head], reached, queue);
+  for (let i = queue.shift(); i !== undefined; i = queue.shift())
+    advanceFrom(map, c, i, reached, queue);
+  queue.close();
+  releaseWorking(map, reached);
   for (let i = 0; i < map.mesh.count; i++)
     if (map.WaterKindCodes[i] === 2)
       map.MaximumIceThickness[i] = Math.max(map.MaximumIceThickness[i], map.IceThickness[i]);

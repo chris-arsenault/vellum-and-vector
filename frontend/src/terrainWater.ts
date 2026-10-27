@@ -4,13 +4,13 @@ import {
   type AdaptivePointLocator,
   type Position,
 } from "@atlas/domain";
-import type { Raster } from "./types";
+import type { LoadedRaster } from "./types";
 import VectorSource from "ol/source/Vector.js";
 import Feature from "ol/Feature.js";
 import GeoJSON from "ol/format/GeoJSON.js";
 
 /** Physical water geometry survives scalar resampling; explicit terrain edits can expose islands. */
-export function terrainWater(raster: Raster, locate?: AdaptivePointLocator) {
+export function terrainWater(raster: LoadedRaster, locate?: AdaptivePointLocator) {
   const sea = raster.water?.channels.seaLevel
     ? fieldInterpolator(raster.water, "seaLevel", false, locate)
     : () => 0;

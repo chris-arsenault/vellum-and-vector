@@ -10,7 +10,7 @@ import GeoJSON from "ol/format/GeoJSON.js";
 import ImageTileSource from "ol/source/ImageTile.js";
 import { createXYZ } from "ol/tilegrid.js";
 import type Projection from "ol/proj/Projection.js";
-import type { Raster } from "./types";
+import { resourceRaster, type Raster, type LoadedRaster } from "./types";
 import { terrainWater } from "./terrainWater";
 
 type ColorAt = (position: Position, dx: number, dy: number) => number[];
@@ -33,13 +33,23 @@ export function rasterLimits(data: Raster[]): number[] {
     for (const overlay of field.overlays ?? [])
       if (overlay.channels.includes(channel)) include(overlay.grid, channel);
   };
-  for (const raster of data) include(raster.field, raster.channel);
+  for (const raster of data) {
+    if (!resourceRaster(raster)) {
+      include(raster.field, raster.channel);
+      continue;
+    }
+    const range = raster.field.channels[raster.channel]?.range;
+    if (range) {
+      limits[0] = Math.min(limits[0], range[0]);
+      limits[1] = Math.max(limits[1], range[1]);
+    }
+  }
   return Number.isFinite(limits[0]) ? limits : [0, 1];
 }
 
 /** Pixels query committed geography. Tile boundaries do not bound derivative reads. */
 export function tilePainter(
-  raster: Raster,
+  raster: LoadedRaster,
   limits: number[],
   classes: SurfaceCategory[] = surfaceCategories()
 ): (extent: number[], size: number) => Uint8ClampedArray {
@@ -65,7 +75,7 @@ export function tilePainter(
 }
 
 export function rasterTileSource(
-  raster: Raster,
+  raster: LoadedRaster,
   limits: number[],
   projection: Projection,
   pixelRatio = globalThis.devicePixelRatio ?? 1
@@ -103,7 +113,7 @@ export function rasterTileSource(
 }
 
 const hexColor = (hex: string) => [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
-function surfacePainter(raster: Raster, classes: SurfaceCategory[]) {
+function surfacePainter(raster: LoadedRaster, classes: SurfaceCategory[]) {
   const interpolator = (channel: string) =>
     raster.surface?.channels[channel] ? classInterpolator(raster.surface, channel) : null;
   const surfaceAt = interpolator("finalSurface"),
@@ -127,7 +137,7 @@ function surfacePainter(raster: Raster, classes: SurfaceCategory[]) {
   };
 }
 function terrainPainter(
-  raster: Raster,
+  raster: LoadedRaster,
   minimum: number,
   height: (p: Position) => number,
   classes: SurfaceCategory[]

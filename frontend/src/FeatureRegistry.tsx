@@ -1,20 +1,21 @@
-import { useEffect, useMemo, useState } from "react";
-import { presentAtlasFeature, rectangle, presentedFeatureStyle, type Bounds } from "@atlas/domain";
+import { useEffect, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { presentedFeatureStyle, type Bounds } from "@atlas/domain";
 import type { EditorState } from "./useEditor";
 import type { AtlasFeature } from "./types";
 import {
-  registryRows,
-  registryColumns,
-  matchesRegistry,
-  sortRegistry,
+  coreColumns,
   registryCell,
   type RegistryRow,
   type RegistryQuery,
   type RegistryColumn,
-} from "./registryData";
+  type RegistryPage,
+} from "@atlas/domain";
 import { RegistryFilters, AttributeFilters } from "./RegistryFilters";
 import { bounds } from "./presentation";
 import { useJobs } from "./useAtlas";
+import { atlasWorkspace } from "./atlasWorkspace";
+import { editArea } from "./useScene";
 import "./featureRegistry.css";
 
 const initialQuery: RegistryQuery = {
@@ -37,7 +38,7 @@ export function FeatureRegistry({ editor }: { editor: EditorState }) {
     >
       <RegistryHeader model={model} worldId={editor.world.id} />
       <RegistryFilters
-        rows={model.rows}
+        facets={model.facets}
         query={model.query}
         change={model.update}
         world={editor.world}
@@ -60,30 +61,23 @@ function useRegistryModel(editor: EditorState) {
   const [page, setPage] = useState(0),
     [expanded, setExpanded] = useState(false);
   const world = editor.world;
-  const rows = useMemo(
-    () =>
-      registryRows(
-        world,
-        scope === "world" ? undefined : editor.area.id,
-        scope === "viewport" && editor.viewportExtent
-          ? rectangle(editor.viewportExtent as Bounds)
-          : undefined
-      ),
-    [world, scope, editor.area.id, editor.viewportExtent]
-  );
-  const available = useMemo(() => registryColumns(rows, world), [rows, world]);
-  const filtered = useMemo(
-    () =>
-      sortRegistry(
-        rows.filter((r) => matchesRegistry(r, query)),
-        sort.key,
-        sort.descending
-      ),
-    [rows, query, sort]
-  );
-  const visible = available.filter((c) => columns.includes(c.key));
+  const areaId = scope === "world" ? undefined : editor.area.id;
+  const extent = scope === "viewport" ? (editor.viewportExtent as Bounds | undefined) : undefined;
+  const result = useQuery({
+    queryKey: ["registry", world.id, world.version, areaId, extent, query, sort, page],
+    placeholderData: keepPreviousData,
+    queryFn: async () =>
+      (await atlasWorkspace()).readRegistry({
+        worldId: world.id,
+        areaId,
+        extent: extent ?? undefined,
+        query,
+        sort,
+        page,
+        limit: 100,
+      }),
+  });
   const open = useRegistryNavigation(editor);
-  const currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / 100) - 1));
   const update = (next: RegistryQuery) => {
     setQuery(next);
     setPage(0);
@@ -100,13 +94,31 @@ function useRegistryModel(editor: EditorState) {
     setPage,
     expanded,
     setExpanded,
-    rows,
-    available,
-    filtered,
-    visible,
+    ...registryResults(result.data, columns),
+    pending: result.isFetching,
+    error: result.error,
     open,
-    currentPage,
     update,
+  };
+}
+function registryResults(data: RegistryPage | undefined, columns: string[]) {
+  const page = data ?? {
+    rows: [],
+    columns: coreColumns,
+    total: 0,
+    matching: 0,
+    page: 0,
+    facets: { types: [], categories: { status: [], state: [], profile: [], space: [] } },
+  };
+  const available = page.columns;
+  return {
+    rows: page.rows,
+    facets: page.facets,
+    total: page.total,
+    matching: page.matching,
+    currentPage: page.page,
+    available,
+    visible: available.filter((column) => columns.includes(column.key)),
   };
 }
 type RegistryModel = ReturnType<typeof useRegistryModel>;
@@ -146,31 +158,34 @@ function RegistryHeader({ model, worldId }: { model: RegistryModel; worldId: str
   );
 }
 function RegistryResults({ model, editor }: { model: RegistryModel; editor: EditorState }) {
-  const { filtered, rows, visible, sort, setSort, open, currentPage, setPage } = model;
+  const { matching, total, rows, visible, sort, setSort, open, currentPage, setPage } = model;
   return (
     <>
       <p role="status">
-        {filtered.length.toLocaleString()} matching features · {rows.length.toLocaleString()} in
-        scope
+        {matching.toLocaleString()} matching features · {total.toLocaleString()} in scope
+        {model.pending && " · Reading registry…"}
       </p>
       <RegistryTable
-        rows={filtered.slice(currentPage * 100, (currentPage + 1) * 100)}
+        rows={rows}
         columns={visible}
         sort={sort}
         changeSort={setSort}
         open={open}
         editor={editor}
       />
-      {!filtered.length && <p>No matching features. Change the scope or filters.</p>}
+      {model.error && <p role="alert">{model.error.message}</p>}
+      {!model.pending && !model.error && !matching && (
+        <p>No matching features. Change the scope or filters.</p>
+      )}
       <nav className="registry-pages" aria-label="Registry pages">
         <button disabled={!currentPage} onClick={() => setPage(currentPage - 1)}>
           Previous page
         </button>
         <span>
-          Page {currentPage + 1} of {Math.max(1, Math.ceil(filtered.length / 100))}
+          Page {currentPage + 1} of {Math.max(1, Math.ceil(matching / 100))}
         </span>
         <button
-          disabled={(currentPage + 1) * 100 >= filtered.length}
+          disabled={(currentPage + 1) * 100 >= matching}
           onClick={() => setPage(currentPage + 1)}
         >
           Next page
@@ -311,10 +326,9 @@ function useRegistryNavigation(editor: EditorState) {
     return () => cancelAnimationFrame(frame);
   }, [pending, editor.area, editor.mapEngine]);
   return (feature: AtlasFeature) => {
-    const presented = presentAtlasFeature(editor.world, feature, editor.area.id);
-    const areaId = presented ? editor.area.id : feature.areaId;
+    const areaId = editArea(editor.world, editor.area.id, feature);
     if (areaId !== editor.area.id) editor.enter(areaId);
-    editor.select(presented ?? feature);
-    setPending({ feature: presented ?? feature, areaId });
+    editor.select(feature);
+    setPending({ feature, areaId });
   };
 }

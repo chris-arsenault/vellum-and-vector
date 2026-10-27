@@ -21,6 +21,7 @@ function areaRequirements(data: AreaInput, context: IntentContext) {
   const reads = intentReads(context, {
     objects: [
       { kind: "area", ids: [data.id, data.parentId] },
+      ...(data.regionId ? [{ kind: "view" as const, ids: [data.regionId] }] : []),
       ...(data.contextFeatureId
         ? [{ kind: "feature" as const, ids: [data.contextFeatureId] }]
         : []),

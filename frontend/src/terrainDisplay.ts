@@ -21,8 +21,8 @@ function cubic(values: number[], t: number, first: boolean, last: boolean) {
 }
 
 function regularDisplay(grid: RegularGrid, fallback: (p: Position) => number) {
-  const { bounds, width, height, active } = grid,
-    values = grid.channels.elevation;
+  const { bounds, width, height } = grid,
+    read = displayCell(grid);
   return (p: Position) => {
     const x = Math.max(
         0,
@@ -34,18 +34,34 @@ function regularDisplay(grid: RegularGrid, fallback: (p: Position) => number) {
       );
     const col = Math.min(width - 2, Math.floor(x)),
       row = Math.min(height - 2, Math.floor(y));
-    const rows: number[] = [];
+    const samples = read(col, row);
+    if (!samples) return fallback(p);
+    const rows = samples.map((values) => cubic(values, x - col, col === 0, col === width - 2));
+    return cubic(rows, y - row, row === 0, row === height - 2);
+  };
+}
+/** A display polynomial reuses its sixteen source samples while pixels remain in that cell. */
+function displayCell(grid: RegularGrid) {
+  const { active, width, height } = grid,
+    values = grid.channels.elevation;
+  let previous = -1,
+    held: number[][] | null = null;
+  return (col: number, row: number) => {
+    const cell = row * width + col;
+    if (cell === previous && values.immutable && active.immutable) return held;
+    previous = cell;
+    held = [];
     for (let j = row - 1; j <= row + 2; j++) {
       const samples: number[] = [];
       for (let i = col - 1; i <= col + 2; i++) {
         const at =
           Math.max(0, Math.min(height - 1, j)) * width + Math.max(0, Math.min(width - 1, i));
-        if (!active[at] || !Number.isFinite(values[at])) return fallback(p);
+        if (!active[at] || !Number.isFinite(values[at])) return (held = null);
         samples.push(values[at]);
       }
-      rows.push(cubic(samples, x - col, col === 0, col === width - 2));
+      held.push(samples);
     }
-    return cubic(rows, y - row, row === 0, row === height - 2);
+    return held;
   };
 }
 

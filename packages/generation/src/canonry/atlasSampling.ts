@@ -1,75 +1,131 @@
 import type { AtlasPhysicalWorkspace } from "./atlasWorkspace";
 import type { PhysicalMesh } from "./mesh";
+import {
+  allocateNumerical,
+  readNumericalBlock,
+  writeNumericalBlock,
+  type NumericalAllocator,
+  type NumericalVector,
+} from "@atlas/domain";
 import { triangleSample } from "./triangleSampling";
 
-// Temporary sample objects are confined to one batch, rather than retained per map cell.
-const interpolationBatchSize = 4096;
+const interpolationBlockSamples = 4096;
+// One fan has a centre, a face neighbor and at most six incident vertex cells.
+const triangleProjectionStride = 8;
 export interface ProjectionInterpolation {
-  samples: Int32Array;
-  batches: { offsets: Uint32Array; cells: Int32Array; weights: Float64Array }[];
+  samples: NumericalVector;
+  degree: NumericalVector;
+  cells: NumericalVector;
+  weights: NumericalVector;
+  stride: number;
 }
-
-/** Keep the same fan weights in compact typed storage, including seam and pole support. */
+/** Prepare physical fan weights through bounded blocks; the execution allocator owns them. */
 export function projectionInterpolation(
   mesh: PhysicalMesh,
   count: number,
-  position: (index: number) => [number, number]
+  position: (index: number) => [number, number],
+  numerical?: NumericalAllocator
 ): ProjectionInterpolation {
-  const samples = new Int32Array(count),
-    batches: ProjectionInterpolation["batches"] = [];
-  for (let start = 0; start < count; start += interpolationBatchSize) {
-    const batch = Array.from(
-      { length: Math.min(interpolationBatchSize, count - start) },
-      (_, i) => {
-        const [x, y] = position(start + i);
-        return triangleSample(mesh, x, y);
-      }
+  const allocate = (type: "int32" | "uint8" | "float64", length: number, name: string) =>
+    allocateNumerical({ type, length, lifetime: "run", name: `projection:${name}` }, numerical);
+  const projection: ProjectionInterpolation = {
+    samples: allocate("int32", count, "samples"),
+    degree: allocate("uint8", count, "degree"),
+    cells: allocate("int32", count * triangleProjectionStride, "cells"),
+    weights: allocate("float64", count * triangleProjectionStride, "weights"),
+    stride: triangleProjectionStride,
+  };
+  for (let start = 0; start < count; start += interpolationBlockSamples)
+    writeProjectionBlock(
+      mesh,
+      projection,
+      start,
+      Math.min(interpolationBlockSamples, count - start),
+      position
     );
-    const length = batch.reduce((sum, sample) => sum + sample.cells.length, 0),
-      cells = new Int32Array(length),
-      weights = new Float64Array(length),
-      offsets = new Uint32Array(batch.length + 1);
-    for (const [i, sample] of batch.entries()) {
-      samples[start + i] = sample.cell;
-      cells.set(sample.cells, offsets[i]);
-      weights.set(sample.weights, offsets[i]);
-      offsets[i + 1] = offsets[i] + sample.cells.length;
-    }
-    batches.push({ offsets, cells, weights });
-  }
-  return { samples, batches };
+  return projection;
 }
-
-function interpolate(
-  interpolation: ProjectionInterpolation,
-  values: ArrayLike<number>,
-  output: Float64Array
+function writeProjectionBlock(
+  mesh: PhysicalMesh,
+  projection: ProjectionInterpolation,
+  start: number,
+  count: number,
+  position: (index: number) => [number, number]
 ) {
-  let index = 0;
-  for (const { offsets, cells, weights } of interpolation.batches)
-    for (let i = 0; i < offsets.length - 1; i++, index++) {
-      const start = offsets[i],
-        end = offsets[i + 1];
-      if (start === end) {
-        output[index] = 0;
-        continue;
-      }
-      const base = values[cells[start]];
+  const samples = new Int32Array(count),
+    degree = new Uint8Array(count),
+    cells = new Int32Array(count * projection.stride),
+    weights = new Float64Array(cells.length);
+  for (let i = 0; i < count; i++) {
+    const [x, y] = position(start + i),
+      sample = triangleSample(mesh, x, y);
+    samples[i] = sample.cell;
+    degree[i] = sample.cells.length;
+    cells.set(sample.cells, i * projection.stride);
+    weights.set(sample.weights, i * projection.stride);
+  }
+  writeNumericalBlock(projection.samples, start, samples);
+  writeNumericalBlock(projection.degree, start, degree);
+  writeNumericalBlock(projection.cells, start * projection.stride, cells);
+  writeNumericalBlock(projection.weights, start * projection.stride, weights);
+}
+function interpolate(
+  projection: ProjectionInterpolation,
+  valueAt: (index: number) => number,
+  output: NumericalVector
+) {
+  for (let start = 0; start < projection.samples.length; start += interpolationBlockSamples) {
+    const count = Math.min(interpolationBlockSamples, projection.samples.length - start);
+    const degree = readNumericalBlock(projection.degree, start, count),
+      cells = readNumericalBlock(
+        projection.cells,
+        start * projection.stride,
+        count * projection.stride
+      ),
+      weights = readNumericalBlock(
+        projection.weights,
+        start * projection.stride,
+        count * projection.stride
+      ),
+      result = new Float64Array(count);
+    for (let i = 0; i < count; i++) {
+      if (!degree[i]) continue;
+      const at = i * projection.stride,
+        base = valueAt(cells[at]);
       let value = 0;
-      for (let j = start; j < end; j++) value += weights[j] * (values[cells[j]] - base);
-      output[index] = base + value;
+      for (let j = 0; j < degree[i]; j++)
+        value += weights[at + j] * (valueAt(cells[at + j]) - base);
+      result[i] = base + value;
     }
+    writeNumericalBlock(output, start, result);
+  }
   return output;
 }
-
+export function releaseProjection(
+  projection: ProjectionInterpolation,
+  numerical?: NumericalAllocator
+) {
+  if (numerical)
+    for (const vector of [
+      projection.samples,
+      projection.degree,
+      projection.cells,
+      projection.weights,
+    ])
+      numerical.release(vector);
+}
 /** Reuse geometric weights across channels; identities always use a discrete sample. */
 export function projectedValues(
   work: AtlasPhysicalWorkspace,
-  values: ArrayLike<number>,
+  values: ArrayLike<number> | ((index: number) => number),
   discrete = false,
-  output: Float64Array = new Float64Array(work.samples.length)
+  output: NumericalVector = allocateNumerical(
+    { type: "float64", length: work.samples.length, lifetime: "process", name: "projected" },
+    work.map.numerical
+  )
 ) {
-  if (!discrete && work.interpolation) return interpolate(work.interpolation, values, output);
-  for (let i = 0; i < work.samples.length; i++) output[i] = values[work.samples[i]];
+  const valueAt = typeof values === "function" ? values : (index: number) => values[index];
+  if (!discrete && work.interpolation) return interpolate(work.interpolation, valueAt, output);
+  for (let i = 0; i < work.samples.length; i++) output[i] = valueAt(work.samples[i]);
   return output;
 }

@@ -1,6 +1,8 @@
 import type { PhysicalField } from "./field";
+import type { NumericalVector } from "@atlas/domain";
 import { maximumCrustThickness, minimumCrustThickness, units } from "./math";
 import { weightScale, type TransportPlan } from "./transportPlan";
+import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 
 export interface CrustBudget {
   oceanCreated: number;
@@ -11,9 +13,9 @@ export interface CrustBudget {
   oceanAdjustment: number;
 }
 interface Columns {
-  continental: Float64Array;
-  oceanic: Float64Array;
-  reserve: Float64Array;
+  continental: NumericalVector;
+  oceanic: NumericalVector;
+  reserve: NumericalVector;
 }
 export function captureCrustColumns(map: PhysicalField): Columns {
   if (!map.CrustColumnsInitialized) {
@@ -24,8 +26,8 @@ export function captureCrustColumns(map: PhysicalField): Columns {
   }
   return {
     continental: map.CrustContinentalColumn.slice(),
-    oceanic: Float64Array.from(map.CrustThickness, (value, i) =>
-      Math.max(0, value - map.CrustContinentalColumn[i])
+    oceanic: workingValues(map, "float64", "crust:oceanic", (i) =>
+      Math.max(0, map.CrustThickness[i] - map.CrustContinentalColumn[i])
     ),
     reserve: map.CrustRootReserve.slice(),
   };
@@ -38,9 +40,9 @@ function exported(map: PhysicalField, source: number, share: number, columns: Co
 }
 function accumulate(map: PhysicalField, plan: TransportPlan, old: Columns): Columns {
   const result: Columns = {
-    continental: new Float64Array(map.mesh.count),
-    oceanic: new Float64Array(map.mesh.count),
-    reserve: new Float64Array(map.mesh.count),
+    continental: workingArray(map, "float64", "crust:continental"),
+    oceanic: workingArray(map, "float64", "crust:oceanicArrival"),
+    reserve: workingArray(map, "float64", "crust:reserve"),
   };
   for (let source = 0; source < map.mesh.count; source++) {
     let retained = 0;
@@ -89,6 +91,7 @@ function retainColumn(map: PhysicalField, plan: TransportPlan, columns: Columns,
 export function transportCrustColumns(map: PhysicalField, plan: TransportPlan, old: Columns) {
   const columns = accumulate(map, plan, old);
   for (let i = 0; i < map.mesh.count; i++) retainColumn(map, plan, columns, i);
+  releaseWorking(map, ...Object.values(columns));
 }
 
 /** Existing vertical column adjustments remain explicit until their process supplies material. */

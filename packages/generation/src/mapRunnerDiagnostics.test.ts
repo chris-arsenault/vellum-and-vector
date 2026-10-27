@@ -15,6 +15,29 @@ function process(
   };
 }
 
+it.each([
+  "numerical_read",
+  "numerical_write",
+  "feature_read",
+  "feature_write",
+  "network_read",
+  "network_write",
+  "contour_read",
+  "contour_write",
+])("aborts generation on %s instead of publishing incomplete causal history", async (code) => {
+  const fail = process("storage", () => {
+    throw new DomainError(code, "Local disk could not complete a transfer.");
+  });
+  const after = vi.fn(),
+    following = process("following", after);
+  const runner = new MapRunner(
+    configuration([invoke(fail), invoke(following)]),
+    new MapProcessRegistry().register(fail).register(following)
+  );
+  await expect(runner.run(landscape(), options)).rejects.toMatchObject({ code });
+  expect(after).not.toHaveBeenCalled();
+});
+
 it.each([false, true])(
   "records async=%s failures and continues without restoring working state",
   async (asyncFailure) => {

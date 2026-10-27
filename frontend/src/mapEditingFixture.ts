@@ -1,24 +1,23 @@
+import { fixtureWorld, fixtureState, commitCommand } from "./testSupport/workspaceFixture";
 import { rectangle } from "@atlas/domain";
-import { createWorld, session } from "./atlasState";
-import { commitCommand } from "./atlasCommands";
 import { makeCommand } from "./useAtlas";
 
-export function mapEditingFixture(roadEnd: [number, number] = [650, 650]) {
-  const initial = createWorld({ name: "Mapped authoring", seed: 17, width: 1000, height: 1000 });
+export async function mapEditingFixture(roadEnd: [number, number] = [650, 650]) {
+  const initial = fixtureWorld({ name: "Mapped authoring", seed: 17, width: 1000, height: 1000 });
   const root = Object.keys(initial.areas)[0],
     river = crypto.randomUUID(),
     town = crypto.randomUUID(),
     road = crypto.randomUUID();
-  const current = () => session(initial.id).snapshot;
-  const command = (kind: string, data: Record<string, unknown>) =>
-    commitCommand(initial.id, makeCommand(current().world, kind, data));
-  command("createField", { areaId: root, layerId: "elevation", resolution: 11, value: 100 });
+  const current = () => fixtureState(initial.id).snapshot;
+  const command = async (kind: string, data: Record<string, unknown>) =>
+    await commitCommand(initial.id, makeCommand(current().world, kind, data));
+  await command("createField", { areaId: root, layerId: "elevation", resolution: 11, value: 100 });
   for (const feature of sourceFeatures(river, town, road, roadEnd))
-    command("putFeature", {
+    await command("putFeature", {
       areaId: root,
       feature: { ...feature, protected: false, relations: [] },
     });
-  command("createArea", {
+  await command("createArea", {
     parentId: root,
     name: "Geographic region",
     profile: "region",

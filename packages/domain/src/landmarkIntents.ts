@@ -94,7 +94,10 @@ export function registerLandmarkIntents(registry: IntentRegistry): void {
     description: "Remove an authored landmark and invalidate the geography its causes shaped.",
     schema: z.object({ id: uuid }),
     requirements: (data, context) =>
-      intentReads(context, { objects: [{ kind: "landmark", ids: [data.id] }] }),
+      intentReads(context, {
+        objects: [{ kind: "landmark", ids: [data.id] }],
+        referencesTo: [data.id],
+      }),
     evaluate(data, context, snapshot) {
       const landmark = snapshot.world.landmarks.find((l) => l.id === data.id);
       requireThat(landmark, "missing_landmark", "Choose an existing landmark.");

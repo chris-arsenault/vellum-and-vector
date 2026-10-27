@@ -15,7 +15,7 @@ export function generationSnapshot(
   const snapshot = result.state.domain,
     world = snapshot.world;
   world.version++;
-  if (original) restoreMappedEdits(snapshot, original);
+  if (original) restoreMappedEdits(snapshot, original, result.state);
   publishGenerationProducts(result.state, id, original, warnings);
   world.areas[input.areaId].version = world.version;
   world.generations.push({

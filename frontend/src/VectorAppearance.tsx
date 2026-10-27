@@ -2,6 +2,8 @@ import type { EditorState } from "./useEditor";
 import type { LayerStyle } from "./types";
 import { defaultSymbolStyle } from "./vectorStyles";
 import type { Symbolizer } from "geostyler-style";
+import type { Geometry } from "geojson";
+import { useLayerPresentation } from "./useWorkspacePresentation";
 function sizeSymbol(symbol: Symbolizer, size: number): Symbolizer {
   if (symbol.kind === "Line") return { ...symbol, width: size };
   if (symbol.kind === "Fill") return { ...symbol, outlineWidth: size };
@@ -20,11 +22,8 @@ function sizeControl(symbol: Symbolizer | undefined) {
     return { label: "Line width", value: typeof symbol.width === "number" ? symbol.width : 2 };
   return { label: "Line width", value: 2 };
 }
-function defaultSymbols(editor: EditorState, presentation: LayerStyle) {
+function defaultSymbols(editor: EditorState, presentation: LayerStyle, kinds: Geometry["type"][]) {
   const layer = editor.world.layers[presentation.layerId];
-  const kinds = Object.values(editor.world.features)
-    .filter((f) => f.layerId === layer.id)
-    .map((f) => f.geometry.type);
   return (
     presentation.symbols ??
     defaultSymbolStyle(
@@ -35,9 +34,9 @@ function defaultSymbols(editor: EditorState, presentation: LayerStyle) {
   );
 }
 
-function symbolActions(editor: EditorState, presentation: LayerStyle) {
+function symbolActions(editor: EditorState, presentation: LayerStyle, kinds: Geometry["type"][]) {
   const layer = editor.world.layers[presentation.layerId];
-  const symbols = () => defaultSymbols(editor, presentation);
+  const symbols = () => defaultSymbols(editor, presentation, kinds);
   const update = (changes: Partial<LayerStyle>) =>
     editor.setStyles(editor.styles.map((s) => (s.layerId === layer.id ? { ...s, ...changes } : s)));
   return {
@@ -105,8 +104,10 @@ export function VectorAppearance({
   advanced: () => void;
 }) {
   const name = editor.world.layers[presentation.layerId].name;
-  const actions = symbolActions(editor, presentation);
-  const line = defaultSymbols(editor, presentation)
+  const layer = useLayerPresentation(editor.world, presentation.layerId);
+  const kinds = layer.data?.geometries ?? [];
+  const actions = symbolActions(editor, presentation, kinds);
+  const line = defaultSymbols(editor, presentation, kinds)
     .rules.flatMap((r) => r.symbolizers)
     .find((s) => ["Line", "Fill", "Mark"].includes(s.kind));
   const size = sizeControl(line);

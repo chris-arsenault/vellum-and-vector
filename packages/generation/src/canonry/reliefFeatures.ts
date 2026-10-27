@@ -7,6 +7,7 @@ import { components, publishPlace } from "./geographicRegions";
 import { Landform } from "./codes";
 import { prominence } from "./landforms";
 import { physicalSampler } from "./physicalMetric";
+import { generationFeature } from "../generationFeatures";
 
 /**
  * Heights on a ring around each cell. The ring reaches at least one cell spacing, since nearer
@@ -111,7 +112,7 @@ export function extractReliefFeatures(state: GenerationState) {
  */
 export function extractValleys(
   state: GenerationState,
-  reaches: { members: number[]; featureIds: string[] }[]
+  reaches: Iterable<{ members: number[]; featureIds: string[] }>
 ) {
   const { map, profile } = state.physical!,
     ring = rings(state),
@@ -119,8 +120,8 @@ export function extractValleys(
     [x0, y0] = map.mesh.origin;
   for (const { members, featureIds } of reaches) {
     const rivers = featureIds
-      .map((id) => state.domain.world.features[id]?.geometry)
-      .filter(Boolean);
+      .map((id) => generationFeature(state, id)?.geometry)
+      .filter((geometry): geometry is Geometry => !!geometry);
     if (!rivers.length) continue;
     const corridor = spatial.buffer(spatial.unionAll(rivers), halfWidth);
     for (const run of incisedRuns(state, ring, members)) {

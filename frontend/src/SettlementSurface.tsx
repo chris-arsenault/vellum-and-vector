@@ -1,4 +1,6 @@
 import type { AtlasFeature, SocietyCommunity, SocietyRegion, World } from "@atlas/domain";
+import { useQuery } from "@tanstack/react-query";
+import { atlasWorkspace, workspaceScope } from "./atlasWorkspace";
 import type { EditorState } from "./useEditor";
 import {
   Badge,
@@ -39,10 +41,23 @@ export function SettlementSurface({
   areaId: string;
   editor: EditorState;
 }) {
-  const found = settlementCommunity(world, feature, areaId);
+  const inspection = useQuery({
+    queryKey: ["settlement", world.id, world.version, areaId, feature.id],
+    queryFn: async () =>
+      (await atlasWorkspace()).readSettlement(workspaceScope(world, areaId), feature.id),
+  });
+  if (inspection.isPending) return <p role="status">Reading settlement…</p>;
+  if (inspection.error) return <p role="alert">{inspection.error.message}</p>;
+  const retained = inspection.data;
+  if (!retained) return null;
+  const found = settlementCommunity(
+    { ...world, societies: { [areaId]: retained.region } },
+    feature,
+    areaId
+  );
   if (!found) return null;
   const { region, community } = found;
-  const select = featureSelector(world, editor);
+  const select = featureSelector(retained.related, editor);
   return (
     <>
       <TitleBadges feature={feature} community={community} />
@@ -58,11 +73,15 @@ export function SettlementSurface({
 
 /** Select a feature by predicate, from the scene first and the world's record otherwise. */
 export type FeatureSelector = (match: (f: AtlasFeature) => boolean) => (() => void) | undefined;
-function featureSelector(world: World, editor: EditorState): FeatureSelector {
+function featureSelector(related: AtlasFeature[], editor: EditorState): FeatureSelector {
   return (match) => {
-    const feature =
-      editor.scene.data?.find(match) ?? Object.values(world.features).find(match) ?? null;
-    return feature ? () => editor.setSelected(feature) : undefined;
+    const feature = editor.scene.data?.find(match) ?? related.find(match) ?? null;
+    return feature
+      ? () => {
+          if (feature.areaId !== editor.area.id) editor.enter(feature.areaId);
+          editor.setSelected(feature);
+        }
+      : undefined;
   };
 }
 

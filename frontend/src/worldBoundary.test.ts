@@ -1,3 +1,4 @@
+import { fixtureWorld, fixtureState, commitCommand } from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
 import { atlasParametersSchema } from "@atlas/generation";
 import { atlasPhysicalProfile } from "../../packages/generation/src/canonry/atlasProfile";
@@ -9,10 +10,8 @@ import {
 } from "./generationDraft";
 import { applyCartographicChoice, cartographicControls } from "./cartographicDraft";
 import { canonicalGeometry, type Command } from "@atlas/domain";
-import { createWorld, session } from "./atlasState";
-import { commitCommand } from "./atlasCommands";
 
-it("defaults new worlds to Cylinder and preserves explicit legacy open configurations", () => {
+it("defaults new worlds to Cylinder and preserves explicit legacy open configurations", async () => {
   const draft = newGenerationDraft();
   expect(prepareDraft(draft).source.world.reference.boundaryMode).toBe("cylinder");
   expect(draftWorldSnapshot(draft).world.reference.boundaryMode).toBe("cylinder");
@@ -39,8 +38,8 @@ it.each([
   expect(prepared.source.world.reference.boundaryMode).toBe(mode);
 });
 
-it("authors one road across the seam with a shared canonical junction", () => {
-  const world = createWorld({
+it("authors one road across the seam with a shared canonical junction", async () => {
+  const world = fixtureWorld({
     name: "Cylinder",
     seed: 73,
     width: 1000,
@@ -74,7 +73,7 @@ it("authors one road across the seam with a shared canonical junction", () => {
       },
     },
   };
-  const result = commitCommand(world.id, command).candidate;
+  const result = (await commitCommand(world.id, command)).candidate;
   const reaches = Object.values(result.networkReaches!);
   expect(result.features[id].geometry.type).toBe("MultiLineString");
   expect(reaches).toHaveLength(2);
@@ -84,15 +83,15 @@ it("authors one road across the seam with a shared canonical junction", () => {
   expect(result.networkNodes![junction].position).toEqual({ x: 0, y: 250, z: 0 });
 });
 
-it("retains an existing blank world's open boundary when preparing its first generation", () => {
-  const world = createWorld({
+it("retains an existing blank world's open boundary when preparing its first generation", async () => {
+  const world = fixtureWorld({
     name: "Open",
     seed: 73,
     width: 1000,
     height: 500,
     boundaryMode: "none",
   });
-  const prepared = prepareDraft(newGenerationDraft(), session(world.id).snapshot);
+  const prepared = prepareDraft(newGenerationDraft(), fixtureState(world.id).snapshot);
   expect(prepared.source.world.reference.boundaryMode).toBe("none");
   expect(prepared.input.parameters?.mapBoundary).toBe(0);
 });

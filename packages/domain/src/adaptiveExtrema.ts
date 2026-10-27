@@ -1,7 +1,7 @@
 import type { Geometry } from "geojson";
 import type { AdaptiveField } from "./adaptiveField";
 import { adaptiveCell } from "./adaptiveTopology";
-import { reconstructAdaptive, sampleAdaptive } from "./adaptiveReconstruction";
+import { prepareAdaptivePatches, adaptivePointSampler } from "./adaptivePoint";
 import { preparedAdaptivePolynomial, type PreparedAdaptiveCell } from "./adaptiveHermite";
 import { visitAdaptiveOverlap } from "./adaptiveTransfer";
 import { geometryParts } from "./composition";
@@ -78,7 +78,8 @@ export function adaptiveExtrema(
   region: Geometry
 ): [number, number] | null {
   const values = field.channels[channel],
-    surface = reconstructAdaptive(field.topology, values);
+    patch = prepareAdaptivePatches(field.topology, values),
+    sample = adaptivePointSampler(field.topology, values, undefined, patch);
   const discrete = discreteChannel(field, channel);
   let low = Infinity,
     high = -Infinity;
@@ -93,7 +94,8 @@ export function adaptiveExtrema(
       return;
     }
     if (spatial.covers(region, shape)) {
-      const c = surface.corners.subarray(i * 4, i * 4 + 4);
+      const coefficients = patch(i).coefficients,
+        c = [0, 4, 8, 12].map((at) => coefficients[at]);
       low = Math.min(low, values[i], ...c);
       high = Math.max(high, values[i], ...c);
     } else {
@@ -108,11 +110,11 @@ export function adaptiveExtrema(
       middle = { x: (b[0] + b[2]) / 2, y: (b[1] + b[3]) / 2, z: 0 };
     if (spatial.pointCoverage(piece.region)(middle)) points.push([middle.x, middle.y]);
     for (const [x, y] of points) {
-      const value = sampleAdaptive(surface, x, y);
+      const value = sample(x, y);
       low = Math.min(low, value);
       high = Math.max(high, value);
     }
-    const [minimum, maximum] = interval(field, surface.cells[piece.i], piece);
+    const [minimum, maximum] = interval(field, patch(piece.i), piece);
     if (minimum >= low - spatial.precision && maximum <= high + spatial.precision) continue;
     if (Math.max(b[2] - b[0], b[3] - b[1]) <= spatial.precision) {
       low = Math.min(low, minimum);

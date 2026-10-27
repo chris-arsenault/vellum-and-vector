@@ -1,6 +1,4 @@
-import type { PhysicalMesh, TriangleCoord } from "./mesh";
-
-const key = (p: TriangleCoord) => `${p.u}:${p.v}:${Number(p.inverted)}`;
+import type { PhysicalMesh } from "./mesh";
 
 export function worldLattice(
   width: number,
@@ -27,11 +25,4 @@ export function joinWorldEdges(
   const { columns, rows, spacingY } = lattice;
   const width = mesh.bounds[2] - mesh.bounds[0];
   mesh.periodic = { width, columns, ...(poles ? { poles: { rows, spacingY } } : {}) };
-  mesh.coords.forEach((p, i) => {
-    for (const direction of [-1, 0, 1])
-      mesh.indexes.set(
-        key({ ...p, u: p.u + direction * columns, v: p.v + direction * columns }),
-        i
-      );
-  });
 }

@@ -5,6 +5,7 @@ import {
   createGrid,
   rectangle,
   spatial,
+  type NumericalVector,
 } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { adaptivePhysicalMesh } from "./adaptiveMesh";
@@ -51,7 +52,7 @@ function fixture(
   return map;
 }
 const regions = (map: ReturnType<typeof fixture>) => marineRegions(map, shelfBreak);
-const labelAt = (map: ReturnType<typeof fixture>, labels: Int32Array, x: number, y = 0) =>
+const labelAt = (map: ReturnType<typeof fixture>, labels: NumericalVector, x: number, y = 0) =>
   labels[nearestTriangle(map.mesh, x, y)];
 
 it.each([false, true])("separates broad seas at a narrow strait, refined=%s", (refined) => {

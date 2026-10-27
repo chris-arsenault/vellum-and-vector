@@ -6,6 +6,7 @@ import { isSocietyWork, societyWorkLayers } from "@atlas/domain";
 import { namingVersion } from "./atlasNaming";
 import { isWorldSociety } from "./societyMapScope";
 import { societyWorkGeometry, eventFootprint } from "./societyWorkGeometry";
+import { generationFeature, generationFeatures } from "./generationFeatures";
 
 function nameUnrecordedWork(state: GenerationState, work: SocietyWork) {
   if (work.name) return;
@@ -15,7 +16,11 @@ function nameUnrecordedWork(state: GenerationState, work: SocietyWork) {
   work.name = named.name;
   work.naming = { language: named.namingLanguage, culture: named.namingCulture, era: work.built };
 }
-function workName(state: GenerationState, work: SocietyWork, previous?: AtlasFeature) {
+function workName(
+  state: GenerationState,
+  work: SocietyWork,
+  previous?: Pick<AtlasFeature, "name" | "attributes">
+) {
   // A retained map name takes precedence over vocabulary revisions or a changed population.
   if (previous) return { name: previous.name, attributes: previous.attributes };
   nameUnrecordedWork(state, work);
@@ -32,15 +37,21 @@ function workName(state: GenerationState, work: SocietyWork, previous?: AtlasFea
   };
 }
 
+function existingNames(state: GenerationState) {
+  const existing = new Map<unknown, Pick<AtlasFeature, "name" | "attributes">>();
+  for (const feature of generationFeatures(state))
+    if (isSocietyWork(feature))
+      existing.set(feature.attributes.workId, {
+        name: feature.name,
+        attributes: feature.attributes,
+      });
+  return existing;
+}
 export function publishSocietyWorks(state: GenerationState) {
   const region = state.society!.region;
-  const existing = new Map(
-    Object.values(state.domain.world.features)
-      .filter(isSocietyWork)
-      .map((f) => [f.attributes.workId, f])
-  );
+  const existing = existingNames(state);
   for (const w of region.works) {
-    if (w.authored && state.domain.world.features[w.id]) continue;
+    if (w.authored && generationFeature(state, w.id)) continue;
     // A demand is a latent quantity, not a feature, at every profile; the World publishes
     // no generated works at all (ADR 0005).
     if (isWorldSociety(state) || w.demand) {

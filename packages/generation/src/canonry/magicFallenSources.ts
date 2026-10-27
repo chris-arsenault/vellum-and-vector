@@ -4,6 +4,7 @@ import type { MagicField } from "./magicState";
 import type { LocateContext } from "./magicSources";
 import { exposure, heldStock, releaseShare, siteStrength } from "./magicStocks";
 import { meshDeltaX, nearestTriangle } from "./mesh";
+import type { NumericalVector } from "@atlas/domain";
 
 /**
  * Fallen cores. Each impact seeds a finite stock once, on the crater and its ejecta in
@@ -52,7 +53,7 @@ export function impactSources(
 function seedFallenStock(
   map: PhysicalField,
   field: MagicField,
-  held: Float64Array,
+  held: NumericalVector,
   event: PhysicalField["events"][number],
   epochIndex: number
 ) {

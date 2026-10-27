@@ -3,6 +3,7 @@ import { generatedFeature, putGenerated } from "./mapFeatures";
 import type { GenerationState, MapProcess, MapProcessContext } from "./process";
 import { publishSettlements } from "./societyPublication";
 import { initializePopulation } from "./societyPopulation";
+import { generationFeatures } from "./generationFeatures";
 
 export const builtProcess: MapProcess = {
   contract: {
@@ -77,9 +78,9 @@ function interior(state: GenerationState) {
     rectangle([x0 + inset, y0 + inset, middle, y1 - inset]),
     rectangle([middle, y0 + inset, x1 - inset, y1 - inset]),
   ];
-  const existing = Object.values(state.domain.world.features).filter(
-    (f) => f.areaId === state.domain.scope.areaId && f.kind === "room"
-  );
+  const existing = [
+    ...generationFeatures(state, { areaId: state.domain.scope.areaId, kind: "room" }),
+  ];
   const rooms = existing.length
     ? existing
     : footprints.flatMap((shape, index) => {

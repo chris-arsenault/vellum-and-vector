@@ -1,9 +1,10 @@
 import type Projection from "ol/proj/Projection.js";
 import type DataTileSource from "ol/source/DataTile.js";
-import type { Raster } from "./types";
+import { resourceRaster, type Raster } from "./types";
 import { numericTileSource } from "./numericTiles";
 import { TileWorkerClient } from "./TileWorkerClient";
 import type { GridSurface } from "@atlas/domain";
+import { rasterIdentity } from "./rasterIdentity";
 
 function sameGrid(a?: GridSurface, b?: GridSurface): boolean {
   if (a === b) return true;
@@ -20,6 +21,9 @@ function sameGrid(a?: GridSurface, b?: GridSurface): boolean {
   );
 }
 function sameData(a: Raster, b: Raster) {
+  if (resourceRaster(a) || resourceRaster(b)) {
+    return resourceRaster(a) && resourceRaster(b) && rasterIdentity(a) === rasterIdentity(b);
+  }
   return (
     sameGrid(a.field, b.field) &&
     sameGrid(a.water, b.water) &&

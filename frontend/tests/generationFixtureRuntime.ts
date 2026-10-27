@@ -1,10 +1,12 @@
 /* eslint-disable max-lines-per-function -- The browser worker fixture keeps its lifecycle in one closure. */
 import type { AtlasFeature, DomainSnapshot, Grid, Landmark, SocietyRegion } from "@atlas/domain";
 import { generationSnapshot } from "@atlas/generation";
-import { sendGeneration } from "../src/generationTransport";
+import { WorkspaceClient } from "../src/WorkspaceClient";
+import { openSpatialRuntime } from "../src/spatialRuntime";
+import { loadGenerationFeatures } from "../src/generationInputs";
+import type { GenerationWorkspaceStart } from "../src/generationWorkspaceProtocol";
 import type {
   CompletedBoundary,
-  AtlasGenerationInput,
   PublicationDefinition,
   GenerationDiagnostic,
 } from "@atlas/generation";
@@ -31,6 +33,7 @@ export function installGenerationFixtureRuntime({
   landmarks,
   society,
   diagnostics,
+  publicationSource,
 }: {
   hold: boolean;
   fields: boolean;
@@ -40,9 +43,14 @@ export function installGenerationFixtureRuntime({
   landmarks: Landmark[];
   society?: SocietyRegion;
   diagnostics: GenerationDiagnostic[];
+  publicationSource: string;
 }) {
   const pending = new Set<() => Promise<void>>();
+  const spatialReady = openSpatialRuntime();
   Object.assign(window, {
+    generationFixtureReady() {
+      return pending.size > 0;
+    },
     completeGenerationFixture() {
       return Promise.all([...pending].map((complete) => complete()));
     },
@@ -53,24 +61,40 @@ export function installGenerationFixtureRuntime({
       if (!String(args[0]).includes("generation.worker")) return Reflect.construct(target, args);
       let stopped = false;
       let complete: (() => Promise<void>) | undefined;
+      let publicationWorker: Worker | undefined;
+      let generationPort: MessagePort | undefined;
       const worker = {
         onmessage: null as ((event: MessageEvent) => void) | null,
         terminate() {
           stopped = true;
+          publicationWorker?.terminate();
+          generationPort?.close();
           if (complete) pending.delete(complete);
         },
-        postMessage(message: {
-          snapshot: DomainSnapshot;
-          input: AtlasGenerationInput;
-          operationId: string;
-        }) {
+        async postMessage(message: GenerationWorkspaceStart | { kind: "cancel" }) {
+          if ("kind" in message) {
+            worker.onmessage?.(new MessageEvent("message", { data: { kind: "cancelled" } }));
+            return;
+          }
+          generationPort = message.port;
+          await spatialReady;
+          const workspace = new WorkspaceClient(message.port);
+          const source = await workspace.generationSource(message.worldId, message.input.areaId);
+          const features: Record<string, AtlasFeature> = {};
+          await loadGenerationFeatures(source, workspace, {
+            put: (feature) => {
+              features[feature.id] = feature;
+            },
+          });
+          source.world.features = features;
+          if (stopped) return;
           Object.assign(window, {
             generationFixtureInput: structuredClone(message.input),
-            generationFixtureSnapshot: structuredClone(message.snapshot),
+            generationFixtureSnapshot: structuredClone(source),
             generationFixtureWorker: worker,
           });
           // Pin the same input revision that a real worker receives through structured cloning.
-          const snapshot = structuredClone(message.snapshot);
+          const snapshot = structuredClone(source);
           const original = structuredClone(snapshot);
           const publications = message.input.configuration?.inputs
             ?.publications as unknown as PublicationDefinition[];
@@ -177,11 +201,27 @@ export function installGenerationFixtureRuntime({
               },
             };
             const output = generationSnapshot(result, message.input, message.operationId, original);
-            await sendGeneration(output, [], diagnostics, (data, transfer) => {
-              if (!stopped)
-                worker.onmessage?.(
-                  new MessageEvent("message", { data: structuredClone(data, { transfer }) })
-                );
+            const url = URL.createObjectURL(
+              new Blob([publicationSource], { type: "text/javascript" })
+            );
+            publicationWorker = new NativeWorker(url);
+            URL.revokeObjectURL(url);
+            await new Promise<void>((resolve, reject) => {
+              publicationWorker!.onmessage = (event) => {
+                if (!stopped) worker.onmessage?.(event);
+                if (["completed", "failed"].includes(event.data.kind)) resolve();
+              };
+              publicationWorker!.onerror = (event) => reject(new Error(event.message));
+              message.port.onmessage = null;
+              publicationWorker!.postMessage(
+                {
+                  original,
+                  snapshot: output,
+                  operationId: message.operationId,
+                  port: message.port,
+                },
+                [message.port]
+              );
             });
           };
           pending.add(complete);

@@ -6,31 +6,33 @@ import OpenLayersParser from "geostyler-openlayers-parser";
 import type { Style as SymbolStyle } from "geostyler-style";
 import type { LayerStyle, World } from "./types";
 import { defaultSymbolStyle } from "./vectorStyles";
+import type { LayerPresentation } from "@atlas/domain";
+import { useLayerPresentation } from "./useWorkspacePresentation";
 import "geostyler/dist/index.css";
 
-export default function SymbolEditor({
-  world,
-  presentation,
-  apply,
-  close,
-}: {
+interface SymbolEditorProps {
   world: World;
   presentation: LayerStyle;
   apply: (symbols: SymbolStyle | undefined) => void;
   close: () => void;
-}) {
+}
+export default function SymbolEditor(props: SymbolEditorProps) {
+  const data = useLayerPresentation(props.world, props.presentation.layerId);
+  if (data.isPending) return <p role="status">Reading layer attributes…</p>;
+  if (data.error) return <p role="alert">{data.error.message}</p>;
+  return <SymbolEditorForm {...props} data={data.data} />;
+}
+function SymbolEditorForm({
+  world,
+  presentation,
+  apply,
+  close,
+  data,
+}: SymbolEditorProps & { data: LayerPresentation }) {
   const layer = world.layers[presentation.layerId];
   const container = useRef<HTMLDivElement>(null);
   const [symbols, setSymbols] = useState(
-    () =>
-      presentation.symbols ??
-      defaultSymbolStyle(
-        layer.name,
-        presentation,
-        Object.values(world.features)
-          .filter((feature) => feature.layerId === layer.id)
-          .map((feature) => feature.geometry.type)
-      )
+    () => presentation.symbols ?? defaultSymbolStyle(layer.name, presentation, data.geometries)
   );
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -50,7 +52,7 @@ export default function SymbolEditor({
   return (
     <div className="symbol-editor" ref={container}>
       <ConfigProvider getPopupContainer={() => container.current!}>
-        <GeoStylerContext.Provider value={symbolContext(world, presentation.layerId)}>
+        <GeoStylerContext.Provider value={symbolContext(data)}>
           {/* GeoStyler's style prop is symbol data, not a CSS style object. */}
           {/* eslint-disable-next-line ahara/no-inline-styles */}
           <Style style={symbols} onStyleChange={setSymbols} disableClassification />
@@ -74,27 +76,14 @@ export default function SymbolEditor({
     </div>
   );
 }
-function symbolContext(
-  world: World,
-  layerId: string
-): import("geostyler").GeoStylerContextInterface {
-  const features = Object.values(world.features).filter((feature) => feature.layerId === layerId);
-  const properties = { name: { type: "string" }, kind: { type: "string" } } as Record<
-    string,
-    { type: "string" | "number" | "boolean" }
-  >;
-  for (const feature of features)
-    for (const [name, value] of Object.entries(feature.attributes)) {
-      if (typeof value === "number" || typeof value === "boolean" || typeof value === "string")
-        properties[name] = { type: typeof value as "number" | "boolean" | "string" };
-    }
+function symbolContext(data: LayerPresentation): import("geostyler").GeoStylerContextInterface {
   return {
     composition: { Editor: { rasterEditor: { visibility: false } } },
     data: {
-      schema: { type: "object", properties },
+      schema: { type: "object", properties: data.properties },
       exampleFeatures: {
         type: "FeatureCollection",
-        features: features.map((feature) => ({
+        features: data.examples.map((feature) => ({
           type: "Feature",
           id: feature.id,
           geometry: feature.geometry,

@@ -98,7 +98,7 @@ it("preserves intensive integrals and extensive totals through refinement and co
     fg = adaptiveGeometry(fine);
   const values = Float64Array.from(cg.x, (x, i) => 4 + x / 200 + cg.y[i] / 1000);
   const refined = transferAdaptive(coarse, fine, values, "intensive");
-  const integral = (v: Float64Array, area: Float64Array) =>
+  const integral = (v: import("./numericalVector").NumericalVector, area: ArrayLike<number>) =>
     v.reduce((sum, value, i) => sum + value * area[i], 0);
   expect(integral(refined, fg.areas)).toBeCloseTo(integral(values, cg.areas), 6);
   expect(Array.from(transferAdaptive(fine, coarse, refined, "intensive"))).toEqual(

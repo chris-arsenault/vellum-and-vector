@@ -5,47 +5,58 @@ import { clamp, round } from "./math";
 import { hashUnit } from "./noise";
 import { metricSearch } from "./metricSearch";
 import { tectonicOceanMaturityMyr } from "./tectonicControls";
+import { workingArray, releaseWorking } from "./physicalNumerics";
+import type { NumericalVector } from "@atlas/domain";
 
 const unreachable = 2147483647;
 function expand(
   map: PhysicalField,
-  queue: number[],
-  distance: Float64Array,
-  kind: Int32Array | null,
+  queue: Iterable<number>,
+  distance: NumericalVector,
+  kind: NumericalVector | null,
   reach: number
 ) {
-  metricSearch(map.mesh, queue, distance, reach, (j, i) => {
-    if (kind) kind[j] = kind[i];
-  });
+  metricSearch(
+    map.mesh,
+    queue,
+    distance,
+    reach,
+    (j, i) => {
+      if (kind) kind[j] = kind[i];
+    },
+    map.numerical
+  );
 }
 export function tectonicMargins(map: PhysicalField, context: PhysicalContext) {
   const count = map.mesh.count,
     p = context.Profile;
-  const distance = new Float64Array(count).fill(unreachable),
-    spreading = distance.slice();
-  const kind = new Int32Array(count),
-    frontier: number[] = [],
-    spreadingFrontier: number[] = [];
+  const distance = workingArray(map, "float64", "margin:distance").fill(unreachable),
+    spreading = workingArray(map, "float64", "margin:spreading").fill(unreachable);
+  const kind = workingArray(map, "int32", "margin:kind");
   for (let i = 0; i < count; i++) {
     const code = map.TectonicBoundaryCodes[i];
     if (code === 0) continue;
     distance[i] = 0;
     kind[i] = code;
-    frontier.push(i);
     if (code === 2) {
       spreading[i] = 0;
-      spreadingFrontier.push(i);
     }
   }
-  expand(map, frontier, distance, kind, Math.max(1, p.MarginInfluenceReach));
-  expand(map, spreadingFrontier, spreading, null, unreachable);
+  function* seeds(spreadingOnly: boolean) {
+    for (let i = 0; i < count; i++)
+      if (spreadingOnly ? map.TectonicBoundaryCodes[i] === 2 : map.TectonicBoundaryCodes[i] !== 0)
+        yield i;
+  }
+  expand(map, seeds(false), distance, kind, Math.max(1, p.MarginInfluenceReach));
+  expand(map, seeds(true), spreading, null, unreachable);
   assignMarginsAndAge(map, context, kind, spreading);
+  releaseWorking(map, distance, spreading, kind);
 }
 function assignMarginsAndAge(
   map: PhysicalField,
   context: PhysicalContext,
-  kind: Int32Array,
-  spreading: Float64Array
+  kind: NumericalVector,
+  spreading: NumericalVector
 ) {
   const p = context.Profile;
   let oldest = 0;

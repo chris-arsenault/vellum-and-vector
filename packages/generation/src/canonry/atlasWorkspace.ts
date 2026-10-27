@@ -6,12 +6,11 @@ import {
   spatial,
   type Grid,
   type Position,
-  createAdaptiveField,
-  prepareAdaptiveTransfer,
-  resampleChannels,
-  gridPosition,
   rectangle,
   isDescendant,
+  numericalSampleType,
+  allocateNumerical,
+  type NumericalVector,
 } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { authoredFields } from "../mapAuthored";
@@ -19,7 +18,9 @@ import { createField, type PhysicalField } from "./field";
 import { nearestTriangle } from "./mesh";
 import { createWorldMesh } from "./worldMesh";
 import { createAdaptiveWorldMesh } from "./adaptiveMesh";
-import { projectionInterpolation, type ProjectionInterpolation } from "./atlasSampling";
+import type { ProjectionInterpolation } from "./atlasSampling";
+import { refreshWorkspaceSamples } from "./atlasSurfaceProjection";
+export { refreshWorkspaceSamples } from "./atlasSurfaceProjection";
 import { atlasPhysicalProfile, atlasQuality } from "./atlasProfile";
 import { generationResolution } from "../resolution";
 import { continentalWorldProfile } from "./worldScale";
@@ -39,9 +40,10 @@ export interface AtlasPhysicalWorkspace {
   landmarkRoster?: import("./landmarkSiting").RosterEntry[];
   map: PhysicalField;
   profile: PhysicalProfile;
-  samples: Int32Array;
+  samples: NumericalVector;
   interpolation?: ProjectionInterpolation;
-  fixed: { binding: ChannelBinding; values: Float64Array }[];
+  interpolationKey?: string;
+  fixed: { binding: ChannelBinding; values: NumericalVector }[];
   inherited: boolean;
   sampling: { maximumSize: number; minimumSize: number; featureSamples: number };
 }
@@ -88,10 +90,8 @@ function initializeInheritedMaterial(map: PhysicalField, surface: Grid) {
     if (map.CrustThickness[i] <= 0)
       map.CrustThickness[i] = units(1000 + 3 * map.CrustContinentalFraction[i]);
     map.Elevation[i] = map.BedrockElevation[i] + map.SedimentThickness[i];
+    map.CrustTypeCodes[i] = map.CrustContinentalFraction[i] >= 500 ? 2 : 1;
   }
-  map.CrustTypeCodes.set(
-    Int32Array.from(map.CrustContinentalFraction, (value) => (value >= 500 ? 2 : 1))
-  );
   if (!surface.channels.geothermal) map.Geothermal.fill(0);
 }
 function inheritNumerical(state: GenerationState, work: AtlasPhysicalWorkspace) {
@@ -129,13 +129,16 @@ function inheritChannels(
       const value = valueAt(nativePosition(work, i));
       const native = (value - (binding.offset ?? 0) + (binding.datum ? datum : 0)) / binding.scale;
       map[binding.native][i] =
-        map[binding.native] instanceof Int32Array ? Math.round(native) : native;
+        numericalSampleType(map[binding.native]) === "int32" ? Math.round(native) : native;
     }
   }
 }
 function fixedInheritedBoundary(state: GenerationState, work: AtlasPhysicalWorkspace) {
   if (!work.inherited) return;
-  const values = new Float64Array(work.map.mesh.count).fill(NaN);
+  const values = allocateNumerical(
+    { type: "float64", length: work.map.mesh.count, lifetime: "run", name: "inherited:boundary" },
+    work.map.numerical
+  ).fill(NaN);
   const footprint = state.surface.scope.footprint,
     margin = state.domain.scope.resolution ?? work.map.mesh.spacing;
   const interior = spatial.buffer(footprint, -margin);
@@ -150,7 +153,15 @@ function fixedSamples(
   footprint: Grid["scope"]["footprint"],
   binding: ChannelBinding
 ) {
-  const values = new Float64Array(work.map.mesh.count).fill(NaN);
+  const values = allocateNumerical(
+    {
+      type: "float64",
+      length: work.map.mesh.count,
+      lifetime: "run",
+      name: `authored:${binding.name}`,
+    },
+    work.map.numerical
+  ).fill(NaN);
   const covers = spatial.pointCoverage(footprint),
     sourceCovers = spatial.pointCoverage(source.scope.footprint),
     valueAt = gridSampler(source, binding.name, binding.unit === "category");
@@ -158,7 +169,8 @@ function fixedSamples(
     const position = nativePosition(work, i);
     if (!covers(position) || !sourceCovers(position)) continue;
     const value = (valueAt(position) - (binding.offset ?? 0)) / binding.scale;
-    values[i] = work.map[binding.native] instanceof Int32Array ? Math.round(value) : value;
+    values[i] =
+      numericalSampleType(work.map[binding.native]) === "int32" ? Math.round(value) : value;
   }
   return values;
 }
@@ -219,14 +231,15 @@ export function createAtlasWorkspace(
         spatial.area(state.domain.scope.footprint),
         [anchor.x, anchor.y],
         profile.MapBoundary === 1,
-        profile.MapBoundary === 1 && profile.LatitudeSouth === -90 && profile.LatitudeNorth === 90
+        profile.MapBoundary === 1 && profile.LatitudeSouth === -90 && profile.LatitudeNorth === 90,
+        state.numerical
       )
     : createChildMesh(state, sampling, profile.BoundaryPadding);
-  const map = createField(mesh);
+  const map = createField(mesh, state.numerical);
   const work: AtlasPhysicalWorkspace = {
     map,
     profile,
-    samples: new Int32Array(state.surface.active.length),
+    samples: new Int32Array(0),
     fixed: [],
     inherited: Boolean(state.surface.channels.elevation),
     sampling,
@@ -265,7 +278,8 @@ function createChildMesh(
     },
     padding,
     state.domain.scope.footprint,
-    crossesChartSeam(state)
+    crossesChartSeam(state),
+    state.numerical
   );
 }
 function crossesChartSeam(state: GenerationState) {
@@ -299,55 +313,8 @@ function protectedSampling(state: GenerationState, size: number) {
     });
   return supports;
 }
-export function refreshWorkspaceSamples(
-  state: GenerationState,
-  work: AtlasPhysicalWorkspace,
-  prepared?: ReturnType<typeof prepareAdaptiveTransfer>
-) {
-  if (!work.map.mesh.topology) {
-    work.interpolation = projectionInterpolation(
-      work.map.mesh,
-      state.surface.active.length,
-      (i) => {
-        const p = gridPosition(state.surface, i),
-          mesh = work.map.mesh;
-        return [p.x - mesh.origin[0], p.y - mesh.origin[1]];
-      }
-    );
-    work.samples = work.interpolation.samples;
-    return;
-  }
-  const previous = state.surface,
-    topology = work.map.mesh.topology!;
-  work.samples = work.map.mesh.leafToCell;
-  if (previous.topology === topology) return;
-  const next = createAdaptiveField(previous.id, previous.scope, topology);
-  if (!Object.keys(previous.channels).length) {
-    state.surface = next;
-    return;
-  }
-  if (previous.topology?.bounds.every((value, i) => value === topology.bounds[i])) {
-    const transfer = prepared ?? prepareAdaptiveTransfer(previous.topology, topology);
-    for (const [name, values] of Object.entries(previous.channels)) {
-      next.channels[name] = transfer(values, channelQuantity(previous, name));
-      next.units[name] = previous.units[name];
-      (next.quantities ??= {})[name] = channelQuantity(previous, name);
-    }
-  } else resampleChannels(previous, next);
-  state.surface = next;
-  retainPeriodicSurface(state, work);
-}
-function retainPeriodicSurface(state: GenerationState, work: AtlasPhysicalWorkspace) {
-  if (state.domain.world.areas[state.domain.scope.areaId].parentId && work.map.mesh.periodic)
-    state.surface.periodicWidth = work.map.mesh.periodic.width;
-}
-function channelQuantity(grid: Grid, name: string) {
-  return (
-    grid.quantities?.[name] ??
-    (["category", "cell-index"].includes(grid.units[name]) ? "category" : "intensive")
-  );
-}
 export function refreshWorkspaceProtection(state: GenerationState, work: AtlasPhysicalWorkspace) {
+  if (state.numerical) for (const fixed of work.fixed) state.numerical.release(fixed.values);
   work.fixed = [];
   fixedInheritedBoundary(state, work);
   fixedAuthoring(state, work);

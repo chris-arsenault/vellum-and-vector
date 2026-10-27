@@ -148,17 +148,16 @@ fields and advanced GIS symbol rules.
 
 The application is written in TypeScript. React and OpenLayers provide the editor;
 shared TypeScript modules define world data, commands, validation and procedural
-generation. The UI calls domain operations directly against browser memory.
-Generation runs in a Web Worker with progress, cancellation and complete result
-publication. Explicit map snapshots use IndexedDB. There is no backend,
-authentication, server database or MCP.
+generation. The [browser workspace](docs/adr/0003-frontend-session.md) owns local
+geography and executes scoped domain operations. Generation runs in a Web Worker
+with progress and cancellation. There is no backend, authentication, server
+database or MCP.
 
 | Responsibility | Direction                                                                               |
 | -------------- | --------------------------------------------------------------------------------------- |
 | Editor         | React, OpenLayers, explicit geographic refinement and responsive manual tools           |
 | Domain         | Shared TypeScript types, spatial identity, constraints and versioned commands           |
 | Generation     | Shared working map, registered processes and causal epoch sequences in a browser worker |
-| Session        | In-memory worlds, fields, templates, history and undo                                   |
 
 Every area has a geographic parent, footprint and coordinate frame. Features keep
 their identity as finer representations are authored. Layer views compose the
@@ -186,8 +185,8 @@ temperature, sea level, source activity or population pressure. Physical and
 magical nodes interleave at their causal positions. Cultural, political, site
 and cave generation use the same structure with their inherited context.
 
-Generation and completed causes stay in memory. Cancellation discards the worker's
-unpublished output. If you edit the world during generation, the edits are kept
+Cancellation discards the worker's unpublished output; initial geography already
+delivered remains marked incomplete. If you edit the world during generation, the edits are kept
 and the outdated result is rejected. Generate again from the current geography.
 Child fields inherit parent geography and retain its boundary band while finer
 numerical work occupies the interior.
@@ -272,35 +271,30 @@ cells and call the relevant algorithm directly. A unit test's setup must specify
 the coast, ridge, river, ice stock or population it needs. It must not run a
 generator, a physical schedule or a seed sweep to find those preconditions.
 
-`pnpm test:generation` is opt-in and generates **one shared Draft world**.
+`pnpm test:generation` is opt-in and generates a shared small Draft world using
+the SQLite/GEOS execution adapters and file-backed numerical storage.
 Independent checks reuse it for physical history, water and rivers, ecological
 publication, all seven magic systems, society, naming, and authored protection.
-Add assertions to that result instead of adding generation calls. Use at most
-two full generations during a task, each checking multiple integrated outcomes.
-There are no Fine-generation tests or separate scale-generation suite.
+Reuse that result across assertions; add a shared fixture only when different
+preconditions require one. There is no fixed generation quota or time limit on
+development work. Fine verification requires separate authorization.
 
 Browser tests import `test` from `frontend/tests/uiTest.ts`. Every journey receives
 the small generation fixture automatically, and a real generation worker throws
 before it can start. Fixture grids have 256 cells; a form may display larger
 world dimensions without generating them. Raster fields are opt-in when needed
 for the UI behavior under test. Geometry, magic, ecology and society algorithms
-belong in constructed Vitest cases. Worker transfer and publication use supplied
-arrays in `frontend/src/generationTransport.test.ts`.
+belong in constructed Vitest cases. Worker publication, storage, cancellation
+and save/reopen checks also use small supplied geography and arrays.
 
 These boundaries are enforced by the unit test setup, standard ESLint restricted
-imports, and `frontend/src/testPolicy.test.ts`. The policy checks the single
-integration entry point and verifies that direct, aliased and dynamic generator
+imports, and `frontend/src/testPolicy.test.ts`. The policy checks shared generation
+setup and verifies that direct, aliased and dynamic generator
 attempts cannot enter routine tests. Do not bypass the guards or extend timeouts
 to accommodate generated setup.
 
-The opt-in rendering journey also uses a constructed 16×16 world:
-
-```sh
-ATLAS_PERFORMANCE=1 pnpm --dir frontend test:browser
-```
-
-It checks actual OpenLayers rendering, navigation and layer switching without
-generation or a saved-world artifact. Browser tests own `test-results/`; any
+The browser suite checks production rendering, navigation and layer switching
+with small supplied worlds. Browser tests own `test-results/`; any
 local diagnostic output from node tests belongs in ignored `.artifacts/`.
 
 ## Deployment

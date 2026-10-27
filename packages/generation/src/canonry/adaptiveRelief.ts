@@ -7,6 +7,7 @@ import {
   spatial,
   type Grid,
   type Position,
+  type NumericalVector,
 } from "@atlas/domain";
 import type { GenerationState, MapProcess } from "../process";
 import type { PhysicalField } from "./field";
@@ -16,15 +17,17 @@ import { fractalNoise } from "./noise";
 import { rebuild } from "./surface";
 import { nativeContext } from "./context";
 import { composeNativeAuthoring, nativePosition, parentChannels } from "./atlasWorkspace";
+import { workingArray, releaseWorking } from "./physicalNumerics";
 
 export interface ReliefSynthesis {
   changed: number;
   rmsM: number;
 }
 interface Proposal {
-  delta: Float64Array;
-  cell: Int32Array;
-  sums: Map<number, { sum: number; weight: number }>;
+  delta: NumericalVector;
+  cell: NumericalVector;
+  sums: NumericalVector;
+  weights: NumericalVector;
 }
 function parentSpan(parent: Grid): number {
   if (parent.scope.resolution) return parent.scope.resolution;
@@ -83,9 +86,10 @@ function proposeRelief(
     inside = interior ? spatial.pointCoverage(interior) : () => false,
     [bx0, by0, bx1, by1] = spatial.bounds(footprint);
   const proposal: Proposal = {
-    delta: new Float64Array(mesh.count),
-    cell: new Int32Array(mesh.count).fill(-1),
-    sums: new Map(),
+    delta: workingArray(map, "float64", "relief:delta"),
+    cell: workingArray(map, "int32", "relief:parent").fill(-1),
+    sums: workingArray(map, "float64", "relief:sums", parent.active.length),
+    weights: workingArray(map, "float64", "relief:weights", parent.active.length),
   };
   for (let i = 0; i < mesh.count; i++) {
     if (map.WaterKindCodes[i] !== 0 || mesh.contentAreas[i] <= 0) continue;
@@ -99,10 +103,8 @@ function proposeRelief(
     const id = parentCell(parent, x, y);
     proposal.delta[i] = relief * fade;
     proposal.cell[i] = id;
-    const entry = proposal.sums.get(id) ?? { sum: 0, weight: 0 };
-    entry.sum += proposal.delta[i] * mesh.areas[i];
-    entry.weight += mesh.areas[i];
-    proposal.sums.set(id, entry);
+    proposal.sums[id] += proposal.delta[i] * mesh.areas[i];
+    proposal.weights[id] += mesh.areas[i];
   }
   return proposal;
 }
@@ -112,9 +114,12 @@ function applyConserved(map: PhysicalField, proposal: Proposal): ReliefSynthesis
     square = 0;
   for (let i = 0; i < map.mesh.count; i++) {
     if (proposal.cell[i] < 0) continue;
-    const entry = proposal.sums.get(proposal.cell[i])!;
+    const parent = proposal.cell[i];
     const floor = (map.EffectiveSeaLevel + units(1) - map.Elevation[i]) / 1024;
-    const change = Math.max(proposal.delta[i] - entry.sum / entry.weight, floor);
+    const change = Math.max(
+      proposal.delta[i] - proposal.sums[parent] / proposal.weights[parent],
+      floor
+    );
     const applied = units(change);
     if (applied === 0) continue;
     map.BedrockElevation[i] += applied;
@@ -139,7 +144,12 @@ export function synthesizeRelief(
   seed: number,
   p: PhysicalProfile
 ): ReliefSynthesis {
-  return applyConserved(map, proposeRelief(map, parent, footprint, band, seed, p));
+  const proposal = proposeRelief(map, parent, footprint, band, seed, p);
+  try {
+    return applyConserved(map, proposal);
+  } finally {
+    releaseWorking(map, ...Object.values(proposal));
+  }
 }
 
 /** The child-profile step that realizes the relief its parent left latent. */

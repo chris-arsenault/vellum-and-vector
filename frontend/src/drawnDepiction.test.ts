@@ -1,3 +1,4 @@
+import { fixtureWorld } from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
 import {
   defaultCartographicPresentation,
@@ -8,15 +9,14 @@ import {
   describeFeature,
 } from "@atlas/domain";
 import type { Geometry } from "geojson";
-import type { AtlasFeature, Raster } from "./types";
-import { createWorld } from "./atlasState";
+import type { AtlasFeature, LoadedRaster as Raster } from "./types";
 import { drawingGeography } from "./drawnGeography";
 import { biomeStyle, biomeTreatment } from "./drawnEcology";
 import { placeAnchor, placeMark } from "./drawnPlaces";
 import { cartographicFeatureStyle, defaultDrawnStyles } from "./drawnStyles";
 import { drawnMagic, magicCartography } from "./drawnMagic";
 import { sheetPadding } from "./drawnSheet";
-import type { DrawnMapInput } from "./drawnMap";
+import type { LoadedDrawnMapInput as DrawnMapInput } from "./drawnMap";
 
 const polygon = (ring: number[][]): Geometry => ({ type: "Polygon", coordinates: [ring] });
 function feature(
@@ -72,7 +72,7 @@ function neighbours() {
     ),
   ];
 }
-it("rounds shared generated stairs once, retaining complete coverage and the source boundaries", () => {
+it("rounds shared generated stairs once, retaining complete coverage and the source boundaries", async () => {
   const features = neighbours(),
     before = structuredClone(features);
   const shapes = drawingGeography(features),
@@ -84,7 +84,7 @@ it("rounds shared generated stairs once, retaining complete coverage and the sou
   expect(features).toEqual(before);
   expect(drawingGeography(features)).toBe(shapes);
 });
-it("retains authored shared borders and three-country junctions", () => {
+it("retains authored shared borders and three-country junctions", async () => {
   const features = neighbours();
   features[0].protected = true;
   expect(drawingGeography(features).get("east")).toEqual(features[1].geometry);
@@ -96,7 +96,7 @@ it("retains authored shared borders and three-country junctions", () => {
   const shapes = drawingGeography(junction);
   for (const f of junction) expect(shapes.get(f.id)).toEqual(f.geometry);
 });
-it("keeps narrow coastal slivers and adjacent countries valid during shared smoothing", () => {
+it("keeps narrow coastal slivers and adjacent countries valid during shared smoothing", async () => {
   const sliver = polygon([
     [0, 0],
     [10000, 0],
@@ -124,8 +124,8 @@ it("keeps narrow coastal slivers and adjacent countries valid during shared smoo
   expect(spatial.intersectionArea(a)(b)).toBeCloseTo(0, 4);
   expect(spatial.area(spatial.union(a, b))).toBeCloseTo(100000000, 2);
 });
-it("clips land washes and ecological shapes to physical shores and lakes, including water holes", () => {
-  const world = createWorld({ name: "Shores", seed: 3, width: 100000, height: 100000 });
+it("clips land washes and ecological shapes to physical shores and lakes, including water holes", async () => {
+  const world = fixtureWorld({ name: "Shores", seed: 3, width: 100000, height: 100000 });
   const area = Object.values(world.areas)[0];
   const field = createGrid(
     "coast",
@@ -168,7 +168,7 @@ it("clips land washes and ecological shapes to physical shores and lakes, includ
   }
   expect(country.geometry).toEqual(area.footprint);
 });
-it("depicts distinct biome families with their own wash and illustration motif", () => {
+it("depicts distinct biome families with their own wash and illustration motif", async () => {
   const kinds = ["forest", "grassland", "wetland", "barren"];
   const features = kinds.map((kind) =>
     feature(kind, rectangle([0, 0, 10000, 10000]), kind, "ecology")
@@ -183,7 +183,7 @@ it("depicts distinct biome families with their own wash and illustration motif",
   features[3].attributes.biome = "Desert";
   expect(biomeTreatment(features[3])?.symbol).toBe("dune");
 });
-it("gives major non-city sites recognizable marks and anchors polygon sites inside their footprint", () => {
+it("gives major non-city sites recognizable marks and anchors polygon sites inside their footprint", async () => {
   const kinds = ["volcano", "crater", "waterfall", "poi", "harbor"];
   expect(
     kinds.map((kind) => placeMark(feature(kind, rectangle([0, 0, 10000, 10000]), kind, "geology")))
@@ -194,7 +194,7 @@ it("gives major non-city sites recognizable marks and anchors polygon sites insi
   const [x, y] = placeAnchor(site);
   expect(spatial.pointCoverage(site.geometry)({ x, y, z: 0 })).toBe(true);
   // A magic landmark is a place on the magic layer: marked as a site, never a tinted field.
-  const world = createWorld({ name: "Marks", seed: 1, width: 100000, height: 100000 });
+  const world = fixtureWorld({ name: "Marks", seed: 1, width: 100000, height: 100000 });
   const wellspring = feature(
     "Emberwell",
     { type: "Point", coordinates: [5000, 5000] },
@@ -205,8 +205,8 @@ it("gives major non-city sites recognizable marks and anchors polygon sites insi
   expect(placeMark(wellspring)).toBe("shrine");
   expect(magicCartography(wellspring, world)).toBe("site");
 });
-it("keeps legacy mesh fault traces out of ordinary drawn maps but retains explicit fault styling", () => {
-  const world = createWorld({ name: "Faults", seed: 1, width: 100000, height: 100000 });
+it("keeps legacy mesh fault traces out of ordinary drawn maps but retains explicit fault styling", async () => {
+  const world = fixtureWorld({ name: "Faults", seed: 1, width: 100000, height: 100000 });
   const fault = feature(
     "fault",
     {
@@ -236,8 +236,8 @@ it("keeps legacy mesh fault traces out of ordinary drawn maps but retains explic
     true
   );
 });
-it("keeps broad magical fields translucent while retaining rule-defined sites and courses", () => {
-  const world = createWorld({ name: "Magic", seed: 1, width: 100000, height: 100000 });
+it("keeps broad magical fields translucent while retaining rule-defined sites and courses", async () => {
+  const world = fixtureWorld({ name: "Magic", seed: 1, width: 100000, height: 100000 });
   const field = feature(
     "Pressure lattice",
     rectangle([0, 0, 10000, 10000]),
@@ -256,8 +256,8 @@ it("keeps broad magical fields translucent while retaining rule-defined sites an
     "course"
   );
 });
-it("reserves chart space for a full political legend instead of drawing the key over the land", () => {
-  const world = createWorld({ name: "Many countries", seed: 1, width: 100000, height: 100000 });
+it("reserves chart space for a full political legend instead of drawing the key over the land", async () => {
+  const world = fixtureWorld({ name: "Many countries", seed: 1, width: 100000, height: 100000 });
   const input: DrawnMapInput = {
     world,
     area: Object.values(world.areas)[0],

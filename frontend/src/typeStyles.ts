@@ -20,7 +20,8 @@ export function typeStyle(
   parsed?: StyleLike,
   cartography?: CartographicPresentation,
   footprint?: Geometry,
-  geography?: DrawingGeography
+  geography?: DrawingGeography,
+  features?: AtlasFeature[]
 ): StyleLike {
   return (feature, resolution) => {
     const domain = feature.get("domain") as AtlasFeature;
@@ -36,7 +37,8 @@ export function typeStyle(
       parsed,
       cartography,
       footprint,
-      geography
+      geography,
+      features
     );
     if (!output) return [];
     const styles = Array.isArray(output) ? output : [output];
@@ -62,7 +64,8 @@ function styledFeature(
   parsed?: StyleLike,
   cartography?: CartographicPresentation,
   footprint?: Geometry,
-  geography?: DrawingGeography
+  geography?: DrawingGeography,
+  features?: AtlasFeature[]
 ) {
   if (cartography?.mode === "drawn")
     return cartographicFeatureStyle(domain, effective, resolution, {
@@ -70,6 +73,7 @@ function styledFeature(
       view: cartography,
       footprint,
       geography,
+      features,
     });
   return parsed
     ? parsedOutput(parsed, feature, resolution)

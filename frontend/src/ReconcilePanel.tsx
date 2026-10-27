@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import GeoJSON from "ol/format/GeoJSON.js";
-import { previewCommand } from "./atlasCommands";
+import { previewWorkspaceCommand } from "./workspaceAuthoring";
+import { useConnections } from "./useWorkspacePresentation";
 import { ErrorMessage } from "./ErrorMessage";
 import { AttributeEditor } from "./AttributeEditor";
 import { makeCommand } from "./useAtlas";
@@ -12,7 +13,7 @@ export function ReconcilePanel({ world, editor }: { world: World; editor: Editor
   const [command, setCommand] = useState<Command | null>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
   const preview = useMutation({
-    mutationFn: async (input: Command) => previewCommand(world.id, input),
+    mutationFn: async (input: Command) => previewWorkspaceCommand(world.id, input),
     onSuccess: (result) => editor.setProposedFeatures(Object.values(result.candidate.features)),
   });
   function inspect() {
@@ -138,7 +139,8 @@ function ConnectionChanges({
   editor: EditorState;
   update: (connection: Connection) => void;
 }) {
-  const attached = Object.values(world.connections ?? {}).filter((c) =>
+  const connections = useConnections(world, editor.area.id);
+  const attached = (connections.data ?? []).filter((c) =>
     editor.pendingEdits.some(
       (e) => e.feature.id === c.a.featureId || e.feature.id === c.b.featureId
     )

@@ -1,4 +1,8 @@
 import { adaptiveCell, type AdaptiveTopology } from "./adaptiveTopology";
+import { ByteCache } from "./byteCache";
+
+const adaptiveStencilCacheBytes = 4 * 1024 * 1024;
+const adaptiveFitCacheBytes = 256 * 1024;
 export type AdaptiveSamples = ArrayLike<number> | ((index: number) => number);
 export const adaptiveSample = (values: AdaptiveSamples, i: number) =>
   typeof values === "function" ? values(i) : values[i];
@@ -36,7 +40,7 @@ function solve(prepared: ReturnType<typeof factor>, rhs: number[]) {
   return rhs;
 }
 function prepareFits(t: AdaptiveTopology) {
-  const cache = new Map<number, ReturnType<typeof stencil>>();
+  const cache = new ByteCache<number, ReturnType<typeof stencil>>(adaptiveStencilCacheBytes);
   function stencil(i: number) {
     const box = adaptiveCell(t, i),
       width = box[2] - box[0],
@@ -64,8 +68,11 @@ function prepareFits(t: AdaptiveTopology) {
     return { neighbors: Int32Array.from(neighbors), weights, prepared, width, height };
   }
   return (i: number) => {
-    if (!cache.has(i)) cache.set(i, stencil(i));
-    return cache.get(i)!;
+    const previous = cache.get(i);
+    if (previous) return previous;
+    const result = stencil(i);
+    cache.set(i, result, result.weights.byteLength + result.neighbors.byteLength + 1024);
+    return result;
   };
 }
 // Geometry is immutable after assembly. A new refinement gets a new preparation;
@@ -75,7 +82,7 @@ const preparations = new WeakMap<AdaptiveTopology, ReturnType<typeof prepareFits
 export function adaptiveFits(t: AdaptiveTopology, values: AdaptiveSamples) {
   if (!preparations.has(t)) preparations.set(t, prepareFits(t));
   const geometry = preparations.get(t)!,
-    cache = new Map<number, number[]>();
+    cache = new ByteCache<number, number[]>(adaptiveFitCacheBytes);
   return (i: number) => {
     const previous = cache.get(i);
     if (previous) return previous;
@@ -94,7 +101,7 @@ export function adaptiveFits(t: AdaptiveTopology, values: AdaptiveSamples) {
       fitted[3] / (width * height),
       fitted[4] / height ** 2,
     ];
-    cache.set(i, result);
+    cache.set(i, result, 128);
     return result;
   };
 }

@@ -1,5 +1,14 @@
-import { fieldInterpolator, gridPosition, putChannel, resolutionCells } from "@atlas/domain";
+import {
+  fieldInterpolator,
+  gridPosition,
+  putChannel,
+  resolutionCells,
+  numericalSampleType,
+  type NumericalVector,
+  type AtlasFeature,
+} from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
+import { generationNetworks, removeGenerationReach } from "./generationNetworks";
 import type { PhysicalField } from "./canonry/field";
 import { generationBindings } from "./generationBindings";
 import { atlasChannels, type ChannelBinding } from "./canonry/atlasChannels";
@@ -35,6 +44,7 @@ import { damCandidateCell } from "./societyDemand";
 import { isWorldSociety } from "./societyMapScope";
 import { regionalIncomingWater } from "./canonry/regionalCorridors";
 import { refreshRegionalInfluence } from "./canonry/regionalMagic";
+import { generationFeatures, removeGenerationFeature } from "./generationFeatures";
 
 function synchronizeNative(state: GenerationState) {
   for (const name of state.society!.changed) {
@@ -56,7 +66,7 @@ function synchronizeChannel(state: GenerationState, binding: ChannelBinding) {
     const sample = at(nativePosition(work, i));
     if (before && sample === 0) continue;
     const value = before ? values[i] + sample / scale : (sample - offset) / scale;
-    values[i] = values instanceof Int32Array ? Math.round(value) : value;
+    values[i] = numericalSampleType(values) === "int32" ? Math.round(value) : value;
     if (name === "elevation") {
       if (!before) map.Elevation[i] += map.BaseSeaLevel;
       map.BedrockElevation[i] = map.Elevation[i] - map.SedimentThickness[i];
@@ -65,7 +75,7 @@ function synchronizeChannel(state: GenerationState, binding: ChannelBinding) {
     }
   }
 }
-function changedSurface(state: GenerationState, name: string, before?: Float64Array) {
+function changedSurface(state: GenerationState, name: string, before?: NumericalVector) {
   return before
     ? {
         ...state.surface,
@@ -81,11 +91,7 @@ function refreshWater(state: GenerationState, context: MapProcessContext) {
     bound = generationBindings(context);
   const c = physicalContext(bound.seed, 0, work.profile);
   c.SeaLevelOffset = (work.map.EffectiveSeaLevel - work.map.BaseSeaLevel) / 1024;
-  work.map.EngineeredDams = new Set(
-    state
-      .society!.region.works.filter((w) => w.kind === "dam" && w.condition > 0.1)
-      .flatMap((w) => workSamples(state, w).map(({ i }) => work.samples[i]))
-  );
+  work.map.EngineeredDams = new Set(engineeredDamCells(state));
   // Repair present dependencies only. No tectonic motion, incision epochs or new geological events.
   const incoming = state.domain.world.areas[state.domain.scope.areaId].parentId
     ? regionalIncomingWater(state)
@@ -103,6 +109,12 @@ function refreshWater(state: GenerationState, context: MapProcessContext) {
     riverChannelGeometry,
   ])
     operation(work.map, c);
+}
+function* engineeredDamCells(state: GenerationState) {
+  for (const work of state.society!.region.works) {
+    if (work.kind !== "dam" || work.condition <= 0.1) continue;
+    for (const { i } of workSamples(state, work)) yield state.physical!.samples[i];
+  }
 }
 export function refreshSocietyEnvironment(
   state: GenerationState,
@@ -127,7 +139,12 @@ export function refreshSocietyEnvironment(
   refreshSocietySupport(state);
   society.changed.clear();
   society.mediumChanged.clear();
-  delete society.elevationBefore;
+  releaseElevationBefore(state);
+}
+function releaseElevationBefore(state: GenerationState) {
+  const before = state.society!.elevationBefore;
+  if (before?.readBlock) state.numerical?.release(before);
+  delete state.society!.elevationBefore;
 }
 function refreshNative(
   state: GenerationState,
@@ -260,28 +277,33 @@ function ensureEnvironmentalWorkspace(
  * holds onto are dropped before the surface is extracted again after people acted.
  */
 export function dropReplaceableFeatures(state: GenerationState) {
-  const world = state.domain.world,
-    area = state.domain.scope.areaId;
-  const previous = Object.values(world.features).filter(
-    (f) =>
-      f.areaId === area &&
-      f.kind !== "landmark" &&
-      ["rivers", "lakes", "ecology", "magic"].includes(f.layerId) &&
-      f.state === "generated" &&
-      !f.protected &&
-      !Object.values(world.areas).some((a) =>
-        a.boundary?.crossings.some((c) => c.featureId === f.id)
-      ) &&
-      !Object.values(world.features).some((other) =>
-        other.relations.some((r) => r.targetId === f.id)
-      ) &&
-      !Object.keys(f.detail).length
-  );
-  for (const f of previous) {
-    delete world.features[f.id];
-    for (const r of Object.values(world.networkReaches ?? {}))
-      if (r.featureId === f.id) delete world.networkReaches![r.id];
+  const area = state.domain.scope.areaId;
+  const referenced = new Set<string>();
+  for (const feature of generationFeatures(state))
+    for (const relation of feature.relations) referenced.add(relation.targetId);
+  for (const f of generationFeatures(state, { areaId: area })) {
+    if (!replaceableFeature(state, f, referenced)) continue;
+    removeGenerationFeature(state, f.id);
+    for (const reach of generationNetworks(state).reaches({ featureId: f.id }))
+      removeGenerationReach(state, reach.id);
   }
+}
+function replaceableFeature(
+  state: GenerationState,
+  feature: AtlasFeature,
+  referenced: Set<string>
+) {
+  return (
+    feature.kind !== "landmark" &&
+    ["rivers", "lakes", "ecology", "magic"].includes(feature.layerId) &&
+    feature.state === "generated" &&
+    !feature.protected &&
+    !Object.values(state.domain.world.areas).some((area) =>
+      area.boundary?.crossings.some((c) => c.featureId === feature.id)
+    ) &&
+    !referenced.has(feature.id) &&
+    !Object.keys(feature.detail).length
+  );
 }
 function publishEnvironmentalChanges(
   state: GenerationState,

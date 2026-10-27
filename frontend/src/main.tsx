@@ -1,18 +1,10 @@
-import { createRoot } from "react-dom/client";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { App } from "./App";
-import { subscribe } from "./atlasState";
-import "ol/ol.css";
-import "./styles.css";
-import "./cartography.css";
+import { openSpatialRuntime } from "./spatialRuntime";
 
-const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 500 } } });
-const unsubscribe = subscribe((change) => {
-  void client.invalidateQueries(change === "world" ? {} : { queryKey: [change] });
-});
-if (import.meta.hot) import.meta.hot.dispose(unsubscribe);
-createRoot(document.getElementById("root")!).render(
-  <QueryClientProvider client={client}>
-    <App />
-  </QueryClientProvider>
-);
+try {
+  await openSpatialRuntime();
+  await import("./renderApp");
+} catch (error) {
+  const root = document.getElementById("root");
+  if (root)
+    root.textContent = `The map engine could not start. ${error instanceof Error ? error.message : String(error)}`;
+}

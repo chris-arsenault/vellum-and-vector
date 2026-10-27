@@ -6,6 +6,9 @@ import { clamp, toUnits, truncate, units } from "./math";
 import { edgeLeadingTo } from "./mesh";
 import { channelDimensions } from "./dimensions";
 import { physicalDistance } from "./physicalMetric";
+import type { NumericalVector } from "@atlas/domain";
+import { workingArray, releaseWorking } from "./physicalNumerics";
+import { NumericalRecordQueue } from "./numericalQueue";
 
 function normalize(x: number, y: number): [number, number] {
   const length = Math.max(0.000001, Math.sqrt(x * x + y * y));
@@ -17,8 +20,8 @@ function direction(map: PhysicalField, source: number, target: number): [number,
     Math.fround(map.mesh.y[target] - map.mesh.y[source])
   );
 }
-export function dominantUpstream(map: PhysicalField, filled = false): Int32Array {
-  const upstream = new Int32Array(map.mesh.count).fill(-1);
+export function dominantUpstream(map: PhysicalField, filled = false): NumericalVector {
+  const upstream = workingArray(map, "int32", "channel:upstream").fill(-1);
   const channel = filled ? map.RiverChannelStrength : map.RiverOrders;
   for (let i = 0; i < map.mesh.count; i++) {
     const target = map.FlowTargets[i];
@@ -31,7 +34,7 @@ export function dominantUpstream(map: PhysicalField, filled = false): Int32Array
 }
 export function longitudinalAlignment(
   map: PhysicalField,
-  upstream: Int32Array,
+  upstream: NumericalVector,
   spine: number,
   target: number
 ): number {
@@ -69,12 +72,13 @@ function extendSpines(map: PhysicalField) {
       source = inflow[target];
     }
   }
+  releaseWorking(map, inflow);
 }
 type Front = { triangle: number; spine: number; depth: number; maximum: number };
 function canWiden(
   map: PhysicalField,
   c: PhysicalContext,
-  upstream: Int32Array,
+  upstream: NumericalVector,
   spine: number,
   target: number
 ): boolean {
@@ -95,7 +99,7 @@ function canWiden(
 function tryWiden(
   map: PhysicalField,
   c: PhysicalContext,
-  upstream: Int32Array,
+  upstream: NumericalVector,
   front: Front,
   target: number
 ): boolean {
@@ -140,7 +144,10 @@ export function riverChannelGeometry(map: PhysicalField, c: PhysicalContext) {
   map.RiverWidth.fill(0);
   map.RiverDepth.fill(0);
   const upstream = dominantUpstream(map),
-    frontier: Front[] = [],
+    frontier = new NumericalRecordQueue<Front>(
+      ["triangle", "spine", "depth", "maximum"],
+      map.numerical
+    ),
     p = c.Profile;
   for (let i = 0; i < map.mesh.count; i++) {
     const order = map.RiverOrders[i];
@@ -168,8 +175,21 @@ export function riverChannelGeometry(map: PhysicalField, c: PhysicalContext) {
     const maximum = expansionSteps(map, c, i);
     if (maximum > 0) frontier.push({ triangle: i, spine: i, depth: 0, maximum });
   }
-  for (let head = 0; head < frontier.length; head++) {
-    const front = frontier[head];
+  try {
+    expandChannels(map, c, upstream, frontier);
+    extendSpines(map);
+  } finally {
+    frontier.close();
+    releaseWorking(map, upstream);
+  }
+}
+function expandChannels(
+  map: PhysicalField,
+  c: PhysicalContext,
+  upstream: NumericalVector,
+  frontier: NumericalRecordQueue<Front>
+) {
+  for (let front = frontier.shift(); front; front = frontier.shift()) {
     for (let edge = 0; edge < map.mesh.degree[front.triangle]; edge++) {
       const target = map.mesh.neighbors[front.triangle * map.mesh.stride + edge];
       if (tryWiden(map, c, upstream, front, target))
@@ -180,5 +200,4 @@ export function riverChannelGeometry(map: PhysicalField, c: PhysicalContext) {
         });
     }
   }
-  extendSpines(map);
 }

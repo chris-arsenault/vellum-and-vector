@@ -5,6 +5,8 @@ import type { LocateContext } from "./magicSources";
 import { nativeIndexAtSurface } from "./atlasWorkspace";
 import { siteStrength } from "./magicStocks";
 import { clamp, rockResistance, round } from "./math";
+import type { NumericalVector } from "@atlas/domain";
+import { workingArray, releaseWorking } from "./physicalNumerics";
 
 const wards = (field: MagicField) =>
   field.definition.enabled && field.definition.effects.warding > 0;
@@ -118,11 +120,11 @@ export function applyWarding(state: GenerationState, field: MagicField) {
 }
 /** What each ring removes, as an amount per ring: the removed value times the cell's area. */
 function removeInside(map: PhysicalField, magic: MagicWorkspace, removed: (i: number) => number) {
-  const displaced = new Map<number, number>();
+  const displaced = workingArray(map, "float64", "magic:ward-displacement");
   for (let i = 0; i < map.mesh.count; i++) {
     const ring = magic.wardLabel[i];
     if (ring < 0) continue;
-    displaced.set(ring, (displaced.get(ring) ?? 0) + removed(i) * map.mesh.areas[i]);
+    displaced[ring] += removed(i) * map.mesh.areas[i];
   }
   return displaced;
 }
@@ -130,21 +132,22 @@ function removeInside(map: PhysicalField, magic: MagicWorkspace, removed: (i: nu
 function landOnRim(
   map: PhysicalField,
   magic: MagicWorkspace,
-  displaced: Map<number, number>,
+  displaced: NumericalVector,
   land: (i: number, added: number) => void
 ) {
-  const rimArea = new Map<number, number>();
+  const rimArea = workingArray(map, "float64", "magic:ward-rim-area");
   for (let i = 0; i < map.mesh.count; i++) {
     const ring = magic.rimLabel[i];
-    if (ring >= 0) rimArea.set(ring, (rimArea.get(ring) ?? 0) + map.mesh.areas[i]);
+    if (ring >= 0) rimArea[ring] += map.mesh.areas[i];
   }
   for (let i = 0; i < map.mesh.count; i++) {
     const ring = magic.rimLabel[i];
     if (ring < 0) continue;
-    const amount = displaced.get(ring) ?? 0,
-      area = rimArea.get(ring) ?? 0;
+    const amount = displaced[ring],
+      area = rimArea[ring];
     if (amount > 0 && area > 0) land(i, amount / area);
   }
+  releaseWorking(map, displaced, rimArea);
 }
 /**
  * The rings and their rims: every connected patch of warding is one ring, and a cell with
@@ -156,26 +159,35 @@ export function markRim(map: PhysicalField, magic: MagicWorkspace) {
   magic.wardRim.fill(0);
   magic.wardLabel.fill(-1);
   magic.rimLabel.fill(-1);
+  const queue = workingArray(map, "int32", "magic:ward-frontier");
   let rings = 0;
   for (let start = 0; start < mesh.count; start++) {
     if (map.Warding[start] <= 0 || magic.wardLabel[start] >= 0) continue;
-    labelRing(map, magic, start, rings);
+    labelRing(map, magic, start, rings, queue);
     rings++;
   }
+  releaseWorking(map, queue);
 }
 /** Flood one ring from a warded cell, marking its cells and the rim cells around it. */
-function labelRing(map: PhysicalField, magic: MagicWorkspace, start: number, ring: number) {
-  const { mesh } = map,
-    queue = [start];
+function labelRing(
+  map: PhysicalField,
+  magic: MagicWorkspace,
+  start: number,
+  ring: number,
+  queue: NumericalVector
+) {
+  const { mesh } = map;
+  queue[0] = start;
+  let tail = 1;
   magic.wardLabel[start] = ring;
-  for (let head = 0; head < queue.length; head++) {
+  for (let head = 0; head < tail; head++) {
     const i = queue[head];
     for (let edge = 0; edge < mesh.degree[i]; edge++) {
       const j = mesh.neighbors[i * mesh.stride + edge];
       if (j < 0) continue;
       if (map.Warding[j] > 0 && magic.wardLabel[j] < 0) {
         magic.wardLabel[j] = ring;
-        queue.push(j);
+        queue[tail++] = j;
       } else if (map.Warding[j] <= 0 && magic.rimLabel[j] < 0) {
         magic.rimLabel[j] = ring;
         magic.wardRim[j] = 1;
@@ -213,9 +225,9 @@ function spillBelow(map: PhysicalField, field: MagicField) {
  * Coasts hold inside a ward: the external forcing on a warded shore moves to the shore
  * downdrift of it, along the current of the sea beside it, as past a terminal groyne.
  */
-export function wardCoasts(map: PhysicalField, magic: MagicWorkspace, totals: Float64Array) {
+export function wardCoasts(map: PhysicalField, magic: MagicWorkspace, totals: NumericalVector) {
   if (!magic.fields.some(wards)) return;
-  const moved = new Float64Array(map.mesh.count);
+  const moved = workingArray(map, "float64", "magic:ward-coasts");
   for (let i = 0; i < map.mesh.count; i++) {
     const w = map.Warding[i];
     if (w <= 0 || map.WaterKindCodes[i] !== 0 || totals[i] <= 0) continue;
@@ -226,6 +238,7 @@ export function wardCoasts(map: PhysicalField, magic: MagicWorkspace, totals: Fl
   }
   for (let i = 0; i < map.mesh.count; i++)
     if (moved[i] > 0) totals[i] = clamp(totals[i] + round(moved[i]), 0, 1000);
+  releaseWorking(map, moved);
 }
 /** The land neighbour that lies along the strongest current of the sea beside a shore cell. */
 function downdrift(map: PhysicalField, i: number) {

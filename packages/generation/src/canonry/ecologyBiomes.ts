@@ -1,6 +1,7 @@
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import { environment } from "./ecologyEnvironment";
+import { workingArray } from "./physicalNumerics";
 
 /** Area-weighted means over a biome region; they name the region, never shape it. */
 export interface BiomeSummary {
@@ -203,9 +204,9 @@ function barrenName(r: BiomeSummary) {
 export function biomeRules(state: GenerationState) {
   const map = state.physical!.map,
     count = map.mesh.count,
-    temperature = new Float64Array(count),
-    moisture = new Float64Array(count),
-    wetness = new Float64Array(count);
+    temperature = workingArray(map, "float64", "biome:temperature"),
+    moisture = workingArray(map, "float64", "biome:moisture"),
+    wetness = workingArray(map, "float64", "biome:wetness");
   for (let i = 0; i < count; i++) {
     const e = environment(map, i);
     [temperature[i], moisture[i], wetness[i]] = [e.temperature, e.moisture, e.wetness];

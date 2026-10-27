@@ -1,15 +1,21 @@
 import type { PhysicalMesh } from "./mesh";
+import type { NumericalVector, NumericalAllocator } from "@atlas/domain";
 import { PriorityQueue } from "./priorityQueue";
 
 /** Multi-source geodesic distances over physical faces, including coarse/fine interfaces. */
 export function metricSearch(
   mesh: PhysicalMesh,
-  seeds: number[],
-  distance: Float64Array,
+  seeds: Iterable<number>,
+  distance: NumericalVector,
   reach: number,
-  visit: (target: number, source: number) => void
+  visit: (target: number, source: number) => void,
+  numerical?: NumericalAllocator
 ) {
-  const queue = new PriorityQueue<{ i: number; d: number }>((a, b) => a.d - b.d || a.i - b.i);
+  const queue = new PriorityQueue<{ i: number; d: number }>(
+    (a, b) => a.d - b.d || a.i - b.i,
+    numerical,
+    ["i", "d"]
+  );
   for (const i of seeds) queue.push({ i, d: distance[i] });
   while (queue.count) {
     const { i, d } = queue.pop();
@@ -24,4 +30,5 @@ export function metricSearch(
       queue.push({ i: j, d: next });
     }
   }
+  queue.close();
 }

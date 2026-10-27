@@ -2,102 +2,44 @@
 import { setWaterSurface, type PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { noWaterSurface, units } from "./math";
-
-/** Closed worlds seed their ocean in the deepest basin rather than an off-map outlet. */
-function oceanSeeds(map: PhysicalField) {
-  const seeds: number[] = [];
-  let deepest = 0;
-  for (let i = 0; i < map.mesh.count; i++) {
-    if (map.mesh.boundary[i]) seeds.push(i);
-    if (map.Elevation[i] < map.Elevation[deepest]) deepest = i;
-  }
-  return seeds.length ? seeds : [deepest];
-}
-
-class OceanComponents {
-  private readonly seeds: Set<number>;
-  readonly parent: Int32Array;
-  readonly sizes: Int32Array;
-  readonly contents: Float64Array;
-  readonly boundary: Uint8Array;
-  connected = 0;
-  constructor(private readonly map: PhysicalField) {
-    this.seeds = new Set(oceanSeeds(map));
-    const n = map.mesh.count;
-    this.parent = new Int32Array(n).fill(-1);
-    this.sizes = new Int32Array(n);
-    this.contents = new Float64Array(n);
-    this.boundary = new Uint8Array(n);
-  }
-  activate(i: number) {
-    this.parent[i] = i;
-    this.sizes[i] = 1;
-    this.contents[i] = this.map.mesh.contentAreas[i];
-    this.boundary[i] = Number(this.seeds.has(i));
-    if (this.boundary[i]) this.connected += this.contents[i];
-  }
-  root(i: number): number {
-    let root = i;
-    while (this.parent[root] !== root) root = this.parent[root];
-    while (this.parent[i] !== i) {
-      const next = this.parent[i];
-      this.parent[i] = root;
-      i = next;
-    }
-    return root;
-  }
-  union(first: number, second: number) {
-    let a = this.root(first),
-      b = this.root(second);
-    if (a === b) return;
-    if (this.sizes[a] < this.sizes[b]) [a, b] = [b, a];
-    if (this.boundary[a]) this.connected -= this.contents[a];
-    if (this.boundary[b]) this.connected -= this.contents[b];
-    this.parent[b] = a;
-    this.sizes[a] += this.sizes[b];
-    this.contents[a] += this.contents[b];
-    this.boundary[a] |= this.boundary[b];
-    if (this.boundary[a]) this.connected += this.contents[a];
-  }
-}
+import { oceanSeeds, OceanComponents, visitConnectedOcean } from "./oceanComponents";
+import { orderedIndices } from "./numericalOrder";
+import { releaseWorking } from "./physicalNumerics";
 function connectedOceanLevel(map: PhysicalField, target: number): number {
-  const order = Array.from({ length: map.mesh.count }, (_, i) => i).sort(
-    (a, b) => map.Elevation[b] - map.Elevation[a] || a - b
-  );
+  const order = orderedIndices(map.Elevation, true, map.numerical);
   const components = new OceanComponents(map);
   let cursor = order.length - 1,
     elevation = map.Elevation[order[0]];
-  while (cursor >= 0) {
-    elevation = map.Elevation[order[cursor]];
-    const end = cursor;
-    while (cursor >= 0 && map.Elevation[order[cursor]] === elevation)
-      components.activate(order[cursor--]);
-    for (let index = end; index > cursor; index--) {
-      const i = order[index];
-      for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-        const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-        if (j >= 0 && components.parent[j] >= 0) components.union(i, j);
+  try {
+    while (cursor >= 0) {
+      elevation = map.Elevation[order[cursor]];
+      const end = cursor;
+      while (cursor >= 0 && map.Elevation[order[cursor]] === elevation)
+        components.activate(order[cursor--]);
+      for (let index = end; index > cursor; index--) {
+        const i = order[index];
+        connectCell(map, components, i);
       }
+      if (components.connected >= target) break;
     }
-    if (components.connected >= target) break;
+    return elevation + units(1);
+  } finally {
+    components.close();
+    releaseWorking(map, order);
   }
-  return elevation + units(1);
+}
+function connectCell(map: PhysicalField, components: OceanComponents, i: number) {
+  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
+    if (j >= 0 && components.parent[j] >= 0) components.union(i, j);
+  }
 }
 /** Volume (m³) of the ocean connected to the boundary when the water stands at `level`. */
 function connectedVolume(map: PhysicalField, level: number): number {
-  const seen = new Uint8Array(map.mesh.count),
-    queue: number[] = [];
   let volume = 0;
-  const visit = (i: number) => {
-    if (i < 0 || seen[i] || map.Elevation[i] >= level) return;
-    seen[i] = 1;
+  visitConnectedOcean(map, level, (i) => {
     volume += ((level - map.Elevation[i]) / 1024) * map.mesh.contentAreas[i];
-    queue.push(i);
-  };
-  for (const i of oceanSeeds(map)) visit(i);
-  for (let head = 0; head < queue.length; head++)
-    for (let edge = 0; edge < map.mesh.degree[queue[head]]; edge++)
-      visit(map.mesh.neighbors[queue[head] * map.mesh.stride + edge]);
+  });
   return volume;
 }
 /** The level at which the connected ocean holds `volume`: the water budget sets the datum. */
@@ -110,7 +52,7 @@ function levelForVolume(map: PhysicalField, volume: number): number {
   }
   high += units(1);
   while (high - low > 1) {
-    const middle = Math.floor((low + high) / 2);
+    const middle = low + (high - low) / 2;
     if (connectedVolume(map, middle) < volume) low = middle;
     else high = middle;
   }
@@ -160,16 +102,9 @@ export function oceanConnectivity(map: PhysicalField, c: PhysicalContext) {
   map.WaterDepths.fill(0);
   map.WaterSurfaceElevations.fill(noWaterSurface);
   map.EffectiveSeaLevel = seaLevel(map, c);
-  const queue: number[] = [];
-  const mark = (i: number) => {
-    if (i < 0 || map.WaterKindCodes[i] !== 0 || map.Elevation[i] >= map.EffectiveSeaLevel) return;
+  visitConnectedOcean(map, map.EffectiveSeaLevel, (i) => {
     map.WaterKindCodes[i] = 1;
     map.WaterBodyIds[i] = 1;
     setWaterSurface(map, i, map.EffectiveSeaLevel);
-    queue.push(i);
-  };
-  for (const i of oceanSeeds(map)) mark(i);
-  for (let head = 0; head < queue.length; head++)
-    for (let edge = 0; edge < map.mesh.degree[queue[head]]; edge++)
-      mark(map.mesh.neighbors[queue[head] * map.mesh.stride + edge]);
+  });
 }

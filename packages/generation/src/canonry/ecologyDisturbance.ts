@@ -4,6 +4,8 @@ import { ecologicalFront } from "./ecologyMovement";
 import { plantGroups, livingPlantCarbon } from "./ecologyGroups";
 import { environment, unit, windStrength, type EcologyForcing } from "./ecologyEnvironment";
 import { meshWorldUnitNoise as unitNoise } from "./noise";
+import type { NumericalVector } from "@atlas/domain";
+import { workingValues, releaseWorking } from "./physicalNumerics";
 
 /**
  * Floods along floodplains and deltas, more often where the seasons and runoff
@@ -34,9 +36,11 @@ export function disturbEcology(
   forcing: (i: number) => EcologyForcing,
   seed: number
 ) {
-  const fuel = Float64Array.from(map.TreeCover, (_, i) => unit(livingPlantCarbon(map, i) / 5));
-  const starts = Float64Array.from(fuel, (value, i) =>
-    ignition(map, i, value, years, forcing(i), seed)
+  const fuel = workingValues(map, "float64", "ecology:fire-fuel", (i) =>
+    unit(livingPlantCarbon(map, i) / 5)
+  );
+  const starts = workingValues(map, "float64", "ecology:fire-starts", (i) =>
+    ignition(map, i, fuel[i], years, forcing(i), seed)
   );
   const front = ecologicalFront(
     map,
@@ -45,6 +49,7 @@ export function disturbEcology(
     (i, edge, j) => fireTravel(map, fuel, i, edge, j)
   );
   for (let i = 0; i < map.mesh.count; i++) burnCell(map, i, front.time[i], years, forcing(i));
+  releaseWorking(map, fuel, starts, front.time, front.source);
 }
 function ignition(
   map: PhysicalField,
@@ -69,7 +74,7 @@ function ignition(
   );
   return f.fire > 0 || noise < risk * 0.3 ? 0 : Infinity;
 }
-function fireTravel(map: PhysicalField, fuel: Float64Array, i: number, edge: number, j: number) {
+function fireTravel(map: PhysicalField, fuel: NumericalVector, i: number, edge: number, j: number) {
   const distance = map.mesh.edgeLength[i * map.mesh.stride + edge];
   const wetness = environment(map, j).wetness;
   const wind =

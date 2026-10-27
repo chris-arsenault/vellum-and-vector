@@ -7,7 +7,7 @@ import {
   type ParameterDefinitions,
   type World,
 } from "@atlas/domain";
-import { requireChannel, summarizeChannel } from "./mapFields";
+import { requireChannel, summarizeChannel, surfaceArray, surfaceValues } from "./mapFields";
 import type { GenerationState, MapProcess, MapProcessContext } from "./process";
 import { generationBindings } from "./generationBindings";
 
@@ -110,15 +110,17 @@ export const thermalMagicProcess: MapProcess = {
     kind: "forcing-contributor",
     contribute(state, context) {
       const grid = state.surface,
-        heat = new Float64Array(grid.active.length),
-        stored = new Float64Array(grid.active.length);
+        heat = surfaceArray(state, "magic:heat"),
+        stored = surfaceArray(state, "magic:stored");
       for (const source of sources(state, context)) {
         const multiplier = activity(context, source),
           key = `magic:${source.id}:stored`,
           memory = grid.channels[key]
             ? requireChannel(grid, key, "celsius")
-            : new Float64Array(heat.length),
-          forcing = Float64Array.from(heat, (_value, i) => forcingAt(state, source, multiplier, i)),
+            : surfaceArray(state, key),
+          forcing = surfaceValues(state, "magic:forcing", (i) =>
+            forcingAt(state, source, multiplier, i)
+          ),
           forcingKey = `magic:${source.id}:forcing`;
         for (let i = 0; i < heat.length; i++) {
           heat[i] += forcing[i] + memory[i];
@@ -130,7 +132,7 @@ export const thermalMagicProcess: MapProcess = {
           grid,
           `magic:${source.id}`,
           "celsius",
-          Float64Array.from(forcing, (value, i) => value + memory[i])
+          surfaceValues(state, `magic:${source.id}`, (i) => forcing[i] + memory[i])
         );
         context.recordCause({
           kind: "magic",
@@ -195,7 +197,7 @@ export const magicStorageProcess: MapProcess = {
           key = `magic:${source.id}:stored`,
           memory = grid.channels[key]
             ? requireChannel(grid, key, "celsius")
-            : new Float64Array(grid.active.length),
+            : surfaceArray(state, key),
           forcing = requireChannel(grid, `magic:${source.id}:forcing`, "celsius");
         requireThat(
           source.decay >= 0 && source.decay <= 1 && source.storage >= 0,

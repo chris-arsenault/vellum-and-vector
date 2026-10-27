@@ -120,25 +120,31 @@ export function validateLayerAttributes(
 export function validateLayerChange(
   previous: Layer | undefined,
   next: Layer,
-  features: {
+  features: Iterable<{
     id?: string;
     kind?: string;
     attributes: Record<string, unknown>;
     detail: Record<string, { attributes: Record<string, unknown> | null }>;
-  }[],
+  }>,
   materializedFields: number
 ): void {
   layerAttributeDefinitions(next.schema);
-  requireThat(
+  const retained =
     previous === undefined ||
-      (previous.representations ?? [previous.representation]).every((r) =>
-        (next.representations ?? [next.representation]).includes(r)
-      ) ||
-      (features.length === 0 && materializedFields === 0),
+    (previous.representations ?? [previous.representation]).every((r) =>
+      (next.representations ?? [next.representation]).includes(r)
+    );
+  requireThat(
+    retained || materializedFields === 0,
     "layer_representation",
     "A materialized layer keeps its vector, field or network representation."
   );
   for (const feature of features) {
+    requireThat(
+      retained,
+      "layer_representation",
+      "A materialized layer keeps its vector, field or network representation."
+    );
     const owner = `The ${feature.kind ?? "feature"} ${feature.id ?? ""}`.trimEnd();
     validateLayerAttributes(next, feature.attributes, owner);
     for (const [areaId, detail] of Object.entries(feature.detail))

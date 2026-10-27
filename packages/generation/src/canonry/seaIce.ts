@@ -6,14 +6,12 @@ import { meshNoise as fractalNoise } from "./noise";
 import { Feature } from "./codes";
 
 export function seaIce(map: PhysicalField, c: PhysicalContext) {
-  const ocean: number[] = [],
-    p = c.Profile;
+  const p = c.Profile;
   map.SeaIceSuitability.fill(0);
   for (let i = 0; i < map.mesh.count; i++) {
     map.FeatureFlags[i] &= ~(Feature.PermanentSeaIce | Feature.PermanentIceMargin);
     if (map.WaterKindCodes[i] !== 1 || i >= map.mesh.contentCount) continue;
     map.IceThickness[i] = 0;
-    ocean.push(i);
     const coherence = round(
       fractalNoise(map.mesh, map.mesh.x[i], map.mesh.y[i], c.Seed, p.SeaIceVariationScale, 3) *
         p.SeaIceSuitabilityVariation
@@ -32,7 +30,8 @@ export function seaIce(map: PhysicalField, c: PhysicalContext) {
   }
   // Ice extent follows the cold itself rather than a requested coverage share.
   const cutoff = 1000 - p.SeaIceFormationTemperature;
-  for (const i of ocean) {
+  for (let i = 0; i < map.mesh.contentCount; i++) {
+    if (map.WaterKindCodes[i] !== 1) continue;
     const cold = map.SeaIceSuitability[i];
     if (cold < cutoff || map.Temperature[i] > p.IceMarginTemperature) continue;
     map.IceThickness[i] = clamp(50 + (cold - cutoff) * 2, 50, 240);

@@ -7,6 +7,7 @@ import {
   type SocietyEraRecord,
 } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
+import { generationFeatures } from "./generationFeatures";
 import { createSocietyGeography, refreshSocietySupport } from "./societyGeography";
 import { societyAncestor, inheritSociety } from "./societyInheritance";
 import { peopleTrait } from "./societyTraits";
@@ -68,7 +69,7 @@ export function nearestCommunity(state: GenerationState, x: number, y: number) {
   return nearest;
 }
 function applyStartingCommunities(state: GenerationState) {
-  for (const f of Object.values(state.domain.world.features)) {
+  for (const f of generationFeatures(state)) {
     if (f.kind !== "settlement" || f.geometry.type !== "Point") continue;
     if (f.areaId !== state.domain.scope.areaId || f.state === "generated") continue;
     const c = nearestCommunity(state, f.geometry.coordinates[0], f.geometry.coordinates[1]);

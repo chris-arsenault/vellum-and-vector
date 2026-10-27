@@ -20,40 +20,83 @@ interface Scope {
   setStyles: (styles: LayerStyle[]) => void;
 }
 /** Saved compositions use the same commands, history and local save as region subjects. */
-export function useComposition(world: World, scope: Scope) {
+function useCompositionState(world: World, scope: Scope) {
   const [id, setCompositionId] = useState<string | null>(null);
   const [draft, setDraft] = useState(defaultCartographicPresentation);
-  const commit = useCommit(world.id);
-  const rasterStyles = useRef<LayerStyle[] | null>(null);
+  const [pending, setPending] = useState<{
+    id: string;
+    cartography: CartographicPresentation;
+    layers: LayerStyle[];
+  } | null>(null);
   const sourceAreaId = regionSourceAreaId(world, scope.selectedRegionId, scope.areaId);
   const current = world.views.find(
     (v) =>
       v.id === id && v.areaId === sourceAreaId && (v.regionId ?? null) === scope.selectedRegionId
   );
-  const cartography = current ? (current.cartography ?? legacyPresentation) : draft;
-  const layers = current?.layers ?? scope.savedStyles;
+  const editing = pending?.id === current?.id ? pending : null;
+  const cartography = editing?.cartography ?? currentPresentation(current, draft);
+  const layers = editing?.layers ?? current?.layers ?? scope.savedStyles;
+  return {
+    current,
+    editing,
+    cartography,
+    layers,
+    sourceAreaId,
+    setDraft,
+    setPending,
+    setCompositionId,
+  };
+}
+function currentPresentation(
+  current: World["views"][number] | undefined,
+  draft: CartographicPresentation
+) {
+  return current ? (current.cartography ?? legacyPresentation) : draft;
+}
+export function useComposition(world: World, scope: Scope) {
+  const {
+    current,
+    editing,
+    cartography,
+    layers,
+    sourceAreaId,
+    setDraft,
+    setPending,
+    setCompositionId,
+  } = useCompositionState(world, scope);
+  const commit = useCommit(world.id);
+  const rasterStyles = useRef<LayerStyle[] | null>(null);
   const styleChange = (value: CartographicPresentation) =>
     changedStyles(value, cartography, world, layers, rasterStyles);
   const save = (name: string, value = cartography, copy = false) => {
     const viewId = copy ? crypto.randomUUID() : (current?.id ?? crypto.randomUUID());
+    const nextLayers = styleChange(value);
+    setDraft(value);
+    setPending({ id: viewId, cartography: value, layers: nextLayers });
     commit.mutate(
       makeCommand(world, "putView", {
         id: viewId,
         name,
         areaId: sourceAreaId,
-        layers: styleChange(value),
+        layers: nextLayers,
         raster: scope.rasterView,
         ...(scope.selectedRegionId ? { regionId: scope.selectedRegionId } : {}),
         cartography: value,
       }),
-      { onSuccess: () => setCompositionId(viewId) }
+      {
+        onSuccess: () => {
+          setCompositionId(viewId);
+          setPending(null);
+        },
+        onError: () => setPending(null),
+      }
     );
   };
   return {
     cartography,
     compositionId: current?.id ?? null,
     compositionName: current?.name ?? "Custom composition",
-    compositionLayers: current?.layers,
+    compositionLayers: editing?.layers ?? current?.layers,
     compositionError: commit.error,
     setCompositionId,
     openComposition: (view: World["views"][number]) => {

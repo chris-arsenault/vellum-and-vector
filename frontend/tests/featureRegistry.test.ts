@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "./uiTest";
-import { rectangle } from "@atlas/domain";
+import { rectangle, spatial } from "@atlas/domain";
 import {
   canvas,
   closeDrawer,
@@ -107,6 +107,7 @@ test("reshaping a site's footprint keeps its point, and undo restores it", async
   );
   spring.footprint = rectangle([100, 100, 300, 300]);
   await generatedWorld(page, "Footprint world", { features: [spring] });
+  const before = await exportMap(page);
   await openRegistry(page);
   await page.getByLabel("Show Clear Spring on map").click();
   await page.getByLabel("Geometry to edit").selectOption("footprint");
@@ -122,14 +123,16 @@ test("reshaping a site's footprint keeps its point, and undo restores it", async
   await page.mouse.down();
   await page.mouse.move(px + 20, py - 20, { steps: 8 });
   await page.mouse.up();
-  await expect(status(page)).toContainText("Revision 3");
+  await expect(status(page)).toContainText(`Revision ${before.version + 1}`);
   const after = (await exportMap(page)).features.find((f: { id: string }) => f.id === spring.id);
   expect(after.geometry).toEqual(spring.geometry);
   expect(after.properties.footprint).not.toEqual(spring.footprint);
   await page.getByRole("button", { name: "Undo", exact: true }).click();
-  await expect(status(page)).toContainText("Revision 4");
+  await expect(status(page)).toContainText(`Revision ${before.version + 2}`);
   const restored = (await exportMap(page)).features.find((f: { id: string }) => f.id === spring.id);
-  expect(restored.properties.footprint).toEqual(spring.footprint);
+  expect(spatial.canonical(restored.properties.footprint)).toEqual(
+    spatial.canonical(spring.footprint)
+  );
 });
 async function pointerCoordinate(page: Page, x: number, y: number) {
   await page.mouse.move(x, y);

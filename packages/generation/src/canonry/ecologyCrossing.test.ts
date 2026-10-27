@@ -109,7 +109,7 @@ it("makes frequently flooded ground wetter, younger and less wooded", () => {
     map.FloodplainIntensity[i] = map.mesh.y[i] > 0 ? 1000 : 0;
   }
   evolveVegetation(map, 800);
-  const mean = (values: Float64Array, flooded: boolean) => {
+  const mean = (values: import("@atlas/domain").NumericalVector, flooded: boolean) => {
     const cells = on(map, "mainland").filter((i) => map.mesh.y[i] > 0 === flooded);
     return cells.reduce((sum, i) => sum + values[i], 0) / cells.length;
   };

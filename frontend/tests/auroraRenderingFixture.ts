@@ -16,7 +16,10 @@ import { terrainTile } from "../src/terrainTile";
 import { terrainStyle } from "../src/rasterStyles";
 import { configureTerrainContours } from "../src/terrainContours";
 import { defaultRasterPresentation } from "../src/rasterPresentation";
-import type { Raster } from "../src/types";
+import type { LoadedRaster as Raster } from "../src/types";
+import { openSpatialRuntime } from "../src/spatialRuntime";
+
+const spatialReady = openSpatialRuntime();
 
 export interface RenderingOptions {
   ice?: number;
@@ -53,6 +56,7 @@ function fixture() {
   });
   return {
     async render(options: RenderingOptions) {
+      await spatialReady;
       const raster = terrain(options),
         sample = numericTileSampler(raster);
       const view = defaultRasterPresentation();

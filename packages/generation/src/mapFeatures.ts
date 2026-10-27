@@ -11,6 +11,19 @@ import {
 } from "@atlas/domain";
 import type { GenerationState, MapProcess } from "./process";
 import { nameGeographicFeature, nameMetadata } from "./atlasNaming";
+import {
+  generationFeature,
+  generationFeatures,
+  findGenerationFeature,
+  writeGenerationFeature,
+  removeGenerationFeature,
+} from "./generationFeatures";
+import {
+  generationNetworks,
+  writeGenerationNode,
+  writeGenerationReach,
+  removeGenerationReach,
+} from "./generationNetworks";
 
 export function generatedFeature(
   state: GenerationState,
@@ -68,7 +81,7 @@ function featureNaming(
   };
 }
 export function putGenerated(state: GenerationState, feature: AtlasFeature) {
-  const previous = state.domain.world.features[feature.id];
+  const previous = generationFeature(state, feature.id);
   if (
     previous &&
     (previous.protected || previous.state === "authored" || Object.keys(previous.detail).length)
@@ -81,7 +94,7 @@ export function putGenerated(state: GenerationState, feature: AtlasFeature) {
     )
   )
     return false;
-  state.domain.world.features[feature.id] = feature;
+  writeGenerationFeature(state, feature);
   return true;
 }
 /** A finer drawing of an existing subject keeps its original identity and network endpoints. */
@@ -91,7 +104,8 @@ export function putGeneratedDetail(
   matches: (existing: AtlasFeature) => boolean
 ) {
   const world = state.domain.world;
-  const previous = Object.values(world.features).find(
+  const previous = findGenerationFeature(
+    state,
     (candidate) =>
       candidate.areaId !== feature.areaId &&
       isDescendant(world.areas, feature.areaId, candidate.areaId) &&
@@ -116,6 +130,7 @@ export function putGeneratedDetail(
     actor: "generator",
     generationId: null,
   };
+  writeGenerationFeature(state, previous);
   return true;
 }
 function networkHeight(feature: AtlasFeature, index: number, coordinate: number[]) {
@@ -154,10 +169,8 @@ function putNetworkPart(
       ])
     )
   );
-  world.networkNodes ??= {};
-  world.networkReaches ??= {};
   for (const [index, p] of ends.entries())
-    world.networkNodes[ids[index]] = {
+    writeGenerationNode(state, {
       id: ids[index],
       kind: feature.kind,
       position: canonicalPosition(world.reference, {
@@ -167,9 +180,9 @@ function putNetworkPart(
       }),
       spaceId: state.domain.scope.spaceId,
       waterLevel: null,
-    };
+    });
   const reach = semanticId(world.id, "generated-reach", key);
-  world.networkReaches[reach] = {
+  writeGenerationReach(state, {
     id: reach,
     featureId: feature.id,
     start: ids[0],
@@ -179,7 +192,7 @@ function putNetworkPart(
     endFlow: Array.isArray(feature.attributes.discharges)
       ? Number(feature.attributes.discharges.at(-1))
       : null,
-  };
+  });
 }
 export function prepareGeneratedProcess(domains: string[]): MapProcess {
   return {
@@ -195,31 +208,29 @@ export function prepareGeneratedProcess(domains: string[]): MapProcess {
       kind: "initialize",
       initialize(state) {
         const world = state.domain.world;
-        state.retainedFeatureNames = Object.fromEntries(
-          Object.values(world.features).map((f) => [
-            f.id,
-            {
-              name: f.name,
-              attributes: Object.fromEntries(
-                Object.entries(f.attributes).filter(
-                  ([key]) => key.startsWith("naming") || key === "namedInEra"
-                )
-              ),
-            },
-          ])
-        );
+        state.retainedFeatureNames = {};
+        for (const f of generationFeatures(state))
+          state.retainedFeatureNames[f.id] = {
+            name: f.name,
+            attributes: Object.fromEntries(
+              Object.entries(f.attributes).filter(
+                ([key]) => key.startsWith("naming") || key === "namedInEra"
+              )
+            ),
+          };
         const contracted = new Set([
           ...Object.values(world.areas).flatMap(
             (a) => a.boundary?.crossings.map((c) => c.featureId) ?? []
           ),
-          ...Object.values(world.features).flatMap((f) => f.relations.map((r) => r.targetId)),
           ...Object.values(world.connections ?? {}).flatMap((c) => [c.a.featureId, c.b.featureId]),
         ]);
-        for (const feature of Object.values(world.features)) {
+        for (const feature of generationFeatures(state))
+          for (const relation of feature.relations) contracted.add(relation.targetId);
+        for (const feature of generationFeatures(state)) {
           if (!replaceable(feature, state.domain.scope.areaId, domains, contracted)) continue;
-          delete world.features[feature.id];
-          for (const reach of Object.values(world.networkReaches ?? {}))
-            if (reach.featureId === feature.id) delete world.networkReaches![reach.id];
+          removeGenerationFeature(state, feature.id);
+          for (const reach of generationNetworks(state).reaches({ featureId: feature.id }))
+            removeGenerationReach(state, reach.id);
         }
       },
     },

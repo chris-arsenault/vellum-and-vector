@@ -1,23 +1,19 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
-  availableRegionFootprint,
   regionFootprint,
   regionViews,
   regionLineage,
-  regionCandidates,
-  snapRegionCut,
   spatial,
-  usefulRegionSize,
   refinedRegionArea,
   regionRefinementInput,
   regionSourceAreaId,
   type Bounds,
   type RegionCandidate,
+  type RegionQuery,
 } from "@atlas/domain";
-import type { Geometry, LineString } from "geojson";
+import type { Geometry } from "geojson";
 import type { Tool, World, Position } from "./types";
-import { readScene } from "./atlasReads";
-import { session } from "./atlasState";
+import { atlasWorkspace, workspaceScope } from "./atlasWorkspace";
 import { makeCommand, type useCommit } from "./useAtlas";
 import type { MapEngine } from "./mapEngine";
 
@@ -38,24 +34,28 @@ export function isRegionTool(tool: Tool) {
   return ["regionPick", "regionOutline", "regionCut", "regionEdit"].includes(tool);
 }
 function useRegionDraft() {
+  const request = useRef(0);
   const [regionDraft, setDraft] = useState<RegionCandidate | null>(null);
   const [candidates, setCandidates] = useState<RegionCandidate[]>([]);
   const [cuts, setCuts] = useState<Geometry[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [regionError, setError] = useState<Error | null>(null);
   const clear = () => {
+    request.current++;
     setDraft(null);
     setCandidates([]);
     setCuts([]);
     setEditingId(null);
     setError(null);
   };
-  const attempt = (work: () => void) => {
+  const attempt = async (work: () => Promise<() => void>) => {
+    const current = ++request.current;
     try {
       setError(null);
-      work();
+      const apply = await work();
+      if (current === request.current) apply();
     } catch (error) {
-      setError(error as Error);
+      if (current === request.current) setError(error as Error);
     }
   };
   return {
@@ -79,14 +79,8 @@ function regionContext(o: Options, d: Draft) {
   const region = regions.find((r) => r.id === o.selectedRegionId) ?? null;
   const parentId = d.editingId ? (region?.region.parentId ?? null) : (region?.id ?? null);
   const footprint = regionFootprint(o.world, sourceAreaId, region?.id ?? null);
-  const parent = regionFootprint(o.world, sourceAreaId, parentId);
   const viewport = (o.viewport as Bounds | null) ?? spatial.bounds(footprint);
-  const available = () => {
-    const shape = availableRegionFootprint(o.world, sourceAreaId, parentId, d.editingId);
-    if (!shape) throw new Error("This parent is fully subdivided. Open one of its regions.");
-    return shape;
-  };
-  return { region, regions, parentId, footprint, parent, viewport, available, sourceAreaId };
+  return { region, regions, parentId, footprint, viewport, sourceAreaId };
 }
 type Context = ReturnType<typeof regionContext>;
 export function useRegions(o: Options) {
@@ -161,73 +155,53 @@ export function useRegions(o: Options) {
   };
 }
 function regionDrawing(o: Options, d: Draft, c: Context, enter: (id: string) => void) {
-  const propose = (lines: Geometry[], position: Position | null) => {
-    const choices = regionCandidates(
-      c.available(),
-      regionSources(o.world, o.areaId),
-      lines,
-      position,
-      c.viewport
-    ).filter((v) => spatial.area(v.footprint) < spatial.area(c.parent));
-    d.setCandidates(choices);
-    d.setDraft(choices[0] ?? null);
-    if (!choices.length)
-      throw new Error(
-        "No smaller enclosed region here. Draw an outline or connect a dividing line to existing boundaries."
-      );
-  };
+  const query = (position: Position | null): RegionQuery => ({
+    scope: workspaceScope(o.world, c.sourceAreaId),
+    sourceAreaId: c.sourceAreaId,
+    parentId: c.parentId,
+    editingId: d.editingId,
+    cuts: d.cuts,
+    position,
+    viewport: c.viewport,
+  });
   return {
     regionPick: (position: Position) =>
-      d.attempt(() => {
-        const child = c.regions.find(
-          (r) =>
-            r.region.parentId === (c.region?.id ?? null) &&
-            spatial.pointCoverage(r.region.footprint)(position)
-        );
-        if (child && !d.cuts.length) {
-          enter(child.id);
-          return;
-        }
-        propose(d.cuts, position);
+      d.attempt(async () => {
+        const result = await (await atlasWorkspace()).regionChoices(query(position));
+        return () => {
+          if (result.childId) {
+            enter(result.childId);
+            return;
+          }
+          d.setCandidates(result.candidates);
+          d.setDraft(result.candidates[0] ?? null);
+          if (!result.candidates.length)
+            throw new Error(
+              "No smaller enclosed region here. Draw an outline or connect a dividing line to existing boundaries."
+            );
+        };
       }),
-    regionDraw: (geometry: Geometry) => d.attempt(() => drawRegion(o, d, c, propose, geometry)),
+    regionDraw: (geometry: Geometry) =>
+      d.attempt(async () => {
+        const tolerance =
+          (o.mapEngine?.map.getView().getResolution() ?? (c.viewport[2] - c.viewport[0]) / 800) *
+          12;
+        const result = await (
+          await atlasWorkspace()
+        ).drawRegion({ query: query(null), geometry, tolerance });
+        return () => {
+          d.setCuts(result.cuts);
+          d.setDraft(
+            result.candidate && {
+              ...result.candidate,
+              name: d.editingId ? (c.region?.name ?? result.candidate.name) : result.candidate.name,
+            }
+          );
+          d.setCandidates(result.candidates);
+          o.setTool(geometry.type.includes("LineString") ? "regionPick" : "regionEdit");
+        };
+      }),
   };
-}
-/** A cut that crosses the chart seam arrives as the pieces on each side; each one divides. */
-function cutLines(geometry: Geometry): LineString[] {
-  if (geometry.type === "LineString") return [geometry];
-  if (geometry.type === "MultiLineString")
-    return geometry.coordinates.map((coordinates) => ({ type: "LineString", coordinates }));
-  return [];
-}
-function drawRegion(
-  o: Options,
-  d: Draft,
-  c: Context,
-  propose: (lines: Geometry[], position: Position | null) => void,
-  geometry: Geometry
-) {
-  const lines = cutLines(geometry);
-  if (lines.length) {
-    const boundaries = [
-      c.available(),
-      ...regionSources(o.world, o.areaId).map((s) => s.footprint),
-      ...d.cuts,
-    ];
-    const tolerance =
-      (o.mapEngine?.map.getView().getResolution() ?? (c.viewport[2] - c.viewport[0]) / 800) * 12;
-    const next = [...d.cuts, ...lines.map((line) => snapRegionCut(line, boundaries, tolerance))];
-    d.setCuts(next);
-    propose(next, null);
-    o.setTool("regionPick");
-    return;
-  }
-  const clipped = spatial.intersection(c.available(), geometry);
-  if (!clipped || !usefulRegionSize(clipped))
-    throw new Error("Choose a larger outline inside the available parent region.");
-  d.setDraft({ name: d.editingId ? (c.region?.name ?? "Region") : "Region", footprint: clipped });
-  d.setCandidates([]);
-  o.setTool("regionEdit");
 }
 function regionCommands(o: Options, d: Draft, c: Context, enter: (id: string | null) => void) {
   return {
@@ -263,21 +237,4 @@ function regionCommands(o: Options, d: Draft, c: Context, enter: (id: string | n
         });
     },
   };
-}
-function regionSources(world: World, areaId: string): RegionCandidate[] {
-  const sources = readScene(world.id, areaId)
-    .map((f) => ({ ...f, geometry: f.footprint ?? f.geometry }))
-    .filter((f) =>
-      ["Polygon", "MultiPolygon", "LineString", "MultiLineString"].includes(f.geometry.type)
-    )
-    .map((f) => ({ name: f.name, footprint: f.geometry }));
-  const field = Object.values(session(world.id).snapshot.numerical).find(
-    (f) => f.scope.areaId === areaId && f.ocean
-  );
-  if (field?.ocean) {
-    sources.push({ name: "Sea", footprint: field.ocean });
-    const land = spatial.difference(world.areas[areaId].footprint, field.ocean);
-    if (land) sources.push({ name: "Land", footprint: land });
-  }
-  return sources;
 }

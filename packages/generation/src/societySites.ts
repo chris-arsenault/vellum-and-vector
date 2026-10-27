@@ -4,6 +4,8 @@ import {
   neighbors,
   settlementSiteKinds,
   spatial,
+  allocateNumerical,
+  type NumericalVector,
   type SettlementSiteKind,
   type SocietyCommunity,
 } from "@atlas/domain";
@@ -29,7 +31,7 @@ const unit = (value: number) => Math.max(0, Math.min(1, value));
 class SiteReader {
   readonly grid;
   private readonly covers;
-  private readonly rings = new Map<number, number[]>();
+  private lastRing: { cell: number; neighbors: number[] } | undefined;
   constructor(readonly state: GenerationState) {
     this.grid = state.surface;
     this.covers = spatial.geometryCoverage(this.grid.scope.footprint);
@@ -39,17 +41,16 @@ class SiteReader {
   }
   /** Eight neighbours in angular order, so a saddle shows as alternating high and low. */
   ring(i: number) {
-    let ring = this.rings.get(i);
-    if (ring) return ring;
+    if (this.lastRing?.cell === i) return this.lastRing.neighbors;
     const p = gridPosition(this.grid, i);
-    ring = neighbors(this.grid, i, true, this.covers).sort((a, b) => {
+    const ring = neighbors(this.grid, i, true, this.covers).sort((a, b) => {
       const qa = gridPosition(this.grid, a),
         qb = gridPosition(this.grid, b);
       const da = gridDisplacement(this.grid, p, qa),
         db = gridDisplacement(this.grid, p, qb);
       return Math.atan2(da.y, da.x) - Math.atan2(db.y, db.x);
     });
-    this.rings.set(i, ring);
+    this.lastRing = { cell: i, neighbors: ring };
     return ring;
   }
   /** The four edge neighbours: a junction counts channels that actually enter the cell. */
@@ -253,13 +254,13 @@ export function rankSites(
   options: SiteOptions = settled
 ): (SiteOpportunity | null)[] {
   const r = new SiteReader(state),
-    result: (SiteOpportunity | null)[] = new Array(state.surface.active.length).fill(null),
-    kinds = options.mobile ? mobileClassifiers : classifiers;
-  for (let i = 0; i < result.length; i++) {
-    if (!dryLand(state, i) || uninhabitable(r, i)) continue;
-    result[i] = onRuins(bestClass(r, i, kinds), options.ruins.get(i));
-  }
-  return result;
+    count = state.surface.active.length;
+  return Array.from({ length: count }, (_, i) => siteAt(r, i, options));
+}
+function siteAt(r: SiteReader, i: number, options: SiteOptions) {
+  if (!dryLand(r.state, i) || uninhabitable(r, i)) return null;
+  const kinds = options.mobile ? mobileClassifiers : classifiers;
+  return onRuins(bestClass(r, i, kinds), options.ruins.get(i));
 }
 function bestClass(r: SiteReader, i: number, kinds: typeof classifiers) {
   let best: SiteOpportunity | null = null;
@@ -314,27 +315,29 @@ function fortress(r: SiteReader, site: number, kind: SettlementSiteKind) {
 export function chooseSettlementSites(
   state: GenerationState,
   context: MapProcessContext,
-  owner: Int32Array,
+  owner: NumericalVector,
   seeds: number[],
-  river: Float64Array,
-  coast: Float64Array,
+  river: NumericalVector,
+  coast: NumericalVector,
   options: SiteOptions = settled
 ): { cell: number; site: SettlementSite | null }[] {
-  const ranked = rankSites(state, options),
-    r = new SiteReader(state);
+  const r = new SiteReader(state);
   const best = seeds.map((seed) => ({
     cell: seed,
     site: null as SettlementSite | null,
     key: [Infinity, 0],
   }));
-  const ties = new Map<number, number>();
+  const ties = allocateNumerical(
+    { type: "float64", length: owner.length, lifetime: "process", name: "society-site-ties" },
+    state.numerical
+  ).fill(NaN);
   const draw = (i: number) => {
-    if (!ties.has(i)) ties.set(i, context.random());
-    return ties.get(i)!;
+    if (Number.isNaN(ties[i])) ties[i] = context.random();
+    return ties[i];
   };
   for (let i = 0; i < owner.length; i++) {
     const k = owner[i],
-      site = ranked[i];
+      site = siteAt(r, i, options);
     if (k < 0 || k >= best.length || !site) continue;
     const capacity = supportAt(state, i, river[i], coast[i]).capacity,
       key = [rank(site.kind), -site.score * (1 + capacity)];
@@ -344,6 +347,7 @@ export function chooseSettlementSites(
     current.key = key;
     current.site = { kind: site.kind, reason: site.reason, fortress: false };
   }
+  state.numerical?.releaseUnused([ties], []);
   // A band on the move holds no fortress and camps on the col itself.
   if (options.mobile) return best;
   return distinctSeats(
@@ -378,7 +382,7 @@ function distinctSeats(
 function passFoot(
   r: SiteReader,
   choice: { cell: number; site: SettlementSite | null },
-  owner: Int32Array,
+  owner: NumericalVector,
   unit: number,
   seed: number
 ) {

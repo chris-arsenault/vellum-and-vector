@@ -8,6 +8,8 @@ import { clamp, round, toUnits } from "./math";
 import { hashUnit } from "./noise";
 import { contributingArea } from "./flowGraph";
 import { physicalDistance, physicalGradients } from "./physicalMetric";
+import type { NumericalVector } from "@atlas/domain";
+import { workingArray, releaseWorking } from "./physicalNumerics";
 
 const epsilon = 0.0000001;
 function normalize(x: number, y: number): [number, number] {
@@ -189,7 +191,11 @@ function aspectTarget(
   );
   return draw < p ? steps[left].target : steps[right].target;
 }
-function captureScore(area: Float64Array | null, target: number, p: PhysicalProfile): number {
+function captureScore(
+  area: import("@atlas/domain").NumericalVector | null,
+  target: number,
+  p: PhysicalProfile
+): number {
   return area === null
     ? 0
     : (Math.log2(1 + area[target] / 100_000_000) * p.DrainageCaptureWeight) / 1000;
@@ -199,7 +205,7 @@ function selectTarget(
   map: PhysicalField,
   c: PhysicalContext,
   source: number,
-  area: Float64Array | null,
+  area: import("@atlas/domain").NumericalVector | null,
   gradient: ReturnType<typeof physicalGradients>
 ): number {
   const aspect = aspectTarget(map, c, source, gradient);
@@ -211,7 +217,7 @@ function scoredTarget(
   map: PhysicalField,
   c: PhysicalContext,
   source: number,
-  area: Float64Array | null,
+  area: import("@atlas/domain").NumericalVector | null,
   gradient: ReturnType<typeof physicalGradients>
 ): number {
   const [dx, dy] = descentDirection(map, c.Profile, source, gradient);
@@ -247,19 +253,24 @@ function scoredTarget(
     throw new Error(`Conditioned triangle ${source} has no outlet.`);
   return best;
 }
-export function resolveLandTargets(map: PhysicalField, c: PhysicalContext): Int32Array {
-  const targets = new Int32Array(map.mesh.count).fill(-1);
-  const gradient = physicalGradients(map.mesh, map.DrainageElevations);
+export function resolveLandTargets(map: PhysicalField, c: PhysicalContext): NumericalVector {
+  const targets = workingArray(map, "int32", "drainage:targets").fill(-1);
+  const gradient = physicalGradients(map.mesh, map.DrainageElevations, map.numerical);
   for (let i = 0; i < map.mesh.count; i++)
     if (map.WaterKindCodes[i] !== 1) targets[i] = selectTarget(map, c, i, null, gradient);
-  if (c.Profile.DrainageCaptureWeight <= 0) return targets;
-  const area = contributingArea(targets, map.mesh.areas);
-  for (let i = 0; i < map.mesh.count; i++)
-    if (map.WaterKindCodes[i] !== 1) targets[i] = selectTarget(map, c, i, area, gradient);
+  if (c.Profile.DrainageCaptureWeight > 0) {
+    const area = contributingArea(targets, map.mesh.areas, map.numerical);
+    for (let i = 0; i < map.mesh.count; i++)
+      if (map.WaterKindCodes[i] !== 1) targets[i] = selectTarget(map, c, i, area, gradient);
+    releaseWorking(map, area);
+  }
+  releaseWorking(map, gradient.x, gradient.y);
   return targets;
 }
 export function drainageGuidance(map: PhysicalField, c: PhysicalContext) {
-  map.DrainageGuidanceTargets.set(resolveLandTargets(map, c));
+  const targets = resolveLandTargets(map, c);
+  map.DrainageGuidanceTargets.set(targets);
+  releaseWorking(map, targets);
 }
 export function selectByOutletAlignment(
   map: PhysicalField,

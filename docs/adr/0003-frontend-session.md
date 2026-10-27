@@ -7,17 +7,21 @@ for the current product.
 ## Decision
 
 Run the atlas entirely in the browser. React and OpenLayers present the editor;
-shared TypeScript domain operations validate changes against session memory.
-Generation runs the shared process sequence in a Web Worker. Keep worlds,
-templates, numerical fields, completed causes, edit history and undo in memory.
+shared TypeScript domain operations validate scoped inputs in a dedicated worker.
+The browser GIS workspace uses SQLite and RTree indexes for canonical records,
+GEOS for spatial operations, and immutable Zarr resources in origin-private file
+storage for numerical fields. This follows the user's 2026-10-27 direction to
+replace whole-world reconstruction with scoped storage and incremental processing.
 Reloading or closing the tab ends generation and discards unsaved session changes.
 
-Per the user's 2026-10-24 direction, explicit **Save map** stores a world's session
-snapshot in IndexedDB. **Saved maps** lists local saves and reopens a selected
-map without generation, replacing that world's current session copy. A save
+Per the user's 2026-10-24 direction, explicit **Save map** creates a local catalog
+snapshot and records its root in IndexedDB. **Saved maps** lists local saves and
+reopens a selected map without generation, replacing that world's current session. A save
 retains geography, numerical fields, world map views, completed causes, history
 and undo. Saving again updates that world's copy. Independent templates and
 running jobs are not saved; generation must finish before saving its output.
+Saved roots and undo history retain the numerical resources they reference.
+Cleanup reclaims abandoned working files while respecting other live tabs.
 There is no autosave, generation restart or recovery mechanism. Browser storage
 belongs to the current browser and site origin and may be cleared by the browser
 or user.
@@ -28,22 +32,48 @@ template downloads remain local user actions.
 Keep the existing spatial model: geographically parented areas, planar metric
 coordinates, stable feature identity, distinct located floors, layer composition,
 authored protection and fixed refinement interfaces. Reuse domain validation
-directly; do not emulate HTTP routes inside the browser.
+directly. The application layer resolves domain read requirements and maps domain
+changes to transactional catalog writes. Domain values contain no SQL, WASM
+handles or file paths. `SpatialStore` and `ResourceStore` describe geographic and
+numerical operations that a later hosted adapter can implement; they do not emulate
+PostGIS functions or prescribe HTTP routes.
+
+The editor holds configuration, selections and current viewport products. It reads
+features and registry rows through scoped, paged queries. Canonical geometry stays
+separate from indexed boundary pieces and generalized display products. Region
+picking follows connected edges through locally noded tiles, preparing only the
+geography the query visits. Storage boundaries do not become geographic borders.
+Render workers read selected immutable channels directly and evict decoded chunks.
+Raster ranges and category legends include applicable patches and finer map coverage.
+The UI and each worker initialize the same GEOS spatial adapter. There is no JSTS
+fallback or snapshot-based session engine. Released snapshot saves retain a narrow
+importer so existing explicit saves remain readable.
 
 ## Generation and edits
 
-Each worker receives the current in-memory snapshot. Processes share its private
-working map and report stage progress. Cancellation terminates that worker.
+Each generation worker receives configuration and a workspace connection. It resolves
+scoped geography and opens immutable field resources directly. Processes share a private
+working map and report stage progress. Numerical vectors use worker-owned scratch
+storage with a bounded decoded page cache; process lifetimes release scratch while
+retaining outputs needed by later stages. Canonical feature inputs arrive in revision-pinned
+pages. Private SQLite tables keep the source baseline separate from generated features,
+network reaches and junctions. Processes read detached domain values and explicitly write
+changes; protection checks, identity reuse and publication compare against the source records.
+Contour edges use indexed working tables; face assembly consumes bounded line batches through
+the geometry kernel. Numerical queues, rankings and transient channels share the execution
+allocator. Native geometry assembly still scales with the size of an individual feature.
+Cancellation terminates that worker.
 Per the user's 2026-10-24 direction, initial generation shows independent sampled
 previews at completed epochs and progressively installs validated output as it
-arrives. The worker prepares publication, sends numerical buffer ownership through
-transfer lists, and batches world records. Shared buffers and topology travel
-once; completion is a small notification. There are no acknowledgements or saved
-delivery state. Cancellation or failure during delivery leaves initial output
+arrives. The worker finalizes immutable numerical resources and publishes bounded
+batches of world records. Shared field layouts are referenced once; samples do not
+travel through the editor or catalog worker. Independent preview buffers use transfer
+lists. Cancellation or failure during delivery leaves initial output
 marked incomplete; it does not claim a completed world.
 
-Regeneration retains its existing behavior: successful, validated geography
-replaces session state as one operation after delivery. If the
+Regeneration stages catalog batches in disposable local storage and publishes validated
+geography in one transaction. The undo journal retains prior record values and immutable
+geometry references; undo reads those records in pages. If the
 world was edited during the run, retain the edits and report that its generation
 result is out of date. The creator can generate again from the current state.
 There is no automatic retry.
@@ -68,8 +98,9 @@ than erasing its procedural records.
 
 ## Repository boundaries
 
-The active pnpm workspace, checks and build contain `frontend`, `packages/domain`
-and `packages/generation`. Prototype backend and database files remain outside
+The active pnpm workspace, checks and build contain `frontend`, `packages/domain`,
+`packages/application`, `packages/storage-browser` and `packages/generation`.
+Prototype backend and database files remain outside
 that path as historical source. The earlier combined Terraform and platform
 registration are preserved under `infrastructure/backend-prototype` with disabled
 extensions. Do not deploy that backend as part of frontend development.

@@ -1,6 +1,8 @@
 import type { PhysicalField } from "./field";
 import { PriorityQueue } from "./priorityQueue";
 import { windStrength } from "./ecologyEnvironment";
+import { workingArray } from "./physicalNumerics";
+import type { NumericalVector } from "@atlas/domain";
 
 export type Carrier = "wind" | "current";
 export interface Crossing {
@@ -40,13 +42,31 @@ export function waterDistance(
   limit: number
 ) {
   const mesh = map.mesh,
-    distance = new Float64Array(mesh.count).fill(Infinity);
-  const queue = new PriorityQueue<{ i: number; d: number }>((a, b) => a.d - b.d || a.i - b.i);
+    distance = workingArray(map, "float64", "ecology:water-distance").fill(Infinity);
+  const queue = new PriorityQueue<{ i: number; d: number }>(
+    (a, b) => a.d - b.d || a.i - b.i,
+    map.numerical,
+    ["i", "d"]
+  );
   for (let i = 0; i < mesh.count; i++)
     if (!sea(map, i) && occupied(i)) {
       distance[i] = 0;
       queue.push({ i, d: 0 });
     }
+  traverseWater(map, distance, queue, carrier, limit);
+  queue.close();
+  for (let i = 0; i < distance.length; i++)
+    if (sea(map, i) || distance[i] === 0) distance[i] = Infinity;
+  return distance;
+}
+function traverseWater(
+  map: PhysicalField,
+  distance: NumericalVector,
+  queue: PriorityQueue<{ i: number; d: number }>,
+  carrier: Carrier,
+  limit: number
+) {
+  const mesh = map.mesh;
   while (queue.count) {
     const { i, d } = queue.pop();
     if (d !== distance[i]) continue;
@@ -59,7 +79,6 @@ export function waterDistance(
       queue.push({ i: j, d: next });
     }
   }
-  return Float64Array.from(distance, (d, i) => (sea(map, i) || d === 0 ? Infinity : d));
 }
 /** Expected arrival in years after a crossing of the given effective distance. */
 export const crossingTime = (crossing: Crossing, distance: number) =>

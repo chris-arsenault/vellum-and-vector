@@ -14,7 +14,7 @@ import {
   landscapeEpoch,
   type TerrainHistory,
 } from "@atlas/generation";
-import { defaultEpochs } from "./atlasState";
+import { defaultEpochs } from "./worldCreation";
 import { normalizeGenerationDraft, updateFeature, type GenerationDraft } from "./generationDraft";
 import { draftEpochBindings, sharedClock, rebindDraftEpochs } from "./generationEpochBindings";
 

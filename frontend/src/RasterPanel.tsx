@@ -1,7 +1,13 @@
 import { useId } from "react";
 import { physicalMaterialNames, type SurfaceCategory } from "@atlas/domain";
 import type { EditorState } from "./useEditor";
-import type { FieldStyle, Raster, RasterPresentation, World } from "./types";
+import {
+  resourceRaster,
+  type FieldStyle,
+  type Raster,
+  type RasterPresentation,
+  type World,
+} from "./types";
 import {
   categoryPalette,
   defaultFieldStyle,
@@ -318,7 +324,11 @@ function CategoryLegend({
 export function SurfaceLegend({ world, base }: { world: World; base: Raster[] }) {
   const data = base
     .filter((raster) => raster.surface?.channels.finalSurface)
-    .map((raster) => ({ ...raster, field: raster.surface!, channel: "finalSurface" }));
+    .map((raster): Raster =>
+      resourceRaster(raster)
+        ? { ...raster, field: raster.surface!, channel: "finalSurface" }
+        : { ...raster, field: raster.surface!, channel: "finalSurface" }
+    );
   if (!data.length) return null;
   return <CategoryLegend title="Surface" classes={surfacePalette(world)} data={data} />;
 }

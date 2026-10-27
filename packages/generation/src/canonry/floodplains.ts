@@ -3,11 +3,14 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, toUnits, units } from "./math";
 import { dominantUpstream, longitudinalAlignment } from "./channelGeometry";
+import type { NumericalVector } from "@atlas/domain";
+import { NumericalRecordQueue } from "./numericalQueue";
+import { releaseWorking } from "./physicalNumerics";
 
 function canFlood(
   map: PhysicalField,
   c: PhysicalContext,
-  upstream: Int32Array,
+  upstream: NumericalVector,
   source: number,
   target: number
 ): boolean {
@@ -24,8 +27,12 @@ function canFlood(
   );
 }
 type Front = { i: number; distance: number };
-function seedFloodplains(map: PhysicalField, c: PhysicalContext, upstream: Int32Array): Front[] {
-  const frontier: Front[] = [];
+function seedFloodplains(
+  map: PhysicalField,
+  c: PhysicalContext,
+  upstream: NumericalVector,
+  frontier: NumericalRecordQueue<Front>
+) {
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.RiverChannelOrders[i] < c.Profile.FloodplainMinimumRiverOrder) continue;
     for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
@@ -44,14 +51,27 @@ function seedFloodplains(map: PhysicalField, c: PhysicalContext, upstream: Int32
       frontier.push({ i: j, distance });
     }
   }
-  return frontier;
 }
 export function floodplains(map: PhysicalField, c: PhysicalContext) {
   map.FloodplainIntensity.fill(0);
   const upstream = dominantUpstream(map),
-    frontier = seedFloodplains(map, c, upstream);
-  for (let head = 0; head < frontier.length; head++) {
-    const { i, distance } = frontier[head];
+    frontier = new NumericalRecordQueue<Front>(["i", "distance"], map.numerical);
+  try {
+    seedFloodplains(map, c, upstream, frontier);
+    expandFloodplains(map, c, upstream, frontier);
+  } finally {
+    frontier.close();
+    releaseWorking(map, upstream);
+  }
+}
+function expandFloodplains(
+  map: PhysicalField,
+  c: PhysicalContext,
+  upstream: NumericalVector,
+  frontier: NumericalRecordQueue<Front>
+) {
+  for (let front = frontier.shift(); front; front = frontier.shift()) {
+    const { i, distance } = front;
     for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
       const at = i * map.mesh.stride + edge,
         j = map.mesh.neighbors[at];

@@ -44,11 +44,11 @@ it("unites an enclosed island after filling the surrounding region's small hole"
   expect(spatial.area(result)).toBe(1e6);
 });
 
-function fixture(bounds: Bounds = [0, 0, 2000, 1000]) {
+function fixture(bounds: Bounds = [0, 0, 2000, 1000], cylinder = false) {
   const state = landscape(),
     footprint = rectangle(bounds),
     scope = { ...state.domain.scope, footprint },
-    mesh = createWorldMesh(bounds, 64, 0);
+    mesh = createWorldMesh(bounds, 64, 0, undefined, undefined, undefined, cylinder, cylinder);
   state.domain.scope = scope;
   state.domain.world.reference.domain = footprint;
   state.domain.world.areas.area.footprint = footprint;
@@ -63,6 +63,26 @@ function fixture(bounds: Bounds = [0, 0, 2000, 1000]) {
   };
   return { state, mesh };
 }
+it.each(["membership", "combined"])(
+  "keeps %s geography local on a cylindrical world, including its seam",
+  (mode) => {
+    const { state, mesh } = fixture([0, 0, 4000, 2000], true);
+    for (const cell of mesh.x.keys()) {
+      const own = (i: number) => Number(i === cell);
+      const shape =
+        mode === "membership"
+          ? membershipContour(state, [cell], own)
+          : combinedContour(state, [cell], [own], ([value]) => value - 0.1);
+      expect(shape, `${mode} cell ${cell}`).not.toBeNull();
+      const covered = spatial.pointCoverage(shape!);
+      for (const other of mesh.x.keys())
+        expect(
+          covered({ x: mesh.x[other] + mesh.origin[0], y: mesh.y[other] + mesh.origin[1], z: 0 }),
+          `${mode} ${cell} covering ${other}`
+        ).toBe(cell === other);
+    }
+  }
+);
 
 it("closes a combined contour when only its interpolation support touches the mesh edge", () => {
   const { state, mesh } = fixture(),

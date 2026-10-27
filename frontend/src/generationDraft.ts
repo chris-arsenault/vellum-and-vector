@@ -21,7 +21,7 @@ import {
   type DomainSnapshot,
   type ParameterValues,
 } from "@atlas/domain";
-import { createWorldSnapshot, defaultEpochs, worldScope } from "./atlasState";
+import { createWorldSnapshot, defaultEpochs, worldScope } from "./worldCreation";
 
 export interface GenerationDraft {
   worldId?: string;

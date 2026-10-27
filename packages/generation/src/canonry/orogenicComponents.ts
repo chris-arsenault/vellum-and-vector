@@ -5,6 +5,9 @@ import { round, toUnits } from "./math";
 import { hashUnit } from "./noise";
 import { metricSearch } from "./metricSearch";
 import { meshDeltaX, meshPointX } from "./mesh";
+import type { NumericalVector } from "@atlas/domain";
+import { workingArray, releaseWorking } from "./physicalNumerics";
+import { NumericalQueue } from "./numericalQueue";
 
 export interface BoundaryComponent {
   id: number;
@@ -24,10 +27,10 @@ export interface BoundaryComponent {
   y: number;
 }
 export interface OrogenicFrame {
-  distance: Float64Array;
-  source: Int32Array;
+  distance: NumericalVector;
+  source: NumericalVector;
   // +1 on the belt's hinterland, −1 on its foreland (see assignSides).
-  side: Float64Array;
+  side: NumericalVector;
 }
 const active = (map: PhysicalField, i: number, minimum: number) =>
   map.TectonicBoundaryCodes[i] !== 0 && map.TectonicStrain[i] >= minimum;
@@ -46,13 +49,13 @@ function addCell(c: BoundaryComponent, map: PhysicalField, i: number, origin: nu
 function floodComponent(
   map: PhysicalField,
   context: PhysicalContext,
-  ids: Int32Array,
+  ids: NumericalVector,
   component: BoundaryComponent,
   start: number
 ) {
-  const queue = [start];
-  for (let head = 0; head < queue.length; head++) {
-    const i = queue[head];
+  const queue = new NumericalQueue(map.numerical);
+  queue.push(start);
+  for (let i = queue.shift(); i !== undefined; i = queue.shift()) {
     addCell(component, map, i, map.mesh.x[start]);
     for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
       const j = map.mesh.neighbors[i * map.mesh.stride + edge];
@@ -68,6 +71,7 @@ function floodComponent(
       queue.push(j);
     }
   }
+  queue.close();
   component.collision /= component.area * 1000;
   component.suture /= component.area * 1000;
   component.strain /= component.area * 1000;
@@ -78,7 +82,7 @@ function floodComponent(
 export function discoverComponents(
   map: PhysicalField,
   context: PhysicalContext,
-  ids: Int32Array
+  ids: NumericalVector
 ): BoundaryComponent[] {
   const components: BoundaryComponent[] = [];
   for (let i = 0; i < map.mesh.count; i++) {
@@ -155,10 +159,10 @@ function acrossStrike(map: PhysicalField, i: number, source: number): number {
 function assignSides(
   map: PhysicalField,
   components: BoundaryComponent[],
-  source: Int32Array,
-  side: Float64Array
+  source: NumericalVector,
+  side: NumericalVector
 ) {
-  const mass = new Float64Array(components.length);
+  const mass = workingArray(map, "float64", "orogeny:mass", components.length);
   for (let i = 0; i < map.mesh.count; i++) {
     const id = map.OrogenicComponentIds[i];
     if (id < 0 || source[i] < 0) continue;
@@ -172,31 +176,40 @@ function assignSides(
     const offset = acrossStrike(map, i, source[i]);
     side[i] = offset === 0 ? 1 : Math.sign(offset) * (mass[id] < 0 ? -1 : 1);
   }
+  releaseWorking(map, mass);
 }
 export function propagateInfluence(
   map: PhysicalField,
   context: PhysicalContext,
   components: BoundaryComponent[],
-  ids: Int32Array
+  ids: NumericalVector
 ): OrogenicFrame {
-  const distance = new Float64Array(map.mesh.count).fill(Infinity),
-    source = new Int32Array(map.mesh.count).fill(-1),
-    side = new Float64Array(map.mesh.count);
-  const queue: number[] = [];
-  for (let i = 0; i < ids.length; i++) {
-    const id = ids[i];
-    if (id < 0 || components[id].area < context.Profile.OrogenicMinimumComponentArea) continue;
-    map.OrogenicComponentIds[i] = id;
-    map.OrogenicSystemProminence[i] = components[id].prominence;
-    distance[i] = 0;
-    source[i] = i;
-    queue.push(i);
+  const distance = workingArray(map, "float64", "orogeny:distance").fill(Infinity),
+    source = workingArray(map, "int32", "orogeny:source").fill(-1),
+    side = workingArray(map, "float64", "orogeny:side");
+  function* seeds() {
+    for (let i = 0; i < ids.length; i++) {
+      const id = ids[i];
+      if (id < 0 || components[id].area < context.Profile.OrogenicMinimumComponentArea) continue;
+      map.OrogenicComponentIds[i] = id;
+      map.OrogenicSystemProminence[i] = components[id].prominence;
+      distance[i] = 0;
+      source[i] = i;
+      yield i;
+    }
   }
-  metricSearch(map.mesh, queue, distance, context.Profile.OrogenicInfluenceReach, (j, i) => {
-    source[j] = source[i];
-    map.OrogenicComponentIds[j] = map.OrogenicComponentIds[i];
-    map.OrogenicSystemProminence[j] = map.OrogenicSystemProminence[i];
-  });
+  metricSearch(
+    map.mesh,
+    seeds(),
+    distance,
+    context.Profile.OrogenicInfluenceReach,
+    (j, i) => {
+      source[j] = source[i];
+      map.OrogenicComponentIds[j] = map.OrogenicComponentIds[i];
+      map.OrogenicSystemProminence[j] = map.OrogenicSystemProminence[i];
+    },
+    map.numerical
+  );
   assignSides(map, components, source, side);
   return { distance, source, side };
 }

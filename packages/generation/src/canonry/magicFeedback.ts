@@ -8,7 +8,8 @@ import { magicBudget, originStocks, reservoirStock } from "./magicState";
 import { advanceStocks } from "./magicStocks";
 import { rememberLakes } from "./magicSaltSources";
 import { markRim, wardCoasts } from "./magicHallowed";
-import type { MagicSystem } from "@atlas/domain";
+import type { MagicSystem, NumericalVector } from "@atlas/domain";
+import { workingArray, releaseWorking } from "./physicalNumerics";
 
 export const coastalMagicParameters: (keyof MagicSystem["parameters"])[] = [
   "coastalThreshold",
@@ -119,19 +120,19 @@ function shoals(map: PhysicalField, i: number) {
 /** A ray below this intensity moves no water; it is the front rule's retained level. */
 const frontThreshold = 160;
 interface OceanForcing {
-  upwelling: Float64Array;
-  seaSurface: Float64Array;
-  fog: Float64Array;
-  storm: Float64Array;
+  upwelling: NumericalVector;
+  seaSurface: NumericalVector;
+  fog: NumericalVector;
+  storm: NumericalVector;
 }
 /** Upwelling, sea-surface forcing, fog source and storm energy per ocean cell from every moving system. */
 function movedWater(map: PhysicalField, fields: Field[]): OceanForcing {
   const n = map.mesh.count,
     forcing = {
-      upwelling: new Float64Array(n),
-      seaSurface: new Float64Array(n),
-      fog: new Float64Array(n),
-      storm: new Float64Array(n),
+      upwelling: workingArray(map, "float64", "magic:water-upwelling"),
+      seaSurface: workingArray(map, "float64", "magic:water-surface"),
+      fog: workingArray(map, "float64", "magic:water-fog"),
+      storm: workingArray(map, "float64", "magic:water-storm"),
     };
   for (let i = 0; i < n; i++) {
     if (map.WaterKindCodes[i] !== 1) continue;
@@ -181,8 +182,8 @@ function stormEnergy(map: PhysicalField, field: Field, i: number) {
   return 1000 * field.definition.effects.storm * sharpness * fed;
 }
 /** Fog settles on the land cells that touch an upwelling band. */
-function settledFog(map: PhysicalField, source: Float64Array) {
-  const fog = new Float64Array(map.mesh.count);
+function settledFog(map: PhysicalField, source: NumericalVector) {
+  const fog = workingArray(map, "float64", "magic:settled-fog");
   for (let i = 0; i < fog.length; i++) {
     if (map.WaterKindCodes[i] !== 0) continue;
     for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
@@ -238,6 +239,7 @@ export function magicOceanFeedback(state: GenerationState) {
     magic.seaSurface[i] = moved.seaSurface[i];
     magic.fog[i] = fog[i];
   }
+  releaseWorking(map, ...Object.values(moved), fog);
 }
 /**
  * Rock hardening and softening (existing), then the conduits: flowing Fire keeps its vein
@@ -323,7 +325,7 @@ export function magicCoastalFeedback(state: GenerationState, context?: MapProces
     map = work.map;
   const epoch = coastalEpoch(context);
   const fields = magic.fields.filter((field) => field.definition.enabled),
-    totals = new Float64Array(map.mesh.count);
+    totals = workingArray(map, "float64", "magic:coastal-forcing");
   for (let i = 0; i < map.mesh.count; i++) {
     let total = 0;
     if (map.WaterKindCodes[i] === 0)
@@ -346,6 +348,7 @@ export function magicCoastalFeedback(state: GenerationState, context?: MapProces
     );
     magic.coastal[i] = totals[i];
   }
+  releaseWorking(map, totals);
 }
 /**
  * Thawing ground charge on bare land lets the ground settle, like thermokarst: a bounded
@@ -372,7 +375,7 @@ function holdIce(
   field: Field,
   i: number,
   persistence: number,
-  shelf: Float64Array | undefined
+  shelf: NumericalVector | undefined
 ) {
   const held = unit((field.stored[i] - 300) / 150),
     shelved =

@@ -1,17 +1,18 @@
 import {
   gridPosition,
   gridDistance,
-  visitAdaptiveOverlap,
+  overlappingAdaptiveLeaves,
   type Grid,
   type Bounds,
   type Position,
 } from "@atlas/domain";
 
 /** Query the existing sampling topology rather than scanning the world for each local work. */
-export function samplesInBox(grid: Grid, box: Bounds) {
-  const indices: number[] = [];
-  if (grid.topology) visitAdaptiveOverlap(grid.topology, box, (i) => indices.push(i));
-  else {
+export function* samplesInBox(grid: Grid, box: Bounds) {
+  if (grid.topology) {
+    for (const i of overlappingAdaptiveLeaves(grid.topology, box, true))
+      if (grid.active[i]) yield i;
+  } else {
     const [w, s, e, n] = grid.bounds;
     const dx = (e - w) / (grid.width - 1),
       dy = (n - s) / (grid.height - 1);
@@ -25,9 +26,8 @@ export function samplesInBox(grid: Grid, box: Bounds) {
         x <= Math.min(grid.width - 1, Math.floor((box[2] - w) / dx));
         x++
       )
-        indices.push(y * grid.width + x);
+        if (grid.active[y * grid.width + x]) yield y * grid.width + x;
   }
-  return indices.filter((i) => grid.active[i]).sort((a, b) => a - b);
 }
 
 /** The sample nearest a position on a state's surface. */
@@ -63,11 +63,15 @@ export function nearestSocietySample(
     radius *= 2;
   }
 }
-function nearbySamples(grid: Grid, p: Pick<Position, "x" | "y">, radius: number) {
+function* nearbySamples(grid: Grid, p: Pick<Position, "x" | "y">, radius: number) {
   const shifts = grid.periodicWidth ? [-grid.periodicWidth, 0, grid.periodicWidth] : [0];
-  return new Set(
-    shifts.flatMap((shift) =>
-      samplesInBox(grid, [p.x + shift - radius, p.y - radius, p.x + shift + radius, p.y + radius])
-    )
-  );
+  // A repeated sample across wrapped windows has the same distance and cannot
+  // replace itself; avoid retaining a world-sized deduplication set.
+  for (const shift of shifts)
+    yield* samplesInBox(grid, [
+      p.x + shift - radius,
+      p.y - radius,
+      p.x + shift + radius,
+      p.y + radius,
+    ]);
 }

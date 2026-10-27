@@ -1,6 +1,6 @@
 // Numerical invariants from Canonry's layer Validate methods. Spatial authoring
 // validation remains at the GIS projection boundary.
-import type { PhysicalField } from "./field";
+import type { PhysicalField, PhysicalIntegerName as IntegerName } from "./field";
 import type { PhysicalContext } from "./context";
 import { validateLandscape } from "./surface";
 import { isOpenOutlet } from "./field";
@@ -8,9 +8,6 @@ import { sourceToOutletOrder } from "./flowGraph";
 import { edgeLeadingTo } from "./mesh";
 import { isGrounded } from "./glacierSurface";
 
-type IntegerName = {
-  [K in keyof PhysicalField]: PhysicalField[K] extends Int32Array ? K : never;
-}[keyof PhysicalField];
 function scalar(map: PhysicalField, name: IntegerName, low = 0, high = 1000) {
   for (const value of map[name])
     if (value < low || value > high) throw new Error(`Canonry ${name} left its physical range.`);

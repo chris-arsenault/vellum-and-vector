@@ -1,7 +1,9 @@
 import type { PhysicalField } from "./field";
+import type { NumericalVector } from "@atlas/domain";
 import { environment, approach, unit, type EcologyForcing } from "./ecologyEnvironment";
 import { migrateAnimals } from "./ecologyMovement";
 import { crossingTime, waterDistance, type Crossing } from "./ecologyCrossing";
+import { workingValues, releaseWorking } from "./physicalNumerics";
 
 function populationResponse(value: number, capacity: number, years: number, time: number) {
   if (value <= 0) return 0;
@@ -19,8 +21,8 @@ function forage(map: PhysicalField, i: number, browser: boolean) {
 }
 function consume(
   map: PhysicalField,
-  population: Float64Array,
-  capacity: Float64Array,
+  population: NumericalVector,
+  capacity: NumericalVector,
   i: number,
   years: number,
   browser: boolean
@@ -54,8 +56,8 @@ const animalCrossing: Crossing = { carrier: "current", reach: 120_000, interval:
  */
 function foundAcrossWater(
   map: PhysicalField,
-  population: Float64Array,
-  capacity: Float64Array,
+  population: NumericalVector,
+  capacity: NumericalVector,
   years: number
 ) {
   const landed = waterDistance(
@@ -67,6 +69,7 @@ function foundAcrossWater(
   for (let i = 0; i < population.length; i++)
     if (population[i] < 1e-7 && capacity[i] > 0 && crossingTime(animalCrossing, landed[i]) <= years)
       population[i] = capacity[i] * 0.01;
+  releaseWorking(map, landed);
 }
 /** Food and prey create carrying budgets; migration moves the existing populations first. */
 export function evolveAnimals(
@@ -74,17 +77,23 @@ export function evolveAnimals(
   years: number,
   forcing: (i: number) => EcologyForcing
 ) {
-  const graze = Float64Array.from(
-    map.TreeCover,
-    (_, i) => forage(map, i, false) * forcing(i).grazing
+  const graze = workingValues(
+    map,
+    "float64",
+    "ecology:grazing-capacity",
+    (i) => forage(map, i, false) * forcing(i).grazing
   );
-  const browse = Float64Array.from(
-    map.TreeCover,
-    (_, i) => forage(map, i, true) * forcing(i).grazing
+  const browse = workingValues(
+    map,
+    "float64",
+    "ecology:browsing-capacity",
+    (i) => forage(map, i, true) * forcing(i).grazing
   );
-  const aquatic = Float64Array.from(
-    map.TreeCover,
-    (_, i) => map.AquaticProductivity[i] * 0.12 * (1 - map.EcologicalToxicity[i])
+  const aquatic = workingValues(
+    map,
+    "float64",
+    "ecology:aquatic-capacity",
+    (i) => map.AquaticProductivity[i] * 0.12 * (1 - map.EcologicalToxicity[i])
   );
   const speed = forcing(0).migration;
   migrateAnimals(map, map.Grazers, graze, years, 12_000 * speed);
@@ -97,7 +106,12 @@ export function evolveAnimals(
     consume(map, map.Browsers, browse, i, years, true);
     map.Herbivores[i] = map.Grazers[i] + map.Browsers[i];
   }
-  const prey = Float64Array.from(map.Herbivores, (value) => value * 0.08);
+  const prey = workingValues(
+    map,
+    "float64",
+    "ecology:prey-capacity",
+    (i) => map.Herbivores[i] * 0.08
+  );
   migrateAnimals(map, map.Predators, prey, years, 18_000 * speed);
   foundAcrossWater(map, map.Predators, prey, years);
   for (let i = 0; i < map.mesh.count; i++) {
@@ -114,4 +128,5 @@ export function evolveAnimals(
     );
     map.AquaticFauna[i] = populationResponse(map.AquaticFauna[i], aquatic[i], years, 5);
   }
+  releaseWorking(map, graze, browse, aquatic, prey);
 }

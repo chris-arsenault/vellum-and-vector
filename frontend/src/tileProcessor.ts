@@ -2,6 +2,7 @@ import type { GridSurface } from "@atlas/domain";
 import { numericTileSampler } from "./numericTiles";
 import type { TileMessage, TileReply } from "./tileProtocol";
 import { terrainTile } from "./terrainTile";
+import type { LoadedRaster } from "./types";
 function rasterSampler(
   r: Extract<TileMessage, { kind: "raster" }>["raster"],
   grids: Map<number, GridSurface>
@@ -21,7 +22,17 @@ function rasterSampler(
 export function tileProcessor() {
   const grids = new Map<number, GridSurface>();
   const samplers = new Map<number, ReturnType<typeof rasterSampler>>();
-  return (message: TileMessage): TileReply | null => {
+  return (
+    message: TileMessage | { kind: "loadedRaster"; id: number; raster: LoadedRaster }
+  ): Exclude<TileReply, { kind: string }> | null => {
+    if (message.kind === "loadedRaster") {
+      const sample = numericTileSampler(message.raster);
+      samplers.set(message.id, (extent, size) =>
+        message.raster.channel === "elevation"
+          ? terrainTile(sample(extent, size), size)
+          : sample(extent, size)
+      );
+    }
     if (message.kind === "grid") grids.set(message.id, message.grid);
     if (message.kind === "raster") {
       samplers.set(message.id, rasterSampler(message.raster, grids));

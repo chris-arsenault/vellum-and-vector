@@ -208,7 +208,10 @@ function featureTools(
   let feature = selected ? engine.features.getFeatureById(selected) : null;
   if (feature && geometryRole === "footprint") feature = footprintHandle(feature);
   if (feature) select.getFeatures().push(feature);
-  select.on("select", (event) => events().select(event.selected[0]?.get("domain") ?? null));
+  select.on("select", (event) => {
+    events().select(event.selected[0]?.get("domain") ?? null);
+    if (tool !== "select") select.getFeatures().clear();
+  });
   if (["select", "reshape", "move"].includes(tool)) active.push(select);
   if (tool === "reshape") {
     const modify = new Modify({

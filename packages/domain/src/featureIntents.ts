@@ -26,6 +26,7 @@ export function featureRequirements(data: FeatureEdit, context: IntentContext) {
   return intentReads(context, {
     objects: [
       { kind: "area", ids: [data.areaId] },
+      { kind: "society", ids: [`society:${data.areaId}`] },
       {
         kind: "feature",
         ids: [

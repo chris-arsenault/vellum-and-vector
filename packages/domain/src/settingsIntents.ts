@@ -173,6 +173,7 @@ function registerViews(registry: IntentRegistry) {
     schema: viewSchema,
     requirements: (data, context) =>
       intentReads(context, {
+        referencesTo: [data.id],
         objects: [
           { kind: "view", ids: [data.id] },
           { kind: "area", ids: [data.areaId] },
@@ -206,7 +207,10 @@ function registerViews(registry: IntentRegistry) {
     description: "Remove a saved view without altering its shared geographic data.",
     schema: z.object({ id: uuid }),
     requirements: (data, context) =>
-      intentReads(context, { objects: [{ kind: "view", ids: [data.id] }] }),
+      intentReads(context, {
+        objects: [{ kind: "view", ids: [data.id] }],
+        referencesTo: [data.id],
+      }),
     evaluate(data, context, snapshot) {
       requireThat(
         snapshot.world.views.some((v) => v.id === data.id),

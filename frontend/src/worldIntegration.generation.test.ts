@@ -1,4 +1,4 @@
-import { beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it } from "vitest";
 import { generateAtlas, type AtlasGenerationInput } from "@atlas/generation";
 import {
   landmarkKind,
@@ -11,16 +11,19 @@ import {
 import { newGenerationDraft, prepareDraft } from "./generationDraft";
 import { generationSnapshot } from "./generationJobs";
 import { presentHumanEras } from "../../packages/generation/src/societyRound";
+import { generationStorageFixture } from "../../packages/storage-browser/src/generationFixture";
 
 let result: Awaited<ReturnType<typeof generateAtlas>>;
 let published: DomainSnapshot;
 let input: AtlasGenerationInput;
 let source: DomainSnapshot;
+let storage: Awaited<ReturnType<typeof generationStorageFixture>>;
 const epochs: { id: string; ice: number; maximum: number; impacts: number }[] = [];
 const markerId = "7f6292e2-2b50-42b4-a599-abdbbdceda21";
 
 // The entire end-to-end suite shares this one world. Assertions below are read-only.
 beforeAll(async () => {
+  storage = await generationStorageFixture();
   const draft = newGenerationDraft();
   draft.width = 2_000_000;
   draft.height = 1_000_000;
@@ -48,7 +51,9 @@ beforeAll(async () => {
     generationId: null,
   };
   const physical = new Set(source.world.epochs.map((epoch) => epoch.id));
+  storage.source(source);
   result = await generateAtlas(source, input, {
+    ...storage.options,
     async saveBoundary(boundary) {
       const id = boundary.ancestry[0]?.id;
       if (boundary.kind !== "epoch" || !physical.has(id)) return;
@@ -64,7 +69,13 @@ beforeAll(async () => {
     },
   });
   published = generationSnapshot(result, input, "shared-draft-world", source);
+  // Assertions inspect this small result; production publication pages these records directly.
+  published.world.features = Object.fromEntries(
+    [...storage.options.features.values()].map((feature) => [feature.id, feature])
+  );
 }, 300_000);
+
+afterAll(() => storage?.close());
 
 it("completes causal physical and human history while retaining authored geography", () => {
   expect(result.state.diagnostics?.filter((item) => item.severity === "error") ?? []).toEqual([]);

@@ -1,6 +1,5 @@
-import { sampleFields, lineParts, spatial, type Position } from "@atlas/domain";
+import { spatial, type Position } from "@atlas/domain";
 import type { Geometry } from "geojson";
-import { session } from "./atlasState";
 import type { Area, AtlasFeature, World } from "./types";
 import type { DrawingTool } from "./cartography";
 
@@ -16,7 +15,7 @@ export function drawnFeature(
   tool: DrawingTool,
   options: DrawingOptions
 ): AtlasFeature {
-  const count = Object.values(world.features).filter((f) => f.kind === tool.kind).length + 1;
+  const count = (world.featureCount ?? 0) + 1;
   const feature: AtlasFeature = {
     id: crypto.randomUUID(),
     areaId: area.id,
@@ -36,14 +35,6 @@ export function drawnFeature(
     generationId: null,
     causes: [],
   };
-  if (geometry.type.includes("LineString") && tool.kind === "river") {
-    const coordinates = lineParts(geometry).flat();
-    feature.attributes.elevations = coordinates.map(
-      ([x, y]) => sampleFields(session(world.id).snapshot, { x, y, z: 0 }).elevation ?? 0
-    );
-    feature.attributes.discharges = coordinates.map(() => 1);
-    feature.attributes.discharge = 1;
-  }
   const relation = {
     sovereignty: "sovereign",
     administration: "administeredBy",

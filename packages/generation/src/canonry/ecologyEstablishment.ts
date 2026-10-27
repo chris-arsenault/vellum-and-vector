@@ -5,6 +5,8 @@ import { plantGroups, groupSuitability, type PlantGroup } from "./ecologyGroups"
 import { ecologicalFront, type EcologicalFront } from "./ecologyMovement";
 import { windStrength, type EcologyForcing } from "./ecologyEnvironment";
 import { crossingTime, waterDistance, type Crossing } from "./ecologyCrossing";
+import type { NumericalVector } from "@atlas/domain";
+import { workingValues, releaseWorking } from "./physicalNumerics";
 
 export function initializeEcology(map: PhysicalField, seed = 42, inherited = false) {
   if (map.EcologyInitialized) return;
@@ -49,7 +51,7 @@ function founders(map: PhysicalField, i: number, seed: number) {
 export interface PlantArrival {
   group: PlantGroup;
   front: EcologicalFront;
-  suitability: Float64Array;
+  suitability: NumericalVector;
 }
 export function dispersePlants(
   map: PhysicalField,
@@ -57,11 +59,11 @@ export function dispersePlants(
   forcing: (i: number) => EcologyForcing
 ): PlantArrival[] {
   return plantGroups.map((group) => {
-    const suitability = Float64Array.from(map.TreeCover, (_, i) =>
+    const suitability = workingValues(map, "float64", `ecology:${group.id}:suitability`, (i) =>
       groupSuitability(map, group, i, forcing(i))
     );
-    const starts = Float64Array.from(map[group.seed], (bank, i) =>
-      bank + map[group.cover][i] > 0.00001 ? 0 : Infinity
+    const starts = workingValues(map, "float64", `ecology:${group.id}:starts`, (i) =>
+      map[group.seed][i] + map[group.cover][i] > 0.00001 ? 0 : Infinity
     );
     // Propagules also cross the sea, arriving later the farther they must travel.
     const crossing = group.crossing as Crossing;
@@ -73,6 +75,7 @@ export function dispersePlants(
     const front = ecologicalFront(map, starts, admits, (i, edge, j) =>
       seedTravel(map, group, forcing(i), i, edge, j)
     );
+    releaseWorking(map, starts, landed);
     return { group, front, suitability };
   });
 }

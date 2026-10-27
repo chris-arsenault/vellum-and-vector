@@ -1,6 +1,6 @@
 import { putChannel } from "@atlas/domain";
 import { magicalForcing } from "./mapMagic";
-import { summarizeChannel } from "./mapFields";
+import { summarizeChannel, surfaceArray, surfaceValues } from "./mapFields";
 import type { MapProcess } from "./process";
 
 // The physical processes consume altered material resistance and coastal stress,
@@ -25,7 +25,7 @@ export const materialMagicProcess: MapProcess = {
       if (!grid.channels.naturalRock)
         putChannel(grid, "naturalRock", "ratio", grid.channels.rock.slice());
       grid.channels.rock.set(grid.channels.naturalRock);
-      const pressure = new Float64Array(grid.active.length);
+      const pressure = surfaceArray(state, "magic:coastal-pressure");
       for (const source of state.domain.world.magic) {
         if (
           source.systemId ||
@@ -33,8 +33,8 @@ export const materialMagicProcess: MapProcess = {
           (source.spaceId && source.spaceId !== context.scope.spaceId)
         )
           continue;
-        const values = Float64Array.from(grid.active, (active, i) =>
-          active ? magicalForcing(state, context, source, i) : 0
+        const values = surfaceValues(state, `magic:${source.id}`, (i) =>
+          grid.active[i] ? magicalForcing(state, context, source, i) : 0
         );
         const key = `magic:${source.id}`;
         putChannel(grid, key, "ratio", values);

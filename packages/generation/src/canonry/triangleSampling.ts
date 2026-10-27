@@ -1,5 +1,8 @@
 import type { PhysicalMesh } from "./mesh";
 import { nearestTriangle, meshDeltaX, meshPoint } from "./mesh";
+import { triangleVertex } from "./triangleVertices";
+import { allocateNumerical, type NumericalAllocator } from "@atlas/domain";
+import { NumericalList } from "./numericalList";
 
 export interface TriangleSample {
   cell: number;
@@ -7,57 +10,6 @@ export interface TriangleSample {
   weights: number[];
 }
 const rootThree = Math.sqrt(3);
-const prepared = new WeakMap<PhysicalMesh, ReturnType<typeof prepareVertices>>();
-
-function vertexKey(mesh: PhysicalMesh, v: number[]) {
-  const period = 6 * (mesh.periodic?.columns ?? 0);
-  return period ? `${((v[0] % period) + period) % period}:${v[1]}` : v.join(":");
-}
-
-function prepareVertices(mesh: PhysicalMesh) {
-  const vertices: number[][] = [],
-    positions: [number, number][] = [],
-    indexes = new Map<string, number>();
-  const corners = new Int32Array(mesh.count * 3);
-  const seamMembers = new Map<string, number[]>();
-  mesh.coords.forEach((p, i) => {
-    const x = 3 * (p.u + p.v) + (p.inverted ? 4 : 2),
-      y = -p.u + p.v,
-      sign = p.inverted ? -1 : 1;
-    [
-      [x - 2 * sign, y],
-      [x + sign, y - 1],
-      [x + sign, y + 1],
-    ].forEach((v, corner) => {
-      const key = v.join(":"),
-        index = indexes.get(key) ?? vertices.length;
-      if (!indexes.has(key)) {
-        indexes.set(key, index);
-        const equivalent = vertexKey(mesh, v);
-        const members = seamMembers.get(equivalent) ?? [];
-        seamMembers.set(equivalent, members);
-        vertices.push(members);
-        positions.push([
-          (v[0] * mesh.spacing) / 2 + mesh.latticeOffset[0] + mesh.origin[0],
-          (v[1] * rootThree * (mesh.periodic?.poles?.spacingY ?? mesh.spacing)) / 2 +
-            mesh.latticeOffset[1] +
-            mesh.origin[1],
-        ]);
-      }
-      if (!vertices[index].includes(i)) vertices[index].push(i);
-      corners[i * 3 + corner] = index;
-    });
-  });
-  return { vertices, corners, positions };
-}
-function vertexSupport(mesh: PhysicalMesh) {
-  let support = prepared.get(mesh);
-  if (!support) {
-    support = prepareVertices(mesh);
-    prepared.set(mesh, support);
-  }
-  return support;
-}
 /** Piecewise linear fans share vertex averages across faces. Centre samples are exact. */
 function locate(mesh: PhysicalMesh, x: number, y: number) {
   [x, y] = meshPoint(mesh, x, y);
@@ -97,8 +49,7 @@ export function triangleSample(mesh: PhysicalMesh, x: number, y: number): Triang
   const fan = fanWeights(barycentric, minimum),
     cells = [cell, faceNeighbor(mesh, cell, fan.opposite)],
     weights = [fan.center + fan.face / 2, fan.face / 2],
-    support = vertexSupport(mesh),
-    members = support.vertices[support.corners[cell * 3 + fan.corner]];
+    members = triangleVertex(mesh, cell, fan.corner).members;
   for (const member of members) {
     cells.push(member);
     weights.push(fan.vertex / members.length);
@@ -120,25 +71,53 @@ function vertexMean(members: number[], read: (i: number) => number) {
   return base + members.reduce((sum, i) => sum + (read(i) - base), 0) / members.length;
 }
 /** Include vertex neighbors: a region's interpolation can reach beyond its member cells. */
-export function triangleSupport(mesh: PhysicalMesh, members: number[]) {
-  const support = vertexSupport(mesh),
-    cells = new Set(members);
+export function triangleSupport(
+  mesh: PhysicalMesh,
+  members: Iterable<number>,
+  numerical?: NumericalAllocator
+) {
+  const selected = allocateNumerical(
+    { type: "uint8", length: mesh.count, lifetime: "process", name: "contour:membership" },
+    numerical
+  );
+  const list = new NumericalList("int32", "contour:support", numerical);
+  const add = (cell: number) => {
+    if (selected[cell]) return;
+    selected[cell] = 1;
+    list.push(cell);
+  };
+  for (const cell of members) add(cell);
   for (const cell of members)
     for (let corner = 0; corner < 3; corner++)
-      for (const i of support.vertices[support.corners[cell * 3 + corner]]) cells.add(i);
-  return cells;
+      for (const i of triangleVertex(mesh, cell, corner).members) add(i);
+  const cells = list.finish();
+  return {
+    has: (cell: number) => !!selected[cell],
+    [Symbol.iterator]: () => cells.values(),
+    close: () => numerical?.releaseUnused([selected, cells], []),
+  };
 }
-export function* triangleFans(mesh: PhysicalMesh, members: number[], read: (i: number) => number) {
-  const support = vertexSupport(mesh),
-    cells = triangleSupport(mesh, members);
-  const values = new Map<number, [number, number, number]>();
-  const vertex = (index: number): [number, number, number] => {
-    if (!values.has(index)) {
-      const members = support.vertices[index],
-        p = support.positions[index];
-      values.set(index, [p[0], p[1], vertexMean(members, read)]);
-    }
-    return values.get(index)!;
+export function* triangleFans(
+  mesh: PhysicalMesh,
+  members: Iterable<number> | undefined,
+  read: (i: number) => number,
+  numerical?: NumericalAllocator
+) {
+  const support = members ? triangleSupport(mesh, members, numerical) : null;
+  try {
+    yield* triangleCellFans(mesh, support ?? mesh.x.keys(), read);
+  } finally {
+    support?.close();
+  }
+}
+export function* triangleCellFans(
+  mesh: PhysicalMesh,
+  cells: Iterable<number>,
+  read: (i: number) => number
+) {
+  const vertex = (cell: number, corner: number): [number, number, number] => {
+    const { members, position: p } = triangleVertex(mesh, cell, corner);
+    return [p[0], p[1], vertexMean(members, read)];
   };
   for (const cell of cells) {
     const center: [number, number, number] = [
@@ -146,7 +125,7 @@ export function* triangleFans(mesh: PhysicalMesh, members: number[], read: (i: n
         mesh.y[cell] + mesh.origin[1],
         read(cell),
       ],
-      corners = [0, 1, 2].map((i) => vertex(support.corners[cell * 3 + i]));
+      corners = [0, 1, 2].map((i) => vertex(cell, i));
     const boundary = corners.flatMap((a, i) => {
       const b = corners[(i + 1) % 3],
         neighbor = faceNeighbor(mesh, cell, (i + 2) % 3);
@@ -166,23 +145,32 @@ export function* triangleFans(mesh: PhysicalMesh, members: number[], read: (i: n
 export function* triangleBoundary(
   mesh: PhysicalMesh,
   read: (i: number) => number,
-  members?: number[]
+  members?: Iterable<number>,
+  numerical?: NumericalAllocator
 ) {
-  const support = vertexSupport(mesh),
-    cells = members ? triangleSupport(mesh, members) : new Set(mesh.x.keys());
-  const vertex = (index: number): [number, number, number] => {
-    const members = support.vertices[index],
-      p = support.positions[index];
+  const selected = members ? triangleSupport(mesh, members, numerical) : null;
+  try {
+    yield* boundarySegments(mesh, read, selected);
+  } finally {
+    selected?.close();
+  }
+}
+function* boundarySegments(
+  mesh: PhysicalMesh,
+  read: (i: number) => number,
+  selected: ReturnType<typeof triangleSupport> | null
+) {
+  const cells = selected ?? mesh.x.keys();
+  const vertex = (cell: number, corner: number): [number, number, number] => {
+    const { members, position: p } = triangleVertex(mesh, cell, corner);
     return [p[0], p[1], vertexMean(members, read)];
   };
   for (const cell of cells) {
     for (let corner = 0; corner < 3; corner++) {
       const neighbor = faceNeighbor(mesh, cell, (corner + 2) % 3);
-      const acrossChart =
-        mesh.periodic && Math.abs(mesh.x[neighbor] - mesh.x[cell]) > 2 * mesh.spacing;
-      if (neighbor !== cell && cells.has(neighbor) && !acrossChart) continue;
-      const a = vertex(support.corners[cell * 3 + corner]),
-        b = vertex(support.corners[cell * 3 + ((corner + 1) % 3)]),
+      if (interiorNeighbor(mesh, cell, neighbor, selected)) continue;
+      const a = vertex(cell, corner),
+        b = vertex(cell, (corner + 1) % 3),
         middle: [number, number, number] = [
           (a[0] + b[0]) / 2,
           (a[1] + b[1]) / 2,
@@ -193,20 +181,26 @@ export function* triangleBoundary(
     }
   }
 }
+function interiorNeighbor(
+  mesh: PhysicalMesh,
+  cell: number,
+  neighbor: number,
+  selected: ReturnType<typeof triangleSupport> | null
+) {
+  return (
+    neighbor !== cell &&
+    (!selected || selected.has(neighbor)) &&
+    !crossesChart(mesh, cell, neighbor)
+  );
+}
+function crossesChart(mesh: PhysicalMesh, cell: number, neighbor: number) {
+  return mesh.periodic && Math.abs(mesh.x[neighbor] - mesh.x[cell]) > 2 * mesh.spacing;
+}
 export function triangleSampler(
   mesh: PhysicalMesh,
   values: ArrayLike<number> | ((i: number) => number)
 ) {
   const read = typeof values === "function" ? values : (i: number) => values[i];
-  const support = vertexSupport(mesh),
-    vertices = new Float64Array(support.vertices.length).fill(NaN);
-  const vertexValue = (index: number) => {
-    if (Number.isNaN(vertices[index])) {
-      const members = support.vertices[index];
-      vertices[index] = vertexMean(members, read);
-    }
-    return vertices[index];
-  };
   return (x: number, y: number) => {
     const { cell, barycentric, minimum } = locate(mesh, x, y);
     if (cell < 0) return 0;
@@ -215,7 +209,7 @@ export function triangleSampler(
     const base = read(cell);
     return (
       base +
-      (fan.vertex * (vertexValue(support.corners[cell * 3 + fan.corner]) - base) +
+      (fan.vertex * (vertexMean(triangleVertex(mesh, cell, fan.corner).members, read) - base) +
         (fan.face * (read(neighbor) - base)) / 2) /
         (fan.center + fan.vertex + fan.face)
     );

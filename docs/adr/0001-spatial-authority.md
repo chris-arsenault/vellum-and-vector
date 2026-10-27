@@ -3,8 +3,8 @@
 Direction recorded 2026-10-18.
 
 Current runtime and authority are governed by [ADR 0003](0003-frontend-session.md):
-browser memory and direct TypeScript validation. The PostGIS, service and
-persistence provisions here are deferred; spatial identity and authoring rules
+the browser GIS workspace and shared TypeScript validation. The PostGIS, service and
+hosted persistence provisions here are deferred; spatial identity and authoring rules
 remain applicable.
 
 ## Context

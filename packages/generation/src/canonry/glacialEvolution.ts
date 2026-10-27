@@ -5,6 +5,7 @@ import { clamp, truncate, units } from "./math";
 import { erode, deposit } from "./surface";
 import { isGrounded, refreshGrounding } from "./glacierSurface";
 import { targetOrder } from "./flowGraph";
+import { workingArray } from "./physicalNumerics";
 
 export function glacialErosion(map: PhysicalField, c: PhysicalContext) {
   const p = c.Profile;
@@ -47,8 +48,8 @@ function isTerminus(map: PhysicalField, c: PhysicalContext, i: number, target: n
   );
 }
 export function glacialDeposition(map: PhysicalField, c: PhysicalContext) {
-  const moving = new Float64Array(map.mesh.count);
-  for (const i of targetOrder(map.IceFlowTargets)) {
+  const moving = workingArray(map, "float64", "glacier:sediment");
+  for (const i of targetOrder(map.IceFlowTargets, map.numerical)) {
     const area = map.mesh.areas[i];
     const load = moving[i] + (map.SedimentSupply[i] / 1024) * area;
     map.SedimentSupply[i] = 0;

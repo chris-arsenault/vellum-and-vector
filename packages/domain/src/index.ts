@@ -1,4 +1,5 @@
 export * from "./model";
+export * from "./networkWorkspace";
 export * from "./featureCatalogue";
 export * from "./featureReads";
 export * from "./drainage";
@@ -12,6 +13,7 @@ export * from "./errors";
 export * from "./schemas";
 export * from "./spatial";
 export * from "./grids";
+export * from "./gridWindow";
 export * from "./brush";
 export * from "./gridResampling";
 export * from "./operations";
@@ -70,11 +72,25 @@ export * from "./analysis";
 export * from "./adaptiveTopology";
 export * from "./adaptiveReconstruction";
 export * from "./adaptiveTransfer";
+export { visitAdaptiveFace } from "./adaptiveFaceQuery";
 export * from "./adaptiveField";
 export * from "./adaptivePoint";
 export * from "./classSampler";
 export * from "./fieldContours";
+export * from "./contourWorkspace";
 export * from "./snapshot";
+export * from "./featureWorkspace";
+export * from "./workspace";
+export * from "./registry";
+export * from "./settlementInspection";
+export * from "./presentationReads";
+export * from "./workspaceResources";
+export * from "./numericalVector";
+export * from "./numericalBlocks";
+export * from "./byteCache";
+export * from "./numericalAllocation";
+export * from "./gridCopy";
+export { authoredFieldChanges } from "./fieldAuthoring";
 export * from "./scale";
 export * from "./society";
 export * from "./societyEditing";
@@ -90,3 +106,4 @@ export {
   translateGeometry,
   unwrapCoordinates,
 } from "./worldBoundary";
+export * from "./generationHistory";

@@ -1,8 +1,8 @@
 # World Atlas Creator
 
-**Current implementation scope — updated 2026-10-24:** The user has deferred the
-backend and MCP until the frontend product functions. The browser owns session
-memory and runs generation in a worker. Explicit local map saves in IndexedDB
+**Current implementation scope — updated 2026-10-27:** The user has deferred the
+backend and MCP until the frontend product functions. The browser owns a local GIS
+workspace and runs generation in a worker. Explicit local map saves rooted in IndexedDB
 allow reopening geography without regeneration; unsaved changes disappear on
 reload, and generation stops when the tab closes. [ADR 0003](adr/0003-frontend-session.md)
 supersedes this document's backend, durable-job, recovery and service requirements

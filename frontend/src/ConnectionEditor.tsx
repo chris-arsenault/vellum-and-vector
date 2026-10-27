@@ -1,12 +1,13 @@
 import { useState } from "react";
-import GeoJSON from "ol/format/GeoJSON.js";
 import type { Connection, World } from "./types";
 import type { EditorState } from "./useEditor";
-import { useScene } from "./useScene";
+import { AccessFeature } from "./AccessFeature";
+import { useConnections } from "./useWorkspacePresentation";
 
 export function ConnectionEditor({ world, editor }: { world: World; editor: EditorState }) {
   const [id, select] = useState("");
-  const current = world.connections?.[id];
+  const connections = useConnections(world, editor.area.id);
+  const current = connections.data?.find((connection) => connection.id === id);
   const point =
     editor.selected?.geometry.type === "Point"
       ? editor.selected.geometry.coordinates
@@ -23,13 +24,14 @@ export function ConnectionEditor({ world, editor }: { world: World; editor: Edit
         Connection
         <select value={id} onChange={(event) => select(event.target.value)}>
           <option value="">New connection</option>
-          {Object.values(world.connections ?? {}).map((c) => (
+          {connections.data?.map((c) => (
             <option value={c.id} key={c.id}>
               {c.kind}: {world.areas[c.a.areaId]?.name} → {world.areas[c.b.areaId]?.name}
             </option>
           ))}
         </select>
       </label>
+      {connections.error && <p role="alert">{connections.error.message}</p>}
       <ConnectionForm
         key={id}
         initial={
@@ -58,12 +60,6 @@ function ConnectionForm({
   editor: EditorState;
 }) {
   const [connection, change] = useState(initial);
-  function align() {
-    change({
-      ...connection,
-      b: { ...connection.b, position: { ...connection.a.position, z: connection.b.position.z } },
-    });
-  }
   return (
     <form
       onSubmit={(event) => {
@@ -75,7 +71,10 @@ function ConnectionForm({
         Kind
         <select
           value={connection.kind}
-          onChange={(event) => change({ ...connection, kind: event.target.value })}
+          onChange={(event) => {
+            const kind = event.target.value;
+            change((current) => ({ ...current, kind }));
+          }}
         >
           {["entrance", "vertical", "portal", "road", "river", "cave"].map((kind) => (
             <option key={kind}>{kind}</option>
@@ -90,16 +89,16 @@ function ConnectionForm({
         title="From"
         value={connection.a}
         world={world}
-        change={(a) => change({ ...connection, a })}
+        change={(a) => change((current) => ({ ...current, a }))}
       />
-      <button type="button" className="quiet" onClick={align}>
+      <button type="button" className="quiet" onClick={() => change(alignConnection)}>
         Align destination horizontally
       </button>
       <Endpoint
         title="To"
         value={connection.b}
         world={world}
-        change={(b) => change({ ...connection, b })}
+        change={(b) => change((current) => ({ ...current, b }))}
       />
       {connection.kind === "river" && (
         <label>
@@ -109,7 +108,10 @@ function ConnectionForm({
             min="0"
             step="any"
             value={connection.flow}
-            onChange={(event) => change({ ...connection, flow: Number(event.target.value) })}
+            onChange={(event) => {
+              const flow = Number(event.target.value);
+              change((current) => ({ ...current, flow }));
+            }}
           />
         </label>
       )}
@@ -118,6 +120,12 @@ function ConnectionForm({
       </button>
     </form>
   );
+}
+function alignConnection(connection: Connection): Connection {
+  return {
+    ...connection,
+    b: { ...connection.b, position: { ...connection.a.position, z: connection.b.position.z } },
+  };
 }
 
 function Endpoint({
@@ -131,29 +139,6 @@ function Endpoint({
   world: World;
   change: (end: Connection["a"]) => void;
 }) {
-  const scene = useScene(world, value.areaId);
-  function attach(id: string) {
-    const feature = scene.data?.find((f) => f.id === id);
-    const coordinates = feature
-      ? new GeoJSON()
-          .readGeometry(feature.geometry)
-          ?.getClosestPoint([value.position.x, value.position.y])
-      : null;
-    change({
-      ...value,
-      featureId: feature?.id ?? null,
-      position: coordinates
-        ? {
-            x: coordinates[0],
-            y: coordinates[1],
-            z:
-              typeof feature?.attributes.elevation === "number"
-                ? feature.attributes.elevation
-                : value.position.z,
-          }
-        : value.position,
-    });
-  }
   return (
     <fieldset>
       <legend>{title}</legend>
@@ -170,17 +155,7 @@ function Endpoint({
           ))}
         </select>
       </label>
-      <label>
-        Access feature
-        <select value={value.featureId ?? ""} onChange={(event) => attach(event.target.value)}>
-          <option value="">Located endpoint without feature</option>
-          {scene.data?.map((feature) => (
-            <option value={feature.id} key={feature.id}>
-              {feature.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <AccessFeature key={value.areaId} world={world} value={value} change={change} />
       <EndpointCoordinates value={value} change={change} />
     </fieldset>
   );

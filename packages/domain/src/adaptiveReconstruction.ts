@@ -5,12 +5,13 @@ import {
   type AdaptiveTopology,
 } from "./adaptiveTopology";
 import { prepareAdaptivePatches } from "./adaptivePoint";
+import type { NumericalVector } from "./numericalVector";
 import { evaluatePreparedAdaptiveCell, type PreparedAdaptiveCell } from "./adaptiveHermite";
 export { evaluateAdaptiveCell } from "./adaptiveHermite";
 
 export interface AdaptiveReconstruction {
   topology: AdaptiveTopology;
-  values: Float64Array;
+  values: NumericalVector;
   corners: Float64Array;
   patches: Float64Array;
   cells: PreparedAdaptiveCell[];
@@ -54,7 +55,7 @@ export function adaptiveGradients(
 }
 export function reconstructAdaptive(
   topology: AdaptiveTopology,
-  values: Float64Array
+  values: NumericalVector
 ): AdaptiveReconstruction {
   const at = prepareAdaptivePatches(topology, values);
   const patches = new Float64Array(values.length * 16),

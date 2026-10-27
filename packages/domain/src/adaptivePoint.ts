@@ -6,6 +6,9 @@ import {
   type PreparedAdaptiveCell,
 } from "./adaptiveHermite";
 import { adaptivePatchGeometry, type AdaptiveVertex } from "./adaptivePatchGeometry";
+import { ByteCache } from "./byteCache";
+
+const adaptiveChannelCacheBytes = 256 * 1024;
 
 import {
   adaptiveFits,
@@ -103,16 +106,18 @@ function unconstrainedVertex(
 }
 /** Shared vertex values and derivatives also constrain fine faces to their coarse patch. */
 export function prepareAdaptivePatches(t: AdaptiveTopology, values: Samples) {
-  const coefficients = new Map<number, PreparedAdaptiveCell>();
+  const coefficients = new ByteCache<number, PreparedAdaptiveCell>(adaptiveChannelCacheBytes);
   const fit = adaptiveFits(t, values),
     geometry = adaptivePatchGeometry(t);
-  const vertices = new Map<number, number[]>(),
-    baseValues = new Map<number, number>();
+  const vertices = new ByteCache<number, number[]>(adaptiveChannelCacheBytes),
+    baseValues = new ByteCache<number, number>(adaptiveChannelCacheBytes);
   const baseValue = (x: number, y: number, epsilon: number) => {
     const vertex = geometry.vertex(x, y, epsilon);
-    if (!baseValues.has(vertex.id))
-      baseValues.set(vertex.id, corner(t, values, vertex, fit, baseValue));
-    return baseValues.get(vertex.id)!;
+    const previous = baseValues.get(vertex.id);
+    if (previous !== undefined) return previous;
+    const result = corner(t, values, vertex, fit, baseValue);
+    baseValues.set(vertex.id, result, 80);
+    return result;
   };
   const vertex = (point: AdaptiveVertex): number[] => {
     const { id, cells, x, y, epsilon, hanging } = point;
@@ -135,7 +140,7 @@ export function prepareAdaptivePatches(t: AdaptiveTopology, values: Samples) {
     } else {
       result = unconstrainedVertex(t, values, cells, { x, y, epsilon }, baseValue, fit);
     }
-    vertices.set(id, result);
+    vertices.set(id, result, 112);
     return result;
   };
   const patch = (i: number): PreparedAdaptiveCell => {
@@ -149,7 +154,7 @@ export function prepareAdaptivePatches(t: AdaptiveTopology, values: Samples) {
       })
     );
     const result = prepareAdaptiveCell(c, read(values, i));
-    coefficients.set(i, result);
+    coefficients.set(i, result, 320);
     return result;
   };
   return patch;
@@ -158,9 +163,9 @@ export function prepareAdaptivePatches(t: AdaptiveTopology, values: Samples) {
 export function adaptivePointSampler(
   t: AdaptiveTopology,
   values: Samples,
-  locate: AdaptivePointLocator = locateAdaptivePoint
+  locate: AdaptivePointLocator = locateAdaptivePoint,
+  patch = prepareAdaptivePatches(t, values)
 ) {
-  const patch = prepareAdaptivePatches(t, values);
   return (x: number, y: number) => {
     const { leaf, u, v } = locate(t, x, y);
     return leaf < 0 ? NaN : evaluatePreparedAdaptiveCell(patch(leaf), u, v);

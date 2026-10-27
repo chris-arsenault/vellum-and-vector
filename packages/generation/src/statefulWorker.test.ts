@@ -5,12 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
+import { createRequire } from "node:module";
 import { atlasGenerationModules } from "./atlasModules";
 import { prepareAtlasGeneration } from "./atlasWorkflow";
-import {
-  GenerationReceiver,
-  type GenerationMessage,
-} from "../../../frontend/src/generationTransport";
+import type { DomainSnapshot, EpochHistory } from "@atlas/domain";
 import {
   inventoryChannel,
   inventoryFeature,
@@ -19,16 +17,16 @@ import {
   statefulInventoryRequest,
 } from "./fixtures/statefulModule";
 
-function run(worker: Worker, message: unknown): Promise<GenerationReceiver> {
+interface WorkerOutput {
+  snapshot: DomainSnapshot;
+  history: EpochHistory[];
+}
+function run(worker: Worker, message: unknown): Promise<WorkerOutput> {
   return new Promise((resolve, reject) => {
-    let receiver: GenerationReceiver | undefined;
     worker.on("error", reject);
-    worker.on("message", (entry: GenerationMessage) => {
+    worker.on("message", (entry: WorkerOutput & { kind: string; error?: string }) => {
       if (entry.kind === "failed") reject(new Error(entry.error));
-      if (entry.kind === "snapshot") receiver = new GenerationReceiver(entry);
-      else if (entry.kind === "samples" || entry.kind === "numerical" || entry.kind === "records")
-        receiver!.receive(entry);
-      else if (entry.kind === "completed") resolve(receiver!);
+      else if (entry.kind === "completed") resolve(entry);
     });
     worker.on("exit", (code) => {
       if (code !== 0) reject(new Error(`Worker exited ${code}.`));
@@ -43,6 +41,9 @@ it("rebinds a reviewed stateful module in a separately bundled worker and publis
   let worker: Worker | null = null;
   try {
     const outfile = join(directory, "worker.mjs");
+    const geos = createRequire(
+      new URL("../../storage-browser/package.json", import.meta.url)
+    ).resolve("geos-wasm");
     await build({
       entryPoints: [fileURLToPath(new URL("./fixtures/statefulWorker.ts", import.meta.url))],
       outfile,
@@ -50,6 +51,8 @@ it("rebinds a reviewed stateful module in a separately bundled worker and publis
       platform: "node",
       format: "esm",
       target: "node22",
+      alias: { "geos-wasm": geos },
+      external: [geos],
     });
     const { source, input } = statefulInventoryRequest();
     const prepared = prepareAtlasGeneration(source, input);
@@ -60,7 +63,7 @@ it("rebinds a reviewed stateful module in a separately bundled worker and publis
       input: prepared.input,
       operationId: crypto.randomUUID(),
     });
-    const snapshot = completed.complete();
+    const snapshot = completed.snapshot;
     const field = snapshot.world.fields.find((field) => field.layerId === inventoryLayer)!;
     const grid = snapshot.numerical[field.id];
     expect(

@@ -1,5 +1,8 @@
 import { adaptiveCell, adaptiveLeafAt, type AdaptiveTopology } from "./adaptiveTopology";
 import type { Bounds } from "./spatial";
+import { ByteCache } from "./byteCache";
+
+const geometryCacheBytes = 1024 * 1024;
 
 export interface AdaptiveVertex {
   id: number;
@@ -27,8 +30,9 @@ function incident(t: AdaptiveTopology, x: number, y: number, epsilon: number) {
   return [...leaves];
 }
 function prepare(t: AdaptiveTopology) {
-  const vertices = new Map<string, AdaptiveVertex>(),
-    cells = new Map<number, Cell>();
+  const vertices = new ByteCache<string, AdaptiveVertex>(geometryCacheBytes),
+    cells = new ByteCache<number, Cell>(geometryCacheBytes);
+  let nextVertexId = 0;
   function vertex(x: number, y: number, epsilon: number): AdaptiveVertex {
     const key = `${x}:${y}`,
       previous = vertices.get(key);
@@ -39,7 +43,7 @@ function prepare(t: AdaptiveTopology) {
       return (x > b[0] && x < b[2]) || (y > b[1] && y < b[3]);
     });
     const result = {
-      id: vertices.size,
+      id: nextVertexId++,
       x,
       y,
       epsilon,
@@ -47,7 +51,7 @@ function prepare(t: AdaptiveTopology) {
       hanging: hanging[0],
       coarse: hanging.sort((a, b) => t.levels[t.leaves[a]] - t.levels[t.leaves[b]])[0],
     };
-    vertices.set(key, result);
+    vertices.set(key, result, 192 + key.length * 2 + neighbors.length * 8);
     return result;
   }
   function cell(i: number) {
@@ -69,7 +73,7 @@ function prepare(t: AdaptiveTopology) {
         vertex(x1, y1, epsilon),
       ],
     };
-    cells.set(i, result);
+    cells.set(i, result, 512);
     return result;
   }
   return { vertex, cell };

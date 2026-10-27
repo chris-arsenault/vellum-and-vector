@@ -4,12 +4,12 @@ import GeoJSON from "ol/format/GeoJSON.js";
 import { Fill, Stroke, Style } from "ol/style.js";
 import { fieldInterpolator, spatial, presentedFeatureStyle } from "@atlas/domain";
 import type { Geometry, Point as GeoPoint } from "geojson";
-import type { DrawnMapInput } from "./drawnMap";
+import type { LoadedDrawnMapInput as DrawnMapInput } from "./drawnMap";
 import { drawnIcon, type DrawnIconKind } from "./drawnSymbols";
 import { biomeTreatment } from "./drawnEcology";
 import { drawingGeography } from "./drawnGeography";
 import { bounds } from "./presentation";
-import type { Raster } from "./types";
+import type { LoadedRaster as Raster } from "./types";
 import { terrainWater } from "./terrainWater";
 
 // Symbol spacing describes visual density at the subject scale, not generated detail.
@@ -162,8 +162,8 @@ function biomeCover(input: DrawnMapInput) {
       : [];
   });
 }
-export function illustratedTerrain(input: DrawnMapInput, footprint: Geometry) {
-  return terrainMarks(input, footprint).map((mark) => {
+export function illustratedTerrain(input: Pick<DrawnMapInput, "view">, marks: TerrainMark[]) {
+  return marks.map((mark) => {
     const feature = new Feature({ geometry: new Point(mark.coordinate) });
     feature.setStyle(
       new Style({

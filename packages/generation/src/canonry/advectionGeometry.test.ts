@@ -104,7 +104,7 @@ function unequalBlocks(samples: number) {
 it.each([1024, 4096])("carries a narrow block beside larger blocks at %s samples", (samples) => {
   const map = unequalBlocks(samples),
     mesh = map.mesh;
-  const integral = (values: Float64Array) =>
+  const integral = (values: import("@atlas/domain").NumericalVector) =>
     values.reduce((sum, value, i) => sum + value * mesh.areas[i], 0);
   const sediment = integral(map.SedimentThickness);
   const erosion = integral(map.CumulativeFluvialErosion);

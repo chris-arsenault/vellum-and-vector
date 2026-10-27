@@ -4,6 +4,7 @@ import { landscape } from "./mapFixtures";
 import { createField } from "./canonry/field";
 import { createWorldMesh } from "./canonry/worldMesh";
 import { atlasPhysicalProfile } from "./canonry/atlasProfile";
+import { readNumericalBlock } from "@atlas/domain";
 
 it("samples a bounded independent display grid without modifying live surface channels", () => {
   const state = landscape();
@@ -12,8 +13,14 @@ it("samples a bounded independent display grid without modifying live surface ch
   expect(preview.width).toBe(128);
   expect(preview.height).toBeLessThan(128);
   expect(preview.channels.elevation.length).toBe(preview.width * preview.height);
-  expect(preview.channels.elevation.buffer).not.toBe(state.surface.channels.elevation.buffer);
-  structuredClone(preview, { transfer: [preview.channels.elevation.buffer] });
+  const output = readNumericalBlock(preview.channels.elevation, 0, preview.active.length);
+  const input = readNumericalBlock(
+    state.surface.channels.elevation,
+    0,
+    state.surface.active.length
+  );
+  expect(output.buffer).not.toBe(input.buffer);
+  structuredClone(preview, { transfer: [output.buffer] });
   expect(state.surface).toEqual(original);
 });
 

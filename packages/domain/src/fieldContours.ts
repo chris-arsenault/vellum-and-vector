@@ -1,16 +1,13 @@
 import type { Geometry } from "geojson";
-import GeoJSONReader from "jsts/org/locationtech/jts/io/GeoJSONReader.js";
-import GeoJSONWriter from "jsts/org/locationtech/jts/io/GeoJSONWriter.js";
-import GeometryFactory from "jsts/org/locationtech/jts/geom/GeometryFactory.js";
-import Polygonizer from "jsts/org/locationtech/jts/operation/polygonize/Polygonizer.js";
-import UnaryUnionOp from "jsts/org/locationtech/jts/operation/union/UnaryUnionOp.js";
-import InteriorPointArea from "jsts/org/locationtech/jts/algorithm/InteriorPointArea.js";
 import { adaptiveCell, adaptiveLeafAt, type AdaptiveTopology } from "./adaptiveTopology";
 import { spatial, type Bounds } from "./spatial";
 import type { RegularGrid } from "./grids";
+import { ByteCache } from "./byteCache";
+import type { ContourEdges, ContourPoint, ContourWorkspace } from "./contourWorkspace";
+import { addContourEdge, contourLines, withContourEdges } from "./contourLines";
+export { contourSupport } from "./contourSupport";
 
-type Point = [number, number];
-type Edge = { a: Point; b: Point; used: boolean };
+type Point = ContourPoint;
 type Scalar = (x: number, y: number) => number;
 type Crossing = (first: Point, last: Point) => Point;
 const mix = (a: Point, b: Point, t: number): Point => [
@@ -43,18 +40,14 @@ function crossing(
   return mix(a, b, (low + high) / 2);
 }
 function prepareQueries(at: Scalar, level: number) {
-  const stations = new Map<number, Map<number, number>>(),
-    crossings = new Map<string, Point>();
+  const stations = new ByteCache<string, number>(2 * 1024 * 1024),
+    crossings = new ByteCache<string, Point>(2 * 1024 * 1024);
   const sample: Scalar = (x, y) => {
-    let column = stations.get(x);
-    if (!column) {
-      column = new Map();
-      stations.set(x, column);
-    }
-    const previous = column.get(y);
+    const id = `${x}:${y}`;
+    const previous = stations.get(id);
     if (previous !== undefined) return previous;
     const value = at(x, y);
-    column.set(y, value);
+    stations.set(id, value, id.length * 2 + 64);
     return value;
   };
   const cross: Crossing = (first, last) => {
@@ -65,7 +58,7 @@ function prepareQueries(at: Scalar, level: number) {
     const previous = crossings.get(id);
     if (previous) return previous;
     const result = crossing(at, a, b, sample(...a), sample(...b), level);
-    crossings.set(id, result);
+    crossings.set(id, result, id.length * 2 + 80);
     return result;
   };
   // Only stations and completed crossings survive a root solve. Bisection probes
@@ -114,7 +107,7 @@ function traceTriangle(
   at: Scalar,
   level: number,
   tolerance: number,
-  edges: Edge[],
+  edges: ContourEdges,
   cross: Crossing
 ) {
   const pending = [vertices];
@@ -145,7 +138,7 @@ function traceTriangle(
         continue;
       }
     }
-    edges.push({ a: count === 1 ? first : last, b: count === 1 ? last : first, used: false });
+    addContourEdge(edges, count === 1 ? first : last, count === 1 ? last : first);
   }
 }
 function outsideEdge(
@@ -154,14 +147,15 @@ function outsideEdge(
   root: Bounds,
   at: Scalar,
   level: number,
-  cross: Crossing
-): Edge[] {
-  if (!onOuterBoundary(a, b, root)) return [];
+  cross: Crossing,
+  edges: ContourEdges
+) {
+  if (!onOuterBoundary(a, b, root)) return;
   const ia = at(...a) > level,
     ib = at(...b) > level;
-  if (!ia && !ib) return [];
+  if (!ia && !ib) return;
   const p = ia === ib ? a : cross(a, b);
-  return [{ a: ia ? a : p, b: ib ? b : p, used: false }];
+  addContourEdge(edges, ia ? a : p, ib ? b : p);
 }
 function onOuterBoundary(a: Point, b: Point, root: Bounds) {
   return (
@@ -169,70 +163,10 @@ function onOuterBoundary(a: Point, b: Point, root: Bounds) {
     (a[1] === b[1] && (a[1] === root[1] || a[1] === root[3]))
   );
 }
-function rings(edges: Edge[]): Point[][] {
-  const starts = new Map<string, Edge[]>(),
-    points = new Map<string, Point>();
-  for (const edge of edges) {
-    for (const side of ["a", "b"] as const) {
-      const id = key(edge[side]);
-      if (!points.has(id))
-        points.set(
-          id,
-          edge[side].map((v) => Math.round(v / spatial.precision) * spatial.precision) as Point
-        );
-      edge[side] = points.get(id)!;
-    }
-    const id = key(edge.a);
-    if (!starts.has(id)) starts.set(id, []);
-    starts.get(id)!.push(edge);
-  }
-  const result: Point[][] = [];
-  for (const start of edges) {
-    if (start.used || key(start.a) === key(start.b)) continue;
-    const ring = connectedRing(start, starts);
-    if (ring.length >= 4) result.push(ring);
-  }
-  return result;
-}
-function connectedRing(start: Edge, starts: Map<string, Edge[]>) {
-  const ring = [start.a];
-  let edge = start;
-  for (;;) {
-    edge.used = true;
-    ring.push(edge.b);
-    if (key(edge.b) === key(start.a)) return ring;
-    const next = (starts.get(key(edge.b)) ?? []).filter((candidate) => !candidate.used);
-    if (!next.length) throw new Error(`A field contour did not close at ${key(edge.b)}.`);
-    next.sort((a, b) => turn(edge, b) - turn(edge, a));
-    edge = next[0];
-  }
-}
-function turn(incoming: Edge, outgoing: Edge) {
-  const x = incoming.b[0] - incoming.a[0],
-    y = incoming.b[1] - incoming.a[1];
-  const u = outgoing.b[0] - outgoing.a[0],
-    v = outgoing.b[1] - outgoing.a[1];
-  return Math.atan2(x * v - y * u, x * u + y * v);
-}
-function polygonize(boundaries: Point[][], at: Scalar, level: number): Geometry | null {
-  if (!boundaries.length) return null;
-  const reader = new GeoJSONReader(new GeometryFactory()),
-    writer = new GeoJSONWriter();
-  const lines = reader.read({ type: "MultiLineString", coordinates: boundaries });
+function polygonize(edges: ContourEdges, at: Scalar, level: number): Geometry | null {
   // Exact-level plateaus can make closed walks touch or retrace an outer edge.
   // Node that linework before assembling faces, using the existing GIS engine.
-  const polygonizer = new Polygonizer();
-  polygonizer.add(UnaryUnionOp.union(lines));
-  const polygons: Geometry[] = [];
-  for (const polygon of polygonizer.getPolygons().toArray()) {
-    const probe = InteriorPointArea.getInteriorPoint(polygon);
-    if (at(probe.x, probe.y) > level) polygons.push(writer.write(polygon) as Geometry);
-  }
-  if (!polygons.length) return null;
-  const result = UnaryUnionOp.union(
-    reader.read({ type: "GeometryCollection", geometries: polygons })
-  );
-  return writer.write(result) as Geometry;
+  return spatial.polygonizeArea(contourLines(edges), (point) => at(point.x, point.y) > level);
 }
 export type LinearContourSample = [number, number, number];
 /** Exact crossings of a piecewise linear sampled field need no root search. */
@@ -240,26 +174,28 @@ export function linearFieldContour(
   triangles: Iterable<LinearContourSample[]>,
   at: Scalar,
   level = 0.5,
-  boundary: Iterable<LinearContourSample[]> = []
+  boundary: Iterable<LinearContourSample[]> = [],
+  workspace?: ContourWorkspace
 ): Geometry | null {
-  const edges: Edge[] = [];
-  for (const triangle of triangles) {
-    const inside = triangle.map((p) => p[2] > level),
-      count = inside.filter(Boolean).length;
-    if (count === 0 || count === 3) continue;
-    const isolated = inside.indexOf(count === 1),
-      a = triangle[isolated],
-      b = triangle[(isolated + 1) % 3],
-      c = triangle[(isolated + 2) % 3];
-    const first = linearCrossing(a, b, level),
-      last = linearCrossing(a, c, level);
-    edges.push({ a: count === 1 ? first : last, b: count === 1 ? last : first, used: false });
-  }
-  closeLinearBoundary(edges, boundary, level);
-  return polygonize(rings(edges.filter((edge) => key(edge.a) !== key(edge.b))), at, level);
+  return withContourEdges(workspace, (edges) => {
+    for (const triangle of triangles) {
+      const inside = triangle.map((p) => p[2] > level),
+        count = inside.filter(Boolean).length;
+      if (count === 0 || count === 3) continue;
+      const isolated = inside.indexOf(count === 1),
+        a = triangle[isolated],
+        b = triangle[(isolated + 1) % 3],
+        c = triangle[(isolated + 2) % 3];
+      const first = linearCrossing(a, b, level),
+        last = linearCrossing(a, c, level);
+      addContourEdge(edges, count === 1 ? first : last, count === 1 ? last : first);
+    }
+    closeLinearBoundary(edges, boundary, level);
+    return polygonize(edges, at, level);
+  });
 }
 function closeLinearBoundary(
-  edges: Edge[],
+  edges: ContourEdges,
   boundary: Iterable<LinearContourSample[]>,
   level: number
 ) {
@@ -268,11 +204,11 @@ function closeLinearBoundary(
       ib = b[2] > level;
     if (!ia && !ib) continue;
     const crossing = ia === ib ? a : linearCrossing(a, b, level);
-    edges.push({
-      a: (ia ? a : crossing).slice(0, 2) as Point,
-      b: (ib ? b : crossing).slice(0, 2) as Point,
-      used: false,
-    });
+    addContourEdge(
+      edges,
+      (ia ? a : crossing).slice(0, 2) as Point,
+      (ib ? b : crossing).slice(0, 2) as Point
+    );
   }
 }
 function linearCrossing(p: LinearContourSample, q: LinearContourSample, level: number): Point {
@@ -286,34 +222,36 @@ export function fieldContour(
   at: Scalar,
   selected?: Iterable<number>,
   level = 0.5,
-  tolerance = 100
+  tolerance = 100,
+  workspace?: ContourWorkspace
 ): Geometry | null {
-  const edges: Edge[] = [];
-  const { sample, cross, clear } = prepareQueries(at, level);
-  let row = NaN;
-  for (const box of contourBoxes(source, selected)) {
-    // Regular cells arrive in row order. Completed row queries need not stay live;
-    // shared crossings are recomputed in canonical endpoint order when needed again.
-    if (!("leaves" in source) && box[1] !== row) {
-      clear();
-      row = box[1];
+  return withContourEdges(workspace, (edges) => {
+    const { sample, cross, clear } = prepareQueries(at, level);
+    let row = NaN;
+    for (const box of contourBoxes(source, selected)) {
+      // Regular cells arrive in row order. Completed row queries need not stay live;
+      // shared crossings are recomputed in canonical endpoint order when needed again.
+      if (!("leaves" in source) && box[1] !== row) {
+        clear();
+        row = box[1];
+      }
+      const center: Point = [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2];
+      const adjacent: Bounds[] = [];
+      if ("leaves" in source) {
+        const i = adaptiveLeafAt(source, ...center);
+        for (let edge = source.offsets[i]; edge < source.offsets[i + 1]; edge++)
+          adjacent.push(adaptiveCell(source, source.neighbors[edge]));
+      }
+      const points = boundary(box, adjacent);
+      for (let i = 0; i < points.length; i++) {
+        const a = points[i],
+          b = points[(i + 1) % points.length];
+        traceTriangle([center, a, b], sample, level, tolerance, edges, cross);
+        outsideEdge(a, b, source.bounds, sample, level, cross, edges);
+      }
     }
-    const center: Point = [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2];
-    const adjacent: Bounds[] = [];
-    if ("leaves" in source) {
-      const i = adaptiveLeafAt(source, ...center);
-      for (let edge = source.offsets[i]; edge < source.offsets[i + 1]; edge++)
-        adjacent.push(adaptiveCell(source, source.neighbors[edge]));
-    }
-    const points = boundary(box, adjacent);
-    for (let i = 0; i < points.length; i++) {
-      const a = points[i],
-        b = points[(i + 1) % points.length];
-      traceTriangle([center, a, b], sample, level, tolerance, edges, cross);
-      edges.push(...outsideEdge(a, b, source.bounds, sample, level, cross));
-    }
-  }
-  return polygonize(rings(edges.filter((edge) => key(edge.a) !== key(edge.b))), sample, level);
+    return polygonize(edges, sample, level);
+  });
 }
 function* contourBoxes(source: AdaptiveTopology | RegularGrid, leaves?: Iterable<number>) {
   if ("leaves" in source) {
@@ -331,22 +269,4 @@ function* contourBoxes(source: AdaptiveTopology | RegularGrid, leaves?: Iterable
         x === source.width - 2 ? x1 : x0 + (x + 1) * dx,
         y === source.height - 2 ? y1 : y0 + (y + 1) * dy,
       ] as Bounds;
-}
-/** Reconstruction uses incident-cell gradients, so include their complete three-face stencil. */
-export function contourSupport(topology: AdaptiveTopology, members: Iterable<number>) {
-  const selected = new Set(members);
-  let front = [...selected];
-  for (let ring = 0; ring < 3; ring++) {
-    const next: number[] = [];
-    for (const i of front)
-      for (let at = topology.offsets[i]; at < topology.offsets[i + 1]; at++) {
-        const j = topology.neighbors[at];
-        if (!selected.has(j)) {
-          selected.add(j);
-          next.push(j);
-        }
-      }
-    front = next;
-  }
-  return selected;
 }

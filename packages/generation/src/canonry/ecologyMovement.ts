@@ -1,21 +1,25 @@
 import type { PhysicalField } from "./field";
+import type { NumericalVector } from "@atlas/domain";
 import { PriorityQueue } from "./priorityQueue";
+import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 
 export interface EcologicalFront {
-  time: Float64Array;
-  source: Int32Array;
+  time: NumericalVector;
+  source: NumericalVector;
 }
 /** Travel times in years on the physical adjacency graph; unreachable cells stay unreachable. */
 export function ecologicalFront(
   map: PhysicalField,
-  starts: Float64Array,
+  starts: NumericalVector,
   admits: (i: number) => boolean,
   travel: (from: number, edge: number, to: number) => number
 ): EcologicalFront {
-  const time = starts.slice(),
-    source = new Int32Array(map.mesh.count).fill(-1);
+  const time = workingValues(map, "float64", "ecology:front-time", (i) => starts[i]),
+    source = workingArray(map, "int32", "ecology:front-source").fill(-1);
   const queue = new PriorityQueue<{ i: number; time: number }>(
-    (a, b) => a.time - b.time || a.i - b.i
+    (a, b) => a.time - b.time || a.i - b.i,
+    map.numerical,
+    ["i", "time"]
   );
   for (let i = 0; i < time.length; i++)
     if (Number.isFinite(time[i]) && admits(i)) {
@@ -42,8 +46,8 @@ export function ecologicalFront(
 /** Relocate existing biomass toward reachable surplus habitat before birth/death changes it. */
 export function migrateAnimals(
   map: PhysicalField,
-  population: Float64Array,
-  capacity: Float64Array,
+  population: NumericalVector,
+  capacity: NumericalVector,
   years: number,
   speed: number,
   aquatic = false
@@ -52,8 +56,8 @@ export function migrateAnimals(
     aquatic
       ? (map.WaterKindCodes[i] > 0 || map.RiverOrders[i] > 0) && map.IceThickness[i] < 2
       : map.WaterKindCodes[i] !== 1 && map.WaterDepths[i] < 1.5 * 1024;
-  const starts = Float64Array.from(capacity, (value, i) =>
-    value > population[i] * 1.1 + 1e-8 ? 0 : Infinity
+  const starts = workingValues(map, "float64", "ecology:migration-starts", (i) =>
+    capacity[i] > population[i] * 1.1 + 1e-8 ? 0 : Infinity
   );
   const front = ecologicalFront(map, starts, admits, (i, edge, j) =>
     speed > 0
@@ -62,7 +66,7 @@ export function migrateAnimals(
         speed
       : Infinity
   );
-  const moving = new Float64Array(map.mesh.count);
+  const moving = workingArray(map, "float64", "ecology:migration-amounts");
   for (let i = 0; i < population.length; i++) {
     const target = front.source[i];
     if (target < 0 || target === i || front.time[i] > years) continue;
@@ -73,4 +77,5 @@ export function migrateAnimals(
     map.MigrationFlux[i] += amount;
   }
   for (let i = 0; i < population.length; i++) population[i] += moving[i];
+  releaseWorking(map, starts, moving, front.time, front.source);
 }

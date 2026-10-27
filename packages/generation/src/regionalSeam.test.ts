@@ -12,6 +12,7 @@ import {
 import { landscape } from "./mapFixtures";
 import { findRoute } from "./mapRouting";
 import { createSocietyGeography } from "./societyGeography";
+import { landEdges } from "./societyTraversal";
 import { publishSettlements } from "./societyPublication";
 import { emptySupport } from "./societySupport";
 import type { MapProcessContext } from "./process";
@@ -99,7 +100,7 @@ it("routes across a supplied seam region by the nearby geographic edge, not thro
   expect(route.length).toBeGreaterThan(1);
   createSocietyGeography(state, context);
   expect(
-    state.society!.edges.some(
+    [...landEdges(state)].some(
       (edge) =>
         Math.abs(gridPosition(grid, edge.a).x - gridPosition(grid, edge.b).x) > 9000 &&
         edge.distance < 1000

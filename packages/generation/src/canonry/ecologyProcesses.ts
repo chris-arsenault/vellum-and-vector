@@ -7,6 +7,7 @@ import {
   type MagicSystem,
 } from "@atlas/domain";
 import type { GenerationState, MapProcess, MapProcessContext } from "../process";
+import { generationFeatures } from "../generationFeatures";
 import { composeNativeAuthoring, nativePosition } from "./atlasWorkspace";
 import { environment, classifyBiome, unit, type EcologyForcing } from "./ecologyEnvironment";
 import { evolveVegetation } from "./ecologyVegetation";
@@ -24,6 +25,7 @@ import { generationBindings } from "../generationBindings";
 import { atlasParametersSchema, type AtlasParameters } from "../atlasParameters";
 import type { Epoch } from "@atlas/domain";
 import type { ProcessBehavior } from "../processTraits";
+import { workingArray } from "./physicalNumerics";
 
 interface EcologyInput {
   seed: number;
@@ -97,15 +99,14 @@ function forcing(state: GenerationState, input: EcologyInput, context?: MapProce
 function coverAuthority(state: GenerationState) {
   const work = state.physical!,
     map = work.map;
-  const woodlands = Object.values(state.domain.world.features).filter(
-    (feature) =>
-      feature.kind === "forest" &&
-      feature.state !== "generated" &&
-      areaSpace(state.domain.world, feature.areaId) === state.domain.scope.spaceId &&
-      spatial.intersects(feature.geometry, state.domain.scope.footprint)
-  );
-  const woodland = new Uint8Array(map.mesh.count);
-  for (const feature of woodlands) {
+  const woodland = workingArray(map, "uint8", "ecology:authored-woodland");
+  for (const feature of generationFeatures(state, { kind: "forest" })) {
+    if (
+      feature.state === "generated" ||
+      areaSpace(state.domain.world, feature.areaId) !== state.domain.scope.spaceId ||
+      !spatial.intersects(feature.geometry, state.domain.scope.footprint)
+    )
+      continue;
     const covers = spatial.pointCoverage(feature.geometry);
     for (let i = 0; i < map.mesh.count; i++) {
       if (!covers(nativePosition(work, i))) continue;
@@ -226,7 +227,11 @@ function recordEcology(state: GenerationState, context: MapProcessContext) {
     description: `${duration} years of establishment, competition, cohort growth, migration and disturbance${state.physical!.inherited ? " (inherited ecology is refined without replaying its age)" : ""}. ${cover}. Fire-affected cover ${Math.round(burned / 1e6)} km². Grazers/browsers/predators ${Math.round(grazers)}/${Math.round(browsers)}/${Math.round(predators)} kg C; migrated ${Math.round(migration)} kg C through reachable habitat. Soil and seed banks carry this epoch's ecological consequences forward.`,
   });
 }
-function recordTransitions(state: GenerationState, before: Int32Array, context: MapProcessContext) {
+function recordTransitions(
+  state: GenerationState,
+  before: import("@atlas/domain").NumericalVector,
+  context: MapProcessContext
+) {
   const map = state.physical!.map,
     changes = new Map<string, number>();
   for (let i = 0; i < map.mesh.contentCount; i++) {

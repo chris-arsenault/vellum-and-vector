@@ -5,12 +5,14 @@ import {
   type MagicOrigin,
   type MagicStock,
   type MagicSystem,
+  type NumericalVector,
 } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import { weightScale } from "./transportPlan";
 import { createConfluenceWorkspace, type ConfluenceWorkspace } from "./magicConfluences";
 import { inheritMagicChannel } from "./magicInheritance";
+import { retainedArray, workingArray, releaseWorking } from "./physicalNumerics";
 import {
   carriedMagicChannels,
   magicChannels,
@@ -27,49 +29,49 @@ export interface LocatedSource {
   radius: number;
   strength: number;
 }
-export interface MagicField extends Record<MagicChannel, Float64Array> {
-  parents?: Int32Array;
+export interface MagicField extends Record<MagicChannel, NumericalVector> {
+  parents?: NumericalVector;
   wakePaths?: number[][][];
   definition: MagicSystem;
   located: LocatedSource[];
   /** Each origin's own source strength per cell; `source` is their maximum. */
-  originSources: Record<string, Float64Array>;
+  originSources: Record<string, NumericalVector>;
   /** Amount of the system per cell in each origin reservoir, keyed by `stockKey`. */
-  stocks: Record<string, Float64Array>;
+  stocks: Record<string, NumericalVector>;
   /** Impact events whose fall has already seeded a finite stock. */
   seeded: Set<string>;
   /** Stock that left the budget: washed to the sea, extracted, released and spent. */
   lost: number;
   /** Stock people drew from each cell since the last advance; an overdrawn spring collapses. */
-  drawn: Float64Array;
+  drawn: NumericalVector;
   /** Veil's doors: pairs of stable tears, as the cells at their two ends. */
   doors: { a: number; b: number }[];
-  features: Record<string, Uint8Array>;
+  features: Record<string, NumericalVector>;
   /** Share of each member cell a rule's class occupies, by rule id. */
-  coverage: Record<string, Float64Array>;
+  coverage: Record<string, NumericalVector>;
   /** The most any of the system's classes occupies in a cell, after meetings took theirs. */
-  systemCoverage: Float64Array;
+  systemCoverage: NumericalVector;
 }
 /** Applied contributions are remembered so a re-evaluation replaces them instead of adding. */
 export interface MagicWorkspace {
   fields: MagicField[];
-  heat: Float64Array;
+  heat: NumericalVector;
   /** Ice removed in the current epoch, so a second evaluation melts only what is owed. */
-  melt: Float64Array;
-  coastal: Float64Array;
-  upwelling: Float64Array;
-  seaSurface: Float64Array;
-  fog: Float64Array;
-  naturalSurface: Float64Array;
-  finalSurface: Float64Array;
+  melt: NumericalVector;
+  coastal: NumericalVector;
+  upwelling: NumericalVector;
+  seaSurface: NumericalVector;
+  fog: NumericalVector;
+  naturalSurface: NumericalVector;
+  finalSurface: NumericalVector;
   /** The next class by coverage where it holds the floor of the cell, or -1. */
-  secondSurface: Float64Array;
+  secondSurface: NumericalVector;
   confluences: ConfluenceWorkspace;
   /** Cells just outside a Hallowed ring: where what the ward holds back lands. */
-  wardRim: Uint8Array;
+  wardRim: NumericalVector;
   /** The ring each warded cell belongs to, and the ring each rim cell touches; -1 for none. */
-  wardLabel: Int32Array;
-  rimLabel: Int32Array;
+  wardLabel: NumericalVector;
+  rimLabel: NumericalVector;
 }
 export function configuredSystems(state: GenerationState) {
   return state.domain.world.magicSystems ?? canonryMagicPresets();
@@ -116,10 +118,12 @@ export function withOrigin<T>(field: MagicField, origin: MagicOrigin, run: () =>
 }
 
 function createMagicField(state: GenerationState, definition: MagicSystem): MagicField {
-  const count = state.physical!.map.mesh.count;
-  const channels = {} as Record<MagicChannel, Float64Array>;
+  const map = state.physical!.map;
+  const channels = {} as Record<MagicChannel, NumericalVector>;
+  const allocate = (name: string) =>
+    retainedArray(map, "float64", `magic:${definition.id}:${name}`);
   for (const channel of magicChannels)
-    channels[channel] = new Float64Array(count).fill(magicFieldDefinitions[channel].initial);
+    channels[channel] = allocate(channel).fill(magicFieldDefinitions[channel].initial);
   const field: MagicField = {
     ...channels,
     definition,
@@ -129,15 +133,15 @@ function createMagicField(state: GenerationState, definition: MagicSystem): Magi
     stocks: {},
     seeded: new Set(),
     lost: 0,
-    drawn: new Float64Array(count),
+    drawn: allocate("drawn"),
     features: {},
     coverage: {},
-    systemCoverage: new Float64Array(count),
+    systemCoverage: allocate("system-coverage"),
   };
   for (const origin of definition.origins) {
-    field.originSources[origin.id] = new Float64Array(count);
+    field.originSources[origin.id] = allocate(`origin:${origin.id}`);
     for (const stock of originStocks(origin))
-      field.stocks[stockKey(origin, stock)] = new Float64Array(count);
+      field.stocks[stockKey(origin, stock)] = allocate(`stock:${stockKey(origin, stock)}`);
   }
   if (!definition.enabled || !state.physical!.inherited) return field;
   inheritMagicField(state, field);
@@ -203,24 +207,29 @@ export function initializeMagic(
   definitions = configuredSystems(state),
   confluences = configuredConfluences(state)
 ) {
-  const count = state.physical!.map.mesh.count;
+  const map = state.physical!.map;
+  const allocate = (name: string) => retainedArray(map, "float64", `magic:${name}`);
   state.physical!.magic = {
     fields: enabled
       ? structuredClone(definitions).map((system) => createMagicField(state, system))
       : [],
-    confluences: createConfluenceWorkspace(enabled ? structuredClone(confluences) : [], count),
-    heat: new Float64Array(count),
-    melt: new Float64Array(count),
-    coastal: new Float64Array(count),
-    upwelling: new Float64Array(count),
-    seaSurface: new Float64Array(count),
-    fog: new Float64Array(count),
-    naturalSurface: new Float64Array(count),
-    finalSurface: new Float64Array(count),
-    secondSurface: new Float64Array(count).fill(-1),
-    wardRim: new Uint8Array(count),
-    wardLabel: new Int32Array(count).fill(-1),
-    rimLabel: new Int32Array(count).fill(-1),
+    confluences: createConfluenceWorkspace(
+      enabled ? structuredClone(confluences) : [],
+      map.mesh.count,
+      map.numerical
+    ),
+    heat: allocate("heat"),
+    melt: allocate("melt"),
+    coastal: allocate("coastal"),
+    upwelling: allocate("upwelling"),
+    seaSurface: allocate("sea-surface"),
+    fog: allocate("fog"),
+    naturalSurface: allocate("natural-surface"),
+    finalSurface: allocate("final-surface"),
+    secondSurface: allocate("second-surface").fill(-1),
+    wardRim: retainedArray(map, "uint8", "magic:ward-rim"),
+    wardLabel: retainedArray(map, "int32", "magic:ward-label").fill(-1),
+    rimLabel: retainedArray(map, "int32", "magic:rim-label").fill(-1),
   };
 }
 /**
@@ -243,6 +252,7 @@ function carryHistory(field: MagicField, map: PhysicalField) {
       const source = map.AdvectionSourceIndex[i];
       field[channel][i] = source >= 0 ? previous[source] : magicFieldDefinitions[channel].initial;
     }
+    releaseWorking(map, previous);
   }
 }
 function carryStocks(field: MagicField, map: PhysicalField) {
@@ -250,13 +260,15 @@ function carryStocks(field: MagicField, map: PhysicalField) {
     for (const stock of originStocks(origin)) {
       if (!stock.carriers.includes("crust")) continue;
       const values = field.stocks[stockKey(origin, stock)];
-      values.set(carryAmount(map, values));
+      const moved = carryAmount(map, values);
+      values.set(moved);
+      releaseWorking(map, moved);
     }
 }
 /** Scatter an amount per cell along the last plate drift; without a plan the amount stays. */
-export function carryAmount(map: PhysicalField, values: Float64Array) {
+export function carryAmount(map: PhysicalField, values: NumericalVector) {
   const plan = map.transportPlan;
-  const moved = new Float64Array(values.length);
+  const moved = workingArray(map, "float64", "magic:carried-amount", values.length);
   if (!plan) {
     moved.set(values);
     return moved;

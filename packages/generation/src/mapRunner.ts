@@ -2,8 +2,8 @@ import {
   DomainError,
   requireThat,
   sameValue,
-  cloneSnapshot,
   type ParameterValues,
+  type NumericalAllocator,
 } from "@atlas/domain";
 import {
   MapProcessRegistry,
@@ -29,8 +29,13 @@ import {
   processRequirements,
 } from "./productLedger";
 import { executeProcessBehavior } from "./processTraits";
-import { preparePublicationLayers } from "./publication";
-import { processDiagnostics, processFailureDiagnostics, stageEnabled } from "./processRecovery";
+import {
+  processDiagnostics,
+  processFailureDiagnostics,
+  stageEnabled,
+  unrecoverableProcessFailure,
+} from "./processRecovery";
+import { prepareWorkingState, numericalProcessLifetime } from "./generationWorkingState";
 
 export interface MapRunnerOptions {
   seed: string;
@@ -38,7 +43,14 @@ export interface MapRunnerOptions {
   cancelled?(): boolean;
   progress?(path: string[], fraction: number, message: string): void;
   diagnostic?(diagnostic: GenerationDiagnostic): void;
-  /** Adapter scheduling between processes; the shared working map stays in memory. */
+  /** Worker-owned numerical storage; never serialized into a boundary or save. */
+  numerical?: NumericalAllocator;
+  features?: import("@atlas/domain").FeatureWorkspace;
+  sourceFeatures?: import("@atlas/domain").FeatureReader;
+  networks?: import("@atlas/domain").NetworkWorkspace;
+  sourceNetworks?: import("@atlas/domain").NetworkReader;
+  contours?: import("@atlas/domain").ContourWorkspace;
+  /** Adapter scheduling between processes. */
   yieldControl?(): Promise<void>;
   // Optional completed-epoch/final observation. Serialize before resolving:
   // numerical workspace is shared and the following epoch mutates it.
@@ -62,14 +74,21 @@ export class MapRunner {
       if (stage.invocation) registry.get(stage.invocation.process, stage.invocation.version);
   }
   async run(initial: GenerationState, options: MapRunnerOptions): Promise<CompletedBoundary> {
+    return this.runState(initial, options, false);
+  }
+  /** The execution adapter transfers its private working state; immutable inputs stay scoped. */
+  async runOwned(initial: GenerationState, options: MapRunnerOptions): Promise<CompletedBoundary> {
+    return this.runState(initial, options, true);
+  }
+  private async runState(
+    initial: GenerationState,
+    options: MapRunnerOptions,
+    owned: boolean
+  ): Promise<CompletedBoundary> {
     verifyReconciliationBindings(this.configuration, this.registry);
     const configurationHash = await this.configurationHash(initial, options);
-    const state = {
-      ...structuredClone({ ...initial, domain: undefined }),
-      domain: cloneSnapshot(initial.domain),
-    };
+    const state = prepareWorkingState(initial, options, owned);
     const causes: GenerationCause[][] = [];
-    preparePublicationLayers(state.domain, state.publications ?? [], state.domain.scope.areaId);
     const products = new ProductLedger(state.facts, this.registry.productDefinitions());
     bindNativeFacts(state, products);
     const validate = workingValidator(state, initial);
@@ -177,6 +196,7 @@ export class MapRunner {
     }
     const parameters = invocationParameters(process.contract, this.configuration, stage);
     products.checkProviders(process.contract);
+    const releaseNumerical = numericalProcessLifetime(options.numerical, state);
     try {
       const diagnostics = await this.applyProcess(
         state,
@@ -191,7 +211,7 @@ export class MapRunner {
       record(diagnostics, "retained");
     } catch (error) {
       this.checkCancelled(options);
-      if (error instanceof DomainError && error.code === "generation_cancelled") throw error;
+      if (unrecoverableProcessFailure(error)) throw error;
       record(processFailureDiagnostics(error), "omitted", error);
       [...process.contract.produces, ...process.contract.invalidates].forEach((product) =>
         products.invalidate(product, stage.path.join("/"))
@@ -199,6 +219,8 @@ export class MapRunner {
       validate();
       options.progress?.(stage.path, 1, `Skipped ${process.contract.id}`);
       return false;
+    } finally {
+      releaseNumerical();
     }
     options.progress?.(stage.path, 1, `Completed ${process.contract.id}`);
     return true;

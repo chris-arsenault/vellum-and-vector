@@ -1,10 +1,11 @@
 import { fieldContour, fieldInterpolator, spatial, type GridSurface } from "@atlas/domain";
 import type { Geometry } from "geojson";
-import type { Raster } from "./types";
+import { resourceRaster, type Raster, type LoadedRaster } from "./types";
 
 const oceans = new WeakMap<GridSurface, { water: Raster["water"]; geometry: Geometry | null }>();
 /** Existing shorelines retain authority; scalar-only maps use the shared contour operation. */
 export function drawnOcean(raster: Raster): Geometry | null {
+  if (resourceRaster(raster)) return null;
   const previous = oceans.get(raster.field);
   if (previous && previous.water === raster.water) return previous.geometry;
   let ocean =
@@ -18,7 +19,7 @@ export function drawnOcean(raster: Raster): Geometry | null {
   oceans.set(raster.field, { water: raster.water, geometry: ocean });
   return ocean;
 }
-function contourSea(raster: Raster, grid: GridSurface) {
+function contourSea(raster: LoadedRaster, grid: GridSurface) {
   const height = fieldInterpolator(grid, "elevation");
   const level = raster.water?.channels.seaLevel
     ? fieldInterpolator(raster.water, "seaLevel")

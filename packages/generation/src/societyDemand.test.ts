@@ -43,6 +43,19 @@ function fixture(profile: "world" | "local") {
 }
 const unit = 0;
 
+it("keeps a demand's initial medium when applying its first effect changes later cells", () => {
+  const { state } = fixture("world"),
+    community = state.society!.region.communities[unit];
+  putChannel(state.surface, "magic:fire:intensity", "intensity", new Float64Array(10).fill(200));
+  const work = makeWork(state, community, "tapping"),
+    before = [...demandSamples(state, work)],
+    samples = demandSamples(state, work);
+  expect(samples.next().value).toEqual(before[0]);
+  state.surface.channels["magic:fire:intensity"].fill(0);
+  expect([...samples]).toEqual(before.slice(1));
+  expect([...demandSamples(state, work)]).toEqual([]);
+});
+
 it("makes World works demands that act over the unit's whole country, conserving the total", () => {
   const { state, context } = fixture("world"),
     c = state.society!.region.communities[unit];
@@ -50,11 +63,11 @@ it("makes World works demands that act over the unit's whole country, conserving
   expect(demand.demand).toMatchObject({ unit: "fraction" });
   const located = makeWork(state, c, "clearance", c.position);
   expect(located.demand).toBeUndefined();
-  const spread = demandSamples(state, demand),
+  const spread = [...demandSamples(state, demand)],
     owned = Array.from(state.society!.owner).filter((o) => o === unit).length;
   expect(spread.length).toBe(owned);
   expect(spread.length).toBeGreaterThan(1);
-  expect(workSamples(state, demand)).toEqual(spread);
+  expect([...workSamples(state, demand)]).toEqual(spread);
   // The total the demand covers equals the located work's footprint, bounded by the country.
   const area = spread.reduce((sum, s) => sum + s.fraction * state.surface.measures[s.i], 0);
   expect(area).toBeCloseTo(
@@ -82,7 +95,7 @@ it("gives a structural demand an amount and a unit but no samples or terrain cha
   for (const work of [pass, harbor, dam]) {
     expect(societyWorkNatures[work.kind].nature).toBe("structural");
     expect(work.demand).toMatchObject({ unit: societyWorkNatures[work.kind].unit });
-    expect(workSamples(state, work)).toEqual([]);
+    expect([...workSamples(state, work)]).toEqual([]);
   }
   expect(pass.demand!.amount).toBe(1000); // the people whose routes cross the steep ground
   state.society!.region.works = [pass, harbor, dam];

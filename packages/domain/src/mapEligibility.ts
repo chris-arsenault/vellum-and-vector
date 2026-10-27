@@ -110,7 +110,11 @@ function featureGeometry(feature: Pick<AtlasFeature, "geometry" | "footprint">) 
 }
 
 /** Any overlapping drawing in this located space must survive, regardless of hierarchy depth. */
-export function mappedGenerationConflicts(snapshot: DomainSnapshot, areaId: string) {
+export function mappedGenerationConflicts(
+  snapshot: DomainSnapshot,
+  areaId: string,
+  features: Iterable<AtlasFeature> = Object.values(snapshot.world.features)
+) {
   const { world } = snapshot,
     area = world.areas[areaId];
   if (!area || !["world", "region"].includes(area.profile)) return [];
@@ -122,7 +126,7 @@ export function mappedGenerationConflicts(snapshot: DomainSnapshot, areaId: stri
     if (!conflicts.some((item) => item.subjectId === subjectId && item.areaId === owner))
       conflicts.push({ subjectId, areaId: owner, name });
   };
-  for (const feature of Object.values(world.features))
+  for (const feature of features)
     for (const edit of featureEdits(feature))
       add(feature.id, edit.areaId, feature.name, edit.geometries);
   for (const patch of snapshot.fieldPatches)
@@ -133,9 +137,10 @@ export function mappedGenerationConflicts(snapshot: DomainSnapshot, areaId: stri
 
 export function mappedGenerationDiagnostics(
   snapshot: DomainSnapshot,
-  areaId: string
+  areaId: string,
+  features?: Iterable<AtlasFeature>
 ): Diagnostic[] {
-  return mappedGenerationConflicts(snapshot, areaId).map((edit) => ({
+  return mappedGenerationConflicts(snapshot, areaId, features).map((edit) => ({
     code: "mapped_edit_overlap",
     severity: "error",
     invocation: null,

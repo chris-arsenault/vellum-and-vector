@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ErrorMessage } from "./ErrorMessage";
-import { registerWorldSnapshot, session } from "./atlasState";
+import { registerWorkspaceWorld } from "./atlasWorkspace";
 import { startGeneration } from "./generationJobs";
 import { GenerationWizard } from "./GenerationWizard";
 import { draftPreview, draftWorldSnapshot, type GenerationDraft } from "./generationDraft";
@@ -131,9 +131,9 @@ function CreateWorld({
       const reviewed = generate ? (prepared ?? draftPreview(draft)) : undefined;
       if (reviewed?.diagnostics.some((item) => item.severity === "error"))
         throw new Error(reviewed.diagnostics.map((item) => item.message).join("\n"));
-      const world = registerWorldSnapshot(reviewed?.source ?? draftWorldSnapshot(draft));
+      const world = await registerWorkspaceWorld(reviewed?.source ?? draftWorldSnapshot(draft));
       if (reviewed)
-        startGeneration(world.id, {
+        await startGeneration(world.id, {
           ...reviewed.input,
           operationId: crypto.randomUUID(),
           expectedVersion: world.version,
@@ -142,7 +142,7 @@ function CreateWorld({
     },
     onSuccess: (world) => {
       void cache.invalidateQueries({ queryKey: ["worlds"] });
-      cache.setQueryData(["world", world.id], session(world.id).snapshot.world);
+      cache.setQueryData(["world", world.id], world);
       onCreate(world.id);
     },
   });

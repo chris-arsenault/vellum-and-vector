@@ -1,16 +1,18 @@
-import { metricProduct, type MetricOperator } from "./metricOperator";
+import { metricArray, metricProduct, releaseMetric, type MetricOperator } from "./metricOperator";
+import type { NumericalVector } from "@atlas/domain";
+import { NumericalList } from "./numericalList";
 
 type Level = {
   matrix: MetricOperator;
-  x: Float64Array;
-  rhs: Float64Array;
-  scratch: Float64Array;
-  aggregate?: Int32Array;
+  x: NumericalVector;
+  rhs: NumericalVector;
+  scratch: NumericalVector;
+  aggregate?: NumericalVector;
   coarse?: Level;
-  exact?: (rhs: Float64Array, x: Float64Array) => void;
+  exact?: (rhs: NumericalVector, x: NumericalVector) => void;
 };
 function aggregate(matrix: MetricOperator) {
-  const groups = new Int32Array(matrix.areas.length).fill(-1);
+  const groups = metricArray("groups", matrix.areas.length, "int32", matrix.numerical).fill(-1);
   let count = 0;
   for (let i = 0; i < groups.length; i++) {
     if (groups[i] >= 0) continue;
@@ -24,43 +26,56 @@ function aggregate(matrix: MetricOperator) {
   return { groups, count };
 }
 /** Galerkin P' A P for piecewise-constant connected aggregates. */
-function coarseOperator(matrix: MetricOperator, groups: Int32Array, count: number): MetricOperator {
-  const rows = Array.from({ length: count }, () => new Map<number, number>());
-  const areas = new Float64Array(count),
-    offsets = new Int32Array(count + 1);
-  for (let i = 0; i < groups.length; i++) {
-    const a = groups[i];
-    areas[a] += matrix.areas[i];
-    for (let at = matrix.offsets[i]; at < matrix.offsets[i + 1]; at++) {
-      const b = groups[matrix.neighbors[at]];
-      if (a !== b) rows[a].set(b, (rows[a].get(b) ?? 0) + matrix.weights[at]);
-    }
+function coarseOperator(
+  matrix: MetricOperator,
+  groups: NumericalVector,
+  count: number
+): MetricOperator {
+  const numerical = matrix.numerical,
+    heads = metricArray("heads", count, "int32", numerical).fill(-1),
+    next = metricArray("next", groups.length, "int32", numerical);
+  for (let i = groups.length - 1; i >= 0; i--) {
+    next[i] = heads[groups[i]];
+    heads[groups[i]] = i;
   }
-  const neighbors: number[] = [],
-    weights: number[] = [],
-    diagonal = areas.slice();
-  rows.forEach((row, i) => {
-    offsets[i] = neighbors.length;
+  const areas = metricArray("coarse-area", count, "float64", numerical),
+    diagonal = metricArray("coarse-diagonal", count, "float64", numerical),
+    offsets = metricArray("coarse-offsets", count + 1, "int32", numerical),
+    neighbors = new NumericalList("int32", "metric:coarse-neighbors", numerical),
+    weights = new NumericalList("float64", "metric:coarse-weights", numerical);
+  for (let a = 0; a < count; a++) {
+    const row = new Map<number, number>();
+    for (let i = heads[a]; i >= 0; i = next[i]) {
+      areas[a] += matrix.areas[i];
+      for (let at = matrix.offsets[i]; at < matrix.offsets[i + 1]; at++) {
+        const b = groups[matrix.neighbors[at]];
+        if (a !== b) row.set(b, (row.get(b) ?? 0) + matrix.weights[at]);
+      }
+    }
+    offsets[a] = neighbors.length;
+    diagonal[a] = areas[a];
     for (const [j, value] of row) {
       neighbors.push(j);
       weights.push(value);
-      diagonal[i] += value;
+      diagonal[a] += value;
     }
-  });
+  }
   offsets[count] = neighbors.length;
+  numerical?.releaseUnused([heads, next], []);
   return {
-    cells: new Int32Array(count),
+    numerical,
+    cells: metricArray("coarse-cells", count, "int32", numerical),
     areas,
     diagonal,
     offsets,
-    neighbors: Int32Array.from(neighbors),
-    weights: Float64Array.from(weights),
+    neighbors: neighbors.finish(),
+    weights: weights.finish(),
   };
 }
 function factor(matrix: MetricOperator) {
   const n = matrix.areas.length;
   if (!matrix.weights.length)
-    return (rhs: Float64Array, x: Float64Array) => {
+    return (rhs: NumericalVector, x: NumericalVector) => {
       for (let i = 0; i < n; i++) x[i] = rhs[i] / matrix.diagonal[i];
     };
   const lower = new Float64Array(n * n);
@@ -74,9 +89,9 @@ function factor(matrix: MetricOperator) {
       lower[i * n + j] = i === j ? Math.sqrt(value) : value / lower[j * n + j];
     }
   }
-  return (rhs: Float64Array, x: Float64Array) => triangularSolve(lower, rhs, x);
+  return (rhs: NumericalVector, x: NumericalVector) => triangularSolve(lower, rhs, x);
 }
-function triangularSolve(lower: Float64Array, rhs: Float64Array, x: Float64Array) {
+function triangularSolve(lower: Float64Array, rhs: NumericalVector, x: NumericalVector) {
   const n = rhs.length;
   for (let i = 0; i < n; i++) {
     let value = rhs[i];
@@ -93,9 +108,9 @@ function hierarchy(matrix: MetricOperator): Level {
   const n = matrix.areas.length;
   const level: Level = {
     matrix,
-    x: new Float64Array(n),
-    rhs: new Float64Array(n),
-    scratch: new Float64Array(n),
+    x: metricArray("solution", n, "float64", matrix.numerical),
+    rhs: metricArray("rhs", n, "float64", matrix.numerical),
+    scratch: metricArray("scratch", n, "float64", matrix.numerical),
   };
   // This is a numerical coarse-solve block size, not a cap on physical work or CG convergence.
   if (n <= 32 || !matrix.weights.length) level.exact = factor(matrix);
@@ -132,9 +147,20 @@ function cycle(level: Level) {
 /** A symmetric aggregation V-cycle conditions CG; the fine physical equation is unchanged. */
 export function prepareMultigrid(matrix: MetricOperator) {
   const root = hierarchy(matrix);
-  return (residual: Float64Array) => {
+  const apply = (residual: NumericalVector) => {
     root.rhs.set(residual);
     cycle(root);
     return root.x;
   };
+  return Object.assign(apply, { close: () => closeLevel(root) });
+}
+function closeLevel(level: Level) {
+  level.matrix.numerical?.releaseUnused(
+    [level.x, level.rhs, level.scratch, ...(level.aggregate ? [level.aggregate] : [])],
+    []
+  );
+  if (level.coarse) {
+    closeLevel(level.coarse);
+    releaseMetric(level.coarse.matrix);
+  }
 }

@@ -1,6 +1,7 @@
 import type { GridSurface } from "@atlas/domain";
-import type { Raster } from "./types";
+import { resourceRaster, type Raster } from "./types";
 import type { TileMessage, TileReply } from "./tileProtocol";
+import { connectAtlasWorker } from "./connectAtlasWorker";
 
 interface Pending {
   raster: number;
@@ -14,25 +15,39 @@ export class TileWorkerClient {
   private grids = new Map<GridSurface, { id: number; users: number }>();
   private rasters = new Map<number, GridSurface[]>();
   private pending = new Map<number, Pending>();
+  private connection: Promise<void> | undefined;
+  private failed: Error | undefined;
   constructor(
     private makeWorker = () =>
-      new Worker(new URL("./raster.worker.ts", import.meta.url), { type: "module" })
+      new Worker(new URL("./raster.worker.ts", import.meta.url), { type: "module" }),
+    private connect = connectAtlasWorker
   ) {}
   private send(message: TileMessage) {
     if (!this.worker) {
       this.worker = this.makeWorker();
       this.worker.onmessage = (event: MessageEvent<TileReply>) => this.receive(event.data);
-      this.worker.onerror = (event) => {
-        for (const item of this.pending.values()) {
-          item.cleanup();
-          item.reject(new Error(event.message));
-        }
-        this.pending.clear();
-      };
+      this.worker.onerror = (event) => this.fail(new Error(event.message));
     }
-    this.worker.postMessage(message);
+    const worker = this.worker;
+    if (message.kind === "resourceRaster" && !this.connection)
+      this.connection = this.connect(worker);
+    if (this.connection)
+      void this.connection.then(
+        () => worker.postMessage(message),
+        (error: Error) => this.fail(error)
+      );
+    else worker.postMessage(message);
+  }
+  private fail(error: Error) {
+    this.failed = error;
+    for (const item of this.pending.values()) {
+      item.cleanup();
+      item.reject(error);
+    }
+    this.pending.clear();
   }
   private receive(reply: TileReply) {
+    if ("kind" in reply) return;
     const item = this.pending.get(reply.request);
     if (!item) return;
     this.pending.delete(reply.request);
@@ -52,6 +67,11 @@ export class TileWorkerClient {
   }
   register(raster: Raster) {
     const id = ++this.sequence;
+    if (resourceRaster(raster)) {
+      this.rasters.set(id, []);
+      this.send({ kind: "resourceRaster", id, raster });
+      return id;
+    }
     const used = [
       raster.field,
       ...(raster.water ? [raster.water] : []),
@@ -67,6 +87,7 @@ export class TileWorkerClient {
     return id;
   }
   load(raster: number, extent: number[], size: number, signal: AbortSignal) {
+    if (this.failed) return Promise.reject(this.failed);
     if (signal.aborted || !this.rasters.has(raster))
       return Promise.reject(new DOMException("Tile cancelled", "AbortError"));
     const request = ++this.sequence;
@@ -108,8 +129,20 @@ export class TileWorkerClient {
     this.send({ kind: "release", id, grids });
   }
   dispose() {
-    this.worker?.terminate();
+    const worker = this.worker;
+    if (worker) {
+      worker.onmessage = (event: MessageEvent<TileReply>) => {
+        if ("kind" in event.data && event.data.kind === "closed") worker.terminate();
+      };
+      if (this.connection)
+        void this.connection.then(
+          () => worker.postMessage({ kind: "close" } satisfies TileMessage),
+          () => worker.terminate()
+        );
+      else worker.postMessage({ kind: "close" } satisfies TileMessage);
+    }
     this.worker = null;
+    this.connection = undefined;
     for (const item of this.pending.values()) {
       item.cleanup();
       item.reject(new DOMException("Map closed", "AbortError"));

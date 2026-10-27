@@ -6,6 +6,9 @@ import { strainAt } from "./magicConfluences";
 import { hashUnit } from "./noise";
 import { clamp, round, units } from "./math";
 import { rebuild } from "./surface";
+import type { NumericalVector } from "@atlas/domain";
+import { workingValues, releaseWorking } from "./physicalNumerics";
+import { orderedIndices } from "./numericalOrder";
 
 const tears = (field: MagicField) =>
   field.definition.enabled && field.definition.effects.tearing > 0;
@@ -46,7 +49,7 @@ export function strainSources(
 function cellStrain(
   map: PhysicalField,
   others: MagicField[],
-  meetings: { coverage: Float64Array }[],
+  meetings: { coverage: NumericalVector }[],
   i: number
 ) {
   let strain = 0;
@@ -80,17 +83,19 @@ export function pairingSources(
   const used = new Set<number>();
   field.doors = field.doors.filter((door) => eligible(door.a) && eligible(door.b));
   for (const door of field.doors) used.add(door.a).add(door.b);
-  const candidates = [];
-  for (let i = 0; i < map.mesh.count; i++) if (!used.has(i) && eligible(i)) candidates.push(i);
-  candidates.sort((a, b) => strength[b] - strength[a] || a - b);
+  const scores = workingValues(map, "float64", "magic:door-candidates", (i) =>
+    !used.has(i) && eligible(i) ? strength[i] : -Infinity
+  );
+  const candidates = orderedIndices(scores, true, map.numerical);
   for (const a of candidates) {
-    if (field.doors.length >= p.doorCount) break;
+    if (field.doors.length >= p.doorCount || scores[a] === -Infinity) break;
     if (used.has(a)) continue;
-    const b = partner(map, strength, candidates, used, a, p.doorDistance, p.doorMatch);
+    const b = partner(map, scores, candidates, used, a, p.doorDistance, p.doorMatch);
     if (b < 0) continue;
     used.add(a).add(b);
     field.doors.push({ a, b });
   }
+  releaseWorking(map, scores, candidates);
   field.doors.forEach((door, index) => {
     for (const [end, cell] of [
       ["a", door.a],
@@ -108,7 +113,7 @@ export function pairingSources(
     }
   });
 }
-function doorEligibility(state: GenerationState, field: MagicField, strength: Float64Array) {
+function doorEligibility(state: GenerationState, field: MagicField, strength: NumericalVector) {
   const map = state.physical!.map,
     magic = state.physical!.magic!,
     p = field.definition.parameters,
@@ -128,8 +133,8 @@ function doorEligibility(state: GenerationState, field: MagicField, strength: Fl
 }
 function partner(
   map: PhysicalField,
-  strength: Float64Array,
-  candidates: number[],
+  strength: NumericalVector,
+  candidates: NumericalVector,
   used: Set<number>,
   a: number,
   span: number,

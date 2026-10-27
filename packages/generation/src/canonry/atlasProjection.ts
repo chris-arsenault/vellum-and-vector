@@ -1,4 +1,4 @@
-import { gridPosition, putChannel } from "@atlas/domain";
+import { gridPosition, putChannel, allocateNumerical, type NumericalVector } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { atlasChannels, type ChannelBinding } from "./atlasChannels";
 import { nativeIndexAtSurface } from "./atlasWorkspace";
@@ -84,7 +84,7 @@ export function projectNative(
   const emit = (
     name: string,
     unit: string,
-    values: () => Float64Array,
+    values: () => NumericalVector,
     quantity: "category" | "intensive" = "intensive"
   ) => {
     if (!selectedChannels || selectedChannels.has(name))
@@ -97,7 +97,7 @@ export function projectNative(
 type DerivedEmitter = (
   name: string,
   unit: string,
-  values: () => Float64Array,
+  values: () => NumericalVector,
   quantity?: "category" | "intensive"
 ) => void;
 
@@ -105,17 +105,17 @@ function projectDerivedClimate(state: GenerationState, emit: DerivedEmitter) {
   const work = state.physical!,
     map = work.map;
   emit("seaDatum", "metre", () =>
-    new Float64Array(work.samples.length).fill(map.BaseSeaLevel / 1024)
+    allocateNumerical(
+      { type: "float64", length: work.samples.length, lifetime: "run", name: "seaDatum" },
+      map.numerical
+    ).fill(map.BaseSeaLevel / 1024)
   );
   emit("flow", "cubic-metre/second", () => projectedValues(work, map.FlowAccumulation));
   emit("drainageElevation", "metre", () =>
     projectedValues(work, map.DrainageElevations).map((value) => (value - map.BaseSeaLevel) / 1024)
   );
   emit("precipitation", "metre/year", () =>
-    projectedValues(
-      work,
-      Float64Array.from(map.Rainfall, (value, i) => (value + map.Snowfall[i]) / 1000)
-    )
+    projectedValues(work, (i) => (map.Rainfall[i] + map.Snowfall[i]) / 1000)
   );
 }
 function projectDerivedMaterial(
@@ -128,11 +128,11 @@ function projectDerivedMaterial(
   emit("erosion", "metre", () =>
     projectedValues(
       work,
-      Float64Array.from(
-        map.CumulativeFluvialErosion,
-        (value, i) =>
-          (value + map.CumulativeGlacialErosion[i] + map.CumulativeCoastalErosion[i]) / 1024
-      )
+      (i) =>
+        (map.CumulativeFluvialErosion[i] +
+          map.CumulativeGlacialErosion[i] +
+          map.CumulativeCoastalErosion[i]) /
+        1024
     )
   );
   // Keep substrate useful to cave generation without inventing a second geology.
@@ -140,11 +140,9 @@ function projectDerivedMaterial(
   emit("carbonate", "ratio", () =>
     projectedValues(
       work,
-      Float64Array.from(
-        map.CrustContinentalFraction,
-        (value, i) =>
-          (value / 1000) * (1 - Math.min(1, map.VolcanicConstructionHistory[i] / (1024 * 100)))
-      )
+      (i) =>
+        (map.CrustContinentalFraction[i] / 1000) *
+        (1 - Math.min(1, map.VolcanicConstructionHistory[i] / (1024 * 100)))
     )
   );
 }
@@ -154,17 +152,21 @@ function projectWaterLevels(work: AtlasPhysicalWorkspace, emit: DerivedEmitter) 
     "waterLevel",
     "metre",
     () =>
-      Float64Array.from(
-        work.samples,
+      projectedValues(
+        work,
         (i) =>
           ((map.WaterKindCodes[i] ? map.WaterSurfaceElevations[i] : map.EffectiveSeaLevel) -
             map.BaseSeaLevel) /
-          1024
+          1024,
+        true
       ),
     "category"
   );
   emit("seaLevel", "metre", () =>
-    new Float64Array(work.samples.length).fill((map.EffectiveSeaLevel - map.BaseSeaLevel) / 1024)
+    allocateNumerical(
+      { type: "float64", length: work.samples.length, lifetime: "run", name: "seaLevel" },
+      map.numerical
+    ).fill((map.EffectiveSeaLevel - map.BaseSeaLevel) / 1024)
   );
 }
 

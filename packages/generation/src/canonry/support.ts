@@ -4,6 +4,7 @@ import type { PhysicalContext } from "./context";
 import { clamp, crustHeight, elevationLimit, ratio, toUnits, units } from "./math";
 import { rebuild } from "./surface";
 import { smoothMetric } from "./metricSmoothing";
+import { releaseWorking } from "./physicalNumerics";
 import {
   tectonicRiftCoolingMyr,
   tectonicRiftFailure,
@@ -46,7 +47,9 @@ export function lithosphericFlexure(map: PhysicalField, context: PhysicalContext
   const current = smoothMetric(
     map.mesh,
     map.CrustSupportTarget,
-    context.Profile.LithosphericFlexureLength
+    context.Profile.LithosphericFlexureLength,
+    undefined,
+    map.numerical
   );
   for (let i = 0; i < current.length; i++) {
     if (!map.CrustSupportInitialized) {
@@ -65,4 +68,5 @@ export function lithosphericFlexure(map: PhysicalField, context: PhysicalContext
     rebuild(map, i);
   }
   map.CrustSupportInitialized = true;
+  releaseWorking(map, current);
 }

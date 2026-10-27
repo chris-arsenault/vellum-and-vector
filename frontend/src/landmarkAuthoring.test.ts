@@ -1,7 +1,11 @@
+import {
+  fixtureWorld,
+  fixtureState,
+  undoWorld,
+  commitCommand,
+  readScene,
+} from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
-import { createWorld, session, undoWorld } from "./atlasState";
-import { commitCommand } from "./atlasCommands";
-import { readScene } from "./atlasReads";
 import { makeCommand } from "./useAtlas";
 import {
   DomainError,
@@ -13,12 +17,17 @@ import {
 
 const km = 1000;
 function world() {
-  const created = createWorld({ name: "Landmarks", seed: 11, width: 2000 * km, height: 1000 * km });
+  const created = fixtureWorld({
+    name: "Landmarks",
+    seed: 11,
+    width: 2000 * km,
+    height: 1000 * km,
+  });
   return { world: created, areaId: Object.keys(created.areas)[0] };
 }
-function failure(run: () => unknown) {
+async function failure(run: () => Promise<unknown>) {
   try {
-    run();
+    await run();
   } catch (error) {
     return error instanceof DomainError ? error.code : String(error);
   }
@@ -35,38 +44,41 @@ const mountain = (areaId: string, id: string, overrides: Record<string, unknown>
   ...overrides,
 });
 
-it("authors, edits, lists, removes and undoes landmarks through the session", () => {
+const canyon = (areaId: string, id: string) => ({
+  areaId,
+  id,
+  name: "Long Cut",
+  kind: "canyon",
+  geometry: {
+    type: "LineString",
+    coordinates: [
+      [200 * km, 300 * km],
+      [500 * km, 320 * km],
+      [700 * km, 400 * km],
+    ],
+  },
+  parameters: { depth: 1500, rimWidth: 15, captureDistance: 150 },
+  emplacedAtEpoch: 1,
+});
+
+it("authors, edits, lists, removes and undoes landmarks through the workspace", async () => {
   const { world: initial, areaId } = world();
   const mountainId = crypto.randomUUID(),
     canyonId = crypto.randomUUID();
-  let current: World = commitCommand(
-    initial.id,
-    makeCommand(initial, "putLandmark", mountain(areaId, mountainId))
+  let current: World = (
+    await commitCommand(
+      initial.id,
+      makeCommand(initial, "putLandmark", mountain(areaId, mountainId))
+    )
   ).candidate;
-  current = commitCommand(
-    current.id,
-    makeCommand(current, "putLandmark", {
-      areaId,
-      id: canyonId,
-      name: "Long Cut",
-      kind: "canyon",
-      geometry: {
-        type: "LineString",
-        coordinates: [
-          [200 * km, 300 * km],
-          [500 * km, 320 * km],
-          [700 * km, 400 * km],
-        ],
-      },
-      parameters: { depth: 1500, rimWidth: 15, captureDistance: 150 },
-      emplacedAtEpoch: 1,
-    })
+  current = (
+    await commitCommand(current.id, makeCommand(current, "putLandmark", canyon(areaId, canyonId)))
   ).candidate;
   expect(current.landmarks.map((l) => [l.name, l.kind, l.emplacedAtEpoch, l.areaId])).toEqual([
     ["Kibo", "volcanic-mountain", 0, areaId],
     ["Long Cut", "canyon", 1, areaId],
   ]);
-  const scene = readScene(current.id, areaId);
+  const scene = await readScene(current.id, areaId);
   const kibo = scene.find((f) => f.id === mountainId)!;
   expect(kibo).toMatchObject({
     kind: "landmark",
@@ -84,15 +96,17 @@ it("authors, edits, lists, removes and undoes landmarks through the session", ()
   ]);
   expect(scene.find((f) => f.id === canyonId)!.geometry.type).toBe("LineString");
 
-  const moved = commitCommand(
-    current.id,
-    makeCommand(
-      current,
-      "putLandmark",
-      mountain(areaId, mountainId, {
-        name: "Kibo Peak",
-        geometry: { type: "Point", coordinates: [900 * km, 450 * km] },
-      })
+  const moved = (
+    await commitCommand(
+      current.id,
+      makeCommand(
+        current,
+        "putLandmark",
+        mountain(areaId, mountainId, {
+          name: "Kibo Peak",
+          geometry: { type: "Point", coordinates: [900 * km, 450 * km] },
+        })
+      )
     )
   ).candidate;
   expect(moved.landmarks).toHaveLength(2);
@@ -101,28 +115,28 @@ it("authors, edits, lists, removes and undoes landmarks through the session", ()
     geometry: { coordinates: [900 * km, 450 * km] },
   });
 
-  const removed = commitCommand(
-    moved.id,
-    makeCommand(moved, "removeLandmark", { areaId, id: canyonId })
+  const removed = (
+    await commitCommand(moved.id, makeCommand(moved, "removeLandmark", { areaId, id: canyonId }))
   ).candidate;
   expect(removed.landmarks.map((l) => l.id)).toEqual([mountainId]);
-  const restored = undoWorld(removed.id, session(removed.id).history[0].operationId);
+  const restored = await undoWorld(removed.id, fixtureState(removed.id).history[0].operationId);
   expect(restored.landmarks.map((l) => l.id).sort()).toEqual([mountainId, canyonId].sort());
 });
 
-it("rejects unknown kinds, mismatched geometry, out-of-range or undeclared measures, bad epochs and outside placement", () => {
+it("rejects unknown kinds, mismatched geometry, out-of-range or undeclared measures, bad epochs and outside placement", async () => {
   const { world: current, areaId } = world();
   const id = crypto.randomUUID();
   const attempt = (overrides: Record<string, unknown>) =>
-    failure(() =>
-      commitCommand(
-        current.id,
-        makeCommand(current, "putLandmark", mountain(areaId, id, overrides))
-      )
+    failure(
+      async () =>
+        await commitCommand(
+          current.id,
+          makeCommand(current, "putLandmark", mountain(areaId, id, overrides))
+        )
     );
-  expect(attempt({ kind: "great-pyramid" })).toBe("landmark_kind");
+  expect(await attempt({ kind: "great-pyramid" })).toBe("landmark_kind");
   expect(
-    attempt({
+    await attempt({
       geometry: {
         type: "LineString",
         coordinates: [
@@ -132,24 +146,29 @@ it("rejects unknown kinds, mismatched geometry, out-of-range or undeclared measu
       },
     })
   ).toBe("landmark_geometry");
-  expect(attempt({ parameters: { summit: 12000, prominence: 4000, baseRadius: 30 } })).toBe(
+  expect(await attempt({ parameters: { summit: 12000, prominence: 4000, baseRadius: 30 } })).toBe(
     "landmark_parameter"
   );
-  expect(attempt({ parameters: { summit: 5900, baseRadius: 30 } })).toBe("landmark_parameter");
+  expect(await attempt({ parameters: { summit: 5900, baseRadius: 30 } })).toBe(
+    "landmark_parameter"
+  );
   expect(
-    attempt({ parameters: { summit: 5900, prominence: 4000, baseRadius: 30, moons: 2 } })
+    await attempt({ parameters: { summit: 5900, prominence: 4000, baseRadius: 30, moons: 2 } })
   ).toBe("landmark_parameter");
-  expect(attempt({ emplacedAtEpoch: current.epochs.length })).toBe("landmark_epoch");
-  expect(attempt({ geometry: { type: "Point", coordinates: [-5 * km, 500 * km] } })).toBe(
+  expect(await attempt({ emplacedAtEpoch: current.epochs.length })).toBe("landmark_epoch");
+  expect(await attempt({ geometry: { type: "Point", coordinates: [-5 * km, 500 * km] } })).toBe(
     "landmark_location"
   );
   expect(
-    failure(() => commitCommand(current.id, makeCommand(current, "removeLandmark", { areaId, id })))
+    await failure(
+      async () =>
+        await commitCommand(current.id, makeCommand(current, "removeLandmark", { areaId, id }))
+    )
   ).toBe("missing_landmark");
-  expect(session(current.id).snapshot.world.version).toBe(1);
-  const message = (() => {
+  expect(fixtureState(current.id).snapshot.world.version).toBe(1);
+  const message = await (async () => {
     try {
-      commitCommand(
+      await commitCommand(
         current.id,
         makeCommand(
           current,
@@ -165,12 +184,14 @@ it("rejects unknown kinds, mismatched geometry, out-of-range or undeclared measu
   expect(message).toBe("Prominence must be between 300 and 9000 m.");
 });
 
-it("reads one row per landmark: the realization under the authored name, else the record", () => {
+it("reads one row per landmark: the realization under the authored name, else the record", async () => {
   const { world: initial, areaId } = world();
   const id = crypto.randomUUID();
-  const current = commitCommand(
-    initial.id,
-    makeCommand(initial, "putLandmark", mountain(areaId, id, { name: "Kibo" }))
+  const current = (
+    await commitCommand(
+      initial.id,
+      makeCommand(initial, "putLandmark", mountain(areaId, id, { name: "Kibo" }))
+    )
   ).candidate;
   const before = canonicalFeatures(current).filter((f) => f.id === id);
   expect(before).toHaveLength(1);
@@ -199,7 +220,7 @@ it("reads one row per landmark: the realization under the authored name, else th
   ]);
 });
 
-it("declares every catalogue kind with in-range defaults and a positive reach", () => {
+it("declares every catalogue kind with in-range defaults and a positive reach", async () => {
   for (const kind of [
     "volcanic-mountain",
     "canyon",

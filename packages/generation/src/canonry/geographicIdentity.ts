@@ -1,7 +1,27 @@
-import { spatial, point, lineParts, type AtlasFeature, type DomainSnapshot } from "@atlas/domain";
+import {
+  spatial,
+  point,
+  lineParts,
+  type AtlasFeature,
+  type DomainSnapshot,
+  type FeatureReader,
+} from "@atlas/domain";
 import type { GenerationState } from "../process";
+import {
+  generationFeature,
+  removeGenerationFeature,
+  writeGenerationFeature,
+  originalFeatureReader,
+} from "../generationFeatures";
+import {
+  generationNetworks,
+  originalNetworks,
+  writeGenerationNode,
+  writeGenerationReach,
+  removeGenerationReach,
+} from "../generationNetworks";
 
-type Candidate = { feature: AtlasFeature; bounds: number[] };
+type Candidate = { id: string; line: boolean; bounds: number[] };
 const group = (f: AtlasFeature) =>
   `${f.kind}:${f.layerId}:${f.attributes.system ?? ""}:${f.attributes.rule ?? ""}`;
 const isLine = (f: AtlasFeature) => f.geometry.type.includes("LineString");
@@ -25,12 +45,18 @@ function lineCorresponds(a: AtlasFeature, b: AtlasFeature, tolerance: number) {
   });
 }
 
-function similarity(feature: AtlasFeature, candidate: Candidate, tolerance: number) {
+function similarity(
+  feature: AtlasFeature,
+  candidate: Candidate,
+  tolerance: number,
+  source: FeatureReader
+) {
   const a = spatial.bounds(feature.geometry),
     b = candidate.bounds;
   const gap = Math.max(b[0] - a[2], a[0] - b[2], b[1] - a[3], a[1] - b[3], 0);
-  if (gap > tolerance || isLine(feature) !== isLine(candidate.feature)) return Infinity;
-  if (isLine(feature) && !lineCorresponds(feature, candidate.feature, tolerance)) return Infinity;
+  if (gap > tolerance || isLine(feature) !== candidate.line) return Infinity;
+  if (candidate.line && !lineCorresponds(feature, source.get(candidate.id)!, tolerance))
+    return Infinity;
   const size = Math.max(
     tolerance,
     Math.hypot(a[2] - a[0], a[3] - a[1]),
@@ -50,8 +76,19 @@ function preserveOriginal(source: DomainSnapshot, feature: AtlasFeature) {
     )
   );
 }
-function isOriginalProtected(source: DomainSnapshot, feature: AtlasFeature) {
-  return Boolean(source.world.features[feature.id]) && preserveOriginal(source, feature);
+function isOriginalProtected(
+  state: GenerationState,
+  source: DomainSnapshot,
+  feature: AtlasFeature
+) {
+  return (
+    Boolean(originalFeatureReader(state, source).get(feature.id)) &&
+    preserveOriginal(source, feature)
+  );
+}
+function movableFeature(state: GenerationState, id: string, original: DomainSnapshot) {
+  const feature = generationFeature(state, id);
+  return feature && !isOriginalProtected(state, original, feature) ? feature : undefined;
 }
 
 function moveCoordinate(
@@ -79,21 +116,23 @@ function moveEndpoint(
   anchorId: string,
   original: DomainSnapshot
 ) {
-  const anchor = original.world.networkNodes?.[anchorId];
+  const anchor = originalNetworks(state, original).node(anchorId);
   if (!anchor || nodeId === anchorId) return;
-  state.domain.world.networkNodes![anchorId] = structuredClone(anchor);
-  for (const reach of Object.values(state.domain.world.networkReaches!)) {
+  writeGenerationNode(state, structuredClone(anchor));
+  for (const reach of generationNetworks(state).reaches({ nodeId })) {
     const start = reach.start === nodeId,
       end = reach.end === nodeId;
     if (!start && !end) continue;
-    const feature = state.domain.world.features[reach.featureId];
-    if (isOriginalProtected(original, feature)) continue;
+    const feature = movableFeature(state, reach.featureId, original);
+    if (!feature) continue;
     const coordinate = [anchor.position.x, anchor.position.y, anchor.position.z];
     moveCoordinate(reach, start, end, coordinate);
     moveCoordinate(feature, start, end, coordinate);
     alignElevation(feature, start, end, anchor.position.z);
+    writeGenerationFeature(state, feature);
     reach.start = start ? anchorId : reach.start;
     reach.end = end ? anchorId : reach.end;
+    writeGenerationReach(state, reach);
   }
 }
 
@@ -103,12 +142,9 @@ function anchorPreservedJunctions(
   next: AtlasFeature,
   previous: AtlasFeature
 ) {
-  const old = Object.values(original.world.networkReaches ?? {}).filter(
-    (reach) => reach.featureId === previous.id
-  );
+  const old = [...originalNetworks(state, original).reaches({ featureId: previous.id })];
   if (!old.length) return;
-  for (const reach of Object.values(state.domain.world.networkReaches ?? {})) {
-    if (reach.featureId !== next.id) continue;
+  for (const reach of generationNetworks(state).reaches({ featureId: next.id })) {
     moveEndpoint(state, reach.start, old[0].start, original);
     moveEndpoint(state, reach.end, old.at(-1)!.end, original);
   }
@@ -122,20 +158,22 @@ function reuseIdentity(
 ) {
   const preserve = preserveOriginal(original, previous);
   if (preserve) anchorPreservedJunctions(state, original, next, previous);
-  if (next.id !== previous.id) delete state.domain.world.features[next.id];
-  state.domain.world.features[previous.id] = preserve
-    ? structuredClone(previous)
-    : {
-        ...next,
-        id: previous.id,
-        name: previous.name,
-        relations: previous.relations,
-        attributes: { ...next.attributes, ...retainedNameMetadata(previous) },
-      };
-  for (const reach of Object.values(state.domain.world.networkReaches ?? {})) {
-    if (reach.featureId !== next.id) continue;
-    if (preserve) delete state.domain.world.networkReaches![reach.id];
-    else reach.featureId = previous.id;
+  if (next.id !== previous.id) removeGenerationFeature(state, next.id);
+  writeGenerationFeature(
+    state,
+    preserve
+      ? structuredClone(previous)
+      : {
+          ...next,
+          id: previous.id,
+          name: previous.name,
+          relations: previous.relations,
+          attributes: { ...next.attributes, ...retainedNameMetadata(previous) },
+        }
+  );
+  for (const reach of generationNetworks(state).reaches({ featureId: next.id })) {
+    if (preserve) removeGenerationReach(state, reach.id);
+    else writeGenerationReach(state, { ...reach, featureId: previous.id });
   }
   if (preserve) restoreNetwork(state, original, previous.id);
 }
@@ -147,19 +185,19 @@ function retainedNameMetadata(feature: AtlasFeature) {
   );
 }
 function restoreNetwork(state: GenerationState, original: DomainSnapshot, id: string) {
-  for (const reach of Object.values(original.world.networkReaches ?? {})) {
-    if (reach.featureId !== id) continue;
-    state.domain.world.networkReaches![reach.id] = structuredClone(reach);
+  const network = originalNetworks(state, original);
+  for (const reach of network.reaches({ featureId: id })) {
+    writeGenerationReach(state, structuredClone(reach));
     for (const node of [reach.start, reach.end]) {
-      const value = original.world.networkNodes?.[node];
-      if (value) state.domain.world.networkNodes![node] = structuredClone(value);
+      const value = network.node(node);
+      if (value) writeGenerationNode(state, structuredClone(value));
     }
   }
 }
 
 function previousCandidates(state: GenerationState, original: DomainSnapshot) {
   const candidates = new Map<string, Candidate[]>();
-  for (const feature of Object.values(original.world.features)) {
+  for (const feature of originalFeatureReader(state, original).values()) {
     if (
       feature.areaId !== state.domain.scope.areaId ||
       feature.attributes.causeId ||
@@ -168,7 +206,9 @@ function previousCandidates(state: GenerationState, original: DomainSnapshot) {
       continue;
     const key = group(feature);
     if (!candidates.has(key)) candidates.set(key, []);
-    candidates.get(key)!.push({ feature, bounds: spatial.bounds(feature.geometry) });
+    candidates
+      .get(key)!
+      .push({ id: feature.id, line: isLine(feature), bounds: spatial.bounds(feature.geometry) });
   }
   return candidates;
 }
@@ -182,29 +222,34 @@ export function retainGeographicIdentities(
 ) {
   const candidates = previousCandidates(state, original),
     used = new Set<string>();
+  const source = originalFeatureReader(state, original);
   for (const id of generated) {
-    const previous = original.world.features[id],
-      next = state.domain.world.features[id];
+    const previous = source.get(id),
+      next = generationFeature(state, id);
     if (!previous || !next) continue;
     used.add(id);
     reuseIdentity(state, original, next, previous);
   }
   if (!candidates.size) return;
-  const next = [...generated]
-    .map((id) => state.domain.world.features[id])
-    .filter(
-      (feature) => feature && !feature.attributes.causeId && !original.world.features[feature.id]
-    );
-  next.sort((a, b) => spatial.length(b.geometry) - spatial.length(a.geometry));
-  for (const feature of next) {
+  for (const { id } of rankedFeatures(state, original, generated)) {
+    const feature = generationFeature(state, id)!;
     const matches = (candidates.get(group(feature)) ?? [])
-      .filter((candidate) => !used.has(candidate.feature.id))
-      .map((candidate) => ({ candidate, score: similarity(feature, candidate, tolerance) }))
+      .filter((candidate) => !used.has(candidate.id))
+      .map((candidate) => ({ candidate, score: similarity(feature, candidate, tolerance, source) }))
       .filter((match) => match.score < 0.35)
       .sort((a, b) => a.score - b.score);
-    const previous = matches[0]?.candidate.feature;
+    const previous = matches[0] && source.get(matches[0].candidate.id);
     if (!previous) continue;
     used.add(previous.id);
     reuseIdentity(state, original, feature, previous);
   }
+}
+function rankedFeatures(state: GenerationState, original: DomainSnapshot, generated: Set<string>) {
+  const next: { id: string; length: number }[] = [];
+  for (const id of generated) {
+    const feature = generationFeature(state, id);
+    if (feature && !feature.attributes.causeId && !originalFeatureReader(state, original).get(id))
+      next.push({ id, length: spatial.length(feature.geometry) });
+  }
+  return next.sort((a, b) => b.length - a.length);
 }

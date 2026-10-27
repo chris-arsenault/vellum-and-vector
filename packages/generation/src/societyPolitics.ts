@@ -16,6 +16,7 @@ import { generationBindings } from "./generationBindings";
 import { namePolity } from "./societyNaming";
 import { relocatePolitySeats } from "./societyHierarchy";
 import { besiegeLost } from "./societySiege";
+import { generationFeatures } from "./generationFeatures";
 
 export function initializePolitics(state: GenerationState, context: MapProcessContext) {
   if (!state.society) initializePopulation(state, context);
@@ -67,15 +68,14 @@ function namePolityAtSeat(
   if (seat) namePolity(state.domain.world, entity, seat, "Founding");
 }
 function institutionalSupport(state: GenerationState, polity: SocietyPolity) {
-  const world = state.domain.world;
-  return Object.values(world.features)
-    .filter(
-      (f) =>
-        f.kind === "institution" &&
-        (f.attributes.communityId === polity.seat ||
-          f.relations.some((r) => r.targetId === polity.id))
+  let support = 0;
+  for (const f of generationFeatures(state, { kind: "institution" }))
+    if (
+      f.attributes.communityId === polity.seat ||
+      f.relations.some((r) => r.targetId === polity.id)
     )
-    .reduce((sum, f) => sum + Number(f.attributes.influence ?? 0.1), 0);
+      support += Number(f.attributes.influence ?? 0.1);
+  return support;
 }
 /** Reach falls with travel cost and rises where the seat's people know how to hold the country. */
 function polityReach(
@@ -244,7 +244,7 @@ export function evolvePolitics(state: GenerationState, context: MapProcessContex
 function applyPoliticalAnchors(state: GenerationState, era: string) {
   if (state.society!.cycle && state.society!.cycle.index > 0) return;
   const politics = state.society!.region.politics!;
-  for (const f of Object.values(state.domain.world.features)) {
+  for (const f of generationFeatures(state, { kind: "societyEvent" })) {
     if (
       f.kind !== "societyEvent" ||
       f.state === "generated" ||

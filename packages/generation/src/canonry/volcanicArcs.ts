@@ -5,6 +5,7 @@ import { clamp, elevationLimit, units } from "./math";
 import { rebuild } from "./surface";
 import { Feature } from "./codes";
 import { tectonicArcMeltShare, tectonicArcOffset, tectonicArcRadius } from "./tectonicControls";
+import { workingArray, releaseWorking } from "./physicalNumerics";
 
 function overridingSide(map: PhysicalField, cell: number) {
   const state = map.tectonics;
@@ -63,7 +64,7 @@ function erupt(map: PhysicalField, context: PhysicalContext, i: number, height: 
 }
 /** Melt follows actual oceanic consumption, on the overriding side, independently of plumes. */
 export function subductionArcs(map: PhysicalField, context: PhysicalContext) {
-  const added = new Float64Array(map.mesh.count);
+  const added = workingArray(map, "float64", "arcs:added");
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.OceanicSubduction[i] <= 0) continue;
     const normal = overridingSide(map, i);
@@ -81,4 +82,5 @@ export function subductionArcs(map: PhysicalField, context: PhysicalContext) {
   }
   for (let i = 0; i < map.mesh.count; i++) if (added[i] > 0) erupt(map, context, i, added[i]);
   map.OceanicSubduction.fill(0);
+  releaseWorking(map, added);
 }

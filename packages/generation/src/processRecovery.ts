@@ -2,6 +2,24 @@ import { DomainError, type Diagnostic } from "@atlas/domain";
 import type { GenerationDiagnostic, GenerationState } from "./process";
 import type { SequenceStage } from "./sequence";
 
+/** An unavailable execution store invalidates the job, not only the current process product. */
+export function unrecoverableProcessFailure(error: unknown) {
+  return (
+    error instanceof DomainError &&
+    [
+      "generation_cancelled",
+      "numerical_read",
+      "numerical_write",
+      "feature_read",
+      "feature_write",
+      "network_read",
+      "network_write",
+      "contour_read",
+      "contour_write",
+    ].includes(error.code)
+  );
+}
+
 export function processDiagnostic(
   stage: SequenceStage,
   diagnostic: Diagnostic,

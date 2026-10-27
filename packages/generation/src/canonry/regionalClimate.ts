@@ -6,10 +6,12 @@ import { physicalContext } from "./context";
 import { runoff, snowShare } from "./climate";
 import { clamp } from "./math";
 import type { PhysicalField } from "./field";
+import type { NumericalVector } from "@atlas/domain";
+import { workingValues, releaseWorking } from "./physicalNumerics";
 
 /** Local windward/leeward contrast around the inherited broad weather. */
 const regionalOrographicContrast = 0.35;
-function exposure(map: PhysicalField, i: number, delta: Float64Array) {
+function exposure(map: PhysicalField, i: number, delta: NumericalVector) {
   const speed = Math.hypot(map.WindX[i], map.WindY[i]);
   if (speed === 0) return 0;
   let rise = 0,
@@ -31,7 +33,12 @@ export function downscaleRegionalClimate(state: GenerationState, seed: number) {
     parent = parentChannels(state).get("elevation");
   if (!parent) return;
   const height = fieldInterpolator(parent, "elevation"),
-    delta = Float64Array.from(map.Elevation, (z, i) => z / 1024 - height(nativePosition(work, i)));
+    delta = workingValues(
+      map,
+      "float64",
+      "climate:relief",
+      (i) => map.Elevation[i] / 1024 - height(nativePosition(work, i))
+    );
   for (let i = 0; i < map.mesh.count; i++) {
     if (!state.surface.channels.temperature) map.Temperature[i] = p.TemperatureBaseline;
     map.Temperature[i] = clamp(
@@ -53,6 +60,7 @@ export function downscaleRegionalClimate(state: GenerationState, seed: number) {
     map.Moisture[i] = clamp(map.Moisture[i] * factor, 0, 1000);
   }
   runoff(map, physicalContext(seed, 0, p));
+  releaseWorking(map, delta);
 }
 export const regionalClimateProcess: MapProcess = {
   contract: {

@@ -6,7 +6,7 @@ import { projectedValues, projectionInterpolation } from "./atlasSampling";
 import { triangleSample, triangleValue } from "./triangleSampling";
 
 it.each(["open", "cylinder", "globe"])(
-  "projects complete %s interpolation in compact batches, preserving seams and missing support",
+  "projects complete %s interpolation through blocks, preserving seams and missing support",
   (boundary) => {
     const mesh = createWorldMesh(
       [0, 0, 400_000, 200_000],
@@ -50,8 +50,8 @@ it.each(["open", "cylinder", "globe"])(
     const reused = new Float64Array(count);
     expect(projectedValues(work, values, false, reused)).toBe(reused);
     expect(reused).toEqual(expected);
-    expect(interpolation.batches).toHaveLength(3);
-    expect(interpolation.batches.at(-1)!.offsets).toHaveLength(10);
+    expect(interpolation.degree).toHaveLength(count);
+    expect(interpolation.cells).toHaveLength(count * interpolation.stride);
     expect(
       projectedValues(work, new Float64Array(mesh.count).fill(0.1)).every(
         (v) => v === 0 || v === 0.1

@@ -1,5 +1,4 @@
 import { expect, test, type Page } from "./uiTest";
-import type { SessionWorld } from "../src/atlasState";
 import { completeGenerationFixture, installGenerationFixture } from "./generationFixture";
 import { createWorld, generate, pageErrors, placePoint } from "./harness";
 
@@ -27,18 +26,15 @@ async function storedData(page: Page, id: string) {
     });
     try {
       return await new Promise((resolve, reject) => {
-        const transaction = database.transaction("maps");
+        const transaction = database.transaction(["maps", "summaries"]);
         const request = transaction.objectStore("maps").get(worldId);
+        const summary = transaction.objectStore("summaries").get(worldId);
         transaction.onabort = () => reject(transaction.error);
         transaction.oncomplete = () => {
-          const data = request.result.data as SessionWorld;
-          const grid = Object.values(data.snapshot.numerical)[0];
           resolve({
-            version: data.snapshot.world.version,
-            features: Object.values(data.snapshot.world.features).map((feature) => feature.name),
-            typed: grid?.channels.elevation instanceof Float64Array,
-            history: data.history.length,
-            undo: data.undo.length,
+            format: request.result.format,
+            version: summary.result.version,
+            name: summary.result.name,
           });
         };
       });
@@ -59,7 +55,7 @@ test("a saved map reopens its generated fields and authored edits after reload",
   await save(page);
   const id = await page.getByLabel("World", { exact: true }).inputValue();
   const before = await storedData(page, id);
-  expect(before).toMatchObject({ typed: true, features: ["Saved landmark"], history: 2, undo: 2 });
+  expect(before).toMatchObject({ format: 2, name: "Review atlas" });
   await placePoint(page, "Unsaved landmark", 450);
   await expect(page.locator(".header-meta")).toHaveText("Unsaved changes");
   await page.reload();
@@ -75,6 +71,30 @@ test("a saved map reopens its generated fields and authored edits after reload",
   await open(page, "Review atlas");
   await expect(page.locator(".map-status")).toContainText("1 world features");
   expect(errors).toEqual([]);
+});
+
+test("a saved map opens in another tab while the first tab keeps editing", async ({
+  page,
+  context,
+}) => {
+  await createWorld(page, "Shared local save");
+  await placePoint(page, "Saved point");
+  await save(page);
+  const second = await context.newPage();
+  try {
+    await installGenerationFixture(second);
+    await second.goto("/");
+    await open(second, "Shared local save");
+    await expect(second.locator(".map-status")).toContainText("1 world features");
+    await placePoint(page, "First tab only", 450);
+    await expect(page.locator(".map-status")).toContainText("2 world features");
+    await expect(second.locator(".map-status")).toContainText("1 world features");
+    await second.getByRole("button", { name: "Undo", exact: true }).click();
+    await expect(second.locator(".map-status")).toContainText("0 world features");
+    await expect(page.locator(".map-status")).toContainText("2 world features");
+  } finally {
+    await second.close();
+  }
 });
 
 test("one save per world, independent saves, and the old save survives a failed write", async ({

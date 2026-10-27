@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { spatial } from "@atlas/domain";
-import { prepareAtlasGeneration, regionalResolution } from "@atlas/generation";
-import { session } from "./atlasState";
+import { generationResolution } from "@atlas/generation";
+import { atlasWorkspace } from "./atlasWorkspace";
 import { inheritedGeneration } from "./generationJobs";
 import { useGenerate } from "./useAtlas";
 import { ErrorMessage } from "./ErrorMessage";
@@ -23,16 +24,19 @@ function useRegionalGeneration(world: World, editor: EditorState) {
       ...(magic ? ["magic"] : []),
       ...(people ? ["built", "cultural", "political"] : []),
     ],
-    source = session(world.id).snapshot,
-    prepared = prepareAtlasGeneration(source, {
+    input = {
       areaId: editor.area.id,
       quality,
       seed,
       domains,
       parameters: previous?.parameters,
+    },
+    prepared = useQuery({
+      queryKey: ["generation-setup", world.id, world.version, input],
+      queryFn: async () => (await atlasWorkspace()).generationSetup(world.id, input),
     }),
-    errors = prepared.diagnostics.filter((item) => item.severity === "error"),
-    resolution = regionalResolution(source, editor.area.id, quality);
+    errors = preparationErrors(prepared.data?.diagnostics, prepared.error),
+    resolution = prepared.data?.resolution ?? generationResolution(quality, editor.area.profile);
   return {
     quality,
     setQuality,
@@ -46,8 +50,18 @@ function useRegionalGeneration(world: World, editor: EditorState) {
     domains,
     errors,
     resolution,
+    preparing: prepared.isPending,
     parameters: previous?.parameters,
   };
+}
+function preparationErrors(
+  diagnostics: { severity: string; message: string }[] = [],
+  error: Error | null
+) {
+  return [
+    ...diagnostics.filter((item) => item.severity === "error"),
+    ...(error ? [{ message: error.message }] : []),
+  ];
 }
 type RegionalSetup = ReturnType<typeof useRegionalGeneration>;
 
@@ -122,20 +136,7 @@ function RegionalContext({
   );
 }
 function RegionalForm({ editor, setup }: { editor: EditorState; setup: RegionalSetup }) {
-  const {
-    quality,
-    setQuality,
-    seed,
-    setSeed,
-    magic,
-    setMagic,
-    people,
-    setPeople,
-    generate,
-    domains,
-    errors,
-    parameters,
-  } = setup;
+  const { quality, setQuality, seed, setSeed, generate, domains, errors, parameters } = setup;
   return (
     <form
       onSubmit={(event) => {
@@ -164,28 +165,16 @@ function RegionalForm({ editor, setup }: { editor: EditorState; setup: RegionalS
           required
         />
       </label>
-      <label>
-        <input
-          type="checkbox"
-          checked={magic}
-          onChange={(event) => setMagic(event.target.checked)}
-        />
-        Refine inherited magical geography
-      </label>
-      <label>
-        <input
-          type="checkbox"
-          checked={people}
-          onChange={(event) => setPeople(event.target.checked)}
-        />
-        Develop inherited settlements and routes
-      </label>
+      <RegionalDomains setup={setup} />
       {errors.map((item, index) => (
         <p className="error" key={index}>
           {item.message}
         </p>
       ))}
-      <button className="primary" disabled={generate.isPending || !!errors.length}>
+      <button
+        className="primary"
+        disabled={generate.isPending || setup.preparing || !!errors.length}
+      >
         Generate regional detail
       </button>
       <button type="button" onClick={() => editor.setPanel("regions")}>
@@ -193,5 +182,27 @@ function RegionalForm({ editor, setup }: { editor: EditorState; setup: RegionalS
       </button>
       <ErrorMessage error={generate.error} />
     </form>
+  );
+}
+function RegionalDomains({ setup }: { setup: RegionalSetup }) {
+  return (
+    <>
+      <label>
+        <input
+          type="checkbox"
+          checked={setup.magic}
+          onChange={(event) => setup.setMagic(event.target.checked)}
+        />
+        Refine inherited magical geography
+      </label>
+      <label>
+        <input
+          type="checkbox"
+          checked={setup.people}
+          onChange={(event) => setup.setPeople(event.target.checked)}
+        />
+        Develop inherited settlements and routes
+      </label>
+    </>
   );
 }

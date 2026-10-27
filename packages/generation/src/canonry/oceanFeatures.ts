@@ -1,4 +1,4 @@
-import { spatial } from "@atlas/domain";
+import { spatial, type NumericalVector } from "@atlas/domain";
 import type { Geometry, Polygon } from "geojson";
 import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
@@ -6,6 +6,8 @@ import { combinedContour, areaGeometry } from "./geographicContours";
 import { marineRegions, type MarineRegion } from "./marineRegions";
 import { metricSearch } from "./metricSearch";
 import { units } from "./math";
+import { NumericalList } from "./numericalList";
+import { workingValues, releaseWorking } from "./physicalNumerics";
 
 function polygons(shape: Geometry): Polygon[] {
   if (shape.type === "Polygon") return [shape];
@@ -15,25 +17,38 @@ function polygons(shape: Geometry): Polygon[] {
   return [];
 }
 /** Extend labels onto land for interpolation; the authoritative sea clips every named extent. */
-function extendedLabels(state: GenerationState, labels: Int32Array) {
-  const mesh = state.physical!.map.mesh,
+function extendedLabels(state: GenerationState, labels: NumericalVector) {
+  const map = state.physical!.map,
+    mesh = map.mesh,
     extended = labels.slice(),
-    distance = Float64Array.from(labels, (label) => (label < 0 ? Infinity : 0)),
-    seeds = [...labels.keys()].filter((i) => labels[i] >= 0);
-  metricSearch(mesh, seeds, distance, Infinity, (target, source) => {
-    extended[target] = extended[source];
-  });
+    distance = workingValues(map, "float64", "marine-extension-distance", (i) =>
+      labels[i] < 0 ? Infinity : 0
+    );
+  function* seeds() {
+    for (let i = 0; i < labels.length; i++) if (labels[i] >= 0) yield i;
+  }
+  metricSearch(
+    mesh,
+    seeds(),
+    distance,
+    Infinity,
+    (target, source) => {
+      extended[target] = extended[source];
+    },
+    map.numerical
+  );
+  releaseWorking(map, distance);
   return extended;
 }
 
 function regionOutline(
   state: GenerationState,
-  labels: Int32Array,
+  labels: NumericalVector,
   region: MarineRegion,
   ocean: Geometry
 ) {
   const mesh = state.physical!.map.mesh,
-    members: number[] = [],
+    members = new NumericalList("int32", "marine-outline-members", state.numerical),
     neighbours = new Set<number>();
   for (let i = 0; i < labels.length; i++) {
     if (labels[i] !== region.id) continue;
@@ -44,12 +59,14 @@ function regionOutline(
     }
   }
   const terms = [region.id, ...neighbours].map((id) => (i: number) => Number(labels[i] === id));
+  const cells = members.finish();
   const contour = combinedContour(
     state,
-    members,
+    cells,
     terms,
     ([own, ...other]) => own - Math.max(0, ...other)
   );
+  releaseWorking(state.physical!.map, cells);
   return areaGeometry(contour && spatial.intersection(contour, ocean));
 }
 
@@ -78,8 +95,13 @@ export function extractOceans(state: GenerationState) {
     return;
   }
   const { labels, regions } = marineRegions(work.map, units(work.profile.ShelfBreakDepth));
-  if (regions.length === 1) return publishOcean(state, ocean, regions[0].type);
+  for (const region of regions) releaseWorking(work.map, region.members);
+  if (regions.length === 1) {
+    releaseWorking(work.map, labels);
+    return publishOcean(state, ocean, regions[0].type);
+  }
   const extended = extendedLabels(state, labels);
+  releaseWorking(work.map, labels);
   // Cut smaller seas out of the existing outline; its remainder belongs to the broadest.
   // Independent contour approximations must not leave gaps or overlapping water geography.
   regions.sort((a, b) => a.area - b.area || a.id - b.id);
@@ -92,4 +114,5 @@ export function extractOceans(state: GenerationState) {
     publishOcean(state, shape, region.type);
     remaining = areaGeometry(spatial.difference(remaining, shape));
   }
+  releaseWorking(work.map, extended);
 }

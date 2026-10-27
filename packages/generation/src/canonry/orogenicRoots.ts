@@ -3,12 +3,8 @@ import type { PhysicalContext } from "./context";
 import type { BoundaryComponent, OrogenicFrame } from "./orogenicComponents";
 import { constructionWeight } from "./orogenicShape";
 import { clamp, crustHeight, maximumCrustThickness, units } from "./math";
-
-interface RootTarget {
-  cell: number;
-  weight: number;
-  capacity: number;
-}
+import { workingArray, releaseWorking } from "./physicalNumerics";
+import { orderedIndices } from "./numericalOrder";
 function addRoot(map: PhysicalField, cell: number, volume: number) {
   const before = map.CrustThickness[cell] / 1024,
     fraction = map.CrustContinentalFraction[cell] / 1000,
@@ -39,23 +35,34 @@ function capacity(
   const maximum = units(Math.min(maximumCrustThickness, 1000 + 3000 * fraction + root));
   return (Math.max(0, maximum - map.CrustThickness[i]) * map.mesh.areas[i]) / 1024;
 }
-function allocate(
+function rootCapacity(
   map: PhysicalField,
-  targets: RootTarget[],
-  available: number,
-  admitted: Float64Array
+  context: PhysicalContext,
+  components: BoundaryComponent[],
+  frame: OrogenicFrame
 ) {
-  // Saturate small capacities first, then share the remaining volume by physical weight.
-  targets.sort((a, b) => a.capacity / a.weight - b.capacity / b.weight || a.cell - b.cell);
-  let remaining = available,
-    weight = targets.reduce((sum, target) => sum + target.weight, 0);
-  for (const target of targets) {
-    const volume = Math.min(target.capacity, (remaining * target.weight) / weight);
-    if (volume > 0) admitted[target.cell] += addRoot(map, target.cell, volume);
-    remaining -= volume;
-    weight -= target.weight;
+  const componentArray = (name: string) =>
+    workingArray(map, "float64", `roots:${name}`, components.length);
+  const reserves = componentArray("reserves"),
+    totals = componentArray("totals"),
+    weights = workingArray(map, "float64", "roots:weights"),
+    capacities = workingArray(map, "float64", "roots:capacities"),
+    ratios = workingArray(map, "float64", "roots:ratios").fill(Infinity);
+  for (let i = 0; i < map.mesh.count; i++) {
+    const id = map.OrogenicComponentIds[i];
+    if (id < 0 || components[id].code !== 1) continue;
+    reserves[id] += (map.CrustRootReserve[i] * map.mesh.areas[i]) / 1024;
+    if (map.CrustContinentalFraction[i] < 350) continue;
+    const weight = constructionWeight(map, context, components[id], frame, i) * map.mesh.areas[i];
+    const room = capacity(map, context, components[id], i);
+    if (weight > 0 && room > 0) {
+      weights[i] = weight;
+      capacities[i] = room;
+      ratios[i] = room / weight;
+      totals[id] += weight;
+    }
   }
-  return available - remaining;
+  return { reserves, totals, weights, capacities, ratios };
 }
 /** Shortened continental columns feed roots; ranked relief cannot manufacture crust. */
 export function distributeOrogenicRoots(
@@ -64,24 +71,29 @@ export function distributeOrogenicRoots(
   components: BoundaryComponent[],
   frame: OrogenicFrame
 ) {
-  const reserves = new Float64Array(components.length),
-    targets = components.map((): RootTarget[] => []),
-    admitted = new Float64Array(map.mesh.count);
+  const { reserves, totals, weights, capacities, ratios } = rootCapacity(
+      map,
+      context,
+      components,
+      frame
+    ),
+    remaining = reserves.slice(),
+    admitted = workingArray(map, "float64", "roots:admitted");
+  // One external order preserves the capacity order within every independent belt.
+  const order = orderedIndices(ratios, false, map.numerical);
+  for (const i of order) {
+    if (!Number.isFinite(ratios[i])) break;
+    const id = map.OrogenicComponentIds[i];
+    if (remaining[id] <= 0) continue;
+    const volume = Math.min(capacities[i], (remaining[id] * weights[i]) / totals[id]);
+    if (volume > 0) admitted[i] += addRoot(map, i, volume);
+    remaining[id] -= volume;
+    totals[id] -= weights[i];
+  }
   for (let i = 0; i < map.mesh.count; i++) {
     const id = map.OrogenicComponentIds[i];
-    if (id < 0 || components[id].code !== 1) continue;
-    reserves[id] += (map.CrustRootReserve[i] * map.mesh.areas[i]) / 1024;
-    if (map.CrustContinentalFraction[i] < 350) continue;
-    const weight = constructionWeight(map, context, components[id], frame, i) * map.mesh.areas[i];
-    const room = capacity(map, context, components[id], i);
-    if (weight > 0 && room > 0) targets[id].push({ cell: i, weight, capacity: room });
+    if (id >= 0 && reserves[id] > 0) map.CrustRootReserve[i] *= remaining[id] / reserves[id];
   }
-  const consumed = components.map((_, id) =>
-    reserves[id] > 0 ? allocate(map, targets[id], reserves[id], admitted) / reserves[id] : 0
-  );
-  for (let i = 0; i < map.mesh.count; i++) {
-    const id = map.OrogenicComponentIds[i];
-    if (id >= 0) map.CrustRootReserve[i] *= 1 - consumed[id];
-  }
+  releaseWorking(map, reserves, remaining, totals, weights, capacities, ratios, order);
   return admitted;
 }

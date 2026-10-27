@@ -3,7 +3,7 @@ import { createGrid, fieldInterpolator, gridPosition, putChannel, rectangle } fr
 import { terrainDisplaySampler } from "./terrainDisplay";
 import { numericTileSampler, terrainSampleBands } from "./numericTiles";
 import { terrainTile } from "./terrainTile";
-import type { Raster } from "./types";
+import type { LoadedRaster as Raster } from "./types";
 
 function fixture(at: (x: number, y: number) => number): Raster {
   const grid = createGrid(

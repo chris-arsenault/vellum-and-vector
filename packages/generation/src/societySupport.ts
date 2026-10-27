@@ -1,6 +1,6 @@
-import { gridPosition, neighbors, spatial, type SocietySupport } from "@atlas/domain";
+import { allocateNumerical, neighbors, spatial, type SocietySupport } from "@atlas/domain";
 import type { GenerationState } from "./process";
-import { nativePosition } from "./canonry/atlasWorkspace";
+export { channelAccess } from "./societyChannelAccess";
 
 export const emptySupport = (): SocietySupport => ({
   farming: 0,
@@ -69,7 +69,15 @@ export function supportAt(
 export function coastalFishery(state: GenerationState) {
   const grid = state.surface,
     covers = spatial.geometryCoverage(grid.scope.footprint),
-    result = new Float64Array(grid.active.length);
+    result = allocateNumerical(
+      {
+        type: "float64",
+        length: grid.active.length,
+        lifetime: "run",
+        name: "society-coastal-fishery",
+      },
+      state.numerical
+    );
   const water = grid.channels.water;
   if (!water) return result;
   for (let i = 0; i < result.length; i++) {
@@ -93,61 +101,4 @@ export function soilWaterCapacity(state: GenerationState, i: number) {
 }
 function storedSoilWater(state: GenerationState, i: number) {
   return societyValue(state, "soilWater", i) / Math.max(0.01, soilWaterCapacity(state, i));
-}
-
-/** Sample every retained channel, including reaches omitted from visible cartography. */
-export function channelAccess(state: GenerationState) {
-  const grid = state.surface,
-    result = new Float64Array(grid.active.length);
-  const size = Math.max(1000, grid.scope.resolution ?? 1000);
-  const buckets = liveDrainage(state)
-    ? liveChannelBuckets(state.physical!, size)
-    : channelBuckets(state, size);
-  for (let i = 0; i < result.length; i++) {
-    const p = gridPosition(grid, i),
-      x = Math.floor(p.x / size),
-      y = Math.floor(p.y / size);
-    for (let dx = -1; dx <= 1; dx++)
-      for (let dy = -1; dy <= 1; dy++)
-        for (const [a, b, flow] of buckets.get(`${x + dx}:${y + dy}`) ?? [])
-          result[i] = Math.max(
-            result[i],
-            Math.exp(-Math.hypot(a - p.x, b - p.y) / size) * (1 - Math.exp(-Math.max(0, flow)))
-          );
-  }
-  return result;
-}
-/**
- * The live mesh is read mid-cycle, and inside an epoch before any extraction, when it is
- * the only drainage there is; otherwise the retained network is the record.
- */
-function liveDrainage(state: GenerationState) {
-  if (!state.physical) return false;
-  return Boolean(state.society?.cycle) || !state.domain.world.drainage?.[state.domain.scope.areaId];
-}
-function channelBuckets(state: GenerationState, size: number) {
-  const buckets = new Map<string, [number, number, number][]>();
-  for (const network of Object.values(state.domain.world.drainage ?? {})) {
-    if (network.spaceId !== state.surface.scope.spaceId) continue;
-    for (const reach of network.reaches)
-      for (const [j, p] of reach.coordinates.entries()) {
-        const key = `${Math.floor(p[0] / size)}:${Math.floor(p[1] / size)}`;
-        const bucket = buckets.get(key) ?? [];
-        bucket.push([p[0], p[1], reach.discharges[j] ?? 0]);
-        buckets.set(key, bucket);
-      }
-  }
-  return buckets;
-}
-function liveChannelBuckets(work: NonNullable<GenerationState["physical"]>, size: number) {
-  const buckets = new Map<string, [number, number, number][]>();
-  for (let i = 0; i < work.map.mesh.count; i++) {
-    if (work.map.RiverOrders[i] <= 0) continue;
-    const p = nativePosition(work, i);
-    const key = `${Math.floor(p.x / size)}:${Math.floor(p.y / size)}`;
-    const bucket = buckets.get(key) ?? [];
-    bucket.push([p.x, p.y, work.map.FlowAccumulation[i]]);
-    buckets.set(key, bucket);
-  }
-  return buckets;
 }

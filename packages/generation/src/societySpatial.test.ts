@@ -57,7 +57,7 @@ it.each([false, true])(
           causes: [],
         };
         const inside = indices.filter((i) => distance(i) <= radius);
-        expect(workSamples(state, work)).toEqual(
+        expect([...workSamples(state, work)]).toEqual(
           inside.length
             ? inside.map((i) => ({ i, fraction: Math.exp(-distance(i) / radius) }))
             : [

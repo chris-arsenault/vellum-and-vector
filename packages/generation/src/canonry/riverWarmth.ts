@@ -1,6 +1,7 @@
 import type { PhysicalField } from "./field";
 import { sourceToOutletOrder } from "./flowGraph";
 import { physicalDistance } from "./physicalMetric";
+import { workingArray, releaseWorking } from "./physicalNumerics";
 
 /** Distance over which carried warmth falls to a third: a long tongue, not a whole basin. */
 const warmthLength = 60_000;
@@ -11,7 +12,7 @@ const warmthLength = 60_000;
  * cell carries is the strongest that reaches it.
  */
 export function riverWarmth(map: PhysicalField) {
-  const carried = new Float64Array(map.mesh.count);
+  const carried = workingArray(map, "float64", "river:warmth");
   map.RiverWarmth.fill(0);
   for (const i of sourceToOutletOrder(map)) {
     const warmth = Math.max(carried[i], Math.max(0, map.ExternalHeatForcing[i]));
@@ -22,4 +23,5 @@ export function riverWarmth(map: PhysicalField) {
     const next = warmth * Math.exp(-physicalDistance(map.mesh, i, target) / warmthLength);
     carried[target] = Math.max(carried[target], next);
   }
+  releaseWorking(map, carried);
 }

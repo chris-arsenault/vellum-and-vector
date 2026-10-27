@@ -5,16 +5,20 @@ import { clamp, round } from "./math";
 import { hashUnit } from "./noise";
 import { edgeLeadingTo, triangleIdentity } from "./mesh";
 import { oceanPropagation } from "./magicOcean";
-import type { MagicPropagation, MagicSystem } from "@atlas/domain";
+import type { MagicPropagation, MagicSystem, NumericalVector } from "@atlas/domain";
+import { retainedArray, workingArray, workingValues, releaseWorking } from "./physicalNumerics";
+import { orderedIndices } from "./numericalOrder";
 import { reservoirAmount, reservoirStock, withOrigin } from "./magicState";
 import { applyWarding, wardPropagation } from "./magicHallowed";
 
 function fracturePropagation(state: GenerationState, field: MagicField, activity: number) {
   const map = state.physical!.map,
     p = field.definition.parameters;
-  field.parents = new Int32Array(map.mesh.count).fill(-1);
+  field.parents = retainedArray(map, "int32", "magic:fracture-parents").fill(-1);
   const queue = new PriorityQueue<{ index: number; value: number }>(
-    (a, b) => b.value - a.value || a.index - b.index
+    (a, b) => b.value - a.value || a.index - b.index,
+    map.numerical,
+    ["index", "value"]
   );
   for (let i = 0; i < map.mesh.count; i++)
     if (field.source[i] > 0) {
@@ -54,9 +58,11 @@ function rootPropagation(state: GenerationState, field: MagicField, activity: nu
     map.WaterKindCodes[i] !== 0 ||
     map.IceThickness[i] > 0 ||
     (cover(i) < p.rootFloor && map.SoilDepth[i] < 0.3);
-  field.parents = new Int32Array(map.mesh.count).fill(-1);
+  field.parents = retainedArray(map, "int32", "magic:root-parents").fill(-1);
   const queue = new PriorityQueue<{ index: number; value: number }>(
-    (a, b) => b.value - a.value || a.index - b.index
+    (a, b) => b.value - a.value || a.index - b.index,
+    map.numerical,
+    ["index", "value"]
   );
   for (let i = 0; i < map.mesh.count; i++)
     if (field.source[i] > 0) {
@@ -108,10 +114,14 @@ function coldPropagation(state: GenerationState, field: MagicField, seed: number
   // Fresh fallout drains coldward. Existing charge stays in its ice carrier;
   // it contributes local concentration without being captured a second time.
   const iceStock = reservoirStock(field, "ice");
-  const accumulation = Float64Array.from(field.source, (value, i) => value * map.mesh.areas[i]);
-  const order = Array.from({ length: map.mesh.count }, (_, i) => i).sort(
-    (a, b) => map.Temperature[b] - map.Temperature[a] || b - a
+  const accumulation = workingValues(
+    map,
+    "float64",
+    "magic:cold-accumulation",
+    (i) => field.source[i] * map.mesh.areas[i]
   );
+  // Equal temperatures cannot exchange charge: coldTarget requires a strictly colder cell.
+  const order = orderedIndices(map.Temperature, true, map.numerical);
   for (const i of order) {
     const target = coldTarget(state, i, seed),
       capacity = clamp(map.IceThickness[i], 0, 900);
@@ -136,6 +146,7 @@ function coldPropagation(state: GenerationState, field: MagicField, seed: number
     field.retained[i] = retained;
     if (target >= 0) accumulation[target] += Math.max(0, accumulation[i] - retained);
   }
+  releaseWorking(map, accumulation, order);
 }
 function radialPropagation(state: GenerationState, field: MagicField) {
   const work = state.physical!,
@@ -265,10 +276,12 @@ export function propagateMagic(
   seed: number,
   activity: number
 ) {
+  const map = state.physical!.map;
   field.intensity.fill(0);
   field.wake.fill(0);
   field.rogue.fill(0);
   field.retained.fill(0);
+  if (field.parents) releaseWorking(map, field.parents);
   delete field.parents;
   field.wakePaths = [];
   if (!field.definition.enabled) {
@@ -285,10 +298,10 @@ export function propagateMagic(
   }
   const count = field.intensity.length,
     merged: MergedRun = {
-      intensity: new Float64Array(count),
-      wake: new Float64Array(count),
-      rogue: new Float64Array(count),
-      retained: new Float64Array(count),
+      intensity: workingArray(map, "float64", "magic:merged-intensity", count),
+      wake: workingArray(map, "float64", "magic:merged-wake", count),
+      rogue: workingArray(map, "float64", "magic:merged-rogue", count),
+      retained: workingArray(map, "float64", "magic:merged-retained", count),
       parents: undefined,
       wakePaths: [],
     };
@@ -312,13 +325,14 @@ export function propagateMagic(
     field.wake[i] *= Number(field.intensity[i] > 0);
   }
   applyWarding(state, field);
+  releaseWorking(map, merged.intensity, merged.wake, merged.rogue, merged.retained);
 }
 interface MergedRun {
-  intensity: Float64Array;
-  wake: Float64Array;
-  rogue: Float64Array;
-  retained: Float64Array;
-  parents: Int32Array | undefined;
+  intensity: NumericalVector;
+  wake: NumericalVector;
+  rogue: NumericalVector;
+  retained: NumericalVector;
+  parents: NumericalVector | undefined;
   wakePaths: number[][][];
 }
 /** Whether the shared source channel holds strength no origin located. */
@@ -366,5 +380,7 @@ function propagateOrigin(
     merged.retained[i] += field.retained[i];
   }
   merged.parents ??= field.parents;
+  if (field.parents && field.parents !== merged.parents)
+    releaseWorking(state.physical!.map, field.parents);
   merged.wakePaths.push(...field.wakePaths);
 }

@@ -1,4 +1,10 @@
-import { population, putChannel, languageUse, languageKnowledge } from "@atlas/domain";
+import {
+  generateNumerical,
+  population,
+  putChannel,
+  languageUse,
+  languageKnowledge,
+} from "@atlas/domain";
 import type { GenerationState } from "./process";
 import { generatedFeature, putGenerated } from "./mapFeatures";
 import { isWorldSociety } from "./societyMapScope";
@@ -19,9 +25,15 @@ export function publishCultures(state: GenerationState) {
       }, 0);
       return members / Math.max(1e-12, population(c));
     });
-    const values = Float64Array.from(
-      state.surface.active,
-      (_a, i) => fractions[work.owner[i]] ?? 0
+    const values = generateNumerical(
+      {
+        type: "float64",
+        length: work.owner.length,
+        lifetime: "run",
+        name: `${entity.kind}:${entity.id}`,
+      },
+      (i) => fractions[work.owner[i]] ?? 0,
+      state.numerical
     );
     putChannel(state.surface, `${entity.kind}:${entity.id}`, "ratio", values);
     if (entity.kind === "language")
@@ -29,7 +41,16 @@ export function publishCultures(state: GenerationState) {
         state.surface,
         `languageUse:${entity.id}`,
         "ratio",
-        Float64Array.from(state.surface.active, (_a, i) => use[work.owner[i]]?.[entity.id] ?? 0)
+        generateNumerical(
+          {
+            type: "float64",
+            length: work.owner.length,
+            lifetime: "run",
+            name: `languageUse:${entity.id}`,
+          },
+          (i) => use[work.owner[i]]?.[entity.id] ?? 0,
+          state.numerical
+        )
       );
   }
   // Global culture, language and faith are distributions. A catchment is not

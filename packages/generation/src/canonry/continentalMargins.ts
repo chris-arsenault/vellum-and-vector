@@ -5,6 +5,7 @@ import type { PhysicalProfile } from "./profile";
 import { clamp, units } from "./math";
 import { deposit } from "./surface";
 import { PriorityQueue } from "./priorityQueue";
+import { workingValues, releaseWorking } from "./physicalNumerics";
 
 const smooth = (value: number) => {
   const c = clamp(value, 0, 1);
@@ -25,8 +26,7 @@ function adjacentLandMargin(map: PhysicalField, i: number): number {
   }
   return selected;
 }
-function seedOceanCoast(map: PhysicalField): number[] {
-  const queue: number[] = [];
+function* seedOceanCoast(map: PhysicalField) {
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes[i] !== 1) continue;
     const margin = adjacentLandMargin(map, i);
@@ -40,9 +40,8 @@ function seedOceanCoast(map: PhysicalField): number[] {
     }
     map.OceanMarginDistance[i] = distance;
     map.CoastalMarginCodes[i] = margin;
-    queue.push(i);
+    yield i;
   }
-  return queue;
 }
 function seedLandCoast(map: PhysicalField) {
   for (let i = 0; i < map.mesh.count; i++) {
@@ -61,7 +60,9 @@ function marginFrame(map: PhysicalField) {
   map.OceanMarginDistance.fill(Infinity);
   map.CoastalMarginCodes.fill(0);
   const queue = new PriorityQueue<{ i: number; distance: number }>(
-    (a, b) => a.distance - b.distance || a.i - b.i
+    (a, b) => a.distance - b.distance || a.i - b.i,
+    map.numerical,
+    ["i", "distance"]
   );
   for (const i of seedOceanCoast(map)) queue.push({ i, distance: map.OceanMarginDistance[i] });
   seedLandCoast(map);
@@ -80,6 +81,7 @@ function marginFrame(map: PhysicalField) {
   }
   for (let i = 0; i < map.mesh.count; i++)
     if (!Number.isFinite(map.OceanMarginDistance[i])) map.OceanMarginDistance[i] = 0;
+  queue.close();
 }
 export function continentalMarginEvolution(map: PhysicalField) {
   // Crust support owns structural relief and subsidence. Distance from today's coast
@@ -108,9 +110,11 @@ function capacity(map: PhysicalField, p: PhysicalProfile, i: number): number {
 }
 export function marineSedimentation(map: PhysicalField, c: PhysicalContext) {
   if (map.SedimentExportedTotal <= 0) return;
-  const capacities = Float64Array.from(
-    { length: map.mesh.count },
-    (_, i) => (capacity(map, c.Profile, i) / 1024) * map.mesh.areas[i]
+  const capacities = workingValues(
+    map,
+    "float64",
+    "marine:capacity",
+    (i) => (capacity(map, c.Profile, i) / 1024) * map.mesh.areas[i]
   );
   let remainingCapacity = capacities.reduce((sum, value) => sum + value, 0);
   const exported = map.SedimentExportedTotal;
@@ -134,4 +138,5 @@ export function marineSedimentation(map: PhysicalField, c: PhysicalContext) {
     remainingCapacity -= available;
   }
   map.SedimentExportedTotal = exported - initialBudget + budget;
+  releaseWorking(map, capacities);
 }

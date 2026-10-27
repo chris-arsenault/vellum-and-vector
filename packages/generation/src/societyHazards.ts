@@ -9,6 +9,7 @@ import {
   type SocietyEvent,
 } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
+import { generationFeatures } from "./generationFeatures";
 import { nearestSample } from "./societySpatial";
 import { societyValue } from "./societySupport";
 import { isWorldSociety } from "./societyMapScope";
@@ -166,7 +167,7 @@ export function unitRadius(c: Pick<SocietyCommunity, "areaKm2">) {
   return Math.sqrt((c.areaKm2 * 1e6) / Math.PI);
 }
 function applyAuthoredHazards(state: GenerationState, era: string) {
-  for (const f of Object.values(state.domain.world.features)) {
+  for (const f of generationFeatures(state, { kind: "societyEvent" })) {
     if (
       f.kind !== "societyEvent" ||
       f.state === "generated" ||

@@ -1,6 +1,6 @@
 import { createGrid, putChannel } from "@atlas/domain";
 import { atlasPublicationDefinitions, type CompletedBoundary } from "@atlas/generation";
-import { createWorldSnapshot } from "./atlasState";
+import { createWorldSnapshot } from "./worldCreation";
 
 /** Known coast and upland cells, supplied directly rather than found by generating a seed. */
 export function constructedWorld() {

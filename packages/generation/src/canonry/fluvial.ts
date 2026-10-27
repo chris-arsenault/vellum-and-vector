@@ -8,6 +8,8 @@ import { drainageConditioning } from "./drainageFlood";
 import { resolveLandTargets } from "./flowGuidance";
 import { contributingArea, sourceToOutletOrder } from "./flowGraph";
 import { cellTravel, physicalDistance } from "./physicalMetric";
+import type { NumericalVector } from "@atlas/domain";
+import { workingArray, releaseWorking } from "./physicalNumerics";
 
 /** A channel cut: eroded, remembered as incision, and booked as sediment supply. */
 export function recordCut(map: PhysicalField, i: number, requested: number) {
@@ -35,7 +37,7 @@ function controllingSill(map: PhysicalField, start: number, maximumSteps: number
 }
 function erodeOutlets(map: PhysicalField, c: PhysicalContext) {
   if (c.HydrologyStrength <= 0) return;
-  const cuts = new Float64Array(map.mesh.count),
+  const cuts = workingArray(map, "float64", "fluvial:outlet-cuts"),
     p = c.Profile;
   for (let i = 0; i < map.mesh.count; i++) {
     const overflow = map.LakeOverflow[i],
@@ -51,6 +53,7 @@ function erodeOutlets(map: PhysicalField, c: PhysicalContext) {
     cuts[sill] = Math.max(cuts[sill], units(incision));
   }
   for (let i = 0; i < cuts.length; i++) if (cuts[i] > 0) recordCut(map, i, cuts[i]);
+  releaseWorking(map, cuts);
 }
 export function surfaceResistance(map: PhysicalField, i: number): number {
   const cover = clamp(map.SedimentThickness[i] / units(25), 0, 1),
@@ -64,8 +67,8 @@ export function surfaceResistance(map: PhysicalField, i: number): number {
 function erodeTriangle(
   map: PhysicalField,
   c: PhysicalContext,
-  targets: Int32Array,
-  area: Float64Array,
+  targets: NumericalVector,
+  area: import("@atlas/domain").NumericalVector,
   i: number
 ) {
   const target = targets[i];
@@ -103,11 +106,12 @@ export function fluvialErosion(map: PhysicalField, c: PhysicalContext) {
     const pass = { ...c, Seed: c.Seed ^ iteration };
     drainageConditioning(map, pass);
     const targets = resolveLandTargets(map, pass),
-      area = contributingArea(targets, map.mesh.areas);
+      area = contributingArea(targets, map.mesh.areas, map.numerical);
     for (let i = 0; i < targets.length; i++) erodeTriangle(map, c, targets, area, i);
+    releaseWorking(map, targets, area);
   }
 }
-function transportDistance(map: PhysicalField, i: number, previous: Int32Array) {
+function transportDistance(map: PhysicalField, i: number, previous: NumericalVector) {
   const target = map.FlowTargets[i],
     next = target >= 0 ? target : previous[i];
   return next >= 0
@@ -120,9 +124,9 @@ function transportDistance(map: PhysicalField, i: number, previous: Int32Array) 
     : Math.sqrt(map.mesh.areas[i]);
 }
 export function sedimentTransport(map: PhysicalField, c: PhysicalContext) {
-  const moving = new Float64Array(map.mesh.count),
+  const moving = workingArray(map, "float64", "sediment:moving"),
     p = c.Profile;
-  const previous = new Int32Array(map.mesh.count).fill(-1);
+  const previous = workingArray(map, "int32", "sediment:previous").fill(-1);
   for (let i = 0; i < map.mesh.count; i++)
     if (map.FlowTargets[i] >= 0) previous[map.FlowTargets[i]] = i;
   for (const i of sourceToOutletOrder(map)) {

@@ -8,7 +8,10 @@ import { terrainTile } from "../src/terrainTile";
 import { terrainStyle } from "../src/rasterStyles";
 import { configureTerrainContours } from "../src/terrainContours";
 import { defaultRasterPresentation } from "../src/rasterPresentation";
-import type { Raster, RasterPresentation } from "../src/types";
+import type { LoadedRaster as Raster, RasterPresentation } from "../src/types";
+import { openSpatialRuntime } from "../src/spatialRuntime";
+
+const spatialReady = openSpatialRuntime();
 
 interface MountainOptions {
   resolution: number;
@@ -103,6 +106,7 @@ function fixture() {
   const color = pixelReader(layer, map);
   return {
     async render(options: MountainOptions) {
+      await spatialReady;
       const raster = terrain(options),
         sample = numericTileSampler(raster);
       const view: RasterPresentation = {

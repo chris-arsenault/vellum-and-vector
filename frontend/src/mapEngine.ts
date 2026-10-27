@@ -156,7 +156,8 @@ function syncVectorLayers(engine: MapEngine, world: World, styles: LayerStyle[])
       world,
       engine.vectors.get("cartography"),
       engine.vectors.get("displayFootprint"),
-      engine.vectors.get("drawingGeography")
+      engine.vectors.get("drawingGeography"),
+      engine.vectors.get("scene")
     );
   }
   const collection = engine.vectors.getLayers();
@@ -177,9 +178,15 @@ function applyVectorStyle(
   world: World,
   cartography?: CartographicPresentation,
   footprint?: Geometry,
-  geography?: DrawingGeography
+  geography?: DrawingGeography,
+  features?: AtlasFeature[]
 ) {
-  if (sameVectorStyle(layer, style, world, cartography, footprint, geography)) return;
+  if (
+    sameVectorStyle(layer, style, world, cartography, footprint, geography) &&
+    layer.get("scene") === features
+  )
+    return;
+  layer.set("scene", features);
   layer.set("presentation", style);
   layer.set("styleSystems", world.magicSystems);
   layer.set("styleWorld", world);
@@ -188,7 +195,7 @@ function applyVectorStyle(
   layer.set("drawingGeography", geography);
   if (!style.symbols || cartography?.mode === "drawn") {
     layer.set("symbols", null);
-    layer.setStyle(typeStyle(world, style, undefined, cartography, footprint, geography));
+    layer.setStyle(typeStyle(world, style, undefined, cartography, footprint, geography, features));
     return;
   }
   if (layer.get("symbols") === style.symbols && layer.get("parsedStyle")) {
@@ -242,6 +249,7 @@ export function updateFeatures(
   engine.vectors.set("displayFootprint", cartography?.clip ? footprint : undefined);
   engine.vectors.set("world", world);
   engine.vectors.set("drawingGeography", geography);
+  engine.vectors.set("scene", scene);
   syncVectorLayers(engine, world, styles);
   const wanted = new Set(scene.map((feature) => feature.id));
   for (const feature of engine.features.getFeatures()) {

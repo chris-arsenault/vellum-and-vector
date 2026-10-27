@@ -3,11 +3,6 @@ import { z } from "zod";
 import { builtinLayers, putChannel } from "@atlas/domain";
 import { atlasGenerationModules, type GenerationModule } from "./generationModules";
 import { prepareAtlasGeneration, type AtlasGenerationInput } from "./atlasWorkflow";
-import {
-  GenerationReceiver,
-  sendGeneration,
-  type GenerationMessage,
-} from "../../../frontend/src/generationTransport";
 import { landscape, epoch } from "./mapFixtures";
 import { sequenceStages } from "./sequence";
 import { MapRunner } from "./mapRunner";
@@ -166,7 +161,7 @@ it("extends the real atlas recipe, runtime and new-layer publication by register
     expect(
       completed.history[0].causes.some((cause) => cause.process === "test.survey.measure")
     ).toBe(true);
-    const snapshotOutput = completed.complete();
+    const snapshotOutput = completed.snapshot;
     const field = snapshotOutput.world.fields.find((field) => field.layerId === "survey")!;
     expect(
       snapshotOutput.numerical[field.id].channels.testSurvey.every(
@@ -228,21 +223,5 @@ async function runModule(
     seedScope: "survey",
   });
   const output = generationSnapshot(result, prepared.input, crypto.randomUUID());
-  const messages: GenerationMessage[] = [];
-  let receiver: GenerationReceiver | undefined;
-  await sendGeneration(output, result.state.history, [], (value, transfer) => {
-    const received = structuredClone(value, { transfer });
-    messages.push(received);
-    if (received.kind === "snapshot") receiver = new GenerationReceiver(received);
-    else if (
-      received.kind === "numerical" ||
-      received.kind === "samples" ||
-      received.kind === "records"
-    )
-      receiver!.receive(received);
-  });
-  expect(messages.filter((entry) => entry.kind === "failed")).toEqual([]);
-  expect(messages.at(-1)).toEqual({ kind: "completed" });
-  expect(receiver).toBeDefined();
-  return receiver!;
+  return { snapshot: output, history: result.state.history };
 }

@@ -6,6 +6,7 @@ import { noWaterSurface } from "./math";
 import type { TectonicState } from "./tectonicState";
 import type { LandmarkLedger } from "./landmarkLedger";
 import type { CrustBudget } from "./crustTransport";
+import { allocateNumerical, type NumericalAllocator, type NumericalVector } from "@atlas/domain";
 
 const integerFields = [
   "BiomeCodes",
@@ -189,61 +190,68 @@ const metricFields = [
   // Magical heat carried down the drainage (native units): the thawed river below a wellspring.
   "RiverWarmth",
 ] as const;
-export type PhysicalField = Record<(typeof integerFields)[number], Int32Array> &
-  Record<(typeof elevationFields)[number], Float64Array> &
-  Record<(typeof metricFields)[number], Float64Array> &
-  Record<(typeof floatFields)[number], Float32Array> & {
-    mesh: PhysicalMesh;
-    tectonics: TectonicState | null;
-    landmarkLedger: LandmarkLedger | null;
-    CrustColumnsInitialized: boolean;
-    crustBudget: CrustBudget;
-    /** Present engineered barriers; natural-lake size filters do not erase their reservoirs. */
-    EngineeredDams: Set<number>;
-    events: {
-      id: string;
-      kind: "impact" | "plume" | "volcano" | "landmark";
-      x: number;
-      y: number;
-      radius: number;
-      epoch: number;
-      strength: number;
-      caldera?: boolean;
-    }[];
-    faults: { id: string; coordinates: [number, number][]; width: number }[];
-    AvailableFacts: Set<string>;
-    EffectiveSeaLevel: number;
-    BaseSeaLevel: number;
-    // Connected ocean volume (m³) at the base level once the first flood has set it; later
-    // floods move the base level to hold this volume, as a fixed water budget does.
-    BaseOceanVolume: number;
-    SeaLevelInitialized: boolean;
-    OpenBoundary: boolean;
-    CrustSupportInitialized: boolean;
-    SedimentProducedTotal: number;
-    SedimentDepositedTotal: number;
-    SedimentExportedTotal: number;
-    CompletedEpochCount: number;
-    EcologyInitialized: boolean;
-    AccumulatedPlateDrift: number;
-    LastPlateDriftStep: number;
-    /** The last plate drift's scatter, kept so amounts riding the crust can follow it. */
-    transportPlan: TransportPlan | null;
-    DrainageTieDecisionTotal: number;
-    DrainageDecisionTotal: number;
-    FloodFlatFillTotal: number;
-    FloodFillTotal: number;
-  };
-export function createField(mesh: PhysicalMesh): PhysicalField {
+export type PhysicalIntegerName = (typeof integerFields)[number];
+export type PhysicalBufferName =
+  | PhysicalIntegerName
+  | (typeof elevationFields)[number]
+  | (typeof metricFields)[number]
+  | (typeof floatFields)[number];
+export type PhysicalField = Record<PhysicalBufferName, NumericalVector> & {
+  numerical?: NumericalAllocator;
+  mesh: PhysicalMesh;
+  tectonics: TectonicState | null;
+  landmarkLedger: LandmarkLedger | null;
+  CrustColumnsInitialized: boolean;
+  crustBudget: CrustBudget;
+  /** Present engineered barriers; natural-lake size filters do not erase their reservoirs. */
+  EngineeredDams: Set<number>;
+  events: {
+    id: string;
+    kind: "impact" | "plume" | "volcano" | "landmark";
+    x: number;
+    y: number;
+    radius: number;
+    epoch: number;
+    strength: number;
+    caldera?: boolean;
+  }[];
+  faults: { id: string; coordinates: [number, number][]; width: number }[];
+  AvailableFacts: Set<string>;
+  EffectiveSeaLevel: number;
+  BaseSeaLevel: number;
+  // Connected ocean volume (m³) at the base level once the first flood has set it; later
+  // floods move the base level to hold this volume, as a fixed water budget does.
+  BaseOceanVolume: number;
+  SeaLevelInitialized: boolean;
+  OpenBoundary: boolean;
+  CrustSupportInitialized: boolean;
+  SedimentProducedTotal: number;
+  SedimentDepositedTotal: number;
+  SedimentExportedTotal: number;
+  CompletedEpochCount: number;
+  EcologyInitialized: boolean;
+  AccumulatedPlateDrift: number;
+  LastPlateDriftStep: number;
+  /** The last plate drift's scatter, kept so amounts riding the crust can follow it. */
+  transportPlan: TransportPlan | null;
+  DrainageTieDecisionTotal: number;
+  DrainageDecisionTotal: number;
+  FloodFlatFillTotal: number;
+  FloodFillTotal: number;
+};
+export function createField(mesh: PhysicalMesh, numerical?: NumericalAllocator): PhysicalField {
+  const allocate = (type: import("@atlas/domain").SampleType, name: string) =>
+    allocateNumerical({ type, length: mesh.count, lifetime: "run", name }, numerical);
   const arrays = {
-    ...Object.fromEntries(integerFields.map((name) => [name, new Int32Array(mesh.count)])),
-    ...Object.fromEntries(elevationFields.map((name) => [name, new Float64Array(mesh.count)])),
-    ...Object.fromEntries(metricFields.map((name) => [name, new Float64Array(mesh.count)])),
-    ...Object.fromEntries(floatFields.map((name) => [name, new Float32Array(mesh.count)])),
+    ...Object.fromEntries(integerFields.map((name) => [name, allocate("int32", name)])),
+    ...Object.fromEntries(elevationFields.map((name) => [name, allocate("float64", name)])),
+    ...Object.fromEntries(metricFields.map((name) => [name, allocate("float64", name)])),
+    ...Object.fromEntries(floatFields.map((name) => [name, allocate("float32", name)])),
   };
   const field = {
     ...arrays,
     mesh,
+    numerical,
     tectonics: null,
     landmarkLedger: null,
     CrustColumnsInitialized: false,

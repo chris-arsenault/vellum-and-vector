@@ -124,7 +124,7 @@ it("keeps all channel vertices inside their drainage cells and pins the water ou
 
 it("carries finite dimensional station profiles without changing the drainage simulation", () => {
   const { map, main } = network(),
-    original = structuredClone(map),
+    original = structuredClone(physicalData(map)),
     paths = createRiverPaths(map);
   const result = riverPath(map, paths, main),
     count = result.geometry.coordinates.length;
@@ -137,8 +137,19 @@ it("carries finite dimensional station profiles without changing the drainage si
   expect(result.profiles.elevations.every((z, i, values) => i === 0 || z <= values[i - 1])).toBe(
     true
   );
-  expect(map).toEqual(original);
+  expect(physicalData(map)).toEqual(original);
 });
+function physicalData(map: import("./field").PhysicalField) {
+  const coords = Array.from(map.mesh.coords);
+  return {
+    ...map,
+    mesh: {
+      ...map.mesh,
+      coords,
+      indexes: coords.map((p) => map.mesh.indexes.get(`${p.u}:${p.v}:${Number(p.inverted)}`)),
+    },
+  };
+}
 
 it("retains dimensional profiles when a curved channel is clipped at a world boundary", () => {
   const { map, main } = network();

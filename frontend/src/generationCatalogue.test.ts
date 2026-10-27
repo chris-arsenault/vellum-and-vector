@@ -1,3 +1,4 @@
+import { fixtureWorld, fixtureState } from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
 import {
   atlasRegistry,
@@ -7,11 +8,10 @@ import {
   atlasParameterDefinitions,
 } from "@atlas/generation";
 import { sequenceStages } from "../../packages/generation/src/sequence";
-import { createWorld, session } from "./atlasState";
 
-it("describes every active invocation without constructing a physical workspace", () => {
-  const world = createWorld({ name: "Catalogue", seed: 42, width: 10000, height: 10000 });
-  const source = session(world.id).snapshot;
+it("describes every active invocation without constructing a physical workspace", async () => {
+  const world = fixtureWorld({ name: "Catalogue", seed: 42, width: 10000, height: 10000 });
+  const source = fixtureState(world.id).snapshot;
   const input = {
     areaId: source.scope.areaId,
     domains: ["physical", "magic", "cultural", "political", "built"],
@@ -30,7 +30,7 @@ it("describes every active invocation without constructing a physical workspace"
   expect(source.numerical).toEqual({});
 });
 
-it("validates creator controls from the same definitions used to present them", () => {
+it("validates creator controls from the same definitions used to present them", async () => {
   for (const [key, definition] of Object.entries(atlasParameterDefinitions)) {
     expect(atlasParametersSchema.parse({})[key as keyof typeof atlasParameterDefinitions]).toBe(
       definition.default

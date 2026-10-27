@@ -3,6 +3,7 @@
 import { fieldInterpolator, putChannel, spatial } from "@atlas/domain";
 import type { MapProcess } from "../process";
 import { nativePosition } from "./atlasWorkspace";
+import { workingArray } from "./physicalNumerics";
 
 export const advectAtlasMagic: MapProcess = {
   contract: {
@@ -25,9 +26,14 @@ export const advectAtlasMagic: MapProcess = {
       const covered = spatial.pointCoverage(grid.scope.footprint),
         sameTopology = grid.topology && grid.topology === work.map.mesh.topology;
       for (const name of histories) {
-        const previous = { ...grid, channels: { [name]: grid.channels[name].slice() } };
+        const previous = { ...grid, channels: { [name]: grid.channels[name] } };
         const valueAt = fieldInterpolator(previous, name);
-        const moved = new Float64Array(grid.active.length);
+        const moved = workingArray(
+          work.map,
+          "float64",
+          "magic:advected-history",
+          grid.active.length
+        );
         for (let i = 0; i < moved.length; i++) {
           const source = work.map.AdvectionSourceIndex[work.samples[i]];
           if (source < 0) continue;

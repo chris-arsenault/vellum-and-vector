@@ -1,4 +1,12 @@
-import { putChannel, requireThat, type Grid } from "@atlas/domain";
+import {
+  allocateNumerical,
+  putChannel,
+  requireThat,
+  type Grid,
+  type NumericalVector,
+  type NumericalAllocator,
+} from "@atlas/domain";
+import { NumericalQueue } from "./canonry/numericalQueue";
 import { requireChannel } from "./mapFields";
 import {
   adjacency,
@@ -11,13 +19,13 @@ import {
 import type { GenerationState, MapProcessContext } from "./process";
 
 export interface Drainage {
-  links: number[][];
-  receiver: Float64Array;
-  height: Float64Array;
-  rank: Float64Array;
-  basin: Float64Array;
-  ocean: Uint8Array;
-  order: number[];
+  links: (cell: number) => number[];
+  receiver: NumericalVector;
+  height: NumericalVector;
+  rank: NumericalVector;
+  basin: NumericalVector;
+  ocean: NumericalVector;
+  order: NumericalVector;
 }
 
 // Priority flood retains the physical floor and supplies a spill elevation plus
@@ -26,18 +34,25 @@ export interface Drainage {
 export function conditionDrainage(
   grid: Grid,
   seaLevel: number,
-  context: MapProcessContext
+  context: MapProcessContext,
+  numerical?: NumericalAllocator
 ): Drainage {
   const floor = requireChannel(grid, "elevation", "metre"),
     links = adjacency(grid);
-  const receiver = new Float64Array(floor.length).fill(-1),
+  const vector = (type: "float64" | "uint8" | "int32", name: string) =>
+    allocateNumerical(
+      { type, length: floor.length, lifetime: "process", name: `drainage:${name}` },
+      numerical
+    );
+  const receiver = vector("float64", "receiver").fill(-1),
     height = floor.slice();
-  const rank = new Float64Array(floor.length).fill(-1),
-    basin = new Float64Array(floor.length);
-  const seen = new Uint8Array(floor.length),
-    heap = new CellHeap(height),
-    order: number[] = [];
-  const ocean = connectedOcean(grid, links, floor, seaLevel);
+  const rank = vector("float64", "rank").fill(-1),
+    basin = vector("float64", "basin");
+  const seen = vector("uint8", "seen"),
+    heap = new CellHeap(height, numerical),
+    order = vector("int32", "order");
+  let count = 0;
+  const ocean = connectedOcean(grid, links, floor, seaLevel, numerical);
   for (let i = 0; i < floor.length; i++) {
     if (!grid.active[i] || !boundaryCell(grid, i)) continue;
     height[i] = Math.max(floor[i], ocean[i] ? seaLevel : floor[i]);
@@ -46,15 +61,10 @@ export function conditionDrainage(
     heap.push(i);
   }
   for (let i = heap.pop(); i !== undefined; i = heap.pop()) {
-    checkProgress(
-      context,
-      order.length,
-      floor.length,
-      "Resolving depressions and drainage outlets"
-    );
-    rank[i] = order.length;
-    order.push(i);
-    for (const j of links[i]) {
+    checkProgress(context, count, floor.length, "Resolving depressions and drainage outlets");
+    rank[i] = count;
+    order[count++] = i;
+    for (const j of links(i)) {
       if (seen[j]) continue;
       seen[j] = 1;
       receiver[j] = i;
@@ -64,27 +74,39 @@ export function conditionDrainage(
     }
   }
   requireThat(
-    order.length === grid.active.reduce((sum, v) => sum + v, 0),
+    count === grid.active.reduce((sum, v) => sum + v, 0),
     "drainage_component",
     "Every active component needs a mapped boundary outlet."
   );
-  return { links, receiver, height, rank, basin, ocean, order };
+  heap.close();
+  numerical?.release(seen);
+  return { links, receiver, height, rank, basin, ocean, order: order.subarray(0, count) };
 }
 
-function connectedOcean(grid: Grid, links: number[][], floor: Float64Array, seaLevel: number) {
-  const ocean = new Uint8Array(floor.length),
-    queue: number[] = [];
+function connectedOcean(
+  grid: Grid,
+  links: Drainage["links"],
+  floor: NumericalVector,
+  seaLevel: number,
+  numerical?: NumericalAllocator
+) {
+  const ocean = allocateNumerical(
+      { type: "uint8", length: floor.length, lifetime: "process", name: "drainage:ocean" },
+      numerical
+    ),
+    queue = new NumericalQueue(numerical);
   for (let i = 0; i < floor.length; i++)
     if (grid.active[i] && boundaryCell(grid, i) && floor[i] < seaLevel) {
       ocean[i] = 1;
       queue.push(i);
     }
-  for (let n = 0; n < queue.length; n++)
-    for (const j of links[queue[n]])
+  for (let i = queue.shift(); i !== undefined; i = queue.shift())
+    for (const j of links(i))
       if (!ocean[j] && floor[j] < seaLevel) {
         ocean[j] = 1;
         queue.push(j);
       }
+  queue.close();
   return ocean;
 }
 
@@ -93,9 +115,14 @@ export function routeRunoff(state: GenerationState, graph: Drainage, context: Ma
     rainfall = requireChannel(grid, "rainfall", "metre/year");
   const melt = state.facts.has("meltwater") ? requireChannel(grid, "meltwater", "metre") : null;
   const years = epochYears(context, Number(context.parameters.meltwaterYears));
-  const runoff = new Float64Array(rainfall.length),
-    flow = new Float64Array(rainfall.length),
-    outlet = new Float64Array(rainfall.length);
+  const values = (name: string) =>
+    allocateNumerical(
+      { type: "float64", length: rainfall.length, lifetime: "process", name: `runoff:${name}` },
+      state.numerical
+    );
+  const runoff = values("runoff"),
+    flow = values("flow"),
+    outlet = values("outlet");
   for (const i of graph.order) {
     const available = Math.max(0, rainfall[i]) + (years > 0 ? (melt?.[i] ?? 0) / years : 0);
     runoff[i] = graph.ocean[i]
@@ -123,19 +150,35 @@ export function routeRunoff(state: GenerationState, graph: Drainage, context: Ma
   });
 }
 
-function accumulateFlow(graph: Drainage, flow: Float64Array, outlet: Float64Array) {
-  for (const i of [...graph.order].reverse()) {
+function accumulateFlow(graph: Drainage, flow: NumericalVector, outlet: NumericalVector) {
+  for (let n = graph.order.length - 1; n >= 0; n--) {
+    const i = graph.order[n];
     const target = graph.receiver[i];
     if (target >= 0) flow[target] += flow[i];
     else outlet[i] = flow[i];
   }
 }
 
-export function writeDrainage(grid: Grid, graph: Drainage, seaLevel: number) {
+export function writeDrainage(
+  grid: Grid,
+  graph: Drainage,
+  seaLevel: number,
+  numerical?: NumericalAllocator
+) {
+  const values = (name: string) =>
+    allocateNumerical(
+      {
+        type: "float64",
+        length: grid.active.length,
+        lifetime: "process",
+        name: `drainage:${name}`,
+      },
+      numerical
+    );
   const floor = grid.channels.elevation,
-    depth = new Float64Array(floor.length),
-    depression = new Float64Array(floor.length),
-    water = new Float64Array(floor.length);
+    depth = values("depth"),
+    depression = values("depression"),
+    water = values("water");
   for (const i of graph.order) {
     depression[i] = Math.max(0, graph.height[i] - floor[i]);
     depth[i] = graph.ocean[i]

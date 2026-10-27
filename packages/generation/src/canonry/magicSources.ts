@@ -2,7 +2,7 @@ import { meshDeltaX, nearestTriangle } from "./mesh";
 import type { GenerationState } from "../process";
 import type { MagicField } from "./magicState";
 import { clamp, round } from "./math";
-import { worldCandidates, separatedCandidates } from "./worldSources";
+import { worldCandidates, separatedCandidates, type WorldCandidate } from "./worldSources";
 import { areaBudget, mediumArea, referenceLandArea, referenceOceanArea } from "./worldScale";
 import type { PhysicalField } from "./field";
 import { hashUnit } from "./noise";
@@ -14,6 +14,8 @@ import { aquiferSources, forgeSources, verdantSources } from "./magicGreenwoodSo
 import { deadLakeSources, deathSources } from "./magicSaltSources";
 import { keptLineSources, tenureSources } from "./magicHallowed";
 import { pairingSources, strainSources } from "./magicVeil";
+import { workingArray, releaseWorking } from "./physicalNumerics";
+import { PriorityQueue } from "./priorityQueue";
 
 function isHeatMaximum(map: PhysicalField, start: number, radius: number) {
   const { mesh, HeatSourceDensity: density } = map;
@@ -56,7 +58,7 @@ function geothermalSources(
   );
   if (budget === 0) return;
   const candidates = geothermalCandidates(state, field, seed);
-  const selected: typeof candidates = [];
+  const selected: (WorldCandidate & { i: number })[] = [];
   for (const source of candidates) {
     const i = source.i;
     const spacing = p.sourceSpacing + ((1000 - map.HeatSourceDensity[i]) * 10_000) / 150;
@@ -103,35 +105,50 @@ function exhumedSpent(map: PhysicalField, field: MagicField, origin: MagicOrigin
     if (strength > 0) field.source[i] = Math.max(field.source[i], strength);
   }
 }
-function geothermalCandidates(state: GenerationState, field: MagicField, seed: number) {
+function* geothermalCandidates(state: GenerationState, field: MagicField, seed: number) {
   const map = state.physical!.map,
     p = field.definition.parameters;
   const radius = p.sourceSpacing / 2;
   const maximum = map.HeatSourceDensity.reduce((peak, value) => Math.max(peak, value), 0);
-  const candidates = [];
-  for (let i = 0; i < map.mesh.contentCount; i++) {
-    if (map.HeatSourceDensity[i] < p.sourceThreshold) continue;
-    // Fire rises through fractures in the crust under land; the sea floor belongs to
-    // Pressure, and its heat shows as vents through the geothermal field, not as cores.
-    if (map.WaterKindCodes[i] === 1) continue;
-    // A conduit that sealed after carrying its budget no longer feeds a core, unless new
-    // strain across it has cracked the seal: then it reopens with part of its budget left.
-    if (field.sealed[i] > 0) {
-      if (map.TectonicStrain[i] < p.reopenStrain) continue;
-      field.sealed[i] = 0;
-      field.history[i] = Math.min(field.history[i], p.conduitBudget * (1 - p.reopenShare));
-    }
-    if (map.HeatSourceDensity[i] !== maximum && !isHeatMaximum(map, i, radius)) continue;
-    const x = map.mesh.x[i],
-      y = map.mesh.y[i];
-    const priority = hashUnit(seed, Math.floor(x / radius), Math.floor(y / radius));
-    candidates.push({ i, id: Math.round(priority * 2147483647), x, y, priority });
-  }
-  return candidates.sort(
-    (a, b) => map.HeatSourceDensity[b.i] - map.HeatSourceDensity[a.i] || b.priority - a.priority
+  const candidates = new PriorityQueue<{ i: number; heat: number; priority: number }>(
+    (a, b) => b.heat - a.heat || b.priority - a.priority || a.i - b.i,
+    state.numerical,
+    ["i", "heat", "priority"]
   );
+  try {
+    for (let i = 0; i < map.mesh.contentCount; i++) {
+      if (map.HeatSourceDensity[i] < p.sourceThreshold) continue;
+      // Fire rises through fractures in the crust under land; the sea floor belongs to
+      // Pressure, and its heat shows as vents through the geothermal field, not as cores.
+      if (map.WaterKindCodes[i] === 1) continue;
+      // A conduit that sealed after carrying its budget no longer feeds a core, unless new
+      // strain across it has cracked the seal: then it reopens with part of its budget left.
+      if (field.sealed[i] > 0) {
+        if (map.TectonicStrain[i] < p.reopenStrain) continue;
+        field.sealed[i] = 0;
+        field.history[i] = Math.min(field.history[i], p.conduitBudget * (1 - p.reopenShare));
+      }
+      if (map.HeatSourceDensity[i] !== maximum && !isHeatMaximum(map, i, radius)) continue;
+      const x = map.mesh.x[i],
+        y = map.mesh.y[i];
+      const priority = hashUnit(seed, Math.floor(x / radius), Math.floor(y / radius));
+      candidates.push({ i, heat: map.HeatSourceDensity[i], priority });
+    }
+    while (candidates.count) {
+      const { i, priority } = candidates.pop();
+      yield {
+        i,
+        id: Math.round(priority * 2147483647),
+        x: map.mesh.x[i],
+        y: map.mesh.y[i],
+        priority,
+      };
+    }
+  } finally {
+    candidates.close();
+  }
 }
-function strongestHeatSource(values: Int32Array, count: number) {
+function strongestHeatSource(values: import("@atlas/domain").NumericalVector, count: number) {
   let strongest = 0;
   for (let i = 1; i < count; i++) if (values[i] > values[strongest]) strongest = i;
   return strongest;
@@ -357,8 +374,9 @@ export function locateMagicSources(
   field.located = [];
   for (const origin of field.definition.origins) field.originSources[origin.id].fill(0);
   if (!field.definition.enabled) return;
-  const merged = new Float64Array(count),
-    radii = new Float64Array(count);
+  const map = state.physical!.map,
+    merged = workingArray(map, "float64", "magic:merged-source", count),
+    radii = workingArray(map, "float64", "magic:merged-radii", count);
   field.definition.origins.forEach((origin, index) => {
     field.source.fill(0);
     field.radii.fill(0);
@@ -382,6 +400,7 @@ export function locateMagicSources(
   });
   field.source.set(merged);
   field.radii.set(radii);
+  releaseWorking(map, merged, radii);
   // An origin whose strategy does not keep a stock of its own holds its located strength as
   // an amount in its first reservoir: strength times the cell's area, so the stock can be
   // carried and its budget closed. A finite origin's stock is the source, not the mirror.

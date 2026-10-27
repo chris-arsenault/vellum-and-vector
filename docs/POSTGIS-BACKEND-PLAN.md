@@ -10,10 +10,9 @@ Provide a hosted workspace for the eventual paid deployment: private persistent 
 PostgreSQL/PostGIS, numerical resources in S3, authenticated spatial/domain operations and
 long-running generation with bounded memory and local scratch. Reuse the domain model,
 resource formats and operation contracts established by the
-[browser workspace plan](BROWSER-GIS-WORKSPACE-PLAN.md). Replace that link with its durable
-architecture sources when the browser plan closes.
+[browser workspace architecture](adr/0003-frontend-session.md).
 
-The browser plan builds no hosted adapters. This document builds on the resulting contracts;
+The browser implementation includes no hosted adapters. This document builds on its contracts;
 it is not an instruction to reactivate the old backend, SQL migrations or Terraform unchanged.
 An eventual paid deployment requires account/entitlement enforcement, but this plan does not
 choose prices, a payment provider or a new billing product. Those are separate product choices.

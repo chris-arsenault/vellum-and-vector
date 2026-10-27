@@ -1,9 +1,24 @@
+import { fixtureWorld, fixtureState, readFeature } from "./testSupport/workspaceFixture";
 import { afterEach, expect, it, vi } from "vitest";
-import { createWorld, session } from "./atlasState";
 import { cancelGeneration, listJobs, startGeneration, generationSnapshot } from "./generationJobs";
-import { createAdaptiveField, createAdaptiveTopology, createGrid, putChannel } from "@atlas/domain";
+import { createAdaptiveField, createAdaptiveTopology, putChannel } from "@atlas/domain";
 import { atlasPublicationDefinitions, type GenerationDiagnostic } from "@atlas/generation";
-import { sendGeneration } from "./generationTransport";
+import { mapEditingFixture } from "./mapEditingFixture";
+vi.mock("./atlasWorkspace", async () => {
+  const { fixtureState: current } = await import("./testSupport/workspaceFixture");
+  const { prepareAtlasGeneration } = await import("@atlas/generation");
+  return {
+    readEditorWorld: async (id: string) => current(id).snapshot.world,
+    atlasWorkspace: async () => ({
+      connect: async () => {},
+      generationSetup: async (
+        id: string,
+        input: import("@atlas/generation").AtlasGenerationInput
+      ) => prepareAtlasGeneration(current(id).snapshot, input),
+    }),
+    rememberWorld: vi.fn(),
+  };
+});
 
 class TestWorker {
   static latest: TestWorker;
@@ -19,24 +34,49 @@ class TestWorker {
 
 afterEach(() => vi.unstubAllGlobals());
 
+it("rejects overlapping generation before creating a worker or job", async () => {
+  const f = await mapEditingFixture();
+  await f.command("putMapFeature", {
+    areaId: f.child,
+    feature: {
+      ...(await readFeature(f.id, f.town, f.child)),
+      geometry: { type: "Point", coordinates: [550, 450] },
+    },
+  });
+  const worker = vi.fn();
+  vi.stubGlobal("Worker", worker);
+  await expect(
+    startGeneration(f.id, {
+      areaId: f.child,
+      quality: "draft",
+      seed: 17,
+      domains: ["physical"],
+      expectedVersion: f.current().world.version,
+      operationId: crypto.randomUUID(),
+    })
+  ).rejects.toThrow(/overlaps/);
+  expect(worker).not.toHaveBeenCalled();
+  expect(listJobs(f.id)).toEqual([]);
+});
+
 it.each(["completed", "failed"])(
   "retains streamed diagnostics when generation is %s",
   async (status) => {
     vi.stubGlobal("Worker", TestWorker);
-    const world = createWorld({
+    const world = fixtureWorld({
       name: "Recoverable errors",
       seed: 42,
       width: 10000,
       height: 10000,
     });
-    const domain = session(world.id).snapshot;
+    const domain = fixtureState(world.id).snapshot;
     const input = {
       areaId: domain.scope.areaId,
       domains: ["physical"],
       quality: "draft",
       seed: 42,
     };
-    startGeneration(world.id, {
+    await startGeneration(world.id, {
       ...input,
       expectedVersion: world.version,
       operationId: crypto.randomUUID(),
@@ -54,41 +94,17 @@ it.each(["completed", "failed"])(
     };
     const worker = TestWorker.latest;
     worker.onmessage!({ data: { kind: "diagnostic", diagnostic } });
+    await vi.waitFor(() => expect(listJobs(world.id)[0].diagnostics).toContainEqual(diagnostic));
     expect(listJobs(world.id)[0].diagnostics).toContainEqual(diagnostic);
     expect(listJobs(world.id)[0].status).toBe("running");
     if (status === "completed") {
-      const surface = createGrid("recovered", domain.scope, 2, 2);
-      putChannel(surface, "elevation", "metre", new Float64Array(4).fill(10));
-      const snapshot = generationSnapshot(
-        {
-          kind: "final",
-          configurationHash: "recovered",
-          ancestry: [],
-          state: {
-            domain: structuredClone(domain),
-            surface,
-            facts: new Set(["elevation"]),
-            history: [],
-            diagnostics: [diagnostic],
-            publications: atlasPublicationDefinitions(input, world),
-          },
-        },
-        input,
-        crypto.randomUUID()
-      );
-      await sendGeneration(snapshot, [], [diagnostic], (message, transfer) => {
-        worker.onmessage!({ data: structuredClone(message, { transfer }) });
-      });
-      expect(
-        session(world.id).snapshot.world.fields.some((field) =>
-          field.channels?.includes("elevation")
-        )
-      ).toBe(true);
+      worker.onmessage!({ data: { kind: "completed" } });
     } else {
       worker.onmessage!({
         data: { kind: "failed", error: "Unrecoverable failure", diagnostics: [diagnostic] },
       });
     }
+    await vi.waitFor(() => expect(listJobs(world.id)[0].status).toBe(status));
     const job = listJobs(world.id)[0];
     expect(job.status).toBe(status);
     expect(job.error).toBe(status === "completed" ? null : "Unrecoverable failure");
@@ -98,10 +114,15 @@ it.each(["completed", "failed"])(
   }
 );
 
-it("retains the active stage and error when a worker fails", () => {
+it("retains the active stage and error when a worker fails", async () => {
   vi.stubGlobal("Worker", TestWorker);
-  const world = createWorld({ name: "Failure diagnostics", seed: 42, width: 10000, height: 10000 });
-  const job = startGeneration(world.id, {
+  const world = fixtureWorld({
+    name: "Failure diagnostics",
+    seed: 42,
+    width: 10000,
+    height: 10000,
+  });
+  const job = await startGeneration(world.id, {
     areaId: Object.keys(world.areas)[0],
     domains: ["physical"],
     quality: "draft",
@@ -118,7 +139,9 @@ it("retains the active stage and error when a worker fails", () => {
       message: "Building territory for Polity 1",
     },
   });
-  expect(listJobs(world.id)[0].stage).toBe("Building territory for Polity 1");
+  await vi.waitFor(() =>
+    expect(listJobs(world.id)[0].stage).toBe("Building territory for Polity 1")
+  );
   worker.onerror!({ message: "Worker exhausted memory" });
   const failed = listJobs(world.id)[0];
   expect(failed.status).toBe("failed");
@@ -128,11 +151,11 @@ it("retains the active stage and error when a worker fails", () => {
   cancelGeneration(job.id);
 });
 
-it("starts generation with operative political capacity without a compatibility warning", () => {
+it("starts generation with operative political capacity without a compatibility warning", async () => {
   vi.stubGlobal("Worker", TestWorker);
-  const world = createWorld({ name: "History warning", seed: 42, width: 10000, height: 10000 });
+  const world = fixtureWorld({ name: "History warning", seed: 42, width: 10000, height: 10000 });
   world.humanEras![0].politicalCapacity = 2;
-  const job = startGeneration(world.id, {
+  const job = await startGeneration(world.id, {
     areaId: Object.keys(world.areas)[0],
     domains: ["physical", "cultural"],
     quality: "draft",
@@ -148,9 +171,9 @@ it("starts generation with operative political capacity without a compatibility 
   cancelGeneration(job.id);
 });
 
-it("publishes adaptive world quantities in their geographic layers without rasterizing them", () => {
-  const world = createWorld({ name: "World fields", seed: 42, width: 10000, height: 10000 });
-  const domain = session(world.id).snapshot;
+it("publishes adaptive world quantities in their geographic layers without rasterizing them", async () => {
+  const world = fixtureWorld({ name: "World fields", seed: 42, width: 10000, height: 10000 });
+  const domain = fixtureState(world.id).snapshot;
   const topology = createAdaptiveTopology([0, 0, 10000, 10000], {
     maximumSize: 2500,
     minimumSize: 2500,

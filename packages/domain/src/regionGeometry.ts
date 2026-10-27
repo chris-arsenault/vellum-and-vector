@@ -1,9 +1,4 @@
 import type { Geometry, LineString, Polygon, Position } from "geojson";
-import GeoJSONReader from "jsts/org/locationtech/jts/io/GeoJSONReader.js";
-import GeoJSONWriter from "jsts/org/locationtech/jts/io/GeoJSONWriter.js";
-import GeometryFactory from "jsts/org/locationtech/jts/geom/GeometryFactory.js";
-import Polygonizer from "jsts/org/locationtech/jts/operation/polygonize/Polygonizer.js";
-import UnaryUnionOp from "jsts/org/locationtech/jts/operation/union/UnaryUnionOp.js";
 import { spatial, point, type Bounds } from "./spatial";
 import { usefulRegionSize } from "./regionViews";
 
@@ -28,21 +23,13 @@ export function regionBoundaryLines(geometry: Geometry): LineString[] {
 }
 /** Node shared river/shore/territory/cut edges once, then assemble enclosed faces. */
 export function regionFaces(footprint: Geometry, boundaries: Geometry[]): Polygon[] {
-  const reader = new GeoJSONReader(new GeometryFactory()),
-    writer = new GeoJSONWriter();
   const lines = [...regionBoundaryLines(footprint), ...boundaries.flatMap(regionBoundaryLines)];
-  const polygonizer = new Polygonizer();
-  polygonizer.add(
-    UnaryUnionOp.union(
-      reader.read({
-        type: "MultiLineString",
-        coordinates: lines.map((line) => line.coordinates),
-      })
-    )
-  );
+  const faces = spatial.polygonize({
+    type: "MultiLineString",
+    coordinates: lines.map((line) => line.coordinates),
+  });
   const result: Polygon[] = [];
-  for (const shape of polygonizer.getPolygons().toArray()) {
-    const geometry = writer.write(shape) as Polygon;
+  for (const geometry of faces) {
     const probe = point(spatial.interiorPosition(geometry));
     if (spatial.covers(footprint, probe)) {
       const clipped = spatial.intersection(footprint, geometry);

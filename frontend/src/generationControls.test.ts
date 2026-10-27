@@ -1,10 +1,9 @@
+import { fixtureWorld, commitCommand } from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
 import { atlasPhysicalProfile } from "../../packages/generation/src/canonry/atlasProfile";
-import { createWorld } from "./atlasState";
-import { commitCommand } from "./atlasCommands";
 import { makeCommand } from "./useAtlas";
 
-it("maps creator controls to native physics with declared units", () => {
+it("maps creator controls to native physics with declared units", async () => {
   const profile = atlasPhysicalProfile({
     continents: 7,
     provinces: 30,
@@ -23,27 +22,31 @@ it("maps creator controls to native physics with declared units", () => {
   expect(profile.SeaLevel * profile.ElevationScale).toBe(100);
 });
 
-it("authors a variant through the shared operation and preserves it when settings change", () => {
-  const world = createWorld({ name: "Configurable magic", seed: 9, width: 1000, height: 1000 });
+it("authors a variant through the shared operation and preserves it when settings change", async () => {
+  const world = fixtureWorld({ name: "Configurable magic", seed: 9, width: 1000, height: 1000 });
   const variant = {
     ...world.magicSystems![0],
     id: "new-system",
     name: "Ice forging",
     effects: { heat: -0.2, iceMelt: -0.3, rockResistance: 500, coastalForcing: 0 },
   };
-  let current = commitCommand(
-    world.id,
-    makeCommand(world, "setMagicSystems", {
-      systems: [...world.magicSystems!, variant],
-    })
+  let current = (
+    await commitCommand(
+      world.id,
+      makeCommand(world, "setMagicSystems", {
+        systems: [...world.magicSystems!, variant],
+      })
+    )
   ).candidate;
   expect(current.magicSystems?.at(-1)?.name).toBe("Ice forging");
-  current = commitCommand(
-    world.id,
-    makeCommand(current, "setWorldSettings", {
-      name: "Revised world",
-      seed: 10,
-    })
+  current = (
+    await commitCommand(
+      world.id,
+      makeCommand(current, "setWorldSettings", {
+        name: "Revised world",
+        seed: 10,
+      })
+    )
   ).candidate;
   expect(current.magicSystems?.at(-1)?.effects.heat).toBe(-0.2);
 });

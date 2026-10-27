@@ -11,23 +11,29 @@ import {
   type DomainSnapshot,
   type Grid,
   type AtlasFeature,
+  featureWorkspaceWorld,
 } from "@atlas/domain";
 import type { GenerationState } from "./process";
 import { validateAuthoredInputs } from "./mapAuthored";
+import {
+  generationFeature,
+  generationFeatures,
+  generationFeatureWorld,
+  originalFeatureReader,
+} from "./generationFeatures";
 
 export function validateWorkingMap(state: GenerationState, original: DomainSnapshot): void {
   validateScope(state, original);
   validateAuthoredInputs(state, original);
-  for (const feature of Object.values(original.world.features))
-    validateFeatureProtection(feature, state.domain.world.features[feature.id]);
-  const changed = [
-    ...new Set([
-      ...Object.keys(original.world.features),
-      ...Object.keys(state.domain.world.features),
-    ]),
-  ].filter((id) => !sameValue(original.world.features[id], state.domain.world.features[id]));
-  validateGeometryWriteScopes(original, state.domain.world, changed);
-  validateInterfaces(state, original, changed);
+  const previous = originalFeatureReader(state, original);
+  for (const feature of previous.values())
+    validateFeatureProtection(feature, generationFeature(state, feature.id));
+  validateInterfaces(state, original);
+  for (const feature of generationFeatures(state))
+    if (!sameValue(previous.get(feature.id), feature))
+      validateChangedFeature(state, original, feature.id);
+  for (const { id } of previous.values())
+    if (!generationFeature(state, id)) validateChangedFeature(state, original, id);
   validateSurface(state, original);
 }
 
@@ -54,29 +60,38 @@ function validateScope(state: GenerationState, original: DomainSnapshot) {
   );
 }
 
-function validateInterfaces(state: GenerationState, original: DomainSnapshot, changed: string[]) {
+function validateInterfaces(state: GenerationState, original: DomainSnapshot) {
   for (const area of Object.values(original.world.areas)) {
     requireThat(
       sameValue(area.boundary, state.domain.world.areas[area.id]?.boundary),
       "generation_boundary",
       "Generation preserves inherited interfaces; reconcile them through authoring."
     );
-    for (const id of changed) {
-      const feature = state.domain.world.features[id];
-      const contracted = area.boundary?.crossings.some((crossing) => crossing.featureId === id);
-      requireThat(
-        !contracted || feature,
-        "generation_crossing",
-        "Generation retains contracted network features."
-      );
-      if (
-        !feature ||
-        areaSpace(state.domain.world, feature.areaId) !== areaSpace(original.world, area.id)
-      )
-        continue;
-      const geometry = composeFeature(state.domain.world, feature);
-      if (geometry) validateCrossings(state.domain, area, feature, geometry, feature.attributes);
-    }
+  }
+}
+function validateChangedFeature(state: GenerationState, original: DomainSnapshot, id: string) {
+  const world = generationFeatureWorld(state, [id]);
+  validateGeometryWriteScopes(
+    {
+      ...original,
+      world: featureWorkspaceWorld(original.world, originalFeatureReader(state, original), [id]),
+    },
+    world,
+    [id]
+  );
+  for (const area of Object.values(original.world.areas)) {
+    const feature = world.features[id];
+    const contracted = area.boundary?.crossings.some((crossing) => crossing.featureId === id);
+    requireThat(
+      !contracted || feature,
+      "generation_crossing",
+      "Generation retains contracted network features."
+    );
+    if (!feature || areaSpace(world, feature.areaId) !== areaSpace(original.world, area.id))
+      continue;
+    const geometry = composeFeature(world, feature);
+    if (geometry)
+      validateCrossings({ ...state.domain, world }, area, feature, geometry, feature.attributes);
   }
 }
 

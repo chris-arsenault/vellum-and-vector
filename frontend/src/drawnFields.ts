@@ -4,7 +4,7 @@ import LineString from "ol/geom/LineString.js";
 import { Circle, Fill, Stroke, Style } from "ol/style.js";
 import { fieldInterpolator, spatial } from "@atlas/domain";
 import type { Geometry } from "geojson";
-import type { DrawnMapInput } from "./drawnMap";
+import type { LoadedDrawnMapInput as DrawnMapInput } from "./drawnMap";
 import { bounds, lineage } from "./presentation";
 import type { World } from "./types";
 import type { CartographicPresentation } from "@atlas/domain";
@@ -68,8 +68,8 @@ export function fieldMarks(input: DrawnMapInput, footprint: Geometry): FieldMark
     return result;
   });
 }
-export function illustratedFields(input: DrawnMapInput, footprint: Geometry) {
-  return fieldMarks(input, footprint).map((mark) => {
+export function illustratedFields(input: Pick<DrawnMapInput, "view">, marks: FieldMark[]) {
+  return marks.map((mark) => {
     const feature = new Feature({ geometry: fieldGeometry(mark) });
     const color = input.view.style === "ink" ? "#594b36" : atlasColour(mark.channel);
     const stipple = mark.channel.startsWith("population");

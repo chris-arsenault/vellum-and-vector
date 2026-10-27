@@ -1,5 +1,6 @@
 import type { Grid, GridSurface } from "./grids";
 import { requireThat } from "./errors";
+import { copyGrid } from "./gridCopy";
 
 export function overlayField(
   base: GridSurface,
@@ -31,5 +32,5 @@ export function overlayField(
 }
 /** Keep authored patches at their own resolution; consumers use the shared evaluator. */
 export function materializeField(source: GridSurface): GridSurface {
-  return structuredClone(source);
+  return copyGrid(source);
 }

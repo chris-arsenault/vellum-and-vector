@@ -10,7 +10,7 @@ import { createMesh } from "./mesh";
 import { validateLandscape } from "./surface";
 import { createWorldMesh } from "./worldMesh";
 
-const volume = (map: PhysicalField, channel: Float64Array) =>
+const volume = (map: PhysicalField, channel: import("@atlas/domain").NumericalVector) =>
   channel.reduce((sum, depth, i) => sum + (depth / 1024) * map.mesh.areas[i], 0);
 
 it("keeps marine sediment allocation within fractional and continental-volume budgets", () => {

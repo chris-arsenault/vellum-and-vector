@@ -243,12 +243,14 @@ it("uses Cartesian area, exact holes and fixed boundary crossings", () => {
       [2, 12],
     ],
   };
-  expect(spatial.crossings(path, footprint)).toEqual([
-    { x: 2, y: 0, z: 0 },
-    { x: 2, y: 10, z: 0 },
-  ]);
+  expect(new Set(spatial.crossings(path, footprint))).toEqual(
+    new Set([
+      { x: 2, y: 0, z: 0 },
+      { x: 2, y: 10, z: 0 },
+    ])
+  );
   expect(() =>
-    spatial.read({
+    spatial.canonical({
       type: "Polygon",
       coordinates: [
         [

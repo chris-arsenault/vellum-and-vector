@@ -1,9 +1,8 @@
 import {
-  adaptiveLeafAt,
   refineAdaptiveWhere,
   prepareAdaptiveTransfer,
-  visitAdaptiveOverlap,
-  type AdaptiveTopology,
+  generateNumerical,
+  type NumericalAllocator,
 } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { remeshPhysical } from "./physicalRemesh";
@@ -51,32 +50,22 @@ function supported([x0, y0, x1, y1]: number[], supports: SamplingSupport[]) {
       Math.hypot(Math.max(x0 - x, 0, x - x1), Math.max(y0 - y, 0, y - y1)) <= radius
   );
 }
-function supportBins(topology: AdaptiveTopology, supports: SamplingSupport[]) {
-  const bins = new Map<number, SamplingSupport[]>();
-  for (const s of supports)
-    visitAdaptiveOverlap(
-      topology,
-      [s.x - s.radius, s.y - s.radius, s.x + s.radius, s.y + s.radius],
-      (leaf) => {
-        if (!bins.has(leaf)) bins.set(leaf, []);
-        bins.get(leaf)!.push(s);
-      }
-    );
-  return (box: number[]) =>
-    bins.get(adaptiveLeafAt(topology, (box[0] + box[2]) / 2, (box[1] + box[3]) / 2)) ?? [];
-}
 function remapArray(
   old: PhysicalMesh,
   mesh: PhysicalMesh,
   values: ArrayLike<number>,
   quantity: "category" | "intensive" | "extensive",
-  transfer: ReturnType<typeof prepareAdaptiveTransfer>
+  transfer: ReturnType<typeof prepareAdaptiveTransfer>,
+  numerical?: NumericalAllocator,
+  type: "float64" | "uint8" = "float64"
 ) {
-  const source = new Float64Array(old.count);
-  for (let leaf = 0; leaf < source.length; leaf++) source[leaf] = values[old.leafToCell[leaf]];
-  const next = transfer(source, quantity);
-  const result = new Float64Array(mesh.count);
-  for (let cell = 0; cell < result.length; cell++) result[cell] = next[mesh.cellToLeaf[cell]];
+  const next = transfer((leaf) => values[old.leafToCell[leaf]], quantity);
+  const result = generateNumerical(
+    { type, length: mesh.count, lifetime: "run", name: "adaptive:magicTransfer" },
+    (cell) => next[mesh.cellToLeaf[cell]],
+    numerical
+  );
+  if (numerical) numerical.release(next);
   return result;
 }
 function remapMagic(
@@ -95,12 +84,19 @@ function remapMagic(
         work.map.mesh,
         field[key],
         magicFieldDefinitions[key].quantity,
-        transfer
+        transfer,
+        state.numerical
       );
     }
     for (const [key, values] of Object.entries(field.features))
-      field.features[key] = Uint8Array.from(
-        remapArray(old, work.map.mesh, values, "category", transfer)
+      field.features[key] = remapArray(
+        old,
+        work.map.mesh,
+        values,
+        "category",
+        transfer,
+        state.numerical,
+        "uint8"
       );
   }
   for (const key of magicWorkspaceChannels)
@@ -109,7 +105,8 @@ function remapMagic(
       work.map.mesh,
       magic[key],
       magicWorkspaceDefinitions[key].quantity,
-      transfer
+      transfer,
+      state.numerical
     );
 }
 /** Refinement precedes construction or an already scheduled global reconciliation. */
@@ -122,14 +119,16 @@ export function refineWorkspace(
     old = work.map.mesh;
   if (!old.topology || !supports.length) return false;
   const started = performance.now();
-  const candidates = supportBins(old.topology, supports);
   const minimum = supports.reduce((size, support) => Math.min(size, support.size), Infinity);
-  const topology = refineAdaptiveWhere(old.topology, minimum, (box) =>
-    supported(box, candidates(box))
+  const topology = refineAdaptiveWhere(
+    old.topology,
+    minimum,
+    (box) => supported(box, supports),
+    state.numerical
   );
   if (topology === old.topology) return false;
   const assembled = performance.now();
-  const transfer = prepareAdaptiveTransfer(old.topology, topology);
+  const transfer = prepareAdaptiveTransfer(old.topology, topology, state.numerical);
   work.map = remeshPhysical(work.map, topology, state.domain.scope.footprint, transfer);
   refreshGrounding(work.map, work.profile);
   if (invalidation === "standalone")

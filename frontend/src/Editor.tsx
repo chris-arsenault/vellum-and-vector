@@ -9,7 +9,7 @@ import { WorkflowPanel } from "./WorkflowPanel";
 import { JobsPanel } from "./JobsPanel";
 import { useEditor, type EditorState } from "./useEditor";
 import { lineage } from "./presentation";
-import { exportWorld } from "./atlasReads";
+import { exportWorkspaceWorld as exportWorld } from "./workspaceReads";
 import { download } from "./download";
 import type { Tool, World } from "./types";
 import { ToolIcon } from "./ToolIcon";

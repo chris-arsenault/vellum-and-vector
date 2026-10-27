@@ -16,6 +16,7 @@ import { tectonicProvinces } from "./provinces";
 import { tectonicReferenceMyr } from "./tectonicControls";
 import { advectLandmarkDrainage } from "./landmarkTransport";
 import { geologicalPointMotion } from "./geologicalPointMotion";
+import { workingArray, releaseWorking } from "./physicalNumerics";
 
 function advectGeometry(map: PhysicalField, distance: number) {
   const vx = physicalSampler(map.mesh, map.CrustMotionX),
@@ -47,6 +48,7 @@ function transportStep(map: PhysicalField, step: number) {
   map.ConvergentCrustSurplus.fill(0);
   advectGeometry(map, step);
   const plan = buildTransportPlan(map, step);
+  if (map.transportPlan) releaseWorking(map, ...Object.values(map.transportPlan));
   map.transportPlan = plan;
   advectLandmarkDrainage(map, plan, step);
   transportHistory(map, plan);
@@ -78,7 +80,7 @@ export function plateAdvection(
     map.AccumulatedPlateDrift += total;
     return;
   }
-  const surplus = new Float64Array(map.mesh.count),
+  const surplus = workingArray(map, "float64", "advection:surplus"),
     evolved = { ...context, IsEvolutionEpoch: true };
   let remaining = context.TectonicDurationMyr;
   while (remaining > 1e-9) {
@@ -95,6 +97,7 @@ export function plateAdvection(
     remaining -= myr;
   }
   map.ConvergentCrustSurplus.set(surplus);
+  releaseWorking(map, surplus);
   tectonicProvinces(map, evolved);
   map.AccumulatedPlateDrift += total;
 }

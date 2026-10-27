@@ -1,6 +1,6 @@
 // Canonry PhysicalGeographyGrid.cs and MicrotriangleCoord.cs, commit 0f62584c.
 import { round } from "./math";
-import { adaptiveLeafAt, type AdaptiveTopology } from "@atlas/domain";
+import { adaptiveLeafAt, type AdaptiveTopology, type NumericalVector } from "@atlas/domain";
 
 const rootThree = Number("1.7320508075688772935");
 const triangleArea = Number("1.2990381056766579701");
@@ -9,6 +9,16 @@ export interface TriangleCoord {
   v: number;
   inverted: boolean;
 }
+export interface TriangleCoordinates extends Iterable<TriangleCoord> {
+  readonly [index: number]: TriangleCoord;
+  readonly length: number;
+  forEach(visit: (p: TriangleCoord, index: number) => void): void;
+  findIndex(predicate: (p: TriangleCoord, index: number) => boolean): number;
+}
+export interface TriangleIndex {
+  get(key: string): number | undefined;
+  at?(u: number, v: number, inverted: boolean): number | undefined;
+}
 export interface PhysicalMesh {
   /** Only full-width world meshes identify their east/west edges. */
   periodic?: { width: number; columns: number; poles?: { rows: number; spacingY: number } };
@@ -16,33 +26,38 @@ export interface PhysicalMesh {
   contentCount: number;
   contentRadius: number;
   workRadius: number;
-  coords: TriangleCoord[];
-  indexes: Map<string, number>;
-  x: Float32Array | Float64Array;
-  y: Float32Array | Float64Array;
-  neighbors: Int32Array;
-  edgeX: Float32Array;
-  edgeY: Float32Array;
-  boundary: Uint8Array;
+  coords: TriangleCoordinates;
+  indexes: TriangleIndex;
+  x: NumericalVector;
+  y: NumericalVector;
+  neighbors: NumericalVector;
+  edgeX: NumericalVector;
+  edgeY: NumericalVector;
+  boundary: NumericalVector;
   openBoundary: boolean;
   spacing: number;
-  areas: Float64Array;
+  areas: NumericalVector;
   origin: [number, number];
   latticeOffset: [number, number];
   bounds: [number, number, number, number];
-  edgeLength: Float64Array;
-  degree: Int32Array;
+  edgeLength: NumericalVector;
+  degree: NumericalVector;
   stride: number;
-  cellWidth: Float64Array;
-  cellHeight: Float64Array;
-  faceLength: Float64Array;
-  faceDistance: Float64Array;
-  contentAreas: Float64Array;
+  cellWidth: NumericalVector;
+  cellHeight: NumericalVector;
+  faceLength: NumericalVector;
+  faceDistance: NumericalVector;
+  contentAreas: NumericalVector;
   topology: AdaptiveTopology | null;
-  cellToLeaf: Int32Array;
-  leafToCell: Int32Array;
+  cellToLeaf: NumericalVector;
+  leafToCell: NumericalVector;
 }
 const key = (p: TriangleCoord) => `${p.u}:${p.v}:${Number(p.inverted)}`;
+export function triangleIndex(mesh: PhysicalMesh, u: number, v: number, inverted: boolean) {
+  return mesh.indexes.at
+    ? mesh.indexes.at(u, v, inverted)
+    : mesh.indexes.get(`${u}:${v}:${Number(inverted)}`);
+}
 function centroid(p: TriangleCoord): [number, number] {
   return [1.5 * (p.u + p.v) + (p.inverted ? 2 : 1), rootThree * 0.5 * (-p.u + p.v)];
 }
@@ -162,7 +177,7 @@ function latticeCandidate(mesh: PhysicalMesh, x: number, y: number, inverted: bo
   // Cube rounding gives the nearest site on each triangular sublattice.
   if (du > dv && du > dw) a = -b - c;
   else if (dv > dw) b = -a - c;
-  return mesh.indexes.get(`${a}:${b}:${Number(inverted)}`);
+  return triangleIndex(mesh, a, b, inverted);
 }
 export function nearestTriangle(mesh: PhysicalMesh, x: number, y: number): number {
   [x, y] = meshPoint(mesh, x, y);
@@ -198,7 +213,7 @@ function boundaryTriangle(
       v = round((sum + difference) * 0.5);
     for (let du = -2; du <= 2; du++)
       for (let dv = -2; dv <= 2; dv++) {
-        const candidate = mesh.indexes.get(key({ u: u + du, v: v + dv, inverted }));
+        const candidate = triangleIndex(mesh, u + du, v + dv, inverted);
         if (candidate === undefined) continue;
         const distance =
           meshDeltaX(mesh, mesh.x[candidate] - x) ** 2 + (mesh.y[candidate] - y) ** 2;

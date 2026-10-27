@@ -1,7 +1,7 @@
+import { fixtureWorld } from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
 import { rectangle } from "@atlas/domain";
-import { createWorld } from "./atlasState";
-import { registryRows, matchesRegistry, sortRegistry, type RegistryQuery } from "./registryData";
+import { registryRows, matchesRegistry, sortRegistry, type RegistryQuery } from "@atlas/domain";
 import type { AtlasFeature } from "./types";
 const query: RegistryQuery = {
   search: "",
@@ -15,7 +15,7 @@ const query: RegistryQuery = {
   attributes: [],
 };
 function fixture() {
-  const world = createWorld({ name: "Registry", seed: 1, width: 1000, height: 1000 }),
+  const world = fixtureWorld({ name: "Registry", seed: 1, width: 1000, height: 1000 }),
     areaId = Object.keys(world.areas)[0];
   const town = (id: string, people: number | null): AtlasFeature => ({
     id,
@@ -40,7 +40,7 @@ function fixture() {
   };
   return { world, areaId };
 }
-it("sorts numerically, keeps unknown values last and filters town residents rather than catchment population", () => {
+it("sorts numerically, keeps unknown values last and filters town residents rather than catchment population", async () => {
   const { world } = fixture(),
     rows = registryRows(world);
   expect(sortRegistry(rows, "population", true).map((r) => r.feature.id)).toEqual([
@@ -59,7 +59,7 @@ it("sorts numerically, keeps unknown values last and filters town residents rath
       .map((r) => r.feature.id)
   ).toEqual(["large"]);
 });
-it("discovers a crossing feature by intersection and keeps finer/floor features out of a World map read", () => {
+it("discovers a crossing feature by intersection and keeps finer/floor features out of a World map read", async () => {
   const { world, areaId } = fixture(),
     root = world.areas[areaId];
   world.features.road = {
@@ -113,7 +113,7 @@ it("discovers a crossing feature by intersection and keeps finer/floor features 
       .some((r) => r.feature.id === "door")
   ).toBe(false);
 });
-it("includes separately owned authored magic sources without duplicating their identity", () => {
+it("includes separately owned authored magic sources without duplicating their identity", async () => {
   const { world, areaId } = fixture(),
     id = crypto.randomUUID();
   world.magic.push({

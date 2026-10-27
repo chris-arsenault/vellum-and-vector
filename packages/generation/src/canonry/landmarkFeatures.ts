@@ -10,6 +10,7 @@ import {
 } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { GenerationState } from "../process";
+import { generationFeatures, removeGenerationFeature } from "../generationFeatures";
 import { putGenerated } from "../mapFeatures";
 import { atlasName, nameGeographicFeature, nameMetadata } from "../atlasNaming";
 import { remeasureLandmark, type LandmarkScene } from "./landmarks";
@@ -118,9 +119,11 @@ const detectedKinds = new Set(["peak", "gorge", "waterfall", "valley"]);
 /** Drop detected landforms that stand on claimed cells: they are the landmark, published once. */
 export function dropClaimedFeatures(state: GenerationState, claimed: Set<number>) {
   if (!claimed.size) return;
-  const work = state.physical!,
-    world = state.domain.world;
-  for (const feature of Object.values(world.features)) {
+  const work = state.physical!;
+  for (const feature of generationFeatures(state, {
+    areaId: state.domain.scope.areaId,
+    layerId: "geology",
+  })) {
     if (
       feature.areaId !== state.domain.scope.areaId ||
       feature.state !== "generated" ||
@@ -130,7 +133,7 @@ export function dropClaimedFeatures(state: GenerationState, claimed: Set<number>
       continue;
     const points = anchors(feature),
       onClaim = points.filter((p) => claimed.has(cellOf(work, p))).length;
-    if (onClaim * 2 >= points.length) delete world.features[feature.id];
+    if (onClaim * 2 >= points.length) removeGenerationFeature(state, feature.id);
   }
 }
 function signatureAttributes(record: LandmarkRecord) {

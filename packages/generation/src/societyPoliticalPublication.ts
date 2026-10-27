@@ -1,6 +1,7 @@
 import { adaptiveCell, rectangle, spatial, type Bounds } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { GenerationState } from "./process";
+import { generationFeatures } from "./generationFeatures";
 import { generatedFeature, putGenerated } from "./mapFeatures";
 import { isWorldSociety } from "./societyMapScope";
 import { polityCharacter } from "./societyCharacter";
@@ -62,9 +63,7 @@ function clipWater(state: GenerationState, strips: Geometry[]) {
   const grid = state.surface;
   let shape = spatial.intersection(spatial.unionAll(strips), grid.scope.footprint);
   if (shape && grid.ocean) shape = excludeOcean(shape, grid.ocean);
-  for (const lake of Object.values(state.domain.world.features).filter(
-    (f) => f.kind === "lake" && f.areaId === grid.scope.areaId
-  ))
+  for (const lake of generationFeatures(state, { kind: "lake", areaId: grid.scope.areaId }))
     if (shape && spatial.intersects(shape, lake.geometry))
       shape = spatial.difference(shape, lake.geometry);
   return shape;

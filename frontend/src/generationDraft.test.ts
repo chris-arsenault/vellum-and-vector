@@ -1,3 +1,9 @@
+import {
+  createWorldSnapshot,
+  listWorlds,
+  registerWorldSnapshot,
+  fixtureState,
+} from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
 import { generationRecipeSchema, prepareAtlasGeneration } from "@atlas/generation";
 import { createGrid, rectangle } from "@atlas/domain";
@@ -11,10 +17,9 @@ import {
   updateDraftDomains,
   updateFeature,
 } from "./generationDraft";
-import { createWorldSnapshot, listWorlds, registerWorldSnapshot, session } from "./atlasState";
 import { updateEcologyEpoch } from "./generationDraftEpochs";
 
-it("creates blank world data independently of generation feature dependencies", () => {
+it("creates blank world data independently of generation feature dependencies", async () => {
   let draft = newGenerationDraft();
   for (const id of Object.keys(draft.recipe.features!))
     draft = updateFeature(draft, id, { enabled: false });
@@ -25,7 +30,7 @@ it("creates blank world data independently of generation feature dependencies", 
   expect(listWorlds()).toEqual(before);
 });
 
-it("previews complete initial settings without publishing worlds or changing defaults", () => {
+it("previews complete initial settings without publishing worlds or changing defaults", async () => {
   let draft = newGenerationDraft();
   draft.recipe.seed = 73;
   draft = updateEcologyEpoch(draft, "Formation", { migration: 2 });
@@ -37,11 +42,11 @@ it("previews complete initial settings without publishing worlds or changing def
   expect(draftPreview(draft).input.configuration).toEqual(preview.input.configuration);
   expect(draftPreview(draft).source.scope.areaId).toBe(preview.source.scope.areaId);
   const world = registerWorldSnapshot(preview.source);
-  expect(session(world.id).snapshot.world.epochs[0].ecology?.migration).toBe(2);
+  expect(fixtureState(world.id).snapshot.world.epochs[0].ecology?.migration).toBe(2);
   expect(draftPreview(newGenerationDraft()).input.settings?.epochs[0].ecology?.migration).toBe(1);
 });
 
-it("normalizes legacy process choices and values without changing the prepared request", () => {
+it("normalizes legacy process choices and values without changing the prepared request", async () => {
   const draft = newGenerationDraft();
   const legacy = generationRecipeSchema.parse({
     ...draft.recipe,
@@ -71,7 +76,7 @@ it("normalizes legacy process choices and values without changing the prepared r
   expect(after.diagnostics).toEqual(before.diagnostics);
 });
 
-it("preserves owned scalar and nested values when switching a feature off and on", () => {
+it("preserves owned scalar and nested values when switching a feature off and on", async () => {
   let draft = setFeatureSetting(newGenerationDraft(), "ecology.living", "vegetation", 0.6);
   draft = updateEcologyEpoch(draft, "Cold age", { migration: 2.4 });
   const before = structuredClone(draft.recipe.features!["ecology.living"]);
@@ -84,7 +89,7 @@ it("preserves owned scalar and nested values when switching a feature off and on
   expect(prepareDraft(draft).input.parameters!.vegetation).toBe(0.6);
 });
 
-it("starts a new world with cultural, political and built geography included", () => {
+it("starts a new world with cultural, political and built geography included", async () => {
   const draft = newGenerationDraft();
   expect(draft.recipe.domains).toEqual(
     expect.arrayContaining(["physical", "magic", "cultural", "political", "built"])
@@ -94,7 +99,7 @@ it("starts a new world with cultural, political and built geography included", (
     expect(selection[id].enabled, id).toBe(true);
 });
 
-it("preserves feature intent across domain gates and explicitly enables a new feature's domain", () => {
+it("preserves feature intent across domain gates and explicitly enables a new feature's domain", async () => {
   let draft = updateDraftDomains(newGenerationDraft(), ["physical"]);
   expect(prepareDraft(draft).input.resolvedFeatures!.selection["human.cultures"].enabled).toBe(
     false
@@ -106,7 +111,7 @@ it("preserves feature intent across domain gates and explicitly enables a new fe
   );
 });
 
-it("keeps invalid owned values editable while preparation rejects them", () => {
+it("keeps invalid owned values editable while preparation rejects them", async () => {
   const invalid = setFeatureSetting(newGenerationDraft(), "physical.volcanism", "volcanism", -1);
   expect(invalid.recipe.features!["physical.volcanism"].settings!.volcanism).toBe(-1);
   expect(() => prepareDraft(invalid)).toThrow();
@@ -114,7 +119,7 @@ it("keeps invalid owned values editable while preparation rejects them", () => {
   expect(prepareDraft(repaired).input.parameters!.volcanism).toBe(0.4);
 });
 
-it("derives compatibility fields from owned values instead of treating them as another authority", () => {
+it("derives compatibility fields from owned values instead of treating them as another authority", async () => {
   const draft = setFeatureSetting(newGenerationDraft(), "physical.volcanism", "volcanism", 0.4);
   draft.recipe.parameters.volcanism = 1.2;
   draft.recipe.settings.epochs[0].temperature = 99;
@@ -123,7 +128,7 @@ it("derives compatibility fields from owned values instead of treating them as a
   expect(normalized.recipe.settings.epochs[0].temperature).toBe(15);
 });
 
-it("prepares a region using its actual area identity and complete source snapshot", () => {
+it("prepares a region using its actual area identity and complete source snapshot", async () => {
   const draft = newGenerationDraft();
   const source = createWorldSnapshot({
     ...draft,

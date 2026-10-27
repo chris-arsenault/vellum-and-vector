@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import GeoJSON from "ol/format/GeoJSON.js";
 import type { Area, AtlasFeature, LayerStyle, Optional, Raster, Tool, World } from "./types";
 import { createMap, fitArea, updateFeatures, applyMapUpdate, type MapEngine } from "./mapEngine";
@@ -11,7 +11,6 @@ import { updateRegionMap, type RegionPresentation } from "./regionMap";
 import { canonicalPosition } from "@atlas/domain";
 import type { CartographicPresentation } from "@atlas/domain";
 import { updateDrawnMap, type DrawnMapInput } from "./drawnMap";
-import { drawingGeography } from "./drawnGeography";
 interface Props {
   world: World;
   area: Area;
@@ -60,11 +59,12 @@ export function MapCanvas({
     coordinates,
     callbacks
   );
+  const editable = useEditableFeatures(features, selection.feature);
   useFeaturePresentation(engine, {
     world,
     area,
     styles,
-    features,
+    features: editable,
     view: cartography,
     region,
     base: baseRaster,
@@ -103,6 +103,16 @@ export function MapCanvas({
     />
   );
 }
+function useEditableFeatures(features: AtlasFeature[], selected: AtlasFeature | null) {
+  // Selection loads canonical geometry for editing; overview products never become edits.
+  return useMemo(
+    () =>
+      selected
+        ? features.map((feature) => (feature.id === selected.id ? selected : feature))
+        : features,
+    [features, selected]
+  );
+}
 function useDrawnPresentation(engine: MapEngine | null, input: DrawnMapInput) {
   useEffect(() => {
     if (!engine) return;
@@ -127,8 +137,7 @@ function useFeaturePresentation(
           styles,
           features,
           view,
-          region?.footprint ?? area.footprint,
-          view.mode === "drawn" ? drawingGeography(features, base ?? undefined) : undefined
+          region?.footprint ?? area.footprint
         )
       );
   }, [engine, world, area, styles, features, view, region, base]);
@@ -212,7 +221,7 @@ function useFeatureTools(
   useEffect(() => {
     if (engine)
       return installMapTools(engine, tool, feature?.id ?? null, () => callbacks.current, role);
-  }, [engine, tool, feature?.id, role, version, callbacks]);
+  }, [engine, tool, feature, role, version, callbacks]);
 }
 function useAreaFit(
   engine: MapEngine | null,

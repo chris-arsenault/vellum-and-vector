@@ -1,4 +1,5 @@
-import type { MagicOrigin, MagicStock } from "@atlas/domain";
+import type { MagicOrigin, MagicStock, NumericalVector } from "@atlas/domain";
+import { workingArray, releaseWorking } from "./physicalNumerics";
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import { originStocks, stockKey, type MagicField } from "./magicState";
@@ -56,7 +57,7 @@ export function advanceStocks(state: GenerationState, field: MagicField, epochIn
 /** What a reservoir does in the advance, then what its carriers do. */
 const reservoirAdvances: Record<
   string,
-  (map: PhysicalField, field: MagicField, values: Float64Array, origin: MagicOrigin) => void
+  (map: PhysicalField, field: MagicField, values: NumericalVector, origin: MagicOrigin) => void
 > = {
   ice: (_map, field, values) => gatherIntoIce(field, values),
   ground: mirrorGround,
@@ -81,13 +82,18 @@ function advanceStock(
   if (stock.carriers.includes("animal")) carryInTheGut(map, field, values);
 }
 /** Sap a cell holds without a stand of its own is spent by the share declared, per epoch. */
-function decaySap(_map: PhysicalField, field: MagicField, sap: Float64Array, origin: MagicOrigin) {
+function decaySap(
+  _map: PhysicalField,
+  field: MagicField,
+  sap: NumericalVector,
+  origin: MagicOrigin
+) {
   const own = field.originSources[origin.id],
     keep = 1 - field.definition.parameters.sapLoss;
   for (let i = 0; i < sap.length; i++) if (own[i] <= 0) sap[i] *= keep;
 }
 /** Cracked cores cool: a share of the forge stock is gone each epoch. */
-function coolForge(_map: PhysicalField, field: MagicField, cracked: Float64Array) {
+function coolForge(_map: PhysicalField, field: MagicField, cracked: NumericalVector) {
   const keep = 1 - field.definition.parameters.forgeCooling;
   for (let i = 0; i < cracked.length; i++) {
     field.lost += cracked[i] * (1 - keep);
@@ -95,7 +101,7 @@ function coolForge(_map: PhysicalField, field: MagicField, cracked: Float64Array
   }
 }
 /** Peat under sediment becomes a stratum the crust carries and an aquifer can leach. */
-function buryPeat(map: PhysicalField, field: MagicField, stratum: Float64Array) {
+function buryPeat(map: PhysicalField, field: MagicField, stratum: NumericalVector) {
   const p = field.definition.parameters;
   for (let i = 0; i < stratum.length; i++) {
     const buried = 1 - exposure(map, i, p.buryDepth);
@@ -107,10 +113,10 @@ function buryPeat(map: PhysicalField, field: MagicField, stratum: Float64Array) 
  * Herbivores carry a stock in the gut: a share of a grazed cell's stock goes to the
  * neighbours in proportion to the herds there, so a herd road seeds the ground ahead of it.
  */
-function carryInTheGut(map: PhysicalField, field: MagicField, values: Float64Array) {
+function carryInTheGut(map: PhysicalField, field: MagicField, values: NumericalVector) {
   const p = field.definition.parameters,
     herds = (i: number) => map.Grazers[i] + map.Browsers[i],
-    moved = new Float64Array(values.length);
+    moved = workingArray(map, "float64", "magic:animal-carriage", values.length);
   for (let i = 0; i < values.length; i++) {
     if (values[i] <= 0 || herds(i) <= 0) continue;
     const grazed = landNeighbours(map, i),
@@ -121,6 +127,7 @@ function carryInTheGut(map: PhysicalField, field: MagicField, values: Float64Arr
     for (const j of grazed) moved[j] += (share * herds(j)) / weight;
   }
   for (let i = 0; i < values.length; i++) values[i] += moved[i];
+  releaseWorking(map, moved);
 }
 function landNeighbours(map: PhysicalField, i: number) {
   const cells: number[] = [];
@@ -148,11 +155,11 @@ function collapseOverdrawn(map: PhysicalField, field: MagicField, origin: MagicO
   }
 }
 /** The charge this epoch's propagation captured in the ice joins the ice reservoir. */
-function gatherIntoIce(field: MagicField, ice: Float64Array) {
+function gatherIntoIce(field: MagicField, ice: NumericalVector) {
   for (let i = 0; i < ice.length; i++) ice[i] += field.retained[i];
 }
 /** The ground reservoir is the stored charge as an amount; the history pass keeps `stored`. */
-function mirrorGround(map: PhysicalField, field: MagicField, ground: Float64Array) {
+function mirrorGround(map: PhysicalField, field: MagicField, ground: NumericalVector) {
   for (let i = 0; i < ground.length; i++) ground[i] = field.stored[i] * map.mesh.areas[i];
 }
 /**
@@ -165,12 +172,12 @@ function carryWithIce(
   map: PhysicalField,
   field: MagicField,
   origin: MagicOrigin,
-  ice: Float64Array
+  ice: NumericalVector
 ) {
   const p = field.definition.parameters,
     moraine = field.stocks[`${origin.id}/moraine`],
     shelf = field.stocks[`${origin.id}/shelf`],
-    moved = new Float64Array(ice.length);
+    moved = workingArray(map, "float64", "magic:ice-carriage", ice.length);
   let lost = 0;
   for (let i = 0; i < ice.length; i++) {
     if (ice[i] <= 0) continue;
@@ -196,6 +203,7 @@ function carryWithIce(
         ? clamp(ice[i] / (map.mesh.areas[i] * map.IceThickness[i] * p.iceChargeSaturation), 0, 1)
         : 0;
   }
+  releaseWorking(map, moved);
   return lost;
 }
 /** Where ice lets its charge go: the shelf at sea, the moraine on land, or out of the budget. */
@@ -203,21 +211,21 @@ function drop(
   map: PhysicalField,
   i: number,
   amount: number,
-  moraine: Float64Array | undefined,
-  shelf: Float64Array | undefined,
+  moraine: NumericalVector | undefined,
+  shelf: NumericalVector | undefined,
   lose: () => void
 ) {
   const sink = map.WaterKindCodes[i] === 1 ? shelf : moraine;
   if (sink) sink[i] += amount;
   else lose();
 }
-function consume(field: MagicField, values: Float64Array) {
+function consume(field: MagicField, values: NumericalVector) {
   for (let i = 0; i < values.length; i++) values[i] *= 1 - field.releasing[i];
 }
 /** Placers: a share of the stock on a river cell moves to the cell the river flows to. */
-function carryDownstream(map: PhysicalField, field: MagicField, values: Float64Array) {
+function carryDownstream(map: PhysicalField, field: MagicField, values: NumericalVector) {
   const mobility = field.definition.parameters.placerMobility,
-    moved = new Float64Array(values.length);
+    moved = workingArray(map, "float64", "magic:river-carriage", values.length);
   let lost = 0;
   for (let i = 0; i < values.length; i++) {
     if (values[i] <= 0 || map.WaterKindCodes[i] === 1) continue;
@@ -229,6 +237,7 @@ function carryDownstream(map: PhysicalField, field: MagicField, values: Float64A
     else moved[target] += share;
   }
   for (let i = 0; i < values.length; i++) values[i] += moved[i];
+  releaseWorking(map, moved);
   return lost;
 }
 /** The ejecta fan stays barren for the declared epochs after the fall, then recovers. */

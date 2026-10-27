@@ -9,10 +9,12 @@ import {
 } from "./schemas";
 import type { Grid } from "./grids";
 import { adaptiveTopologySchema } from "./adaptiveSchema";
+import { numericalSchema } from "./numericalSchema";
 
-const channel = z
-  .instanceof(Float64Array)
-  .refine((values) => values.every(Number.isFinite), "Numerical channels require finite samples.");
+const channel = numericalSchema("float64").refine(
+  (values) => values.every(Number.isFinite),
+  "Numerical channels require finite samples."
+);
 const bodySchema = z.object({
   id: identifier,
   footprint: geometrySchema,
@@ -39,7 +41,7 @@ const fieldSchema = z
     periodicWidth: finite.positive().optional(),
     scope: scopeSchema,
     bounds: z.tuple([finite, finite, finite, finite]),
-    active: z.instanceof(Uint8Array).refine((values) => values.every((value) => value <= 1)),
+    active: numericalSchema("uint8").refine((values) => values.every((value) => value <= 1)),
     measures: channel.refine((values) => values.every((value) => value >= 0)),
     channels: z.record(identifier, channel),
     units: z.record(identifier, identifier),

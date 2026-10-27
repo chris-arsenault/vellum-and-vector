@@ -1,32 +1,38 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { readScene, readRaster } from "./atlasReads";
+import { useMemo } from "react";
+import { atlasWorkspace, workspaceScope } from "./atlasWorkspace";
 import { bounds } from "./presentation";
-import { areaSpace, areaDepth, isDescendant, spatial } from "@atlas/domain";
-import { type Area, type AtlasFeature, type World } from "./types";
+import { spatial, type Bounds } from "@atlas/domain";
+import { type AtlasFeature, type World } from "./types";
+import { sceneWindows, displayTolerance } from "./sceneWindows";
 
-export function useMapData(world: World, areaId: string, extent: number[] | null = null) {
-  const scene = useScene(world, areaId, extent);
-  // Keep the last raster list while a revision or area change refetches: an empty list would
-  // dispose every WebGL layer and re-upload every tile once the same grids come back.
-  const raster = useQuery({
-    queryKey: ["fields", world.id, areaId, world.version],
+export function useMapData(
+  world: World,
+  areaId: string,
+  extent: number[] | null = null,
+  resolution = 0
+) {
+  const scene = useScene(world, areaId, extent, resolution);
+  const window = (extent ?? bounds(world.areas[areaId].footprint)) as Bounds;
+  const windows = sceneWindows(world, window);
+  const tolerance = displayTolerance(resolution);
+  const fields = useQuery({
+    queryKey: ["fields", world.id, areaId, windows, tolerance],
+    staleTime: Infinity,
+    gcTime: 0,
     placeholderData: keepPreviousData,
-    queryFn: () =>
-      world.fields
-        .filter(
-          (field) =>
-            areaSpace(world, field.areaId) === areaSpace(world, areaId) &&
-            isDescendant(world.areas, areaId, field.areaId)
-        )
-        .sort((a, b) => areaDepth(world.areas, a.areaId) - areaDepth(world.areas, b.areaId))
-        .flatMap((field) =>
-          (field.channels ?? [])
-            .filter((channel) => channel !== "elevation" && !channel.startsWith("magicApplied:"))
-            .map((channel) => readRaster(world.id, field.id, channel, areaId))
-        )
-        .filter((raster) => raster.field.units[raster.channel] !== "cell-index"),
+    enabled: extent !== null,
+    queryFn: async () => (await atlasWorkspace()).readRasters(world.id, areaId, window, tolerance),
   });
-  const baseRaster = useRasters(world, areaId, "elevation", extent);
+  const split = useMemo(
+    () => ({
+      raster: fields.data?.filter((r) => r.channel !== "elevation"),
+      base: fields.data?.filter((r) => r.channel === "elevation"),
+    }),
+    [fields.data]
+  );
+  const raster = { ...fields, data: split.raster };
+  const baseRaster = { ...fields, data: split.base };
   return { scene, raster, baseRaster };
 }
 
@@ -47,65 +53,41 @@ export function scopedFootprint(world: World, areaId: string, feature: AtlasFeat
 export function useScene(
   world: World,
   areaId: string,
-  extent: number[] | null | undefined = undefined
+  extent: number[] | null | undefined = undefined,
+  resolution = 0
 ) {
-  return useQuery({
-    queryKey: ["scene", world.id, areaId, world.version],
+  const tolerance = displayTolerance(resolution);
+  const windows = sceneWindows(world, (extent ?? bounds(world.areas[areaId].footprint)) as Bounds);
+  return useQuery<AtlasFeature[]>({
+    queryKey: ["scene", world.id, areaId, windows, tolerance],
+    staleTime: Infinity,
+    gcTime: 0,
     enabled: extent !== null,
     placeholderData: (previous, query) => (query?.queryKey[2] === areaId ? previous : undefined),
-    queryFn: () => readScene(world.id, areaId),
-  });
-}
-
-function space(world: World, area: Area): string | null {
-  if (area.profile === "interior" || area.context === "cave" || area.frame.floor !== null)
-    return area.id;
-  return area.parentId ? space(world, world.areas[area.parentId]) : null;
-}
-
-export function useRasters(
-  world: World,
-  areaId: string,
-  channel: string,
-  viewport: number[] | null | undefined = undefined
-) {
-  const area = world.areas[areaId];
-  const extent =
-    viewport && world.reference.boundaryMode === "cylinder"
-      ? [
-          bounds(world.reference.domain)[0],
-          viewport[1],
-          bounds(world.reference.domain)[2],
-          viewport[3],
-        ]
-      : (viewport ?? bounds(area.footprint));
-  const fields = world.fields
-    .filter((field) => isDescendant(world.areas, areaId, field.areaId))
-    .filter((f) => {
-      if (f.channels && !f.channels.includes(channel)) return false;
-      if (!f.channels && f.layerId !== channel && f.layerId !== "elevation") return false;
-      const owner = world.areas[f.areaId];
-      const box = bounds(owner.footprint);
-      return (
-        space(world, owner) === space(world, area) &&
-        box[0] <= extent[2] &&
-        box[2] >= extent[0] &&
-        box[1] <= extent[3] &&
-        box[3] >= extent[1]
-      );
-    })
-    .sort((a, b) => areaDepth(world.areas, a.areaId) - areaDepth(world.areas, b.areaId));
-  return useQuery({
-    queryKey: [
-      "rasters",
-      world.id,
-      world.version,
-      areaId,
-      fields.map((f) => f.id).join(","),
-      channel,
-    ],
-    enabled: viewport !== null,
-    placeholderData: keepPreviousData,
-    queryFn: () => fields.map((f) => readRaster(world.id, f.id, channel, areaId)),
+    queryFn: async ({ signal }) => {
+      const workspace = await atlasWorkspace(),
+        features = new Map<string, AtlasFeature>();
+      for (const window of windows) {
+        let after: string | null = null;
+        do {
+          signal.throwIfAborted();
+          const page = await workspace.readDisplay(
+            {
+              scope: workspaceScope(world, areaId),
+              extent: window,
+              layers: [],
+              after,
+              limit: 128,
+              predicate: "intersects",
+              geometry: null,
+            },
+            tolerance
+          );
+          for (const { feature } of page.records) features.set(feature.id, feature);
+          after = page.next;
+        } while (after);
+      }
+      return [...features.values()];
+    },
   });
 }

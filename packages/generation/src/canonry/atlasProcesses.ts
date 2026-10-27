@@ -13,6 +13,7 @@ import {
 } from "./atlasWorkspace";
 import { projectNative } from "./atlasProjection";
 import { extractNativeGeography } from "./atlasFeatures";
+import { featureRevisions } from "../generationFeatures";
 import { physicalSchedule } from "./schedule";
 import { crustalSupport } from "./support";
 import { reconcileWater } from "./field";
@@ -362,7 +363,7 @@ function finishProcess(original: DomainSnapshot): MapProcess {
     behavior: {
       kind: "extract",
       extract(state, context) {
-        const before = new Map(Object.entries(state.domain.world.features));
+        const before = new Map(featureRevisions(state));
         const selected = generationBindings(context).features.selection;
         const enabled = (id: string) => selected[id].enabled;
         extractNativeGeography(state, context, {
@@ -378,9 +379,9 @@ function finishProcess(original: DomainSnapshot): MapProcess {
           landmarks: enabled("physical.landmarks"),
         });
         const generated = new Set(
-          Object.values(state.domain.world.features)
-            .filter((feature) => before.get(feature.id) !== feature)
-            .map((feature) => feature.id)
+          [...featureRevisions(state)]
+            .filter(([id, revision]) => before.get(id) !== revision)
+            .map(([id]) => id)
         );
         retainGeographicIdentities(
           state,

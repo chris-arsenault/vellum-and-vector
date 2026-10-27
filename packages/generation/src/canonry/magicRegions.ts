@@ -1,4 +1,5 @@
-import type { MagicCondition, MagicFeatureRule } from "@atlas/domain";
+import type { MagicCondition, MagicFeatureRule, NumericalVector } from "@atlas/domain";
+import { retainedArray, workingArray, releaseWorking } from "./physicalNumerics";
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import type { MagicField } from "./magicState";
@@ -118,22 +119,24 @@ export function growRegion(
   seed: number
 ) {
   const map = state.physical!.map;
-  const included = new Uint8Array(map.mesh.count),
-    queue: number[] = [];
+  const included = retainedArray(map, "uint8", "magic:region-members"),
+    queue = workingArray(map, "int32", "magic:region-frontier");
+  let tail = 0;
   const isSeed = matcher(state, field, rule.seeds, seed),
     retains = matcher(state, field, rule.retains ?? rule.seeds, seed);
   for (let i = 0; i < map.mesh.count; i++)
     if (isSeed(i)) {
       included[i] = 1;
-      queue.push(i);
+      queue[tail++] = i;
     }
-  for (let head = 0; head < queue.length; head++)
+  for (let head = 0; head < tail; head++)
     for (let edge = 0; edge < map.mesh.degree[queue[head]]; edge++) {
       const j = map.mesh.neighbors[queue[head] * map.mesh.stride + edge];
       if (j < 0 || included[j] || !retains(j)) continue;
       included[j] = 1;
-      queue.push(j);
+      queue[tail++] = j;
     }
+  releaseWorking(map, queue);
   return included;
 }
 /**
@@ -144,10 +147,15 @@ export function ruleCoverage(
   state: GenerationState,
   field: MagicField,
   rule: MagicFeatureRule,
-  members: Uint8Array,
+  members: NumericalVector,
   seed: number
 ) {
-  const coverage = new Float64Array(members.length);
+  const coverage = retainedArray(
+    state.physical!.map,
+    "float64",
+    `magic:coverage:${rule.id}`,
+    members.length
+  );
   if (!rule.coverage) {
     for (let i = 0; i < members.length; i++) coverage[i] = members[i];
     return coverage;

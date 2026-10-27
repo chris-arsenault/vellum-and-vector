@@ -1,9 +1,10 @@
 # GIS/domain-backed generation workflows
 
 Current execution follows [ADR 0003](adr/0003-frontend-session.md): a browser worker
-uses in-memory inputs and streams validated output with transferable numerical
-buffers. Initial generation also displays sampled epoch previews. No persistent
-state, restart, recovery, backend or MCP is part of this product phase.
+resolves scoped catalog inputs and opens immutable numerical resources directly.
+Initial generation displays independent epoch previews and publishes validated
+record batches. Explicit map saves retain completed geography; execution state
+does not restart or recover. There is no backend or MCP in this product phase.
 
 ## Geographic regional refinement
 
@@ -240,9 +241,11 @@ profile configuration. Its private working state includes:
 - Traits, authored protections and magical definitions.
 - Historical states, forcing and accumulated consequences.
 
-Keep working arrays, indexes and numerical scratch data in memory. Resource
-references identify committed numerical inputs and retained historical results.
-Processes share typed domain state directly.
+Resource references identify committed numerical inputs. The browser execution
+adapter supplies page-backed numerical vectors, bounded block access and scratch
+lifetimes. Processes share typed domain state directly, independently of React,
+database connections and browser messaging. Completed history retains causal
+results rather than copies of numerical scratch.
 
 The context provides scoped GIS/domain access: intersection, containment,
 distance, sampling, resampling, network traversal and domain inspection. Include
@@ -442,11 +445,13 @@ through refinement and regeneration.
 
 ## Session execution and publication
 
-The worker receives the current session snapshot, configuration, seed and scope.
+The worker receives configuration, seed, scope and a workspace connection. It
+resolves generation inputs through the catalog and opens selected field channels
+from immutable resources without sending samples through the catalog worker.
 Status, stage progress and failure diagnostics live in memory. Terminating the
 worker cancels generation. Closing or reloading the tab discards the session.
 
-Keep numerical workspace in memory. Completed epochs retain their ancestry and
+Numerical working storage belongs to the execution worker. Completed epochs retain their ancestry and
 typed causal consequences without duplicating every intermediate field. The
 epoch/final callback samples an independent display grid before generation
 continues; transferring that preview never detaches live workspace arrays.
@@ -459,24 +464,30 @@ World-to-display interpolation builds compact typed weights in batches rather
 than retaining JavaScript sample objects for every display cell. Repeated physical
 projections reuse the working surface's channel buffers. The browser adapter yields
 between process stages so the worker returns to its event loop during a run.
-Individual processes still operate on the shared in-memory geography; this is
-not disk-backed generation or a saved execution state.
+Processes operate on the shared working geography through the numerical allocator.
+Local scratch is disposable and does not constitute saved execution state.
 
 Regular-grid contour extraction releases sampled-point and crossing caches as it
-advances between rows. The contour edges remain available for polygon assembly;
-shared crossings retain canonical endpoint order when recomputed.
+advances between rows. The generation worker stores the directed contour graph in
+indexed scratch tables and streams bounded line segments into native face assembly.
+Shared crossings retain canonical endpoint order when recomputed. This bounds the
+decoded edge graph and tracing buffers; the native overlay and final geometry still require memory
+proportional to the feature being assembled.
 
-The worker prepares field publication and sends numerical resource descriptions,
-then transfers each backing buffer once, preserving shared views and topology.
-World records arrive in batches. The editor installs available fields and records
-progressively during initial generation. Completion carries no geography payload.
-An interrupted initial delivery remains marked incomplete. The adapter uses no
-acknowledgements, persistence, restart or recovery, and generation processes do
-not know about browser messaging.
+Connected numerical passes keep queues, rankings, lake membership and scratch
+channels in the execution allocator. Society demands capture their eligible medium
+before applying changes, then stream the forcing across those cells. Local work
+queries traverse the sampling topology without collecting the entire surface.
 
-Regeneration still assembles the same delivered output before replacing session
-geography through its existing publication operation. Check world revision and
-field ownership. If intervening edits changed the world, keep
+The worker finalizes immutable Zarr resources and publishes their references with
+geographic records. Fields share masks and topology by reference. The catalog
+installs validated batches progressively during initial generation; the editor
+receives revisions and invalidations. An interrupted initial delivery remains
+marked incomplete. Generation processes do not know about browser messaging.
+
+Regeneration stages record batches in disposable SQLite storage before applying
+them in one catalog transaction. Check world revision and field ownership. If
+intervening edits changed the world, keep
 the edits and report the out-of-date generation result. No automatic retry occurs.
 Domain processes remain independent of the browser adapter.
 
@@ -486,7 +497,7 @@ Domain processes remain independent of the browser adapter.
 - Compose GIS, magical and physical processes over shared working state.
 - Produce accumulated consequences through warm/glacial/present epochs with
   changing variables, persistent state and reset forcing.
-- Produce repeatable geographic consequences from the same in-memory inputs.
+- Produce repeatable geographic consequences from the same scoped inputs.
 - Diagnose stale facts caused by incorrect ordering and execute the corrected sequence.
 - Refine regional/cave history against retained parent inputs, fixed interfaces,
   stable feature identity and protected authored detail.
@@ -645,7 +656,7 @@ Read the corresponding Canonry bodies before adapting their structure:
   and [physical/magical orchestration](https://github.com/chris-arsenault/the-canonry-game/blob/main/src/IceRemembers.Seed/PhysicalGeneration/IceRemembersWorldGenerationOrchestrator.cs).
 
 The TypeScript runner applies registered processes to one working map in a browser
-worker. The frontend publishes semantic field groups into session memory, retains
+worker. The workspace publishes semantic field groups through immutable resources, retains
 completed causes by area, and uses direct shared domain validation for edits.
 World generation, located refinement, manual editing, templates, cancellation and
 undo have browser journeys. The physical kernel is a source-traceable port;
@@ -1138,8 +1149,8 @@ toolsets and cosmetic styling remain separate work. Existing world human/built
 consumers must continue to read valid quantities and must not introduce a
 quality-dependent size conversion.
 
-Keep the browser worker, one shared process state, deterministic epochs, in-memory
-session publication, authored protection and undo. No backend, persistence, MCP,
+Keep the browser worker, one shared process state, deterministic epochs, local
+catalog publication, authored protection and undo. No backend, execution persistence, MCP,
 recovery, new deployment machinery or automatic resource caps.
 
 ### Implementation choices and boundaries

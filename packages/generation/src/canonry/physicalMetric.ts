@@ -1,5 +1,10 @@
 import type { PhysicalMesh } from "./mesh";
-import { adaptivePointSampler } from "@atlas/domain";
+import {
+  adaptivePointSampler,
+  allocateNumerical,
+  isNumericalVector,
+  type NumericalAllocator,
+} from "@atlas/domain";
 import { triangleSampler } from "./triangleSampling";
 import { meshDeltaX, edgeLeadingTo } from "./mesh";
 
@@ -15,33 +20,49 @@ export function physicalFace(mesh: PhysicalMesh, i: number, edge: number) {
     j = mesh.neighbors[at];
   let x = mesh.x[i] + meshDeltaX(mesh, mesh.x[j] - mesh.x[i]) / 2,
     y = (mesh.y[i] + mesh.y[j]) / 2;
-  let nx = mesh.edgeX[at],
+  const nx = mesh.edgeX[at],
     ny = mesh.edgeY[at];
   if (mesh.periodic?.poles) {
     x = mesh.x[i] + (nx * mesh.edgeLength[at]) / 2;
     y = mesh.y[i] + (ny * mesh.edgeLength[at]) / 2;
   }
-  if (mesh.topology) {
-    const leaf = mesh.cellToLeaf[i],
-      source = mesh.topology.offsets[leaf] + edge;
-    nx = mesh.topology.normalX[source];
-    ny = mesh.topology.normalY[source];
+  if (mesh.topology) return adaptiveFace(mesh, i, edge);
+  return { x, y, nx, ny, length: mesh.faceLength[at] };
+}
+function adaptiveFace(mesh: PhysicalMesh, i: number, edge: number) {
+  const topology = mesh.topology!,
+    at = i * mesh.stride + edge,
+    j = mesh.neighbors[at],
+    leaf = mesh.cellToLeaf[i],
+    start = topology.offsets[leaf],
+    local = edge < topology.offsets[leaf + 1] - start,
+    nx = local ? topology.normalX[start + edge] : Math.sign(mesh.edgeX[at]),
+    ny = local ? topology.normalY[start + edge] : 0,
+    otherX = mesh.x[j] + (local ? 0 : nx * mesh.periodic!.width),
     x =
-      (Math.max(mesh.x[i] - mesh.cellWidth[i] / 2, mesh.x[j] - mesh.cellWidth[j] / 2) +
-        Math.min(mesh.x[i] + mesh.cellWidth[i] / 2, mesh.x[j] + mesh.cellWidth[j] / 2)) /
-      2;
+      (Math.max(mesh.x[i] - mesh.cellWidth[i] / 2, otherX - mesh.cellWidth[j] / 2) +
+        Math.min(mesh.x[i] + mesh.cellWidth[i] / 2, otherX + mesh.cellWidth[j] / 2)) /
+      2,
     y =
       (Math.max(mesh.y[i] - mesh.cellHeight[i] / 2, mesh.y[j] - mesh.cellHeight[j] / 2) +
         Math.min(mesh.y[i] + mesh.cellHeight[i] / 2, mesh.y[j] + mesh.cellHeight[j] / 2)) /
       2;
-  }
   return { x, y, nx, ny, length: mesh.faceLength[at] };
 }
 
 /** Least-squares gradient in world metres; split faces contribute their actual support. */
-export function physicalGradients(mesh: PhysicalMesh, values: ArrayLike<number>) {
-  const x = new Float64Array(mesh.count),
-    y = new Float64Array(mesh.count);
+export function physicalGradients(
+  mesh: PhysicalMesh,
+  values: ArrayLike<number>,
+  numerical?: NumericalAllocator
+) {
+  const vector = (name: string) =>
+      allocateNumerical(
+        { type: "float64", length: mesh.count, lifetime: "process", name: `gradient:${name}` },
+        numerical
+      ),
+    x = vector("x"),
+    y = vector("y");
   for (let i = 0; i < mesh.count; i++) {
     let xx = 0,
       xy = 0,
@@ -83,9 +104,11 @@ export function cellTravel(mesh: PhysicalMesh, i: number, dx: number, dy: number
 }
 export function physicalSampler(mesh: PhysicalMesh, values: ArrayLike<number>) {
   if (!mesh.topology) return triangleSampler(mesh, values);
-  const at = adaptivePointSampler(
-    mesh.topology,
-    Float64Array.from(mesh.leafToCell, (cell) => values[cell])
-  );
+  const source = isNumericalVector(values)
+    ? values.immutable
+      ? values
+      : values.slice()
+    : Float64Array.from(values);
+  const at = adaptivePointSampler(mesh.topology, (leaf) => source[mesh.leafToCell[leaf]]);
   return (x: number, y: number) => at(x + mesh.origin[0], y + mesh.origin[1]);
 }

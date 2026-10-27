@@ -4,28 +4,31 @@ import type { GenerationState } from "../process";
 import type { MagicField } from "./magicState";
 import { nativePosition } from "./atlasWorkspace";
 import { nearestTriangle } from "./mesh";
+import type { RegionMembers } from "./regionMembers";
+import { workingArray, releaseWorking } from "./physicalNumerics";
 
 export interface PlaceGeometry {
   geometry: Geometry;
   anchor: number;
   meaning: string;
 }
-export function bestMember(members: number[], score: (i: number) => number) {
+export function bestMember(members: RegionMembers, score: (i: number) => number) {
   return members.reduce((a, b) => (score(b) > score(a) ? b : a));
 }
 /** Read real directed links, never the boundary of a classified polygon. */
 export function linkedCourse(
   state: GenerationState,
-  members: number[],
+  members: RegionMembers,
   targets: ArrayLike<number>,
   exits = false
 ) {
   const work = state.physical!,
-    included = new Set(members),
+    included = workingArray(work.map, "uint8", "course:members"),
     lines: number[][][] = [];
+  for (const cell of members) included[cell] = 1;
   for (const i of members) {
     const j = targets[i];
-    if (j < 0 || (!exits && !included.has(j))) continue;
+    if (j < 0 || (!exits && !included[j])) continue;
     const a = nativePosition(work, i),
       b = nativePosition(work, j);
     lines.push([
@@ -33,6 +36,7 @@ export function linkedCourse(
       [b.x, b.y],
     ]);
   }
+  releaseWorking(work.map, included);
   return clippedLines(state, lines);
 }
 function clippedLines(state: GenerationState, lines: number[][][]) {
@@ -47,7 +51,7 @@ function lineGeometry(geometry: Geometry | null) {
 export function naturalPlaceGeometry(
   state: GenerationState,
   kind: string,
-  members: number[],
+  members: RegionMembers,
   extent?: Geometry
 ): PlaceGeometry | null {
   const work = state.physical!,
@@ -71,7 +75,7 @@ export function magicPlaceGeometry(
   state: GenerationState,
   field: MagicField,
   ruleId: string,
-  members: number[],
+  members: RegionMembers,
   extent: Geometry
 ): PlaceGeometry | null {
   const rule = field.definition.features.find((r) => r.id === ruleId)!;
@@ -121,7 +125,12 @@ function propagationParents(
     )?.parents
   );
 }
-function sourcePoint(state: GenerationState, field: MagicField, ruleId: string, members: number[]) {
+function sourcePoint(
+  state: GenerationState,
+  field: MagicField,
+  ruleId: string,
+  members: RegionMembers
+) {
   if (!["core", "locus"].includes(ruleId)) return null;
   const [x0, y0] = state.physical!.map.mesh.origin;
   for (const source of field.located) {

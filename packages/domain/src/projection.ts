@@ -2,6 +2,7 @@ import type { ChangeSet, DomainSnapshot, DomainWrite, ObjectKind } from "./opera
 import type { World } from "./model";
 import { requireThat } from "./errors";
 import { overlayField } from "./fieldComposition";
+import { copyGrid } from "./gridCopy";
 
 function geography(world: World, writes: DomainWrite[]) {
   for (const write of writes.filter((w) => w.kind === "area"))
@@ -9,12 +10,14 @@ function geography(world: World, writes: DomainWrite[]) {
   for (const write of writes.filter((w) => w.kind === "feature"))
     world.features[write.value.id] = structuredClone(write.value);
   for (const { value } of writes.filter((w) => w.kind === "representation")) {
-    const feature = world.features[value.featureId];
+    const previous = world.features[value.featureId];
     requireThat(
-      feature,
+      previous,
       "missing_feature",
       "A detailed representation needs its semantic feature."
     );
+    const feature = { ...previous, detail: { ...previous.detail } };
+    world.features[value.featureId] = feature;
     const { featureId, areaId, ...detail } = value;
     feature.detail[areaId] = structuredClone(detail);
     requireThat(
@@ -57,6 +60,24 @@ function networks(world: World, writes: DomainWrite[]) {
   for (const { value } of writes.filter((w) => w.kind === "reach"))
     world.networkReaches[value.id] = structuredClone(value);
 }
+function retainedGeography(world: World, changes: ChangeSet) {
+  world.societies = { ...world.societies };
+  world.drainage = { ...world.drainage };
+  for (const { value } of changes.writes.filter((write) => write.kind === "society")) {
+    const { id, ...region } = value;
+    void id;
+    world.societies[value.areaId] = structuredClone(region);
+  }
+  for (const { value } of changes.writes.filter((write) => write.kind === "drainage")) {
+    const { id, ...network } = value;
+    void id;
+    world.drainage[value.areaId] = structuredClone(network);
+  }
+  for (const remove of changes.removes) {
+    if (remove.kind === "society") delete world.societies[remove.id.slice("society:".length)];
+    if (remove.kind === "drainage") delete world.drainage[remove.id.slice("drainage:".length)];
+  }
+}
 function removeObjects(world: World, removes: ChangeSet["removes"]) {
   const stores: Partial<Record<ObjectKind, Record<string, unknown>>> = {
     area: world.areas,
@@ -80,17 +101,35 @@ function removeObjects(world: World, removes: ChangeSet["removes"]) {
   const representations = new Set(
     removes.filter((r) => r.kind === "representation").map((r) => r.id)
   );
-  for (const feature of Object.values(world.features))
-    for (const [area, detail] of Object.entries(feature.detail))
-      if (detail.id && representations.has(detail.id)) delete feature.detail[area];
+  if (representations.size)
+    for (const previous of Object.values(world.features)) {
+      const removed = Object.entries(previous.detail).filter(
+        ([, detail]) => detail.id && representations.has(detail.id)
+      );
+      if (!removed.length) continue;
+      const feature = { ...previous, detail: { ...previous.detail } };
+      world.features[feature.id] = feature;
+      for (const [area] of removed) delete feature.detail[area];
+    }
 }
 export function projectChanges(snapshot: DomainSnapshot, changes: ChangeSet): DomainSnapshot {
-  const world = structuredClone(snapshot.world);
+  // Inputs stay immutable; a scoped projection shares untouched records and numerical data.
+  const world: World = {
+    ...snapshot.world,
+    areas: { ...snapshot.world.areas },
+    features: { ...snapshot.world.features },
+    entities: { ...snapshot.world.entities },
+    layers: { ...snapshot.world.layers },
+    connections: { ...snapshot.world.connections },
+    networkNodes: { ...snapshot.world.networkNodes },
+    networkReaches: { ...snapshot.world.networkReaches },
+  };
   Object.assign(world, changes.worldMetadata);
   world.version++;
   geography(world, changes.writes);
   semantics(world, changes.writes);
   networks(world, changes.writes);
+  retainedGeography(world, changes);
   removeObjects(world, changes.removes);
   const coverage = new Map(snapshot.coverage.map((c) => [c.id, c]));
   for (const { value } of changes.writes.filter((w) => w.kind === "coverage"))
@@ -118,7 +157,7 @@ function projectFields(snapshot: DomainSnapshot, changes: ChangeSet) {
     );
     if (field?.kind === "field") {
       const previous = numerical[field.value.id];
-      numerical[field.value.id] = structuredClone(artifact.grid);
+      numerical[field.value.id] = copyGrid(artifact.grid);
       for (const overlay of previous?.overlays ?? [])
         overlayField(numerical[field.value.id], overlay.grid, overlay.channels, overlay.mapOnly);
     }

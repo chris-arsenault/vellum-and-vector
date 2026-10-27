@@ -1,7 +1,13 @@
 import type { Geometry } from "geojson";
-import { areaSpace, composeFeature, composeFootprint, isDescendant } from "./composition";
+import {
+  areaSpace,
+  composeFeature,
+  composeFootprint,
+  isDescendant,
+  type CompositionSpatial,
+} from "./composition";
 import { profiles, type AtlasFeature, type World } from "./model";
-import { spatial } from "./spatial";
+import { spatial, type Spatial } from "./spatial";
 import { authoredLandmarkFeatures } from "./landmarks";
 
 /** Sources stay owned by world.magic; readers and selection share their semantic identities. */
@@ -31,31 +37,37 @@ export function authoredMagicFeatures(world: World): AtlasFeature[] {
     causes: [],
   }));
 }
-export function canonicalFeatures(world: World) {
+export function canonicalFeatures(world: World, gis?: Pick<Spatial, "buffer">) {
   const result = new Map(Object.values(world.features).map((f) => [f.id, f]));
   for (const source of authoredMagicFeatures(world)) result.set(source.id, source);
-  for (const landmark of authoredLandmarkFeatures(world)) result.set(landmark.id, landmark);
+  for (const landmark of authoredLandmarkFeatures(world, gis)) result.set(landmark.id, landmark);
   return [...result.values()];
 }
 export function featureIntersects(
   feature: Pick<AtlasFeature, "geometry" | "footprint">,
-  extent: Geometry
+  extent: Geometry,
+  gis: Pick<Spatial, "intersects"> = spatial
 ) {
   return (
-    spatial.intersects(feature.geometry, extent) ||
-    Boolean(feature.footprint && spatial.intersects(feature.footprint, extent))
+    gis.intersects(feature.geometry, extent) ||
+    Boolean(feature.footprint && gis.intersects(feature.footprint, extent))
   );
 }
-export function presentAtlasFeature(world: World, feature: AtlasFeature, areaId: string) {
+export function presentAtlasFeature(
+  world: World,
+  feature: AtlasFeature,
+  areaId: string,
+  gis?: CompositionSpatial & Pick<Spatial, "intersects">
+) {
   const area = world.areas[areaId],
     owner = world.areas[feature.areaId];
   if (areaSpace(world, owner.id) !== areaSpace(world, areaId)) return null;
   if (profiles.indexOf(owner.profile) > profiles.indexOf(area.profile)) return null;
   if (!isDescendant(world.areas, areaId, owner.id)) return null;
-  const geometry = composeFeature(world, feature, [], area.profile, areaId);
+  const geometry = composeFeature(world, feature, [], area.profile, areaId, gis);
   if (!geometry) return null;
-  const footprint = composeFootprint(world, feature, area.profile, areaId);
-  if (!featureIntersects({ geometry, footprint: footprint ?? undefined }, area.footprint))
+  const footprint = composeFootprint(world, feature, area.profile, areaId, gis);
+  if (!featureIntersects({ geometry, footprint: footprint ?? undefined }, area.footprint, gis))
     return null;
   const result = {
     ...feature,

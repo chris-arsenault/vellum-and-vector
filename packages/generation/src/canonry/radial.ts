@@ -1,10 +1,11 @@
 // PhysicalRadialFieldPainter.cs, Canonry 0f62584c.
 import type { PhysicalMesh } from "./mesh";
+import type { NumericalVector } from "@atlas/domain";
 import { round } from "./math";
 import { meshDeltaX } from "./mesh";
 export function paintMaximum(
   mesh: PhysicalMesh,
-  field: Int32Array,
+  field: NumericalVector,
   x: number,
   y: number,
   radius: number,

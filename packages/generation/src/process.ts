@@ -5,6 +5,10 @@ import type {
   ParameterDefinitions,
   ParameterValues,
   SpatialScope,
+  NumericalAllocator,
+  EpochHistory,
+  GenerationCause,
+  GenerationEpoch,
 } from "@atlas/domain";
 import { requireThat, sameValue } from "@atlas/domain";
 import type { ProcessBehavior } from "./processTraits";
@@ -30,6 +34,12 @@ export interface HumanRound {
   }[];
 }
 export interface GenerationState {
+  features?: import("@atlas/domain").FeatureWorkspace;
+  sourceFeatures?: import("@atlas/domain").FeatureReader;
+  networks?: import("@atlas/domain").NetworkWorkspace;
+  sourceNetworks?: import("@atlas/domain").NetworkReader;
+  contours?: import("@atlas/domain").ContourWorkspace;
+  numerical?: NumericalAllocator;
   retainedFeatureNames?: Record<string, { name: string; attributes: Record<string, unknown> }>;
   society?: import("./societyGeography").SocietyWorkspace;
   /** Completed human rounds of earlier epochs; the present society reads their ruins and history. */
@@ -49,57 +59,7 @@ export interface GenerationDiagnostic extends Diagnostic {
   outcome: "omitted" | "skipped" | "retained";
   stack?: string;
 }
-export interface FieldSummary {
-  unit: string;
-  minimum: number;
-  maximum: number;
-  mean: number;
-}
-export type GenerationCause =
-  | { kind: "climate"; process: string; fields: Record<string, FieldSummary> }
-  | {
-      kind: "material";
-      process: string;
-      eroded: number;
-      deposited: number;
-      exported: number;
-      unit: "cubic-metre";
-    }
-  | {
-      kind: "drainage";
-      process: string;
-      runoff: number;
-      outflow: number;
-      unit: "cubic-metre/second";
-    }
-  | {
-      kind: "ice";
-      process: string;
-      accumulation: number;
-      meltwater: number;
-      remaining: number;
-      unit: "cubic-metre";
-    }
-  | {
-      kind: "magic";
-      process: string;
-      sourceId: string;
-      activity: number;
-      forcing: FieldSummary;
-      stored: FieldSummary;
-    }
-  | { kind: "domain"; process: string; subjects: string[]; description: string };
-export interface EpochHistory {
-  path: string[];
-  ancestry: GenerationEpoch[];
-  causes: GenerationCause[];
-}
-export interface GenerationEpoch {
-  id: string;
-  duration: number;
-  parentEpoch: string | null;
-  variables: ParameterValues;
-}
+export type { FieldSummary, GenerationCause, EpochHistory, GenerationEpoch } from "@atlas/domain";
 export interface MapProcessContract {
   id: string;
   version: string;

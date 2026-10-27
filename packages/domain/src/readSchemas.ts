@@ -37,8 +37,12 @@ export const readRequirementsSchema: z.ZodType<ReadRequirements> = z.object({
   parentHistory: z.array(z.uuid()).default([]),
   dependencies: z.boolean().default(true),
   references: z.array(z.uuid()).optional(),
+  referencesTo: z.array(z.uuid()).optional(),
   layerContents: z.array(identifier).optional(),
   completeRepresentations: z.array(z.uuid()).optional(),
+  connected: z
+    .object({ featureIds: z.array(z.uuid()), mode: z.enum(["network", "circulation"]) })
+    .optional(),
   constraints: z
     .object({
       intersectingAreas: z.boolean(),

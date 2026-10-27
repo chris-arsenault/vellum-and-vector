@@ -5,11 +5,15 @@ import type { PhysicalContext } from "./context";
 import { clamp } from "./math";
 import { sourceToOutletOrder } from "./flowGraph";
 import { physicalDistance } from "./physicalMetric";
+import { workingValues, releaseWorking } from "./physicalNumerics";
+import type { NumericalVector } from "@atlas/domain";
 
-function sedimentDelivery(map: PhysicalField): Float64Array {
-  const delivery = Float64Array.from(
-    { length: map.mesh.count },
-    (_, i) =>
+function sedimentDelivery(map: PhysicalField): NumericalVector {
+  const delivery = workingValues(
+    map,
+    "float64",
+    "delta:delivery",
+    (i) =>
       ((map.CumulativeFluvialErosion[i] + map.CumulativeGlacialErosion[i]) / 1024) *
       map.mesh.areas[i]
   );
@@ -22,7 +26,7 @@ function sedimentDelivery(map: PhysicalField): Float64Array {
 function qualifies(
   map: PhysicalField,
   c: PhysicalContext,
-  delivery: Float64Array,
+  delivery: NumericalVector,
   mouth: number,
   ocean: number
 ): boolean {
@@ -114,4 +118,5 @@ export function deltaFormation(map: PhysicalField, c: PhysicalContext) {
     if (ocean >= 0 && map.WaterKindCodes[ocean] === 1 && qualifies(map, c, delivery, i, ocean))
       buildFan(map, c, i, ocean);
   }
+  releaseWorking(map, delivery);
 }

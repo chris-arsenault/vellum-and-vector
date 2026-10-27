@@ -1,3 +1,4 @@
+import { fixtureWorld, fixtureState } from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
 import {
   prepareAtlasGeneration,
@@ -7,17 +8,16 @@ import {
   type ProcessConfiguration,
 } from "@atlas/generation";
 import { planHash } from "../../packages/generation/src/planHash";
-import { createWorld, session } from "./atlasState";
 import { createGrid, putChannel } from "@atlas/domain";
 
 function request() {
-  const world = createWorld({
+  const world = fixtureWorld({
     name: "Resolved world",
     seed: 42,
     width: 1_000_000,
     height: 500_000,
   });
-  const source = session(world.id).snapshot;
+  const source = fixtureState(world.id).snapshot;
   return {
     source,
     input: {
@@ -46,7 +46,7 @@ it("includes every ecological epoch input in configuration identity and pins the
   expect(source.world.seed).toBe(42);
 });
 
-it("diagnoses an invalidated fact at its actual causal invocation", () => {
+it("diagnoses an invalidated fact at its actual causal invocation", async () => {
   const make = (
     id: string,
     requires: string[],
@@ -78,7 +78,7 @@ it("diagnoses an invalidated fact at its actual causal invocation", () => {
   expect(errors[0].message).toContain("invalidated by terrain");
 });
 
-it("translates legacy switches into coupled features and explains dependencies", () => {
+it("translates legacy switches into coupled features and explains dependencies", async () => {
   const { source, input } = request();
   const climate = prepareAtlasGeneration(source, {
     ...input,
@@ -103,7 +103,7 @@ it("translates legacy switches into coupled features and explains dependencies",
   ).toBe(true);
 });
 
-it("accepts authored elevation with initialized absent histories and rejects mismatched units", () => {
+it("accepts authored elevation with initialized absent histories and rejects mismatched units", async () => {
   const { source, input } = request();
   const id = crypto.randomUUID();
   const grid = createGrid(id, source.scope, 4, 4);

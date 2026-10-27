@@ -27,7 +27,7 @@ import {
 } from "@atlas/domain";
 import { newCompilationContext, buildExpression } from "ol/expr/gpu.js";
 import { ColorType, NumberType, newParsingContext } from "ol/expr/expression.js";
-import type { Raster } from "./types";
+import type { LoadedRaster as Raster } from "./types";
 
 function fixture(channel = "temperature"): Raster {
   const field = createGrid(

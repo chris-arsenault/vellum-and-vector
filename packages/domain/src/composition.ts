@@ -3,6 +3,8 @@ import { requireThat } from "./errors";
 import { profiles, type Area, type AtlasFeature, type World, type Profile } from "./model";
 import { spatial, Spatial } from "./spatial";
 
+export type CompositionSpatial = Pick<Spatial, "intersection" | "difference" | "union">;
+
 export function geometryParts(g: Geometry | null): Geometry[] {
   if (g === null) return [];
   if (g.type === "GeometryCollection") return g.geometries.flatMap(geometryParts);
@@ -22,7 +24,7 @@ export function geometryDimension(g: Geometry): number {
 export function combineGeometry(
   parts: Geometry[],
   dimension: number,
-  gis = spatial
+  gis: Pick<Spatial, "union"> = spatial
 ): Geometry | null {
   const matching = parts.flatMap(geometryParts).filter((p) => geometryDimension(p) === dimension);
   if (matching.length === 0) return null;
@@ -89,7 +91,8 @@ export function composeFeature(
   feature: AtlasFeature,
   path: string[] = [],
   profile?: Profile,
-  areaId?: string
+  areaId?: string,
+  gis: CompositionSpatial = new Spatial(world.reference?.precision)
 ): Geometry | null {
   requireThat(
     !path.includes(feature.id),
@@ -98,7 +101,6 @@ export function composeFeature(
   );
   const dimension = geometryDimension(feature.geometry),
     ownArea = world.areas[feature.areaId];
-  const gis = new Spatial(world.reference?.precision);
   requireThat(ownArea, "missing_area_context", "A feature needs its located area context.");
   const follows = feature.relations.filter((r) => r.kind === "follows");
   let geometry: Geometry | null = feature.geometry;
@@ -121,7 +123,7 @@ export function composeFeature(
           "binding_space",
           "A line can follow geography in its own located space."
         );
-        const composed = composeFeature(world, target, [...path, feature.id], profile, areaId);
+        const composed = composeFeature(world, target, [...path, feature.id], profile, areaId, gis);
         return composed ? geometryParts(gis.intersection(composed, ownArea.footprint)) : [];
       }),
       dimension,
@@ -158,7 +160,8 @@ export function composeFootprint(
   world: World,
   feature: AtlasFeature,
   profile?: Profile,
-  areaId?: string
+  areaId?: string,
+  gis: CompositionSpatial = new Spatial(world.reference.precision)
 ) {
   const initial = Object.entries(feature.detail).find(
     ([id, representation]) =>
@@ -183,6 +186,7 @@ export function composeFootprint(
     { ...feature, geometry: base, detail, relations: [] },
     [],
     profile,
-    areaId
+    areaId,
+    gis
   );
 }

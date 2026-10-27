@@ -14,12 +14,12 @@ import { initializeCultures, diffuseCultures } from "./societyCulture";
 import { publishCultures } from "./societyCulturePublication";
 import { atlasName, geographicNamingCulture } from "./atlasNaming";
 import { bindSocietyProfile } from "./societyProfile";
+import { PriorityQueue } from "./canonry/priorityQueue";
 
-export function landCells(state: GenerationState) {
+export function* landCells(state: GenerationState) {
   const covers = spatial.pointCoverage(state.domain.scope.footprint);
-  return Array.from(state.surface.active.keys()).filter(
-    (i) => dryLand(state, i) && covers(gridPosition(state.surface, i))
-  );
+  for (let i = 0; i < state.surface.active.length; i++)
+    if (dryLand(state, i) && covers(gridPosition(state.surface, i))) yield i;
 }
 export function suitability(state: GenerationState, i: number) {
   const grid = state.surface;
@@ -46,31 +46,7 @@ export function centers(
       })
   );
   if (existing.length) return existing;
-  const candidates = landCells(state)
-    .map((i) => ({
-      i,
-      score: suitability(state, i) * (0.6 + context.random() * 0.4),
-    }))
-    .sort((a, b) => b.score - a.score);
-  const selected: number[] = [];
-  const span = Math.max(
-    state.surface.bounds[2] - state.surface.bounds[0],
-    state.surface.bounds[3] - state.surface.bounds[1]
-  );
-  // Scores never change. Visit the ranked candidates once, including when the
-  // remaining land cannot fit another origin at the requested separation.
-  for (const { i } of candidates) {
-    if (selected.length === count) break;
-    const position = gridPosition(state.surface, i);
-    if (
-      selected.some((j) => {
-        const p = gridPosition(state.surface, j);
-        return Math.hypot(position.x - p.x, position.y - p.y) < span / (count * 1.5);
-      })
-    )
-      continue;
-    selected.push(i);
-  }
+  const selected = selectCenters(state, context, count);
   return selected.map((i, index) => {
     const id = semanticId(state.domain.world.id, kind, `${state.domain.scope.areaId}:${index}`);
     const position = gridPosition(state.surface, i);
@@ -95,6 +71,42 @@ export function centers(
     state.domain.world.entities[id] = entity;
     return entity;
   });
+}
+function selectCenters(state: GenerationState, context: MapProcessContext, count: number) {
+  const candidates = new PriorityQueue<{ i: number; score: number }>(
+    (a, b) => b.score - a.score || a.i - b.i,
+    state.numerical,
+    ["i", "score"]
+  );
+  for (const i of landCells(state))
+    candidates.push({
+      i,
+      score: suitability(state, i) * (0.6 + context.random() * 0.4),
+    });
+  const selected: number[] = [];
+  const span = Math.max(
+    state.surface.bounds[2] - state.surface.bounds[0],
+    state.surface.bounds[3] - state.surface.bounds[1]
+  );
+  // Scores never change. Visit the ranked candidates once, including when the
+  // remaining land cannot fit another origin at the requested separation.
+  try {
+    while (candidates.count && selected.length < count) {
+      const { i } = candidates.pop();
+      const position = gridPosition(state.surface, i);
+      if (
+        selected.some((j) => {
+          const p = gridPosition(state.surface, j);
+          return Math.hypot(position.x - p.x, position.y - p.y) < span / (count * 1.5);
+        })
+      )
+        continue;
+      selected.push(i);
+    }
+    return selected;
+  } finally {
+    candidates.close();
+  }
 }
 export const culturalProcess: MapProcess = {
   contract: {

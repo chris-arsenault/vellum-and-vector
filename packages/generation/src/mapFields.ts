@@ -1,7 +1,27 @@
-import { requireThat, type Grid } from "@atlas/domain";
-import type { FieldSummary } from "./process";
+import {
+  requireThat,
+  allocateNumerical,
+  generateNumerical,
+  type Grid,
+  type NumericalVector,
+} from "@atlas/domain";
+import type { FieldSummary, GenerationState } from "./process";
 
-export function requireChannel(grid: Grid, name: string, unit: string): Float64Array {
+export function surfaceArray(state: GenerationState, name: string) {
+  return allocateNumerical(
+    { type: "float64", length: state.surface.active.length, lifetime: "process", name },
+    state.numerical
+  );
+}
+export function surfaceValues(state: GenerationState, name: string, at: (i: number) => number) {
+  return generateNumerical(
+    { type: "float64", length: state.surface.active.length, lifetime: "process", name },
+    at,
+    state.numerical
+  );
+}
+
+export function requireChannel(grid: Grid, name: string, unit: string): NumericalVector {
   const values = grid.channels[name];
   requireThat(
     values &&
@@ -31,6 +51,6 @@ export function summarizeChannel(grid: Grid, name: string): FieldSummary {
   return { unit: grid.units[name], minimum, maximum, mean: total / area };
 }
 
-export function integratedDepth(grid: Grid, values: Float64Array): number {
+export function integratedDepth(grid: Grid, values: NumericalVector): number {
   return values.reduce((sum, value, i) => sum + value * grid.measures[i], 0);
 }

@@ -1,3 +1,4 @@
+import { fixtureWorld } from "./testSupport/workspaceFixture";
 import { it, expect } from "vitest";
 import {
   areaSpace,
@@ -6,9 +7,8 @@ import {
   rectangle,
   spatial,
 } from "@atlas/domain";
-import type { AtlasFeature, Raster } from "./types";
-import { createWorld } from "./atlasState";
-import type { DrawnMapInput } from "./drawnMap";
+import type { AtlasFeature, LoadedRaster as Raster } from "./types";
+import type { LoadedDrawnMapInput as DrawnMapInput } from "./drawnMap";
 import { territoryWashes } from "./drawnMap";
 import { defaultDrawnStyles } from "./drawnStyles";
 import { terrainMarks } from "./drawnTerrain";
@@ -19,7 +19,7 @@ import type { Point } from "ol/geom.js";
 import { drawnOcean } from "./drawnWater";
 
 function fixture(): DrawnMapInput {
-  const world = createWorld({ name: "Drawn geography", seed: 31, width: 100000, height: 100000 });
+  const world = fixtureWorld({ name: "Drawn geography", seed: 31, width: 100000, height: 100000 });
   const area = Object.values(world.areas)[0];
   const field = createGrid(
     "drawing",
@@ -81,7 +81,7 @@ function country(input: DrawnMapInput): AtlasFeature {
     causes: [],
   };
 }
-it("retains ocean geometry and derives water when only elevation is available", () => {
+it("retains ocean geometry and derives water when only elevation is available", async () => {
   const input = fixture(),
     raster = input.base[0];
   expect(drawnOcean(raster)).toBe(raster.field.ocean);
@@ -96,7 +96,7 @@ it("retains ocean geometry and derives water when only elevation is available", 
   expect(covers({ x: 90000, y: 50000, z: 0 })).toBe(false);
   expect(field).toEqual(before);
 });
-it("places deterministic terrain on land without changing source fields", () => {
+it("places deterministic terrain on land without changing source fields", async () => {
   const input = fixture(),
     before = structuredClone(input.base[0].field);
   const marks = terrainMarks(input, input.area.footprint);
@@ -106,7 +106,7 @@ it("places deterministic terrain on land without changing source fields", () => 
   expect(terrainMarks(input, input.area.footprint)).toEqual(marks);
   expect(input.base[0].field).toEqual(before);
 });
-it("keeps terrain marks out of holes and handles disconnected subjects", () => {
+it("keeps terrain marks out of holes and handles disconnected subjects", async () => {
   const input = fixture();
   const holed = spatial.difference(
     rectangle([30000, 0, 65000, 100000]),
@@ -119,7 +119,7 @@ it("keeps terrain marks out of holes and handles disconnected subjects", () => {
   expect(marks.every((m) => covers({ x: m.coordinate[0], y: m.coordinate[1], z: 0 }))).toBe(true);
   expect(marks.some((m) => m.coordinate[0] > 80000)).toBe(true);
 });
-it("honours existing terrain-layer visibility without changing the numerical source", () => {
+it("honours existing terrain-layer visibility without changing the numerical source", async () => {
   const input = fixture();
   input.styles = input.styles.map((s) => (s.layerId === "geology" ? { ...s, visible: false } : s));
   expect(terrainMarks(input, input.area.footprint).every((m) => m.kind === "tree")).toBe(true);
@@ -127,7 +127,7 @@ it("honours existing terrain-layer visibility without changing the numerical sou
   expect(terrainMarks(input, input.area.footprint)).toEqual([]);
   expect(input.base[0].field.channels.treeCover[0]).toBe(0.7);
 });
-it("shows coexisting cultural fields independently and explains them in the legend", () => {
+it("shows coexisting cultural fields independently and explains them in the legend", async () => {
   const input = fixture();
   input.view.fields = ["culture:a", "language:b"];
   const marks = fieldMarks(input, input.area.footprint);
@@ -137,7 +137,7 @@ it("shows coexisting cultural fields independently and explains them in the lege
   expect(drawnLegend(input)).toHaveLength(2);
   expect(fieldMarks(input, input.area.footprint)).toEqual(marks);
 });
-it("keeps territory washes below illustrations and honours feature visibility", () => {
+it("keeps territory washes below illustrations and honours feature visibility", async () => {
   const input = fixture(),
     feature = country(input);
   input.features = [feature];
@@ -146,7 +146,7 @@ it("keeps territory washes below illustrations and honours feature visibility", 
   expect(territoryWashes(input)).toEqual([]);
   expect(feature.geometry).toEqual(rectangle([0, 0, 100000, 100000]));
 });
-it("locates regional country labels inside the selected geography and retains manual paths", () => {
+it("locates regional country labels inside the selected geography and retains manual paths", async () => {
   const input = fixture(),
     feature = country(input);
   const footprint = rectangle([70000, 70000, 90000, 90000]);

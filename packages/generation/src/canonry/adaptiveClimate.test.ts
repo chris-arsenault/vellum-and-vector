@@ -28,8 +28,10 @@ function fixture(refined = true) {
   });
   return createField(adaptivePhysicalMesh(topology, rectangle(bounds)));
 }
-const integral = (map: ReturnType<typeof fixture>, values: Float64Array) =>
-  values.reduce((sum, value, i) => sum + value * map.mesh.areas[i], 0);
+const integral = (
+  map: ReturnType<typeof fixture>,
+  values: import("@atlas/domain").NumericalVector
+) => values.reduce((sum, value, i) => sum + value * map.mesh.areas[i], 0);
 
 it("chooses initial connected ocean coverage by area rather than refinement density", () => {
   for (const refined of [false, true]) {

@@ -3,15 +3,17 @@ import { physicalSampler } from "./physicalMetric";
 import { spatial } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import { meshDeltaX, meshPointX } from "./mesh";
+import type { NumericalVector } from "@atlas/domain";
+import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 
 type Coordinate = [number, number];
 type Station = { point: Coordinate; segment: number; fraction: number };
 export interface RiverPaths {
-  x: Float64Array;
-  y: Float64Array;
-  upstream: Int32Array;
+  x: NumericalVector;
+  y: NumericalVector;
+  upstream: NumericalVector;
   elevationAt?: (x: number, y: number) => number;
-  water?: { ocean: Geometry | null; lakes: Map<number, Geometry> };
+  water?: { ocean: Geometry | null; lakes: { get(id: number): Geometry | undefined } };
 }
 const mix = (a: Coordinate, b: Coordinate, t = 0.5): Coordinate => [
   a[0] + (b[0] - a[0]) * t,
@@ -22,9 +24,9 @@ const position = (paths: RiverPaths, i: number): Coordinate => [paths.x[i], path
 /** Remove cell-scale stair steps along the main stem, sharing every confluence position. */
 export function createRiverPaths(map: PhysicalField): RiverPaths {
   const paths: RiverPaths = {
-    x: Float64Array.from(map.mesh.x),
-    y: Float64Array.from(map.mesh.y),
-    upstream: new Int32Array(map.mesh.count).fill(-1),
+    x: workingValues(map, "float64", "river:x", (i) => map.mesh.x[i]),
+    y: workingValues(map, "float64", "river:y", (i) => map.mesh.y[i]),
+    upstream: workingArray(map, "int32", "river:upstream").fill(-1),
     elevationAt: physicalSampler(map.mesh, map.Elevation),
   };
   for (let i = 0; i < map.mesh.count; i++) {
@@ -39,8 +41,8 @@ export function createRiverPaths(map: PhysicalField): RiverPaths {
   return paths;
 }
 function relax(map: PhysicalField, paths: RiverPaths) {
-  const x = paths.x.slice(),
-    y = paths.y.slice();
+  const x = workingValues(map, "float64", "river:relax-x", (i) => paths.x[i]),
+    y = workingValues(map, "float64", "river:relax-y", (i) => paths.y[i]);
   for (let i = 0; i < map.mesh.count; i++) {
     const previous = paths.upstream[i],
       next = map.FlowTargets[i];
@@ -68,6 +70,7 @@ function relax(map: PhysicalField, paths: RiverPaths) {
     paths.x[i] = map.mesh.x[i] + dx * factor;
     paths.y[i] = map.mesh.y[i] + dy * factor;
   }
+  releaseWorking(map, x, y);
 }
 /** A shore cell's centre is its only point guaranteed dry in the published water geometry. */
 function bordersWater(map: PhysicalField, i: number) {
@@ -300,7 +303,7 @@ function appendAdaptiveSegment(
 function profile(
   members: number[],
   stations: Station[],
-  values: Float64Array,
+  values: import("@atlas/domain").NumericalVector,
   scale = 1,
   offset = 0
 ) {

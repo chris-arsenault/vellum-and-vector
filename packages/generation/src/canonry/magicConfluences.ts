@@ -1,5 +1,8 @@
 import {
   confluenceEffective,
+  allocateNumerical,
+  type NumericalVector,
+  type NumericalAllocator,
   type ConfluenceEffects,
   type MagicConfluence,
   type MagicFeatureRule,
@@ -12,24 +15,33 @@ import { growRegion } from "./magicRegions";
 import { clamp, rockResistance, round, units } from "./math";
 import { hashUnit } from "./noise";
 import { deposit, rebuild } from "./surface";
+import { retainedArray, releaseWorking } from "./physicalNumerics";
 
 /** A confluence's hold on the mesh this evaluation: where it holds and how much of each cell. */
 export interface ConfluenceState {
   definition: MagicConfluence;
-  members: Uint8Array;
-  coverage: Float64Array;
+  members: NumericalVector;
+  coverage: NumericalVector;
 }
 export interface ConfluenceWorkspace {
   definitions: MagicConfluence[];
   states: Record<string, ConfluenceState>;
   /** Strain between systems per cell, 0–1: the product of two intensities times their front. */
-  strain: Float64Array;
+  strain: NumericalVector;
 }
 export function createConfluenceWorkspace(
   definitions: MagicConfluence[],
-  count: number
+  count: number,
+  numerical?: NumericalAllocator
 ): ConfluenceWorkspace {
-  return { definitions, states: {}, strain: new Float64Array(count) };
+  return {
+    definitions,
+    states: {},
+    strain: allocateNumerical(
+      { type: "float64", length: count, lifetime: "run", name: "magic:strain" },
+      numerical
+    ),
+  };
 }
 
 /** Every meeting whose systems are all present and enabled, in list order. */
@@ -69,13 +81,15 @@ export function evaluateConfluences(state: GenerationState, seed: number, apply:
     map = work.map,
     magic = work.magic!,
     count = map.mesh.count;
+  for (const held of Object.values(magic.confluences.states))
+    releaseWorking(map, held.members, held.coverage);
   magic.confluences.states = {};
   magic.confluences.strain.fill(0);
   for (const confluence of activeConfluences(state)) {
     const fields = participants(state, confluence),
       rule = confluence as unknown as MagicFeatureRule,
       members = growRegion(state, fields[0], rule, seed),
-      coverage = new Float64Array(count);
+      coverage = retainedArray(map, "float64", `confluence:${confluence.id}:coverage`);
     for (let i = 0; i < count; i++) {
       if (!members[i]) continue;
       if (fields.some((field) => field.systemCoverage[i] < confluence.floor)) {

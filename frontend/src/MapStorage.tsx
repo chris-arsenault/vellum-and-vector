@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ErrorMessage } from "./ErrorMessage";
 import { listSavedMaps, openSavedMap, saveMap, type SavedMapSummary } from "./savedMaps";
 import { useJobs } from "./useAtlas";
@@ -9,7 +9,7 @@ export function MapStorage({ world, onOpen }: { world?: World; onOpen: (id: stri
   const [picking, setPicking] = useState(false);
   const cache = useQueryClient();
   const saved = useQuery({ queryKey: ["saved-maps"], queryFn: listSavedMaps });
-  const jobs = useJobs(world?.id ?? "");
+  const busy = useWorldBusy(world?.id);
   const save = useMutation({
     mutationFn: saveMap,
     onSuccess: () => cache.invalidateQueries({ queryKey: ["saved-maps"] }),
@@ -24,7 +24,7 @@ export function MapStorage({ world, onOpen }: { world?: World; onOpen: (id: stri
           </span>
           <button
             className="quiet"
-            disabled={save.isPending || jobs.data?.some((job) => job.status === "running")}
+            disabled={save.isPending || busy}
             onClick={() => save.mutate(world.id)}
           >
             {save.isPending ? "Saving…" : "Save map"}
@@ -40,6 +40,11 @@ export function MapStorage({ world, onOpen }: { world?: World; onOpen: (id: stri
   );
 }
 
+function useWorldBusy(worldId?: string) {
+  const jobs = useJobs(worldId ?? "");
+  const commands = useIsMutating({ mutationKey: ["command", worldId] });
+  return commands > 0 || jobs.data?.some((job) => job.status === "running");
+}
 function saveStatus(summary: SavedMapSummary | undefined, version: number) {
   if (!summary) return "Session only · not saved";
   return summary.version === version ? "Saved locally" : "Unsaved changes";

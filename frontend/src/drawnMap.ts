@@ -8,17 +8,17 @@ import {
   type CartographicPresentation,
 } from "@atlas/domain";
 import type { Geometry } from "geojson";
-import type { MapEngine } from "./mapEngine";
+import { updateFeatures, type MapEngine } from "./mapEngine";
 import type { RegionPresentation } from "./regionMap";
-import type { Area, AtlasFeature, LayerStyle, Raster, World } from "./types";
-import { illustratedTerrain, coastEchoes, terrainSymbolsAcrossSubject } from "./drawnTerrain";
+import type { Area, AtlasFeature, LayerStyle, Raster, LoadedRaster, World } from "./types";
 import { bounds } from "./presentation";
-import { illustratedFields } from "./drawnFields";
+import { renderIllustration } from "./renderIllustration";
 import { atlasColour } from "./drawnSymbols";
 import { polityIdentity } from "./drawnStyles";
 import { asArray } from "ol/color.js";
 import { setDrawingViewport } from "./drawnViewport";
-import { drawingGeography, drawingOceans } from "./drawnGeography";
+import { drawingGeography } from "./drawnGeography";
+import type { DrawingProducts } from "./illustrationProtocol";
 
 export interface DrawnMapInput {
   world: World;
@@ -30,9 +30,12 @@ export interface DrawnMapInput {
   base: Raster[];
   rasters: Raster[];
 }
+export type LoadedDrawnMapInput = Omit<DrawnMapInput, "base" | "rasters"> & {
+  base: LoadedRaster[];
+  rasters: LoadedRaster[];
+};
 export function updateDrawnMap(engine: MapEngine, input: DrawnMapInput) {
   if (unchangedDrawing(engine, input)) return;
-  engine.drawn.set("revision", input.world.version);
   const footprint = input.region?.footprint ?? input.area.footprint;
   configureDrawnLayers(engine, input, footprint);
   if (input.view.mode !== "drawn") return;
@@ -40,16 +43,16 @@ export function updateDrawnMap(engine: MapEngine, input: DrawnMapInput) {
   source.clear();
   updateMask(engine, footprint, input.view.clip);
   source.addFeature(painted(footprint, "#eee4c9", "#8b7c60", -100));
-  addOcean(engine, input, footprint);
-  source.addFeatures(territoryWashes(input));
-  source.addFeatures(illustratedTerrain(input, footprint));
-  source.addFeatures(illustratedFields(input, footprint));
+  renderIllustration(engine, input, footprint);
 }
 function unchangedDrawing(engine: MapEngine, input: DrawnMapInput) {
   const previous = engine.drawn.get("input") as DrawnMapInput | undefined;
-  if (!previous || engine.drawn.get("revision") !== input.world.version) return false;
+  if (!previous) return false;
   return (
-    ["world", "view", "features", "styles", "base", "rasters"].every(
+    ["reference", "layers", "entities", "magicSystems", "confluences", "fields"].every(
+      (key) => previous.world[key as keyof World] === input.world[key as keyof World]
+    ) &&
+    ["view", "features", "styles", "base", "rasters"].every(
       (key) => previous[key as keyof DrawnMapInput] === input[key as keyof DrawnMapInput]
     ) &&
     (previous.region?.footprint ?? previous.area.footprint) ===
@@ -94,20 +97,40 @@ const drawingLayerPriorities: Record<string, number> = {
 function drawingLayerPriority(id: string) {
   return drawingLayerPriorities[id] ?? -5;
 }
-function addOcean(engine: MapEngine, input: DrawnMapInput, footprint: Geometry) {
+export function applyDrawingProducts(
+  engine: MapEngine,
+  input: DrawnMapInput,
+  products: DrawingProducts
+) {
+  const footprint = input.region?.footprint ?? input.area.footprint;
+  updateFeatures(
+    engine,
+    input.world,
+    input.area,
+    input.styles,
+    input.features,
+    input.view,
+    footprint,
+    products.geography
+  );
+  const mask = engine.drawnMask.getSource()!;
+  mask.clear();
+  if (products.outside) mask.addFeature(painted(products.outside, "#eee4c9", "#c9b995", 0));
   const source = engine.drawn.getSource()!;
-  for (const ocean of drawingOceans(input.features, input.base)) {
+  for (const ocean of products.oceans) {
     source.addFeature(
       painted(ocean, input.view.style === "ink" ? "#e1e1d2" : "#b4cfca", "#7b897b", -90)
     );
-    const box = bounds(footprint);
-    source.addFeatures(coastEchoes(ocean, (box[2] - box[0]) / terrainSymbolsAcrossSubject));
   }
+  source.addFeatures(products.coasts.map((shape) => painted(shape, "#00000000", "#6e938955", -80)));
+  source.addFeatures(territoryWashes(input, products.geography));
 }
-export function territoryWashes(input: DrawnMapInput) {
+export function territoryWashes(
+  input: DrawnMapInput,
+  geography = drawingGeography(input.features, input.base)
+) {
   const layer = input.styles.find((s) => s.layerId === "sovereignty");
   if (!layer?.visible) return [];
-  const geography = drawingGeography(input.features, input.base);
   return input.features
     .filter((f) => f.layerId === "sovereignty")
     .flatMap((f) => {
@@ -140,9 +163,6 @@ function updateMask(engine: MapEngine, footprint: Geometry, clip: boolean) {
   engine.drawn.set("covers", clip ? spatial.pointCoverage(footprint) : null);
   const source = engine.drawnMask.getSource()!;
   source.clear();
-  if (!clip) return;
-  const outside = spatial.difference(engine.reference.domain, footprint);
-  if (outside) source.addFeature(painted(outside, "#eee4c9", "#c9b995", 0));
 }
 function painted(geometry: Geometry, color: string, outline: string, zIndex: number, opacity = 1) {
   const feature = new Feature({ geometry: new GeoJSON().readGeometry(geometry)! });

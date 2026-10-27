@@ -1,27 +1,17 @@
 import {
-  areaSpace,
-  createGrid,
-  createAdaptiveField,
-  createAdaptiveTopology,
-  resampleChannels,
   spatial,
-  semanticId,
   requireThat,
-  cloneSnapshot,
   sameValue,
   type ParameterValues,
   DomainError,
   type DomainSnapshot,
-  type Grid,
-  type SpatialScope,
-  rectangle,
   proceduralSnapshot,
   mappedGenerationDiagnostics,
+  type FeatureReader,
 } from "@atlas/domain";
 import { MapRunner, type MapRunnerOptions } from "./mapRunner";
 import {
   MapProcessRegistry,
-  type GenerationState,
   type MapProcess,
   type ProcessConfiguration,
   type ProcessSequence,
@@ -47,13 +37,9 @@ import { atlasGenerationModules } from "./atlasModules";
 import { serializableBindings } from "./generationBindings";
 import { inheritedChannelNames, inheritedNativeFacts } from "./canonry/inheritedFacts";
 import { societySequence } from "./societyProcesses";
+import { atlasInitialState } from "./atlasInitialState";
 import { boundaryDiagnostics, migrateBoundarySelection, inheritMapBoundary } from "./worldBoundary";
-import {
-  regionalInputFields,
-  regionalInputChannels,
-  regionalResolution,
-  regionalInputDiagnostics,
-} from "./regionalInputs";
+import { regionalInputDiagnostics } from "./regionalInputs";
 
 export interface AtlasGenerationInput {
   areaId: string;
@@ -74,7 +60,7 @@ export async function generateAtlas(
   input: AtlasGenerationInput,
   options: Omit<MapRunnerOptions, "seed" | "seedScope"> = {}
 ) {
-  const prepared = prepareAtlasGeneration(source, input);
+  const prepared = prepareAtlasGeneration(source, input, options.sourceFeatures);
   input = prepared.input;
   source = prepared.source;
   if (prepared.diagnostics.some((diagnostic) => diagnostic.severity === "error"))
@@ -84,10 +70,10 @@ export async function generateAtlas(
       prepared.diagnostics
     );
   options.progress?.(["prepare"], 0, "Sampling inherited geography");
-  const initial = initialState(source, input);
+  const initial = atlasInitialState(source, input, options.numerical);
   const registry = atlasRegistry(source, input);
   const configuration = input.configuration!;
-  const result = await new MapRunner(configuration, registry).run(initial, {
+  const result = await new MapRunner(configuration, registry).runOwned(initial, {
     ...options,
     seed: String(input.seed),
     seedScope: JSON.stringify([
@@ -111,9 +97,17 @@ export function atlasRegistry(source: DomainSnapshot, input: AtlasGenerationInpu
     .register(finalizeNamesProcess(source));
 }
 
-export function prepareAtlasGeneration(source: DomainSnapshot, input: AtlasGenerationInput) {
-  const mappedDiagnostics = mappedGenerationDiagnostics(source, input.areaId);
-  source = proceduralSnapshot(source);
+export function prepareAtlasGeneration(
+  source: DomainSnapshot,
+  input: AtlasGenerationInput,
+  sourceFeatures?: FeatureReader
+) {
+  const mappedDiagnostics = mappedGenerationDiagnostics(
+    source,
+    input.areaId,
+    sourceFeatures?.values()
+  );
+  source = proceduralSnapshot(source, sourceFeatures);
   input = structuredClone(input);
   input.features = migrateBoundarySelection(input.features);
   input = inheritMapBoundary(source, input);
@@ -231,89 +225,6 @@ function checkNewSelection(source: DomainSnapshot, input: AtlasGenerationInput) 
     );
 }
 
-function initialState(source: DomainSnapshot, input: AtlasGenerationInput): GenerationState {
-  const domain = cloneSnapshot(source),
-    area = domain.world.areas[input.areaId];
-  requireThat(area, "generation_area", "Choose an existing mapped area.");
-  const quality = atlasQuality[input.quality as keyof typeof atlasQuality];
-  requireThat(quality, "generation_quality", "Choose draft, standard or fine detail.");
-  const scope: SpatialScope = {
-    worldId: domain.world.id,
-    areaId: area.id,
-    spaceId: areaSpace(domain.world, area.id),
-    footprint: area.footprint,
-    crsId: domain.world.reference.id,
-    revision: domain.world.version,
-    time: "present",
-    resolution: null,
-  };
-  domain.scope = scope;
-  const extent = spatial.bounds(area.footprint);
-  const { cellSpan } = regionalResolution(source, area.id, input.quality);
-  scope.resolution = cellSpan;
-  // A child keeps its parent's boundary band. Fine numerical work occupies the
-  // interior; parent samples remain authoritative at the established interface.
-  const band = Math.min(cellSpan, (extent[2] - extent[0]) / 4, (extent[3] - extent[1]) / 4);
-  const interior =
-    area.boundary && !["region", "local"].includes(area.profile)
-      ? spatial.buffer(area.footprint, -band)
-      : area.footprint;
-  requireThat(
-    interior && spatial.area(interior) > 0,
-    "generation_extent",
-    "Choose an extent with room for interior field samples."
-  );
-  const id = semanticId(domain.world.id, "surface", `${area.id}:${input.seed}`);
-  const surface =
-    area.profile !== "world" && area.profile !== "interior"
-      ? createAdaptiveField(
-          id,
-          { ...scope, footprint: interior },
-          createAdaptiveTopology(extent, {
-            maximumSize: Math.max(
-              cellSpan,
-              Math.max(extent[2] - extent[0], extent[3] - extent[1]) / 8
-            ),
-            minimumSize: cellSpan,
-            refine: (box) => spatial.intersects(rectangle(box), area.footprint),
-          })
-        )
-      : createGrid(
-          id,
-          { ...scope, footprint: interior },
-          Math.max(2, Math.ceil((extent[2] - extent[0]) / cellSpan) + 1),
-          Math.max(2, Math.ceil((extent[3] - extent[1]) / cellSpan) + 1)
-        );
-  inheritSurface(source, surface, input);
-  return {
-    domain,
-    surface,
-    facts: initialFacts(surface),
-    history: [],
-    causes: [],
-    publications: atlasGenerationModules.publications(input, domain.world),
-  };
-}
-function inheritSurface(source: DomainSnapshot, target: Grid, input: AtlasGenerationInput) {
-  const world = source.world;
-  const channels = regionalInputChannels(
-    regionalInputFields(source, input.areaId, input.domains.includes("physical"))
-  );
-  for (const [name, grid] of channels) resampleChannels(grid, target, [name]);
-  requireThat(
-    input.domains.includes("physical") ||
-      target.channels.elevation ||
-      world.areas[input.areaId].profile === "interior",
-    "generation_prerequisite",
-    "Generate physical geography first, or include it in this request."
-  );
-}
-function initialFacts(surface: Grid) {
-  const facts = new Set(Object.keys(surface.channels));
-  if (surface.channels.bedrock) facts.add("geology");
-  if (surface.channels.receiver) facts.add("drainage");
-  return facts;
-}
 function invoke(process: MapProcess, id = process.contract.id) {
   return {
     kind: "process" as const,

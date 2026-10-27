@@ -43,8 +43,10 @@ function hillsideFixture() {
   });
   return createField(adaptivePhysicalMesh(topology, rectangle(box)));
 }
-const integral = (values: Float64Array, areas: Float64Array) =>
-  values.reduce((sum, value, i) => sum + value * areas[i], 0);
+const integral = (
+  values: import("@atlas/domain").NumericalVector,
+  areas: import("@atlas/domain").NumericalVector
+) => values.reduce((sum, value, i) => sum + value * areas[i], 0);
 
 it("retains seabed, flooded glacial valleys, lakes and glacial landforms during classification", () => {
   const map = fixture();

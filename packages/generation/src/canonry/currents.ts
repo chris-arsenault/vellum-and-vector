@@ -7,22 +7,28 @@ import { prepareMetricSmoother } from "./metricSmoothing";
 import { physicalDistance } from "./physicalMetric";
 import { gyreDirections, intensifyWesternBoundaries, seaSurfaceAnomaly } from "./oceanGyres";
 import { linkDistance, wrapLinks } from "./longitudeWrap";
+import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
+import type { NumericalVector } from "@atlas/domain";
 
 function normalized(x: number, y: number): [number, number] {
   const length = Math.sqrt(x * x + y * y);
   return length < 0.000001 ? [0, 0] : [round((x / length) * 1000), round((y / length) * 1000)];
 }
 function smoothDirections(map: PhysicalField, length: number) {
-  const ocean = Uint8Array.from(map.WaterKindCodes, (kind) => Number(kind === 1));
-  const smooth = prepareMetricSmoother(map.mesh, length, ocean);
-  const x = smooth(Float64Array.from(map.OceanCurrentX));
-  const y = smooth(Float64Array.from(map.OceanCurrentY));
+  const ocean = workingValues(map, "uint8", "currents:ocean", (i) =>
+    Number(map.WaterKindCodes[i] === 1)
+  );
+  const smooth = prepareMetricSmoother(map.mesh, length, ocean, map.numerical);
+  const x = smooth(map.OceanCurrentX),
+    y = smooth(map.OceanCurrentY);
   for (let i = 0; i < map.mesh.count; i++)
     if (map.WaterKindCodes[i] === 1)
       [map.OceanCurrentX[i], map.OceanCurrentY[i]] = normalized(x[i], y[i]);
+  smooth.close();
+  releaseWorking(map, ocean, x, y);
 }
-function upstreamNeighbors(map: PhysicalField): Int32Array {
-  const targets = new Int32Array(map.mesh.count).fill(-1);
+function upstreamNeighbors(map: PhysicalField): NumericalVector {
+  const targets = workingArray(map, "int32", "currents:upstream").fill(-1);
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes[i] !== 1) continue;
     let best = 0;
@@ -68,8 +74,8 @@ function measureStrength(map: PhysicalField, c: PhysicalContext) {
     );
   }
 }
-function heatSources(map: PhysicalField): Int32Array {
-  const source = new Int32Array(map.mesh.count);
+function heatSources(map: PhysicalField): NumericalVector {
+  const source = workingArray(map, "int32", "currents:heat");
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes[i] !== 1) continue;
     let heat = map.Geothermal[i];
@@ -84,8 +90,8 @@ function heatSources(map: PhysicalField): Int32Array {
 }
 function upstreamHeat(
   map: PhysicalField,
-  source: Int32Array,
-  targets: Int32Array,
+  source: NumericalVector,
+  targets: NumericalVector,
   start: number,
   reach: number,
   cooling: number,
@@ -113,21 +119,21 @@ export function transportOceanHeat(
   map: PhysicalField,
   reach: number,
   cooling: number,
-  targets: Int32Array,
+  targets: NumericalVector,
   linkLength = (i: number, j: number) => physicalDistance(map.mesh, i, j)
 ) {
   const source = heatSources(map);
-  if (reach <= 0) return;
-  for (let i = 0; i < map.mesh.count; i++)
+  for (let i = 0; reach > 0 && i < map.mesh.count; i++)
     if (map.WaterKindCodes[i] === 1)
       map.OceanCurrentHeat[i] = round(
         upstreamHeat(map, source, targets, i, reach, cooling, linkLength)
       );
+  releaseWorking(map, source);
 }
 function waveExposure(
   map: PhysicalField,
   steps: number,
-  targets: Int32Array,
+  targets: NumericalVector,
   linkLength: (i: number, j: number) => number
 ) {
   for (let i = 0; i < map.mesh.count; i++) {
@@ -183,4 +189,5 @@ export function oceanCurrents(map: PhysicalField, c: PhysicalContext) {
     linkLength
   );
   waveExposure(map, c.Profile.OceanCurrentFetchDistance, upstream, linkLength);
+  releaseWorking(map, western, upstream);
 }

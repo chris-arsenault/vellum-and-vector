@@ -1,10 +1,12 @@
-import { biomes, spatial } from "@atlas/domain";
+import { biomes, spatial, type NumericalVector } from "@atlas/domain";
+import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 import type { GenerationState } from "../process";
 import { components, publishPlace } from "./geographicRegions";
 import type { Geometry } from "geojson";
 import { combinedContour, fillSmallHoles } from "./geographicContours";
 import { biomeRules, type BiomeRule, type BiomeSummary } from "./ecologyBiomes";
 import { largestRegionFactor, landArea, partitionRegion } from "./regionPartition";
+import type { RegionMembers } from "./regionMembers";
 
 type Term = (i: number) => number;
 const families: Record<string, string> = {
@@ -49,26 +51,30 @@ function authoredTerms(state: GenerationState, rule: BiomeRule): Term[] {
 function waterTerms(state: GenerationState): { terms: Term[]; dry: (v: number[]) => number } {
   const map = state.physical!.map,
     mesh = map.mesh,
-    level = new Float64Array(mesh.count).fill(NaN),
-    body = new Int32Array(mesh.count).fill(-1);
-  let front: number[] = [];
+    level = workingArray(map, "float64", "biome:lake-level").fill(NaN),
+    body = workingArray(map, "int32", "biome:water-body").fill(-1),
+    front = workingArray(map, "int32", "biome:lake-front");
+  let tail = 0;
   for (let i = 0; i < mesh.count; i++)
     if (map.WaterKindCodes[i] === 2) {
       [level[i], body[i]] = [map.WaterSurfaceElevations[i], map.WaterBodyIds[i]];
-      front.push(i);
+      front[tail++] = i;
     }
   // A lake's shoreline samples average its neighbours; carry its level past that support.
-  for (let ring = 0; ring < 3; ring++) {
-    const next: number[] = [];
-    for (const i of front)
+  for (let ring = 0, start = 0; ring < 3; ring++) {
+    const end = tail;
+    for (let at = start; at < end; at++) {
+      const i = front[at];
       for (let edge = 0; edge < mesh.degree[i]; edge++) {
         const j = mesh.neighbors[i * mesh.stride + edge];
         if (j < 0 || body[j] >= 0) continue;
         [level[j], body[j]] = [level[i], body[i]];
-        next.push(j);
+        front[tail++] = j;
       }
-    front = next;
+    }
+    start = end;
   }
+  releaseWorking(map, front);
   const depth = (i: number) => map.EffectiveSeaLevel - map.Elevation[i];
   return {
     terms: [
@@ -83,7 +89,7 @@ function waterTerms(state: GenerationState): { terms: Term[]; dry: (v: number[])
 }
 function summarize(
   state: GenerationState,
-  members: number[],
+  members: RegionMembers,
   biome: ReturnType<typeof biomeRules>
 ) {
   const map = state.physical!.map,
@@ -147,12 +153,12 @@ export function extractEcologicalFeatures(state: GenerationState) {
     water = waterTerms(state),
     land = landArea(state),
     // Published pieces by cell; another piece inside a gap keeps its own outline.
-    claimed = new Int32Array(map.mesh.count).fill(-1);
+    claimed = workingArray(map, "int32", "biome:claimed").fill(-1);
   let serial = 0;
   biome.rules.forEach((rule, index) => {
     const quantity = ruleQuantity(state, biome.rules, index, water),
       minimum = rule.share * land;
-    const inside = new Float64Array(map.mesh.count).map((_, i) => quantity.at(i));
+    const inside = workingValues(map, "float64", "biome:inside", quantity.at);
     components(
       state,
       (i) => inside[i] > 0,
@@ -182,8 +188,10 @@ export function extractEcologicalFeatures(state: GenerationState) {
           );
         });
         serial += pieces.length;
+        state.numerical?.releaseUnused(pieces, [members]);
       }
     );
+    releaseWorking(map, inside);
   });
 }
 /**
@@ -193,8 +201,8 @@ export function extractEcologicalFeatures(state: GenerationState) {
  */
 function pieceTerms(
   state: GenerationState,
-  claimed: Int32Array,
-  piece: number[],
+  claimed: NumericalVector,
+  piece: RegionMembers,
   own: number,
   sibling: (label: number) => boolean
 ) {
@@ -210,7 +218,7 @@ function pieceTerms(
 function publishBiome(
   state: GenerationState,
   rule: BiomeRule,
-  members: number[],
+  members: RegionMembers,
   pieces: ((cell: number) => number)[],
   quantity: ReturnType<typeof ruleQuantity>,
   { region, fill }: { region: BiomeSummary; fill: (shape: Geometry) => Geometry }

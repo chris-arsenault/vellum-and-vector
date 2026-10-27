@@ -1,12 +1,11 @@
+import { readFeature, fixtureState, undoWorld } from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
 import type { PopulationGroup, SocietyCommunity, SocietyRegion } from "@atlas/domain";
 import { mapEditingFixture } from "./mapEditingFixture";
-import { readFeature } from "./atlasReads";
 import { settlementCommunity } from "./settlementSurfaceData";
-import { session, undoWorld } from "./atlasState";
 
-function residentFixture() {
-  const f = mapEditingFixture();
+async function residentFixture() {
+  const f = await mapEditingFixture();
   const groups: PopulationGroup[] = [
     {
       people: "residents",
@@ -69,11 +68,11 @@ function residentFixture() {
   return f;
 }
 
-it("keeps mapped group edits, settlement totals, inspection and undo coherent without changing retained society", () => {
-  const f = residentFixture(),
+it("keeps mapped group edits, settlement totals, inspection and undo coherent without changing retained society", async () => {
+  const f = await residentFixture(),
     before = structuredClone(f.current()),
-    feature = readFeature(f.id, f.town, f.child);
-  f.command("putMapFeature", {
+    feature = await readFeature(f.id, f.town, f.child);
+  await f.command("putMapFeature", {
     areaId: f.child,
     feature: {
       ...feature,
@@ -91,7 +90,7 @@ it("keeps mapped group edits, settlement totals, inspection and undo coherent wi
       },
     },
   });
-  const mapped = readFeature(f.id, f.town, f.child);
+  const mapped = await readFeature(f.id, f.town, f.child);
   expect(mapped.attributes).toMatchObject({
     population: 240,
     settlementPopulation: 240,
@@ -106,25 +105,25 @@ it("keeps mapped group edits, settlement totals, inspection and undo coherent wi
     before.world.societies![f.root].communities[0].history
   );
   expect(f.current().world.societies).toEqual(before.world.societies);
-  expect(readFeature(f.id, f.town, f.root).attributes).toEqual(
+  expect((await readFeature(f.id, f.town, f.root)).attributes).toEqual(
     before.world.features[f.town].attributes
   );
-  undoWorld(f.id, session(f.id).history[0].operationId);
-  expect(readFeature(f.id, f.town, f.child).attributes).toEqual(feature.attributes);
+  await undoWorld(f.id, fixtureState(f.id).history[0].operationId);
+  expect((await readFeature(f.id, f.town, f.child)).attributes).toEqual(feature.attributes);
 });
 
-it("updates mapped urban counts and resident groups together while keeping the mapped rural population", () => {
-  const f = residentFixture(),
+it("updates mapped urban counts and resident groups together while keeping the mapped rural population", async () => {
+  const f = await residentFixture(),
     before = structuredClone(f.current()),
-    feature = readFeature(f.id, f.town, f.child);
-  f.command("putMapFeature", {
+    feature = await readFeature(f.id, f.town, f.child);
+  await f.command("putMapFeature", {
     areaId: f.child,
     feature: {
       ...feature,
       attributes: { ...feature.attributes, population: 300 },
     },
   });
-  expect(readFeature(f.id, f.town, f.child).attributes).toMatchObject({
+  expect((await readFeature(f.id, f.town, f.child)).attributes).toMatchObject({
     population: 300,
     communityPopulation: 1100,
     ruralPopulation: 800,

@@ -1,5 +1,6 @@
 import { requireThat } from "@atlas/domain";
-import { restoreSessionWorld, session, type SessionWorld } from "./atlasState";
+import type { LegacySavedWorld } from "./legacySave";
+import { atlasWorkspace, rememberWorld } from "./atlasWorkspace";
 import { clearGenerationJobs, listJobs } from "./generationJobs";
 
 export interface SavedMapSummary {
@@ -7,11 +8,10 @@ export interface SavedMapSummary {
   name: string;
   version: number;
   savedAt: string;
+  root?: { name: string; path: string };
 }
-interface SavedMap {
-  format: 1;
-  data: SessionWorld;
-}
+type SavedMap =
+  { format: 1; data: LegacySavedWorld } | { format: 2; root: { name: string; path: string } };
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -54,23 +54,32 @@ export async function listSavedMaps(): Promise<SavedMapSummary[]> {
   return summaries.sort((a, b) => b.savedAt.localeCompare(a.savedAt));
 }
 
+export async function savedMapRoots() {
+  const summaries = await listSavedMaps();
+  // Older saves lack a catalog root in their index. Keep their storage until they are
+  // explicitly resaved; opening an atlas must never discard an unrecognized save.
+  return summaries.every((summary) => summary.root)
+    ? summaries.map((summary) => summary.root!)
+    : null;
+}
+
 export async function saveMap(id: string) {
+  const jobs = listJobs(id);
+  requireThat(
+    !jobs.some((job) => job.status === "running") && !jobs[0]?.partial,
+    "incomplete_generation",
+    "Finish generation before saving this map."
+  );
+  const saved = await (await atlasWorkspace()).saveWorld(id);
   await transact("readwrite", (transaction) => {
-    const jobs = listJobs(id);
-    requireThat(
-      !jobs.some((job) => job.status === "running") && !jobs[0]?.partial,
-      "incomplete_generation",
-      "Finish generation before saving this map."
-    );
-    const data = session(id);
-    const world = data.snapshot.world;
     const summary: SavedMapSummary = {
       id,
-      name: world.name,
-      version: world.version,
+      name: saved.name,
+      version: saved.version,
       savedAt: new Date().toISOString(),
+      root: saved.root,
     };
-    transaction.objectStore("maps").put({ format: 1, data } satisfies SavedMap, id);
+    transaction.objectStore("maps").put({ format: 2, root: saved.root } satisfies SavedMap, id);
     return transaction.objectStore("summaries").put(summary);
   });
 }
@@ -80,8 +89,17 @@ export async function openSavedMap(id: string) {
     transaction.objectStore("maps").get(id)
   );
   requireThat(saved, "missing_saved_map", "This saved map is no longer available.");
-  requireThat(saved.format === 1, "saved_map_format", "This saved map uses an unsupported format.");
+  requireThat(
+    saved.format === 1 || saved.format === 2,
+    "saved_map_format",
+    "This saved map uses an unsupported format."
+  );
   clearGenerationJobs(id);
-  restoreSessionWorld(saved.data);
-  return saved.data.snapshot.world;
+  const workspace = await atlasWorkspace();
+  const world =
+    saved.format === 2
+      ? await workspace.openSavedWorld(id, saved.root)
+      : await workspace.openLegacyWorld(id, saved.data);
+  rememberWorld(world);
+  return world;
 }

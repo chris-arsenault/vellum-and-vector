@@ -5,6 +5,41 @@ import { createField } from "./field";
 import { units } from "./math";
 import { oceanConnectivity, groundedIceWater } from "./ocean";
 import { createWorldMesh } from "./worldMesh";
+import { arenaFixture } from "../../../storage-browser/src/numericalFixture";
+
+it.each([false, true])(
+  "converges on fractional elevation without rounding a bracket onto itself (file storage: %s)",
+  (fileBacked) => {
+    const working = fileBacked ? arenaFixture() : undefined;
+    try {
+      const mesh = createWorldMesh([0, 0, 100, 100], 16, 0);
+      const map = createField(mesh, working?.arena);
+      map.Elevation.fill(-100.5);
+      const area = mesh.contentAreas.reduce((sum, value) => sum + value, 0);
+      map.BaseOceanVolume = (area * 1023.75) / 1024;
+      map.SeaLevelInitialized = true;
+      map.CompletedEpochCount = 1;
+      const budget = map.BaseOceanVolume;
+      // Fail an infinite loop inside synchronous code instead of wedging the test runner.
+      // Bisection of this 1024-unit interval needs eleven passes at unit precision.
+      let reads = 0;
+      map.Elevation = new Proxy(map.Elevation, {
+        get(target, key) {
+          if (typeof key === "string" && /^\d+$/.test(key) && ++reads > mesh.count * 256)
+            throw new Error("Ocean level failed to converge on the supplied bracket.");
+          return Reflect.get(target, key, target);
+        },
+      });
+      oceanConnectivity(map, physicalContext(1, 0, atlasPhysicalProfile()));
+      expect(map.BaseSeaLevel).toBeCloseTo(923.5, 6);
+      expect(Math.abs(oceanVolume(map) - budget)).toBeLessThan(area / 1024);
+      expect(map.BaseOceanVolume).toBe(budget);
+      for (let i = 0; i < mesh.count; i++) expect(map.Elevation[i]).toBe(-100.5);
+    } finally {
+      working?.close();
+    }
+  }
+);
 
 function oceanVolume(map: ReturnType<typeof createField>) {
   let volume = 0;

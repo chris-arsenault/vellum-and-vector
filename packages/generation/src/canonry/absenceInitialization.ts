@@ -1,11 +1,8 @@
 import type { GenerationState, MapProcess } from "../process";
 import type { ResolvedFeatures } from "../features";
 import { physicalFeatureDefinitions } from "../physicalFeatures";
-import type { PhysicalField } from "./field";
+import type { PhysicalField, PhysicalBufferName as BufferName } from "./field";
 
-type BufferName = {
-  [K in keyof PhysicalField]: PhysicalField[K] extends { fill(value: number): unknown } ? K : never;
-}[keyof PhysicalField];
 /** Explicit neutral histories; these are not claims that the omitted models ran. */
 const neutralBuffers: Record<string, BufferName[]> = {
   Impacts: ["ImpactExcavation", "ImpactRimUplift", "ImpactEjectaThickness", "ImpactHeat"],

@@ -1,77 +1,116 @@
+import { type GenerationDiagnostic } from "@atlas/generation";
+import { DomainError, configureSpatial } from "@atlas/domain";
 import {
-  generateAtlas,
-  generationPreview,
-  generationSnapshot,
-  type AtlasGenerationInput,
-  type GenerationDiagnostic,
-} from "@atlas/generation";
-import { DomainError, type Diagnostic, type DomainSnapshot } from "@atlas/domain";
-import { sendGeneration } from "./generationTransport";
-import { transferableBuffers } from "./generationNumerical";
+  OpfsStore,
+  ZarrResources,
+  openNumericalArena,
+  openGenerationWorkspace,
+  GeometryKernel,
+  GeosSpatial,
+} from "@atlas/storage-browser";
+import { WorkspaceClient } from "./WorkspaceClient";
+import { WorkspaceFields } from "./workspaceFields";
+import { executeGeneration } from "./generationExecution";
+import type {
+  GenerationWorkspaceStart,
+  GenerationWorkspaceMessage,
+} from "./generationWorkspaceProtocol";
 
-self.onmessage = async (
-  event: MessageEvent<{
-    snapshot: DomainSnapshot;
-    input: AtlasGenerationInput;
-    operationId: string;
-  }>
-) => {
+const send = (message: GenerationWorkspaceMessage, transfer: Transferable[] = []) =>
+  self.postMessage(message, { transfer });
+let cancelled = false;
+self.onmessage = async (event: MessageEvent<GenerationWorkspaceStart | { kind: "cancel" }>) => {
+  if ("kind" in event.data) {
+    cancelled = true;
+    return;
+  }
+  const { operationId, port } = event.data;
+  const workspace = new WorkspaceClient(port);
+  let working: Awaited<ReturnType<typeof openNumericalArena>> | undefined;
+  let fields: WorkspaceFields | undefined;
+  let featureWorkspace: Awaited<ReturnType<typeof openGenerationWorkspace>> | undefined;
+  let kernel: GeometryKernel | undefined;
   let stage = "Preparing geography";
   const diagnostics: GenerationDiagnostic[] = [];
+  let outcome: GenerationWorkspaceMessage = { kind: "completed" };
   try {
-    const result = await generateAtlas(event.data.snapshot, event.data.input, {
-      yieldControl: () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
-      diagnostic(diagnostic) {
-        diagnostics.push(diagnostic);
-        self.postMessage({ kind: "diagnostic", diagnostic });
+    kernel = await GeometryKernel.create();
+    configureSpatial((precision) => new GeosSpatial(kernel!, precision));
+    working = await openNumericalArena(`generation_${operationId}`);
+    featureWorkspace = await openGenerationWorkspace(`generation_features_${operationId}`);
+    const store = new ZarrResources(await OpfsStore.open("atlas-resources"));
+    fields = new WorkspaceFields(workspace, store, working.arena);
+    await executeGeneration(
+      event.data,
+      {
+        working,
+        store,
+        fields,
+        workspace,
+        features: featureWorkspace.features,
+        sourceFeatures: featureWorkspace.sourceFeatures,
+        networks: featureWorkspace.networks,
+        sourceNetworks: featureWorkspace.sourceNetworks,
+        contours: featureWorkspace.contours,
+        cancelled: () => cancelled,
+        send,
       },
-      progress(path, fraction, message) {
-        stage = `${path.join(" / ")}: ${message}`;
-        self.postMessage({ kind: "progress", path, fraction, message });
-      },
-      async saveBoundary(boundary) {
-        const grid = generationPreview(boundary.state);
-        if (!grid.channels.elevation) return;
-        const label =
-          boundary.kind === "epoch"
-            ? boundary.ancestry.map((epoch) => epoch.id).join(" / ")
-            : "Present geography";
-        self.postMessage({ kind: "preview", grid, label }, { transfer: transferableBuffers(grid) });
-        await new Promise<void>((resolve) => setTimeout(resolve, 0));
-      },
-    });
-    stage = "Preparing completed fields and coverage";
-    const warnings: Diagnostic[] = [];
-    const snapshot = generationSnapshot(
-      result,
-      event.data.input,
-      event.data.operationId,
-      event.data.snapshot,
-      warnings
-    );
-    const history = [
-      ...result.state.history,
-      ...(result.state.causes?.length
-        ? [{ path: ["present"], ancestry: [], causes: result.state.causes }]
-        : []),
-    ];
-    stage = "Sending completed geography to the editor";
-    self.postMessage({ kind: "progress", path: ["finalize"], fraction: 0.995, message: stage });
-    await sendGeneration(
-      snapshot,
-      history,
-      [...(result.state.diagnostics ?? []), ...warnings],
-      (message, transfer) => self.postMessage(message, { transfer })
+      {
+        diagnostic(diagnostic) {
+          diagnostics.push(diagnostic);
+          send({ kind: "diagnostic", diagnostic });
+        },
+        progress(path, fraction, message) {
+          stage = `${path.join(" / ")}: ${message}`;
+          send({ kind: "progress", path, fraction, message });
+        },
+      }
     );
   } catch (error) {
-    console.error(`[atlas generation] Failed during ${stage}`, error);
-    self.postMessage({
-      kind: "failed",
-      error: `${stage}: ${error instanceof Error ? error.message : String(error)}`,
-      diagnostics: [
-        ...diagnostics,
-        ...(error instanceof DomainError && Array.isArray(error.details) ? error.details : []),
-      ],
-    });
+    outcome = cancelled
+      ? { kind: "cancelled" }
+      : {
+          kind: "failed",
+          error: `${stage}: ${error instanceof Error ? error.message : String(error)}`,
+          diagnostics: [...diagnostics, ...errorDiagnostics(error)],
+        };
+  } finally {
+    try {
+      await closeGeneration(fields, featureWorkspace, working, kernel);
+    } catch (error) {
+      if (outcome.kind === "completed")
+        outcome = {
+          kind: "failed",
+          error: `Releasing local storage: ${String(error)}`,
+          diagnostics,
+        };
+    } finally {
+      port.close();
+    }
   }
+  send(outcome);
 };
+async function closeGeneration(
+  fields: WorkspaceFields | undefined,
+  features: Awaited<ReturnType<typeof openGenerationWorkspace>> | undefined,
+  working: Awaited<ReturnType<typeof openNumericalArena>> | undefined,
+  kernel: GeometryKernel | undefined
+) {
+  try {
+    try {
+      await fields?.close();
+    } finally {
+      await features?.close();
+    }
+  } finally {
+    try {
+      await working?.close();
+    } finally {
+      configureSpatial();
+      kernel?.close();
+    }
+  }
+}
+function errorDiagnostics(error: unknown): GenerationDiagnostic[] {
+  return error instanceof DomainError && Array.isArray(error.details) ? error.details : [];
+}

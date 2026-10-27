@@ -3,24 +3,26 @@ import type { PhysicalProfile } from "./profile";
 import { toUnits } from "./math";
 import { smoothMetric } from "./metricSmoothing";
 import { physicalGradients, physicalSampler } from "./physicalMetric";
+import type { NumericalVector } from "@atlas/domain";
+import { workingValues } from "./physicalNumerics";
 
 const unit = (value: number) => Math.min(1, Math.max(0, value));
 
 export interface WindTerrain {
-  terrain: Float64Array;
-  gradientX: Float64Array;
-  gradientY: Float64Array;
-  height: Float64Array;
+  terrain: import("@atlas/domain").NumericalVector;
+  gradientX: NumericalVector;
+  gradientY: NumericalVector;
+  height: NumericalVector;
   /** Unsmoothed height, so gaps narrower than the smoothing length keep their walls. */
   sample: (x: number, y: number) => number;
 }
 /** Land height above sea level in metres, its smoothed form and that form's slope. */
 export function windTerrain(map: PhysicalField, p: PhysicalProfile): WindTerrain {
-  const height = Float64Array.from(map.Elevation, (elevation, i) =>
-    map.WaterKindCodes[i] === 1 ? 0 : Math.max(0, toUnits(elevation - map.EffectiveSeaLevel))
+  const height = workingValues(map, "float64", "wind:height", (i) =>
+    map.WaterKindCodes[i] === 1 ? 0 : Math.max(0, toUnits(map.Elevation[i] - map.EffectiveSeaLevel))
   );
-  const terrain = smoothMetric(map.mesh, height, p.WindTerrainLength);
-  const gradient = physicalGradients(map.mesh, terrain);
+  const terrain = smoothMetric(map.mesh, height, p.WindTerrainLength, undefined, map.numerical);
+  const gradient = physicalGradients(map.mesh, terrain, map.numerical);
   return {
     terrain,
     gradientX: gradient.x,

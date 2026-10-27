@@ -3,8 +3,11 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { units } from "./math";
 import { canCarryIce, refreshGrounding, supportElevation } from "./glacierSurface";
+import { workingValues, releaseWorking } from "./physicalNumerics";
+import { orderedIndices } from "./numericalOrder";
+import type { NumericalVector } from "@atlas/domain";
 
-function assignTargets(map: PhysicalField, surface: Float64Array) {
+function assignTargets(map: PhysicalField, surface: NumericalVector) {
   for (let i = 0; i < surface.length; i++) {
     if (!canCarryIce(map, i)) continue;
     let best = -1,
@@ -24,16 +27,16 @@ function assignTargets(map: PhysicalField, surface: Float64Array) {
 export function iceFlow(map: PhysicalField, c: PhysicalContext) {
   map.IceFlowTargets.fill(-1);
   refreshGrounding(map, c.Profile);
-  const surface = Float64Array.from(
-    { length: map.mesh.count },
-    (_, i) => supportElevation(map, i) + units(map.IceThickness[i])
+  const surface = workingValues(
+    map,
+    "float64",
+    "ice:surface",
+    (i) => supportElevation(map, i) + units(map.IceThickness[i])
   );
   for (let i = 0; i < map.mesh.count; i++)
     map.IceFlux[i] = (map.IceThickness[i] * map.mesh.areas[i]) / c.Profile.IceTransportYears;
   assignTargets(map, surface);
-  const order = Array.from({ length: map.mesh.count }, (_, i) => i).sort(
-    (a, b) => surface[b] - surface[a] || a - b
-  );
+  const order = orderedIndices(surface, true, map.numerical);
   for (const i of order) {
     const target = map.IceFlowTargets[i];
     if (target >= 0) map.IceFlux[target] += map.IceFlux[i];
@@ -43,4 +46,5 @@ export function iceFlow(map: PhysicalField, c: PhysicalContext) {
     if (map.GroundedIce[i] !== 0)
       map.MaximumGroundedIceFlux[i] = Math.max(map.MaximumGroundedIceFlux[i], map.IceFlux[i]);
   }
+  releaseWorking(map, surface, order);
 }

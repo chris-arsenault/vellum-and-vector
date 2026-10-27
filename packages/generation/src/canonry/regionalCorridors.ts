@@ -4,6 +4,7 @@ import { parentChannels } from "./atlasWorkspace";
 import { nearestTriangle } from "./mesh";
 import { units } from "./math";
 import type { PhysicalField } from "./field";
+import { workingArray } from "./physicalNumerics";
 
 function conditionSegment(
   map: PhysicalField,
@@ -51,7 +52,7 @@ export function conditionRegionalCorridors(state: GenerationState) {
 /** Only water entering the requested region is external supply; local runoff is added separately. */
 export function regionalIncomingWater(state: GenerationState) {
   const map = state.physical!.map,
-    incoming = new Float64Array(map.mesh.count),
+    incoming = workingArray(map, "float64", "regional:incoming-water"),
     area = state.domain.world.areas[state.domain.scope.areaId],
     seen = new Set<string>();
   for (const crossing of area.boundary?.crossings ?? []) {

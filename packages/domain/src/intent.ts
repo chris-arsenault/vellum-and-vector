@@ -12,6 +12,7 @@ import type { FactDependencies } from "./factDependencies";
 import { Spatial } from "./spatial";
 import { areaSpace } from "./composition";
 import { assertAgentChangeSafety } from "./changeSafety";
+import type { NumericalAllocator } from "./numericalVector";
 
 export const intentSchema = z.object({
   operationId: z.uuid(),
@@ -24,6 +25,7 @@ export const intentSchema = z.object({
 });
 export type Intent = z.infer<typeof intentSchema>;
 export interface IntentContext {
+  numerical?: NumericalAllocator;
   owner: string;
   actor: string;
   operationId: string;

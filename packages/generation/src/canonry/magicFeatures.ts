@@ -6,6 +6,7 @@ import { classifyNaturalSurface } from "./naturalSurface";
 import { projectedValues } from "./atlasSampling";
 import { growRegion, ruleCoverage } from "./magicRegions";
 import { activeConfluences, evaluateConfluences } from "./magicConfluences";
+import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 import {
   magicChannels,
   magicFieldDefinitions,
@@ -38,6 +39,11 @@ export function effectiveMagicRules(system: MagicField["definition"]) {
 export function coverSystems(state: GenerationState, seed: number) {
   const magic = state.physical!.magic!;
   for (const field of magic.fields) {
+    releaseWorking(
+      state.physical!.map,
+      ...Object.values(field.features),
+      ...Object.values(field.coverage)
+    );
     field.features = {};
     field.coverage = {};
     field.systemCoverage.fill(0);
@@ -60,10 +66,10 @@ export function classifyMagicFeatures(state: GenerationState, seed = state.domai
   const magic = state.physical!.magic!;
   coverSystems(state, seed);
   evaluateConfluences(state, seed, false);
-  const count = magic.finalSurface.length,
-    held = new Float64Array(count).fill(-Infinity),
-    priority = new Float64Array(count).fill(-Infinity),
-    second = new Float64Array(count);
+  const map = state.physical!.map,
+    held = workingArray(map, "float64", "magic:surface-share").fill(-Infinity),
+    priority = workingArray(map, "float64", "magic:surface-priority").fill(-Infinity),
+    second = workingArray(map, "float64", "magic:surface-second");
   magic.secondSurface.fill(-1);
   const sources = surfaceRuleSources(
     magic.fields.map((field) => field.definition),
@@ -88,8 +94,8 @@ export function classifyMagicFeatures(state: GenerationState, seed = state.domai
   const paint = (
     code: number,
     rulePriority: number,
-    members: Uint8Array,
-    coverage?: Float64Array
+    members: ArrayLike<number>,
+    coverage?: ArrayLike<number>
   ) => {
     for (let i = 0; i < members.length; i++) {
       const share = coverage?.[i] ?? 1;
@@ -111,6 +117,7 @@ export function classifyMagicFeatures(state: GenerationState, seed = state.domai
       held.members,
       held.coverage
     );
+  releaseWorking(map, held, priority, second);
 }
 export function projectMagic(state: GenerationState) {
   const work = state.physical!,
@@ -172,6 +179,14 @@ function projectedMagicValues(
   const work = state.physical!;
   if (quantity !== "extensive" || !work.interpolation)
     return projectedValues(work, values, quantity === "category");
-  const density = Float64Array.from(work.map.mesh.areas, (area, i) => values[i] / area);
-  return projectedValues(work, density).map((value, i) => value * state.surface.measures[i]);
+  const density = workingValues(
+    work.map,
+    "float64",
+    "magic:project-density",
+    (i) => values[i] / work.map.mesh.areas[i]
+  );
+  const output = projectedValues(work, density);
+  for (let i = 0; i < output.length; i++) output[i] *= state.surface.measures[i];
+  releaseWorking(work.map, density);
+  return output;
 }

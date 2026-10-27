@@ -103,7 +103,7 @@ it.each([1024, 4096])(
 function flatTravelCosts(
   map: ReturnType<typeof createField>,
   c: PhysicalContext,
-  targets: Int32Array
+  targets: import("@atlas/domain").NumericalVector
 ) {
   const mesh = map.mesh,
     costs = new Float64Array(mesh.count),

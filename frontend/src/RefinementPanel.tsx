@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { commitCommand } from "./atlasCommands";
+import { commitWorkspaceCommand } from "./workspaceAuthoring";
 import { ErrorMessage } from "./ErrorMessage";
 import { areaInput, type EditorState } from "./useEditor";
 import { makeCommand } from "./useAtlas";
@@ -18,7 +18,10 @@ function useRefinement(world: World, editor: EditorState) {
         ...areaInput(editor.area, editor.selection, form),
         contextFeatureId: contextFeature(editor),
       };
-      const result = commitCommand(world.id, makeCommand(world, "createArea", input));
+      const result = await commitWorkspaceCommand(
+        world.id,
+        makeCommand(world, "createArea", input)
+      );
       const area = Object.values(result.candidate.areas).find((area) => !world.areas[area.id])!;
       cache.setQueryData(["world", world.id], result.candidate);
       editor.enter(area.id);

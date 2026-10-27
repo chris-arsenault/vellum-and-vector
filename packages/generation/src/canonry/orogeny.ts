@@ -22,6 +22,8 @@ import {
 import { rebuild } from "./surface";
 import { adjustCrustColumn } from "./crustTransport";
 import { distributeOrogenicRoots } from "./orogenicRoots";
+import type { NumericalVector } from "@atlas/domain";
+import { workingArray, releaseWorking } from "./physicalNumerics";
 
 function deformationLimit(
   context: PhysicalContext,
@@ -123,7 +125,7 @@ function constructTriangle(
   frame: OrogenicFrame,
   i: number,
   step: number,
-  roots: Float64Array | null
+  roots: NumericalVector | null
 ) {
   const source = frame.source[i],
     section = crossSection(map, context, c, i, source, frame.distance[i], frame.side[i]);
@@ -139,14 +141,17 @@ export function orogenicConstruction(map: PhysicalField, context: PhysicalContex
   map.OrogenicComponentIds.fill(-1);
   map.OrogenicSystemProminence.fill(0);
   map.OrogenicConstruction.fill(0);
-  const ids = new Int32Array(map.mesh.count).fill(-1);
+  const ids = workingArray(map, "int32", "orogeny:components").fill(-1);
   const components = discoverComponents(map, context, ids);
   rankComponents(components, context);
   const frame = propagateInfluence(map, context, components, ids);
   const step = context.IsEvolutionEpoch
     ? (context.Profile.EpochOrogenicConstructionStep * context.TectonicStrength) / 1000
     : context.Profile.InitialOrogenicConstructionStep;
-  if (step <= 0) return;
+  if (step <= 0) {
+    releaseWorking(map, ids, ...Object.values(frame));
+    return;
+  }
   const roots = context.IsEvolutionEpoch
     ? distributeOrogenicRoots(map, context, components, frame)
     : null;
@@ -154,4 +159,5 @@ export function orogenicConstruction(map: PhysicalField, context: PhysicalContex
     const id = map.OrogenicComponentIds[i];
     if (id >= 0) constructTriangle(map, context, components[id], frame, i, step, roots);
   }
+  releaseWorking(map, ids, ...Object.values(frame), ...(roots ? [roots] : []));
 }

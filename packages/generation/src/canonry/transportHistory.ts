@@ -4,6 +4,8 @@ import { clamp, units } from "./math";
 import { weightScale, type TransportPlan } from "./transportPlan";
 import { ecologyCarbon, ecologyMemory, ecologyRatios } from "./ecologyState";
 import { captureCrustColumns, transportCrustColumns } from "./crustTransport";
+import type { NumericalVector } from "@atlas/domain";
+import { workingArray, releaseWorking } from "./physicalNumerics";
 
 const intensive = [
   ...ecologyRatios,
@@ -86,23 +88,25 @@ const categories = [
   "VolcanicLastActiveEpoch",
   "FeatureFlags",
 ] as const;
-type Accumulator = Record<(typeof categories)[number], Float64Array> & {
-  assemblyContribution: Float64Array;
-  plateContribution: Float64Array;
-  sutureContribution: Float64Array;
+type Accumulator = Record<(typeof categories)[number], NumericalVector> & {
+  assemblyContribution: NumericalVector;
+  plateContribution: NumericalVector;
+  sutureContribution: NumericalVector;
 };
-function accumulator(count: number): Accumulator {
+function accumulator(map: PhysicalField): Accumulator {
   const fields = Object.fromEntries(
     categories.map((name) => [
       name,
-      new Float64Array(count).fill(name === "VolcanicLastActiveEpoch" ? -1 : 0),
+      workingArray(map, "float64", `transport:${name}`).fill(
+        name === "VolcanicLastActiveEpoch" ? -1 : 0
+      ),
     ])
   );
   return {
     ...fields,
-    assemblyContribution: new Float64Array(count),
-    plateContribution: new Float64Array(count),
-    sutureContribution: new Float64Array(count),
+    assemblyContribution: workingArray(map, "float64", "transport:assemblyContribution"),
+    plateContribution: workingArray(map, "float64", "transport:plateContribution"),
+    sutureContribution: workingArray(map, "float64", "transport:sutureContribution"),
   } as Accumulator;
 }
 function addAssembly(
@@ -202,8 +206,8 @@ function accumulateChannel(
   map: PhysicalField,
   plan: TransportPlan,
   name: (typeof intensive)[number] | (typeof extensive)[number] | (typeof maxima)[number],
-  scratch: Float64Array,
-  areaWeights?: Float64Array
+  scratch: NumericalVector,
+  areaWeights?: NumericalVector
 ) {
   scratch.fill(0);
   const values = map[name];
@@ -219,7 +223,7 @@ function completeIntensive(
   map: PhysicalField,
   plan: TransportPlan,
   name: (typeof intensive)[number],
-  scratch: Float64Array
+  scratch: NumericalVector
 ) {
   for (let target = 0; target < map.mesh.count; target++) {
     const arrival = plan.arrivals[target],
@@ -231,7 +235,7 @@ function completeExtensive(
   map: PhysicalField,
   plan: TransportPlan,
   name: (typeof extensive)[number],
-  scratch: Float64Array
+  scratch: NumericalVector
 ) {
   for (let target = 0; target < map.mesh.count; target++) {
     const value = finalize(scratch[target], plan.arrivals[target], 0, 0, true);
@@ -241,9 +245,9 @@ function completeExtensive(
 }
 export function transportHistory(map: PhysicalField, plan: TransportPlan) {
   const crust = captureCrustColumns(map);
-  const a = accumulator(map.mesh.count),
-    scratch = new Float64Array(map.mesh.count),
-    areaWeights = new Float64Array(plan.weights.length);
+  const a = accumulator(map),
+    scratch = workingArray(map, "float64", "transport:channel"),
+    areaWeights = workingArray(map, "float64", "transport:areaWeights", plan.weights.length);
   const biomes = map.BiomeCodes.slice();
   // Resolve labels before their source fractions/strengths are transported in place.
   for (let source = 0; source < map.mesh.count; source++) {
@@ -277,4 +281,5 @@ export function transportHistory(map: PhysicalField, plan: TransportPlan) {
     const source = plan.dominant[target];
     map.BiomeCodes[target] = source >= 0 ? biomes[source] : 0;
   }
+  releaseWorking(map, ...Object.values(crust), ...Object.values(a), scratch, areaWeights, biomes);
 }

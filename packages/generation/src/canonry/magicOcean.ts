@@ -6,6 +6,7 @@ import { traceOceanBeam } from "./magicBeams";
 import { nearestTriangle } from "./mesh";
 import { worldCandidates } from "./worldSources";
 import { PriorityQueue } from "./priorityQueue";
+import { workingArray, releaseWorking } from "./physicalNumerics";
 import { areaBudget, mediumArea, referenceOceanArea, referenceCoastLength } from "./worldScale";
 
 function coastlineLength(map: PhysicalField) {
@@ -32,9 +33,11 @@ function coastalCell(map: PhysicalField, i: number) {
 }
 function coastDistances(map: PhysicalField, reach: number) {
   const { mesh } = map;
-  const distances = new Float64Array(mesh.count).fill(Infinity);
+  const distances = workingArray(map, "float64", "magic:coast-distance").fill(Infinity);
   const queue = new PriorityQueue<{ i: number; distance: number }>(
-    (a, b) => a.distance - b.distance
+    (a, b) => a.distance - b.distance,
+    map.numerical,
+    ["i", "distance"]
   );
   for (let i = 0; i < mesh.contentCount; i++) {
     if (!coastalCell(map, i)) continue;
@@ -64,6 +67,7 @@ function oceanSources(map: PhysicalField, count: number, seed: number, coastalDi
     if (distances && distances[i] > coastalDistance!) continue;
     candidates.push({ i, priority: source.priority });
   }
+  if (distances) releaseWorking(map, distances);
   return [
     ...new Set(candidates.sort((a, b) => b.priority - a.priority).map((source) => source.i)),
   ].slice(0, count);

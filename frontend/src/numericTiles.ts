@@ -10,13 +10,13 @@ import DataTileSource from "ol/source/DataTile.js";
 import GeoJSON from "ol/format/GeoJSON.js";
 import type Projection from "ol/proj/Projection.js";
 import { createXYZ } from "ol/tilegrid.js";
-import type { Raster } from "./types";
+import type { Raster, LoadedRaster } from "./types";
 import { categorical } from "./rasterTiles";
 import { scaledValue } from "./rasterPresentation";
 import { terrainWater } from "./terrainWater";
 import { terrainDisplaySampler } from "./terrainDisplay";
 
-function terrainAt(raster: Raster, locate: AdaptivePointLocator) {
+function terrainAt(raster: LoadedRaster, locate: AdaptivePointLocator) {
   const waterAt = terrainWater(raster, locate);
   const ice = raster.ice ? fieldInterpolator(raster.ice, "ice", false, locate) : () => 0;
   return (p: Position, height: number) => {
@@ -25,7 +25,7 @@ function terrainAt(raster: Raster, locate: AdaptivePointLocator) {
   };
 }
 /** Surface class for the base map; -1 where no classification exists. */
-function surfaceAt(raster: Raster, channel: string, locate: AdaptivePointLocator) {
+function surfaceAt(raster: LoadedRaster, channel: string, locate: AdaptivePointLocator) {
   if (!raster.surface?.channels[channel]) return () => -1;
   const read = classInterpolator(raster.surface, channel, locate);
   return (p: Position) => {
@@ -37,7 +37,7 @@ function surfaceAt(raster: Raster, channel: string, locate: AdaptivePointLocator
 export const terrainSampleBands = 9;
 
 /** Physical bands share geographic reads; display height only generalizes contours and relief. */
-export function numericTileSampler(raster: Raster) {
+export function numericTileSampler(raster: LoadedRaster) {
   const footprint = new GeoJSON().readGeometry(raster.footprint)!;
   const locate = adaptivePointLocator();
   // Classes are reconstructed from memberships so their boundaries match region outlines.

@@ -1,16 +1,16 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { session, undoWorld } from "./atlasState";
+import { atlasWorkspace, undoWorkspaceWorld } from "./atlasWorkspace";
 import { ErrorMessage } from "./ErrorMessage";
 import { useHistory } from "./useAtlas";
 import type { World } from "./types";
 
 export function HistoryPanel({ world }: { world: World }) {
-  const history = useHistory(world.id);
+  const history = useHistory(world);
   const cache = useQueryClient();
   const undo = useMutation({
     mutationFn: async (operationId: string) => {
-      return undoWorld(world.id, operationId);
+      return undoWorkspaceWorld(world.id, operationId);
     },
     onSuccess: (result) => {
       cache.setQueryData(["world", world.id], result);
@@ -35,7 +35,7 @@ export function HistoryPanel({ world }: { world: World }) {
             <button
               className="secondary"
               onClick={() => undo.mutate(entry.operationId)}
-              disabled={undo.isPending}
+              disabled={undo.isPending || history.isFetching}
             >
               Undo latest operation
             </button>
@@ -51,7 +51,7 @@ function GenerationHistory({ world }: { world: World }) {
   const history = useQuery({
     queryKey: ["field-history", world.id, world.version, fieldId],
     enabled: !!fieldId,
-    queryFn: () => session(world.id).causes[fieldId] ?? [],
+    queryFn: async () => (await atlasWorkspace()).readCauses(world.id, fieldId),
   });
   return (
     <>

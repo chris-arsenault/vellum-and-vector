@@ -12,6 +12,11 @@ import {
 import { createRNG, pickWeighted } from "@atlas/name-forge";
 import type { Geometry } from "geojson";
 import type { GenerationState, MapProcess } from "./process";
+import {
+  generationFeatures,
+  writeGenerationFeature,
+  originalFeatureReader,
+} from "./generationFeatures";
 import { atlasName, nameGeographicFeature, nameMetadata } from "./atlasNaming";
 import { polityCharacter, polityTerm } from "./societyCharacter";
 
@@ -138,7 +143,7 @@ function newGeographicName(
     feature.areaId === state.domain.scope.areaId &&
     feature.state === "generated" &&
     !feature.protected &&
-    !original.world.features[feature.id] &&
+    !originalFeatureReader(state, original).get(feature.id) &&
     !feature.attributes.namedInEra &&
     Boolean(feature.attributes.namingKind)
   );
@@ -173,9 +178,11 @@ function finalizeGeography(state: GenerationState, original: DomainSnapshot) {
   const era = state.society?.region.history.at(-1)?.id ?? "Before societies";
   finalizePolities(state, original, era);
   const residents = namingPopulation(state);
-  for (const feature of Object.values(state.domain.world.features))
-    if (newGeographicName(state, original, feature))
+  for (const feature of generationFeatures(state))
+    if (newGeographicName(state, original, feature)) {
       resolveGeographicName(state, feature, era, residents);
+      writeGenerationFeature(state, feature);
+    }
 }
 function finalizePolities(state: GenerationState, original: DomainSnapshot, era: string) {
   const world = state.domain.world,
@@ -189,19 +196,21 @@ function finalizePolities(state: GenerationState, original: DomainSnapshot, era:
     entity.attributes.character = character;
     namePolity(world, entity, seat, era, polityTerm(character));
     entity.attributes.namedInEra ??= era;
-    refreshPolityLabels(world, original, entity);
+    refreshPolityLabels(state, original, entity);
   }
 }
-function refreshPolityLabels(world: World, original: DomainSnapshot, entity: Entity) {
-  for (const feature of Object.values(world.features))
+function refreshPolityLabels(state: GenerationState, original: DomainSnapshot, entity: Entity) {
+  for (const feature of generationFeatures(state))
     if (
-      !original.world.features[feature.id] &&
+      !originalFeatureReader(state, original).get(feature.id) &&
       feature.state === "generated" &&
       !feature.protected &&
       ["sovereignty", "control", "claim"].includes(feature.kind) &&
       feature.relations.some((r) => r.targetId === entity.id)
-    )
+    ) {
       feature.name = `${entity.name} ${feature.kind}`;
+      writeGenerationFeature(state, feature);
+    }
 }
 /** Final names consume the completed society state; source-map names remain historical facts. */
 export function finalizeNamesProcess(original: DomainSnapshot): MapProcess {

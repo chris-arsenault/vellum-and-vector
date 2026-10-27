@@ -1,4 +1,5 @@
 import type { PhysicalField } from "./field";
+import type { NumericalVector } from "@atlas/domain";
 import type { PhysicalProfile } from "./profile";
 import { nearestTriangle } from "./mesh";
 import { physicalDistance } from "./physicalMetric";
@@ -29,7 +30,7 @@ export function wrappedEdges(map: PhysicalField, p: PhysicalProfile): [number, n
 export function wrapLinks(
   map: PhysicalField,
   p: PhysicalProfile,
-  links: Int32Array,
+  links: NumericalVector,
   admissible: (j: number) => boolean = () => true
 ) {
   const edges = wrappedEdges(map, p);

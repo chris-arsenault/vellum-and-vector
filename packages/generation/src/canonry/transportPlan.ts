@@ -5,19 +5,22 @@ import { clamp, round } from "./math";
 import { adaptiveCell, visitAdaptiveOverlap, type Bounds } from "@atlas/domain";
 import { triangleOverlap } from "./triangleOverlap";
 import { tectonicTransport } from "./tectonicTransport";
+import type { NumericalVector } from "@atlas/domain";
+import { NumericalList } from "./numericalList";
+import { workingArray } from "./physicalNumerics";
 
 export const weightScale = 1_000_000;
 export interface TransportPlan {
-  offsets: Int32Array;
-  targets: Int32Array;
-  weights: Float64Array;
-  arrivals: Float64Array;
-  dominant: Int32Array;
-  dominantWeight: Float64Array;
+  offsets: NumericalVector;
+  targets: NumericalVector;
+  weights: NumericalVector;
+  arrivals: NumericalVector;
+  dominant: NumericalVector;
+  dominantWeight: NumericalVector;
 }
 type Builder = Omit<TransportPlan, "targets" | "weights"> & {
-  targets: number[];
-  weights: number[];
+  targets: NumericalList;
+  weights: NumericalList;
 };
 function add(map: PhysicalField, plan: Builder, source: number, target: number, weight: number) {
   if (weight <= 0) return;
@@ -93,28 +96,35 @@ export function buildTransportPlan(map: PhysicalField, step: number): TransportP
   const count = map.mesh.count;
   const transform = tectonicTransport(map, step);
   const plan: Builder = {
-    offsets: new Int32Array(count + 1),
-    targets: [],
-    weights: [],
-    arrivals: new Float64Array(count),
-    dominant: new Int32Array(count).fill(-1),
-    dominantWeight: new Float64Array(count),
+    offsets: workingArray(map, "int32", "transport:offsets", count + 1),
+    targets: new NumericalList("int32", "transport:targets", map.numerical),
+    weights: new NumericalList("float64", "transport:weights", map.numerical),
+    arrivals: workingArray(map, "float64", "transport:arrivals"),
+    dominant: workingArray(map, "int32", "transport:dominant").fill(-1),
+    dominantWeight: workingArray(map, "float64", "transport:dominantWeight"),
   };
-  for (let i = 0; i < count; i++) {
-    plan.offsets[i] = plan.targets.length;
-    const move = transform ? (x: number, y: number) => transform(i, x, y) : undefined;
-    const [x, y] = move
-      ? move(map.mesh.x[i], map.mesh.y[i])
-      : [
-          map.mesh.x[i] + (map.CrustMotionX[i] * step) / 1000,
-          map.mesh.y[i] + (map.CrustMotionY[i] * step) / 1000,
-        ];
-    (map.mesh.topology ? scatterVolume : scatter)(map, plan, i, x, y, move);
+  try {
+    for (let i = 0; i < count; i++) {
+      plan.offsets[i] = plan.targets.length;
+      const move = transform ? (x: number, y: number) => transform(i, x, y) : undefined;
+      const [x, y] = move
+        ? move(map.mesh.x[i], map.mesh.y[i])
+        : [
+            map.mesh.x[i] + (map.CrustMotionX[i] * step) / 1000,
+            map.mesh.y[i] + (map.CrustMotionY[i] * step) / 1000,
+          ];
+      (map.mesh.topology ? scatterVolume : scatter)(map, plan, i, x, y, move);
+    }
+    plan.offsets[count] = plan.targets.length;
+    const ready = {
+      ...plan,
+      targets: plan.targets.finish(),
+      weights: plan.weights.finish(),
+    };
+    for (const vector of Object.values(ready)) vector.retain?.();
+    return ready;
+  } finally {
+    plan.targets.close();
+    plan.weights.close();
   }
-  plan.offsets[count] = plan.targets.length;
-  return {
-    ...plan,
-    targets: Int32Array.from(plan.targets),
-    weights: Float64Array.from(plan.weights),
-  };
 }

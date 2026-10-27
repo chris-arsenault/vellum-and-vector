@@ -1,238 +1,135 @@
-import type { Geometry, MultiLineString, Position as Coordinate } from "geojson";
-import GeoJSONReader from "jsts/org/locationtech/jts/io/GeoJSONReader.js";
-import GeoJSONWriter from "jsts/org/locationtech/jts/io/GeoJSONWriter.js";
-import GeometryFactory from "jsts/org/locationtech/jts/geom/GeometryFactory.js";
-import PrecisionModel from "jsts/org/locationtech/jts/geom/PrecisionModel.js";
-import IsValidOp from "jsts/org/locationtech/jts/operation/valid/IsValidOp.js";
-import RelateOp from "jsts/org/locationtech/jts/operation/relate/RelateOp.js";
-import OverlayOp from "jsts/org/locationtech/jts/operation/overlay/OverlayOp.js";
-import DistanceOp from "jsts/org/locationtech/jts/operation/distance/DistanceOp.js";
-import BufferOp from "jsts/org/locationtech/jts/operation/buffer/BufferOp.js";
-import GeometryPrecisionReducer from "jsts/org/locationtech/jts/precision/GeometryPrecisionReducer.js";
-import UnaryUnionOp from "jsts/org/locationtech/jts/operation/union/UnaryUnionOp.js";
-import IndexedPointInAreaLocator from "jsts/org/locationtech/jts/algorithm/locate/IndexedPointInAreaLocator.js";
-import Location from "jsts/org/locationtech/jts/geom/Location.js";
-import InteriorPointArea from "jsts/org/locationtech/jts/algorithm/InteriorPointArea.js";
-import STRtree from "jsts/org/locationtech/jts/index/strtree/STRtree.js";
-import Envelope from "jsts/org/locationtech/jts/geom/Envelope.js";
-import CoordinatePoint from "jsts/org/locationtech/jts/geom/Coordinate.js";
-import DelaunayTriangulationBuilder from "jsts/org/locationtech/jts/triangulate/DelaunayTriangulationBuilder.js";
+import type { Geometry, Position as Coordinate } from "geojson";
 import type { Frame, Position } from "./model";
-import { frameSchema, geometrySchema } from "./schemas";
+import { frameSchema } from "./schemas";
 import { requireThat } from "./errors";
 
-interface Shape {
-  isRectangle(): boolean;
-  isEmpty(): boolean;
-  normalize(): void;
-  getGeometryType(): string;
-  getBoundary(): Shape;
-  getCoordinates(): { x: number; y: number; z: number }[];
-  getArea(): number;
-  getLength(): number;
-  getEnvelopeInternal(): {
-    getMinX(): number;
-    getMinY(): number;
-    getMaxX(): number;
-    getMaxY(): number;
-  };
+export type Bounds = [number, number, number, number];
+export type SpatialOperations = Pick<
+  Spatial,
+  | "canonical"
+  | "delaunayEdges"
+  | "covers"
+  | "geometryCoverage"
+  | "pointCoverage"
+  | "intersects"
+  | "intersectionPredicate"
+  | "distance"
+  | "area"
+  | "length"
+  | "intersection"
+  | "intersectionArea"
+  | "difference"
+  | "differenceFrom"
+  | "union"
+  | "unionAll"
+  | "nodeLines"
+  | "polygonize"
+  | "polygonizeArea"
+  | "buffer"
+  | "bounds"
+  | "interiorPosition"
+  | "crossings"
+>;
+let operationFactory: ((precision: number) => SpatialOperations) | undefined;
+const implementations = new Map<number, SpatialOperations>();
+/** Installed once by an execution adapter; domain code never owns native handles. */
+export function configureSpatial(factory?: (precision: number) => SpatialOperations) {
+  operationFactory = factory;
+  implementations.clear();
+}
+function operations(precision: number) {
+  requireThat(
+    operationFactory,
+    "spatial_engine",
+    "Initialize the spatial engine before using domain geometry."
+  );
+  let value = implementations.get(precision);
+  if (!value) {
+    value = operationFactory(precision);
+    implementations.set(precision, value);
+  }
+  return value;
 }
 
-export type Bounds = [number, number, number, number];
-
 export class Spatial {
-  private readonly model: PrecisionModel;
-  private readonly reader: GeoJSONReader;
-  private readonly writer = new GeoJSONWriter();
-
   constructor(readonly precision = 0.000001) {
     requireThat(
       Number.isFinite(precision) && precision > 0,
       "invalid_precision",
       "Precision must be positive."
     );
-    this.model = new PrecisionModel(1 / precision);
-    this.reader = new GeoJSONReader(new GeometryFactory(this.model, 0));
   }
-
-  read(value: Geometry): Shape {
-    const original = this.reader.read(geometrySchema.parse(value)) as Shape;
-    requireThat(
-      !original.isEmpty() && IsValidOp.isValid(original),
-      "invalid_geometry",
-      "Geometry must be nonempty and topologically valid."
-    );
-    const shape = GeometryPrecisionReducer.reduce(original, this.model) as Shape;
-    requireThat(
-      !shape.isEmpty() && IsValidOp.isValid(shape),
-      "precision_collapse",
-      "Geometry collapses at the world's declared precision."
-    );
-    return shape;
-  }
-
-  private write(shape: Shape): Geometry | null {
-    if (shape.isEmpty()) return null;
-    if (["Polygon", "MultiPolygon"].includes(shape.getGeometryType())) shape.normalize();
-    const coordinates = shape.getCoordinates();
-    let index = 0;
-    const restoreZeroZ = (geometry: Geometry): Geometry =>
-      geometry.type === "GeometryCollection"
-        ? { ...geometry, geometries: geometry.geometries.map(restoreZeroZ) }
-        : ({
-            ...geometry,
-            coordinates: mapCoordinates(geometry.coordinates, (c) => {
-              const source = coordinates[index++];
-              return source.z === 0 && c.length === 2 ? [...c, 0] : c;
-            }),
-          } as Geometry);
-    // JSTS's GeoJSON writer tests Z for truthiness and omits an explicit zero.
-    return geometrySchema.parse(restoreZeroZ(this.writer.write(shape) as Geometry));
-  }
-
   canonical(value: Geometry): Geometry {
-    return this.write(this.read(value))!;
+    return operations(this.precision).canonical(value);
   }
-
-  /** Edges reference the supplied points, after applying this spatial precision. */
   delaunayEdges(points: Position[]): [number, number][] {
-    if (points.length < 2) return [];
-    const key = (x: number, y: number) =>
-      `${this.model.makePrecise(x)}:${this.model.makePrecise(y)}`;
-    const indices = new Map(points.map((p, i) => [key(p.x, p.y), i]));
-    if (indices.size < 2) return [];
-    const builder = new DelaunayTriangulationBuilder();
-    builder.setSites(this.read({ type: "MultiPoint", coordinates: points.map((p) => [p.x, p.y]) }));
-    const edges = this.writer.write(
-      builder.getEdges(new GeometryFactory(this.model, 0))
-    ) as MultiLineString;
-    return edges.coordinates.map(([a, b]) => [
-      indices.get(key(a[0], a[1]))!,
-      indices.get(key(b[0], b[1]))!,
-    ]);
+    return operations(this.precision).delaunayEdges(points);
   }
-
   covers(a: Geometry, b: Geometry): boolean {
-    return Boolean(RelateOp.covers(this.read(a), this.read(b)));
+    return operations(this.precision).covers(a, b);
   }
-  geometryCoverage(footprint: Geometry): (geometry: Geometry) => boolean {
-    const shape = this.read(footprint);
-    if (!shape.isRectangle())
-      return (geometry) => Boolean(RelateOp.covers(shape, this.read(geometry)));
-    // A rectangle is convex: envelope containment is exact coverage for any
-    // valid geometry. Other footprints retain their full topological predicate.
-    const extent = shape.getEnvelopeInternal();
-    return (geometry) => {
-      const probe = this.read(geometry).getEnvelopeInternal();
-      return (
-        extent.getMinX() <= probe.getMinX() &&
-        extent.getMaxX() >= probe.getMaxX() &&
-        extent.getMinY() <= probe.getMinY() &&
-        extent.getMaxY() >= probe.getMaxY()
-      );
-    };
+  geometryCoverage(value: Geometry): (geometry: Geometry) => boolean {
+    return operations(this.precision).geometryCoverage(value);
   }
-  pointCoverage(footprint: Geometry): (position: Position) => boolean {
-    const shape = this.read(footprint),
-      locator = ["Polygon", "MultiPolygon"].includes(shape.getGeometryType())
-        ? new IndexedPointInAreaLocator(shape)
-        : null;
-    return (position) => {
-      if (!locator) return Boolean(RelateOp.covers(shape, this.read(point(position))));
-      requireThat(
-        Number.isFinite(position.x) && Number.isFinite(position.y) && Number.isFinite(position.z),
-        "invalid_geometry",
-        "Point coordinates must be finite."
-      );
-      const probe = new CoordinatePoint(
-        this.model.makePrecise(position.x),
-        this.model.makePrecise(position.y)
-      );
-      return locator.locate(probe) !== Location.EXTERIOR;
-    };
+  pointCoverage(value: Geometry): (position: Position) => boolean {
+    return operations(this.precision).pointCoverage(value);
   }
   intersects(a: Geometry, b: Geometry): boolean {
-    return Boolean(RelateOp.intersects(this.read(a), this.read(b)));
+    return operations(this.precision).intersects(a, b);
   }
-  intersectionPredicate(footprint: Geometry): (geometry: Geometry) => boolean {
-    const shape = this.read(footprint);
-    return (geometry) => Boolean(RelateOp.intersects(this.read(geometry), shape));
+  intersectionPredicate(value: Geometry): (geometry: Geometry) => boolean {
+    return operations(this.precision).intersectionPredicate(value);
   }
   distance(a: Geometry, b: Geometry): number {
-    return DistanceOp.distance(this.read(a), this.read(b)) as number;
+    return operations(this.precision).distance(a, b);
   }
   area(value: Geometry): number {
-    return this.read(value).getArea();
+    return operations(this.precision).area(value);
   }
   length(value: Geometry): number {
-    return this.read(value).getLength();
+    return operations(this.precision).length(value);
   }
   intersection(a: Geometry, b: Geometry): Geometry | null {
-    return this.write(OverlayOp.intersection(this.read(a), this.read(b)) as Shape);
+    return operations(this.precision).intersection(a, b);
   }
-  /** Reuse a validated footprint and measure intersections without a GeoJSON round trip. */
-  intersectionArea(footprint: Geometry): (geometry: Geometry) => number {
-    const shape = this.read(footprint);
-    return (geometry) => (OverlayOp.intersection(this.read(geometry), shape) as Shape).getArea();
+  intersectionArea(value: Geometry): (geometry: Geometry) => number {
+    return operations(this.precision).intersectionArea(value);
   }
   difference(a: Geometry, b: Geometry): Geometry | null {
-    return this.write(OverlayOp.difference(this.read(a), this.read(b)) as Shape);
+    return operations(this.precision).difference(a, b);
   }
-  /** Subtract one fixed mask from many features without rebuilding its spatial index. */
-  differenceFrom(mask: Geometry): (geometry: Geometry) => Geometry | null {
-    const shape = this.read(mask),
-      locator = new IndexedPointInAreaLocator(shape),
-      boundary = new STRtree(),
-      coordinates = shape.getCoordinates();
-    for (let i = 1; i < coordinates.length; i++) {
-      const a = coordinates[i - 1],
-        b = coordinates[i];
-      boundary.insert(new Envelope(a.x, b.x, a.y, b.y), {});
-    }
-    return (geometry) => {
-      const candidate = this.read(geometry);
-      // With no mask edge in its envelope the entire candidate is on one side.
-      // Include edges between rings as conservative false positives; exact GIS
-      // subtraction handles every envelope which might cross a boundary.
-      if (boundary.query(candidate.getEnvelopeInternal()).isEmpty()) {
-        const p = candidate.getCoordinates()[0];
-        return locator.locate(p) === Location.EXTERIOR ? geometry : null;
-      }
-      return this.write(OverlayOp.difference(candidate, shape) as Shape);
-    };
+  differenceFrom(value: Geometry): (geometry: Geometry) => Geometry | null {
+    return operations(this.precision).differenceFrom(value);
   }
   union(a: Geometry, b: Geometry): Geometry {
-    return this.write(OverlayOp.union(this.read(a), this.read(b)) as Shape)!;
+    return operations(this.precision).union(a, b);
   }
-  unionAll(geometries: Geometry[]): Geometry {
-    requireThat(geometries.length > 0, "invalid_geometry", "Union requires at least one geometry.");
-    return this.write(
-      UnaryUnionOp.union(this.read({ type: "GeometryCollection", geometries })) as Shape
-    )!;
+  unionAll(values: Geometry[]): Geometry {
+    return operations(this.precision).unionAll(values);
   }
   nodeLines(value: Geometry): Geometry {
-    return this.write(UnaryUnionOp.union(this.read(value)) as Shape)!;
+    return operations(this.precision).nodeLines(value);
+  }
+  polygonize(value: Geometry): Geometry[] {
+    return operations(this.precision).polygonize(value);
+  }
+  polygonizeArea(
+    boundaries: Iterable<Coordinate[]>,
+    includes: (point: Position) => boolean
+  ): Geometry | null {
+    return operations(this.precision).polygonizeArea(boundaries, includes);
   }
   buffer(value: Geometry, metres: number): Geometry | null {
-    requireThat(Number.isFinite(metres), "invalid_distance", "Buffer distance must be finite.");
-    return this.write(BufferOp.bufferOp(this.read(value), metres) as Shape);
+    return operations(this.precision).buffer(value, metres);
   }
   bounds(value: Geometry): Bounds {
-    const e = this.read(value).getEnvelopeInternal();
-    return [e.getMinX(), e.getMinY(), e.getMaxX(), e.getMaxY()];
+    return operations(this.precision).bounds(value);
   }
   interiorPosition(value: Geometry): Position {
-    const p = InteriorPointArea.getInteriorPoint(this.read(value));
-    return { x: p.x, y: p.y, z: 0 };
+    return operations(this.precision).interiorPosition(value);
   }
   crossings(value: Geometry, footprint: Geometry): Position[] {
-    const result = OverlayOp.intersection(
-      this.read(value),
-      this.read(footprint).getBoundary()
-    ) as Shape;
-    const unique = new Map<string, Position>();
-    for (const c of result.getCoordinates()) unique.set(`${c.x},${c.y}`, { x: c.x, y: c.y, z: 0 });
-    return [...unique.values()];
+    return operations(this.precision).crossings(value, footprint);
   }
 }
 

@@ -10,6 +10,7 @@ test("an epoch preview shows while generation continues and clears on cancellati
   await page.getByLabel("World name", { exact: true }).fill("Growing atlas");
   await page.getByRole("button", { name: /Review & generate/ }).click();
   await page.getByRole("button", { name: "Generate world", exact: true }).click();
+  await page.waitForFunction(() => "generationFixtureSnapshot" in window);
   await page.evaluate(() => {
     const fixture = window as unknown as {
       generationFixtureSnapshot: import("@atlas/domain").DomainSnapshot;
@@ -48,6 +49,7 @@ test("arriving fields display before the completion notification", async ({ page
   await page.getByLabel("Height · km", { exact: true }).fill("1");
   await page.getByRole("button", { name: /Review & generate/ }).click();
   await page.getByRole("button", { name: "Generate world", exact: true }).click();
+  await page.waitForFunction(() => "generationFixtureSnapshot" in window);
   await page.evaluate(() => {
     const fixture = window as unknown as {
       generationFixtureWorker: { onmessage: (event: MessageEvent) => void };

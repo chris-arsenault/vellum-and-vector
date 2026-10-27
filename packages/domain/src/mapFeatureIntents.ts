@@ -12,6 +12,8 @@ import { moveMappedRoutes, writeMapRepresentation } from "./mapRouteEdits";
 import { updateNetworkTopology } from "./networkTopology";
 import { registerMapRemovalIntents } from "./mapRemoval";
 import { editMappedResidents } from "./societyEditing";
+import { lineParts } from "./lineStations";
+import { sampleFields } from "./boundaryContracts";
 
 export function evaluateMapFeature(
   data: FeatureEdit,
@@ -58,11 +60,21 @@ export function evaluateMapFeature(
     if (previous.kind === "settlement" && !sameValue(before.geometry, geometry))
       moveMappedRoutes(snapshot, changes, area, before, feature, context.actor);
   } else {
+    initializeMappedRiver(snapshot, feature);
     changes.writes.push({ kind: "feature", value: feature });
     updateNetworkTopology(snapshot, changes, [feature.id]);
   }
   upsertArea(changes, { ...area, layers: { ...area.layers, [layer.id]: "authored" } });
   return changes;
+}
+function initializeMappedRiver(snapshot: DomainSnapshot, feature: AtlasFeature) {
+  if (feature.kind !== "river" || !feature.geometry.type.includes("LineString")) return;
+  const coordinates = lineParts(feature.geometry).flat();
+  feature.attributes.elevations ??= coordinates.map(
+    ([x, y]) => sampleFields(snapshot, { x, y, z: 0 }).elevation ?? 0
+  );
+  feature.attributes.discharge ??= 1;
+  feature.attributes.discharges ??= coordinates.map(() => feature.attributes.discharge);
 }
 
 /** Shared map anchors keep their two-dimensional location; no physical values are imposed. */
@@ -120,6 +132,12 @@ export function registerMapFeatureIntents(registry: IntentRegistry) {
         ],
         references: data.feature.relations.map((r) => r.targetId),
         completeRepresentations: [data.feature.id],
+        channels:
+          data.feature.kind === "river" && data.feature.attributes.elevations === undefined
+            ? context.fields
+                .filter((field) => field.channels?.includes("elevation"))
+                .map((field) => ({ fieldId: field.id, names: ["elevation"] }))
+            : [],
       }),
     evaluate: evaluateMapFeature,
   });

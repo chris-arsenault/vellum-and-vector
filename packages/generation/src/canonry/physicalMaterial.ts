@@ -2,6 +2,7 @@ import { putChannel } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import { Landform } from "./codes";
+import { projectedValues } from "./atlasSampling";
 
 function landMaterial(map: PhysicalField, i: number): number {
   if (map.DeltaIntensity[i] > 0 || map.FloodplainIntensity[i] > 0) return 3;
@@ -30,8 +31,10 @@ export function projectPhysicalMaterial(state: GenerationState) {
     state.surface,
     "physicalMaterial",
     "category",
-    Float64Array.from(work.samples, (i) =>
-      map.WaterKindCodes[i] === 1 ? oceanMaterial(map, i) : landMaterial(map, i)
+    projectedValues(
+      work,
+      (i) => (map.WaterKindCodes[i] === 1 ? oceanMaterial(map, i) : landMaterial(map, i)),
+      true
     )
   );
 }

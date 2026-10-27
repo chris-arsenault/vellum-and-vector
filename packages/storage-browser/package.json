@@ -1,0 +1,19 @@
+{
+  "name": "@atlas/storage-browser",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@atlas/domain": "workspace:*",
+    "@sqlite.org/sqlite-wasm": "3.54.1-build1",
+    "cbor-x": "1.6.8",
+    "geos-wasm": "3.1.1",
+    "zarrita": "0.7.5"
+  }
+}

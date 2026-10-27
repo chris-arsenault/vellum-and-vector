@@ -1,5 +1,5 @@
 import { areaSpace, spatial, type NetworkReach, type World } from "@atlas/domain";
-import type { AnalysisResult } from "./atlasReads";
+import type { AnalysisResult } from "./spatialAnalysis";
 
 interface Edge {
   to: string;

@@ -34,7 +34,7 @@ function corridor() {
 }
 const xAt = (map: ReturnType<typeof corridor>, i: number) => map.mesh.x[i] + map.mesh.origin[0];
 const force = (f: Partial<typeof neutralEcology>) => () => ({ ...neutralEcology, ...f });
-const mass = (map: ReturnType<typeof corridor>, values: Float64Array) =>
+const mass = (map: ReturnType<typeof corridor>, values: import("@atlas/domain").NumericalVector) =>
   values.reduce((sum, v, i) => sum + v * map.mesh.areas[i], 0);
 function source(map: ReturnType<typeof corridor>) {
   for (let i = 0; i < map.mesh.count; i++)

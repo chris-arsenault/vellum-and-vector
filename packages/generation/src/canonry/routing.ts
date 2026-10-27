@@ -7,8 +7,12 @@ import { hashUnit } from "./noise";
 import { edgeLeadingTo } from "./mesh";
 import { selectByOutletAlignment } from "./flowGuidance";
 import { sourceToOutletOrder } from "./flowGraph";
+import type { NumericalVector } from "@atlas/domain";
+import { workingArray, releaseWorking } from "./physicalNumerics";
+import { NumericalQueue } from "./numericalQueue";
+import { lakeMembership } from "./lakeMembership";
 
-function stableRoot(map: PhysicalField, members: number[], seed: number): number {
+function stableRoot(map: PhysicalField, members: Iterable<number>, seed: number): number {
   let selected = -1,
     best = -Number.MAX_VALUE;
   for (const i of members) {
@@ -21,25 +25,28 @@ function stableRoot(map: PhysicalField, members: number[], seed: number): number
   if (selected < 0) throw new Error("Lake body has no members.");
   return selected;
 }
-function lakeRanks(map: PhysicalField, root: number): Map<number, number> {
-  const ranks = new Map([[root, 0]]),
-    queue = [root];
-  for (let head = 0; head < queue.length; head++) {
-    const i = queue[head];
-    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-      if (
-        j < 0 ||
-        map.WaterKindCodes[j] !== 2 ||
-        map.WaterBodyIds[j] !== map.WaterBodyIds[root] ||
-        ranks.has(j)
-      )
-        continue;
-      ranks.set(j, ranks.get(i)! + 1);
-      queue.push(j);
+function lakeRanks(map: PhysicalField, root: number, ranks: NumericalVector) {
+  const queue = new NumericalQueue(map.numerical);
+  ranks[root] = 0;
+  queue.push(root);
+  try {
+    for (let i = queue.shift(); i !== undefined; i = queue.shift()) {
+      for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+        const j = map.mesh.neighbors[i * map.mesh.stride + edge];
+        if (
+          j < 0 ||
+          map.WaterKindCodes[j] !== 2 ||
+          map.WaterBodyIds[j] !== map.WaterBodyIds[root] ||
+          ranks[j] >= 0
+        )
+          continue;
+        ranks[j] = ranks[i] + 1;
+        queue.push(j);
+      }
     }
+  } finally {
+    queue.close();
   }
-  return ranks;
 }
 function outletEscape(map: PhysicalField, target: number) {
   let current = target;
@@ -51,34 +58,57 @@ function outletEscape(map: PhysicalField, target: number) {
     current = parent;
   }
 }
-function routeLake(map: PhysicalField, members: number[], seed: number) {
-  let root = members.find((i) => map.LakeOutletTargets[i] >= 0) ?? -1;
+function routeLake(
+  map: PhysicalField,
+  members: Iterable<number>,
+  seed: number,
+  ranks: NumericalVector
+) {
+  let root = -1;
+  for (const i of members)
+    if (map.LakeOutletTargets[i] >= 0) {
+      root = i;
+      break;
+    }
   const outlet = root >= 0 ? map.LakeOutletTargets[root] : -1;
   if (root < 0) root = stableRoot(map, members, seed);
-  const ranks = lakeRanks(map, root);
+  lakeRanks(map, root, ranks);
   map.FlowTargets[root] = outlet;
   outletEscape(map, outlet);
   for (const member of members) {
     if (member === root) continue;
-    const candidates: number[] = [];
-    for (let edge = 0; edge < map.mesh.degree[member]; edge++) {
-      const j = map.mesh.neighbors[member * map.mesh.stride + edge],
-        rank = ranks.get(j);
-      if (rank !== undefined && rank < ranks.get(member)!) candidates.push(j);
-    }
+    const candidates = lowerLakeNeighbors(map, member, root, ranks);
     map.FlowTargets[member] = selectByOutletAlignment(map, candidates, member, root, root);
   }
 }
-function routeLakes(map: PhysicalField, seed: number) {
-  const bodies = new Map<number, number[]>();
-  for (let i = 0; i < map.mesh.count; i++) {
-    if (map.WaterKindCodes[i] !== 2) continue;
-    const body = map.WaterBodyIds[i],
-      members = bodies.get(body) ?? [];
-    members.push(i);
-    bodies.set(body, members);
+function lowerLakeNeighbors(
+  map: PhysicalField,
+  member: number,
+  root: number,
+  ranks: NumericalVector
+) {
+  const candidates: number[] = [];
+  for (let edge = 0; edge < map.mesh.degree[member]; edge++) {
+    const j = map.mesh.neighbors[member * map.mesh.stride + edge];
+    if (
+      j >= 0 &&
+      map.WaterBodyIds[j] === map.WaterBodyIds[root] &&
+      ranks[j] >= 0 &&
+      ranks[j] < ranks[member]
+    )
+      candidates.push(j);
   }
-  for (const members of bodies.values()) routeLake(map, members, seed);
+  return candidates;
+}
+function routeLakes(map: PhysicalField, seed: number) {
+  const membership = lakeMembership(map),
+    ranks = workingArray(map, "int32", "lake:ranks").fill(-1);
+  try {
+    for (const id of membership.bodies.keys()) routeLake(map, membership.members(id), seed, ranks);
+  } finally {
+    membership.close();
+    releaseWorking(map, ranks);
+  }
 }
 export function flowRouting(map: PhysicalField, c: PhysicalContext) {
   map.FlowTargets.fill(-1);
@@ -98,4 +128,5 @@ export function flowRouting(map: PhysicalField, c: PhysicalContext) {
     map.DrainageBasinIds[i] =
       target < 0 || map.WaterKindCodes[target] === 1 ? ++basin : map.DrainageBasinIds[target];
   }
+  releaseWorking(map, order);
 }

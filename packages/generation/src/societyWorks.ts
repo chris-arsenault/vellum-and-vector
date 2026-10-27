@@ -10,6 +10,7 @@ import {
   type SocietyWorkKind,
 } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
+import { generationFeatures } from "./generationFeatures";
 import { applyNativeColdAgeWork } from "./societyNativeWorks";
 import { nearestCommunity } from "./societyPopulation";
 import { societyValue, soilWaterCapacity } from "./societySupport";
@@ -107,11 +108,6 @@ export function planSocietyWorks(state: GenerationState) {
  */
 function addHarbors(state: GenerationState, existing: Set<string>) {
   const grid = state.surface;
-  const shores = isWorldSociety(state)
-    ? []
-    : Array.from(grid.active.keys()).filter(
-        (i) => societyValue(state, "water", i) === 1 && societyValue(state, "waterDepth", i) < 30
-      );
   for (const c of state.society!.region.communities) {
     if (population(c) < 1000) continue;
     const work = makeWork(state, c, "harbor");
@@ -119,10 +115,7 @@ function addHarbors(state: GenerationState, existing: Set<string>) {
     if (work.demand) {
       if (!hasMedium(state, work)) continue;
     } else {
-      const near = shores.find((i) => {
-        const p = gridPosition(grid, i);
-        return Math.hypot(p.x - c.position.x, p.y - c.position.y) < 10000;
-      });
+      const near = harborSample(state, c.position);
       if (near === undefined) continue;
       work.position = gridPosition(grid, near);
     }
@@ -130,9 +123,19 @@ function addHarbors(state: GenerationState, existing: Set<string>) {
     existing.add(work.id);
   }
 }
+function harborSample(state: GenerationState, position: SocietyCommunity["position"]) {
+  const { x, y } = position;
+  for (const i of samplesInBox(state.surface, [x - 10000, y - 10000, x + 10000, y + 10000])) {
+    if (societyValue(state, "water", i) !== 1 || societyValue(state, "waterDepth", i) >= 30)
+      continue;
+    const p = gridPosition(state.surface, i);
+    if (Math.hypot(p.x - x, p.y - y) < 10000) return i;
+  }
+  return undefined;
+}
 function addAuthoredWorks(state: GenerationState, existing: Set<string>) {
   const work = state.society!;
-  for (const f of Object.values(state.domain.world.features)) {
+  for (const f of generationFeatures(state)) {
     if (!isSocietyWork(f) || f.state === "generated") continue;
     const id = String(f.attributes.workId ?? f.id);
     if (f.areaId !== state.domain.scope.areaId || existing.has(id)) continue;
@@ -206,30 +209,36 @@ export function changeSample(
   if (!values || !Number.isFinite(value) || values[i] === value) return;
   if (state.physical && channel === "elevation") {
     state.society!.elevationBefore ??= values.slice();
+    state.society!.elevationBefore.retain?.();
   }
   values[i] = value;
   state.society!.changed.add(channel);
   if (cause === "work") state.society!.mediumChanged.add(channel);
 }
-export function workSamples(state: GenerationState, work: SocietyWork) {
-  if (work.demand) return demandSamples(state, work);
-  const samples: { i: number; fraction: number }[] = [];
+export function* workSamples(state: GenerationState, work: SocietyWork) {
+  if (work.demand) {
+    yield* demandSamples(state, work);
+    return;
+  }
+  let found = false;
   const { x, y } = work.position,
     r = work.radius;
   for (const i of samplesInBox(state.surface, [x - r, y - r, x + r, y + r])) {
     const p = gridPosition(state.surface, i),
       d = Math.hypot(p.x - work.position.x, p.y - work.position.y);
-    if (d <= work.radius) samples.push({ i, fraction: Math.exp(-d / Math.max(1, work.radius)) });
+    if (d <= work.radius) {
+      found = true;
+      yield { i, fraction: Math.exp(-d / Math.max(1, work.radius)) };
+    }
   }
-  if (!samples.length) {
+  if (!found) {
     const i = nearestSample(state, work.position);
     if (i >= 0)
-      samples.push({
+      yield {
         i,
         fraction: Math.min(1, (Math.PI * work.radius ** 2) / state.surface.measures[i]),
-      });
+      };
   }
-  return samples;
 }
 export function applySocietyWorks(
   state: GenerationState,

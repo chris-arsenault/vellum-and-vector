@@ -5,7 +5,7 @@ import {
   type Grid,
   type ParameterDefinitions,
 } from "@atlas/domain";
-import { integratedDepth, requireChannel, summarizeChannel } from "./mapFields";
+import { integratedDepth, requireChannel, summarizeChannel, surfaceArray } from "./mapFields";
 import type { MapProcess } from "./process";
 
 const temperatureParameters: ParameterDefinitions = {
@@ -46,8 +46,8 @@ export const temperatureProcess: MapProcess = {
       const grid = state.surface,
         elevation = requireChannel(grid, "elevation", "metre"),
         heat = requireChannel(grid, "heat", "celsius"),
-        temperature = new Float64Array(elevation.length),
-        natural = new Float64Array(elevation.length);
+        temperature = surfaceArray(state, "temperature"),
+        natural = surfaceArray(state, "natural-temperature");
       for (let i = 0; i < elevation.length; i++) {
         natural[i] =
           Number(context.parameters.temperature) +
@@ -149,10 +149,10 @@ export const precipitationProcess: MapProcess = {
       const grid = state.surface,
         elevation = requireChannel(grid, "elevation", "metre"),
         temperature = requireChannel(grid, "temperature", "celsius"),
-        precipitation = new Float64Array(elevation.length),
-        snowfall = new Float64Array(elevation.length),
-        rainfall = new Float64Array(elevation.length),
-        moisture = new Float64Array(elevation.length);
+        precipitation = surfaceArray(state, "precipitation"),
+        snowfall = surfaceArray(state, "snowfall"),
+        rainfall = surfaceArray(state, "rainfall"),
+        moisture = surfaceArray(state, "moisture");
       for (const path of airPaths(grid, String(context.parameters.wind))) {
         let previous = -1;
         for (const i of path) {
@@ -244,14 +244,12 @@ export const iceBalanceProcess: MapProcess = {
       const grid = state.surface,
         temperature = requireChannel(grid, "temperature", "celsius"),
         snowfall = requireChannel(grid, "snowfall", "metre/year"),
-        ice = grid.channels.ice
-          ? requireChannel(grid, "ice", "metre")
-          : new Float64Array(grid.active.length),
+        ice = grid.channels.ice ? requireChannel(grid, "ice", "metre") : surfaceArray(state, "ice"),
         maximum = grid.channels.maximumIce
           ? requireChannel(grid, "maximumIce", "metre")
-          : new Float64Array(grid.active.length),
-        meltwater = new Float64Array(grid.active.length),
-        accumulation = new Float64Array(grid.active.length);
+          : surfaceArray(state, "maximum-ice"),
+        meltwater = surfaceArray(state, "meltwater"),
+        accumulation = surfaceArray(state, "accumulation");
       requireThat(
         snowfall.every((value) => value >= 0) && ice.every((value) => value >= 0),
         "ice_input",
@@ -315,7 +313,7 @@ export const resetForcingProcess: MapProcess = {
   behavior: {
     kind: "initialize",
     initialize(state) {
-      putChannel(state.surface, "heat", "celsius", new Float64Array(state.surface.active.length));
+      putChannel(state.surface, "heat", "celsius", surfaceArray(state, "heat"));
       if (state.surface.channels.meltwater) state.surface.channels.meltwater.fill(0);
     },
   },

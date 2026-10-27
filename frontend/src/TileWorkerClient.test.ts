@@ -1,11 +1,11 @@
+import { fixtureWorld, fixtureState } from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
 import { createGrid, putChannel, rectangle, cloneSnapshot } from "@atlas/domain";
-import { createWorld, session } from "./atlasState";
 import { TileWorkerClient } from "./TileWorkerClient";
 import { tileProcessor } from "./tileProcessor";
 import { numericTileSampler, terrainSampleBands } from "./numericTiles";
 import type { TileMessage, TileReply } from "./tileProtocol";
-import type { Raster } from "./types";
+import type { LoadedRaster as Raster, ResourceRaster } from "./types";
 import { RasterSources } from "./RasterSources";
 import Projection from "ol/proj/Projection.js";
 
@@ -57,6 +57,10 @@ class WorkerFixture {
   }
   flush() {
     for (const message of this.messages.splice(0)) {
+      if (message.kind === "close") {
+        this.onmessage?.(new MessageEvent("message", { data: { kind: "closed" } }));
+        continue;
+      }
       const reply = this.process(message);
       if (reply) this.onmessage?.(new MessageEvent("message", { data: reply }));
     }
@@ -96,6 +100,7 @@ it("shares immutable grid registration across channels and preserves actual samp
   client.release(temperature);
   expect(worker.messages.some((m) => m.kind === "release" && m.grids.length === 1)).toBe(true);
   client.dispose();
+  worker.flush();
   expect(worker.terminated).toBe(true);
 });
 it("rejects aborted and replaced tiles and ignores obsolete replies", async () => {
@@ -116,7 +121,7 @@ it("rejects aborted and replaced tiles and ignores obsolete replies", async () =
   await replaced;
   client.dispose();
 });
-it("reuses sources for presentation changes and replaces them when numerical data change", () => {
+it("reuses sources for presentation changes and replaces them when numerical data change", async () => {
   const worker = new WorkerFixture(),
     client = new TileWorkerClient(() => worker as unknown as Worker);
   const sources = new RasterSources(
@@ -131,8 +136,8 @@ it("reuses sources for presentation changes and replaces them when numerical dat
   expect(sources.source({ ...raster })).toBe(first);
   sources.end();
   expect(worker.messages.filter((m) => m.kind === "grid")).toHaveLength(1);
-  const world = createWorld({ name: "Source cache", seed: 1, width: 100, height: 100 });
-  const snapshot = session(world.id).snapshot;
+  const world = fixtureWorld({ name: "Source cache", seed: 1, width: 100, height: 100 });
+  const snapshot = fixtureState(world.id).snapshot;
   snapshot.numerical.terrain = raster.field;
   const cloned = cloneSnapshot(snapshot).numerical.terrain;
   expect(cloned).not.toBe(raster.field);
@@ -150,5 +155,102 @@ it("reuses sources for presentation changes and replaces them when numerical dat
   sources.end();
   expect(worker.messages.filter((m) => m.kind === "release")).toHaveLength(2);
   sources.dispose();
+  worker.flush();
   expect(worker.terminated).toBe(true);
+});
+function referencedRaster(): ResourceRaster {
+  const raster = fixture(),
+    field = raster.field;
+  return {
+    ...raster,
+    field: {
+      resourceId: "field:1",
+      scope: field.scope,
+      bounds: field.bounds,
+      units: field.units,
+      quantities: { elevation: "intensive" },
+      channels: { elevation: { range: [-10, 14], categories: [] } },
+      patches: [],
+    },
+    water: undefined,
+    ice: undefined,
+    surface: undefined,
+    geography: {
+      scope: field.scope,
+      areaId: raster.areaId,
+      geographyId: "layout:1",
+      windows: [field.bounds],
+      tolerance: 1,
+      revision: 1,
+    },
+  };
+}
+it("orders resource registration, cancellation and release after the peer connection", async () => {
+  const worker = new WorkerFixture();
+  let connected!: () => void;
+  const ready = new Promise<void>((resolve) => {
+    connected = resolve;
+  });
+  const client = new TileWorkerClient(
+    () => worker as unknown as Worker,
+    () => ready
+  );
+  const id = client.register(referencedRaster()),
+    abort = new AbortController();
+  const pending = client.load(id, [0, 0, 100, 100], 4, abort.signal);
+  const cancelled = expect(pending).rejects.toMatchObject({ name: "AbortError" });
+  abort.abort();
+  client.release(id);
+  client.dispose();
+  expect(worker.messages).toHaveLength(0);
+  connected();
+  await ready;
+  await cancelled;
+  expect(worker.messages.map((message) => message.kind)).toEqual([
+    "resourceRaster",
+    "tile",
+    "cancel",
+    "release",
+    "close",
+  ]);
+  worker.flush();
+  expect(worker.terminated).toBe(true);
+});
+it("surfaces peer connection failure to waiting tiles and closes the renderer", async () => {
+  const worker = new WorkerFixture();
+  const error = new Error("Geographic workspace unavailable");
+  const client = new TileWorkerClient(
+    () => worker as unknown as Worker,
+    () => Promise.reject(error)
+  );
+  const id = client.register(referencedRaster());
+  await expect(client.load(id, [0, 0, 100, 100], 4, new AbortController().signal)).rejects.toThrow(
+    error
+  );
+  client.dispose();
+  await Promise.resolve();
+  expect(worker.terminated).toBe(true);
+});
+it("retains raster tiles across equivalent references and invalidates changed geographic windows", async () => {
+  const worker = new WorkerFixture();
+  const client = new TileWorkerClient(
+    () => worker as unknown as Worker,
+    async () => {}
+  );
+  const sources = new RasterSources(new Projection({ code: "world", units: "m" }), client);
+  const raster = referencedRaster();
+  sources.begin();
+  const first = sources.source(raster);
+  sources.end();
+  sources.begin();
+  expect(sources.source(structuredClone(raster))).toBe(first);
+  sources.end();
+  const changed = structuredClone(raster);
+  changed.geography.windows = [[20, 20, 80, 80]];
+  sources.begin();
+  expect(sources.source(changed)).not.toBe(first);
+  sources.end();
+  sources.dispose();
+  await Promise.resolve();
+  worker.flush();
 });

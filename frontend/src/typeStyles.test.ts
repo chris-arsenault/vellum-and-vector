@@ -1,14 +1,14 @@
+import { fixtureWorld } from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
 import Feature from "ol/Feature.js";
 import { Style, Stroke, Text } from "ol/style.js";
 import type { StyleFunction } from "ol/style/Style.js";
 import { describeFeature } from "@atlas/domain";
-import { createWorld } from "./atlasState";
 import { typeStyle } from "./typeStyles";
 import type { AtlasFeature, LayerStyle } from "./types";
 
-it("applies type visibility and label overrides to an existing advanced renderer", () => {
-  const world = createWorld({ name: "Types", seed: 1, width: 1000, height: 1000 });
+it("applies type visibility and label overrides to an existing advanced renderer", async () => {
+  const world = fixtureWorld({ name: "Types", seed: 1, width: 1000, height: 1000 });
   const f = {
     kind: "waterfall",
     layerId: "geology",

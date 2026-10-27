@@ -1,19 +1,19 @@
 import { useState } from "react";
 import type { World } from "./types";
-import type { RegistryColumn, RegistryQuery, RegistryRow, AttributeFilter } from "./registryData";
+import type { RegistryColumn, RegistryQuery, RegistryFacets, AttributeFilter } from "@atlas/domain";
 
 export function RegistryFilters({
-  rows,
+  facets,
   query,
   change,
   world,
 }: {
-  rows: RegistryRow[];
+  facets: RegistryFacets;
   query: RegistryQuery;
   change: (q: RegistryQuery) => void;
   world: World;
 }) {
-  const types = [...new Map(rows.map((r) => [r.type.id, r.type])).values()];
+  const types = facets.types;
   return (
     <div className="registry-filters">
       <input
@@ -38,7 +38,7 @@ export function RegistryFilters({
           ))}
         </select>
       </label>
-      <CategoryFilters rows={rows} query={query} change={change} world={world} />
+      <CategoryFilters facets={facets} query={query} change={change} world={world} />
       <label className="check">
         <input
           type="checkbox"
@@ -58,7 +58,7 @@ export function RegistryFilters({
     </div>
   );
 }
-function CategoryFilters({ rows, query, change, world }: Parameters<typeof RegistryFilters>[0]) {
+function CategoryFilters({ facets, query, change, world }: Parameters<typeof RegistryFilters>[0]) {
   const categories = [
     { key: "status", label: "Status" },
     { key: "state", label: "Authorship" },
@@ -76,14 +76,11 @@ function CategoryFilters({ rows, query, change, world }: Parameters<typeof Regis
             onChange={(e) => change({ ...query, [key]: e.target.value })}
           >
             <option value="">All</option>
-            {[...new Set(rows.map((r) => String(r.values[key] ?? "")))]
-              .filter(Boolean)
-              .sort()
-              .map((v) => (
-                <option key={v} value={v}>
-                  {key === "space" ? (world.areas[v]?.name ?? "World surface") : v}
-                </option>
-              ))}
+            {facets.categories[key].map((v) => (
+              <option key={v} value={v}>
+                {key === "space" ? (world.areas[v]?.name ?? "World surface") : v}
+              </option>
+            ))}
           </select>
         </label>
       ))}

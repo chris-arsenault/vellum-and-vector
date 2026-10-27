@@ -5,6 +5,7 @@ import {
   point,
   spatial,
   type DrainageReach,
+  type NumericalVector,
 } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { GenerationState, MapProcessContext } from "../process";
@@ -21,8 +22,10 @@ import { extractReliefFeatures, extractValleys } from "./reliefFeatures";
 import { physicalDistance } from "./physicalMetric";
 import { extractOceans } from "./oceanFeatures";
 import { dropClaimedFeatures, extractLandmarks, landmarkClaims } from "./landmarkFeatures";
+import { workingArray, releaseWorking } from "./physicalNumerics";
+import { generationFeature, generationFeatures } from "../generationFeatures";
 
-function riverReach(state: GenerationState, start: number, incoming: Int32Array) {
+function riverReach(state: GenerationState, start: number, incoming: NumericalVector) {
   const map = state.physical!.map,
     members = [start];
   let i = start;
@@ -124,39 +127,45 @@ function publishReachCopy(
   return ids;
 }
 /** Every reach as extraction forms it, linked downstream through the cell it ends on. */
-function drainageReaches(state: GenerationState, incoming: Int32Array) {
+function* drainageReaches(
+  state: GenerationState,
+  incoming: NumericalVector
+): IterableIterator<{ start: number; members: number[]; reach: DrainageReach }> {
   const work = state.physical!,
     map = work.map,
-    reaches: { start: number; members: number[]; reach: DrainageReach }[] = [];
-  for (let i = 0; i < map.mesh.contentCount; i++) {
-    if (map.RiverOrders[i] <= 0 || incoming[i] === 1) continue;
-    const members = riverReach(state, i, incoming),
-      mouth = members.at(-1)!;
-    reaches.push({
-      start: i,
-      members,
-      reach: {
-        downstream: null,
-        waterBody: map.WaterKindCodes[mouth] !== 0 ? map.WaterBodyIds[mouth] : null,
-        order: map.RiverOrders[i],
-        basin: map.DrainageBasinIds[i],
-        coordinates: unwrapCoordinates(
-          members.map((j) => {
-            const p = nativePosition(work, j);
-            return [Math.round(p.x), Math.round(p.y)] as [number, number];
-          }),
-          map.mesh.periodic?.width
-        ) as [number, number][],
-        discharges: members.map((j) => map.FlowAccumulation[j]),
-        catchmentAreas: members.map((j) => map.CatchmentArea[j]),
-        featureIds: [],
-      },
-    });
+    starts = workingArray(map, "int32", "rivers:reach-starts").fill(-1);
+  let count = 0;
+  for (let i = 0; i < map.mesh.contentCount; i++)
+    if (map.RiverOrders[i] > 0 && incoming[i] !== 1) starts[i] = count++;
+  try {
+    for (let i = 0; i < map.mesh.contentCount; i++) {
+      if (starts[i] < 0) continue;
+      const members = riverReach(state, i, incoming),
+        mouth = members.at(-1)!;
+      yield {
+        start: i,
+        members,
+        reach: {
+          downstream: members.length > 1 && starts[mouth] >= 0 ? starts[mouth] : null,
+          waterBody: map.WaterKindCodes[mouth] !== 0 ? map.WaterBodyIds[mouth] : null,
+          order: map.RiverOrders[i],
+          basin: map.DrainageBasinIds[i],
+          coordinates: unwrapCoordinates(
+            members.map((j) => {
+              const p = nativePosition(work, j);
+              return [Math.round(p.x), Math.round(p.y)] as [number, number];
+            }),
+            map.mesh.periodic?.width
+          ) as [number, number][],
+          discharges: members.map((j) => map.FlowAccumulation[j]),
+          catchmentAreas: members.map((j) => map.CatchmentArea[j]),
+          featureIds: [],
+        } satisfies DrainageReach,
+      };
+    }
+  } finally {
+    releaseWorking(map, starts);
   }
-  const starts = new Map(reaches.map(({ start }, index) => [start, index]));
-  for (const { members, reach } of reaches)
-    reach.downstream = members.length > 1 ? (starts.get(members.at(-1)!) ?? null) : null;
-  return reaches;
 }
 /** World maps keep their major basins; a dry world still shows its largest river systems. */
 function worldRiverMinimum(state: GenerationState, basinDischarge: Map<number, number>) {
@@ -172,7 +181,7 @@ function worldRiverMinimum(state: GenerationState, basinDischarge: Map<number, n
  */
 function shortHeadwater(
   work: NonNullable<GenerationState["physical"]>,
-  incoming: Int32Array,
+  incoming: NumericalVector,
   members: number[]
 ) {
   const mouth = members.at(-1)!;
@@ -183,7 +192,7 @@ function shortHeadwater(
   return length < work.profile.MappedHeadwaterMinimumLength;
 }
 function riverInputs(map: PhysicalField) {
-  const incoming = new Int32Array(map.mesh.count),
+  const incoming = workingArray(map, "int32", "rivers:incoming"),
     basinDischarge = new Map<number, number>();
   for (let i = 0; i < map.mesh.count; i++) {
     const basin = map.DrainageBasinIds[i];
@@ -222,16 +231,23 @@ export function extractNativeGeography(
   context: MapProcessContext,
   deliveries = allDeliveries
 ) {
+  context.progress(0, "Tracing ocean shoreline");
   state.surface.ocean = oceanFootprint(state);
+  context.progress(0.1, "Extracting ocean regions");
   if (deliveries.oceans) extractOceans(state);
+  context.progress(0.2, "Extracting geological events and lakes");
   extractGeologicalEvents(state, deliveries);
   if (deliveries.lakes) extractLakes(state);
+  context.progress(0.35, "Extracting landforms");
   if (deliveries.landforms) {
     extractNamedLandforms(state);
     extractReliefFeatures(state);
   }
+  context.progress(0.5, "Extracting magical places");
   if (deliveries.magic) extractMagicPlaces(state);
+  context.progress(0.65, "Extracting ecological regions");
   if (deliveries.ecology) extractEcologicalFeatures(state);
+  context.progress(0.8, "Extracting river geography");
   if (deliveries.rivers) extractRiverGeography(state, context, deliveries.landforms);
   else delete state.domain.world.drainage?.[state.domain.scope.areaId];
   // Last: a detected landform on a landmark is the landmark, published once under its identity.
@@ -239,6 +255,7 @@ export function extractNativeGeography(
     dropClaimedFeatures(state, landmarkClaims(state));
     extractLandmarks(state);
   }
+  context.progress(1, "Geographic extraction complete");
 }
 function extractRiverGeography(
   state: GenerationState,
@@ -249,37 +266,48 @@ function extractRiverGeography(
     map = work.map,
     paths = createRiverPaths(map),
     { incoming, basinDischarge } = riverInputs(map);
+  const lakes = new Map<number, string>();
+  for (const feature of generationFeatures(state, {
+    kind: "lake",
+    areaId: state.domain.scope.areaId,
+  }))
+    lakes.set(Number(feature.attributes.waterBody), feature.id);
   paths.water = {
     ocean: state.surface.ocean ?? null,
-    lakes: new Map(
-      Object.values(state.domain.world.features)
-        .filter(
-          (feature) => feature.kind === "lake" && feature.areaId === state.domain.scope.areaId
-        )
-        .map((feature) => [Number(feature.attributes.waterBody), feature.geometry])
-    ),
+    lakes: {
+      get(id) {
+        const featureId = lakes.get(id);
+        return featureId ? generationFeature(state, featureId)?.geometry : undefined;
+      },
+    },
   };
   const minimum = worldRiverMinimum(state, basinDischarge),
-    reaches = drainageReaches(state, incoming);
-  // The map shows a subset; the stored network keeps every reach for finer areas.
-  for (const { start, members, reach } of reaches) {
-    const discharge = basinDischarge.get(reach.basin) ?? 0;
-    if (discharge < minimum) continue;
-    if (!spatial.covers(state.domain.scope.footprint, point(nativePosition(work, start)))) continue;
-    if (shortHeadwater(work, incoming, members)) continue;
-    reach.featureIds = publishReach(state, start, members, paths, discharge);
+    reaches: DrainageReach[] = [];
+  function* publish() {
+    // The map shows a subset; the stored network keeps every reach for finer areas.
+    for (const { start, members, reach } of drainageReaches(state, incoming)) {
+      reaches.push(reach);
+      const discharge = basinDischarge.get(reach.basin) ?? 0;
+      if (discharge < minimum) continue;
+      if (!spatial.covers(state.domain.scope.footprint, point(nativePosition(work, start))))
+        continue;
+      if (shortHeadwater(work, incoming, members)) continue;
+      reach.featureIds = publishReach(state, start, members, paths, discharge);
+      yield { members, featureIds: reach.featureIds };
+    }
   }
-  if (valleys)
-    extractValleys(
-      state,
-      reaches.map(({ members, reach }) => ({ members, featureIds: reach.featureIds }))
-    );
+  try {
+    if (valleys) extractValleys(state, publish());
+    else for (const reach of publish()) void reach;
+  } finally {
+    releaseWorking(map, incoming);
+  }
   state.domain.world.drainage = {
     ...state.domain.world.drainage,
     [state.domain.scope.areaId]: {
       areaId: state.domain.scope.areaId,
       spaceId: state.domain.scope.spaceId,
-      reaches: reaches.map(({ reach }) => reach),
+      reaches,
     },
   };
   context.recordCause({

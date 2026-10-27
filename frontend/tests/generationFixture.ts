@@ -12,6 +12,13 @@ const fixtureBundle = build({
   globalName: "AtlasGenerationFixture",
   platform: "browser",
 }).then((result) => result.outputFiles[0].text);
+const publicationBundle = build({
+  entryPoints: [fileURLToPath(new URL("./fixturePublication.worker.ts", import.meta.url))],
+  bundle: true,
+  write: false,
+  format: "iife",
+  platform: "browser",
+}).then((result) => result.outputFiles[0].text);
 
 export interface GenerationFixtureOptions {
   /** Keep the job running until `completeGenerationFixture` is called. */
@@ -44,6 +51,7 @@ export async function installGenerationFixture(page: Page, options: GenerationFi
     landmarks: options.landmarks ?? [],
     society: options.society,
     diagnostics: options.diagnostics ?? [],
+    publicationSource: await publicationBundle,
   };
   await page.addInitScript({
     content: `${await fixtureBundle}\nAtlasGenerationFixture.installGenerationFixtureRuntime(${JSON.stringify(runtime)});`,
@@ -51,6 +59,9 @@ export async function installGenerationFixture(page: Page, options: GenerationFi
 }
 
 export async function completeGenerationFixture(page: Page) {
+  await page.waitForFunction(() =>
+    (window as unknown as { generationFixtureReady?(): boolean }).generationFixtureReady?.()
+  );
   await page.evaluate(() =>
     (
       window as unknown as { completeGenerationFixture(): Promise<void> }

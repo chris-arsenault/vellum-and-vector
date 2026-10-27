@@ -4,43 +4,31 @@ import {
   neighbors,
   requireThat,
   spatial,
+  allocateNumerical,
   type Grid,
   type Position,
+  type NumericalAllocator,
+  type NumericalVector,
 } from "@atlas/domain";
+import { PriorityQueue } from "./canonry/priorityQueue";
 
-interface Step {
+type Step = {
   cell: number;
   cost: number;
-}
+};
 export class RouteHeap {
-  private readonly items: Step[] = [];
+  private readonly items: PriorityQueue<Step>;
+  constructor(numerical?: NumericalAllocator) {
+    this.items = new PriorityQueue((a, b) => a.cost - b.cost, numerical, ["cell", "cost"]);
+  }
   push(item: Step) {
-    const items = this.items;
-    let index = items.length;
-    items.push(item);
-    while (index > 0) {
-      const parent = Math.floor((index - 1) / 2);
-      if (items[parent].cost <= item.cost) break;
-      items[index] = items[parent];
-      index = parent;
-    }
-    items[index] = item;
+    this.items.push(item);
   }
   pop() {
-    const items = this.items,
-      first = items[0],
-      last = items.pop();
-    if (!items.length || !last) return first;
-    let index = 0;
-    while (index * 2 + 1 < items.length) {
-      let child = index * 2 + 1;
-      if (child + 1 < items.length && items[child + 1].cost < items[child].cost) child++;
-      if (items[child].cost >= last.cost) break;
-      items[index] = items[child];
-      index = child;
-    }
-    items[index] = last;
-    return first;
+    return this.items.count ? this.items.pop() : undefined;
+  }
+  close() {
+    this.items.close();
   }
 }
 function nearest(grid: Grid, point: Position) {
@@ -63,15 +51,49 @@ function nearest(grid: Grid, point: Position) {
   requireThat(best >= 0, "route_samples", "This extent has no active routing samples.");
   return best;
 }
-export function findRoute(grid: Grid, from: Position, to: Position, kind: string): Position[] {
+export function findRoute(
+  grid: Grid,
+  from: Position,
+  to: Position,
+  kind: string,
+  numerical?: NumericalAllocator
+): Position[] {
+  const allocate = (type: "float64" | "int32", name: string) =>
+    allocateNumerical(
+      {
+        type,
+        length: grid.active.length,
+        lifetime: "process",
+        name,
+      },
+      numerical
+    );
+  const costs = allocate("float64", "route-cost").fill(Infinity),
+    previous = allocate("int32", "route-previous").fill(-1),
+    queue = new RouteHeap(numerical);
+  try {
+    return searchRoute(grid, from, to, kind, { costs, previous, queue });
+  } finally {
+    queue.close();
+    numerical?.releaseUnused([costs, previous], []);
+  }
+}
+function searchRoute(
+  grid: Grid,
+  from: Position,
+  to: Position,
+  kind: string,
+  {
+    costs,
+    previous,
+    queue,
+  }: { costs: NumericalVector; previous: NumericalVector; queue: RouteHeap }
+) {
   const start = nearest(grid, from),
     end = nearest(grid, to);
   // Every edge uses the same footprint. Read its topology once per route
   // while retaining exact segment checks at concavities and holes.
   const covers = spatial.geometryCoverage(grid.scope.footprint);
-  const costs = new Float64Array(grid.active.length).fill(Infinity);
-  const previous = new Int32Array(grid.active.length).fill(-1),
-    queue = new RouteHeap();
   // A*: no step costs less than its distance times the cheapest land factor, so the straight
   // distance to the end, so scaled, never overestimates and the search stays near the way.
   const goal = gridPosition(grid, end),
@@ -150,7 +172,7 @@ function oceanCell(grid: Grid, index: number) {
 }
 function routePoints(
   grid: Grid,
-  previous: Int32Array,
+  previous: NumericalVector,
   start: number,
   end: number,
   from: Position,

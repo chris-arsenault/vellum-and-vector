@@ -5,9 +5,15 @@ import { lerp, round, truncate, units } from "./math";
 import { hashUnit } from "./noise";
 import { nearestTriangle, triangleIdentity } from "./mesh";
 import { paintMaximum, triangleDistanceSquared } from "./radial";
+import type { NumericalVector } from "@atlas/domain";
+import { NumericalList } from "./numericalList";
+import { releaseWorking } from "./physicalNumerics";
 
-function candidateSets(map: PhysicalField, c: PhysicalContext): number[][] {
-  const result: number[][] = [[], [], [], []];
+function candidateSets(map: PhysicalField, c: PhysicalContext) {
+  const result = Array.from(
+    { length: 4 },
+    () => new NumericalList("int32", "warmth:candidates", map.numerical)
+  );
   for (let i = 0; i < map.mesh.contentCount; i++) {
     if (map.WaterKindCodes[i] === 1) {
       result[0].push(i);
@@ -19,11 +25,11 @@ function candidateSets(map: PhysicalField, c: PhysicalContext): number[][] {
     if (distance >= 200_000 && map.Elevation[i] < peak) result[2].push(i);
     if (map.Elevation[i] >= peak && map.Geothermal[i] >= 420) result[3].push(i);
   }
-  return result;
+  return result.map((values) => values.finish());
 }
 function selectSource(
   map: PhysicalField,
-  candidates: number[],
+  candidates: NumericalVector,
   selected: number[],
   seed: number,
   sourceIndex: number
@@ -84,4 +90,5 @@ export function warmthSources(map: PhysicalField, c: PhysicalContext) {
     );
     paintMaximum(map.mesh, map.Warmth, map.mesh.x[source], map.mesh.y[source], radius, strength);
   }
+  releaseWorking(map, ...candidates);
 }

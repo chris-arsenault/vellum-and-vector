@@ -1,4 +1,13 @@
-import { putChannel, requireThat, type Grid } from "@atlas/domain";
+import {
+  allocateNumerical,
+  generateNumerical,
+  putChannel,
+  requireThat,
+  type Grid,
+  type NumericalVector,
+  type NumericalAllocator,
+} from "@atlas/domain";
+import { orderedIndices } from "./canonry/numericalOrder";
 import { requireChannel } from "./mapFields";
 import { conditionDrainage, routeRunoff, writeDrainage } from "./mapDrainage";
 import {
@@ -41,9 +50,9 @@ export const drainageProcess: MapProcess = {
     kind: "model-pass",
     applyPass(state, context) {
       const level = Number(context.parameters.seaLevel),
-        graph = conditionDrainage(state.surface, level, context);
+        graph = conditionDrainage(state.surface, level, context, state.numerical);
       routeRunoff(state, graph, context);
-      writeDrainage(state.surface, graph, level);
+      writeDrainage(state.surface, graph, level, state.numerical);
     },
   },
   validate(state) {
@@ -133,12 +142,20 @@ export const erosionProcess: MapProcess = {
       const grid = state.surface,
         mobile = movableTerrain(state),
         years = epochYears(context);
-      const moving = new Float64Array(grid.active.length),
-        eroded = new Float64Array(grid.active.length),
-        deposited = new Float64Array(grid.active.length);
-      const order = Array.from(grid.active.keys())
-        .filter((i) => grid.active[i])
-        .sort((a, b) => grid.channels.drainageRank[b] - grid.channels.drainageRank[a]);
+      const values = (name: string) =>
+        allocateNumerical(
+          {
+            type: "float64",
+            length: grid.active.length,
+            lifetime: "process",
+            name: `erosion:${name}`,
+          },
+          state.numerical
+        );
+      const moving = values("moving"),
+        eroded = values("eroded"),
+        deposited = values("deposited");
+      const order = orderedIndices(grid.channels.drainageRank, true, state.numerical);
       let exported = 0;
       for (let n = 0; n < order.length; n++) {
         checkProgress(
@@ -149,6 +166,7 @@ export const erosionProcess: MapProcess = {
         );
         const i = order[n],
           target = grid.channels.receiver[i];
+        if (!grid.active[i]) continue;
         const supply = removeMaterial(grid, i, target, mobile[i] === 1, years, context);
         eroded[i] = supply;
         const load = moving[i] + supply;
@@ -157,7 +175,7 @@ export const erosionProcess: MapProcess = {
         if (target >= 0) moving[target] += load - retained;
         else exported += load - retained;
       }
-      recordTransport(grid, eroded, deposited, exported, context);
+      recordTransport(grid, eroded, deposited, exported, context, state.numerical);
     },
   },
   validate(state) {
@@ -229,10 +247,11 @@ function depositMaterial(
 }
 function recordTransport(
   grid: Grid,
-  removed: Float64Array,
-  retained: Float64Array,
+  removed: NumericalVector,
+  retained: NumericalVector,
   exported: number,
-  context: MapProcessContext
+  context: MapProcessContext,
+  numerical?: NumericalAllocator
 ) {
   const eroded = removed.reduce((sum, v) => sum + v, 0),
     deposited = retained.reduce((sum, v) => sum + v, 0);
@@ -245,13 +264,21 @@ function recordTransport(
     grid,
     "erosion",
     "metre",
-    Float64Array.from(removed, (v, i) => (grid.measures[i] > 0 ? v / grid.measures[i] : 0))
+    generateNumerical(
+      { type: "float64", length: removed.length, lifetime: "process", name: "erosion:depth" },
+      (i) => (grid.measures[i] > 0 ? removed[i] / grid.measures[i] : 0),
+      numerical
+    )
   );
   putChannel(
     grid,
     "deposition",
     "metre",
-    Float64Array.from(retained, (v, i) => (grid.measures[i] > 0 ? v / grid.measures[i] : 0))
+    generateNumerical(
+      { type: "float64", length: retained.length, lifetime: "process", name: "deposition:depth" },
+      (i) => (grid.measures[i] > 0 ? retained[i] / grid.measures[i] : 0),
+      numerical
+    )
   );
   context.recordCause({
     kind: "material",

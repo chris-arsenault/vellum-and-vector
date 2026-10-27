@@ -283,10 +283,13 @@ export function validateLandmarkParameters(kind: LandmarkKind, parameters: Recor
   }
 }
 /** The horizontal footprint over which the landmark's causes act. */
-export function landmarkFootprint(landmark: Pick<Landmark, "kind" | "geometry" | "parameters">) {
+export function landmarkFootprint(
+  landmark: Pick<Landmark, "kind" | "geometry" | "parameters">,
+  gis: Pick<typeof spatial, "buffer"> = spatial
+) {
   const kind = landmarkKind(landmark.kind);
   requireThat(kind, "landmark_kind", "Choose a landmark kind from the catalogue.");
-  return spatial.buffer(landmark.geometry, kind.reach(landmark.parameters)) ?? landmark.geometry;
+  return gis.buffer(landmark.geometry, kind.reach(landmark.parameters)) ?? landmark.geometry;
 }
 /** The generated realization of a landmark, when generation has published one under its id. */
 export function realizedLandmark(world: World, landmark: Landmark): AtlasFeature | null {
@@ -298,7 +301,10 @@ export function realizedLandmark(world: World, landmark: Landmark): AtlasFeature
  * identities. A landmark has one row: its generated realization, carrying the measured
  * signature under the authored name, or the authored record until generation has run.
  */
-export function authoredLandmarkFeatures(world: World): AtlasFeature[] {
+export function authoredLandmarkFeatures(
+  world: World,
+  gis?: Pick<typeof spatial, "buffer">
+): AtlasFeature[] {
   const root = Object.values(world.areas).find((a) => !a.parentId)!.id;
   return (world.landmarks ?? []).map((landmark) => {
     const realized = realizedLandmark(world, landmark);
@@ -319,7 +325,7 @@ export function authoredLandmarkFeatures(world: World): AtlasFeature[] {
       kind: "landmark",
       name: landmark.name,
       geometry: landmark.geometry,
-      footprint: landmarkFootprint(landmark),
+      footprint: landmarkFootprint(landmark, gis),
       detail: {},
       attributes: {
         landmarkKind: landmark.kind,

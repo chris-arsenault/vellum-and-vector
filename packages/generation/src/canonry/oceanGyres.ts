@@ -10,6 +10,8 @@ import { physicalGradients } from "./physicalMetric";
 import { sourceOrder } from "./airColumn";
 import { smoothMetric } from "./metricSmoothing";
 import { linkDistance } from "./longitudeWrap";
+import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
+import type { NumericalVector } from "@atlas/domain";
 
 const unit = (value: number) => Math.min(1, Math.max(0, value));
 
@@ -63,16 +65,18 @@ function shoreDistance(map: PhysicalField, i: number, reach: number) {
 function coastDistance(map: PhysicalField, reach: number) {
   return oceanPathDistance(
     map,
-    Float64Array.from(map.WaterKindCodes, (_, i) => shoreDistance(map, i, reach)),
+    workingValues(map, "float64", "ocean:coast-distance", (i) => shoreDistance(map, i, reach)),
     reach
   );
 }
 /** Ocean-path distance onward from cells whose starting distance is below `reach`. */
-function oceanPathDistance(map: PhysicalField, start: Float64Array, reach: number) {
+function oceanPathDistance(map: PhysicalField, start: NumericalVector, reach: number) {
   const mesh = map.mesh,
-    distances = start.slice();
+    distances = start;
   const queue = new PriorityQueue<{ i: number; distance: number }>(
-    (a, b) => a.distance - b.distance
+    (a, b) => a.distance - b.distance,
+    map.numerical,
+    ["i", "distance"]
   );
   for (let i = 0; i < mesh.count; i++)
     if (map.WaterKindCodes[i] === 1 && distances[i] < reach)
@@ -95,9 +99,14 @@ export function gyreDirections(map: PhysicalField, c: PhysicalContext) {
     mesh = map.mesh;
   // Proximity falls from one at the shore; its gradient points toward land.
   const distance = coastDistance(map, p.GyreCoastalLength * 3);
-  const coast = Float64Array.from(distance, (d) => Math.exp(-d / p.GyreCoastalLength) / 2);
-  const normal = physicalGradients(mesh, coast);
-  const western = new Float64Array(mesh.count);
+  const coast = workingValues(
+    map,
+    "float64",
+    "ocean:coast",
+    (i) => Math.exp(-distance[i] / p.GyreCoastalLength) / 2
+  );
+  const normal = physicalGradients(mesh, coast, map.numerical);
+  const western = workingArray(map, "float64", "ocean:western");
   map.Upwelling.fill(0);
   for (let i = 0; i < mesh.count; i++) {
     if (map.WaterKindCodes[i] !== 1) continue;
@@ -116,12 +125,13 @@ export function gyreDirections(map: PhysicalField, c: PhysicalContext) {
     map.OceanCurrentX[i] = round((flow.x / length) * 1000);
     map.OceanCurrentY[i] = round((flow.y / length) * 1000);
   }
+  releaseWorking(map, distance, coast, normal.x, normal.y);
   return western;
 }
 export function intensifyWesternBoundaries(
   map: PhysicalField,
   c: PhysicalContext,
-  western: Float64Array
+  western: NumericalVector
 ) {
   for (let i = 0; i < map.mesh.count; i++)
     if (western[i] > 0)
@@ -143,7 +153,11 @@ function equilibrium(map: PhysicalField, c: PhysicalContext, i: number) {
  * Surface water carries the temperature of where it came from, relaxing toward
  * the local equilibrium with distance; upwelling brings up cold water.
  */
-export function seaSurfaceAnomaly(map: PhysicalField, c: PhysicalContext, upstream: Int32Array) {
+export function seaSurfaceAnomaly(
+  map: PhysicalField,
+  c: PhysicalContext,
+  upstream: NumericalVector
+) {
   const p = c.Profile,
     mixed = mixFronts(map, p, carriedAnomaly(map, c, upstream));
   for (let i = 0; i < map.mesh.count; i++)
@@ -151,18 +165,18 @@ export function seaSurfaceAnomaly(map: PhysicalField, c: PhysicalContext, upstre
       map.WaterKindCodes[i] === 1
         ? round(mixed[i] - (map.Upwelling[i] * p.UpwellingCooling) / 1000)
         : 0;
+  releaseWorking(map, mixed);
 }
 /** Departure of carried water from the local equilibrium, scaled by transport. */
-function carriedAnomaly(map: PhysicalField, c: PhysicalContext, upstream: Int32Array) {
-  const p = c.Profile,
-    n = map.mesh.count;
+function carriedAnomaly(map: PhysicalField, c: PhysicalContext, upstream: NumericalVector) {
+  const p = c.Profile;
   // Exponentially weighted upstream averages, accumulated in one pass from
   // each current's source: total = own + decay × upstream total.
-  const sums = new Float64Array(n),
-    weights = new Float64Array(n),
-    carried = new Float64Array(n),
+  const sums = workingArray(map, "float64", "ocean:heat-sum"),
+    weights = workingArray(map, "float64", "ocean:heat-weight"),
+    carried = workingArray(map, "float64", "ocean:carried-heat"),
     distance = linkDistance(map, p),
-    { order, boundary } = sourceOrder(upstream);
+    { order, boundary } = sourceOrder(upstream, map.numerical);
   // Gyres are closed loops: the second pass lets each loop's break read the
   // first pass's upstream value, so heat carries around the circuit.
   for (const pass of [0, 1])
@@ -179,6 +193,7 @@ function carriedAnomaly(map: PhysicalField, c: PhysicalContext, upstream: Int32A
       const transport = Math.min(1, map.OceanCurrentStrength[i] / 600);
       carried[i] = (sums[i] / weights[i] - local) * transport;
     }
+  releaseWorking(map, sums, weights, order, boundary);
   return carried;
 }
 /**
@@ -188,26 +203,32 @@ function carriedAnomaly(map: PhysicalField, c: PhysicalContext, upstream: Int32A
  * On a map with few kilometres per degree the length shrinks to a few degrees,
  * so a front never spans a whole belt.
  */
-function mixFronts(map: PhysicalField, p: PhysicalProfile, carried: Float64Array) {
+function mixFronts(map: PhysicalField, p: PhysicalProfile, carried: NumericalVector) {
   const length = Math.min(p.SeaSurfaceMixing, p.SeaSurfaceMixingDegrees * metresPerDegree(p)),
-    ocean = Uint8Array.from(map.WaterKindCodes, (kind) => Number(kind === 1)),
+    opposing = opposition(map),
     reach = length * 3,
     front = oceanPathDistance(
       map,
-      Float64Array.from(opposition(map), (value) => (value > 0.5 ? 0 : reach)),
+      workingValues(map, "float64", "ocean:front-distance", (i) => (opposing[i] > 0.5 ? 0 : reach)),
       reach
     ),
-    zone = Uint8Array.from(ocean, (wet, i) => Number(wet === 1 && front[i] < reach)),
-    mixed = zone.some(Boolean) ? smoothMetric(map.mesh, carried, length, zone) : carried;
-  return Float64Array.from(carried, (value, i) => {
+    zone = workingValues(map, "uint8", "ocean:mixing-zone", (i) =>
+      Number(map.WaterKindCodes[i] === 1 && front[i] < reach)
+    ),
+    mixed = zone.some(Boolean)
+      ? smoothMetric(map.mesh, carried, length, zone, map.numerical)
+      : carried;
+  for (let i = 0; i < carried.length; i++) {
     const w = Math.exp(-((front[i] / length) ** 2));
-    return value + w * (mixed[i] - value);
-  });
+    carried[i] += w * (mixed[i] - carried[i]);
+  }
+  releaseWorking(map, opposing, zone, front, ...(mixed !== carried ? [mixed] : []));
+  return carried;
 }
 /** How directly each ocean cell's drift opposes a neighbour's: one head-on, zero aligned. */
 function opposition(map: PhysicalField) {
   const mesh = map.mesh,
-    result = new Float64Array(mesh.count);
+    result = workingArray(map, "float64", "ocean:opposition");
   for (let i = 0; i < mesh.count; i++) {
     if (map.WaterKindCodes[i] !== 1) continue;
     for (let edge = 0; edge < mesh.degree[i]; edge++) {

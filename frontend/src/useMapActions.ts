@@ -1,7 +1,6 @@
 import type { Geometry } from "geojson";
 import { bounds, frameAt, rectangle } from "./presentation";
 import { makeCommand } from "./useAtlas";
-import { session } from "./atlasState";
 import { brushChannel, drawingDefinition, type Workspace } from "./cartography";
 import {
   drawnFeature,
@@ -12,20 +11,26 @@ import {
 } from "./mapAuthoring";
 import type { EditorEditing, EditorSessionState } from "./useEditor";
 import type { AtlasFeature, Position, Template, Tool, World } from "./types";
+import { useRef } from "react";
+import { atlasWorkspace, workspaceScope } from "./atlasWorkspace";
+import { editArea } from "./useScene";
 
 export function useMapActions(world: World, state: EditorSessionState, editing: EditorEditing) {
-  const select = (feature: AtlasFeature | null) => {
-    state.setGeometryRole("primary");
-    state.setSelected(feature);
-    const source = world.magic.find((source) => source.id === feature?.id);
-    const landmark = world.landmarks.find((landmark) => landmark.id === feature?.id);
-    if (source) {
-      state.setMagicDraft({ id: source.id, source: source.source, radius: source.radius });
-      state.setPanel("magic");
-    } else if (landmark) {
-      state.setLandmarkDraft({ id: landmark.id, geometry: landmark.geometry });
-      state.setPanel("landmark");
-    } else state.setPanel("inspect");
+  const selection = useRef(0);
+  const select = async (display: AtlasFeature | null) => {
+    const request = ++selection.current;
+    let feature = display;
+    try {
+      if (display)
+        feature = await (
+          await atlasWorkspace()
+        ).readFeature(workspaceScope(world, editArea(world, state.areaId, display)), display.id);
+    } catch (error) {
+      if (request === selection.current) state.setInteractionError(error as Error);
+      return;
+    }
+    if (request !== selection.current) return;
+    selectFeaturePanel(world, state, feature);
   };
   const extent = (geometry: Geometry) => {
     try {
@@ -58,8 +63,14 @@ export function useMapActions(world: World, state: EditorSessionState, editing: 
     selectExtent: extent,
     setTool: chooseTool,
     draw: (geometry: Geometry) => completeDrawing(world, state, editing, geometry, extent),
-    enter: (id: string) => enterArea(world, state, id),
-    cancel: () => cancelDrawing(state),
+    enter: (id: string) => {
+      selection.current++;
+      enterArea(world, state, id);
+    },
+    cancel: () => {
+      selection.current++;
+      cancelDrawing(state);
+    },
     ...geometryActions(world, state, editing),
     setWorkspace: (workspace: Workspace) => chooseWorkspace(world, state, workspace),
     placeTemplate: (template: Template) => {
@@ -69,6 +80,19 @@ export function useMapActions(world: World, state: EditorSessionState, editing: 
     },
     refinePoi: (feature: AtlasFeature) => extent(placeExtent(feature)),
   };
+}
+function selectFeaturePanel(world: World, state: EditorSessionState, feature: AtlasFeature | null) {
+  state.setGeometryRole("primary");
+  state.setSelected(feature);
+  const source = world.magic.find((source) => source.id === feature?.id);
+  const landmark = world.landmarks.find((landmark) => landmark.id === feature?.id);
+  if (source) {
+    state.setMagicDraft({ id: source.id, source: source.source, radius: source.radius });
+    state.setPanel("magic");
+  } else if (landmark) {
+    state.setLandmarkDraft({ id: landmark.id, geometry: landmark.geometry });
+    state.setPanel("landmark");
+  } else state.setPanel("inspect");
 }
 function toolProblem(world: World, state: EditorSessionState, tool: Tool) {
   if (tool.startsWith("survey") && !world.layers[state.customLayer])
@@ -142,7 +166,7 @@ function placeExtent(feature: AtlasFeature) {
   return rectangle(x - 25, y - 25, 50, 50);
 }
 function enterArea(world: World, state: EditorSessionState, id: string) {
-  const area = session(world.id).snapshot.world.areas[id] ?? state.area,
+  const area = world.areas[id] ?? state.area,
     box = bounds(area.footprint);
   state.setAreaId(id);
   state.setRegionId(null);

@@ -1,3 +1,9 @@
+import {
+  fixtureWorld,
+  fixtureState,
+  undoWorld,
+  commitCommand,
+} from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
 import {
   rectangle,
@@ -7,23 +13,21 @@ import {
   presentAtlasFeature,
   type AtlasFeature,
 } from "@atlas/domain";
-import { createWorld, session, undoWorld } from "./atlasState";
-import { commitCommand } from "./atlasCommands";
 
 function fixture() {
-  const world = createWorld({ name: "Refinement", seed: 13, width: 100_000, height: 100_000 }),
+  const world = fixtureWorld({ name: "Refinement", seed: 13, width: 100_000, height: 100_000 }),
     source = Object.keys(world.areas)[0];
-  const current = () => session(world.id).snapshot.world;
-  const command = (kind: string, data: Record<string, unknown>) =>
-    commitCommand(world.id, {
+  const current = () => fixtureState(world.id).snapshot.world;
+  const command = async (kind: string, data: Record<string, unknown>) =>
+    await commitCommand(world.id, {
       operationId: crypto.randomUUID(),
       expectedVersion: current().version,
       kind,
       data,
     });
-  const region = (span: number, parentId: string | null = null) => {
+  const region = async (span: number, parentId: string | null = null) => {
     const id = crypto.randomUUID();
-    command("putView", {
+    await command("putView", {
       id,
       areaId: source,
       name: "A region",
@@ -34,14 +38,14 @@ function fixture() {
   };
   return { world, source, current, command, region };
 }
-it("links arbitrary recursive geographic refinement to existing selected subjects", () => {
+it("links arbitrary recursive geographic refinement to existing selected subjects", async () => {
   const f = fixture(),
     original = structuredClone(f.current().areas[f.source]);
   let parent: string | null = null,
     parentArea = f.source;
   for (const span of [80_000, 40_000, 20_000, 10_000]) {
-    const id = f.region(span, parent);
-    f.command("createArea", regionRefinementInput(f.current(), id));
+    const id = await f.region(span, parent);
+    await f.command("createArea", regionRefinementInput(f.current(), id));
     const area = refinedRegionArea(f.current(), id)!;
     expect(area.parentId).toBe(parentArea);
     expect(area.profile).toBe("region");
@@ -56,40 +60,57 @@ it("links arbitrary recursive geographic refinement to existing selected subject
   expect(f.current().areas[f.source]).toEqual(original);
   expect(f.current().generations).toEqual([]);
 });
-it("rejects duplicate, mismatched and unsupported refinements and preserves undo", () => {
+it("rejects duplicate, mismatched and unsupported refinements and preserves undo", async () => {
   const f = fixture(),
-    id = f.region(40_000),
+    id = await f.region(40_000),
     input = regionRefinementInput(f.current(), id);
-  expect(() => f.command("createArea", { ...input, profile: "site" })).toThrow(
-    /geographic map type/
+  await expect(
+    async () => await f.command("createArea", { ...input, profile: "site" })
+  ).rejects.toThrow(/geographic map type/);
+  await expect(
+    async () =>
+      await f.command("createArea", {
+        ...input,
+        footprint: rectangle([1000, 1000, 30_000, 30_000]),
+      })
+  ).rejects.toThrow(/outline/);
+  await f.command("createArea", input);
+  await expect(async () => await f.command("createArea", input)).rejects.toThrow(
+    /existing refined map/
   );
-  expect(() =>
-    f.command("createArea", { ...input, footprint: rectangle([1000, 1000, 30_000, 30_000]) })
-  ).toThrow(/outline/);
-  f.command("createArea", input);
-  expect(() => f.command("createArea", input)).toThrow(/existing refined map/);
   const view = f.current().views.find((v) => v.id === id)!;
-  expect(() =>
-    f.command("putView", {
-      ...view,
-      region: { ...view.region, footprint: rectangle([1000, 1000, 5000, 5000]) },
-    })
-  ).toThrow(/outline/);
-  expect(() => f.command("removeView", { id })).toThrow(/region/);
-  undoWorld(f.world.id, session(f.world.id).history[0].operationId);
+  await expect(
+    async () =>
+      await f.command("putView", {
+        ...view,
+        region: { ...view.region, footprint: rectangle([1000, 1000, 5000, 5000]) },
+      })
+  ).rejects.toThrow(/outline/);
+  await expect(async () => await f.command("removeView", { id })).rejects.toThrow(/region/);
+  await undoWorld(f.world.id, fixtureState(f.world.id).history[0].operationId);
   expect(refinedRegionArea(f.current(), id)).toBeUndefined();
   expect(f.current().views).toHaveLength(1);
 });
-it("owns fields recursively without disclosing a descendant's same-profile geography to its parent", () => {
+it("owns fields recursively without disclosing a descendant's same-profile geography to its parent", async () => {
   const f = fixture(),
-    outer = f.region(80_000);
-  f.command("createArea", regionRefinementInput(f.current(), outer));
+    outer = await f.region(80_000);
+  await f.command("createArea", regionRefinementInput(f.current(), outer));
   const parent = refinedRegionArea(f.current(), outer)!;
-  f.command("createField", { areaId: parent.id, layerId: "elevation", resolution: 5, value: 200 });
-  const inner = f.region(30_000, outer);
-  f.command("createArea", regionRefinementInput(f.current(), inner));
+  await f.command("createField", {
+    areaId: parent.id,
+    layerId: "elevation",
+    resolution: 5,
+    value: 200,
+  });
+  const inner = await f.region(30_000, outer);
+  await f.command("createArea", regionRefinementInput(f.current(), inner));
   const child = refinedRegionArea(f.current(), inner)!;
-  f.command("createField", { areaId: child.id, layerId: "elevation", resolution: 9, value: 200 });
+  await f.command("createField", {
+    areaId: child.id,
+    layerId: "elevation",
+    resolution: 9,
+    value: 200,
+  });
   expect(f.current().fields).toHaveLength(2);
   const place: AtlasFeature = {
     id: crypto.randomUUID(),

@@ -40,12 +40,11 @@ export function classInterpolator(
  * over the same four corner cells; ties go to the nearest cell.
  */
 function latticeClassSampler(grid: GridSurface, channel: string) {
-  const values = grid.channels[channel],
-    active = grid.active,
-    width = grid.width ?? 0,
+  const width = grid.width ?? 0,
     height = grid.height ?? 0;
   if (width < 2 || height < 2) return (p: Position) => interpolateSample(grid, channel, p, true);
   const [x0, y0, x1, y1] = grid.bounds;
+  const readCell = latticeMembership(grid, channel, width);
   return (p: Position) => {
     const gx = Math.max(0, Math.min(width - 1, ((p.x - x0) / (x1 - x0)) * (width - 1))),
       gy = Math.max(0, Math.min(height - 1, ((p.y - y0) / (y1 - y0)) * (height - 1)));
@@ -54,23 +53,36 @@ function latticeClassSampler(grid: GridSurface, channel: string) {
       tx = gx - x,
       ty = gy - y,
       i = y * width + x;
-    const corners = [i, i + 1, i + width, i + width + 1],
+    const { codes, mask } = readCell(i),
       weights = [(1 - tx) * (1 - ty), tx * (1 - ty), (1 - tx) * ty, tx * ty];
-    const nearest = values[Math.round(gy) * width + Math.round(gx)];
+    const nearest = codes[(Math.round(gy) - y) * 2 + Math.round(gx) - x];
     let best = nearest,
       bestWeight = -Infinity;
     for (let a = 0; a < 4; a++) {
-      if (!active[corners[a]]) continue;
-      const code = values[corners[a]];
+      if (!mask[a]) continue;
+      const code = codes[a];
       let weight = 0;
-      for (let b = 0; b < 4; b++)
-        if (active[corners[b]] && values[corners[b]] === code) weight += weights[b];
+      for (let b = 0; b < 4; b++) if (mask[b] && codes[b] === code) weight += weights[b];
       if (weight > bestWeight || (weight === bestWeight && code === nearest)) {
         best = code;
         bestWeight = weight;
       }
     }
     return best;
+  };
+}
+function latticeMembership(grid: GridSurface, channel: string, width: number) {
+  const values = grid.channels[channel],
+    active = grid.active;
+  let previous = -1,
+    held: { codes: number[]; mask: number[] };
+  return (cell: number) => {
+    if (cell !== previous || !values.immutable || !active.immutable) {
+      const corners = [cell, cell + 1, cell + width, cell + width + 1];
+      held = { codes: corners.map((i) => values[i]), mask: corners.map((i) => active[i]) };
+      previous = cell;
+    }
+    return held;
   };
 }
 function baseClassSampler(grid: GridSurface, channel: string, locate: AdaptivePointLocator) {

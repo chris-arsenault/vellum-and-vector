@@ -44,5 +44,15 @@ export function combineChanges(
 export function stagedSnapshot(source: DomainSnapshot, changes: ChangeSet): DomainSnapshot {
   const candidate = projectChanges(source, changes);
   candidate.world.version = source.world.version;
+  const revisions = new Map(source.revisions.map((r) => [`${r.kind}:${r.id}`, r]));
+  const identities = { ...source.identities };
+  for (const remove of changes.removes) revisions.delete(`${remove.kind}:${remove.id}`);
+  for (const { kind, value } of changes.writes) {
+    const id = value.id!;
+    revisions.set(`${kind}:${id}`, { kind, id, revisionId: id, version: source.world.version });
+    identities[id] = kind;
+  }
+  candidate.revisions = [...revisions.values()];
+  candidate.identities = identities;
   return candidate;
 }

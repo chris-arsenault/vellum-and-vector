@@ -1,5 +1,8 @@
 import { useMutation } from "@tanstack/react-query";
-import { analyzeArea, readFeature } from "./atlasReads";
+import {
+  analyzeWorkspaceArea as analyzeArea,
+  readWorkspaceFeature as readFeature,
+} from "./workspaceReads";
 import { ErrorMessage } from "./ErrorMessage";
 import { newFeature, type EditorState } from "./useEditor";
 import type { World } from "./types";

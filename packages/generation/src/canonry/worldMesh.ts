@@ -1,74 +1,17 @@
-import type { PhysicalMesh, TriangleCoord } from "./mesh";
-import { neighborCoord } from "./mesh";
+import {
+  allocateNumerical,
+  generateNumerical,
+  type NumericalAllocator,
+  type SampleType,
+} from "@atlas/domain";
+import { neighborCoord, triangleIndex, type PhysicalMesh } from "./mesh";
 import { worldLattice, joinWorldEdges } from "./periodicMesh";
+import { latticePosition, type LatticeFrame } from "./latticeRows";
+import { sampledLattice } from "./sampledLattice";
 
-const rootThree = Math.sqrt(3);
-const triangleArea = (3 * rootThree) / 4;
-const key = (p: TriangleCoord) => `${p.u}:${p.v}:${Number(p.inverted)}`;
+const triangleArea = (3 * Math.sqrt(3)) / 4;
 
-function coordinates(
-  p: TriangleCoord,
-  spacing: number,
-  offset: [number, number],
-  spacingY = spacing
-): [number, number] {
-  return [
-    (1.5 * (p.u + p.v) + (p.inverted ? 2 : 1)) * spacing + offset[0],
-    ((rootThree * (-p.u + p.v)) / 2) * spacingY + offset[1],
-  ];
-}
-
-function cells(
-  width: number,
-  height: number,
-  spacing: number,
-  offset: [number, number],
-  spacingY = spacing
-): TriangleCoord[] {
-  const extent = Math.ceil(width / (3 * spacing) + height / (rootThree * spacingY)) + 2;
-  const centerU = Math.round(-offset[0] / (3 * spacing) + offset[1] / (rootThree * spacingY)),
-    centerV = Math.round(-offset[0] / (3 * spacing) - offset[1] / (rootThree * spacingY));
-  const result: TriangleCoord[] = [];
-  for (let u = centerU - extent; u <= centerU + extent; u++)
-    for (let v = centerV - extent; v <= centerV + extent; v++)
-      for (const inverted of [false, true]) {
-        const p = { u, v, inverted },
-          [x, y] = coordinates(p, spacing, offset, spacingY);
-        if (Math.abs(x) <= width / 2 && Math.abs(y) <= height / 2) result.push(p);
-      }
-  return result;
-}
-
-function sampledCells(
-  bounds: [number, number, number, number],
-  spacing: number,
-  padding: number,
-  covers: (x: number, y: number) => boolean,
-  offset: [number, number],
-  wrapX = false,
-  spacingY = spacing
-) {
-  const width = bounds[2] - bounds[0],
-    height = bounds[3] - bounds[1],
-    origin = [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2];
-  const inside: TriangleCoord[] = [],
-    outside: TriangleCoord[] = [];
-  for (const p of cells(
-    width + (wrapX ? 0 : 2 * padding),
-    height + 2 * padding,
-    spacing,
-    offset,
-    spacingY
-  )) {
-    const [x, y] = coordinates(p, spacing, offset, spacingY);
-    const content =
-      Math.abs(x) <= width / 2 && Math.abs(y) <= height / 2 && covers(x + origin[0], y + origin[1]);
-    (content ? inside : outside).push(p);
-  }
-  return { inside, outside };
-}
-
-/** The mesh's positions and neighbor distances are metres; areas are square metres. */
+/** Lattice identities and metric adjacency are retained in worker-owned numerical storage. */
 export function createWorldMesh(
   bounds: [number, number, number, number],
   samples: number,
@@ -77,7 +20,8 @@ export function createWorldMesh(
   area = (bounds[2] - bounds[0]) * (bounds[3] - bounds[1]),
   anchor?: [number, number],
   wrapX = false,
-  closePoles = false
+  closePoles = false,
+  numerical?: NumericalAllocator
 ): PhysicalMesh {
   const width = bounds[2] - bounds[0],
     height = bounds[3] - bounds[1],
@@ -85,94 +29,162 @@ export function createWorldMesh(
     { spacing, spacingY } = lattice,
     workPadding = closePoles ? 0 : padding;
   const origin: [number, number] = [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2];
-  let latticeOffset: [number, number] = [0, 0],
-    sampled = sampledCells(bounds, spacing, workPadding, covers, latticeOffset, wrapX, spacingY);
-  if (!sampled.inside.length) {
-    const target = anchor ?? origin;
-    // Translate the same lattice so one centroid represents the covered anchor.
-    // Spacing, work extent and physical feature dimensions remain unchanged.
-    latticeOffset = [target[0] - origin[0] - spacing, target[1] - origin[1]];
-    sampled = sampledCells(bounds, spacing, workPadding, covers, latticeOffset, wrapX, spacingY);
+  const frame: LatticeFrame = {
+    width: width + (wrapX ? 0 : 2 * workPadding),
+    height: height + 2 * workPadding,
+    spacing,
+    spacingY,
+    offset: [0, 0],
+  };
+  const sampled = ensureLattice(
+    bounds,
+    frame,
+    covers,
+    wrapX ? lattice.columns : null,
+    anchor ?? origin,
+    numerical
+  );
+  return buildMesh(
+    bounds,
+    area,
+    padding,
+    origin,
+    frame,
+    lattice,
+    sampled,
+    wrapX,
+    closePoles,
+    numerical
+  );
+}
+function ensureLattice(
+  bounds: [number, number, number, number],
+  frame: LatticeFrame,
+  covers: (x: number, y: number) => boolean,
+  columns: number | null,
+  anchor: [number, number],
+  numerical?: NumericalAllocator
+) {
+  let sampled = sampledLattice(bounds, frame, covers, columns, numerical);
+  if (!sampled) {
+    frame.offset = [
+      anchor[0] - (bounds[0] + bounds[2]) / 2 - frame.spacing,
+      anchor[1] - (bounds[1] + bounds[3]) / 2,
+    ];
+    sampled = sampledLattice(bounds, frame, covers, columns, numerical);
   }
-  const { inside, outside } = sampled;
-  if (!inside.length)
-    throw new Error("World sampling needs at least one cell inside its footprint.");
-  const coords = [...inside, ...outside],
-    count = coords.length;
+  if (!sampled) throw new Error("World sampling needs at least one cell inside its footprint.");
+  return sampled;
+}
+function buildMesh(
+  bounds: [number, number, number, number],
+  area: number,
+  padding: number,
+  origin: [number, number],
+  frame: LatticeFrame,
+  lattice: ReturnType<typeof worldLattice>,
+  sampled: NonNullable<ReturnType<typeof sampledLattice>>,
+  wrapX: boolean,
+  closePoles: boolean,
+  numerical?: NumericalAllocator
+): PhysicalMesh {
+  const { count, contentCount, coords, indexes } = sampled,
+    { spacing } = frame;
+  const vector = (type: SampleType, size: number, name: string, value = 0) =>
+    allocateNumerical(
+      { type, length: size, lifetime: "run", name: `mesh:${name}` },
+      numerical
+    ).fill(value);
+  const identity = () =>
+    generateNumerical(
+      { type: "int32", length: count, lifetime: "run", name: "mesh:leaf" },
+      (i) => i,
+      numerical
+    );
   const mesh: PhysicalMesh = {
     count,
-    contentCount: inside.length,
+    contentCount,
     coords,
-    contentRadius: Math.sqrt(area / Math.PI),
-    workRadius: Math.hypot(width / 2 + padding, height / 2 + padding),
-    indexes: new Map(coords.map((p, i) => [key(p), i])),
-    x: new Float64Array(count),
-    y: new Float64Array(count),
-    neighbors: new Int32Array(count * 3).fill(-1),
-    edgeX: new Float32Array(count * 3),
-    edgeY: new Float32Array(count * 3),
-    boundary: new Uint8Array(count),
+    indexes,
+    origin,
+    latticeOffset: frame.offset,
+    ...meshRadii(bounds, area, padding),
+    x: vector("float64", count, "x"),
+    y: vector("float64", count, "y"),
+    neighbors: vector("int32", count * 3, "neighbors", -1),
+    edgeX: vector("float32", count * 3, "edgeX"),
+    edgeY: vector("float32", count * 3, "edgeY"),
+    boundary: vector("uint8", count, "boundary"),
     openBoundary: !closePoles,
     spacing,
-    origin,
-    latticeOffset,
-    bounds: [-width / 2, -height / 2, width / 2, height / 2],
-    areas: Float64Array.from(coords, (_, i) =>
-      i < inside.length ? area / inside.length : triangleArea * spacing ** 2
+    bounds: [
+      -(bounds[2] - bounds[0]) / 2,
+      -(bounds[3] - bounds[1]) / 2,
+      (bounds[2] - bounds[0]) / 2,
+      (bounds[3] - bounds[1]) / 2,
+    ],
+    areas: vector("float64", count, "areas", triangleArea * spacing ** 2).fill(
+      area / contentCount,
+      0,
+      contentCount
     ),
-    edgeLength: new Float64Array(count * 3).fill(spacing),
-    degree: new Int32Array(count).fill(3),
+    contentAreas: vector("float64", count, "contentAreas").fill(
+      area / contentCount,
+      0,
+      contentCount
+    ),
+    edgeLength: vector("float64", count * 3, "edgeLength", spacing),
+    degree: vector("int32", count, "degree", 3),
     stride: 3,
-    cellWidth: new Float64Array(count).fill(Math.sqrt(triangleArea) * spacing),
-    cellHeight: new Float64Array(count).fill(Math.sqrt(triangleArea) * spacing),
-    faceLength: new Float64Array(count * 3).fill(Math.sqrt(3) * spacing),
-    faceDistance: new Float64Array(count * 3).fill(spacing),
-    contentAreas: Float64Array.from(coords, (_, i) =>
-      i < inside.length ? area / inside.length : 0
-    ),
+    cellWidth: vector("float64", count, "width", Math.sqrt(triangleArea) * spacing),
+    cellHeight: vector("float64", count, "height", Math.sqrt(triangleArea) * spacing),
+    faceLength: vector("float64", count * 3, "faceLength", Math.sqrt(3) * spacing),
+    faceDistance: vector("float64", count * 3, "faceDistance", spacing),
     topology: null,
-    cellToLeaf: Int32Array.from({ length: count }, (_, i) => i),
-    leafToCell: Int32Array.from({ length: count }, (_, i) => i),
+    cellToLeaf: identity(),
+    leafToCell: identity(),
   };
   coords.forEach((p, i) => {
-    [mesh.x[i], mesh.y[i]] = coordinates(p, spacing, latticeOffset, spacingY);
+    [mesh.x[i], mesh.y[i]] = latticePosition(p, frame);
   });
   if (wrapX) joinWorldEdges(mesh, lattice, closePoles);
-  connect(mesh);
+  connect(mesh, frame);
   return mesh;
 }
-
-function connect(mesh: PhysicalMesh) {
-  const spacingY = mesh.periodic?.poles?.spacingY ?? mesh.spacing;
+function connect(mesh: PhysicalMesh, frame: LatticeFrame) {
   for (let i = 0; i < mesh.count; i++)
     for (let edge = 0; edge < 3; edge++) {
-      const j = mesh.indexes.get(key(neighborCoord(mesh.coords[i], edge))) ?? -1,
+      const p = neighborCoord(mesh.coords[i], edge),
+        j = triangleIndex(mesh, p.u, p.v, p.inverted) ?? -1,
         at = i * 3 + edge;
       mesh.neighbors[at] = j;
       if (j < 0) {
         closeBoundary(mesh, i, at);
         continue;
       }
-      const expected = coordinates(
-        neighborCoord(mesh.coords[i], edge),
-        mesh.spacing,
-        mesh.latticeOffset,
-        spacingY
-      );
-      const dx = expected[0] - mesh.x[i],
+      const expected = latticePosition(p, frame),
+        dx = expected[0] - mesh.x[i],
         dy = expected[1] - mesh.y[i],
         length = Math.hypot(dx, dy);
       mesh.edgeLength[at] = length;
       mesh.faceDistance[at] = length;
       mesh.faceLength[at] =
         edge === 0
-          ? rootThree * spacingY
-          : Math.hypot(1.5 * mesh.spacing, (rootThree * spacingY) / 2);
+          ? Math.sqrt(3) * frame.spacingY
+          : Math.hypot(1.5 * mesh.spacing, (Math.sqrt(3) * frame.spacingY) / 2);
       mesh.edgeX[at] = dx / length;
       mesh.edgeY[at] = dy / length;
     }
 }
-
+function meshRadii(bounds: [number, number, number, number], area: number, padding: number) {
+  return {
+    contentRadius: Math.sqrt(area / Math.PI),
+    workRadius: Math.hypot(
+      (bounds[2] - bounds[0]) / 2 + padding,
+      (bounds[3] - bounds[1]) / 2 + padding
+    ),
+  };
+}
 function closeBoundary(mesh: PhysicalMesh, i: number, at: number) {
   if (mesh.periodic?.poles) mesh.faceLength[at] = 0;
   else mesh.boundary[i] = 1;

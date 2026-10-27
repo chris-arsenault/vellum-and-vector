@@ -4,6 +4,9 @@ import { clearWaterSurface, setWaterSurface, type PhysicalField } from "./field"
 import type { PhysicalContext } from "./context";
 import { hashUnit } from "./noise";
 import { round } from "./math";
+import type { NumericalVector } from "@atlas/domain";
+import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
+import { NumericalList } from "./numericalList";
 import {
   contributingWater,
   qualifies,
@@ -25,16 +28,17 @@ function clearLakes(map: PhysicalField) {
 }
 function collectDepressions(
   map: PhysicalField,
-  mask: Uint8Array,
-  marks: Int32Array,
+  mask: NumericalVector,
+  marks: NumericalVector,
   start: number,
   id: number
 ): Depression[] {
   marks[start] = id;
-  const collected = [start];
+  const collected = new NumericalList("int32", "lakes:depression", map.numerical);
+  collected.push(start);
   let spill = Number.MAX_VALUE;
   for (let head = 0; head < collected.length; head++) {
-    const i = collected[head];
+    const i = collected.at(head);
     spill = Math.min(spill, map.DrainageElevations[i]);
     for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
       const j = map.mesh.neighbors[i * map.mesh.stride + edge];
@@ -43,19 +47,27 @@ function collectDepressions(
       collected.push(j);
     }
   }
-  const submerged = new Set(collected.filter((i) => spill > map.Elevation[i]));
-  return splitConnected(map, submerged).map((members) => ({ id, members, spill }));
+  const wet = new NumericalList("int32", "lakes:submerged-cells", map.numerical);
+  for (let n = 0; n < collected.length; n++) {
+    const i = collected.at(n);
+    if (spill > map.Elevation[i]) wet.push(i);
+  }
+  collected.close();
+  const submerged = wet.finish();
+  const result = splitConnected(map, submerged).map((members) => ({ id, members, spill }));
+  releaseWorking(map, submerged);
+  return result;
 }
 function addPools(
   map: PhysicalField,
   c: PhysicalContext,
   component: Depression,
-  water: Float64Array,
+  water: NumericalVector,
   supported: SupportedLake[]
 ) {
   const lake = solveStage(map, c.Profile, component, water);
   if (lake === null) return;
-  for (const members of splitConnected(map, new Set(lake.members))) {
+  for (const members of splitConnected(map, lake.members)) {
     const depth = members.reduce(
       (maximum, i) => Math.max(maximum, lake.surface - map.Elevation[i]),
       0
@@ -67,7 +79,9 @@ function addPools(
       overflow: members.length === lake.members.length ? lake.overflow : 0,
     };
     if (qualifies(map, c.Profile, pool)) supported.push(pool);
+    else releaseWorking(map, members);
   }
+  releaseWorking(map, lake.members);
 }
 type Outlet = { member: number; target: number; rank: number; drainage: number; geometry: number };
 function preferred(candidate: Outlet, best: Outlet): boolean {
@@ -82,7 +96,7 @@ function findOutlet(
   map: PhysicalField,
   c: PhysicalContext,
   lake: SupportedLake,
-  marks: Int32Array
+  marks: NumericalVector
 ) {
   let best = {
     member: -1,
@@ -117,7 +131,7 @@ function markLake(
   map: PhysicalField,
   c: PhysicalContext,
   lake: SupportedLake,
-  marks: Int32Array,
+  marks: NumericalVector,
   id: number
 ) {
   for (const i of lake.members) {
@@ -132,21 +146,25 @@ function markLake(
     map.LakeOverflow[outlet.member] = lake.overflow;
   }
 }
-export function lakeBasins(map: PhysicalField, c: PhysicalContext, incoming?: Float64Array) {
+export function lakeBasins(map: PhysicalField, c: PhysicalContext, incoming?: NumericalVector) {
   clearLakes(map);
   const water = contributingWater(map, incoming),
-    mask = new Uint8Array(map.mesh.count),
-    marks = new Int32Array(map.mesh.count);
-  for (let i = 0; i < mask.length; i++)
-    if (map.WaterKindCodes[i] === 0 && map.DrainageElevations[i] - map.Elevation[i] >= 1024)
-      mask[i] = 1;
+    mask = workingValues(map, "uint8", "lakes:mask", (i) =>
+      Number(map.WaterKindCodes[i] === 0 && map.DrainageElevations[i] - map.Elevation[i] >= 1024)
+    ),
+    marks = workingArray(map, "int32", "lakes:marks");
   let componentId = 0;
   const supported: SupportedLake[] = [];
   for (let i = 0; i < mask.length; i++) {
     if (!mask[i] || marks[i] !== 0) continue;
-    for (const component of collectDepressions(map, mask, marks, i, ++componentId))
+    for (const component of collectDepressions(map, mask, marks, i, ++componentId)) {
+      const before = supported.length;
       addPools(map, c, component, water, supported);
+      if (supported.length === before) releaseWorking(map, component.members);
+    }
   }
   supported.sort((a, b) => a.members[0] - b.members[0]);
   for (const [index, lake] of supported.entries()) markLake(map, c, lake, marks, index + 2);
+  for (const lake of supported) releaseWorking(map, lake.members, lake.component.members);
+  releaseWorking(map, water, mask, marks);
 }

@@ -12,6 +12,7 @@ import {
 import type { GenerationState } from "./process";
 import { dryLand, societyValue } from "./societySupport";
 import { isWorldSociety } from "./societyMapScope";
+import { NumericalList } from "./canonry/numericalList";
 
 /**
  * Society as field forcing (ADR 0005). At World a unit's works are demands it makes of its
@@ -46,7 +47,7 @@ export function workMedium(state: GenerationState, kind: SocietyWorkKind) {
   }
 }
 /** The dry cells of the work's country (its unit, or the heirs of an inherited unit) that carry its medium. */
-function mediumCells(
+function* mediumCells(
   state: GenerationState,
   work: Pick<SocietyWork, "communityId" | "kind"> & { country?: string[] }
 ) {
@@ -55,16 +56,13 @@ function mediumCells(
     units = new Set(
       society.region.communities.flatMap((c, index) => (ids.has(c.id) ? [index] : []))
     ),
-    medium = workMedium(state, work.kind),
-    cells: number[] = [];
-  if (!units.size) return cells;
+    medium = workMedium(state, work.kind);
+  if (!units.size) return;
   for (let i = 0; i < society.owner.length; i++)
-    if (units.has(society.owner[i]) && dryLand(state, i) && medium(i)) cells.push(i);
-  return cells;
+    if (units.has(society.owner[i]) && dryLand(state, i) && medium(i)) yield i;
 }
 /** The share of the unit's medium a located work of this radius would have covered. */
-function mediumShare(state: GenerationState, cells: number[], radius: number) {
-  const area = cells.reduce((sum, i) => sum + state.surface.measures[i], 0);
+function mediumShare(area: number, radius: number) {
   return area > 0 ? Math.min(1, (Math.PI * radius ** 2) / area) : 0;
 }
 export function isStructural(kind: SocietyWorkKind) {
@@ -72,7 +70,7 @@ export function isStructural(kind: SocietyWorkKind) {
 }
 /** Whether the unit holds any cell of the kind's medium. */
 export function hasMedium(state: GenerationState, work: Pick<SocietyWork, "communityId" | "kind">) {
-  return mediumCells(state, work).length > 0;
+  return !mediumCells(state, work).next().done;
 }
 /** The channel cell a World dam demand would stand on: the unit's river cell with the most flow. */
 export function damCandidateCell(state: GenerationState, work: SocietyWork) {
@@ -96,40 +94,61 @@ export function demandAmount(
   radius: number
 ): SocietyDemand {
   const unit = societyWorkNatures[kind].unit,
-    cells = mediumCells(state, { communityId: c.id, kind }),
-    share = mediumShare(state, cells, radius);
+    { area, flow, maximum, shore } = mediumTotals(state, c.id, kind),
+    share = mediumShare(area, radius);
   switch (kind) {
     case "irrigation":
     case "dam": {
       // The same fifth of a channel's flow that a located water work may take.
-      const flow = cells.map((i) => societyValue(state, "flow", i) * 0.2);
-      const amount =
-        kind === "dam" ? Math.max(0, ...flow) : flow.reduce((s, f) => s + f, 0) * share;
+      const amount = kind === "dam" ? maximum : flow * share;
       return { amount, unit };
     }
     case "harbor":
     case "pass":
       return { amount: population(c), unit };
     case "weir":
-      return {
-        amount: cells.reduce((sum, i) => sum + Math.sqrt(state.surface.measures[i]), 0) * share,
-        unit,
-      };
+      return { amount: shore * share, unit };
     default:
       return { amount: share, unit };
   }
+}
+function mediumTotals(state: GenerationState, communityId: string, kind: SocietyWorkKind) {
+  let area = 0,
+    flow = 0,
+    maximum = 0,
+    shore = 0;
+  for (const i of mediumCells(state, { communityId, kind })) {
+    area += state.surface.measures[i];
+    if (kind === "irrigation" || kind === "dam") {
+      const amount = societyValue(state, "flow", i) * 0.2;
+      flow += amount;
+      maximum = Math.max(maximum, amount);
+    }
+    if (kind === "weir") shore += Math.sqrt(state.surface.measures[i]);
+  }
+  return { area, flow, maximum, shore };
 }
 /**
  * An intensive demand's samples: every medium cell of its unit, each at the share a located
  * work of the same radius would have covered, so the total forcing is conserved and spread.
  * A structural demand has no samples: a fraction of a dam is nothing.
  */
-export function demandSamples(state: GenerationState, work: SocietyWork) {
-  if (isStructural(work.kind)) return [];
-  const cells = mediumCells(state, work),
-    fraction = mediumShare(state, cells, work.radius);
-  if (fraction <= 0) return [];
-  return cells.map((i) => ({ i, fraction }));
+export function* demandSamples(state: GenerationState, work: SocietyWork) {
+  if (isStructural(work.kind)) return;
+  // Capture eligibility before applying the work: its effects can change the medium.
+  const cells = new NumericalList("int32", "society:demand-medium", state.numerical);
+  try {
+    let area = 0;
+    for (const i of mediumCells(state, work)) {
+      cells.push(i);
+      area += state.surface.measures[i];
+    }
+    const fraction = mediumShare(area, work.radius);
+    if (fraction <= 0) return;
+    for (let k = 0; k < cells.length; k++) yield { i: cells.at(k), fraction };
+  } finally {
+    cells.close();
+  }
 }
 /**
  * How well a cell of the medium serves a structural work on this profile's terrain: a dam

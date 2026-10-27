@@ -1,11 +1,13 @@
 // OceanDistanceLayer, BathymetryLayer and LandmassLayer, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
+import type { NumericalVector } from "@atlas/domain";
 import type { PhysicalContext } from "./context";
 import { units } from "./math";
 import { metricSearch } from "./metricSearch";
 import { physicalGradients } from "./physicalMetric";
+import { workingArray, releaseWorking } from "./physicalNumerics";
 
-function retainInheritedDistance(map: PhysicalField, inherited: Float64Array | null) {
+function retainInheritedDistance(map: PhysicalField, inherited: NumericalVector | null) {
   if (!inherited) return;
   for (let i = 0; i < inherited.length; i++)
     if (inherited[i] >= 0 && (map.OceanDistance[i] < 0 || inherited[i] < map.OceanDistance[i]))
@@ -14,21 +16,38 @@ function retainInheritedDistance(map: PhysicalField, inherited: Float64Array | n
 export function oceanDistance(map: PhysicalField) {
   const inherited = map.OpenBoundary ? map.OceanDistance.slice() : null;
   map.OceanDistance.fill(Infinity);
-  const queue: number[] = [];
+  const queue = workingArray(map, "int32", "distance:seeds");
+  let count = 0;
   for (let i = 0; i < map.mesh.count; i++)
     if (map.WaterKindCodes[i] === 1) {
       map.OceanDistance[i] = 0;
-      queue.push(i);
+      if (touchesLand(map, i)) queue[count++] = i;
     }
-  metricSearch(map.mesh, queue, map.OceanDistance, Infinity, () => {});
+  metricSearch(
+    map.mesh,
+    queue.subarray(0, count),
+    map.OceanDistance,
+    Infinity,
+    () => {},
+    map.numerical
+  );
   for (let i = 0; i < map.mesh.count; i++)
     if (!Number.isFinite(map.OceanDistance[i])) map.OceanDistance[i] = -1;
   retainInheritedDistance(map, inherited);
+  releaseWorking(map, queue, ...(inherited ? [inherited] : []));
+}
+function touchesLand(map: PhysicalField, i: number) {
+  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
+    if (j >= 0 && map.WaterKindCodes[j] !== 1) return true;
+  }
+  return false;
 }
 export function measureSlopes(map: PhysicalField) {
-  const gradient = physicalGradients(map.mesh, map.Elevation);
+  const gradient = physicalGradients(map.mesh, map.Elevation, map.numerical);
   for (let i = 0; i < map.mesh.count; i++)
     map.Slope[i] = Math.hypot(gradient.x[i], gradient.y[i]) / 1024;
+  releaseWorking(map, gradient.x, gradient.y);
 }
 export function bathymetry(map: PhysicalField, c: PhysicalContext) {
   measureSlopes(map);
@@ -53,7 +72,7 @@ function collect(
   map: PhysicalField,
   start: number,
   id: number,
-  labels: Int32Array,
+  labels: NumericalVector,
   eligible: (i: number) => boolean
 ) {
   const members = [start];

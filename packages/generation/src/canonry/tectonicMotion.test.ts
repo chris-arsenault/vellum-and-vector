@@ -71,7 +71,7 @@ it("partitions a rigid-motion interval without changing the material trajectory"
 
 it("carries an amount through every internal transport and across the cylinder seam", () => {
   const { map, context } = translatingWorld(30);
-  let stock = new Float64Array(map.mesh.count);
+  let stock: import("@atlas/domain").NumericalVector = new Float64Array(map.mesh.count);
   stock[map.mesh.x.findIndex((x, i) => x > 900_000 && Math.abs(map.mesh.y[i]) < 100_000)] = 100;
   let calls = 0;
   plateAdvection(map, context, () => {
