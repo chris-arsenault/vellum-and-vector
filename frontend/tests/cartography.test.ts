@@ -173,6 +173,8 @@ test("magical sources are drawn, edited, moved and applied", async ({ page }) =>
   await page.getByRole("button", { name: "Start blank field", exact: true }).click();
   await expect(page.getByRole("button", { name: "Paint on map", exact: true })).toBeVisible();
   await page.getByLabel("Working layer").selectOption("magic");
+  await expect(page.getByRole("button", { name: "Export GIS", exact: true })).toBeEnabled();
+  await expect(page.getByLabel("Working layer")).toHaveValue("magic");
   await page.getByRole("button", { name: "Draw source & reach", exact: true }).click();
   await canvas(page).click({ position: { x: 330, y: 320 } });
   await canvas(page).click({ position: { x: 400, y: 320 } });

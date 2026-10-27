@@ -44,7 +44,8 @@ export function FieldBrush({ world, editor }: { world: World; editor: EditorStat
           <p>Start a sampled {info.channel} field in this area to paint it directly.</p>
           <button
             disabled={editor.commit.isPending}
-            onClick={() =>
+            onClick={() => {
+              begin();
               editor.commit.mutate(
                 makeCommand(world, "createField", {
                   id: crypto.randomUUID(),
@@ -59,10 +60,9 @@ export function FieldBrush({ world, editor }: { world: World; editor: EditorStat
                       values: 0,
                     },
                   },
-                }),
-                { onSuccess: begin }
-              )
-            }
+                })
+              );
+            }}
           >
             Start blank field
           </button>
