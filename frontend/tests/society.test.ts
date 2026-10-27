@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./uiTest";
 import type { AtlasFeature, PopulationGroup, SocietyRegion } from "@atlas/domain";
-import { canvas, exportMap, generatedWorld, pageErrors, panel } from "./harness";
+import { canvas, drag, exportMap, generatedWorld, pageErrors, panel } from "./harness";
 
 /** The legend items of a share bar on the inspection surface, by the bar's label. */
 function legend(page: Page, label: string) {
@@ -140,6 +140,16 @@ test("the settlement surface shows the community and its edits reach the export"
   await page.getByText("Place environmental work", { exact: true }).click();
   await page.getByRole("combobox", { name: "Work", exact: true }).selectOption("conservation");
   await page.getByLabel("Radius (metres)", { exact: true }).fill("250");
+  await expect(page.getByLabel("Radius (metres)", { exact: true })).toHaveValue("250");
+  // Moving the viewport must not replace the selected feature's unfinished work form.
+  await canvas(page).focus();
+  await page.keyboard.down("Space");
+  await drag(page, [150, 300], [1050, 300]);
+  await drag(page, [150, 300], [1050, 300]);
+  await page.keyboard.up("Space");
+  await expect(page.getByLabel("Radius (metres)", { exact: true })).toHaveValue("250");
+  await page.getByRole("button", { name: "Fit area", exact: true }).click();
+  await expect(page.getByLabel("Radius (metres)", { exact: true })).toHaveValue("250");
   await page.getByRole("button", { name: "Place work", exact: true }).click();
   const exported = await exportMap(page);
   expect(

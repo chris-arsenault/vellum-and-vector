@@ -10,11 +10,16 @@ import type { PopulationGroup } from "@atlas/domain";
 import { CartographicFinishing } from "./CartographicFinishing";
 
 export function Inspector({ world, editor }: { world: World; editor: EditorState }) {
-  const feature = editor.scene.data
-    ? editor.scene.data.find((f) => f.id === editor.selected?.id)
-    : editor.selected;
+  const feature = editor.selected;
   if (!feature) return <AreaContext editor={editor} />;
-  return <FeatureInspection world={world} editor={editor} feature={feature} />;
+  return (
+    <FeatureInspection
+      key={`${feature.id}:${editor.area.id}`}
+      world={world}
+      editor={editor}
+      feature={feature}
+    />
+  );
 }
 function AreaContext({ editor }: { editor: EditorState }) {
   return (
