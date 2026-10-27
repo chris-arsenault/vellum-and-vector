@@ -2,6 +2,7 @@ import type { SocietyCommunity, SocietyConnection, SocietyPolity } from "@atlas/
 import type { GenerationState, MapProcessContext } from "./process";
 import { nearestSample } from "./societySpatial";
 import { dryLand } from "./societySupport";
+import { profileOf } from "./societyProfile";
 import { wayClasses, wornCost } from "./societyWays";
 
 /**
@@ -11,14 +12,12 @@ import { wayClasses, wornCost } from "./societyWays";
  * them rare; a polity keeps at most a few, and a highway outlives the polity that built it.
  */
 
-/** Yearly travellers a way needs before a polity considers paving it. */
-const highwayTraffic = wayClasses.road * 1.5;
+/** A way needs this many times the travellers of a road before a polity considers paving it. */
+const highwayTrafficShare = 1.5;
 /** The share of its people a polity must feed to afford great works. */
 const highwaySupport = 0.6;
 /** Political capacity (an era variable) below which no highway is raised. */
 const highwayCapacity = 1;
-/** A polity's highways at one time. */
-const highwaysPerPolity = 2;
 /** Open country: samples along the line within this relief, below this slope and tree cover. */
 const openCountry = { relief: 150, slope: 0.02, trees: 0.5, samples: 24 };
 
@@ -47,12 +46,9 @@ function polityOf(state: GenerationState, id: string) {
   return politics?.polities.find((p) => p.id === owner && p.status === "active");
 }
 /** A way busy enough to pave, on land, not yet a highway. */
-function busyWay(link: SocietyConnection) {
+function busyWay(link: SocietyConnection, traffic: number) {
   return (
-    !link.highway &&
-    link.kind !== "sea" &&
-    link.kind !== "door" &&
-    (link.wear ?? 0) >= highwayTraffic
+    !link.highway && link.kind !== "sea" && link.kind !== "door" && (link.wear ?? 0) >= traffic
   );
 }
 /** The polity that holds both ends of a way from its seat, if it can afford a highway. */
@@ -66,7 +62,7 @@ function builder(
   if (!polity || polityOf(state, link.to) !== polity) return undefined;
   if (polity.seat !== link.from && polity.seat !== link.to) return undefined;
   const able = polity.support >= highwaySupport && capacity >= highwayCapacity;
-  return able && (built.get(polity.id) ?? 0) < highwaysPerPolity ? polity : undefined;
+  return able && (built.get(polity.id) ?? 0) < profileOf(state).highways ? polity : undefined;
 }
 function count(built: Map<string, number>, polity: string) {
   built.set(polity, (built.get(polity) ?? 0) + 1);
@@ -94,7 +90,7 @@ function raiseHighway(
   const name = `${state.domain.world.entities[polity.id]?.name ?? polity.id} Way`;
   const year = Math.round(state.society!.cycle?.elapsed ?? 0);
   link.highway = { polity: polity.id, built: `${era}, year ${year}`, name };
-  link.travelCost = wornCost(link);
+  link.travelCost = wornCost(link, wayClasses(profileOf(state)));
   polity.causes.push(
     `${era}: raised the ${name}, a straight highway from ${ends[0].name} to ${ends[1].name} across open country.`
   );
@@ -106,8 +102,9 @@ export function raiseHighways(state: GenerationState, context: MapProcessContext
   const { capacity, era } = eraOf(context);
   const communities = new Map(region.communities.map((c) => [c.id, c]));
   const built = highwaysBuilt(region.connections);
+  const traffic = profileOf(state).roadTraffic * highwayTrafficShare;
   let raised = 0;
-  for (const link of region.connections.filter(busyWay)) {
+  for (const link of region.connections.filter((link) => busyWay(link, traffic))) {
     const polity = builder(state, link, built, capacity);
     const ends: [SocietyCommunity, SocietyCommunity] = [
       communities.get(link.from)!,

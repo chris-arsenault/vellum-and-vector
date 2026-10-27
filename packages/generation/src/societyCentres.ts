@@ -2,6 +2,7 @@ import { population, type SocietyCommunity } from "@atlas/domain";
 import type { GenerationState } from "./process";
 import { communityRoutes } from "./societyContact";
 import { compactGroups } from "./societyGroups";
+import { profileOf } from "./societyProfile";
 import { concentration, contactPopulation } from "./societySettlements";
 import { peopleTrait } from "./societyTraits";
 
@@ -32,8 +33,6 @@ const chiefTownShare = 0.5;
 const townFoodShare = 0.5;
 /** A centre's draw grows faster than its size: the bigger market wins its hinterland. */
 const sizeExponent = 1.3;
-/** Travel cost over which a centre's draw falls by e; beyond four reaches it is nothing. */
-const reach = 200000;
 /** A town needs this many residents to draw at all; smaller places are the countryside. */
 const drawingTown = 200;
 function siteDraw(c: SocietyCommunity, seats: ReadonlySet<string>) {
@@ -66,10 +65,14 @@ function townPull(c: SocietyCommunity, seats: ReadonlySet<string>) {
   if (c.status !== "inhabited" || town < drawingTown) return 0;
   return Math.pow(town, sizeExponent) * siteDraw(c, seats);
 }
-/** weights[a]: for each centre b within reach of a, how strongly b draws a's town-dwellers. */
+/**
+ * weights[a]: for each centre b within reach of a, how strongly b draws a's town-dwellers.
+ * The reach is the travel cost over which a draw falls by e; beyond four reaches it is nothing.
+ */
 function centreWeights(state: GenerationState, seats: ReadonlySet<string>) {
   const region = state.society!.region,
     communities = region.communities;
+  const reach = profileOf(state).cityReach;
   const routes = communityRoutes(region);
   const weights = communities.map(() => new Map<number, number>()),
     paths: UrbanAllocation["paths"] = new Map();

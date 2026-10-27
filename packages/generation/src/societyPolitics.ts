@@ -9,6 +9,7 @@ import {
 import type { GenerationState, MapProcessContext, MapProcess } from "./process";
 import { practiceOpportunities, seekingFactor } from "./societySeeking";
 import { centers } from "./mapPeople";
+import { profileOf } from "./societyProfile";
 import { initializePopulation, nearestCommunity } from "./societyPopulation";
 import { communityReach } from "./societyContact";
 import { generationBindings } from "./generationBindings";
@@ -218,7 +219,9 @@ export function evolvePolitics(state: GenerationState, context: MapProcessContex
   if (state.society!.inherited) return;
   const region = state.society!.region,
     politics = region.politics!;
-  const capacity = Number(context.epochs.at(-1)?.variables.politicalCapacity ?? 1);
+  const capacity =
+    Number(context.epochs.at(-1)?.variables.politicalCapacity ?? 1) *
+    profileOf(state).politicalReach;
   const era = context.epochs.at(-1)?.id ?? "Settlement";
   for (const p of politics.polities) updateSupport(state, p, years);
   applyPoliticalAnchors(state, era);

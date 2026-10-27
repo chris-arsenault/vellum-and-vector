@@ -247,6 +247,67 @@ export const atlasParameterDefinitions = {
     integer: true,
     group: "human",
   },
+  // Society coefficients an outcome choice moves. Each default is the value the society
+  // code used as a constant before it became a setting, so an untouched recipe is unchanged.
+  culturalMobility: {
+    label: "Cultural mobility",
+    unit: "multiplier",
+    minimum: 0,
+    default: 1,
+    step: 0.1,
+    group: "human",
+  },
+  politicalReach: {
+    label: "Political reach",
+    unit: "multiplier",
+    minimum: 0,
+    default: 1,
+    step: 0.1,
+    group: "human",
+  },
+  // A number input validates its value against min + n × step, so each minimum is a step.
+  townThreshold: {
+    label: "World town size",
+    unit: "residents",
+    minimum: 100,
+    default: 5000,
+    step: 100,
+    integer: true,
+    group: "human",
+  },
+  cityReach: {
+    label: "City hinterland reach",
+    unit: "km",
+    minimum: 10,
+    default: 200,
+    step: 10,
+    group: "human",
+  },
+  roadTraffic: {
+    label: "Travellers that make a road",
+    unit: "per year",
+    minimum: 50,
+    default: 1000,
+    step: 50,
+    group: "human",
+  },
+  marketTravel: {
+    label: "Market travel",
+    unit: "multiplier",
+    minimum: 0,
+    default: 1,
+    step: 0.1,
+    group: "human",
+  },
+  highways: {
+    label: "Highways per polity",
+    unit: "count",
+    minimum: 0,
+    default: 2,
+    step: 1,
+    integer: true,
+    group: "human",
+  },
 } satisfies Record<string, AtlasParameterDefinition>;
 
 export type AtlasParameters = Record<keyof typeof atlasParameterDefinitions, number>;

@@ -21,6 +21,7 @@ import { initializePopulation, nearestCommunity } from "./societyPopulation";
 import { communityReach, contactCosts } from "./societyContact";
 import { namingCulture } from "./atlasNaming";
 import { evolveLanguageUse } from "./societyLanguage";
+import { profileOf } from "./societyProfile";
 
 export function culturalIdentity(
   state: GenerationState,
@@ -172,7 +173,8 @@ export function diffuseCultures(state: GenerationState, context: MapProcessConte
   if (state.society!.inherited) return;
   const communities = state.society!.region.communities,
     contacts = strongestContacts(state);
-  const mobility = Number(context.epochs.at(-1)?.variables.mobility ?? 1);
+  const mobility =
+    Number(context.epochs.at(-1)?.variables.mobility ?? 1) * profileOf(state).culturalMobility;
   for (const contact of contacts) contact.strength *= mobility;
   const before = communities.map((c) => c.groups);
   for (const [i, c] of communities.entries()) {

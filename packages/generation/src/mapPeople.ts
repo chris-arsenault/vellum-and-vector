@@ -13,6 +13,7 @@ const presentEras = (settings: GenerationSettings) =>
 import { initializeCultures, diffuseCultures } from "./societyCulture";
 import { publishCultures } from "./societyCulturePublication";
 import { atlasName, geographicNamingCulture } from "./atlasNaming";
+import { bindSocietyProfile } from "./societyProfile";
 
 export function landCells(state: GenerationState) {
   const covers = spatial.pointCoverage(state.domain.scope.footprint);
@@ -115,6 +116,7 @@ export const culturalProcess: MapProcess = {
       }
       const standalone = !state.society;
       initializeCultures(state, context);
+      bindSocietyProfile(state, context);
       const eras = context.inputs?.features
         ? presentEras(generationBindings(context).settings)
         : [];
@@ -163,6 +165,7 @@ export const politicalProcess: MapProcess = {
       }
       const standalone = !state.society?.region.politics;
       initializePolitics(state, context);
+      bindSocietyProfile(state, context);
       if (standalone) {
         const eras = context.inputs?.features
           ? presentEras(generationBindings(context).settings)

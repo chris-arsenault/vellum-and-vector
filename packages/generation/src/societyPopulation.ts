@@ -14,10 +14,12 @@ import { startingPopulations } from "./societySettlements";
 import { practiceOpportunities, seekerShares, seekingFactor } from "./societySeeking";
 import { drawToCentres, urbanTargets } from "./societyCentres";
 import { compactGroups } from "./societyGroups";
+import { bindSocietyProfile } from "./societyProfile";
 
 export function initializePopulation(state: GenerationState, context: MapProcessContext) {
   const prior = societyAncestor(state);
   const work = createSocietyGeography(state, context, { retained: prior?.communities });
+  bindSocietyProfile(state, context);
   const people = semanticId(state.domain.world.id, "people", "residents");
   state.domain.world.entities[people] ??= {
     id: people,

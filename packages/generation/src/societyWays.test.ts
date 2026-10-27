@@ -77,11 +77,11 @@ it("wears the ways to the city more than the ways beside them, and forgets them 
 
 it("classes a way by its yearly travellers", () => {
   expect(wayClass({ wear: 0 })).toBeNull();
-  expect(wayClass({ wear: wayClasses.track })).toBe("track");
-  expect(wayClass({ wear: wayClasses.road })).toBe("road");
+  expect(wayClass({ wear: wayClasses().track })).toBe("track");
+  expect(wayClass({ wear: wayClasses().road })).toBe("road");
   expect(wornCost({ distance: 1000, wear: 0, kind: "land" })).toBe(1000);
-  expect(wornCost({ distance: 1000, wear: wayClasses.road * 3, kind: "land" })).toBeCloseTo(600);
-  expect(wornCost({ distance: 1000, wear: wayClasses.road * 3, kind: "sea" })).toBe(1000);
+  expect(wornCost({ distance: 1000, wear: wayClasses().road * 3, kind: "land" })).toBeCloseTo(600);
+  expect(wornCost({ distance: 1000, wear: wayClasses().road * 3, kind: "sea" })).toBe(1000);
 });
 
 it("folds slivers into the largest group of the same people without changing the count", () => {

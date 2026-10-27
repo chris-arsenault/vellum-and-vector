@@ -62,7 +62,7 @@ function fixture(trees: number) {
     history: [],
   };
   const busy = region.connections.find((l) => l.from === seat.id || l.to === seat.id)!;
-  busy.wear = wayClasses.road * 2;
+  busy.wear = wayClasses().road * 2;
   return { state, context, region, busy, polity };
 }
 

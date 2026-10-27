@@ -25,12 +25,9 @@ export function CartographicDecisions({ flow }: { flow: GenerationWorkflow }) {
 export function CartographicDecision({
   flow,
   control,
-  adjust = true,
 }: {
   flow: GenerationWorkflow;
   control: CartographicControl;
-  /** Offer the advanced panel; off where the step already shows the affected settings. */
-  adjust?: boolean;
 }) {
   const fields = useWorkflowFields();
   const affected = controlFeatures(control);
@@ -67,7 +64,7 @@ export function CartographicDecision({
         </select>
       </label>
       <p>{control.explanation}</p>
-      {!control.system && adjust && (
+      {!control.system && (
         <button
           type="button"
           className="setup-link"

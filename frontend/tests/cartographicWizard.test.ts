@@ -23,16 +23,18 @@ test("composes geographic outcomes and sends the complete reviewed recipe to gen
   await expect(page.locator(".setup-actions")).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await setupStep(page, /People & places/).click();
-  // Cultural, political and built geography are included by default; each is independent.
+  // Cultural, political and built geography are included by default; each is independent,
+  // and each capability's outcome choices sit with it like the land and landscape choices.
   await expect(page.getByRole("checkbox", { name: "Cultures", exact: true })).toBeChecked();
+  await expect(page.getByLabel("Age of the world", { exact: true })).toHaveValue("lantern");
   await page.getByLabel("Cultural pattern", { exact: true }).selectOption("distinct");
-  await expect(page.getByLabel("Starting cultures · count", { exact: true })).toHaveValue("3");
-  await expect(page.getByRole("group", { name: "Hearthfall", exact: true })).toBeVisible();
   await page.getByRole("checkbox", { name: "Political territories", exact: true }).uncheck();
   await expect(page.getByLabel("Political pattern", { exact: true })).toHaveCount(0);
   await expect(
     page.getByRole("checkbox", { name: "Settlements and routes", exact: true })
   ).toBeChecked();
+  await page.getByLabel("Towns and cities", { exact: true }).selectOption("great");
+  await expect(page.getByLabel("Roads and travel", { exact: true })).toHaveValue("markets");
   await setupStep(page, /Review & generate/).click();
   await expect(page.locator(".cartographic-review")).toContainText("Wide plains");
   await expect(page.locator(".cartographic-review")).toContainText("Humid woodland");
@@ -53,6 +55,10 @@ test("composes geographic outcomes and sends the complete reviewed recipe to gen
     vegetation: 2.5,
     grazing: 0.1,
     cultureCount: 3,
+    culturalMobility: 0.5,
+    townThreshold: 10000,
+    cityReach: 300,
+    roadTraffic: 1000,
   });
   expect(input.features!["physical.impacts"].enabled).toBe(true);
   expect(input.features!["physical.river-incision"].enabled).toBe(true);

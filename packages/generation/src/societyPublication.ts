@@ -18,7 +18,8 @@ import {
 } from "./mapFeatures";
 import { findRoute } from "./mapRouting";
 import { communityRoutes } from "./societyContact";
-import { wayClass } from "./societyWays";
+import { profileOf } from "./societyProfile";
+import { wayClass, wayClasses } from "./societyWays";
 import { publishSocietyWorks } from "./societyWorkPublication";
 import { settlementHierarchy, type SettlementHierarchy } from "./societyHierarchy";
 import { isMajorSettlement, isWorldSociety } from "./societyMapScope";
@@ -48,9 +49,14 @@ export function societyPublications(input: AtlasGenerationInput): PublicationDef
 export function publishSettlements(state: GenerationState, context: MapProcessContext) {
   const region = state.society!.region;
   const hierarchy = settlementHierarchy(region);
+  const profile = profileOf(state);
   const mapped = new Set(
     region.communities
-      .filter((c) => !isWorldSociety(state) || isMajorSettlement(c, hierarchy.get(c.id)!))
+      .filter(
+        (c) =>
+          !isWorldSociety(state) ||
+          isMajorSettlement(c, hierarchy.get(c.id)!, profile.townThreshold)
+      )
       .map((c) => c.id)
   );
   publishSocietyWorks(state);
@@ -107,11 +113,14 @@ function realizedWays(
   const region = state.society!.region;
   const communities = new Map(region.communities.map((c) => [c.id, c]));
   const realized = new Map<number, RoadClass>();
+  const classes = wayClasses(profileOf(state));
   for (const [i, link] of region.connections.entries()) {
     const a = communities.get(link.from)!,
       b = communities.get(link.to)!;
     if (!connectedSettlements(a, b)) continue;
-    const cls = isWorldSociety(state) ? wayClass(link) : (wayClass(link) ?? "track");
+    const cls = isWorldSociety(state)
+      ? wayClass(link, classes)
+      : (wayClass(link, classes) ?? "track");
     if (cls) realized.set(i, cls);
   }
   for (const i of connectivityFloor(state, mapped, hierarchy))

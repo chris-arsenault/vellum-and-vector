@@ -12,6 +12,7 @@ import { evolveSettlements } from "./societySettlements";
 import { settledCycle, societyStep } from "./societyTempo";
 import { wearWays } from "./societyWays";
 import { raiseHighways } from "./societyHighways";
+import { bindSocietyProfile } from "./societyProfile";
 import { recordSocietyOnMesh } from "./societyRecord";
 
 /** One decadal cycle of feedback: people, works, magic use, learned practices, environment, hazards, settlements. */
@@ -23,6 +24,7 @@ export function societyCycle(
 ) {
   const work = state.society!;
   work.cycle = cycle;
+  bindSocietyProfile(state, context);
   evolvePopulation(state, context, dt);
   if (context.parameters.cultural) diffuseCultures(state, context, dt);
   applySocietyWorks(state, context, dt);

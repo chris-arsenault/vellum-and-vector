@@ -168,8 +168,9 @@ that produce it: physical and living map outcomes, independent cultural and
 political patterns, and distinct Fire, Aurora and Pressure controls that follow
 the magic source authority and product contract above. Each control is declared
 once with its alternatives and the values each alternative sets, in
-`frontend/src/cartographicDraft.ts` for the physical and living controls and in
-`packages/generation/src/magicCartography.ts` for the magic controls; those
+`packages/generation/src/physicalCartography.ts` and `terrainCartography.ts`
+for the land controls, `domainCartography.ts` for the living landscape and the
+people controls, and `magicCartography.ts` for the magic controls; those
 declarations are the record of the values. All three systems support
 independent inclusion.
 
@@ -338,11 +339,18 @@ settings participate in configuration identity and remain inspectable in the
 in-memory run record. JSON editing updates only the wizard draft.
 
 A new world includes cultural, political and built geography by default. The
-People & places step shows each of those capabilities as its own group: its
-inclusion, its curated pattern, the starting count the generator reads and,
-below them, the human era schedule the cultural and political histories run
-on. The advanced panel shows the same fields for one capability at a time, and
-the step hides its own copy while that capability is being adjusted there.
+People & places step shows each of those capabilities as its own group with
+its inclusion and the outcome choices declared for it, built like the land and
+landscape choices: the age of the world (which era the settled history ends
+in), the cultural pattern (starting cultures and how far contact carries
+them), the political pattern (starting polities and how far a seat holds),
+towns and cities (the World town size and how far a city draws its
+hinterland) and roads and travel (the traffic that makes a road, market
+travel and a polity's highways). Each alternative sets a bundle of feature
+settings; the society coefficients those bundles move are atlas parameters
+whose defaults are the constants the code used before, read once per cycle
+into the society workspace (`societyProfile`). Adjust opens the advanced
+panel on the underlying settings and the era schedule.
 
 The workflow edits version 2 `features`: `physical.impacts` omits the impact
 capability, `physical.river-incision` omits cutting while retaining river output,

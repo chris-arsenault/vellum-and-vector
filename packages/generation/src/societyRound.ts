@@ -10,6 +10,7 @@ import { societyCycle } from "./societyEvolution";
 import { roundCycle, societyStep } from "./societyTempo";
 import { generatedFeature, putGenerated } from "./mapFeatures";
 import { isMajorRuin } from "./societyMapScope";
+import { profileOf } from "./societyProfile";
 
 type Era = GenerationSettings["humanEras"][number];
 /**
@@ -142,7 +143,8 @@ export function endRound(state: GenerationState, era: string, epoch: string): Hu
     camps = region.communities.filter(lasting);
   for (const c of camps) {
     c.status = "ruined";
-    if (isMajorRuin(c)) putGenerated(state, ruinFeature(state, c, era, epoch));
+    if (isMajorRuin(c, profileOf(state).townThreshold))
+      putGenerated(state, ruinFeature(state, c, era, epoch));
   }
   return {
     era,

@@ -56,6 +56,8 @@ export interface SocietyWorkspace {
   urban?: import("./societyCentres").UrbanAllocation;
   /** People who travelled each connection this cycle, by index into `region.connections`. */
   traffic?: Float64Array;
+  /** The coefficients the recipe's outcome choices set, bound each cycle from the context. */
+  profile?: import("./societyProfile").SocietyProfile;
   /** Systems whose stocks people drew or deposited this cycle; the refresh re-evaluates them. */
   magicTouched?: Set<string>;
   /** Each community's net population fall this cycle: a die-off the mesh records as deaths. */
