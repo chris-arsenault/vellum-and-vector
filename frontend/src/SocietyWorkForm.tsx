@@ -53,7 +53,9 @@ export function SocietyWorkForm({
           Place here, then move the work on the map. Regenerating society refreshes present terrain
           and water effects while retaining completed eras.
         </p>
-        <button type="submit">Place work</button>
+        <button type="submit" disabled={editor.commit.isPending}>
+          Place work
+        </button>
       </form>
     </details>
   );

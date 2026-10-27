@@ -71,6 +71,7 @@ function SourceList({ editor }: { editor: EditorState }) {
             </small>
             <button
               className="quiet"
+              disabled={editor.commit.isPending}
               onClick={() => {
                 editor.setMagicDraft({
                   id: source.id,
@@ -84,6 +85,7 @@ function SourceList({ editor }: { editor: EditorState }) {
             </button>
             <button
               className="quiet"
+              disabled={editor.commit.isPending}
               onClick={() => editor.execute("removeMagicSource", { id: source.id })}
             >
               Remove source

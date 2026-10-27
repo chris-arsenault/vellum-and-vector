@@ -72,7 +72,7 @@ export class CatalogMutation {
       changes.expectedWorldRevision === undefined ||
         changes.expectedWorldRevision === world.version,
       "stale_version",
-      "The world changed. Read its current revision."
+      "The world changed. Your edits were kept. Review the current geography before trying again."
     );
     for (const expected of changes.expected) {
       const actual =

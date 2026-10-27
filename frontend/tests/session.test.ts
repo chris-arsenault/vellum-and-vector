@@ -1,5 +1,9 @@
 import { test, expect } from "./uiTest";
-import { installGenerationFixture, completeGenerationFixture } from "./generationFixture";
+import {
+  installGenerationFixture,
+  completeGenerationFixture,
+  waitForGenerationFixture,
+} from "./generationFixture";
 
 test.beforeEach(async ({ page }) => installGenerationFixture(page, { hold: true }));
 
@@ -51,6 +55,7 @@ test("manual edits made during generation survive its outdated result", async ({
   await page.getByRole("button", { name: "Create world", exact: true }).click();
   await page.getByLabel("Detail level").selectOption("draft");
   await page.getByRole("button", { name: "Generate selected domains" }).click();
+  await waitForGenerationFixture(page);
   await page
     .getByRole("toolbar", { name: "Map tools" })
     .getByRole("button", { name: "Place point", exact: true })

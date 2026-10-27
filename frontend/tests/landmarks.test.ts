@@ -32,6 +32,7 @@ const published = {
     "geology",
     {
       landmarkKind: "volcanic-mountain",
+      causeId: `landmark:${id}`,
       origin: "generated",
       signature: "realized",
       summit: 5890,
@@ -63,6 +64,7 @@ const wellspringFeature = {
     "magic",
     {
       landmarkKind: "fire-wellspring",
+      causeId: `landmark:${wellspringId}`,
       origin: "generated",
       system: "fire",
       signature: "realized",
@@ -100,7 +102,8 @@ test("landmarks are a generation count, sited by the run, then edited and remove
   await setupStep(page, /Review & generate/).click();
   await page.getByRole("button", { name: "Generate world", exact: true }).click();
   await expect(canvas(page)).toBeVisible();
-  await expect(status(page)).toContainText("Revision 2");
+  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
+  await expect(status(page)).toContainText("Revision 3");
   const input = await page.evaluate(
     () =>
       (window as unknown as { generationFixtureInput: AtlasGenerationInput }).generationFixtureInput
@@ -133,12 +136,12 @@ test("landmarks are a generation count, sited by the run, then edited and remove
   await page.getByLabel("Landmark name").fill("Kibo Peak");
   await page.getByLabel("Summit elevation · m").fill("6000");
   await page.getByRole("button", { name: "Save landmark", exact: true }).click();
-  await expect(status(page)).toContainText("Revision 3");
+  await expect(status(page)).toContainText("Revision 4");
   await expect(panel(page)).toContainText("Kibo Peak");
   await expect(panel(page)).toContainText("summit elevation 6000 m");
 
   await panel(page).getByRole("button", { name: "Remove landmark", exact: true }).first().click();
-  await expect(status(page)).toContainText("Revision 4");
+  await expect(status(page)).toContainText("Revision 5");
   await expect(panel(page)).not.toContainText("Kibo Peak");
   await expect(panel(page)).toContainText("Emberwell");
   expect(errors).toEqual([]);

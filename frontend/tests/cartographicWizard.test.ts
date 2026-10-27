@@ -40,6 +40,7 @@ test("composes geographic outcomes and sends the complete reviewed recipe to gen
   await expect(page.locator(".cartographic-review")).toContainText("Humid woodland");
   await page.getByRole("button", { name: "Generate world", exact: true }).click();
   await expect(page.getByRole("application", { name: "World map canvas" })).toBeVisible();
+  await page.waitForFunction(() => "generationFixtureInput" in window);
   const input = await page.evaluate(
     () =>
       (window as unknown as { generationFixtureInput: AtlasGenerationInput }).generationFixtureInput

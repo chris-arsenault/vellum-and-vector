@@ -62,6 +62,7 @@ test("configures a first world, preserves choices, explains dependencies and sen
   await expect.poll(() => page.evaluate(() => "generationFixtureInput" in window)).toBe(false);
   await page.getByRole("button", { name: "Generate world", exact: true }).click();
   await expect(page.getByRole("application", { name: "World map canvas" })).toBeVisible();
+  await page.waitForFunction(() => "generationFixtureInput" in window);
   const input = await page.evaluate(
     () => (window as unknown as { generationFixtureInput: typeof recipe }).generationFixtureInput
   );

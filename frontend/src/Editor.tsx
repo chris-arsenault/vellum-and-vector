@@ -36,6 +36,7 @@ export function Editor({ world, worlds, changeWorld, newWorld, openLore, openSav
     <div className="app-shell">
       <EditorHeader
         areaId={editor.area.id}
+        editing={editor.commit.isPending}
         world={world}
         worlds={worlds}
         changeWorld={changeWorld}
@@ -88,7 +89,8 @@ function EditorHeader({
   openLore,
   openSaved,
   areaId,
-}: Props & { areaId: string }) {
+  editing,
+}: Props & { areaId: string; editing: boolean }) {
   return (
     <header className="app-header">
       <Brand />
@@ -117,6 +119,7 @@ function EditorHeader({
       </button>
       <button
         className="quiet"
+        disabled={editing}
         onClick={async () => download(`${world.name}.geojson`, await exportWorld(world.id, areaId))}
       >
         Export GIS

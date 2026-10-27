@@ -58,10 +58,15 @@ export async function installGenerationFixture(page: Page, options: GenerationFi
   });
 }
 
-export async function completeGenerationFixture(page: Page) {
+/** The held worker has captured its source revision and can now receive concurrent edits. */
+export async function waitForGenerationFixture(page: Page) {
   await page.waitForFunction(() =>
     (window as unknown as { generationFixtureReady?(): boolean }).generationFixtureReady?.()
   );
+}
+
+export async function completeGenerationFixture(page: Page) {
+  await waitForGenerationFixture(page);
   await page.evaluate(() =>
     (
       window as unknown as { completeGenerationFixture(): Promise<void> }

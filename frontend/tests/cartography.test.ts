@@ -179,12 +179,13 @@ test("magical sources are drawn, edited, moved and applied", async ({ page }) =>
   await page.getByLabel("Source name").fill("Warm spring");
   await page.getByLabel("Environmental effect").selectOption("heat");
   await page.getByRole("button", { name: "Save magical source", exact: true }).click();
-  await expect(page.getByText("Warm spring", { exact: true })).toBeVisible();
+  await expect(page.getByRole("strong").filter({ hasText: /^Warm spring$/ })).toBeVisible();
   await page.getByRole("button", { name: "Edit source", exact: true }).click();
   await page.getByLabel("Strength", { exact: true }).fill("35");
   await page.getByRole("button", { name: "Save magical source", exact: true }).click();
   await expect(page.getByRole("button", { name: "Edit source", exact: true })).toHaveCount(1);
   await page.getByRole("button", { name: "Edit source", exact: true }).click();
+  await expect(page.getByLabel("Strength", { exact: true })).toHaveValue("35");
   await page.getByRole("button", { name: "Move source on map", exact: true }).click();
   await drag(page, [330, 320], [350, 360]);
   await expect(status(page)).toContainText("Revision 5");
