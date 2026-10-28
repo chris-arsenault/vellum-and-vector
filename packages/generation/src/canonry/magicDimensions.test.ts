@@ -187,7 +187,8 @@ it("publishes wake membership over the physical beam width", () => {
       if (distance + halfDiagonal < radius) expect(field.wake.get(i)).toBe(1);
     }
   }
-});
+  // Two adaptive worlds up to 65 536 cells: seconds locally, several times that on CI runners.
+}, 120_000);
 
 it("records hot source chambers and removes inactive source cores", () => {
   const state = scenario(),
