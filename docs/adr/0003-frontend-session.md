@@ -22,9 +22,10 @@ and undo. Saving again updates that world's copy. Independent templates and
 running jobs are not saved; generation must finish before saving its output.
 Saved roots and undo history retain the numerical resources they reference.
 Cleanup reclaims abandoned working files while respecting other live tabs.
-There is no autosave, generation restart or recovery mechanism. Browser storage
-belongs to the current browser and site origin and may be cleared by the browser
-or user.
+The catalog worker discovers saved roots itself while holding the exclusive storage
+lock, so cleanup never acts on a root list read before the lock. There is no
+autosave, generation restart or recovery mechanism. Browser storage belongs to the
+current browser and site origin and may be cleared by the browser or user.
 
 There is no authentication, API, server database or MCP service. Explicit GIS and
 template downloads remain local user actions.
@@ -39,11 +40,20 @@ numerical operations that a later hosted adapter can implement; they do not emul
 PostGIS functions or prescribe HTTP routes.
 
 The editor holds configuration, selections and current viewport products. It reads
-features and registry rows through scoped, paged queries. Canonical geometry stays
-separate from indexed boundary pieces and generalized display products. Region
-picking follows connected edges through locally noded tiles, preparing only the
-geography the query visits. Storage boundaries do not become geographic borders.
-Render workers read selected immutable channels directly and evict decoded chunks.
+features and registry rows through scoped, paged queries. A page composes its
+features from one context and caches each presented feature by identity until the
+next commit; the registry presents rows in batches through the same path and marks
+only the features a write can affect. Canonical geometry stays separate from
+indexed boundary pieces and generalized display products: a record write stores
+the geometry row, links and bounds, and one owner derives boundary parts, spatial
+pieces and overviews lazily, keyed by the immutable geometry id. Region picking
+follows connected edges through locally noded tiles, installing boundary sources
+only for the tiles a query visits and widening the nearest-boundary search
+locally. Storage boundaries do not become geographic borders. Display reads
+return a fragment per seam window; the editor keeps every fragment under the
+feature's canonical identity. Render workers register a raster by the immutable
+resources it samples and update viewport geography in place; immutable inputs
+decode once into resident arrays.
 Raster ranges and category legends include applicable patches and finer map coverage.
 The UI and each worker initialize the same GEOS spatial adapter. There is no JSTS
 fallback or snapshot-based session engine. Released snapshot saves retain a narrow
@@ -53,23 +63,27 @@ importer so existing explicit saves remain readable.
 
 Each generation worker receives configuration and a workspace connection. It resolves
 scoped geography and opens immutable field resources directly. Processes share a private
-working map and report stage progress. Numerical vectors use worker-owned scratch
-storage with a bounded decoded page cache; process lifetimes release scratch while
-retaining outputs needed by later stages. Canonical feature inputs arrive in revision-pinned
-pages. Private SQLite tables keep the source baseline separate from generated features,
+working map and report stage progress. Numerical vectors are native typed arrays while
+the worker's resident budget holds; the arena pages to worker-owned scratch only beyond
+it, and owns process lifetimes, release and retention either way. No indirection sits
+on the sample path. Canonical feature inputs arrive in revision-pinned pages. The
+catalog worker serves the editor's own requests ahead of queued generation and render
+traffic, so publication batches never delay a scene read. Private SQLite tables keep the source baseline separate from generated features,
 network reaches and junctions. Processes read detached domain values and explicitly write
 changes; protection checks, identity reuse and publication compare against the source records.
 Contour edges use indexed working tables; face assembly consumes bounded line batches through
 the geometry kernel. Numerical queues, rankings and transient channels share the execution
 allocator. Native geometry assembly still scales with the size of an individual feature.
-Cancellation terminates that worker.
+Cancellation belongs to the host: it asks the worker to stop, terminates it after a
+short grace period, and discards its staged batches and working files.
 Per the user's 2026-10-24 direction, initial generation shows independent sampled
 previews at completed epochs and progressively installs validated output as it
 arrives. The worker finalizes immutable numerical resources and publishes bounded
 batches of world records. Shared field layouts are referenced once; samples do not
 travel through the editor or catalog worker. Independent preview buffers use transfer
-lists. Cancellation or failure during delivery leaves initial output
-marked incomplete; it does not claim a completed world.
+lists. The first batch marks the world's publication incomplete and the last clears
+the mark; cancellation or failure during delivery leaves that mark on the world, so
+saving and map status read completion from the world rather than from a job.
 
 Regeneration stages catalog batches in disposable local storage and publishes validated
 geography in one transaction. The undo journal retains prior record values and immutable

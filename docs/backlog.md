@@ -1,7 +1,10 @@
 # Product backlog
 
-Requested 2026-10-18. UI and interaction work takes priority. The current product remains browser-only,
-with no backend, persistence or MCP; preserve the existing backend source.
+Requested 2026-10-18. The current product remains browser-only, with explicit local
+map saves and no backend or MCP; preserve the existing backend source. Manual
+editing, associated authoring tools and undo are deferred under the
+[current product scope](product-spec.md). Older entries involving them do not
+authorize implementation, repair or deletion of their existing code.
 
 - [ ] **1. Use metric units inside the generation algorithms.** Express distances,
       elevations, areas and physical rates in declared world units inside the
@@ -241,6 +244,75 @@ with no backend, persistence or MCP; preserve the existing backend source.
       Deferred per the user's 2026-10-26 direction. For now, pole-to-pole coverage
       uses cylindrical metre geometry with independent terrain along its closed
       north/south edges; latitude coverage does not enable spherical geometry.
+
+## Browser GIS defects — 2026-10-28
+
+Recorded from the review of `bc719c5` and resolved the same day by the structural
+remediation (saved roots under the lock, native numerical vectors, lazy geometry
+derivation from one owner, per-query feature composition, host-owned cancellation,
+viewport-independent raster and sketch lifetimes). [ADR 0003](adr/0003-frontend-session.md)
+describes the resulting mechanisms; the entries stay as the record of what was fixed.
+
+- [x] **18. P1 — Read saved-map roots under the cleanup lock.**
+      [Workspace startup](../frontend/src/atlasWorkspace.ts) reads IndexedDB roots
+      before [storage cleanup](../packages/storage-browser/src/storageSession.ts)
+      acquires its exclusive lease. Another tab can save and close in that gap;
+      cleanup then deletes the new catalog and its resources using the stale root
+      list. Coordinate authoritative root discovery, save publication and deletion
+      under the same storage boundary. The race is source-confirmed, not yet
+      reproduced in a browser; verify the interleaving with small supplied data.
+
+- [x] **19. P2 — Bound nearest-boundary preparation during region picking.**
+      [BoundaryIndex.nearest](../packages/storage-browser/src/boundaryIndex.ts)
+      prepares every boundary intersecting an eastward ray across the world before
+      choosing its nearest hit. A constructed two-rectangle example confirmed
+      indexing of unrelated distant geography. Expand the indexed search locally
+      until the nearest hit is established. This finding establishes excess work,
+      not the cause of the originally reported non-noded intersection exception.
+
+- [x] **20. P2 — Keep numerical raster resources alive across viewport changes.**
+      [Raster identity](../frontend/src/rasterIdentity.ts) includes viewport
+      geography, so [RasterSources](../frontend/src/RasterSources.ts) releases and
+      recreates unchanged numerical sources when panning. When the final reader
+      closes, reopening [Zarr inputs](../packages/storage-browser/src/zarrInput.ts)
+      enumerates every chunk and [OPFS](../packages/storage-browser/src/opfsStore.ts)
+      retains a File object for each. Separate immutable resource lifetime from
+      viewport geometry and bound input metadata preparation. The repeated setup
+      path is confirmed; its latency and memory impact are unmeasured.
+
+- [x] **21. P2 — Preserve all display fragments across the cylindrical seam.**
+      [Display queries](../packages/storage-browser/src/displayFeatures.ts) return
+      clipped geometry per viewport window, but [useScene](../frontend/src/useScene.ts)
+      overwrites earlier fragments with the same canonical feature identity.
+      Compose the fragments or identify display pieces separately while retaining
+      their canonical identity. The loss was reproduced with SQLite, GEOS and a
+      constructed polygon spanning both windows.
+
+- [x] **22. P2 — Let cancellation stop a busy generation worker.**
+      [cancelGeneration](../frontend/src/generationJobs.ts) only posts a message;
+      a synchronous process cannot receive it until it yields. A stuck stage keeps
+      the job active and prevents another run or reopening a save. Give the host
+      ownership of termination and disposal of unpublished staging, preserving
+      already-published initial geography as incomplete. This is cancellation,
+      not restart or recovery. Existing fixture workers acknowledge immediately,
+      so verification must exercise a busy worker with a small controlled task.
+
+- [x] **23. P2 — Retain incomplete publication status across generation attempts.**
+      After interrupted initial publication, start another attempt and cancel or
+      fail it before publication. The newest [job](../frontend/src/generationJobs.ts)
+      has no partial flag, while [saving](../frontend/src/savedMaps.ts) and
+      [map status](../frontend/src/Editor.tsx) inspect only that newest flag. The
+      incomplete map becomes saveable and appears committed. Represent completion
+      on the published world state rather than deriving it from the latest UI job;
+      cover this retry sequence with supplied publication batches.
+
+- [x] **24. P2 — Preserve an unfinished region outline during unrelated updates.**
+      [MapCanvas](../frontend/src/MapCanvas.tsx) recreates interactions when the world
+      revision or selected feature object changes; cleanup removes the active Draw
+      interaction. An OpenLayers reproduction confirmed sketch abortion. Tie
+      interaction lifetime to the selected tool and its actual target, updating
+      unrelated canonical data independently. Scope this correction to active
+      region selection and refinement, without resuming manual feature editing.
 
 The [product contract](product-spec.md) supplies the geographic and authoring
 requirements. [ADR 0003](adr/0003-frontend-session.md) defines the current execution

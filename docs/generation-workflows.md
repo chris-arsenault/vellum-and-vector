@@ -242,8 +242,8 @@ profile configuration. Its private working state includes:
 - Historical states, forcing and accumulated consequences.
 
 Resource references identify committed numerical inputs. The browser execution
-adapter supplies page-backed numerical vectors, bounded block access and scratch
-lifetimes. Processes share typed domain state directly, independently of React,
+adapter supplies native numerical vectors within a resident budget, paging to
+scratch only beyond it, with block access and process lifetimes either way. Processes share typed domain state directly, independently of React,
 database connections and browser messaging. Completed history retains causal
 results rather than copies of numerical scratch.
 
@@ -297,7 +297,8 @@ failure. Recoverable errors do not open an error dialog or discard valid results
 Invalid configuration or inherited geography, cancellation, worker termination
 and failures that leave the working map unsafe to publish still stop the run.
 A long numerical process can split work internally to report progress and
-observe cancellation.
+observe cancellation; when it does not, the host terminates the worker after a
+short grace period and discards its unpublished staging.
 
 ## Profile configuration and parameters
 
