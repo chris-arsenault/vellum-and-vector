@@ -38,10 +38,10 @@ the budget because the shared draft world fits inside it.
   call `numericalProcessLifetime`, which releases process-lifetime vectors
   not reachable from the state after each process. Copies between runs use
   `vector.slice()`.
-- `packages/generation/src/canonry/numericalQueue.ts`, `numericalList.ts`,
-  `numericalOrder.ts`, `queueStorage.ts` — queues, lists and orderings are
-  already chunked (16 384 samples) and release consumed chunks. They index
-  their chunks with `values[i]`, so they inherit the Proxy cost when paged.
+- Queues, lists, heaps and orderings are the resident typed-array structures
+  in `packages/domain/src/hpc` (see `HPC-DATA-STRUCTURES-FINDINGS.md`); they
+  never go through the allocator, so they carry no Proxy cost. The earlier
+  chunked substitutes were deleted when the conversion landed.
 
 ## Inventory of the generation package
 

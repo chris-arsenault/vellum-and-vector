@@ -49,7 +49,7 @@ export function conditionDrainage(
   const rank = vector("float64", "rank").fill(-1),
     basin = vector("float64", "basin");
   const seen = vector("uint8", "seen"),
-    heap = new CellHeap(height, numerical),
+    heap = new CellHeap(height),
     order = vector("int32", "order");
   let count = 0;
   const ocean = connectedOcean(grid, links, floor, seaLevel, numerical);
@@ -60,7 +60,7 @@ export function conditionDrainage(
     basin[i] = i + 1;
     heap.push(i);
   }
-  for (let i = heap.pop(); i !== undefined; i = heap.pop()) {
+  for (let i = heap.pop(); i >= 0; i = heap.pop()) {
     checkProgress(context, count, floor.length, "Resolving depressions and drainage outlets");
     rank[i] = count;
     order[count++] = i;
@@ -78,7 +78,6 @@ export function conditionDrainage(
     "drainage_component",
     "Every active component needs a mapped boundary outlet."
   );
-  heap.close();
   numerical?.release(seen);
   return { links, receiver, height, rank, basin, ocean, order: order.subarray(0, count) };
 }

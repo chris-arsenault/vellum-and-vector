@@ -128,16 +128,35 @@ shows up in a profile.
 ## 7. Adoption check
 
 `make test-architecture` runs `packages/generation/src/hpcAdoption.architecture.ts`,
-which fails until every substitute use is gone and prints the conversion list
-with file, line and replacement. It is not part of `make ci`. At the time of
-writing: 157 sites in 84 files, led by `canonry/marineRegions.ts` (10),
-`canonry/lakeStage.ts` (6), `canonry/triangleSampling.ts` (6). Rules flag
-`new PriorityQueue<`, `BoundedCandidates`, `orderedIndices(`,
+which prints every site that still uses a substitute shape with file, line and
+replacement, and passes when there are none. It is not part of `make ci`. Rules
+flag `new PriorityQueue`, `BoundedCandidates`, `orderedIndices(`,
 `new NumericalQueue(`, `new NumericalRecordQueue<`, `new NumericalList(`,
-`new Map<number,` and `new Set<number>` inside `canonry/`, comparator
-`.sort((`, `.coords[`, `workingArray(...).fill(-1)`, and `JSON.stringify(`
-inside `canonry/`. The substitute modules themselves are exempt until their
-last user goes.
+`.coords[`, and, inside `canonry/`, `new Map<number,`, `new Set<number>`,
+comparator `.sort((` and `JSON.stringify(`. A site that no structure fits
+carries `// hpc-exempt: <reason>` on its line or the line before; the current
+exemptions are sorts and tables over feature, region and seeded-candidate
+records, a few dozen to a few hundred objects handled once.
+
+## 8. Conversion
+
+The conversion landed in six commits after this document's first version. The
+substitute modules (`numericalQueue.ts`, `numericalList.ts`, `priorityQueue.ts`,
+`numericalOrder.ts`, `queueStorage.ts`) are deleted. Where a structure changed
+behaviour rather than only representation:
+
+- Lattice addresses are three columns (`coordU`, `coordV`, `coordInverted`)
+  and a dense address table; adaptive meshes carry empty columns and an index
+  that answers `undefined`.
+- `coastDistances` (magic ocean) and `oceanPathDistance` (gyres) had no tie
+  order; they now run on `MonotoneHeap`, whose FIFO tie lane is deterministic.
+  Only the distances are consumed, so results are unchanged.
+- Candidate lists that had no tie order (`landmarkCanyon` rivers near a head,
+  ocean magic sources) now break ties by ascending cell through `radixOrder`.
+- Lake membership and marine regions group by label in one counting pass;
+  marine region records stay in a small `Map` keyed by watershed root.
+- `metricSearch` no longer takes an allocator; frontiers are resident
+  typed arrays and are never paged.
 
 ## Sources
 

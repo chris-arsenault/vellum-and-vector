@@ -120,7 +120,6 @@ function assignCells(state: GenerationState, seeds: number[]) {
       seeds.push(i);
       spread.run();
     }
-  spread.close();
   return { owner: spread.owner, distances: spread.distances };
 }
 function community(state: GenerationState, cell: number): SocietyCommunity {
@@ -273,7 +272,6 @@ function seaConnections(
     if (dryLand(state, edge.a) && owner[edge.a] >= 0)
       spread.seed(edge.b, owner[edge.a], distances[edge.a] + edge.cost);
   spread.run();
-  spread.close();
   const { owner: seaOwner, distances: seaDistance } = spread;
   for (const edge of seaEdges(state)) {
     if (dryLand(state, edge.a)) continue;

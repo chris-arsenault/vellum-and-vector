@@ -68,16 +68,17 @@ function routesFrom(edges: ContactEdge[][], start: number) {
     queue = new RouteHeap();
   if (start < 0) return { distance, previous, via };
   distance[start] = 0;
-  queue.push({ cell: start, cost: 0 });
-  for (let entry = queue.pop(); entry; entry = queue.pop()) {
-    if (entry.cost !== distance[entry.cell]) continue;
-    for (const edge of edges[entry.cell]) {
-      const cost = entry.cost + edge.cost;
+  queue.push(start, 0);
+  for (let cell = queue.pop(); cell >= 0; cell = queue.pop()) {
+    const here = queue.cost();
+    if (here !== distance[cell]) continue;
+    for (const edge of edges[cell]) {
+      const cost = here + edge.cost;
       if (cost >= distance[edge.to]) continue;
       distance[edge.to] = cost;
-      previous[edge.to] = entry.cell;
+      previous[edge.to] = cell;
       via[edge.to] = edge.link;
-      queue.push({ cell: edge.to, cost });
+      queue.push(edge.to, cost);
     }
   }
   return { distance, previous, via };

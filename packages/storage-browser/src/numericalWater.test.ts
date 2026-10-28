@@ -7,7 +7,6 @@ import { atlasPhysicalProfile } from "../../generation/src/canonry/atlasProfile"
 import { flowRouting } from "../../generation/src/canonry/routing";
 import { analyseTerrain } from "../../generation/src/canonry/landmarkSitingRules";
 import { reconcileRemeshedWater } from "../../generation/src/canonry/remeshWater";
-import { NumericalRecordQueue } from "../../generation/src/canonry/numericalQueue";
 import { arenaFixture } from "./numericalFixture";
 
 function meshFixture(arena: ReturnType<typeof arenaFixture>["arena"]) {
@@ -91,24 +90,6 @@ it("retains the supplied lake inventory when changed support raises its floor", 
     expect(next.WaterDepths.reduce((sum, depth, i) => sum + depth * mesh.areas[i], 0)).toBe(volume);
     expect(next.WaterDepths[20]).toBe(0);
     expect(previous.WaterDepths[0]).toBe(5 * 1024);
-  } finally {
-    f.close();
-  }
-});
-it("carries fractional channel-front distances in FIFO order across released queue chunks", () => {
-  const f = arenaFixture(2048, 64);
-  try {
-    const queue = new NumericalRecordQueue<{ cell: number; depth: number }>(
-      ["cell", "depth"],
-      f.arena
-    );
-    for (let i = 0; i < 17003; i++) queue.push({ cell: i, depth: i * 0.125 });
-    for (let i = 0; i < 17003; i++) expect(queue.shift()).toEqual({ cell: i, depth: i * 0.125 });
-    expect(queue.shift()).toBeUndefined();
-    queue.push({ cell: 4, depth: 0.75 });
-    expect(queue.shift()).toEqual({ cell: 4, depth: 0.75 });
-    queue.close();
-    expect(f.arena.stats.peakDecodedBytes).toBeLessThanOrEqual(2048);
   } finally {
     f.close();
   }

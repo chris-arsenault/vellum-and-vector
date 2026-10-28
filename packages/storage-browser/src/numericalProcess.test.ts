@@ -18,8 +18,6 @@ import { arenaFixture } from "./numericalFixture";
 import { MapRunner } from "../../generation/src/mapRunner";
 import { MapProcessRegistry, type MapProcess } from "../../generation/src/process";
 import { landscape, configuration, invoke, options } from "../../generation/src/mapFixtures";
-import { orderedIndices } from "../../generation/src/canonry/numericalOrder";
-import { PriorityQueue } from "../../generation/src/canonry/priorityQueue";
 import { drainageConditioning } from "../../generation/src/canonry/drainageFlood";
 import { drainageGuidance } from "../../generation/src/canonry/flowGuidance";
 import { flowRouting } from "../../generation/src/canonry/routing";
@@ -27,7 +25,6 @@ import { riverNetwork } from "../../generation/src/canonry/rivers";
 import { createWorldMesh } from "../../generation/src/canonry/worldMesh";
 import { buildTransportPlan } from "../../generation/src/canonry/transportPlan";
 import { transportHistory } from "../../generation/src/canonry/transportHistory";
-import { NumericalList } from "../../generation/src/canonry/numericalList";
 import { marineRegions } from "../../generation/src/canonry/marineRegions";
 import { createSocietyGeography } from "../../generation/src/societyGeography";
 import { generationNumericalState } from "../../generation/src/generationNumericalState";
@@ -89,64 +86,6 @@ it("scatters connected crust and history on disk with the same material and prov
     expect(f.arena.stats.peakDecodedBytes).toBeLessThanOrEqual(32_768);
   } finally {
     f.close();
-  }
-});
-it("finishes a graph column across several append buffers without changing its sample type", () => {
-  const f = arenaFixture();
-  try {
-    const list = new NumericalList("int32", "graph:targets", f.arena);
-    for (let i = 0; i < 40_003; i++) list.push(i - 2000);
-    const values = list.finish();
-    expect(values.sampleType).toBe("int32");
-    expect(values.length).toBe(40_003);
-    expect(values.every((value, i) => value === i - 2000)).toBe(true);
-    expect(() => list.push(1)).toThrow(/complete/);
-  } finally {
-    f.close();
-  }
-});
-it("orders tied keys through external merges without random whole-field key lookups", () => {
-  const fixture = arenaFixture();
-  try {
-    const input = Float64Array.from({ length: 40_001 }, (_, i) => Math.imul(i, 7919) % 113),
-      values = fixture.arena.allocate({
-        type: "float64",
-        length: input.length,
-        lifetime: "process",
-        name: "order:keys",
-      });
-    values.set(input);
-    for (const descending of [true, false]) {
-      const actual = orderedIndices(values, descending, fixture.arena),
-        expected = Int32Array.from({ length: input.length }, (_, i) => i).sort(
-          (a, b) => (descending ? input[b] - input[a] : input[a] - input[b]) || a - b
-        );
-      expect(Array.from(actual)).toEqual(Array.from(expected));
-      fixture.arena.release(actual);
-    }
-    expect(fixture.arena.stats.peakDecodedBytes).toBeLessThanOrEqual(32_768);
-  } finally {
-    fixture.close();
-  }
-});
-it("grows and drains a paged priority queue across chunk boundaries with stable tie ordering", () => {
-  const fixture = arenaFixture();
-  try {
-    const compare = (a: { i: number; d: number }, b: { i: number; d: number }) =>
-        a.d - b.d || a.i - b.i,
-      queue = new PriorityQueue(compare, fixture.arena, ["i", "d"]),
-      expected = Array.from({ length: 17_003 }, (_, i) => ({
-        i,
-        d: Math.imul(i, 7919) % 113,
-      })).sort(compare);
-    for (let i = expected.length - 1; i >= 0; i--) queue.push(expected[i]);
-    for (const entry of expected) expect(queue.pop()).toEqual(entry);
-    expect(queue.count).toBe(0);
-    queue.push({ i: 5, d: -1 });
-    expect(queue.pop()).toEqual({ i: 5, d: -1 });
-    expect(fixture.arena.stats.peakDecodedBytes).toBeLessThanOrEqual(32_768);
-  } finally {
-    fixture.close();
   }
 });
 it("runs real ocean, distance, bathymetry and climate processes on file-backed physical state", () => {

@@ -7,9 +7,8 @@ import {
   spatial,
   type Grid,
   generateNumerical,
-  type NumericalAllocator,
+  KeyedHeap,
 } from "@atlas/domain";
-import { PriorityQueue } from "./canonry/priorityQueue";
 import type { GenerationState, MapProcessContext } from "./process";
 
 export const secondsPerYear = 365.25 * 24 * 60 * 60;
@@ -117,22 +116,14 @@ export function smoothNoise(x: number, y: number, seed: number): number {
   return ((1 - ty) * a + ty * b) * 2 - 1;
 }
 
+/** Lowest cell first by its height at push time; ties to the lower cell. `pop()` gives -1 when empty. */
 export class CellHeap {
-  private cells: PriorityQueue<{ cell: number }>;
-  constructor(heights: ArrayLike<number>, numerical?: NumericalAllocator) {
-    this.cells = new PriorityQueue(
-      (a, b) => heights[a.cell] - heights[b.cell] || a.cell - b.cell,
-      numerical,
-      ["cell"]
-    );
-  }
+  private readonly cells = new KeyedHeap("min");
+  constructor(private readonly heights: ArrayLike<number>) {}
   push(cell: number) {
-    this.cells.push({ cell });
+    this.cells.push(cell, this.heights[cell]);
   }
   pop() {
-    return this.cells.count ? this.cells.pop().cell : undefined;
-  }
-  close() {
-    this.cells.close();
+    return this.cells.pop();
   }
 }

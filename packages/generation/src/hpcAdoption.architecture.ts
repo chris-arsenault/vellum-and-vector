@@ -3,8 +3,9 @@ import { join, relative } from "node:path";
 import { expect, it } from "vitest";
 
 /** Architecture check: generation code must use the typed-array structures in
- * `@atlas/domain` (hpc) instead of the substitutes below. It is expected to fail until
- * every listed site is converted; its output is the conversion list. Run with
+ * `@atlas/domain` (hpc) rather than object queues, comparator heaps, Map/Set keyed by cell
+ * or per-cell coordinate objects. A site that no structure fits carries
+ * `// hpc-exempt: <reason>` on its line or the line before. Run with
  * `make test-architecture`, not as part of the unit suite. */
 interface Rule {
   pattern: RegExp;
@@ -12,7 +13,10 @@ interface Rule {
   scope?: RegExp;
 }
 const rules: Rule[] = [
-  { pattern: /new PriorityQueue</, replacement: "MonotoneHeap (monotone frontier) or KeyedHeap" },
+  {
+    pattern: /new PriorityQueue[<(]/,
+    replacement: "MonotoneHeap (monotone frontier), KeyedHeap or MultiKeyHeap",
+  },
   { pattern: /\bBoundedCandidates\b/, replacement: "TopK" },
   { pattern: /\borderedIndices\(/, replacement: "radixOrder" },
   { pattern: /new NumericalQueue\(/, replacement: "CellQueue" },
@@ -36,14 +40,6 @@ const rules: Rule[] = [
     scope: /canonry\//,
   },
 ];
-/** The substitutes themselves are not findings; they are deleted when their last user goes. */
-const substitutes = new Set([
-  "canonry/numericalQueue.ts",
-  "canonry/numericalList.ts",
-  "canonry/priorityQueue.ts",
-  "canonry/numericalOrder.ts",
-  "canonry/queueStorage.ts",
-]);
 function* sources(directory: string): Generator<string> {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
@@ -57,7 +53,6 @@ export function hpcAdoptionFindings(root = __dirname) {
   const findings: string[] = [];
   for (const path of sources(root)) {
     const file = relative(root, path);
-    if (substitutes.has(file)) continue;
     const lines = readFileSync(path, "utf8").split("\n");
     lines.forEach((line, index) => {
       // A site with no applicable structure (a short list of objects) carries its reason inline.

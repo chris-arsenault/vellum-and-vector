@@ -5,30 +5,24 @@ import {
   requireThat,
   spatial,
   allocateNumerical,
+  KeyedHeap,
   type Grid,
   type Position,
   type NumericalAllocator,
   type NumericalVector,
 } from "@atlas/domain";
-import { PriorityQueue } from "./canonry/priorityQueue";
 
-type Step = {
-  cell: number;
-  cost: number;
-};
+/** Cheapest-first cell frontier; `pop()` returns the cell or -1 and `cost()` its key. */
 export class RouteHeap {
-  private readonly items: PriorityQueue<Step>;
-  constructor(numerical?: NumericalAllocator) {
-    this.items = new PriorityQueue((a, b) => a.cost - b.cost, numerical, ["cell", "cost"]);
-  }
-  push(item: Step) {
-    this.items.push(item);
+  private readonly items = new KeyedHeap("min");
+  push(cell: number, cost: number) {
+    this.items.push(cell, cost);
   }
   pop() {
-    return this.items.count ? this.items.pop() : undefined;
+    return this.items.pop();
   }
-  close() {
-    this.items.close();
+  cost() {
+    return this.items.poppedKey();
   }
 }
 function nearest(grid: Grid, point: Position) {
@@ -70,11 +64,10 @@ export function findRoute(
     );
   const costs = allocate("float64", "route-cost").fill(Infinity),
     previous = allocate("int32", "route-previous").fill(-1),
-    queue = new RouteHeap(numerical);
+    queue = new RouteHeap();
   try {
     return searchRoute(grid, from, to, kind, { costs, previous, queue });
   } finally {
-    queue.close();
     numerical?.releaseUnused([costs, previous], []);
   }
 }
@@ -103,18 +96,18 @@ function searchRoute(
     return gridDistance(grid, p, goal) * cheapest;
   };
   costs[start] = 0;
-  queue.push({ cell: start, cost: remaining(start) });
-  for (let entry = queue.pop(); entry; entry = queue.pop()) {
-    const here = costs[entry.cell];
-    if (entry.cost !== here + remaining(entry.cell)) continue;
-    if (entry.cell === end) return routePoints(grid, previous, start, end, from, to);
-    for (const next of neighbors(grid, entry.cell, true, covers)) {
-      const step = routeCost(grid, entry.cell, next, kind);
+  queue.push(start, remaining(start));
+  for (let cell = queue.pop(); cell >= 0; cell = queue.pop()) {
+    const here = costs[cell];
+    if (queue.cost() !== here + remaining(cell)) continue;
+    if (cell === end) return routePoints(grid, previous, start, end, from, to);
+    for (const next of neighbors(grid, cell, true, covers)) {
+      const step = routeCost(grid, cell, next, kind);
       const cost = here + step;
       if (cost >= costs[next]) continue;
       costs[next] = cost;
-      previous[next] = entry.cell;
-      queue.push({ cell: next, cost: cost + remaining(next) });
+      previous[next] = cell;
+      queue.push(next, cost + remaining(next));
     }
   }
   return [];

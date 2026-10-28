@@ -94,30 +94,28 @@ export class SocietySpread {
       );
     this.owner = allocate("int32", "society-owner").fill(-1);
     this.distances = allocate("float64", "society-distance").fill(Infinity);
-    this.queue = new RouteHeap(state.numerical);
+    this.queue = new RouteHeap();
     this.edges = localEdges(state, marine);
   }
   seed(cell: number, owner: number, cost = 0) {
     if (cost >= this.distances[cell]) return;
     this.owner[cell] = owner;
     this.distances[cell] = cost;
-    this.queue.push({ cell, cost });
+    this.queue.push(cell, cost);
   }
   run() {
-    for (let entry = this.queue.pop(); entry; entry = this.queue.pop()) {
-      if (entry.cost !== this.distances[entry.cell]) continue;
-      for (const edge of this.edges(entry.cell)) {
-        if (this.marine && edge.a !== entry.cell) continue;
+    for (let cell = this.queue.pop(); cell >= 0; cell = this.queue.pop()) {
+      const here = this.queue.cost();
+      if (here !== this.distances[cell]) continue;
+      for (const edge of this.edges(cell)) {
+        if (this.marine && edge.a !== cell) continue;
         const next = edge.b,
-          cost = entry.cost + edge.cost;
+          cost = here + edge.cost;
         if (cost >= this.distances[next]) continue;
-        this.owner[next] = this.owner[entry.cell];
+        this.owner[next] = this.owner[cell];
         this.distances[next] = cost;
-        this.queue.push({ cell: next, cost });
+        this.queue.push(next, cost);
       }
     }
-  }
-  close() {
-    this.queue.close();
   }
 }

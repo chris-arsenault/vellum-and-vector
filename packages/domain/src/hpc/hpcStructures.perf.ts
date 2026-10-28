@@ -7,15 +7,11 @@ import { radixOrder } from "./radixOrder";
 import { BitSet } from "./bitSet";
 import { EpochStamps } from "./epochStamps";
 import { groupByLabel } from "./groupByLabel";
-import { PriorityQueue } from "../../../generation/src/canonry/priorityQueue";
-import {
-  NumericalQueue,
-  NumericalRecordQueue,
-} from "../../../generation/src/canonry/numericalQueue";
-import { orderedIndices } from "../../../generation/src/canonry/numericalOrder";
+import { KeyedHeap } from "./keyedHeap";
 
-/** One run per structure against the current substitute. Numbers go to test-results; no
- * assertions on timing. Sizes are small and tile sized, never a full large world. */
+/** One run per structure against a plain-JS baseline (comparator sort, object binary heap,
+ * object array queue, Map of lists). Numbers go to test-results; no assertions on timing.
+ * Sizes are small and tile sized, never a full large world. */
 const sizes = [10_000, 1_000_000];
 const ms = (t: number) => Math.round((performance.now() - t) * 10) / 10;
 function random(seed: number) {
@@ -50,12 +46,64 @@ function floodWithMonotone(n: number, next: () => number) {
   }
   return pops;
 }
-function floodWithBinaryHeap(n: number, next: () => number) {
-  const heap = new PriorityQueue<{ i: number; d: number }>(
-    (a, b) => a.d - b.d || a.i - b.i,
-    undefined,
-    ["i", "d"]
-  );
+/** The same flood on the comparison heap over typed columns. */
+function floodWithKeyedHeap(n: number, next: () => number) {
+  const heap = new KeyedHeap("min");
+  for (let i = 0; i < 64; i++) heap.push(i, next());
+  let item = 64,
+    pops = 0;
+  while (heap.size && item < n) {
+    heap.pop();
+    const key = heap.poppedKey();
+    heap.push(item++, key + next());
+    if (next() < 0.5) heap.push(item++, key + next());
+    pops++;
+  }
+  while (heap.size) {
+    heap.pop();
+    pops++;
+  }
+  return pops;
+}
+/** Object binary heap with a comparator closure: the shape the conversion replaced. */
+class ObjectHeap<T> {
+  private items: T[] = [];
+  constructor(private readonly compare: (a: T, b: T) => number) {}
+  get count() {
+    return this.items.length;
+  }
+  push(value: T) {
+    const items = this.items;
+    let at = items.length;
+    items.push(value);
+    while (at > 0) {
+      const parent = (at - 1) >>> 1;
+      if (this.compare(value, items[parent]) >= 0) break;
+      items[at] = items[parent];
+      at = parent;
+    }
+    items[at] = value;
+  }
+  pop(): T {
+    const items = this.items,
+      first = items[0],
+      last = items.pop()!;
+    if (!items.length) return first;
+    let at = 0;
+    for (;;) {
+      let child = at * 2 + 1;
+      if (child >= items.length) break;
+      if (child + 1 < items.length && this.compare(items[child + 1], items[child]) < 0) child++;
+      if (this.compare(last, items[child]) <= 0) break;
+      items[at] = items[child];
+      at = child;
+    }
+    items[at] = last;
+    return first;
+  }
+}
+function floodWithObjectHeap(n: number, next: () => number) {
+  const heap = new ObjectHeap<{ i: number; d: number }>((a, b) => a.d - b.d || a.i - b.i);
   for (let i = 0; i < 64; i++) heap.push({ i, d: next() });
   let item = 64,
     pops = 0;
@@ -79,25 +127,17 @@ function queues(n: number) {
   for (let i = cells.shift(); i >= 0; i = cells.shift()) sum += i;
   const cellQueue = ms(t);
   t = performance.now();
-  const numerical = new NumericalQueue();
-  for (let i = 0; i < n; i++) numerical.push(i);
-  for (let i = numerical.shift(); i !== undefined; i = numerical.shift()) sum += i;
-  const numericalQueue = ms(t);
-  t = performance.now();
   const records = new RecordQueue(2);
   for (let i = 0; i < n; i++) records.push(i, i * 0.5, 1);
   for (let i = records.shift(); i >= 0; i = records.shift()) sum += records.field(0);
   const recordQueue = ms(t);
   t = performance.now();
-  const recordNumerical = new NumericalRecordQueue<{ i: number; a: number; b: number }>([
-    "i",
-    "a",
-    "b",
-  ]);
-  for (let i = 0; i < n; i++) recordNumerical.push({ i, a: i * 0.5, b: 1 });
-  for (let r = recordNumerical.shift(); r; r = recordNumerical.shift()) sum += r.a;
-  const numericalRecordQueue = ms(t);
-  return { cellQueue, numericalQueue, recordQueue, numericalRecordQueue, sink: sum };
+  // Object records in a plain array drained by index (array shift() is quadratic).
+  const objects: { i: number; a: number; b: number }[] = [];
+  for (let i = 0; i < n; i++) objects.push({ i, a: i * 0.5, b: 1 });
+  for (let head = 0; head < objects.length; head++) sum += objects[head].a;
+  const objectRecords = ms(t);
+  return { cellQueue, recordQueue, objectRecords, sink: sum };
 }
 function flags(n: number) {
   let t = performance.now();
@@ -141,7 +181,7 @@ function grouping(n: number) {
   return { csr, mapOfLists, sink: groups.members.length + map.size };
 }
 
-it("records one run of each structure against its substitute", () => {
+it("records one run of each structure against a plain-JS baseline", () => {
   const results: Record<string, unknown> = {};
   for (const n of sizes) {
     const values = keys(n);
@@ -149,20 +189,24 @@ it("records one run of each structure against its substitute", () => {
     radixOrder(values);
     const radix = ms(t);
     t = performance.now();
-    orderedIndices(values);
+    Int32Array.from({ length: n }, (_, i) => i).sort((a, b) => values[a] - values[b] || a - b);
     const comparator = ms(t);
     t = performance.now();
     const monotonePops = floodWithMonotone(n, random(1));
     const monotone = ms(t);
     t = performance.now();
-    const binaryPops = floodWithBinaryHeap(n, random(1));
-    const binary = ms(t);
+    const keyedPops = floodWithKeyedHeap(n, random(1));
+    const keyed = ms(t);
+    t = performance.now();
+    const objectPops = floodWithObjectHeap(n, random(1));
+    const objects = ms(t);
     results[n] = {
-      order: { radixOrder: radix, orderedIndices: comparator },
+      order: { radixOrder: radix, comparatorSort: comparator },
       flood: {
         monotoneHeap: monotone,
-        binaryHeapObjects: binary,
-        pops: [monotonePops, binaryPops],
+        keyedHeap: keyed,
+        objectHeap: objects,
+        pops: [monotonePops, keyedPops, objectPops],
       },
       queues: queues(n),
       flags: flags(n),
