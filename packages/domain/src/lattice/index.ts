@@ -26,3 +26,14 @@ export {
   type WorldLatticeOptions,
 } from "./worldLattice";
 export { AdaptiveLattice, createAdaptiveWorldLattice } from "./adaptiveLattice";
+export {
+  BlockScratch,
+  blockConstructors,
+  bytesPerSample,
+  newBlock,
+  type BlockArray,
+  type RandomAccessFile,
+} from "./blockScratch";
+export { BlockCache, type BlockOwner } from "./blockCache";
+export { Band, type BandSchema, type BlockSource } from "./band";
+export { Coverage } from "./coverage";
