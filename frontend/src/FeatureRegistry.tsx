@@ -13,7 +13,7 @@ import {
 } from "@atlas/domain";
 import { RegistryFilters, AttributeFilters } from "./RegistryFilters";
 import { bounds } from "./presentation";
-import { useJobs } from "./useAtlas";
+import { useWorld } from "./useAtlas";
 import { atlasWorkspace } from "./atlasWorkspace";
 import { editArea } from "./useScene";
 import "./featureRegistry.css";
@@ -124,7 +124,7 @@ function registryResults(data: RegistryPage | undefined, columns: string[]) {
 type RegistryModel = ReturnType<typeof useRegistryModel>;
 function RegistryHeader({ model, worldId }: { model: RegistryModel; worldId: string }) {
   const { scope, setScope, setPage, expanded, setExpanded } = model;
-  const jobs = useJobs(worldId);
+  const world = useWorld(worldId);
   return (
     <>
       <header>
@@ -136,7 +136,7 @@ function RegistryHeader({ model, worldId }: { model: RegistryModel; worldId: str
       <p className="hint">
         Find existing geography across this world. Finer places open in their own maps.
       </p>
-      {jobs.data?.[0]?.partial && (
+      {world.data?.publication?.state === "incomplete" && (
         <p role="status">Initial generation is incomplete; delivered features are listed.</p>
       )}
       <label>

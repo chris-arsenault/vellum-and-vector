@@ -1,12 +1,6 @@
 import type {
-  CatalogChanges,
-  FeatureQuery,
-  ObjectKind,
   WorkspaceScope,
   WorldMetadata,
-  RegionQuery,
-  RegionDrawing,
-  ReadRequirements,
   Command,
   Template,
   Impact,
@@ -14,8 +8,9 @@ import type {
   DomainWrite,
   DomainSnapshot,
   Bounds,
-  AuthoringFeatureQuery,
 } from "@atlas/domain";
+import type { SpatialCatalog } from "@atlas/storage-browser";
+
 export interface WorkspaceCommand {
   scope: WorkspaceScope;
   command: Command;
@@ -27,23 +22,56 @@ export interface WorkspaceCommandResult {
   impact: Impact;
   preview: DomainWrite[];
 }
+/** Catalog reads and writes cross the worker boundary as a typed method call. This is the
+ * surface a hosted adapter would implement; everything else below is session plumbing. */
+export type CatalogMethod =
+  | "createWorld"
+  | "readWorld"
+  | "readRecords"
+  | "readFeatures"
+  | "readDisplay"
+  | "readAuthoring"
+  | "readAuthoringPage"
+  | "readEditor"
+  | "readRegistry"
+  | "readSettlement"
+  | "readConnections"
+  | "readLayerPresentation"
+  | "readFeature"
+  | "readFieldGeography"
+  | "regionChoices"
+  | "drawRegion"
+  | "readHistory"
+  | "readCauses"
+  | "undo"
+  | "commit"
+  | "beginPublication"
+  | "appendPublication"
+  | "finishPublication"
+  | "discardPublication"
+  | "abandonPublication";
+export type CatalogCall<M extends CatalogMethod = CatalogMethod> = {
+  kind: "catalog";
+  worldId: string;
+  method: M;
+  args: Parameters<SpatialCatalog[M]>;
+};
+export type CatalogResult<M extends CatalogMethod> = Awaited<ReturnType<SpatialCatalog[M]>>;
 
 export type WorkspaceOperation =
   | { kind: "open"; name: string }
   | { kind: "connect"; port: MessagePort }
-  | { kind: "createWorld"; world: WorldMetadata }
-  | { kind: "importWorld"; snapshot: DomainSnapshot }
+  | { kind: "close" }
+  | CatalogCall
+  | { kind: "importWorld"; worldId: string; snapshot: DomainSnapshot }
   | { kind: "openLegacyWorld"; worldId: string; saved: import("./legacySave").LegacySavedWorld }
-  | { kind: "readEditor"; worldId: string }
-  | { kind: "readRegistry"; input: import("@atlas/domain").RegistryRequest }
-  | { kind: "readSettlement"; scope: WorkspaceScope; featureId: string }
-  | { kind: "readConnections"; scope: WorkspaceScope }
-  | { kind: "readLayerPresentation"; worldId: string; layerId: string }
-  | { kind: "readFeature"; scope: WorkspaceScope; featureId: string }
+  | { kind: "openSavedWorld"; worldId: string; root: { name: string; path: string } }
+  | { kind: "saveWorld"; worldId: string }
+  | { kind: "export"; worldId: string; areaId?: string }
   | { kind: "readRasters"; worldId: string; areaId: string; extent: Bounds; tolerance: number }
   | {
       kind: "readRasterGeography";
-      scope: WorkspaceScope;
+      worldId: string;
       reference: import("./types").RasterGeographyReference;
     }
   | { kind: "generationSource"; worldId: string; areaId: string }
@@ -52,31 +80,16 @@ export type WorkspaceOperation =
       worldId: string;
       input: import("@atlas/generation").AtlasGenerationInput;
     }
-  | { kind: "readWorld"; worldId: string }
-  | { kind: "readRecords"; scope: WorkspaceScope; recordKind: ObjectKind; ids: string[] }
-  | { kind: "readFeatures"; query: FeatureQuery }
-  | { kind: "readDisplay"; query: FeatureQuery; tolerance: number }
-  | { kind: "readAuthoring"; input: ReadRequirements }
-  | { kind: "readAuthoringPage"; input: AuthoringFeatureQuery; after: string | null; limit: number }
-  | { kind: "readFieldGeography"; scope: WorkspaceScope; resourceId: string }
-  | { kind: "regionChoices"; query: RegionQuery }
-  | { kind: "drawRegion"; input: RegionDrawing }
-  | { kind: "readHistory"; worldId: string; before: number | null; limit: number }
-  | { kind: "readCauses"; worldId: string; areaId: string }
-  | { kind: "saveWorld"; worldId: string }
-  | { kind: "openSavedWorld"; worldId: string; root: { name: string; path: string } }
   | { kind: "analyze"; worldId: string; input: import("./spatialAnalysis").AnalysisInput }
-  | { kind: "export"; worldId: string; areaId?: string }
-  | { kind: "undo"; worldId: string; operationId: string }
-  | { kind: "commit"; changes: CatalogChanges }
-  | { kind: "beginPublication"; worldId: string; input: import("@atlas/domain").CatalogPublication }
-  | { kind: "appendPublication"; worldId: string; token: string; changes: CatalogChanges }
-  | { kind: "finishPublication"; worldId: string; token: string }
-  | { kind: "discardPublication"; worldId: string; token: string }
-  | { kind: "executeCommand"; input: WorkspaceCommand }
-  | { kind: "close" };
+  | { kind: "executeCommand"; worldId: string; input: WorkspaceCommand }
+  | { kind: "abandonOperation"; worldId: string; operationId: string };
+export type WorldOperation = Exclude<
+  WorkspaceOperation,
+  { kind: "open" } | { kind: "connect" } | { kind: "close" }
+>;
 export interface WorkspaceRequest {
   id: number;
   operation: WorkspaceOperation;
 }
 export type WorkspaceReply = { id: number; value: unknown } | { id: number; error: string };
+export type { WorldMetadata };

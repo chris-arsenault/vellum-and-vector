@@ -3,27 +3,21 @@ import type {
   WorldMetadata,
   WorkspaceScope,
   ObjectKind,
-  CatalogRecord,
   FeatureQuery,
-  FeaturePage,
   CatalogChanges,
-  WorkspaceChange,
   RegionQuery,
-  RegionChoices,
   RegionDrawing,
-  RegionDrawingResult,
-  History,
   ReadRequirements,
   DomainSnapshot,
-  FieldGeography,
   World,
-  AtlasFeature,
   Bounds,
-  EpochHistory,
-  AuthoringPage,
   AuthoringFeatureQuery,
+  CatalogPublication,
+  RegistryRequest,
 } from "@atlas/domain";
 import type {
+  CatalogMethod,
+  CatalogResult,
   WorkspaceOperation,
   WorkspaceReply,
   WorkspaceCommand,
@@ -31,6 +25,7 @@ import type {
 } from "./workspaceProtocol";
 import type { RasterGeography, RasterGeographyReference, ResourceRaster } from "./types";
 
+/** The editor's handle on the catalog worker. Catalog methods cross as one typed call. */
 export class WorkspaceClient implements SpatialStore {
   private sequence = 0;
   private failed: Error | null = null;
@@ -53,9 +48,6 @@ export class WorkspaceClient implements SpatialStore {
       this.fail(new Error("Could not read geographic workspace output."));
     if ("start" in worker) worker.start();
   }
-  async open(name: string) {
-    await this.request<void>({ kind: "open", name });
-  }
   private fail(error: Error) {
     this.failed = error;
     for (const item of this.pending.values()) item.reject(error);
@@ -73,41 +65,42 @@ export class WorkspaceClient implements SpatialStore {
       );
     });
   }
-  createWorld(world: WorldMetadata) {
-    return this.request<void>({ kind: "createWorld", world });
+  private catalog<M extends CatalogMethod>(
+    worldId: string,
+    method: M,
+    ...args: Parameters<import("@atlas/storage-browser").SpatialCatalog[M]>
+  ) {
+    return this.request<CatalogResult<M>>({ kind: "catalog", worldId, method, args });
   }
+  async open(name: string) {
+    await this.request<void>({ kind: "open", name });
+  }
+  connect(port: MessagePort) {
+    return this.request<void>({ kind: "connect", port });
+  }
+  // Session and world lifecycle.
   importWorld(snapshot: DomainSnapshot) {
-    return this.request<World>({ kind: "importWorld", snapshot });
+    return this.request<World>({ kind: "importWorld", worldId: snapshot.world.id, snapshot });
   }
   openLegacyWorld(worldId: string, saved: import("./legacySave").LegacySavedWorld) {
     return this.request<World>({ kind: "openLegacyWorld", worldId, saved });
   }
-  readEditor(worldId: string) {
-    return this.request<World>({ kind: "readEditor", worldId });
+  openSavedWorld(worldId: string, root: { name: string; path: string }) {
+    return this.request<World>({ kind: "openSavedWorld", worldId, root });
   }
-  readRegistry(input: import("@atlas/domain").RegistryRequest) {
-    return this.request<import("@atlas/domain").RegistryPage>({ kind: "readRegistry", input });
-  }
-  readSettlement(scope: WorkspaceScope, featureId: string) {
-    return this.request<import("@atlas/domain").SettlementInspection | null>({
-      kind: "readSettlement",
-      scope,
-      featureId,
-    });
-  }
-  readConnections(scope: WorkspaceScope) {
-    return this.request<import("@atlas/domain").Connection[]>({ kind: "readConnections", scope });
-  }
-  readLayerPresentation(worldId: string, layerId: string) {
-    return this.request<import("@atlas/domain").LayerPresentation>({
-      kind: "readLayerPresentation",
+  saveWorld(worldId: string) {
+    return this.request<{ root: { name: string; path: string }; name: string; version: number }>({
+      kind: "saveWorld",
       worldId,
-      layerId,
     });
   }
-  readFeature(scope: WorkspaceScope, featureId: string) {
-    return this.request<AtlasFeature>({ kind: "readFeature", scope, featureId });
+  exportWorld(worldId: string, areaId?: string) {
+    return this.request<File>({ kind: "export", worldId, areaId });
   }
+  abandonOperation(worldId: string, operationId: string) {
+    return this.request<void>({ kind: "abandonOperation", worldId, operationId });
+  }
+  // Application operations executed beside the catalog.
   readRasters(worldId: string, areaId: string, extent: Bounds, tolerance = 0) {
     return this.request<ResourceRaster[]>({
       kind: "readRasters",
@@ -120,12 +113,9 @@ export class WorkspaceClient implements SpatialStore {
   readRasterGeography(reference: RasterGeographyReference) {
     return this.request<RasterGeography>({
       kind: "readRasterGeography",
-      scope: reference.scope,
+      worldId: reference.scope.worldId,
       reference,
     });
-  }
-  connect(port: MessagePort) {
-    return this.request<void>({ kind: "connect", port });
   }
   generationSource(worldId: string, areaId: string) {
     return this.request<DomainSnapshot>({ kind: "generationSource", worldId, areaId });
@@ -137,48 +127,6 @@ export class WorkspaceClient implements SpatialStore {
       resolution: { cellSpan: number; cellArea: number; cellAreaKm2: number };
     }>({ kind: "generationSetup", worldId, input });
   }
-  readWorld(worldId: string) {
-    return this.request<WorldMetadata>({ kind: "readWorld", worldId });
-  }
-  readRecords(scope: WorkspaceScope, recordKind: ObjectKind, ids: string[]) {
-    return this.request<CatalogRecord[]>({ kind: "readRecords", scope, recordKind, ids });
-  }
-  readFeatures(query: FeatureQuery) {
-    return this.request<FeaturePage>({ kind: "readFeatures", query });
-  }
-  readDisplay(query: FeatureQuery, tolerance: number) {
-    return this.request<FeaturePage>({ kind: "readDisplay", query, tolerance });
-  }
-  readAuthoring(input: ReadRequirements) {
-    return this.request<DomainSnapshot>({ kind: "readAuthoring", input });
-  }
-  readAuthoringPage(input: AuthoringFeatureQuery, after: string | null, limit: number) {
-    return this.request<AuthoringPage>({ kind: "readAuthoringPage", input, after, limit });
-  }
-  readFieldGeography(scope: WorkspaceScope, resourceId: string) {
-    return this.request<FieldGeography>({ kind: "readFieldGeography", scope, resourceId });
-  }
-  regionChoices(query: RegionQuery) {
-    return this.request<RegionChoices>({ kind: "regionChoices", query });
-  }
-  drawRegion(input: RegionDrawing) {
-    return this.request<RegionDrawingResult>({ kind: "drawRegion", input });
-  }
-  readHistory(worldId: string, before: number | null, limit: number) {
-    return this.request<History[]>({ kind: "readHistory", worldId, before, limit });
-  }
-  readCauses(worldId: string, areaId: string) {
-    return this.request<EpochHistory[]>({ kind: "readCauses", worldId, areaId });
-  }
-  saveWorld(worldId: string) {
-    return this.request<{ root: { name: string; path: string }; name: string; version: number }>({
-      kind: "saveWorld",
-      worldId,
-    });
-  }
-  openSavedWorld(worldId: string, root: { name: string; path: string }) {
-    return this.request<World>({ kind: "openSavedWorld", worldId, root });
-  }
   analyze(worldId: string, input: import("./spatialAnalysis").AnalysisInput) {
     return this.request<import("./spatialAnalysis").AnalysisResult>({
       kind: "analyze",
@@ -186,43 +134,85 @@ export class WorkspaceClient implements SpatialStore {
       input,
     });
   }
-  exportWorld(worldId: string, areaId?: string) {
-    return this.request<File>({
-      kind: "export",
-      worldId,
-      areaId,
-    });
-  }
-  undo(worldId: string, operationId: string) {
-    return this.request<WorkspaceChange>({ kind: "undo", worldId, operationId });
-  }
-  commit(changes: CatalogChanges) {
-    return this.request<WorkspaceChange>({ kind: "commit", changes });
-  }
-  async beginPublication(input: import("@atlas/domain").CatalogPublication) {
-    const token = await this.request<string>({
-      kind: "beginPublication",
-      worldId: input.worldId,
+  executeCommand(input: WorkspaceCommand) {
+    return this.request<WorkspaceCommandResult>({
+      kind: "executeCommand",
+      worldId: input.scope.worldId,
       input,
     });
+  }
+  // Catalog surface.
+  createWorld(world: WorldMetadata) {
+    return this.catalog(world.id, "createWorld", world);
+  }
+  readWorld(worldId: string) {
+    return this.catalog(worldId, "readWorld", worldId);
+  }
+  readEditor(worldId: string) {
+    return this.catalog(worldId, "readEditor", worldId);
+  }
+  readRegistry(input: RegistryRequest) {
+    return this.catalog(input.worldId, "readRegistry", input);
+  }
+  readSettlement(scope: WorkspaceScope, featureId: string) {
+    return this.catalog(scope.worldId, "readSettlement", scope, featureId);
+  }
+  readConnections(scope: WorkspaceScope) {
+    return this.catalog(scope.worldId, "readConnections", scope);
+  }
+  readLayerPresentation(worldId: string, layerId: string) {
+    return this.catalog(worldId, "readLayerPresentation", worldId, layerId);
+  }
+  readFeature(scope: WorkspaceScope, featureId: string) {
+    return this.catalog(scope.worldId, "readFeature", scope, featureId);
+  }
+  readRecords(scope: WorkspaceScope, recordKind: ObjectKind, ids: string[]) {
+    return this.catalog(scope.worldId, "readRecords", scope, recordKind, ids);
+  }
+  readFeatures(query: FeatureQuery) {
+    return this.catalog(query.scope.worldId, "readFeatures", query);
+  }
+  readDisplay(query: FeatureQuery, tolerance: number) {
+    return this.catalog(query.scope.worldId, "readDisplay", query, tolerance);
+  }
+  readAuthoring(input: ReadRequirements) {
+    return this.catalog(input.scope.worldId, "readAuthoring", input);
+  }
+  readAuthoringPage(input: AuthoringFeatureQuery, after: string | null, limit: number) {
+    return this.catalog(input.scope.worldId, "readAuthoringPage", input, after, limit);
+  }
+  readFieldGeography(scope: WorkspaceScope, resourceId: string) {
+    return this.catalog(scope.worldId, "readFieldGeography", scope, resourceId);
+  }
+  regionChoices(query: RegionQuery) {
+    return this.catalog(query.scope.worldId, "regionChoices", query);
+  }
+  drawRegion(input: RegionDrawing) {
+    return this.catalog(input.query.scope.worldId, "drawRegion", input);
+  }
+  readHistory(worldId: string, before: number | null, limit: number) {
+    return this.catalog(worldId, "readHistory", worldId, before, limit);
+  }
+  readCauses(worldId: string, areaId: string) {
+    return this.catalog(worldId, "readCauses", worldId, areaId);
+  }
+  undo(worldId: string, operationId: string) {
+    return this.catalog(worldId, "undo", worldId, operationId);
+  }
+  commit(changes: CatalogChanges) {
+    return this.catalog(changes.worldId, "commit", changes);
+  }
+  async beginPublication(input: CatalogPublication) {
+    const token = await this.catalog(input.worldId, "beginPublication", input);
     this.publications.set(token, input.worldId);
     return token;
   }
   appendPublication(token: string, changes: CatalogChanges) {
-    return this.request<void>({
-      kind: "appendPublication",
-      worldId: changes.worldId,
-      token,
-      changes,
-    });
+    return this.catalog(changes.worldId, "appendPublication", token, changes);
   }
   async finishPublication(token: string) {
     try {
-      return await this.request<WorkspaceChange>({
-        kind: "finishPublication",
-        worldId: this.publicationWorld(token),
-        token,
-      });
+      return await this.catalog(this.publicationWorld(token), "finishPublication", token);
     } finally {
       this.publications.delete(token);
     }
@@ -231,7 +221,7 @@ export class WorkspaceClient implements SpatialStore {
     const worldId = this.publications.get(token);
     if (!worldId) return;
     try {
-      await this.request<void>({ kind: "discardPublication", worldId, token });
+      await this.catalog(worldId, "discardPublication", token);
     } finally {
       this.publications.delete(token);
     }
@@ -240,9 +230,6 @@ export class WorkspaceClient implements SpatialStore {
     const worldId = this.publications.get(token);
     if (!worldId) throw new Error("This publication is no longer active.");
     return worldId;
-  }
-  executeCommand(input: WorkspaceCommand) {
-    return this.request<WorkspaceCommandResult>({ kind: "executeCommand", input });
   }
   async close() {
     if (this.closed) return;

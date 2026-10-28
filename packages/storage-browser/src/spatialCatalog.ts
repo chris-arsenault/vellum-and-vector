@@ -230,6 +230,9 @@ export class SpatialCatalog implements SpatialStore {
   async discardPublication(token: string) {
     this.publication.discard(token);
   }
+  async abandonPublication(operationId: string) {
+    this.publication.abandon(operationId);
+  }
   async close() {
     this.kernel.close();
     this.db.close();

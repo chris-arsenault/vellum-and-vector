@@ -53,6 +53,11 @@ export class PublicationStaging {
     this.db.exec({ sql: "DELETE FROM publication_scratch.batches WHERE token=?", bind: [token] });
     this.active.delete(token);
   }
+  /** Drop every staged batch of an operation whose worker no longer exists. */
+  abandon(operationId: string) {
+    for (const [token, input] of [...this.active])
+      if (input.operationId === operationId) this.discard(token);
+  }
   private require(token: string) {
     const input = this.active.get(token);
     requireThat(input, "publication_missing", "This publication is no longer active.");

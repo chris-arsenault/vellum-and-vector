@@ -6,17 +6,22 @@ import {
   type SavedMapSummary,
 } from "@atlas/storage-browser";
 import type { LegacySavedWorld } from "./legacySave";
-import { atlasWorkspace, rememberWorld } from "./atlasWorkspace";
+import { atlasWorkspace, readEditorWorld, rememberWorld } from "./atlasWorkspace";
 import { clearGenerationJobs, listJobs } from "./generationJobs";
 
 export { listSavedMaps, type SavedMapSummary };
 
 /** Snapshot and registration both run while this tab holds the shared storage lease, so
- * another tab's collector cannot run between them. */
+ * another tab's collector cannot run between them. Completion is read from the world. */
 export async function saveMap(id: string) {
   const jobs = listJobs(id);
   requireThat(
-    !jobs.some((job) => job.status === "running") && !jobs[0]?.partial,
+    !jobs.some((job) => job.status === "running"),
+    "incomplete_generation",
+    "Finish generation before saving this map."
+  );
+  requireThat(
+    !(await readEditorWorld(id)).publication,
     "incomplete_generation",
     "Finish generation before saving this map."
   );

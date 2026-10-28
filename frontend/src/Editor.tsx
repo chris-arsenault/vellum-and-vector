@@ -242,7 +242,7 @@ function SubjectCanvas({ world, editor }: { world: World; editor: EditorState })
 function MapStatus({ world, editor }: { world: World; editor: EditorState }) {
   const jobs = useJobs(world.id);
   const generating = jobs.data?.some((job) => job.status === "running");
-  const partial = jobs.data?.[0]?.partial;
+  const partial = world.publication?.state === "incomplete";
   return (
     <div className="map-status">
       <span>

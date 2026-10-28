@@ -298,6 +298,9 @@ export interface World {
   /** Meetings between systems as processes; absent means the Canonry presets. */
   confluences?: import("./magicConfluences").MagicConfluence[];
   featureCount?: number;
+  /** Set by the first batch of a progressive initial publication; cleared by its last. A world
+   * that still carries it was never completed, whatever later generation attempts did. */
+  publication?: { operationId: string; areaId: string; state: "incomplete" };
   id: string;
   name: string;
   seed: number;

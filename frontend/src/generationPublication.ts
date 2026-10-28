@@ -218,12 +218,21 @@ async function publishInitial(publication: Publication, history: EpochHistory[])
   let revision = original.world.version,
     first = true;
   const complete = completion(publication, history);
+  const incomplete: NonNullable<CatalogChanges["metadata"]>["publication"] = {
+    operationId: publication.operationId,
+    areaId: publication.snapshot.scope.areaId,
+    state: "incomplete",
+  };
   const commit = async (changes: CatalogChanges) => {
     check();
     changes.expectedWorldRevision = revision;
     if (first)
       Object.assign(changes, ready, {
-        metadata: { ...complete.metadata, generations: original.world.generations },
+        metadata: {
+          ...complete.metadata,
+          generations: original.world.generations,
+          publication: incomplete,
+        },
       });
     const change = await workspace.commit(changes);
     revision = change.revision;
@@ -234,7 +243,10 @@ async function publishInitial(publication: Publication, history: EpochHistory[])
   if (first) await commit(mappedChanges(publication, [], []));
   check();
   const final = mappedChanges(publication, [], []);
-  Object.assign(final, complete, { expectedWorldRevision: revision });
+  Object.assign(final, complete, {
+    metadata: { ...complete.metadata, publication: undefined },
+    expectedWorldRevision: revision,
+  });
   progress(await workspace.commit(final));
 }
 async function publishAtomic(publication: Publication, history: EpochHistory[]) {

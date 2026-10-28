@@ -171,6 +171,7 @@ async function receive(id: string, message: GenerationWorkspaceMessage) {
       return;
     case "cancelled":
       finish(id, "cancelled");
+      void abandon(active.job.worldId, id);
       return;
     case "failed":
       appendDiagnostics(active.job, message.diagnostics ?? []);
@@ -202,10 +203,30 @@ function finish(id: string, status: string, error: string | null = null) {
   });
   changed("jobs");
 }
+/** How long a worker may keep running after the host asks it to stop. */
+export const cancellationGraceMs = 1500;
+/** The host owns cancellation: a busy stage cannot read the message, so the worker is
+ * terminated after the grace period and its unpublished staging is discarded. Published
+ * initial geography stays, marked incomplete on the world. */
 export function cancelGeneration(id: string) {
   const active = running.get(id);
   if (!active) return;
   active.job.stage = "Cancelling generation";
   active.worker.postMessage({ kind: "cancel" });
   changed("jobs");
+  setTimeout(() => {
+    if (!running.has(id)) return;
+    finish(id, "cancelled");
+    void abandon(active.job.worldId, id);
+  }, cancellationGraceMs);
+}
+async function abandon(worldId: string, operationId: string) {
+  try {
+    await (await atlasWorkspace()).abandonOperation(worldId, operationId);
+    rememberWorld(await readEditorWorld(worldId));
+  } catch (error) {
+    const job = jobs.find((entry) => entry.id === operationId);
+    if (job) job.error = error instanceof Error ? error.message : String(error);
+    changed("jobs");
+  }
 }

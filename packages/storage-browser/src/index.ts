@@ -14,6 +14,7 @@ export { writeFieldLayout, writeFieldChannels, type FieldLayoutResources } from 
 export { FieldWorkingSet, FieldInputCache, type FieldInputStore } from "./fieldWorkingSet";
 export { resourceCategories, mergeSummary } from "./fieldSummaries";
 export { openStorageSession, collectSavedStorage } from "./storageSession";
+export { abandonGenerationStorage } from "./workingStorageCleanup";
 export {
   listSavedMaps,
   readSavedMap,
