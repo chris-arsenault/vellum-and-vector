@@ -1,12 +1,22 @@
 # World Atlas Creator
 
+**Deferred product scope — 2026-10-28:** Manual editing, its associated authoring
+tools, and undo are out of active scope pending proper design. Stop implementation
+and repair work on them. Preserve the existing code and tests for future redesign;
+this direction does not authorize deleting them or preventing their return. Older
+requirements for these features describe future scope, not acceptance criteria for
+current work. Their existing implementation is not accepted product behavior.
+Generation, regional selection and refinement, inspection, presentation, explicit
+local saves and export remain active scope. Completed causal generation history
+is separate from undo.
+
 **Current implementation scope — updated 2026-10-27:** The user has deferred the
 backend and MCP until the frontend product functions. The browser owns a local GIS
 workspace and runs generation in a worker. Explicit local map saves rooted in IndexedDB
 allow reopening geography without regeneration; unsaved changes disappear on
 reload, and generation stops when the tab closes. [ADR 0003](adr/0003-frontend-session.md)
 supersedes this document's backend, durable-job, recovery and service requirements
-for current work. Geographic authoring behavior remains the product direction.
+for current work. Geographic authoring remains deferred as described above.
 
 **Regional refinement and map authority — 2026-10-26:** Geographic regions can
 nest arbitrarily within the existing map type. Refinement elaborates retained

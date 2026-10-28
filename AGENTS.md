@@ -3,9 +3,19 @@
 ## Product and source authority
 
 Build the fictional-world atlas described in [docs/product-spec.md](docs/product-spec.md).
-Creators progressively generate and author one geographically coherent world,
-from broad landscapes to located sites and interiors. Keep manual editing,
-spatial identity, authored protection and understandable causal history central.
+Creators progressively generate and explore one geographically coherent world.
+Keep spatial identity and understandable generation history central.
+
+**Deferred product scope — 2026-10-28:** Manual editing, its associated authoring
+tools, and undo are deferred until the user resumes their design. Do not implement,
+repair, redesign or expand them as part of current work. Preserve their existing
+code and tests for future redesign; deferral does not authorize deleting their
+implementation or making their eventual return harder. Older requirements for
+these features are future scope, not acceptance criteria for current generation,
+storage or performance work. Existing code does not establish accepted product
+behavior. Generation, regional selection and refinement, inspection, presentation,
+explicit local saves and export remain active scope. Completed causal generation
+history is separate from undo.
 
 Current user direction and the product contract define required behavior. These
 instructions and the [ADRs](docs/adr/0001-spatial-authority.md) record implementation
