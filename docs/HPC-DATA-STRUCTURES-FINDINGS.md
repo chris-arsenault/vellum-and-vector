@@ -105,25 +105,32 @@ shape through the `PaddedAdjacency` interface.
 
 ## 6. Results (one run, node, `test-results/hpc-structures.json`)
 
-| Workload                      | n              | New                               | Substitute                           |
-| ----------------------------- | -------------- | --------------------------------- | ------------------------------------ |
-| Order 1M float keys           | 1 000 000      | `radixOrder` 173 ms               | `orderedIndices` 479 ms              |
-| Order 10k float keys          | 10 000         | 13 ms                             | 15 ms                                |
-| Flood-shaped push/pop         | 1 000 000 pops | `MonotoneHeap` 417 ms             | `PriorityQueue` with objects 750 ms  |
-| Flood-shaped push/pop         | 10 000 pops    | 20 ms                             | 6 ms                                 |
-| Record FIFO push/shift        | 1 000 000      | `RecordQueue` 26 ms               | `NumericalRecordQueue` 213 ms        |
-| Cell FIFO push/shift          | 1 000 000      | `CellQueue` 27 ms                 | `NumericalQueue` (native path) 34 ms |
-| 10 resets and sparse marks    | 1 000 000      | `EpochStamps` 6 ms, `BitSet` 9 ms | `Uint8Array.fill` 3 ms               |
-| Members by label, 1000 labels | 1 000 000      | `groupByLabel` 8 ms               | `Map` of arrays 28 ms                |
+The baselines are plain JS shapes written inline in the perf test (comparator
+sort of an index array, an object binary heap with a comparator closure, an
+object array drained by index, a `Map` of arrays); the earlier chunked
+substitutes are deleted. Run after the conversion landed.
 
-Read plainly: the record queue, the grouping and the ordering are clear wins;
-the monotone heap wins at scale and loses at 10k, where the first-measured
-structure also pays JIT warm-up in this single-run protocol; the cell queue
-only matters on the paged path, which this run does not exercise; byte fills
-are faster than bitsets at this density, so `BitSet` earns its place on memory
-and `nextSet`, not on marking speed. `radixOrder` runs eight byte passes;
-16-bit digits (four passes, 65 536 counts) are the obvious tuning if ordering
-shows up in a profile.
+| Workload                      | n              | New                                       | Baseline               |
+| ----------------------------- | -------------- | ----------------------------------------- | ---------------------- |
+| Order 1M float keys           | 1 000 000      | `radixOrder` 110 ms                       | comparator sort 451 ms |
+| Order 10k float keys          | 10 000         | 5 ms                                      | 3 ms                   |
+| Flood-shaped push/pop         | 1 000 000 pops | `KeyedHeap` 214 ms, `MonotoneHeap` 457 ms | object heap 787 ms     |
+| Flood-shaped push/pop         | 10 000 pops    | `KeyedHeap` 4 ms, `MonotoneHeap` 9 ms     | object heap 4 ms       |
+| Record FIFO push/shift        | 1 000 000      | `RecordQueue` 27 ms                       | object records 40 ms   |
+| Cell FIFO push/shift          | 1 000 000      | `CellQueue` 21 ms                         |                        |
+| 10 resets and sparse marks    | 1 000 000      | `EpochStamps` 6 ms, `BitSet` 9 ms         | `Uint8Array.fill` 3 ms |
+| Members by label, 1000 labels | 1 000 000      | `groupByLabel` 7 ms                       | `Map` of arrays 28 ms  |
+
+Read plainly: the ordering, the grouping and the record queue are clear wins
+at scale and a wash at 10k, where the first-measured structure also pays JIT
+warm-up in this single-run protocol. The binary heap on typed columns beats
+the radix heap on this flood shape at both sizes: the radix heap's bucket
+refills cost more than the comparison heap's sifts save, so generation uses
+`KeyedHeap` everywhere and `MonotoneHeap` stays in the library as the
+monotone option without a current user. Byte fills are faster than bitsets at
+this density, so `BitSet` earns its place on memory and `nextSet`, not on
+marking speed. `radixOrder` runs eight byte passes; 16-bit digits (four
+passes, 65 536 counts) are the obvious tuning if ordering shows up in a profile.
 
 ## 7. Adoption check
 
@@ -149,8 +156,8 @@ behaviour rather than only representation:
   and a dense address table; adaptive meshes carry empty columns and an index
   that answers `undefined`.
 - `coastDistances` (magic ocean) and `oceanPathDistance` (gyres) had no tie
-  order; they now run on `MonotoneHeap`, whose FIFO tie lane is deterministic.
-  Only the distances are consumed, so results are unchanged.
+  order; `KeyedHeap` breaks their ties by ascending cell. Only the distances
+  are consumed, so results are unchanged.
 - Candidate lists that had no tie order (`landmarkCanyon` rivers near a head,
   ocean magic sources) now break ties by ascending cell through `radixOrder`.
 - Lake membership and marine regions group by label in one counting pass;

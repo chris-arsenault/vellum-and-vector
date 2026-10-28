@@ -5,7 +5,7 @@ import { hashUnit } from "./noise";
 import { traceOceanBeam } from "./magicBeams";
 import { nearestTriangle } from "./mesh";
 import { worldCandidates } from "./worldSources";
-import { CellList, FloatList, MonotoneHeap, radixOrder } from "@atlas/domain";
+import { CellList, FloatList, KeyedHeap, radixOrder } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import { areaBudget, mediumArea, referenceOceanArea, referenceCoastLength } from "./worldScale";
 
@@ -34,15 +34,14 @@ function coastalCell(map: PhysicalField, i: number) {
 function coastDistances(map: PhysicalField, reach: number) {
   const { mesh } = map;
   const distances = workingArray(map, "float64", "magic:coast-distance").fill(Infinity);
-  // Dijkstra over positive edge lengths: keys never fall below the last popped key.
-  const queue = new MonotoneHeap("min");
+  const queue = new KeyedHeap("min");
   for (let i = 0; i < mesh.contentCount; i++) {
     if (!coastalCell(map, i)) continue;
     distances[i] = Math.min(mesh.cellWidth[i], mesh.cellHeight[i]) / 2;
     queue.push(i, distances[i]);
   }
   for (let i = queue.pop(); i >= 0; i = queue.pop()) {
-    const distance = queue.key();
+    const distance = queue.poppedKey();
     if (distance !== distances[i]) continue;
     for (let edge = 0; edge < mesh.degree[i]; edge++) {
       const j = mesh.neighbors[i * mesh.stride + edge],

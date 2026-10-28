@@ -10,7 +10,7 @@ import { sourceOrder } from "./airColumn";
 import { smoothMetric } from "./metricSmoothing";
 import { linkDistance } from "./longitudeWrap";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
-import { MonotoneHeap, type NumericalVector } from "@atlas/domain";
+import { KeyedHeap, type NumericalVector } from "@atlas/domain";
 
 const unit = (value: number) => Math.min(1, Math.max(0, value));
 
@@ -72,12 +72,11 @@ function coastDistance(map: PhysicalField, reach: number) {
 function oceanPathDistance(map: PhysicalField, start: NumericalVector, reach: number) {
   const mesh = map.mesh,
     distances = start;
-  // Dijkstra over positive edge lengths: keys never fall below the last popped key.
-  const queue = new MonotoneHeap("min");
+  const queue = new KeyedHeap("min");
   for (let i = 0; i < mesh.count; i++)
     if (map.WaterKindCodes[i] === 1 && distances[i] < reach) queue.push(i, distances[i]);
   for (let i = queue.pop(); i >= 0; i = queue.pop()) {
-    const distance = queue.key();
+    const distance = queue.poppedKey();
     if (distance !== distances[i]) continue;
     for (let edge = 0; edge < mesh.degree[i]; edge++) {
       const j = mesh.neighbors[i * mesh.stride + edge],
