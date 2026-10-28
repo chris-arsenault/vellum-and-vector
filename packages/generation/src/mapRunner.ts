@@ -45,6 +45,8 @@ export interface MapRunnerOptions {
   diagnostic?(diagnostic: GenerationDiagnostic): void;
   /** Worker-owned numerical storage; never serialized into a boundary or save. */
   numerical?: NumericalAllocator;
+  /** Worker-owned block cache for the physical coverage; resident when absent. */
+  cache?: import("@atlas/domain").BlockCache;
   features?: import("@atlas/domain").FeatureWorkspace;
   sourceFeatures?: import("@atlas/domain").FeatureReader;
   networks?: import("@atlas/domain").NetworkWorkspace;
@@ -196,7 +198,7 @@ export class MapRunner {
     }
     const parameters = invocationParameters(process.contract, this.configuration, stage);
     products.checkProviders(process.contract);
-    const releaseNumerical = numericalProcessLifetime(options.numerical, state);
+    const releaseNumerical = numericalProcessLifetime(options.numerical, state, true);
     try {
       const diagnostics = await this.applyProcess(
         state,

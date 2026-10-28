@@ -1,25 +1,26 @@
 import type { PhysicalField } from "./field";
-import { radixOrder } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
 /** Each trunk cell's reach: the river between confluences, named by its uppermost cell. */
 function trunkReaches(map: PhysicalField, trunk: number) {
-  const isTrunk = (i: number) => map.CatchmentArea[i] >= trunk,
+  const isTrunk = (i: number) => map.CatchmentArea.get(i) >= trunk,
     inflow = workingArray(map, "int32", "region:inflow"),
     upstream = workingArray(map, "int32", "region:upstream").fill(-1),
     reach = workingArray(map, "int32", "region:reach").fill(-1);
   for (let i = 0; i < map.mesh.count; i++) {
     if (!isTrunk(i)) continue;
-    const target = map.FlowTargets[i];
+    const target = map.FlowTargets.get(i);
     if (target < 0 || !isTrunk(target)) continue;
-    inflow[target]++;
-    upstream[target] = i;
+    inflow.add(target, 1);
+    upstream.set(target, i);
   }
   // Catchment grows downstream, so ascending catchment visits upstream reaches first.
-  const order = radixOrder(map.CatchmentArea);
-  for (const t of order)
-    if (isTrunk(t)) reach[t] = inflow[t] === 1 && reach[upstream[t]] >= 0 ? reach[upstream[t]] : t;
-  releaseWorking(map, inflow, upstream, order);
+  for (const t of map.coverage.order(map.CatchmentArea)) {
+    if (!isTrunk(t)) continue;
+    const above = inflow.get(t) === 1 ? reach.get(upstream.get(t)) : -1;
+    reach.set(t, above >= 0 ? above : t);
+  }
+  releaseWorking(map, inflow, upstream);
   return reach;
 }
 /** Label catchments by trunk reach, retaining outlets and looping flats as distinct units. */
@@ -30,16 +31,18 @@ export function catchmentUnits(map: PhysicalField, trunk: number) {
   for (let i = 0; i < map.mesh.count; i++) {
     let cell = i,
       length = 0;
-    while (unit[cell] < 0 && !onPath[cell]) {
-      path[length++] = cell;
-      onPath[cell] = 1;
-      if (map.FlowTargets[cell] < 0) break;
-      cell = map.FlowTargets[cell];
+    while (unit.get(cell) < 0 && !onPath.get(cell)) {
+      path.set(length++, cell);
+      onPath.set(cell, 1);
+      const target = map.FlowTargets.get(cell);
+      if (target < 0) break;
+      cell = target;
     }
-    const label = unit[cell] >= 0 ? unit[cell] : cell;
+    const label = unit.get(cell) >= 0 ? unit.get(cell) : cell;
     for (let at = 0; at < length; at++) {
-      unit[path[at]] = label;
-      onPath[path[at]] = 0;
+      const on = path.get(at);
+      unit.set(on, label);
+      onPath.set(on, 0);
     }
   }
   releaseWorking(map, path, onPath);

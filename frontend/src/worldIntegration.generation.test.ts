@@ -58,7 +58,7 @@ beforeAll(async () => {
       const id = boundary.ancestry[0]?.id;
       if (boundary.kind !== "epoch" || !physical.has(id)) return;
       const map = boundary.state.physical!.map;
-      const total = (values: ArrayLike<number>) =>
+      const total = (values: Iterable<number>) =>
         Array.from(values).reduce((sum, value) => sum + value, 0);
       epochs.push({
         id,

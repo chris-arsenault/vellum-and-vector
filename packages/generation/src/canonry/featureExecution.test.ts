@@ -8,7 +8,8 @@ import { MapRunner } from "../mapRunner";
 import type { GenerationState, MapProcess, ProcessConfiguration } from "../process";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { createField } from "./field";
-import { createMesh } from "./mesh";
+import { createMesh, TriangularLattice } from "./mesh";
+import type { Band } from "@atlas/domain";
 import { createWorldMesh } from "./worldMesh";
 import { createAdaptiveWorldMesh } from "./adaptiveMesh";
 import { secondsPerYear } from "./dimensions";
@@ -103,39 +104,40 @@ async function runPhysical(
   return new MapRunner(configuration, registry).run(state, { seed: "73", seedScope: "reference" });
 }
 
+const values = (band: Band) => Array.from(band);
+
 function iceValley() {
   const map = createField(createMesh(4, 0)),
     profile = atlasPhysicalProfile();
-  map.mesh.areas.fill(1000);
   map.BedrockElevation.fill(units(1000));
-  map.Elevation.set(map.BedrockElevation);
+  map.Elevation.copyFrom(map.BedrockElevation);
   map.IceThickness.fill(100);
   map.GroundedIce.fill(1);
   map.IceFlux.fill(profile.GlacierFluxThreshold * 2);
-  map.IceFlowTargets.set([1, 2, 3, -1]);
+  [1, 2, 3, -1].forEach((target, i) => map.IceFlowTargets.set(i, target));
   return numericalState(map, [0, 0, 4000, 1000]);
 }
 
 it("executes coupled glacial erosion and deposition with one conserved material budget", async () => {
   const initial = iceValley(),
-    before = initial.physical!.map.Elevation.slice();
+    before = values(initial.physical!.map.Elevation);
   const output = await runPhysical(
     initial,
     ["glacial-erosion", "glacial-deposition"],
     ["Elevation", "LakeState", "LandIce", "IceFlow", "LandscapeHistory"]
   );
   const map = output.state.physical!.map;
-  expect(map.Elevation.some((height, i) => height !== before[i])).toBe(true);
-  expect(map.CumulativeGlacialErosion.some((cut) => cut > 0)).toBe(true);
-  expect(map.CumulativeGlacialDeposition.some((deposit) => deposit > 0)).toBe(true);
-  expect(map.SedimentSupply.every((load) => load === 0)).toBe(true);
+  expect(values(map.Elevation).some((height, i) => height !== before[i])).toBe(true);
+  expect(values(map.CumulativeGlacialErosion).some((cut) => cut > 0)).toBe(true);
+  expect(values(map.CumulativeGlacialDeposition).some((deposit) => deposit > 0)).toBe(true);
+  expect(values(map.SedimentSupply).every((load) => load === 0)).toBe(true);
   expect(map.SedimentProducedTotal).toBeGreaterThan(0);
   expect(map.SedimentDepositedTotal + map.SedimentExportedTotal).toBeCloseTo(
     map.SedimentProducedTotal,
     7
   );
   expect(() => validateLandscape(map)).not.toThrow();
-  expect(initial.physical!.map.Elevation).toEqual(before);
+  expect(values(initial.physical!.map.Elevation)).toEqual(before);
 });
 
 function coast() {
@@ -146,12 +148,14 @@ function coast() {
   map.WaveExposure.fill(1000);
   map.CrustTypeCodes.fill(2);
   for (let i = 0; i < map.mesh.count; i++) {
-    map.WaterKindCodes[i] = map.mesh.x[i] < 0 ? 1 : 0;
-    map.BedrockElevation[i] = map.Elevation[i] = units(map.mesh.x[i] < 0 ? -100 : 100);
-    if (map.WaterKindCodes[i] !== 0) continue;
-    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-      if (j >= 0 && map.mesh.x[j] < 0) map.ExternalCoastalForcing[i] = 500;
+    map.WaterKindCodes.set(i, map.mesh.x(i) < 0 ? 1 : 0);
+    const height = units(map.mesh.x(i) < 0 ? -100 : 100);
+    map.BedrockElevation.set(i, height);
+    map.Elevation.set(i, height);
+    if (map.WaterKindCodes.get(i) !== 0) continue;
+    for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+      const j = map.mesh.neighbor(i, edge);
+      if (j >= 0 && map.mesh.x(j) < 0) map.ExternalCoastalForcing.set(i, 500);
     }
   }
   return numericalState(map, extent);
@@ -159,24 +163,24 @@ function coast() {
 
 it("executes external and natural coastal cutting through the shared material executor", async () => {
   const initial = coast(),
-    before = initial.physical!.map.Elevation.slice();
+    before = values(initial.physical!.map.Elevation);
   const output = await runPhysical(
     initial,
     ["external-coastal-forcing", "coastal-erosion-and-deposition"],
     ["Elevation", "Ocean", "Bathymetry", "OceanCurrents", "LandscapeHistory", "SedimentTransport"]
   );
   const map = output.state.physical!.map;
-  expect(map.Elevation.some((height, i) => height !== before[i])).toBe(true);
-  expect(map.ExternalCoastalForcingHistory.some((force) => force > 0)).toBe(true);
-  expect(map.CumulativeCoastalErosion.some((cut) => cut > 0)).toBe(true);
-  expect(map.ExternalCoastalForcing.every((force) => force === 0)).toBe(true);
+  expect(values(map.Elevation).some((height, i) => height !== before[i])).toBe(true);
+  expect(values(map.ExternalCoastalForcingHistory).some((force) => force > 0)).toBe(true);
+  expect(values(map.CumulativeCoastalErosion).some((cut) => cut > 0)).toBe(true);
+  expect(values(map.ExternalCoastalForcing).every((force) => force === 0)).toBe(true);
   expect(map.SedimentProducedTotal).toBeGreaterThan(0);
   expect(
     Math.abs(map.SedimentDepositedTotal + map.SedimentExportedTotal - map.SedimentProducedTotal) /
       map.SedimentProducedTotal
   ).toBeLessThan(1e-9);
   expect(() => validateLandscape(map)).not.toThrow();
-  expect(initial.physical!.map.Elevation).toEqual(before);
+  expect(values(initial.physical!.map.Elevation)).toEqual(before);
 });
 
 function catchment() {
@@ -185,41 +189,47 @@ function catchment() {
     profile = atlasPhysicalProfile();
   map.WaterKindCodes.fill(1);
   map.Slope.fill(profile.ChannelReferenceSlope);
-  const index = (u: number, inverted: boolean) => map.mesh.indexes.at(u, 0, inverted)!;
+  const index = (u: number, inverted: boolean) =>
+    (map.mesh as TriangularLattice).addressCell(u, 0, inverted);
   const members = Array.from({ length: 12 }, (_, k) => [
     index(k - 6, false),
     index(k - 6, true),
   ]).flat();
   const outlet = index(6, false);
   members.forEach((cell, station) => {
-    map.WaterKindCodes[cell] = 0;
-    map.DrainageBasinIds[cell] = 1;
-    map.FlowTargets[cell] = members[station + 1] ?? outlet;
-    map.BedrockElevation[cell] = map.Elevation[cell] = units(500 - station);
-    map.DrainageElevations[cell] = map.Elevation[cell];
-    map.Runoff[cell] = ((1000 / members.length) * 1000 * secondsPerYear) / map.mesh.areas[cell];
+    map.WaterKindCodes.set(cell, 0);
+    map.DrainageBasinIds.set(cell, 1);
+    map.FlowTargets.set(cell, members[station + 1] ?? outlet);
+    map.BedrockElevation.set(cell, units(500 - station));
+    map.Elevation.set(cell, units(500 - station));
+    map.DrainageElevations.set(cell, map.Elevation.get(cell));
+    map.Runoff.set(cell, ((1000 / members.length) * 1000 * secondsPerYear) / map.mesh.area(cell));
   });
   return numericalState(map, extent);
 }
 
 it("publishes a dimensional river network without performing terrain incision", async () => {
   const initial = catchment(),
-    before = initial.physical!.map.Elevation.slice();
+    before = values(initial.physical!.map.Elevation);
   const output = await runPhysical(
     initial,
     ["river-network", "river-channel-geometry", "fixture.extract-rivers"],
     ["Elevation", "Lakes", "Runoff", "FlowRouting"]
   );
   const map = output.state.physical!.map,
-    cells = [...map.RiverOrders.keys()].filter((i) => map.RiverOrders[i] > 0);
+    cells = Array.from({ length: map.mesh.count }, (_, i) => i).filter(
+      (i) => map.RiverOrders.get(i) > 0
+    );
   expect(cells.length).toBeGreaterThan(1);
-  expect(cells.every((i) => map.FlowAccumulation[i] > 0 && map.RiverWidth[i] > 0)).toBe(true);
-  expect(cells.every((i) => Number.isFinite(map.RiverDepth[i]) && map.RiverDepth[i] > 0)).toBe(
+  expect(cells.every((i) => map.FlowAccumulation.get(i) > 0 && map.RiverWidth.get(i) > 0)).toBe(
     true
   );
-  expect(map.Elevation).toEqual(before);
-  expect(map.BedrockElevation).toEqual(before);
-  expect(map.CumulativeFluvialErosion.every((cut) => cut === 0)).toBe(true);
+  expect(
+    cells.every((i) => Number.isFinite(map.RiverDepth.get(i)) && map.RiverDepth.get(i) > 0)
+  ).toBe(true);
+  expect(values(map.Elevation)).toEqual(before);
+  expect(values(map.BedrockElevation)).toEqual(before);
+  expect(values(map.CumulativeFluvialErosion).every((cut) => cut === 0)).toBe(true);
   expect(map.SedimentProducedTotal).toBe(0);
   const rivers = Object.values(output.state.domain.world.features).filter(
     (feature) => feature.kind === "river"
@@ -245,7 +255,7 @@ it("uses impact-contributed fracture state without executing a fault-network fea
       "physical.volcanism": { enabled: false },
     };
   initial.physical!.map.Elevation.fill(units(500));
-  initial.physical!.map.BedrockElevation.set(initial.physical!.map.Elevation);
+  initial.physical!.map.BedrockElevation.copyFrom(initial.physical!.map.Elevation);
   const output = await runPhysical(
     initial,
     ["impact-cratering", "geothermal"],
@@ -254,7 +264,7 @@ it("uses impact-contributed fracture state without executing a fault-network fea
   );
   const map = output.state.physical!.map;
   expect(map.events.some((event) => event.kind === "impact")).toBe(true);
-  expect(map.FractureConductance.some((value) => value > 0)).toBe(true);
+  expect(values(map.FractureConductance).some((value) => value > 0)).toBe(true);
   expect(map.faults).toEqual([]);
   expect(output.state.facts.has("canonry:FractureState")).toBe(true);
   expect(output.state.facts.has("canonry:Fractures")).toBe(false);
@@ -267,7 +277,9 @@ it("uses impact-contributed fracture state without executing a fault-network fea
     selected
   );
   expect(
-    map.Geothermal.some((value, i) => value > comparison.state.physical!.map.Geothermal[i])
+    values(map.Geothermal).some(
+      (value, i) => value > comparison.state.physical!.map.Geothermal.get(i)
+    )
   ).toBe(true);
 });
 
@@ -282,7 +294,7 @@ function allLandPressure() {
   map.OpenBoundary = true;
   map.SeaLevelInitialized = true;
   map.Elevation.fill(units(1000));
-  map.BedrockElevation.set(map.Elevation);
+  map.BedrockElevation.copyFrom(map.Elevation);
   // These deliberately incorrect inputs must be replaced by the real kernels.
   map.WaterKindCodes.fill(1);
   map.WaterDepths.fill(units(100));
@@ -332,17 +344,17 @@ it("computes a valid empty ocean and bathymetry before finding no deep-ocean pre
   });
   const map = output.state.physical!.map,
     pressure = output.state.physical!.magic!.fields[0];
-  expect(map.WaterKindCodes.every((kind) => kind === 0)).toBe(true);
-  expect(map.WaterDepths.every((depth) => depth === 0)).toBe(true);
-  expect(map.BathymetricZoneCodes.every((zone) => zone === 0)).toBe(true);
+  expect(values(map.WaterKindCodes).every((kind) => kind === 0)).toBe(true);
+  expect(values(map.WaterDepths).every((depth) => depth === 0)).toBe(true);
+  expect(values(map.BathymetricZoneCodes).every((zone) => zone === 0)).toBe(true);
   expect(output.state.facts.has("canonry:Ocean")).toBe(true);
   expect(output.state.facts.has("canonry:Bathymetry")).toBe(true);
   expect(pressure.definition.origins[0].source).toBe("deep-ocean");
   expect(pressure.located).toEqual([]);
-  expect(pressure.source.every((value) => value === 0)).toBe(true);
-  expect(pressure.intensity.every((value) => value === 0)).toBe(true);
+  expect(values(pressure.source).every((value) => value === 0)).toBe(true);
+  expect(values(pressure.intensity).every((value) => value === 0)).toBe(true);
   expect(output.state.facts.has(pressurePass(initial).replace("canonry.", "atlas:"))).toBe(true);
-  expect(initial.physical!.map.BathymetricZoneCodes.every((zone) => zone === 4)).toBe(true);
+  expect(values(initial.physical!.map.BathymetricZoneCodes).every((zone) => zone === 4)).toBe(true);
 });
 
 it("skips missing bathymetry before the pressure source operation can mutate magic", async () => {

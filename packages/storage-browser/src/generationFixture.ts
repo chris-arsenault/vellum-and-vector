@@ -6,25 +6,34 @@ import { SqliteFeatureWorkspace } from "./featureWorkspace";
 import { SqliteNetworkWorkspace } from "./networkWorkspace";
 import { SqliteContourWorkspace } from "./contourWorkspace";
 import { arenaFixture } from "./numericalFixture";
+import { blockCacheFixture } from "./blockCacheFixture";
 import {
   numericalPageSamples,
   numericalResidentBytes,
   numericalWorkingCacheBytes,
 } from "./pagedArena";
 
-/** Shared generation uses SQLite WASM in memory, GEOS and a host-file numerical arena. */
+/** The physical coverage's resident budget in bytes; `ATLAS_BLOCK_BUDGET` forces eviction. */
+export function blockBudgetBytes() {
+  const budget = Number(process.env.ATLAS_BLOCK_BUDGET);
+  return Number.isFinite(budget) && budget > 0 ? budget : Infinity;
+}
+/** Shared generation uses SQLite WASM in memory, GEOS, a host-file numerical arena for the
+ * surface grid and a host-file block cache for the physical coverage. */
 export async function generationStorageFixture() {
   const sqlite = await sqliteInit();
   const db = new sqlite.oo1.DB(":memory:");
   const kernel = await GeometryKernel.create();
   const working = arenaFixture(
-    numericalWorkingCacheBytes,
-    numericalPageSamples,
-    numericalResidentBytes
-  );
+      numericalWorkingCacheBytes,
+      numericalPageSamples,
+      numericalResidentBytes
+    ),
+    blocks = blockCacheFixture(blockBudgetBytes());
   configureSpatial((precision) => new GeosSpatial(kernel, precision));
   const options = {
     numerical: working.arena,
+    cache: blocks.cache,
     features: new SqliteFeatureWorkspace(db),
     sourceFeatures: new SqliteFeatureWorkspace(db, "source_features"),
     networks: new SqliteNetworkWorkspace(db),
@@ -44,6 +53,7 @@ export async function generationStorageFixture() {
     close() {
       configureSpatial();
       working.close();
+      blocks.close();
       db.close();
       kernel.close();
     },

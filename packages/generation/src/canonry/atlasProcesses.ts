@@ -8,16 +8,15 @@ import { configuredPhysicalProfile } from "../physicalProfileConfiguration";
 import {
   composeNativeAuthoring,
   createAtlasWorkspace,
-  sampleSurfaceAtNative,
   type AtlasPhysicalWorkspace,
 } from "./atlasWorkspace";
 import { projectNative } from "./atlasProjection";
 import { extractNativeGeography } from "./atlasFeatures";
+import { contributeForcing } from "./atlasForcing";
 import { featureRevisions } from "../generationFeatures";
 import { physicalSchedule } from "./schedule";
 import { crustalSupport } from "./support";
 import { reconcileWater } from "./field";
-import { clamp, rockResistance, round } from "./math";
 import type { NativeStep } from "./sequence";
 import { advectMagic } from "./magicState";
 import { retainGeographicIdentities } from "./geographicIdentity";
@@ -64,7 +63,7 @@ function restoreAuthoring(work: AtlasPhysicalWorkspace) {
   for (const { binding, values } of work.fixed) {
     if (binding.native !== "Elevation") continue;
     for (let i = 0; i < values.length; i++)
-      if (Number.isFinite(values[i])) reconcileWater(work.map, i);
+      if (Number.isFinite(values.get(i))) reconcileWater(work.map, i);
   }
   refreshGrounding(work.map, work.profile);
 }
@@ -303,38 +302,9 @@ function projectProcess(input: AtlasGenerationInput, forcingOnly = false): MapPr
 function forcingProcess(): MapProcess {
   return {
     contract: contract("canonry.forcing", ["canonry:workspace"]),
-    behavior: {
-      kind: "forcing-contributor",
-      contribute(state) {
-        const map = state.physical!.map;
-        for (let i = 0; i < map.mesh.count; i++) {
-          map.ExternalHeatForcing[i] = state.surface.channels.heat
-            ? round(sampleSurfaceAtNative(state, "heat", i) * 10)
-            : 0;
-          map.ExternalHeatForcing[i] += state.physical!.magic?.heat[i] ?? 0;
-          if (state.surface.channels.rock)
-            map.RockResistance[i] = rockResistance(
-              round(sampleSurfaceAtNative(state, "rock", i) * 4000)
-            );
-          const pressure = sampleCoastalPressure(state, i);
-          map.ExternalCoastalForcing[i] =
-            map.WaterKindCodes[i] === 0 ? round(clamp(pressure, 0, 1000)) : 0;
-        }
-      },
-    },
+    behavior: { kind: "forcing-contributor", contribute: contributeForcing },
     validate: validateWorkspace,
   };
-}
-function sampleCoastalPressure(state: GenerationState, i: number) {
-  if (!state.surface.channels.coastalPressure) return 0;
-  const map = state.physical!.map;
-  let pressure = 0;
-  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-    if (j >= 0 && map.WaterKindCodes[j] === 1)
-      pressure = Math.max(pressure, sampleSurfaceAtNative(state, "coastalPressure", j));
-  }
-  return pressure;
 }
 function epochStartProcess(): MapProcess {
   return {

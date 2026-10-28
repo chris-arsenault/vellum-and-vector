@@ -7,7 +7,6 @@ import {
   type Bounds,
   linearFieldContour,
   spatial,
-  type NumericalAllocator,
 } from "@atlas/domain";
 import type { Geometry, Position } from "geojson";
 import type { GenerationState } from "../process";
@@ -40,7 +39,9 @@ export function lakeFootprint(
   const map = state.physical!.map,
     mesh = map.mesh,
     floor = physicalSampler(mesh, map.Elevation),
-    connected = membershipSampler(state, (i) => Number(map.WaterBodyIds[i] === body)),
+    inBody = (i: number) => Number(map.WaterBodyIds.get(i) === body),
+    depth = (i: number) => level - map.Elevation.get(i),
+    connected = membershipSampler(state, inBody),
     wet = (x: number, y: number) => level - floor(x - mesh.origin[0], y - mesh.origin[1]);
   if (mesh.topology)
     return geographicContour(
@@ -50,17 +51,17 @@ export function lakeFootprint(
       0
     );
   const footprint = linearFieldContour(
-    triangleFans(mesh, members, (i) => level - map.Elevation[i], state.numerical),
+    triangleFans(mesh, members, depth),
     wet,
     0,
-    triangleBoundary(mesh, (i) => level - map.Elevation[i], members, state.numerical),
+    triangleBoundary(mesh, depth, members),
     state.contours
   );
   const membership = linearFieldContour(
-    triangleFans(mesh, members, (i) => Number(map.WaterBodyIds[i] === body), state.numerical),
+    triangleFans(mesh, members, inBody),
     connected,
     0.1,
-    triangleBoundary(mesh, (i) => Number(map.WaterBodyIds[i] === body), members, state.numerical),
+    triangleBoundary(mesh, inBody, members),
     state.contours
   );
   return footprint && membership && spatial.intersection(footprint, membership);
@@ -71,18 +72,19 @@ export function oceanFootprint(state: GenerationState) {
   const map = state.physical!.map,
     mesh = map.mesh,
     depths = workingValues(map, "float64", "ocean-contour-depth", (i) => {
-      const depth = map.EffectiveSeaLevel - map.Elevation[i];
-      return map.WaterKindCodes[i] === 1 ? depth : -Math.abs(depth);
+      const depth = map.EffectiveSeaLevel - map.Elevation.get(i);
+      return map.WaterKindCodes.get(i) === 1 ? depth : -Math.abs(depth);
     }),
     depth = physicalSampler(mesh, depths),
+    read = (i: number) => depths.get(i),
     at = (x: number, y: number) => depth(x - mesh.origin[0], y - mesh.origin[1]);
   const shape = mesh.topology
     ? fieldContour(mesh.topology, at, undefined, 0, undefined, state.contours)
     : linearFieldContour(
-        triangleFans(mesh, undefined, (i) => depths[i]),
+        triangleFans(mesh, undefined, read),
         at,
         0,
-        triangleBoundary(mesh, (i) => depths[i]),
+        triangleBoundary(mesh, read),
         state.contours
       );
   releaseWorking(map, depths);
@@ -92,7 +94,7 @@ export function oceanFootprint(state: GenerationState) {
 export function membershipSampler(state: GenerationState, includes: (cell: number) => number) {
   const mesh = state.physical!.map.mesh;
   if (mesh.topology)
-    return adaptivePointSampler(mesh.topology, (leaf) => includes(mesh.leafToCell[leaf]));
+    return adaptivePointSampler(mesh.topology, (leaf) => includes(mesh.leafToCell(leaf)));
   const sample = triangleSampler(mesh, includes);
   return (x: number, y: number) => sample(x - mesh.origin[0], y - mesh.origin[1]);
 }
@@ -104,10 +106,10 @@ export function membershipContour(
 ) {
   const mesh = state.physical!.map.mesh,
     valueAt = membershipSampler(state, includes);
-  if (mesh.topology || supportTouchesBoundary(mesh, members, state.numerical))
+  if (mesh.topology || supportTouchesBoundary(mesh, members))
     return geographicContour(state, members, valueAt);
   return linearFieldContour(
-    triangleFans(mesh, members, includes, state.numerical),
+    triangleFans(mesh, members, includes),
     valueAt,
     undefined,
     undefined,
@@ -128,38 +130,30 @@ export function combinedContour(
   const mesh = state.physical!.map.mesh,
     samplers = terms.map((term) => membershipSampler(state, term)),
     valueAt = (x: number, y: number) => combine(samplers.map((sample) => sample(x, y)));
-  if (mesh.topology || supportTouchesBoundary(mesh, members, state.numerical))
+  if (mesh.topology || supportTouchesBoundary(mesh, members))
     return geographicContour(state, members, valueAt, 0);
   return linearFieldContour(
-    combinedFans(mesh, members, terms, combine, state.numerical),
+    combinedFans(mesh, members, terms, combine),
     valueAt,
     0,
     undefined,
     state.contours
   );
 }
-function supportTouchesBoundary(
-  mesh: PhysicalMesh,
-  members: Iterable<number>,
-  numerical?: NumericalAllocator
-) {
-  const support = triangleSupport(mesh, members, numerical);
-  try {
-    for (const cell of support) if (touchesChartBoundary(mesh, cell)) return true;
-    return false;
-  } finally {
-    support.close();
-  }
+function supportTouchesBoundary(mesh: PhysicalMesh, members: Iterable<number>) {
+  for (const cell of triangleSupport(mesh, members))
+    if (touchesChartBoundary(mesh, cell)) return true;
+  return false;
 }
 function touchesChartBoundary(mesh: PhysicalMesh, cell: number) {
-  if (mesh.boundary[cell]) return true;
+  if (mesh.boundary(cell)) return true;
   if (!mesh.periodic) return false;
-  const y = mesh.y[cell] + mesh.origin[1];
-  if (y - mesh.cellHeight[cell] <= mesh.bounds[1] || y + mesh.cellHeight[cell] >= mesh.bounds[3])
-    return true;
-  for (let edge = 0; edge < mesh.degree[cell]; edge++) {
-    const neighbor = mesh.neighbors[cell * mesh.stride + edge];
-    if (neighbor >= 0 && Math.abs(mesh.x[neighbor] - mesh.x[cell]) > 2 * mesh.spacing) return true;
+  const y = mesh.y(cell) + mesh.origin[1],
+    height = mesh.cellHeight(cell);
+  if (y - height <= mesh.bounds[1] || y + height >= mesh.bounds[3]) return true;
+  for (let edge = 0; edge < mesh.degree(cell); edge++) {
+    const neighbor = mesh.neighbor(cell, edge);
+    if (neighbor >= 0 && Math.abs(mesh.x(neighbor) - mesh.x(cell)) > 2 * mesh.spacing) return true;
   }
   return false;
 }
@@ -167,10 +161,9 @@ function* combinedFans(
   mesh: PhysicalMesh,
   members: Iterable<number>,
   terms: ((cell: number) => number)[],
-  combine: (values: number[]) => number,
-  numerical?: NumericalAllocator
+  combine: (values: number[]) => number
 ) {
-  const support = triangleSupport(mesh, members, numerical);
+  const support = triangleSupport(mesh, members);
   const fans = terms.map((term) => triangleCellFans(mesh, support, term));
   try {
     for (;;) {
@@ -184,7 +177,6 @@ function* combinedFans(
     }
   } finally {
     for (const fan of fans) fan.return();
-    support.close();
   }
 }
 /**
@@ -212,7 +204,7 @@ export function fillSmallHoles(
     for (const cell of meshWindowCells(mesh, spatial.bounds(hole)))
       if (
         blocks(cell) &&
-        covers({ x: mesh.x[cell] + mesh.origin[0], y: mesh.y[cell] + mesh.origin[1], z: 0 })
+        covers({ x: mesh.x(cell) + mesh.origin[0], y: mesh.y(cell) + mesh.origin[1], z: 0 })
       )
         return true;
     return false;
@@ -240,10 +232,10 @@ export function geographicContour(
     );
   const bounds: Bounds = [Infinity, Infinity, -Infinity, -Infinity];
   for (const i of members) {
-    bounds[0] = Math.min(bounds[0], mesh.x[i] + mesh.origin[0]);
-    bounds[1] = Math.min(bounds[1], mesh.y[i] + mesh.origin[1]);
-    bounds[2] = Math.max(bounds[2], mesh.x[i] + mesh.origin[0]);
-    bounds[3] = Math.max(bounds[3], mesh.y[i] + mesh.origin[1]);
+    bounds[0] = Math.min(bounds[0], mesh.x(i) + mesh.origin[0]);
+    bounds[1] = Math.min(bounds[1], mesh.y(i) + mesh.origin[1]);
+    bounds[2] = Math.max(bounds[2], mesh.x(i) + mesh.origin[0]);
+    bounds[3] = Math.max(bounds[3], mesh.y(i) + mesh.origin[1]);
   }
   for (let axis = 0; axis < 4; axis++) bounds[axis] += (axis < 2 ? -2 : 2) * mesh.spacing;
   const scope = { ...state.surface.scope, footprint: rectangle(bounds) },
@@ -259,9 +251,11 @@ export function geographicContour(
   try {
     return fieldContour(grid, valueAt, undefined, level, undefined, state.contours);
   } finally {
-    releaseWorking(state.physical!.map, grid.active, grid.measures);
+    // The contour grid lives in the surface arena, not the world coverage.
+    state.numerical?.release(grid.active);
+    state.numerical?.release(grid.measures);
   }
 }
 function* memberLeaves(mesh: PhysicalMesh, members: Iterable<number>) {
-  for (const i of members) yield mesh.cellToLeaf[i];
+  for (const i of members) yield mesh.cellToLeaf(i);
 }

@@ -39,6 +39,30 @@ function scenario(samples = 4096, width = 2_000_000, height = 1_000_000) {
   initializeMagic(state);
   return state;
 }
+const allCells = (count: number) => Array.from({ length: count }, (_, i) => i);
+
+/**
+ * A reference mesh whose content cells form one chain, a cell joined only to the next and the
+ * previous, at a fixed physical spacing; cell `ids[k]` is the chain's k-th cell.
+ */
+function chainMesh(steps: number) {
+  const mesh = createMesh(steps + 1, 0),
+    ids = allCells(mesh.count).filter((i) => mesh.membership(i) === 1),
+    position = new Map(ids.map((id, k) => [id, k])),
+    spacing = 40_000 / steps;
+  Object.defineProperty(mesh, "spacing", { value: spacing });
+  Object.assign(mesh, {
+    area: () => 100_000_000,
+    edgeLength: () => spacing,
+    neighbor: (cell: number, edge: number) => {
+      const k = position.get(cell);
+      if (k === undefined) return -1;
+      const next = edge === 0 ? k + 1 : edge === 1 ? k - 1 : -1;
+      return next >= 0 && next <= steps ? ids[next] : -1;
+    },
+  });
+  return { mesh, ids };
+}
 
 it("scales Fire and deep-ocean source budgets with their physical medium, independent of sampling", () => {
   for (const samples of [1024, 4096]) {
@@ -58,7 +82,9 @@ it("scales Fire and deep-ocean source budgets with their physical medium, indepe
       map.WaterDepths.fill(3000);
       locateMagicSources(state, pressure, 73);
       expect(pressure.located).toHaveLength(areaBudget(1, mediumArea(map), referenceOceanArea));
-      expect(pressure.source.filter((value) => value > 0)).toHaveLength(pressure.located.length);
+      expect(Array.from(pressure.source).filter((value) => value > 0)).toHaveLength(
+        pressure.located.length
+      );
       locateMagicSources(state, fire, 73);
       expect(fire.located).toHaveLength(0);
     }
@@ -69,23 +95,16 @@ it("captures the same cold activity over a fixed physical travel distance", () =
   const retained: number[] = [];
   for (const steps of [4, 8]) {
     const state = scenario(64),
-      map = createField(createMesh(steps + 1, 0));
+      { mesh, ids } = chainMesh(steps),
+      map = createField(mesh);
     state.physical!.map = map;
-    map.mesh.spacing = 40_000 / steps;
-    map.mesh.areas.fill(100_000_000);
-    map.mesh.neighbors.fill(-1);
-    map.mesh.edgeLength.fill(map.mesh.spacing);
     map.IceThickness.fill(400);
-    for (let i = 0; i <= steps; i++) {
-      map.Temperature[i] = 500 - i;
-      if (i < steps) map.mesh.neighbors[i * 3] = i + 1;
-      if (i > 0) map.mesh.neighbors[i * 3 + 1] = i - 1;
-    }
+    for (let i = 0; i <= steps; i++) map.Temperature.set(ids[i], 500 - i);
     initializeMagic(state);
     const field = state.physical!.magic!.fields[1];
-    field.source[0] = 100;
+    field.source.set(ids[0], 100);
     propagateMagic(state, field, 42, 1);
-    retained.push(field.retained.slice(0, steps).reduce((sum, value) => sum + value, 0));
+    retained.push(ids.slice(0, steps).reduce((sum, id) => sum + field.retained.get(id), 0));
   }
   expect(retained[0]).toBeCloseTo(10_000_000_000 * (1 - (2 / 3) ** 4), 4);
   expect(retained[1]).toBeCloseTo(retained[0], 4);
@@ -97,14 +116,15 @@ it("selects geothermal peaks rather than random points on a heat gradient", () =
   const field = state.physical!.magic!.fields[0];
   field.definition.parameters.maximumSources = 10;
   for (let i = 0; i < map.mesh.count; i++)
-    map.HeatSourceDensity[i] = Math.round(500 + map.mesh.x[i] / 2000);
+    map.HeatSourceDensity.set(i, Math.round(500 + map.mesh.x(i) / 2000));
   locateMagicSources(state, field, 42);
-  expect(field.source.some((value) => value > 0)).toBe(true);
+  expect(Array.from(field.source).some((value) => value > 0)).toBe(true);
   for (let i = 0; i < map.mesh.count; i++) {
-    if (!field.source[i]) continue;
-    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-      if (j >= 0) expect(map.HeatSourceDensity[j]).toBeLessThanOrEqual(map.HeatSourceDensity[i]);
+    if (!field.source.get(i)) continue;
+    for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+      const j = map.mesh.neighbor(i, edge);
+      if (j >= 0)
+        expect(map.HeatSourceDensity.get(j)).toBeLessThanOrEqual(map.HeatSourceDensity.get(i));
     }
   }
 });
@@ -116,7 +136,7 @@ it("retains coastal source density and eligibility when the sampling strip gets 
       map = state.physical!.map;
     const field = state.physical!.magic!.fields[2],
       p = field.definition.parameters;
-    for (let i = 0; i < map.mesh.count; i++) map.WaterKindCodes[i] = map.mesh.x[i] < 0 ? 1 : 0;
+    for (let i = 0; i < map.mesh.count; i++) map.WaterKindCodes.set(i, map.mesh.x(i) < 0 ? 1 : 0);
     Object.assign(p, {
       coastalSources: 30,
       coastalSourceDistance: 200_000,
@@ -125,10 +145,10 @@ it("retains coastal source density and eligibility when the sampling strip gets 
       wakeSources: 0,
     });
     propagateMagic(state, field, 42, 1);
-    counts.push(field.rogue.reduce((sum, value) => sum + value, 0));
+    counts.push(Array.from(field.rogue).reduce((sum, value) => sum + value, 0));
     expect(counts.at(-1)).toBeGreaterThan(0);
     for (let i = 0; i < map.mesh.count; i++)
-      if (field.rogue[i]) expect(-map.mesh.x[i]).toBeLessThan(200_000 + map.mesh.spacing);
+      if (field.rogue.get(i)) expect(-map.mesh.x(i)).toBeLessThan(200_000 + map.mesh.spacing);
   }
   expect(counts[1]).toBe(counts[0]);
 });
@@ -150,17 +170,20 @@ it("publishes wake membership over the physical beam width", () => {
     // Measure the kernel at a fixed interior station, independently of edge-source placement.
     const source = nearestTriangle(map.mesh, 0, 0);
     traceOceanBeam(map, field, 42, source, 0, 150, 1, true);
-    expect(field.wake).toEqual(Float64Array.from(field.intensity, (value) => Number(value > 0)));
+    expect(Array.from(field.wake)).toEqual(
+      Array.from(field.intensity, (value) => Number(value > 0))
+    );
     const radius = field.definition.parameters.beamWidth / 2;
-    for (let i = 0; i < map.mesh.contentCount; i++) {
+    for (let i = 0; i < map.mesh.count; i++) {
+      if (map.mesh.membership(i) !== 1) continue;
       const distance = Math.hypot(
-        map.mesh.x[i] - map.mesh.x[source],
-        map.mesh.y[i] - map.mesh.y[source]
+        map.mesh.x(i) - map.mesh.x(source),
+        map.mesh.y(i) - map.mesh.y(source)
       );
-      const halfDiagonal = Math.hypot(map.mesh.cellWidth[i], map.mesh.cellHeight[i]) / 2;
+      const halfDiagonal = Math.hypot(map.mesh.cellWidth(i), map.mesh.cellHeight(i)) / 2;
       // Only cells intersecting the physical disk can be marked; every wholly interior cell is.
-      if (field.wake[i]) expect(distance).toBeLessThan(radius + halfDiagonal);
-      if (distance + halfDiagonal < radius) expect(field.wake[i]).toBe(1);
+      if (field.wake.get(i)) expect(distance).toBeLessThan(radius + halfDiagonal);
+      if (distance + halfDiagonal < radius) expect(field.wake.get(i)).toBe(1);
     }
   }
 });
@@ -174,14 +197,18 @@ it("records hot source chambers and removes inactive source cores", () => {
   locateMagicSources(state, field, 42);
   propagateMagic(state, field, 42, 1);
   magicThermalFeedback(state);
-  expect(map.FeatureFlags.some((value) => Boolean(value & Feature.MagmaChamber))).toBe(true);
+  expect(Array.from(map.FeatureFlags).some((value) => Boolean(value & Feature.MagmaChamber))).toBe(
+    true
+  );
   propagateMagic(state, field, 42, 0);
   magicThermalFeedback(state);
   classifyMagicFeatures(state);
   expect(
-    map.FeatureFlags.some((value) => Boolean(value & (Feature.FireCore | Feature.MagmaChamber)))
+    Array.from(map.FeatureFlags).some((value) =>
+      Boolean(value & (Feature.FireCore | Feature.MagmaChamber))
+    )
   ).toBe(false);
-  expect(field.features.core.every((value) => value === 0)).toBe(true);
+  expect(Array.from(field.features.core).every((value) => value === 0)).toBe(true);
 });
 
 it("propagates an oblique ocean ray without snapping its heading to adaptive faces", () => {
@@ -194,13 +221,13 @@ it("propagates an oblique ocean ray without snapping its heading to adaptive fac
   traceOceanBeam(map, field, 12, source, angle, 1000, 700_000);
   let far = 0;
   for (let i = 0; i < map.mesh.count; i++) {
-    if (!field.intensity[i]) continue;
-    const dx = map.mesh.x[i] - map.mesh.x[source],
-      dy = map.mesh.y[i] - map.mesh.y[source];
+    if (!field.intensity.get(i)) continue;
+    const dx = map.mesh.x(i) - map.mesh.x(source),
+      dy = map.mesh.y(i) - map.mesh.y(source);
     const across = Math.abs(dy * Math.cos(angle) - dx * Math.sin(angle));
     expect(across).toBeLessThan(
       field.definition.parameters.beamWidth / 2 +
-        Math.hypot(map.mesh.cellWidth[i], map.mesh.cellHeight[i]) / 2
+        Math.hypot(map.mesh.cellWidth(i), map.mesh.cellHeight(i)) / 2
     );
     far = Math.max(far, dx * Math.cos(angle) + dy * Math.sin(angle));
   }
@@ -226,21 +253,21 @@ it("keeps first coastal occurrence with advected coastal history and resets new 
   const state = scenario(),
     map = state.physical!.map,
     field = state.physical!.magic!.fields[2];
-  for (let i = 0; i < map.mesh.count; i++) map.WaterKindCodes[i] = map.mesh.x[i] < 0 ? 1 : 0;
+  for (let i = 0; i < map.mesh.count; i++) map.WaterKindCodes.set(i, map.mesh.x(i) < 0 ? 1 : 0);
   field.intensity.fill(500);
   magicCoastalFeedback(state, context(state, 0));
-  const source = field.coastalHistory.findIndex((value) => value > 0);
+  const source = Array.from(field.coastalHistory).findIndex((value) => value > 0);
   expect(source).toBeGreaterThanOrEqual(0);
   magicCoastalFeedback(state, context(state, 2));
-  expect(field.coastalFirstEpoch[source]).toBe(0);
+  expect(field.coastalFirstEpoch.get(source)).toBe(0);
   map.AdvectionSourceIndex.fill(-1);
-  map.AdvectionSourceIndex[0] = source;
-  const history = field.coastalHistory[source];
+  map.AdvectionSourceIndex.set(0, source);
+  const history = field.coastalHistory.get(source);
   advectMagic(state);
-  expect(field.coastalHistory[0]).toBe(history);
-  expect(field.coastalFirstEpoch[0]).toBe(0);
-  expect(field.coastalHistory[1]).toBe(0);
-  expect(field.coastalFirstEpoch[1]).toBe(-1);
+  expect(field.coastalHistory.get(0)).toBe(history);
+  expect(field.coastalFirstEpoch.get(0)).toBe(0);
+  expect(field.coastalHistory.get(1)).toBe(0);
+  expect(field.coastalFirstEpoch.get(1)).toBe(-1);
   projectMagic(state);
   expect(state.surface.units["magic:pressure:coastalFirstEpoch"]).toBe("category");
 });
@@ -267,5 +294,5 @@ it("keeps an independently configured interaction when its container system is d
     },
   ];
   classifyMagicFeatures(state);
-  expect(owner.features.collision.every((value) => value === 1)).toBe(true);
+  expect(Array.from(owner.features.collision).every((value) => value === 1)).toBe(true);
 });

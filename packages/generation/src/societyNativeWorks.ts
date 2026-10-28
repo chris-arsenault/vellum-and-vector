@@ -24,14 +24,15 @@ export function applyNativeColdAgeWork(
 /** Only a standing weir on the water is a shoal; a decayed or landward one leaves none. */
 function markWeir(state: GenerationState, work: SocietyWork, cell: number) {
   const map = state.physical!.map,
-    standing = work.magnitude * work.condition >= 0.5 && map.WaterKindCodes[cell] === 1;
-  if (standing) map.FeatureFlags[cell] |= Feature.Shoal;
-  else map.FeatureFlags[cell] &= ~Feature.Shoal;
+    standing = work.magnitude * work.condition >= 0.5 && map.WaterKindCodes.get(cell) === 1,
+    flags = map.FeatureFlags.get(cell);
+  map.FeatureFlags.set(cell, standing ? flags | Feature.Shoal : flags & ~Feature.Shoal);
 }
 /** Quarrying takes the stored charge of every charge-holding system, and the ice it held. */
 function quarryPrism(state: GenerationState, cell: number, kept: number) {
   const physical = state.physical!;
   for (const field of physical.magic?.fields ?? [])
-    if (field.definition.effects.icePersistence > 0) field.stored[cell] *= kept;
-  physical.map.IcePersistence[cell] *= kept;
+    if (field.definition.effects.icePersistence > 0)
+      field.stored.set(cell, field.stored.get(cell) * kept);
+  physical.map.IcePersistence.set(cell, physical.map.IcePersistence.get(cell) * kept);
 }

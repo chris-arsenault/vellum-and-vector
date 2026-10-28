@@ -42,6 +42,6 @@ it("uses evolved native terrain and its metre datum at epoch boundaries", () => 
   const values = preview.channels.elevation.filter((_, i) => preview.active[i] !== 0);
   expect(values.length).toBeGreaterThan(0);
   expect(values.every((height) => height === 25)).toBe(true);
-  expect(map.Elevation[0]).toBe(1024 * 125);
+  expect(map.Elevation.get(0)).toBe(1024 * 125);
   expect(state.surface.channels.elevation[0]).not.toBe(25);
 });

@@ -47,10 +47,11 @@ it("allocates unequal assembly territories while respecting an area-based crust 
       groups = new Map<number, number>();
     let continental = 0,
       total = 0;
-    for (let i = 0; i < map.mesh.contentCount; i++) {
-      const area = map.mesh.contentAreas[i];
-      areas[map.CrustProvinceIds[i] - 1] += area;
-      continental += (area * map.CrustContinentalFraction[i]) / 1000;
+    for (let i = 0; i < map.mesh.count; i++) {
+      if (map.mesh.membership(i) !== 1) continue;
+      const area = map.mesh.contentArea(i);
+      areas[map.CrustProvinceIds.get(i) - 1] += area;
+      continental += (area * map.CrustContinentalFraction.get(i)) / 1000;
       total += area;
     }
     for (const [i, site] of sites.entries())

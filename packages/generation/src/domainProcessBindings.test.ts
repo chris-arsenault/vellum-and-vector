@@ -26,12 +26,12 @@ function fixture(): GenerationState {
     sampling: { maximumSize: 1000, minimumSize: 1000, featureSamples: 2 },
   };
   map.Elevation.fill(100 * 1024);
-  map.BedrockElevation.set(map.Elevation);
+  map.BedrockElevation.copyFrom(map.Elevation);
   map.Temperature.fill(450);
   map.Moisture.fill(700);
   map.Rainfall.fill(800);
   map.RockResistance.fill(1000);
-  map.DrainageElevations.set(map.Elevation);
+  map.DrainageElevations.copyFrom(map.Elevation);
   return state;
 }
 function bindings(): GenerationBindings {
@@ -115,10 +115,14 @@ it("ecology executes bound seed/settings instead of conflicting factory and worl
         state,
         ctx
       );
-    expect(state.physical!.map.Productivity.every((value) => value === 0)).toBe(true);
+    expect(Array.from(state.physical!.map.Productivity).every((value) => value === 0)).toBe(true);
   }
-  expect(first.physical!.map.TreeCover).toEqual(second.physical!.map.TreeCover);
-  expect(first.physical!.map.SoilCarbon).toEqual(second.physical!.map.SoilCarbon);
+  expect(Array.from(first.physical!.map.TreeCover)).toEqual(
+    Array.from(second.physical!.map.TreeCover)
+  );
+  expect(Array.from(first.physical!.map.SoilCarbon)).toEqual(
+    Array.from(second.physical!.map.SoilCarbon)
+  );
   const processes = ecologyProcesses({
     areaId: "area",
     quality: "draft",
@@ -155,8 +159,8 @@ it("configured magic initializes requested systems and binds present history to 
     state,
     ctx
   );
-  expect(field.history.every((value) => value === 20)).toBe(true);
-  expect(field.firstEpoch.every((value) => value === 1)).toBe(true);
+  expect(Array.from(field.history).every((value) => value === 20)).toBe(true);
+  expect(Array.from(field.firstEpoch).every((value) => value === 1)).toBe(true);
 });
 it("a disabled configured-magic feature initializes only neutral working buffers", async () => {
   const state = fixture(),
@@ -170,7 +174,7 @@ it("a disabled configured-magic feature initializes only neutral working buffers
     ctx
   );
   expect(state.physical!.magic!.fields).toEqual([]);
-  expect(state.physical!.magic!.heat.every((value) => value === 0)).toBe(true);
+  expect(Array.from(state.physical!.magic!.heat).every((value) => value === 0)).toBe(true);
 });
 it("cultural spread consumes bound human history while legacy world history cannot override it", async () => {
   const first = fixture(),

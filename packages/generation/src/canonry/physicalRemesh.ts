@@ -1,13 +1,7 @@
-import {
-  prepareAdaptiveTransfer,
-  isNumericalVector,
-  type AdaptiveTopology,
-  type NumericalVector,
-} from "@atlas/domain";
+import { prepareAdaptiveTransfer, Band, type AdaptiveTopology } from "@atlas/domain";
 import type { Geometry } from "geojson";
-import { adaptivePhysicalMesh } from "./adaptiveMesh";
-import { joinAdaptiveSeam } from "./adaptiveSeam";
-import { createField, type PhysicalField } from "./field";
+import { adaptivePhysicalMesh, AdaptiveLattice } from "./adaptiveMesh";
+import { createField, physicalBands, type PhysicalField } from "./field";
 import { reconcileRemeshedWater } from "./remeshWater";
 import { remeshLandmarkDrainage } from "./landmarkTransport";
 
@@ -69,29 +63,24 @@ const categories = new Set([
   "WaveExposureHistory",
   "ExternalCoastalForcingHistory",
 ]);
-function setTransferred(next: PhysicalField, name: string, transferred: NumericalVector) {
-  const target = next[name as keyof PhysicalField];
-  if (!isNumericalVector(target)) throw new Error(`Missing remesh channel ${name}.`);
-  for (let cell = 0; cell < next.mesh.count; cell++)
-    target[cell] = transferred[next.mesh.cellToLeaf[cell]];
-}
 function transferChannels(
   map: PhysicalField,
   next: PhysicalField,
   transfer: ReturnType<typeof prepareAdaptiveTransfer>
 ) {
-  for (const [name, values] of Object.entries(map)) {
-    if (!isNumericalVector(values)) {
-      if (name !== "mesh") Object.assign(next, { [name]: values });
-      continue;
-    }
+  for (const [name, value] of Object.entries(map)) {
+    if (value instanceof Band) continue;
+    if (name !== "mesh" && name !== "coverage") Object.assign(next, { [name]: value });
+  }
+  for (const [name, values] of physicalBands(map)) {
     if (indices.has(name)) continue;
     const transferred = transfer(
-      (leaf) => values[map.mesh.leafToCell[leaf]],
+      (leaf) => values.get(map.mesh.leafToCell(leaf)),
       categories.has(name) ? "category" : "intensive"
     );
-    setTransferred(next, name, transferred);
-    if (map.numerical) map.numerical.release(transferred);
+    const target = next[name];
+    for (let cell = 0; cell < next.mesh.count; cell++)
+      target.set(cell, transferred[next.mesh.cellToLeaf(cell)]);
   }
 }
 /** Transfer represented material and history; index-valued diagnostics must be rebuilt. */
@@ -103,15 +92,15 @@ export function remeshPhysical(
 ) {
   const old = map.mesh;
   if (!old.topology) throw new Error("Adaptive remeshing requires an adaptive physical field.");
-  const mesh = adaptivePhysicalMesh(topology, footprint, map.numerical);
-  if (old.periodic) joinAdaptiveSeam(mesh, map.numerical);
+  const mesh = adaptivePhysicalMesh(topology, footprint);
+  if (old.periodic && mesh instanceof AdaptiveLattice) mesh.joinSeam();
   mesh.bounds = old.bounds;
-  const next = createField(mesh, map.numerical);
-  const transfer = prepared ?? prepareAdaptiveTransfer(old.topology, topology, map.numerical);
+  const next = createField(mesh, map.coverage.cache);
+  const transfer = prepared ?? prepareAdaptiveTransfer(old.topology, topology);
   transferChannels(map, next, transfer);
   // Elevation is a dependent material interface, not a second independently transferred mass.
   for (let i = 0; i < mesh.count; i++)
-    next.Elevation[i] = next.BedrockElevation[i] + next.SedimentThickness[i];
+    next.Elevation.set(i, next.BedrockElevation.get(i) + next.SedimentThickness.get(i));
   reconcileRemeshedWater(map, next);
   remeshLandmarkDrainage(map, next, transfer);
   return next;

@@ -43,29 +43,31 @@ function scenario() {
   return { state, map, greenwood };
 }
 const cells = (map: ReturnType<typeof scenario>["map"], test: (x: number, y: number) => boolean) =>
-  Array.from(map.mesh.x, (x, i) => i).filter((i) => test(map.mesh.x[i], map.mesh.y[i]));
+  Array.from({ length: map.mesh.count }, (_, i) => i).filter((i) =>
+    test(map.mesh.x(i), map.mesh.y(i))
+  );
 
 it("locates stands in old canopy and deep peat and springs on soft rock below a catchment", () => {
   const { state, map, greenwood } = scenario();
   const old = cells(map, (x) => x < -60_000),
     peat = cells(map, (x) => x > 60_000),
     spring = cells(map, (x, y) => Math.abs(x) < 5000 && Math.abs(y) < 5000);
-  for (const i of old) map.CanopyAge[i] = 900;
-  for (const i of peat) map.PeatCarbon[i] = 20;
+  for (const i of old) map.CanopyAge.set(i, 900);
+  for (const i of peat) map.PeatCarbon.set(i, 20);
   for (const i of spring) {
-    map.FlowAccumulation[i] = 80;
-    map.RockResistance[i] = 600;
-    map.Slope[i] = 0.005;
+    map.FlowAccumulation.set(i, 80);
+    map.RockResistance.set(i, 600);
+    map.Slope.set(i, 0.005);
   }
   locateMagicSources(state, greenwood, 42, 0);
   const stand = greenwood.originSources.stand,
     well = greenwood.originSources.spring;
-  expect(old.every((i) => stand[i] > 0)).toBe(true);
-  expect(peat.every((i) => stand[i] > 0)).toBe(true);
-  expect(spring.every((i) => well[i] > 0 && stand[i] === 0)).toBe(true);
+  expect(old.every((i) => stand.get(i) > 0)).toBe(true);
+  expect(peat.every((i) => stand.get(i) > 0)).toBe(true);
+  expect(spring.every((i) => well.get(i) > 0 && stand.get(i) === 0)).toBe(true);
   expect(
     cells(map, (x) => Math.abs(x) < 50_000 && Math.abs(x) > 10_000).every(
-      (i) => stand[i] === 0 && well[i] === 0
+      (i) => stand.get(i) === 0 && well.get(i) === 0
     )
   ).toBe(true);
   expect(greenwood.located.filter((point) => point.origin === "spring")).toHaveLength(
@@ -75,35 +77,35 @@ it("locates stands in old canopy and deep peat and springs on soft rock below a 
 
 it("spreads between roots through cover and stops at bare rock, water and ice", () => {
   const { state, map, greenwood } = scenario();
-  for (const i of cells(map, (x) => x < -80_000)) map.CanopyAge[i] = 900;
+  for (const i of cells(map, (x) => x < -80_000)) map.CanopyAge.set(i, 900);
   // Three walls east of the stand: bare rock, a lake, and ice.
   for (const i of cells(map, (x) => x > -45_000 && x < -35_000)) {
-    map.TreeCover[i] = 0;
-    map.BroadleafCover[i] = 0;
-    map.SoilDepth[i] = 0.05;
+    map.TreeCover.set(i, 0);
+    map.BroadleafCover.set(i, 0);
+    map.SoilDepth.set(i, 0.05);
   }
   locateMagicSources(state, greenwood, 42, 0);
   propagateMagic(state, greenwood, 42, 1);
   expect(
-    cells(map, (x) => x > -70_000 && x < -50_000).some((i) => greenwood.intensity[i] > 0)
+    cells(map, (x) => x > -70_000 && x < -50_000).some((i) => greenwood.intensity.get(i) > 0)
   ).toBe(true);
-  expect(cells(map, (x) => x > -30_000).every((i) => greenwood.intensity[i] === 0)).toBe(true);
+  expect(cells(map, (x) => x > -30_000).every((i) => greenwood.intensity.get(i) === 0)).toBe(true);
   for (const i of cells(map, (x) => x > -45_000 && x < -35_000)) {
-    map.TreeCover[i] = 0.5;
-    map.SoilDepth[i] = 0.5;
-    map.WaterKindCodes[i] = 2;
+    map.TreeCover.set(i, 0.5);
+    map.SoilDepth.set(i, 0.5);
+    map.WaterKindCodes.set(i, 2);
   }
   propagateMagic(state, greenwood, 42, 1);
-  expect(cells(map, (x) => x > -30_000).every((i) => greenwood.intensity[i] === 0)).toBe(true);
+  expect(cells(map, (x) => x > -30_000).every((i) => greenwood.intensity.get(i) === 0)).toBe(true);
   for (const i of cells(map, (x) => x > -45_000 && x < -35_000)) {
-    map.WaterKindCodes[i] = 0;
-    map.IceThickness[i] = 100;
+    map.WaterKindCodes.set(i, 0);
+    map.IceThickness.set(i, 100);
   }
   propagateMagic(state, greenwood, 42, 1);
-  expect(cells(map, (x) => x > -30_000).every((i) => greenwood.intensity[i] === 0)).toBe(true);
-  for (const i of cells(map, (x) => x > -45_000 && x < -35_000)) map.IceThickness[i] = 0;
+  expect(cells(map, (x) => x > -30_000).every((i) => greenwood.intensity.get(i) === 0)).toBe(true);
+  for (const i of cells(map, (x) => x > -45_000 && x < -35_000)) map.IceThickness.set(i, 0);
   propagateMagic(state, greenwood, 42, 1);
-  expect(cells(map, (x) => x > -30_000).some((i) => greenwood.intensity[i] > 0)).toBe(true);
+  expect(cells(map, (x) => x > -30_000).some((i) => greenwood.intensity.get(i) > 0)).toBe(true);
 });
 
 it("grows forest past its climate band, establishes on bare ground and braids the river", () => {
@@ -120,47 +122,47 @@ it("grows forest past its climate band, establishes on bare ground and braids th
   greenwood.intensity.fill(0);
   const reach = cells(map, (x) => Math.abs(x) < 15_000);
   for (const i of reach) {
-    greenwood.intensity[i] = 800;
-    map.RiverOrders[i] = 2;
-    map.WetlandCover[i] = 0;
+    greenwood.intensity.set(i, 800);
+    map.RiverOrders.set(i, 2);
+    map.WetlandCover.set(i, 0);
   }
   magicLivingFeedback(state);
-  expect(map.Verdure[reach[0]]).toBeCloseTo(0.8, 6);
-  expect(map.WetlandCover[reach[0]]).toBeGreaterThanOrEqual(0.4);
-  expect(map.FloodplainIntensity[reach[0]]).toBeGreaterThanOrEqual(480);
+  expect(map.Verdure.get(reach[0])).toBeCloseTo(0.8, 6);
+  expect(map.WetlandCover.get(reach[0])).toBeGreaterThanOrEqual(0.4);
+  expect(map.FloodplainIntensity.get(reach[0])).toBeGreaterThanOrEqual(480);
   const dry = cells(map, (x) => x > 50_000)[0];
-  expect(map.Verdure[dry]).toBe(0);
-  expect(map.WetlandCover[dry]).toBe(0);
+  expect(map.Verdure.get(dry)).toBe(0);
+  expect(map.WetlandCover.get(dry)).toBe(0);
 });
 
 it("collapses an overdrawn spring, seals it, and carries sap in the gut toward the herds", () => {
   const { state, map, greenwood } = scenario();
   const spring = cells(map, (x, y) => Math.abs(x) < 5000 && Math.abs(y) < 5000)[0];
-  map.FlowAccumulation[spring] = 80;
-  map.RockResistance[spring] = 600;
-  map.Slope[spring] = 0.005;
+  map.FlowAccumulation.set(spring, 80);
+  map.RockResistance.set(spring, 600);
+  map.Slope.set(spring, 0.005);
   locateMagicSources(state, greenwood, 42, 0);
-  const recharge = greenwood.originSources.spring[spring] * map.mesh.areas[spring];
+  const recharge = greenwood.originSources.spring.get(spring) * map.mesh.area(spring);
   expect(recharge).toBeGreaterThan(0);
-  const bedrock = map.BedrockElevation[spring];
+  const bedrock = map.BedrockElevation.get(spring);
   drawReservoir(greenwood, "aquifer", spring, recharge * 0.8);
   advanceStocks(state, greenwood, 0);
-  expect(greenwood.sealed[spring]).toBe(1);
-  expect(map.BedrockElevation[spring]).toBeLessThan(bedrock);
+  expect(greenwood.sealed.get(spring)).toBe(1);
+  expect(map.BedrockElevation.get(spring)).toBeLessThan(bedrock);
   locateMagicSources(state, greenwood, 42, 1);
-  expect(greenwood.originSources.spring[spring]).toBe(0);
+  expect(greenwood.originSources.spring.get(spring)).toBe(0);
   // Herds carry sap to the ground they graze toward.
   const sap = greenwood.stocks["stand/sap"],
     from = cells(map, (x) => x < -80_000)[0],
-    neighbour = map.mesh.neighbors[from * map.mesh.stride];
+    neighbour = map.mesh.neighbor(from, 0);
   sap.fill(0);
-  sap[from] = 1000;
+  sap.set(from, 1000);
   map.Grazers.fill(0);
-  map.Grazers[from] = 500;
-  map.Grazers[neighbour] = 500;
+  map.Grazers.set(from, 500);
+  map.Grazers.set(neighbour, 500);
   advanceStocks(state, greenwood, 1);
-  expect(sap[from]).toBeLessThan(1000);
-  expect(sap[neighbour]).toBeGreaterThan(0);
+  expect(sap.get(from)).toBeLessThan(1000);
+  expect(sap.get(neighbour)).toBeGreaterThan(0);
 });
 
 it("leaves no residue when disabled", () => {
@@ -168,5 +170,5 @@ it("leaves no residue when disabled", () => {
   greenwood.definition.enabled = false;
   greenwood.intensity.fill(800);
   magicLivingFeedback(state);
-  expect(map.Verdure.every((value) => value === 0)).toBe(true);
+  expect(Array.from(map.Verdure).every((value) => value === 0)).toBe(true);
 });

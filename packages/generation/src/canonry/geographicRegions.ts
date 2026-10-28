@@ -1,4 +1,11 @@
-import { CellList, SmallIntSet, spatial, point, type MagicFeatureRule } from "@atlas/domain";
+import {
+  CellList,
+  SmallIntSet,
+  spatial,
+  point,
+  type Band,
+  type MagicFeatureRule,
+} from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
@@ -15,7 +22,6 @@ import {
 import { landArea, largestRegionShare, partitionRegion } from "./regionPartition";
 import { naturalPlaceGeometry, magicPlaceGeometry, type PlaceGeometry } from "./placeGeometry";
 import type { MagicField } from "./magicState";
-import type { NumericalVector } from "@atlas/domain";
 import type { RegionMembers } from "./regionMembers";
 import { workingValues, releaseWorking } from "./physicalNumerics";
 import { lakeMembership } from "./lakeMembership";
@@ -31,8 +37,8 @@ export function extractLakes(state: GenerationState) {
   // basin before clipping; truncating its support leaves an open shoreline.
   for (const body of membership.bodies()) {
     const members = membership.members(body);
-    if (members[0] >= mesh.contentCount) continue;
-    const level = map.WaterSurfaceElevations[members[0]];
+    if (!members.some((i) => mesh.membership(i) === 1)) continue;
+    const level = map.WaterSurfaceElevations.get(members[0]);
     const contour = lakeFootprint(state, members, body, level);
     const shape = clipRegion(state, contour);
     if (!shape) continue;
@@ -63,7 +69,7 @@ function clipRegion(state: GenerationState, shape: Geometry | null) {
 }
 function connectedMembers(
   state: GenerationState,
-  visited: NumericalVector,
+  visited: Band,
   includes: (i: number) => boolean,
   start: number,
   region: number
@@ -71,44 +77,42 @@ function connectedMembers(
   const members = new CellList(),
     mesh = state.physical!.map.mesh;
   members.push(start);
-  visited[start] = region;
-  for (let head = 0; head < members.length; head++)
-    for (let edge = 0; edge < mesh.degree[members.at(head)]; edge++) {
-      const j = mesh.neighbors[members.at(head) * mesh.stride + edge];
-      if (j < 0 || j >= visited.length || visited[j] >= 0 || !includes(j)) continue;
-      visited[j] = region;
+  visited.set(start, region);
+  for (let head = 0; head < members.length; head++) {
+    const cell = members.at(head);
+    for (let edge = 0; edge < mesh.degree(cell); edge++) {
+      const j = mesh.neighbor(cell, edge);
+      if (j < 0 || visited.get(j) >= 0 || !includes(j)) continue;
+      visited.set(j, region);
       members.push(j);
     }
+  }
   return members.finish();
 }
 export function components(
   state: GenerationState,
   includes: (i: number) => boolean,
-  publish: (members: NumericalVector, geometry?: Geometry) => void,
+  publish: (members: Int32Array, geometry?: Geometry) => void,
   polygonal = false,
   maximum = Infinity,
   weight?: (i: number) => number
 ) {
   const map = state.physical!.map,
-    visited = workingValues(
-      map,
-      "int32",
-      "region:labels",
-      (i) => (includes(i) ? -2 : -1),
-      map.mesh.contentCount
-    );
+    mesh = map.mesh,
+    // Regions are made of content cells; the halo never starts or joins one.
+    content = (i: number) => mesh.membership(i) === 1 && includes(i),
+    visited = workingValues(map, "int32", "region:labels", (i) => (content(i) ? -2 : -1));
   let serial = 0;
   for (let i = 0; i < visited.length; i++) {
-    if (visited[i] !== -2) continue;
-    const members = connectedMembers(state, visited, includes, i, serial);
+    if (visited.get(i) !== -2) continue;
+    const members = connectedMembers(state, visited, content, i, serial);
     // Oversized regions split along drainage divides; each piece is its own label.
     const pieces = partitionRegion(state, members, maximum);
-    pieces.forEach((piece, n) => piece.forEach((cell) => (visited[cell] = serial + n)));
+    pieces.forEach((piece, n) => piece.forEach((cell) => visited.set(cell, serial + n)));
     pieces.forEach((piece, n) =>
       publish(piece, polygonal ? regionShape(state, visited, serial + n, piece, weight) : undefined)
     );
     serial += pieces.length;
-    releaseWorking(map, members, ...pieces);
   }
   releaseWorking(map, visited);
 }
@@ -120,7 +124,7 @@ export function components(
  */
 function labelContour(
   state: GenerationState,
-  labels: NumericalVector,
+  labels: Band,
   label: number,
   leaves: RegionMembers,
   weight?: (i: number) => number
@@ -128,15 +132,17 @@ function labelContour(
   const mesh = state.physical!.map.mesh,
     touching = new SmallIntSet();
   for (const i of leaves)
-    for (let edge = 0; edge < mesh.degree[i]; edge++) {
-      const other = labels[mesh.neighbors[i * mesh.stride + edge]];
+    for (let edge = 0; edge < mesh.degree(i); edge++) {
+      const j = mesh.neighbor(i, edge);
+      if (j < 0) continue;
+      const other = labels.get(j);
       if (other >= 0 && other !== label) touching.add(other);
     }
   const peak = weight ? leaves.reduce((maximum, i) => Math.max(maximum, weight(i)), 1e-9) : 1,
-    share = (cell: number) => (labels[cell] === label ? (weight ? weight(cell) / peak : 1) : 0);
+    share = (cell: number) => (labels.get(cell) === label ? (weight ? weight(cell) / peak : 1) : 0);
   if (!touching.size) return membershipContour(state, leaves, share);
   const terms = [label, ...touching.items()].map((value) =>
-    value === label ? share : (cell: number) => Number(labels[cell] === value)
+    value === label ? share : (cell: number) => Number(labels.get(cell) === value)
   );
   return combinedContour(state, leaves, terms, ([own, ...others]) => {
     const shared = others.reduce((sum, value) => sum + value, 0);
@@ -145,25 +151,23 @@ function labelContour(
 }
 function regionShape(
   state: GenerationState,
-  labels: NumericalVector,
+  labels: Band,
   label: number,
   leaves: RegionMembers,
   weight?: (i: number) => number
 ) {
   const water = state.physical!.map.WaterKindCodes,
     outline = labelContour(state, labels, label, leaves, weight),
-    wet = water[leaves[0]] !== 0;
+    wet = water.get(leaves[0]) !== 0;
   // Enclosed gaps of the same medium join the region; islands and lakes stay open.
   return (
     clipRegion(
       state,
       outline &&
-        fillSmallHoles(
-          state,
-          outline,
-          smallHole,
-          (cell) => (water[cell] !== 0) !== wet || (labels[cell] !== -1 && labels[cell] !== label)
-        )
+        fillSmallHoles(state, outline, smallHole, (cell) => {
+          const held = labels.get(cell);
+          return (water.get(cell) !== 0) !== wet || (held !== -1 && held !== label);
+        })
     ) ?? undefined
   );
 }
@@ -197,7 +201,7 @@ function placeRepresentative(state: GenerationState, members: RegionMembers) {
   let representative = -1;
   for (const i of members) {
     if (!covers(nativePosition(work, i))) continue;
-    if (representative < 0 || work.map.Elevation[i] > work.map.Elevation[representative])
+    if (representative < 0 || work.map.Elevation.get(i) > work.map.Elevation.get(representative))
       representative = i;
   }
   return representative;
@@ -216,11 +220,11 @@ function placeAttributes(
     sourceAlgorithm: "canonry-0f62584c",
     area: extent
       ? spatial.area(extent)
-      : members.reduce((sum, i) => sum + work.map.mesh.areas[i], 0),
+      : members.reduce((sum, i) => sum + work.map.mesh.area(i), 0),
     representative: nativePosition(work, anchor),
     placeType: name,
     geometryMeaning: placement?.meaning ?? "classified geographic region",
-    elevation: (work.map.Elevation[anchor] - work.map.BaseSeaLevel) / 1024,
+    elevation: (work.map.Elevation.get(anchor) - work.map.BaseSeaLevel) / 1024,
   };
 }
 export function extractNamedLandforms(state: GenerationState) {
@@ -229,11 +233,11 @@ export function extractNamedLandforms(state: GenerationState) {
     ? spatial.differenceFrom(state.surface.ocean)
     : (shape: Geometry) => shape;
   const classes: [string, string, (i: number) => boolean][] = [
-    ["cirque", "Cirque", (i) => map.LandformCodes[i] === Landform.Cirque],
-    ["fjord", "Fjord", (i) => map.LandformCodes[i] === Landform.Fjord],
-    ["moraine", "Moraine", (i) => map.LandformCodes[i] === Landform.Moraine],
-    ["waterfall", "Waterfall", (i) => map.LandformCodes[i] === Landform.Waterfall],
-    ["gorge", "Gorge", (i) => map.LandformCodes[i] === Landform.Gorge],
+    ["cirque", "Cirque", (i) => map.LandformCodes.get(i) === Landform.Cirque],
+    ["fjord", "Fjord", (i) => map.LandformCodes.get(i) === Landform.Fjord],
+    ["moraine", "Moraine", (i) => map.LandformCodes.get(i) === Landform.Moraine],
+    ["waterfall", "Waterfall", (i) => map.LandformCodes.get(i) === Landform.Waterfall],
+    ["gorge", "Gorge", (i) => map.LandformCodes.get(i) === Landform.Gorge],
   ];
   const maximum = largestRegionShare * landArea(state);
   for (const [kind, name, includes] of classes)
@@ -275,7 +279,7 @@ export function extractMagicPlaces(state: GenerationState) {
   for (const held of Object.values(magic?.confluences.states ?? {}))
     components(
       state,
-      (i) => Boolean(held.members[i]) && held.coverage[i] > 0,
+      (i) => Boolean(held.members.get(i)) && held.coverage.get(i) > 0,
       (region, extent) =>
         region.length >= placeMinimumCells.area &&
         publishPlace(
@@ -289,9 +293,9 @@ export function extractMagicPlaces(state: GenerationState) {
             rule: held.definition.id,
             systems: held.definition.systems.join(","),
             meanCoverage:
-              region.reduce((sum, i) => sum + held.coverage[i], 0) / Math.max(1, region.length),
+              region.reduce((sum, i) => sum + held.coverage.get(i), 0) / Math.max(1, region.length),
             maximumStrain: region.reduce(
-              (peak, i) => Math.max(peak, magic!.confluences.strain[i]),
+              (peak, i) => Math.max(peak, magic!.confluences.strain.get(i)),
               0
             ),
           },
@@ -300,7 +304,7 @@ export function extractMagicPlaces(state: GenerationState) {
         ),
       true,
       Infinity,
-      (i) => held.coverage[i]
+      (i) => held.coverage.get(i)
     );
   for (const field of magic?.fields ?? [])
     for (const rule of field.definition.features) publishRulePlaces(state, field, rule);
@@ -318,11 +322,11 @@ function publishRulePlaces(state: GenerationState, field: MagicField, rule: Magi
     coverage = field.coverage[rule.id],
     minimum = placeMinimumCells[cartography],
     maximum = cartography === "course" ? Infinity : largestRegionShare * landArea(state),
-    areas = state.physical!.map.mesh.areas;
+    mesh = state.physical!.map.mesh;
   if (!members) return;
   components(
     state,
-    (i) => Boolean(members[i]) && (coverage?.[i] ?? 1) > 0,
+    (i) => Boolean(members.get(i)) && (coverage?.get(i) ?? 1) > 0,
     (region, extent) =>
       region.length >= minimum &&
       publishPlace(
@@ -334,16 +338,16 @@ function publishRulePlaces(state: GenerationState, field: MagicField, rule: Magi
         {
           system: field.definition.id,
           rule: rule.id,
-          maximumIntensity: region.reduce((peak, i) => Math.max(peak, field.intensity[i]), 0),
+          maximumIntensity: region.reduce((peak, i) => Math.max(peak, field.intensity.get(i)), 0),
           accumulatedActivity:
-            region.reduce((sum, i) => sum + field.history[i] * areas[i], 0) /
-            region.reduce((sum, i) => sum + areas[i], 0),
+            region.reduce((sum, i) => sum + field.history.get(i) * mesh.area(i), 0) /
+            region.reduce((sum, i) => sum + mesh.area(i), 0),
         },
         extent,
         extent ? magicPlaceGeometry(state, field, rule.id, region, extent) : null
       ),
     true,
     maximum,
-    coverage ? (i) => coverage[i] : undefined
+    coverage ? (i) => coverage.get(i) : undefined
   );
 }

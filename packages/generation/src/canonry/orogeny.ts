@@ -22,7 +22,7 @@ import {
 import { rebuild } from "./surface";
 import { adjustCrustColumn } from "./crustTransport";
 import { distributeOrogenicRoots } from "./orogenicRoots";
-import type { NumericalVector } from "@atlas/domain";
+import type { Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
 function deformationLimit(
@@ -56,8 +56,8 @@ function changeThickness(
   section: number,
   drive: number
 ): number {
-  const fraction = map.CrustContinentalFraction[i] / 1000,
-    current = toUnits(map.CrustThickness[i]);
+  const fraction = map.CrustContinentalFraction.get(i) / 1000,
+    current = toUnits(map.CrustThickness.get(i));
   const requested = current + drive / (buoyancy(fraction) / 1000);
   const limit = deformationLimit(context, c, fraction, section, drive);
   const next = thickness(
@@ -70,14 +70,14 @@ function changeThickness(
 }
 function recordActivity(map: PhysicalField, context: PhysicalContext, i: number, admitted: number) {
   const value = toUnits(admitted);
-  map.TectonicActivityHistory[i] = Math.min(
-    2147483647,
-    map.TectonicActivityHistory[i] + Math.abs(value)
+  map.TectonicActivityHistory.set(
+    i,
+    Math.min(2147483647, map.TectonicActivityHistory.get(i) + Math.abs(value))
   );
   if (value <= 0) return;
   const uplift = value / Math.max(1, context.Profile.InitialOrogenicConstructionStep);
-  map.Uplift[i] = Math.max(map.Uplift[i], clamp(uplift, 0, 1.5));
-  map.RidgeInfluence[i] = Math.max(map.RidgeInfluence[i], clamp(uplift * 1.3, 0, 1));
+  map.Uplift.set(i, Math.max(map.Uplift.get(i), clamp(uplift, 0, 1.5)));
+  map.RidgeInfluence.set(i, Math.max(map.RidgeInfluence.get(i), clamp(uplift * 1.3, 0, 1)));
 }
 function constructSurface(
   map: PhysicalField,
@@ -90,7 +90,7 @@ function constructSurface(
 ) {
   const value = toUnits(admitted),
     p = context.Profile;
-  if (value <= 0 || map.CrustContinentalFraction[i] / 1000 < 0.35 || c.code !== 1) return;
+  if (value <= 0 || map.CrustContinentalFraction.get(i) / 1000 < 0.35 || c.code !== 1) return;
   const crest = clamp(section / 1.55, 0, 1);
   const requested = units(
     Math.min(
@@ -101,20 +101,23 @@ function constructSurface(
     )
   );
   if (requested <= 0) return;
-  const old = map.BedrockElevation[i];
+  const old = map.BedrockElevation.get(i);
   const next = clamp(
     old + requested,
     units(-elevationLimit),
-    units(elevationLimit) - map.SedimentThickness[i]
+    units(elevationLimit) - map.SedimentThickness.get(i)
   );
   const applied = next - old;
   if (applied <= 0) return;
-  map.BedrockElevation[i] = next;
-  map.SurfaceRockLoad[i] += applied;
+  map.BedrockElevation.set(i, next);
+  map.SurfaceRockLoad.add(i, applied);
   const influence = clamp((Math.sqrt(crest) * (c.prominence / 1000)) / 1.75, 0, 1);
-  map.RockResistance[i] = Math.max(
-    map.RockResistance[i],
-    round(1000 + (p.OrogenicCoreRockResistance - 1000) * influence)
+  map.RockResistance.set(
+    i,
+    Math.max(
+      map.RockResistance.get(i),
+      round(1000 + (p.OrogenicCoreRockResistance - 1000) * influence)
+    )
   );
   rebuild(map, i);
 }
@@ -125,15 +128,15 @@ function constructTriangle(
   frame: OrogenicFrame,
   i: number,
   step: number,
-  roots: NumericalVector | null
+  roots: Band | null
 ) {
-  const source = frame.source[i],
-    section = crossSection(map, context, c, i, source, frame.distance[i], frame.side[i]);
+  const source = frame.source.get(i),
+    section = crossSection(map, context, c, i, source, frame.distance.get(i), frame.side.get(i));
   const weight = constructionWeight(map, context, c, frame, i, section);
   const drive = step * (c.prominence / 1000) * weight;
   if (!roots && Math.abs(drive) < 0.5) return;
-  const admitted = roots ? roots[i] : changeThickness(map, context, c, i, section, drive);
-  map.OrogenicConstruction[i] = admitted;
+  const admitted = roots ? roots.get(i) : changeThickness(map, context, c, i, section, drive);
+  map.OrogenicConstruction.set(i, admitted);
   recordActivity(map, context, i, admitted);
   constructSurface(map, context, c, i, source, section, admitted);
 }
@@ -149,15 +152,15 @@ export function orogenicConstruction(map: PhysicalField, context: PhysicalContex
     ? (context.Profile.EpochOrogenicConstructionStep * context.TectonicStrength) / 1000
     : context.Profile.InitialOrogenicConstructionStep;
   if (step <= 0) {
-    releaseWorking(map, ids, ...Object.values(frame));
+    releaseWorking(map, ids, frame.distance, frame.source, frame.side);
     return;
   }
   const roots = context.IsEvolutionEpoch
     ? distributeOrogenicRoots(map, context, components, frame)
     : null;
   for (let i = 0; i < map.mesh.count; i++) {
-    const id = map.OrogenicComponentIds[i];
+    const id = map.OrogenicComponentIds.get(i);
     if (id >= 0) constructTriangle(map, context, components[id], frame, i, step, roots);
   }
-  releaseWorking(map, ids, ...Object.values(frame), ...(roots ? [roots] : []));
+  releaseWorking(map, ids, frame.distance, frame.source, frame.side, ...(roots ? [roots] : []));
 }

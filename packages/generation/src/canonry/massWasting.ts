@@ -3,6 +3,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { deposit, erode } from "./surface";
 import { hillslopeFlux } from "./hillslopeFlux";
+import { releaseWorking } from "./physicalNumerics";
 
 export function massWasting(map: PhysicalField, context: PhysicalContext, postFluvial = false) {
   const p = context.Profile;
@@ -10,11 +11,15 @@ export function massWasting(map: PhysicalField, context: PhysicalContext, postFl
   for (let iteration = 0; iteration < iterations; iteration++) {
     const { cuts, fills } = hillslopeFlux(map, p);
     for (let i = 0; i < map.mesh.count; i++) {
-      if (cuts[i] > 0) {
-        erode(map, i, (cuts[i] * 1024) / map.mesh.areas[i]);
-        map.SedimentProducedTotal += cuts[i];
+      const cut = cuts.get(i),
+        fill = fills.get(i),
+        area = map.mesh.area(i);
+      if (cut > 0) {
+        erode(map, i, (cut * 1024) / area);
+        map.SedimentProducedTotal += cut;
       }
-      if (fills[i] > 0) deposit(map, i, (fills[i] * 1024) / map.mesh.areas[i]);
+      if (fill > 0) deposit(map, i, (fill * 1024) / area);
     }
+    releaseWorking(map, cuts, fills);
   }
 }

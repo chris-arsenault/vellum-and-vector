@@ -3,42 +3,48 @@ import { setWaterSurface, type PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { noWaterSurface, units } from "./math";
 import { oceanSeeds, OceanComponents, visitConnectedOcean } from "./oceanComponents";
-import { radixOrder } from "@atlas/domain";
-import { releaseWorking } from "./physicalNumerics";
+
+/**
+ * Lowest cells first, streamed from the coverage in runs of equal elevation: each level
+ * activates every cell at that height, then joins each of them to its active neighbours,
+ * until the water connected to the boundary covers the target area.
+ */
 function connectedOceanLevel(map: PhysicalField, target: number): number {
-  const order = radixOrder(map.Elevation, true);
-  const components = new OceanComponents(map);
-  let cursor = order.length - 1,
-    elevation = map.Elevation[order[0]];
+  const components = new OceanComponents(map),
+    level: number[] = [];
+  let elevation = -Infinity;
+  const settle = () => {
+    for (const i of level) connectCell(map, components, i);
+    level.length = 0;
+  };
   try {
-    while (cursor >= 0) {
-      elevation = map.Elevation[order[cursor]];
-      const end = cursor;
-      while (cursor >= 0 && map.Elevation[order[cursor]] === elevation)
-        components.activate(order[cursor--]);
-      for (let index = end; index > cursor; index--) {
-        const i = order[index];
-        connectCell(map, components, i);
+    for (const i of map.coverage.order(map.Elevation)) {
+      const height = map.Elevation.get(i);
+      if (height !== elevation) {
+        settle();
+        if (components.connected >= target) return elevation + units(1);
+        elevation = height;
       }
-      if (components.connected >= target) break;
+      components.activate(i);
+      level.push(i);
     }
+    settle();
     return elevation + units(1);
   } finally {
     components.close();
-    releaseWorking(map, order);
   }
 }
 function connectCell(map: PhysicalField, components: OceanComponents, i: number) {
-  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-    if (j >= 0 && components.parent[j] >= 0) components.union(i, j);
+  for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+    const j = map.mesh.neighbor(i, edge);
+    if (j >= 0 && components.parent.get(j) >= 0) components.union(i, j);
   }
 }
 /** Volume (m³) of the ocean connected to the boundary when the water stands at `level`. */
 function connectedVolume(map: PhysicalField, level: number): number {
   let volume = 0;
   visitConnectedOcean(map, level, (i) => {
-    volume += ((level - map.Elevation[i]) / 1024) * map.mesh.contentAreas[i];
+    volume += ((level - map.Elevation.get(i)) / 1024) * map.mesh.contentArea(i);
   });
   return volume;
 }
@@ -47,8 +53,9 @@ function levelForVolume(map: PhysicalField, volume: number): number {
   let low = Infinity,
     high = -Infinity;
   for (let i = 0; i < map.mesh.count; i++) {
-    low = Math.min(low, map.Elevation[i]);
-    high = Math.max(high, map.Elevation[i]);
+    const elevation = map.Elevation.get(i);
+    low = Math.min(low, elevation);
+    high = Math.max(high, elevation);
   }
   high += units(1);
   while (high - low > 1) {
@@ -60,14 +67,15 @@ function levelForVolume(map: PhysicalField, volume: number): number {
 }
 function lowestBoundary(map: PhysicalField) {
   let boundary = Number.MAX_VALUE;
-  for (const i of oceanSeeds(map)) boundary = Math.min(boundary, map.Elevation[i]);
+  for (const i of oceanSeeds(map)) boundary = Math.min(boundary, map.Elevation.get(i));
   return boundary;
 }
 /** Water-equivalent volume held above the ocean in grounded land and lake ice. */
 export function groundedIceWater(map: PhysicalField) {
   let volume = 0;
   for (let i = 0; i < map.mesh.count; i++)
-    if (map.GroundedIce[i] !== 0) volume += map.IceThickness[i] * map.mesh.contentAreas[i] * 0.917;
+    if (map.GroundedIce.get(i) !== 0)
+      volume += map.IceThickness.get(i) * map.mesh.contentArea(i) * 0.917;
   return volume;
 }
 /**
@@ -80,7 +88,8 @@ export function groundedIceWater(map: PhysicalField) {
 function seaLevel(map: PhysicalField, c: PhysicalContext) {
   const owned = !map.SeaLevelInitialized || map.BaseOceanVolume > 0;
   if (owned && !c.IsEvolutionEpoch && map.CompletedEpochCount === 0) {
-    const area = map.mesh.contentAreas.reduce((sum, value) => sum + value, 0);
+    let area = 0;
+    for (let i = 0; i < map.mesh.count; i++) area += map.mesh.contentArea(i);
     const target = area * c.Profile.QualityTargets.OceanCoverage.target;
     map.BaseSeaLevel = Math.max(
       connectedOceanLevel(map, target) + units(c.Profile.SeaLevel * c.Profile.ElevationScale),
@@ -103,8 +112,8 @@ export function oceanConnectivity(map: PhysicalField, c: PhysicalContext) {
   map.WaterSurfaceElevations.fill(noWaterSurface);
   map.EffectiveSeaLevel = seaLevel(map, c);
   visitConnectedOcean(map, map.EffectiveSeaLevel, (i) => {
-    map.WaterKindCodes[i] = 1;
-    map.WaterBodyIds[i] = 1;
+    map.WaterKindCodes.set(i, 1);
+    map.WaterBodyIds.set(i, 1);
     setWaterSurface(map, i, map.EffectiveSeaLevel);
   });
 }

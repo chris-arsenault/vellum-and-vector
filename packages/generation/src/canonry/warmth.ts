@@ -5,26 +5,28 @@ import { lerp, round, truncate, units } from "./math";
 import { hashUnit } from "./noise";
 import { nearestTriangle, triangleIdentity } from "./mesh";
 import { paintMaximum, triangleDistanceSquared } from "./radial";
-import { CellList, type NumericalVector } from "@atlas/domain";
+import { CellList } from "@atlas/domain";
 
 function candidateSets(map: PhysicalField, c: PhysicalContext) {
-  const result = Array.from({ length: 4 }, () => new CellList());
-  for (let i = 0; i < map.mesh.contentCount; i++) {
-    if (map.WaterKindCodes[i] === 1) {
+  const result = Array.from({ length: 4 }, () => new CellList()),
+    peak = units(c.Profile.PeakElevationThreshold);
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (map.mesh.membership(i) !== 1) continue;
+    if (map.WaterKindCodes.get(i) === 1) {
       result[0].push(i);
       continue;
     }
-    const distance = map.OceanDistance[i],
-      peak = units(c.Profile.PeakElevationThreshold);
+    const distance = map.OceanDistance.get(i),
+      elevation = map.Elevation.get(i);
     if (distance > 0 && distance <= 120_000) result[1].push(i);
-    if (distance >= 200_000 && map.Elevation[i] < peak) result[2].push(i);
-    if (map.Elevation[i] >= peak && map.Geothermal[i] >= 420) result[3].push(i);
+    if (distance >= 200_000 && elevation < peak) result[2].push(i);
+    if (elevation >= peak && map.Geothermal.get(i) >= 420) result[3].push(i);
   }
   return result.map((values) => values.finish());
 }
 function selectSource(
   map: PhysicalField,
-  candidates: NumericalVector,
+  candidates: Int32Array,
   selected: number[],
   seed: number,
   sourceIndex: number
@@ -43,8 +45,8 @@ function selectSource(
         : Math.min(...selected.map((j) => triangleDistanceSquared(map.mesh, i, j)));
     const score =
       distance / 100_000_000 +
-      map.Geothermal[i] * 0.25 +
-      map.OceanCurrentHeat[i] * 0.22 +
+      map.Geothermal.get(i) * 0.25 +
+      map.OceanCurrentHeat.get(i) * 0.22 +
       hashUnit(seed ^ 0x4b67, triangleIdentity(map.mesh, i), sample);
     if (score > bestScore) {
       best = i;
@@ -57,8 +59,11 @@ export function warmthSources(map: PhysicalField, c: PhysicalContext) {
   const p = c.Profile;
   map.Warmth.fill(0);
   for (let i = 0; i < map.mesh.count; i++)
-    if (map.WaterKindCodes[i] === 1)
-      map.Warmth[i] = truncate((map.OceanCurrentHeat[i] * p.OceanCurrentWarmthStrength) / 1000);
+    if (map.WaterKindCodes.get(i) === 1)
+      map.Warmth.set(
+        i,
+        truncate((map.OceanCurrentHeat.get(i) * p.OceanCurrentWarmthStrength) / 1000)
+      );
   paintMaximum(map.mesh, map.Warmth, 0, 0, p.HeartWarmthRadius, p.HeartWarmthStrength);
   const candidates = candidateSets(map, c),
     selected: number[] = [];
@@ -83,6 +88,6 @@ export function warmthSources(map: PhysicalField, c: PhysicalContext) {
         hashUnit(c.Seed ^ 0x29f1, index, 1)
       )
     );
-    paintMaximum(map.mesh, map.Warmth, map.mesh.x[source], map.mesh.y[source], radius, strength);
+    paintMaximum(map.mesh, map.Warmth, map.mesh.x(source), map.mesh.y(source), radius, strength);
   }
 }

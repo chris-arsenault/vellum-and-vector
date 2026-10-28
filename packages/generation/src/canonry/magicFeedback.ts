@@ -8,7 +8,7 @@ import { magicBudget, originStocks, reservoirStock } from "./magicState";
 import { advanceStocks } from "./magicStocks";
 import { rememberLakes } from "./magicSaltSources";
 import { markRim, wardCoasts } from "./magicHallowed";
-import type { MagicSystem, NumericalVector } from "@atlas/domain";
+import type { Band, MagicSystem } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
 export const coastalMagicParameters: (keyof MagicSystem["parameters"])[] = [
@@ -27,44 +27,49 @@ type Field = NonNullable<NonNullable<GenerationState["physical"]>["magic"]>["fie
  */
 export function heldCharge(map: PhysicalField, field: Field, i: number) {
   if (!field.definition.effects.icePersistence) return 1;
-  const strength = Math.max((field.stored[i] - 300) / 150, (field.intensity[i] - 600) / 300);
+  const stored = field.stored.get(i),
+    strength = Math.max((stored - 300) / 150, (field.intensity.get(i) - 600) / 300);
   // Relict charge in the ground keeps acting after the ice has gone, at a reduced strength,
   // so a deglaciated valley stays cold until the charge has thawed away.
-  const relict = field.definition.parameters.relictStrength * unit((field.stored[i] - 300) / 150);
-  return unit(strength) * Math.max(unit(map.IceThickness[i] / 50), relict);
+  const relict = field.definition.parameters.relictStrength * unit((stored - 300) / 150);
+  return unit(strength) * Math.max(unit(map.IceThickness.get(i) / 50), relict);
 }
 export function magicThermalFeedback(state: GenerationState) {
   const work = state.physical!,
     magic = work.magic!,
     map = work.map;
   for (let i = 0; i < map.mesh.count; i++) {
-    map.FeatureFlags[i] &= ~(Feature.FireCore | Feature.MagmaChamber);
+    let flags = map.FeatureFlags.get(i) & ~(Feature.FireCore | Feature.MagmaChamber);
     let heat = 0,
       melt = 0;
     for (const field of magic.fields) {
       if (!field.definition.enabled) continue;
-      const effects = field.definition.effects;
-      heat +=
-        field.intensity[i] * effects.heat * (effects.heat < 0 ? heldCharge(map, field, i) : 1);
-      melt += field.intensity[i] * effects.iceMelt;
-      if (effects.heat > 0 && field.source[i] > 0 && field.intensity[i] > 0) {
-        map.FeatureFlags[i] |= Feature.FireCore;
-        if (field.intensity[i] >= 940) map.FeatureFlags[i] |= Feature.MagmaChamber;
+      const effects = field.definition.effects,
+        intensity = field.intensity.get(i);
+      heat += intensity * effects.heat * (effects.heat < 0 ? heldCharge(map, field, i) : 1);
+      melt += intensity * effects.iceMelt;
+      if (effects.heat > 0 && field.source.get(i) > 0 && intensity > 0) {
+        flags |= Feature.FireCore;
+        if (intensity >= 940) flags |= Feature.MagmaChamber;
       }
     }
+    map.FeatureFlags.set(i, flags);
     // Replace this contribution; later climate passes use the same external forcing.
-    const previous = magic.heat[i];
-    magic.heat[i] = round(heat);
-    map.ExternalHeatForcing[i] += magic.heat[i] - previous;
-    map.Temperature[i] = clamp(map.Temperature[i] - previous + magic.heat[i], 0, 1000);
+    const previous = magic.heat.get(i),
+      rounded = round(heat);
+    magic.heat.set(i, rounded);
+    map.ExternalHeatForcing.add(i, rounded - previous);
+    map.Temperature.set(i, clamp(map.Temperature.get(i) - previous + rounded, 0, 1000));
     // Melt is a removal, not a level: within one epoch each cell loses at most the largest
     // melt any evaluation asked for, so the climate and post-glacial passes do not both melt.
-    const owed = Math.min(map.IceThickness[i], Math.max(0, round(melt) - magic.melt[i]));
-    magic.melt[i] = Math.max(magic.melt[i], round(melt));
-    map.IceThickness[i] = Math.max(0, map.IceThickness[i] - owed);
+    const ice = map.IceThickness.get(i),
+      owed = Math.min(ice, Math.max(0, round(melt) - magic.melt.get(i)));
+    magic.melt.set(i, Math.max(magic.melt.get(i), round(melt)));
+    map.IceThickness.set(i, Math.max(0, ice - owed));
     // Ice melted from below pools under the glacier and leaves as meltwater: the runoff
     // pass cuts its outburst channels below the margin.
-    if (owed > 0) map.GlacialMeltwater[i] = clamp(map.GlacialMeltwater[i] + round(owed), 0, 1000);
+    if (owed > 0)
+      map.GlacialMeltwater.set(i, clamp(map.GlacialMeltwater.get(i) + round(owed), 0, 1000));
   }
 }
 /**
@@ -83,7 +88,7 @@ export function magicLivingFeedback(state: GenerationState) {
       warding = 0,
       tearing = 0;
     for (const field of fields) {
-      const share = field.intensity[i] / 1000;
+      const share = field.intensity.get(i) / 1000;
       quickening += share * field.definition.effects.quickening;
       stillness += share * field.definition.effects.stillness * heldCharge(map, field, i);
       verdure += share * field.definition.effects.verdure;
@@ -91,39 +96,38 @@ export function magicLivingFeedback(state: GenerationState) {
       warding += share * field.definition.effects.warding;
       tearing += share * field.definition.effects.tearing;
     }
-    map.Quickening[i] = unit(quickening);
-    map.Stillness[i] = unit(stillness);
-    map.Verdure[i] = unit(verdure);
-    map.Salting[i] = unit(salting);
-    map.Warding[i] = unit(warding);
-    map.Tearing[i] = unit(tearing);
+    map.Quickening.set(i, unit(quickening));
+    map.Stillness.set(i, unit(stillness));
+    map.Verdure.set(i, unit(verdure));
+    map.Salting.set(i, unit(salting));
+    map.Warding.set(i, unit(warding));
+    map.Tearing.set(i, unit(tearing));
     // Greenwood divides the river that crosses it into wetland channels: the braided reach.
-    if (map.Verdure[i] > 0.3 && map.RiverOrders[i] >= 1 && map.WaterKindCodes[i] === 0) {
-      map.WetlandCover[i] = Math.max(map.WetlandCover[i], 0.5 * map.Verdure[i]);
-      map.FloodplainIntensity[i] = Math.max(
-        map.FloodplainIntensity[i],
-        round(600 * map.Verdure[i])
-      );
+    const green = unit(verdure);
+    if (green > 0.3 && map.RiverOrders.get(i) >= 1 && map.WaterKindCodes.get(i) === 0) {
+      map.WetlandCover.set(i, Math.max(map.WetlandCover.get(i), 0.5 * green));
+      map.FloodplainIntensity.set(i, Math.max(map.FloodplainIntensity.get(i), round(600 * green)));
     }
   }
   markRim(map, work.magic!);
 }
 /** Shelf, water shallower than 400 m, or a cell on the shore: where a ray lifts deep water. */
 function shoals(map: PhysicalField, i: number) {
-  if ([2, 3].includes(map.BathymetricZoneCodes[i]) || map.WaterDepths[i] < 400 * 1024) return true;
-  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-    if (j >= 0 && map.WaterKindCodes[j] !== 1) return true;
+  if ([2, 3].includes(map.BathymetricZoneCodes.get(i)) || map.WaterDepths.get(i) < 400 * 1024)
+    return true;
+  for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+    const j = map.mesh.neighbor(i, edge);
+    if (j >= 0 && map.WaterKindCodes.get(j) !== 1) return true;
   }
   return false;
 }
 /** A ray below this intensity moves no water; it is the front rule's retained level. */
 const frontThreshold = 160;
 interface OceanForcing {
-  upwelling: NumericalVector;
-  seaSurface: NumericalVector;
-  fog: NumericalVector;
-  storm: NumericalVector;
+  upwelling: Band;
+  seaSurface: Band;
+  fog: Band;
+  storm: Band;
 }
 /** Upwelling, sea-surface forcing, fog source and storm energy per ocean cell from every moving system. */
 function movedWater(map: PhysicalField, fields: Field[]): OceanForcing {
@@ -135,13 +139,13 @@ function movedWater(map: PhysicalField, fields: Field[]): OceanForcing {
       storm: workingArray(map, "float64", "magic:water-storm"),
     };
   for (let i = 0; i < n; i++) {
-    if (map.WaterKindCodes[i] !== 1) continue;
+    if (map.WaterKindCodes.get(i) !== 1) continue;
     const shoaling = shoals(map, i);
     for (const field of fields) moveWaterAt(map, forcing, field, i, shoaling);
-    forcing.upwelling[i] = clamp(round(forcing.upwelling[i]), 0, 1000);
+    forcing.upwelling.set(i, clamp(round(forcing.upwelling.get(i)), 0, 1000));
     // A front cools the surface by a few degrees, never into a sea of its own.
-    forcing.seaSurface[i] = clamp(round(forcing.seaSurface[i]), -60, 60);
-    forcing.storm[i] = clamp(round(forcing.storm[i]), 0, 1000);
+    forcing.seaSurface.set(i, clamp(round(forcing.seaSurface.get(i)), -60, 60));
+    forcing.storm.set(i, clamp(round(forcing.storm.get(i)), 0, 1000));
   }
   return forcing;
 }
@@ -154,16 +158,17 @@ function moveWaterAt(
   shoaling: boolean
 ) {
   const e = field.definition.effects,
-    lift = field.intensity[i] - frontThreshold,
+    intensity = field.intensity.get(i),
+    lift = intensity - frontThreshold,
     front = shoaling && lift > 0,
-    wake = field.wake[i] > 0 && field.intensity[i] > 0;
+    wake = field.wake.get(i) > 0 && intensity > 0;
   if (front) {
-    forcing.upwelling[i] += lift * e.upwelling;
-    forcing.seaSurface[i] += lift * e.seaSurface;
-    forcing.fog[i] = Math.max(forcing.fog[i], unit(lift / 400) * e.fog);
-  } else if (wake) forcing.seaSurface[i] += e.wakeWarming;
+    forcing.upwelling.add(i, lift * e.upwelling);
+    forcing.seaSurface.add(i, lift * e.seaSurface);
+    forcing.fog.set(i, Math.max(forcing.fog.get(i), unit(lift / 400) * e.fog));
+  } else if (wake) forcing.seaSurface.add(i, e.wakeWarming);
   if ((front || wake) && e.storm > 0)
-    forcing.storm[i] = Math.max(forcing.storm[i], stormEnergy(map, field, i));
+    forcing.storm.set(i, Math.max(forcing.storm.get(i), stormEnergy(map, field, i)));
 }
 /**
  * Storms are born on sharp warm fronts, as they cluster along the real warm currents: the
@@ -172,26 +177,30 @@ function moveWaterAt(
  */
 function stormEnergy(map: PhysicalField, field: Field, i: number) {
   let front = 0;
-  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-    if (j >= 0)
-      front = Math.max(front, Math.abs(map.SeaSurfaceAnomaly[i] - map.SeaSurfaceAnomaly[j]));
+  const anomaly = map.SeaSurfaceAnomaly.get(i);
+  for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+    const j = map.mesh.neighbor(i, edge);
+    if (j >= 0) front = Math.max(front, Math.abs(anomaly - map.SeaSurfaceAnomaly.get(j)));
   }
   const sharpness = unit(front / field.definition.parameters.stormFrontGradient),
-    fed = 1 + unit(Math.max(0, map.ExternalHeatForcing[i]) / 200);
+    fed = 1 + unit(Math.max(0, map.ExternalHeatForcing.get(i)) / 200);
   return 1000 * field.definition.effects.storm * sharpness * fed;
 }
 /** Fog settles on the land cells that touch an upwelling band. */
-function settledFog(map: PhysicalField, source: NumericalVector) {
+function settledFog(map: PhysicalField, source: Band) {
   const fog = workingArray(map, "float64", "magic:settled-fog");
   for (let i = 0; i < fog.length; i++) {
-    if (map.WaterKindCodes[i] !== 0) continue;
-    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-      if (j >= 0) fog[i] = Math.max(fog[i], source[j]);
+    if (map.WaterKindCodes.get(i) !== 0) continue;
+    for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+      const j = map.mesh.neighbor(i, edge);
+      if (j >= 0) fog.set(i, Math.max(fog.get(i), source.get(j)));
     }
   }
   return fog;
+}
+function anyNonzero(band: Band) {
+  for (let i = 0; i < band.length; i++) if (band.get(i)) return true;
+  return false;
 }
 /**
  * Pressure moves water. Where a ray shoals it lifts cold deep water: upwelling and a cold
@@ -213,31 +222,32 @@ export function magicOceanFeedback(state: GenerationState) {
   // With no moving system left, one last pass clears whatever an earlier one applied.
   if (
     !fields.length &&
-    !magic.upwelling.some(Boolean) &&
-    !magic.seaSurface.some(Boolean) &&
-    !magic.fog.some(Boolean)
+    !anyNonzero(magic.upwelling) &&
+    !anyNonzero(magic.seaSurface) &&
+    !anyNonzero(magic.fog)
   )
     return;
   const moved = movedWater(map, fields),
     fog = settledFog(map, moved.fog);
   for (let i = 0; i < map.mesh.count; i++) {
-    map.ExternalUpwelling[i] = moved.upwelling[i];
-    map.ExternalSeaSurfaceForcing[i] = moved.seaSurface[i];
-    map.FogForcing[i] = fog[i];
-    map.StormForcing[i] = moved.storm[i];
-    if (map.WaterKindCodes[i] === 1) {
-      map.Upwelling[i] = clamp(
-        round(map.Upwelling[i] + moved.upwelling[i] - magic.upwelling[i]),
-        0,
-        1000
+    const upwelling = moved.upwelling.get(i),
+      seaSurface = moved.seaSurface.get(i);
+    map.ExternalUpwelling.set(i, upwelling);
+    map.ExternalSeaSurfaceForcing.set(i, seaSurface);
+    map.FogForcing.set(i, fog.get(i));
+    map.StormForcing.set(i, moved.storm.get(i));
+    if (map.WaterKindCodes.get(i) === 1) {
+      map.Upwelling.set(
+        i,
+        clamp(round(map.Upwelling.get(i) + upwelling - magic.upwelling.get(i)), 0, 1000)
       );
-      const delta = moved.seaSurface[i] - magic.seaSurface[i];
-      map.SeaSurfaceAnomaly[i] = round(map.SeaSurfaceAnomaly[i] + delta);
-      map.Temperature[i] = clamp(round(map.Temperature[i] + delta), 0, 1000);
+      const delta = seaSurface - magic.seaSurface.get(i);
+      map.SeaSurfaceAnomaly.set(i, round(map.SeaSurfaceAnomaly.get(i) + delta));
+      map.Temperature.set(i, clamp(round(map.Temperature.get(i) + delta), 0, 1000));
     }
-    magic.upwelling[i] = moved.upwelling[i];
-    magic.seaSurface[i] = moved.seaSurface[i];
-    magic.fog[i] = fog[i];
+    magic.upwelling.set(i, upwelling);
+    magic.seaSurface.set(i, seaSurface);
+    magic.fog.set(i, fog.get(i));
   }
   releaseWorking(map, ...Object.values(moved), fog);
 }
@@ -256,36 +266,40 @@ export function magicRockFeedback(state: GenerationState) {
   for (let i = 0; i < map.mesh.count; i++) {
     let delta = 0;
     for (const field of fields)
-      delta += (field.intensity[i] / 1000) * field.definition.effects.rockResistance;
-    map.RockResistance[i] = rockResistance(map.RockResistance[i] + round(delta));
-    if (map.WaterKindCodes[i] !== 1)
+      delta += (field.intensity.get(i) / 1000) * field.definition.effects.rockResistance;
+    map.RockResistance.set(i, rockResistance(map.RockResistance.get(i) + round(delta)));
+    if (map.WaterKindCodes.get(i) !== 1)
       for (const field of conduits) evolveConduit(map, field, i, floor);
   }
 }
 /** An active vein opens a little each epoch; one that has carried its budget seals. */
 function evolveConduit(map: PhysicalField, field: Field, i: number, floor: number) {
-  const intensity = field.intensity[i];
-  if (field.sealed[i] > 0) {
-    map.FractureConductance[i] = Math.min(map.FractureConductance[i], floor);
+  const intensity = field.intensity.get(i);
+  if (field.sealed.get(i) > 0) {
+    map.FractureConductance.set(i, Math.min(map.FractureConductance.get(i), floor));
     return;
   }
   if (intensity < 230) return;
-  if (field.history[i] + intensity >= field.definition.parameters.conduitBudget) {
-    field.sealed[i] = 1;
-    map.FractureConductance[i] = floor;
+  if (field.history.get(i) + intensity >= field.definition.parameters.conduitBudget) {
+    field.sealed.set(i, 1);
+    map.FractureConductance.set(i, floor);
     // The conduit's cores stay in the rock as hardened ore.
     const origin = field.definition.origins.find((entry) => entry.renewal === "conduit-fed"),
       spent = origin && field.stocks[`${origin.id}/spent`],
       held = origin && field.stocks[`${origin.id}/${originStocks(origin)[0].id}`];
     if (spent && held) {
-      spent[i] += held[i];
-      held[i] = 0;
+      spent.add(i, held.get(i));
+      held.set(i, 0);
     }
     return;
   }
-  map.FractureConductance[i] = Math.min(
-    1000,
-    map.FractureConductance[i] + round((field.definition.effects.conduitOpening * intensity) / 1000)
+  map.FractureConductance.set(
+    i,
+    Math.min(
+      1000,
+      map.FractureConductance.get(i) +
+        round((field.definition.effects.conduitOpening * intensity) / 1000)
+    )
   );
 }
 /** The forcing one moving system puts on a shore cell from the sea beside it, or none. */
@@ -295,12 +309,12 @@ function shoreForcing(map: PhysicalField, field: Field, i: number) {
   let pressure = 0,
     wave = 0,
     current = 0;
-  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-    if (j < 0 || map.WaterKindCodes[j] !== 1) continue;
-    pressure = Math.max(pressure, field.intensity[j]);
-    wave = Math.max(wave, map.WaveExposure[j]);
-    current = Math.max(current, map.OceanCurrentStrength[j]);
+  for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+    const j = map.mesh.neighbor(i, edge);
+    if (j < 0 || map.WaterKindCodes.get(j) !== 1) continue;
+    pressure = Math.max(pressure, field.intensity.get(j));
+    wave = Math.max(wave, map.WaveExposure.get(j));
+    current = Math.max(current, map.OceanCurrentStrength.get(j));
   }
   const p = field.definition.parameters;
   if (pressure < p.coastalThreshold) return 0;
@@ -328,25 +342,25 @@ export function magicCoastalFeedback(state: GenerationState, context?: MapProces
     totals = workingArray(map, "float64", "magic:coastal-forcing");
   for (let i = 0; i < map.mesh.count; i++) {
     let total = 0;
-    if (map.WaterKindCodes[i] === 0)
+    if (map.WaterKindCodes.get(i) === 0)
       for (const field of fields) {
         const forcing = shoreForcing(map, field, i);
         if (forcing <= 0) continue;
         total += forcing;
-        field.coastalHistory[i] += forcing;
-        if (field.coastalFirstEpoch[i] < 0) field.coastalFirstEpoch[i] = epoch;
+        field.coastalHistory.add(i, forcing);
+        if (field.coastalFirstEpoch.get(i) < 0) field.coastalFirstEpoch.set(i, epoch);
       }
-    totals[i] = clamp(total, 0, 1000);
+    totals.set(i, clamp(total, 0, 1000));
   }
   // A warded shore holds: its forcing moves to the shore downdrift before it is applied.
   wardCoasts(map, magic, totals);
   for (let i = 0; i < map.mesh.count; i++) {
-    map.ExternalCoastalForcing[i] = clamp(
-      map.ExternalCoastalForcing[i] + totals[i] - magic.coastal[i],
-      0,
-      1000
+    const total = totals.get(i);
+    map.ExternalCoastalForcing.set(
+      i,
+      clamp(map.ExternalCoastalForcing.get(i) + total - magic.coastal.get(i), 0, 1000)
     );
-    magic.coastal[i] = totals[i];
+    magic.coastal.set(i, total);
   }
   releaseWorking(map, totals);
 }
@@ -355,14 +369,14 @@ export function magicCoastalFeedback(state: GenerationState, context?: MapProces
  * subsidence per cell that leaves the small closed basins Salt's dead lakes will read.
  */
 function thawSubsidence(map: PhysicalField, field: Field, i: number, thawed: number) {
-  if (thawed <= 0 || map.IceThickness[i] > 0 || map.WaterKindCodes[i] !== 0) return;
+  if (thawed <= 0 || map.IceThickness.get(i) > 0 || map.WaterKindCodes.get(i) !== 0) return;
   const p = field.definition.parameters,
-    room = p.thawSubsidenceLimit - field.subsided[i];
+    room = p.thawSubsidenceLimit - field.subsided.get(i);
   if (room <= 0) return;
   const metres = Math.min(room, (p.thawSubsidence * thawed) / 1000);
   if (metres <= 0) return;
-  field.subsided[i] += metres;
-  map.BedrockElevation[i] -= units(metres);
+  field.subsided.add(i, metres);
+  map.BedrockElevation.add(i, -units(metres));
   rebuild(map, i);
 }
 /**
@@ -375,14 +389,17 @@ function holdIce(
   field: Field,
   i: number,
   persistence: number,
-  shelf: NumericalVector | undefined
+  shelf: Band | undefined
 ) {
-  const held = unit((field.stored[i] - 300) / 150),
+  const held = unit((field.stored.get(i) - 300) / 150),
     shelved =
-      shelf && map.WaterKindCodes[i] === 1
-        ? unit(shelf[i] / (map.mesh.areas[i] * field.definition.parameters.shelfSaturation))
+      shelf && map.WaterKindCodes.get(i) === 1
+        ? unit(shelf.get(i) / (map.mesh.area(i) * field.definition.parameters.shelfSaturation))
         : 0;
-  map.IcePersistence[i] = Math.max(map.IcePersistence[i], persistence * Math.max(held, shelved));
+  map.IcePersistence.set(
+    i,
+    Math.max(map.IcePersistence.get(i), persistence * Math.max(held, shelved))
+  );
 }
 /**
  * Accumulate history and storage. Stored Aurora charge is what the next epoch's ice
@@ -407,19 +424,18 @@ export function retainMagicHistory(state: GenerationState, context: MapProcessCo
     const shelf = reservoirStock(field, "shelf"),
       p = field.definition.parameters;
     for (let i = 0; i < map.mesh.count; i++) {
-      const value = field.intensity[i],
-        before = field.stored[i];
-      field.history[i] += value;
+      const value = field.intensity.get(i),
+        before = field.stored.get(i);
+      field.history.add(i, value);
       // Only this epoch's own activity is stored; the charge carried in from earlier
       // epochs decays by retention instead of being stored again.
-      field.stored[i] =
-        field.stored[i] * retention.retention +
-        Math.max(0, value - field.stored[i]) * retention.storage;
-      if (value > 0 && field.firstEpoch[i] < 0) field.firstEpoch[i] = index;
-      if (p.thawSubsidence > 0) thawSubsidence(map, field, i, before - field.stored[i]);
+      const stored = before * retention.retention + Math.max(0, value - before) * retention.storage;
+      field.stored.set(i, stored);
+      if (value > 0 && field.firstEpoch.get(i) < 0) field.firstEpoch.set(i, index);
+      if (p.thawSubsidence > 0) thawSubsidence(map, field, i, before - stored);
       if (persistence > 0) holdIce(map, field, i, persistence, shelf);
-      if (i >= map.mesh.contentCount) continue;
-      active += value > 0 ? map.mesh.areas[i] : 0;
+      if (map.mesh.membership(i) !== 1) continue;
+      active += value > 0 ? map.mesh.area(i) : 0;
       maximum = Math.max(maximum, value);
     }
     const budget = magicBudget(field, map),

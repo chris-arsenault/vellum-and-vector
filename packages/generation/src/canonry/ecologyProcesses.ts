@@ -4,6 +4,7 @@ import {
   spatial,
   requireThat,
   ecologyEpochSchema,
+  type Band,
   type MagicSystem,
 } from "@atlas/domain";
 import type { GenerationState, MapProcess, MapProcessContext } from "../process";
@@ -25,7 +26,8 @@ import { generationBindings } from "../generationBindings";
 import { atlasParametersSchema, type AtlasParameters } from "../atlasParameters";
 import type { Epoch } from "@atlas/domain";
 import type { ProcessBehavior } from "../processTraits";
-import { workingArray } from "./physicalNumerics";
+import { workingArray, releaseWorking } from "./physicalNumerics";
+import type { PhysicalField } from "./field";
 
 interface EcologyInput {
   seed: number;
@@ -69,7 +71,7 @@ function magicalEcologyForcing(state: GenerationState, i: number) {
     if (!field.definition.enabled) continue;
     // A charge-holding system acts on the living only through the charge its ice holds,
     // the same gate its cooling and stillness pass.
-    const intensity = (field.intensity[i] / 1000) * heldCharge(map, field, i);
+    const intensity = (field.intensity.get(i) / 1000) * heldCharge(map, field, i);
     for (const effect of ecologicalMagicEffects)
       result[ecologicalMagicEffectBindings[effect]] += intensity * field.definition.effects[effect];
   }
@@ -83,10 +85,10 @@ function forcing(state: GenerationState, input: EcologyInput, context?: MapProce
     return {
       ...magicalEcologyForcing(state, i),
       // Shared fields the magic feedback wrote; absent systems leave them at zero.
-      quickening: map.Quickening[i],
-      stillness: map.Stillness[i],
-      verdure: map.Verdure[i],
-      salting: map.Salting[i],
+      quickening: map.Quickening.get(i),
+      stillness: map.Stillness.get(i),
+      verdure: map.Verdure.get(i),
+      salting: map.Salting.get(i),
       productivity: (input.parameters?.vegetation ?? 1) * ecology.productivity,
       grazing: input.parameters?.grazing ?? 1,
       seasonality: ecology.seasonality,
@@ -110,27 +112,29 @@ function coverAuthority(state: GenerationState) {
     const covers = spatial.pointCoverage(feature.geometry);
     for (let i = 0; i < map.mesh.count; i++) {
       if (!covers(nativePosition(work, i))) continue;
-      woodland[i] = 1;
+      woodland.set(i, 1);
     }
   }
   const fixed = work.fixed.filter(({ binding }) =>
     (ecologyScalars as readonly string[]).includes(binding.native)
   );
   return (i: number) => {
-    if (woodland[i]) {
-      map.TreeCover[i] = Math.max(0.7, map.TreeCover[i]);
-      map.GrassCover[i] = Math.min(0.2, map.GrassCover[i]);
-      map.WetlandCover[i] = Math.min(0.1, map.WetlandCover[i]);
+    if (woodland.get(i)) {
+      map.TreeCover.set(i, Math.max(0.7, map.TreeCover.get(i)));
+      map.GrassCover.set(i, Math.min(0.2, map.GrassCover.get(i)));
+      map.WetlandCover.set(i, Math.min(0.1, map.WetlandCover.get(i)));
     }
-    for (const { binding, values } of fixed)
-      if (Number.isFinite(values[i])) map[binding.native][i] = values[i];
+    for (const { binding, values } of fixed) {
+      const value = values.get(i);
+      if (Number.isFinite(value)) map[binding.native].set(i, value);
+    }
     if (
-      woodland[i] ||
+      woodland.get(i) ||
       fixed.some(
-        ({ binding, values }) => binding.native === "TreeCover" && Number.isFinite(values[i])
+        ({ binding, values }) => binding.native === "TreeCover" && Number.isFinite(values.get(i))
       )
     )
-      authoritativeCanopy(map, i, map.TreeCover[i]);
+      authoritativeCanopy(map, i, map.TreeCover.get(i));
     else updateTreeCover(map, i);
   };
 }
@@ -144,11 +148,11 @@ function initialize(state: GenerationState, seed: number) {
   const map = state.physical!.map;
   initializeEcology(map, seed, state.physical!.inherited);
   for (let i = 0; i < map.mesh.count; i++) {
-    map.EcologySediment[i] = map.SedimentThickness[i] / 1024;
-    map.EcologyVolcanic[i] = map.VolcanicConstructionHistory[i] / 1024;
-    map.EcologyImpact[i] = map.ImpactExcavation[i] / 1024;
-    map.EcologyErosion[i] = erosionHistory(map, i);
-    map.EcologyIce[i] = map.IceThickness[i];
+    map.EcologySediment.set(i, map.SedimentThickness.get(i) / 1024);
+    map.EcologyVolcanic.set(i, map.VolcanicConstructionHistory.get(i) / 1024);
+    map.EcologyImpact.set(i, map.ImpactExcavation.get(i) / 1024);
+    map.EcologyErosion.set(i, erosionHistory(map, i));
+    map.EcologyIce.set(i, map.IceThickness.get(i));
   }
   applyWoodlands(state);
 }
@@ -168,35 +172,36 @@ function present(
     const env = environment(map, i);
     const fire = magic ? unit(magic(i).fire) : 0;
     const stress = presentStress(env);
-    if (fire > 0) map.FireActivity[i] = fire;
+    if (fire > 0) map.FireActivity.set(i, fire);
     if (stress > 0 || fire > 0) presentMortality(map, i, stress, fire, restore);
     normalizeCommunities(map, i);
     updateTreeCover(map, i);
   }
   applyWoodlands(state);
-  for (let i = 0; i < map.mesh.count; i++) map.BiomeCodes[i] = classifyBiome(map, i);
+  for (let i = 0; i < map.mesh.count; i++) map.BiomeCodes.set(i, classifyBiome(map, i));
   composeNativeAuthoring(state.physical!);
 }
 function presentStress(env: ReturnType<typeof environment>) {
   return env.frozen || env.submerged ? 1 : unit((env.temperature - 50) / 15);
 }
 function presentMortality(
-  map: import("./field").PhysicalField,
+  map: PhysicalField,
   i: number,
   stress: number,
   fire: number,
   restore: (i: number) => void
 ) {
-  const previous = livingPlantCarbon(map, i);
+  const previous = livingPlantCarbon(map, i),
+    survival = (1 - stress) * (1 - fire);
   for (const group of plantGroups) {
-    map[group.cover][i] *= (1 - stress) * (1 - fire);
-    if (group.juvenile) map[group.juvenile][i] *= (1 - stress) * (1 - fire);
+    map[group.cover].set(i, map[group.cover].get(i) * survival);
+    if (group.juvenile) map[group.juvenile].set(i, map[group.juvenile].get(i) * survival);
   }
   updateTreeCover(map, i);
   restore(i);
-  map.SoilCarbon[i] += Math.max(0, previous - livingPlantCarbon(map, i)) * (1 - fire);
+  map.SoilCarbon.add(i, Math.max(0, previous - livingPlantCarbon(map, i)) * (1 - fire));
   for (const name of ["Productivity", "Herbivores", "Predators", "Grazers", "Browsers"] as const)
-    map[name][i] *= (1 - stress) * (1 - fire);
+    map[name].set(i, map[name].get(i) * survival);
 }
 function recordEcology(state: GenerationState, context: MapProcessContext) {
   const map = state.physical!.map;
@@ -206,14 +211,15 @@ function recordEcology(state: GenerationState, context: MapProcessContext) {
     grazers = 0,
     browsers = 0,
     predators = 0;
-  for (let i = 0; i < map.mesh.contentCount; i++) {
-    areas[map.BiomeCodes[i]] += map.mesh.contentAreas[i];
-    const area = map.mesh.contentAreas[i];
-    migration += map.MigrationFlux[i] * area;
-    burned += map.FireActivity[i] * area;
-    grazers += map.Grazers[i] * area;
-    browsers += map.Browsers[i] * area;
-    predators += map.Predators[i] * area;
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (map.mesh.membership(i) !== 1) continue;
+    const area = map.mesh.contentArea(i);
+    areas[map.BiomeCodes.get(i)] += area;
+    migration += map.MigrationFlux.get(i) * area;
+    burned += map.FireActivity.get(i) * area;
+    grazers += map.Grazers.get(i) * area;
+    browsers += map.Browsers.get(i) * area;
+    predators += map.Predators.get(i) * area;
   }
   const cover = biomes
     .map((biome, i) => (areas[i] > 0 ? `${biome.name}: ${Math.round(areas[i] / 1e6)} km²` : ""))
@@ -227,17 +233,16 @@ function recordEcology(state: GenerationState, context: MapProcessContext) {
     description: `${duration} years of establishment, competition, cohort growth, migration and disturbance${state.physical!.inherited ? " (inherited ecology is refined without replaying its age)" : ""}. ${cover}. Fire-affected cover ${Math.round(burned / 1e6)} km². Grazers/browsers/predators ${Math.round(grazers)}/${Math.round(browsers)}/${Math.round(predators)} kg C; migrated ${Math.round(migration)} kg C through reachable habitat. Soil and seed banks carry this epoch's ecological consequences forward.`,
   });
 }
-function recordTransitions(
-  state: GenerationState,
-  before: import("@atlas/domain").NumericalVector,
-  context: MapProcessContext
-) {
+function recordTransitions(state: GenerationState, before: Band, context: MapProcessContext) {
   const map = state.physical!.map,
     changes = new Map<string, number>();
-  for (let i = 0; i < map.mesh.contentCount; i++) {
-    if (!before[i] || before[i] === map.BiomeCodes[i]) continue;
-    const change = `${biomes[before[i]].name} → ${biomes[map.BiomeCodes[i]].name}`;
-    changes.set(change, (changes.get(change) ?? 0) + map.mesh.contentAreas[i]);
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (map.mesh.membership(i) !== 1) continue;
+    const was = before.get(i),
+      now = map.BiomeCodes.get(i);
+    if (!was || was === now) continue;
+    const change = `${biomes[was].name} → ${biomes[now].name}`;
+    changes.set(change, (changes.get(change) ?? 0) + map.mesh.contentArea(i));
   }
   if (!changes.size) return;
   context.recordCause({
@@ -249,19 +254,25 @@ function recordTransitions(
       .join("; "),
   });
 }
+/** The first cell whose value fails the predicate, or -1. */
+function firstFailing(band: Band, holds: (value: number) => boolean) {
+  for (let i = 0; i < band.length; i++) if (!holds(band.get(i))) return i;
+  return -1;
+}
 function validate(state: GenerationState, context: MapProcessContext) {
   const map = state.physical!.map;
   for (const name of ecologyScalars) {
-    const invalid = map[name].findIndex((value) => !Number.isFinite(value) || value < 0);
+    const band = map[name],
+      invalid = firstFailing(band, (value) => Number.isFinite(value) && value >= 0);
     requireThat(
       invalid < 0,
       "ecology_field",
-      `Ecology ${name} must remain finite and nonnegative (${context.invocation.join("/")}, cell ${invalid}, value ${map[name][invalid]}).`
+      `Ecology ${name} must remain finite and nonnegative (${context.invocation.join("/")}, cell ${invalid}, value ${invalid < 0 ? 0 : band.get(invalid)}).`
     );
   }
   for (const name of ecologyRatios)
     requireThat(
-      map[name].every((value) => value <= 1.000001),
+      firstFailing(map[name], (value) => value <= 1.000001) < 0,
       "ecology_cover",
       `Ecology ${name} must remain a fraction.`
     );
@@ -347,7 +358,7 @@ function advance(
   applyWoodlands(state);
   const f = forcing(state, input, context);
   const map = state.physical!.map,
-    before = map.BiomeCodes.slice();
+    before = map.coverage.copyBand(map.BiomeCodes);
   // The epoch's drainage is routed by now; carry the wellsprings' warmth down it first.
   riverWarmth(map);
   evolveVegetation(
@@ -360,6 +371,7 @@ function advance(
   applyWoodlands(state);
   accumulateOrganicMatter(map, years, f);
   recordTransitions(state, before, context);
+  releaseWorking(map, before);
 }
 
 /** New elapsed human time is distinct from spatial refinement of completed history. */

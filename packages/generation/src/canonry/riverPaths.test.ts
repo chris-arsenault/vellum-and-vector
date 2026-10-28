@@ -1,14 +1,14 @@
 import { expect, it } from "vitest";
-import { interpolateProfile, lineParts, rectangle, spatial } from "@atlas/domain";
+import { Band, interpolateProfile, lineParts, rectangle, spatial } from "@atlas/domain";
 import { createWorldMesh } from "./worldMesh";
 import { createField } from "./field";
-import { nearestTriangle } from "./mesh";
+import { nearestTriangle, type TriangularLattice } from "./mesh";
 import { createRiverPaths, riverPath } from "./riverPaths";
 
 function network() {
   const map = createField(createWorldMesh([-100_000, -100_000, 100_000, 100_000], 1024, 0));
   const index = (u: number, v: number, inverted: boolean) => {
-    const i = map.mesh.indexes.at(u, v, inverted) ?? -1;
+    const i = (map.mesh as TriangularLattice).addressCell(u, v, inverted);
     expect(i).toBeGreaterThanOrEqual(0);
     return i;
   };
@@ -27,24 +27,24 @@ function network() {
     [branch, 50],
   ] as const)
     channel.forEach((i, station) => {
-      map.RiverOrders[i] = 1;
-      map.FlowAccumulation[i] = discharge + station;
-      map.RiverWidth[i] = 20 + station;
-      map.RiverDepth[i] = 2 + station / 10;
-      map.CatchmentArea[i] = 1_000_000 * (station + 1);
-      map.DrainageElevations[i] = (500 - station) * 1024;
-      map.FlowTargets[i] = channel[station + 1] ?? -1;
+      map.RiverOrders.set(i, 1);
+      map.FlowAccumulation.set(i, discharge + station);
+      map.RiverWidth.set(i, 20 + station);
+      map.RiverDepth.set(i, 2 + station / 10);
+      map.CatchmentArea.set(i, 1_000_000 * (station + 1));
+      map.DrainageElevations.set(i, (500 - station) * 1024);
+      map.FlowTargets.set(i, channel[station + 1] ?? -1);
     });
   // Restore the main-stem junction after the tributary meets it.
-  map.FlowTargets[main[join]] = main[join + 1];
+  map.FlowTargets.set(main[join], main[join + 1]);
   for (let station = join; station < main.length; station++) {
     const i = main[station];
-    map.FlowAccumulation[i] = 300 + station;
-    map.DrainageElevations[i] = (500 - station) * 1024;
+    map.FlowAccumulation.set(i, 300 + station);
+    map.DrainageElevations.set(i, (500 - station) * 1024);
   }
   const mouth = main.at(-1)!;
-  map.WaterKindCodes[mouth] = 1;
-  map.RiverOrders[mouth] = 0;
+  map.WaterKindCodes.set(mouth, 1);
+  map.RiverOrders.set(mouth, 0);
   return { map, main, branch, join, mouth };
 }
 function turns(coordinates: number[][]) {
@@ -70,18 +70,18 @@ it("turns a mouth into shallow water toward the deeper water beside it", () => {
       [a, b] = line.slice(-2);
     return [b[0] - a[0], b[1] - a[1]];
   };
-  map.WaterDepths[mouth] = 0.03 * 1024;
+  map.WaterDepths.set(mouth, 0.03 * 1024);
   const straight = ending();
   // The open water lies beside the mouth, off the river's line of approach.
   let side = -1;
-  for (let edge = 0; edge < map.mesh.degree[mouth]; edge++) {
-    const j = map.mesh.neighbors[mouth * map.mesh.stride + edge];
-    if (j >= 0 && Math.abs(map.mesh.y[j] - map.mesh.y[mouth]) > 1) side = j;
+  for (let edge = 0; edge < map.mesh.degree(mouth); edge++) {
+    const j = map.mesh.neighbor(mouth, edge);
+    if (j >= 0 && Math.abs(map.mesh.y(j) - map.mesh.y(mouth)) > 1) side = j;
   }
-  map.WaterKindCodes[side] = 1;
-  map.WaterDepths[side] = 40 * 1024;
+  map.WaterKindCodes.set(side, 1);
+  map.WaterDepths.set(side, 40 * 1024);
   const turned = ending(),
-    toward = Math.sign(map.mesh.y[side] - map.mesh.y[mouth]),
+    toward = Math.sign(map.mesh.y(side) - map.mesh.y(mouth)),
     lean = ([x, y]: number[]) => (toward * y) / Math.hypot(x, y);
   expect(lean(turned) - lean(straight)).toBeGreaterThan(0.15);
 });
@@ -89,7 +89,7 @@ it("turns a mouth into shallow water toward the deeper water beside it", () => {
 it("removes the repeated 60-degree mesh staircase rather than only inserting vertices", () => {
   const { map, main } = network(),
     paths = createRiverPaths(map);
-  const raw = main.map((i) => [map.mesh.x[i], map.mesh.y[i]]),
+  const raw = main.map((i) => [map.mesh.x(i), map.mesh.y(i)]),
     continuous = riverPath(map, paths, main).geometry.coordinates;
   expect(Math.max(...turns(raw))).toBeCloseTo(Math.PI / 3, 5);
   expect(Math.max(...turns(continuous))).toBeLessThan(Math.PI / 6);
@@ -106,7 +106,7 @@ it("shares a relaxed confluence across reaches while continuing the main-stem ta
     tributary = riverPath(map, paths, branch).geometry.coordinates;
   expect(upstream.at(-1)).toEqual(downstream[0]);
   expect(tributary.at(-1)).toEqual(downstream[0]);
-  expect(downstream[0]).not.toEqual([map.mesh.x[main[join]], map.mesh.y[main[join]]]);
+  expect(downstream[0]).not.toEqual([map.mesh.x(main[join]), map.mesh.y(main[join])]);
   expect(turns([upstream.at(-2)!, downstream[0], downstream[1]])[0]).toBeLessThan(0.2);
 });
 
@@ -118,13 +118,13 @@ it("keeps all channel vertices inside their drainage cells and pins the water ou
     for (const [x, y] of riverPath(map, paths, members).geometry.coordinates)
       expect(allowed.has(nearestTriangle(map.mesh, x, y))).toBe(true);
   }
-  expect(paths.x[mouth]).toBe(map.mesh.x[mouth]);
-  expect(paths.y[mouth]).toBe(map.mesh.y[mouth]);
+  expect(paths.x.get(mouth)).toBe(map.mesh.x(mouth));
+  expect(paths.y.get(mouth)).toBe(map.mesh.y(mouth));
 });
 
 it("carries finite dimensional station profiles without changing the drainage simulation", () => {
   const { map, main } = network(),
-    original = structuredClone(physicalData(map)),
+    original = physicalData(map),
     paths = createRiverPaths(map);
   const result = riverPath(map, paths, main),
     count = result.geometry.coordinates.length;
@@ -132,22 +132,21 @@ it("carries finite dimensional station profiles without changing the drainage si
     expect(values).toHaveLength(count);
     expect(values.every((value) => Number.isFinite(value) && value >= 0)).toBe(true);
   }
-  expect(result.profiles.widths[0]).toBe(map.RiverWidth[main[0]]);
-  expect(result.profiles.discharges.at(-1)).toBe(map.FlowAccumulation[main.at(-1)!]);
+  expect(result.profiles.widths[0]).toBe(map.RiverWidth.get(main[0]));
+  expect(result.profiles.discharges.at(-1)).toBe(map.FlowAccumulation.get(main.at(-1)!));
   expect(result.profiles.elevations.every((z, i, values) => i === 0 || z <= values[i - 1])).toBe(
     true
   );
   expect(physicalData(map)).toEqual(original);
 });
 function physicalData(map: import("./field").PhysicalField) {
-  const { coordU, coordV, coordInverted, indexes } = map.mesh;
-  return {
-    ...map,
-    mesh: {
-      ...map.mesh,
-      indexes: Array.from(coordU, (u, i) => indexes.at(u, coordV[i], !!coordInverted[i])),
-    },
-  };
+  const data: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(map)) {
+    if (value instanceof Band) data[name] = Array.from(value);
+    else if (name !== "coverage" && name !== "mesh" && typeof value !== "function")
+      data[name] = structuredClone(value);
+  }
+  return data;
 }
 
 it("retains dimensional profiles when a curved channel is clipped at a world boundary", () => {
@@ -167,15 +166,15 @@ it("retains dimensional profiles when a curved channel is clipped at a world bou
 it("clips a lake inlet to the published water polygon rather than an independently sampled floor", () => {
   const { map, main, mouth } = network(),
     paths = createRiverPaths(map),
-    x = map.mesh.x[mouth] - map.mesh.spacing / 4,
+    x = map.mesh.x(mouth) - map.mesh.spacing / 4,
     shape = rectangle([
       x,
-      map.mesh.y[mouth] - map.mesh.spacing,
-      map.mesh.x[mouth] + map.mesh.spacing,
-      map.mesh.y[mouth] + map.mesh.spacing,
+      map.mesh.y(mouth) - map.mesh.spacing,
+      map.mesh.x(mouth) + map.mesh.spacing,
+      map.mesh.y(mouth) + map.mesh.spacing,
     ]);
-  map.WaterKindCodes[mouth] = 2;
-  map.WaterBodyIds[mouth] = 7;
+  map.WaterKindCodes.set(mouth, 2);
+  map.WaterBodyIds.set(mouth, 7);
   paths.water = { ocean: null, lakes: new Map([[7, shape]]) };
   const result = riverPath(map, paths, main);
   expect(result.geometry.coordinates.at(-1)![0]).toBeCloseTo(x, 5);

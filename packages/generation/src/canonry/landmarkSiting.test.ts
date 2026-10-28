@@ -33,19 +33,19 @@ function continent() {
   const map = createField(createWorldMesh([0, 0, 2_000_000, 1_000_000], 4096, 0)),
     context = physicalContext(seed, 0, atlasPhysicalProfile());
   for (let i = 0; i < map.mesh.count; i++) {
-    const x = map.mesh.x[i],
-      y = map.mesh.y[i],
+    const x = map.mesh.x(i),
+      y = map.mesh.y(i),
       sea = Math.abs(x) > 900 * km || Math.abs(y) > 400 * km;
     let metres = 300;
     if (Math.abs(x) <= 100 * km) metres = 2500 - (Math.abs(x) / (100 * km)) * 600;
     else if (x > 100 * km) metres = 1200 - ((x - 100 * km) / (800 * km)) * 500 - Math.abs(y) / 4000;
-    map.WaterKindCodes[i] = sea ? 1 : 0;
-    map.Elevation[i] = units(sea ? -500 : metres);
-    map.BedrockElevation[i] = map.Elevation[i];
-    map.CrustThickness[i] = units(4000);
-    map.CrustContinentalFraction[i] = 1000;
-    map.RockResistance[i] = 1000;
-    map.Runoff[i] = sea ? 0 : x > 100 * km ? 800 : 100;
+    map.WaterKindCodes.set(i, sea ? 1 : 0);
+    map.Elevation.set(i, units(sea ? -500 : metres));
+    map.BedrockElevation.set(i, map.Elevation.get(i));
+    map.CrustThickness.set(i, units(4000));
+    map.CrustContinentalFraction.set(i, 1000);
+    map.RockResistance.set(i, 1000);
+    map.Runoff.set(i, sea ? 0 : x > 100 * km ? 800 : 100);
   }
   drainageConditioning(map, context);
   drainageGuidance(map, context);
@@ -53,7 +53,7 @@ function continent() {
   riverNetwork(map, context);
   return map;
 }
-const at = (map: PhysicalField, i: number): Point => [map.mesh.x[i], map.mesh.y[i]];
+const at = (map: PhysicalField, i: number): Point => [map.mesh.x(i), map.mesh.y(i)];
 const entry = (kind: string, ordinal = 0) => ({ ordinal, kind, epoch: 1 });
 
 it("draws a seeded roster of kinds and forming epochs for the shortfall", () => {
@@ -83,8 +83,8 @@ it("sites each kind where its terrain reading says it belongs", () => {
     r = mountain.parameters.baseRadius * km;
   expect(height(map, peak)).toBeLessThanOrEqual(1500);
   expect(relief(map, within(map, peak, r))).toBeLessThanOrEqual(400);
-  expect(Math.abs(map.mesh.x[peak])).toBeGreaterThan(100 * km + r);
-  expect(t.sea[peak]).toBeGreaterThanOrEqual(1.5 * r);
+  expect(Math.abs(map.mesh.x(peak))).toBeGreaterThan(100 * km + r);
+  expect(t.sea.get(peak)).toBeGreaterThanOrEqual(1.5 * r);
   // The summit is set above the local base by the seeded prominence.
   expect(mountain.parameters.summit).toBeGreaterThanOrEqual(
     height(map, peak) + mountain.parameters.prominence - 50
@@ -92,7 +92,7 @@ it("sites each kind where its terrain reading says it belongs", () => {
 
   const falls = siteLandmark(t, entry("falls"), seed, [])!;
   expect(falls).not.toBeNull();
-  expect(map.RiverOrders[falls.site.center]).toBeGreaterThan(0);
+  expect(map.RiverOrders.get(falls.site.center)).toBeGreaterThan(0);
   expect(height(map, falls.site.center)).toBeGreaterThanOrEqual(150);
   expect(falls.parameters.drop).toBeLessThanOrEqual(0.5 * height(map, falls.site.center));
 
@@ -103,7 +103,7 @@ it("sites each kind where its terrain reading says it belongs", () => {
   expect(canyon.site.path).toHaveLength(3);
   expect(distance(map, head, canyon.site.path[2])).toBeGreaterThanOrEqual(37 * km);
   for (const p of canyon.site.path)
-    expect(map.WaterKindCodes[nearestTriangle(map.mesh, ...p)]).toBe(0);
+    expect(map.WaterKindCodes.get(nearestTriangle(map.mesh, ...p))).toBe(0);
   const nearestRiver = Math.min(...t.rivers.map((i) => distance(map, i, at(map, head))));
   expect(nearestRiver).toBeLessThanOrEqual(canyon.parameters.captureDistance * km);
   expect(canyon.parameters.depth).toBeLessThanOrEqual(0.8 * height(map, head) + 1);
@@ -117,13 +117,13 @@ it("sites each kind where its terrain reading says it belongs", () => {
     span = Math.hypot(dx, dy),
     mid: Point = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2],
     side = (sign: number) =>
-      map.Elevation[
+      map.Elevation.get(
         nearestTriangle(
           map.mesh,
           mid[0] + (sign * dy * 3 * w) / span,
           mid[1] - (sign * dx * 3 * w) / span
         )
-      ];
+      );
   // The right-hand side of the drawn line is the lower ground the scarp drops to.
   expect(side(1)).toBeLessThan(side(-1));
   expect(span).toBeGreaterThanOrEqual(37 * km);
@@ -131,7 +131,7 @@ it("sites each kind where its terrain reading says it belongs", () => {
   for (const kind of ["dome-ring", "impact-ring", "resistant-mountain"]) {
     const ring = siteLandmark(t, entry(kind), seed, [])!;
     expect(ring, kind).not.toBeNull();
-    expect(map.WaterKindCodes[ring.site.center]).toBe(0);
+    expect(map.WaterKindCodes.get(ring.site.center)).toBe(0);
   }
 });
 
@@ -158,22 +158,22 @@ const near = (x: number, y: number, cx: number, cy: number, radius: number) =>
   Math.hypot(x - cx, y - cy) < radius;
 /** Deep water off the far coasts, a cold icy range in the middle. */
 function paintSeasAndIce(map: PhysicalField, i: number) {
-  const x = map.mesh.x[i],
-    sea = map.WaterKindCodes[i] === 1;
-  map.WaterDepths[i] = sea ? units(Math.abs(x) > 950 * km ? 3000 : 500) : 0;
-  map.Temperature[i] = Math.abs(x) <= 100 * km ? 250 : 320;
-  map.IceThickness[i] = Math.abs(x) <= 60 * km && !sea ? 300 : 0;
+  const x = map.mesh.x(i),
+    sea = map.WaterKindCodes.get(i) === 1;
+  map.WaterDepths.set(i, sea ? units(Math.abs(x) > 950 * km ? 3000 : 500) : 0);
+  map.Temperature.set(i, Math.abs(x) <= 100 * km ? 250 : 320);
+  map.IceThickness.set(i, Math.abs(x) <= 60 * km && !sea ? 300 : 0);
 }
 /** A hot spot on the western plains, a wet wood on the eastern plateau, a dry basin south. */
 function paintLife(map: PhysicalField, i: number) {
-  const x = map.mesh.x[i],
-    y = map.mesh.y[i],
+  const x = map.mesh.x(i),
+    y = map.mesh.y(i),
     wood = near(x, y, 500 * km, 200 * km, 120 * km),
     basin = near(x, y, 500 * km, -250 * km, 100 * km);
-  map.HeatSourceDensity[i] = near(x, y, -500 * km, 150 * km, 80 * km) ? 900 : 0;
-  map.TreeCover[i] = wood ? 0.8 : 0.1;
-  map.Moisture[i] = wood ? 800 : basin ? 150 : 450;
-  map.LakeMemory[i] = near(x, y, 500 * km, -250 * km, 30 * km) ? 20 : 0;
+  map.HeatSourceDensity.set(i, near(x, y, -500 * km, 150 * km, 80 * km) ? 900 : 0);
+  map.TreeCover.set(i, wood ? 0.8 : 0.1);
+  map.Moisture.set(i, wood ? 800 : basin ? 150 : 450);
+  map.LakeMemory.set(i, near(x, y, 500 * km, -250 * km, 30 * km) ? 20 : 0);
 }
 /** The continent with each system's medium painted somewhere specific. */
 function enchanted() {
@@ -197,7 +197,7 @@ it("still finds a site for every magic kind on a continent with no medium painte
   ]) {
     const found = siteLandmark(t, entry(kind), seed, []);
     expect(found, kind).not.toBeNull();
-    expect(map.WaterKindCodes[found!.site.center]).toBe(kind === "pressure-locus" ? 1 : 0);
+    expect(map.WaterKindCodes.get(found!.site.center)).toBe(kind === "pressure-locus" ? 1 : 0);
   }
 });
 
@@ -207,21 +207,21 @@ it("sites each magic kind in its system's own medium", () => {
     sited = (kind: string) => siteLandmark(t, entry(kind), seed, [])!;
   const wellspring = sited("fire-wellspring");
   expect(wellspring).not.toBeNull();
-  expect(map.HeatSourceDensity[wellspring.site.center]).toBeGreaterThanOrEqual(300);
+  expect(map.HeatSourceDensity.get(wellspring.site.center)).toBeGreaterThanOrEqual(300);
   const vault = sited("aurora-vault");
   expect(vault).not.toBeNull();
-  expect(map.IceThickness[vault.site.center]).toBeGreaterThan(0);
+  expect(map.IceThickness.get(vault.site.center)).toBeGreaterThan(0);
   const locus = sited("pressure-locus");
   expect(locus).not.toBeNull();
-  expect(map.WaterKindCodes[locus.site.center]).toBe(1);
-  expect(map.WaterDepths[locus.site.center]).toBeGreaterThanOrEqual(units(1500));
+  expect(map.WaterKindCodes.get(locus.site.center)).toBe(1);
+  expect(map.WaterDepths.get(locus.site.center)).toBeGreaterThanOrEqual(units(1500));
   const heart = sited("greenwood-heart");
   expect(heart).not.toBeNull();
-  expect(map.TreeCover[heart.site.center]).toBeGreaterThanOrEqual(0.4);
+  expect(map.TreeCover.get(heart.site.center)).toBeGreaterThanOrEqual(0.4);
   const pan = sited("salt-pan");
   expect(pan).not.toBeNull();
-  expect(map.Moisture[pan.site.center]).toBeLessThanOrEqual(400);
-  expect(map.LakeMemory[pan.site.center]).toBeGreaterThan(0);
+  expect(map.Moisture.get(pan.site.center)).toBeLessThanOrEqual(400);
+  expect(map.LakeMemory.get(pan.site.center)).toBeGreaterThan(0);
   for (const found of [wellspring, vault, locus, heart, pan])
     expect(found.parameters.reach * km).toBeGreaterThanOrEqual(map.mesh.spacing);
 });

@@ -21,12 +21,13 @@ export function deathSources(
     brine = field.stocks[`${origin.id}/brine`];
   if (!brine) return;
   for (let i = 0; i < map.mesh.count; i++) {
-    if (map.MassDeath[i] <= 0) continue;
-    const made = map.MassDeath[i] * p.saltPerDeath;
-    map.MassDeath[i] = 0;
+    const dead = map.MassDeath.get(i);
+    if (dead <= 0) continue;
+    const made = dead * p.saltPerDeath;
+    map.MassDeath.set(i, 0);
     if (made <= 0) continue;
-    brine[i] += made;
-    field.source[i] = siteStrength((1000 * made) / map.mesh.areas[i] / p.saltFull);
+    brine.add(i, made);
+    field.source.set(i, siteStrength((1000 * made) / map.mesh.area(i) / p.saltFull));
   }
 }
 /**
@@ -44,19 +45,20 @@ export function deadLakeSources(
     bed = field.stocks[`${origin.id}/bed`];
   if (!bed) return;
   for (let i = 0; i < map.mesh.count; i++) {
-    if (map.LakeMemory[i] <= 0 || map.WaterKindCodes[i] !== 0 || map.IceThickness[i] > 0) continue;
+    const memory = map.LakeMemory.get(i);
+    if (memory <= 0 || map.WaterKindCodes.get(i) !== 0 || map.IceThickness.get(i) > 0) continue;
     // Still a basin: the floor lies below the spill its drainage fills to.
-    if (map.DrainageElevations[i] <= map.Elevation[i]) continue;
-    const made = map.LakeMemory[i] * map.mesh.areas[i] * p.saltPerLakeMetre;
-    map.LakeMemory[i] = 0;
+    if (map.DrainageElevations.get(i) <= map.Elevation.get(i)) continue;
+    const made = memory * map.mesh.area(i) * p.saltPerLakeMetre;
+    map.LakeMemory.set(i, 0);
     if (made <= 0) continue;
-    bed[i] += made;
-    field.source[i] = siteStrength((1000 * made) / map.mesh.areas[i] / p.saltFull);
+    bed.add(i, made);
+    field.source.set(i, siteStrength((1000 * made) / map.mesh.area(i) / p.saltFull));
   }
 }
 /** While a cell is a lake it remembers its depth; the memory outlives the water for Salt to read. */
 export function rememberLakes(map: PhysicalField) {
   for (let i = 0; i < map.mesh.count; i++)
-    if (map.WaterKindCodes[i] === 2)
-      map.LakeMemory[i] = Math.max(map.LakeMemory[i], map.WaterDepths[i] / 1024);
+    if (map.WaterKindCodes.get(i) === 2)
+      map.LakeMemory.set(i, Math.max(map.LakeMemory.get(i), map.WaterDepths.get(i) / 1024));
 }

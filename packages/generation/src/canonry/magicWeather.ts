@@ -13,33 +13,34 @@ export function stormWrites(state: GenerationState) {
   const work = state.physical!,
     map = work.map,
     p = work.profile;
-  if (!map.StormTrack.some(Boolean)) return;
+  if (!map.coverage.reduce(map.StormTrack, (tracked, value) => tracked + (value ? 1 : 0), 0))
+    return;
   for (let i = 0; i < map.mesh.count; i++) {
-    const track = map.StormTrack[i] / 1000;
-    if (track <= 0 || map.WaterKindCodes[i] !== 0) continue;
-    const scour = p.StormScour * track * clamp(map.Slope[i] / 0.05, 0, 1);
-    map.SoilDepth[i] *= 1 - scour;
-    map.SoilWater[i] *= 1 - scour;
+    const track = map.StormTrack.get(i) / 1000;
+    if (track <= 0 || map.WaterKindCodes.get(i) !== 0) continue;
+    const scour = p.StormScour * track * clamp(map.Slope.get(i) / 0.05, 0, 1);
+    map.SoilDepth.set(i, map.SoilDepth.get(i) * (1 - scour));
+    map.SoilWater.set(i, map.SoilWater.get(i) * (1 - scour));
     if (bare(map, i)) driveDunes(map, i, p.DuneMobility * track);
   }
 }
 const bare = (map: PhysicalField, i: number) =>
-  map.TreeCover[i] + map.GrassCover[i] + map.WetlandCover[i] < 0.12;
+  map.TreeCover.get(i) + map.GrassCover.get(i) + map.WetlandCover.get(i) < 0.12;
 /**
  * Sand leaves a bare cell for its downwind neighbour; the sea swallows what reaches it. The
  * sand is sediment the budget already counted when it was first laid down, so the move
  * changes thicknesses and nothing in the produced, deposited and exported totals.
  */
 function driveDunes(map: PhysicalField, i: number, share: number) {
-  const moving = map.SedimentThickness[i] * share;
+  const moving = map.SedimentThickness.get(i) * share;
   if (moving <= 0) return;
-  const target = alignedNeighbor(map, i, map.WindX[i] / 1000, map.WindY[i] / 1000);
+  const target = alignedNeighbor(map, i, map.WindX.get(i) / 1000, map.WindY.get(i) / 1000);
   if (target < 0) return;
-  map.SedimentThickness[i] -= moving;
+  map.SedimentThickness.add(i, -moving);
   rebuild(map, i);
-  if (map.WaterKindCodes[target] === 1) return;
-  const landed = (moving * map.mesh.areas[i]) / map.mesh.areas[target];
-  map.SedimentThickness[target] += landed;
-  map.CumulativeDeposition[target] += landed;
+  if (map.WaterKindCodes.get(target) === 1) return;
+  const landed = (moving * map.mesh.area(i)) / map.mesh.area(target);
+  map.SedimentThickness.add(target, landed);
+  map.CumulativeDeposition.add(target, landed);
   rebuild(map, target);
 }

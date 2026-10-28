@@ -31,10 +31,10 @@ function recordSeats(state: GenerationState, years: number) {
   for (const c of society.region.communities) {
     const cell = cellAt(state, c.position);
     if (cell < 0) continue;
-    if (c.status === "inhabited") map.Tenure[cell] += population(c) * years;
+    if (c.status === "inhabited") map.Tenure.add(cell, population(c) * years);
     const fell = society.dieOff?.get(c.id) ?? 0;
     if (fell <= 0) continue;
-    map.MassDeath[cell] += fell;
+    map.MassDeath.add(cell, fell);
     deaths += fell;
   }
   society.dieOff?.clear();
@@ -51,7 +51,7 @@ function recordEvents(state: GenerationState) {
     recorded.add(event.id);
     const cell = cellAt(state, event.position);
     if (cell < 0) continue;
-    map.MassDeath[cell] += event.casualties;
+    map.MassDeath.add(cell, event.casualties);
     deaths += event.casualties;
   }
   return deaths;
@@ -67,7 +67,7 @@ function walkRoutes(state: GenerationState, years: number) {
       b = positions.get(link.to);
     if (wear <= 0 || !a || !b) continue;
     for (const cell of cellsAlong(state, a, b, map.mesh.spacing / 2))
-      map.WalkedRoute[cell] += wear * years;
+      map.WalkedRoute.add(cell, wear * years);
   }
 }
 /** Years over which an unkept line is forgotten. */
@@ -81,10 +81,10 @@ const keptWorkKinds = new Set(["dam", "irrigation", "harbor", "pass", "weir"]);
 function keepLines(state: GenerationState, years: number) {
   const map = state.physical!.map,
     keep = Math.exp(-years / lineMemory);
-  for (let i = 0; i < map.mesh.count; i++) map.KeptLine[i] *= keep;
+  for (let i = 0; i < map.mesh.count; i++) map.KeptLine.set(i, map.KeptLine.get(i) * keep);
   const keptAt = (p: Pick<Position, "x" | "y">) => {
     const cell = cellAt(state, p);
-    if (cell >= 0) map.KeptLine[cell] += years;
+    if (cell >= 0) map.KeptLine.add(cell, years);
   };
   for (const seat of frontierSeats(state)) keptAt(seat);
   for (const work of state.society!.region.works)

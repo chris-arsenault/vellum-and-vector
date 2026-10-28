@@ -8,7 +8,6 @@ import { Landform as L } from "./codes";
 import { measureSlopes } from "./geography";
 import { physicalSampler } from "./physicalMetric";
 import { workingArray, releaseWorking } from "./physicalNumerics";
-import { radixOrder } from "@atlas/domain";
 
 function shape(
   map: PhysicalField,
@@ -20,16 +19,17 @@ function shape(
     lower = 0,
     highest = -(2 ** 63),
     count = 0;
+  const elevation = map.Elevation.get(i);
   for (let direction = 0; direction < 16; direction++) {
     const angle = (direction * Math.PI) / 8;
     const height = valueAt(
-      map.mesh.x[i] + Math.cos(angle) * radius,
-      map.mesh.y[i] + Math.sin(angle) * radius
+      map.mesh.x(i) + Math.cos(angle) * radius,
+      map.mesh.y(i) + Math.sin(angle) * radius
     );
     if (!Number.isFinite(height)) continue;
     count++;
-    if (height > map.Elevation[i]) higher++;
-    if (height < map.Elevation[i]) lower++;
+    if (height > elevation) higher++;
+    if (height < elevation) lower++;
     highest = Math.max(highest, height);
   }
   return {
@@ -54,8 +54,8 @@ function flanked(
       for (let step = 1; step <= steps; step++) {
         const reach = (p.FjordMaximumHalfWidth * step) / steps,
           height = valueAt(
-            map.mesh.x[i] + Math.cos(angle) * reach,
-            map.mesh.y[i] + Math.sin(angle) * reach
+            map.mesh.x(i) + Math.cos(angle) * reach,
+            map.mesh.y(i) + Math.sin(angle) * reach
           );
         if (height > map.EffectiveSeaLevel) return true;
       }
@@ -71,16 +71,17 @@ function retained(
   i: number,
   valueAt: ReturnType<typeof physicalSampler>
 ): number {
-  const glacial = map.LandformCodes[i];
-  if (map.WaterKindCodes[i] === 1)
+  const glacial = map.LandformCodes.get(i),
+    water = map.WaterKindCodes.get(i);
+  if (water === 1)
     return (glacial === L.UValley ||
       glacial === L.Cirque ||
-      map.CumulativeGlacialErosion[i] >= units(p.FjordMinimumGlacialErosion)) &&
+      map.CumulativeGlacialErosion.get(i) >= units(p.FjordMinimumGlacialErosion)) &&
       flanked(map, p, i, valueAt)
       ? L.Fjord
       : L.Seabed;
   if (glacial === L.UValley || glacial === L.Cirque || glacial === L.Moraine) return glacial;
-  return map.WaterKindCodes[i] === 2 ? L.Basin : 0;
+  return water === 2 ? L.Basin : 0;
 }
 function historical(
   map: PhysicalField,
@@ -88,46 +89,44 @@ function historical(
   i: number,
   s: ReturnType<typeof shape>
 ): number {
-  if (
-    map.ImpactRimUplift[i] >= units(p.ImpactLandformMinimumRimUplift) &&
-    map.ImpactRimUplift[i] * 2 > map.ImpactExcavation[i]
-  )
-    return L.ImpactRim;
-  if (map.ImpactExcavation[i] >= units(p.ImpactLandformMinimumExcavation) && s.higher >= 2)
-    return L.ImpactBasin;
-  return map.CumulativeGlacialDeposition[i] >= units(p.OutwashMinimumGlacialDeposition) &&
-    map.Slope[i] <= p.PlainSlopeThreshold
+  const rim = map.ImpactRimUplift.get(i),
+    excavation = map.ImpactExcavation.get(i);
+  if (rim >= units(p.ImpactLandformMinimumRimUplift) && rim * 2 > excavation) return L.ImpactRim;
+  if (excavation >= units(p.ImpactLandformMinimumExcavation) && s.higher >= 2) return L.ImpactBasin;
+  return map.CumulativeGlacialDeposition.get(i) >= units(p.OutwashMinimumGlacialDeposition) &&
+    map.Slope.get(i) <= p.PlainSlopeThreshold
     ? L.OutwashPlain
     : 0;
 }
 function hasDrop(map: PhysicalField, p: PhysicalProfile, i: number): boolean {
-  const target = map.FlowTargets[i];
+  const target = map.FlowTargets.get(i);
   if (target < 0) return false;
   const distance = Math.hypot(
-    meshDeltaX(map.mesh, map.mesh.x[i] - map.mesh.x[target]),
-    map.mesh.y[i] - map.mesh.y[target]
+    meshDeltaX(map.mesh, map.mesh.x(i) - map.mesh.x(target)),
+    map.mesh.y(i) - map.mesh.y(target)
   );
   return (
-    ((map.Elevation[i] - map.Elevation[target]) / distance) * p.WaterfallEvaluationLength >=
+    ((map.Elevation.get(i) - map.Elevation.get(target)) / distance) * p.WaterfallEvaluationLength >=
     units(p.WaterfallMinimumDrop)
   );
 }
 function waterfall(map: PhysicalField, p: PhysicalProfile, i: number): boolean {
-  if (map.RiverOrders[i] <= 0) return false;
+  const order = map.RiverOrders.get(i);
+  if (order <= 0) return false;
   if (hasDrop(map, p, i)) return true;
-  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-    if (j >= 0 && map.RiverOrders[j] >= map.RiverOrders[i] && hasDrop(map, p, j)) return true;
+  for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+    const j = map.mesh.neighbor(i, edge);
+    if (j >= 0 && map.RiverOrders.get(j) >= order && hasDrop(map, p, j)) return true;
   }
   return false;
 }
 function ridge(map: PhysicalField, p: PhysicalProfile, i: number): boolean {
   return (
-    map.Elevation[i] >= units(p.RidgeElevationThreshold) &&
-    map.Slope[i] >= p.RidgeSlopeThreshold &&
-    (map.RidgeInfluence[i] >= Math.fround(0.26) ||
-      map.Uplift[i] >= Math.fround(0.42) ||
-      map.TectonicActivityHistory[i] >= p.InheritedRidgeActivityThreshold)
+    map.Elevation.get(i) >= units(p.RidgeElevationThreshold) &&
+    map.Slope.get(i) >= p.RidgeSlopeThreshold &&
+    (map.RidgeInfluence.get(i) >= Math.fround(0.26) ||
+      map.Uplift.get(i) >= Math.fround(0.42) ||
+      map.TectonicActivityHistory.get(i) >= p.InheritedRidgeActivityThreshold)
   );
 }
 function valley(
@@ -137,11 +136,11 @@ function valley(
   s: ReturnType<typeof shape>
 ): boolean {
   return (
-    map.RiverOrders[i] > 0 ||
-    map.CumulativeFluvialErosion[i] >= units(p.AncestralValleyMinimumErosion) ||
+    map.RiverOrders.get(i) > 0 ||
+    map.CumulativeFluvialErosion.get(i) >= units(p.AncestralValleyMinimumErosion) ||
     (s.higher >= 2 &&
-      map.Slope[i] > p.PlainSlopeThreshold &&
-      map.FlowAccumulation[i] >= truncate(p.RiverAccumulationThreshold / 3))
+      map.Slope.get(i) > p.PlainSlopeThreshold &&
+      map.FlowAccumulation.get(i) >= truncate(p.RiverAccumulationThreshold / 3))
   );
 }
 function pass(
@@ -151,8 +150,8 @@ function pass(
   s: ReturnType<typeof shape>
 ): number {
   if (
-    map.Elevation[i] >= units(p.RidgeElevationThreshold) &&
-    map.RidgeInfluence[i] >= Math.fround(0.34) &&
+    map.Elevation.get(i) >= units(p.RidgeElevationThreshold) &&
+    map.RidgeInfluence.get(i) >= Math.fround(0.34) &&
     s.higher >= 2 &&
     s.lower >= 1
   )
@@ -169,7 +168,7 @@ function relief(
   if (col) return col;
   if (ridge(map, p, i)) return L.Ridge;
   if (valley(map, p, i, s)) return L.Valley;
-  return map.Slope[i] <= p.PlainSlopeThreshold ? L.Plain : L.Slope;
+  return map.Slope.get(i) <= p.PlainSlopeThreshold ? L.Plain : L.Slope;
 }
 function classify(
   map: PhysicalField,
@@ -184,9 +183,9 @@ function classify(
   if (history !== 0) return history;
   if (waterfall(map, p, i)) return L.Waterfall;
   if (
-    map.RiverOrders[i] > 0 &&
-    map.Slope[i] >= p.GorgeMinimumSlope &&
-    map.CumulativeFluvialErosion[i] >= units(p.GorgeMinimumIncision)
+    map.RiverOrders.get(i) > 0 &&
+    map.Slope.get(i) >= p.GorgeMinimumSlope &&
+    map.CumulativeFluvialErosion.get(i) >= units(p.GorgeMinimumIncision)
   )
     return L.Gorge;
   return relief(map, p, i, s);
@@ -195,13 +194,13 @@ export function landformClassification(map: PhysicalField, c: PhysicalContext) {
   measureSlopes(map);
   const valueAt = physicalSampler(map.mesh, map.Elevation);
   for (let i = 0; i < map.mesh.count; i++)
-    map.LandformCodes[i] = classify(map, c.Profile, i, valueAt);
+    map.LandformCodes.set(i, classify(map, c.Profile, i, valueAt));
   // Summits by topographic prominence, which no fixed sampling radius can measure.
   // A summit outranks glacial classes that persist from earlier ice ages.
   const rise = prominence(map);
   for (let i = 0; i < map.mesh.count; i++)
-    if (rise[i] >= units(c.Profile.PeakMinimumProminence) && map.WaterKindCodes[i] === 0)
-      map.LandformCodes[i] = L.Peak;
+    if (rise.get(i) >= units(c.Profile.PeakMinimumProminence) && map.WaterKindCodes.get(i) === 0)
+      map.LandformCodes.set(i, L.Peak);
   releaseWorking(map, rise);
 }
 /**
@@ -214,35 +213,36 @@ export function prominence(map: PhysicalField) {
     parent = workingArray(map, "int32", "prominence:parent").fill(-1),
     summit = workingArray(map, "int32", "prominence:summit"),
     rise = workingArray(map, "float64", "prominence:rise"),
+    elevation = map.Elevation,
     // Equal heights rank by cell index, so a flat summit has one deterministic top.
     above = (a: number, b: number) =>
-      map.Elevation[a] > map.Elevation[b] || (map.Elevation[a] === map.Elevation[b] && a < b);
+      elevation.get(a) > elevation.get(b) || (elevation.get(a) === elevation.get(b) && a < b);
   const root = (i: number) => {
     let r = i;
-    while (parent[r] !== r) r = parent[r];
-    for (let next = parent[i]; i !== r; i = next, next = parent[i]) parent[i] = r;
+    while (parent.get(r) !== r) r = parent.get(r);
+    for (let next = parent.get(i); i !== r; i = next, next = parent.get(i)) parent.set(i, r);
     return r;
   };
   const join = (cell: number, j: number) => {
     const [a, b] = [root(cell), root(j)];
     if (a === b) return;
-    const [high, low] = above(summit[a], summit[b]) ? [a, b] : [b, a];
-    rise[summit[low]] = map.Elevation[summit[low]] - map.Elevation[cell];
-    parent[low] = high;
+    const [high, low] = above(summit.get(a), summit.get(b)) ? [a, b] : [b, a];
+    rise.set(summit.get(low), elevation.get(summit.get(low)) - elevation.get(cell));
+    parent.set(low, high);
   };
-  const order = radixOrder(map.Elevation, true);
-  for (const cell of order) {
-    if (map.Elevation[cell] <= map.EffectiveSeaLevel) break;
-    parent[cell] = cell;
-    summit[cell] = cell;
-    for (let edge = 0; edge < map.mesh.degree[cell]; edge++) {
-      const j = map.mesh.neighbors[cell * map.mesh.stride + edge];
-      if (j >= 0 && parent[j] >= 0) join(cell, j);
+  // Highest first, streamed over the blocks; the join order is what makes cols correct.
+  for (const cell of map.coverage.order(elevation, true)) {
+    if (elevation.get(cell) <= map.EffectiveSeaLevel) break;
+    parent.set(cell, cell);
+    summit.set(cell, cell);
+    for (let edge = 0; edge < map.mesh.degree(cell); edge++) {
+      const j = map.mesh.neighbor(cell, edge);
+      if (j >= 0 && parent.get(j) >= 0) join(cell, j);
     }
   }
   for (let cell = 0; cell < count; cell++)
-    if (parent[cell] === cell)
-      rise[summit[cell]] = map.Elevation[summit[cell]] - map.EffectiveSeaLevel;
-  releaseWorking(map, parent, summit, order);
+    if (parent.get(cell) === cell)
+      rise.set(summit.get(cell), elevation.get(summit.get(cell)) - map.EffectiveSeaLevel);
+  releaseWorking(map, parent, summit);
   return rise;
 }

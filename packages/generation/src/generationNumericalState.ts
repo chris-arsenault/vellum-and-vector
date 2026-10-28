@@ -1,4 +1,4 @@
-import { isNumericalVector, type GridSurface, type NumericalVector } from "@atlas/domain";
+import { Band, isNumericalVector, type GridSurface, type NumericalVector } from "@atlas/domain";
 import type { GenerationState } from "./process";
 import type { MagicWorkspace } from "./canonry/magicState";
 
@@ -22,24 +22,33 @@ export function generationNumericalState(state: GenerationState) {
   columns(state.society?.urban, result);
   for (const path of state.society?.urban?.paths.values() ?? []) columns(path, result);
   if (!work) return result;
-  columns(work.map, result);
-  columns(work.map.mesh, result);
   columns(work.map.mesh.topology, result);
-  columns(work.map.transportPlan, result);
   columns(work.interpolation, result);
-  for (const fixed of work.fixed) result.add(fixed.values);
-  if (work.magic) magicColumns(work.magic, result);
   return result;
 }
-function magicColumns(magic: MagicWorkspace, result: Set<NumericalVector>) {
-  columns(magic, result);
-  columns(magic.confluences, result);
+function bands(record: object | null | undefined, result: Set<Band>) {
+  for (const value of Object.values(record ?? {})) if (value instanceof Band) result.add(value);
+}
+/** Enumerate the physical coverage's bands reachable from the state. */
+export function generationBands(state: GenerationState) {
+  const result = new Set<Band>(),
+    work = state.physical;
+  if (!work) return result;
+  bands(work.map, result);
+  bands(work.map.transportPlan, result);
+  for (const fixed of work.fixed) result.add(fixed.values);
+  if (work.magic) magicBands(work.magic, result);
+  return result;
+}
+function magicBands(magic: MagicWorkspace, result: Set<Band>) {
+  bands(magic, result);
+  bands(magic.confluences, result);
   for (const field of magic.fields) {
-    columns(field, result);
-    columns(field.originSources, result);
-    columns(field.stocks, result);
-    columns(field.features, result);
-    columns(field.coverage, result);
+    bands(field, result);
+    bands(field.originSources, result);
+    bands(field.stocks, result);
+    bands(field.features, result);
+    bands(field.coverage, result);
   }
-  for (const meeting of Object.values(magic.confluences.states)) columns(meeting, result);
+  for (const meeting of Object.values(magic.confluences.states)) bands(meeting, result);
 }

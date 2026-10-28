@@ -40,12 +40,12 @@ function physicalFeatures(
   caldera: boolean
 ) {
   const p = context.Profile;
-  map.FeatureFlags[i] |=
-    distance <= p.VolcanicConeRadius ? Feature.VolcanicCone : Feature.LavaPlain;
-  if (caldera && distance <= p.VolcanicConeRadius * 0.28)
-    map.FeatureFlags[i] |= Feature.VolcanicCaldera;
-  if (activity >= Math.min(600, Math.trunc((strength * 3) / 4)))
-    map.FeatureFlags[i] |= Feature.MantlePlume;
+  let flags =
+    map.FeatureFlags.get(i) |
+    (distance <= p.VolcanicConeRadius ? Feature.VolcanicCone : Feature.LavaPlain);
+  if (caldera && distance <= p.VolcanicConeRadius * 0.28) flags |= Feature.VolcanicCaldera;
+  if (activity >= Math.min(600, Math.trunc((strength * 3) / 4))) flags |= Feature.MantlePlume;
+  map.FeatureFlags.set(i, flags);
 }
 function constructTriangle(
   map: PhysicalField,
@@ -59,7 +59,7 @@ function constructTriangle(
   const p = context.Profile,
     apron = Math.max(0, 1 - distance / p.MantlePlumeRadius),
     cone = Math.max(0, 1 - distance / p.VolcanicConeRadius);
-  const crust = map.CrustTypeCodes[i] === 2 ? 0.72 : 1;
+  const crust = map.CrustTypeCodes.get(i) === 2 ? 0.72 : 1;
   const uplift = Math.max(
     1,
     units(
@@ -72,22 +72,25 @@ function constructTriangle(
     caldera && distance < radius
       ? units(p.VolcanicCalderaDepth * (1 - (distance / radius) ** 2))
       : 0;
-  map.BedrockElevation[i] = clamp(
-    map.BedrockElevation[i] + uplift - cut,
-    units(-elevationLimit),
-    units(elevationLimit) - map.SedimentThickness[i]
+  map.BedrockElevation.set(
+    i,
+    clamp(
+      map.BedrockElevation.get(i) + uplift - cut,
+      units(-elevationLimit),
+      units(elevationLimit) - map.SedimentThickness.get(i)
+    )
   );
-  map.SurfaceRockLoad[i] += uplift - cut;
-  map.VolcanicConstructionHistory[i] += uplift;
+  map.SurfaceRockLoad.add(i, uplift - cut);
+  map.VolcanicConstructionHistory.add(i, uplift);
   rebuild(map, i);
   const activity = round(strength * apron);
-  map.VolcanicActivity[i] = Math.max(map.VolcanicActivity[i], activity);
-  if (activity >= Math.trunc(strength / 4)) map.VolcanicLastActiveEpoch[i] = recordedEpoch;
-  map.FractureConductance[i] = Math.max(
-    map.FractureConductance[i],
-    Math.trunc((activity * 7) / 10)
+  map.VolcanicActivity.set(i, Math.max(map.VolcanicActivity.get(i), activity));
+  if (activity >= Math.trunc(strength / 4)) map.VolcanicLastActiveEpoch.set(i, recordedEpoch);
+  map.FractureConductance.set(
+    i,
+    Math.max(map.FractureConductance.get(i), Math.trunc((activity * 7) / 10))
   );
-  map.Uplift[i] = Math.max(map.Uplift[i], clamp(cone, 0, 1));
+  map.Uplift.set(i, Math.max(map.Uplift.get(i), clamp(cone, 0, 1)));
   physicalFeatures(map, context, i, distance, activity, strength, caldera);
 }
 export function volcanicConstruction(map: PhysicalField, context: PhysicalContext) {
@@ -98,7 +101,8 @@ export function volcanicConstruction(map: PhysicalField, context: PhysicalContex
     (context.IsEvolutionEpoch
       ? 0
       : Feature.VolcanicCone | Feature.VolcanicCaldera | Feature.LavaPlain);
-  for (let i = 0; i < map.mesh.count; i++) map.FeatureFlags[i] &= ~clear;
+  for (let i = 0; i < map.mesh.count; i++)
+    map.FeatureFlags.set(i, map.FeatureFlags.get(i) & ~clear);
   const sequence = context.IsEvolutionEpoch ? context.EpochIndex + 1 : 0,
     recorded = context.IsEvolutionEpoch ? context.EpochIndex : 0;
   for (const root of map.events.filter((event) => event.kind === "plume")) {
@@ -120,8 +124,8 @@ export function volcanicConstruction(map: PhysicalField, context: PhysicalContex
     });
     for (let i = 0; i < map.mesh.count; i++) {
       const distance = Math.hypot(
-        meshDeltaX(map.mesh, map.mesh.x[i] - center[0]),
-        map.mesh.y[i] - center[1]
+        meshDeltaX(map.mesh, map.mesh.x(i) - center[0]),
+        map.mesh.y(i) - center[1]
       );
       if (distance <= context.Profile.MantlePlumeRadius)
         constructTriangle(map, context, i, distance, strength, recorded, caldera);

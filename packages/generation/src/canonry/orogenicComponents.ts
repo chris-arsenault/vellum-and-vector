@@ -5,7 +5,7 @@ import { round, toUnits } from "./math";
 import { hashUnit } from "./noise";
 import { metricSearch } from "./metricSearch";
 import { meshDeltaX, meshPointX } from "./mesh";
-import { CellQueue, type NumericalVector } from "@atlas/domain";
+import { CellQueue, type Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
 export interface BoundaryComponent {
@@ -26,47 +26,49 @@ export interface BoundaryComponent {
   y: number;
 }
 export interface OrogenicFrame {
-  distance: NumericalVector;
-  source: NumericalVector;
+  distance: Band;
+  source: Band;
   // +1 on the belt's hinterland, −1 on its foreland (see assignSides).
-  side: NumericalVector;
+  side: Band;
 }
 const active = (map: PhysicalField, i: number, minimum: number) =>
-  map.TectonicBoundaryCodes[i] !== 0 && map.TectonicStrain[i] >= minimum;
+  map.TectonicBoundaryCodes.get(i) !== 0 && map.TectonicStrain.get(i) >= minimum;
 function addCell(c: BoundaryComponent, map: PhysicalField, i: number, origin: number) {
+  const area = map.mesh.area(i),
+    fraction = map.CrustContinentalFraction.get(i);
   c.count++;
-  c.area += map.mesh.areas[i];
-  c.collision += map.CrustCollisionIntensity[i] * map.mesh.areas[i];
-  c.suture += map.CrustSutureStrength[i] * map.mesh.areas[i];
-  c.strain += map.TectonicStrain[i] * map.mesh.areas[i];
-  c.continental += map.CrustContinentalFraction[i] * map.mesh.areas[i];
-  c.maximumContinental = Math.max(c.maximumContinental, map.CrustContinentalFraction[i] / 1000);
-  c.shortening += toUnits(map.ConvergentCrustSurplus[i]) * map.mesh.areas[i];
-  c.x += (origin + meshDeltaX(map.mesh, map.mesh.x[i] - origin)) * map.mesh.areas[i];
-  c.y += map.mesh.y[i] * map.mesh.areas[i];
+  c.area += area;
+  c.collision += map.CrustCollisionIntensity.get(i) * area;
+  c.suture += map.CrustSutureStrength.get(i) * area;
+  c.strain += map.TectonicStrain.get(i) * area;
+  c.continental += fraction * area;
+  c.maximumContinental = Math.max(c.maximumContinental, fraction / 1000);
+  c.shortening += toUnits(map.ConvergentCrustSurplus.get(i)) * area;
+  c.x += (origin + meshDeltaX(map.mesh, map.mesh.x(i) - origin)) * area;
+  c.y += map.mesh.y(i) * area;
 }
 function floodComponent(
   map: PhysicalField,
   context: PhysicalContext,
-  ids: NumericalVector,
+  ids: Band,
   component: BoundaryComponent,
   start: number
 ) {
   const queue = new CellQueue();
   queue.push(start);
   for (let i = queue.shift(); i >= 0; i = queue.shift()) {
-    addCell(component, map, i, map.mesh.x[start]);
-    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
+    addCell(component, map, i, map.mesh.x(start));
+    for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+      const j = map.mesh.neighbor(i, edge);
       if (
         j < 0 ||
-        ids[j] >= 0 ||
-        map.TectonicBoundaryCodes[j] !== component.code ||
-        map.TectonicBoundaryPairIds[j] !== component.pair ||
+        ids.get(j) >= 0 ||
+        map.TectonicBoundaryCodes.get(j) !== component.code ||
+        map.TectonicBoundaryPairIds.get(j) !== component.pair ||
         !active(map, j, context.Profile.OrogenicMinimumStrain)
       )
         continue;
-      ids[j] = component.id;
+      ids.set(j, component.id);
       queue.push(j);
     }
   }
@@ -80,15 +82,15 @@ function floodComponent(
 export function discoverComponents(
   map: PhysicalField,
   context: PhysicalContext,
-  ids: NumericalVector
+  ids: Band
 ): BoundaryComponent[] {
   const components: BoundaryComponent[] = [];
   for (let i = 0; i < map.mesh.count; i++) {
-    if (ids[i] >= 0 || !active(map, i, context.Profile.OrogenicMinimumStrain)) continue;
+    if (ids.get(i) >= 0 || !active(map, i, context.Profile.OrogenicMinimumStrain)) continue;
     const component: BoundaryComponent = {
       id: components.length,
-      code: map.TectonicBoundaryCodes[i],
-      pair: map.TectonicBoundaryPairIds[i],
+      code: map.TectonicBoundaryCodes.get(i),
+      pair: map.TectonicBoundaryPairIds.get(i),
       prominence: 0,
       count: 0,
       area: 0,
@@ -103,7 +105,7 @@ export function discoverComponents(
       y: 0,
     };
     components.push(component);
-    ids[i] = component.id;
+    ids.set(i, component.id);
     floodComponent(map, context, ids, component, i);
   }
   return components;
@@ -139,15 +141,15 @@ export function rankComponents(components: BoundaryComponent[], context: Physica
 }
 /** Signed across-strike offset (metres) of a cell from its source boundary cell. */
 function acrossStrike(map: PhysicalField, i: number, source: number): number {
-  let tx = map.TectonicTangentX[source] / 1000,
-    ty = map.TectonicTangentY[source] / 1000;
+  let tx = map.TectonicTangentX.get(source) / 1000,
+    ty = map.TectonicTangentY.get(source) / 1000;
   if (Math.abs(tx) + Math.abs(ty) < 0.01) {
     tx = 1;
     ty = 0;
   }
   return (
-    -meshDeltaX(map.mesh, map.mesh.x[i] - map.mesh.x[source]) * ty +
-    (map.mesh.y[i] - map.mesh.y[source]) * tx
+    -meshDeltaX(map.mesh, map.mesh.x(i) - map.mesh.x(source)) * ty +
+    (map.mesh.y(i) - map.mesh.y(source)) * tx
   );
 }
 /**
@@ -158,50 +160,53 @@ function acrossStrike(map: PhysicalField, i: number, source: number): number {
 function assignSides(
   map: PhysicalField,
   components: BoundaryComponent[],
-  source: NumericalVector,
-  side: NumericalVector
+  source: Band,
+  side: Band
 ) {
-  const mass = workingArray(map, "float64", "orogeny:mass", components.length);
+  const mass = new Float64Array(components.length);
   for (let i = 0; i < map.mesh.count; i++) {
-    const id = map.OrogenicComponentIds[i];
-    if (id < 0 || source[i] < 0) continue;
-    const offset = acrossStrike(map, i, source[i]);
+    const id = map.OrogenicComponentIds.get(i),
+      from = source.get(i);
+    if (id < 0 || from < 0) continue;
+    const offset = acrossStrike(map, i, from);
     if (offset !== 0)
-      mass[id] += Math.sign(offset) * (map.CrustContinentalFraction[i] / 1000) * map.mesh.areas[i];
+      mass[id] +=
+        Math.sign(offset) * (map.CrustContinentalFraction.get(i) / 1000) * map.mesh.area(i);
   }
   for (let i = 0; i < map.mesh.count; i++) {
-    const id = map.OrogenicComponentIds[i];
-    if (id < 0 || source[i] < 0) continue;
-    const offset = acrossStrike(map, i, source[i]);
-    side[i] = offset === 0 ? 1 : Math.sign(offset) * (mass[id] < 0 ? -1 : 1);
+    const id = map.OrogenicComponentIds.get(i),
+      from = source.get(i);
+    if (id < 0 || from < 0) continue;
+    const offset = acrossStrike(map, i, from);
+    side.set(i, offset === 0 ? 1 : Math.sign(offset) * (mass[id] < 0 ? -1 : 1));
   }
-  releaseWorking(map, mass);
 }
 export function propagateInfluence(
   map: PhysicalField,
   context: PhysicalContext,
   components: BoundaryComponent[],
-  ids: NumericalVector
+  ids: Band
 ): OrogenicFrame {
   const distance = workingArray(map, "float64", "orogeny:distance").fill(Infinity),
     source = workingArray(map, "int32", "orogeny:source").fill(-1),
     side = workingArray(map, "float64", "orogeny:side");
   function* seeds() {
     for (let i = 0; i < ids.length; i++) {
-      const id = ids[i];
+      const id = ids.get(i);
       if (id < 0 || components[id].area < context.Profile.OrogenicMinimumComponentArea) continue;
-      map.OrogenicComponentIds[i] = id;
-      map.OrogenicSystemProminence[i] = components[id].prominence;
-      distance[i] = 0;
-      source[i] = i;
+      map.OrogenicComponentIds.set(i, id);
+      map.OrogenicSystemProminence.set(i, components[id].prominence);
+      distance.set(i, 0);
+      source.set(i, i);
       yield i;
     }
   }
   metricSearch(map.mesh, seeds(), distance, context.Profile.OrogenicInfluenceReach, (j, i) => {
-    source[j] = source[i];
-    map.OrogenicComponentIds[j] = map.OrogenicComponentIds[i];
-    map.OrogenicSystemProminence[j] = map.OrogenicSystemProminence[i];
+    source.set(j, source.get(i));
+    map.OrogenicComponentIds.set(j, map.OrogenicComponentIds.get(i));
+    map.OrogenicSystemProminence.set(j, map.OrogenicSystemProminence.get(i));
   });
   assignSides(map, components, source, side);
+  releaseWorking(map);
   return { distance, source, side };
 }

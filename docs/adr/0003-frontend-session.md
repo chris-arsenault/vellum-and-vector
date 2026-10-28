@@ -63,10 +63,13 @@ importer so existing explicit saves remain readable.
 
 Each generation worker receives configuration and a workspace connection. It resolves
 scoped geography and opens immutable field resources directly. Processes share a private
-working map and report stage progress. Numerical vectors are native typed arrays while
-the worker's resident budget holds; the arena pages to worker-owned scratch only beyond
-it, and owns process lifetimes, release and retention either way. No indirection sits
-on the sample path. Canonical feature inputs arrive in revision-pinned pages. The
+working map and report stage progress. The physical world is a coverage of typed bands
+over a block-major lattice: a band is blocks of one native typed-array type, a read is
+two indexings, and a block cache keeps blocks resident within the worker's budget and
+spills them to worker-owned scratch beyond it, owning process lifetimes, release and
+retention either way (`docs/WORLD-COVERAGE-DESIGN.md`). The surface grid's channels are
+native typed arrays within the same budget through the numerical arena. No indirection
+sits on the sample path. Canonical feature inputs arrive in revision-pinned pages. The
 catalog worker serves the editor's own requests ahead of queued generation and render
 traffic, so publication batches never delay a scene read. Private SQLite tables keep the source baseline separate from generated features,
 network reaches and junctions. Processes read detached domain values and explicitly write

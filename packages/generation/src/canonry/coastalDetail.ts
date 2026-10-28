@@ -28,8 +28,8 @@ function coastalNoise(
   i: number,
   ch: ReturnType<typeof character>
 ) {
-  const x = map.mesh.x[i],
-    y = map.mesh.y[i],
+  const x = map.mesh.x(i),
+    y = map.mesh.y(i),
     scale = Math.max(1, ch.scale * 1.7);
   const wx = fractalNoise(map.mesh, x, y, c.Seed ^ 0x51a3, scale, 3) * ch.warp;
   const wy = fractalNoise(map.mesh, x + 917_000, y - 431_000, c.Seed ^ 0x51a3, scale, 3) * ch.warp;
@@ -40,18 +40,21 @@ export function coastalDetail(map: PhysicalField, c: PhysicalContext) {
   const band = units(c.Profile.CoastalDetailBand);
   if (band <= 0 || c.Profile.CoastalDetailStrength <= 0) return;
   for (let i = 0; i < map.mesh.count; i++) {
-    const height = map.Elevation[i] - map.EffectiveSeaLevel;
+    const height = map.Elevation.get(i) - map.EffectiveSeaLevel;
     if (Math.abs(height) > band) continue;
-    const ch = character(c.Profile, map.MarginCodes[i]);
+    const ch = character(c.Profile, map.MarginCodes.get(i));
     if (ch.amplitude <= 0) continue;
     const proximity = 1 - Math.abs(height) / band;
     const displacement = coastalNoise(map, c, i, ch) * ch.amplitude * proximity * proximity;
     const delta = units((displacement * c.Profile.CoastalDetailStrength) / 1000);
     if (delta === 0) continue;
-    map.BedrockElevation[i] = clamp(
-      map.BedrockElevation[i] + delta,
-      units(-elevationLimit),
-      units(elevationLimit) - map.SedimentThickness[i]
+    map.BedrockElevation.set(
+      i,
+      clamp(
+        map.BedrockElevation.get(i) + delta,
+        units(-elevationLimit),
+        units(elevationLimit) - map.SedimentThickness.get(i)
+      )
     );
     rebuild(map, i);
   }

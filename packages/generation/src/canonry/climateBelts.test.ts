@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import type { Band } from "@atlas/domain";
 import { createWorldMesh } from "./worldMesh";
 import { createField } from "./field";
 import { atlasPhysicalProfile } from "./atlasProfile";
@@ -27,19 +28,21 @@ it.each([
   (south, north) => {
     const { map, context } = flatWorld(south, north);
     temperature(map, context);
-    const cells = Array.from({ length: map.mesh.contentCount }, (_, i) => i);
+    const cells = Array.from({ length: map.mesh.count }, (_, i) => i).filter(
+      (i) => map.mesh.membership(i) === 1
+    );
     const equatorward = cells.reduce((best, i) =>
-      map.Temperature[i] > map.Temperature[best] ? i : best
+      map.Temperature.get(i) > map.Temperature.get(best) ? i : best
     );
     const poleward = cells.reduce((best, i) =>
-      map.Temperature[i] < map.Temperature[best] ? i : best
+      map.Temperature.get(i) < map.Temperature.get(best) ? i : best
     );
-    expect(map.Temperature[equatorward] - map.Temperature[poleward]).toBeGreaterThan(100);
+    expect(map.Temperature.get(equatorward) - map.Temperature.get(poleward)).toBeGreaterThan(100);
     if (south === -north) {
-      const lower = cells.filter((i) => map.mesh.y[i] < -200_000);
-      const upper = cells.filter((i) => map.mesh.y[i] > 200_000);
+      const lower = cells.filter((i) => map.mesh.y(i) < -200_000);
+      const upper = cells.filter((i) => map.mesh.y(i) > 200_000);
       const mean = (indices: number[]) =>
-        indices.reduce((sum, i) => sum + map.Temperature[i], 0) / indices.length;
+        indices.reduce((sum, i) => sum + map.Temperature.get(i), 0) / indices.length;
       expect(mean(lower)).toBeCloseTo(mean(upper), 0);
     }
   }
@@ -50,20 +53,21 @@ function rainfall(rainfall: number) {
   context.Profile = atlasPhysicalProfile({ rainfall, latitudeProjection: 0 });
   context.Profile.CirculationWander = 0;
   for (let i = 0; i < map.mesh.count; i++) {
-    const ocean = map.mesh.x[i] < -100_000;
-    map.WaterKindCodes[i] = ocean ? 1 : 0;
-    map.WaterDepths[i] = ocean ? units(1000) : 0;
-    map.Elevation[i] = units(ocean ? -1000 : 100);
-    map.Temperature[i] = 450;
+    const ocean = map.mesh.x(i) < -100_000;
+    map.WaterKindCodes.set(i, ocean ? 1 : 0);
+    map.WaterDepths.set(i, ocean ? units(1000) : 0);
+    map.Elevation.set(i, units(ocean ? -1000 : 100));
+    map.Temperature.set(i, 450);
   }
   atmosphericFlow(map, context);
   moisture(map, context);
   precipitation(map, context);
   runoff(map, context);
-  const total = (values: ArrayLike<number>) => {
+  const total = (values: Band) => {
     let sum = 0;
-    for (let i = 0; i < map.mesh.contentCount; i++)
-      if (map.WaterKindCodes[i] === 0) sum += values[i] * map.mesh.contentAreas[i];
+    for (let i = 0; i < map.mesh.count; i++)
+      if (map.mesh.membership(i) === 1 && map.WaterKindCodes.get(i) === 0)
+        sum += values.get(i) * map.mesh.contentArea(i);
     return sum;
   };
   return { rain: total(map.Rainfall) + total(map.Snowfall), runoff: total(map.Runoff) };

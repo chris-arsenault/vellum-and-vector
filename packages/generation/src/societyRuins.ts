@@ -57,5 +57,7 @@ function drownedShoal(state: GenerationState, i: number) {
   const physical = state.physical;
   if (!physical || societyValue(state, "water", i) !== 1) return false;
   const cell = physical.samples[i];
-  return cell !== undefined && cell >= 0 && (physical.map.FeatureFlags[cell] & Feature.Shoal) !== 0;
+  return (
+    cell !== undefined && cell >= 0 && (physical.map.FeatureFlags.get(cell) & Feature.Shoal) !== 0
+  );
 }

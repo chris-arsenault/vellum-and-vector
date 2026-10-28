@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import type { Band } from "@atlas/domain";
 import { createField } from "./field";
 import { createWorldMesh } from "./worldMesh";
 import { atlasPhysicalProfile } from "./atlasProfile";
@@ -17,15 +18,16 @@ function fixture() {
 it("keeps nearby geological points together across a cell motion boundary", () => {
   const { map, context } = fixture(),
     mesh = map.mesh;
-  for (let i = 0; i < mesh.count; i++) map.CrustMotionX[i] = mesh.x[i] < 0 ? 1000 : -1000;
-  const i = Array.from(mesh.x.keys()).find(
-      (i) =>
-        mesh.x[i] < 0 &&
-        Array.from(mesh.neighbors.slice(i * 3, i * 3 + 3)).some((j) => j >= 0 && mesh.x[j] > 0)
-    )!,
-    j = Array.from(mesh.neighbors.slice(i * 3, i * 3 + 3)).find((j) => j >= 0 && mesh.x[j] > 0)!,
-    x = (mesh.x[i] + mesh.x[j]) / 2,
-    y = (mesh.y[i] + mesh.y[j]) / 2;
+  for (let i = 0; i < mesh.count; i++) map.CrustMotionX.set(i, mesh.x(i) < 0 ? 1000 : -1000);
+  const neighborsOf = (i: number) =>
+    Array.from({ length: mesh.degree(i) }, (_, e) => mesh.neighbor(i, e));
+  const eastOf = (i: number) => neighborsOf(i).find((j) => j >= 0 && mesh.x(j) > 0);
+  let i = -1;
+  for (let c = 0; c < mesh.count && i < 0; c++)
+    if (mesh.membership(c) !== 0 && mesh.x(c) < 0 && eastOf(c) !== undefined) i = c;
+  const j = eastOf(i)!,
+    x = (mesh.x(i) + mesh.x(j)) / 2,
+    y = (mesh.y(i) + mesh.y(j)) / 2;
   map.events = [-0.01, 0.01].map((offset, index) => ({
     id: `impact:${index}`,
     kind: "impact" as const,
@@ -45,7 +47,8 @@ it("keeps nearby geological points together across a cell motion boundary", () =
 it("follows continuous deformation along a long fault and preserves identity and stationary plumes", () => {
   const { map, context } = fixture(),
     mesh = map.mesh;
-  map.CrustMotionY.set(Float64Array.from(mesh.x, (x) => Math.round(800 * Math.sin(x / 20_000))));
+  for (let i = 0; i < mesh.count; i++)
+    map.CrustMotionY.set(i, Math.round(800 * Math.sin(mesh.x(i) / 20_000)));
   map.faults.push({
     id: "fault:test",
     width: 1000,
@@ -83,20 +86,20 @@ function unequalBlocks(samples: number) {
   const mesh = map.mesh;
   map.CrustThickness.fill(1000 * 1024);
   for (let i = 0; i < mesh.count; i++) {
-    const x = mesh.x[i],
-      y = mesh.y[i];
+    const x = mesh.x(i),
+      y = mesh.y(i);
     if (Math.abs(x) > 60000 || Math.abs(y) > 40000) continue;
     const block = x < 0 ? 1 : x < 15000 ? 2 : 3;
-    map.CrustAssemblyIds[i] = block;
-    map.CrustContinentalFraction[i] = 1000;
-    map.CrustThickness[i] = 4000 * 1024;
-    map.CrustSuturePairIds[i] = (block << 16) | (block + 1);
-    map.CrustSutureStrength[i] = block * 100;
-    map.SedimentThickness[i] = block * 1024;
-    map.CumulativeFluvialErosion[i] = block * 2048;
-    map.MaximumIceThickness[i] = block * 500;
-    map.CrustMotionX[i] = block === 1 ? 500 : -500;
-    map.CrustMotionY[i] = block === 2 ? 500 : 0;
+    map.CrustAssemblyIds.set(i, block);
+    map.CrustContinentalFraction.set(i, 1000);
+    map.CrustThickness.set(i, 4000 * 1024);
+    map.CrustSuturePairIds.set(i, (block << 16) | (block + 1));
+    map.CrustSutureStrength.set(i, block * 100);
+    map.SedimentThickness.set(i, block * 1024);
+    map.CumulativeFluvialErosion.set(i, block * 2048);
+    map.MaximumIceThickness.set(i, block * 500);
+    map.CrustMotionX.set(i, block === 1 ? 500 : -500);
+    map.CrustMotionY.set(i, block === 2 ? 500 : 0);
   }
   return map;
 }
@@ -104,29 +107,35 @@ function unequalBlocks(samples: number) {
 it.each([1024, 4096])("carries a narrow block beside larger blocks at %s samples", (samples) => {
   const map = unequalBlocks(samples),
     mesh = map.mesh;
-  const integral = (values: import("@atlas/domain").NumericalVector) =>
-    values.reduce((sum, value, i) => sum + value * mesh.areas[i], 0);
+  const integral = (values: Band) =>
+    map.coverage.reduce(values, (sum, value, i) => sum + value * mesh.area(i), 0);
+  const distinct = (band: Band) => {
+    const values = new Set<number>();
+    for (let i = 0; i < mesh.count; i++) if (mesh.membership(i) !== 0) values.add(band.get(i));
+    return values;
+  };
   const sediment = integral(map.SedimentThickness);
   const erosion = integral(map.CumulativeFluvialErosion);
   const plan = buildTransportPlan(map, 5000);
   transportHistory(map, plan);
   expect(Math.abs(integral(map.SedimentThickness) - sediment) / sediment).toBeLessThan(1e-11);
   expect(Math.abs(integral(map.CumulativeFluvialErosion) - erosion) / erosion).toBeLessThan(1e-11);
-  expect(new Set(map.CrustAssemblyIds)).toEqual(new Set([0, 1, 2, 3]));
+  expect(distinct(map.CrustAssemblyIds)).toEqual(new Set([0, 1, 2, 3]));
   const pairs = new Set([0, 65538, 131075, 196612]);
-  expect(new Set(map.CrustSuturePairIds)).toEqual(pairs);
+  expect(distinct(map.CrustSuturePairIds)).toEqual(pairs);
   let narrowInterior = 0;
   for (let i = 0; i < mesh.count; i++) {
-    expect(map.MaximumIceThickness[i]).toBeLessThanOrEqual(1500);
-    const block = map.CrustAssemblyIds[i];
+    if (mesh.membership(i) === 0) continue;
+    expect(map.MaximumIceThickness.get(i)).toBeLessThanOrEqual(1500);
+    const block = map.CrustAssemblyIds.get(i);
     if (block > 0) {
       // Edge cells mix with the surrounding oceanic material. Sutures retain their
       // own provenance rather than becoming a label of the winning assembly.
-      expect(map.CrustContinentalFraction[i]).toBeGreaterThan(0);
-      expect(map.CrustContinentalFraction[i]).toBeLessThanOrEqual(1000);
-      expect(pairs.has(map.CrustSuturePairIds[i])).toBe(true);
-      expect(map.CrustSutureStrength[i]).toBeGreaterThanOrEqual(0);
-      if (block === 2 && map.CrustContinentalFraction[i] === 1000) narrowInterior++;
+      expect(map.CrustContinentalFraction.get(i)).toBeGreaterThan(0);
+      expect(map.CrustContinentalFraction.get(i)).toBeLessThanOrEqual(1000);
+      expect(pairs.has(map.CrustSuturePairIds.get(i))).toBe(true);
+      expect(map.CrustSutureStrength.get(i)).toBeGreaterThanOrEqual(0);
+      if (block === 2 && map.CrustContinentalFraction.get(i) === 1000) narrowInterior++;
     }
   }
   expect(narrowInterior).toBeGreaterThan(0);
@@ -164,7 +173,8 @@ it("keeps a cap-edge fault on its cylindrical longitudes during northward motion
 
 it("compresses a fault through a converging velocity field without numerically folding it", () => {
   const map = createField(createWorldMesh([0, 0, 400_000, 200_000], 1024, 0));
-  for (let i = 0; i < map.mesh.count; i++) map.CrustMotionY[i] = map.mesh.y[i] < 0 ? 1000 : -1000;
+  for (let i = 0; i < map.mesh.count; i++)
+    map.CrustMotionY.set(i, map.mesh.y(i) < 0 ? 1000 : -1000);
   map.CrustThickness.fill(1000 * 1024);
   map.faults.push({
     id: "compression",

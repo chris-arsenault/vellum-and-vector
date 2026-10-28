@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { Band } from "@atlas/domain";
 import { createWorldMesh } from "./worldMesh";
 import { createField, type PhysicalField } from "./field";
 import { atlasPhysicalProfile } from "./atlasProfile";
@@ -18,31 +19,45 @@ function continent(heat?: (x: number, y: number) => number, samples = 9000) {
   const c = physicalContext(42, 0, atlasPhysicalProfile({ latitudeProjection: 0 }));
   c.Profile.CirculationWander = 0;
   for (let i = 0; i < map.mesh.count; i++) {
-    const x = map.mesh.x[i],
+    const x = map.mesh.x(i),
       sea = x < -1_000_000;
-    map.WaterKindCodes[i] = sea ? 1 : 0;
-    map.WaterDepths[i] = sea ? units(3000) : 0;
-    map.Elevation[i] = units(sea ? -3000 : 100 + 3000 * Math.exp(-((x / 80_000) ** 2)));
-    map.Temperature[i] = 450;
-    map.ExternalHeatForcing[i] = heat?.(x, map.mesh.y[i]) ?? 0;
+    map.WaterKindCodes.set(i, sea ? 1 : 0);
+    map.WaterDepths.set(i, sea ? units(3000) : 0);
+    map.Elevation.set(i, units(sea ? -3000 : 100 + 3000 * Math.exp(-((x / 80_000) ** 2))));
+    map.Temperature.set(i, 450);
+    map.ExternalHeatForcing.set(i, heat?.(x, map.mesh.y(i)) ?? 0);
   }
   atmosphericFlow(map, c);
   moisture(map, c);
   precipitation(map, c);
   return map;
 }
-function along(map: PhysicalField, values: ArrayLike<number>, x: number, y = 0, half = 150_000) {
+function along(
+  map: PhysicalField,
+  values: Band | ArrayLike<number>,
+  x: number,
+  y = 0,
+  half = 150_000
+) {
+  const read = (i: number) => (values instanceof Band ? values.get(i) : values[i]);
   let total = 0,
     count = 0;
-  for (let i = 0; i < map.mesh.contentCount; i++)
-    if (Math.abs(map.mesh.x[i] - x) < 20_000 && Math.abs(map.mesh.y[i] - y) < half) {
-      total += values[i];
+  for (let i = 0; i < map.mesh.count; i++)
+    if (
+      map.mesh.membership(i) === 1 &&
+      Math.abs(map.mesh.x(i) - x) < 20_000 &&
+      Math.abs(map.mesh.y(i) - y) < half
+    ) {
+      total += read(i);
       count++;
     }
   return total / count;
 }
 const total = (map: PhysicalField) =>
-  Float64Array.from(map.Rainfall, (rain, i) => rain + map.Snowfall[i]);
+  Float64Array.from(
+    { length: map.mesh.count },
+    (_, i) => map.Rainfall.get(i) + map.Snowfall.get(i)
+  );
 
 it("rains out inland, wrings out a windward range and leaves a long lee shadow", () => {
   const map = continent(),

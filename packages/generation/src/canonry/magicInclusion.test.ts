@@ -33,18 +33,24 @@ function scenario(mask: number) {
     sampling: { maximumSize: map.mesh.spacing, minimumSize: map.mesh.spacing, featureSamples: 2 },
   };
   map.FractureConductance.fill(900);
-  map.HeatSourceDensity[0] = 1000;
+  map.HeatSourceDensity.set(contentCells(map)[0], 1000);
   map.RockResistance.fill(1200);
   map.IceThickness.fill(400);
   map.WaveExposure.fill(500);
   map.OceanCurrentStrength.fill(300);
   for (let i = 0; i < map.mesh.count; i++) {
-    map.WaterKindCodes[i] = Number(map.mesh.x[i] < 0);
-    map.WaterDepths[i] = map.WaterKindCodes[i] * 2_000_000;
-    map.Temperature[i] = 200 + map.mesh.x[i] / 20_000;
+    map.WaterKindCodes.set(i, Number(map.mesh.x(i) < 0));
+    map.WaterDepths.set(i, map.WaterKindCodes.get(i) * 2_000_000);
+    map.Temperature.set(i, 200 + map.mesh.x(i) / 20_000);
   }
   initializeMagic(state);
   return state;
+}
+/** Content cells in id order; content is not a prefix of the ids. */
+function contentCells(map: ReturnType<typeof createField>) {
+  const cells: number[] = [];
+  for (let i = 0; i < map.mesh.count; i++) if (map.mesh.membership(i) === 1) cells.push(i);
+  return cells;
 }
 const context = { epochIndices: [0], recordCause() {} } as unknown as MapProcessContext;
 
@@ -52,16 +58,17 @@ for (let mask = 0; mask < 8; mask++) {
   it(`executes magic inclusion ${mask} with neutral absence and natural geography intact`, () => {
     const state = scenario(mask),
       map = state.physical!.map,
-      magic = state.physical!.magic!;
-    const water = map.WaterKindCodes.slice(),
-      current = map.OceanCurrentStrength.slice(),
-      geothermal = map.HeatSourceDensity.slice();
+      magic = state.physical!.magic!,
+      cells = contentCells(map);
+    const water = Array.from(map.WaterKindCodes),
+      current = Array.from(map.OceanCurrentStrength),
+      geothermal = Array.from(map.HeatSourceDensity);
     for (const field of magic.fields) {
       field.definition.parameters.coastalThreshold = 0;
       field.definition.history.storage = 0.5;
       locateMagicSources(state, field, 73);
       propagateMagic(state, field, 73, 1);
-      expect(field.intensity.some((value) => value > 0)).toBe(field.definition.enabled);
+      expect(Array.from(field.intensity).some((value) => value > 0)).toBe(field.definition.enabled);
     }
     magicThermalFeedback(state);
     magicRockFeedback(state);
@@ -70,35 +77,37 @@ for (let mask = 0; mask < 8; mask++) {
     classifyMagicFeatures(state);
     projectMagic(state);
     for (const field of magic.fields) {
-      for (const channel of magicChannels) expect(field[channel].every(Number.isFinite)).toBe(true);
+      for (const channel of magicChannels)
+        expect(Array.from(field[channel]).every(Number.isFinite)).toBe(true);
       if (field.definition.enabled) continue;
       for (const channel of magicChannels)
         expect(
-          field[channel].every((value) => value === magicFieldDefinitions[channel].initial),
+          cells.every((i) => field[channel].get(i) === magicFieldDefinitions[channel].initial),
           `${field.definition.id}:${channel}`
         ).toBe(true);
       for (const [id, values] of Object.entries(field.features))
-        if (id !== "war") expect(values.every((value) => value === 0)).toBe(true);
+        if (id !== "war") expect(cells.every((i) => values.get(i) === 0)).toBe(true);
     }
-    expect(map.WaterKindCodes).toEqual(water);
-    expect(map.OceanCurrentStrength).toEqual(current);
-    expect(map.HeatSourceDensity).toEqual(geothermal);
+    expect(Array.from(map.WaterKindCodes)).toEqual(water);
+    expect(Array.from(map.OceanCurrentStrength)).toEqual(current);
+    expect(Array.from(map.HeatSourceDensity)).toEqual(geothermal);
     if (mask === 0) {
-      expect(map.ExternalHeatForcing.every((value) => value === 0)).toBe(true);
-      expect(map.ExternalCoastalForcing.every((value) => value === 0)).toBe(true);
-      expect(map.RockResistance.every((value) => value === 1200)).toBe(true);
-      expect(magic.finalSurface).toEqual(magic.naturalSurface);
+      expect(cells.every((i) => map.ExternalHeatForcing.get(i) === 0)).toBe(true);
+      expect(cells.every((i) => map.ExternalCoastalForcing.get(i) === 0)).toBe(true);
+      expect(cells.every((i) => map.RockResistance.get(i) === 1200)).toBe(true);
+      expect(Array.from(magic.finalSurface)).toEqual(Array.from(magic.naturalSurface));
     }
   });
 }
 
 it("rejects stale active forcing from disabled contributors, including zero-threshold coastal amplification", () => {
   const state = scenario(0),
-    map = state.physical!.map;
-  const temperature = map.Temperature.slice(),
-    ice = map.IceThickness.slice();
-  expect(map.WaterKindCodes.some((value) => value === 0)).toBe(true);
-  expect(map.WaterKindCodes.some((value) => value === 1)).toBe(true);
+    map = state.physical!.map,
+    cells = contentCells(map);
+  const temperature = Array.from(map.Temperature),
+    ice = Array.from(map.IceThickness);
+  expect(Array.from(map.WaterKindCodes).some((value) => value === 0)).toBe(true);
+  expect(Array.from(map.WaterKindCodes).some((value) => value === 1)).toBe(true);
   for (const field of state.physical!.magic!.fields) {
     field.intensity.fill(800);
     field.source.fill(1000);
@@ -108,21 +117,26 @@ it("rejects stale active forcing from disabled contributors, including zero-thre
   magicRockFeedback(state);
   magicCoastalFeedback(state);
   retainMagicHistory(state, context);
-  expect(map.Temperature).toEqual(temperature);
-  expect(map.IceThickness).toEqual(ice);
-  expect(map.ExternalCoastalForcing.every((value) => value === 0)).toBe(true);
-  expect(map.RockResistance.every((value) => value === 1200)).toBe(true);
+  expect(Array.from(map.Temperature)).toEqual(temperature);
+  expect(Array.from(map.IceThickness)).toEqual(ice);
+  expect(cells.every((i) => map.ExternalCoastalForcing.get(i) === 0)).toBe(true);
+  expect(cells.every((i) => map.RockResistance.get(i) === 1200)).toBe(true);
   for (const field of state.physical!.magic!.fields) {
     field.stored.fill(600);
     propagateMagic(state, field, 73, 1);
-    expect(field.intensity.every((value) => value === 0)).toBe(true);
-    expect(field.stored.every((value) => value === 0)).toBe(true);
+    expect(cells.every((i) => field.intensity.get(i) === 0)).toBe(true);
+    expect(cells.every((i) => field.stored.get(i) === 0)).toBe(true);
   }
   map.AdvectionSourceIndex.fill(0);
   advectMagic(state);
 });
 
 it("lets Aurora respond to the changed heat and ice when Fire is omitted", () => {
+  const sum = (band: Iterable<number>) => {
+    let total = 0;
+    for (const value of band) total += value;
+    return total;
+  };
   const outcomes = [2, 3].map((mask) => {
     const state = scenario(mask),
       fields = state.physical!.magic!.fields;
@@ -132,8 +146,8 @@ it("lets Aurora respond to the changed heat and ice when Fire is omitted", () =>
     locateMagicSources(state, fields[1], 73);
     propagateMagic(state, fields[1], 73, 1);
     return {
-      ice: state.physical!.map.IceThickness.reduce((sum, value) => sum + value, 0),
-      source: fields[1].source.reduce((sum, value) => sum + value, 0),
+      ice: sum(state.physical!.map.IceThickness),
+      source: sum(fields[1].source),
     };
   });
   expect(outcomes[0].ice).toBeGreaterThan(outcomes[1].ice);
@@ -143,7 +157,8 @@ it("lets Aurora respond to the changed heat and ice when Fire is omitted", () =>
 it("retains Fire/Aurora contact with Pressure absent and requires the actual participants", () => {
   for (let mask = 0; mask < 8; mask++) {
     const state = scenario(mask),
-      fields = state.physical!.magic!.fields;
+      fields = state.physical!.magic!.fields,
+      cells = contentCells(state.physical!.map);
     // Controlled overlap isolates participation from geography and distribution. The
     // meetings live in the shared confluence list and need every participant enabled.
     for (const field of fields) field.intensity.fill(500);
@@ -151,8 +166,8 @@ it("retains Fire/Aurora contact with Pressure absent and requires the actual par
     const held = state.physical!.magic!.confluences.states;
     if ((mask & 3) === 3) {
       expect(held.war).toBeDefined();
-      expect(held.war.members.every((value) => value === 1)).toBe(true);
-      expect(held.war.coverage.every((value) => value > 0)).toBe(true);
+      expect(cells.every((i) => held.war.members.get(i) === 1)).toBe(true);
+      expect(cells.every((i) => held.war.coverage.get(i) > 0)).toBe(true);
     } else expect(held.war).toBeUndefined();
     if (!(mask & 4)) {
       expect(held.steam).toBeUndefined();
@@ -169,6 +184,6 @@ it("retains Fire/Aurora contact with Pressure absent and requires the actual par
     fields[0].definition.enabled = false;
     fields[0].intensity.fill(0);
     classifyMagicFeatures(state);
-    expect(fields[2].features.zero.every((value) => value === 0)).toBe(true);
+    expect(cells.every((i) => fields[2].features.zero.get(i) === 0)).toBe(true);
   }
 });

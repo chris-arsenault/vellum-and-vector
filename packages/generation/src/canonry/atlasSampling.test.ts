@@ -23,8 +23,8 @@ it.each(["open", "cylinder", "globe"])(
       i === count - 1
         ? [1e9, 1e9]
         : [
-            mesh.x[i % mesh.count] + mesh.spacing * 0.23,
-            mesh.y[i % mesh.count] - mesh.spacing * 0.17,
+            mesh.x(i % mesh.count) + mesh.spacing * 0.23,
+            mesh.y(i % mesh.count) - mesh.spacing * 0.17,
           ];
     const interpolation = projectionInterpolation(mesh, count, position);
     const work = {
@@ -36,7 +36,10 @@ it.each(["open", "cylinder", "globe"])(
       inherited: false,
       sampling: { maximumSize: 1000, minimumSize: 1000, featureSamples: 2 },
     };
-    const values = Float64Array.from(mesh.x, (x, i) => 0.1 + x * 0.003 - mesh.y[i] * 0.001);
+    const values = Float64Array.from(
+      { length: mesh.count },
+      (_, i) => 0.1 + mesh.x(i) * 0.003 - mesh.y(i) * 0.001
+    );
     const expected = Float64Array.from({ length: count }, (_, i) => {
       const [x, y] = position(i);
       const sample = triangleSample(mesh, x, y);
@@ -53,7 +56,7 @@ it.each(["open", "cylinder", "globe"])(
     expect(interpolation.degree).toHaveLength(count);
     expect(interpolation.cells).toHaveLength(count * interpolation.stride);
     expect(
-      projectedValues(work, new Float64Array(mesh.count).fill(0.1)).every(
+      Array.from(projectedValues(work, new Float64Array(mesh.count).fill(0.1))).every(
         (v) => v === 0 || v === 0.1
       )
     ).toBe(true);

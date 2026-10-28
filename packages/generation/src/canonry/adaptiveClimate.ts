@@ -15,11 +15,11 @@ export function shoreSupport(state: GenerationState, context: PhysicalContext) {
   const level = map.BaseSeaLevel + context.SeaLevelOffset * 1024;
   const supports: SamplingSupport[] = [];
   for (let i = 0; i < mesh.count; i++)
-    for (let edge = 0; edge < mesh.degree[i]; edge++) {
-      const j = mesh.neighbors[i * mesh.stride + edge];
-      if (j < i || map.Elevation[i] < level === map.Elevation[j] < level) continue;
+    for (let edge = 0; edge < mesh.degree(i); edge++) {
+      const j = mesh.neighbor(i, edge);
+      if (j < i || map.Elevation.get(i) < level === map.Elevation.get(j) < level) continue;
       if (
-        Math.max(mesh.cellWidth[i], mesh.cellHeight[i], mesh.cellWidth[j], mesh.cellHeight[j]) <=
+        Math.max(mesh.cellWidth(i), mesh.cellHeight(i), mesh.cellWidth(j), mesh.cellHeight(j)) <=
         size
       )
         continue;
@@ -68,17 +68,21 @@ function iceSupport(state: GenerationState) {
   const size = p.LandformNeighborhoodRadius / work.sampling.featureSamples;
   const supports: SamplingSupport[] = [];
   for (let i = 0; i < mesh.count; i++) {
-    const j = map.IceFlowTargets[i];
-    if (j < 0 || !map.GroundedIce[i] || map.IceFlux[i] < p.GlacierFluxThreshold) continue;
+    const j = map.IceFlowTargets.get(i);
+    if (j < 0 || !map.GroundedIce.get(i) || map.IceFlux.get(i) < p.GlacierFluxThreshold) continue;
     if (
-      Math.max(mesh.cellWidth[i], mesh.cellHeight[i], mesh.cellWidth[j], mesh.cellHeight[j]) <= size
+      Math.max(mesh.cellWidth(i), mesh.cellHeight(i), mesh.cellWidth(j), mesh.cellHeight(j)) <= size
     )
       continue;
-    const stations = Math.max(1, Math.ceil(physicalDistance(mesh, i, j) / size));
+    const stations = Math.max(1, Math.ceil(physicalDistance(mesh, i, j) / size)),
+      xi = mesh.x(i),
+      yi = mesh.y(i),
+      dx = meshDeltaX(mesh, mesh.x(j) - xi),
+      dy = mesh.y(j) - yi;
     for (let n = 0; n <= stations; n++)
       supports.push({
-        x: mesh.x[i] + mesh.origin[0] + (meshDeltaX(mesh, mesh.x[j] - mesh.x[i]) * n) / stations,
-        y: mesh.y[i] + mesh.origin[1] + ((mesh.y[j] - mesh.y[i]) * n) / stations,
+        x: xi + mesh.origin[0] + (dx * n) / stations,
+        y: yi + mesh.origin[1] + (dy * n) / stations,
         radius: size,
         size,
       });

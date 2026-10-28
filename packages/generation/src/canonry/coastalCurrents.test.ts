@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { createWorldMesh } from "./worldMesh";
-import { createField } from "./field";
+import { createField, type PhysicalField } from "./field";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { physicalContext } from "./context";
 import { coastalErosion, externalCoastalForcing } from "./coastalEvolution";
@@ -9,6 +9,7 @@ import { smoothMetric } from "./metricSmoothing";
 import { transportOceanHeat } from "./currents";
 import { alignedNeighbor } from "./atmosphere";
 import { createAdaptiveWorldMesh } from "./adaptiveMesh";
+import { workingValues } from "./physicalNumerics";
 
 function coast(samples: number) {
   const size = 100_000 / Math.sqrt(samples);
@@ -16,10 +17,12 @@ function coast(samples: number) {
     createAdaptiveWorldMesh([0, 0, 100_000, 100_000], { maximumSize: size, minimumSize: size }, 0)
   );
   for (let i = 0; i < map.mesh.count; i++) {
-    map.WaterKindCodes[i] = map.mesh.x[i] < 0 ? 1 : 0;
-    map.WaveExposure[i] = 1000;
-    map.CrustTypeCodes[i] = 2;
-    map.BedrockElevation[i] = map.Elevation[i] = (map.mesh.x[i] < 0 ? -100 : 100) * 1024;
+    map.WaterKindCodes.set(i, map.mesh.x(i) < 0 ? 1 : 0);
+    map.WaveExposure.set(i, 1000);
+    map.CrustTypeCodes.set(i, 2);
+    const height = (map.mesh.x(i) < 0 ? -100 : 100) * 1024;
+    map.BedrockElevation.set(i, height);
+    map.Elevation.set(i, height);
   }
   return map;
 }
@@ -31,7 +34,9 @@ it("keeps erosion volume and shore width physical when sampling doubles", () => 
       profile = atlasPhysicalProfile();
     coastalErosion(map, physicalContext(157, 0, profile));
     volumes.push(map.SedimentProducedTotal);
-    const width = Math.max(...map.mesh.x.filter((_, i) => map.CumulativeCoastalErosion[i] > 0));
+    let width = -Infinity;
+    for (let i = 0; i < map.mesh.count; i++)
+      if (map.CumulativeCoastalErosion.get(i) > 0) width = Math.max(width, map.mesh.x(i));
     expect(width).toBeGreaterThan(profile.CoastalActiveWidth * 0.8);
     expect(width).toBeLessThan(profile.CoastalActiveWidth + map.mesh.spacing);
     expect(map.SedimentDepositedTotal + map.SedimentExportedTotal).toBeCloseTo(
@@ -50,15 +55,18 @@ it("applies external coastal forcing through the same physical shore band", () =
     const map = coast(samples),
       profile = atlasPhysicalProfile();
     for (let i = 0; i < map.mesh.count; i++) {
-      if (map.WaterKindCodes[i] !== 0) continue;
-      for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-        const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-        if (j >= 0 && map.WaterKindCodes[j] === 1) map.ExternalCoastalForcing[i] = 500;
+      if (map.WaterKindCodes.get(i) !== 0) continue;
+      for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+        const j = map.mesh.neighbor(i, edge);
+        if (j >= 0 && map.WaterKindCodes.get(j) === 1) map.ExternalCoastalForcing.set(i, 500);
       }
     }
     externalCoastalForcing(map, physicalContext(157, 0, profile));
     volumes.push(map.SedimentProducedTotal);
-    expect(map.ExternalCoastalForcing.every((value) => value === 0)).toBe(true);
+    let spent = true;
+    for (let i = 0; i < map.mesh.count; i++)
+      if (map.ExternalCoastalForcing.get(i) !== 0) spent = false;
+    expect(spent).toBe(true);
     expect(map.SedimentDepositedTotal + map.SedimentExportedTotal).toBeCloseTo(
       map.SedimentProducedTotal,
       -2
@@ -82,47 +90,75 @@ it("weights an unresolved shore strip by its physical area", () => {
 });
 
 it("keeps separated ocean basins independent during physical smoothing", () => {
-  const mesh = createWorldMesh([-50_000, -50_000, 50_000, 50_000], 1024, 0);
-  const ocean = Uint8Array.from(mesh.x, (x) => Number(Math.abs(x) > 10_000));
-  const input = Float64Array.from(mesh.x, (x) => (x < -10_000 ? 1000 : 0));
-  const output = smoothMetric(mesh, input, 35_000, ocean);
-  for (let i = 0; i < mesh.count; i++) expect(output[i]).toBeCloseTo(input[i], 7);
+  const map = createField(createWorldMesh([-50_000, -50_000, 50_000, 50_000], 1024, 0)),
+    mesh = map.mesh;
+  const ocean = workingValues(map, "uint8", "test:ocean", (i) =>
+    Number(Math.abs(mesh.x(i)) > 10_000)
+  );
+  const input = workingValues(map, "float64", "test:input", (i) =>
+    mesh.x(i) < -10_000 ? 1000 : 0
+  );
+  const output = smoothMetric(map, input, 35_000, ocean);
+  for (let i = 0; i < mesh.count; i++) expect(output.get(i)).toBeCloseTo(input.get(i), 7);
 });
 
 it("mixes upstream heat, cools it, and retains geothermal source floors", () => {
   const results = [0, 50].map((cooling) => {
-    const map = createField(createWorldMesh([-50_000, -10_000, 50_000, 10_000], 512, 0));
+    const map = createField(createWorldMesh([-50_000, -10_000, 50_000, 10_000], 512, 0)),
+      mesh = map.mesh;
     map.WaterKindCodes.fill(1);
-    for (let i = 0; i < map.mesh.count; i++) map.Geothermal[i] = map.mesh.x[i] < -20_000 ? 1000 : 0;
-    const targets = Int32Array.from(map.mesh.x, (_, i) => alignedNeighbor(map, i, -1, 0));
-    transportOceanHeat(map, 15_000, cooling, targets);
-    const downstream = [...map.OceanCurrentHeat].filter(
-      (_, i) => map.mesh.x[i] > -10_000 && map.mesh.x[i] < 0
+    for (let i = 0; i < mesh.count; i++) map.Geothermal.set(i, mesh.x(i) < -20_000 ? 1000 : 0);
+    const targets = workingValues(map, "int32", "test:targets", (i) =>
+      alignedNeighbor(map, i, -1, 0)
     );
-    expect(map.OceanCurrentHeat.every((heat) => heat >= 60 && heat <= 860)).toBe(true);
-    expect(
-      [...map.OceanCurrentHeat].some((heat, i) => map.mesh.x[i] < -30_000 && heat === 860)
-    ).toBe(true);
-    expect(downstream.some((heat) => heat > 60 && heat < 860)).toBe(true);
-    return downstream.reduce((sum, heat) => sum + heat, 0);
+    transportOceanHeat(map, 15_000, cooling, targets);
+    const summary = heatSummary(map);
+    expect(summary.withinRange).toBe(true);
+    expect(summary.floorRetained).toBe(true);
+    expect(summary.intermediate).toBe(true);
+    return summary.total;
   });
   expect(results[1]).toBeLessThan(results[0]);
 });
+/** Range, floor and mixing facts of the transported heat, and its total just east of the source. */
+function heatSummary(map: PhysicalField) {
+  const mesh = map.mesh,
+    inRange = (heat: number) => heat >= 60 && heat <= 860,
+    mixed = (heat: number) => heat > 60 && heat < 860;
+  let withinRange = true,
+    floorRetained = false,
+    intermediate = false,
+    total = 0;
+  for (let i = 0; i < mesh.count; i++) {
+    if (mesh.membership(i) === 0) continue;
+    const heat = map.OceanCurrentHeat.get(i),
+      x = mesh.x(i);
+    withinRange &&= inRange(heat);
+    floorRetained ||= x < -30_000 && heat === 860;
+    if (x <= -10_000 || x >= 0) continue;
+    intermediate ||= mixed(heat);
+    total += heat;
+  }
+  return { withinRange, floorRetained, intermediate, total };
+}
 
 it("keeps downstream heat transport at the same physical scale", () => {
   const reaches = [1024, 4096].map((samples) => {
-    const map = createField(createWorldMesh([-50_000, -50_000, 50_000, 50_000], samples, 0));
+    const map = createField(createWorldMesh([-50_000, -50_000, 50_000, 50_000], samples, 0)),
+      mesh = map.mesh;
     map.WaterKindCodes.fill(1);
-    for (let i = 0; i < map.mesh.count; i++) map.Geothermal[i] = map.mesh.x[i] < -20_000 ? 1000 : 0;
-    const targets = Int32Array.from(map.mesh.x, (_, i) => alignedNeighbor(map, i, -1, 0));
+    for (let i = 0; i < mesh.count; i++) map.Geothermal.set(i, mesh.x(i) < -20_000 ? 1000 : 0);
+    const targets = workingValues(map, "int32", "test:targets", (i) =>
+      alignedNeighbor(map, i, -1, 0)
+    );
     transportOceanHeat(map, 15_000, 50, targets);
     let excess = 0,
       moment = 0;
-    for (let i = 0; i < map.mesh.count; i++) {
-      if (map.mesh.x[i] <= -20_000) continue;
-      const heat = (map.OceanCurrentHeat[i] - 60) * map.mesh.areas[i];
+    for (let i = 0; i < mesh.count; i++) {
+      if (mesh.membership(i) === 0 || mesh.x(i) <= -20_000) continue;
+      const heat = (map.OceanCurrentHeat.get(i) - 60) * mesh.area(i);
       excess += heat;
-      moment += heat * (map.mesh.x[i] + 20_000);
+      moment += heat * (mesh.x(i) + 20_000);
     }
     return moment / excess;
   });
@@ -138,7 +174,9 @@ it("uses metre amplitudes for margin-shaped coastal relief", () => {
   map.BedrockElevation.fill(0);
   map.Elevation.fill(0);
   coastalDetail(map, physicalContext(157, 0, profile));
-  const relief = Math.max(...map.Elevation.map((height) => Math.abs(height) / 1024));
+  let relief = -Infinity;
+  for (let i = 0; i < map.mesh.count; i++)
+    relief = Math.max(relief, Math.abs(map.Elevation.get(i)) / 1024);
   expect(relief).toBeGreaterThan(1);
   expect(relief).toBeLessThanOrEqual(profile.CoastalDetailPassiveAmplitude);
 });

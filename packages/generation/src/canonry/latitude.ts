@@ -48,5 +48,5 @@ export function metresPerDegree(frame: Frame) {
   return north > south && span > 0 ? (north - south) / span : Infinity;
 }
 export function latitudeAt(profile: PhysicalProfile, map: PhysicalField, i: number) {
-  return latitudeAtY(profile, map.mesh.y[i] + map.mesh.origin[1]);
+  return latitudeAtY(profile, map.mesh.y(i) + map.mesh.origin[1]);
 }

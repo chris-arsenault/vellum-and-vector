@@ -7,12 +7,12 @@ export function tectonicTransport(map: PhysicalField, distance: number) {
   if (!state) return null;
   const plates = new Map(state.plates.map((plate) => [plate.id, plate]));
   return (cell: number, x: number, y: number): [number, number] => {
-    const site = state.sites[map.CrustProvinceIds[cell] - 1],
+    const site = state.sites[map.CrustProvinceIds.get(cell) - 1],
       plate = site && plates.get(site.plate);
     if (!plate)
       return [
-        x + (map.CrustMotionX[cell] * distance) / 1000,
-        y + (map.CrustMotionY[cell] * distance) / 1000,
+        x + (map.CrustMotionX.get(cell) * distance) / 1000,
+        y + (map.CrustMotionY.get(cell) * distance) / 1000,
       ];
     return moveTectonicPoint(map, site, plate, x, y, distance);
   };

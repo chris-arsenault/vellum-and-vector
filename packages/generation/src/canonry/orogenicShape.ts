@@ -32,10 +32,10 @@ export function crossSection(
   side = 1
 ): number {
   const p = context.Profile,
-    continental = map.CrustContinentalFraction[i] / 1000;
+    continental = map.CrustContinentalFraction.get(i) / 1000;
   if (c.code === 1) {
     const mix = clamp(
-      (Math.max(map.CrustCollisionIntensity[source] / 1000, c.collision) - 0.08) / 0.42,
+      (Math.max(map.CrustCollisionIntensity.get(source) / 1000, c.collision) - 0.08) / 0.42,
       0,
       1
     );
@@ -74,14 +74,14 @@ function alongNoise(
   seed: number,
   scale: number
 ): number {
-  let tx = map.TectonicTangentX[source] / 1000,
-    ty = map.TectonicTangentY[source] / 1000;
+  let tx = map.TectonicTangentX.get(source) / 1000,
+    ty = map.TectonicTangentY.get(source) / 1000;
   if (Math.abs(tx) + Math.abs(ty) < 0.01) {
     tx = 1;
     if (!summit) ty = 0;
   }
-  const x = map.mesh.x[i],
-    y = map.mesh.y[i],
+  const x = map.mesh.x(i),
+    y = map.mesh.y(i),
     width = map.mesh.periodic?.width;
   const offset = pair * (summit ? 310_000 : 190_000);
   if (!width) return unitNoise(x * tx + y * ty, offset, seed, scale, 3);
@@ -135,9 +135,9 @@ export function constructionWeight(
   i: number,
   section?: number
 ): number {
-  const source = frame.source[i];
+  const source = frame.source.get(i);
   const shape =
-    section ?? crossSection(map, context, c, i, source, frame.distance[i], frame.side[i]);
-  const activity = (map.TectonicStrain[source] / 1000) * 0.62 + c.strain * 0.38;
+    section ?? crossSection(map, context, c, i, source, frame.distance.get(i), frame.side.get(i));
+  const activity = (map.TectonicStrain.get(source) / 1000) * 0.62 + c.strain * 0.38;
   return activity * alongStrike(map, context, c, i, source) * shape;
 }

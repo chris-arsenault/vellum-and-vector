@@ -1,26 +1,32 @@
-import { groupByLabel } from "@atlas/domain";
 import type { PhysicalField } from "./field";
 
 /** Water-body identities own grouped membership, including off-content support. Body ids
- * are small positive integers, so one counting pass over the lake cells groups them. */
+ * are small positive integers, so two passes over the lake cells group them: a count per
+ * body, then the cells in ascending index order. Nothing here is sized by the world. */
 export function lakeMembership(map: PhysicalField) {
-  const labels = new Int32Array(map.mesh.count).fill(-1);
-  let labelCount = 0;
+  const { WaterKindCodes: kinds, WaterBodyIds: bodies } = map;
+  let labelCount = 0,
+    lakeCells = 0;
   for (let i = 0; i < map.mesh.count; i++) {
-    if (map.WaterKindCodes[i] !== 2) continue;
-    labels[i] = map.WaterBodyIds[i];
-    labelCount = Math.max(labelCount, labels[i] + 1);
+    if (kinds.get(i) !== 2) continue;
+    labelCount = Math.max(labelCount, bodies.get(i) + 1);
+    lakeCells++;
   }
-  const groups = groupByLabel(labels, labelCount);
+  const offsets = new Int32Array(labelCount + 1);
+  for (let i = 0; i < map.mesh.count; i++) if (kinds.get(i) === 2) offsets[bodies.get(i) + 1]++;
+  for (let body = 0; body < labelCount; body++) offsets[body + 1] += offsets[body];
+  const members = new Int32Array(lakeCells),
+    cursor = offsets.slice(0, labelCount);
+  for (let i = 0; i < map.mesh.count; i++)
+    if (kinds.get(i) === 2) members[cursor[bodies.get(i)]++] = i;
   return {
     /** Body ids with at least one cell, ascending. */
     *bodies() {
-      for (let id = 0; id < labelCount; id++)
-        if (groups.offsets[id + 1] > groups.offsets[id]) yield id;
+      for (let id = 0; id < labelCount; id++) if (offsets[id + 1] > offsets[id]) yield id;
     },
     /** The body's cells in ascending index order. */
     members(id: number) {
-      return groups.members_of(id);
+      return members.subarray(offsets[id], offsets[id + 1]);
     },
   };
 }

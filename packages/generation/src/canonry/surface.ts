@@ -2,24 +2,24 @@
 import { reconcileWater, type PhysicalField } from "./field";
 
 export function rebuild(map: PhysicalField, i: number) {
-  map.Elevation[i] = map.BedrockElevation[i] + map.SedimentThickness[i];
+  map.Elevation.set(i, map.BedrockElevation.get(i) + map.SedimentThickness.get(i));
   reconcileWater(map, i);
 }
 export function erode(map: PhysicalField, i: number, requested: number): number {
   if (requested <= 0) return 0;
-  const sediment = Math.min(requested, map.SedimentThickness[i]);
-  map.SedimentThickness[i] -= sediment;
+  const sediment = Math.min(requested, map.SedimentThickness.get(i));
+  map.SedimentThickness.add(i, -sediment);
   const bedrock = requested - sediment;
-  map.BedrockElevation[i] -= bedrock;
-  if (bedrock > 0) map.SurfaceRockLoad[i] -= bedrock;
+  map.BedrockElevation.add(i, -bedrock);
+  if (bedrock > 0) map.SurfaceRockLoad.add(i, -bedrock);
   rebuild(map, i);
   return requested;
 }
 export function deposit(map: PhysicalField, i: number, requested: number): number {
   const deposited = Math.max(0, requested);
-  map.SedimentThickness[i] += deposited;
-  map.CumulativeDeposition[i] += deposited;
-  map.SedimentDepositedTotal += (deposited / 1024) * map.mesh.areas[i];
+  map.SedimentThickness.add(i, deposited);
+  map.CumulativeDeposition.add(i, deposited);
+  map.SedimentDepositedTotal += (deposited / 1024) * map.mesh.area(i);
   rebuild(map, i);
   return deposited;
 }
@@ -50,24 +50,27 @@ export function initializeLandscape(map: PhysicalField) {
   map.SedimentProducedTotal = 0;
   map.SedimentDepositedTotal = 0;
   map.SedimentExportedTotal = 0;
-  map.BedrockElevation.set(map.Elevation);
-  map.CrustSupportElevation.set(map.Elevation);
-  map.TectonicActivityHistory.set(map.TectonicStrain);
+  map.BedrockElevation.copyFrom(map.Elevation);
+  map.CrustSupportElevation.copyFrom(map.Elevation);
+  map.TectonicActivityHistory.copyFrom(map.TectonicStrain);
   map.CrustSupportInitialized = true;
 }
 export function validateLandscape(map: PhysicalField) {
   for (let i = 0; i < map.mesh.count; i++) {
     const invalid = [
-      map.SedimentThickness[i],
-      map.CumulativeFluvialErosion[i],
-      map.CumulativeGlacialErosion[i],
-      map.CumulativeGlacialDeposition[i],
-      map.CumulativeCoastalErosion[i],
-      map.CumulativeDeposition[i],
+      map.SedimentThickness.get(i),
+      map.CumulativeFluvialErosion.get(i),
+      map.CumulativeGlacialErosion.get(i),
+      map.CumulativeGlacialDeposition.get(i),
+      map.CumulativeCoastalErosion.get(i),
+      map.CumulativeDeposition.get(i),
     ].some((v) => v < 0);
-    if (invalid || map.Elevation[i] !== map.BedrockElevation[i] + map.SedimentThickness[i])
+    const elevation = map.Elevation.get(i),
+      bedrock = map.BedrockElevation.get(i),
+      sediment = map.SedimentThickness.get(i);
+    if (invalid || elevation !== bedrock + sediment)
       throw new Error(
-        `Landscape cell ${i} is inconsistent: elevation ${map.Elevation[i]}, bedrock ${map.BedrockElevation[i]}, sediment ${map.SedimentThickness[i]}, negative material ${invalid}.`
+        `Landscape cell ${i} is inconsistent: elevation ${elevation}, bedrock ${bedrock}, sediment ${sediment}, negative material ${invalid}.`
       );
   }
   if (

@@ -38,16 +38,18 @@ it("raises a mountain to its summit and restores it after the summit is lowered"
   // The whole edifice loses 700 m, as a glacial epoch might take; the signature is restored.
   const centre = nearestTriangle(map.mesh, 0, 0);
   for (let i = 0; i < map.mesh.count; i++) {
-    if (Math.hypot(map.mesh.x[i], map.mesh.y[i]) > 60_000) continue;
-    map.BedrockElevation[i] -= units(700);
-    map.Elevation[i] -= units(700);
+    if (Math.hypot(map.mesh.x(i), map.mesh.y(i)) > 60_000) continue;
+    map.BedrockElevation.add(i, -units(700));
+    map.Elevation.add(i, -units(700));
   }
-  expect(map.Elevation[centre]).toBe(units(2300));
+  expect(map.Elevation.get(centre)).toBe(units(2300));
   const held = maintainLandmark(map, p, mountain, 1, ledger)!;
   expect(held.measured.summit).toBeGreaterThanOrEqual(3000);
   expect(held.maintenance).toBeGreaterThan(0);
-  expect(map.LandmarkMaintenance[centre]).toBeGreaterThan(0);
-  expect(map.Elevation[centre]).toBe(map.BedrockElevation[centre] + map.SedimentThickness[centre]);
+  expect(map.LandmarkMaintenance.get(centre)).toBeGreaterThan(0);
+  expect(map.Elevation.get(centre)).toBe(
+    map.BedrockElevation.get(centre) + map.SedimentThickness.get(centre)
+  );
 });
 
 /** Kinds drawn narrower than a cell of this mesh still measure from real cells on both sides. */
@@ -100,8 +102,8 @@ it("measures narrow kinds from whole cells and holds the realized ones after rel
   for (let epoch = 0; epoch < 2; epoch++) {
     if (epoch > 0)
       for (let i = 0; i < map.mesh.count; i++) {
-        map.BedrockElevation[i] = units(500) + (map.BedrockElevation[i] - units(500)) * 0.6;
-        map.Elevation[i] = map.BedrockElevation[i] + map.SedimentThickness[i];
+        map.BedrockElevation.set(i, units(500) + (map.BedrockElevation.get(i) - units(500)) * 0.6);
+        map.Elevation.set(i, map.BedrockElevation.get(i) + map.SedimentThickness.get(i));
       }
     for (const landmark of small) {
       const record = maintainLandmark(map, p, landmark, epoch, ledger)!;

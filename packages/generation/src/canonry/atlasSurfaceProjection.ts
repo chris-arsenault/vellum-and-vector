@@ -5,6 +5,7 @@ import {
   gridPosition,
   putChannel,
   type AdaptiveField,
+  type AdaptiveLattice,
   type NumericalAllocator,
   type Grid,
 } from "@atlas/domain";
@@ -56,7 +57,7 @@ export function refreshWorkspaceSamples(
   }
   const previous = state.surface,
     topology = work.map.mesh.topology;
-  work.samples = work.map.mesh.leafToCell;
+  work.samples = (work.map.mesh as AdaptiveLattice).leafCells();
   if (previous.topology === topology) return;
   const next = createAdaptiveField(previous.id, previous.scope, topology, state.numerical);
   if (!Object.keys(previous.channels).length) {

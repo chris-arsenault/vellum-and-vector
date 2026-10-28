@@ -10,6 +10,7 @@ export { ZarrResources } from "./zarrResources";
 export { openBrowserWorkspace, type BrowserWorkspace } from "./browserWorkspace";
 export { PagedArena } from "./pagedArena";
 export { openNumericalArena } from "./opfsArena";
+export { openBlockCache, blockCacheBudgetBytes } from "./opfsBlockCache";
 export { writeFieldLayout, writeFieldChannels, type FieldLayoutResources } from "./fieldResources";
 export { FieldWorkingSet, FieldInputCache, type FieldInputStore } from "./fieldWorkingSet";
 export { resourceCategories, mergeSummary } from "./fieldSummaries";

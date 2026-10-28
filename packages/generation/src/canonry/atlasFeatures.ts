@@ -4,8 +4,8 @@ import {
   interpolateProfile,
   point,
   spatial,
+  type Band,
   type DrainageReach,
-  type NumericalVector,
 } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { GenerationState, MapProcessContext } from "../process";
@@ -25,14 +25,15 @@ import { dropClaimedFeatures, extractLandmarks, landmarkClaims } from "./landmar
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import { generationFeature, generationFeatures } from "../generationFeatures";
 
-function riverReach(state: GenerationState, start: number, incoming: NumericalVector) {
+function riverReach(state: GenerationState, start: number, incoming: Band) {
   const map = state.physical!.map,
     members = [start];
   let i = start;
-  while (map.FlowTargets[i] >= 0) {
-    const j = map.FlowTargets[i];
+  while (map.FlowTargets.get(i) >= 0) {
+    const j = map.FlowTargets.get(i);
     members.push(j);
-    if (map.WaterKindCodes[j] !== 0 || map.RiverOrders[j] <= 0 || incoming[j] !== 1) break;
+    if (map.WaterKindCodes.get(j) !== 0 || map.RiverOrders.get(j) <= 0 || incoming.get(j) !== 1)
+      break;
     i = j;
   }
   return members;
@@ -114,7 +115,7 @@ function publishReachCopy(
       "rivers",
       reach,
       {
-        order: map.RiverOrders[start],
+        order: map.RiverOrders.get(start),
         discharge: discharges[0],
         basinDischarge,
         ...attributes,
@@ -126,52 +127,61 @@ function publishReachCopy(
   }
   return ids;
 }
+/** The retained record of one reach: where it ends, what it carries, and its course. */
+function reachRecord(
+  state: GenerationState,
+  start: number,
+  members: number[],
+  starts: Band
+): DrainageReach {
+  const work = state.physical!,
+    map = work.map,
+    mouth = members.at(-1)!;
+  return {
+    downstream: members.length > 1 && starts.get(mouth) >= 0 ? starts.get(mouth) : null,
+    waterBody: map.WaterKindCodes.get(mouth) !== 0 ? map.WaterBodyIds.get(mouth) : null,
+    order: map.RiverOrders.get(start),
+    basin: map.DrainageBasinIds.get(start),
+    coordinates: unwrapCoordinates(
+      members.map((j) => {
+        const p = nativePosition(work, j);
+        return [Math.round(p.x), Math.round(p.y)] as [number, number];
+      }),
+      map.mesh.periodic?.width
+    ) as [number, number][],
+    discharges: members.map((j) => map.FlowAccumulation.get(j)),
+    catchmentAreas: members.map((j) => map.CatchmentArea.get(j)),
+    featureIds: [],
+  };
+}
 /** Every reach as extraction forms it, linked downstream through the cell it ends on. */
 function* drainageReaches(
   state: GenerationState,
-  incoming: NumericalVector
+  incoming: Band
 ): IterableIterator<{ start: number; members: number[]; reach: DrainageReach }> {
-  const work = state.physical!,
-    map = work.map,
+  const map = state.physical!.map,
+    mesh = map.mesh,
     starts = workingArray(map, "int32", "rivers:reach-starts").fill(-1);
   let count = 0;
-  for (let i = 0; i < map.mesh.contentCount; i++)
-    if (map.RiverOrders[i] > 0 && incoming[i] !== 1) starts[i] = count++;
+  for (let i = 0; i < mesh.count; i++)
+    if (mesh.membership(i) === 1 && map.RiverOrders.get(i) > 0 && incoming.get(i) !== 1)
+      starts.set(i, count++);
   try {
-    for (let i = 0; i < map.mesh.contentCount; i++) {
-      if (starts[i] < 0) continue;
-      const members = riverReach(state, i, incoming),
-        mouth = members.at(-1)!;
-      yield {
-        start: i,
-        members,
-        reach: {
-          downstream: members.length > 1 && starts[mouth] >= 0 ? starts[mouth] : null,
-          waterBody: map.WaterKindCodes[mouth] !== 0 ? map.WaterBodyIds[mouth] : null,
-          order: map.RiverOrders[i],
-          basin: map.DrainageBasinIds[i],
-          coordinates: unwrapCoordinates(
-            members.map((j) => {
-              const p = nativePosition(work, j);
-              return [Math.round(p.x), Math.round(p.y)] as [number, number];
-            }),
-            map.mesh.periodic?.width
-          ) as [number, number][],
-          discharges: members.map((j) => map.FlowAccumulation[j]),
-          catchmentAreas: members.map((j) => map.CatchmentArea[j]),
-          featureIds: [],
-        } satisfies DrainageReach,
-      };
+    for (let i = 0; i < mesh.count; i++) {
+      if (starts.get(i) < 0) continue;
+      const members = riverReach(state, i, incoming);
+      yield { start: i, members, reach: reachRecord(state, i, members, starts) };
     }
   } finally {
     releaseWorking(map, starts);
   }
 }
 /** World maps keep their major basins; a dry world still shows its largest river systems. */
-function worldRiverMinimum(state: GenerationState, basinDischarge: Float64Array) {
+function worldRiverMinimum(state: GenerationState, basinDischarge: Band) {
   if (state.domain.world.areas[state.domain.scope.areaId].profile !== "world") return 0;
   let largest = 0;
-  for (const discharge of basinDischarge) largest = Math.max(largest, discharge);
+  for (let basin = 0; basin < basinDischarge.length; basin++)
+    largest = Math.max(largest, basinDischarge.get(basin));
   return Math.min(state.physical!.profile.WorldRiverMinimumBasinDischarge, largest / 2);
 }
 /**
@@ -181,11 +191,11 @@ function worldRiverMinimum(state: GenerationState, basinDischarge: Float64Array)
  */
 function shortHeadwater(
   work: NonNullable<GenerationState["physical"]>,
-  incoming: NumericalVector,
+  incoming: Band,
   members: number[]
 ) {
   const mouth = members.at(-1)!;
-  if (incoming[members[0]] !== 0 || work.map.WaterKindCodes[mouth] !== 0) return false;
+  if (incoming.get(members[0]) !== 0 || work.map.WaterKindCodes.get(mouth) !== 0) return false;
   let length = 0;
   for (let n = 1; n < members.length; n++)
     length += physicalDistance(work.map.mesh, members[n - 1], members[n]);
@@ -194,12 +204,12 @@ function shortHeadwater(
 function riverInputs(map: PhysicalField) {
   // Basin ids are numbered from one per outlet, so the largest is at most the cell count.
   const incoming = workingArray(map, "int32", "rivers:incoming"),
-    basinDischarge = new Float64Array(map.mesh.count + 1);
+    basinDischarge = workingArray(map, "float64", "rivers:basin-discharge", map.mesh.count + 1);
   for (let i = 0; i < map.mesh.count; i++) {
-    const basin = map.DrainageBasinIds[i];
-    basinDischarge[basin] = Math.max(basinDischarge[basin], map.FlowAccumulation[i]);
-    const j = map.FlowTargets[i];
-    if (map.RiverOrders[i] > 0 && j >= 0 && map.RiverOrders[j] > 0) incoming[j]++;
+    const basin = map.DrainageBasinIds.get(i);
+    basinDischarge.set(basin, Math.max(basinDischarge.get(basin), map.FlowAccumulation.get(i)));
+    const j = map.FlowTargets.get(i);
+    if (map.RiverOrders.get(i) > 0 && j >= 0 && map.RiverOrders.get(j) > 0) incoming.add(j, 1);
   }
   return { incoming, basinDischarge };
 }
@@ -289,7 +299,7 @@ function extractRiverGeography(
     // The map shows a subset; the stored network keeps every reach for finer areas.
     for (const { start, members, reach } of drainageReaches(state, incoming)) {
       reaches.push(reach);
-      const discharge = basinDischarge[reach.basin] ?? 0;
+      const discharge = basinDischarge.get(reach.basin);
       if (discharge < minimum) continue;
       if (!spatial.covers(state.domain.scope.footprint, point(nativePosition(work, start))))
         continue;
@@ -302,7 +312,7 @@ function extractRiverGeography(
     if (valleys) extractValleys(state, publish());
     else for (const reach of publish()) void reach;
   } finally {
-    releaseWorking(map, incoming);
+    releaseWorking(map, incoming, basinDischarge);
   }
   state.domain.world.drainage = {
     ...state.domain.world.drainage,

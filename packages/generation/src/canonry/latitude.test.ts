@@ -20,8 +20,9 @@ it("maps world northing linearly under the even-degree projection, for a world a
   expect(latitudeAtY(profile, 3_000_000)).toBe(60);
   expect(latitudeAtY(profile, 750_000)).toBe(0);
   for (const map of [world, region])
-    for (let i = 0; i < map.mesh.contentCount; i += 37) {
-      const y = map.mesh.y[i] + map.mesh.origin[1];
+    for (let i = 0; i < map.mesh.count; i += 37) {
+      if (map.mesh.membership(i) !== 1) continue;
+      const y = map.mesh.y(i) + map.mesh.origin[1];
       expect(latitudeAt(profile, map, i)).toBeCloseTo(-20 + (80 * y) / 3_000_000, 9);
     }
 });
@@ -57,10 +58,11 @@ it("inverts the projection and keeps regions on their parent's latitudes", () =>
     for (const latitude of [-70, -45, -3, 0, 12, 61, 70])
       expect(latitudeAtY(profile, northingAtLatitude(profile, latitude))).toBeCloseTo(latitude, 9);
     const region = createField(createWorldMesh([300_000, 500_000, 700_000, 900_000], 1024, 20_000));
-    for (let i = 0; i < region.mesh.contentCount; i += 29)
-      expect(latitudeAt(profile, region, i)).toBe(
-        latitudeAtY(profile, region.mesh.y[i] + region.mesh.origin[1])
-      );
+    for (let i = 0; i < region.mesh.count; i += 29)
+      if (region.mesh.membership(i) === 1)
+        expect(latitudeAt(profile, region, i)).toBe(
+          latitudeAtY(profile, region.mesh.y(i) + region.mesh.origin[1])
+        );
   }
 });
 
@@ -71,7 +73,8 @@ it("places a map without a world frame at its mid latitude", () => {
     latitudeProjection: 0,
   });
   const map = createField(createWorldMesh([0, 0, 400_000, 400_000], 256, 10_000));
-  for (let i = 0; i < map.mesh.count; i += 11) expect(latitudeAt(profile, map, i)).toBe(40);
+  for (let i = 0; i < map.mesh.count; i += 11)
+    if (map.mesh.membership(i) !== 0) expect(latitudeAt(profile, map, i)).toBe(40);
 });
 
 it("rejects a north edge south of the south edge", () => {

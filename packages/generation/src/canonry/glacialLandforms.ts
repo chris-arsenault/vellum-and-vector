@@ -12,14 +12,14 @@ function cirqueHead(
   radius: number,
   valueAt: ReturnType<typeof physicalSampler>
 ): boolean {
-  if (map.MaximumIceThickness[i] < threshold) return false;
+  const thickness = map.MaximumIceThickness.get(i);
+  if (thickness < threshold) return false;
   // Strictly thicker than all around: a level ice-sheet plateau has no cirque heads.
+  const x = map.mesh.x(i),
+    y = map.mesh.y(i);
   for (let direction = 0; direction < 16; direction++) {
     const angle = (direction * Math.PI) / 8;
-    if (
-      valueAt(map.mesh.x[i] + Math.cos(angle) * radius, map.mesh.y[i] + Math.sin(angle) * radius) >=
-      map.MaximumIceThickness[i]
-    )
+    if (valueAt(x + Math.cos(angle) * radius, y + Math.sin(angle) * radius) >= thickness)
       return false;
   }
   return true;
@@ -29,19 +29,19 @@ export function glacialLandforms(map: PhysicalField, c: PhysicalContext) {
   const valueAt = physicalSampler(map.mesh, map.MaximumIceThickness);
   for (let i = 0; i < map.mesh.count; i++) {
     if (
-      map.WaterKindCodes[i] !== 0 ||
-      map.MaximumGroundedIceFlux[i] < c.Profile.GlacierFluxThreshold
+      map.WaterKindCodes.get(i) !== 0 ||
+      map.MaximumGroundedIceFlux.get(i) < c.Profile.GlacierFluxThreshold
     )
       continue;
     if (
-      map.CumulativeGlacialErosion[i] >= units(c.Profile.UValleyMinimumGlacialErosion) &&
-      (map.RiverOrders[i] > 0 ||
-        map.FlowAccumulation[i] >= truncate(c.Profile.RiverAccumulationThreshold / 2))
+      map.CumulativeGlacialErosion.get(i) >= units(c.Profile.UValleyMinimumGlacialErosion) &&
+      (map.RiverOrders.get(i) > 0 ||
+        map.FlowAccumulation.get(i) >= truncate(c.Profile.RiverAccumulationThreshold / 2))
     )
-      map.LandformCodes[i] = Landform.UValley;
+      map.LandformCodes.set(i, Landform.UValley);
     // Cirques are mountain landforms: bowls at the heads of valley glaciers.
     if (
-      map.Elevation[i] - map.EffectiveSeaLevel >= units(c.Profile.MountainElevation) &&
+      map.Elevation.get(i) - map.EffectiveSeaLevel >= units(c.Profile.MountainElevation) &&
       cirqueHead(
         map,
         i,
@@ -50,10 +50,10 @@ export function glacialLandforms(map: PhysicalField, c: PhysicalContext) {
         valueAt
       )
     )
-      map.LandformCodes[i] = Landform.Cirque;
+      map.LandformCodes.set(i, Landform.Cirque);
     // Moraines are till ridges left where ice termini stood: glacial deposition only, not the
     // river and slope deposition that covers most formerly glaciated land.
-    if (map.CumulativeGlacialDeposition[i] >= units(c.Profile.MoraineMinimumGlacialDeposition))
-      map.LandformCodes[i] = Landform.Moraine;
+    if (map.CumulativeGlacialDeposition.get(i) >= units(c.Profile.MoraineMinimumGlacialDeposition))
+      map.LandformCodes.set(i, Landform.Moraine);
   }
 }

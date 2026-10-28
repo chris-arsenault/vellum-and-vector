@@ -2,6 +2,7 @@ import type { AtlasPhysicalWorkspace } from "./atlasWorkspace";
 import type { PhysicalMesh } from "./mesh";
 import {
   allocateNumerical,
+  Band,
   readNumericalBlock,
   writeNumericalBlock,
   type NumericalAllocator,
@@ -117,14 +118,19 @@ export function releaseProjection(
 /** Reuse geometric weights across channels; identities always use a discrete sample. */
 export function projectedValues(
   work: AtlasPhysicalWorkspace,
-  values: ArrayLike<number> | ((index: number) => number),
+  values: Band | ArrayLike<number> | ((index: number) => number),
   discrete = false,
   output: NumericalVector = allocateNumerical(
     { type: "float64", length: work.samples.length, lifetime: "process", name: "projected" },
-    work.map.numerical
+    work.numerical
   )
 ) {
-  const valueAt = typeof values === "function" ? values : (index: number) => values[index];
+  const valueAt =
+    typeof values === "function"
+      ? values
+      : values instanceof Band
+        ? (index: number) => values.get(index)
+        : (index: number) => values[index];
   if (!discrete && work.interpolation) return interpolate(work.interpolation, valueAt, output);
   for (let i = 0; i < work.samples.length; i++) output[i] = valueAt(work.samples[i]);
   return output;

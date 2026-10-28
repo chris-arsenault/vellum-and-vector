@@ -28,9 +28,9 @@ it("inherits impact history and fixed geography from supplied parent cells with 
   const state: GenerationState = { domain, surface, facts: new Set(), history: [] };
   const work = createAtlasWorkspace(state, "draft");
   expect(work.inherited).toBe(true);
-  expect(work.map.ImpactExcavation.some((value) => value > 0)).toBe(true);
+  expect(Array.from(work.map.ImpactExcavation).some((value) => value > 0)).toBe(true);
   expect(work.map.AvailableFacts.has("Impacts")).toBe(true);
-  expect(work.map.Elevation.every(Number.isFinite)).toBe(true);
+  expect(Array.from(work.map.Elevation).every(Number.isFinite)).toBe(true);
   expect(work.map.SeaLevelInitialized).toBe(true);
   const prepared = prepareAtlasGeneration(domain, {
     ...input,

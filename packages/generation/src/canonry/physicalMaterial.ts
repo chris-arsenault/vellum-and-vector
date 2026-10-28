@@ -5,22 +5,27 @@ import { Landform } from "./codes";
 import { projectedValues } from "./atlasSampling";
 
 function landMaterial(map: PhysicalField, i: number): number {
-  if (map.DeltaIntensity[i] > 0 || map.FloodplainIntensity[i] > 0) return 3;
-  if (map.LandformCodes[i] === Landform.Moraine) return 10;
-  if (map.Geothermal[i] >= 760) return 9;
-  if (map.IceThickness[i] >= 300) return 5;
+  if (map.DeltaIntensity.get(i) > 0 || map.FloodplainIntensity.get(i) > 0) return 3;
+  if (map.LandformCodes.get(i) === Landform.Moraine) return 10;
+  if (map.Geothermal.get(i) >= 760) return 9;
+  if (map.IceThickness.get(i) >= 300) return 5;
   return exposedMaterial(map, i);
 }
 function exposedMaterial(map: PhysicalField, i: number): number {
-  if ([Landform.Gorge, Landform.Waterfall].includes(map.LandformCodes[i])) return 0;
-  if ([Landform.Peak, Landform.Ridge].includes(map.LandformCodes[i]))
-    return map.Slope[i] >= 0.0085 ? 0 : 1;
-  if (map.Temperature[i] <= 250) return map.Moisture[i] >= 560 ? 4 : 2;
-  return map.Moisture[i] >= 330 ? 3 : 2;
+  const landform = map.LandformCodes.get(i);
+  if ([Landform.Gorge, Landform.Waterfall].includes(landform)) return 0;
+  if ([Landform.Peak, Landform.Ridge].includes(landform)) return map.Slope.get(i) >= 0.0085 ? 0 : 1;
+  const moisture = map.Moisture.get(i);
+  if (map.Temperature.get(i) <= 250) return moisture >= 560 ? 4 : 2;
+  return moisture >= 330 ? 3 : 2;
 }
 function oceanMaterial(map: PhysicalField, i: number): number {
-  if (map.BathymetricZoneCodes[i] === 4) return 7;
-  if (map.WaterDepths[i] <= 125 * 1024 && map.Temperature[i] >= 300 && map.Geothermal[i] >= 150)
+  if (map.BathymetricZoneCodes.get(i) === 4) return 7;
+  if (
+    map.WaterDepths.get(i) <= 125 * 1024 &&
+    map.Temperature.get(i) >= 300 &&
+    map.Geothermal.get(i) >= 150
+  )
     return 8;
   return 6;
 }
@@ -33,7 +38,7 @@ export function projectPhysicalMaterial(state: GenerationState) {
     "category",
     projectedValues(
       work,
-      (i) => (map.WaterKindCodes[i] === 1 ? oceanMaterial(map, i) : landMaterial(map, i)),
+      (i) => (map.WaterKindCodes.get(i) === 1 ? oceanMaterial(map, i) : landMaterial(map, i)),
       true
     )
   );

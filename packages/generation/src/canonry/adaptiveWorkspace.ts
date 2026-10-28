@@ -1,8 +1,9 @@
 import {
   refineAdaptiveWhere,
   prepareAdaptiveTransfer,
-  generateNumerical,
+  type Band,
   type NumericalAllocator,
+  type SampleType,
 } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { remeshPhysical } from "./physicalRemesh";
@@ -11,7 +12,9 @@ import type { PhysicalContext } from "./context";
 import { plannedImpacts } from "./impacts";
 import { plumeCenter } from "./volcanism";
 import type { PhysicalMesh } from "./mesh";
+import { physicalBands, type PhysicalField } from "./field";
 import { refreshGrounding } from "./glacierSurface";
+import { retainedArray } from "./physicalNumerics";
 import { invalidateNativeProducts } from "../productLedger";
 import {
   magicChannels,
@@ -50,64 +53,50 @@ function supported([x0, y0, x1, y1]: number[], supports: SamplingSupport[]) {
       Math.hypot(Math.max(x0 - x, 0, x - x1), Math.max(y0 - y, 0, y - y1)) <= radius
   );
 }
-function remapArray(
+/** Carry one band from the old lattice onto the new one; the old band is released. */
+function remapBand(
   old: PhysicalMesh,
-  mesh: PhysicalMesh,
-  values: ArrayLike<number>,
+  map: PhysicalField,
+  values: Band,
   quantity: "category" | "intensive" | "extensive",
   transfer: ReturnType<typeof prepareAdaptiveTransfer>,
   numerical?: NumericalAllocator,
-  type: "float64" | "uint8" = "float64"
+  type: SampleType = "float64"
 ) {
-  const next = transfer((leaf) => values[old.leafToCell[leaf]], quantity);
-  const result = generateNumerical(
-    { type, length: mesh.count, lifetime: "run", name: "adaptive:magicTransfer" },
-    (cell) => next[mesh.cellToLeaf[cell]],
-    numerical
-  );
-  if (numerical) numerical.release(next);
+  // The transfer works on adaptive leaves in the surface arena; the result is a new band.
+  const leaves = transfer((leaf) => values.get(old.leafToCell(leaf)), quantity);
+  const result = retainedArray(map, type, values.name);
+  for (let cell = 0; cell < map.mesh.count; cell++)
+    result.set(cell, leaves[map.mesh.cellToLeaf(cell)]);
+  if (numerical) numerical.release(leaves);
   return result;
 }
 function remapMagic(
   state: GenerationState,
-  old: PhysicalMesh,
+  old: PhysicalField,
   transfer: ReturnType<typeof prepareAdaptiveTransfer>
 ) {
   const work = state.physical!,
     magic = work.magic;
   if (!magic) return;
+  const carry = (
+    values: Band,
+    quantity: "category" | "intensive" | "extensive",
+    type: SampleType = "float64"
+  ) => {
+    const next = remapBand(old.mesh, work.map, values, quantity, transfer, state.numerical, type);
+    old.coverage.release(values);
+    return next;
+  };
   for (const field of magic.fields) {
     delete field.parents;
-    for (const key of magicChannels) {
-      field[key] = remapArray(
-        old,
-        work.map.mesh,
-        field[key],
-        magicFieldDefinitions[key].quantity,
-        transfer,
-        state.numerical
-      );
-    }
+    for (const key of magicChannels)
+      field[key] = carry(field[key], magicFieldDefinitions[key].quantity);
     for (const [key, values] of Object.entries(field.features))
-      field.features[key] = remapArray(
-        old,
-        work.map.mesh,
-        values,
-        "category",
-        transfer,
-        state.numerical,
-        "uint8"
-      );
+      field.features[key] = carry(values, "category", "uint8");
   }
   for (const key of magicWorkspaceChannels)
-    magic[key] = remapArray(
-      old,
-      work.map.mesh,
-      magic[key],
-      magicWorkspaceDefinitions[key].quantity,
-      transfer,
-      state.numerical
-    );
+    magic[key] = carry(magic[key], magicWorkspaceDefinitions[key].quantity);
 }
 /** Refinement precedes construction or an already scheduled global reconciliation. */
 export function refineWorkspace(
@@ -116,7 +105,8 @@ export function refineWorkspace(
   invalidation: RemeshInvalidationPolicy = "standalone"
 ) {
   const work = state.physical!,
-    old = work.map.mesh;
+    previous = work.map,
+    old = previous.mesh;
   if (!old.topology || !supports.length) return false;
   const started = performance.now();
   const minimum = supports.reduce((size, support) => Math.min(size, support.size), Infinity);
@@ -129,7 +119,7 @@ export function refineWorkspace(
   if (topology === old.topology) return false;
   const assembled = performance.now();
   const transfer = prepareAdaptiveTransfer(old.topology, topology, state.numerical);
-  work.map = remeshPhysical(work.map, topology, state.domain.scope.footprint, transfer);
+  work.map = remeshPhysical(previous, topology, state.domain.scope.footprint, transfer);
   refreshGrounding(work.map, work.profile);
   if (invalidation === "standalone")
     invalidateNativeProducts(
@@ -137,7 +127,9 @@ export function refineWorkspace(
       remeshInvalidations.map((product) => product.slice("canonry:".length)),
       "adaptive topology transfer"
     );
-  remapMagic(state, old, transfer);
+  remapMagic(state, previous, transfer);
+  // The old lattice's physical bands are no longer read; give their blocks back to the cache.
+  for (const [, band] of physicalBands(previous)) previous.coverage.release(band);
   refreshWorkspaceSamples(state, work, transfer);
   refreshWorkspaceProtection(state, work);
   console.log("Adaptive terrain refinement", {

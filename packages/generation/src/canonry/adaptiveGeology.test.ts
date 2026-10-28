@@ -5,9 +5,11 @@ import {
   rectangle,
   refineAdaptiveTopology,
   sampleAdaptive,
+  type AdaptiveLattice,
+  type Band,
 } from "@atlas/domain";
 import { adaptivePhysicalMesh } from "./adaptiveMesh";
-import { createField } from "./field";
+import { createField, type PhysicalField } from "./field";
 import { smoothMetric } from "./metricSmoothing";
 import { remeshPhysical } from "./physicalRemesh";
 import { massWasting } from "./massWasting";
@@ -16,7 +18,8 @@ import { atlasPhysicalProfile } from "./atlasProfile";
 import { buildTransportPlan } from "./transportPlan";
 import { transportHistory } from "./transportHistory";
 import { orogenicConstruction } from "./orogeny";
-import { metricOperator, metricProduct } from "./metricOperator";
+import { metricArray, metricOperator, metricProduct } from "./metricOperator";
+import { releaseWorking, workingValues } from "./physicalNumerics";
 import { volcanicConstruction } from "./volcanism";
 import { impactCratering, plannedImpacts } from "./impacts";
 import { physicalSampler } from "./physicalMetric";
@@ -43,10 +46,17 @@ function hillsideFixture() {
   });
   return createField(adaptivePhysicalMesh(topology, rectangle(box)));
 }
-const integral = (
-  values: import("@atlas/domain").NumericalVector,
-  areas: import("@atlas/domain").NumericalVector
-) => values.reduce((sum, value, i) => sum + value * areas[i], 0);
+const integral = (map: PhysicalField, values: Band) =>
+  map.coverage.reduce(values, (sum, value, i) => sum + value * map.mesh.area(i), 0);
+/** Number of cells whose value satisfies the test. */
+const countWhere = (map: PhysicalField, band: Band, test: (value: number) => boolean) =>
+  map.coverage.reduce(band, (n, value) => n + (test(value) ? 1 : 0), 0);
+const maximum = (map: PhysicalField, band: Band) =>
+  map.coverage.reduce(band, (highest, value) => Math.max(highest, value), -Infinity);
+/** Write `value(i)` into every cell of the band. */
+function assign(map: PhysicalField, band: Band, value: (i: number) => number) {
+  for (let i = 0; i < map.mesh.count; i++) band.set(i, value(i));
+}
 
 it("retains seabed, flooded glacial valleys, lakes and glacial landforms during classification", () => {
   const map = fixture();
@@ -54,44 +64,44 @@ it("retains seabed, flooded glacial valleys, lakes and glacial landforms during 
   const marks = () => {
     for (let i = 0; i < map.mesh.count; i++) {
       const kind = i % 4;
-      map.WaterKindCodes[i] = kind < 2 ? 1 : kind === 2 ? 2 : 0;
-      map.LandformCodes[i] = kind === 1 ? Landform.UValley : kind === 3 ? Landform.Moraine : 0;
+      map.WaterKindCodes.set(i, kind < 2 ? 1 : kind === 2 ? 2 : 0);
+      map.LandformCodes.set(i, kind === 1 ? Landform.UValley : kind === 3 ? Landform.Moraine : 0);
     }
   };
   // A shallow trough along y = 0: land rises on both flanks within a fjord's half-width, and
   // no summit is prominent enough to be a peak.
-  for (let i = 0; i < map.mesh.count; i++)
-    map.Elevation[i] = ((Math.abs(map.mesh.y[i]) - 2000) * 1024) / 1000;
+  assign(map, map.Elevation, (i) => ((Math.abs(map.mesh.y(i)) - 2000) * 1024) / 1000);
   marks();
   landformClassification(map, physicalContext(42, 0, atlasPhysicalProfile()));
-  for (let i = 0; i < map.mesh.count; i++) expect(map.LandformCodes[i]).toBe(expected[i % 4]);
+  for (let i = 0; i < map.mesh.count; i++) expect(map.LandformCodes.get(i)).toBe(expected[i % 4]);
   // Scoured open shelf with no flanking land is seabed.
   map.Elevation.fill(-500 * 1024);
   marks();
   landformClassification(map, physicalContext(42, 0, atlasPhysicalProfile()));
-  for (let i = 1; i < map.mesh.count; i += 4) expect(map.LandformCodes[i]).toBe(Landform.Seabed);
+  for (let i = 1; i < map.mesh.count; i += 4)
+    expect(map.LandformCodes.get(i)).toBe(Landform.Seabed);
 });
 
 it("keeps glacial landforms to terminus till, deep troughs and mountain ice heads", () => {
   const map = fixture(),
     p = atlasPhysicalProfile(),
-    till = map.mesh.contentCount >> 1;
+    till = map.mesh.count >> 1;
   for (let i = 0; i < map.mesh.count; i++) {
-    map.Elevation[i] = 500 * 1024;
-    map.MaximumGroundedIceFlux[i] = p.GlacierFluxThreshold;
+    map.Elevation.set(i, 500 * 1024);
+    map.MaximumGroundedIceFlux.set(i, p.GlacierFluxThreshold);
     // A level ice-sheet plateau, river and slope deposition everywhere, shallow scour.
-    map.MaximumIceThickness[i] = 840;
-    map.CumulativeDeposition[i] = 20 * 1024;
-    map.CumulativeGlacialErosion[i] = 2 * 1024;
-    map.RiverOrders[i] = 1;
+    map.MaximumIceThickness.set(i, 840);
+    map.CumulativeDeposition.set(i, 20 * 1024);
+    map.CumulativeGlacialErosion.set(i, 2 * 1024);
+    map.RiverOrders.set(i, 1);
   }
-  map.CumulativeGlacialDeposition[till] = 12 * 1024;
+  map.CumulativeGlacialDeposition.set(till, 12 * 1024);
   glacialLandforms(map, physicalContext(42, 0, p));
   for (let i = 0; i < map.mesh.count; i++)
-    expect(map.LandformCodes[i]).toBe(i === till ? Landform.Moraine : 0);
+    expect(map.LandformCodes.get(i)).toBe(i === till ? Landform.Moraine : 0);
   map.CumulativeGlacialErosion.fill(p.UValleyMinimumGlacialErosion * 1024);
   glacialLandforms(map, physicalContext(42, 0, p));
-  expect(map.LandformCodes.filter((code) => code === Landform.UValley)).toHaveLength(
+  expect(countWhere(map, map.LandformCodes, (code) => code === Landform.UValley)).toBe(
     map.mesh.count - 1
   );
 });
@@ -99,14 +109,13 @@ it("keeps glacial landforms to terminus till, deep troughs and mountain ice head
 it("samples an immutable physical surface lazily with the same coarse/fine reconstruction", () => {
   const map = fixture(),
     mesh = map.mesh;
-  map.Elevation.set(
-    Float64Array.from(mesh.x, (x, i) => 200 + Math.sin(x / 10000) * Math.cos(mesh.y[i] / 9000))
-  );
+  assign(map, map.Elevation, (i) => 200 + Math.sin(mesh.x(i) / 10000) * Math.cos(mesh.y(i) / 9000));
   const expected = reconstructAdaptive(
     mesh.topology!,
-    Float64Array.from(mesh.leafToCell, (cell) => map.Elevation[cell])
+    Float64Array.from((mesh as AdaptiveLattice).leafCells(), (cell) => map.Elevation.get(cell))
   );
-  const at = physicalSampler(mesh, map.Elevation);
+  // physicalSampler reads the band it is given; the immutable surface is a copy-on-write snapshot.
+  const at = physicalSampler(mesh, map.Elevation.snapshot());
   map.Elevation.fill(-999);
   for (let y = -49000; y < 50000; y += 7319)
     for (let x = -49000; x < 50000; x += 6173)
@@ -122,27 +131,31 @@ it.each([0, 2500, 20_000])(
   (reach) => {
     const box: [number, number, number, number] = [0, 0, 20_000, 20_000];
     const topology = createAdaptiveTopology(box, { maximumSize: 10_000, minimumSize: 10_000 });
-    const mesh = adaptivePhysicalMesh(topology, rectangle(box));
-    const input = Float64Array.from(mesh.x, (x) => 7 + (x < 0 ? -3 : 3));
-    const output = smoothMetric(mesh, input, reach);
+    const mesh = adaptivePhysicalMesh(topology, rectangle(box)),
+      map = createField(mesh);
+    const input = workingValues(map, "float64", "test:input", (i) => 7 + (mesh.x(i) < 0 ? -3 : 3));
+    const output = smoothMetric(map, input, reach);
     // Two equal square columns exchange through one face: contrast is divided by
     // 1 + 2 L²/h². This expectation does not call the assembled matrix/operator.
     const contrast = 3 / (1 + 2 * (reach / 10_000) ** 2);
     for (let i = 0; i < mesh.count; i++)
-      expect(output[i]).toBeCloseTo(7 + (mesh.x[i] < 0 ? -contrast : contrast), 9);
+      expect(output.get(i)).toBeCloseTo(7 + (mesh.x(i) < 0 ? -contrast : contrast), 9);
+    releaseWorking(map, input, output);
   }
 );
 
 it("diffuses support across coarse/fine faces without creating crust", () => {
   const map = fixture();
-  const input = Float64Array.from(map.mesh.x, (x, i) =>
-    Math.exp(-(x ** 2 + map.mesh.y[i] ** 2) / 2e8)
+  const input = workingValues(map, "float64", "test:input", (i) =>
+    Math.exp(-(map.mesh.x(i) ** 2 + map.mesh.y(i) ** 2) / 2e8)
   );
-  const output = smoothMetric(map.mesh, input, 15_000);
-  expect(integral(output, map.mesh.areas)).toBeCloseTo(integral(input, map.mesh.areas), -2);
-  expect(Math.max(...output)).toBeLessThan(Math.max(...input));
-  const constant = smoothMetric(map.mesh, new Float64Array(map.mesh.count).fill(7), 15_000);
-  expect([...constant].every((v) => Math.abs(v - 7) < 1e-9)).toBe(true);
+  const output = smoothMetric(map, input, 15_000);
+  expect(integral(map, output)).toBeCloseTo(integral(map, input), -2);
+  expect(maximum(map, output)).toBeLessThan(maximum(map, input));
+  const flat = workingValues(map, "float64", "test:flat", () => 7);
+  const constant = smoothMetric(map, flat, 15_000);
+  expect(countWhere(map, constant, (v) => Math.abs(v - 7) >= 1e-9)).toBe(0);
+  releaseWorking(map, input, output, flat, constant);
 });
 
 it("solves the fine physical equation at high coarse/fine contrast and long influence length", () => {
@@ -151,59 +164,67 @@ it("solves the fine physical equation at high coarse/fine contrast and long infl
     minimumSize: 390.625,
     refine: ([x, y, right, top]) => x < 1500 && right > -1500 && y < 10_000 && top > -10_000,
   });
-  const mesh = adaptivePhysicalMesh(topology, rectangle(bounds));
-  const input = Float64Array.from(
-    mesh.x,
-    (x, i) => Math.sin(x / 9000) + Math.cos(mesh.y[i] / 7000)
+  const mesh = adaptivePhysicalMesh(topology, rectangle(bounds)),
+    map = createField(mesh);
+  const input = workingValues(
+    map,
+    "float64",
+    "test:input",
+    (i) => Math.sin(mesh.x(i) / 9000) + Math.cos(mesh.y(i) / 7000)
   );
-  const result = smoothMetric(mesh, input, 200_000);
-  const matrix = metricOperator(mesh, 200_000),
-    applied = new Float64Array(mesh.count);
+  const result = smoothMetric(map, input, 200_000);
+  const matrix = metricOperator(map, 200_000),
+    applied = metricArray(map, "applied", matrix.cells.length);
   metricProduct(matrix, result, applied);
   let residual = 0,
     magnitude = 0;
   for (let i = 0; i < result.length; i++) {
-    const rhs = input[i] * mesh.areas[i];
-    residual += (applied[i] - rhs) ** 2 / matrix.diagonal[i];
-    magnitude += rhs ** 2 / matrix.diagonal[i];
+    const rhs = input.get(i) * mesh.area(i);
+    residual += (applied.get(i) - rhs) ** 2 / matrix.diagonal.get(i);
+    magnitude += rhs ** 2 / matrix.diagonal.get(i);
   }
   expect(residual / magnitude).toBeLessThan(1e-12);
 });
 
 it("remeshes evolved material and provenance without restoring an initial event", () => {
   const map = fixture();
-  map.BedrockElevation.set(Float64Array.from(map.mesh.x, (x) => x / 10));
+  assign(map, map.BedrockElevation, (i) => map.mesh.x(i) / 10);
   map.SedimentThickness.fill(100);
-  map.CrustAssemblyIds.set(Int32Array.from(map.mesh.x, (x) => (x < 0 ? 3 : 8)));
+  assign(map, map.CrustAssemblyIds, (i) => (map.mesh.x(i) < 0 ? 3 : 8));
   map.CumulativeFluvialErosion.fill(400);
   const refined = refineAdaptiveTopology(map.mesh.topology!, [0], 1000);
   const next = remeshPhysical(map, refined, rectangle(bounds));
-  expect(integral(next.SedimentThickness, next.mesh.areas)).toBeCloseTo(
-    integral(map.SedimentThickness, map.mesh.areas),
+  expect(integral(next, next.SedimentThickness)).toBeCloseTo(
+    integral(map, map.SedimentThickness),
     -2
   );
-  expect(integral(next.BedrockElevation, next.mesh.areas)).toBeCloseTo(
-    integral(map.BedrockElevation, map.mesh.areas),
+  expect(integral(next, next.BedrockElevation)).toBeCloseTo(
+    integral(map, map.BedrockElevation),
     -2
   );
-  expect(new Set(next.CrustAssemblyIds)).toEqual(new Set([3, 8]));
-  expect([...next.CumulativeFluvialErosion].every((v) => v === 400)).toBe(true);
-  expect([...next.FlowTargets].every((v) => v === -1)).toBe(true);
+  expect(new Set(Array.from(next.CrustAssemblyIds))).toEqual(new Set([3, 8]));
+  expect(countWhere(next, next.CumulativeFluvialErosion, (v) => v !== 400)).toBe(0);
+  expect(countWhere(next, next.FlowTargets, (v) => v !== -1)).toBe(0);
   expect(
-    [...next.Elevation].every((v, i) => v === next.BedrockElevation[i] + next.SedimentThickness[i])
-  ).toBe(true);
+    next.coverage.reduce(
+      next.Elevation,
+      (wrong, v, i) =>
+        v === next.BedrockElevation.get(i) + next.SedimentThickness.get(i) ? wrong : wrong + 1,
+      0
+    )
+  ).toBe(0);
 });
 
 it("moves hillslope material conservatively across unequal control volumes", () => {
   const map = hillsideFixture();
-  map.BedrockElevation.set(Float64Array.from(map.mesh.x, (x) => 1024 * (3500 - Math.abs(x) * 2)));
-  map.Elevation.set(map.BedrockElevation);
+  assign(map, map.BedrockElevation, (i) => 1024 * (3500 - Math.abs(map.mesh.x(i)) * 2));
+  map.Elevation.copyFrom(map.BedrockElevation);
   map.RockResistance.fill(1000);
-  const before = integral(map.Elevation, map.mesh.areas);
+  const before = integral(map, map.Elevation);
   const profile = atlasPhysicalProfile();
   profile.MassWastingIterations = 1;
   massWasting(map, physicalContext(1, 0, profile));
-  expect(integral(map.Elevation, map.mesh.areas)).toBeCloseTo(before, -4);
+  expect(integral(map, map.Elevation)).toBeCloseTo(before, -4);
   expect(map.SedimentProducedTotal).toBeGreaterThan(0);
 });
 
@@ -211,69 +232,71 @@ it("preserves a gentle mountain flank while relaxing genuinely unstable rock", (
   for (const slope of [0.15, 2]) {
     const map = hillsideFixture();
     map.RockResistance.fill(1000);
-    map.Elevation.set(Float64Array.from(map.mesh.x, (x) => slope * x * 1024));
-    map.BedrockElevation.set(map.Elevation);
-    const before = map.Elevation.slice(),
-      volume = integral(before, map.mesh.areas);
+    assign(map, map.Elevation, (i) => slope * map.mesh.x(i) * 1024);
+    map.BedrockElevation.copyFrom(map.Elevation);
+    const before = Array.from(map.Elevation),
+      volume = integral(map, map.Elevation);
     massWasting(map, physicalContext(42, 0, atlasPhysicalProfile()));
-    if (slope === 0.15) expect(map.Elevation).toEqual(before);
-    else expect(map.Elevation.some((value, i) => value !== before[i])).toBe(true);
-    expect(integral(map.Elevation, map.mesh.areas)).toBeCloseTo(volume, -2);
+    if (slope === 0.15) expect(Array.from(map.Elevation)).toEqual(before);
+    else expect(before.some((value, i) => value !== map.Elevation.get(i))).toBe(true);
+    expect(integral(map, map.Elevation)).toBeCloseTo(volume, -2);
   }
 });
 
 it("retains lake inventory and a single hydrostatic level when its floor is refined", () => {
   const map = fixture();
-  map.BedrockElevation.set(Float64Array.from(map.mesh.x, (x) => x / 10));
-  map.Elevation.set(map.BedrockElevation);
+  assign(map, map.BedrockElevation, (i) => map.mesh.x(i) / 10);
+  map.Elevation.copyFrom(map.BedrockElevation);
   map.WaterKindCodes.fill(2);
   map.WaterBodyIds.fill(17);
   map.WaterSurfaceElevations.fill(10_000);
-  map.WaterDepths.set(Float64Array.from(map.Elevation, (floor) => 10_000 - floor));
-  const before = integral(map.WaterDepths, map.mesh.areas);
+  assign(map, map.WaterDepths, (i) => 10_000 - map.Elevation.get(i));
+  const before = integral(map, map.WaterDepths);
   const refined = refineAdaptiveTopology(map.mesh.topology!, [0, 1, 2], 1000);
   const next = remeshPhysical(map, refined, rectangle(bounds));
-  expect(integral(next.WaterDepths, next.mesh.areas)).toBeCloseTo(before, -2);
-  expect(new Set(next.WaterSurfaceElevations).size).toBe(1);
+  expect(integral(next, next.WaterDepths)).toBeCloseTo(before, -2);
+  expect(new Set(Array.from(next.WaterSurfaceElevations)).size).toBe(1);
   expect(
-    [...next.WaterDepths].every(
-      (depth, i) => depth === next.WaterSurfaceElevations[i] - next.Elevation[i]
+    next.coverage.reduce(
+      next.WaterDepths,
+      (wrong, depth, i) =>
+        depth === next.WaterSurfaceElevations.get(i) - next.Elevation.get(i) ? wrong : wrong + 1,
+      0
     )
-  ).toBe(true);
+  ).toBe(0);
 });
 
 it("retains ordered ice maxima when history is refined without another glaciation", () => {
   const map = fixture();
-  map.MaximumIceFlux.set(
-    Float64Array.from(
-      map.mesh.x,
-      (x, i) => 10 + Math.abs(Math.sin(x / 1700 + map.mesh.y[i] / 2300)) * 1e6
-    )
+  assign(
+    map,
+    map.MaximumIceFlux,
+    (i) => 10 + Math.abs(Math.sin(map.mesh.x(i) / 1700 + map.mesh.y(i) / 2300)) * 1e6
   );
-  map.MaximumGroundedIceFlux.set(
-    Float64Array.from(map.MaximumIceFlux, (flux, i) =>
-      Math.min(flux, Math.abs(Math.cos(i * 1.71)) * 9e5)
-    )
+  assign(map, map.MaximumGroundedIceFlux, (i) =>
+    Math.min(map.MaximumIceFlux.get(i), Math.abs(Math.cos(i * 1.71)) * 9e5)
   );
-  const topology = refineAdaptiveTopology(map.mesh.topology!, [...map.mesh.cellToLeaf], 1000);
+  const topology = refineAdaptiveTopology(
+    map.mesh.topology!,
+    Array.from({ length: map.mesh.count }, (_, i) => map.mesh.cellToLeaf(i)),
+    1000
+  );
   const next = remeshPhysical(map, topology, rectangle(bounds));
   for (let i = 0; i < next.mesh.count; i++)
-    expect(next.MaximumGroundedIceFlux[i]).toBeLessThanOrEqual(next.MaximumIceFlux[i]);
+    expect(next.MaximumGroundedIceFlux.get(i)).toBeLessThanOrEqual(next.MaximumIceFlux.get(i));
 });
 
 it("advects entire material footprints across coarse/fine faces", () => {
   const map = fixture();
   map.CrustMotionX.fill(1000);
-  map.SedimentThickness.set(
-    Float64Array.from(map.mesh.x, (x, i) =>
-      Math.abs(x) < 20_000 && Math.abs(map.mesh.y[i]) < 20_000 ? 100 : 0
-    )
+  assign(map, map.SedimentThickness, (i) =>
+    Math.abs(map.mesh.x(i)) < 20_000 && Math.abs(map.mesh.y(i)) < 20_000 ? 100 : 0
   );
-  const before = integral(map.SedimentThickness, map.mesh.areas);
+  const before = integral(map, map.SedimentThickness);
   const plan = buildTransportPlan(map, 2000);
   transportHistory(map, plan);
-  expect(integral(map.SedimentThickness, map.mesh.areas)).toBeCloseTo(before, -2);
-  expect(Math.max(...map.SedimentThickness)).toBeLessThanOrEqual(100 + 1e-9);
+  expect(integral(map, map.SedimentThickness)).toBeCloseTo(before, -2);
+  expect(maximum(map, map.SedimentThickness)).toBeLessThanOrEqual(100 + 1e-9);
   expect(plan.targets.length).toBeGreaterThan(map.mesh.count);
 });
 
@@ -287,18 +310,18 @@ it("constructs collision relief and rift thinning from the same physical boundar
     map.CrustContinentalFraction.fill(1000);
     map.RockResistance.fill(1000);
     for (let i = 0; i < map.mesh.count; i++) {
-      if (Math.abs(map.mesh.x[i]) > 12_500) continue;
-      map.TectonicBoundaryCodes[i] = code;
-      map.TectonicBoundaryPairIds[i] = 65538;
-      map.TectonicStrain[i] = 800;
-      map.CrustCollisionIntensity[i] = code === 1 ? 900 : 0;
+      if (Math.abs(map.mesh.x(i)) > 12_500) continue;
+      map.TectonicBoundaryCodes.set(i, code);
+      map.TectonicBoundaryPairIds.set(i, 65538);
+      map.TectonicStrain.set(i, 800);
+      map.CrustCollisionIntensity.set(i, code === 1 ? 900 : 0);
     }
     orogenicConstruction(map, physicalContext(42, 0, profile));
-    expect(map.OrogenicConstruction.some((v) => v > 0)).toBe(true);
+    expect(countWhere(map, map.OrogenicConstruction, (v) => v > 0)).toBeGreaterThan(0);
     if (code === 1) {
-      expect(map.BedrockElevation.some((v) => v > 0)).toBe(true);
-      expect(map.RockResistance.some((v) => v > 1000)).toBe(true);
-    } else expect(map.OrogenicConstruction.some((v) => v < 0)).toBe(true);
+      expect(countWhere(map, map.BedrockElevation, (v) => v > 0)).toBeGreaterThan(0);
+      expect(countWhere(map, map.RockResistance, (v) => v > 1000)).toBeGreaterThan(0);
+    } else expect(countWhere(map, map.OrogenicConstruction, (v) => v < 0)).toBeGreaterThan(0);
   }
 });
 
@@ -350,9 +373,9 @@ it.each(["volcano", "crater"])(
     const at = physicalSampler(map.mesh, map.Elevation);
     if (kind === "volcano") expect(at(center.x, center.y) / 1024).toBeGreaterThan(1000);
     else expect(at(center.x, center.y) / 1024).toBeLessThan(-200);
-    const before = map.Elevation.slice();
+    const before = Array.from(map.Elevation);
     massWasting(map, context);
-    expect(map.Elevation).toEqual(before);
+    expect(Array.from(map.Elevation)).toEqual(before);
     map.CrustMotionX.fill(1000);
     map.CrustMotionY.fill(0);
     p.PlateDriftPerEpoch = 250;

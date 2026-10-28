@@ -54,22 +54,26 @@ function magicRules(state: GenerationState): BiomeRule[] {
   const quickening = fields.filter((f) => f.definition.effects.quickening > 0),
     stilling = fields.filter((f) => f.definition.effects.stillness > 0),
     fogging = fields.filter((f) => f.definition.effects.fog > 0);
-  const canopy = (i: number) => map.BroadleafCover[i] + map.ConiferCover[i],
-    cover = (i: number) => map.TreeCover[i] + map.GrassCover[i] + map.WetlandCover[i];
+  const canopy = (i: number) => map.BroadleafCover.get(i) + map.ConiferCover.get(i),
+    cover = (i: number) => map.TreeCover.get(i) + map.GrassCover.get(i) + map.WetlandCover.get(i);
   const rules: BiomeRule[] = [];
   if (quickening.length)
     rules.push(
       {
         kind: "ember",
         share: 0.0003,
-        terms: [(i) => map.Quickening[i] - 0.25, (i) => canopy(i) - 0.3],
+        terms: [(i) => map.Quickening.get(i) - 0.25, (i) => canopy(i) - 0.3],
         name: () => "Ember grove",
         system: (r) => strongest(quickening, r),
       },
       {
         kind: "thaw",
         share: 0.0003,
-        terms: [(i) => map.Quickening[i] - 0.25, (i) => 0.3 - canopy(i), (i) => cover(i) - 0.12],
+        terms: [
+          (i) => map.Quickening.get(i) - 0.25,
+          (i) => 0.3 - canopy(i),
+          (i) => cover(i) - 0.12,
+        ],
         name: () => "Thaw meadow",
         system: (r) => strongest(quickening, r),
       }
@@ -79,14 +83,14 @@ function magicRules(state: GenerationState): BiomeRule[] {
       {
         kind: "rime",
         share: 0.0003,
-        terms: [(i) => map.Stillness[i] - 0.45, (i) => canopy(i) - 0.3],
+        terms: [(i) => map.Stillness.get(i) - 0.45, (i) => canopy(i) - 0.3],
         name: () => "Rime forest",
         system: (r) => strongest(stilling, r),
       },
       {
         kind: "glow",
         share: 0.0003,
-        terms: [(i) => map.Stillness[i] - 0.45, (i) => 0.12 - cover(i)],
+        terms: [(i) => map.Stillness.get(i) - 0.45, (i) => 0.12 - cover(i)],
         name: () => "Glow-lichen barrens",
         system: (r) => strongest(stilling, r),
       }
@@ -95,7 +99,7 @@ function magicRules(state: GenerationState): BiomeRule[] {
     rules.push({
       kind: "fog",
       share: 0.0003,
-      terms: [(i) => map.FogForcing[i] - 0.3, (i) => cover(i) - 0.12],
+      terms: [(i) => map.FogForcing.get(i) - 0.3, (i) => cover(i) - 0.12],
       name: (r) => (r.broadleaf + r.conifer >= 0.4 ? "Moss forest" : "Fog heath"),
       system: (r) => strongest(fogging, r),
     });
@@ -117,8 +121,8 @@ function saltRules(
       kind: "flat",
       share: 0.0003,
       terms: [
-        (i) => map.Salting[i] - 0.3,
-        (i) => map.RockResistance[i] - 950,
+        (i) => map.Salting.get(i) - 0.3,
+        (i) => map.RockResistance.get(i) - 950,
         (i) => 0.12 - cover(i),
       ],
       name: () => "Glass flat",
@@ -127,14 +131,14 @@ function saltRules(
     {
       kind: "pan",
       share: 0.0003,
-      terms: [(i) => map.Salting[i] - 0.3, (i) => 0.12 - cover(i)],
+      terms: [(i) => map.Salting.get(i) - 0.3, (i) => 0.12 - cover(i)],
       name: () => "Salt pan",
       system,
     },
     {
       kind: "barrow",
       share: 0.0003,
-      terms: [(i) => map.Salting[i] - 0.3, (i) => cover(i) - 0.12],
+      terms: [(i) => map.Salting.get(i) - 0.3, (i) => cover(i) - 0.12],
       name: () => "Barrow heath",
       system,
     },
@@ -152,21 +156,21 @@ function verdantRules(
     {
       kind: "deepwood",
       share: 0.0003,
-      terms: [(i) => map.Verdure[i] - 0.3, (i) => canopy(i) - 0.5],
+      terms: [(i) => map.Verdure.get(i) - 0.3, (i) => canopy(i) - 0.5],
       name: () => "Deepwood",
       system,
     },
     {
       kind: "wending",
       share: 0.0003,
-      terms: [(i) => map.Verdure[i] - 0.3, (i) => map.WetlandCover[i] - 0.3],
+      terms: [(i) => map.Verdure.get(i) - 0.3, (i) => map.WetlandCover.get(i) - 0.3],
       name: () => "Wending fen",
       system,
     },
     {
       kind: "well",
       share: 0.0003,
-      terms: [(i) => map.Verdure[i] - 0.3, (i) => 0.5 - canopy(i), (i) => cover(i) - 0.12],
+      terms: [(i) => map.Verdure.get(i) - 0.3, (i) => 0.5 - canopy(i), (i) => cover(i) - 0.12],
       name: () => "Well meadow",
       system,
     },
@@ -209,26 +213,36 @@ export function biomeRules(state: GenerationState) {
     wetness = workingArray(map, "float64", "biome:wetness");
   for (let i = 0; i < count; i++) {
     const e = environment(map, i);
-    [temperature[i], moisture[i], wetness[i]] = [e.temperature, e.moisture, e.wetness];
+    temperature.set(i, e.temperature);
+    moisture.set(i, e.moisture);
+    wetness.set(i, e.wetness);
   }
   const cover = (i: number) =>
-    map.BroadleafCover[i] + map.ConiferCover[i] + map.GrassCover[i] + map.WetlandCover[i];
+    map.BroadleafCover.get(i) +
+    map.ConiferCover.get(i) +
+    map.GrassCover.get(i) +
+    map.WetlandCover.get(i);
   const rules: BiomeRule[] = [
     ...magicRules(state),
     {
       kind: "wetland",
       share: 0.001,
-      terms: [(i) => map.WetlandCover[i] - 0.3],
+      terms: [(i) => map.WetlandCover.get(i) - 0.3],
       name: wetlandName,
     },
     {
       kind: "forest",
       share: 0.004,
-      terms: [(i) => map.BroadleafCover[i] + map.ConiferCover[i] - 0.4],
+      terms: [(i) => map.BroadleafCover.get(i) + map.ConiferCover.get(i) - 0.4],
       name: forestName,
     },
     // Open grass meets barren land near the same total cover, so the two share an edge.
-    { kind: "grassland", share: 0.004, terms: [(i) => map.GrassCover[i] - 0.15], name: grassName },
+    {
+      kind: "grassland",
+      share: 0.004,
+      terms: [(i) => map.GrassCover.get(i) - 0.15],
+      name: grassName,
+    },
     { kind: "barren", share: 0.004, terms: [(i) => 0.12 - cover(i)], name: barrenName },
   ];
   return { rules, temperature, moisture, wetness };

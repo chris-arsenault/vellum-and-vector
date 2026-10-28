@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import {
+  Band,
   createAdaptiveTopology,
-  isNumericalVector,
   rectangle,
   putChannel,
   type NumericalVector,
@@ -15,6 +15,7 @@ import { oceanConnectivity } from "../../generation/src/canonry/ocean";
 import { bathymetry, oceanDistance } from "../../generation/src/canonry/geography";
 import { temperature } from "../../generation/src/canonry/climate";
 import { arenaFixture } from "./numericalFixture";
+import { blockCacheFixture } from "./blockCacheFixture";
 import { MapRunner } from "../../generation/src/mapRunner";
 import { MapProcessRegistry, type MapProcess } from "../../generation/src/process";
 import { landscape, configuration, invoke, options } from "../../generation/src/mapFixtures";
@@ -30,7 +31,7 @@ import { createSocietyGeography } from "../../generation/src/societyGeography";
 import { generationNumericalState } from "../../generation/src/generationNumericalState";
 
 function execute(map: PhysicalField) {
-  for (let i = 0; i < map.mesh.count; i++) map.Elevation[i] = map.mesh.x[i] / 10;
+  for (let i = 0; i < map.mesh.count; i++) map.Elevation.set(i, map.mesh.x(i) / 10);
   initializeLandscape(map);
   const context = physicalContext(42, 0, atlasPhysicalProfile());
   context.Profile.QualityTargets.OceanCoverage.target = 0.5;
@@ -52,38 +53,38 @@ function movingCrust(map: PhysicalField) {
   map.CrustThickness.fill(4000 * 1024);
   map.RockResistance.fill(1000);
   for (let i = 0; i < map.mesh.count; i++) {
-    const left = map.mesh.x[i] < 0;
-    map.CrustContinentalFraction[i] = left ? 1000 : 400;
-    map.CrustMotionX[i] = left ? 1000 : -1000;
-    map.TectonicBoundaryCodes[i] = 1;
-    map.SedimentSupply[i] = 1 + (i % 7);
-    map.CumulativeFluvialErosion[i] = i * 10;
-    map.MaximumIceThickness[i] = 123;
-    map.FeatureFlags[i] = i % 2;
+    const left = map.mesh.x(i) < 0;
+    map.CrustContinentalFraction.set(i, left ? 1000 : 400);
+    map.CrustMotionX.set(i, left ? 1000 : -1000);
+    map.TectonicBoundaryCodes.set(i, 1);
+    map.SedimentSupply.set(i, 1 + (i % 7));
+    map.CumulativeFluvialErosion.set(i, i * 10);
+    map.MaximumIceThickness.set(i, 123);
+    map.FeatureFlags.set(i, i % 2);
   }
   const plan = buildTransportPlan(map, 70_000);
   transportHistory(map, plan);
   return plan;
 }
 it("scatters connected crust and history on disk with the same material and provenance", () => {
-  const f = arenaFixture();
+  const f = blockCacheFixture(32_768);
   try {
     const mesh = createWorldMesh([0, 0, 4e6, 3e6], 256, 0, undefined, undefined, undefined, true),
       native = createField(mesh),
-      disk = createField(mesh, f.arena),
+      disk = createField(mesh, f.cache),
       expected = movingCrust(native),
       actual = movingCrust(disk);
-    f.arena.releaseProcess();
+    disk.coverage.releaseProcess();
     for (const key of Object.keys(expected) as (keyof typeof expected)[])
       expect(Array.from(actual[key]), key).toEqual(Array.from(expected[key]));
     for (const [name, values] of Object.entries(native)) {
-      if (!isNumericalVector(values)) continue;
-      expect(Array.from(disk[name as keyof PhysicalField] as NumericalVector), name).toEqual(
+      if (!(values instanceof Band)) continue;
+      expect(Array.from(disk[name as keyof PhysicalField] as Band), name).toEqual(
         Array.from(values)
       );
     }
     expect(disk.crustBudget).toEqual(native.crustBudget);
-    expect(f.arena.stats.peakDecodedBytes).toBeLessThanOrEqual(32_768);
+    expect(f.cache.stats.peakBytes).toBeLessThanOrEqual(32_768);
   } finally {
     f.close();
   }
@@ -96,23 +97,21 @@ it("runs real ocean, distance, bathymetry and climate processes on file-backed p
     refine: ([x, y]) => x < 0 && y < 0,
   });
   const mesh = adaptivePhysicalMesh(topology, rectangle(bounds)),
-    fixture = arenaFixture();
+    fixture = blockCacheFixture(32_768);
   try {
     const native = createField(mesh),
-      disk = createField(mesh, fixture.arena);
+      disk = createField(mesh, fixture.cache);
     execute(native);
     execute(disk);
     for (const [name, values] of Object.entries(native)) {
-      if (!isNumericalVector(values)) continue;
+      if (!(values instanceof Band)) continue;
       const actual = disk[name as keyof PhysicalField];
-      expect(isNumericalVector(actual)).toBe(true);
-      expect(Array.from(actual as import("@atlas/domain").NumericalVector), name).toEqual(
-        Array.from(values)
-      );
+      expect(actual instanceof Band).toBe(true);
+      expect(Array.from(actual as Band), name).toEqual(Array.from(values));
     }
     expect(disk.EffectiveSeaLevel).toBe(native.EffectiveSeaLevel);
-    expect(fixture.arena.stats.reads).toBeGreaterThan(0);
-    expect(fixture.arena.stats.peakDecodedBytes).toBeLessThanOrEqual(32_768);
+    expect(fixture.cache.stats.loads).toBeGreaterThan(0);
+    expect(fixture.cache.stats.peakBytes).toBeLessThanOrEqual(32_768);
   } finally {
     fixture.close();
   }
@@ -129,7 +128,8 @@ function runnerProcess(
   };
 }
 it("keeps marine regions and community ownership valid across paged frontiers and scratch release", () => {
-  const f = arenaFixture(2048);
+  const f = arenaFixture(2048),
+    blocks = blockCacheFixture(2048);
   try {
     const box: [number, number, number, number] = [-100000, -50000, 100000, 50000],
       mesh = adaptivePhysicalMesh(
@@ -139,16 +139,18 @@ it("keeps marine regions and community ownership valid across paged frontiers an
         }),
         rectangle(box)
       ),
-      map = createField(mesh, f.arena);
+      map = createField(mesh, blocks.cache);
     for (let i = 0; i < mesh.count; i++) {
-      const wet = Math.abs(mesh.x[i]) > 25000 || Math.abs(mesh.y[i]) < 12500;
-      map.WaterKindCodes[i] = wet ? 1 : 0;
-      map.WaterDepths[i] = wet ? 3000 * 1024 : 0;
+      const wet = Math.abs(mesh.x(i)) > 25000 || Math.abs(mesh.y(i)) < 12500;
+      map.WaterKindCodes.set(i, wet ? 1 : 0);
+      map.WaterDepths.set(i, wet ? 3000 * 1024 : 0);
     }
     const result = marineRegions(map, 800 * 1024);
     expect(result.regions).toHaveLength(2);
     for (const region of result.regions) {
-      expect(region.members.every((i) => result.labels[i] === region.id)).toBe(true);
+      expect(Array.from(region.members).every((i) => result.labels.get(i) === region.id)).toBe(
+        true
+      );
       expect(region.area).toBeGreaterThan(0);
     }
     const state = landscape();
@@ -177,9 +179,11 @@ it("keeps marine regions and community ownership valid across paged frontiers an
     expect(work.owner.every((owner) => owner >= 0 && !!work.region.communities[owner])).toBe(true);
     expect(work.region.communities.every((community) => community.areaKm2 > 0)).toBe(true);
     expect(work.river.every(Number.isFinite)).toBe(true);
-    expect(f.arena.stats.reads).toBeGreaterThan(0);
+    expect(blocks.cache.stats.loads).toBeGreaterThan(0);
+    expect(blocks.cache.stats.evictions).toBeGreaterThan(0);
   } finally {
     f.close();
+    blocks.close();
   }
 });
 function lifetimeProcesses(): MapProcess[] {

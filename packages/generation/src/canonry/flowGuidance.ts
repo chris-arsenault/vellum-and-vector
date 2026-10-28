@@ -8,7 +8,7 @@ import { clamp, round, toUnits } from "./math";
 import { hashUnit } from "./noise";
 import { contributingArea } from "./flowGraph";
 import { physicalDistance, physicalGradients } from "./physicalMetric";
-import type { NumericalVector } from "@atlas/domain";
+import type { Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
 const epsilon = 0.0000001;
@@ -18,23 +18,25 @@ function normalize(x: number, y: number): [number, number] {
 }
 function desiredDirection(map: PhysicalField, source: number, target: number): [number, number] {
   return normalize(
-    Math.fround(meshDeltaX(map.mesh, map.mesh.x[target] - map.mesh.x[source])),
-    Math.fround(map.mesh.y[target] - map.mesh.y[source])
+    Math.fround(meshDeltaX(map.mesh, map.mesh.x(target) - map.mesh.x(source))),
+    Math.fround(map.mesh.y(target) - map.mesh.y(source))
   );
 }
 function coordinateTie(map: PhysicalField, source: number, target: number, seed: number): number {
   return hashUnit(
-    seed ^ round(map.mesh.x[source] * 4096),
-    round(map.mesh.y[source] * 4096) ^ round(map.mesh.x[target] * 4096),
-    round(map.mesh.y[target] * 4096)
+    seed ^ round(map.mesh.x(source) * 4096),
+    round(map.mesh.y(source) * 4096) ^ round(map.mesh.x(target) * 4096),
+    round(map.mesh.y(target) * 4096)
   );
 }
 export function legalAdjacentTarget(map: PhysicalField, source: number, target: number): boolean {
+  const sourceElevation = map.DrainageElevations.get(source),
+    targetElevation = map.DrainageElevations.get(target);
   return (
-    map.WaterKindCodes[target] === 1 ||
-    map.DrainageElevations[target] < map.DrainageElevations[source] ||
-    (map.DrainageElevations[target] === map.DrainageElevations[source] &&
-      map.DrainageRanks[target] < map.DrainageRanks[source])
+    map.WaterKindCodes.get(target) === 1 ||
+    targetElevation < sourceElevation ||
+    (targetElevation === sourceElevation &&
+      map.DrainageRanks.get(target) < map.DrainageRanks.get(source))
   );
 }
 function candidateScore(
@@ -45,18 +47,19 @@ function candidateScore(
   alignment: number
 ): number {
   const inherited = clamp(
-    toUnits(map.CumulativeFluvialErosion[target] + map.CumulativeGlacialErosion[target]),
+    toUnits(map.CumulativeFluvialErosion.get(target) + map.CumulativeGlacialErosion.get(target)),
     0,
     100
   );
-  if (map.WaterKindCodes[target] === 1) return 10000 + alignment;
+  if (map.WaterKindCodes.get(target) === 1) return 10000 + alignment;
   const length = Math.hypot(
-    meshDeltaX(map.mesh, map.mesh.x[source] - map.mesh.x[target]),
-    map.mesh.y[source] - map.mesh.y[target]
+    meshDeltaX(map.mesh, map.mesh.x(source) - map.mesh.x(target)),
+    map.mesh.y(source) - map.mesh.y(target)
   );
-  const drop = (map.DrainageElevations[source] - map.DrainageElevations[target]) / (1024 * length);
+  const drop =
+    (map.DrainageElevations.get(source) - map.DrainageElevations.get(target)) / (1024 * length);
   if (drop <= 0) {
-    const progress = clamp(map.DrainageRanks[source] - map.DrainageRanks[target], 0, 20);
+    const progress = clamp(map.DrainageRanks.get(source) - map.DrainageRanks.get(target), 0, 20);
     return (
       (alignment * p.DrainageOutletAlignmentWeight) / 10 +
       progress * 0.15 +
@@ -64,7 +67,7 @@ function candidateScore(
     );
   }
   const floorDrop = clamp(
-    (map.Elevation[source] - map.Elevation[target]) / (1024 * length),
+    (map.Elevation.get(source) - map.Elevation.get(target)) / (1024 * length),
     -0.005,
     0.02
   );
@@ -81,14 +84,14 @@ function descentDirection(
   source: number,
   gradient: ReturnType<typeof physicalGradients>
 ): [number, number] {
-  const parent = map.DrainageParents[source];
+  const parent = map.DrainageParents.get(source);
   // A flat has no height gradient. Its flood parent carries the least-cost
   // corridor; looking far along that winding path replaces it with a shortcut.
   if (
     parent >= 0 &&
-    map.DrainageElevations[parent] === map.DrainageElevations[source] &&
-    gradient.x[source] === 0 &&
-    gradient.y[source] === 0
+    map.DrainageElevations.get(parent) === map.DrainageElevations.get(source) &&
+    gradient.x.get(source) === 0 &&
+    gradient.y.get(source) === 0
   )
     return desiredDirection(map, source, parent);
   let x = 0,
@@ -97,14 +100,14 @@ function descentDirection(
   for (let distance = 0; distance < p.DrainageGuidanceLookaheadDistance;)
   // Advance by the actual parent segment, including coarse/fine crossings.
   {
-    const parent = map.DrainageParents[current];
+    const parent = map.DrainageParents.get(current);
     if (parent < 0) break;
     const segment = Math.min(
       physicalDistance(map.mesh, current, parent),
       p.DrainageGuidanceLookaheadDistance - distance
     );
-    x -= gradient.x[current] * segment;
-    y -= gradient.y[current] * segment;
+    x -= gradient.x.get(current) * segment;
+    y -= gradient.y.get(current) * segment;
     distance += segment;
     current = parent;
   }
@@ -115,16 +118,17 @@ function descentDirection(
 type Step = { target: number; x: number; y: number };
 /** Downhill moves from a land cell, or null beside the sea, where existing routing decides. */
 function downhillSteps(map: PhysicalField, source: number): Step[] | null {
-  const steps: Step[] = [];
-  for (let edge = 0; edge < map.mesh.degree[source]; edge++) {
-    const target = map.mesh.neighbors[source * map.mesh.stride + edge];
+  const steps: Step[] = [],
+    elevation = map.DrainageElevations.get(source);
+  for (let edge = 0; edge < map.mesh.degree(source); edge++) {
+    const target = map.mesh.neighbor(source, edge);
     if (target < 0) continue;
-    if (map.WaterKindCodes[target] === 1) return null;
-    if (map.DrainageElevations[target] >= map.DrainageElevations[source]) continue;
+    if (map.WaterKindCodes.get(target) === 1) return null;
+    if (map.DrainageElevations.get(target) >= elevation) continue;
     steps.push({
       target,
-      x: meshDeltaX(map.mesh, map.mesh.x[target] - map.mesh.x[source]),
-      y: map.mesh.y[target] - map.mesh.y[source],
+      x: meshDeltaX(map.mesh, map.mesh.x(target) - map.mesh.x(source)),
+      y: map.mesh.y(target) - map.mesh.y(source),
     });
   }
   return steps;
@@ -173,10 +177,12 @@ function aspectTarget(
   source: number,
   gradient: ReturnType<typeof physicalGradients>
 ): number {
-  const length = Math.hypot(gradient.x[source], gradient.y[source]);
+  const gx = gradient.x.get(source),
+    gy = gradient.y.get(source),
+    length = Math.hypot(gx, gy);
   if (length === 0) return -1;
-  const ax = -gradient.x[source] / length,
-    ay = -gradient.y[source] / length,
+  const ax = -gx / length,
+    ay = -gy / length,
     steps = downhillSteps(map, source);
   if (!steps?.length) return -1;
   const twoSteps = steps.map((step) => {
@@ -186,26 +192,22 @@ function aspectTarget(
   const { left, right, p } = bracket(twoSteps, ax, ay);
   const draw = hashUnit(
     c.EpochStableSeed ^ 0x2f8a,
-    round(map.mesh.x[source] * 1024),
-    round(map.mesh.y[source] * 1024)
+    round(map.mesh.x(source) * 1024),
+    round(map.mesh.y(source) * 1024)
   );
   return draw < p ? steps[left].target : steps[right].target;
 }
-function captureScore(
-  area: import("@atlas/domain").NumericalVector | null,
-  target: number,
-  p: PhysicalProfile
-): number {
+function captureScore(area: Band | null, target: number, p: PhysicalProfile): number {
   return area === null
     ? 0
-    : (Math.log2(1 + area[target] / 100_000_000) * p.DrainageCaptureWeight) / 1000;
+    : (Math.log2(1 + area.get(target) / 100_000_000) * p.DrainageCaptureWeight) / 1000;
 }
 /** Sloping ground follows the descent; flats, shores and enclosed cells keep scored guidance. */
 function selectTarget(
   map: PhysicalField,
   c: PhysicalContext,
   source: number,
-  area: import("@atlas/domain").NumericalVector | null,
+  area: Band | null,
   gradient: ReturnType<typeof physicalGradients>
 ): number {
   const aspect = aspectTarget(map, c, source, gradient);
@@ -217,7 +219,7 @@ function scoredTarget(
   map: PhysicalField,
   c: PhysicalContext,
   source: number,
-  area: import("@atlas/domain").NumericalVector | null,
+  area: Band | null,
   gradient: ReturnType<typeof physicalGradients>
 ): number {
   const [dx, dy] = descentDirection(map, c.Profile, source, gradient);
@@ -225,11 +227,10 @@ function scoredTarget(
     bestScore = -Number.MAX_VALUE,
     bestTie = -Number.MAX_VALUE,
     tieDecided = false;
-  for (let edge = 0; edge < map.mesh.degree[source]; edge++) {
-    const offset = source * map.mesh.stride + edge,
-      target = map.mesh.neighbors[offset];
+  for (let edge = 0; edge < map.mesh.degree(source); edge++) {
+    const target = map.mesh.neighbor(source, edge);
     if (target < 0 || !legalAdjacentTarget(map, source, target)) continue;
-    const alignment = map.mesh.edgeX[offset] * dx + map.mesh.edgeY[offset] * dy;
+    const alignment = map.mesh.edgeX(source, edge) * dx + map.mesh.edgeY(source, edge) * dy;
     const score =
       candidateScore(map, c.Profile, source, target, alignment) +
       captureScore(area, target, c.Profile);
@@ -253,15 +254,15 @@ function scoredTarget(
     throw new Error(`Conditioned triangle ${source} has no outlet.`);
   return best;
 }
-export function resolveLandTargets(map: PhysicalField, c: PhysicalContext): NumericalVector {
+export function resolveLandTargets(map: PhysicalField, c: PhysicalContext): Band {
   const targets = workingArray(map, "int32", "drainage:targets").fill(-1);
-  const gradient = physicalGradients(map.mesh, map.DrainageElevations, map.numerical);
+  const gradient = physicalGradients(map.mesh, (i) => map.DrainageElevations.get(i), map.coverage);
   for (let i = 0; i < map.mesh.count; i++)
-    if (map.WaterKindCodes[i] !== 1) targets[i] = selectTarget(map, c, i, null, gradient);
+    if (map.WaterKindCodes.get(i) !== 1) targets.set(i, selectTarget(map, c, i, null, gradient));
   if (c.Profile.DrainageCaptureWeight > 0) {
-    const area = contributingArea(targets, map.mesh.areas, map.numerical);
+    const area = contributingArea(map, targets);
     for (let i = 0; i < map.mesh.count; i++)
-      if (map.WaterKindCodes[i] !== 1) targets[i] = selectTarget(map, c, i, area, gradient);
+      if (map.WaterKindCodes.get(i) !== 1) targets.set(i, selectTarget(map, c, i, area, gradient));
     releaseWorking(map, area);
   }
   releaseWorking(map, gradient.x, gradient.y);
@@ -269,7 +270,7 @@ export function resolveLandTargets(map: PhysicalField, c: PhysicalContext): Nume
 }
 export function drainageGuidance(map: PhysicalField, c: PhysicalContext) {
   const targets = resolveLandTargets(map, c);
-  map.DrainageGuidanceTargets.set(targets);
+  map.DrainageGuidanceTargets.copyFrom(targets);
   releaseWorking(map, targets);
 }
 export function selectByOutletAlignment(

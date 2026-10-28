@@ -6,6 +6,7 @@ import { clamp, rockResistance, round, units } from "./math";
 import { nearestTriangle } from "./mesh";
 import { prominence } from "./landforms";
 import { shapeImpact } from "./impacts";
+import { releaseWorking } from "./physicalNumerics";
 import {
   cut,
   distance,
@@ -42,7 +43,7 @@ function mountainCells(map: PhysicalField, placed: Placed) {
 function summitCell(map: PhysicalField, placed: Placed) {
   let summit: [number, number] | null = null;
   for (const cell of mountainCells(map, placed).cells)
-    if (!summit || map.Elevation[cell[0]] > map.Elevation[summit[0]]) summit = cell;
+    if (!summit || map.Elevation.get(cell[0]) > map.Elevation.get(summit[0])) summit = cell;
   return summit;
 }
 /**
@@ -66,10 +67,13 @@ function raiseMountain(
     const t = 1 - d / radius,
       profile = Math.min(1, shape(d) / reference);
     applied = Math.max(applied, shiftBedrock(map, i, round(height * profile)));
-    map.RockResistance[i] = Math.max(
-      map.RockResistance[i],
-      rockResistance(
-        volcanic ? 1000 + (p.VolcanicRockResistance - 1000) * profile : 1000 + 3000 * Math.sqrt(t)
+    map.RockResistance.set(
+      i,
+      Math.max(
+        map.RockResistance.get(i),
+        rockResistance(
+          volcanic ? 1000 + (p.VolcanicRockResistance - 1000) * profile : 1000 + 3000 * Math.sqrt(t)
+        )
       )
     );
     if (volcanic) volcanicCauses(map, i, d, radius, t, height * profile, epoch);
@@ -86,21 +90,29 @@ function volcanicCauses(
   epoch: number
 ) {
   const activity = round(1000 * t);
-  map.VolcanicConstructionHistory[i] += Math.max(0, round(raise));
-  map.VolcanicActivity[i] = Math.max(map.VolcanicActivity[i], activity);
-  map.VolcanicLastActiveEpoch[i] = Math.max(map.VolcanicLastActiveEpoch[i], epoch);
-  map.FractureConductance[i] = Math.max(
-    map.FractureConductance[i],
-    Math.trunc((activity * 7) / 10)
+  map.VolcanicConstructionHistory.add(i, Math.max(0, round(raise)));
+  map.VolcanicActivity.set(i, Math.max(map.VolcanicActivity.get(i), activity));
+  map.VolcanicLastActiveEpoch.set(i, Math.max(map.VolcanicLastActiveEpoch.get(i), epoch));
+  map.FractureConductance.set(
+    i,
+    Math.max(map.FractureConductance.get(i), Math.trunc((activity * 7) / 10))
   );
-  map.Uplift[i] = Math.max(map.Uplift[i], clamp(t, 0, 1));
-  map.FeatureFlags[i] |= d <= radius / 3 ? Feature.VolcanicCone : Feature.LavaPlain;
+  map.Uplift.set(i, Math.max(map.Uplift.get(i), clamp(t, 0, 1)));
+  map.FeatureFlags.set(
+    i,
+    map.FeatureFlags.get(i) | (d <= radius / 3 ? Feature.VolcanicCone : Feature.LavaPlain)
+  );
 }
 function measureMountain(map: PhysicalField, placed: Placed) {
   const summit = summitCell(map, placed);
   if (!summit) return { summit: NaN, prominence: NaN };
-  const rise = prominence(map);
-  return { summit: metres(map, map.Elevation[summit[0]]), prominence: rise[summit[0]] / 1024 };
+  const rise = prominence(map),
+    measured = {
+      summit: metres(map, map.Elevation.get(summit[0])),
+      prominence: rise.get(summit[0]) / 1024,
+    };
+  releaseWorking(map, rise);
+  return measured;
 }
 function mountain(volcanic: boolean): Kind {
   return {
@@ -110,10 +122,9 @@ function mountain(volcanic: boolean): Kind {
       const height = heightSampler(map),
         base = ring(height, placed.center, placed.parameters.baseRadius * 1000);
       const summit = unitsAbove(map, placed.parameters.summit),
-        centre = nearestTriangle(map.mesh, ...placed.center);
-      const from = Number.isFinite(base)
-        ? Math.min(base, map.Elevation[centre])
-        : map.Elevation[centre];
+        centre = nearestTriangle(map.mesh, ...placed.center),
+        centreElevation = map.Elevation.get(centre);
+      const from = Number.isFinite(base) ? Math.min(base, centreElevation) : centreElevation;
       const needed = Math.max(summit - from, units(placed.parameters.prominence));
       const anchor = Math.min(...cells.map(([, d]) => d));
       if (needed > 0) raiseMountain(map, p, placed, needed, volcanic, epoch, anchor);
@@ -127,12 +138,12 @@ function mountain(volcanic: boolean): Kind {
       const centre = nearestTriangle(map.mesh, ...placed.center),
         anchor = Math.min(...cells.map(([, d]) => d));
       const needed = Math.max(
-        unitsAbove(map, placed.parameters.summit) - map.Elevation[centre],
+        unitsAbove(map, placed.parameters.summit) - map.Elevation.get(centre),
         units(shortfall.prominence ?? 0)
       );
       if (needed <= 0) return 0;
       const applied = raiseMountain(map, p, placed, needed, volcanic, epoch, anchor);
-      for (const [i] of mountainCells(map, placed).cells) map.LandmarkMaintenance[i] += applied;
+      for (const [i] of mountainCells(map, placed).cells) map.LandmarkMaintenance.add(i, applied);
       return applied;
     },
   };
@@ -182,7 +193,7 @@ const domeRing: Kind = {
       const d = distance(map, i, placed.center);
       shiftBedrock(map, i, round(height * (1 - (d / radius) ** 2)));
       const resistance = realized ? (crests.has(i) ? 3400 : 600) : 2000;
-      map.RockResistance[i] = Math.max(map.RockResistance[i], rockResistance(resistance));
+      map.RockResistance.set(i, Math.max(map.RockResistance.get(i), rockResistance(resistance)));
     }
   },
   measure(map, placed) {
@@ -190,7 +201,7 @@ const domeRing: Kind = {
     const { cells, crests } = ringClasses(map, placed),
       up: number[] = [],
       down: number[] = [];
-    for (const i of cells) (crests.has(i) ? up : down).push(map.Elevation[i]);
+    for (const i of cells) (crests.has(i) ? up : down).push(map.Elevation.get(i));
     return { ringRelief: (mean(up) - mean(down)) / 1024 };
   },
   maintain(map, _p, placed, shortfall) {
@@ -204,13 +215,13 @@ const domeRing: Kind = {
     for (const i of cells) {
       if (crests.has(i)) continue;
       const done = cut(map, i, needed);
-      map.LandmarkMaintenance[i] += done;
+      map.LandmarkMaintenance.add(i, done);
       applied = Math.max(applied, done);
       remainder = Math.max(remainder, needed - done);
     }
     for (const i of crests) {
       const done = shiftBedrock(map, i, round(remainder));
-      map.LandmarkMaintenance[i] += done;
+      map.LandmarkMaintenance.add(i, done);
       applied = Math.max(applied, done);
     }
     return applied;
@@ -237,9 +248,9 @@ function craterMeasures(map: PhysicalField, placed: Placed) {
     plain: number[] = [];
   for (let i = 0; i < map.mesh.count; i++) {
     const d = distance(map, i, placed.center);
-    if (bands.floor(d)) floor.push(map.Elevation[i]);
-    else if (bands.rim(d)) rim.push(map.Elevation[i]);
-    else if (bands.plain(d)) plain.push(map.Elevation[i]);
+    if (bands.floor(d)) floor.push(map.Elevation.get(i));
+    else if (bands.rim(d)) rim.push(map.Elevation.get(i));
+    else if (bands.plain(d)) plain.push(map.Elevation.get(i));
   }
   return {
     floorDepth: (mean(rim) - mean(floor)) / 1024,
@@ -271,13 +282,13 @@ const impactRing: Kind = {
       const d = distance(map, i, placed.center);
       if (deeper > 0 && bands.floor(d)) {
         const done = excavate(map, i, deeper);
-        map.LandmarkMaintenance[i] += done;
+        map.LandmarkMaintenance.add(i, done);
         applied = Math.max(applied, done);
       }
       if (higher > 0 && bands.rim(d)) {
         const done = shiftBedrock(map, i, higher);
-        map.ImpactRimUplift[i] += done;
-        map.LandmarkMaintenance[i] += done;
+        map.ImpactRimUplift.add(i, done);
+        map.LandmarkMaintenance.add(i, done);
         applied = Math.max(applied, done);
       }
     }
@@ -293,7 +304,7 @@ function scarpCells(map: PhysicalField, placed: Placed) {
     width = Math.max(placed.parameters.scarpWidth * 1000, map.mesh.spacing * 1.2),
     cells: { i: number; hit: PathHit }[] = [];
   for (let i = 0; i < map.mesh.count; i++) {
-    const hit = nearestOnPath(map, metrics, map.mesh.x[i], map.mesh.y[i]);
+    const hit = nearestOnPath(map, metrics, map.mesh.x(i), map.mesh.y(i));
     if (hit.distance <= width) cells.push({ i, hit });
   }
   return { metrics, width, cells };
@@ -311,7 +322,7 @@ function throwScarp(
   for (const { i, hit } of cells) {
     const ramp = clamp(hit.distance / (width / 2), 0, 1);
     const done = shiftBedrock(map, i, round(hit.side * (throwUnits / 2) * ramp));
-    if (book) map.LandmarkMaintenance[i] += Math.abs(done);
+    if (book) map.LandmarkMaintenance.add(i, Math.abs(done));
     applied = Math.max(applied, Math.abs(done));
   }
   return applied;
@@ -321,9 +332,12 @@ const escarpment: Kind = {
     const { width, cells } = scarpCells(map, placed);
     throwScarp(map, p, placed, units(placed.parameters.throw), false);
     for (const { i, hit } of cells)
-      map.FractureConductance[i] = Math.max(
-        map.FractureConductance[i],
-        round(p.ImpactFractureStrength * (1 - hit.distance / width))
+      map.FractureConductance.set(
+        i,
+        Math.max(
+          map.FractureConductance.get(i),
+          round(p.ImpactFractureStrength * (1 - hit.distance / width))
+        )
       );
     map.faults.push({ id: `landmark:${placed.landmark.id}`, coordinates: placed.path, width });
   },
@@ -333,7 +347,7 @@ const escarpment: Kind = {
     // whole cells and a correction applied through the same ramp reads back in full.
     const { width, cells } = scarpCells(map, placed),
       x = cells.map(({ hit }) => hit.side * clamp(hit.distance / (width / 2), 0, 1)),
-      y = cells.map(({ i }) => map.Elevation[i]),
+      y = cells.map(({ i }) => map.Elevation.get(i)),
       mx = mean(x),
       my = mean(y);
     let covariance = 0,

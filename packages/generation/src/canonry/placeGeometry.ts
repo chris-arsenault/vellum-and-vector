@@ -1,4 +1,4 @@
-import { point, spatial, geometryParts, combineGeometry } from "@atlas/domain";
+import { point, spatial, geometryParts, combineGeometry, type Band } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { GenerationState } from "../process";
 import type { MagicField } from "./magicState";
@@ -19,16 +19,16 @@ export function bestMember(members: RegionMembers, score: (i: number) => number)
 export function linkedCourse(
   state: GenerationState,
   members: RegionMembers,
-  targets: ArrayLike<number>,
+  targets: Band,
   exits = false
 ) {
   const work = state.physical!,
     included = workingArray(work.map, "uint8", "course:members"),
     lines: number[][][] = [];
-  for (const cell of members) included[cell] = 1;
+  for (const cell of members) included.set(cell, 1);
   for (const i of members) {
-    const j = targets[i];
-    if (j < 0 || (!exits && !included[j])) continue;
+    const j = targets.get(i);
+    if (j < 0 || (!exits && !included.get(j))) continue;
     const a = nativePosition(work, i),
       b = nativePosition(work, j);
     lines.push([
@@ -63,8 +63,8 @@ export function naturalPlaceGeometry(
   }
   if (kind !== "waterfall") return null;
   const anchor = bestMember(members, (i) => {
-    const target = map.FlowTargets[i];
-    return target >= 0 ? map.Elevation[i] - map.Elevation[target] : -Infinity;
+    const target = map.FlowTargets.get(i);
+    return target >= 0 ? map.Elevation.get(i) - map.Elevation.get(target) : -Infinity;
   });
   const geometry = point(nativePosition(work, anchor));
   return !extent || spatial.intersects(geometry, extent)
@@ -83,8 +83,8 @@ export function magicPlaceGeometry(
   const anchor = bestMember(
     members,
     (i) =>
-      field.intensity[i] +
-      (ruleId === "spring" ? map.Geothermal[i] + map.Moisture[i] : field.source[i])
+      field.intensity.get(i) +
+      (ruleId === "spring" ? map.Geothermal.get(i) + map.Moisture.get(i) : field.source.get(i))
   );
   if (rule.cartography === "course") {
     const parents = propagationParents(state, field, rule);

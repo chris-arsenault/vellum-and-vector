@@ -4,6 +4,7 @@ import { resolveGenerationFeatures, type FeatureSelection } from "../features";
 import { physicalFeatureDefinitions } from "../physicalFeatures";
 import { atlasPublicationDefinitions, selectedAtlasChannels } from "./atlasPublications";
 import { projectNative } from "./atlasProjection";
+import { generationWorkingState } from "../generationWorkingState";
 import { createField } from "./field";
 import { createMesh } from "./mesh";
 import { atlasPhysicalProfile } from "./atlasProfile";
@@ -82,8 +83,9 @@ it("does not compute a composite erosion product when all its owners are disable
 });
 
 it("retains the existing numerical output and quantity semantics for selected derived products", () => {
+  // A structured clone drops the coverage's classes; the working-state copy snapshots it.
   const { state, channels, bindings } = fixture(),
-    legacy = structuredClone(state);
+    legacy = generationWorkingState(state, state.numerical, false);
   projectNative(legacy, false, false, bindings);
   projectNative(state, false, false, bindings, channels);
   expect(state.surface).toEqual(legacy.surface);

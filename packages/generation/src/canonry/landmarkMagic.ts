@@ -25,8 +25,8 @@ function around(map: PhysicalField, placed: Placed) {
   const centre = nearestTriangle(map.mesh, ...placed.center);
   if (centre < 0) return [];
   const cells = [centre];
-  for (let edge = 0; edge < map.mesh.degree[centre]; edge++) {
-    const j = map.mesh.neighbors[centre * map.mesh.stride + edge];
+  for (let edge = 0; edge < map.mesh.degree(centre); edge++) {
+    const j = map.mesh.neighbor(centre, edge);
     if (j >= 0 && distance(map, j, placed.center) <= map.mesh.spacing * 1.1) cells.push(j);
   }
   return cells;
@@ -86,7 +86,7 @@ function magicKind(id: string, system: string): Kind {
     measure(map, placed, _record, scene) {
       const live = field(scene, system);
       if (!live) return { intensity: NaN };
-      const intensity = Math.max(...around(map, placed).map((i) => live.intensity[i]), 0);
+      const intensity = Math.max(...around(map, placed).map((i) => live.intensity.get(i)), 0);
       return { intensity: round(intensity) };
     },
     maintain(map, _p, placed, shortfall, epoch, record, scene) {

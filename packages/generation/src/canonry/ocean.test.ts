@@ -1,21 +1,23 @@
 import { expect, it } from "vitest";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { physicalContext } from "./context";
-import { createField } from "./field";
+import { createField, type PhysicalField } from "./field";
 import { units } from "./math";
 import { oceanConnectivity, groundedIceWater } from "./ocean";
 import { createWorldMesh } from "./worldMesh";
-import { arenaFixture } from "../../../storage-browser/src/numericalFixture";
+import { blockCacheFixture } from "../../../storage-browser/src/blockCacheFixture";
 
 it.each([false, true])(
   "converges on fractional elevation without rounding a bracket onto itself (file storage: %s)",
   (fileBacked) => {
-    const working = fileBacked ? arenaFixture() : undefined;
+    const working = fileBacked ? blockCacheFixture() : undefined;
     try {
       const mesh = createWorldMesh([0, 0, 100, 100], 16, 0);
-      const map = createField(mesh, working?.arena);
+      const map = createField(mesh, working?.cache);
       map.Elevation.fill(-100.5);
-      const area = mesh.contentAreas.reduce((sum, value) => sum + value, 0);
+      let area = 0;
+      for (let i = 0; i < mesh.count; i++)
+        if (mesh.membership(i) !== 0) area += mesh.contentArea(i);
       map.BaseOceanVolume = (area * 1023.75) / 1024;
       map.SeaLevelInitialized = true;
       map.CompletedEpochCount = 1;
@@ -25,8 +27,12 @@ it.each([false, true])(
       let reads = 0;
       map.Elevation = new Proxy(map.Elevation, {
         get(target, key) {
-          if (typeof key === "string" && /^\d+$/.test(key) && ++reads > mesh.count * 256)
-            throw new Error("Ocean level failed to converge on the supplied bracket.");
+          if (key === "get" || key === "block")
+            return (...args: [number, boolean?]) => {
+              if (++reads > mesh.count * 256)
+                throw new Error("Ocean level failed to converge on the supplied bracket.");
+              return (target[key] as (...a: [number, boolean?]) => unknown)(...args);
+            };
           return Reflect.get(target, key, target);
         },
       });
@@ -34,7 +40,7 @@ it.each([false, true])(
       expect(map.BaseSeaLevel).toBeCloseTo(923.5, 6);
       expect(Math.abs(oceanVolume(map) - budget)).toBeLessThan(area / 1024);
       expect(map.BaseOceanVolume).toBe(budget);
-      for (let i = 0; i < mesh.count; i++) expect(map.Elevation[i]).toBe(-100.5);
+      for (let i = 0; i < mesh.count; i++) expect(map.Elevation.get(i)).toBe(-100.5);
     } finally {
       working?.close();
     }
@@ -44,18 +50,34 @@ it.each([false, true])(
 function oceanVolume(map: ReturnType<typeof createField>) {
   let volume = 0;
   for (let i = 0; i < map.mesh.count; i++)
-    if (map.WaterKindCodes[i] === 1)
-      volume += ((map.EffectiveSeaLevel - map.Elevation[i]) / 1024) * map.mesh.contentAreas[i];
+    if (map.mesh.membership(i) !== 0 && map.WaterKindCodes.get(i) === 1)
+      volume += ((map.EffectiveSeaLevel - map.Elevation.get(i)) / 1024) * map.mesh.contentArea(i);
   return volume;
 }
-const oceanCells = (map: ReturnType<typeof createField>) =>
-  map.WaterKindCodes.slice(0, map.mesh.contentCount).filter((kind) => kind === 1).length;
+const oceanCells = (map: ReturnType<typeof createField>) => {
+  let count = 0;
+  for (let i = 0; i < map.mesh.count; i++)
+    if (map.mesh.membership(i) === 1 && map.WaterKindCodes.get(i) === 1) count++;
+  return count;
+};
 
+/** Lower every live cell whose elevation satisfies the predicate by the given metres. */
+function sinkLiveCells(map: PhysicalField, where: (elevation: number) => boolean, metres: number) {
+  for (let i = 0; i < map.mesh.count; i++)
+    if (map.mesh.membership(i) !== 0 && where(map.Elevation.get(i)))
+      map.Elevation.add(i, -units(metres));
+}
+function countLiveCells(map: PhysicalField, where: (elevation: number) => boolean) {
+  let count = 0;
+  for (let i = 0; i < map.mesh.count; i++)
+    if (map.mesh.membership(i) !== 0 && where(map.Elevation.get(i))) count++;
+  return count;
+}
 it("sets the water budget at the first flood and keeps it when the land later sinks", () => {
   const map = createField(createWorldMesh([0, 0, 400_000, 400_000], 1024, 0));
   // A ramp from a deep western sea to eastern uplands.
   for (let i = 0; i < map.mesh.count; i++)
-    map.Elevation[i] = units(-600 + (map.mesh.x[i] + 200_000) / 200);
+    map.Elevation.set(i, units(-600 + (map.mesh.x(i) + 200_000) / 200));
   const context = physicalContext(1, 0, atlasPhysicalProfile());
   oceanConnectivity(map, context);
   const firstOcean = oceanCells(map),
@@ -70,8 +92,7 @@ it("sets the water budget at the first flood and keeps it when the land later si
 
   // A later formation flood re-measures the budget on the planet formation has built: the deep
   // basin sinks, the shoreline cells that set the area target do not.
-  for (let i = 0; i < map.mesh.count; i++)
-    if (map.Elevation[i] < map.BaseSeaLevel - units(300)) map.Elevation[i] -= units(200);
+  sinkLiveCells(map, (elevation) => elevation < map.BaseSeaLevel - units(300), 200);
   oceanConnectivity(map, context);
   expect(oceanCells(map)).toBe(firstOcean);
   expect(map.BaseOceanVolume).toBeGreaterThan(firstBudget);
@@ -80,9 +101,8 @@ it("sets the water budget at the first flood and keeps it when the land later si
 
   // In an epoch every land cell sinks by 150 m, as aged or diluted crust did before the fix.
   context.IsEvolutionEpoch = true;
-  for (let i = 0; i < map.mesh.count; i++)
-    if (map.Elevation[i] > formationLevel) map.Elevation[i] -= units(150);
-  const fixedLevelFlood = map.Elevation.filter((value) => value < formationLevel).length;
+  sinkLiveCells(map, (elevation) => elevation > formationLevel, 150);
+  const fixedLevelFlood = countLiveCells(map, (elevation) => elevation < formationLevel);
   oceanConnectivity(map, context);
   const budget = budgetAfterFormation,
     firstLevel = formationLevel;
@@ -102,15 +122,15 @@ it("sets the water budget at the first flood and keeps it when the land later si
 
 it("exchanges grounded ice with ocean water, excludes floating ice and never resets the final budget", () => {
   const map = createField(createWorldMesh([0, 0, 400_000, 400_000], 1024, 0));
-  for (let i = 0; i < map.mesh.count; i++) map.Elevation[i] = units(map.mesh.x[i] / 200);
+  for (let i = 0; i < map.mesh.count; i++) map.Elevation.set(i, units(map.mesh.x(i) / 200));
   const context = physicalContext(1, 0, atlasPhysicalProfile());
   oceanConnectivity(map, context);
   const budget = map.BaseOceanVolume,
     warmLevel = map.BaseSeaLevel;
   map.CompletedEpochCount = 1;
   for (let i = 0; i < map.mesh.count; i++) {
-    map.IceThickness[i] = 200;
-    map.GroundedIce[i] = map.mesh.x[i] > 100_000 ? 1 : 0;
+    map.IceThickness.set(i, 200);
+    map.GroundedIce.set(i, map.mesh.x(i) > 100_000 ? 1 : 0);
   }
   oceanConnectivity(map, context);
   const coldLevel = map.BaseSeaLevel;
@@ -126,7 +146,7 @@ it("exchanges grounded ice with ocean water, excludes floating ice and never res
   map.GlacialMeltwater.fill(1000); // Routing is a forcing, not another ocean inventory deposit.
   oceanConnectivity(map, context);
   expect(map.BaseSeaLevel).toBeCloseTo(warmLevel, -1);
-  map.Elevation[0] -= units(500);
+  map.Elevation.add(0, -units(500));
   oceanConnectivity(map, context);
   expect(map.BaseOceanVolume).toBe(budget);
   context.SeaLevelOffset = 40;

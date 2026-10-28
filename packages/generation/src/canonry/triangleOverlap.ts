@@ -5,7 +5,7 @@ type Point = [number, number];
 const rootThree = Math.sqrt(3);
 
 function triangle(mesh: PhysicalMesh, cell: number, x: number, y: number): Point[] {
-  const sign = mesh.coordInverted[cell] ? 1 : -1,
+  const sign = mesh.inverted(cell) ? 1 : -1,
     sx = mesh.spacing,
     sy = mesh.periodic?.poles?.spacingY ?? sx;
   return [
@@ -51,17 +51,17 @@ function polarCap(mesh: PhysicalMesh, source: number, y: number) {
   const edge = mesh.bounds[3],
     reach = rootThree * mesh.periodic.poles.spacingY;
   // A reflected control volume can fold at a closed edge; use the topology scatter there.
-  return Math.abs(y) + reach >= edge || Math.abs(mesh.y[source]) + reach >= edge;
+  return Math.abs(y) + reach >= edge || Math.abs(mesh.y(source)) + reach >= edge;
 }
 function targetOverlap(mesh: PhysicalMesh, cell: number, polygon: Point[], x: number, y: number) {
-  const cx = x + meshDeltaX(mesh, mesh.x[cell] - x),
-    cy = mesh.y[cell];
+  const cx = x + meshDeltaX(mesh, mesh.x(cell) - x),
+    cy = mesh.y(cell);
   if (Math.abs(cx - x) > mesh.spacing * 2 || Math.abs(cy - y) > mesh.spacing * 2) return 0;
   return overlap(polygon, triangle(mesh, cell, cx, cy));
 }
 function appendNeighbors(mesh: PhysicalMesh, cell: number, seen: SmallIntSet, queue: number[]) {
-  for (let edge = 0; edge < mesh.degree[cell]; edge++) {
-    const target = mesh.neighbors[cell * mesh.stride + edge];
+  for (let edge = 0; edge < mesh.degree(cell); edge++) {
+    const target = mesh.neighbor(cell, edge);
     if (target >= 0 && seen.add(target)) queue.push(target);
   }
 }
@@ -78,7 +78,7 @@ export function triangleOverlap(
   const nearest = nearestTriangle(mesh, x, y);
   if (nearest < 0) return [];
   const polygon = move
-      ? triangle(mesh, source, mesh.x[source], mesh.y[source]).map(([x, y]) => move(x, y))
+      ? triangle(mesh, source, mesh.x(source), mesh.y(source)).map(([x, y]) => move(x, y))
       : triangle(mesh, source, x, y),
     sourceArea = area(polygon),
     queue = [nearest],

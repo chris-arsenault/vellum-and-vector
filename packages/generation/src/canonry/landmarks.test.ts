@@ -27,20 +27,22 @@ const bounds: [number, number, number, number] = [0, 0, 2_000_000, 1_000_000];
 function interior(map: PhysicalField) {
   const sea: number[] = [],
     land: number[] = [];
-  for (let i = 0; i < map.mesh.contentCount; i++)
-    (map.WaterKindCodes[i] === 1 ? sea : land).push(i);
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (map.mesh.membership(i) !== 1) continue;
+    (map.WaterKindCodes.get(i) === 1 ? sea : land).push(i);
+  }
   const clearance = (i: number) =>
     sea.reduce(
       (best, j) =>
-        Math.min(best, Math.hypot(map.mesh.x[i] - map.mesh.x[j], map.mesh.y[i] - map.mesh.y[j])),
+        Math.min(best, Math.hypot(map.mesh.x(i) - map.mesh.x(j), map.mesh.y(i) - map.mesh.y(j))),
       Infinity
     );
   return land
     .map((i) => ({ i, clearance: clearance(i) }))
     .sort((a, b) => b.clearance - a.clearance)
     .map(({ i, clearance }) => ({
-      x: map.mesh.x[i] + map.mesh.origin[0],
-      y: map.mesh.y[i] + map.mesh.origin[1],
+      x: map.mesh.x(i) + map.mesh.origin[0],
+      y: map.mesh.y(i) + map.mesh.origin[1],
       clearance,
     }));
 }
@@ -132,13 +134,13 @@ function evolve(_seed: number, place: (map: PhysicalField) => Landmark[]) {
     corrections: Record<string, number[]> = {},
     drift: number[] = [];
   for (let i = 0; i < map.mesh.count; i++) {
-    const ocean = Math.abs(map.mesh.x[i]) > 900_000 || Math.abs(map.mesh.y[i]) > 400_000;
-    map.WaterKindCodes[i] = ocean ? 1 : 0;
-    map.Elevation[i] = units(ocean ? -500 : 1000);
-    map.BedrockElevation[i] = map.Elevation[i];
-    map.CrustThickness[i] = units(4000);
-    map.CrustContinentalFraction[i] = 1000;
-    map.RockResistance[i] = 1000;
+    const ocean = Math.abs(map.mesh.x(i)) > 900_000 || Math.abs(map.mesh.y(i)) > 400_000;
+    map.WaterKindCodes.set(i, ocean ? 1 : 0);
+    map.Elevation.set(i, units(ocean ? -500 : 1000));
+    map.BedrockElevation.set(i, map.Elevation.get(i));
+    map.CrustThickness.set(i, units(4000));
+    map.CrustContinentalFraction.set(i, 1000);
+    map.RockResistance.set(i, 1000);
   }
   let landmarks: Landmark[] = [];
   const emplace = (index: number) => {
@@ -158,9 +160,12 @@ function evolve(_seed: number, place: (map: PhysicalField) => Landmark[]) {
   for (let index = 0; index < 3; index++) {
     if (index > 0)
       for (let i = 0; i < map.mesh.count; i++) {
-        if (map.WaterKindCodes[i] === 1) continue;
-        map.BedrockElevation[i] = units(1000) + (map.BedrockElevation[i] - units(1000)) * 0.8;
-        map.Elevation[i] = map.BedrockElevation[i] + map.SedimentThickness[i];
+        if (map.WaterKindCodes.get(i) === 1) continue;
+        map.BedrockElevation.set(
+          i,
+          units(1000) + (map.BedrockElevation.get(i) - units(1000)) * 0.8
+        );
+        map.Elevation.set(i, map.BedrockElevation.get(i) + map.SedimentThickness.get(i));
       }
     maintain(index);
     validateLandscape(map);
@@ -196,27 +201,40 @@ it("restores every landmark's signature after repeated controlled relief loss", 
   expect(falls.measured.drop).toBeGreaterThanOrEqual(50 - 0.01);
   expect(falls.notes.some((text) => text.includes("latent"))).toBe(true);
   expect(map.faults.some((fault) => fault.id === "landmark:escarpment-1")).toBe(true);
-  expect(map.LandmarkMaintenance.some((value) => value > 0)).toBe(true);
+  expect(Array.from(map.LandmarkMaintenance).some((value) => value > 0)).toBe(true);
   // The last epoch's cuts are still supply awaiting transport; the ledger invariant holds.
   expect(map.SedimentDepositedTotal + map.SedimentExportedTotal).toBeLessThanOrEqual(
     map.SedimentProducedTotal * (1 + 1e-9)
   );
 });
 
+/** River cells southwest of the head within capture reach, largest flow first. */
+function southernRivers(map: PhysicalField, head: number) {
+  return Array.from({ length: map.mesh.count }, (_, i) => i)
+    .filter(
+      (i) =>
+        map.RiverOrders.get(i) > 0 &&
+        map.mesh.y(i) < 0 &&
+        map.mesh.x(i) < 0 &&
+        Math.hypot(map.mesh.x(i) - map.mesh.x(head), map.mesh.y(i) - map.mesh.y(head)) < 150_000
+    )
+    .sort((a, b) => map.FlowAccumulation.get(b) - map.FlowAccumulation.get(a));
+}
 it("captures the largest divertible river into the canyon and reports where it came from", () => {
   // Two east-draining valleys: the wet southern river can be incised into the
   // lower northern canyon. Later climate is free to move or remove a river.
   const map = createField(createWorldMesh([0, 0, 400_000, 300_000], 1024, 0)),
     context = physicalContext(seed, 0, atlasPhysicalProfile());
   for (let i = 0; i < map.mesh.count; i++) {
-    const x = map.mesh.x[i],
-      y = map.mesh.y[i];
-    map.Elevation[i] = units(
-      (y >= 0 ? 300 : 700) - x * 0.001 + (Math.abs(y) - 60_000) ** 2 * 0.00000005
+    const x = map.mesh.x(i),
+      y = map.mesh.y(i);
+    map.Elevation.set(
+      i,
+      units((y >= 0 ? 300 : 700) - x * 0.001 + (Math.abs(y) - 60_000) ** 2 * 0.00000005)
     );
-    map.BedrockElevation[i] = map.Elevation[i];
-    map.Runoff[i] = y < 0 ? 1000 : 20;
-    if (x > 180_000) map.WaterKindCodes[i] = 1;
+    map.BedrockElevation.set(i, map.Elevation.get(i));
+    map.Runoff.set(i, y < 0 ? 1000 : 20);
+    if (x > 180_000) map.WaterKindCodes.set(i, 1);
   }
   const route = () => {
     drainageConditioning(map, context);
@@ -226,19 +244,12 @@ it("captures the largest divertible river into the canyon and reports where it c
   };
   route();
   const head = nearestTriangle(map.mesh, 0, 60_000),
-    candidates = Array.from(map.RiverOrders.keys())
-      .filter(
-        (i) =>
-          map.RiverOrders[i] > 0 &&
-          map.mesh.y[i] < 0 &&
-          map.mesh.x[i] < 0 &&
-          Math.hypot(map.mesh.x[i] - map.mesh.x[head], map.mesh.y[i] - map.mesh.y[head]) < 150_000
-      )
-      .sort((a, b) => map.FlowAccumulation[b] - map.FlowAccumulation[a]);
+    candidates = southernRivers(map, head);
   expect(candidates.length).toBeGreaterThan(1);
   const [largest, smaller] = candidates;
   map.RiverOrders.fill(0);
-  map.RiverOrders[largest] = map.RiverOrders[smaller] = 1;
+  map.RiverOrders.set(largest, 1);
+  map.RiverOrders.set(smaller, 1);
   const placed = placeLandmark(
       map,
       landmark("canyon", path({ x: 200_000, y: 210_000 }, { x: 300_000, y: 210_000 }), {
@@ -254,8 +265,8 @@ it("captures the largest divertible river into the canyon and reports where it c
         .filter((cell) => cell.station <= geometry.line.length / 3)
         .map((cell) => cell.i)
     ),
-    discharge = map.FlowAccumulation[largest],
-    runoff = map.Runoff.slice();
+    discharge = map.FlowAccumulation.get(largest),
+    runoff = Array.from(map.Runoff);
   captureInto(map, record, {
     head,
     floor: new Set(geometry.floor.map((cell) => cell.i)),
@@ -264,8 +275,8 @@ it("captures the largest divertible river into the canyon and reports where it c
     label: "canyon head",
   });
   expect(record.capture).toEqual({
-    x: map.mesh.x[largest],
-    y: map.mesh.y[largest],
+    x: map.mesh.x(largest),
+    y: map.mesh.y(largest),
     accumulation: discharge,
   });
   expect(record.notes.some((text) => text.startsWith("Captured the river"))).toBe(true);
@@ -273,23 +284,23 @@ it("captures the largest divertible river into the canyon and reports where it c
   route();
   let current = largest;
   for (let n = 0; n < map.mesh.count && current >= 0 && !headReach.has(current); n++)
-    current = map.FlowTargets[current];
+    current = map.FlowTargets.get(current);
   expect(headReach.has(current), "the captured river reaches the canyon head").toBe(true);
-  expect(Math.max(...Array.from(headReach, (i) => map.FlowAccumulation[i]))).toBeGreaterThanOrEqual(
-    discharge * 0.9
-  );
-  expect(map.Runoff).toEqual(runoff);
+  expect(
+    Math.max(...Array.from(headReach, (i) => map.FlowAccumulation.get(i)))
+  ).toBeGreaterThanOrEqual(discharge * 0.9);
+  expect(Array.from(map.Runoff)).toEqual(runoff);
 });
 
 it("is deterministic and leaves the world untouched when no landmark is placed", () => {
   const first = evolve(seed, placeAll),
     second = evolve(seed, placeAll),
     none = evolve(seed, () => []);
-  expect(first.map.Elevation).toEqual(second.map.Elevation);
+  expect(Array.from(first.map.Elevation)).toEqual(Array.from(second.map.Elevation));
   expect([...first.ledger.values()].map((r) => r.measured)).toEqual(
     [...second.ledger.values()].map((r) => r.measured)
   );
   expect(none.ledger.size).toBe(0);
-  expect(none.map.LandmarkMaintenance.every((value) => value === 0)).toBe(true);
+  expect(Array.from(none.map.LandmarkMaintenance).every((value) => value === 0)).toBe(true);
   expect(none.map.events.some((event) => event.kind === "landmark")).toBe(false);
 });

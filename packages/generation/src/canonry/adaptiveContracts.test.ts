@@ -3,6 +3,8 @@ import {
   createAdaptiveField,
   createAdaptiveTopology,
   rectangle,
+  type AdaptiveLattice,
+  type Band,
   type ParameterValues,
 } from "@atlas/domain";
 import { atlasFeatureDefinitions, atlasRegistry } from "../atlasWorkflow";
@@ -15,8 +17,17 @@ import { preflight } from "../preflight";
 import type { ProcessConfiguration } from "../process";
 import { adaptivePhysicalMesh } from "./adaptiveMesh";
 import { atlasPhysicalProfile } from "./atlasProfile";
-import { createField } from "./field";
+import { createField, type PhysicalField } from "./field";
 import { remeshInvalidations } from "./adaptiveWorkspace";
+
+/** Whether any live (content or halo) cell of the band satisfies the test. */
+function anyLive(map: PhysicalField, band: Band, test: (value: number) => boolean) {
+  for (let i = 0; i < map.mesh.count; i++)
+    if (map.mesh.membership(i) !== 0 && test(band.get(i))) return true;
+  return false;
+}
+const integral = (map: PhysicalField, band: Band) =>
+  map.coverage.reduce(band, (sum, depth, i) => sum + depth * map.mesh.area(i), 0);
 
 function fixture(size: number) {
   const state = landscape();
@@ -44,15 +55,18 @@ function fixture(size: number) {
   });
   const map = createField(adaptivePhysicalMesh(topology, footprint));
   map.OpenBoundary = true;
-  for (let i = 0; i < map.mesh.count; i++)
-    map.BedrockElevation[i] = map.Elevation[i] = (1000 - map.mesh.x[i] / 100) * 1024;
+  for (let i = 0; i < map.mesh.count; i++) {
+    const height = (1000 - map.mesh.x(i) / 100) * 1024;
+    map.BedrockElevation.set(i, height);
+    map.Elevation.set(i, height);
+  }
   map.Temperature.fill(150);
   map.Rainfall.fill(1000);
   state.surface = createAdaptiveField("provided-terrain", state.domain.scope, topology);
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
-    samples: map.mesh.leafToCell,
+    samples: (map.mesh as AdaptiveLattice).leafCells(),
     fixed: [],
     inherited: false,
     sampling: { maximumSize: size, minimumSize: 3125, featureSamples: 2 },
@@ -137,9 +151,9 @@ it.each([25_000, 3125])(
     expect(map.mesh.count > count).toBe(size === 25_000);
     for (const product of ["Runoff", "Lakes", "LakeState", "LakeOutlets", "FlowRouting", "Rivers"])
       expect(result.state.facts.has(`canonry:${product}`), product).toBe(true);
-    expect(map.FlowTargets.every((target) => target < map.mesh.count)).toBe(true);
-    expect(map.LakeOutletTargets.every((target) => target < map.mesh.count)).toBe(true);
-    expect(map.RiverOrders.some((order) => order > 0)).toBe(true);
+    expect(anyLive(map, map.FlowTargets, (target) => target >= map.mesh.count)).toBe(false);
+    expect(anyLive(map, map.LakeOutletTargets, (target) => target >= map.mesh.count)).toBe(false);
+    expect(anyLive(map, map.RiverOrders, (order) => order > 0)).toBe(true);
   }
 );
 
@@ -150,7 +164,7 @@ it.each([25_000, 3125])(
       map = state.physical!.map;
     map.IceThickness.fill(1000);
     state.facts.add("canonry:LandIce");
-    const volume = map.IceThickness.reduce((sum, depth, i) => sum + depth * map.mesh.areas[i], 0);
+    const volume = integral(map, map.IceThickness);
     const count = map.mesh.count;
     const { registry, configuration } = recipe(state, ["ice-flow", "refine-ice"]);
     expect(preflight(configuration, registry, state.facts)).toEqual([]);
@@ -160,10 +174,8 @@ it.each([25_000, 3125])(
     });
     const next = result.state.physical!.map;
     expect(next.mesh.count > count).toBe(size === 25_000);
-    expect(
-      next.IceThickness.reduce((sum, depth, i) => sum + depth * next.mesh.areas[i], 0)
-    ).toBeCloseTo(volume, -2);
-    expect(next.IceFlowTargets.some((target) => target >= 0)).toBe(true);
+    expect(integral(next, next.IceThickness)).toBeCloseTo(volume, -2);
+    expect(anyLive(next, next.IceFlowTargets, (target) => target >= 0)).toBe(true);
     expect(result.state.facts.has("canonry:IceFlow")).toBe(true);
     expect(result.state.facts.has("canonry:LakeState")).toBe(true);
   }
@@ -184,10 +196,12 @@ it.each([25_000, 3125])(
     const state = fixture(size),
       map = state.physical!.map;
     for (let i = 0; i < map.mesh.count; i++) {
-      map.BedrockElevation[i] = map.Elevation[i] = (map.mesh.x[i] * 1024) / 100;
-      if (map.mesh.x[i] < 0) {
-        map.WaterKindCodes[i] = 1;
-        map.WaterDepths[i] = -map.Elevation[i];
+      const height = (map.mesh.x(i) * 1024) / 100;
+      map.BedrockElevation.set(i, height);
+      map.Elevation.set(i, height);
+      if (map.mesh.x(i) < 0) {
+        map.WaterKindCodes.set(i, 1);
+        map.WaterDepths.set(i, -map.Elevation.get(i));
       }
     }
     const { registry, configuration } = recipe(state, [...water, "refine-climate"]);

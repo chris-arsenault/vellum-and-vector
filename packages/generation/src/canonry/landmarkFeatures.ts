@@ -73,7 +73,7 @@ function claimedCells(work: Work, landmark: Landmark, record: LandmarkRecord): n
   for (let i = 0; i < map.mesh.count; i++) {
     const inside =
       radius === null
-        ? nearestOnPath(map, metrics, map.mesh.x[i], map.mesh.y[i]).distance <= p.scarpWidth * 1000
+        ? nearestOnPath(map, metrics, map.mesh.x(i), map.mesh.y(i)).distance <= p.scarpWidth * 1000
         : distance(map, i, placed.center) <= radius;
     if (inside) cells.push(i);
   }

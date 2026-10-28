@@ -51,10 +51,10 @@ function excavate(
 ): number {
   if (distance > radius) return 0;
   const requested = Math.max(1, units(depth * (1 - (distance / radius) ** 2)));
-  const cut = Math.max(0, Math.min(requested, map.BedrockElevation[i] - units(-3800)));
-  map.BedrockElevation[i] -= cut;
-  map.SurfaceRockLoad[i] -= cut;
-  map.ImpactExcavation[i] += cut;
+  const cut = Math.max(0, Math.min(requested, map.BedrockElevation.get(i) - units(-3800)));
+  map.BedrockElevation.add(i, -cut);
+  map.SurfaceRockLoad.add(i, -cut);
+  map.ImpactExcavation.add(i, cut);
   if (cut > 0) rebuild(map, i);
   return cut;
 }
@@ -63,11 +63,11 @@ function raiseRim(map: PhysicalField, i: number, distance: number, radius: numbe
   if (influence <= 0) return;
   const uplift = Math.max(
     0,
-    Math.min(units(height * influence), units(3800) - map.BedrockElevation[i])
+    Math.min(units(height * influence), units(3800) - map.BedrockElevation.get(i))
   );
-  map.BedrockElevation[i] += uplift;
-  map.SurfaceRockLoad[i] += uplift;
-  map.ImpactRimUplift[i] += uplift;
+  map.BedrockElevation.add(i, uplift);
+  map.SurfaceRockLoad.add(i, uplift);
+  map.ImpactRimUplift.add(i, uplift);
   if (uplift > 0) rebuild(map, i);
 }
 function shock(
@@ -80,15 +80,18 @@ function shock(
 ) {
   const influence = 1 - distance / (radius * 1.45);
   if (influence > 0)
-    map.FractureConductance[i] = Math.max(
-      map.FractureConductance[i],
-      round(p.ImpactFractureStrength * influence)
+    map.FractureConductance.set(
+      i,
+      Math.max(map.FractureConductance.get(i), round(p.ImpactFractureStrength * influence))
     );
   if (radius >= p.ImpactThermalRadiusThreshold && distance <= radius)
-    map.ImpactHeat[i] = Math.max(map.ImpactHeat[i], round(1000 * (1 - distance / radius)));
+    map.ImpactHeat.set(i, Math.max(map.ImpactHeat.get(i), round(1000 * (1 - distance / radius))));
   if (distance > radius * 1.15 || share <= 0) return;
   const gain = 1600 * (1 - distance / Math.max(0.001, radius * 1.15)) * share;
-  map.RockResistance[i] = Math.max(map.RockResistance[i], rockResistance(1000 + round(gain)));
+  map.RockResistance.set(
+    i,
+    Math.max(map.RockResistance.get(i), rockResistance(1000 + round(gain)))
+  );
 }
 function ejecta(
   map: PhysicalField,
@@ -101,16 +104,14 @@ function ejecta(
   let totalWeight = candidates.reduce((sum, [, weight]) => sum + weight, 0);
   for (const [i, weight] of candidates) {
     if (remaining <= 0 || totalWeight <= 0) break;
-    const headroom = Math.max(0, units(3800) - map.Elevation[i]);
-    const requested = Math.min(
-      headroom,
-      (((remaining * weight) / totalWeight) * 1024) / map.mesh.areas[i]
-    );
+    const headroom = Math.max(0, units(3800) - map.Elevation.get(i)),
+      area = map.mesh.area(i);
+    const requested = Math.min(headroom, (((remaining * weight) / totalWeight) * 1024) / area);
     totalWeight -= weight;
     if (requested <= 0) continue;
     const amount = deposit(map, i, requested);
-    map.ImpactEjectaThickness[i] += amount;
-    const volume = (amount / 1024) * map.mesh.areas[i];
+    map.ImpactEjectaThickness.add(i, amount);
+    const volume = (amount / 1024) * area;
     remaining -= volume;
     deposited += volume;
   }
@@ -137,23 +138,21 @@ export function shapeImpact(
   rim: number
 ) {
   const center = nearestTriangle(map.mesh, source.x, source.y);
-  map.FeatureFlags[center] |= Feature.ImpactCenter;
-  const share = 1 - clamp(map.WaterDepths[center] / units(p.ImpactOceanShockDepth), 0, 1);
+  map.FeatureFlags.set(center, map.FeatureFlags.get(center) | Feature.ImpactCenter);
+  const share = 1 - clamp(map.WaterDepths.get(center) / units(p.ImpactOceanShockDepth), 0, 1);
   let excavation = 0;
   const candidates: [number, number][] = [];
   for (let i = 0; i < map.mesh.count; i++) {
     const distance = Math.hypot(
-      meshDeltaX(map.mesh, map.mesh.x[i] - source.x),
-      map.mesh.y[i] - source.y
-    );
-    excavation += (excavate(map, i, distance, radius, depth) / 1024) * map.mesh.areas[i];
+        meshDeltaX(map.mesh, map.mesh.x(i) - source.x),
+        map.mesh.y(i) - source.y
+      ),
+      area = map.mesh.area(i);
+    excavation += (excavate(map, i, distance, radius, depth) / 1024) * area;
     raiseRim(map, i, distance, radius, rim);
     shock(map, p, i, distance, radius, share);
     if (distance >= radius && distance <= radius * 2.2)
-      candidates.push([
-        i,
-        map.mesh.areas[i] * Math.max(0, 1 - (distance - radius) / (radius * 1.2)),
-      ]);
+      candidates.push([i, area * Math.max(0, 1 - (distance - radius) / (radius * 1.2))]);
   }
   map.SedimentProducedTotal += excavation;
   map.SedimentExportedTotal += excavation - ejecta(map, p, candidates, excavation);

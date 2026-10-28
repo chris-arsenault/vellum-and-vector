@@ -1,4 +1,4 @@
-import type { NumericalVector, SocietyWork } from "@atlas/domain";
+import type { Band, SocietyWork } from "@atlas/domain";
 import type { GenerationState } from "./process";
 import { nativeIndexAtSurface } from "./canonry/atlasWorkspace";
 import { workSamples } from "./societyWorks";
@@ -40,7 +40,7 @@ export function irrigateChannels(state: GenerationState) {
       for (const { cell, share } of irrigationIntakes(state, work)) {
         if (cell === undefined || cell < 0) continue;
         const diverted = Math.min(
-          map.FlowAccumulation[cell] * 0.2,
+          map.FlowAccumulation.get(cell) * 0.2,
           work.magnitude * work.condition * share
         );
         total += diverted;
@@ -58,12 +58,12 @@ function divertDownstream(
   map: PhysicalField,
   cell: number,
   amount: number,
-  visited: NumericalVector,
+  visited: Band,
   visit: number
 ) {
-  for (let at = cell; at >= 0 && visited[at] !== visit; at = map.FlowTargets[at]) {
-    visited[at] = visit;
-    map.FlowAccumulation[at] = Math.max(0, map.FlowAccumulation[at] - amount);
+  for (let at = cell; at >= 0 && visited.get(at) !== visit; at = map.FlowTargets.get(at)) {
+    visited.set(at, visit);
+    map.FlowAccumulation.set(at, Math.max(0, map.FlowAccumulation.get(at) - amount));
   }
 }
 function* irrigationIntakes(state: GenerationState, work: SocietyWork) {

@@ -9,6 +9,7 @@ import { advectMagic, initializeMagic, magicBudget } from "./magicState";
 import { weightScale } from "./transportPlan";
 import { locateMagicSources } from "./magicSources";
 import { propagateMagic } from "./magicPropagation";
+import { workingArray } from "./physicalNumerics";
 
 /**
  * The three presets on the magic test scenario, reduced to totals. The origin and stock
@@ -39,20 +40,26 @@ function scenario() {
   };
   map.RockResistance.fill(1000);
   map.FractureConductance.fill(800);
-  map.HeatSourceDensity[0] = 1000;
-  for (let i = 0; i < map.mesh.count; i++) {
-    map.Temperature[i] = Math.round(300 + map.mesh.x[i] * 0.0005);
-    map.Elevation[i] = Math.round(map.mesh.x[i] * 0.01 * 1024);
-    map.WaterKindCodes[i] = map.mesh.x[i] < 0 ? 1 : 0;
-    map.WaterDepths[i] = Math.max(0, -map.Elevation[i]);
-    map.IceThickness[i] = map.Temperature[i] < 300 ? 400 : 0;
+  map.HeatSourceDensity.set(contentCells(map)[0], 1000);
+  for (const i of contentCells(map)) {
+    map.Temperature.set(i, Math.round(300 + map.mesh.x(i) * 0.0005));
+    map.Elevation.set(i, Math.round(map.mesh.x(i) * 0.01 * 1024));
+    map.WaterKindCodes.set(i, map.mesh.x(i) < 0 ? 1 : 0);
+    map.WaterDepths.set(i, Math.max(0, -map.Elevation.get(i)));
+    map.IceThickness.set(i, map.Temperature.get(i) < 300 ? 400 : 0);
   }
   initializeMagic(state);
   return state;
 }
-const total = (values: ArrayLike<number>) => {
+/** Content cells in id order; content is not a prefix of the ids. */
+function contentCells(map: ReturnType<typeof createField>) {
+  const cells: number[] = [];
+  for (let i = 0; i < map.mesh.count; i++) if (map.mesh.membership(i) === 1) cells.push(i);
+  return cells;
+}
+const total = (values: Iterable<number>) => {
   let sum = 0;
-  for (let i = 0; i < values.length; i++) sum += values[i];
+  for (const value of values) sum += value;
   return Math.round(sum);
 };
 
@@ -67,7 +74,7 @@ it("keeps every preset's located sources and propagated field exactly as before 
       intensity: total(field.intensity),
       wake: total(field.wake),
       retained: total(field.retained),
-      active: field.intensity.filter((value) => value > 0).length,
+      active: Array.from(field.intensity).filter((value) => value > 0).length,
     };
   });
   expect(totals).toMatchInlineSnapshot(`
@@ -141,7 +148,7 @@ it("mirrors each origin's source into its first reservoir and closes the budget"
   const held = fire.stocks["vein/held"];
   expect(held).toBeDefined();
   for (let i = 0; i < held.length; i++)
-    expect(held[i]).toBeCloseTo(fire.source[i] * map.mesh.areas[i], 6);
+    expect(held.get(i)).toBeCloseTo(fire.source.get(i) * map.mesh.area(i), 6);
   const budget = magicBudget(fire, map);
   expect(budget.created).toBeGreaterThan(0);
   expect(budget.carried).toBeCloseTo(budget.created, 3);
@@ -152,46 +159,48 @@ it("carries a crust stock by the transport plan's weights and conserves its tota
   const state = scenario(),
     map = state.physical!.map,
     fire = state.physical!.magic!.fields[0],
-    count = map.mesh.count;
+    count = map.mesh.count,
+    cells = contentCells(map);
   const held = fire.stocks["vein/held"];
   held.fill(0);
-  held[0] = 1000;
-  held[1] = 500;
-  // A synthetic plan: cell 0 splits three ways, cell 1 lands whole on cell 2, others stay.
-  const offsets = new Int32Array(count + 1),
+  held.set(cells[0], 1000);
+  held.set(cells[1], 500);
+  // A synthetic plan: the first cell splits three ways, the second lands whole on the third,
+  // others stay.
+  const offsets = workingArray(map, "int32", "test:offsets", count + 1),
     targets: number[] = [],
     weights: number[] = [];
   for (let i = 0; i < count; i++) {
-    offsets[i] = targets.length;
-    if (i === 0) {
-      targets.push(3, 4, 5);
+    offsets.set(i, targets.length);
+    if (i === cells[0]) {
+      targets.push(cells[3], cells[4], cells[5]);
       weights.push(weightScale / 2, weightScale / 4, weightScale / 4);
-    } else if (i === 1) {
-      targets.push(2);
+    } else if (i === cells[1]) {
+      targets.push(cells[2]);
       weights.push(weightScale);
     } else {
       targets.push(i);
       weights.push(weightScale);
     }
   }
-  offsets[count] = targets.length;
+  offsets.set(count, targets.length);
   map.transportPlan = {
     offsets,
     targets: Int32Array.from(targets),
     weights: Float64Array.from(weights),
-    arrivals: new Float64Array(count),
-    dominant: new Int32Array(count).fill(-1),
-    dominantWeight: new Float64Array(count),
+    arrivals: workingArray(map, "float64", "test:arrivals"),
+    dominant: workingArray(map, "int32", "test:dominant").fill(-1),
+    dominantWeight: workingArray(map, "float64", "test:dominantWeight"),
   };
   map.AdvectionSourceIndex.fill(-1);
-  for (let i = 0; i < count; i++) map.AdvectionSourceIndex[i] = i;
+  for (let i = 0; i < count; i++) map.AdvectionSourceIndex.set(i, i);
   advectMagic(state);
-  expect(Array.from(held.slice(0, 6))).toEqual([0, 0, 500, 500, 250, 250]);
-  expect(held.reduce((sum, value) => sum + value, 0)).toBe(1500);
+  expect(cells.slice(0, 6).map((i) => held.get(i))).toEqual([0, 0, 500, 500, 250, 250]);
+  expect(total(held)).toBe(1500);
   // Without a plan the amount stays where it is.
   map.transportPlan = null;
   advectMagic(state);
-  expect(held.reduce((sum, value) => sum + value, 0)).toBe(1500);
+  expect(total(held)).toBe(1500);
 });
 
 it("locates and propagates two origins on their own rules and keeps the stronger in the field", () => {
@@ -199,7 +208,7 @@ it("locates and propagates two origins on their own rules and keeps the stronger
     map = state.physical!.map,
     fire = state.physical!.magic!.fields[0];
   map.HeatSourceDensity.fill(600);
-  map.HeatSourceDensity[0] = 1000;
+  map.HeatSourceDensity.set(contentCells(map)[0], 1000);
   fire.definition = magicSystemSchema.parse({
     ...fire.definition,
     origins: [
@@ -229,14 +238,16 @@ it("locates and propagates two origins on their own rules and keeps the stronger
     scatter = field.originSources.scatter;
   expect(field.located.some((point) => point.origin === "vein")).toBe(true);
   expect(field.located.some((point) => point.origin === "scatter")).toBe(true);
-  expect(scatter.some((value) => value > 0)).toBe(true);
-  expect(vein.some((value) => value > 0)).toBe(true);
+  expect(Array.from(scatter).some((value) => value > 0)).toBe(true);
+  expect(Array.from(vein).some((value) => value > 0)).toBe(true);
   for (let i = 0; i < field.source.length; i++)
-    expect(field.source[i]).toBe(Math.max(vein[i], scatter[i]));
+    expect(field.source.get(i)).toBe(Math.max(vein.get(i), scatter.get(i)));
   // The radial origin reaches cells the fracture origin never did, and the fracture origin's
   // own cells keep at least their own intensity.
-  expect(field.intensity.filter((value) => value > 0).length).toBeGreaterThan(7);
+  expect(Array.from(field.intensity).filter((value) => value > 0).length).toBeGreaterThan(7);
   classifyMagicFeatures(state, 42);
   const cores = field.features["vein-core"];
-  expect(Array.from(cores).filter(Boolean).length).toBe(vein.filter((value) => value > 0).length);
+  expect(Array.from(cores).filter(Boolean).length).toBe(
+    Array.from(vein).filter((value) => value > 0).length
+  );
 });

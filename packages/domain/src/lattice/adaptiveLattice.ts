@@ -221,11 +221,15 @@ export class AdaptiveLattice implements Lattice {
         -side * (east - west)
       );
   }
+  readonly latticeOffset: [number, number] = [0, 0];
   blockLive(block: number) {
     return this.live[block];
   }
   membership(cell: number) {
     return cell < this.contentCount ? content : halo;
+  }
+  inverted() {
+    return false;
   }
   x(cell: number) {
     return this.xs[cell];
@@ -289,6 +293,10 @@ export class AdaptiveLattice implements Lattice {
   }
   leafToCell(leaf: number) {
     return this.cellOf[leaf];
+  }
+  /** The cell of every leaf, as the surface's sample table. */
+  leafCells(): Int32Array {
+    return this.cellOf;
   }
   deltaX(dx: number) {
     const width = this.periodic?.width;

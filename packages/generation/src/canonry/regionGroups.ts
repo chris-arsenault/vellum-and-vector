@@ -1,36 +1,34 @@
-import { CellList, KeyedHeap, type NumericalVector } from "@atlas/domain";
+import { CellList, KeyedHeap, type Band } from "@atlas/domain";
 import type { PhysicalField } from "./field";
 import type { RegionMembers } from "./regionMembers";
-import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
+import { workingArray, releaseWorking } from "./physicalNumerics";
 
+/** Connected unit membership: a per-cell label band and compact member columns. */
 interface RegionGroups {
-  labels: NumericalVector;
-  members: NumericalVector;
-  offsets: NumericalVector;
+  labels: Band;
+  members: Int32Array;
+  offsets: Int32Array;
 }
 /** Connected unit membership in numerical columns; no object or Set per cell. */
-export function unitGroups(
-  map: PhysicalField,
-  members: RegionMembers,
-  unit: NumericalVector
-): RegionGroups {
+export function unitGroups(map: PhysicalField, members: RegionMembers, unit: Band): RegionGroups {
   const mesh = map.mesh,
     labels = workingArray(map, "int32", "region:groups").fill(-2),
     cells = new CellList(),
     offsets = new CellList();
-  for (const i of members) labels[i] = -1;
+  for (const i of members) labels.set(i, -1);
   for (const start of members) {
-    if (labels[start] >= 0) continue;
+    if (labels.get(start) >= 0) continue;
     const group = offsets.length;
     offsets.push(cells.length);
-    labels[start] = group;
+    labels.set(start, group);
     cells.push(start);
+    const kind = unit.get(start);
     for (let head = offsets.at(group); head < cells.length; head++) {
       const cell = cells.at(head);
-      for (let edge = 0; edge < mesh.degree[cell]; edge++) {
-        const j = mesh.neighbors[cell * mesh.stride + edge];
-        if (j < 0 || labels[j] !== -1 || unit[j] !== unit[start]) continue;
-        labels[j] = group;
+      for (let edge = 0; edge < mesh.degree(cell); edge++) {
+        const j = mesh.neighbor(cell, edge);
+        if (j < 0 || labels.get(j) !== -1 || unit.get(j) !== kind) continue;
+        labels.set(j, group);
         cells.push(j);
       }
     }
@@ -38,28 +36,25 @@ export function unitGroups(
   offsets.push(cells.length);
   return { labels, members: cells.finish(), offsets: offsets.finish() };
 }
-function root(parent: NumericalVector, group: number) {
+function root(parent: Int32Array, group: number) {
   while (parent[group] !== group) group = parent[group] = parent[parent[group]];
   return group;
 }
 interface GroupMerge {
-  parent: NumericalVector;
-  next: NumericalVector;
-  size: NumericalVector;
+  parent: Int32Array;
+  next: Int32Array;
+  size: Float64Array;
 }
-function* neighbours(
-  map: PhysicalField,
-  groups: RegionGroups,
-  next: NumericalVector,
-  start: number
-) {
+function* neighbours(map: PhysicalField, groups: RegionGroups, next: Int32Array, start: number) {
   const mesh = map.mesh;
   for (let group = start; group >= 0; group = next[group])
     for (let at = groups.offsets[group]; at < groups.offsets[group + 1]; at++) {
       const cell = groups.members[at];
-      for (let edge = 0; edge < mesh.degree[cell]; edge++) {
-        const j = mesh.neighbors[cell * mesh.stride + edge];
-        if (j >= 0 && groups.labels[j] >= 0) yield groups.labels[j];
+      for (let edge = 0; edge < mesh.degree(cell); edge++) {
+        const j = mesh.neighbor(cell, edge);
+        if (j < 0) continue;
+        const label = groups.labels.get(j);
+        if (label >= 0) yield label;
       }
     }
 }
@@ -81,14 +76,14 @@ function partner(
 /** Merge the smallest connected unit into its smallest fitting neighbour. */
 export function mergeGroups(map: PhysicalField, groups: RegionGroups, maximum: number) {
   const count = groups.offsets.length - 1,
-    parent = workingValues(map, "int32", "region:parents", (i) => i, count),
-    tail = workingValues(map, "int32", "region:tails", (i) => i, count),
-    next = workingArray(map, "int32", "region:next", count).fill(-1),
-    size = workingArray(map, "float64", "region:sizes", count),
+    parent = Int32Array.from({ length: count }, (_, i) => i),
+    tail = Int32Array.from({ length: count }, (_, i) => i),
+    next = new Int32Array(count).fill(-1),
+    size = new Float64Array(count),
     queue = new KeyedHeap("min");
   for (let group = 0; group < count; group++) {
     for (let at = groups.offsets[group]; at < groups.offsets[group + 1]; at++)
-      size[group] += map.mesh.contentAreas[groups.members[at]];
+      size[group] += map.mesh.contentArea(groups.members[at]);
     queue.push(group, size[group]);
   }
   for (let group = queue.pop(); group >= 0; group = queue.pop()) {
@@ -101,18 +96,17 @@ export function mergeGroups(map: PhysicalField, groups: RegionGroups, maximum: n
     tail[into] = tail[group];
     queue.push(into, size[into]);
   }
-  releaseWorking(map, tail, size);
   return { parent, next };
 }
 /** Pack the final connected pieces; their views share a single owned membership vector. */
 export function groupPieces(
   map: PhysicalField,
   groups: RegionGroups,
-  parent: NumericalVector,
-  next: NumericalVector
+  parent: Int32Array,
+  next: Int32Array
 ) {
-  const cells = workingArray(map, "int32", "region:pieces", groups.members.length),
-    pieces: NumericalVector[] = [];
+  const cells = new Int32Array(groups.members.length),
+    pieces: Int32Array[] = [];
   let length = 0;
   for (let group = 0; group < parent.length; group++) {
     if (parent[group] !== group) continue;
@@ -122,6 +116,6 @@ export function groupPieces(
         cells[length++] = groups.members[at];
     pieces.push(cells.subarray(start, length));
   }
-  releaseWorking(map, parent, next, groups.labels, groups.members, groups.offsets);
+  releaseWorking(map, groups.labels);
   return pieces;
 }

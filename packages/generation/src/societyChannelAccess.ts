@@ -14,9 +14,9 @@ function* channelPoints(state: GenerationState): Iterable<ChannelPoint> {
 }
 function* liveChannels(work: NonNullable<GenerationState["physical"]>): Iterable<ChannelPoint> {
   for (let i = 0; i < work.map.mesh.count; i++) {
-    if (work.map.RiverOrders[i] <= 0) continue;
+    if (work.map.RiverOrders.get(i) <= 0) continue;
     const p = nativePosition(work, i);
-    yield [p.x, p.y, work.map.FlowAccumulation[i]];
+    yield [p.x, p.y, work.map.FlowAccumulation.get(i)];
   }
 }
 function* retainedChannels(state: GenerationState): Iterable<ChannelPoint> {

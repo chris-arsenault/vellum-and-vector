@@ -3,24 +3,25 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, toUnits, units } from "./math";
 import { dominantUpstream, longitudinalAlignment } from "./channelGeometry";
-import { RecordQueue, type NumericalVector } from "@atlas/domain";
+import { RecordQueue, type Band } from "@atlas/domain";
 import { releaseWorking } from "./physicalNumerics";
 
 function canFlood(
   map: PhysicalField,
   c: PhysicalContext,
-  upstream: NumericalVector,
+  upstream: Band,
   source: number,
   target: number
 ): boolean {
   const p = c.Profile;
   return (
     target >= 0 &&
-    map.WaterKindCodes[target] === 0 &&
-    map.RiverChannelStrength[target] === 0 &&
-    map.DrainageBasinIds[target] === map.DrainageBasinIds[source] &&
-    map.Slope[target] <= p.FloodplainMaximumSlope &&
-    Math.abs(map.Elevation[source] - map.Elevation[target]) <= units(p.FloodplainMaximumRelief) &&
+    map.WaterKindCodes.get(target) === 0 &&
+    map.RiverChannelStrength.get(target) === 0 &&
+    map.DrainageBasinIds.get(target) === map.DrainageBasinIds.get(source) &&
+    map.Slope.get(target) <= p.FloodplainMaximumSlope &&
+    Math.abs(map.Elevation.get(source) - map.Elevation.get(target)) <=
+      units(p.FloodplainMaximumRelief) &&
     longitudinalAlignment(map, upstream, source, target) <=
       p.FloodplainMaximumLongitudinalAlignment / 1000
   );
@@ -29,24 +30,25 @@ function canFlood(
 function seedFloodplains(
   map: PhysicalField,
   c: PhysicalContext,
-  upstream: NumericalVector,
+  upstream: Band,
   frontier: RecordQueue
 ) {
   for (let i = 0; i < map.mesh.count; i++) {
-    if (map.RiverChannelOrders[i] < c.Profile.FloodplainMinimumRiverOrder) continue;
-    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-      const at = i * map.mesh.stride + edge,
-        j = map.mesh.neighbors[at];
-      const distance = map.mesh.edgeLength[at];
+    if (map.RiverChannelOrders.get(i) < c.Profile.FloodplainMinimumRiverOrder) continue;
+    for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+      const j = map.mesh.neighbor(i, edge),
+        distance = map.mesh.edgeLength(i, edge);
       if (distance > c.Profile.FloodplainMaximumWidth || !canFlood(map, c, upstream, i, j))
         continue;
       const intensity = clamp(
-        map.RiverChannelStrength[i] + toUnits(map.CumulativeDeposition[j]) - map.Slope[j] * 60_000,
+        map.RiverChannelStrength.get(i) +
+          toUnits(map.CumulativeDeposition.get(j)) -
+          map.Slope.get(j) * 60_000,
         1,
         1000
       );
-      if (intensity <= map.FloodplainIntensity[j]) continue;
-      map.FloodplainIntensity[j] = intensity;
+      if (intensity <= map.FloodplainIntensity.get(j)) continue;
+      map.FloodplainIntensity.set(j, intensity);
       frontier.push(j, distance);
     }
   }
@@ -65,23 +67,23 @@ export function floodplains(map: PhysicalField, c: PhysicalContext) {
 function expandFloodplains(
   map: PhysicalField,
   c: PhysicalContext,
-  upstream: NumericalVector,
+  upstream: Band,
   frontier: RecordQueue
 ) {
   for (let i = frontier.shift(); i >= 0; i = frontier.shift()) {
     const distance = frontier.field(0);
-    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-      const at = i * map.mesh.stride + edge,
-        j = map.mesh.neighbors[at];
-      const next = distance + map.mesh.edgeLength[at];
+    for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+      const j = map.mesh.neighbor(i, edge),
+        length = map.mesh.edgeLength(i, edge);
+      const next = distance + length;
       if (next > c.Profile.FloodplainMaximumWidth || !canFlood(map, c, upstream, i, j)) continue;
-      const relief = toUnits(Math.abs(map.Elevation[i] - map.Elevation[j]));
+      const relief = toUnits(Math.abs(map.Elevation.get(i) - map.Elevation.get(j)));
       const intensity =
-        map.FloodplainIntensity[i] -
-        (c.Profile.FloodplainIntensityDecay * map.mesh.edgeLength[at]) / 10_000 -
+        map.FloodplainIntensity.get(i) -
+        (c.Profile.FloodplainIntensityDecay * length) / 10_000 -
         relief;
-      if (intensity <= map.FloodplainIntensity[j]) continue;
-      map.FloodplainIntensity[j] = intensity;
+      if (intensity <= map.FloodplainIntensity.get(j)) continue;
+      map.FloodplainIntensity.set(j, intensity);
       frontier.push(j, next);
     }
   }

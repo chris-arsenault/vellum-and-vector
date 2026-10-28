@@ -2,10 +2,10 @@ import {
   canonryConfluencePresets,
   canonryMagicPresets,
   originParameters,
+  type Band,
   type MagicOrigin,
   type MagicStock,
   type MagicSystem,
-  type NumericalVector,
 } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
@@ -29,49 +29,49 @@ export interface LocatedSource {
   radius: number;
   strength: number;
 }
-export interface MagicField extends Record<MagicChannel, NumericalVector> {
-  parents?: NumericalVector;
+export interface MagicField extends Record<MagicChannel, Band> {
+  parents?: Band;
   wakePaths?: number[][][];
   definition: MagicSystem;
   located: LocatedSource[];
   /** Each origin's own source strength per cell; `source` is their maximum. */
-  originSources: Record<string, NumericalVector>;
+  originSources: Record<string, Band>;
   /** Amount of the system per cell in each origin reservoir, keyed by `stockKey`. */
-  stocks: Record<string, NumericalVector>;
+  stocks: Record<string, Band>;
   /** Impact events whose fall has already seeded a finite stock. */
   seeded: Set<string>;
   /** Stock that left the budget: washed to the sea, extracted, released and spent. */
   lost: number;
   /** Stock people drew from each cell since the last advance; an overdrawn spring collapses. */
-  drawn: NumericalVector;
+  drawn: Band;
   /** Veil's doors: pairs of stable tears, as the cells at their two ends. */
   doors: { a: number; b: number }[];
-  features: Record<string, NumericalVector>;
+  features: Record<string, Band>;
   /** Share of each member cell a rule's class occupies, by rule id. */
-  coverage: Record<string, NumericalVector>;
+  coverage: Record<string, Band>;
   /** The most any of the system's classes occupies in a cell, after meetings took theirs. */
-  systemCoverage: NumericalVector;
+  systemCoverage: Band;
 }
 /** Applied contributions are remembered so a re-evaluation replaces them instead of adding. */
 export interface MagicWorkspace {
   fields: MagicField[];
-  heat: NumericalVector;
+  heat: Band;
   /** Ice removed in the current epoch, so a second evaluation melts only what is owed. */
-  melt: NumericalVector;
-  coastal: NumericalVector;
-  upwelling: NumericalVector;
-  seaSurface: NumericalVector;
-  fog: NumericalVector;
-  naturalSurface: NumericalVector;
-  finalSurface: NumericalVector;
+  melt: Band;
+  coastal: Band;
+  upwelling: Band;
+  seaSurface: Band;
+  fog: Band;
+  naturalSurface: Band;
+  finalSurface: Band;
   /** The next class by coverage where it holds the floor of the cell, or -1. */
-  secondSurface: NumericalVector;
+  secondSurface: Band;
   confluences: ConfluenceWorkspace;
   /** Cells just outside a Hallowed ring: where what the ward holds back lands. */
-  wardRim: NumericalVector;
+  wardRim: Band;
   /** The ring each warded cell belongs to, and the ring each rim cell touches; -1 for none. */
-  wardLabel: NumericalVector;
-  rimLabel: NumericalVector;
+  wardLabel: Band;
+  rimLabel: Band;
 }
 export function configuredSystems(state: GenerationState) {
   return state.domain.world.magicSystems ?? canonryMagicPresets();
@@ -99,7 +99,7 @@ export function reservoirAmount(field: MagicField, reservoir: string, cell: numb
   let total = 0;
   for (const origin of field.definition.origins)
     for (const stock of originStocks(origin))
-      if (stock.reservoir === reservoir) total += field.stocks[stockKey(origin, stock)][cell];
+      if (stock.reservoir === reservoir) total += field.stocks[stockKey(origin, stock)].get(cell);
   return total;
 }
 /**
@@ -119,7 +119,7 @@ export function withOrigin<T>(field: MagicField, origin: MagicOrigin, run: () =>
 
 function createMagicField(state: GenerationState, definition: MagicSystem): MagicField {
   const map = state.physical!.map;
-  const channels = {} as Record<MagicChannel, NumericalVector>;
+  const channels = {} as Record<MagicChannel, Band>;
   const allocate = (name: string) =>
     retainedArray(map, "float64", `magic:${definition.id}:${name}`);
   for (const channel of magicChannels)
@@ -175,13 +175,13 @@ export function drawReservoir(field: MagicField, reservoir: string, cell: number
         .filter((stock) => stock.reservoir === reservoir)
         .map((stock) => field.stocks[stockKey(origin, stock)])
     )
-    .filter((values) => values[cell] > 0);
-  const available = held.reduce((sum, values) => sum + values[cell], 0);
+    .filter((values) => values.get(cell) > 0);
+  const available = held.reduce((sum, values) => sum + values.get(cell), 0);
   if (available <= 0 || amount <= 0) return 0;
   const drawn = Math.min(amount, available);
-  for (const values of held) values[cell] -= (drawn * values[cell]) / available;
+  for (const values of held) values.add(cell, -(drawn * values.get(cell)) / available);
   field.lost += drawn;
-  field.drawn[cell] += drawn;
+  field.drawn.add(cell, drawn);
   return drawn;
 }
 /** Mining and panning take held cores; a forge's cracked stock and a spring are not ore. */
@@ -197,7 +197,7 @@ export function depositReservoir(
 ) {
   const values = reservoirStock(field, reservoir);
   if (!values || amount <= 0) return 0;
-  values[cell] += amount;
+  values.add(cell, amount);
   field.lost -= amount;
   return amount;
 }
@@ -213,11 +213,7 @@ export function initializeMagic(
     fields: enabled
       ? structuredClone(definitions).map((system) => createMagicField(state, system))
       : [],
-    confluences: createConfluenceWorkspace(
-      enabled ? structuredClone(confluences) : [],
-      map.mesh.count,
-      map.numerical
-    ),
+    confluences: createConfluenceWorkspace(enabled ? structuredClone(confluences) : [], map),
     heat: allocate("heat"),
     melt: allocate("melt"),
     coastal: allocate("coastal"),
@@ -247,10 +243,12 @@ export function advectMagic(state: GenerationState) {
 }
 function carryHistory(field: MagicField, map: PhysicalField) {
   for (const channel of carriedMagicChannels) {
-    const previous = field[channel].slice();
+    const previous = map.coverage.copyBand(field[channel]),
+      values = field[channel],
+      initial = magicFieldDefinitions[channel].initial;
     for (let i = 0; i < map.mesh.count; i++) {
-      const source = map.AdvectionSourceIndex[i];
-      field[channel][i] = source >= 0 ? previous[source] : magicFieldDefinitions[channel].initial;
+      const source = map.AdvectionSourceIndex.get(i);
+      values.set(i, source >= 0 ? previous.get(source) : initial);
     }
     releaseWorking(map, previous);
   }
@@ -261,24 +259,25 @@ function carryStocks(field: MagicField, map: PhysicalField) {
       if (!stock.carriers.includes("crust")) continue;
       const values = field.stocks[stockKey(origin, stock)];
       const moved = carryAmount(map, values);
-      values.set(moved);
+      values.copyFrom(moved);
       releaseWorking(map, moved);
     }
 }
 /** Scatter an amount per cell along the last plate drift; without a plan the amount stays. */
-export function carryAmount(map: PhysicalField, values: NumericalVector) {
+export function carryAmount(map: PhysicalField, values: Band) {
   const plan = map.transportPlan;
   const moved = workingArray(map, "float64", "magic:carried-amount", values.length);
   if (!plan) {
-    moved.set(values);
+    moved.copyFrom(values);
     return moved;
   }
   for (let source = 0; source < values.length; source++) {
-    const amount = values[source];
+    const amount = values.get(source);
     if (amount === 0) continue;
-    for (let offset = plan.offsets[source]; offset < plan.offsets[source + 1]; offset++) {
+    const end = plan.offsets.get(source + 1);
+    for (let offset = plan.offsets.get(source); offset < end; offset++) {
       const target = plan.targets[offset];
-      if (target >= 0) moved[target] += (amount * plan.weights[offset]) / weightScale;
+      if (target >= 0) moved.add(target, (amount * plan.weights[offset]) / weightScale);
     }
   }
   return moved;
@@ -290,14 +289,16 @@ export function carryAmount(map: PhysicalField, values: NumericalVector) {
  */
 export function magicBudget(field: MagicField, map: PhysicalField) {
   const totals = { created: 0, carried: 0, stored: 0, released: 0, lost: field.lost };
-  for (let i = 0; i < map.mesh.contentCount; i++) {
-    const area = map.mesh.areas[i];
-    totals.created += field.source[i] * area;
-    totals.stored += field.stored[i] * area;
-    totals.released += field.intensity[i] * area;
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (map.mesh.membership(i) !== 1) continue;
+    const area = map.mesh.area(i);
+    totals.created += field.source.get(i) * area;
+    totals.stored += field.stored.get(i) * area;
+    totals.released += field.intensity.get(i) * area;
   }
   for (const values of Object.values(field.stocks))
-    for (let i = 0; i < map.mesh.contentCount; i++) totals.carried += values[i];
+    for (let i = 0; i < map.mesh.count; i++)
+      if (map.mesh.membership(i) === 1) totals.carried += values.get(i);
   return totals;
 }
 export function systemSeed(seed: number, id: string) {

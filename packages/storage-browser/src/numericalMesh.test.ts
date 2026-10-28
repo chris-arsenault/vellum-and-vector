@@ -1,9 +1,6 @@
-import { closeSync, fsyncSync, mkdtempSync, openSync, readSync, rmSync, writeSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { expect, it } from "vitest";
 import { createWorldMesh } from "../../generation/src/canonry/worldMesh";
-import { nearestTriangle, triangleIndex } from "../../generation/src/canonry/mesh";
+import { nearestTriangle, triangleAddress, triangleIndex } from "../../generation/src/canonry/mesh";
 import {
   triangleSampler,
   triangleSample,
@@ -15,96 +12,43 @@ import {
 } from "../../generation/src/canonry/atlasSampling";
 import { createField } from "../../generation/src/canonry/field";
 import { atlasPhysicalProfile } from "../../generation/src/canonry/atlasProfile";
-import { PagedArena } from "./pagedArena";
+import { arenaFixture } from "./numericalFixture";
+import { blockCacheFixture } from "./blockCacheFixture";
 
-function fixture() {
-  const directory = mkdtempSync(join(tmpdir(), "atlas-mesh-")),
-    fd = openSync(join(directory, "work.bin"), "w+");
-  const arena = new PagedArena(
-    {
-      read: (bytes, offset) => readSync(fd, bytes, 0, bytes.byteLength, offset),
-      write: (bytes, offset) => writeSync(fd, bytes, 0, bytes.byteLength, offset),
-      flush: () => fsyncSync(fd),
-      close: () => closeSync(fd),
-    },
-    262_144,
-    512
-  );
-  return {
-    arena,
-    close() {
-      arena.close();
-      rmSync(directory, { recursive: true, force: true });
-    },
-  };
-}
 it.each([
   [false, false],
   [true, false],
   [true, true],
-])(
-  "constructs a file-backed long mesh with wrap=%s poles=%s and connected metric faces",
-  (wrap, poles) => {
-    const f = fixture(),
-      bounds: [number, number, number, number] = [0, 0, 10_000_000, 100_000_000];
-    try {
-      const start = performance.now();
-      const mesh = createWorldMesh(
-        bounds,
-        4096,
-        0,
-        () => true,
-        1e15,
-        undefined,
-        wrap,
-        poles,
-        f.arena
-      );
-      const constructionMs = performance.now() - start;
-      f.arena.flush();
-      f.arena.releaseProcess();
-      expect(mesh.coordU).toBeInstanceOf(Int32Array);
-      expect(mesh.indexes instanceof Map).toBe(false);
-      expect(mesh.contentAreas.reduce((sum, area) => sum + area, 0) / 1e15).toBeCloseTo(1, 10);
-      for (let i = 0; i < mesh.count; i += 17) {
-        expect(triangleIndex(mesh, mesh.coordU[i], mesh.coordV[i], !!mesh.coordInverted[i])).toBe(
-          i
-        );
-        expect(nearestTriangle(mesh, mesh.x[i], mesh.y[i])).toBe(i);
-        if (mesh.periodic)
-          expect(
-            triangleIndex(
-              mesh,
-              mesh.coordU[i] + mesh.periodic.columns,
-              mesh.coordV[i] + mesh.periodic.columns,
-              !!mesh.coordInverted[i]
-            )
-          ).toBe(i);
-        for (let edge = 0; edge < 3; edge++) {
-          const j = mesh.neighbors[i * 3 + edge];
-          if (j < 0) continue;
-          expect(mesh.neighbors.subarray(j * 3, j * 3 + 3).includes(i)).toBe(true);
-          expect(mesh.edgeLength[i * 3 + edge]).toBeGreaterThan(0);
-        }
-      }
-      const sample = triangleSampler(mesh, () => 0.1);
-      expect(sample(0, 0)).toBe(0.1);
-      expect(f.arena.stats.reads).toBeGreaterThan(0);
-      expect(f.arena.stats.peakDecodedBytes).toBeLessThanOrEqual(262_144);
-      console.info("file-backed connected mesh", {
-        wrap,
-        poles,
-        cells: mesh.count,
-        constructionMs,
-        ...f.arena.stats,
-      });
-    } finally {
-      f.close();
+])("constructs a long mesh with wrap=%s poles=%s and connected metric faces", (wrap, poles) => {
+  const bounds: [number, number, number, number] = [0, 0, 10_000_000, 100_000_000];
+  const start = performance.now();
+  const mesh = createWorldMesh(bounds, 4096, 0, () => true, 1e15, undefined, wrap, poles);
+  const constructionMs = performance.now() - start;
+  let contentArea = 0;
+  for (let i = 0; i < mesh.count; i++) contentArea += mesh.contentArea(i);
+  expect(contentArea / 1e15).toBeCloseTo(1, 10);
+  for (let i = 0; i < mesh.count; i += 17) {
+    const [u, v, inverted] = triangleAddress(mesh, i);
+    expect(triangleIndex(mesh, u, v, inverted)).toBe(i);
+    expect(nearestTriangle(mesh, mesh.x(i), mesh.y(i))).toBe(i);
+    if (mesh.periodic)
+      expect(
+        triangleIndex(mesh, u + mesh.periodic.columns, v + mesh.periodic.columns, inverted)
+      ).toBe(i);
+    for (let edge = 0; edge < 3; edge++) {
+      const j = mesh.neighbor(i, edge);
+      if (j < 0) continue;
+      expect(Array.from({ length: mesh.degree(j) }, (_, e) => mesh.neighbor(j, e))).toContain(i);
+      expect(mesh.edgeLength(i, edge)).toBeGreaterThan(0);
     }
   }
-);
+  const sample = triangleSampler(mesh, () => 0.1);
+  expect(sample(0, 0)).toBe(0.1);
+  console.info("connected mesh", { wrap, poles, cells: mesh.count, constructionMs });
+});
 it("reuses file-backed interpolation across channels and mathematical block boundaries", () => {
-  const f = fixture();
+  const f = blockCacheFixture(262_144),
+    projection = arenaFixture(262_144, 512);
   try {
     const mesh = createWorldMesh(
       [0, 0, 400_000, 200_000],
@@ -114,17 +58,17 @@ it("reuses file-backed interpolation across channels and mathematical block boun
       8e10,
       undefined,
       true,
-      true,
-      f.arena
+      true
     );
     const count = 8201,
       position = (i: number): [number, number] => [
-        mesh.x[i % mesh.count] + mesh.spacing * 0.23,
-        mesh.y[i % mesh.count] - mesh.spacing * 0.17,
+        mesh.x(i % mesh.count) + mesh.spacing * 0.23,
+        mesh.y(i % mesh.count) - mesh.spacing * 0.17,
       ];
-    const interpolation = projectionInterpolation(mesh, count, position, f.arena);
+    const interpolation = projectionInterpolation(mesh, count, position, projection.arena);
+    const map = createField(mesh, f.cache);
     const work = {
-      map: createField(mesh, f.arena),
+      map,
       samples: interpolation.samples,
       interpolation,
       profile: atlasPhysicalProfile(),
@@ -132,11 +76,12 @@ it("reuses file-backed interpolation across channels and mathematical block boun
       inherited: false,
       sampling: { maximumSize: 1000, minimumSize: 1000, featureSamples: 2 },
     };
-    const input = (i: number) => 0.1 + mesh.x[i] * 0.003 - mesh.y[i] * 0.001;
+    const input = (i: number) => 0.1 + mesh.x(i) * 0.003 - mesh.y(i) * 0.001;
     const result = projectedValues(work, input);
     result.retain?.();
-    f.arena.flush();
-    f.arena.releaseProcess();
+    projection.arena.flush();
+    projection.arena.releaseProcess();
+    map.coverage.releaseProcess();
     for (const i of [0, 1, 4095, 4096, 8200]) {
       const [x, y] = position(i),
         sample = triangleSample(mesh, x, y);
@@ -144,9 +89,10 @@ it("reuses file-backed interpolation across channels and mathematical block boun
       const expected = triangleValue({ ...sample, cells: values.map((_, j) => j) }, values);
       expect(result[i]).toBeCloseTo(expected, 10);
     }
-    expect(f.arena.stats.reads).toBeGreaterThan(0);
-    expect(f.arena.stats.peakDecodedBytes).toBeLessThanOrEqual(262_144);
+    expect(projection.arena.stats.reads).toBeGreaterThan(0);
+    expect(projection.arena.stats.peakDecodedBytes).toBeLessThanOrEqual(262_144);
   } finally {
     f.close();
+    projection.close();
   }
 });

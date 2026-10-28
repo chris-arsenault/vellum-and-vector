@@ -104,12 +104,14 @@ function fixture(inflow = 100) {
   for (let i = 0; i < map.mesh.count; i++) {
     const height = units(
       elevation({
-        x: map.mesh.origin[0] + map.mesh.x[i],
-        y: map.mesh.origin[1] + map.mesh.y[i],
+        x: map.mesh.origin[0] + map.mesh.x(i),
+        y: map.mesh.origin[1] + map.mesh.y(i),
         z: 0,
       })
     );
-    map.Elevation[i] = map.BedrockElevation[i] = map.CrustSupportElevation[i] = height;
+    map.Elevation.set(i, height);
+    map.BedrockElevation.set(i, height);
+    map.CrustSupportElevation.set(i, height);
   }
   map.RockResistance.fill(1000);
   map.Runoff.fill(500);
@@ -150,16 +152,16 @@ function inheritedDrainage(): NonNullable<World["drainage"]> {
 it("constructs deterministic finer relief inside an irregular region without advancing geological history", () => {
   const a = fixture(),
     b = fixture(),
-    before = a.map.Elevation.slice(),
+    before = Array.from(a.map.Elevation),
     parent = a.parent.channels.elevation.slice();
   constructRegionalRelief(a.state, 123);
   constructRegionalRelief(b.state, 123);
-  expect(a.map.Elevation).toEqual(b.map.Elevation);
-  expect(a.map.Elevation.some((height, i) => height !== before[i])).toBe(true);
+  expect(Array.from(a.map.Elevation)).toEqual(Array.from(b.map.Elevation));
+  expect(Array.from(a.map.Elevation).some((height, i) => height !== before[i])).toBe(true);
   expect(a.parent.channels.elevation).toEqual(parent);
   expect(a.map.CompletedEpochCount).toBe(0);
   expect(a.map.events).toEqual([]);
-  expect(a.map.CumulativeFluvialErosion.every((amount) => amount === 0)).toBe(true);
+  expect(Array.from(a.map.CumulativeFluvialErosion).every((amount) => amount === 0)).toBe(true);
 });
 it("routes supplied upstream water plus local runoff through connected tributaries without inventing water", () => {
   const wet = fixture(100),
@@ -168,16 +170,19 @@ it("routes supplied upstream water plus local runoff through connected tributari
     constructRegionalRelief(f.state, 123);
     constructRegionalWater(f.state, 123);
   }
-  const exported = (f: typeof wet) =>
-    f.map.FlowAccumulation.reduce((sum, flow, i) => sum + (f.map.FlowTargets[i] < 0 ? flow : 0), 0);
-  const supplied = wet.map.mesh.areas.reduce(
-    (sum, area) => sum + depthRateToDischarge(500, area),
-    0
-  );
+  const exported = (f: typeof wet) => {
+    let sum = 0;
+    for (let i = 0; i < f.map.mesh.count; i++)
+      if (f.map.FlowTargets.get(i) < 0) sum += f.map.FlowAccumulation.get(i);
+    return sum;
+  };
+  let supplied = 0;
+  for (let i = 0; i < wet.map.mesh.count; i++)
+    supplied += depthRateToDischarge(500, wet.map.mesh.area(i));
   expect(exported(wet)).toBeCloseTo(supplied + 100, 6);
   expect(exported(wet) - exported(dry)).toBeCloseTo(100, 6);
   expect(sourceToOutletOrder(wet.map)).toHaveLength(wet.map.mesh.count);
-  expect(wet.map.RiverOrders.some((order) => order > 0)).toBe(true);
+  expect(Array.from(wet.map.RiverOrders).some((order) => order > 0)).toBe(true);
   expect(wet.state.history).toEqual([]);
 });
 it("keeps both sides of a seam-spanning region joined by short physical edges", () => {
@@ -199,16 +204,13 @@ it("keeps both sides of a seam-spanning region joined by short physical edges", 
   );
   let crossings = 0;
   for (let i = 0; i < map.mesh.count; i++)
-    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-      const at = i * map.mesh.stride + edge,
-        j = map.mesh.neighbors[at];
-      if (Math.abs(map.mesh.x[i] - map.mesh.x[j]) < 30_000) continue;
+    for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+      const j = map.mesh.neighbor(i, edge);
+      if (Math.abs(map.mesh.x(i) - map.mesh.x(j)) < 30_000) continue;
       crossings++;
-      expect(map.mesh.edgeLength[at]).toBeLessThan(3000);
+      expect(map.mesh.edgeLength(i, edge)).toBeLessThan(3000);
       expect(
-        Array.from(
-          map.mesh.neighbors.subarray(j * map.mesh.stride, j * map.mesh.stride + map.mesh.degree[j])
-        )
+        Array.from({ length: map.mesh.degree(j) }, (_, e) => map.mesh.neighbor(j, e))
       ).toContain(i);
     }
   expect(crossings).toBeGreaterThan(0);

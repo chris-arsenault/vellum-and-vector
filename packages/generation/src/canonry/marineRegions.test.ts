@@ -5,7 +5,7 @@ import {
   createGrid,
   rectangle,
   spatial,
-  type NumericalVector,
+  type Band,
 } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { adaptivePhysicalMesh } from "./adaptiveMesh";
@@ -43,28 +43,28 @@ function fixture(
       );
   const map = createField(mesh);
   for (let i = 0; i < mesh.count; i++) {
-    const water = wet(mesh.x[i], mesh.y[i]);
-    map.WaterKindCodes[i] = water ? 1 : 0;
-    map.WaterBodyIds[i] = water ? 1 : 0;
-    map.Elevation[i] = units(water ? -depth(mesh.x[i], mesh.y[i]) : 100);
-    map.WaterDepths[i] = water ? -map.Elevation[i] : 0;
+    const water = wet(mesh.x(i), mesh.y(i));
+    map.WaterKindCodes.set(i, water ? 1 : 0);
+    map.WaterBodyIds.set(i, water ? 1 : 0);
+    map.Elevation.set(i, units(water ? -depth(mesh.x(i), mesh.y(i)) : 100));
+    map.WaterDepths.set(i, water ? -map.Elevation.get(i) : 0);
   }
   return map;
 }
 const regions = (map: ReturnType<typeof fixture>) => marineRegions(map, shelfBreak);
-const labelAt = (map: ReturnType<typeof fixture>, labels: NumericalVector, x: number, y = 0) =>
-  labels[nearestTriangle(map.mesh, x, y)];
+const labelAt = (map: ReturnType<typeof fixture>, labels: Band, x: number, y = 0) =>
+  labels.get(nearestTriangle(map.mesh, x, y));
 
 it.each([false, true])("separates broad seas at a narrow strait, refined=%s", (refined) => {
   const map = fixture((x, y) => sea(x, y, 50_000), undefined, false, refined);
-  const before = map.WaterKindCodes.slice();
+  const before = Array.from(map.WaterKindCodes);
   const result = regions(map);
   expect(result.regions).toHaveLength(2);
   expect(labelAt(map, result.labels, -500_000)).not.toBe(labelAt(map, result.labels, 500_000));
   for (let i = 0; i < map.mesh.count; i++)
-    expect(result.labels[i] >= 0).toBe(map.WaterKindCodes[i] === 1);
-  expect(map.WaterKindCodes).toEqual(before);
-  expect(regions(map).labels).toEqual(result.labels);
+    expect(result.labels.get(i) >= 0).toBe(map.WaterKindCodes.get(i) === 1);
+  expect(Array.from(map.WaterKindCodes)).toEqual(before);
+  expect(Array.from(regions(map).labels)).toEqual(Array.from(result.labels));
 });
 
 it("merges the regions when the strait widens into an uninterrupted sea", () => {
@@ -90,8 +90,8 @@ it("does not name minor seafloor depressions or use plate and province borders",
     (x, y) => 2500 + 300 * Math.cos(x / 70_000) * Math.cos(y / 70_000)
   );
   for (let i = 0; i < map.mesh.count; i++) {
-    map.CrustPlateIds[i] = map.mesh.x[i] < 0 ? 1 : 2;
-    map.CrustProvinceIds[i] = i + 1;
+    map.CrustPlateIds.set(i, map.mesh.x(i) < 0 ? 1 : 2);
+    map.CrustProvinceIds.set(i, i + 1);
   }
   expect(regions(map).regions).toHaveLength(1);
 });
@@ -99,11 +99,11 @@ it("does not name minor seafloor depressions or use plate and province borders",
 it("keeps separate water bodies separate and excludes lakes and dry ground", () => {
   const map = fixture((x, y) => sea(x, y, 0));
   const lake = nearestTriangle(map.mesh, 0, 0);
-  map.WaterKindCodes[lake] = 2;
-  map.WaterDepths[lake] = units(100);
+  map.WaterKindCodes.set(lake, 2);
+  map.WaterDepths.set(lake, units(100));
   const result = regions(map);
   expect(result.regions).toHaveLength(2);
-  expect(result.labels[lake]).toBe(-1);
+  expect(result.labels.get(lake)).toBe(-1);
   map.WaterKindCodes.fill(0);
   expect(regions(map).regions).toHaveLength(0);
 });
@@ -174,16 +174,18 @@ function expectSeaCoverage(state: ReturnType<typeof publicationFixture>, count: 
   const covers = shapes.map((shape) => spatial.pointCoverage(shape));
   const { labels } = regions(state.physical!.map);
   const owners = new Map<number, number>();
-  for (let i = 0; i < mesh.contentCount; i++) {
-    if (labels[i] < 0) continue;
+  for (let i = 0; i < mesh.count; i++) {
+    if (mesh.membership(i) !== 1) continue;
+    const label = labels.get(i);
+    if (label < 0) continue;
     const hits = covers.flatMap((contains, feature) =>
-      contains({ x: mesh.x[i] + mesh.origin[0], y: mesh.y[i] + mesh.origin[1], z: 0 })
+      contains({ x: mesh.x(i) + mesh.origin[0], y: mesh.y(i) + mesh.origin[1], z: 0 })
         ? [feature]
         : []
     );
     expect(hits, `cell ${i}`).toHaveLength(1);
-    if (!owners.has(labels[i])) owners.set(labels[i], hits[0]);
-    expect(hits[0]).toBe(owners.get(labels[i]));
+    if (!owners.has(label)) owners.set(label, hits[0]);
+    expect(hits[0]).toBe(owners.get(label));
   }
   expect(new Set(owners.values()).size).toBe(count);
 }
@@ -215,8 +217,8 @@ it("tiles two connected cylinder seas while retaining one identity across the se
   );
   const state = publicationFixture(map);
   const detected = regions(map).regions.map((region) => ({
-    x: map.mesh.x[region.peak],
-    y: map.mesh.y[region.peak],
+    x: map.mesh.x(region.peak),
+    y: map.mesh.y(region.peak),
     area: region.area,
     cells: region.members.length,
   }));

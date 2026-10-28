@@ -22,25 +22,28 @@ export function verdantSources(
     p = field.definition.parameters,
     sap = field.stocks[`${context.origin.id}/sap`];
   for (let i = 0; i < map.mesh.count; i++) {
-    if (map.WaterKindCodes[i] !== 0 || map.IceThickness[i] > 0) continue;
-    const canopy = map.BroadleafCover[i] + map.ConiferCover[i];
+    if (map.WaterKindCodes.get(i) !== 0 || map.IceThickness.get(i) > 0) continue;
+    const canopy = map.BroadleafCover.get(i) + map.ConiferCover.get(i),
+      age = map.CanopyAge.get(i),
+      peat = map.PeatCarbon.get(i),
+      area = map.mesh.area(i);
     let strength = 0;
-    if (canopy >= p.standCover && map.CanopyAge[i] >= p.standAge)
-      strength = 500 + 300 * clamp((map.CanopyAge[i] - p.standAge) / Math.max(1, p.standAge), 0, 1);
-    if (map.PeatCarbon[i] >= p.peatDepth)
+    if (canopy >= p.standCover && age >= p.standAge)
+      strength = 500 + 300 * clamp((age - p.standAge) / Math.max(1, p.standAge), 0, 1);
+    if (peat >= p.peatDepth)
       strength = Math.max(
         strength,
-        400 + 300 * clamp(map.PeatCarbon[i] / Math.max(1e-9, p.peatDepth) - 1, 0, 1)
+        400 + 300 * clamp(peat / Math.max(1e-9, p.peatDepth) - 1, 0, 1)
       );
     if (sap) {
-      const grove = clamp(sap[i] / map.mesh.areas[i] / p.groveSap, 0, 1);
+      const grove = clamp(sap.get(i) / area / p.groveSap, 0, 1);
       strength = Math.max(strength, 500 * grove);
     }
     const site = siteStrength(strength);
     if (site === 0) continue;
-    field.source[i] = site;
+    field.source.set(i, site);
     // A stand refills its own sap; a planting below the floor is only what was carried there.
-    if (sap) sap[i] = Math.max(sap[i], site * map.mesh.areas[i]);
+    if (sap) sap.set(i, Math.max(sap.get(i), site * area));
   }
 }
 /**
@@ -59,25 +62,28 @@ export function forgeSources(
     cracked = field.stocks[`${origin.id}/cracked`];
   if (!cracked) return;
   for (let i = 0; i < map.mesh.count; i++) {
-    if (cracked[i] <= 0) continue;
-    const strength = siteStrength((1000 * cracked[i]) / map.mesh.areas[i] / p.forgeStrength);
+    const held = cracked.get(i);
+    if (held <= 0) continue;
+    const area = map.mesh.area(i),
+      strength = siteStrength((1000 * held) / area / p.forgeStrength);
     if (strength === 0) continue;
-    field.source[i] = strength;
+    field.source.set(i, strength);
     field.located.push({
       origin: origin.id,
       id: `forge:${i}`,
-      x: map.mesh.x[i],
-      y: map.mesh.y[i],
-      radius: Math.sqrt(map.mesh.areas[i]),
-      strength: field.source[i],
+      x: map.mesh.x(i),
+      y: map.mesh.y(i),
+      radius: Math.sqrt(area),
+      strength,
     });
   }
 }
 /** Open, unfrozen ground on soft karst at a slope break with the spring flow through it. */
 function springGround(map: PhysicalField, i: number, springFlow: number, springRock: number) {
-  if (map.WaterKindCodes[i] !== 0 || map.IceThickness[i] > 0) return false;
-  if (map.FlowAccumulation[i] < springFlow || map.RockResistance[i] > springRock) return false;
-  return map.Slope[i] <= 0.01 && karst(map, i) >= 0.35;
+  if (map.WaterKindCodes.get(i) !== 0 || map.IceThickness.get(i) > 0) return false;
+  if (map.FlowAccumulation.get(i) < springFlow || map.RockResistance.get(i) > springRock)
+    return false;
+  return map.Slope.get(i) <= 0.01 && karst(map, i) >= 0.35;
 }
 /**
  * The spring is where the river comes onto spring ground: the first such cell along its
@@ -85,9 +91,9 @@ function springGround(map: PhysicalField, i: number, springFlow: number, springR
  */
 function springRises(map: PhysicalField, i: number, springFlow: number, springRock: number) {
   if (!springGround(map, i, springFlow, springRock)) return false;
-  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-    if (j >= 0 && map.FlowTargets[j] === i && springGround(map, j, springFlow, springRock))
+  for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+    const j = map.mesh.neighbor(i, edge);
+    if (j >= 0 && map.FlowTargets.get(j) === i && springGround(map, j, springFlow, springRock))
       return false;
   }
   return true;
@@ -95,8 +101,8 @@ function springRises(map: PhysicalField, i: number, springFlow: number, springRo
 /** The world has no carbonate channel; its published karst proxy is continental, unvolcanic crust. */
 function karst(map: PhysicalField, i: number) {
   return (
-    (map.CrustContinentalFraction[i] / 1000) *
-    (1 - Math.min(1, map.VolcanicConstructionHistory[i] / (1024 * 100)))
+    (map.CrustContinentalFraction.get(i) / 1000) *
+    (1 - Math.min(1, map.VolcanicConstructionHistory.get(i) / (1024 * 100)))
   );
 }
 /**
@@ -115,16 +121,18 @@ export function aquiferSources(
     p = field.definition.parameters,
     stratum = reservoirStock(field, "stratum");
   for (let i = 0; i < map.mesh.count; i++) {
-    if (field.sealed[i] > 0 || !springRises(map, i, p.springFlow, p.springRock)) continue;
-    const buried = stratum ? Math.min(300, stratum[i] / map.mesh.areas[i]) : 0;
-    field.source[i] = clamp(round(600 + buried), 1, 1000);
+    if (field.sealed.get(i) > 0 || !springRises(map, i, p.springFlow, p.springRock)) continue;
+    const area = map.mesh.area(i),
+      buried = stratum ? Math.min(300, stratum.get(i) / area) : 0,
+      strength = clamp(round(600 + buried), 1, 1000);
+    field.source.set(i, strength);
     field.located.push({
       origin: origin.id,
       id: `spring:${i}`,
-      x: map.mesh.x[i],
-      y: map.mesh.y[i],
-      radius: Math.sqrt(map.mesh.areas[i]),
-      strength: field.source[i],
+      x: map.mesh.x(i),
+      y: map.mesh.y(i),
+      radius: Math.sqrt(area),
+      strength,
     });
   }
 }

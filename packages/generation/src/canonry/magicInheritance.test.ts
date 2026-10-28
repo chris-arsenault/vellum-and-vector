@@ -48,12 +48,15 @@ it("inherits material amounts by receiving area and retains origin strengths and
   };
   initializeMagic(state);
   const fire = state.physical.magic!.fields.find((field) => field.definition.id === "fire")!;
-  expect(fire.stocks["vein/held"].reduce((sum, amount) => sum + amount, 0)).toBeCloseTo(
+  const mesh = map.mesh,
+    content: number[] = [];
+  for (let i = 0; i < mesh.count; i++) if (mesh.membership(i) === 1) content.push(i);
+  expect(Array.from(fire.stocks["vein/held"]).reduce((sum, amount) => sum + amount, 0)).toBeCloseTo(
     12_000_000,
     5
   );
-  expect(fire.originSources.vein.every((strength) => strength === 750)).toBe(true);
-  expect(fire.firstEpoch.every((epoch) => epoch === 2)).toBe(true);
+  expect(content.every((i) => fire.originSources.vein.get(i) === 750)).toBe(true);
+  expect(content.every((i) => fire.firstEpoch.get(i) === 2)).toBe(true);
   expect(surface.channels["magic:fire:stock:vein/held"]).toEqual(before);
   expect(fire.lost).toBe(0);
 });

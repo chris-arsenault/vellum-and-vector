@@ -108,7 +108,7 @@ it("carries mined cores down the road to a city with no vein, whose forge become
     useSocietyMagic(state, context, 10);
     practice(state, a.id).coreDeposit = 500;
     const fire = field("fire");
-    fire.stocks["vein/held"][cellOf(a)] = 500 * 10_000_000;
+    fire.stocks["vein/held"].set(cellOf(a), 500 * 10_000_000);
     for (let cycle = 0; cycle < 20; cycle++) useSocietyMagic(state, context, 10);
     locateMagicSources(state, fire, 1, 0);
     propagateMagic(state, fire, 1, 1);
@@ -116,14 +116,14 @@ it("carries mined cores down the road to a city with no vein, whose forge become
   };
   const traded = run(true);
   expect(traded.used).toBeGreaterThan(0);
-  expect(traded.fire.stocks["forge/cracked"][traded.cell]).toBeGreaterThan(0);
-  expect(traded.fire.originSources.forge[traded.cell]).toBeGreaterThan(0);
-  expect(traded.fire.intensity[traded.cell]).toBeGreaterThan(0);
+  expect(traded.fire.stocks["forge/cracked"].get(traded.cell)).toBeGreaterThan(0);
+  expect(traded.fire.originSources.forge.get(traded.cell)).toBeGreaterThan(0);
+  expect(traded.fire.intensity.get(traded.cell)).toBeGreaterThan(0);
   expect(traded.state.society!.magicTouched!.has("fire")).toBe(true);
   const alone = run(false);
   expect(alone.used).toBe(0);
-  expect(alone.fire.stocks["forge/cracked"][alone.cell]).toBe(0);
-  expect(alone.fire.originSources.forge[alone.cell]).toBe(0);
+  expect(alone.fire.stocks["forge/cracked"].get(alone.cell)).toBe(0);
+  expect(alone.fire.originSources.forge.get(alone.cell)).toBe(0);
 });
 
 it("gathers seed on a Deepwood seat, trades it down the road and plants a grove at the market", () => {
@@ -132,11 +132,11 @@ it("gathers seed on a Deepwood seat, trades it down the road and plants a grove 
     if (!connected) region.connections = [];
     const greenwood = field("greenwood"),
       sap = greenwood.stocks["stand/sap"];
-    sap[cellOf(a)] = 600 * map.mesh.areas[cellOf(a)];
+    sap.set(cellOf(a), 600 * map.mesh.area(cellOf(a)));
     for (let cycle = 0; cycle < 20; cycle++) useSocietyMagic(state, context, 10);
-    const planted = sap[cellOf(b)];
+    const planted = sap.get(cellOf(b));
     locateMagicSources(state, greenwood, 1, 0);
-    return { planted, grove: greenwood.originSources.stand[cellOf(b)], state };
+    return { planted, grove: greenwood.originSources.stand.get(cellOf(b)), state };
   };
   const traded = run(true);
   expect(traded.planted).toBeGreaterThan(0);
@@ -151,8 +151,8 @@ it("hunts the herds Greenwood's carrier reads and clears ground wetter and empti
   const { state, context, a, cellOf, field, map } = fixture();
   const sample = nearestSample(state, a.position),
     sap = field("greenwood").stocks["stand/sap"],
-    before = 600 * map.mesh.areas[cellOf(a)];
-  sap[cellOf(a)] = before;
+    before = 600 * map.mesh.area(cellOf(a));
+  sap.set(cellOf(a), before);
   for (const c of state.society!.region.communities)
     c.support = { farming: 100, grazing: 0, gathering: 0, fishing: 0, water: 1, capacity: 100 };
   applySocietyWorks(state, context, 50);
@@ -162,7 +162,7 @@ it("hunts the herds Greenwood's carrier reads and clears ground wetter and empti
   expect(state.surface.channels.grazers[sample]).toBeLessThan(1);
   expect(state.surface.channels.treeCover[sample]).toBeLessThan(0.7);
   expect(state.surface.channels.soilWater[sample]).toBeGreaterThan(0.02);
-  expect(sap[cellOf(a)]).toBeLessThan(before);
+  expect(sap.get(cellOf(a))).toBeLessThan(before);
   expect(state.society!.magicTouched!.has("greenwood")).toBe(true);
   // The herds and cover edited here are the mesh fields the ecology and the gut carrier read.
   expect(atlasChannels.find((binding) => binding.name === "grazers")?.native).toBe("Grazers");
@@ -191,20 +191,20 @@ it("besieges the towns a fallen polity lost and records the dead, the tenure and
   expect(b.status).toBe("inhabited");
   state.society!.dieOff!.set(b.id, 50);
   recordSocietyOnMesh(state, 10);
-  expect(map.MassDeath[cellOf(a)]).toBeCloseTo(siege.casualties, 6);
-  expect(map.MassDeath[cellOf(b)]).toBe(50);
+  expect(map.MassDeath.get(cellOf(a))).toBeCloseTo(siege.casualties, 6);
+  expect(map.MassDeath.get(cellOf(b))).toBe(50);
   // New dead: the system made of them is re-evaluated at the next refresh.
   expect(state.society!.magicTouched!.has("salt")).toBe(true);
-  expect(map.Tenure[cellOf(a)]).toBe(0);
-  expect(map.Tenure[cellOf(b)]).toBeCloseTo(population(b) * 10, 6);
-  expect(map.WalkedRoute[cellOf(a)]).toBe(5000);
-  expect(map.WalkedRoute[cellOf(b)]).toBe(5000);
+  expect(map.Tenure.get(cellOf(a))).toBe(0);
+  expect(map.Tenure.get(cellOf(b))).toBeCloseTo(population(b) * 10, 6);
+  expect(map.WalkedRoute.get(cellOf(a))).toBe(5000);
+  expect(map.WalkedRoute.get(cellOf(b))).toBe(5000);
   // The event's dead are recorded once; tenure and the way keep accruing.
   recordSocietyOnMesh(state, 10);
-  expect(map.MassDeath[cellOf(a)]).toBeCloseTo(siege.casualties, 6);
-  expect(map.MassDeath[cellOf(b)]).toBe(50);
-  expect(map.Tenure[cellOf(b)]).toBeCloseTo(population(b) * 20, 6);
-  expect(map.WalkedRoute[cellOf(b)]).toBe(10000);
+  expect(map.MassDeath.get(cellOf(a))).toBeCloseTo(siege.casualties, 6);
+  expect(map.MassDeath.get(cellOf(b))).toBe(50);
+  expect(map.Tenure.get(cellOf(b))).toBeCloseTo(population(b) * 20, 6);
+  expect(map.WalkedRoute.get(cellOf(b))).toBe(10000);
 });
 
 it("rakes the pan under a seat, trades the salt down the road and lays it where it is sold", () => {
@@ -212,7 +212,7 @@ it("rakes the pan under a seat, trades the salt down the road and lays it where 
     const { state, context, a, b, cellOf, field, map, region } = fixture();
     if (!connected) region.connections = [];
     const salt = field("salt");
-    salt.stocks["dead-lake/bed"][cellOf(a)] = 600 * map.mesh.areas[cellOf(a)];
+    salt.stocks["dead-lake/bed"].set(cellOf(a), 600 * map.mesh.area(cellOf(a)));
     for (let cycle = 0; cycle < 20; cycle++) useSocietyMagic(state, context, 10);
     return {
       laid: reservoirAmount(salt, "bed", cellOf(b)),
@@ -241,12 +241,12 @@ it("keeps the frontier at both seats of a way two polities hold, and forgets an 
     history: [],
   };
   recordSocietyOnMesh(state, 10);
-  expect(map.KeptLine[cellOf(a)]).toBe(10);
-  expect(map.KeptLine[cellOf(b)]).toBe(10);
+  expect(map.KeptLine.get(cellOf(a))).toBe(10);
+  expect(map.KeptLine.get(cellOf(b))).toBe(10);
   // The frontier falls to one polity: the line is no longer kept and fades.
   region.politics.control[b.id] = "P";
   recordSocietyOnMesh(state, 10);
-  expect(map.KeptLine[cellOf(a)]).toBeCloseTo(10 * Math.exp(-10 / 150), 9);
+  expect(map.KeptLine.get(cellOf(a))).toBeCloseTo(10 * Math.exp(-10 / 150), 9);
 });
 
 it("connects two communities through a Veil door at the crossing cost, without wearing it", () => {

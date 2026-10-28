@@ -17,29 +17,31 @@ export function saltWrites(state: GenerationState) {
     fire = fields.find((field) => field.definition.effects.quickening > 0);
   for (const field of salts)
     for (let i = 0; i < map.mesh.count; i++) {
-      if (map.WaterKindCodes[i] !== 0) continue;
+      if (map.WaterKindCodes.get(i) !== 0) continue;
       const p = field.definition.parameters,
-        bed = reservoirAmount(field, "bed", i) / map.mesh.areas[i];
+        bed = reservoirAmount(field, "bed", i) / map.mesh.area(i);
       if (bed >= p.glassBed) fuse(map, i, p.glassResistance);
-      const salting = (field.intensity[i] / 1000) * field.definition.effects.salting;
-      if (salting > 0) map.Moisture[i] = round(map.Moisture[i] * (1 - p.desiccation * salting));
-      if (fire && fire.intensity[i] > 0) burn(map, field, fire, i);
+      const salting = (field.intensity.get(i) / 1000) * field.definition.effects.salting;
+      if (salting > 0)
+        map.Moisture.set(i, round(map.Moisture.get(i) * (1 - p.desiccation * salting)));
+      if (fire && fire.intensity.get(i) > 0) burn(map, field, fire, i);
     }
 }
 function fuse(map: PhysicalField, i: number, resistance: number) {
-  map.RockResistance[i] = clamp(map.RockResistance[i] + round(resistance), 0, 1000);
-  map.SoilDepth[i] = 0;
+  map.RockResistance.set(i, clamp(map.RockResistance.get(i) + round(resistance), 0, 1000));
+  map.SoilDepth.set(i, 0);
 }
 /** Fire burns the Salt clean: every reservoir loses its share, and the burnt ground fuses. */
 function burn(map: PhysicalField, field: MagicField, fire: MagicField, i: number) {
   const p = field.definition.parameters,
-    share = clamp(p.saltBurn * (fire.intensity[i] / 1000), 0, 1);
+    share = clamp(p.saltBurn * (fire.intensity.get(i) / 1000), 0, 1);
   let burnt = 0;
   for (const values of Object.values(field.stocks)) {
-    burnt += values[i] * share;
-    values[i] *= 1 - share;
+    const held = values.get(i);
+    burnt += held * share;
+    values.set(i, held * (1 - share));
   }
   if (burnt <= 0) return;
   field.lost += burnt;
-  fuse(map, i, p.glassResistance * Math.min(1, burnt / (map.mesh.areas[i] * p.saltFull)));
+  fuse(map, i, p.glassResistance * Math.min(1, burnt / (map.mesh.area(i) * p.saltFull)));
 }

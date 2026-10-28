@@ -1,5 +1,5 @@
-import type { MagicCondition, MagicFeatureRule, NumericalVector } from "@atlas/domain";
-import { retainedArray, workingArray, releaseWorking } from "./physicalNumerics";
+import { CellQueue, type Band, type MagicCondition, type MagicFeatureRule } from "@atlas/domain";
+import { retainedArray } from "./physicalNumerics";
 import type { GenerationState } from "../process";
 import type { PhysicalField } from "./field";
 import type { MagicField } from "./magicState";
@@ -16,26 +16,26 @@ export function conditionReader(
   const key = test.field;
   if (key.startsWith("system:")) {
     const participant = magic!.fields.find((candidate) => candidate.definition.id === key.slice(7));
-    return (i: number) => (participant?.definition.enabled ? participant.intensity[i] : NaN);
+    return (i: number) => (participant?.definition.enabled ? participant.intensity.get(i) : NaN);
   }
   if (key.startsWith("source:")) {
     const own = field.originSources[key.slice(7)];
-    return (i: number) => own?.[i] ?? 0;
+    return (i: number) => own?.get(i) ?? 0;
   }
   // A stock is an amount; a rule reads it as strength per unit area, like a source.
   if (key.startsWith("stock:")) {
     const held = field.stocks[key.slice(6)],
-      areas = map.mesh.areas;
-    return (i: number) => (held ? held[i] / areas[i] : 0);
+      mesh = map.mesh;
+    return (i: number) => (held ? held.get(i) / mesh.area(i) : 0);
   }
-  if (key === "elevation") return (i: number) => (map.Elevation[i] - map.BaseSeaLevel) / 1024;
-  if (key === "slope") return (i: number) => map.Slope[i];
+  if (key === "elevation") return (i: number) => (map.Elevation.get(i) - map.BaseSeaLevel) / 1024;
+  if (key === "slope") return (i: number) => map.Slope.get(i);
   if (key === "noise")
     return (i: number) =>
       unitNoise(
         map.mesh,
-        map.mesh.x[i],
-        map.mesh.y[i],
+        map.mesh.x(i),
+        map.mesh.y(i),
         test.salt ?? 0x621d,
         field.definition.parameters.featureNoiseScale,
         1
@@ -44,15 +44,15 @@ export function conditionReader(
     return (i: number) =>
       hashUnit(
         seed ^ (test.salt ?? 0),
-        Math.floor(map.mesh.x[i] / field.definition.parameters.featureNoiseScale),
-        Math.floor(map.mesh.y[i] / field.definition.parameters.featureNoiseScale) ^
+        Math.floor(map.mesh.x(i) / field.definition.parameters.featureNoiseScale),
+        Math.floor(map.mesh.y(i) / field.definition.parameters.featureNoiseScale) ^
           (test.index ?? 0)
       );
-  const array = channelValues(map, field)[key];
-  return (i: number) => array?.[i] ?? 0;
+  const band = channelValues(map, field)[key];
+  return (i: number) => band?.get(i) ?? 0;
 }
 /** The named per-cell channels a condition may read directly. */
-function channelValues(map: PhysicalField, field: MagicField): Record<string, ArrayLike<number>> {
+function channelValues(map: PhysicalField, field: MagicField): Record<string, Band> {
   return {
     intensity: field.intensity,
     history: field.history,
@@ -120,23 +120,21 @@ export function growRegion(
 ) {
   const map = state.physical!.map;
   const included = retainedArray(map, "uint8", "magic:region-members"),
-    queue = workingArray(map, "int32", "magic:region-frontier");
-  let tail = 0;
+    queue = new CellQueue();
   const isSeed = matcher(state, field, rule.seeds, seed),
     retains = matcher(state, field, rule.retains ?? rule.seeds, seed);
   for (let i = 0; i < map.mesh.count; i++)
     if (isSeed(i)) {
-      included[i] = 1;
-      queue[tail++] = i;
+      included.set(i, 1);
+      queue.push(i);
     }
-  for (let head = 0; head < tail; head++)
-    for (let edge = 0; edge < map.mesh.degree[queue[head]]; edge++) {
-      const j = map.mesh.neighbors[queue[head] * map.mesh.stride + edge];
-      if (j < 0 || included[j] || !retains(j)) continue;
-      included[j] = 1;
-      queue[tail++] = j;
+  for (let i = queue.shift(); i >= 0; i = queue.shift())
+    for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+      const j = map.mesh.neighbor(i, edge);
+      if (j < 0 || included.get(j) || !retains(j)) continue;
+      included.set(j, 1);
+      queue.push(j);
     }
-  releaseWorking(map, queue);
   return included;
 }
 /**
@@ -147,7 +145,7 @@ export function ruleCoverage(
   state: GenerationState,
   field: MagicField,
   rule: MagicFeatureRule,
-  members: NumericalVector,
+  members: Band,
   seed: number
 ) {
   const coverage = retainedArray(
@@ -157,12 +155,13 @@ export function ruleCoverage(
     members.length
   );
   if (!rule.coverage) {
-    for (let i = 0; i < members.length; i++) coverage[i] = members[i];
+    coverage.copyFrom(members);
     return coverage;
   }
   const read = conditionReader(state, field, { field: rule.coverage.field }, seed),
     { floor, full } = rule.coverage;
   for (let i = 0; i < members.length; i++)
-    if (members[i]) coverage[i] = Math.min(1, Math.max(0, (read(i) - floor) / (full - floor)));
+    if (members.get(i))
+      coverage.set(i, Math.min(1, Math.max(0, (read(i) - floor) / (full - floor))));
   return coverage;
 }

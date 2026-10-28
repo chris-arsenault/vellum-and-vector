@@ -1,4 +1,4 @@
-import { magicSurfaceCode, putChannel, surfaceRuleSources } from "@atlas/domain";
+import { magicSurfaceCode, putChannel, surfaceRuleSources, type Band } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import type { MagicField } from "./magicState";
 import { magicKey } from "./magicState";
@@ -53,7 +53,7 @@ export function coverSystems(state: GenerationState, seed: number) {
       field.features[rule.id] = members;
       field.coverage[rule.id] = coverage;
       for (let i = 0; i < coverage.length; i++)
-        field.systemCoverage[i] = Math.max(field.systemCoverage[i], coverage[i]);
+        field.systemCoverage.set(i, Math.max(field.systemCoverage.get(i), coverage.get(i)));
     }
   }
 }
@@ -78,28 +78,24 @@ export function classifyMagicFeatures(state: GenerationState, seed = state.domai
   // The class with the largest coverage takes the cell, priority breaking ties; the next
   // largest is the second code where it holds at least the floor of the ground.
   const place = (i: number, code: number, rulePriority: number, share: number) => {
-    if (share > held[i] || (share === held[i] && rulePriority > priority[i])) {
-      if (held[i] >= secondSurfaceFloor) {
-        magic.secondSurface[i] = magic.finalSurface[i];
-        second[i] = held[i];
+    const current = held.get(i);
+    if (share > current || (share === current && rulePriority > priority.get(i))) {
+      if (current >= secondSurfaceFloor) {
+        magic.secondSurface.set(i, magic.finalSurface.get(i));
+        second.set(i, current);
       }
-      magic.finalSurface[i] = code;
-      held[i] = share;
-      priority[i] = rulePriority;
-    } else if (share > second[i] && share >= secondSurfaceFloor) {
-      magic.secondSurface[i] = code;
-      second[i] = share;
+      magic.finalSurface.set(i, code);
+      held.set(i, share);
+      priority.set(i, rulePriority);
+    } else if (share > second.get(i) && share >= secondSurfaceFloor) {
+      magic.secondSurface.set(i, code);
+      second.set(i, share);
     }
   };
-  const paint = (
-    code: number,
-    rulePriority: number,
-    members: ArrayLike<number>,
-    coverage?: ArrayLike<number>
-  ) => {
+  const paint = (code: number, rulePriority: number, members: Band, coverage?: Band) => {
     for (let i = 0; i < members.length; i++) {
-      const share = coverage?.[i] ?? 1;
-      if (members[i] && share > 0) place(i, code, rulePriority, share);
+      const share = coverage?.get(i) ?? 1;
+      if (members.get(i) && share > 0) place(i, code, rulePriority, share);
     }
   };
   for (const field of magic.fields)
@@ -126,7 +122,7 @@ export function projectMagic(state: GenerationState) {
   const project = (
     key: string,
     unit: string,
-    values: ArrayLike<number>,
+    values: Band,
     quantity: "intensive" | "extensive" | "category"
   ) =>
     putChannel(state.surface, key, unit, projectedMagicValues(state, values, quantity), quantity);
@@ -173,7 +169,7 @@ export function projectMagic(state: GenerationState) {
 }
 function projectedMagicValues(
   state: GenerationState,
-  values: ArrayLike<number>,
+  values: Band,
   quantity: "intensive" | "extensive" | "category"
 ) {
   const work = state.physical!;
@@ -183,7 +179,7 @@ function projectedMagicValues(
     work.map,
     "float64",
     "magic:project-density",
-    (i) => values[i] / work.map.mesh.areas[i]
+    (i) => values.get(i) / work.map.mesh.area(i)
   );
   const output = projectedValues(work, density);
   for (let i = 0; i < output.length; i++) output[i] *= state.surface.measures[i];

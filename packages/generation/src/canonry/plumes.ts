@@ -15,7 +15,7 @@ export function mantlePlumeRoots(map: PhysicalField, context: PhysicalContext) {
   const ranked = candidates
     .map((source) => {
       const cell = nearestTriangle(map.mesh, source.x, source.y);
-      return { ...source, priority: 1000 - map.TectonicStrain[cell] + source.priority * 420 };
+      return { ...source, priority: 1000 - map.TectonicStrain.get(cell) + source.priority * 420 };
     })
     // hpc-exempt: seeded candidate objects that separatedCandidates consumes as records.
     .sort((a, b) => b.priority - a.priority);
@@ -28,7 +28,7 @@ export function mantlePlumeRoots(map: PhysicalField, context: PhysicalContext) {
       (floor + (1 - floor) * falloff) *
       (0.88 + hashUnit(context.Seed ^ 0x54b1, source.id, 0) * 0.12);
     const strength = round(p.MantlePlumeStrength * variation);
-    map.MantlePlumeRootStrength[nearestTriangle(map.mesh, source.x, source.y)] = strength;
+    map.MantlePlumeRootStrength.set(nearestTriangle(map.mesh, source.x, source.y), strength);
     map.events.push({
       id: `plume:${context.Seed}:${source.id}`,
       kind: "plume",

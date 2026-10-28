@@ -6,11 +6,15 @@ import { hashSigned, hashUnit } from "./noise";
 import { Feature } from "./codes";
 
 function kernelWeight(map: PhysicalField, i: number, x: number, y: number, radius: number) {
-  const mesh = map.mesh;
-  const x0 = Math.max(mesh.x[i] - mesh.cellWidth[i] / 2, x - radius);
-  const x1 = Math.min(mesh.x[i] + mesh.cellWidth[i] / 2, x + radius);
-  const y0 = Math.max(mesh.y[i] - mesh.cellHeight[i] / 2, y - radius);
-  const y1 = Math.min(mesh.y[i] + mesh.cellHeight[i] / 2, y + radius);
+  const mesh = map.mesh,
+    cx = mesh.x(i),
+    cy = mesh.y(i),
+    w = mesh.cellWidth(i) / 2,
+    h = mesh.cellHeight(i) / 2;
+  const x0 = Math.max(cx - w, x - radius);
+  const x1 = Math.min(cx + w, x + radius);
+  const y0 = Math.max(cy - h, y - radius);
+  const y1 = Math.min(cy + h, y + radius);
   if (x1 <= x0 || y1 <= y0) return 0;
   let weight = 0;
   for (let a = 0; a < 3; a++)
@@ -35,7 +39,7 @@ function beamCells(map: PhysicalField, x: number, y: number, radius: number) {
         x + mesh.origin[0] + radius,
         y + mesh.origin[1] + radius,
       ],
-      (leaf) => cells.push(mesh.leafToCell[leaf])
+      (leaf) => cells.push(mesh.leafToCell(leaf))
     );
     return cells;
   }
@@ -46,13 +50,13 @@ function beamCells(map: PhysicalField, x: number, y: number, radius: number) {
     const i = queue[head];
     if (
       i < 0 ||
-      Math.hypot(mesh.x[i] - x, mesh.y[i] - y) >
-        radius + Math.hypot(mesh.cellWidth[i], mesh.cellHeight[i])
+      Math.hypot(mesh.x(i) - x, mesh.y(i) - y) >
+        radius + Math.hypot(mesh.cellWidth(i), mesh.cellHeight(i))
     )
       continue;
     cells.push(i);
-    for (let edge = 0; edge < mesh.degree[i]; edge++) {
-      const j = mesh.neighbors[i * mesh.stride + edge];
+    for (let edge = 0; edge < mesh.degree(i); edge++) {
+      const j = mesh.neighbor(i, edge);
       if (j < 0 || visited.has(j)) continue;
       visited.add(j);
       queue.push(j);
@@ -70,23 +74,25 @@ function paintBeam(
   wake: boolean
 ) {
   const radius = field.definition.parameters.beamWidth / 2;
-  const cells = beamCells(map, x, y, radius).filter((i) => map.WaterKindCodes[i] === 1);
+  const cells = beamCells(map, x, y, radius).filter((i) => map.WaterKindCodes.get(i) === 1);
   const weights = cells.map((i) => kernelWeight(map, i, x, y, radius));
   const total = weights.reduce((sum, value) => sum + value, 0);
   if (!total) return;
   const volume = amount * radius * 2 * distance;
   cells.forEach((i, index) => {
-    field.intensity[i] = Math.min(
-      1000,
-      field.intensity[i] + (volume * weights[index]) / total / map.mesh.areas[i]
+    field.intensity.set(
+      i,
+      Math.min(1000, field.intensity.get(i) + (volume * weights[index]) / total / map.mesh.area(i))
     );
-    if (wake && weights[index] > 0) field.wake[i] = 1;
+    if (wake && weights[index] > 0) field.wake.set(i, 1);
   });
 }
 /** Land reflects a ray, and so does a shoal people built, long after the sea drowned it. */
 function reflects(map: PhysicalField, cell: number) {
   return (
-    cell < 0 || map.WaterKindCodes[cell] !== 1 || (map.FeatureFlags[cell] & Feature.Shoal) !== 0
+    cell < 0 ||
+    map.WaterKindCodes.get(cell) !== 1 ||
+    (map.FeatureFlags.get(cell) & Feature.Shoal) !== 0
   );
 }
 /** Integrate physical rays; headings never snap to sampling-cell neighbors. */
@@ -100,7 +106,7 @@ export function traceOceanBeam(
   reach: number,
   wake = false
 ) {
-  const beam = { x: map.mesh.x[source], y: map.mesh.y[source], angle, energy, bounces: 0 };
+  const beam = { x: map.mesh.x(source), y: map.mesh.y(source), angle, energy, bounces: 0 };
   const p = field.definition.parameters,
     step = p.beamWidth / 2;
   const path: number[][] = [[beam.x + map.mesh.origin[0], beam.y + map.mesh.origin[1]]];

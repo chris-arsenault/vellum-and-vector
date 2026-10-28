@@ -1,13 +1,12 @@
-import { fieldInterpolator, type NumericalVector } from "@atlas/domain";
+import { fieldInterpolator, type Band } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { nativePosition } from "./atlasWorkspace";
-import { workingValues, releaseWorking } from "./physicalNumerics";
 
 /** Amounts cross resolutions as densities times receiving areas; histories and classes do not. */
 export function inheritMagicChannel(
   state: GenerationState,
   key: string,
-  into: NumericalVector,
+  into: Band,
   quantity: "intensive" | "extensive" | "category" = "intensive"
 ): boolean {
   const grid = state.surface,
@@ -20,12 +19,8 @@ export function inheritMagicChannel(
           ...grid,
           channels: {
             ...grid.channels,
-            [key]: workingValues(
-              work.map,
-              "float64",
-              `magic:inherited:${key}`,
-              (i) => (grid.measures[i] > 0 ? values[i] / grid.measures[i] : 0),
-              values.length
+            [key]: Float64Array.from(values, (value, i) =>
+              grid.measures[i] > 0 ? value / grid.measures[i] : 0
             ),
           },
           quantities: { ...grid.quantities, [key]: "intensive" as const },
@@ -33,8 +28,9 @@ export function inheritMagicChannel(
       : grid;
   const valueAt = fieldInterpolator(source, key, quantity === "category");
   for (let i = 0; i < into.length; i++)
-    into[i] =
-      valueAt(nativePosition(work, i)) * (quantity === "extensive" ? work.map.mesh.areas[i] : 1);
-  if (source !== grid) releaseWorking(work.map, source.channels[key]);
+    into.set(
+      i,
+      valueAt(nativePosition(work, i)) * (quantity === "extensive" ? work.map.mesh.area(i) : 1)
+    );
   return true;
 }

@@ -98,5 +98,6 @@ function initializeAbsent(state: GenerationState, absent: Set<string>) {
   if (absent.has("canonry:Fractures")) map.faults = [];
 }
 function clearOceanIce(map: PhysicalField) {
-  for (let i = 0; i < map.mesh.count; i++) if (map.WaterKindCodes[i] === 1) map.IceThickness[i] = 0;
+  for (let i = 0; i < map.mesh.count; i++)
+    if (map.WaterKindCodes.get(i) === 1) map.IceThickness.set(i, 0);
 }

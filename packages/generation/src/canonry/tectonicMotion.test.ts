@@ -1,6 +1,8 @@
 import { expect, it } from "vitest";
 import { createWorldMesh } from "./worldMesh";
+import type { Band } from "@atlas/domain";
 import { createField } from "./field";
+import { releaseWorking, workingArray } from "./physicalNumerics";
 import { atlasEpoch, atlasPhysicalProfile } from "./atlasProfile";
 import { physicalContext } from "./context";
 import { tectonicProvinces } from "./provinces";
@@ -39,7 +41,7 @@ function translatingWorld(myr = 10, index = 0) {
   refreshSiteMotion(map, state);
   map.CrustThickness.fill(4000 * 1024);
   map.BedrockElevation.fill(200 * 1024);
-  map.Elevation.set(map.BedrockElevation);
+  map.Elevation.copyFrom(map.BedrockElevation);
   return { map, context };
 }
 
@@ -66,21 +68,31 @@ it("partitions a rigid-motion interval without changing the material trajectory"
     expect(site.x).toBeCloseTo(divided.map.tectonics!.sites[i].x, 5);
     expect(site.y).toBeCloseTo(divided.map.tectonics!.sites[i].y, 5);
   });
-  expect(whole.map.BedrockElevation).toEqual(divided.map.BedrockElevation);
+  expect(Array.from(whole.map.BedrockElevation)).toEqual(Array.from(divided.map.BedrockElevation));
 });
 
 it("carries an amount through every internal transport and across the cylinder seam", () => {
   const { map, context } = translatingWorld(30);
-  let stock: import("@atlas/domain").NumericalVector = new Float64Array(map.mesh.count);
-  stock[map.mesh.x.findIndex((x, i) => x > 900_000 && Math.abs(map.mesh.y[i]) < 100_000)] = 100;
+  const total = (band: Band) => map.coverage.reduce(band, (sum, value) => sum + value, 0);
+  let stock = workingArray(map, "float64", "test:stock");
+  let start = -1;
+  for (let i = 0; i < map.mesh.count && start < 0; i++)
+    if (map.mesh.x(i) > 900_000 && Math.abs(map.mesh.y(i)) < 100_000) start = i;
+  stock.set(start, 100);
   let calls = 0;
   plateAdvection(map, context, () => {
-    stock = carryAmount(map, stock);
+    const carried = carryAmount(map, stock);
+    releaseWorking(map, stock);
+    stock = carried;
     calls++;
-    expect(stock.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 9);
+    expect(total(stock)).toBeCloseTo(100, 9);
   });
   expect(calls).toBeGreaterThan(1);
-  const west = stock.reduce((sum, value, i) => sum + (map.mesh.x[i] < 0 ? value : 0), 0);
+  const west = map.coverage.reduce(
+    stock,
+    (sum, value, cell) => sum + (map.mesh.x(cell) < 0 ? value : 0),
+    0
+  );
   expect(west).toBeGreaterThan(90);
 });
 
@@ -108,9 +120,12 @@ it("samples rigid rotation at material cells rather than translating whole provi
   refreshSiteMotion(map, state);
   tectonicProvinces(map, context);
   for (let i = 0; i < map.mesh.count; i++) {
-    if (Math.abs(map.mesh.x[i]) > 200_000 || Math.abs(map.mesh.y[i]) > 100_000) continue;
-    expect(map.CrustMotionX[i] / 1000).toBeCloseTo(0.5 - state.plates[0].spin * map.mesh.y[i], 2);
-    expect(map.CrustMotionY[i] / 1000).toBeCloseTo(state.plates[0].spin * map.mesh.x[i], 2);
+    if (Math.abs(map.mesh.x(i)) > 200_000 || Math.abs(map.mesh.y(i)) > 100_000) continue;
+    expect(map.CrustMotionX.get(i) / 1000).toBeCloseTo(
+      0.5 - state.plates[0].spin * map.mesh.y(i),
+      2
+    );
+    expect(map.CrustMotionY.get(i) / 1000).toBeCloseTo(state.plates[0].spin * map.mesh.x(i), 2);
   }
 });
 
@@ -121,8 +136,8 @@ it("preserves a uniform material column while rotating its cells", () => {
   tectonicProvinces(map, context);
   const plan = buildTransportPlan(map, 10_000);
   for (let i = 0; i < map.mesh.count; i++) {
-    if (Math.abs(map.mesh.x[i]) > 200_000 || Math.abs(map.mesh.y[i]) > 100_000) continue;
-    expect(plan.arrivals[i] / 1e6).toBeCloseTo(1, 8);
+    if (Math.abs(map.mesh.x(i)) > 200_000 || Math.abs(map.mesh.y(i)) > 100_000) continue;
+    expect(plan.arrivals.get(i) / 1e6).toBeCloseTo(1, 8);
   }
 });
 

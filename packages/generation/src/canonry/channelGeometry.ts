@@ -6,7 +6,7 @@ import { clamp, toUnits, truncate, units } from "./math";
 import { edgeLeadingTo } from "./mesh";
 import { channelDimensions } from "./dimensions";
 import { physicalDistance } from "./physicalMetric";
-import { RecordQueue, type NumericalVector } from "@atlas/domain";
+import { RecordQueue, type Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
 function normalize(x: number, y: number): [number, number] {
@@ -15,32 +15,32 @@ function normalize(x: number, y: number): [number, number] {
 }
 function direction(map: PhysicalField, source: number, target: number): [number, number] {
   return normalize(
-    Math.fround(meshDeltaX(map.mesh, map.mesh.x[target] - map.mesh.x[source])),
-    Math.fround(map.mesh.y[target] - map.mesh.y[source])
+    Math.fround(meshDeltaX(map.mesh, map.mesh.x(target) - map.mesh.x(source))),
+    Math.fround(map.mesh.y(target) - map.mesh.y(source))
   );
 }
-export function dominantUpstream(map: PhysicalField, filled = false): NumericalVector {
+export function dominantUpstream(map: PhysicalField, filled = false): Band {
   const upstream = workingArray(map, "int32", "channel:upstream").fill(-1);
   const channel = filled ? map.RiverChannelStrength : map.RiverOrders;
   for (let i = 0; i < map.mesh.count; i++) {
-    const target = map.FlowTargets[i];
-    if (channel[i] <= 0 || target < 0 || channel[target] <= 0) continue;
-    const previous = upstream[target];
-    if (previous < 0 || map.FlowAccumulation[i] > map.FlowAccumulation[previous])
-      upstream[target] = i;
+    const target = map.FlowTargets.get(i);
+    if (channel.get(i) <= 0 || target < 0 || channel.get(target) <= 0) continue;
+    const previous = upstream.get(target);
+    if (previous < 0 || map.FlowAccumulation.get(i) > map.FlowAccumulation.get(previous))
+      upstream.set(target, i);
   }
   return upstream;
 }
 export function longitudinalAlignment(
   map: PhysicalField,
-  upstream: NumericalVector,
+  upstream: Band,
   spine: number,
   target: number
 ): number {
   let x = 0,
     y = 0;
-  const downstream = map.FlowTargets[spine],
-    previous = upstream[spine];
+  const downstream = map.FlowTargets.get(spine),
+    previous = upstream.get(spine);
   if (downstream >= 0) {
     const [dx, dy] = direction(map, spine, downstream);
     x += dx;
@@ -58,17 +58,17 @@ export function longitudinalAlignment(
 function extendSpines(map: PhysicalField) {
   const inflow = dominantUpstream(map, true);
   for (let head = 0; head < map.mesh.count; head++) {
-    if (map.RiverOrders[head] <= 0) continue;
+    if (map.RiverOrders.get(head) <= 0) continue;
     let target = head,
-      source = inflow[target];
-    while (source >= 0 && map.RiverOrders[source] <= 0) {
+      source = inflow.get(target);
+    while (source >= 0 && map.RiverOrders.get(source) <= 0) {
       const se = edgeLeadingTo(map.mesh, source, target),
         te = edgeLeadingTo(map.mesh, target, source);
       if (se < 0 || te < 0) break;
-      map.RiverSpineEdgeMasks[source] |= 1 << se;
-      map.RiverSpineEdgeMasks[target] |= 1 << te;
+      map.RiverSpineEdgeMasks.set(source, map.RiverSpineEdgeMasks.get(source) | (1 << se));
+      map.RiverSpineEdgeMasks.set(target, map.RiverSpineEdgeMasks.get(target) | (1 << te));
       target = source;
-      source = inflow[target];
+      source = inflow.get(target);
     }
   }
   releaseWorking(map, inflow);
@@ -77,16 +77,16 @@ type Front = { triangle: number; spine: number; depth: number; maximum: number }
 function canWiden(
   map: PhysicalField,
   c: PhysicalContext,
-  upstream: NumericalVector,
+  upstream: Band,
   spine: number,
   target: number
 ): boolean {
   if (
     target < 0 ||
-    map.RiverOrders[target] > 0 ||
-    map.WaterKindCodes[target] !== 0 ||
-    map.DrainageBasinIds[target] !== map.DrainageBasinIds[spine] ||
-    Math.abs(map.Elevation[spine] - map.Elevation[target]) >
+    map.RiverOrders.get(target) > 0 ||
+    map.WaterKindCodes.get(target) !== 0 ||
+    map.DrainageBasinIds.get(target) !== map.DrainageBasinIds.get(spine) ||
+    Math.abs(map.Elevation.get(spine) - map.Elevation.get(target)) >
       units(c.Profile.RiverChannelMaximumBankRelief)
   )
     return false;
@@ -98,7 +98,7 @@ function canWiden(
 function tryWiden(
   map: PhysicalField,
   c: PhysicalContext,
-  upstream: NumericalVector,
+  upstream: Band,
   front: Front,
   target: number
 ): boolean {
@@ -106,36 +106,34 @@ function tryWiden(
       front.depth + (target < 0 ? Infinity : physicalDistance(map.mesh, front.triangle, target)),
     p = c.Profile;
   if (depth > front.maximum || !canWiden(map, c, upstream, front.spine, target)) return false;
-  const relief = toUnits(Math.abs(map.Elevation[front.spine] - map.Elevation[target]));
-  const slope = Math.max(0, map.Slope[target] - p.PlainSlopeThreshold) * 10_000;
+  const relief = toUnits(Math.abs(map.Elevation.get(front.spine) - map.Elevation.get(target)));
+  const slope = Math.max(0, map.Slope.get(target) - p.PlainSlopeThreshold) * 10_000;
   const strength = Math.max(
     1,
-    map.RiverChannelStrength[front.spine] -
+    map.RiverChannelStrength.get(front.spine) -
       (p.RiverChannelWidthDecay * depth) / 10_000 -
       relief -
       slope
   );
-  const order = map.RiverChannelOrders[front.spine];
-  if (
-    strength < map.RiverChannelStrength[target] ||
-    (strength === map.RiverChannelStrength[target] && order <= map.RiverChannelOrders[target])
-  )
+  const order = map.RiverChannelOrders.get(front.spine),
+    held = map.RiverChannelStrength.get(target);
+  if (strength < held || (strength === held && order <= map.RiverChannelOrders.get(target)))
     return false;
-  map.RiverChannelStrength[target] = strength;
-  map.RiverChannelOrders[target] = order;
+  map.RiverChannelStrength.set(target, strength);
+  map.RiverChannelOrders.set(target, order);
   return depth < front.maximum;
 }
 function expansionSteps(map: PhysicalField, c: PhysicalContext, i: number): number {
   const p = c.Profile,
-    order = map.RiverOrders[i],
-    discharge = truncate(map.FlowAccumulation[i] / Math.max(1, p.RiverAccumulationThreshold));
+    order = map.RiverOrders.get(i),
+    discharge = truncate(map.FlowAccumulation.get(i) / Math.max(1, p.RiverAccumulationThreshold));
   if (order < p.RiverChannelWideningOrder && discharge < p.RiverChannelWideningDischargeMultiplier)
     return 0;
   const scale = Math.max(
     order - p.RiverChannelWideningOrder,
     truncate(discharge / p.RiverChannelWideningDischargeMultiplier)
   );
-  return Math.min(p.RiverChannelMaximumWidth / 2, (map.RiverWidth[i] / 2) * (1 + scale * 0.05));
+  return Math.min(p.RiverChannelMaximumWidth / 2, (map.RiverWidth.get(i) / 2) * (1 + scale * 0.05));
 }
 export function riverChannelGeometry(map: PhysicalField, c: PhysicalContext) {
   map.RiverChannelStrength.fill(0);
@@ -146,28 +144,25 @@ export function riverChannelGeometry(map: PhysicalField, c: PhysicalContext) {
     frontier = new RecordQueue(3),
     p = c.Profile;
   for (let i = 0; i < map.mesh.count; i++) {
-    const order = map.RiverOrders[i];
-    if (order <= 0 && (map.WaterKindCodes[i] === 0 || map.FlowAccumulation[i] <= 0)) continue;
-    const dimensions = channelDimensions(
-      map.FlowAccumulation[i],
-      map.Slope[i],
-      map.RockResistance[i]
-    );
-    map.RiverWidth[i] = dimensions.width;
-    map.RiverDepth[i] = dimensions.depth;
+    const order = map.RiverOrders.get(i),
+      flow = map.FlowAccumulation.get(i);
+    if (order <= 0 && (map.WaterKindCodes.get(i) === 0 || flow <= 0)) continue;
+    const dimensions = channelDimensions(flow, map.Slope.get(i), map.RockResistance.get(i));
+    map.RiverWidth.set(i, dimensions.width);
+    map.RiverDepth.set(i, dimensions.depth);
     if (order <= 0) continue;
-    const discharge = Math.min(
-      12,
-      truncate(map.FlowAccumulation[i] / Math.max(1, p.RiverAccumulationThreshold))
+    const discharge = Math.min(12, truncate(flow / Math.max(1, p.RiverAccumulationThreshold)));
+    map.RiverChannelStrength.set(
+      i,
+      clamp(
+        p.RiverChannelBaseStrength +
+          (order - 1) * p.RiverChannelOrderStrength +
+          discharge * p.RiverChannelDischargeStrength,
+        1,
+        1000
+      )
     );
-    map.RiverChannelStrength[i] = clamp(
-      p.RiverChannelBaseStrength +
-        (order - 1) * p.RiverChannelOrderStrength +
-        discharge * p.RiverChannelDischargeStrength,
-      1,
-      1000
-    );
-    map.RiverChannelOrders[i] = order;
+    map.RiverChannelOrders.set(i, order);
     const maximum = expansionSteps(map, c, i);
     if (maximum > 0) frontier.push(i, i, 0, maximum);
   }
@@ -182,7 +177,7 @@ export function riverChannelGeometry(map: PhysicalField, c: PhysicalContext) {
 function expandChannels(
   map: PhysicalField,
   c: PhysicalContext,
-  upstream: NumericalVector,
+  upstream: Band,
   frontier: RecordQueue
 ) {
   for (let triangle = frontier.shift(); triangle >= 0; triangle = frontier.shift()) {
@@ -192,8 +187,8 @@ function expandChannels(
       depth: frontier.field(1),
       maximum: frontier.field(2),
     };
-    for (let edge = 0; edge < map.mesh.degree[triangle]; edge++) {
-      const target = map.mesh.neighbors[triangle * map.mesh.stride + edge];
+    for (let edge = 0; edge < map.mesh.degree(triangle); edge++) {
+      const target = map.mesh.neighbor(triangle, edge);
       if (tryWiden(map, c, upstream, front, target))
         frontier.push(
           target,

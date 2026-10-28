@@ -36,8 +36,11 @@ const at = (map: PhysicalField, i: number) => nativePosition({ map } as never, i
 function inheritedChild(parent: ReturnType<typeof parentGrid>) {
   const map = createField(createWorldMesh([0, 0, size, size], 4096, 0));
   const elevationAt = fieldInterpolator(parent, "elevation");
-  for (let i = 0; i < map.mesh.count; i++)
-    map.Elevation[i] = map.BedrockElevation[i] = units(elevationAt(at(map, i)));
+  for (let i = 0; i < map.mesh.count; i++) {
+    const height = units(elevationAt(at(map, i)));
+    map.Elevation.set(i, height);
+    map.BedrockElevation.set(i, height);
+  }
   map.RockResistance.fill(1000);
   return map;
 }
@@ -48,8 +51,8 @@ function worstParentMean(map: PhysicalField, change: (i: number) => number, cell
     const { x, y } = at(map, i);
     const key = Math.round((y / size) * 10) * 11 + Math.round((x / size) * 10);
     const entry = means.get(key) ?? { sum: 0, weight: 0 };
-    entry.sum += change(i) * map.mesh.areas[i];
-    entry.weight += map.mesh.areas[i];
+    entry.sum += change(i) * map.mesh.area(i);
+    entry.weight += map.mesh.area(i);
     means.set(key, entry);
   }
   let worst = 0;
@@ -65,8 +68,8 @@ function alignment(map: PhysicalField, change: (i: number) => number, cells: num
     const p = at(map, i);
     let dx = 0,
       dy = 0;
-    for (let e = 0; e < mesh.degree[i]; e++) {
-      const j = mesh.neighbors[i * mesh.stride + e];
+    for (let e = 0; e < mesh.degree(i); e++) {
+      const j = mesh.neighbor(i, e);
       if (j < 0) continue;
       const q = at(map, j),
         len = Math.hypot(q.x - p.x, q.y - p.y);
@@ -90,7 +93,7 @@ it("adds ridge-and-valley relief where the parent is steep, leaves lowland and t
   const result = synthesizeRelief(map, parent, footprint, band, 7, atlasPhysicalProfile());
   expect(result.changed).toBeGreaterThan(100);
 
-  const change = (i: number) => (map.Elevation[i] - before[i]) / 1024;
+  const change = (i: number) => (map.Elevation.get(i) - before[i]) / 1024;
   const inBand = (i: number) => {
     const { x, y } = at(map, i);
     return Math.min(x, size - x, y, size - y) < band;
@@ -98,7 +101,7 @@ it("adds ridge-and-valley relief where the parent is steep, leaves lowland and t
   const rms = (members: number[]) =>
     Math.sqrt(members.reduce((s, i) => s + change(i) ** 2, 0) / Math.max(1, members.length));
   const cells = Array.from({ length: mesh.count }, (_, i) => i).filter(
-    (i) => mesh.contentAreas[i] > 0 && !inBand(i)
+    (i) => mesh.membership(i) === 1 && mesh.contentArea(i) > 0 && !inBand(i)
   );
   const steep = cells.filter((i) => at(map, i).x > size * 0.6 && at(map, i).x < size * 0.9),
     gentle = cells.filter((i) => at(map, i).x > size * 0.1 && at(map, i).x < size * 0.4);
@@ -113,7 +116,7 @@ it("adds ridge-and-valley relief where the parent is steep, leaves lowland and t
   expect(worstParentMean(map, change, cells)).toBeLessThan(10);
   // Bedrock carries the relief and the surface stays consistent.
   for (const i of cells)
-    expect(map.Elevation[i]).toBe(map.BedrockElevation[i] + map.SedimentThickness[i]);
+    expect(map.Elevation.get(i)).toBe(map.BedrockElevation.get(i) + map.SedimentThickness.get(i));
   // Ridges run along the belt: the added relief changes mostly across the parent gradient (x),
   // well above the 2/π ≈ 0.64 an isotropic texture gives.
   expect(alignment(map, change, steep)).toBeGreaterThan(0.75);

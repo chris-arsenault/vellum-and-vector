@@ -2,7 +2,6 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { it } from "vitest";
 import { CellQueue } from "./cellQueue";
 import { RecordQueue } from "./recordQueue";
-import { MonotoneHeap } from "./monotoneHeap";
 import { radixOrder } from "./radixOrder";
 import { BitSet } from "./bitSet";
 import { EpochStamps } from "./epochStamps";
@@ -28,25 +27,6 @@ function keys(n: number) {
   return values;
 }
 /** Flood shape: pop, then push up to two neighbours at a key at or above the popped key. */
-function floodWithMonotone(n: number, next: () => number) {
-  const heap = new MonotoneHeap("min");
-  for (let i = 0; i < 64; i++) heap.push(i, next());
-  let item = 64,
-    pops = 0;
-  while (heap.size && item < n) {
-    heap.pop();
-    const key = heap.key();
-    heap.push(item++, key + next());
-    if (next() < 0.5) heap.push(item++, key + next());
-    pops++;
-  }
-  while (heap.size) {
-    heap.pop();
-    pops++;
-  }
-  return pops;
-}
-/** The same flood on the comparison heap over typed columns. */
 function floodWithKeyedHeap(n: number, next: () => number) {
   const heap = new KeyedHeap("min");
   for (let i = 0; i < 64; i++) heap.push(i, next());
@@ -192,9 +172,6 @@ it("records one run of each structure against a plain-JS baseline", () => {
     Int32Array.from({ length: n }, (_, i) => i).sort((a, b) => values[a] - values[b] || a - b);
     const comparator = ms(t);
     t = performance.now();
-    const monotonePops = floodWithMonotone(n, random(1));
-    const monotone = ms(t);
-    t = performance.now();
     const keyedPops = floodWithKeyedHeap(n, random(1));
     const keyed = ms(t);
     t = performance.now();
@@ -202,12 +179,7 @@ it("records one run of each structure against a plain-JS baseline", () => {
     const objects = ms(t);
     results[n] = {
       order: { radixOrder: radix, comparatorSort: comparator },
-      flood: {
-        monotoneHeap: monotone,
-        keyedHeap: keyed,
-        objectHeap: objects,
-        pops: [monotonePops, keyedPops, objectPops],
-      },
+      flood: { keyedHeap: keyed, objectHeap: objects, pops: [keyedPops, objectPops] },
       queues: queues(n),
       flags: flags(n),
       grouping: grouping(n),

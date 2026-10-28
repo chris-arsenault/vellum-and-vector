@@ -2,7 +2,7 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, maximumCrustThickness, minimumCrustThickness, units } from "./math";
-import { buildTransportPlan } from "./transportPlan";
+import { buildTransportPlan, releaseTransportPlan } from "./transportPlan";
 import { transportHistory } from "./transportHistory";
 import { rebuild } from "./surface";
 import { physicalSampler } from "./physicalMetric";
@@ -23,7 +23,10 @@ function advectGeometry(map: PhysicalField, distance: number) {
     vy = physicalSampler(map.mesh, map.CrustMotionY);
   let maximumSpeed = 0;
   for (let i = 0; i < map.mesh.count; i++)
-    maximumSpeed = Math.max(maximumSpeed, Math.hypot(map.CrustMotionX[i], map.CrustMotionY[i]));
+    maximumSpeed = Math.max(
+      maximumSpeed,
+      Math.hypot(map.CrustMotionX.get(i), map.CrustMotionY.get(i))
+    );
   const move = geologicalPointMotion(map.mesh, vx, vy, distance, maximumSpeed);
   for (const event of map.events)
     if (event.kind !== "plume") [event.x, event.y] = move(event.x, event.y);
@@ -48,17 +51,16 @@ function transportStep(map: PhysicalField, step: number) {
   map.ConvergentCrustSurplus.fill(0);
   advectGeometry(map, step);
   const plan = buildTransportPlan(map, step);
-  if (map.transportPlan) releaseWorking(map, ...Object.values(map.transportPlan));
+  if (map.transportPlan) releaseTransportPlan(map, map.transportPlan);
   map.transportPlan = plan;
   advectLandmarkDrainage(map, plan, step);
   transportHistory(map, plan);
   for (let i = 0; i < map.mesh.count; i++) {
-    map.CrustThickness[i] = clamp(
-      map.CrustThickness[i],
-      units(minimumCrustThickness),
-      units(maximumCrustThickness)
+    map.CrustThickness.set(
+      i,
+      clamp(map.CrustThickness.get(i), units(minimumCrustThickness), units(maximumCrustThickness))
     );
-    map.AdvectionSourceIndex[i] = plan.dominant[i];
+    map.AdvectionSourceIndex.set(i, plan.dominant.get(i));
     rebuild(map, i);
   }
 }
@@ -90,13 +92,13 @@ export function plateAdvection(
     tectonicProvinces(map, evolved);
     transportStep(map, step);
     afterStep();
-    for (let i = 0; i < surplus.length; i++) surplus[i] += map.ConvergentCrustSurplus[i];
+    for (let i = 0; i < surplus.length; i++) surplus.add(i, map.ConvergentCrustSurplus.get(i));
     completeTectonicMotion(map, myr, step);
     for (let i = 0; i < map.mesh.count; i++)
-      if (map.CrustRiftStrain[i] > 0) map.CrustRiftAgeMyr[i] += myr;
+      if (map.CrustRiftStrain.get(i) > 0) map.CrustRiftAgeMyr.add(i, myr);
     remaining -= myr;
   }
-  map.ConvergentCrustSurplus.set(surplus);
+  map.ConvergentCrustSurplus.copyFrom(surplus);
   releaseWorking(map, surplus);
   tectonicProvinces(map, evolved);
   map.AccumulatedPlateDrift += total;

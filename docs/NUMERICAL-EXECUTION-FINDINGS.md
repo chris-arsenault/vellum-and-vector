@@ -35,17 +35,17 @@ The 2026-10-28 structural review named nine findings. The storage plan
 (`1830dffc`) fixed most of them; this plan owns what it left. Dispositions are
 from the plan's phase notes and the current source, not from the phase titles.
 
-| #   | Finding                                                                     | Disposition                                                                                                                                                                                                                              | Owner here   |
-| --- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| 1   | Every numerical sample read goes through a Proxy trap                       | **Partial.** Native typed arrays within the 512 MiB resident budget; the Proxy path returns above it. Zero `readBlock` call sites in generation. The shared node generation never runs above the budget.                                 | P0–P4, P6    |
-| 2   | Catalog write derives every index eagerly, per record, hooks run twice      | Fixed (M3, `d7b4736`): writes no longer derive; one upsert plus bounds. **Residual:** `geometryKernel.ts` still runs `GEOSisValid` on every conversion unless `validate` is false; confirm query rectangles skip it.                     | P5           |
-| 3   | Five geometry indexes with separate invalidation                            | Fixed (M3): `GeometryDerivations` is the one lazy owner. Region picking derives on first visit by design.                                                                                                                                | closed       |
-| 4   | Feature presentation is an N+1 projection                                   | Fixed (M4, `fb4a22c`): one context per page, per-feature cache keyed by revision.                                                                                                                                                        | closed       |
-| 5   | Reads trigger write transactions through a mutable callback                 | Fixed (M3): prepare hook removed; tiles prepare explicitly.                                                                                                                                                                              | closed       |
-| 6   | `SpatialStore` is not what anything consumes                                | Fixed (M5, `3a40899`): one typed catalog call plus 14 lifecycle operations. **Residual:** a hosted adapter has not been written against the collapsed surface, so "consumed only" is asserted, not demonstrated.                         | out of scope |
-| 7   | One serial worker; publication queues behind pans                           | **Partial** (M5): two-lane scheduler, interactive first. A second SQLite connection from the generation worker is impossible (OPFS sync handles are exclusive per file), so publication still runs on the catalog worker in idle slices. | P5 (verify)  |
-| 8   | Generation moves each feature through five encodings                        | **Deferred** (M5 note): records still pass through the private CBOR scratch store, structured clone across the port, and WKB. The CBOR store carries protection and identity semantics and was left in place.                            | P5           |
-| 9   | One OPFS pool per world and per save, kept forever; root discovery off-lock | Fixed (M1, `7fd8773`): roots discovered under the catalog worker's lock; paused VFS releases handles.                                                                                                                                    | closed       |
+| #   | Finding                                                                     | Disposition                                                                                                                                                                                                                                                                                                         | Owner here   |
+| --- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| 1   | Every numerical sample read goes through a Proxy trap                       | **Physical world fixed** (plan `2f2eee37` A1–A3): bands over blocks, no Proxy at any budget; the shared node generation runs on a forced-evicting cache. **Open for the surface grid** until it becomes a coverage (A4): its vectors still come from the arena, native within the budget and a Proxy view above it. | A4, F2       |
+| 2   | Catalog write derives every index eagerly, per record, hooks run twice      | Fixed (M3, `d7b4736`): writes no longer derive; one upsert plus bounds. **Residual:** `geometryKernel.ts` still runs `GEOSisValid` on every conversion unless `validate` is false; confirm query rectangles skip it.                                                                                                | P5           |
+| 3   | Five geometry indexes with separate invalidation                            | Fixed (M3): `GeometryDerivations` is the one lazy owner. Region picking derives on first visit by design.                                                                                                                                                                                                           | closed       |
+| 4   | Feature presentation is an N+1 projection                                   | Fixed (M4, `fb4a22c`): one context per page, per-feature cache keyed by revision.                                                                                                                                                                                                                                   | closed       |
+| 5   | Reads trigger write transactions through a mutable callback                 | Fixed (M3): prepare hook removed; tiles prepare explicitly.                                                                                                                                                                                                                                                         | closed       |
+| 6   | `SpatialStore` is not what anything consumes                                | Fixed (M5, `3a40899`): one typed catalog call plus 14 lifecycle operations. **Residual:** a hosted adapter has not been written against the collapsed surface, so "consumed only" is asserted, not demonstrated.                                                                                                    | out of scope |
+| 7   | One serial worker; publication queues behind pans                           | **Partial** (M5): two-lane scheduler, interactive first. A second SQLite connection from the generation worker is impossible (OPFS sync handles are exclusive per file), so publication still runs on the catalog worker in idle slices.                                                                            | P5 (verify)  |
+| 8   | Generation moves each feature through five encodings                        | **Deferred** (M5 note): records still pass through the private CBOR scratch store, structured clone across the port, and WKB. The CBOR store carries protection and identity semantics and was left in place.                                                                                                       | P5           |
+| 9   | One OPFS pool per world and per save, kept forever; root discovery off-lock | Fixed (M1, `7fd8773`): roots discovered under the catalog worker's lock; paused VFS releases handles.                                                                                                                                                                                                               | closed       |
 
 Also deferred by the storage plan and carried here: Safari and large-world
 measurements were declared separate evidence, not closeout gates. This plan's
@@ -72,15 +72,19 @@ below the world's needs, which is the large-world evidence that matters.
   `NumericalView` reads on demand with a 32 MiB decoded-chunk cache.
 - `packages/generation/src/generationWorkingState.ts` — process boundaries
   call `numericalProcessLifetime`, which releases process-lifetime vectors
-  not reachable from the state after each process. Copies between runs use
-  `vector.slice()`, a full read of the world on the paged path.
+  and bands not reachable from the state after each process. Copies between
+  runs snapshot the physical coverage copy-on-write; surface grid vectors
+  still copy with `vector.slice()`.
 - `packages/domain/src/hpc` — resident structures for frontiers, lists,
-  orderings, grouping and marks. `MonotoneHeap` and `EdgeTable` have no users:
-  the keyed heap won the one-run flood comparison, and mesh adjacency still
-  lives as loose columns on `PhysicalMesh` (`neighbors`, `degree`,
-  `edgeLength`, `coordU/V/Inverted`).
-- Mesh columns are allocated through the arena with `lifetime: "run"`
-  (`canonry/worldMesh.ts`), so above the budget adjacency itself pages.
+  orderings, grouping and marks. `MonotoneHeap` and `EdgeTable` had no users
+  (the keyed heap won the one-run flood comparison; adjacency is arithmetic on
+  the lattice) and were deleted during adoption.
+- `packages/domain/src/lattice` — the physical world is a `Coverage` of
+  `Band`s over a `Lattice` (`docs/WORLD-COVERAGE-DESIGN.md`): adjacency,
+  positions and areas are arithmetic on the triangular lattice and stored
+  bands on adaptive ones; a `Band` read is two indexings into a native block,
+  and the `BlockCache` spills blocks to scratch beyond its budget. Nothing in
+  generation indexes a band with `[i]`; the compiler rejects it.
 
 ## Inventory of the generation package
 

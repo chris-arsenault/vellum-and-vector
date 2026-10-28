@@ -2,6 +2,12 @@ import { expect, it } from "vitest";
 import { createWorldMesh } from "./worldMesh";
 import { nearestTriangle } from "./mesh";
 
+const contentArea = (mesh: ReturnType<typeof createWorldMesh>) => {
+  let total = 0;
+  for (let i = 0; i < mesh.count; i++) if (mesh.membership(i) === 1) total += mesh.area(i);
+  return total;
+};
+
 it("aligns a small world with the existing physical lattice without shrinking its halo", () => {
   for (const samples of [16384, 65536, 262144]) {
     const mesh = createWorldMesh([0, 0, 1000, 1000], samples, 100_000),
@@ -9,15 +15,12 @@ it("aligns a small world with the existing physical lattice without shrinking it
     expect(mesh.contentCount).toBeGreaterThan(0);
     expect(mesh.spacing).toBe(expectedSpacing);
     expect(mesh.workRadius).toBe(Math.hypot(100_500, 100_500));
-    expect(mesh.areas.slice(0, mesh.contentCount).reduce((sum, area) => sum + area, 0)).toBeCloseTo(
-      1_000_000,
-      6
-    );
+    expect(contentArea(mesh)).toBeCloseTo(1_000_000, 6);
     const center = nearestTriangle(mesh, 0, 0);
     expect(center).toBeGreaterThanOrEqual(0);
-    expect(center).toBeLessThan(mesh.contentCount);
-    for (let i = 0; i < mesh.contentCount; i++)
-      expect(nearestTriangle(mesh, mesh.x[i], mesh.y[i])).toBe(i);
+    expect(mesh.membership(center)).toBe(1);
+    for (let i = 0; i < mesh.count; i++)
+      if (mesh.membership(i) === 1) expect(nearestTriangle(mesh, mesh.x(i), mesh.y(i))).toBe(i);
   }
 });
 
@@ -25,14 +28,11 @@ it("supports a narrow extent without increasing its sample density", () => {
   const mesh = createWorldMesh([0, 0, 100, 1_000_000], 16384, 100_000);
   expect(mesh.contentCount).toBeGreaterThan(0);
   expect(mesh.spacing).toBeGreaterThan(100);
-  expect(mesh.areas.slice(0, mesh.contentCount).reduce((sum, area) => sum + area, 0)).toBeCloseTo(
-    100_000_000,
-    4
-  );
+  expect(contentArea(mesh)).toBeCloseTo(100_000_000, 4);
   for (const y of [-500_000, 0, 500_000]) {
     const i = nearestTriangle(mesh, 0, y);
     expect(i).toBeGreaterThanOrEqual(0);
-    expect(Math.hypot(mesh.x[i], mesh.y[i] - y)).toBeLessThan(mesh.spacing);
+    expect(Math.hypot(mesh.x(i), mesh.y(i) - y)).toBeLessThan(mesh.spacing);
   }
 });
 
@@ -43,10 +43,10 @@ it("can align an unsampled irregular footprint at a supplied covered point", () 
   expect(mesh.contentCount).toBeGreaterThan(0);
   const i = nearestTriangle(mesh, -499.5, -499.5);
   expect(i).toBeGreaterThanOrEqual(0);
-  expect(i).toBeLessThan(mesh.contentCount);
-  expect(mesh.x[i] + mesh.origin[0]).toBeCloseTo(0.5, 8);
-  expect(mesh.y[i] + mesh.origin[1]).toBeCloseTo(0.5, 8);
-  expect(mesh.areas.slice(0, mesh.contentCount).reduce((sum, area) => sum + area, 0)).toBe(2);
+  expect(mesh.membership(i)).toBe(1);
+  expect(mesh.x(i) + mesh.origin[0]).toBeCloseTo(0.5, 8);
+  expect(mesh.y(i) + mesh.origin[1]).toBeCloseTo(0.5, 8);
+  expect(contentArea(mesh)).toBe(2);
 });
 
 it("preserves the existing lattice when the footprint already contains samples", () => {
@@ -60,7 +60,10 @@ it("preserves the existing lattice when the footprint already contains samples",
     [0, 0]
   );
   expect(supplied.latticeOffset).toEqual([0, 0]);
-  expect(supplied.x).toEqual(original.x);
-  expect(supplied.y).toEqual(original.y);
+  expect(supplied.count).toBe(original.count);
+  for (let i = 0; i < original.count; i++) {
+    expect(supplied.x(i)).toBe(original.x(i));
+    expect(supplied.y(i)).toBe(original.y(i));
+  }
   expect(supplied.contentCount).toBe(original.contentCount);
 });

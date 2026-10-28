@@ -23,14 +23,14 @@ it("publishes a fixed triangle world as continuous metre channels and discrete m
     mesh = work.map.mesh;
   expect(mesh.topology).toBeNull();
   for (let i = 0; i < mesh.count; i++) {
-    work.map.Elevation[i] = (500 + mesh.x[i] * 0.002) * 1024;
-    work.map.BedrockElevation[i] = work.map.Elevation[i] - 10 * 1024;
-    work.map.SedimentThickness[i] = 10 * 1024;
-    work.map.CrustProvinceIds[i] = i % 5;
+    work.map.Elevation.set(i, (500 + mesh.x(i) * 0.002) * 1024);
+    work.map.BedrockElevation.set(i, work.map.Elevation.get(i) - 10 * 1024);
+    work.map.SedimentThickness.set(i, 10 * 1024);
+    work.map.CrustProvinceIds.set(i, i % 5);
   }
   initializeMagic(state);
   work.magic!.fields[0].intensity.fill(700);
-  work.magic!.fields[0].retained.set(Float64Array.from(mesh.areas, (area) => area * 7));
+  for (let i = 0; i < mesh.count; i++) work.magic!.fields[0].retained.set(i, mesh.area(i) * 7);
   projectNative(state);
   projectMagic(state);
   for (let i = 0; i < state.surface.active.length; i++) {
@@ -62,7 +62,7 @@ it("keeps adjacent classified regions connected across faces and separates dista
   state.physical = createAtlasWorkspace(state, "draft");
   const mesh = state.physical.map.mesh,
     a = nearestTriangle(mesh, 0, 0),
-    b = mesh.neighbors[a * 3],
+    b = mesh.neighbor(a, 0),
     distant = nearestTriangle(mesh, 60_000, 60_000),
     members = [a, b, distant],
     includes = (cell: number) => Number(members.includes(cell)),
@@ -70,8 +70,8 @@ it("keeps adjacent classified regions connected across faces and separates dista
     shape = membershipContour(state, members, includes)!;
   expect(shape.type).toBe("MultiPolygon");
   const p = {
-    x: mesh.origin[0] + (mesh.x[a] + mesh.x[b]) / 2,
-    y: mesh.origin[1] + (mesh.y[a] + mesh.y[b]) / 2,
+    x: mesh.origin[0] + (mesh.x(a) + mesh.x(b)) / 2,
+    y: mesh.origin[1] + (mesh.y(a) + mesh.y(b)) / 2,
     z: 0,
   };
   expect(at(p.x, p.y)).toBeCloseTo(1, 8);
@@ -80,7 +80,7 @@ it("keeps adjacent classified regions connected across faces and separates dista
     expect(
       spatial.covers(
         shape,
-        point({ x: mesh.x[cell] + mesh.origin[0], y: mesh.y[cell] + mesh.origin[1], z: 0 })
+        point({ x: mesh.x(cell) + mesh.origin[0], y: mesh.y(cell) + mesh.origin[1], z: 0 })
       )
     ).toBe(true);
   expect(spatial.covers(shape, point({ x: 130_000, y: 130_000, z: 0 }))).toBe(false);

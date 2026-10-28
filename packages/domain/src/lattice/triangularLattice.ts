@@ -112,6 +112,8 @@ export class TriangularLattice implements Lattice {
         columns = Math.max(columns, count);
       }
     }
+    // Every row holds `columns` sites of each orientation; the frame's edge sites are halo.
+    this.aCount.fill(columns);
     this.columns = columns;
     this.count = this.rows * columns * 2;
     this.blockCount = blockCount(this.count);
@@ -137,7 +139,7 @@ export class TriangularLattice implements Lattice {
     if (k >= this.aCount[inverted * 2 + parity]) return nodata;
     const x = this.x(cell),
       y = this.y(cell);
-    if (Math.abs(x) > this.frameWidth / 2 || Math.abs(y) > this.frameHeight / 2) return nodata;
+    if (Math.abs(y) > this.frameHeight / 2) return nodata;
     if (input.membership) return input.membership(cell, x, y);
     if (
       Math.abs(x) <= width / 2 &&
@@ -181,11 +183,17 @@ export class TriangularLattice implements Lattice {
       d = this.d(cell);
     return [(a - d) / 2, (a + d) / 2, (cell & 1) === 1];
   }
+  get latticeOffset() {
+    return this.offset;
+  }
   blockLive(block: number) {
     return this.live[block];
   }
   membership(cell: number) {
     return this.mask[cell];
+  }
+  inverted(cell: number) {
+    return (cell & 1) === 1;
   }
   private siteX(a: number, inverted: number) {
     return (1.5 * a + 1 + inverted) * this.spacing + this.offset[0];
@@ -200,7 +208,8 @@ export class TriangularLattice implements Lattice {
     return this.siteY(this.d(cell));
   }
   area(cell: number) {
-    return this.mask[cell] === content ? this.contentCellArea : this.haloCellArea;
+    const kind = this.mask[cell];
+    return kind === content ? this.contentCellArea : kind === halo ? this.haloCellArea : 0;
   }
   contentArea(cell: number) {
     return this.mask[cell] === content ? this.contentCellArea : 0;

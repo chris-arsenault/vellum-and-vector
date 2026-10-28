@@ -29,6 +29,6 @@ export function evolveVegetation(
     normalizeCommunities(map, i);
     updateTreeCover(map, i);
     restore(i);
-    map.BiomeCodes[i] = classifyBiome(map, i);
+    map.BiomeCodes.set(i, classifyBiome(map, i));
   }
 }

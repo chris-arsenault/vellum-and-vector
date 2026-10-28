@@ -103,7 +103,7 @@ export function placeLandmark(
   return { landmark, center: path[0], path, parameters: landmark.parameters };
 }
 export function distance(map: PhysicalField, i: number, [x, y]: Point) {
-  return Math.hypot(meshDeltaX(map.mesh, map.mesh.x[i] - x), map.mesh.y[i] - y);
+  return Math.hypot(meshDeltaX(map.mesh, map.mesh.x(i) - x), map.mesh.y(i) - y);
 }
 export function pathMetrics(map: PhysicalField, path: Point[]): PathMetrics {
   const segments: PathMetrics["segments"] = [];
@@ -205,9 +205,9 @@ export function channelCell(map: PhysicalField, station: { x: number; y: number 
   const centre = nearestTriangle(map.mesh, station.x, station.y);
   if (centre === undefined || centre < 0) return -1;
   let best = centre;
-  for (let edge = 0; edge < map.mesh.degree[centre]; edge++) {
-    const j = map.mesh.neighbors[centre * map.mesh.stride + edge];
-    if (j >= 0 && map.Elevation[j] < map.Elevation[best]) best = j;
+  for (let edge = 0; edge < map.mesh.degree(centre); edge++) {
+    const j = map.mesh.neighbor(centre, edge);
+    if (j >= 0 && map.Elevation.get(j) < map.Elevation.get(best)) best = j;
   }
   return best;
 }
@@ -223,36 +223,36 @@ export const unitsAbove = (map: PhysicalField, value: number) => map.BaseSeaLeve
  * and the next crustal-support pass answers it with flexure. No material is produced.
  */
 export function shiftBedrock(map: PhysicalField, i: number, requested: number) {
-  const old = map.BedrockElevation[i];
+  const old = map.BedrockElevation.get(i);
   const next = clamp(
     old + requested,
     units(-elevationLimit),
-    units(elevationLimit) - map.SedimentThickness[i]
+    units(elevationLimit) - map.SedimentThickness.get(i)
   );
   const applied = next - old;
   if (applied === 0) return 0;
-  map.BedrockElevation[i] = next;
-  map.SurfaceRockLoad[i] += applied;
+  map.BedrockElevation.set(i, next);
+  map.SurfaceRockLoad.add(i, applied);
   rebuild(map, i);
   return applied;
 }
 /** A cut booked as river incision down to base level; the sediment leaves through transport. */
 export function cut(map: PhysicalField, i: number, requested: number) {
   const base = map.EffectiveSeaLevel + units(1);
-  const amount = Math.min(requested, map.Elevation[i] - base);
+  const amount = Math.min(requested, map.Elevation.get(i) - base);
   if (amount <= 0) return 0;
   recordCut(map, i, amount);
   return amount;
 }
 /** Excavation that leaves the map, as an impact's does. */
 export function excavate(map: PhysicalField, i: number, requested: number) {
-  const amount = Math.max(0, Math.min(requested, map.BedrockElevation[i] - units(-3800)));
+  const amount = Math.max(0, Math.min(requested, map.BedrockElevation.get(i) - units(-3800)));
   if (amount <= 0) return 0;
-  map.BedrockElevation[i] -= amount;
-  map.SurfaceRockLoad[i] -= amount;
-  map.ImpactExcavation[i] += amount;
+  map.BedrockElevation.add(i, -amount);
+  map.SurfaceRockLoad.add(i, -amount);
+  map.ImpactExcavation.add(i, amount);
   rebuild(map, i);
-  const volume = (amount / 1024) * map.mesh.areas[i];
+  const volume = (amount / 1024) * map.mesh.area(i);
   map.SedimentProducedTotal += volume;
   map.SedimentExportedTotal += volume;
   return amount;

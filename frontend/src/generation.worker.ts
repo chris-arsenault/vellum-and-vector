@@ -4,6 +4,7 @@ import {
   OpfsStore,
   ZarrResources,
   openNumericalArena,
+  openBlockCache,
   openGenerationWorkspace,
   GeometryKernel,
   GeosSpatial,
@@ -27,6 +28,7 @@ self.onmessage = async (event: MessageEvent<GenerationWorkspaceStart | { kind: "
   const { operationId, port } = event.data;
   const workspace = new WorkspaceClient(port);
   let working: Awaited<ReturnType<typeof openNumericalArena>> | undefined;
+  let blocks: Awaited<ReturnType<typeof openBlockCache>> | undefined;
   let fields: WorkspaceFields | undefined;
   let featureWorkspace: Awaited<ReturnType<typeof openGenerationWorkspace>> | undefined;
   let kernel: GeometryKernel | undefined;
@@ -37,6 +39,7 @@ self.onmessage = async (event: MessageEvent<GenerationWorkspaceStart | { kind: "
     kernel = await GeometryKernel.create();
     configureSpatial((precision) => new GeosSpatial(kernel!, precision));
     working = await openNumericalArena(`generation_${operationId}`);
+    blocks = await openBlockCache(`generation_${operationId}`);
     featureWorkspace = await openGenerationWorkspace(`generation_features_${operationId}`);
     const store = new ZarrResources(await OpfsStore.open("atlas-resources"));
     fields = new WorkspaceFields(workspace, store, working.arena);
@@ -44,6 +47,7 @@ self.onmessage = async (event: MessageEvent<GenerationWorkspaceStart | { kind: "
       event.data,
       {
         working,
+        blocks,
         store,
         fields,
         workspace,
@@ -76,7 +80,7 @@ self.onmessage = async (event: MessageEvent<GenerationWorkspaceStart | { kind: "
         };
   } finally {
     try {
-      await closeGeneration(fields, featureWorkspace, working, kernel);
+      await closeGeneration(fields, featureWorkspace, working, blocks, kernel);
     } catch (error) {
       if (outcome.kind === "completed")
         outcome = {
@@ -94,6 +98,7 @@ async function closeGeneration(
   fields: WorkspaceFields | undefined,
   features: Awaited<ReturnType<typeof openGenerationWorkspace>> | undefined,
   working: Awaited<ReturnType<typeof openNumericalArena>> | undefined,
+  blocks: Awaited<ReturnType<typeof openBlockCache>> | undefined,
   kernel: GeometryKernel | undefined
 ) {
   try {
@@ -104,7 +109,11 @@ async function closeGeneration(
     }
   } finally {
     try {
-      await working?.close();
+      try {
+        await working?.close();
+      } finally {
+        await blocks?.close();
+      }
     } finally {
       configureSpatial();
       kernel?.close();

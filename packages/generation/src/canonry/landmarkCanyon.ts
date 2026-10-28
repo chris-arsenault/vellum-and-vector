@@ -37,7 +37,7 @@ export function canyonCells(map: PhysicalField, placed: Placed, corridor: Iterab
   const floor: { i: number; station: number }[] = [],
     rims: { i: number; d: number; station: number }[] = [];
   for (let i = 0; i < map.mesh.count; i++) {
-    const hit = nearestOnPath(map, metrics, map.mesh.x[i], map.mesh.y[i]);
+    const hit = nearestOnPath(map, metrics, map.mesh.x(i), map.mesh.y(i));
     if (hit.distance > rimReach) {
       if (channel.has(i)) floor.push({ i, station: 0 });
       continue;
@@ -72,13 +72,13 @@ export function canyonProfile(map: PhysicalField, placed: Placed, corridor: Iter
     rimCount = new Float64Array(count),
     floorLevel = new Float64Array(count).fill(NaN);
   for (const { i, station } of geometry.rims) {
-    rimSum[station] += map.Elevation[i];
+    rimSum[station] += map.Elevation.get(i);
     rimCount[station]++;
   }
   for (const { i, station } of geometry.floor)
     floorLevel[station] = Math.min(
       Number.isFinite(floorLevel[station]) ? floorLevel[station] : Infinity,
-      map.Elevation[i]
+      map.Elevation.get(i)
     );
   const rimLevel = fillAlong(
     Float64Array.from(rimSum, (sum, k) => (rimCount[k] ? sum / rimCount[k] : NaN))
@@ -113,16 +113,16 @@ function deepenCanyon(
     previous = target[k];
   }
   for (const { i, station } of profile.floor) {
-    const done = cut(map, i, map.Elevation[i] - target[station]);
+    const done = cut(map, i, map.Elevation.get(i) - target[station]);
     applied = Math.max(applied, done);
-    if (book) map.LandmarkMaintenance[i] += done;
+    if (book) map.LandmarkMaintenance.add(i, done);
   }
   // The rim band rises by the full remainder: its mean is what the depth is measured against.
   for (const { i, station } of profile.rims) {
     const remainder = round(Math.max(0, base - target[station]));
     if (remainder <= 0) continue;
     const done = shiftBedrock(map, i, remainder);
-    if (book) map.LandmarkMaintenance[i] += done;
+    if (book) map.LandmarkMaintenance.add(i, done);
     applied = Math.max(applied, done);
   }
   return applied;
@@ -132,41 +132,41 @@ function deepenCanyon(
 
 /** Straight corridor from a river cell down into a landmark's head cell, cut as incision. */
 function cutCorridor(map: PhysicalField, from: number, to: number, floorWidth: number) {
-  const ax = map.mesh.x[from],
-    ay = map.mesh.y[from],
-    ex = meshDeltaX(map.mesh, map.mesh.x[to] - ax),
-    ey = map.mesh.y[to] - ay,
+  const ax = map.mesh.x(from),
+    ay = map.mesh.y(from),
+    ex = meshDeltaX(map.mesh, map.mesh.x(to) - ax),
+    ey = map.mesh.y(to) - ay,
     length = Math.hypot(ex, ey);
   // The corridor leaves as the river cell's steepest exit, below every neighbour it has, and
   // falls to the head faster than the river fell before, so the descent chooses it over the
   // old course. Below base level no cut can win the water.
-  let lowest = map.Elevation[from];
-  for (let edge = 0; edge < map.mesh.degree[from]; edge++) {
-    const j = map.mesh.neighbors[from * map.mesh.stride + edge];
-    if (j >= 0) lowest = Math.min(lowest, map.Elevation[j]);
+  let lowest = map.Elevation.get(from);
+  for (let edge = 0; edge < map.mesh.degree(from); edge++) {
+    const j = map.mesh.neighbor(from, edge);
+    if (j >= 0) lowest = Math.min(lowest, map.Elevation.get(j));
   }
   const start = lowest - units(3);
   if (start <= baseLevel(map)) return null;
-  const exit = map.FlowTargets[from];
+  const exit = map.FlowTargets.get(from);
   const fall =
     exit >= 0
-      ? (map.Elevation[from] - map.Elevation[exit]) /
-        Math.max(1, distance(map, exit, [map.mesh.x[from], map.mesh.y[from]]))
+      ? (map.Elevation.get(from) - map.Elevation.get(exit)) /
+        Math.max(1, distance(map, exit, [ax, ay]))
       : 0;
   const gradient = Math.max(2 / 1000, 1.5 * fall);
-  const end = Math.min(map.Elevation[to], start - units(2) - gradient * length);
+  const end = Math.min(map.Elevation.get(to), start - units(2) - gradient * length);
   const cells: number[] = [];
   let applied = 0;
   for (let i = 0; i < map.mesh.count; i++) {
     if (i === from) continue;
-    const dx = meshDeltaX(map.mesh, map.mesh.x[i] - ax),
-      dy = map.mesh.y[i] - ay,
+    const dx = meshDeltaX(map.mesh, map.mesh.x(i) - ax),
+      dy = map.mesh.y(i) - ay,
       t = length ? clamp((dx * ex + dy * ey) / (length * length), 0, 1) : 0;
     const off = Math.hypot(meshDeltaX(map.mesh, dx - t * ex), dy - t * ey);
     if (off > floorWidth && i !== to) continue;
     const level = start + ((end - start) * (t * length)) / Math.max(1, length);
-    const done = cut(map, i, map.Elevation[i] - level);
-    map.LandmarkMaintenance[i] += done;
+    const done = cut(map, i, map.Elevation.get(i) - level);
+    map.LandmarkMaintenance.add(i, done);
     applied = Math.max(applied, done);
     cells.push(i);
   }
@@ -176,7 +176,7 @@ function flowsInto(map: PhysicalField, from: number, floor: Set<number>, steps: 
   let i = from;
   for (let n = 0; n < steps && i >= 0; n++) {
     if (floor.has(i)) return true;
-    i = map.FlowTargets[i];
+    i = map.FlowTargets.get(i);
   }
   return false;
 }
@@ -184,8 +184,8 @@ function flowsInto(map: PhysicalField, from: number, floor: Set<number>, steps: 
 function reachesSea(map: PhysicalField, from: number, steps: number) {
   let i = from;
   for (let n = 0; n < steps && i >= 0; n++) {
-    if (map.WaterKindCodes[i] === 1) return true;
-    i = map.FlowTargets[i];
+    if (map.WaterKindCodes.get(i) === 1) return true;
+    i = map.FlowTargets.get(i);
   }
   return false;
 }
@@ -196,36 +196,41 @@ function reachesSea(map: PhysicalField, from: number, steps: number) {
 function riversNear(map: PhysicalField, head: number, reach: number, floor: Set<number>) {
   const base = baseLevel(map),
     nearSea = Math.ceil(reach / map.mesh.spacing),
-    candidates = new CellList();
+    candidates = new CellList(),
+    at: [number, number] = [map.mesh.x(head), map.mesh.y(head)];
   for (let i = 0; i < map.mesh.count; i++) {
-    if (map.WaterKindCodes[i] !== 0 || map.RiverOrders[i] <= 0 || floor.has(i)) continue;
-    if (map.Elevation[i] <= base + units(5) || reachesSea(map, i, nearSea)) continue;
-    if (distance(map, i, [map.mesh.x[head], map.mesh.y[head]]) > reach) continue;
+    if (map.WaterKindCodes.get(i) !== 0 || map.RiverOrders.get(i) <= 0 || floor.has(i)) continue;
+    if (map.Elevation.get(i) <= base + units(5) || reachesSea(map, i, nearSea)) continue;
+    if (distance(map, i, at) > reach) continue;
     candidates.push(i);
   }
   // Largest flow first; ties keep ascending cell order.
   const cells = candidates.finish(),
     byFlow = radixOrder(
-      Float64Array.from(cells, (i) => map.FlowAccumulation[i]),
+      Float64Array.from(cells, (i) => map.FlowAccumulation.get(i)),
       true
     );
   return Array.from(byFlow, (k) => cells[k]);
 }
 const riverAt = (map: PhysicalField, i: number) => ({
-  x: map.mesh.x[i],
-  y: map.mesh.y[i],
-  accumulation: map.FlowAccumulation[i],
+  x: map.mesh.x(i),
+  y: map.mesh.y(i),
+  accumulation: map.FlowAccumulation.get(i),
 });
 /** The largest river already running through the floor, if any, is the present capture. */
 function heldRiver(map: PhysicalField, floor: Set<number>, record: LandmarkRecord) {
   let held = 0;
   record.capture = null;
   for (const i of floor)
-    if (map.RiverOrders[i] > 0 && map.FlowAccumulation[i] > held) {
-      held = map.FlowAccumulation[i];
+    if (map.RiverOrders.get(i) > 0 && map.FlowAccumulation.get(i) > held) {
+      held = map.FlowAccumulation.get(i);
       record.capture = riverAt(map, i);
     }
   return held;
+}
+function anyRiver(map: PhysicalField) {
+  for (let i = 0; i < map.mesh.count; i++) if (map.RiverOrders.get(i) > 0) return true;
+  return false;
 }
 export interface CaptureTarget {
   /** The cell the captured river must reach. */
@@ -247,9 +252,9 @@ export function captureInto(map: PhysicalField, record: LandmarkRecord, target: 
   const { head, floor, reach } = target,
     held = heldRiver(map, floor, record),
     steps = 4 * Math.ceil(reach / map.mesh.spacing) + 8;
-  if (!map.RiverOrders.some((order) => order > 0)) return 0;
+  if (!anyRiver(map)) return 0;
   for (const best of riversNear(map, head, reach, floor)) {
-    if (map.FlowAccumulation[best] <= held) break;
+    if (map.FlowAccumulation.get(best) <= held) break;
     if (flowsInto(map, best, floor, steps)) return 0;
     const corridor = cutCorridor(map, best, head, target.floorWidth);
     if (!corridor) continue;
@@ -257,7 +262,7 @@ export function captureInto(map: PhysicalField, record: LandmarkRecord, target: 
     record.capture = riverAt(map, best);
     note(
       record,
-      `Captured the river at (${Math.round(map.mesh.x[best] + map.mesh.origin[0])}, ${Math.round(map.mesh.y[best] + map.mesh.origin[1])}) into the ${target.label}.`
+      `Captured the river at (${Math.round(map.mesh.x(best) + map.mesh.origin[0])}, ${Math.round(map.mesh.y(best) + map.mesh.origin[1])}) into the ${target.label}.`
     );
     return corridor.applied / 1024;
   }
@@ -284,9 +289,12 @@ export const canyon: Kind = {
   emplace(map, p, placed, _epoch, record) {
     const { rims, width } = canyonCells(map, placed, record?.corridor);
     for (const { i, d } of rims)
-      map.RockResistance[i] = Math.max(
-        map.RockResistance[i],
-        rockResistance(1000 + 2000 * clamp(1 - (d - width / 4) / (width * 0.75), 0, 1))
+      map.RockResistance.set(
+        i,
+        Math.max(
+          map.RockResistance.get(i),
+          rockResistance(1000 + 2000 * clamp(1 - (d - width / 4) / (width * 0.75), 0, 1))
+        )
       );
     deepenCanyon(map, p, placed, units(placed.parameters.depth), false, record?.corridor ?? []);
   },

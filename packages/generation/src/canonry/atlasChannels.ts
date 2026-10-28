@@ -1,10 +1,8 @@
 // Explicit projection from Canonry's fixed-point numerical state into GIS channels.
-import type { PhysicalField } from "./field";
+import type { PhysicalBufferName } from "./field";
 import { ecologyBindings } from "./ecologyState";
 
-type ArrayName = {
-  [K in keyof PhysicalField]-?: PhysicalField[K] extends ArrayLike<number> ? K : never;
-}[keyof PhysicalField];
+type ArrayName = PhysicalBufferName;
 export interface ChannelBinding {
   name: string;
   native: ArrayName;

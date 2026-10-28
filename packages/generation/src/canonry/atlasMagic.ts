@@ -1,9 +1,8 @@
 // Canonry MagicAdvectionLayer's dominant material-source mapping, adapted to
 // user-configured signed thermal histories on the atlas's GIS grid.
-import { fieldInterpolator, putChannel, spatial } from "@atlas/domain";
+import { allocateNumerical, fieldInterpolator, putChannel, spatial } from "@atlas/domain";
 import type { MapProcess } from "../process";
 import { nativePosition } from "./atlasWorkspace";
-import { workingArray } from "./physicalNumerics";
 
 export const advectAtlasMagic: MapProcess = {
   contract: {
@@ -28,19 +27,23 @@ export const advectAtlasMagic: MapProcess = {
       for (const name of histories) {
         const previous = { ...grid, channels: { [name]: grid.channels[name] } };
         const valueAt = fieldInterpolator(previous, name);
-        const moved = workingArray(
-          work.map,
-          "float64",
-          "magic:advected-history",
-          grid.active.length
+        // The moved history is a surface channel, so it lives in the surface arena.
+        const moved = allocateNumerical(
+          {
+            type: "float64",
+            length: grid.active.length,
+            lifetime: "run",
+            name: "magic:advected-history",
+          },
+          work.numerical
         );
         for (let i = 0; i < moved.length; i++) {
-          const source = work.map.AdvectionSourceIndex[work.samples[i]];
+          const source = work.map.AdvectionSourceIndex.get(work.samples[i]);
           if (source < 0) continue;
           const p = nativePosition(work, source);
           if (covered(p))
             moved[i] = sameTopology
-              ? previous.channels[name][work.map.mesh.cellToLeaf[source]]
+              ? previous.channels[name][work.map.mesh.cellToLeaf(source)]
               : valueAt(p);
         }
         putChannel(grid, name, grid.units[name], moved);

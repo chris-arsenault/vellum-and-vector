@@ -1,4 +1,4 @@
-import { CellList, SmallIntSet, spatial, type NumericalVector } from "@atlas/domain";
+import { CellList, SmallIntSet, spatial, type Band } from "@atlas/domain";
 import type { Geometry, Polygon } from "geojson";
 import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
@@ -16,18 +16,18 @@ function polygons(shape: Geometry): Polygon[] {
   return [];
 }
 /** Extend labels onto land for interpolation; the authoritative sea clips every named extent. */
-function extendedLabels(state: GenerationState, labels: NumericalVector) {
+function extendedLabels(state: GenerationState, labels: Band) {
   const map = state.physical!.map,
     mesh = map.mesh,
-    extended = labels.slice(),
+    extended = map.coverage.copyBand(labels),
     distance = workingValues(map, "float64", "marine-extension-distance", (i) =>
-      labels[i] < 0 ? Infinity : 0
+      labels.get(i) < 0 ? Infinity : 0
     );
   function* seeds() {
-    for (let i = 0; i < labels.length; i++) if (labels[i] >= 0) yield i;
+    for (let i = 0; i < labels.length; i++) if (labels.get(i) >= 0) yield i;
   }
   metricSearch(mesh, seeds(), distance, Infinity, (target, source) => {
-    extended[target] = extended[source];
+    extended.set(target, extended.get(source));
   });
   releaseWorking(map, distance);
   return extended;
@@ -35,7 +35,7 @@ function extendedLabels(state: GenerationState, labels: NumericalVector) {
 
 function regionOutline(
   state: GenerationState,
-  labels: NumericalVector,
+  labels: Band,
   region: MarineRegion,
   ocean: Geometry
 ) {
@@ -43,15 +43,17 @@ function regionOutline(
     members = new CellList(),
     neighbours = new SmallIntSet();
   for (let i = 0; i < labels.length; i++) {
-    if (labels[i] !== region.id) continue;
+    if (labels.get(i) !== region.id) continue;
     members.push(i);
-    for (let edge = 0; edge < mesh.degree[i]; edge++) {
-      const j = mesh.neighbors[i * mesh.stride + edge];
-      if (j >= 0 && labels[j] !== region.id) neighbours.add(labels[j]);
+    for (let edge = 0; edge < mesh.degree(i); edge++) {
+      const j = mesh.neighbor(i, edge);
+      if (j < 0) continue;
+      const other = labels.get(j);
+      if (other !== region.id) neighbours.add(other);
     }
   }
   const terms = [region.id, ...neighbours.items()].map(
-    (id) => (i: number) => Number(labels[i] === id)
+    (id) => (i: number) => Number(labels.get(i) === id)
   );
   const cells = members.finish();
   const contour = combinedContour(
@@ -88,7 +90,6 @@ export function extractOceans(state: GenerationState) {
     return;
   }
   const { labels, regions } = marineRegions(work.map, units(work.profile.ShelfBreakDepth));
-  for (const region of regions) releaseWorking(work.map, region.members);
   if (regions.length === 1) {
     releaseWorking(work.map, labels);
     return publishOcean(state, ocean, regions[0].type);

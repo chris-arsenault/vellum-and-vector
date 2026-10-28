@@ -42,9 +42,13 @@ export interface Lattice {
   readonly topology: AdaptiveTopology | null;
   /** Largest degree; edge slots are `edge < degree(i)`. */
   readonly stride: number;
+  /** Offset of the lattice frame from the origin (triangular); zero on adaptive lattices. */
+  readonly latticeOffset: [number, number];
   /** Live (content or halo) cells in a block; 0 means the block is absent. */
   blockLive(block: number): number;
   membership(cell: number): number;
+  /** Whether the triangle points down (triangular lattice); false on adaptive lattices. */
+  inverted(cell: number): boolean;
   x(cell: number): number;
   y(cell: number): number;
   area(cell: number): number;

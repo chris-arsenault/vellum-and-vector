@@ -18,7 +18,7 @@ function fixture() {
   map.BedrockElevation.fill(90 * 1024);
   map.SedimentThickness.fill(10 * 1024);
   map.EcologySediment.fill(10);
-  map.DrainageElevations.set(map.Elevation);
+  map.DrainageElevations.copyFrom(map.Elevation);
   map.Temperature.fill(450);
   map.Moisture.fill(700);
   map.Rainfall.fill(800);
@@ -33,18 +33,18 @@ const forcing = (values: Partial<typeof neutralEcology>) => () => ({
   ...values,
 });
 const total = (map: ReturnType<typeof fixture>, i = 0) =>
-  ecologyCarbon.reduce((sum, name) => sum + map[name][i], 0);
+  ecologyCarbon.reduce((sum, name) => sum + map[name].get(i), 0);
 
 it("grows pioneer grass before forest and supports trophic groups without species", () => {
   const young = fixture(),
     mature = fixture();
   evolveVegetation(young, 5);
   evolveVegetation(mature, 1000);
-  expect(young.GrassCover[0]).toBeGreaterThan(young.TreeCover[0]);
-  expect(mature.BiomeCodes[0]).toBe(biomeCode("Temperate forest"));
-  expect(mature.TreeCover[0]).toBeGreaterThan(0.5);
-  expect(mature.Herbivores[0]).toBeGreaterThan(0);
-  expect(mature.Predators[0]).toBeGreaterThan(0);
+  expect(young.GrassCover.get(0)).toBeGreaterThan(young.TreeCover.get(0));
+  expect(mature.BiomeCodes.get(0)).toBe(biomeCode("Temperate forest"));
+  expect(mature.TreeCover.get(0)).toBeGreaterThan(0.5);
+  expect(mature.Herbivores.get(0)).toBeGreaterThan(0);
+  expect(mature.Predators.get(0)).toBeGreaterThan(0);
 });
 
 it("distinguishes dry grassland/desert, boreal forest, rainforest and ice", () => {
@@ -63,30 +63,30 @@ it("distinguishes dry grassland/desert, boreal forest, rainforest and ice", () =
     map.Rainfall.fill(rain);
     if (name === "Ice") map.IceThickness.fill(50);
     evolveVegetation(map, 1000);
-    expect(map.BiomeCodes[0]).toBe(biomeCode(name));
+    expect(map.BiomeCodes.get(0)).toBe(biomeCode(name));
   }
 });
 
 it("retains forest history through swamp, aquatic accumulation, burial and oil formation", () => {
   const map = fixture();
   evolveVegetation(map, 1000);
-  expect(map.BiomeCodes[0]).toBe(biomeCode("Temperate forest"));
+  expect(map.BiomeCodes.get(0)).toBe(biomeCode("Temperate forest"));
   map.Slope.fill(0.001);
   map.FloodplainIntensity.fill(900);
   map.Moisture.fill(900);
   evolveVegetation(map, 10_000);
   accumulateOrganicMatter(map, 10_000);
-  expect(map.BiomeCodes[0]).toBe(biomeCode("Swamp"));
-  expect(map.PeatCarbon[0]).toBeGreaterThan(10);
-  expect(map.AquaticCarbon[0]).toBeGreaterThan(1);
-  expect(map.AquaticFauna[0]).toBe(0); // No aquatic population or connected water source.
+  expect(map.BiomeCodes.get(0)).toBe(biomeCode("Swamp"));
+  expect(map.PeatCarbon.get(0)).toBeGreaterThan(10);
+  expect(map.AquaticCarbon.get(0)).toBeGreaterThan(1);
+  expect(map.AquaticFauna.get(0)).toBe(0); // No aquatic population or connected water source.
   map.SedimentThickness.fill(4010 * 1024);
   const before = total(map);
   evolveBuriedCarbon(map, 10_000_000);
-  expect(map.OrganicBurialDepth[0]).toBeCloseTo(2000);
-  expect(map.CoalCarbon[0]).toBeGreaterThan(1);
-  expect(map.OilCarbon[0]).toBeGreaterThan(1);
-  expect(map.GasCarbon[0]).toBeGreaterThan(1);
+  expect(map.OrganicBurialDepth.get(0)).toBeCloseTo(2000);
+  expect(map.CoalCarbon.get(0)).toBeGreaterThan(1);
+  expect(map.OilCarbon.get(0)).toBeGreaterThan(1);
+  expect(map.GasCarbon.get(0)).toBeGreaterThan(1);
   expect(total(map)).toBeCloseTo(before, 8);
 });
 
@@ -95,16 +95,16 @@ it("does not generate hydrocarbons from an old unburied swamp or a young cold so
   swamp.PeatCarbon.fill(100);
   swamp.AquaticCarbon.fill(100);
   evolveBuriedCarbon(swamp, 100_000_000);
-  expect(swamp.OilCarbon[0]).toBe(0);
-  expect(swamp.CoalCarbon[0]).toBe(0);
+  expect(swamp.OilCarbon.get(0)).toBe(0);
+  expect(swamp.CoalCarbon.get(0)).toBe(0);
   swamp.SedimentThickness.fill(4010 * 1024);
   evolveBuriedCarbon(swamp, 1000);
-  expect(swamp.OilCarbon[0]).toBeLessThan(0.1);
+  expect(swamp.OilCarbon.get(0)).toBeLessThan(0.1);
   const cold = fixture();
   cold.AquaticCarbon.fill(100);
   cold.SedimentThickness.fill(110 * 1024);
   evolveBuriedCarbon(cold, 100_000_000);
-  expect(cold.OilCarbon[0]).toBe(0);
+  expect(cold.OilCarbon.get(0)).toBe(0);
 });
 
 it("makes aquatic source material more oil prone and terrestrial source material coal/gas prone", () => {
@@ -117,8 +117,8 @@ it("makes aquatic source material more oil prone and terrestrial source material
     evolveBuriedCarbon(map, 10_000_000);
     expect(total(map)).toBeCloseTo(100, 9);
   }
-  expect(aquatic.OilCarbon[0]).toBeGreaterThan(plant.OilCarbon[0] * 5);
-  expect(plant.CoalCarbon[0]).toBeGreaterThan(aquatic.CoalCarbon[0]);
+  expect(aquatic.OilCarbon.get(0)).toBeGreaterThan(plant.OilCarbon.get(0) * 5);
+  expect(plant.CoalCarbon.get(0)).toBeGreaterThan(aquatic.CoalCarbon.get(0));
 });
 
 it("oxidizes exposed peat and preserves waterlogged organic matter", () => {
@@ -130,7 +130,7 @@ it("oxidizes exposed peat and preserves waterlogged organic matter", () => {
   wet.WaterDepths.fill(10 * 1024);
   accumulateOrganicMatter(dry, 100);
   accumulateOrganicMatter(wet, 100);
-  expect(wet.PeatCarbon[0]).toBeGreaterThan(dry.PeatCarbon[0] * 10);
+  expect(wet.PeatCarbon.get(0)).toBeGreaterThan(dry.PeatCarbon.get(0) * 10);
 });
 
 it("responds to growth, fire and preservation magic with real ecological changes", () => {
@@ -143,16 +143,16 @@ it("responds to growth, fire and preservation magic with real ecological changes
   evolveVegetation(plain, 500);
   evolveVegetation(growth, 500, forcing({ growth: 1 }));
   evolveVegetation(fire, 500, forcing({ fire: 0.95 }));
-  expect(growth.Productivity[0]).toBeGreaterThan(plain.Productivity[0]);
-  expect(fire.TreeCover[0]).toBeLessThan(plain.TreeCover[0]);
-  expect(fire.FireActivity[0]).toBeGreaterThan(0.9);
+  expect(growth.Productivity.get(0)).toBeGreaterThan(plain.Productivity.get(0));
+  expect(fire.TreeCover.get(0)).toBeLessThan(plain.TreeCover.get(0));
+  expect(fire.FireActivity.get(0)).toBeGreaterThan(0.9);
   const decay = fixture(),
     preserve = fixture();
   decay.PeatCarbon.fill(100);
   preserve.PeatCarbon.fill(100);
   accumulateOrganicMatter(decay, 100);
   accumulateOrganicMatter(preserve, 100, forcing({ preservation: 2 }));
-  expect(preserve.PeatCarbon[0]).toBeGreaterThan(decay.PeatCarbon[0]);
+  expect(preserve.PeatCarbon.get(0)).toBeGreaterThan(decay.PeatCarbon.get(0));
 });
 
 it("grazers suppress cover, predators suppress grazers and aquatic life requires production", () => {
@@ -161,14 +161,14 @@ it("grazers suppress cover, predators suppress grazers and aquatic life requires
   grazed.Herbivores.fill(0.5);
   evolveVegetation(grazed, 100);
   evolveVegetation(control, 100);
-  expect(grazed.TreeCover[0]).toBeLessThan(control.TreeCover[0]);
+  expect(grazed.TreeCover.get(0)).toBeLessThan(control.TreeCover.get(0));
   const hunted = fixture(),
     safe = fixture();
   hunted.Predators.fill(0.1);
   evolveVegetation(hunted, 100);
   evolveVegetation(safe, 100);
-  expect(hunted.Herbivores[0]).toBeLessThan(safe.Herbivores[0]);
-  expect(safe.AquaticFauna[0]).toBe(0);
+  expect(hunted.Herbivores.get(0)).toBeLessThan(safe.Herbivores.get(0));
+  expect(safe.AquaticFauna.get(0)).toBe(0);
 });
 
 it("exhausts tiny grass stocks without negative cover from biomass conversion", () => {
@@ -176,8 +176,10 @@ it("exhausts tiny grass stocks without negative cover from biomass conversion", 
   map.GrassCover.fill(4.3e-15);
   map.Grazers.fill(0.01);
   evolveAnimals(map, 1, forcing({}));
-  expect(map.GrassCover.every((value) => value === 0)).toBe(true);
-  expect(map.SoilCarbon.every((value) => Number.isFinite(value) && value >= 0)).toBe(true);
+  expect(Array.from(map.GrassCover).every((value) => value === 0)).toBe(true);
+  expect(Array.from(map.SoilCarbon).every((value) => Number.isFinite(value) && value >= 0)).toBe(
+    true
+  );
 });
 
 it("roots resist erosion and vegetation reduces runoff without changing rainfall", () => {
@@ -187,9 +189,9 @@ it("roots resist erosion and vegetation reduces runoff without changing rainfall
   const c = physicalContext(42, 0, atlasPhysicalProfile());
   runoff(bare, c);
   runoff(forest, c);
-  expect(forest.Runoff[0]).toBeLessThan(bare.Runoff[0]);
+  expect(forest.Runoff.get(0)).toBeLessThan(bare.Runoff.get(0));
   expect(surfaceResistance(forest, 0)).toBeGreaterThan(surfaceResistance(bare, 0));
-  expect(forest.Rainfall).toEqual(bare.Rainfall);
+  expect(Array.from(forest.Rainfall)).toEqual(Array.from(bare.Rainfall));
 });
 
 it("exhumes buried carbon and cracks overheated oil into gas without creating carbon", () => {
@@ -198,14 +200,14 @@ it("exhumes buried carbon and cracks overheated oil into gas without creating ca
   map.OrganicBurialDepth.fill(3000);
   map.Temperature.fill(1200);
   evolveBuriedCarbon(map, 10_000_000);
-  expect(map.OilCarbon[0]).toBeLessThan(100);
-  expect(map.GasCarbon[0]).toBeGreaterThan(0);
+  expect(map.OilCarbon.get(0)).toBeLessThan(100);
+  expect(map.GasCarbon.get(0)).toBeGreaterThan(0);
   expect(total(map)).toBeCloseTo(100, 9);
   map.EcologySediment.fill(5000);
   map.SedimentThickness.fill(0);
   evolveBuriedCarbon(map, 1000);
   expect(total(map)).toBeLessThan(100);
-  expect(map.OrganicBurialDepth[0]).toBe(0);
+  expect(map.OrganicBurialDepth.get(0)).toBe(0);
 });
 
 it("is deterministic and finite over very short and geological durations", () => {
@@ -218,8 +220,8 @@ it("is deterministic and finite over very short and geological durations", () =>
       evolveBuriedCarbon(map, years);
     }
   for (const name of ecologyScalars) {
-    expect(a[name]).toEqual(b[name]);
-    expect(a[name].every((value) => Number.isFinite(value) && value >= 0)).toBe(true);
+    expect(Array.from(a[name])).toEqual(Array.from(b[name]));
+    expect(Array.from(a[name]).every((value) => Number.isFinite(value) && value >= 0)).toBe(true);
   }
 });
 
@@ -227,8 +229,8 @@ it("bounds cover under strong growth and leaves zero-duration biology unchanged"
   const map = fixture();
   evolveVegetation(map, 1000, forcing({ growth: 5, productivity: 5 }));
   for (const channel of [map.TreeCover, map.GrassCover, map.WetlandCover])
-    expect(channel.every((value) => value >= 0 && value <= 1)).toBe(true);
-  const before = map.TreeCover.slice();
+    expect(Array.from(channel).every((value) => value >= 0 && value <= 1)).toBe(true);
+  const before = Array.from(map.TreeCover);
   evolveVegetation(map, 0, forcing({ fire: 1 }));
-  expect(map.TreeCover).toEqual(before);
+  expect(Array.from(map.TreeCover)).toEqual(before);
 });

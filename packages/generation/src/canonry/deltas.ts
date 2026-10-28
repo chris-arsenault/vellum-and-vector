@@ -6,53 +6,58 @@ import { clamp } from "./math";
 import { sourceToOutletOrder } from "./flowGraph";
 import { physicalDistance } from "./physicalMetric";
 import { workingValues, releaseWorking } from "./physicalNumerics";
-import type { NumericalVector } from "@atlas/domain";
+import type { Band } from "@atlas/domain";
 
-function sedimentDelivery(map: PhysicalField): NumericalVector {
+function sedimentDelivery(map: PhysicalField): Band {
   const delivery = workingValues(
     map,
     "float64",
     "delta:delivery",
     (i) =>
-      ((map.CumulativeFluvialErosion[i] + map.CumulativeGlacialErosion[i]) / 1024) *
-      map.mesh.areas[i]
+      ((map.CumulativeFluvialErosion.get(i) + map.CumulativeGlacialErosion.get(i)) / 1024) *
+      map.mesh.area(i)
   );
-  for (const i of sourceToOutletOrder(map)) {
-    const target = map.FlowTargets[i];
-    if (target >= 0) delivery[target] += delivery[i];
+  const order = sourceToOutletOrder(map);
+  for (let n = 0; n < order.length; n++) {
+    const i = order.get(n),
+      target = map.FlowTargets.get(i);
+    if (target >= 0) delivery.add(target, delivery.get(i));
   }
+  releaseWorking(map, order);
   return delivery;
 }
 function qualifies(
   map: PhysicalField,
   c: PhysicalContext,
-  delivery: NumericalVector,
+  delivery: Band,
   mouth: number,
   ocean: number
 ): boolean {
   const p = c.Profile;
   const major =
-    map.RiverOrders[mouth] >= p.DeltaMinimumRiverOrder ||
-    map.FlowAccumulation[mouth] >= p.RiverAccumulationThreshold * p.DeltaDischargeMultiplier;
+    map.RiverOrders.get(mouth) >= p.DeltaMinimumRiverOrder ||
+    map.FlowAccumulation.get(mouth) >= p.RiverAccumulationThreshold * p.DeltaDischargeMultiplier;
   return (
     major &&
-    delivery[mouth] >= p.DeltaMinimumSedimentDelivery &&
-    map.WaveExposure[ocean] <= p.DeltaMaximumWaveEnergy &&
-    map.OceanCurrentStrength[ocean] <= p.DeltaMaximumCurrentStrength &&
-    map.BathymetricZoneCodes[ocean] !== 4
+    delivery.get(mouth) >= p.DeltaMinimumSedimentDelivery &&
+    map.WaveExposure.get(ocean) <= p.DeltaMaximumWaveEnergy &&
+    map.OceanCurrentStrength.get(ocean) <= p.DeltaMaximumCurrentStrength &&
+    map.BathymetricZoneCodes.get(ocean) !== 4
   );
 }
 function markDelta(map: PhysicalField, i: number, intensity: number, order: number) {
-  map.DeltaIntensity[i] = clamp(intensity, 1, 1000);
-  map.RiverChannelStrength[i] = Math.max(map.RiverChannelStrength[i], map.DeltaIntensity[i]);
-  map.RiverChannelOrders[i] = Math.max(map.RiverChannelOrders[i], order);
-  map.FloodplainIntensity[i] = 0;
+  const held = clamp(intensity, 1, 1000);
+  map.DeltaIntensity.set(i, held);
+  map.RiverChannelStrength.set(i, Math.max(map.RiverChannelStrength.get(i), held));
+  map.RiverChannelOrders.set(i, Math.max(map.RiverChannelOrders.get(i), order));
+  map.FloodplainIntensity.set(i, 0);
 }
 function receiveDelta(map: PhysicalField, mouth: number, i: number): boolean {
-  if (map.WaterKindCodes[i] === 2) return false;
-  return map.WaterKindCodes[i] === 1
-    ? map.BathymetricZoneCodes[i] !== 4
-    : map.DrainageBasinIds[i] === map.DrainageBasinIds[mouth];
+  const water = map.WaterKindCodes.get(i);
+  if (water === 2) return false;
+  return water === 1
+    ? map.BathymetricZoneCodes.get(i) !== 4
+    : map.DrainageBasinIds.get(i) === map.DrainageBasinIds.get(mouth);
 }
 function stepDirection(
   map: PhysicalField,
@@ -60,8 +65,8 @@ function stepDirection(
   target: number
 ): [number, number, number] {
   const f = Math.fround,
-    x = f(meshDeltaX(map.mesh, map.mesh.x[target] - map.mesh.x[source])),
-    y = f(map.mesh.y[target] - map.mesh.y[source]);
+    x = f(meshDeltaX(map.mesh, map.mesh.x(target) - map.mesh.x(source))),
+    y = f(map.mesh.y(target) - map.mesh.y(source));
   const length = Math.max(f(0.001), f(Math.sqrt(f(f(x * x) + f(y * y)))));
   return [x, y, length];
 }
@@ -82,7 +87,7 @@ function buildFan(map: PhysicalField, c: PhysicalContext, mouth: number, ocean: 
     [x, y, length] = stepDirection(map, mouth, ocean),
     dx = f(x / length),
     dy = f(y / length);
-  const order = map.RiverOrders[mouth],
+  const order = map.RiverOrders.get(mouth),
     queue = [{ i: ocean, depth: physicalDistance(map.mesh, mouth, ocean), previous: mouth }],
     p = c.Profile;
   markDelta(map, mouth, 1000, order);
@@ -90,11 +95,11 @@ function buildFan(map: PhysicalField, c: PhysicalContext, mouth: number, ocean: 
     const front = queue[head];
     if (front.depth > p.DeltaMaximumRadius || !receiveDelta(map, mouth, front.i)) continue;
     const intensity = 1000 - (front.depth / 10_000) * p.DeltaIntensityDecay;
-    if (intensity <= map.DeltaIntensity[front.i]) continue;
+    if (intensity <= map.DeltaIntensity.get(front.i)) continue;
     markDelta(map, front.i, intensity, order);
     if (front.depth >= p.DeltaMaximumRadius) continue;
-    for (let edge = 0; edge < map.mesh.degree[front.i]; edge++) {
-      const j = map.mesh.neighbors[front.i * map.mesh.stride + edge];
+    for (let edge = 0; edge < map.mesh.degree(front.i); edge++) {
+      const j = map.mesh.neighbor(front.i, edge);
       if (
         j < 0 ||
         j === front.previous ||
@@ -113,9 +118,9 @@ export function deltaFormation(map: PhysicalField, c: PhysicalContext) {
   map.DeltaIntensity.fill(0);
   const delivery = sedimentDelivery(map);
   for (let i = 0; i < map.mesh.count; i++) {
-    if (map.RiverOrders[i] <= 0) continue;
-    const ocean = map.FlowTargets[i];
-    if (ocean >= 0 && map.WaterKindCodes[ocean] === 1 && qualifies(map, c, delivery, i, ocean))
+    if (map.RiverOrders.get(i) <= 0) continue;
+    const ocean = map.FlowTargets.get(i);
+    if (ocean >= 0 && map.WaterKindCodes.get(ocean) === 1 && qualifies(map, c, delivery, i, ocean))
       buildFan(map, c, i, ocean);
   }
   releaseWorking(map, delivery);

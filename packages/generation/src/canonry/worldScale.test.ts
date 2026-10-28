@@ -38,10 +38,17 @@ it("preserves broad crust transitions at matching relative positions on differen
     tectonicProvinces(map, physicalContext(73, 0, profile));
     return map;
   });
-  const share = (map: (typeof fields)[number]) =>
-    map.CrustContinentalFraction.slice(0, map.mesh.contentCount).filter(
-      (value) => value > 0 && value < 1000
-    ).length / map.mesh.contentCount;
+  const share = (map: (typeof fields)[number]) => {
+    let content = 0,
+      transitional = 0;
+    for (let i = 0; i < map.mesh.count; i++) {
+      if (map.mesh.membership(i) !== 1) continue;
+      content++;
+      const value = map.CrustContinentalFraction.get(i);
+      if (value > 0 && value < 1000) transitional++;
+    }
+    return transitional / content;
+  };
   expect(Math.abs(share(fields[0]) - share(fields[1]))).toBeLessThan(0.03);
 });
 

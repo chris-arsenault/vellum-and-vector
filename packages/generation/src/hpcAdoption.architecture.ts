@@ -15,7 +15,7 @@ interface Rule {
 const rules: Rule[] = [
   {
     pattern: /new PriorityQueue[<(]/,
-    replacement: "MonotoneHeap (monotone frontier), KeyedHeap or MultiKeyHeap",
+    replacement: "KeyedHeap or MultiKeyHeap",
   },
   { pattern: /\bBoundedCandidates\b/, replacement: "TopK" },
   { pattern: /\borderedIndices\(/, replacement: "radixOrder" },
@@ -33,7 +33,6 @@ const rules: Rule[] = [
     replacement: "radixOrder or a native typed-array sort()",
     scope: /canonry\//,
   },
-  { pattern: /\.coords\[/, replacement: "coordinate columns (coordU, coordV, inverted)" },
   {
     pattern: /JSON\.stringify\(/,
     replacement: "an integer key or groupByLabel",

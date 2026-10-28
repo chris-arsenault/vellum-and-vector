@@ -6,9 +6,10 @@ import { adaptivePhysicalMesh } from "./adaptiveMesh";
 import { meshWindowCells } from "./meshWindow";
 
 function check(mesh: PhysicalMesh, bounds: Bounds) {
-  const expected = [...mesh.x.keys()].filter((cell) => {
-    const x = mesh.x[cell] + mesh.origin[0],
-      y = mesh.y[cell] + mesh.origin[1];
+  const expected = Array.from({ length: mesh.count }, (_, i) => i).filter((cell) => {
+    if (mesh.membership(cell) === 0) return false;
+    const x = mesh.x(cell) + mesh.origin[0],
+      y = mesh.y(cell) + mesh.origin[1];
     return x >= bounds[0] && x <= bounds[2] && y >= bounds[1] && y <= bounds[3];
   });
   expect([...meshWindowCells(mesh, bounds)].sort((a, b) => a - b)).toEqual(expected);

@@ -1,7 +1,7 @@
 import type { PhysicalMesh } from "./mesh";
 import { nearestTriangle, meshDeltaX, meshPoint } from "./mesh";
 import { triangleVertex } from "./triangleVertices";
-import { allocateNumerical, CellList, type NumericalAllocator } from "@atlas/domain";
+import { CellList, SmallIntSet } from "@atlas/domain";
 
 export interface TriangleSample {
   cell: number;
@@ -14,9 +14,9 @@ function locate(mesh: PhysicalMesh, x: number, y: number) {
   [x, y] = meshPoint(mesh, x, y);
   const cell = nearestTriangle(mesh, x, y);
   if (cell < 0) return { cell, barycentric: [0, 0, 0], minimum: 0 };
-  const sign = mesh.coordInverted[cell] ? -1 : 1,
-    dx = (meshDeltaX(mesh, x - mesh.x[cell]) / mesh.spacing) * sign,
-    dy = (y - mesh.y[cell]) / (mesh.periodic?.poles?.spacingY ?? mesh.spacing);
+  const sign = mesh.inverted(cell) ? -1 : 1,
+    dx = (meshDeltaX(mesh, x - mesh.x(cell)) / mesh.spacing) * sign,
+    dy = (y - mesh.y(cell)) / (mesh.periodic?.poles?.spacingY ?? mesh.spacing);
   const barycentric = [
     (1 - 2 * dx) / 3,
     (1 + dx) / 3 - dy / rootThree,
@@ -38,8 +38,8 @@ function fanWeights(barycentric: number[], minimum: number) {
   };
 }
 function faceNeighbor(mesh: PhysicalMesh, cell: number, opposite: number) {
-  const edge = mesh.coordInverted[cell] && opposite > 0 ? 3 - opposite : opposite;
-  const neighbor = mesh.neighbors[cell * 3 + edge];
+  const edge = mesh.inverted(cell) && opposite > 0 ? 3 - opposite : opposite;
+  const neighbor = mesh.neighbor(cell, edge);
   return neighbor < 0 ? cell : neighbor;
 }
 export function triangleSample(mesh: PhysicalMesh, x: number, y: number): TriangleSample {
@@ -69,21 +69,17 @@ function vertexMean(members: number[], read: (i: number) => number) {
   const base = read(members[0]);
   return base + members.reduce((sum, i) => sum + (read(i) - base), 0) / members.length;
 }
+/** Every live cell of the mesh. */
+function* liveCells(mesh: PhysicalMesh) {
+  for (let cell = 0; cell < mesh.count; cell++) if (mesh.membership(cell)) yield cell;
+}
 /** Include vertex neighbors: a region's interpolation can reach beyond its member cells. */
-export function triangleSupport(
-  mesh: PhysicalMesh,
-  members: Iterable<number>,
-  numerical?: NumericalAllocator
-) {
-  const selected = allocateNumerical(
-    { type: "uint8", length: mesh.count, lifetime: "process", name: "contour:membership" },
-    numerical
-  );
+export function triangleSupport(mesh: PhysicalMesh, members: Iterable<number>) {
+  // The support is sized by the region, not the world: a small set and a cell list.
+  const selected = new SmallIntSet();
   const list = new CellList();
   const add = (cell: number) => {
-    if (selected[cell]) return;
-    selected[cell] = 1;
-    list.push(cell);
+    if (selected.add(cell)) list.push(cell);
   };
   for (const cell of members) add(cell);
   for (const cell of members)
@@ -91,23 +87,17 @@ export function triangleSupport(
       for (const i of triangleVertex(mesh, cell, corner).members) add(i);
   const cells = list.finish();
   return {
-    has: (cell: number) => !!selected[cell],
+    has: (cell: number) => selected.has(cell),
     [Symbol.iterator]: () => cells.values(),
-    close: () => numerical?.releaseUnused([selected], []),
   };
 }
 export function* triangleFans(
   mesh: PhysicalMesh,
   members: Iterable<number> | undefined,
-  read: (i: number) => number,
-  numerical?: NumericalAllocator
+  read: (i: number) => number
 ) {
-  const support = members ? triangleSupport(mesh, members, numerical) : null;
-  try {
-    yield* triangleCellFans(mesh, support ?? mesh.x.keys(), read);
-  } finally {
-    support?.close();
-  }
+  const support = members ? triangleSupport(mesh, members) : null;
+  yield* triangleCellFans(mesh, support ?? liveCells(mesh), read);
 }
 export function* triangleCellFans(
   mesh: PhysicalMesh,
@@ -120,8 +110,8 @@ export function* triangleCellFans(
   };
   for (const cell of cells) {
     const center: [number, number, number] = [
-        mesh.x[cell] + mesh.origin[0],
-        mesh.y[cell] + mesh.origin[1],
+        mesh.x(cell) + mesh.origin[0],
+        mesh.y(cell) + mesh.origin[1],
         read(cell),
       ],
       corners = [0, 1, 2].map((i) => vertex(cell, i));
@@ -135,7 +125,7 @@ export function* triangleCellFans(
       ];
       return [a, middle];
     });
-    if (mesh.coordInverted[cell]) boundary.reverse();
+    if (mesh.inverted(cell)) boundary.reverse();
     for (let i = 0; i < boundary.length; i++)
       yield [center, boundary[i], boundary[(i + 1) % boundary.length]];
   }
@@ -144,22 +134,17 @@ export function* triangleCellFans(
 export function* triangleBoundary(
   mesh: PhysicalMesh,
   read: (i: number) => number,
-  members?: Iterable<number>,
-  numerical?: NumericalAllocator
+  members?: Iterable<number>
 ) {
-  const selected = members ? triangleSupport(mesh, members, numerical) : null;
-  try {
-    yield* boundarySegments(mesh, read, selected);
-  } finally {
-    selected?.close();
-  }
+  const selected = members ? triangleSupport(mesh, members) : null;
+  yield* boundarySegments(mesh, read, selected);
 }
 function* boundarySegments(
   mesh: PhysicalMesh,
   read: (i: number) => number,
   selected: ReturnType<typeof triangleSupport> | null
 ) {
-  const cells = selected ?? mesh.x.keys();
+  const cells = selected ?? liveCells(mesh);
   const vertex = (cell: number, corner: number): [number, number, number] => {
     const { members, position: p } = triangleVertex(mesh, cell, corner);
     return [p[0], p[1], vertexMean(members, read)];
@@ -175,8 +160,8 @@ function* boundarySegments(
           (a[1] + b[1]) / 2,
           (read(cell) + read(neighbor)) / 2,
         ];
-      yield mesh.coordInverted[cell] ? [b, middle] : [a, middle];
-      yield mesh.coordInverted[cell] ? [middle, a] : [middle, b];
+      yield mesh.inverted(cell) ? [b, middle] : [a, middle];
+      yield mesh.inverted(cell) ? [middle, a] : [middle, b];
     }
   }
 }
@@ -193,7 +178,7 @@ function interiorNeighbor(
   );
 }
 function crossesChart(mesh: PhysicalMesh, cell: number, neighbor: number) {
-  return mesh.periodic && Math.abs(mesh.x[neighbor] - mesh.x[cell]) > 2 * mesh.spacing;
+  return mesh.periodic && Math.abs(mesh.x(neighbor) - mesh.x(cell)) > 2 * mesh.spacing;
 }
 export function triangleSampler(
   mesh: PhysicalMesh,

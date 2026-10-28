@@ -23,11 +23,15 @@ async function directory(parent: FileSystemDirectoryHandle, name: string) {
   }
 }
 /** Discard the working files of a generation whose worker the host terminated: its numerical
- * scratch, its private feature tables and the layout resources it had started to finalize. */
+ * scratch, its block scratch, its private feature tables and the layout resources it had
+ * started to finalize. */
 export async function abandonGenerationStorage(operationId: string) {
   const root = await navigator.storage.getDirectory();
   const work = await directory(root, "atlas-work");
-  if (work) await remove(work, `generation_${operationId}.bin`);
+  if (work) {
+    await remove(work, `generation_${operationId}.bin`);
+    await remove(work, `generation_${operationId}.blocks`);
+  }
   const catalogs = await directory(root, "atlas-catalogs");
   if (catalogs) await remove(catalogs, `generation_features_${operationId}`);
   const resources = await directory(root, "atlas-resources");

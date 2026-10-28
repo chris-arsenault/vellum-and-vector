@@ -1,9 +1,6 @@
-import { closeSync, mkdtempSync, openSync, readSync, rmSync, writeSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { expect, it } from "vitest";
-import { canonryMagicPresets, type NumericalVector } from "@atlas/domain";
-import { PagedArena } from "./pagedArena";
+import { canonryMagicPresets, type BlockCache } from "@atlas/domain";
+import { blockCacheFixture } from "./blockCacheFixture";
 import { landscape } from "../../generation/src/mapFixtures";
 import { createAdaptiveWorldMesh } from "../../generation/src/canonry/adaptiveMesh";
 import { createField } from "../../generation/src/canonry/field";
@@ -20,7 +17,7 @@ import { evolveVegetation } from "../../generation/src/canonry/ecologyVegetation
 import { smoothMetric } from "../../generation/src/canonry/metricSmoothing";
 import { hillslopeFlux } from "../../generation/src/canonry/hillslopeFlux";
 
-function scenario(arena: PagedArena) {
+function scenario(cache: BlockCache) {
   const state = landscape(),
     map = createField(
       createAdaptiveWorldMesh(
@@ -32,9 +29,9 @@ function scenario(arena: PagedArena) {
         },
         0
       ),
-      arena
+      cache
     );
-  state.numerical = arena;
+  state.cache = cache;
   state.domain.world.magicSystems = canonryMagicPresets();
   state.physical = {
     map,
@@ -46,36 +43,25 @@ function scenario(arena: PagedArena) {
   };
   map.RockResistance.fill(1000);
   map.FractureConductance.fill(800);
-  map.HeatSourceDensity[0] = 1000;
+  map.HeatSourceDensity.set(0, 1000);
   map.Moisture.fill(800);
   map.Rainfall.fill(900);
   map.SoilDepth.fill(0.5);
   for (let i = 0; i < map.mesh.count; i++) {
-    map.Temperature[i] = 300 + map.mesh.x[i] * 0.0005;
-    map.Elevation[i] = map.mesh.x[i] * 10;
-    map.BedrockElevation[i] = map.Elevation[i];
-    map.WaterKindCodes[i] = map.mesh.x[i] < 0 ? 1 : 0;
-    map.WaterDepths[i] = Math.max(0, -map.Elevation[i]);
-    map.IceThickness[i] = map.Temperature[i] < 300 ? 400 : 0;
+    map.Temperature.set(i, 300 + map.mesh.x(i) * 0.0005);
+    map.Elevation.set(i, map.mesh.x(i) * 10);
+    map.BedrockElevation.set(i, map.Elevation.get(i));
+    map.WaterKindCodes.set(i, map.mesh.x(i) < 0 ? 1 : 0);
+    map.WaterDepths.set(i, Math.max(0, -map.Elevation.get(i)));
+    map.IceThickness.set(i, map.Temperature.get(i) < 300 ? 400 : 0);
   }
   initializeMagic(state);
   return state;
 }
 it("carries seven-system magic and ecological feedback through disk eviction and stage cleanup", () => {
-  const directory = mkdtempSync(join(tmpdir(), "atlas-causal-")),
-    fd = openSync(join(directory, "work"), "w+");
-  const arena = new PagedArena(
-    {
-      read: (bytes, at) => readSync(fd, bytes, 0, bytes.byteLength, at),
-      write: (bytes, at) => writeSync(fd, bytes, 0, bytes.byteLength, at),
-      flush() {},
-      close: () => closeSync(fd),
-    },
-    32_768,
-    128
-  );
+  const f = blockCacheFixture(32_768);
   try {
-    const state = scenario(arena),
+    const state = scenario(f.cache),
       map = state.physical!.map,
       magic = state.physical!.magic!;
     expect(magic.fields).toHaveLength(7);
@@ -88,30 +74,35 @@ it("carries seven-system magic and ecological feedback through disk eviction and
       magicRockFeedback(state);
       evolveVegetation(map, 100);
       classifyMagicFeatures(state, 42);
-      arena.releaseProcess();
+      map.coverage.releaseProcess();
       for (const field of magic.fields) {
-        expect(field.intensity.every(Number.isFinite)).toBe(true);
+        expect(Array.from(field.intensity).every(Number.isFinite)).toBe(true);
         for (const stock of Object.values(field.stocks))
-          expect(stock.every((v) => Number.isFinite(v) && v >= 0)).toBe(true);
+          expect(Array.from(stock).every((v) => Number.isFinite(v) && v >= 0)).toBe(true);
       }
-      expect(map.TreeCover.every((v) => Number.isFinite(v) && v >= 0 && v <= 1)).toBe(true);
+      expect(Array.from(map.TreeCover).every((v) => Number.isFinite(v) && v >= 0 && v <= 1)).toBe(
+        true
+      );
     }
-    expect(magic.fields[0].intensity.some((v) => v > 0)).toBe(true);
-    const total = (values: NumericalVector) =>
-      values.reduce((sum, v, i) => sum + v * map.mesh.areas[i], 0);
-    const smooth = smoothMetric(map.mesh, map.Elevation, 30_000, undefined, arena);
+    expect(Array.from(magic.fields[0].intensity).some((v) => v > 0)).toBe(true);
+    const total = (values: typeof map.Elevation) =>
+      map.coverage.reduce(values, (sum, v, i) => sum + v * map.mesh.area(i), 0);
+    const smooth = smoothMetric(map, map.Elevation, 30_000);
     // Signed elevations cancel in this symmetric fixture; normalize by absolute volume.
-    const volume = map.Elevation.reduce((sum, v, i) => sum + Math.abs(v) * map.mesh.areas[i], 0);
+    const volume = map.coverage.reduce(
+      map.Elevation,
+      (sum, v, i) => sum + Math.abs(v) * map.mesh.area(i),
+      0
+    );
     expect(Math.abs(total(smooth) - total(map.Elevation)) / volume).toBeLessThan(1e-8);
     const moved = hillslopeFlux(map, state.physical!.profile);
-    expect(moved.cuts.reduce((sum, v) => sum + v, 0)).toBeCloseTo(
-      moved.fills.reduce((sum, v) => sum + v, 0),
+    expect(map.coverage.reduce(moved.cuts, (sum, v) => sum + v, 0)).toBeCloseTo(
+      map.coverage.reduce(moved.fills, (sum, v) => sum + v, 0),
       2
     );
-    expect(arena.stats.reads).toBeGreaterThan(0);
-    expect(arena.stats.peakDecodedBytes).toBeLessThanOrEqual(32_768);
+    expect(f.cache.stats.loads).toBeGreaterThan(0);
+    expect(f.cache.stats.peakBytes).toBeLessThanOrEqual(32_768);
   } finally {
-    arena.close();
-    rmSync(directory, { recursive: true, force: true });
+    f.close();
   }
 });

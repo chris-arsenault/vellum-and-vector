@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import type { Band } from "@atlas/domain";
 import { createWorldMesh } from "./worldMesh";
 import { createField, type PhysicalField } from "./field";
 import { atlasPhysicalProfile } from "./atlasProfile";
@@ -32,27 +33,28 @@ function band(
   c.Profile.WorldExtentY = [0, height];
   c.Profile.CirculationWander = 0;
   for (let i = 0; i < map.mesh.count; i++) {
-    const x = map.mesh.x[i] + map.mesh.origin[0],
+    const x = map.mesh.x(i) + map.mesh.origin[0],
       land = x < 300_000 || x > 1_500_000;
-    map.WaterKindCodes[i] = land ? 0 : 1;
-    map.WaterDepths[i] = land ? 0 : units(3000);
-    map.Elevation[i] = units(land ? 100 : -3000);
-    map.OceanDistance[i] = land ? 100_000 : -1;
-    map.Temperature[i] = 550;
+    map.WaterKindCodes.set(i, land ? 0 : 1);
+    map.WaterDepths.set(i, land ? 0 : units(3000));
+    map.Elevation.set(i, units(land ? 100 : -3000));
+    map.OceanDistance.set(i, land ? 100_000 : -1);
+    map.Temperature.set(i, 550);
   }
   atmosphericFlow(map, c);
   moisture(map, c);
   return { map, c };
 }
 /** Mean of `values` over content cells within 30 km of a world x, away from the north and south edges. */
-function near(map: PhysicalField, values: ArrayLike<number>, x: number) {
+function near(map: PhysicalField, values: Band, x: number) {
   let total = 0,
     count = 0;
-  for (let i = 0; i < map.mesh.contentCount; i++) {
-    const wx = map.mesh.x[i] + map.mesh.origin[0],
-      wy = map.mesh.y[i] + map.mesh.origin[1];
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (map.mesh.membership(i) !== 1) continue;
+    const wx = map.mesh.x(i) + map.mesh.origin[0],
+      wy = map.mesh.y(i) + map.mesh.origin[1];
     if (Math.abs(wx - x) < 30_000 && wy > 150_000 && wy < 450_000) {
-      total += values[i];
+      total += values.get(i);
       count++;
     }
   }
@@ -88,9 +90,9 @@ it("carries the sea-surface anomaly around a world-wide ocean", () => {
   const sea = (wrapLongitude: number) => {
     const { map, c } = band(wrapLongitude);
     for (let i = 0; i < map.mesh.count; i++) {
-      map.WaterKindCodes[i] = 1;
-      map.WaterDepths[i] = units(3000);
-      map.Elevation[i] = units(-3000);
+      map.WaterKindCodes.set(i, 1);
+      map.WaterDepths.set(i, units(3000));
+      map.Elevation.set(i, units(-3000));
     }
     oceanCurrents(map, c);
     return map;

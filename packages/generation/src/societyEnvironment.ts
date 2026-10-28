@@ -4,7 +4,6 @@ import {
   gridPosition,
   putChannel,
   resolutionCells,
-  numericalSampleType,
   type NumericalVector,
   type AtlasFeature,
 } from "@atlas/domain";
@@ -62,17 +61,20 @@ function synchronizeChannel(state: GenerationState, binding: ChannelBinding) {
     name = binding.name;
   const before = name === "elevation" ? state.society!.elevationBefore : undefined;
   const at = fieldInterpolator(changedSurface(state, name, before), name),
-    values = map[binding.native];
+    values = map[binding.native],
+    integer = values.type === "int32";
   for (let i = 0; i < map.mesh.count; i++) {
     const sample = at(nativePosition(work, i));
     if (before && sample === 0) continue;
-    const value = before ? values[i] + sample / scale : (sample - offset) / scale;
-    values[i] = numericalSampleType(values) === "int32" ? Math.round(value) : value;
+    const value = before ? values.get(i) + sample / scale : (sample - offset) / scale;
+    values.set(i, integer ? Math.round(value) : value);
     if (name === "elevation") {
-      if (!before) map.Elevation[i] += map.BaseSeaLevel;
-      map.BedrockElevation[i] = map.Elevation[i] - map.SedimentThickness[i];
+      if (!before) map.Elevation.add(i, map.BaseSeaLevel);
+      const sediment = map.SedimentThickness.get(i),
+        bedrock = map.Elevation.get(i) - sediment;
+      map.BedrockElevation.set(i, bedrock);
       // The landscape invariant is exact equality; rebuild the surface from its parts.
-      map.Elevation[i] = map.BedrockElevation[i] + map.SedimentThickness[i];
+      map.Elevation.set(i, bedrock + sediment);
     }
   }
 }
@@ -201,14 +203,16 @@ function refreshWaterWhenCaused(
     realizing = publish && !society.round && isWorldSociety(state);
   if (!available.has("water") || !(terrainChanged || realizing))
     return { oceanChanged: false, refreshed: false };
-  const codes = state.physical!.map.WaterKindCodes,
-    wasOcean = codes.map((kind) => Number(kind === 1));
+  const map = state.physical!.map,
+    codes = map.WaterKindCodes,
+    wasOcean = map.coverage.copyBand(codes);
   if (realizing) realizeWorldDams(state, context);
   else refreshWater(state, context);
-  return {
-    oceanChanged: codes.some((kind, i) => Number(kind === 1) !== wasOcean[i]),
-    refreshed: true,
-  };
+  let oceanChanged = false;
+  for (let i = 0; i < codes.length && !oceanChanged; i++)
+    oceanChanged = (codes.get(i) === 1) !== (wasOcean.get(i) === 1);
+  map.coverage.release(wasOcean);
+  return { oceanChanged, refreshed: true };
 }
 /**
  * The resolution rule applied to the one structure World can measure. At the era's end each
@@ -248,12 +252,12 @@ function realizeWorldDams(state: GenerationState, context: MapProcessContext) {
 function impoundmentCells(map: PhysicalField, cell: number) {
   const seen = new Set<number>(),
     queue = [cell];
-  const isLake = (i: number) => i >= 0 && map.WaterKindCodes[i] === 2;
+  const isLake = (i: number) => i >= 0 && map.WaterKindCodes.get(i) === 2;
   let count = 0;
   while (queue.length) {
     const i = queue.pop()!;
-    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
+    for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+      const j = map.mesh.neighbor(i, edge);
       if (!isLake(j) || seen.has(j)) continue;
       seen.add(j);
       count++;
@@ -390,6 +394,7 @@ function restorePresentMagic(state: GenerationState) {
       const name = `magic:${field.definition.id}:${channel}`;
       if (!state.surface.channels[name]) continue;
       const at = fieldInterpolator(state.surface, name);
-      for (let i = 0; i < work.map.mesh.count; i++) field[channel][i] = at(nativePosition(work, i));
+      for (let i = 0; i < work.map.mesh.count; i++)
+        field[channel].set(i, at(nativePosition(work, i)));
     }
 }

@@ -181,10 +181,16 @@ export class Coverage {
     }
   }
   /** A coverage sharing this one's lattice and bands copy-on-write. */
-  snapshot(): Coverage {
+  snapshot(copies = new Map<Band, Band>()): Coverage {
     const copy = new Coverage(this.lattice, this.cache);
     for (const [name, band] of this.bands)
-      if (!band.released) copy.adopt(name, band.snapshot({}, ++copy.sequence));
+      if (!band.released) copies.set(band, copy.adopt(name, band.snapshot({}, ++copy.sequence)));
+    return copy;
+  }
+  /** Snapshot an unnamed band (retained or scratch) into this coverage's accounting. */
+  copyBand(band: Band) {
+    const copy = band.snapshot({}, ++this.sequence);
+    this.allocated.push(copy);
     return copy;
   }
 }

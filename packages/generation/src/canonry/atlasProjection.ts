@@ -50,7 +50,7 @@ function projectChannel(state: GenerationState, binding: ChannelBinding) {
       binding.unit === "cell-index"
         ? value < 0
           ? -1
-          : map.mesh.cellToLeaf[value]
+          : map.mesh.cellToLeaf(value)
         : (value - datum) * scale + offset;
   }
   putChannel(grid, binding.name, binding.unit, values);
@@ -107,7 +107,7 @@ function projectDerivedClimate(state: GenerationState, emit: DerivedEmitter) {
   emit("seaDatum", "metre", () =>
     allocateNumerical(
       { type: "float64", length: work.samples.length, lifetime: "run", name: "seaDatum" },
-      map.numerical
+      work.numerical
     ).fill(map.BaseSeaLevel / 1024)
   );
   emit("flow", "cubic-metre/second", () => projectedValues(work, map.FlowAccumulation));
@@ -115,7 +115,7 @@ function projectDerivedClimate(state: GenerationState, emit: DerivedEmitter) {
     projectedValues(work, map.DrainageElevations).map((value) => (value - map.BaseSeaLevel) / 1024)
   );
   emit("precipitation", "metre/year", () =>
-    projectedValues(work, (i) => (map.Rainfall[i] + map.Snowfall[i]) / 1000)
+    projectedValues(work, (i) => (map.Rainfall.get(i) + map.Snowfall.get(i)) / 1000)
   );
 }
 function projectDerivedMaterial(
@@ -129,9 +129,9 @@ function projectDerivedMaterial(
     projectedValues(
       work,
       (i) =>
-        (map.CumulativeFluvialErosion[i] +
-          map.CumulativeGlacialErosion[i] +
-          map.CumulativeCoastalErosion[i]) /
+        (map.CumulativeFluvialErosion.get(i) +
+          map.CumulativeGlacialErosion.get(i) +
+          map.CumulativeCoastalErosion.get(i)) /
         1024
     )
   );
@@ -141,8 +141,8 @@ function projectDerivedMaterial(
     projectedValues(
       work,
       (i) =>
-        (map.CrustContinentalFraction[i] / 1000) *
-        (1 - Math.min(1, map.VolcanicConstructionHistory[i] / (1024 * 100)))
+        (map.CrustContinentalFraction.get(i) / 1000) *
+        (1 - Math.min(1, map.VolcanicConstructionHistory.get(i) / (1024 * 100)))
     )
   );
 }
@@ -155,7 +155,7 @@ function projectWaterLevels(work: AtlasPhysicalWorkspace, emit: DerivedEmitter) 
       projectedValues(
         work,
         (i) =>
-          ((map.WaterKindCodes[i] ? map.WaterSurfaceElevations[i] : map.EffectiveSeaLevel) -
+          ((map.WaterKindCodes.get(i) ? map.WaterSurfaceElevations.get(i) : map.EffectiveSeaLevel) -
             map.BaseSeaLevel) /
           1024,
         true
@@ -165,7 +165,7 @@ function projectWaterLevels(work: AtlasPhysicalWorkspace, emit: DerivedEmitter) 
   emit("seaLevel", "metre", () =>
     allocateNumerical(
       { type: "float64", length: work.samples.length, lifetime: "run", name: "seaLevel" },
-      map.numerical
+      work.numerical
     ).fill((map.EffectiveSeaLevel - map.BaseSeaLevel) / 1024)
   );
 }

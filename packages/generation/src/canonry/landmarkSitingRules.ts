@@ -7,22 +7,22 @@ import { meshPoint, nearestTriangle } from "./mesh";
 import { metricSearch } from "./metricSearch";
 import { physicalSampler } from "./physicalMetric";
 import { distance, type Point } from "./landmarkGeometry";
-import { CellList, radixOrder, type NumericalVector } from "@atlas/domain";
+import { CellList, SmallIntSet, radixOrder, type Band } from "@atlas/domain";
 import { workingArray } from "./physicalNumerics";
 
 /** The field read once per siting pass. */
 export interface Terrain {
   map: PhysicalField;
   /** Metres to the nearest sea cell; Infinity on a field without sea. */
-  sea: NumericalVector;
+  sea: Band;
   /** Metres to the nearest land cell; Infinity on a field without land. */
-  offshore: NumericalVector;
+  offshore: Band;
   /** Content land cells. */
-  land: NumericalVector;
+  land: Int32Array;
   /** Content sea cells. */
-  ocean: NumericalVector;
+  ocean: Int32Array;
   /** River cells, largest flow first, above base level. */
-  rivers: NumericalVector;
+  rivers: Int32Array;
 }
 export interface Site {
   center: number;
@@ -43,7 +43,7 @@ const km = 1000;
 const cellKilometres = (map: PhysicalField) => (map.mesh.spacing * 1.2) / km;
 /** Metres above the base level the landmark machinery measures against. */
 export const height = (map: PhysicalField, i: number) =>
-  (map.Elevation[i] - map.EffectiveSeaLevel) / 1024;
+  (map.Elevation.get(i) - map.EffectiveSeaLevel) / 1024;
 
 /** Geodesic metres from every cell to the nearest cell the predicate accepts. */
 function distanceTo(map: PhysicalField, accept: (i: number) => boolean) {
@@ -51,7 +51,7 @@ function distanceTo(map: PhysicalField, accept: (i: number) => boolean) {
   function* seeds() {
     for (let i = 0; i < map.mesh.count; i++)
       if (accept(i)) {
-        values[i] = 0;
+        values.set(i, 0);
         yield i;
       }
   }
@@ -59,21 +59,23 @@ function distanceTo(map: PhysicalField, accept: (i: number) => boolean) {
   return values;
 }
 export function analyseTerrain(map: PhysicalField): Terrain {
-  const sea = distanceTo(map, (i) => map.WaterKindCodes[i] === 1),
-    offshore = distanceTo(map, (i) => map.WaterKindCodes[i] === 0);
+  const sea = distanceTo(map, (i) => map.WaterKindCodes.get(i) === 1),
+    offshore = distanceTo(map, (i) => map.WaterKindCodes.get(i) === 0);
   const land = new CellList(),
     ocean = new CellList(),
     rivers = new CellList();
-  for (let i = 0; i < map.mesh.contentCount; i++) {
-    if (map.WaterKindCodes[i] === 1) ocean.push(i);
-    if (map.WaterKindCodes[i] !== 0) continue;
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (map.mesh.membership(i) !== 1) continue;
+    const water = map.WaterKindCodes.get(i);
+    if (water === 1) ocean.push(i);
+    if (water !== 0) continue;
     land.push(i);
-    if (map.RiverOrders[i] > 0 && height(map, i) > 5) rivers.push(i);
+    if (map.RiverOrders.get(i) > 0 && height(map, i) > 5) rivers.push(i);
   }
   // Largest flow first; rivers were pushed ascending, so ties keep index order.
   const riverCells = rivers.finish(),
     byFlow = radixOrder(
-      Float64Array.from(riverCells, (i) => map.FlowAccumulation[i]),
+      Float64Array.from(riverCells, (i) => map.FlowAccumulation.get(i)),
       true
     );
   return {
@@ -88,13 +90,14 @@ export function analyseTerrain(map: PhysicalField): Terrain {
 
 /** Cells within the radius of a centre, found through the mesh rather than by scanning it. */
 export function within(map: PhysicalField, centre: number, radius: number) {
-  const at: Point = [map.mesh.x[centre], map.mesh.y[centre]],
+  const at: Point = [map.mesh.x(centre), map.mesh.y(centre)],
     cells = [centre],
-    seen = new Set(cells);
+    seen = new SmallIntSet();
+  seen.add(centre);
   for (let head = 0; head < cells.length; head++) {
     const i = cells[head];
-    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
+    for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+      const j = map.mesh.neighbor(i, edge);
       if (j < 0 || seen.has(j) || distance(map, j, at) > radius) continue;
       seen.add(j);
       cells.push(j);
@@ -107,8 +110,9 @@ export function relief(map: PhysicalField, cells: number[]) {
   let low = Infinity,
     high = -Infinity;
   for (const i of cells) {
-    low = Math.min(low, map.Elevation[i]);
-    high = Math.max(high, map.Elevation[i]);
+    const elevation = map.Elevation.get(i);
+    low = Math.min(low, elevation);
+    high = Math.max(high, elevation);
   }
   return (high - low) / 1024;
 }
@@ -120,15 +124,15 @@ export function baseHeight(map: PhysicalField, cells: number[]) {
 function downhill(t: Terrain, i: number, span: number) {
   const { map } = t,
     at = physicalSampler(map.mesh, map.Elevation),
-    here = map.Elevation[i];
+    here = map.Elevation.get(i);
   let best: Point = [1, 0],
     drop = 0;
   for (let k = 0; k < 8; k++) {
     const angle = (k * Math.PI) / 4,
       [x, y] = meshPoint(
         map.mesh,
-        map.mesh.x[i] + Math.cos(angle) * span,
-        map.mesh.y[i] + Math.sin(angle) * span
+        map.mesh.x(i) + Math.cos(angle) * span,
+        map.mesh.y(i) + Math.sin(angle) * span
       ),
       fall = (here - at(x, y)) / 1024;
     if (fall > drop) {
@@ -144,7 +148,7 @@ function landPath(t: Terrain, from: Point, [dx, dy]: Point, length: number): Poi
     point = (span: number) => meshPoint(map.mesh, from[0] + dx * span, from[1] + dy * span),
     sea = ([x, y]: Point) => {
       const i = nearestTriangle(map.mesh, x, y);
-      return i < 0 || map.WaterKindCodes[i] !== 0;
+      return i < 0 || map.WaterKindCodes.get(i) !== 0;
     };
   let span = length;
   while (span > length / 4 && (sea(point(span)) || sea(point(span / 2)))) span *= 0.8;
@@ -152,25 +156,25 @@ function landPath(t: Terrain, from: Point, [dx, dy]: Point, length: number): Poi
 }
 const point = (t: Terrain, i: number): Site => ({
   center: i,
-  path: [[t.map.mesh.x[i], t.map.mesh.y[i]]],
+  path: [[t.map.mesh.x(i), t.map.mesh.y(i)]],
 });
 /** The river's drop into the cell it flows to, in metres. */
 function stepDown(map: PhysicalField, i: number) {
-  const target = map.FlowTargets[i];
-  return target >= 0 ? Math.max(0, (map.Elevation[i] - map.Elevation[target]) / 1024) : 0;
+  const target = map.FlowTargets.get(i);
+  return target >= 0 ? Math.max(0, (map.Elevation.get(i) - map.Elevation.get(target)) / 1024) : 0;
 }
 /** Whether the river at this cell reaches the sea within this many cells downstream. */
 function reachesSea(map: PhysicalField, i: number, steps: number) {
   let at = i;
   for (let n = 0; n < steps && at >= 0; n++) {
-    at = map.FlowTargets[at];
-    if (at >= 0 && map.WaterKindCodes[at] === 1) return true;
+    at = map.FlowTargets.get(at);
+    if (at >= 0 && map.WaterKindCodes.get(at) === 1) return true;
   }
   return false;
 }
 /** The nearest great river to an anchor within reach: its cell, or -1. */
 function riverNear(t: Terrain, i: number, reach: number) {
-  const at: Point = [t.map.mesh.x[i], t.map.mesh.y[i]];
+  const at: Point = [t.map.mesh.x(i), t.map.mesh.y(i)];
   // Rivers are sorted by flow, so the first within reach is the largest.
   for (const r of t.rivers) if (distance(t.map, r, at) <= reach) return r;
   return -1;
@@ -185,10 +189,10 @@ function mountain(volcanic: boolean): Rule {
     assess(t, i, p) {
       const r = p.baseRadius * km,
         h = height(t.map, i);
-      if (t.sea[i] < 1.5 * r || h < 0 || h > ceiling) return null;
+      if (t.sea.get(i) < 1.5 * r || h < 0 || h > ceiling) return null;
       const rough = relief(t.map, within(t.map, i, r));
       if (rough > limit) return null;
-      const heat = volcanic ? 0.3 * Math.min(1, t.map.HeatSourceDensity[i] / 500) : 0;
+      const heat = volcanic ? 0.3 * Math.min(1, t.map.HeatSourceDensity.get(i) / 500) : 0;
       return 1 - rough / limit + 0.5 * (1 - h / ceiling) + heat;
     },
     shape: point,
@@ -204,12 +208,12 @@ function ring(impact: boolean): Rule {
     assess(t, i, p) {
       const r = (p.diameter * km) / 2,
         h = height(t.map, i);
-      if (t.sea[i] < (impact ? 1 : 1.5) * r || h < 0 || (!impact && h > 1200)) return null;
+      if (t.sea.get(i) < (impact ? 1 : 1.5) * r || h < 0 || (!impact && h > 1200)) return null;
       const rough = relief(t.map, within(t.map, i, r));
       if (rough > limit) return null;
       const bonus = impact
         ? 0.3 * (1 - Math.min(h, 2000) / 2000)
-        : 0.5 * (1 - Math.min(1000, t.map.Moisture[i]) / 1000);
+        : 0.5 * (1 - Math.min(1000, t.map.Moisture.get(i)) / 1000);
       return 1 - rough / limit + bonus;
     },
     shape: point,
@@ -221,7 +225,7 @@ const escarpment: Rule = {
   assess(t, i, p) {
     const w = p.scarpWidth * km,
       h = height(t.map, i);
-    if (t.sea[i] < 2 * w || h < 300) return null;
+    if (t.sea.get(i) < 2 * w || h < 300) return null;
     const { drop } = downhill(t, i, 3 * w);
     return drop < 150 ? null : drop / 1000 + h / 3000;
   },
@@ -235,8 +239,8 @@ const escarpment: Rule = {
       along: Point = [-uy, ux],
       from = meshPoint(
         t.map.mesh,
-        t.map.mesh.x[i] - (along[0] * length) / 2,
-        t.map.mesh.y[i] - (along[1] * length) / 2
+        t.map.mesh.x(i) - (along[0] * length) / 2,
+        t.map.mesh.y(i) - (along[1] * length) / 2
       );
     return { center: i, path: landPath(t, from, along, length) };
   },
@@ -252,18 +256,18 @@ const canyon: Rule = {
   assess(t, i, p) {
     const w = p.rimWidth * km,
       h = height(t.map, i);
-    if (h < 300 || t.sea[i] < Math.max(3 * w, 100 * km)) return null;
+    if (h < 300 || t.sea.get(i) < Math.max(3 * w, 100 * km)) return null;
     const rough = relief(t.map, within(t.map, i, 2 * w));
     if (rough > 400) return null;
     const river = riverNear(t, i, p.captureDistance * km);
-    const flow = river >= 0 ? 1 + Math.log10(1 + t.map.FlowAccumulation[river]) / 10 : 0;
+    const flow = river >= 0 ? 1 + Math.log10(1 + t.map.FlowAccumulation.get(river)) / 10 : 0;
     return 1 - rough / 400 + flow;
   },
   shape(t, i, p) {
     const w = p.rimWidth * km,
       length = Math.max(8 * w, 150 * km),
       { direction } = downhill(t, i, length / 2);
-    return { center: i, path: landPath(t, [t.map.mesh.x[i], t.map.mesh.y[i]], direction, length) };
+    return { center: i, path: landPath(t, [t.map.mesh.x(i), t.map.mesh.y(i)], direction, length) };
   },
   fit(t, i, p) {
     return {
@@ -278,8 +282,8 @@ const falls: Rule = {
   assess(t, i, p) {
     const h = height(t.map, i),
       steps = Math.ceil((p.captureDistance * km) / t.map.mesh.spacing);
-    if (h < 150 || t.sea[i] < 50 * km || reachesSea(t.map, i, steps)) return null;
-    return Math.log10(1 + t.map.FlowAccumulation[i]) + stepDown(t.map, i) / 100;
+    if (h < 150 || t.sea.get(i) < 50 * km || reachesSea(t.map, i, steps)) return null;
+    return Math.log10(1 + t.map.FlowAccumulation.get(i)) + stepDown(t.map, i) / 100;
   },
   shape: point,
   fit(t, i, p) {
@@ -304,30 +308,34 @@ function source(
 // Every magic rule scans its whole pool and always ranks: a system that is generated always
 // has a best site, the strongest medium first and the plainest ground last.
 const wellspring = source("land", (t, i) => {
-  const heat = t.map.HeatSourceDensity[i];
-  return (heat >= 300 ? 2 : 0) + heat / 1000 + t.map.FractureConductance[i] / 1000;
+  const heat = t.map.HeatSourceDensity.get(i);
+  return (heat >= 300 ? 2 : 0) + heat / 1000 + t.map.FractureConductance.get(i) / 1000;
 });
 const vault = source("land", (t, i) => {
-  const ice = t.map.IceThickness[i],
+  const ice = t.map.IceThickness.get(i),
     h = height(t.map, i);
-  return (ice > 0 ? 2 : 0) + ice / 1000 + h / 4000 + (1000 - t.map.Temperature[i]) / 1000;
+  return (ice > 0 ? 2 : 0) + ice / 1000 + h / 4000 + (1000 - t.map.Temperature.get(i)) / 1000;
 });
 const locus = source("ocean", (t, i) => {
-  const depth = t.map.WaterDepths[i] / 1024;
-  if (t.offshore[i] < t.map.mesh.spacing) return null;
-  return (depth >= 1500 ? 2 : 0) + depth / 6000 + Math.min(1, t.offshore[i] / (300 * km));
+  const depth = t.map.WaterDepths.get(i) / 1024,
+    offshore = t.offshore.get(i);
+  if (offshore < t.map.mesh.spacing) return null;
+  return (depth >= 1500 ? 2 : 0) + depth / 6000 + Math.min(1, offshore / (300 * km));
 });
 const heartwood = source("land", (t, i) => {
-  const cover = t.map.TreeCover[i],
-    moisture = t.map.Moisture[i];
-  return (cover >= 0.4 && moisture >= 500 ? 2 : 0) + cover + moisture / 1000 - t.map.Slope[i] * 50;
+  const cover = t.map.TreeCover.get(i),
+    moisture = t.map.Moisture.get(i);
+  return (
+    (cover >= 0.4 && moisture >= 500 ? 2 : 0) + cover + moisture / 1000 - t.map.Slope.get(i) * 50
+  );
 });
 const pan = source("land", (t, i) => {
-  const dry = Math.max(0, 1 - t.map.Moisture[i] / 1000),
-    lake = t.map.LakeMemory[i] > 0,
-    basin = lake || t.map.LandformCodes[i] === Landform.Basin,
+  const moisture = t.map.Moisture.get(i),
+    dry = Math.max(0, 1 - moisture / 1000),
+    lake = t.map.LakeMemory.get(i) > 0,
+    basin = lake || t.map.LandformCodes.get(i) === Landform.Basin,
     flat = relief(t.map, within(t.map, i, 30 * km)) <= 150;
-  return (t.map.Moisture[i] <= 400 && basin ? 2 : 0) + dry + (lake ? 0.5 : 0) + (flat ? 0.3 : 0);
+  return (moisture <= 400 && basin ? 2 : 0) + dry + (lake ? 0.5 : 0) + (flat ? 0.3 : 0);
 });
 
 export const sitingRules: Record<string, Rule> = {

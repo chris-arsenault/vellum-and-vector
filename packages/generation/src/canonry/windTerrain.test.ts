@@ -10,21 +10,30 @@ import { units } from "./math";
 function landscape(height: (x: number, y: number) => number) {
   const map = createField(createWorldMesh([-200_000, -200_000, 200_000, 200_000], 6400, 40_000));
   for (let i = 0; i < map.mesh.count; i++)
-    map.Elevation[i] = units(100 + height(map.mesh.x[i], map.mesh.y[i]));
+    map.Elevation.set(i, units(100 + height(map.mesh.x(i), map.mesh.y(i))));
   // Without a world frame the map sits at the mid latitude: 40° with even degrees.
   const c = physicalContext(42, 0, atlasPhysicalProfile({ latitudeProjection: 0 }));
   c.Profile.CirculationWander = 0;
   atmosphericFlow(map, c);
   return map;
 }
+/** The content cell nearest the point; among equidistant cells, the one on the row nearest y. */
 function nearest(map: PhysicalField, x: number, y: number) {
-  let best = 0;
-  for (let i = 0; i < map.mesh.contentCount; i++)
-    if (
-      Math.hypot(map.mesh.x[i] - x, map.mesh.y[i] - y) <
-      Math.hypot(map.mesh.x[best] - x, map.mesh.y[best] - y)
-    )
+  let best = -1;
+  const rank = (i: number) => [
+    Math.round(Math.hypot(map.mesh.x(i) - x, map.mesh.y(i) - y)),
+    Math.abs(map.mesh.y(i) - y),
+  ];
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (map.mesh.membership(i) !== 1) continue;
+    if (best < 0) {
       best = i;
+      continue;
+    }
+    const [d, dy] = rank(i),
+      [bd, bdy] = rank(best);
+    if (d < bd || (d === bd && dy < bdy)) best = i;
+  }
   return best;
 }
 const ridge = (x: number) => 2500 * Math.exp(-((x / 30_000) ** 2));
@@ -45,16 +54,16 @@ it("shelters the lee of a high ridge and turns windward flow along it", () => {
   const upstream = nearest(map, -170_000, 0),
     windward = nearest(map, -25_000, 0),
     lee = nearest(map, 60_000, 0);
-  expect(map.WindX[upstream]).toBeGreaterThan(0);
-  expect(map.WindSpeed[lee]).toBeLessThan(map.WindSpeed[upstream] * 0.7);
+  expect(map.WindX.get(upstream)).toBeGreaterThan(0);
+  expect(map.WindSpeed.get(lee)).toBeLessThan(map.WindSpeed.get(upstream) * 0.7);
   // Part of the upslope (eastward) flow turns along the ridge on the windward slope.
-  expect(map.WindX[windward]).toBeLessThan(map.WindX[upstream] * 0.9);
-  expect(map.WindY[windward]).toBeGreaterThan(map.WindY[upstream] + 100);
+  expect(map.WindX.get(windward)).toBeLessThan(map.WindX.get(upstream) * 0.9);
+  expect(map.WindY.get(windward)).toBeGreaterThan(map.WindY.get(upstream) + 100);
 });
 
 it("channels wind through a gap in a ridge", () => {
   const map = landscape((x, y) => ridge(x) * (Math.abs(y) < 20_000 ? 0.05 : 1));
   const open = nearest(map, -170_000, 0),
     gap = nearest(map, 0, 0);
-  expect(map.WindSpeed[gap]).toBeGreaterThan(map.WindSpeed[open] * 1.15);
+  expect(map.WindSpeed.get(gap)).toBeGreaterThan(map.WindSpeed.get(open) * 1.15);
 });

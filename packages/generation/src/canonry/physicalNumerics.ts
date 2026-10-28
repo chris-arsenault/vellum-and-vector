@@ -1,9 +1,4 @@
-import {
-  allocateNumerical,
-  generateNumerical,
-  type SampleType,
-  type NumericalVector,
-} from "@atlas/domain";
+import { blockShift, type Band, type SampleType } from "@atlas/domain";
 import type { PhysicalField } from "./field";
 
 /** Process-owned numerical work; retained physical channels are allocated by createField. */
@@ -13,7 +8,7 @@ export function workingArray(
   name: string,
   length = map.mesh.count
 ) {
-  return allocateNumerical({ type, length, lifetime: "process", name }, map.numerical);
+  return map.coverage.scratch(type, name, length);
 }
 export function workingValues(
   map: PhysicalField,
@@ -22,10 +17,17 @@ export function workingValues(
   value: (i: number) => number,
   length = map.mesh.count
 ) {
-  return generateNumerical({ type, length, lifetime: "process", name }, value, map.numerical);
+  const band = map.coverage.scratch(type, name, length);
+  for (let block = 0; block < band.blockCount; block++) {
+    const values = band.block(block, true),
+      start = block << blockShift;
+    for (let n = 0; n < values.length; n++) values[n] = value(start + n);
+    band.unpin(block);
+  }
+  return band;
 }
-export function releaseWorking(map: PhysicalField, ...vectors: NumericalVector[]) {
-  map.numerical?.releaseUnused(vectors, []);
+export function releaseWorking(map: PhysicalField, ...bands: Band[]) {
+  for (const band of bands) map.coverage.release(band);
 }
 /** Causal state survives process cleanup and is reclaimed when the runner replaces it. */
 export function retainedArray(
@@ -34,5 +36,7 @@ export function retainedArray(
   name: string,
   length = map.mesh.count
 ) {
-  return allocateNumerical({ type, length, lifetime: "run", name }, map.numerical);
+  const band = map.coverage.scratch(type, name, length);
+  band.retain();
+  return band;
 }

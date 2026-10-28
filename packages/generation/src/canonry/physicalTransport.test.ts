@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import type { Band } from "@atlas/domain";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { physicalContext } from "./context";
 import { marineSedimentation } from "./continentalMargins";
@@ -10,16 +11,16 @@ import { createMesh } from "./mesh";
 import { validateLandscape } from "./surface";
 import { createWorldMesh } from "./worldMesh";
 
-const volume = (map: PhysicalField, channel: import("@atlas/domain").NumericalVector) =>
-  channel.reduce((sum, depth, i) => sum + (depth / 1024) * map.mesh.areas[i], 0);
+const volume = (map: PhysicalField, channel: Band) =>
+  map.coverage.reduce(channel, (sum, depth, i) => sum + (depth / 1024) * map.mesh.area(i), 0);
 
 it("keeps marine sediment allocation within fractional and continental-volume budgets", () => {
   for (const exported of [0.125, 148_221_571_959_258.8, 1e18]) {
     const map = createField(createWorldMesh([0, 0, 4_000_000, 2_000_000], 4096, 0));
     map.CoastalMarginCodes.fill(1);
     map.Elevation.fill(units(-300));
-    map.BedrockElevation.set(map.Elevation);
-    for (let i = 0; i < map.mesh.count; i++) map.OceanMarginDistance[i] = 1 + (i % 97) * 10_000;
+    map.BedrockElevation.copyFrom(map.Elevation);
+    for (let i = 0; i < map.mesh.count; i++) map.OceanMarginDistance.set(i, 1 + (i % 97) * 10_000);
     map.SedimentProducedTotal = exported;
     map.SedimentExportedTotal = exported;
     marineSedimentation(map, physicalContext(1, 0, atlasPhysicalProfile()));
@@ -39,20 +40,26 @@ it("keeps marine sediment allocation within fractional and continental-volume bu
 function routedSediment(cells: number) {
   // A prescribed 40 km routing graph isolates transport from drainage discovery.
   const mesh = createMesh(cells, 0);
-  mesh.spacing = 40_000 / cells;
-  mesh.areas.fill(400_000_000 / cells);
-  for (let i = 0; i < mesh.count; i++) {
-    mesh.x[i] = (i + 0.5) * mesh.spacing;
-    mesh.y[i] = 0;
-    mesh.cellWidth[i] = mesh.spacing;
-    mesh.cellHeight[i] = mesh.areas[i] / mesh.spacing;
-  }
+  const live: number[] = [];
+  for (let i = 0; i < mesh.count; i++) if (mesh.membership(i) === 1) live.push(i);
+  const position = new Map(live.map((cell, k) => [cell, k])),
+    spacing = 40_000 / cells,
+    area = 400_000_000 / cells;
+  Object.defineProperty(mesh, "spacing", { value: spacing });
+  mesh.area = () => area;
+  mesh.contentArea = () => area;
+  mesh.x = (i) => ((position.get(i) ?? 0) + 0.5) * spacing;
+  mesh.y = () => 0;
+  mesh.cellWidth = () => spacing;
+  mesh.cellHeight = () => area / spacing;
   const map = createField(mesh);
-  for (let i = 0; i < mesh.count - 1; i++) map.FlowTargets[i] = i + 1;
-  map.SedimentSupply[0] = (1000 * 1024) / mesh.areas[0];
+  for (let k = 0; k < live.length - 1; k++) map.FlowTargets.set(live[k], live[k + 1]);
+  map.SedimentSupply.set(live[0], (1000 * 1024) / area);
   map.SedimentProducedTotal = 1000;
   sedimentTransport(map, physicalContext(1, 0, atlasPhysicalProfile()));
-  expect(map.SedimentSupply.every((supply) => supply === 0)).toBe(true);
+  expect(
+    map.coverage.reduce(map.SedimentSupply, (any, supply) => (supply === 0 ? any : 1), 0)
+  ).toBe(0);
   expect(map.SedimentDepositedTotal + map.SedimentExportedTotal).toBeCloseTo(1000, 8);
   return map.SedimentExportedTotal;
 }
@@ -67,15 +74,20 @@ it("deposits the same sediment over the same physical river length at finer samp
 
 function moundMeasures(map: PhysicalField) {
   const total = volume(map, map.Elevation);
-  const moment = map.Elevation.reduce(
+  const moment = map.coverage.reduce(
+    map.Elevation,
     (sum, height, i) =>
-      sum + (height / 1024) * map.mesh.areas[i] * (map.mesh.x[i] ** 2 + map.mesh.y[i] ** 2),
+      sum + (height / 1024) * map.mesh.area(i) * (map.mesh.x(i) ** 2 + map.mesh.y(i) ** 2),
     0
   );
   return {
     volume: total,
     radius: Math.sqrt(moment / total),
-    peak: map.Elevation.reduce((highest, height) => Math.max(highest, height / 1024), 0),
+    peak: map.coverage.reduce(
+      map.Elevation,
+      (highest, height) => Math.max(highest, height / 1024),
+      0
+    ),
   };
 }
 
@@ -84,9 +96,10 @@ function relaxedMound(samples: number) {
   map.RockResistance.fill(1000);
   for (let i = 0; i < map.mesh.count; i++) {
     const height = units(
-      3000 * Math.exp(-(map.mesh.x[i] ** 2 + map.mesh.y[i] ** 2) / (2 * 1000 ** 2))
+      3000 * Math.exp(-(map.mesh.x(i) ** 2 + map.mesh.y(i) ** 2) / (2 * 1000 ** 2))
     );
-    map.BedrockElevation[i] = map.Elevation[i] = height;
+    map.BedrockElevation.set(i, height);
+    map.Elevation.set(i, height);
   }
   const before = moundMeasures(map);
   massWasting(map, physicalContext(1, 0, atlasPhysicalProfile()));

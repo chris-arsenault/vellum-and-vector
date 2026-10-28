@@ -94,7 +94,7 @@ function clearBoundary(map: PhysicalField, i: number) {
     "TectonicTangentX",
     "TectonicTangentY",
   ] as const)
-    map[name][i] = 0;
+    map[name].set(i, 0);
 }
 function boundaryCode(relative: number, extension: number, threshold: number) {
   if (relative < -threshold) return 1;
@@ -133,11 +133,16 @@ function assignBoundary(
     return;
   }
   const extension = bondExtension(map, s);
-  map.TectonicBoundaryCodes[i] = boundaryCode(relative, extension, p.TectonicConvergenceThreshold);
-  map.TectonicBoundaryPairIds[i] =
-    ((Math.min(s.nearest, s.second) + 1) << 16) | (Math.max(s.nearest, s.second) + 1);
-  map.TectonicStrain[i] = unit(amount * clamp(speed + extension, 0, 1));
-  map.CrustRiftStrain[i] = Math.max(map.CrustRiftStrain[i], extension * amount);
+  map.TectonicBoundaryCodes.set(
+    i,
+    boundaryCode(relative, extension, p.TectonicConvergenceThreshold)
+  );
+  map.TectonicBoundaryPairIds.set(
+    i,
+    ((Math.min(s.nearest, s.second) + 1) << 16) | (Math.max(s.nearest, s.second) + 1)
+  );
+  map.TectonicStrain.set(i, unit(amount * clamp(speed + extension, 0, 1)));
+  map.CrustRiftStrain.set(i, Math.max(map.CrustRiftStrain.get(i), extension * amount));
   const dx = meshDeltaX(map.mesh, b.x - a.x),
     dy = b.y - a.y;
   const length = Math.max(0.001, Math.sqrt(dx * dx + dy * dy));
@@ -147,8 +152,8 @@ function assignBoundary(
     tx = -tx;
     ty = -ty;
   }
-  map.TectonicTangentX[i] = motion(tx);
-  map.TectonicTangentY[i] = motion(ty);
+  map.TectonicTangentX.set(i, motion(tx));
+  map.TectonicTangentY.set(i, motion(ty));
 }
 function initialAssembly(
   sites: ProvinceSite[],
@@ -163,9 +168,9 @@ function assignMotion(map: PhysicalField, i: number, nearest: number) {
   const state = map.tectonics!,
     site = state.sites[nearest],
     plate = state.plates.find((plate) => plate.id === site.plate)!;
-  const [vx, vy] = siteMotion(map, { x: map.mesh.x[i], y: map.mesh.y[i] }, plate);
-  map.CrustMotionX[i] = motion(vx + site.compliance * (site.driveX - vx));
-  map.CrustMotionY[i] = motion(vy + site.compliance * (site.driveY - vy));
+  const [vx, vy] = siteMotion(map, { x: map.mesh.x(i), y: map.mesh.y(i) }, plate);
+  map.CrustMotionX.set(i, motion(vx + site.compliance * (site.driveX - vx)));
+  map.CrustMotionY.set(i, motion(vy + site.compliance * (site.driveY - vy)));
 }
 function assignTriangle(
   map: PhysicalField,
@@ -174,8 +179,8 @@ function assignTriangle(
   i: number
 ) {
   const p = context.Profile,
-    x = map.mesh.x[i],
-    y = map.mesh.y[i],
+    x = map.mesh.x(i),
+    y = map.mesh.y(i),
     seed = map.tectonics!.seed;
   const wx =
     fractalNoise(map.mesh, x, y, seed ^ 0x16f1, p.ContinentalWarpScale, 3) *
@@ -186,8 +191,8 @@ function assignTriangle(
   const s = selectSites(sites, x + wx, y + wy, map.mesh),
     site = sites[s.nearest];
   boundarySelection(map, s, x + wx, y + wy);
-  map.CrustProvinceIds[i] = s.nearest + 1;
-  map.CrustPlateIds[i] = map.tectonics!.sites[s.nearest].plate;
+  map.CrustProvinceIds.set(i, s.nearest + 1);
+  map.CrustPlateIds.set(i, map.tectonics!.sites[s.nearest].plate);
   assignMotion(map, i, s.nearest);
   const affinity = clamp(
     0.5 + (s.oceanicDistance - s.continentalDistance) / (p.ContinentalTransitionWidth * 2),
@@ -199,45 +204,42 @@ function assignTriangle(
       ? Math.max(affinity, p.ContinentalCrustPotentialFloor)
       : Math.min(affinity, p.OceanicCrustPotentialCeiling);
   if (!context.IsEvolutionEpoch)
-    map.CrustAssemblyIds[i] = initialAssembly(sites, s, site, affinity);
-  map.CrustAssemblySeparation[i] = unit(
-    clamp(map.CrustRiftStrain[i], 0, 1) * p.ContinentalAssemblySeparationDepth
+    map.CrustAssemblyIds.set(i, initialAssembly(sites, s, site, affinity));
+  map.CrustAssemblySeparation.set(
+    i,
+    unit(clamp(map.CrustRiftStrain.get(i), 0, 1) * p.ContinentalAssemblySeparationDepth)
   );
-  map.CrustBasePotential[i] = unit(potential);
-  if (!context.IsEvolutionEpoch) map.CrustContinentalFraction[i] = unit(affinity);
-  map.CrustTypeCodes[i] = map.CrustContinentalFraction[i] >= 500 ? 2 : 1;
+  map.CrustBasePotential.set(i, unit(potential));
+  if (!context.IsEvolutionEpoch) map.CrustContinentalFraction.set(i, unit(affinity));
+  map.CrustTypeCodes.set(i, map.CrustContinentalFraction.get(i) >= 500 ? 2 : 1);
   assignBoundary(map, i, sites, s, context);
 }
 export function tectonicProvinces(map: PhysicalField, context: PhysicalContext) {
   const sites = tectonicSites(map, context);
   for (let i = 0; i < map.mesh.count; i++) assignTriangle(map, context, sites, i);
-  map.InitialTectonicBoundaryCodes.set(map.TectonicBoundaryCodes);
-  map.InitialTectonicStrain.set(map.TectonicStrain);
+  map.InitialTectonicBoundaryCodes.copyFrom(map.TectonicBoundaryCodes);
+  map.InitialTectonicStrain.copyFrom(map.TectonicStrain);
 }
 export function continentalDomains(map: PhysicalField, context: PhysicalContext) {
   for (let i = 0; i < map.mesh.count; i++) {
-    const potential = map.CrustBasePotential[i] / 1000;
+    const potential = map.CrustBasePotential.get(i) / 1000;
     const roughness = fractalNoise(
       map.mesh,
-      map.mesh.x[i],
-      map.mesh.y[i],
+      map.mesh.x(i),
+      map.mesh.y(i),
       context.Seed ^ 0x41c7,
       context.Profile.ContinentalWarpScale * 0.44,
       4
     );
     const margin = 1 - clamp(Math.abs(potential - 0.5) * 2, 0, 1);
-    const strain = map.TectonicStrain[i] / 1000;
-    const adjustment =
-      map.TectonicBoundaryCodes[i] === 1
-        ? strain * 0.07
-        : map.TectonicBoundaryCodes[i] === 2
-          ? strain * -0.12
-          : 0;
+    const strain = map.TectonicStrain.get(i) / 1000,
+      code = map.TectonicBoundaryCodes.get(i);
+    const adjustment = code === 1 ? strain * 0.07 : code === 2 ? strain * -0.12 : 0;
     const value = clamp(
       potential + roughness * (0.025 + margin * margin * 0.14) + adjustment,
       0,
       1
     );
-    map.ContinentalPotential[i] = unit(value * value * (3 - 2 * value));
+    map.ContinentalPotential.set(i, unit(value * value * (3 - 2 * value)));
   }
 }

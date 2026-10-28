@@ -4,13 +4,13 @@ import {
   fieldInterpolator,
   point,
   spatial,
+  type Band,
   type Grid,
+  type NumericalAllocator,
+  type NumericalVector,
   type Position,
   rectangle,
   isDescendant,
-  numericalSampleType,
-  allocateNumerical,
-  type NumericalVector,
 } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { authoredFields } from "../mapAuthored";
@@ -31,6 +31,7 @@ import { units } from "./math";
 import { inheritedNativeFacts } from "./inheritedFacts";
 import type { AtlasParameters } from "../atlasParameters";
 import { mapBoundaryValue } from "../atlasParameters";
+import { releaseWorking, retainedArray } from "./physicalNumerics";
 
 export interface AtlasPhysicalWorkspace {
   magic?: import("./magicState").MagicWorkspace;
@@ -40,17 +41,19 @@ export interface AtlasPhysicalWorkspace {
   landmarkRoster?: import("./landmarkSiting").RosterEntry[];
   map: PhysicalField;
   profile: PhysicalProfile;
+  /** The surface grid's sample cells; grid-side vectors use the grid allocator. */
   samples: NumericalVector;
+  numerical?: NumericalAllocator;
   interpolation?: ProjectionInterpolation;
   interpolationKey?: string;
-  fixed: { binding: ChannelBinding; values: NumericalVector }[];
+  fixed: { binding: ChannelBinding; values: Band }[];
   inherited: boolean;
   sampling: { maximumSize: number; minimumSize: number; featureSamples: number };
 }
 export function nativePosition(work: AtlasPhysicalWorkspace, i: number): Position {
   return {
-    x: work.map.mesh.origin[0] + work.map.mesh.x[i],
-    y: work.map.mesh.origin[1] + work.map.mesh.y[i],
+    x: work.map.mesh.origin[0] + work.map.mesh.x(i),
+    y: work.map.mesh.origin[1] + work.map.mesh.y(i),
     z: 0,
   };
 }
@@ -82,15 +85,15 @@ export function parentChannels(state: GenerationState) {
 function initializeInheritedMaterial(map: PhysicalField, surface: Grid) {
   for (let i = 0; i < map.mesh.count; i++) {
     if (!surface.channels.bedrock)
-      map.BedrockElevation[i] = map.Elevation[i] - map.SedimentThickness[i];
-    if (!surface.channels.crustSupport) map.CrustSupportElevation[i] = map.Elevation[i];
+      map.BedrockElevation.set(i, map.Elevation.get(i) - map.SedimentThickness.get(i));
+    if (!surface.channels.crustSupport) map.CrustSupportElevation.set(i, map.Elevation.get(i));
     if (!surface.channels.continentalFraction)
-      map.CrustContinentalFraction[i] = map.Elevation[i] >= map.BaseSeaLevel ? 1000 : 0;
-    if (!surface.channels.rock) map.RockResistance[i] = 1000;
-    if (map.CrustThickness[i] <= 0)
-      map.CrustThickness[i] = units(1000 + 3 * map.CrustContinentalFraction[i]);
-    map.Elevation[i] = map.BedrockElevation[i] + map.SedimentThickness[i];
-    map.CrustTypeCodes[i] = map.CrustContinentalFraction[i] >= 500 ? 2 : 1;
+      map.CrustContinentalFraction.set(i, map.Elevation.get(i) >= map.BaseSeaLevel ? 1000 : 0);
+    if (!surface.channels.rock) map.RockResistance.set(i, 1000);
+    if (map.CrustThickness.get(i) <= 0)
+      map.CrustThickness.set(i, units(1000 + 3 * map.CrustContinentalFraction.get(i)));
+    map.Elevation.set(i, map.BedrockElevation.get(i) + map.SedimentThickness.get(i));
+    map.CrustTypeCodes.set(i, map.CrustContinentalFraction.get(i) >= 500 ? 2 : 1);
   }
   if (!surface.channels.geothermal) map.Geothermal.fill(0);
 }
@@ -106,8 +109,9 @@ function inheritNumerical(state: GenerationState, work: AtlasPhysicalWorkspace) 
   inheritChannels(surface, work, parent, datum);
   map.CrustSupportInitialized = true;
   initializeInheritedMaterial(map, surface);
-  map.SedimentProducedTotal = map.CumulativeDeposition.reduce(
-    (a, b, i) => a + (b / 1024) * map.mesh.areas[i],
+  map.SedimentProducedTotal = map.coverage.reduce(
+    map.CumulativeDeposition,
+    (sum, deposition, i) => sum + (deposition / 1024) * map.mesh.area(i),
     0
   );
   map.SedimentDepositedTotal = map.SedimentProducedTotal;
@@ -124,27 +128,25 @@ function inheritChannels(
   for (const binding of atlasChannels) {
     const grid = parent.get(binding.name) ?? surface;
     if (!grid.channels[binding.name]) continue;
-    const valueAt = fieldInterpolator(grid, binding.name, binding.unit === "category");
+    const valueAt = fieldInterpolator(grid, binding.name, binding.unit === "category"),
+      band = map[binding.native],
+      integer = band.type === "int32";
     for (let i = 0; i < map.mesh.count; i++) {
       const value = valueAt(nativePosition(work, i));
       const native = (value - (binding.offset ?? 0) + (binding.datum ? datum : 0)) / binding.scale;
-      map[binding.native][i] =
-        numericalSampleType(map[binding.native]) === "int32" ? Math.round(native) : native;
+      band.set(i, integer ? Math.round(native) : native);
     }
   }
 }
 function fixedInheritedBoundary(state: GenerationState, work: AtlasPhysicalWorkspace) {
   if (!work.inherited) return;
-  const values = allocateNumerical(
-    { type: "float64", length: work.map.mesh.count, lifetime: "run", name: "inherited:boundary" },
-    work.map.numerical
-  ).fill(NaN);
+  const values = retainedArray(work.map, "float64", "inherited:boundary").fill(NaN);
   const footprint = state.surface.scope.footprint,
     margin = state.domain.scope.resolution ?? work.map.mesh.spacing;
   const interior = spatial.buffer(footprint, -margin);
   for (let i = 0; i < values.length; i++)
     if (!interior || !spatial.covers(interior, point(nativePosition(work, i))))
-      values[i] = work.map.Elevation[i] - work.map.BaseSeaLevel;
+      values.set(i, work.map.Elevation.get(i) - work.map.BaseSeaLevel);
   work.fixed.push({ binding: atlasChannels[0], values });
 }
 function fixedSamples(
@@ -153,24 +155,16 @@ function fixedSamples(
   footprint: Grid["scope"]["footprint"],
   binding: ChannelBinding
 ) {
-  const values = allocateNumerical(
-    {
-      type: "float64",
-      length: work.map.mesh.count,
-      lifetime: "run",
-      name: `authored:${binding.name}`,
-    },
-    work.map.numerical
-  ).fill(NaN);
+  const values = retainedArray(work.map, "float64", `authored:${binding.name}`).fill(NaN);
   const covers = spatial.pointCoverage(footprint),
     sourceCovers = spatial.pointCoverage(source.scope.footprint),
-    valueAt = gridSampler(source, binding.name, binding.unit === "category");
+    valueAt = gridSampler(source, binding.name, binding.unit === "category"),
+    integer = work.map[binding.native].type === "int32";
   for (let i = 0; i < values.length; i++) {
     const position = nativePosition(work, i);
     if (!covers(position) || !sourceCovers(position)) continue;
     const value = (valueAt(position) - (binding.offset ?? 0)) / binding.scale;
-    values[i] =
-      numericalSampleType(work.map[binding.native]) === "int32" ? Math.round(value) : value;
+    values.set(i, integer ? Math.round(value) : value);
   }
   return values;
 }
@@ -231,15 +225,15 @@ export function createAtlasWorkspace(
         spatial.area(state.domain.scope.footprint),
         [anchor.x, anchor.y],
         profile.MapBoundary === 1,
-        profile.MapBoundary === 1 && profile.LatitudeSouth === -90 && profile.LatitudeNorth === 90,
-        state.numerical
+        profile.MapBoundary === 1 && profile.LatitudeSouth === -90 && profile.LatitudeNorth === 90
       )
     : createChildMesh(state, sampling, profile.BoundaryPadding);
-  const map = createField(mesh, state.numerical);
+  const map = createField(mesh, state.cache);
   const work: AtlasPhysicalWorkspace = {
     map,
     profile,
     samples: new Int32Array(0),
+    numerical: state.numerical,
     fixed: [],
     inherited: Boolean(state.surface.channels.elevation),
     sampling,
@@ -278,8 +272,7 @@ function createChildMesh(
     },
     padding,
     state.domain.scope.footprint,
-    crossesChartSeam(state),
-    state.numerical
+    crossesChartSeam(state)
   );
 }
 function crossesChartSeam(state: GenerationState) {
@@ -314,30 +307,33 @@ function protectedSampling(state: GenerationState, size: number) {
   return supports;
 }
 export function refreshWorkspaceProtection(state: GenerationState, work: AtlasPhysicalWorkspace) {
-  if (state.numerical) for (const fixed of work.fixed) state.numerical.release(fixed.values);
+  for (const fixed of work.fixed) releaseWorking(work.map, fixed.values);
   work.fixed = [];
   fixedInheritedBoundary(state, work);
   fixedAuthoring(state, work);
 }
 export function composeNativeAuthoring(work: AtlasPhysicalWorkspace) {
   const map = work.map;
-  for (const { binding, values } of work.fixed)
+  for (const { binding, values } of work.fixed) {
+    const band = map[binding.native];
     for (let i = 0; i < values.length; i++) {
-      if (!Number.isFinite(values[i])) continue;
-      const value = values[i] + (binding.datum ? map.BaseSeaLevel : 0);
-      map[binding.native][i] = value;
+      const fixed = values.get(i);
+      if (!Number.isFinite(fixed)) continue;
+      const value = fixed + (binding.datum ? map.BaseSeaLevel : 0);
+      band.set(i, value);
       if (binding.native === "Elevation") {
-        map.BedrockElevation[i] = value - map.SedimentThickness[i];
-        map.Elevation[i] = map.BedrockElevation[i] + map.SedimentThickness[i];
+        map.BedrockElevation.set(i, value - map.SedimentThickness.get(i));
+        map.Elevation.set(i, map.BedrockElevation.get(i) + map.SedimentThickness.get(i));
       }
     }
+  }
 }
 export function sampleSurfaceAtNative(state: GenerationState, name: string, i: number): number {
   const work = state.physical!;
   // Publication and physical feedback share these exact cell centres. Reading
   // their stored samples avoids rebuilding a Hermite evaluator for every cell.
   if (state.surface.topology === work.map.mesh.topology && state.surface.topology)
-    return state.surface.channels[name][work.map.mesh.cellToLeaf[i]];
+    return state.surface.channels[name][work.map.mesh.cellToLeaf(i)];
   return interpolateSample(state.surface, name, nativePosition(work, i));
 }
 export function nativeIndexAtSurface(state: GenerationState, x: number, y: number) {

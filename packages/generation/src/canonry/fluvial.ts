@@ -8,27 +8,28 @@ import { drainageConditioning } from "./drainageFlood";
 import { resolveLandTargets } from "./flowGuidance";
 import { contributingArea, sourceToOutletOrder } from "./flowGraph";
 import { cellTravel, physicalDistance } from "./physicalMetric";
-import type { NumericalVector } from "@atlas/domain";
+import type { Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
 /** A channel cut: eroded, remembered as incision, and booked as sediment supply. */
 export function recordCut(map: PhysicalField, i: number, requested: number) {
   const amount = erode(map, i, requested);
-  map.CumulativeFluvialErosion[i] += amount;
-  map.SedimentSupply[i] += amount;
-  map.SedimentProducedTotal += (amount / 1024) * map.mesh.areas[i];
+  map.CumulativeFluvialErosion.add(i, amount);
+  map.SedimentSupply.add(i, amount);
+  map.SedimentProducedTotal += (amount / 1024) * map.mesh.area(i);
 }
 function controllingSill(map: PhysicalField, start: number, maximumSteps: number): number {
   let selected = -1,
     highest = -Number.MAX_VALUE,
     i = start;
   for (let distance = 0; distance < maximumSteps && i >= 0;) {
-    if (map.WaterKindCodes[i] === 1) break;
-    if (map.WaterKindCodes[i] === 0 && map.Elevation[i] > highest) {
+    const water = map.WaterKindCodes.get(i);
+    if (water === 1) break;
+    if (water === 0 && map.Elevation.get(i) > highest) {
       selected = i;
-      highest = map.Elevation[i];
+      highest = map.Elevation.get(i);
     }
-    const parent = map.DrainageParents[i];
+    const parent = map.DrainageParents.get(i);
     if (parent < 0) break;
     distance += physicalDistance(map.mesh, i, parent);
     i = parent;
@@ -40,8 +41,8 @@ function erodeOutlets(map: PhysicalField, c: PhysicalContext) {
   const cuts = workingArray(map, "float64", "fluvial:outlet-cuts"),
     p = c.Profile;
   for (let i = 0; i < map.mesh.count; i++) {
-    const overflow = map.LakeOverflow[i],
-      outlet = map.LakeOutletTargets[i];
+    const overflow = map.LakeOverflow.get(i),
+      outlet = map.LakeOutletTargets.get(i);
     if (overflow <= 0 || outlet < 0) continue;
     const sill = controllingSill(map, outlet, p.LakeOutletIncisionSearchDistance);
     if (sill < 0) continue;
@@ -50,39 +51,46 @@ function erodeOutlets(map: PhysicalField, c: PhysicalContext) {
         (overflow / (overflow + p.LakeOutletOverflowScale)) *
         c.HydrologyStrength) /
       1000;
-    cuts[sill] = Math.max(cuts[sill], units(incision));
+    cuts.set(sill, Math.max(cuts.get(sill), units(incision)));
   }
-  for (let i = 0; i < cuts.length; i++) if (cuts[i] > 0) recordCut(map, i, cuts[i]);
+  for (let i = 0; i < cuts.length; i++) {
+    const cut = cuts.get(i);
+    if (cut > 0) recordCut(map, i, cut);
+  }
   releaseWorking(map, cuts);
 }
 export function surfaceResistance(map: PhysicalField, i: number): number {
-  const cover = clamp(map.SedimentThickness[i] / units(25), 0, 1),
-    rock = Math.max(1, map.RockResistance[i]);
+  const cover = clamp(map.SedimentThickness.get(i) / units(25), 0, 1),
+    rock = Math.max(1, map.RockResistance.get(i));
   // Burnt ground has lost its binding roots for the season: it gullies.
   const roots =
-    (1 + map.TreeCover[i] * 1.2 + map.GrassCover[i] * 0.45 + map.WetlandCover[i] * 0.7) *
-    (1 - 0.5 * map.FireActivity[i]);
+    (1 +
+      map.TreeCover.get(i) * 1.2 +
+      map.GrassCover.get(i) * 0.45 +
+      map.WetlandCover.get(i) * 0.7) *
+    (1 - 0.5 * map.FireActivity.get(i));
   return Math.max(1, (rock + (300 - rock) * cover) * roots);
 }
 function erodeTriangle(
   map: PhysicalField,
   c: PhysicalContext,
-  targets: NumericalVector,
-  area: import("@atlas/domain").NumericalVector,
+  targets: Band,
+  area: Band,
   i: number
 ) {
-  const target = targets[i];
+  const target = targets.get(i);
   // Only channels incise; leaving interfluves standing lets valleys capture neighbouring flow.
-  if (target < 0 || map.WaterKindCodes[i] === 1 || area[i] < c.Profile.FluvialChannelArea) return;
+  if (target < 0 || map.WaterKindCodes.get(i) === 1 || area.get(i) < c.Profile.FluvialChannelArea)
+    return;
   const length = Math.hypot(
-    meshDeltaX(map.mesh, map.mesh.x[i] - map.mesh.x[target]),
-    map.mesh.y[i] - map.mesh.y[target]
+    meshDeltaX(map.mesh, map.mesh.x(i) - map.mesh.x(target)),
+    map.mesh.y(i) - map.mesh.y(target)
   );
   const fall = Math.max(
     0,
-    (map.DrainageElevations[i] - map.DrainageElevations[target]) / (1024 * length)
+    (map.DrainageElevations.get(i) - map.DrainageElevations.get(target)) / (1024 * length)
   );
-  const catchment = area[i] / 100_000_000;
+  const catchment = area.get(i) / 100_000_000;
   const equilibrium = c.Profile.FluvialEquilibriumGradient / Math.max(1, catchment) ** 0.12;
   const erosiveFall = Math.max(0, fall - equilibrium);
   if (erosiveFall <= 0) return;
@@ -93,7 +101,7 @@ function erodeTriangle(
       1000
   );
   // Sea level is the base level: a river grades to the sea and never cuts its bed below it.
-  const cut = Math.min(requested, map.Elevation[i] - (map.EffectiveSeaLevel + units(1)));
+  const cut = Math.min(requested, map.Elevation.get(i) - (map.EffectiveSeaLevel + units(1)));
   if (cut > 0) recordCut(map, i, cut);
 }
 export function fluvialErosion(map: PhysicalField, c: PhysicalContext) {
@@ -106,39 +114,43 @@ export function fluvialErosion(map: PhysicalField, c: PhysicalContext) {
     const pass = { ...c, Seed: c.Seed ^ iteration };
     drainageConditioning(map, pass);
     const targets = resolveLandTargets(map, pass),
-      area = contributingArea(targets, map.mesh.areas, map.numerical);
+      area = contributingArea(map, targets);
     for (let i = 0; i < targets.length; i++) erodeTriangle(map, c, targets, area, i);
     releaseWorking(map, targets, area);
   }
 }
-function transportDistance(map: PhysicalField, i: number, previous: NumericalVector) {
-  const target = map.FlowTargets[i],
-    next = target >= 0 ? target : previous[i];
+function transportDistance(map: PhysicalField, i: number, previous: Band) {
+  const target = map.FlowTargets.get(i),
+    next = target >= 0 ? target : previous.get(i);
   return next >= 0
     ? cellTravel(
         map.mesh,
         i,
-        meshDeltaX(map.mesh, map.mesh.x[next] - map.mesh.x[i]),
-        map.mesh.y[next] - map.mesh.y[i]
+        meshDeltaX(map.mesh, map.mesh.x(next) - map.mesh.x(i)),
+        map.mesh.y(next) - map.mesh.y(i)
       )
-    : Math.sqrt(map.mesh.areas[i]);
+    : Math.sqrt(map.mesh.area(i));
 }
 export function sedimentTransport(map: PhysicalField, c: PhysicalContext) {
   const moving = workingArray(map, "float64", "sediment:moving"),
     p = c.Profile;
   const previous = workingArray(map, "int32", "sediment:previous").fill(-1);
-  for (let i = 0; i < map.mesh.count; i++)
-    if (map.FlowTargets[i] >= 0) previous[map.FlowTargets[i]] = i;
-  for (const i of sourceToOutletOrder(map)) {
-    const area = map.mesh.areas[i];
-    const load = moving[i] + (map.SedimentSupply[i] / 1024) * area;
-    map.SedimentSupply[i] = 0;
+  for (let i = 0; i < map.mesh.count; i++) {
+    const target = map.FlowTargets.get(i);
+    if (target >= 0) previous.set(target, i);
+  }
+  const order = sourceToOutletOrder(map);
+  for (let n = 0; n < order.length; n++) {
+    const i = order.get(n),
+      area = map.mesh.area(i);
+    const load = moving.get(i) + (map.SedimentSupply.get(i) / 1024) * area;
+    map.SedimentSupply.set(i, 0);
     if (load <= 0) continue;
-    const target = map.FlowTargets[i];
+    const target = map.FlowTargets.get(i);
     const shouldDeposit =
-      map.WaterKindCodes[i] === 2 ||
-      map.Slope[i] <= p.SedimentDepositionSlopeThreshold ||
-      (target >= 0 && map.WaterKindCodes[target] === 1);
+      map.WaterKindCodes.get(i) === 2 ||
+      map.Slope.get(i) <= p.SedimentDepositionSlopeThreshold ||
+      (target >= 0 && map.WaterKindCodes.get(target) === 1);
     const distance = transportDistance(map, i, previous);
     const capture = -Math.expm1(
       (Math.log1p(-p.SedimentTransportFraction / 1000) * distance) / p.SedimentDepositionLength
@@ -151,7 +163,8 @@ export function sedimentTransport(map: PhysicalField, c: PhysicalContext) {
         )
       : 0;
     const volume = (deposited / 1024) * area;
-    if (target >= 0) moving[target] += load - volume;
+    if (target >= 0) moving.add(target, load - volume);
     else map.SedimentExportedTotal += load - volume;
   }
+  releaseWorking(map, order, moving, previous);
 }

@@ -60,6 +60,10 @@ export class Band implements BlockOwner {
   get type() {
     return this.schema.type;
   }
+  /** Promote a process band that the working state carries into later processes. */
+  retain() {
+    this.lifetime = "run";
+  }
   get name() {
     return this.schema.name;
   }

@@ -68,7 +68,7 @@ function evaluateField(
  */
 function lapseToStoredCharge(field: MagicField) {
   for (let i = 0; i < field.intensity.length; i++)
-    field.intensity[i] = Math.min(1000, Math.round(field.stored[i]));
+    field.intensity.set(i, Math.min(1000, Math.round(field.stored.get(i))));
 }
 function applySharedForcing(state: GenerationState) {
   magicThermalFeedback(state);
@@ -131,11 +131,15 @@ export function magicProcesses(
       evaluateMagic(state, context, "post-glacial", seed);
       applySharedForcing(state);
       coverSystems(state, seed);
-      evaluateConfluences(state, seed, true);
+      // Meetings and ground writes act once per epoch. The present phase evaluates the
+      // systems and their forcing again but passes no time, so it writes no ground.
+      const epoch = context.epochIndices[0];
+      evaluateConfluences(state, seed, epoch !== undefined);
+      if (epoch === undefined) return;
       stormWrites(state);
       saltWrites(state);
       hallowedWrites(state);
-      veilWrites(state, context.epochIndices[0] ?? 0);
+      veilWrites(state, epoch);
     },
     coast: magicCoastalFeedback,
     history: retainMagicHistory,

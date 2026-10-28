@@ -6,7 +6,9 @@ import {
   builtinLayers,
   rectangle,
   spatial,
+  type AdaptiveLattice,
 } from "@atlas/domain";
+import { retainedArray } from "./physicalNumerics";
 import { landscape } from "../mapFixtures";
 import { adaptivePhysicalMesh } from "./adaptiveMesh";
 import { createField } from "./field";
@@ -29,7 +31,7 @@ function fixture() {
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
-    samples: map.mesh.leafToCell,
+    samples: (map.mesh as AdaptiveLattice).leafCells(),
     fixed: [],
     inherited: false,
     sampling: { maximumSize: 250, minimumSize: 250, featureSamples: 2 },
@@ -42,14 +44,14 @@ it("publishes a one-cell site but not a one-cell area or course: those stay cove
     mesh = state.physical!.map.mesh,
     fire = state.physical!.magic!.fields[0];
   fire.intensity.fill(800);
-  fire.source[0] = 1000;
+  fire.source.set(0, 1000);
   fire.located = [
-    { origin: "vein", id: "origin", x: mesh.x[0], y: mesh.y[0], radius: 100, strength: 1000 },
+    { origin: "vein", id: "origin", x: mesh.x(0), y: mesh.y(0), radius: 100, strength: 1000 },
   ];
-  fire.parents = new Int32Array(mesh.count).fill(-1);
+  fire.parents = retainedArray(state.physical!.map, "int32", "test:parents").fill(-1);
   for (const rule of fire.definition.features) {
-    const values = new Uint8Array(mesh.count);
-    values[0] = 1;
+    const values = retainedArray(state.physical!.map, "uint8", `test:feature:${rule.id}`);
+    values.set(0, 1);
     fire.features[rule.id] = values;
   }
   extractMagicPlaces(state);
@@ -64,23 +66,24 @@ it("publishes a one-cell site but not a one-cell area or course: those stay cove
 
 it("publishes every system rule with meaningful sites, retained courses and extents", () => {
   const state = fixture(),
-    mesh = state.physical!.map.mesh;
+    map = state.physical!.map,
+    mesh = map.mesh;
   const members = [0, 1, 2];
   for (const field of state.physical!.magic!.fields) {
     field.intensity.fill(800);
-    field.source[0] = 1000;
+    field.source.set(0, 1000);
     field.located = [
-      { origin: "vein", id: "origin", x: mesh.x[0], y: mesh.y[0], radius: 100, strength: 1000 },
+      { origin: "vein", id: "origin", x: mesh.x(0), y: mesh.y(0), radius: 100, strength: 1000 },
     ];
-    field.parents = new Int32Array(mesh.count).fill(-1);
-    field.parents[1] = 0;
-    field.parents[2] = 1;
+    field.parents = retainedArray(map, "int32", `test:parents:${field.definition.id}`).fill(-1);
+    field.parents.set(1, 0);
+    field.parents.set(2, 1);
     field.wakePaths = [
-      members.map((i) => [mesh.x[i] + mesh.origin[0], mesh.y[i] + mesh.origin[1]]),
+      members.map((i) => [mesh.x(i) + mesh.origin[0], mesh.y(i) + mesh.origin[1]]),
     ];
     for (const rule of field.definition.features) {
-      const values = new Uint8Array(mesh.count);
-      members.forEach((i) => (values[i] = 1));
+      const values = retainedArray(map, "uint8", `test:feature:${field.definition.id}:${rule.id}`);
+      members.forEach((i) => values.set(i, 1));
       field.features[rule.id] = values;
     }
   }
@@ -106,15 +109,15 @@ it("publishes every system rule with meaningful sites, retained courses and exte
 it("anchors a fall to the largest real drop and maps an incised channel through its classified footprint", () => {
   const state = fixture(),
     map = state.physical!.map;
-  map.Elevation[0] = 500 * 1024;
-  map.Elevation[1] = 450 * 1024;
-  map.Elevation[2] = 100 * 1024;
-  map.FlowTargets[0] = 1;
-  map.FlowTargets[1] = 2;
+  map.Elevation.set(0, 500 * 1024);
+  map.Elevation.set(1, 450 * 1024);
+  map.Elevation.set(2, 100 * 1024);
+  map.FlowTargets.set(0, 1);
+  map.FlowTargets.set(1, 2);
   expect(naturalPlaceGeometry(state, "waterfall", [0, 1])!.anchor).toBe(1);
   const gorge = naturalPlaceGeometry(state, "gorge", [1], rectangle([0, 0, 4000, 1000]));
   expect(gorge?.geometry.type).toContain("LineString");
-  map.LandformCodes[1] = Landform.Gorge;
+  map.LandformCodes.set(1, Landform.Gorge);
   extractNamedLandforms(state);
   const f = Object.values(state.domain.world.features).find((x) => x.kind === "gorge")!;
   expect(f.geometry.type).toContain("LineString");
@@ -123,9 +126,9 @@ it("anchors a fall to the largest real drop and maps an incised channel through 
 it("uses a named interaction participant's course without borrowing unrelated propagation", () => {
   const state = fixture(),
     [fire, aurora, pressure] = state.physical!.magic!.fields,
-    count = state.physical!.map.mesh.count;
-  fire.parents = new Int32Array(count).fill(-1);
-  fire.parents[1] = 0;
+    map = state.physical!.map;
+  fire.parents = retainedArray(map, "int32", "test:parents").fill(-1);
+  fire.parents.set(1, 0);
   const extent = state.domain.scope.footprint;
   // A course rule that names Fire as a participant borrows Fire's conduit parents.
   pressure.definition.features.push({

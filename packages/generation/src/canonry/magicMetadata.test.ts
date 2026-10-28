@@ -5,6 +5,8 @@ import {
   magicPropagations,
   magicSources,
   magicSystemSchema,
+  type AdaptiveLattice,
+  type Band,
 } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { prepareAtlasGeneration } from "../atlasWorkflow";
@@ -50,7 +52,7 @@ function fixture() {
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
-    samples: map.mesh.leafToCell,
+    samples: (map.mesh as AdaptiveLattice).leafCells(),
     fixed: [],
     inherited: false,
     sampling: { maximumSize: 1000, minimumSize: 500, featureSamples: 2 },
@@ -58,6 +60,19 @@ function fixture() {
   initializeMagic(state);
   return state;
 }
+/** Content cells in id order; content is not a prefix of the ids. */
+function contentCells(state: ReturnType<typeof fixture>) {
+  const mesh = state.physical!.map.mesh,
+    cells: number[] = [];
+  for (let i = 0; i < mesh.count; i++) if (mesh.membership(i) === 1) cells.push(i);
+  return cells;
+}
+/** Retained activity proportional to cell area, as an extensive quantity. */
+function fillRetained(state: ReturnType<typeof fixture>, band: Band, perArea: number) {
+  const mesh = state.physical!.map.mesh;
+  for (let i = 0; i < mesh.count; i++) band.set(i, mesh.area(i) * perArea);
+}
+const sum = (band: Band) => Array.from(band).reduce((total, value) => total + value, 0);
 
 it("offers every schema strategy through its executable declaration and preserves existing labels", () => {
   expect(magicSourceOptions.map((option) => option.value)).toEqual([...magicSources]);
@@ -106,7 +121,7 @@ it("projects and publishes each declared magic channel with its actual quantity 
   const state = fixture(),
     field = state.physical!.magic!.fields[0];
   field.intensity.fill(300);
-  field.retained.set(Float64Array.from(state.physical!.map.mesh.areas, (area) => area * 5));
+  fillRetained(state, field.retained, 5);
   field.firstEpoch.fill(2);
   projectMagic(state);
   const prepared = prepareAtlasGeneration(state.domain, {
@@ -134,15 +149,16 @@ it("conserves extensive retained activity during real remeshing and preserves di
   field.history.fill(7);
   field.firstEpoch.fill(2);
   field.radii.fill(500);
-  field.retained.set(Float64Array.from(state.physical!.map.mesh.areas, (area) => area * 5));
-  const total = field.retained.reduce((sum, value) => sum + value, 0),
+  fillRetained(state, field.retained, 5);
+  const total = sum(field.retained),
     before = field.retained.length;
   expect(refineWorkspace(state, [{ x: 2000, y: 500, radius: 4000, size: 500 }])).toBe(true);
   expect(field.retained.length).toBeGreaterThan(before);
-  expect(field.retained.reduce((sum, value) => sum + value, 0)).toBeCloseTo(total, 6);
-  expect(field.history.every((value) => value === 7)).toBe(true);
-  expect(field.firstEpoch.every((value) => value === 2)).toBe(true);
-  expect(field.radii.every((value) => value === 500)).toBe(true);
+  expect(sum(field.retained)).toBeCloseTo(total, 6);
+  const cells = contentCells(state);
+  expect(cells.every((i) => field.history.get(i) === 7)).toBe(true);
+  expect(cells.every((i) => field.firstEpoch.get(i) === 2)).toBe(true);
+  expect(cells.every((i) => field.radii.get(i) === 500)).toBe(true);
 });
 
 it("inherits only carried activity and resets newly formed crust from declared initial values", () => {
@@ -155,17 +171,19 @@ it("inherits only carried activity and resets newly formed crust from declared i
   projectMagic(state);
   state.physical!.inherited = true;
   initializeMagic(state);
-  const inherited = state.physical!.magic!.fields[0];
-  expect(inherited.history.every((value) => value === 7)).toBe(true);
-  expect(inherited.stored.every((value) => value === 9)).toBe(true);
-  expect(inherited.firstEpoch.every((value) => value === 2)).toBe(true);
-  expect(inherited.intensity.every((value) => value === 0)).toBe(true);
+  const inherited = state.physical!.magic!.fields[0],
+    [c0, c1] = contentCells(state),
+    cells = contentCells(state);
+  expect(cells.every((i) => inherited.history.get(i) === 7)).toBe(true);
+  expect(cells.every((i) => inherited.stored.get(i) === 9)).toBe(true);
+  expect(cells.every((i) => inherited.firstEpoch.get(i) === 2)).toBe(true);
+  expect(cells.every((i) => inherited.intensity.get(i) === 0)).toBe(true);
   state.physical!.map.AdvectionSourceIndex.fill(-1);
-  state.physical!.map.AdvectionSourceIndex[1] = 0;
+  state.physical!.map.AdvectionSourceIndex.set(c1, c0);
   advectMagic(state);
-  expect(inherited.history[0]).toBe(0);
-  expect(inherited.firstEpoch[0]).toBe(-1);
-  expect(inherited.history[1]).toBe(7);
-  expect(inherited.stored[1]).toBe(9);
-  expect(inherited.firstEpoch[1]).toBe(2);
+  expect(inherited.history.get(c0)).toBe(0);
+  expect(inherited.firstEpoch.get(c0)).toBe(-1);
+  expect(inherited.history.get(c1)).toBe(7);
+  expect(inherited.stored.get(c1)).toBe(9);
+  expect(inherited.firstEpoch.get(c1)).toBe(2);
 });

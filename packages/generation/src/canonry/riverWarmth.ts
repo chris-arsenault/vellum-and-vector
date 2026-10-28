@@ -12,16 +12,19 @@ const warmthLength = 60_000;
  * cell carries is the strongest that reaches it.
  */
 export function riverWarmth(map: PhysicalField) {
-  const carried = workingArray(map, "float64", "river:warmth");
+  const carried = workingArray(map, "float64", "river:warmth"),
+    order = sourceToOutletOrder(map);
   map.RiverWarmth.fill(0);
-  for (const i of sourceToOutletOrder(map)) {
-    const warmth = Math.max(carried[i], Math.max(0, map.ExternalHeatForcing[i]));
+  for (let n = 0; n < order.length; n++) {
+    const i = order.get(n);
+    const warmth = Math.max(carried.get(i), Math.max(0, map.ExternalHeatForcing.get(i)));
     if (warmth <= 1) continue;
-    if (map.RiverOrders[i] >= 1 && map.WaterKindCodes[i] === 0) map.RiverWarmth[i] = warmth;
-    const target = map.FlowTargets[i];
-    if (target < 0 || map.WaterKindCodes[target] === 1) continue;
+    if (map.RiverOrders.get(i) >= 1 && map.WaterKindCodes.get(i) === 0)
+      map.RiverWarmth.set(i, warmth);
+    const target = map.FlowTargets.get(i);
+    if (target < 0 || map.WaterKindCodes.get(target) === 1) continue;
     const next = warmth * Math.exp(-physicalDistance(map.mesh, i, target) / warmthLength);
-    carried[target] = Math.max(carried[target], next);
+    carried.set(target, Math.max(carried.get(target), next));
   }
-  releaseWorking(map, carried);
+  releaseWorking(map, carried, order);
 }

@@ -7,50 +7,41 @@ import { Feature } from "./codes";
 
 export function geothermal(map: PhysicalField, c: PhysicalContext) {
   for (let i = 0; i < map.mesh.count; i++) {
-    map.FeatureFlags[i] &= ~Feature.GeothermalVent;
-    const strain = map.TectonicStrain[i] / 1000;
-    const boundary = [0, 0.43, 0.58, 0.24][map.TectonicBoundaryCodes[i]] * strain;
-    const fracture = (map.FractureConductance[i] / 1000) * 0.28;
-    const impact = ((map.ImpactHeat[i] / 1000) * 0.36) / Math.max(1, map.CompletedEpochCount + 1);
-    const lobes = fractalNoise(
-      map.mesh,
-      map.mesh.x[i],
-      map.mesh.y[i],
-      c.Seed ^ 0x4d13,
-      c.Profile.PlumeLobeScale,
-      3
-    );
+    let flags = map.FeatureFlags.get(i) & ~Feature.GeothermalVent;
+    const tectonicStrain = map.TectonicStrain.get(i),
+      fractureConductance = map.FractureConductance.get(i),
+      volcanicActivity = map.VolcanicActivity.get(i),
+      x = map.mesh.x(i),
+      y = map.mesh.y(i);
+    const strain = tectonicStrain / 1000;
+    const boundary = [0, 0.43, 0.58, 0.24][map.TectonicBoundaryCodes.get(i)] * strain;
+    const fracture = (fractureConductance / 1000) * 0.28;
+    const impact =
+      ((map.ImpactHeat.get(i) / 1000) * 0.36) / Math.max(1, map.CompletedEpochCount + 1);
+    const lobes = fractalNoise(map.mesh, x, y, c.Seed ^ 0x4d13, c.Profile.PlumeLobeScale, 3);
     const plume =
-      (map.VolcanicActivity[i] / 1000) *
+      (volcanicActivity / 1000) *
       0.68 *
       clamp(1 + (lobes * c.Profile.PlumeLobeStrength) / 1000, 0, 1.6);
     const broad =
-      unitNoise(
-        map.mesh,
-        map.mesh.x[i],
-        map.mesh.y[i],
-        c.Seed,
-        Math.max(140_000, map.mesh.contentRadius * 0.34),
-        2
-      ) * 0.1;
-    map.Geothermal[i] = round(clamp(boundary + fracture + impact + plume + broad, 0, 1) * 1000);
-    map.HeatSourceDensity[i] = clamp(
-      truncate(
-        (map.Geothermal[i] * 2 +
-          map.FractureConductance[i] +
-          map.TectonicStrain[i] +
-          map.VolcanicActivity[i]) /
-          4
-      ),
-      0,
-      1000
+      unitNoise(map.mesh, x, y, c.Seed, Math.max(140_000, map.mesh.contentRadius * 0.34), 2) * 0.1;
+    const geothermal = round(clamp(boundary + fracture + impact + plume + broad, 0, 1) * 1000);
+    map.Geothermal.set(i, geothermal);
+    map.HeatSourceDensity.set(
+      i,
+      clamp(
+        truncate((geothermal * 2 + fractureConductance + tectonicStrain + volcanicActivity) / 4),
+        0,
+        1000
+      )
     );
     const provenance =
-      map.TectonicStrain[i] >= 180 ||
-      map.FractureConductance[i] >= 560 ||
-      map.VolcanicActivity[i] > 0 ||
-      (map.FeatureFlags[i] & Feature.MantlePlume) !== 0;
-    if (map.Geothermal[i] >= c.Profile.GeothermalVentThreshold && provenance)
-      map.FeatureFlags[i] |= Feature.GeothermalVent;
+      tectonicStrain >= 180 ||
+      fractureConductance >= 560 ||
+      volcanicActivity > 0 ||
+      (flags & Feature.MantlePlume) !== 0;
+    if (geothermal >= c.Profile.GeothermalVentThreshold && provenance)
+      flags |= Feature.GeothermalVent;
+    map.FeatureFlags.set(i, flags);
   }
 }

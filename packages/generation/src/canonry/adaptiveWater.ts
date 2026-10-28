@@ -13,22 +13,26 @@ function valleySupport(state: GenerationState) {
   const size = p.LandformNeighborhoodRadius / work.sampling.featureSamples;
   const supports: SamplingSupport[] = [];
   for (let i = 0; i < mesh.count; i++) {
-    const j = map.FlowTargets[i];
-    if (j < 0 || map.RiverOrders[i] <= 0) continue;
+    const j = map.FlowTargets.get(i);
+    if (j < 0 || map.RiverOrders.get(i) <= 0) continue;
     const length = physicalDistance(mesh, i, j),
-      stations = Math.ceil(length / size);
+      stations = Math.ceil(length / size),
+      xi = mesh.x(i),
+      yi = mesh.y(i),
+      dx = meshDeltaX(mesh, mesh.x(j) - xi),
+      dy = mesh.y(j) - yi;
     for (let n = 0; n <= stations; n++)
       supports.push({
-        x: mesh.origin[0] + mesh.x[i] + (meshDeltaX(mesh, mesh.x[j] - mesh.x[i]) * n) / stations,
-        y: mesh.origin[1] + mesh.y[i] + ((mesh.y[j] - mesh.y[i]) * n) / stations,
+        x: mesh.origin[0] + xi + (dx * n) / stations,
+        y: mesh.origin[1] + yi + (dy * n) / stations,
         radius: size,
         size,
       });
-    const drop = (map.Elevation[i] - map.Elevation[j]) / (1024 * length);
+    const drop = (map.Elevation.get(i) - map.Elevation.get(j)) / (1024 * length);
     if (drop < p.WaterfallMinimumDrop / p.WaterfallEvaluationLength) continue;
     supports.push({
-      x: mesh.origin[0] + mesh.x[i],
-      y: mesh.origin[1] + mesh.y[i],
+      x: mesh.origin[0] + xi,
+      y: mesh.origin[1] + yi,
       radius: p.WaterfallEvaluationLength,
       size: p.WaterfallEvaluationLength / work.sampling.featureSamples,
     });

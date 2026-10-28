@@ -35,13 +35,13 @@ it("keeps boundary geometry stable when an internal consumer uses a different pr
   const map = world(),
     c = context();
   tectonicProvinces(map, c);
-  const provinces = map.CrustProvinceIds.slice(),
-    plates = map.CrustPlateIds.slice();
+  const provinces = Array.from(map.CrustProvinceIds),
+    plates = Array.from(map.CrustPlateIds);
   const internal = physicalContext(104729, 0, c.Profile);
   internal.IsEvolutionEpoch = true;
   tectonicProvinces(map, internal);
-  expect(map.CrustProvinceIds).toEqual(provinces);
-  expect(map.CrustPlateIds).toEqual(plates);
+  expect(Array.from(map.CrustProvinceIds)).toEqual(provinces);
+  expect(Array.from(map.CrustPlateIds)).toEqual(plates);
 });
 
 it("keeps material ancestry when a fragment has different moving membership", () => {
@@ -53,13 +53,13 @@ it("keeps material ancestry when a fragment has different moving membership", ()
   const fragment = sites.find((site) => site !== original && site.assembly === original.assembly)!;
   fragment.plate = map.tectonics!.nextPlateId++;
   map.tectonics!.plates.push(plateOf(map, sites, fragment.plate));
-  const ancestry = map.CrustAssemblyIds.slice();
+  const ancestry = Array.from(map.CrustAssemblyIds);
   c.IsEvolutionEpoch = true;
   tectonicProvinces(map, c);
   expect(fragment.assembly).toBe(original.assembly);
   expect(fragment.plate).not.toBe(original.plate);
-  expect(map.CrustPlateIds.some((id) => id === fragment.plate)).toBe(true);
-  expect(map.CrustAssemblyIds).toEqual(ancestry);
+  expect(Array.from(map.CrustPlateIds).some((id) => id === fragment.plate)).toBe(true);
+  expect(Array.from(map.CrustAssemblyIds)).toEqual(ancestry);
 });
 
 it("initializes the same sites and mechanical state independently of terrain sampling", () => {
@@ -81,6 +81,12 @@ it("carries categorical membership and worker-local mechanics through actual rem
   const next = remeshPhysical(map, nextTopology, rectangle(bounds));
   expect(next.mesh.count).toBeGreaterThan(map.mesh.count);
   expect(next.tectonics).toBe(map.tectonics);
-  expect(new Set(next.CrustPlateIds)).toEqual(new Set(map.CrustPlateIds));
-  expect(new Set(next.CrustAssemblyIds)).toEqual(new Set(map.CrustAssemblyIds));
+  const contentIds = (field: typeof map, band: typeof map.CrustPlateIds) => {
+    const ids = new Set<number>();
+    for (let i = 0; i < field.mesh.count; i++)
+      if (field.mesh.membership(i) === 1) ids.add(band.get(i));
+    return ids;
+  };
+  expect(contentIds(next, next.CrustPlateIds)).toEqual(contentIds(map, map.CrustPlateIds));
+  expect(contentIds(next, next.CrustAssemblyIds)).toEqual(contentIds(map, map.CrustAssemblyIds));
 });

@@ -44,11 +44,11 @@ function directedStep(
     ];
     const j = cellAt(map, next);
     if (j < 0) continue;
-    const novelty = map.FractureConductance[j] < 560 ? 0.22 : -0.08;
+    const novelty = map.FractureConductance.get(j) < 560 ? 0.22 : -0.08;
     const value =
       Math.cos(turn) +
       novelty +
-      (map.TectonicStrain[j] / 1000) * 0.12 +
+      (map.TectonicStrain.get(j) / 1000) * 0.12 +
       hashSigned(
         seed ^ 0x6c53,
         branch + Math.floor(step / 10_000),
@@ -75,17 +75,20 @@ export function widenFracture(
   for (let head = 0; head < queue.length; head++) {
     const i = queue[head];
     const distance = Math.hypot(
-      meshDeltaX(map.mesh, map.mesh.x[i] - point[0]),
-      map.mesh.y[i] - point[1]
+      meshDeltaX(map.mesh, map.mesh.x(i) - point[0]),
+      map.mesh.y(i) - point[1]
     );
-    const support = width / 2 + Math.hypot(map.mesh.cellWidth[i], map.mesh.cellHeight[i]) / 2;
+    const support = width / 2 + Math.hypot(map.mesh.cellWidth(i), map.mesh.cellHeight(i)) / 2;
     if (distance > support && i !== source) continue;
-    map.FractureConductance[i] = Math.max(
-      map.FractureConductance[i],
-      i === source ? strength : round(560 * Math.max(0, 1 - distance / support))
+    map.FractureConductance.set(
+      i,
+      Math.max(
+        map.FractureConductance.get(i),
+        i === source ? strength : round(560 * Math.max(0, 1 - distance / support))
+      )
     );
-    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
+    for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+      const j = map.mesh.neighbor(i, edge);
       if (j < 0 || visited.has(j)) continue;
       visited.add(j);
       queue.push(j);
@@ -133,7 +136,9 @@ function growBranch(
   fault.coordinates.push(point);
 }
 function candidateScore(map: PhysicalField, i: number) {
-  return map.TectonicStrain[i] * 0.48 + map.Uplift[i] * 310 + map.RidgeInfluence[i] * 120;
+  return (
+    map.TectonicStrain.get(i) * 0.48 + map.Uplift.get(i) * 310 + map.RidgeInfluence.get(i) * 120
+  );
 }
 /**
  * Initial maps start from the conductance floor; each later epoch, older
@@ -143,11 +148,14 @@ function prepareFractures(map: PhysicalField, c: PhysicalContext) {
   const p = c.Profile,
     keep = c.IsEvolutionEpoch ? p.FractureRetentionPerEpoch / 1000 : 1;
   for (let i = 0; i < map.mesh.count; i++)
-    map.FractureConductance[i] = Math.max(
-      p.FractureConductanceFloor,
-      round(
-        p.FractureConductanceFloor +
-          (map.FractureConductance[i] - p.FractureConductanceFloor) * keep
+    map.FractureConductance.set(
+      i,
+      Math.max(
+        p.FractureConductanceFloor,
+        round(
+          p.FractureConductanceFloor +
+            (map.FractureConductance.get(i) - p.FractureConductanceFloor) * keep
+        )
       )
     );
 }
@@ -181,13 +189,14 @@ export function fractureNetwork(map: PhysicalField, c: PhysicalContext) {
 
 /** Plan against the current terrain; refining support must not choose a different network. */
 export function plannedFractures(map: PhysicalField, c: PhysicalContext) {
-  const scratch: PhysicalField = {
-    ...map,
-    FractureConductance: map.FractureConductance.slice(),
-    faults: [],
-  };
-  fractureNetwork(scratch, c);
-  return scratch.faults;
+  const conductance = map.coverage.copyBand(map.FractureConductance);
+  const scratch: PhysicalField = { ...map, FractureConductance: conductance, faults: [] };
+  try {
+    fractureNetwork(scratch, c);
+    return scratch.faults;
+  } finally {
+    map.coverage.release(conductance);
+  }
 }
 export function applyPlannedFractures(
   map: PhysicalField,

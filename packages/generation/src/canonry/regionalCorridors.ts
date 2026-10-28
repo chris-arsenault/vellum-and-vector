@@ -18,10 +18,11 @@ function conditionSegment(
     const x = a[0] + ((b[0] - a[0]) * step) / steps,
       y = a[1] + ((b[1] - a[1]) * step) / steps,
       i = nearestTriangle(map.mesh, x - map.mesh.origin[0], y - map.mesh.origin[1]),
-      target = units(elevation({ x, y, z: 0 }));
-    if (target >= map.Elevation[i]) continue;
-    map.BedrockElevation[i] -= map.Elevation[i] - target;
-    map.Elevation[i] = target;
+      target = units(elevation({ x, y, z: 0 })),
+      current = map.Elevation.get(i);
+    if (target >= current) continue;
+    map.BedrockElevation.add(i, -(current - target));
+    map.Elevation.set(i, target);
   }
 }
 
@@ -65,7 +66,7 @@ export function regionalIncomingWater(state: GenerationState) {
       crossing.point.x - map.mesh.origin[0],
       crossing.point.y - map.mesh.origin[1]
     );
-    incoming[cell] += Math.max(0, crossing.flow);
+    incoming.add(cell, Math.max(0, crossing.flow));
   }
   return incoming;
 }

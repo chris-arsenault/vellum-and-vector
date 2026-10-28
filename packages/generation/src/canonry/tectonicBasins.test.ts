@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
-import { createField } from "./field";
+import type { Band } from "@atlas/domain";
+import { createField, type PhysicalField } from "./field";
 import { createWorldMesh } from "./worldMesh";
 import { atlasPhysicalProfile, atlasEpoch } from "./atlasProfile";
 import { physicalContext } from "./context";
@@ -52,11 +53,11 @@ function continent(extension: number) {
   indexTectonicBonds(state);
   tectonicProvinces(map, c);
   for (let i = 0; i < map.mesh.count; i++) {
-    const land = Math.abs(map.mesh.x[i]) < 650_000 && Math.abs(map.mesh.y[i]) < 350_000;
-    map.CrustThickness[i] = units(land ? 4000 : 1000);
-    map.CrustContinentalFraction[i] = land ? 1000 : 0;
-    map.BedrockElevation[i] = units(land ? 300 : -1600);
-    map.Elevation[i] = map.BedrockElevation[i];
+    const land = Math.abs(map.mesh.x(i)) < 650_000 && Math.abs(map.mesh.y(i)) < 350_000;
+    map.CrustThickness.set(i, units(land ? 4000 : 1000));
+    map.CrustContinentalFraction.set(i, land ? 1000 : 0);
+    map.BedrockElevation.set(i, units(land ? 300 : -1600));
+    map.Elevation.set(i, map.BedrockElevation.get(i));
   }
   crustalSupport(map, c, false);
   lithosphericFlexure(map, c);
@@ -65,22 +66,30 @@ function continent(extension: number) {
   return { map, c };
 }
 
+const distinct = (map: PhysicalField, band: Band) => {
+  const ids = new Set<number>();
+  for (let i = 0; i < map.mesh.count; i++) if (map.mesh.membership(i) === 1) ids.add(band.get(i));
+  return ids;
+};
+const anyPositive = (map: PhysicalField, band: Band) =>
+  map.coverage.reduce(band, (found, value) => (value > 0 ? 1 : found), 0) === 1;
+
 it("opens a marine basin through a formerly connected continent using the shared motion", () => {
   const { map, c } = continent(0.8);
   landmasses(map, c);
-  expect(new Set(map.LandmassIds).size).toBe(2); // Ocean plus one connected continent.
+  expect(distinct(map, map.LandmassIds).size).toBe(2); // Ocean plus one connected continent.
   plateAdvection(map, c);
   crustalSupport(map, c, false);
   lithosphericFlexure(map, c);
   oceanConnectivity(map, c);
   landmasses(map, c);
   expect(map.tectonics!.splits).toBe(1);
-  expect(new Set(map.LandmassIds).size).toBeGreaterThan(2);
-  const center = map.mesh.x.findIndex(
-    (x, i) => Math.abs(x) < 20_000 && Math.abs(map.mesh.y[i]) < 20_000
-  );
-  expect(map.WaterKindCodes[center]).toBe(1);
-  expect(map.CrustContinentalFraction[center]).toBeLessThan(100);
+  expect(distinct(map, map.LandmassIds).size).toBeGreaterThan(2);
+  let center = -1;
+  for (let i = 0; i < map.mesh.count && center < 0; i++)
+    if (Math.abs(map.mesh.x(i)) < 20_000 && Math.abs(map.mesh.y(i)) < 20_000) center = i;
+  expect(map.WaterKindCodes.get(center)).toBe(1);
+  expect(map.CrustContinentalFraction.get(center)).toBeLessThan(100);
   expect(map.crustBudget.oceanCreated).toBeGreaterThan(0);
 });
 
@@ -92,7 +101,7 @@ it("keeps the starting continent connected without differential driving", () => 
   oceanConnectivity(map, c);
   landmasses(map, c);
   expect(map.tectonics!.splits).toBe(0);
-  expect(new Set(map.LandmassIds).size).toBe(2);
+  expect(distinct(map, map.LandmassIds).size).toBe(2);
 });
 
 it("narrows and closes a young basin when its fragments converge again", () => {
@@ -106,11 +115,12 @@ it("narrows and closes a young basin when its fragments converge again", () => {
   plateAdvection(map, c);
   surface();
   const oceanWidth = () =>
-    map.WaterKindCodes.reduce(
+    map.coverage.reduce(
+      map.WaterKindCodes,
       (sum, value, i) =>
         sum +
-        (value === 1 && Math.abs(map.mesh.y[i]) < 50_000 && Math.abs(map.mesh.x[i]) < 500_000
-          ? map.mesh.areas[i]
+        (value === 1 && Math.abs(map.mesh.y(i)) < 50_000 && Math.abs(map.mesh.x(i)) < 500_000
+          ? map.mesh.area(i)
           : 0),
       0
     );
@@ -119,8 +129,8 @@ it("narrows and closes a young basin when its fragments converge again", () => {
   for (const site of map.tectonics!.sites) site.driveX *= -1;
   c.TectonicDurationMyr = 60;
   plateAdvection(map, c);
-  expect(map.CrustRootReserve.some((value) => value > 0)).toBe(true);
+  expect(anyPositive(map, map.CrustRootReserve)).toBe(true);
   surface();
   expect(oceanWidth()).toBeLessThan(opened * 0.2);
-  expect(map.OrogenicConstruction.some((value) => value > 0)).toBe(true);
+  expect(anyPositive(map, map.OrogenicConstruction)).toBe(true);
 });

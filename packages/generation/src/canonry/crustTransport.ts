@@ -1,5 +1,5 @@
 import type { PhysicalField } from "./field";
-import type { NumericalVector } from "@atlas/domain";
+import type { Band } from "@atlas/domain";
 import { maximumCrustThickness, minimumCrustThickness, units } from "./math";
 import { weightScale, type TransportPlan } from "./transportPlan";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
@@ -13,30 +13,32 @@ export interface CrustBudget {
   oceanAdjustment: number;
 }
 interface Columns {
-  continental: NumericalVector;
-  oceanic: NumericalVector;
-  reserve: NumericalVector;
+  continental: Band;
+  oceanic: Band;
+  reserve: Band;
 }
 export function captureCrustColumns(map: PhysicalField): Columns {
   if (!map.CrustColumnsInitialized) {
     for (let i = 0; i < map.mesh.count; i++)
-      map.CrustContinentalColumn[i] =
-        (map.CrustThickness[i] * map.CrustContinentalFraction[i]) / 1000;
+      map.CrustContinentalColumn.set(
+        i,
+        (map.CrustThickness.get(i) * map.CrustContinentalFraction.get(i)) / 1000
+      );
     map.CrustColumnsInitialized = true;
   }
   return {
-    continental: map.CrustContinentalColumn.slice(),
+    continental: map.coverage.copyBand(map.CrustContinentalColumn),
     oceanic: workingValues(map, "float64", "crust:oceanic", (i) =>
-      Math.max(0, map.CrustThickness[i] - map.CrustContinentalColumn[i])
+      Math.max(0, map.CrustThickness.get(i) - map.CrustContinentalColumn.get(i))
     ),
-    reserve: map.CrustRootReserve.slice(),
+    reserve: map.coverage.copyBand(map.CrustRootReserve),
   };
 }
 function exported(map: PhysicalField, source: number, share: number, columns: Columns) {
-  const area = map.mesh.areas[source] / 1024;
+  const area = map.mesh.area(source) / 1024;
   map.crustBudget.continentalExported +=
-    (columns.continental[source] + columns.reserve[source]) * share * area;
-  map.crustBudget.oceanExported += columns.oceanic[source] * share * area;
+    (columns.continental.get(source) + columns.reserve.get(source)) * share * area;
+  map.crustBudget.oceanExported += columns.oceanic.get(source) * share * area;
 }
 function accumulate(map: PhysicalField, plan: TransportPlan, old: Columns): Columns {
   const result: Columns = {
@@ -46,13 +48,17 @@ function accumulate(map: PhysicalField, plan: TransportPlan, old: Columns): Colu
   };
   for (let source = 0; source < map.mesh.count; source++) {
     let retained = 0;
-    for (let offset = plan.offsets[source]; offset < plan.offsets[source + 1]; offset++) {
+    const end = plan.offsets.get(source + 1),
+      continental = old.continental.get(source),
+      oceanic = old.oceanic.get(source),
+      reserve = old.reserve.get(source);
+    for (let offset = plan.offsets.get(source); offset < end; offset++) {
       const target = plan.targets[offset],
         share = plan.weights[offset] / weightScale;
-      const weight = (share * map.mesh.areas[source]) / map.mesh.areas[target];
-      result.continental[target] += old.continental[source] * weight;
-      result.oceanic[target] += old.oceanic[source] * weight;
-      result.reserve[target] += old.reserve[source] * weight;
+      const weight = (share * map.mesh.area(source)) / map.mesh.area(target);
+      result.continental.add(target, continental * weight);
+      result.oceanic.add(target, oceanic * weight);
+      result.reserve.add(target, reserve * weight);
       retained += share;
     }
     exported(map, source, Math.max(0, 1 - retained), old);
@@ -60,32 +66,32 @@ function accumulate(map: PhysicalField, plan: TransportPlan, old: Columns): Colu
   return result;
 }
 function retainColumn(map: PhysicalField, plan: TransportPlan, columns: Columns, i: number) {
-  let continental = columns.continental[i],
-    oceanic = columns.oceanic[i];
-  const arrival = plan.arrivals[i] / weightScale,
-    area = map.mesh.areas[i] / 1024;
+  let continental = columns.continental.get(i),
+    oceanic = columns.oceanic.get(i);
+  const arrival = plan.arrivals.get(i) / weightScale,
+    area = map.mesh.area(i) / 1024;
   const fresh = Math.max(0, 1 - arrival) * units(1000);
   oceanic += fresh;
   map.crustBudget.oceanCreated += fresh * area;
   const total = continental + oceanic;
   const convergence =
-    map.TectonicBoundaryCodes[i] === 1 && arrival > 1 ? total - total / arrival : 0;
+    map.TectonicBoundaryCodes.get(i) === 1 && arrival > 1 ? total - total / arrival : 0;
   const excess = Math.max(convergence, total - units(maximumCrustThickness), 0);
   const consumed = Math.min(oceanic, excess),
     reserve = excess - consumed;
   oceanic -= consumed;
   continental -= reserve;
   map.crustBudget.oceanConsumed += consumed * area;
-  map.OceanicSubduction[i] += consumed;
-  map.OceanicSubductionHistory[i] += consumed;
-  map.CrustRootReserve[i] = columns.reserve[i] + reserve;
-  map.ConvergentCrustSurplus[i] = reserve;
+  map.OceanicSubduction.add(i, consumed);
+  map.OceanicSubductionHistory.add(i, consumed);
+  map.CrustRootReserve.set(i, columns.reserve.get(i) + reserve);
+  map.ConvergentCrustSurplus.set(i, reserve);
   const basal = Math.max(0, units(minimumCrustThickness) - continental - oceanic);
   oceanic += basal;
   map.crustBudget.oceanCreated += basal * area;
-  map.CrustContinentalColumn[i] = continental;
-  map.CrustThickness[i] = continental + oceanic;
-  map.CrustContinentalFraction[i] = Math.round((continental / map.CrustThickness[i]) * 1000);
+  map.CrustContinentalColumn.set(i, continental);
+  map.CrustThickness.set(i, continental + oceanic);
+  map.CrustContinentalFraction.set(i, Math.round((continental / map.CrustThickness.get(i)) * 1000));
 }
 /** Continental material is conserved in columns and root reserves; oceanic sinks are explicit. */
 export function transportCrustColumns(map: PhysicalField, plan: TransportPlan, old: Columns) {
@@ -97,12 +103,12 @@ export function transportCrustColumns(map: PhysicalField, plan: TransportPlan, o
 /** Existing vertical column adjustments remain explicit until their process supplies material. */
 export function adjustCrustColumn(map: PhysicalField, i: number, next: number) {
   if (map.CrustColumnsInitialized) {
-    const delta = next - map.CrustThickness[i],
-      continental = (delta * map.CrustContinentalFraction[i]) / 1000,
-      area = map.mesh.areas[i] / 1024;
-    map.CrustContinentalColumn[i] += continental;
+    const delta = next - map.CrustThickness.get(i),
+      continental = (delta * map.CrustContinentalFraction.get(i)) / 1000,
+      area = map.mesh.area(i) / 1024;
+    map.CrustContinentalColumn.add(i, continental);
     map.crustBudget.continentalAdjustment += continental * area;
     map.crustBudget.oceanAdjustment += (delta - continental) * area;
   }
-  map.CrustThickness[i] = next;
+  map.CrustThickness.set(i, next);
 }

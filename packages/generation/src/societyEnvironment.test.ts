@@ -36,16 +36,17 @@ function fixture() {
   state.domain.world.id = "bc07dcd0-7cba-46b1-8e56-5f7829dde8cb";
   state.domain.world.layers = Object.fromEntries(builtinLayers().map((l) => [l.id, l]));
   state.surface = createAdaptiveField("land", state.domain.scope, topology);
-  const map = createField(adaptivePhysicalMesh(topology, state.domain.scope.footprint));
+  const lattice = adaptivePhysicalMesh(topology, state.domain.scope.footprint);
+  const map = createField(lattice);
   const profile = atlasPhysicalProfile();
   map.OpenBoundary = true;
   map.SeaLevelInitialized = true;
   for (let i = 0; i < map.mesh.count; i++) {
-    const x = map.mesh.x[i] + map.mesh.origin[0],
-      y = map.mesh.y[i] + map.mesh.origin[1];
-    map.Elevation[i] = (x < 250 ? -10 : 1 + x / 1000 + Math.abs(y - 500) / 20) * 1024;
+    const x = map.mesh.x(i) + map.mesh.origin[0],
+      y = map.mesh.y(i) + map.mesh.origin[1];
+    map.Elevation.set(i, (x < 250 ? -10 : 1 + x / 1000 + Math.abs(y - 500) / 20) * 1024);
   }
-  map.BedrockElevation.set(map.Elevation);
+  map.BedrockElevation.copyFrom(map.Elevation);
   map.Temperature.fill(400);
   map.Runoff.fill(800);
   map.Rainfall.fill(800);
@@ -63,7 +64,7 @@ function fixture() {
   state.physical = {
     map,
     profile,
-    samples: map.mesh.leafToCell,
+    samples: lattice.leafCells(),
     inherited: false,
     fixed: [],
     sampling: { maximumSize: 250, minimumSize: 250, featureSamples: 2 },
@@ -136,13 +137,13 @@ it("refreshes a dam reservoir and downstream routing without advancing geologica
   work.magnitude = 3;
   state.society!.region.works = [work];
   const geologicalEvents = structuredClone(map.events),
-    tectonics = map.CrustMotionX.slice();
+    tectonics = Array.from(map.CrustMotionX);
   applySocietyWorks(state, context, 20);
   refreshSocietyEnvironment(state, context, 20);
-  expect(map.WaterKindCodes.some((v) => v === 2)).toBe(true);
+  expect(Array.from(map.WaterKindCodes).some((v) => v === 2)).toBe(true);
   expect(Object.values(state.domain.world.features).some((f) => f.kind === "lake")).toBe(true);
   expect(map.events).toEqual(geologicalEvents);
-  expect(map.CrustMotionX).toEqual(tectonics);
+  expect(Array.from(map.CrustMotionX)).toEqual(tectonics);
   for (const [i, water] of state.surface.channels.water.entries())
     if (water === 2) expect(state.surface.channels.waterDepth[i]).toBeGreaterThan(0);
   expect(Number.isFinite(gridPosition(state.surface, 0).x)).toBe(true);
@@ -156,13 +157,13 @@ it("leaves water, terrain and the lake set untouched by a World dam demand", () 
   expect(demand.demand).toMatchObject({ unit: "cubic-metre/second" });
   demand.magnitude = 3;
   state.society!.region.works = [demand];
-  const elevation = map.Elevation.slice(),
-    water = map.WaterKindCodes.slice();
+  const elevation = Array.from(map.Elevation),
+    water = Array.from(map.WaterKindCodes);
   applySocietyWorks(state, context, 20);
   refreshSocietyEnvironment(state, context, 20);
   expect(map.EngineeredDams.count()).toBe(0);
-  expect(map.Elevation).toEqual(elevation);
-  expect(map.WaterKindCodes).toEqual(water);
+  expect(Array.from(map.Elevation)).toEqual(elevation);
+  expect(Array.from(map.WaterKindCodes)).toEqual(water);
   expect(Object.values(state.domain.world.features).some((f) => f.kind === "lake")).toBe(false);
 });
 it("realizes a World dam demand at the era's end only when its impoundment spans the mesh", () => {
@@ -175,7 +176,7 @@ it("realizes a World dam demand at the era's end only when its impoundment spans
   state.society!.region.works = [dam];
   applySocietyWorks(state, context, 20);
   refreshSocietyEnvironment(state, context, 20, true);
-  const lakeCells = map.WaterKindCodes.filter((v) => v === 2).length;
+  const lakeCells = Array.from(map.WaterKindCodes).filter((v) => v === 2).length;
   if (dam.demand) {
     // Below the resolution rule: nothing of the dam exists at World.
     expect(map.EngineeredDams.count()).toBe(0);
@@ -218,13 +219,13 @@ it("retains Pressure rays for inland earthworks and retraces them when ocean con
   initializeMagic(state);
   const trace = vi.spyOn(propagation, "propagateMagic");
   try {
-    const water = state.physical!.map.WaterKindCodes.slice();
+    const water = Array.from(state.physical!.map.WaterKindCodes);
     state.surface.channels.elevation.forEach((height, i) => {
       if (height > 0) changeSample(state, "elevation", i, height + 1);
     });
     state.society!.changed.add("elevation");
     refreshSocietyEnvironment(state, context, 10, false);
-    expect(state.physical!.map.WaterKindCodes.map((v) => Number(v === 1))).toEqual(
+    expect(Array.from(state.physical!.map.WaterKindCodes, (v) => Number(v === 1))).toEqual(
       water.map((v) => Number(v === 1))
     );
     expect(
@@ -257,7 +258,7 @@ it("retains Pressure rays for inland earthworks and retraces them when ocean con
 it("transfers local earthwork deltas without resampling unrelated terrain", () => {
   const { state, context } = fixture(),
     map = state.physical!.map;
-  const before = map.Elevation.slice();
+  const before = Array.from(map.Elevation);
   const work = makeWork(state, state.society!.region.communities[0], "pass", {
     x: 1875,
     y: 375,
@@ -267,10 +268,10 @@ it("transfers local earthwork deltas without resampling unrelated terrain", () =
   state.society!.region.works = [work];
   applySocietyWorks(state, context, 10);
   refreshSocietyEnvironment(state, context, 10, false);
-  expect(map.Elevation).not.toEqual(before);
+  expect(Array.from(map.Elevation)).not.toEqual(before);
   for (let i = 0; i < before.length; i++) {
-    const x = map.mesh.x[i] + map.mesh.origin[0];
-    if (x < 500 || x > 3250) expect(map.Elevation[i]).toBe(before[i]);
+    const x = map.mesh.x(i) + map.mesh.origin[0];
+    if (x < 500 || x > 3250) expect(map.Elevation.get(i)).toBe(before[i]);
   }
   expect(state.society!.elevationBefore).toBeUndefined();
 });

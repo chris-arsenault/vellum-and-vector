@@ -9,10 +9,11 @@ import { createGrid, rectangle, type Profile } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { extractNativeGeography } from "./atlasFeatures";
 import { riverChannelGeometry } from "./channelGeometry";
+import type { TriangularLattice } from "./mesh";
 import type { MapProcessContext } from "../process";
 
 function index(map: PhysicalField, u: number, v: number, inverted: boolean) {
-  return map.mesh.indexes.at(u, v, inverted)!;
+  return (map.mesh as TriangularLattice).addressCell(u, v, inverted);
 }
 function catchment(
   map: PhysicalField,
@@ -22,10 +23,13 @@ function catchment(
   discharge: number
 ) {
   cells.forEach((cell, i) => {
-    map.WaterKindCodes[cell] = 0;
-    map.DrainageBasinIds[cell] = basin;
-    map.FlowTargets[cell] = cells[i + 1] ?? outlet;
-    map.Runoff[cell] = ((discharge / cells.length) * 1000 * secondsPerYear) / map.mesh.areas[cell];
+    map.WaterKindCodes.set(cell, 0);
+    map.DrainageBasinIds.set(cell, basin);
+    map.FlowTargets.set(cell, cells[i + 1] ?? outlet);
+    map.Runoff.set(
+      cell,
+      ((discharge / cells.length) * 1000 * secondsPerYear) / map.mesh.area(cell)
+    );
   });
 }
 function fixture() {
@@ -86,21 +90,22 @@ function publish(map: PhysicalField, profileName: Profile = "world") {
 it("publishes qualifying world basins with their smaller tributaries and preserves the full physical network", () => {
   const { map, main, branch, coast } = fixture(),
     profile = atlasPhysicalProfile(),
-    targets = map.FlowTargets.slice();
+    targets = map.coverage.copyBand(map.FlowTargets);
   const discharge = (cells: number[]) =>
-    cells.reduce((q, i) => q + depthRateToDischarge(map.Runoff[i], map.mesh.areas[i]), 0);
+    cells.reduce((q, i) => q + depthRateToDischarge(map.Runoff.get(i), map.mesh.area(i)), 0);
   riverNetwork(map, physicalContext(1, 0, profile));
-  expect(coast.some((i) => map.RiverOrders[i] > 0)).toBe(true);
-  expect(map.FlowAccumulation[coast.at(-1)!]).toBeCloseTo(discharge(coast), 6);
-  expect(map.FlowAccumulation[main.at(-1)!]).toBeCloseTo(discharge([...main, ...branch]), 6);
+  expect(coast.some((i) => map.RiverOrders.get(i) > 0)).toBe(true);
+  expect(map.FlowAccumulation.get(coast.at(-1)!)).toBeCloseTo(discharge(coast), 6);
+  expect(map.FlowAccumulation.get(main.at(-1)!)).toBeCloseTo(discharge([...main, ...branch]), 6);
   expect(
     branch.some(
       (i) =>
-        map.RiverOrders[i] > 0 && map.FlowAccumulation[i] < profile.WorldRiverMinimumBasinDischarge
+        map.RiverOrders.get(i) > 0 &&
+        map.FlowAccumulation.get(i) < profile.WorldRiverMinimumBasinDischarge
     )
   ).toBe(true);
-  expect(map.RiverOrders[main.at(-1)!]).toBeGreaterThan(1);
-  expect(map.FlowTargets).toEqual(targets);
+  expect(map.RiverOrders.get(main.at(-1)!)).toBeGreaterThan(1);
+  expect(Array.from(map.FlowTargets)).toEqual(Array.from(targets));
   riverChannelGeometry(map, physicalContext(1, 0, profile));
   const features = publish(map);
   expect(features.length).toBeGreaterThan(1);
@@ -120,8 +125,10 @@ it("publishes qualifying world basins with their smaller tributaries and preserv
 
 it("keeps runoff and catchment area when a basin does not qualify as a mapped river", () => {
   const { map, coast } = fixture(),
-    expectedArea = coast.reduce((area, i) => area + map.mesh.areas[i], 0);
+    expectedArea = coast.reduce((area, i) => area + map.mesh.area(i), 0);
   riverNetwork(map, physicalContext(1, 0, atlasPhysicalProfile()));
-  expect(map.CatchmentArea[coast.at(-1)!]).toBeCloseTo(expectedArea, 3);
-  expect(coast.every((i) => map.FlowAccumulation[i] > 0 && map.FlowTargets[i] >= 0)).toBe(true);
+  expect(map.CatchmentArea.get(coast.at(-1)!)).toBeCloseTo(expectedArea, 3);
+  expect(coast.every((i) => map.FlowAccumulation.get(i) > 0 && map.FlowTargets.get(i) >= 0)).toBe(
+    true
+  );
 });

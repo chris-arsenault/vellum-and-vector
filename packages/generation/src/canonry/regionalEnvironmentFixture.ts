@@ -84,15 +84,17 @@ export function regionalEnvironmentFixture(enabled = true) {
     sampling: { maximumSize: 250, minimumSize: 250, featureSamples: 2 },
   };
   for (let i = 0; i < map.mesh.count; i++) {
-    map.Elevation[i] = map.BedrockElevation[i] = 100 * 1024;
-    map.Temperature[i] = 400;
-    map.Rainfall[i] = 1000;
-    map.Moisture[i] = 700;
-    map.RockResistance[i] = 1000;
-    map.FractureConductance[i] = 900;
-    map.CanopyAge[i] = 80;
-    map.BroadleafCover[i] = map.TreeCover[i] = 0.7;
-    map.IceThickness[i] = 300;
+    map.Elevation.set(i, 100 * 1024);
+    map.BedrockElevation.set(i, 100 * 1024);
+    map.Temperature.set(i, 400);
+    map.Rainfall.set(i, 1000);
+    map.Moisture.set(i, 700);
+    map.RockResistance.set(i, 1000);
+    map.FractureConductance.set(i, 900);
+    map.CanopyAge.set(i, 80);
+    map.BroadleafCover.set(i, 0.7);
+    map.TreeCover.set(i, 0.7);
+    map.IceThickness.set(i, 300);
   }
   return { state, map, parent };
 }

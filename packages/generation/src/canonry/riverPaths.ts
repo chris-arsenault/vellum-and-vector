@@ -1,17 +1,16 @@
 import type { PhysicalField } from "./field";
 import { physicalSampler } from "./physicalMetric";
-import { spatial } from "@atlas/domain";
+import { spatial, type Band } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import { meshDeltaX, meshPointX } from "./mesh";
-import type { NumericalVector } from "@atlas/domain";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 
 type Coordinate = [number, number];
 type Station = { point: Coordinate; segment: number; fraction: number };
 export interface RiverPaths {
-  x: NumericalVector;
-  y: NumericalVector;
-  upstream: NumericalVector;
+  x: Band;
+  y: Band;
+  upstream: Band;
   elevationAt?: (x: number, y: number) => number;
   water?: { ocean: Geometry | null; lakes: { get(id: number): Geometry | undefined } };
 }
@@ -19,64 +18,66 @@ const mix = (a: Coordinate, b: Coordinate, t = 0.5): Coordinate => [
   a[0] + (b[0] - a[0]) * t,
   a[1] + (b[1] - a[1]) * t,
 ];
-const position = (paths: RiverPaths, i: number): Coordinate => [paths.x[i], paths.y[i]];
+const position = (paths: RiverPaths, i: number): Coordinate => [paths.x.get(i), paths.y.get(i)];
 
 /** Remove cell-scale stair steps along the main stem, sharing every confluence position. */
 export function createRiverPaths(map: PhysicalField): RiverPaths {
   const paths: RiverPaths = {
-    x: workingValues(map, "float64", "river:x", (i) => map.mesh.x[i]),
-    y: workingValues(map, "float64", "river:y", (i) => map.mesh.y[i]),
+    x: workingValues(map, "float64", "river:x", (i) => map.mesh.x(i)),
+    y: workingValues(map, "float64", "river:y", (i) => map.mesh.y(i)),
     upstream: workingArray(map, "int32", "river:upstream").fill(-1),
     elevationAt: physicalSampler(map.mesh, map.Elevation),
   };
   for (let i = 0; i < map.mesh.count; i++) {
-    const target = map.FlowTargets[i];
-    if (map.RiverOrders[i] <= 0 || target < 0) continue;
-    const previous = paths.upstream[target];
-    if (previous < 0 || map.FlowAccumulation[i] > map.FlowAccumulation[previous])
-      paths.upstream[target] = i;
+    const target = map.FlowTargets.get(i);
+    if (map.RiverOrders.get(i) <= 0 || target < 0) continue;
+    const previous = paths.upstream.get(target);
+    if (previous < 0 || map.FlowAccumulation.get(i) > map.FlowAccumulation.get(previous))
+      paths.upstream.set(target, i);
   }
   // Numerical de-aliasing, not geological activity or a physical meander wavelength.
   for (let pass = 0; pass < 3; pass++) relax(map, paths);
   return paths;
 }
 function relax(map: PhysicalField, paths: RiverPaths) {
-  const x = workingValues(map, "float64", "river:relax-x", (i) => paths.x[i]),
-    y = workingValues(map, "float64", "river:relax-y", (i) => paths.y[i]);
+  const x = workingValues(map, "float64", "river:relax-x", (i) => paths.x.get(i)),
+    y = workingValues(map, "float64", "river:relax-y", (i) => paths.y.get(i));
   for (let i = 0; i < map.mesh.count; i++) {
-    const previous = paths.upstream[i],
-      next = map.FlowTargets[i];
+    const previous = paths.upstream.get(i),
+      next = map.FlowTargets.get(i);
     if (
       previous < 0 ||
       next < 0 ||
-      map.RiverOrders[i] <= 0 ||
-      map.WaterKindCodes[i] !== 0 ||
+      map.RiverOrders.get(i) <= 0 ||
+      map.WaterKindCodes.get(i) !== 0 ||
       bordersWater(map, i)
     )
       continue;
-    const dx =
-        x[i] +
-        (meshDeltaX(map.mesh, x[previous] - x[i]) + meshDeltaX(map.mesh, x[next] - x[i])) / 4 -
-        map.mesh.x[i],
-      dy = (y[previous] + y[next] + 2 * y[i]) / 4 - map.mesh.y[i];
+    const xi = x.get(i),
+      yi = y.get(i),
+      dx =
+        xi +
+        (meshDeltaX(map.mesh, x.get(previous) - xi) + meshDeltaX(map.mesh, x.get(next) - xi)) / 4 -
+        map.mesh.x(i),
+      dy = (y.get(previous) + y.get(next) + 2 * yi) / 4 - map.mesh.y(i);
     // The centroid-to-edge distance is h/2. Keep the point strictly inside its cell.
     const factor = map.mesh.topology
       ? Math.min(
           1,
-          (map.mesh.cellWidth[i] * 0.45) / Math.abs(dx),
-          (map.mesh.cellHeight[i] * 0.45) / Math.abs(dy)
+          (map.mesh.cellWidth(i) * 0.45) / Math.abs(dx),
+          (map.mesh.cellHeight(i) * 0.45) / Math.abs(dy)
         )
       : Math.min(1, (map.mesh.spacing * 0.45) / Math.hypot(dx, dy));
-    paths.x[i] = map.mesh.x[i] + dx * factor;
-    paths.y[i] = map.mesh.y[i] + dy * factor;
+    paths.x.set(i, map.mesh.x(i) + dx * factor);
+    paths.y.set(i, map.mesh.y(i) + dy * factor);
   }
   releaseWorking(map, x, y);
 }
 /** A shore cell's centre is its only point guaranteed dry in the published water geometry. */
 function bordersWater(map: PhysicalField, i: number) {
-  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-    if (j >= 0 && map.WaterKindCodes[j] !== 0) return true;
+  for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+    const j = map.mesh.neighbor(i, edge);
+    if (j >= 0 && map.WaterKindCodes.get(j) !== 0) return true;
   }
   return false;
 }
@@ -87,24 +88,23 @@ function bordersWater(map: PhysicalField, i: number) {
  */
 function openWater(map: PhysicalField, i: number) {
   let best = -1;
-  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
+  for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+    const j = map.mesh.neighbor(i, edge);
     if (
       j < 0 ||
-      map.WaterKindCodes[j] !== map.WaterKindCodes[i] ||
-      map.WaterBodyIds[j] !== map.WaterBodyIds[i]
+      map.WaterKindCodes.get(j) !== map.WaterKindCodes.get(i) ||
+      map.WaterBodyIds.get(j) !== map.WaterBodyIds.get(i)
     )
       continue;
-    if (map.WaterDepths[j] > (best < 0 ? map.WaterDepths[i] : map.WaterDepths[best])) best = j;
+    if (map.WaterDepths.get(j) > (best < 0 ? map.WaterDepths.get(i) : map.WaterDepths.get(best)))
+      best = j;
   }
   return best;
 }
 function tangent(map: PhysicalField, paths: RiverPaths, i: number): Coordinate {
-  const previous = paths.upstream[i],
-    next =
-      map.FlowTargets[i] < 0 && map.WaterKindCodes[i] !== 0
-        ? openWater(map, i)
-        : map.FlowTargets[i];
+  const previous = paths.upstream.get(i),
+    target = map.FlowTargets.get(i),
+    next = target < 0 && map.WaterKindCodes.get(i) !== 0 ? openWater(map, i) : target;
   const a = position(paths, previous < 0 ? i : previous),
     b = position(paths, next < 0 ? i : next);
   return [meshDeltaX(map.mesh, b[0] - a[0]), b[1] - a[1]];
@@ -112,13 +112,13 @@ function tangent(map: PhysicalField, paths: RiverPaths, i: number): Coordinate {
 
 /** Clip a handle to the convex union of the two adjacent triangular drainage cells. */
 function corridorHandle(map: PhysicalField, i: number, j: number, a: Coordinate, d: Coordinate) {
-  const dx = meshDeltaX(map.mesh, map.mesh.x[j] - map.mesh.x[i]),
-    dy = map.mesh.y[j] - map.mesh.y[i],
+  const dx = meshDeltaX(map.mesh, map.mesh.x(j) - map.mesh.x(i)),
+    dy = map.mesh.y(j) - map.mesh.y(i),
     h = Math.hypot(dx, dy),
     ex = dx / h,
     ey = dy / h;
-  const x = a[0] - (map.mesh.x[i] + dx / 2),
-    y = a[1] - (map.mesh.y[i] + map.mesh.y[j]) / 2;
+  const x = a[0] - (map.mesh.x(i) + dx / 2),
+    y = a[1] - (map.mesh.y(i) + map.mesh.y(j)) / 2;
   const u = (x * ex + y * ey) / (1.5 * h),
     v = (-x * ey + y * ex) / ((Math.sqrt(3) * h) / 2),
     du = (d[0] * ex + d[1] * ey) / (1.5 * h),
@@ -184,12 +184,12 @@ function appendCurve(
 }
 function cellHandle(map: PhysicalField, i: number, a: Coordinate, vector: Coordinate) {
   const low = [
-    map.mesh.x[i] - map.mesh.cellWidth[i] / 2,
-    map.mesh.y[i] - map.mesh.cellHeight[i] / 2,
+    map.mesh.x(i) - map.mesh.cellWidth(i) / 2,
+    map.mesh.y(i) - map.mesh.cellHeight(i) / 2,
   ];
   const high = [
-    map.mesh.x[i] + map.mesh.cellWidth[i] / 2,
-    map.mesh.y[i] + map.mesh.cellHeight[i] / 2,
+    map.mesh.x(i) + map.mesh.cellWidth(i) / 2,
+    map.mesh.y(i) + map.mesh.cellHeight(i) / 2,
   ];
   let factor = 1;
   for (let axis = 0; axis < 2; axis++) {
@@ -208,19 +208,14 @@ function portal(
   a: Coordinate,
   b: Coordinate
 ): Coordinate {
+  const mesh = map.mesh;
   const low = [
-    Math.max(map.mesh.x[i] - map.mesh.cellWidth[i] / 2, map.mesh.x[j] - map.mesh.cellWidth[j] / 2),
-    Math.max(
-      map.mesh.y[i] - map.mesh.cellHeight[i] / 2,
-      map.mesh.y[j] - map.mesh.cellHeight[j] / 2
-    ),
+    Math.max(mesh.x(i) - mesh.cellWidth(i) / 2, mesh.x(j) - mesh.cellWidth(j) / 2),
+    Math.max(mesh.y(i) - mesh.cellHeight(i) / 2, mesh.y(j) - mesh.cellHeight(j) / 2),
   ];
   const high = [
-    Math.min(map.mesh.x[i] + map.mesh.cellWidth[i] / 2, map.mesh.x[j] + map.mesh.cellWidth[j] / 2),
-    Math.min(
-      map.mesh.y[i] + map.mesh.cellHeight[i] / 2,
-      map.mesh.y[j] + map.mesh.cellHeight[j] / 2
-    ),
+    Math.min(mesh.x(i) + mesh.cellWidth(i) / 2, mesh.x(j) + mesh.cellWidth(j) / 2),
+    Math.min(mesh.y(i) + mesh.cellHeight(i) / 2, mesh.y(j) + mesh.cellHeight(j) / 2),
   ];
   const axis = Math.abs(high[0] - low[0]) < Math.abs(high[1] - low[1]) ? 0 : 1;
   const fraction = (low[axis] - a[axis]) / (b[axis] - a[axis]);
@@ -263,10 +258,10 @@ function appendAdaptiveSegment(
   const tolerance = Math.min(
     100,
     Math.min(
-      map.mesh.cellWidth[i],
-      map.mesh.cellHeight[i],
-      map.mesh.cellWidth[j],
-      map.mesh.cellHeight[j]
+      map.mesh.cellWidth(i),
+      map.mesh.cellHeight(i),
+      map.mesh.cellWidth(j),
+      map.mesh.cellHeight(j)
     ) / 64
   );
   appendCurve(
@@ -300,17 +295,11 @@ function appendAdaptiveSegment(
     [fraction, 1]
   );
 }
-function profile(
-  members: number[],
-  stations: Station[],
-  values: import("@atlas/domain").NumericalVector,
-  scale = 1,
-  offset = 0
-) {
+function profile(members: number[], stations: Station[], values: Band, scale = 1, offset = 0) {
   return stations.map(
     ({ segment, fraction }) =>
-      (values[members[segment]] * (1 - fraction) +
-        values[members[segment + 1]] * fraction -
+      (values.get(members[segment]) * (1 - fraction) +
+        values.get(members[segment + 1]) * fraction -
         offset) *
       scale
   );
@@ -322,7 +311,7 @@ function clipReceivingWater(
   members: number[],
   stations: Station[]
 ) {
-  const receiving = members.findIndex((i) => map.WaterKindCodes[i] !== 0);
+  const receiving = members.findIndex((i) => map.WaterKindCodes.get(i) !== 0);
   if (!paths.elevationAt || receiving < 1) return stations;
   const wet = receivingWater(map, paths, members[receiving]),
     final = receiving - 1;
@@ -352,15 +341,15 @@ function clipReceivingWater(
 }
 function receivingWater(map: PhysicalField, paths: RiverPaths, last: number) {
   const shape =
-    map.WaterKindCodes[last] === 1
+    map.WaterKindCodes.get(last) === 1
       ? paths.water?.ocean
-      : paths.water?.lakes.get(map.WaterBodyIds[last]);
+      : paths.water?.lakes.get(map.WaterBodyIds.get(last));
   if (shape) {
     const covers = spatial.pointCoverage(shape);
     return (x: number, y: number) =>
       covers({ x: meshPointX(map.mesh, x) + map.mesh.origin[0], y: y + map.mesh.origin[1], z: 0 });
   }
-  const level = map.WaterSurfaceElevations[last];
+  const level = map.WaterSurfaceElevations.get(last);
   return (x: number, y: number) => Number.isFinite(level) && paths.elevationAt!(x, y) < level;
 }
 

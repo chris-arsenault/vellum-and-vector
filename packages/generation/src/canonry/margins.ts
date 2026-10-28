@@ -6,18 +6,18 @@ import { hashUnit } from "./noise";
 import { metricSearch } from "./metricSearch";
 import { tectonicOceanMaturityMyr } from "./tectonicControls";
 import { workingArray, releaseWorking } from "./physicalNumerics";
-import type { NumericalVector } from "@atlas/domain";
+import type { Band } from "@atlas/domain";
 
 const unreachable = 2147483647;
 function expand(
   map: PhysicalField,
   queue: Iterable<number>,
-  distance: NumericalVector,
-  kind: NumericalVector | null,
+  distance: Band,
+  kind: Band | null,
   reach: number
 ) {
   metricSearch(map.mesh, queue, distance, reach, (j, i) => {
-    if (kind) kind[j] = kind[i];
+    if (kind) kind.set(j, kind.get(i));
   });
 }
 export function tectonicMargins(map: PhysicalField, context: PhysicalContext) {
@@ -27,18 +27,17 @@ export function tectonicMargins(map: PhysicalField, context: PhysicalContext) {
     spreading = workingArray(map, "float64", "margin:spreading").fill(unreachable);
   const kind = workingArray(map, "int32", "margin:kind");
   for (let i = 0; i < count; i++) {
-    const code = map.TectonicBoundaryCodes[i];
+    const code = map.TectonicBoundaryCodes.get(i);
     if (code === 0) continue;
-    distance[i] = 0;
-    kind[i] = code;
-    if (code === 2) {
-      spreading[i] = 0;
-    }
+    distance.set(i, 0);
+    kind.set(i, code);
+    if (code === 2) spreading.set(i, 0);
   }
   function* seeds(spreadingOnly: boolean) {
-    for (let i = 0; i < count; i++)
-      if (spreadingOnly ? map.TectonicBoundaryCodes[i] === 2 : map.TectonicBoundaryCodes[i] !== 0)
-        yield i;
+    for (let i = 0; i < count; i++) {
+      const code = map.TectonicBoundaryCodes.get(i);
+      if (spreadingOnly ? code === 2 : code !== 0) yield i;
+    }
   }
   expand(map, seeds(false), distance, kind, Math.max(1, p.MarginInfluenceReach));
   expand(map, seeds(true), spreading, null, unreachable);
@@ -48,29 +47,27 @@ export function tectonicMargins(map: PhysicalField, context: PhysicalContext) {
 function assignMarginsAndAge(
   map: PhysicalField,
   context: PhysicalContext,
-  kind: NumericalVector,
-  spreading: NumericalVector
+  kind: Band,
+  spreading: Band
 ) {
   const p = context.Profile;
-  let oldest = 0;
-  for (const value of spreading) if (value !== unreachable) oldest = Math.max(oldest, value);
+  const oldest = map.coverage.reduce(
+    spreading,
+    (held, value) => (value !== unreachable ? Math.max(held, value) : held),
+    0
+  );
   const scale = Math.max(1, Math.min(oldest, p.CrustAgeSaturationDistance));
   const increment = Math.max(
     1,
     round((context.TectonicDurationMyr * 1000) / tectonicOceanMaturityMyr)
   );
   for (let i = 0; i < map.mesh.count; i++) {
-    map.MarginCodes[i] =
-      kind[i] === 1
-        ? 2
-        : kind[i] === 2
-          ? 3
-          : kind[i] === 3
-            ? 4
-            : map.CrustTypeCodes[i] === 2
-              ? 1
-              : 0;
-    ageTriangle(map, context, i, spreading[i], scale, increment);
+    const code = kind.get(i);
+    map.MarginCodes.set(
+      i,
+      code === 1 ? 2 : code === 2 ? 3 : code === 3 ? 4 : map.CrustTypeCodes.get(i) === 2 ? 1 : 0
+    );
+    ageTriangle(map, context, i, spreading.get(i), scale, increment);
   }
 }
 function ageTriangle(
@@ -82,29 +79,31 @@ function ageTriangle(
   increment: number
 ) {
   if (!context.IsEvolutionEpoch)
-    map.CrustAge[i] = round(
-      Math.sqrt(distance === unreachable ? 1 : clamp(distance / scale, 0, 1)) * 1000
+    map.CrustAge.set(
+      i,
+      round(Math.sqrt(distance === unreachable ? 1 : clamp(distance / scale, 0, 1)) * 1000)
     );
-  else if (map.AdvectionSourceIndex[i] < 0) map.CrustAge[i] = 0;
-  else if (map.CrustContinentalFraction[i] < 500)
-    map.CrustAge[i] = Math.min(1000, map.CrustAge[i] + increment);
+  else if (map.AdvectionSourceIndex.get(i) < 0) map.CrustAge.set(i, 0);
+  else if (map.CrustContinentalFraction.get(i) < 500)
+    map.CrustAge.set(i, Math.min(1000, map.CrustAge.get(i) + increment));
 }
 export function tectonicEpoch(map: PhysicalField, context: PhysicalContext) {
   if (!context.IsEvolutionEpoch)
     throw new Error("Tectonic epoch activity requires an evolution epoch.");
   const persistence = context.Profile.TectonicBoundaryPersistence / 1000;
   for (let i = 0; i < map.mesh.count; i++) {
-    const code = map.InitialTectonicBoundaryCodes[i],
-      strain = map.InitialTectonicStrain[i];
+    const code = map.InitialTectonicBoundaryCodes.get(i),
+      strain = map.InitialTectonicStrain.get(i);
     if (code === 0 || strain === 0) {
-      map.TectonicBoundaryCodes[i] = 0;
-      map.TectonicStrain[i] = 0;
+      map.TectonicBoundaryCodes.set(i, 0);
+      map.TectonicStrain.set(i, 0);
       continue;
     }
-    const pairActivity = hashUnit(context.Seed ^ 0x58d7, map.TectonicBoundaryPairIds[i], code);
-    map.TectonicBoundaryCodes[i] = code;
-    map.TectonicStrain[i] = round(
-      clamp(strain * (persistence + (1 - persistence) * pairActivity), 0, 1000)
+    const pairActivity = hashUnit(context.Seed ^ 0x58d7, map.TectonicBoundaryPairIds.get(i), code);
+    map.TectonicBoundaryCodes.set(i, code);
+    map.TectonicStrain.set(
+      i,
+      round(clamp(strain * (persistence + (1 - persistence) * pairActivity), 0, 1000))
     );
   }
 }

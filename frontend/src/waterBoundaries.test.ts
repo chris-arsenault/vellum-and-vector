@@ -33,15 +33,15 @@ function fixture(pattern: "plane" | "coast" | "island") {
   map.BaseSeaLevel = 20 * 1024;
   map.EffectiveSeaLevel = 100 * 1024;
   for (let i = 0; i < map.mesh.count; i++) {
-    const x = map.mesh.x[i],
-      y = map.mesh.y[i];
+    const x = map.mesh.x(i),
+      y = map.mesh.y(i);
     const relief =
       pattern === "island"
         ? 700 - (x * x + y * y) * 0.0000001
         : x * 0.01 + (pattern === "coast" ? 500 * Math.sin(y / 15_000) : 0);
-    map.Elevation[i] = (100 + relief) * 1024;
-    map.WaterKindCodes[i] = Number(map.Elevation[i] < map.EffectiveSeaLevel);
-    map.WaterSurfaceElevations[i] = map.EffectiveSeaLevel;
+    map.Elevation.set(i, (100 + relief) * 1024);
+    map.WaterKindCodes.set(i, Number(map.Elevation.get(i) < map.EffectiveSeaLevel));
+    map.WaterSurfaceElevations.set(i, map.EffectiveSeaLevel);
   }
   state.physical = {
     map,
@@ -99,19 +99,20 @@ it("meets the shared coastline even where resampled elevation puts the mouth inl
     sample = numericTileSampler(raster),
     paint = tilePainter(raster, [-2000, 2000]);
   let exposedMouths = 0;
-  for (let i = 0; i < mesh.contentCount; i++) {
-    if (map.WaterKindCodes[i]) continue;
-    const j = Array.from(mesh.neighbors.slice(i * 3, i * 3 + 3)).find(
-      (j) => j >= 0 && map.WaterKindCodes[j] === 1
+  for (let i = 0; i < mesh.count; i++) {
+    if (mesh.membership(i) !== 1) continue;
+    if (map.WaterKindCodes.get(i)) continue;
+    const j = Array.from({ length: mesh.degree(i) }, (_, e) => mesh.neighbor(i, e)).find(
+      (j) => j >= 0 && map.WaterKindCodes.get(j) === 1
     );
     if (j === undefined) continue;
-    if (Math.abs(mesh.x[j]) > 90_000 || Math.abs(mesh.y[j]) > 90_000) continue;
+    if (Math.abs(mesh.x(j)) > 90_000 || Math.abs(mesh.y(j)) > 90_000) continue;
     const result = riverPath(map, paths, [i, j]),
       end = result.geometry.coordinates.at(-1)!,
       p = { x: end[0], y: end[1], z: 0 };
     expect(spatial.distance(ocean, point(p))).toBeLessThan(0.00001);
-    const dx = mesh.x[j] - p.x,
-      dy = mesh.y[j] - p.y,
+    const dx = mesh.x(j) - p.x,
+      dy = mesh.y(j) - p.y,
       length = Math.hypot(dx, dy),
       x = p.x + dx / length,
       y = p.y + dy / length;
@@ -131,16 +132,16 @@ it("retains a shallow lake inlet smaller than the local contour grid", () => {
     i = nearestTriangle(mesh, 0, 0),
     level = 100 * 1024;
   map.Elevation.fill(level + 1000 * 1024);
-  map.Elevation[i] = level - 1024;
+  map.Elevation.set(i, level - 1024);
   map.WaterKindCodes.fill(0);
-  map.WaterKindCodes[i] = 2;
+  map.WaterKindCodes.set(i, 2);
   map.WaterBodyIds.fill(0);
-  map.WaterBodyIds[i] = 7;
-  map.WaterSurfaceElevations[i] = level;
+  map.WaterBodyIds.set(i, 7);
+  map.WaterSurfaceElevations.set(i, level);
   const shape = lakeFootprint(state, [i], 7, level)!;
   expect(shape).toBeTruthy();
-  expect(spatial.pointCoverage(shape)({ x: mesh.x[i], y: mesh.y[i], z: 0 })).toBe(true);
-  const j = mesh.neighbors[i * 3],
+  expect(spatial.pointCoverage(shape)({ x: mesh.x(i), y: mesh.y(i), z: 0 })).toBe(true);
+  const j = mesh.neighbor(i, 0),
     paths = createRiverPaths(map);
   paths.water = { ocean: null, lakes: new Map([[7, shape]]) };
   const end = riverPath(map, paths, [j, i]).geometry.coordinates.at(-1)!,
@@ -149,7 +150,7 @@ it("retains a shallow lake inlet smaller than the local contour grid", () => {
   raster.lakes = [{ geometry: shape, level: (level - map.BaseSeaLevel) / 1024 }];
   expect(
     numericTileSampler(raster)(
-      [mesh.x[i] - 0.5, mesh.y[i] - 0.5, mesh.x[i] + 0.5, mesh.y[i] + 0.5],
+      [mesh.x(i) - 0.5, mesh.y(i) - 0.5, mesh.x(i) + 0.5, mesh.y(i) + 0.5],
       1
     )[3]
   ).toBe(2);

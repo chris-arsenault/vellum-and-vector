@@ -13,7 +13,7 @@ export function advectLandmarkDrainage(map: PhysicalField, plan: TransportPlan, 
     const previous = new Set(record.corridor);
     record.corridor = [];
     for (let i = 0; i < plan.dominant.length; i++)
-      if (previous.has(plan.dominant[i])) record.corridor.push(i);
+      if (previous.has(plan.dominant.get(i))) record.corridor.push(i);
     const capture = record.capture;
     if (!capture) continue;
     [capture.x, capture.y] = meshPoint(
@@ -30,12 +30,11 @@ export function remeshLandmarkDrainage(
   transfer: ReturnType<typeof prepareAdaptiveTransfer>
 ) {
   for (const record of next.landmarkLedger?.values() ?? []) {
-    const source = new Set(record.corridor.map((cell) => previous.mesh.cellToLeaf[cell]));
+    const source = new Set(record.corridor.map((cell) => previous.mesh.cellToLeaf(cell)));
     const moved = transfer((leaf) => Number(source.has(leaf)), "category");
     record.corridor = [];
     for (let cell = 0; cell < next.mesh.count; cell++)
-      if (moved[next.mesh.cellToLeaf[cell]] === 1) record.corridor.push(cell);
-    if (next.numerical) next.numerical.release(moved);
+      if (moved[next.mesh.cellToLeaf(cell)] === 1) record.corridor.push(cell);
     if (record.capture) {
       record.capture.x += previous.mesh.origin[0] - next.mesh.origin[0];
       record.capture.y += previous.mesh.origin[1] - next.mesh.origin[1];

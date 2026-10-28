@@ -8,6 +8,7 @@ import {
   point,
   rectangle,
   spatial,
+  type AdaptiveLattice,
 } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { adaptivePhysicalMesh } from "./adaptiveMesh";
@@ -22,6 +23,10 @@ import { initializeMagic, magicKey } from "./magicState";
 import { advectAtlasMagic } from "./atlasMagic";
 import { refineWorkspace } from "./adaptiveWorkspace";
 import { nativePosition, nativeIndexAtSurface, sampleSurfaceAtNative } from "./atlasWorkspace";
+
+/** The cell of every leaf, in leaf order. */
+const leafCells = (map: ReturnType<typeof createField>) =>
+  Array.from((map.mesh as AdaptiveLattice).leafCells());
 
 // Supply an evolved state directly. Extraction/projection must not require
 // tectonics, climate or epochs to run before their algorithms can be tested.
@@ -48,7 +53,7 @@ function fixture() {
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
-    samples: map.mesh.leafToCell,
+    samples: (map.mesh as AdaptiveLattice).leafCells(),
     fixed: [],
     inherited: false,
     sampling: { maximumSize: 12_500, minimumSize: 3125, featureSamples: 2 },
@@ -62,23 +67,23 @@ it("projects evolved channels in leaf order with SI units and the same vertical 
   const state = fixture(),
     map = state.physical!.map;
   for (let i = 0; i < map.mesh.count; i++) {
-    map.Elevation[i] = (300 + map.mesh.x[i] / 1000) * 1024;
-    map.BedrockElevation[i] = map.Elevation[i] - 20 * 1024;
-    map.SedimentThickness[i] = 20 * 1024;
-    map.FlowAccumulation[i] = 17 + i;
-    map.WaterKindCodes[i] = i % 2 ? 2 : 0;
-    map.WaterSurfaceElevations[i] = 250 * 1024;
+    map.Elevation.set(i, (300 + map.mesh.x(i) / 1000) * 1024);
+    map.BedrockElevation.set(i, map.Elevation.get(i) - 20 * 1024);
+    map.SedimentThickness.set(i, 20 * 1024);
+    map.FlowAccumulation.set(i, 17 + i);
+    map.WaterKindCodes.set(i, i % 2 ? 2 : 0);
+    map.WaterSurfaceElevations.set(i, 250 * 1024);
   }
   projectNative(state);
   const grid = state.surface;
   expect(grid.topology).toBe(map.mesh.topology);
-  expect(map.mesh.leafToCell.some((cell, leaf) => cell !== leaf)).toBe(true);
+  expect(leafCells(map).some((cell, leaf) => cell !== leaf)).toBe(true);
   expect(grid.units.elevation).toBe("metre");
   expect(grid.units.flow).toBe("cubic-metre/second");
   expect(grid.quantities?.waterLevel).toBe("category");
   for (let leaf = 0; leaf < grid.active.length; leaf++) {
-    const cell = map.mesh.leafToCell[leaf];
-    expect(grid.channels.elevation[leaf]).toBeCloseTo(200 + map.mesh.x[cell] / 1000, 9);
+    const cell = map.mesh.leafToCell(leaf);
+    expect(grid.channels.elevation[leaf]).toBeCloseTo(200 + map.mesh.x(cell) / 1000, 9);
     expect(grid.channels.flow[leaf]).toBe(17 + cell);
     expect(grid.channels.seaLevel[leaf]).toBe(20);
     expect(grid.channels.waterLevel[leaf]).toBe(cell % 2 ? 150 : 20);
@@ -89,7 +94,7 @@ it("reads physical feedback in cell order across refined terrain and its numeric
   const state = fixture(),
     mesh = state.physical!.map.mesh;
   state.surface.channels.heat = Float64Array.from(
-    mesh.leafToCell,
+    leafCells(state.physical!.map),
     (_, leaf) => Math.sin(leaf * 0.3) * 20
   );
   state.surface.units.heat = "celsius";
@@ -144,11 +149,10 @@ it.each(["same", "coarser"])(
     state.surface.units[name] = "celsius";
     const read = fieldInterpolator(state.surface, name),
       covered = spatial.pointCoverage(state.surface.scope.footprint);
-    state.physical!.map.AdvectionSourceIndex.set(
-      Int32Array.from(mesh.cellToLeaf, (_, cell) => (cell % 7 ? (cell + 13) % mesh.count : -1))
-    );
+    for (let cell = 0; cell < mesh.count; cell++)
+      state.physical!.map.AdvectionSourceIndex.set(cell, cell % 7 ? (cell + 13) % mesh.count : -1);
     const expected = Float64Array.from(state.physical!.samples, (cell) => {
-      const source = state.physical!.map.AdvectionSourceIndex[cell];
+      const source = state.physical!.map.AdvectionSourceIndex.get(cell);
       if (source < 0) return 0;
       const p = nativePosition(state.physical!, source);
       return covered(p) ? read(p) : 0;
@@ -182,7 +186,7 @@ it("inherits continuous magic histories and discrete epoch markers in physical c
   const field = work.magic!.fields[0],
     historyKey = magicKey(field, "history"),
     epochKey = magicKey(field, "firstEpoch");
-  const history = Float64Array.from(work.map.mesh.leafToCell, (_, leaf) => 7 + leaf / 10);
+  const history = Float64Array.from(leafCells(work.map), (_, leaf) => 7 + leaf / 10);
   const epochs = Float64Array.from(history, (_, leaf) => (leaf % 4) - 1);
   state.surface.channels[historyKey] = history;
   state.surface.channels[epochKey] = epochs;
@@ -192,9 +196,9 @@ it("inherits continuous magic histories and discrete epoch markers in physical c
   initializeMagic(state);
   const inherited = work.magic!.fields[0];
   for (let cell = 0; cell < work.map.mesh.count; cell++) {
-    const leaf = work.map.mesh.cellToLeaf[cell];
-    expect(inherited.history[cell]).toBeCloseTo(history[leaf], 9);
-    expect(inherited.firstEpoch[cell]).toBe(epochs[leaf]);
+    const leaf = work.map.mesh.cellToLeaf(cell);
+    expect(inherited.history.get(cell)).toBeCloseTo(history[leaf], 9);
+    expect(inherited.firstEpoch.get(cell)).toBe(epochs[leaf]);
   }
 });
 
@@ -202,14 +206,14 @@ it("extracts two lakes without merging bodies or losing their physical stage", (
   const state = fixture(),
     map = state.physical!.map;
   for (let i = 0; i < map.mesh.count; i++) {
-    const x = map.mesh.x[i],
-      y = map.mesh.y[i];
+    const x = map.mesh.x(i),
+      y = map.mesh.y(i);
     const radius = Math.min(Math.hypot(x + 25_000, y), Math.hypot(x - 25_000, y));
-    map.Elevation[i] = (100 + radius / 100) * 1024;
+    map.Elevation.set(i, (100 + radius / 100) * 1024);
     if (radius < 15_000) {
-      map.WaterKindCodes[i] = 2;
-      map.WaterBodyIds[i] = x < 0 ? 17 : 29;
-      map.WaterSurfaceElevations[i] = 250 * 1024;
+      map.WaterKindCodes.set(i, 2);
+      map.WaterBodyIds.set(i, x < 0 ? 17 : 29);
+      map.WaterSurfaceElevations.set(i, 250 * 1024);
     }
   }
   extractLakes(state);
@@ -230,17 +234,17 @@ it("closes a lake crossing the world boundary by tracing its complete numerical 
   const state = fixture(),
     map = state.physical!.map;
   for (let i = 0; i < map.mesh.count; i++) {
-    const radius = Math.hypot(map.mesh.x[i], map.mesh.y[i] - 30_000);
-    map.Elevation[i] = (100 + radius / 200) * 1024;
+    const radius = Math.hypot(map.mesh.x(i), map.mesh.y(i) - 30_000);
+    map.Elevation.set(i, (100 + radius / 200) * 1024);
     if (radius < 30_000) {
-      map.WaterKindCodes[i] = 2;
-      map.WaterBodyIds[i] = 17;
-      map.WaterSurfaceElevations[i] = 250 * 1024;
+      map.WaterKindCodes.set(i, 2);
+      map.WaterBodyIds.set(i, 17);
+      map.WaterSurfaceElevations.set(i, 250 * 1024);
     }
-    if (map.mesh.x[i] > 40_000 && map.mesh.y[i] > 40_000) {
-      map.WaterKindCodes[i] = 2;
-      map.WaterBodyIds[i] = 29;
-      map.WaterSurfaceElevations[i] = 500 * 1024;
+    if (map.mesh.x(i) > 40_000 && map.mesh.y(i) > 40_000) {
+      map.WaterKindCodes.set(i, 2);
+      map.WaterBodyIds.set(i, 29);
+      map.WaterSurfaceElevations.set(i, 500 * 1024);
     }
   }
   extractLakes(state);
@@ -292,10 +296,10 @@ it("maps an impact crater only while its rim stands above the floor and plain", 
   });
   extractGeologicalEvents(state);
   expect(Object.values(state.domain.world.features)).toHaveLength(0);
-  const plain = map.Elevation[0];
+  const plain = map.Elevation.get(0);
   for (let i = 0; i < map.mesh.count; i++) {
-    const distance = Math.hypot(map.mesh.x[i], map.mesh.y[i]) / radius;
-    map.Elevation[i] = plain + Math.max(0, 1 - Math.abs(distance - 1) / 0.4) * 300 * 1024;
+    const distance = Math.hypot(map.mesh.x(i), map.mesh.y(i)) / radius;
+    map.Elevation.set(i, plain + Math.max(0, 1 - Math.abs(distance - 1) / 0.4) * 300 * 1024);
   }
   extractGeologicalEvents(state);
   const crater = Object.values(state.domain.world.features)[0];
@@ -307,9 +311,9 @@ it("extracts classified terrain places and preserves an authored result on repet
   const state = fixture(),
     map = state.physical!.map;
   for (let i = 0; i < map.mesh.count; i++)
-    if (Math.abs(map.mesh.x[i]) < 10_000 && Math.abs(map.mesh.y[i]) < 10_000) {
-      map.LandformCodes[i] = Landform.Peak;
-      map.Elevation[i] = (2000 + map.mesh.x[i] / 100) * 1024;
+    if (Math.abs(map.mesh.x(i)) < 10_000 && Math.abs(map.mesh.y(i)) < 10_000) {
+      map.LandformCodes.set(i, Landform.Peak);
+      map.Elevation.set(i, (2000 + map.mesh.x(i) / 100) * 1024);
     }
   extractReliefFeatures(state);
   const peak = Object.values(state.domain.world.features)[0];
@@ -329,21 +333,23 @@ it("carries magic inventories and epoch provenance through physical refinement b
     old = state.physical!.map;
   initializeMagic(state);
   const magic = state.physical!.magic!.fields[1];
-  magic.retained.set(Float64Array.from(old.mesh.areas, (area) => area * 7));
+  for (let i = 0; i < old.mesh.count; i++) magic.retained.set(i, old.mesh.area(i) * 7);
   magic.history.fill(500);
   magic.firstEpoch.fill(2);
   old.AvailableFacts.add("FlowRouting");
   state.facts.add("canonry:FlowRouting");
-  const before = magic.retained.reduce((sum, value) => sum + value, 0);
+  const before = Array.from(magic.retained).reduce((sum, value) => sum + value, 0);
   expect(refineWorkspace(state, [{ x: 2_050_000, y: 3_050_000, radius: 8000, size: 1562.5 }])).toBe(
     true
   );
   const map = state.physical!.map;
   expect(map.mesh.count).toBeGreaterThan(old.mesh.count);
   expect(magic.retained).toHaveLength(map.mesh.count);
-  expect(magic.retained.reduce((sum, value) => sum + value, 0)).toBeCloseTo(before, -2);
-  expect(magic.history.every((value) => value === 500)).toBe(true);
-  expect(magic.firstEpoch.every((value) => value === 2)).toBe(true);
+  expect(Array.from(magic.retained).reduce((sum, value) => sum + value, 0)).toBeCloseTo(before, -2);
+  const content: number[] = [];
+  for (let i = 0; i < map.mesh.count; i++) if (map.mesh.membership(i) === 1) content.push(i);
+  expect(content.every((i) => magic.history.get(i) === 500)).toBe(true);
+  expect(content.every((i) => magic.firstEpoch.get(i) === 2)).toBe(true);
   expect(map.AvailableFacts.has("FlowRouting")).toBe(false);
   expect(state.facts.has("canonry:FlowRouting")).toBe(false);
   projectNative(state);

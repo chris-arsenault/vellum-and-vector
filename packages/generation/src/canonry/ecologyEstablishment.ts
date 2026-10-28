@@ -5,53 +5,53 @@ import { plantGroups, groupSuitability, type PlantGroup } from "./ecologyGroups"
 import { ecologicalFront, type EcologicalFront } from "./ecologyMovement";
 import { windStrength, type EcologyForcing } from "./ecologyEnvironment";
 import { crossingTime, waterDistance, type Crossing } from "./ecologyCrossing";
-import type { NumericalVector } from "@atlas/domain";
+import type { Band } from "@atlas/domain";
 import { workingValues, releaseWorking } from "./physicalNumerics";
 
 export function initializeEcology(map: PhysicalField, seed = 42, inherited = false) {
   if (map.EcologyInitialized) return;
   for (let i = 0; i < map.mesh.count; i++) {
     inheritFunctionalGroups(map, i);
-    if (!inherited && map.WaterKindCodes[i] !== 1) founders(map, i, seed);
-    if (!inherited && map.WaterKindCodes[i] > 0 && map.WaterDepths[i] < 200 * 1024)
-      map.AquaticFauna[i] = Math.max(map.AquaticFauna[i], 0.0001);
+    const water = map.WaterKindCodes.get(i);
+    if (!inherited && water !== 1) founders(map, i, seed);
+    if (!inherited && water > 0 && map.WaterDepths.get(i) < 200 * 1024)
+      map.AquaticFauna.set(i, Math.max(map.AquaticFauna.get(i), 0.0001));
   }
   map.EcologyInitialized = true;
 }
 function inheritFunctionalGroups(map: PhysicalField, i: number) {
-  const represented = map.BroadleafCover[i] + map.ConiferCover[i];
-  if (represented === 0 && map.TreeCover[i] > 0) map.BroadleafCover[i] = map.TreeCover[i];
-  if (map.Grazers[i] + map.Browsers[i] === 0) {
-    map.Grazers[i] = map.Herbivores[i] * 0.6;
-    map.Browsers[i] = map.Herbivores[i] * 0.4;
+  const represented = map.BroadleafCover.get(i) + map.ConiferCover.get(i);
+  if (represented === 0 && map.TreeCover.get(i) > 0)
+    map.BroadleafCover.set(i, map.TreeCover.get(i));
+  if (map.Grazers.get(i) + map.Browsers.get(i) === 0) {
+    map.Grazers.set(i, map.Herbivores.get(i) * 0.6);
+    map.Browsers.set(i, map.Herbivores.get(i) * 0.4);
   }
 }
 function founders(map: PhysicalField, i: number, seed: number) {
   const diversity = unitNoise(
     map.mesh,
-    map.mesh.x[i] + map.mesh.origin[0],
-    map.mesh.y[i] + map.mesh.origin[1],
+    map.mesh.x(i) + map.mesh.origin[0],
+    map.mesh.y(i) + map.mesh.origin[1],
     seed,
     70_000,
     2
   );
-  map.SoilDepth[i] = Math.max(
-    map.SoilDepth[i],
-    Math.min(0.5, map.SedimentThickness[i] / 1024 + 0.12)
-  );
-  map.MineralNutrients[i] = Math.max(map.MineralNutrients[i], 0.08);
-  map.GrassSeed[i] = Math.max(map.GrassSeed[i], 0.15);
-  map.BroadleafSeed[i] = Math.max(map.BroadleafSeed[i], diversity > 0.45 ? 0.08 : 0);
-  map.ConiferSeed[i] = Math.max(map.ConiferSeed[i], diversity < 0.55 ? 0.08 : 0);
-  map.WetlandSeed[i] = Math.max(map.WetlandSeed[i], 0.02);
-  map.Grazers[i] = Math.max(map.Grazers[i], diversity * 0.0002);
-  map.Browsers[i] = Math.max(map.Browsers[i], (1 - diversity) * 0.0002);
-  map.Predators[i] = Math.max(map.Predators[i], 0.000001);
+  const lift = (band: Band, floor: number) => band.set(i, Math.max(band.get(i), floor));
+  lift(map.SoilDepth, Math.min(0.5, map.SedimentThickness.get(i) / 1024 + 0.12));
+  lift(map.MineralNutrients, 0.08);
+  lift(map.GrassSeed, 0.15);
+  lift(map.BroadleafSeed, diversity > 0.45 ? 0.08 : 0);
+  lift(map.ConiferSeed, diversity < 0.55 ? 0.08 : 0);
+  lift(map.WetlandSeed, 0.02);
+  lift(map.Grazers, diversity * 0.0002);
+  lift(map.Browsers, (1 - diversity) * 0.0002);
+  lift(map.Predators, 0.000001);
 }
 export interface PlantArrival {
   group: PlantGroup;
   front: EcologicalFront;
-  suitability: NumericalVector;
+  suitability: Band;
 }
 export function dispersePlants(
   map: PhysicalField,
@@ -63,15 +63,22 @@ export function dispersePlants(
       groupSuitability(map, group, i, forcing(i))
     );
     const starts = workingValues(map, "float64", `ecology:${group.id}:starts`, (i) =>
-      map[group.seed][i] + map[group.cover][i] > 0.00001 ? 0 : Infinity
+      map[group.seed].get(i) + map[group.cover].get(i) > 0.00001 ? 0 : Infinity
     );
     // Propagules also cross the sea, arriving later the farther they must travel.
     const crossing = group.crossing as Crossing;
-    const landed = waterDistance(map, (i) => starts[i] === 0, crossing.carrier, crossing.reach * 6);
-    for (let i = 0; i < starts.length; i++)
-      if (Number.isFinite(landed[i]))
-        starts[i] = Math.min(starts[i], crossingTime(crossing, landed[i]));
-    const admits = (i: number) => suitability[i] > 0.001;
+    const landed = waterDistance(
+      map,
+      (i) => starts.get(i) === 0,
+      crossing.carrier,
+      crossing.reach * 6
+    );
+    for (let i = 0; i < starts.length; i++) {
+      const distance = landed.get(i);
+      if (Number.isFinite(distance))
+        starts.set(i, Math.min(starts.get(i), crossingTime(crossing, distance)));
+    }
+    const admits = (i: number) => suitability.get(i) > 0.001;
     const front = ecologicalFront(map, starts, admits, (i, edge, j) =>
       seedTravel(map, group, forcing(i), i, edge, j)
     );
@@ -87,14 +94,13 @@ function seedTravel(
   edge: number,
   j: number
 ) {
-  const at = i * map.mesh.stride + edge,
-    distance = map.mesh.edgeLength[at];
+  const distance = map.mesh.edgeLength(i, edge);
   const along =
-    ((meshDeltaX(map.mesh, map.mesh.x[j] - map.mesh.x[i]) * map.WindX[i] +
-      (map.mesh.y[j] - map.mesh.y[i]) * map.WindY[i]) /
+    ((meshDeltaX(map.mesh, map.mesh.x(j) - map.mesh.x(i)) * map.WindX.get(i) +
+      (map.mesh.y(j) - map.mesh.y(i)) * map.WindY.get(i)) /
       Math.max(1, distance * 1000)) *
     windStrength(map, i);
-  const waterborne = group.id === "wetland" && map.FlowTargets[i] === j ? 3 : 1;
+  const waterborne = group.id === "wetland" && map.FlowTargets.get(i) === j ? 3 : 1;
   const speed =
     group.spread *
     f.migration *
@@ -103,5 +109,5 @@ function seedTravel(
     waterborne;
   // Spread is already a front speed in metres/year; a delay per mesh edge would
   // make migration slower whenever the same geography is refined.
-  return speed > 0 ? (distance * (1 + map.Slope[j] * 10)) / speed : Infinity;
+  return speed > 0 ? (distance * (1 + map.Slope.get(j) * 10)) / speed : Infinity;
 }

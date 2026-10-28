@@ -1,63 +1,64 @@
 // OceanDistanceLayer, BathymetryLayer and LandmassLayer, Canonry 0f62584c.
 import type { PhysicalField } from "./field";
-import type { NumericalVector } from "@atlas/domain";
+import { CellList, type Band } from "@atlas/domain";
 import type { PhysicalContext } from "./context";
 import { units } from "./math";
 import { metricSearch } from "./metricSearch";
 import { physicalGradients } from "./physicalMetric";
-import { workingArray, releaseWorking } from "./physicalNumerics";
+import { releaseWorking } from "./physicalNumerics";
 
-function retainInheritedDistance(map: PhysicalField, inherited: NumericalVector | null) {
+function retainInheritedDistance(map: PhysicalField, inherited: Band | null) {
   if (!inherited) return;
-  for (let i = 0; i < inherited.length; i++)
-    if (inherited[i] >= 0 && (map.OceanDistance[i] < 0 || inherited[i] < map.OceanDistance[i]))
-      map.OceanDistance[i] = inherited[i];
+  for (let i = 0; i < inherited.length; i++) {
+    const held = inherited.get(i),
+      current = map.OceanDistance.get(i);
+    if (held >= 0 && (current < 0 || held < current)) map.OceanDistance.set(i, held);
+  }
 }
 export function oceanDistance(map: PhysicalField) {
-  const inherited = map.OpenBoundary ? map.OceanDistance.slice() : null;
+  const inherited = map.OpenBoundary ? map.coverage.copyBand(map.OceanDistance) : null;
   map.OceanDistance.fill(Infinity);
-  const queue = workingArray(map, "int32", "distance:seeds");
-  let count = 0;
+  const seeds = new CellList();
   for (let i = 0; i < map.mesh.count; i++)
-    if (map.WaterKindCodes[i] === 1) {
-      map.OceanDistance[i] = 0;
-      if (touchesLand(map, i)) queue[count++] = i;
+    if (map.WaterKindCodes.get(i) === 1) {
+      map.OceanDistance.set(i, 0);
+      if (touchesLand(map, i)) seeds.push(i);
     }
-  metricSearch(map.mesh, queue.subarray(0, count), map.OceanDistance, Infinity, () => {});
+  metricSearch(map.mesh, seeds.finish(), map.OceanDistance, Infinity, () => {});
   for (let i = 0; i < map.mesh.count; i++)
-    if (!Number.isFinite(map.OceanDistance[i])) map.OceanDistance[i] = -1;
+    if (!Number.isFinite(map.OceanDistance.get(i))) map.OceanDistance.set(i, -1);
   retainInheritedDistance(map, inherited);
-  releaseWorking(map, queue, ...(inherited ? [inherited] : []));
+  if (inherited) releaseWorking(map, inherited);
 }
 function touchesLand(map: PhysicalField, i: number) {
-  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-    const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-    if (j >= 0 && map.WaterKindCodes[j] !== 1) return true;
+  for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+    const j = map.mesh.neighbor(i, edge);
+    if (j >= 0 && map.WaterKindCodes.get(j) !== 1) return true;
   }
   return false;
 }
 export function measureSlopes(map: PhysicalField) {
-  const gradient = physicalGradients(map.mesh, map.Elevation, map.numerical);
+  const gradient = physicalGradients(map.mesh, (i) => map.Elevation.get(i), map.coverage);
   for (let i = 0; i < map.mesh.count; i++)
-    map.Slope[i] = Math.hypot(gradient.x[i], gradient.y[i]) / 1024;
+    map.Slope.set(i, Math.hypot(gradient.x.get(i), gradient.y.get(i)) / 1024);
   releaseWorking(map, gradient.x, gradient.y);
 }
 export function bathymetry(map: PhysicalField, c: PhysicalContext) {
   measureSlopes(map);
   for (let i = 0; i < map.mesh.count; i++) {
-    if (map.WaterKindCodes[i] === 1) {
-      map.BathymetricZoneCodes[i] =
-        map.WaterDepths[i] <= units(c.Profile.ShelfDepth)
-          ? 2
-          : map.WaterDepths[i] <= units(c.Profile.ShelfBreakDepth)
-            ? 3
-            : 4;
+    if (map.WaterKindCodes.get(i) === 1) {
+      const depth = map.WaterDepths.get(i);
+      map.BathymetricZoneCodes.set(
+        i,
+        depth <= units(c.Profile.ShelfDepth) ? 2 : depth <= units(c.Profile.ShelfBreakDepth) ? 3 : 4
+      );
     } else {
+      const distance = map.OceanDistance.get(i);
       const shelf =
-        map.Elevation[i] <= map.EffectiveSeaLevel + units(c.Profile.ShelfDepth / 2) &&
-        map.OceanDistance[i] >= 0 &&
-        map.OceanDistance[i] <= 180_000;
-      map.BathymetricZoneCodes[i] = shelf ? 1 : 0;
+        map.Elevation.get(i) <= map.EffectiveSeaLevel + units(c.Profile.ShelfDepth / 2) &&
+        distance >= 0 &&
+        distance <= 180_000;
+      map.BathymetricZoneCodes.set(i, shelf ? 1 : 0);
     }
   }
 }
@@ -65,39 +66,43 @@ function collect(
   map: PhysicalField,
   start: number,
   id: number,
-  labels: NumericalVector,
+  labels: Band,
   eligible: (i: number) => boolean
 ) {
-  const members = [start];
-  labels[start] = id;
-  for (let head = 0; head < members.length; head++)
-    for (let edge = 0; edge < map.mesh.degree[members[head]]; edge++) {
-      const j = map.mesh.neighbors[members[head] * map.mesh.stride + edge];
-      if (j < 0 || labels[j] !== 0 || !eligible(j)) continue;
-      labels[j] = id;
+  const members = new CellList();
+  members.push(start);
+  labels.set(start, id);
+  for (let head = 0; head < members.length; head++) {
+    const cell = members.at(head);
+    for (let edge = 0; edge < map.mesh.degree(cell); edge++) {
+      const j = map.mesh.neighbor(cell, edge);
+      if (j < 0 || labels.get(j) !== 0 || !eligible(j)) continue;
+      labels.set(j, id);
       members.push(j);
     }
-  return members;
+  }
+  return members.finish();
 }
 export function landmasses(map: PhysicalField, c: PhysicalContext) {
   map.LandmassIds.fill(0);
   map.LandmassClassCodes.fill(0);
   map.ContinentalGroupIds.fill(0);
   const dry = (i: number) =>
-    map.WaterKindCodes[i] === 0 && map.Elevation[i] >= map.EffectiveSeaLevel;
+    map.WaterKindCodes.get(i) === 0 && map.Elevation.get(i) >= map.EffectiveSeaLevel;
   let next = 0;
   for (let i = 0; i < map.mesh.count; i++) {
-    if (!dry(i) || map.LandmassIds[i] !== 0) continue;
+    if (!dry(i) || map.LandmassIds.get(i) !== 0) continue;
     const members = collect(map, i, ++next, map.LandmassIds, dry);
-    const area = members.reduce((sum, j) => sum + map.mesh.areas[j], 0);
+    let area = 0;
+    for (const j of members) area += map.mesh.area(j);
     const code = area >= c.Profile.IslandAreaThreshold ? 2 : 1;
-    for (const j of members) map.LandmassClassCodes[j] = code;
+    for (const j of members) map.LandmassClassCodes.set(j, code);
   }
   const shelfFloor = map.EffectiveSeaLevel - units(c.Profile.ShelfBreakDepth);
-  const shelf = (i: number) => map.Elevation[i] >= shelfFloor;
+  const shelf = (i: number) => map.Elevation.get(i) >= shelfFloor;
   next = 0;
   for (let i = 0; i < map.mesh.count; i++) {
-    if (!shelf(i) || map.ContinentalGroupIds[i] !== 0) continue;
+    if (!shelf(i) || map.ContinentalGroupIds.get(i) !== 0) continue;
     collect(map, i, ++next, map.ContinentalGroupIds, shelf);
   }
 }

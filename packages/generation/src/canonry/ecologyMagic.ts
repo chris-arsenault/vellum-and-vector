@@ -12,8 +12,11 @@ export function applyToxicity(
 ) {
   for (let i = 0; i < map.mesh.count; i++) {
     const f = forcing(i);
-    map.EcologicalToxicity[i] = unit(
-      Math.max(f.toxicity, map.EcologicalToxicity[i] * Math.exp((-years * f.recovery) / 600))
+    map.EcologicalToxicity.set(
+      i,
+      unit(
+        Math.max(f.toxicity, map.EcologicalToxicity.get(i) * Math.exp((-years * f.recovery) / 600))
+      )
     );
   }
 }

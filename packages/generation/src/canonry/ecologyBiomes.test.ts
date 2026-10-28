@@ -9,6 +9,7 @@ import {
 import { landscape } from "../mapFixtures";
 import { adaptivePhysicalMesh } from "./adaptiveMesh";
 import { createField } from "./field";
+import { retainedArray } from "./physicalNumerics";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { extractEcologicalFeatures } from "./ecologyFeatures";
 import { oceanFootprint } from "./geographicContours";
@@ -20,18 +21,19 @@ function fixture() {
     minimumSize: 125,
   });
   state.surface = createAdaptiveField("ecology", state.domain.scope, topology);
-  const map = createField(adaptivePhysicalMesh(topology, state.domain.scope.footprint));
+  const lattice = adaptivePhysicalMesh(topology, state.domain.scope.footprint);
+  const map = createField(lattice);
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
     fixed: [],
     inherited: false,
-    samples: map.mesh.leafToCell,
+    samples: lattice.leafCells(),
     sampling: { maximumSize: 500, minimumSize: 125, featureSamples: 2 },
   };
   map.Rainfall.fill(800);
   map.Elevation.fill(100 * 1024);
-  map.DrainageElevations.set(map.Elevation);
+  map.DrainageElevations.copyFrom(map.Elevation);
   state.domain.world.id = "2f6e0134-6017-4e80-9196-052a12218500";
   state.domain.world.layers = Object.fromEntries(builtinLayers().map((layer) => [layer.id, layer]));
   return state;
@@ -76,9 +78,9 @@ it("stops biome outlines exactly at the generated coast", () => {
   const [x0, , x1] = state.surface.bounds,
     shore = (x0 + x1) / 2;
   for (let i = 0; i < map.mesh.count; i++) {
-    const x = map.mesh.x[i] + map.mesh.origin[0];
-    map.Elevation[i] = ((100 * (shore - x)) / (x1 - x0)) * 1024;
-    map.WaterKindCodes[i] = x > shore ? 1 : 0;
+    const x = map.mesh.x(i) + map.mesh.origin[0];
+    map.Elevation.set(i, ((100 * (shore - x)) / (x1 - x0)) * 1024);
+    map.WaterKindCodes.set(i, x > shore ? 1 : 0);
   }
   state.surface.ocean = oceanFootprint(state);
   extractEcologicalFeatures(state);
@@ -96,8 +98,7 @@ it("stops biome outlines exactly at the generated coast", () => {
 
 it("names the living landscapes each system's own forcing produces", () => {
   const state = fixture(),
-    map = state.physical!.map,
-    count = map.mesh.count;
+    map = state.physical!.map;
   const system = (id: string, effects: Record<string, number>) => {
     const definition = magicSystemSchema.parse({
       id,
@@ -107,11 +108,11 @@ it("names the living landscapes each system's own forcing produces", () => {
       phase: "climate",
       effects,
     });
-    const field = { definition, intensity: new Float64Array(count).fill(800) };
+    const field = { definition, intensity: retainedArray(map, "float64", "intensity").fill(800) };
     state.physical!.magic = {
       fields: [field],
-      heat: new Float64Array(count),
-      melt: new Float64Array(count),
+      heat: retainedArray(map, "float64", "heat"),
+      melt: retainedArray(map, "float64", "melt"),
     } as unknown as NonNullable<typeof state.physical>["magic"];
   };
   map.Temperature.fill(350);

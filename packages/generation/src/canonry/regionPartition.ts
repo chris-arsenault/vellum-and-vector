@@ -2,8 +2,7 @@ import type { GenerationState } from "../process";
 import type { RegionMembers } from "./regionMembers";
 import { catchmentUnits } from "./catchmentUnits";
 import { unitGroups, mergeGroups, groupPieces } from "./regionGroups";
-import { workingArray, releaseWorking } from "./physicalNumerics";
-import { isNumericalVector } from "@atlas/domain";
+import { releaseWorking } from "./physicalNumerics";
 
 /** A named region may reach this multiple of its least named size before it splits. */
 export const largestRegionFactor = 4;
@@ -14,20 +13,20 @@ export const largestRegionShare = 0.016;
 export function landArea(state: GenerationState) {
   const map = state.physical!.map;
   let area = 0;
-  for (let i = 0; i < map.mesh.contentCount; i++)
-    if (map.WaterKindCodes[i] === 0) area += map.mesh.contentAreas[i];
+  for (let i = 0; i < map.mesh.count; i++)
+    if (map.mesh.membership(i) === 1 && map.WaterKindCodes.get(i) === 0)
+      area += map.mesh.contentArea(i);
   return area;
 }
 /** Split large regions along connected catchments, preserving drainage divides. */
-export function partitionRegion(state: GenerationState, members: RegionMembers, maximum: number) {
-  const map = state.physical!.map,
-    areas = map.mesh.contentAreas;
-  if (members.reduce((sum, i) => sum + areas[i], 0) <= maximum) {
-    if (isNumericalVector(members)) return [members];
-    const cells = workingArray(map, "int32", "region:members", members.length);
-    cells.set(members);
-    return [cells];
-  }
+export function partitionRegion(
+  state: GenerationState,
+  members: RegionMembers,
+  maximum: number
+): Int32Array[] {
+  const map = state.physical!.map;
+  if (members.reduce((sum, i) => sum + map.mesh.contentArea(i), 0) <= maximum)
+    return [members instanceof Int32Array ? members : Int32Array.from(members)];
   const units = catchmentUnits(map, maximum / 4),
     groups = unitGroups(map, members, units);
   releaseWorking(map, units);

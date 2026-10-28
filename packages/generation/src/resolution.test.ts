@@ -63,9 +63,10 @@ it("uses the physical preset in the actual workspace and refines a child without
   const cellSpan = generationResolution("draft", "site").cellSpan;
   expect(mesh.topology).not.toBeNull();
   expect(mesh.contentCount).toBeGreaterThan(1);
-  for (let i = 0; i < mesh.contentCount; i++) {
-    expect(mesh.cellWidth[i]).toBeLessThanOrEqual(cellSpan);
-    expect(mesh.cellHeight[i]).toBeLessThanOrEqual(cellSpan);
+  for (let i = 0; i < mesh.count; i++) {
+    if (mesh.membership(i) !== 1) continue;
+    expect(mesh.cellWidth(i)).toBeLessThanOrEqual(cellSpan);
+    expect(mesh.cellHeight(i)).toBeLessThanOrEqual(cellSpan);
   }
   // The existing 100 km inherited halo remains coarse instead of creating millions of site cells.
   expect(mesh.count).toBeLessThan(1000);

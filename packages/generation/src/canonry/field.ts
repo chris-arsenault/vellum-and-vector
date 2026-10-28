@@ -6,12 +6,7 @@ import { noWaterSurface } from "./math";
 import type { TectonicState } from "./tectonicState";
 import type { LandmarkLedger } from "./landmarkLedger";
 import type { CrustBudget } from "./crustTransport";
-import {
-  allocateNumerical,
-  BitSet,
-  type NumericalAllocator,
-  type NumericalVector,
-} from "@atlas/domain";
+import { Band, BitSet, BlockCache, Coverage, type SampleType } from "@atlas/domain";
 
 const integerFields = [
   "BiomeCodes",
@@ -201,8 +196,42 @@ export type PhysicalBufferName =
   | (typeof elevationFields)[number]
   | (typeof metricFields)[number]
   | (typeof floatFields)[number];
-export type PhysicalField = Record<PhysicalBufferName, NumericalVector> & {
-  numerical?: NumericalAllocator;
+/** Channels that read -1 until a process writes them. */
+const unsetIndexFields = [
+  "OceanMarginDistance",
+  "OceanDistance",
+  "OrogenicComponentIds",
+  "VolcanicLastActiveEpoch",
+  "FlowEdges",
+  "IceFlowTargets",
+  "DrainageParents",
+  "DrainageGuidanceTargets",
+  "FlowTargets",
+  "LakeOutletTargets",
+  "UpwindTargets",
+  "UpwindOceanSources",
+] as const;
+/** The physical schema: every channel's sample type and initial value. */
+export function physicalSchema() {
+  const unset = new Set<string>(unsetIndexFields),
+    initial = (name: string) =>
+      name === "WaterSurfaceElevations" ? noWaterSurface : unset.has(name) ? -1 : 0,
+    entry = (name: string, type: SampleType) => ({
+      name,
+      type,
+      lifetime: "run" as const,
+      initial: initial(name),
+    });
+  return [
+    ...integerFields.map((name) => entry(name, "int32")),
+    ...elevationFields.map((name) => entry(name, "float64")),
+    ...metricFields.map((name) => entry(name, "float64")),
+    ...floatFields.map((name) => entry(name, "float32")),
+  ];
+}
+export type PhysicalField = Record<PhysicalBufferName, Band> & {
+  /** The bands' coverage: lattice, block cache, scratch and process lifetimes. */
+  coverage: Coverage;
   mesh: PhysicalMesh;
   tectonics: TectonicState | null;
   landmarkLedger: LandmarkLedger | null;
@@ -244,19 +273,19 @@ export type PhysicalField = Record<PhysicalBufferName, NumericalVector> & {
   FloodFlatFillTotal: number;
   FloodFillTotal: number;
 };
-export function createField(mesh: PhysicalMesh, numerical?: NumericalAllocator): PhysicalField {
-  const allocate = (type: import("@atlas/domain").SampleType, name: string) =>
-    allocateNumerical({ type, length: mesh.count, lifetime: "run", name }, numerical);
-  const arrays = {
-    ...Object.fromEntries(integerFields.map((name) => [name, allocate("int32", name)])),
-    ...Object.fromEntries(elevationFields.map((name) => [name, allocate("float64", name)])),
-    ...Object.fromEntries(metricFields.map((name) => [name, allocate("float64", name)])),
-    ...Object.fromEntries(floatFields.map((name) => [name, allocate("float32", name)])),
-  };
+/** A physical field over the mesh; the cache bounds resident blocks and spills the rest. */
+export function createField(
+  mesh: PhysicalMesh,
+  cache: BlockCache = new BlockCache(Infinity)
+): PhysicalField {
+  const coverage = new Coverage(mesh, cache),
+    bands = Object.fromEntries(
+      physicalSchema().map((schema) => [schema.name, coverage.allocate(schema)])
+    ) as Record<PhysicalBufferName, Band>;
   const field = {
-    ...arrays,
+    ...bands,
     mesh,
-    numerical,
+    coverage,
     tectonics: null,
     landmarkLedger: null,
     CrustColumnsInitialized: false,
@@ -291,50 +320,40 @@ export function createField(mesh: PhysicalMesh, numerical?: NumericalAllocator):
     FloodFlatFillTotal: 0,
     FloodFillTotal: 0,
   } as PhysicalField;
-  for (const name of [
-    "OceanMarginDistance",
-    "OceanDistance",
-    "OrogenicComponentIds",
-    "VolcanicLastActiveEpoch",
-    "FlowEdges",
-    "IceFlowTargets",
-    "DrainageParents",
-    "DrainageGuidanceTargets",
-    "FlowTargets",
-    "LakeOutletTargets",
-    "UpwindTargets",
-    "UpwindOceanSources",
-  ] as const)
-    field[name].fill(-1);
-  field.WaterSurfaceElevations.fill(noWaterSurface);
   return field;
 }
+/** The field's channel bands, by name. */
+export function physicalBands(map: PhysicalField): [PhysicalBufferName, Band][] {
+  return Object.entries(map).filter(
+    (entry): entry is [PhysicalBufferName, Band] => entry[1] instanceof Band
+  );
+}
 export function clearWaterSurface(map: PhysicalField, i: number) {
-  map.WaterDepths[i] = 0;
-  map.WaterSurfaceElevations[i] = noWaterSurface;
+  map.WaterDepths.set(i, 0);
+  map.WaterSurfaceElevations.set(i, noWaterSurface);
 }
 export const allowsBoundaryDrainage = (map: PhysicalField) =>
   map.OpenBoundary || map.mesh.openBoundary;
 export const isOpenOutlet = (map: PhysicalField, i: number) =>
-  Boolean(map.mesh.boundary[i]) &&
+  map.mesh.boundary(i) &&
   (map.OpenBoundary ||
-    (map.mesh.openBoundary && map.DrainageParents[i] < 0 && map.DrainageRanks[i] >= 0));
+    (map.mesh.openBoundary && map.DrainageParents.get(i) < 0 && map.DrainageRanks.get(i) >= 0));
 export function setWaterSurface(map: PhysicalField, i: number, surface: number) {
-  const depth = surface - map.Elevation[i];
+  const depth = surface - map.Elevation.get(i);
   if (depth <= 0) throw new Error("Water surface must be above its physical floor.");
-  map.WaterSurfaceElevations[i] = surface;
-  map.WaterDepths[i] = depth;
+  map.WaterSurfaceElevations.set(i, surface);
+  map.WaterDepths.set(i, depth);
 }
 export function reconcileWater(map: PhysicalField, i: number) {
-  const surface = map.WaterSurfaceElevations[i];
+  const surface = map.WaterSurfaceElevations.get(i);
   if (surface === noWaterSurface) return;
-  if (surface > map.Elevation[i]) {
-    map.WaterDepths[i] = surface - map.Elevation[i];
+  if (surface > map.Elevation.get(i)) {
+    map.WaterDepths.set(i, surface - map.Elevation.get(i));
     return;
   }
-  map.WaterKindCodes[i] = 0;
-  map.WaterBodyIds[i] = 0;
-  map.LakeOutletTargets[i] = -1;
-  map.LakeOverflow[i] = 0;
+  map.WaterKindCodes.set(i, 0);
+  map.WaterBodyIds.set(i, 0);
+  map.LakeOutletTargets.set(i, -1);
+  map.LakeOverflow.set(i, 0);
   clearWaterSurface(map, i);
 }

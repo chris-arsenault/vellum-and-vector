@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import type { Band } from "@atlas/domain";
 import { createWorldMesh } from "./worldMesh";
 import { createField } from "./field";
 import { atlasPhysicalProfile } from "./atlasProfile";
@@ -17,19 +18,22 @@ function surface(geothermal: number, currentHeat: number) {
   const map = createField(createWorldMesh([-200_000, -200_000, 200_000, 200_000], 400, 20_000));
   const c = physicalContext(7, 0, atlasPhysicalProfile());
   for (let i = 0; i < map.mesh.count; i++) {
-    const sea = map.mesh.x[i] < 0;
-    map.WaterKindCodes[i] = sea ? 1 : 0;
-    map.Elevation[i] = units(sea ? -2000 : 50);
-    map.Geothermal[i] = geothermal;
-    map.OceanCurrentHeat[i] = sea ? currentHeat : 0;
-    map.OceanCurrentStrength[i] = sea ? 800 : 0;
+    const sea = map.mesh.x(i) < 0;
+    map.WaterKindCodes.set(i, sea ? 1 : 0);
+    map.Elevation.set(i, units(sea ? -2000 : 50));
+    map.Geothermal.set(i, geothermal);
+    map.OceanCurrentHeat.set(i, sea ? currentHeat : 0);
+    map.OceanCurrentStrength.set(i, sea ? 800 : 0);
   }
   warmthSources(map, c);
   temperature(map, c);
   return map;
 }
-const spread = (a: ArrayLike<number>, b: ArrayLike<number>) =>
-  Math.max(...Array.from(a, (value, i) => Math.abs(value - b[i])));
+const spread = (a: Band, b: Band) => {
+  let largest = -Infinity;
+  for (let i = 0; i < a.length; i++) largest = Math.max(largest, Math.abs(a.get(i) - b.get(i)));
+  return largest;
+};
 
 it("leaves ridge and fracture heat out of surface temperature", () => {
   // A plate-boundary ridge below vent intensity carrying hydrothermal heat on its current.
@@ -47,16 +51,18 @@ it("freezes an exposed polar sea that averages well below freezing", () => {
     const map = createField(createWorldMesh([0, 0, 200_000, 200_000], 200, 20_000));
     const c = physicalContext(7, 0, atlasPhysicalProfile());
     for (let i = 0; i < map.mesh.count; i++) {
-      map.WaterKindCodes[i] = 1;
-      map.Temperature[i] = 300 + celsius * 10;
+      map.WaterKindCodes.set(i, 1);
+      map.Temperature.set(i, 300 + celsius * 10);
       // Strong current, full wave fetch and background hydrothermal heat.
-      map.OceanCurrentStrength[i] = 1000;
-      map.WaveExposure[i] = 1000;
-      map.OceanCurrentHeat[i] = 60;
+      map.OceanCurrentStrength.set(i, 1000);
+      map.WaveExposure.set(i, 1000);
+      map.OceanCurrentHeat.set(i, 60);
     }
     seaIce(map, c);
-    const cells = Array.from({ length: map.mesh.contentCount }, (_, i) => i);
-    return cells.filter((i) => map.IceThickness[i] > 0).length / cells.length;
+    const cells = Array.from({ length: map.mesh.count }, (_, i) => i).filter(
+      (i) => map.mesh.membership(i) === 1
+    );
+    return cells.filter((i) => map.IceThickness.get(i) > 0).length / cells.length;
   };
   expect(frozen(-12)).toBe(1);
   expect(frozen(2)).toBe(0);
@@ -70,7 +76,7 @@ it("keeps tropical rain above a metre and clips only at the precipitation ceilin
     map.Temperature.fill(550);
     map.Seasonality.fill(5);
     precipitation(map, c);
-    return map.Rainfall[0] + map.Snowfall[0];
+    return map.Rainfall.get(0) + map.Snowfall.get(0);
   };
   const p = atlasPhysicalProfile();
   expect(rain(2400)).toBe(p.PrecipitationBaseline + 2400);
@@ -89,15 +95,21 @@ it("passes tropical rain to rivers and floods without a one-metre clip", () => {
     return map;
   };
   const wet = land(3000);
-  const i = Array.from(wet.WaterKindCodes).indexOf(0);
+  let i = -1;
+  for (let cellIndex = 0; cellIndex < wet.mesh.count && i < 0; cellIndex++)
+    if (wet.mesh.membership(cellIndex) !== 0 && wet.WaterKindCodes.get(cellIndex) === 0)
+      i = cellIndex;
   // Warm, wet land loses part of its rain and runs the rest off, above a metre.
-  expect(wet.Runoff[i]).toBeGreaterThan(1000);
-  expect(wet.Runoff[i]).toBeLessThan(3000);
+  expect(wet.Runoff.get(i)).toBeGreaterThan(1000);
+  expect(wet.Runoff.get(i)).toBeLessThan(3000);
   wet.GlacialMeltwater.fill(5000);
   glacialRunoff(wet, c);
-  expect(wet.Runoff[i]).toBe(c.Profile.PrecipitationCeiling);
+  expect(wet.Runoff.get(i)).toBe(c.Profile.PrecipitationCeiling);
   floodEcology(wet, 1000);
-  expect(Math.max(...wet.FloodFrequency)).toBeLessThanOrEqual(0.5);
+  let floodiest = -Infinity;
+  for (let cellIndex = 0; cellIndex < wet.mesh.count; cellIndex++)
+    floodiest = Math.max(floodiest, wet.FloodFrequency.get(cellIndex));
+  expect(floodiest).toBeLessThanOrEqual(0.5);
 });
 
 it("carries the rainfall setting as moisture supply, from one regime table", () => {
@@ -119,5 +131,8 @@ it("carries the rainfall setting as moisture supply, from one regime table", () 
 });
 
 it("paints no Canonry warmth pockets on an atlas map", () => {
-  expect(surface(0, 60).Warmth.every((value) => value === 0)).toBe(true);
+  const map = surface(0, 60);
+  let painted = false;
+  for (let i = 0; i < map.mesh.count; i++) if (map.Warmth.get(i) !== 0) painted = true;
+  expect(painted).toBe(false);
 });

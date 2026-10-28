@@ -8,6 +8,7 @@ import { nativePosition } from "./atlasWorkspace";
 import { propagateMagic } from "./magicPropagation";
 import { magicThermalFeedback, magicLivingFeedback, heldCharge } from "./magicFeedback";
 import { classifyMagicFeatures, projectMagic } from "./magicFeatures";
+import { releaseWorking } from "./physicalNumerics";
 
 function inheritInfluence(state: GenerationState, field: MagicField) {
   for (const channel of publishedMagicChannels)
@@ -23,14 +24,18 @@ function rememberAppliedHeat(state: GenerationState) {
   const work = state.physical!,
     magic = work.magic!,
     map = work.map;
-  for (const field of magic.fields)
+  for (const field of magic.fields) {
+    if (!field.definition.enabled) continue;
+    const effects = field.definition.effects;
     for (let i = 0; i < map.mesh.count; i++) {
-      if (!field.definition.enabled) continue;
-      const effects = field.definition.effects;
-      magic.heat[i] +=
-        field.intensity[i] * effects.heat * (effects.heat < 0 ? heldCharge(map, field, i) : 1);
-      magic.melt[i] = Math.max(magic.melt[i], field.intensity[i] * effects.iceMelt);
+      const intensity = field.intensity.get(i);
+      magic.heat.add(
+        i,
+        intensity * effects.heat * (effects.heat < 0 ? heldCharge(map, field, i) : 1)
+      );
+      magic.melt.set(i, Math.max(magic.melt.get(i), intensity * effects.iceMelt));
     }
+  }
 }
 function refineInfluence(state: GenerationState, field: MagicField, seed: number) {
   if (!field.definition.enabled) return;
@@ -41,12 +46,14 @@ function refineInfluence(state: GenerationState, field: MagicField, seed: number
     (origin) => state.surface.channels[magicKey(field, `origin:${origin.id}:source`)]
   );
   if (!hasOrigins) return; // Older saved maps retain their aggregate influence.
-  const previous = field.intensity.slice(),
+  const map = state.physical!.map,
+    previous = map.coverage.copyBand(field.intensity),
     interior = spatial.buffer(state.domain.scope.footprint, -(state.domain.scope.resolution ?? 0)),
     inside = interior ? spatial.pointCoverage(interior) : () => false;
   propagateMagic(state, field, systemSeed(seed, field.definition.id), field.definition.strength);
   for (let i = 0; i < previous.length; i++)
-    if (!inside(nativePosition(state.physical!, i))) field.intensity[i] = previous[i];
+    if (!inside(nativePosition(state.physical!, i))) field.intensity.set(i, previous.get(i));
+  releaseWorking(map, previous);
 }
 /** Present propagation reads inherited source strengths, never calls renewal or stock advance. */
 export function refineRegionalMagic(state: GenerationState, seed: number) {

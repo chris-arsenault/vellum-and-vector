@@ -12,7 +12,7 @@ import {
   type NetworkWorkspace,
   type ContourWorkspace,
 } from "@atlas/domain";
-import type { openNumericalArena, ZarrResources } from "@atlas/storage-browser";
+import type { openBlockCache, openNumericalArena, ZarrResources } from "@atlas/storage-browser";
 import type { WorkspaceClient } from "./WorkspaceClient";
 import type { WorkspaceFields } from "./workspaceFields";
 import type {
@@ -30,6 +30,8 @@ export interface GenerationExecution {
   sourceNetworks: NetworkWorkspace;
   contours: ContourWorkspace;
   working: Awaited<ReturnType<typeof openNumericalArena>>;
+  /** The physical coverage's block cache and its scratch file. */
+  blocks: Awaited<ReturnType<typeof openBlockCache>>;
   store: ZarrResources;
   fields: WorkspaceFields;
   workspace: WorkspaceClient;
@@ -69,6 +71,7 @@ export async function executeGeneration(
   const result = await generateAtlas(source, input, {
     ...observers,
     numerical: execution.working.arena,
+    cache: execution.blocks.cache,
     features: execution.features,
     sourceFeatures: execution.sourceFeatures,
     networks: execution.networks,

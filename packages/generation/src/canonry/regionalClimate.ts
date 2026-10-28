@@ -6,22 +6,24 @@ import { physicalContext } from "./context";
 import { runoff, snowShare } from "./climate";
 import { clamp } from "./math";
 import type { PhysicalField } from "./field";
-import type { NumericalVector } from "@atlas/domain";
+import type { Band } from "@atlas/domain";
 import { workingValues, releaseWorking } from "./physicalNumerics";
 
 /** Local windward/leeward contrast around the inherited broad weather. */
 const regionalOrographicContrast = 0.35;
-function exposure(map: PhysicalField, i: number, delta: NumericalVector) {
-  const speed = Math.hypot(map.WindX[i], map.WindY[i]);
+function exposure(map: PhysicalField, i: number, delta: Band) {
+  const wx = map.WindX.get(i),
+    wy = map.WindY.get(i),
+    speed = Math.hypot(wx, wy);
   if (speed === 0) return 0;
   let rise = 0,
     weight = 0;
-  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-    const at = i * map.mesh.stride + edge,
-      j = map.mesh.neighbors[at];
+  const here = delta.get(i);
+  for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+    const j = map.mesh.neighbor(i, edge);
     if (j < 0) continue;
-    const along = (map.mesh.edgeX[at] * map.WindX[i] + map.mesh.edgeY[at] * map.WindY[i]) / speed;
-    rise += ((delta[j] - delta[i]) * along) / map.mesh.edgeLength[at];
+    const along = (map.mesh.edgeX(i, edge) * wx + map.mesh.edgeY(i, edge) * wy) / speed;
+    rise += ((delta.get(j) - here) * along) / map.mesh.edgeLength(i, edge);
     weight += Math.abs(along);
   }
   return weight ? rise / weight : 0;
@@ -37,27 +39,27 @@ export function downscaleRegionalClimate(state: GenerationState, seed: number) {
       map,
       "float64",
       "climate:relief",
-      (i) => map.Elevation[i] / 1024 - height(nativePosition(work, i))
+      (i) => map.Elevation.get(i) / 1024 - height(nativePosition(work, i))
     );
   for (let i = 0; i < map.mesh.count; i++) {
-    if (!state.surface.channels.temperature) map.Temperature[i] = p.TemperatureBaseline;
-    map.Temperature[i] = clamp(
-      map.Temperature[i] - (delta[i] * p.ElevationTemperatureLapse) / 1000,
-      0,
-      1000
+    if (!state.surface.channels.temperature) map.Temperature.set(i, p.TemperatureBaseline);
+    map.Temperature.set(
+      i,
+      clamp(map.Temperature.get(i) - (delta.get(i) * p.ElevationTemperatureLapse) / 1000, 0, 1000)
     );
     const factor =
         1 + regionalOrographicContrast * Math.tanh(exposure(map, i, delta) / p.WindBlockingSlope),
       inheritedRain = state.surface.channels.rainfall || state.surface.channels.snowfall,
       total = clamp(
-        (inheritedRain ? map.Rainfall[i] + map.Snowfall[i] : p.PrecipitationBaseline) * factor,
+        (inheritedRain ? map.Rainfall.get(i) + map.Snowfall.get(i) : p.PrecipitationBaseline) *
+          factor,
         0,
         p.PrecipitationCeiling
       ),
-      snow = snowShare(p, map.Temperature[i], map.Seasonality[i] * 10) / 1000;
-    map.Rainfall[i] = total * (1 - snow);
-    map.Snowfall[i] = total * snow;
-    map.Moisture[i] = clamp(map.Moisture[i] * factor, 0, 1000);
+      snow = snowShare(p, map.Temperature.get(i), map.Seasonality.get(i) * 10) / 1000;
+    map.Rainfall.set(i, total * (1 - snow));
+    map.Snowfall.set(i, total * snow);
+    map.Moisture.set(i, clamp(map.Moisture.get(i) * factor, 0, 1000));
   }
   runoff(map, physicalContext(seed, 0, p));
   releaseWorking(map, delta);

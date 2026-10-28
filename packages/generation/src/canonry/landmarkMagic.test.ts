@@ -40,9 +40,9 @@ function scenario() {
   map.RockResistance.fill(1000);
   map.FractureConductance.fill(800);
   for (let i = 0; i < map.mesh.count; i++) {
-    map.Temperature[i] = 320;
-    map.Elevation[i] = Math.round(Math.max(50, map.mesh.x[i] * 0.01) * 1024);
-    map.WaterKindCodes[i] = map.mesh.x[i] < -60_000 ? 1 : 0;
+    map.Temperature.set(i, 320);
+    map.Elevation.set(i, Math.round(Math.max(50, map.mesh.x(i) * 0.01) * 1024));
+    map.WaterKindCodes.set(i, map.mesh.x(i) < -60_000 ? 1 : 0);
   }
   initializeMagic(state);
   return state;
@@ -50,8 +50,13 @@ function scenario() {
 const site = (state: ReturnType<typeof scenario>) => {
   const map = state.physical!.map;
   let best = -1;
-  for (let i = 0; i < map.mesh.contentCount; i++)
-    if (map.WaterKindCodes[i] === 0 && (best < 0 || map.mesh.x[i] > map.mesh.x[best])) best = i;
+  for (let i = 0; i < map.mesh.count; i++)
+    if (
+      map.mesh.membership(i) === 1 &&
+      map.WaterKindCodes.get(i) === 0 &&
+      (best < 0 || map.mesh.x(i) > map.mesh.x(best))
+    )
+      best = i;
   return best;
 };
 
@@ -65,7 +70,7 @@ it("injects a kept Fire source, measures its intensity and raises the source to 
       id: "5d2f0b6c-1e4a-4b7c-9f3d-2a6e8c0b1d47",
       name: "",
       kind: "fire-wellspring",
-      geometry: { type: "Point", coordinates: [map.mesh.x[cell] + x0, map.mesh.y[cell] + y0] },
+      geometry: { type: "Point", coordinates: [map.mesh.x(cell) + x0, map.mesh.y(cell) + y0] },
       parameters: { intensity: 900, reach: 40 },
       emplacedAtEpoch: 0,
       origin: "generated",
@@ -96,7 +101,7 @@ it("injects a kept Fire source, measures its intensity and raises the source to 
     areaId: "area",
     spaceId: "surface",
   });
-  expect(source.source.x).toBeCloseTo(map.mesh.x[cell] + x0, 0);
+  expect(source.source.x).toBeCloseTo(map.mesh.x(cell) + x0, 0);
 
   // The system's own evaluation picks the record up: the vein releases at the site.
   evaluate();
@@ -132,7 +137,7 @@ it("notes the cap when the system's activity cannot reach the target", () => {
       id: "0c9a7e5b-3d2f-4a18-b6c4-7e1f2d3a4b5c",
       name: "",
       kind: "fire-wellspring",
-      geometry: { type: "Point", coordinates: [map.mesh.x[cell] + x0, map.mesh.y[cell] + y0] },
+      geometry: { type: "Point", coordinates: [map.mesh.x(cell) + x0, map.mesh.y(cell) + y0] },
       parameters: { intensity: 900, reach: 40 },
       emplacedAtEpoch: 0,
     },
@@ -161,7 +166,7 @@ it("forms no source where the system is not generated", () => {
       id: "7b3c1d9e-5f4a-4c2b-8d6e-9a0b1c2d3e4f",
       name: "",
       kind: "salt-pan",
-      geometry: { type: "Point", coordinates: [map.mesh.x[cell] + x0, map.mesh.y[cell] + y0] },
+      geometry: { type: "Point", coordinates: [map.mesh.x(cell) + x0, map.mesh.y(cell) + y0] },
       parameters: { intensity: 600, reach: 30 },
       emplacedAtEpoch: 0,
     },

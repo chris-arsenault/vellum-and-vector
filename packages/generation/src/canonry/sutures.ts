@@ -2,7 +2,7 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, round } from "./math";
-import { KeyedHeap, type NumericalVector } from "@atlas/domain";
+import { KeyedHeap, type Band } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
 interface Contact {
@@ -15,10 +15,10 @@ class MaterialSearch {
   firstDistance = Infinity;
   secondDistance = Infinity;
   observe(map: PhysicalField, context: PhysicalContext, i: number, distance: number) {
-    const assembly = map.CrustAssemblyIds[i];
+    const assembly = map.CrustAssemblyIds.get(i);
     if (
       assembly <= 0 ||
-      map.CrustContinentalFraction[i] < context.Profile.ContinentalSutureMinimumFraction
+      map.CrustContinentalFraction.get(i) < context.Profile.ContinentalSutureMinimumFraction
     )
       return;
     if (this.first === 0 || (assembly === this.first && distance < this.firstDistance)) {
@@ -50,30 +50,30 @@ function findContact(
   map: PhysicalField,
   context: PhysicalContext,
   start: number,
-  visited: NumericalVector,
-  distance: NumericalVector,
+  visited: Band,
+  distance: Band,
   visit: number
 ): Contact | null {
   const p = context.Profile;
   const queue = new KeyedHeap("min");
   const search = new MaterialSearch();
-  visited[start] = visit;
-  distance[start] = 0;
+  visited.set(start, visit);
+  distance.set(start, 0);
   queue.push(start, 0);
   for (let i = queue.pop(); i >= 0; i = queue.pop()) {
     const d = queue.poppedKey();
-    if (d !== distance[i]) continue;
+    if (d !== distance.get(i)) continue;
     search.observe(map, context, i, d);
     const contact = search.contact(p.ContinentalSutureDetectionReach);
     if (contact) return contact;
     if (d >= p.ContinentalSutureDetectionReach) continue;
-    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-      const next = d + map.mesh.edgeLength[i * map.mesh.stride + edge];
+    for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+      const j = map.mesh.neighbor(i, edge);
+      const next = d + map.mesh.edgeLength(i, edge);
       if (j < 0 || next > p.ContinentalSutureDetectionReach) continue;
-      if (visited[j] === visit && distance[j] <= next) continue;
-      visited[j] = visit;
-      distance[j] = next;
+      if (visited.get(j) === visit && distance.get(j) <= next) continue;
+      visited.set(j, visit);
+      distance.set(j, next);
       queue.push(j, next);
     }
   }
@@ -85,10 +85,10 @@ function recordCollision(
   i: number,
   contact: Contact
 ) {
-  const strain = map.TectonicStrain[i];
+  const strain = map.TectonicStrain.get(i);
   const collision = clamp(round(strain * (0.55 + contact.proximity * 0.45)), 0, 1000);
-  const pair = map.CrustSuturePairIds[i],
-    strength = map.CrustSutureStrength[i];
+  const pair = map.CrustSuturePairIds.get(i),
+    strength = map.CrustSutureStrength.get(i);
   const matches = pair === contact.pair;
   if (pair === 0 || matches || collision >= strength) {
     const retained = matches ? strength : 0;
@@ -99,31 +99,35 @@ function recordCollision(
         context.TectonicStrength) /
         1_000_000_000
     );
-    map.CrustSuturePairIds[i] = contact.pair;
-    map.CrustSutureStrength[i] = clamp(retained + Math.max(1, gain), 1, 1000);
+    map.CrustSuturePairIds.set(i, contact.pair);
+    map.CrustSutureStrength.set(i, clamp(retained + Math.max(1, gain), 1, 1000));
   }
   const inherited =
-    map.CrustSuturePairIds[i] === contact.pair
-      ? Math.trunc((map.CrustSutureStrength[i] * strain) / 1000)
+    map.CrustSuturePairIds.get(i) === contact.pair
+      ? Math.trunc((map.CrustSutureStrength.get(i) * strain) / 1000)
       : 0;
-  map.CrustCollisionIntensity[i] = Math.max(collision, inherited);
+  map.CrustCollisionIntensity.set(i, Math.max(collision, inherited));
 }
 export function continentalSutures(map: PhysicalField, context: PhysicalContext) {
   const count = map.mesh.count,
     p = context.Profile;
   map.CrustCollisionIntensity.fill(0);
-  for (let i = 0; i < count; i++)
-    if (map.CrustSutureStrength[i] > 0)
-      map.RockResistance[i] = Math.max(
-        map.RockResistance[i],
-        1000 +
-          Math.trunc(((p.OrogenicCoreRockResistance - 1000) * map.CrustSutureStrength[i]) / 1000)
+  for (let i = 0; i < count; i++) {
+    const suture = map.CrustSutureStrength.get(i);
+    if (suture > 0)
+      map.RockResistance.set(
+        i,
+        Math.max(
+          map.RockResistance.get(i),
+          1000 + Math.trunc(((p.OrogenicCoreRockResistance - 1000) * suture) / 1000)
+        )
       );
+  }
   const visited = workingArray(map, "int32", "sutures:visited"),
     distance = workingArray(map, "float64", "sutures:distance");
   let visit = 0;
   for (let i = 0; i < count; i++) {
-    if (map.TectonicBoundaryCodes[i] !== 1 || map.TectonicStrain[i] <= 0) continue;
+    if (map.TectonicBoundaryCodes.get(i) !== 1 || map.TectonicStrain.get(i) <= 0) continue;
     const contact = findContact(map, context, i, visited, distance, ++visit);
     if (contact) recordCollision(map, context, i, contact);
   }

@@ -3,26 +3,28 @@ import type { PhysicalProfile } from "./profile";
 import { toUnits } from "./math";
 import { smoothMetric } from "./metricSmoothing";
 import { physicalGradients, physicalSampler } from "./physicalMetric";
-import type { NumericalVector } from "@atlas/domain";
+import type { Band } from "@atlas/domain";
 import { workingValues } from "./physicalNumerics";
 
 const unit = (value: number) => Math.min(1, Math.max(0, value));
 
 export interface WindTerrain {
-  terrain: import("@atlas/domain").NumericalVector;
-  gradientX: NumericalVector;
-  gradientY: NumericalVector;
-  height: NumericalVector;
+  terrain: Band;
+  gradientX: Band;
+  gradientY: Band;
+  height: Band;
   /** Unsmoothed height, so gaps narrower than the smoothing length keep their walls. */
   sample: (x: number, y: number) => number;
 }
 /** Land height above sea level in metres, its smoothed form and that form's slope. */
 export function windTerrain(map: PhysicalField, p: PhysicalProfile): WindTerrain {
   const height = workingValues(map, "float64", "wind:height", (i) =>
-    map.WaterKindCodes[i] === 1 ? 0 : Math.max(0, toUnits(map.Elevation[i] - map.EffectiveSeaLevel))
+    map.WaterKindCodes.get(i) === 1
+      ? 0
+      : Math.max(0, toUnits(map.Elevation.get(i) - map.EffectiveSeaLevel))
   );
-  const terrain = smoothMetric(map.mesh, height, p.WindTerrainLength, undefined, map.numerical);
-  const gradient = physicalGradients(map.mesh, terrain, map.numerical);
+  const terrain = smoothMetric(map, height, p.WindTerrainLength);
+  const gradient = physicalGradients(map.mesh, (i) => terrain.get(i), map.coverage);
   return {
     terrain,
     gradientX: gradient.x,
@@ -42,8 +44,8 @@ export function deflectWind(
   x: number,
   y: number
 ): [number, number] {
-  const gx = t.gradientX[i],
-    gy = t.gradientY[i],
+  const gx = t.gradientX.get(i),
+    gy = t.gradientY.get(i),
     slope = Math.hypot(gx, gy);
   if (slope === 0) return [x, y];
   const nx = gx / slope,
@@ -53,7 +55,7 @@ export function deflectWind(
   // Blocking is partial: some air always rises over the barrier and rains on it.
   const blocking =
     p.WindBlockingMaximum *
-    unit(t.terrain[i] / p.WindBlockingHeight) *
+    unit(t.terrain.get(i) / p.WindBlockingHeight) *
     unit(slope / p.WindBlockingSlope);
   const dx = x - blocking * upslope * nx,
     dy = y - blocking * upslope * ny,
@@ -70,17 +72,20 @@ export function windSpeed(
   belt: number,
   barrier: number
 ) {
-  const x = map.WindX[i] / 1000,
-    y = map.WindY[i] / 1000,
-    reach = p.WindGapReach;
-  const land = map.WaterKindCodes[i] !== 1;
+  const x = map.WindX.get(i) / 1000,
+    y = map.WindY.get(i) / 1000,
+    reach = p.WindGapReach,
+    height = t.height.get(i);
+  const land = map.WaterKindCodes.get(i) !== 1;
   // Crests standing above their smoothed surroundings catch stronger wind.
-  const exposure = unit((t.height[i] - t.terrain[i]) / p.WindExposureRelief);
+  const exposure = unit((height - t.terrain.get(i)) / p.WindExposureRelief);
   const shelter = unit(barrier / p.WindShelterHeight);
-  const left = t.sample(map.mesh.x[i] - y * reach, map.mesh.y[i] + x * reach),
-    right = t.sample(map.mesh.x[i] + y * reach, map.mesh.y[i] - x * reach);
+  const cx = map.mesh.x(i),
+    cy = map.mesh.y(i);
+  const left = t.sample(cx - y * reach, cy + x * reach),
+    right = t.sample(cx + y * reach, cy - x * reach);
   // A wall sample beyond the working extent counts as no wall.
-  const walls = Math.min(left, right) - t.height[i];
+  const walls = Math.min(left, right) - height;
   const gap =
     land && Number.isFinite(walls) ? unit((walls - p.WindGapRelief) / p.WindGapRelief) : 0;
   return (

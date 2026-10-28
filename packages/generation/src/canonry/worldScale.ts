@@ -12,9 +12,11 @@ export const referenceCoastLength = 20_000_000;
 export function areaBudget(budget: number, area: number, referenceArea = referenceWorldArea) {
   return budget <= 0 || area <= 0 ? 0 : Math.max(1, Math.round((budget * area) / referenceArea));
 }
+/** Content area of the cells the predicate accepts. */
 export function mediumArea(map: PhysicalField, includes: (i: number) => boolean = () => true) {
   let area = 0;
-  for (let i = 0; i < map.mesh.contentCount; i++) if (includes(i)) area += map.mesh.contentAreas[i];
+  for (let i = 0; i < map.mesh.count; i++)
+    if (map.mesh.membership(i) === 1 && includes(i)) area += map.mesh.contentArea(i);
   return area;
 }
 

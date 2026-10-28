@@ -15,7 +15,7 @@ const elevation = (x: number) => (x < -500_000 ? -100 : x > 500_000 ? 100 : 0);
 
 it.each([-1, 1])("retains independent terrain at the %s latitude edge", (side) => {
   const mesh = cylinder(),
-    values = Float64Array.from(mesh.x, elevation);
+    values = Float64Array.from({ length: mesh.count }, (_, i) => elevation(mesh.x(i)));
   const at = physicalSampler(mesh, values);
   for (const inset of [0, 1, mesh.spacing / 4]) {
     const y = side * (height / 2 - inset);
@@ -28,11 +28,11 @@ it.each([-1, 1])("retains independent terrain at the %s latitude edge", (side) =
 
 it.each([-1, 1])("keeps contour-fan heights local at the %s latitude edge", (side) => {
   const mesh = cylinder();
-  const members = Array.from(mesh.x.keys()).filter(
-    (i) => mesh.x[i] > 800_000 && mesh.x[i] < 1_200_000
+  const members = Array.from({ length: mesh.count }, (_, i) => i).filter(
+    (i) => mesh.membership(i) !== 0 && mesh.x(i) > 800_000 && mesh.x(i) < 1_200_000
   );
   let vertices = 0;
-  for (const triangle of triangleFans(mesh, members, (i) => elevation(mesh.x[i])))
+  for (const triangle of triangleFans(mesh, members, (i) => elevation(mesh.x(i))))
     for (const vertex of triangle)
       if (
         Math.abs(vertex[1] - (side > 0 ? height : 0)) < 1e-6 &&

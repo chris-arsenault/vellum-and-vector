@@ -13,11 +13,10 @@ import { wrapLinks } from "./longitudeWrap";
 export function alignedNeighbor(map: PhysicalField, i: number, dx: number, dy: number): number {
   let best = -1,
     score = -Number.MAX_VALUE;
-  for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-    const offset = i * map.mesh.stride + edge,
-      j = map.mesh.neighbors[offset];
+  for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+    const j = map.mesh.neighbor(i, edge);
     if (j < 0) continue;
-    const alignment = map.mesh.edgeX[offset] * dx + map.mesh.edgeY[offset] * dy;
+    const alignment = map.mesh.edgeX(i, edge) * dx + map.mesh.edgeY(i, edge) * dy;
     if (alignment > score) {
       best = j;
       score = alignment;
@@ -62,8 +61,8 @@ function windDirection(map: PhysicalField, c: PhysicalContext, i: number): [numb
   const wander =
     fractalNoise(
       map.mesh,
-      map.mesh.x[i] + map.mesh.origin[0],
-      map.mesh.y[i] + map.mesh.origin[1],
+      map.mesh.x(i) + map.mesh.origin[0],
+      map.mesh.y(i) + map.mesh.origin[1],
       c.Seed ^ 0x713b,
       p.CirculationWanderScale,
       3
@@ -78,26 +77,27 @@ function traceAirMass(map: PhysicalField, scale: number, start: number, visited:
     barrier = 0,
     moistureBarrier = -1,
     ocean = -1;
+  const startElevation = map.Elevation.get(start);
   visited.begin();
   for (let distance = 0; distance < 180_000;) {
-    const next = map.UpwindTargets[current];
+    const next = map.UpwindTargets.get(current);
     if (next < 0 || visited.marked(next)) break;
     distance += physicalDistance(map.mesh, current, next);
     if (distance > 180_000) break;
     visited.mark(next);
     current = next;
-    barrier = Math.max(barrier, map.Elevation[current] - map.Elevation[start]);
+    barrier = Math.max(barrier, map.Elevation.get(current) - startElevation);
     if (distance <= 140_000) moistureBarrier = barrier;
-    if (map.WaterKindCodes[current] === 1) {
+    if (map.WaterKindCodes.get(current) === 1) {
       ocean = current;
       break;
     }
   }
   const normalize = (value: number) =>
     clamp(truncate((toUnits(value) * 1000) / Math.max(1, truncate(scale / 2))), 0, 1000);
-  map.MoistureBarriers[start] = normalize(moistureBarrier < 0 ? barrier : moistureBarrier);
-  map.PrecipitationBarriers[start] = normalize(barrier);
-  map.UpwindOceanSources[start] = ocean;
+  map.MoistureBarriers.set(start, normalize(moistureBarrier < 0 ? barrier : moistureBarrier));
+  map.PrecipitationBarriers.set(start, normalize(barrier));
+  map.UpwindOceanSources.set(start, ocean);
   return toUnits(barrier);
 }
 export function atmosphericFlow(map: PhysicalField, c: PhysicalContext) {
@@ -105,14 +105,17 @@ export function atmosphericFlow(map: PhysicalField, c: PhysicalContext) {
     terrain = windTerrain(map, p);
   for (let i = 0; i < map.mesh.count; i++) {
     const [x, y] = deflectWind(terrain, p, i, ...windDirection(map, c, i));
-    map.WindX[i] = round(x * 1000);
-    map.WindY[i] = round(y * 1000);
-    map.UpwindTargets[i] = alignedNeighbor(map, i, -x, -y);
+    map.WindX.set(i, round(x * 1000));
+    map.WindY.set(i, round(y * 1000));
+    map.UpwindTargets.set(i, alignedNeighbor(map, i, -x, -y));
   }
   wrapLinks(map, p, map.UpwindTargets);
   const visited = new EpochStamps(map.mesh.count);
   for (let i = 0; i < map.mesh.count; i++) {
     const barrier = traceAirMass(map, p.ElevationScale, i, visited);
-    map.WindSpeed[i] = windSpeed(map, terrain, p, i, beltSpeed(p, latitudeAt(p, map, i)), barrier);
+    map.WindSpeed.set(
+      i,
+      windSpeed(map, terrain, p, i, beltSpeed(p, latitudeAt(p, map, i)), barrier)
+    );
   }
 }

@@ -10,14 +10,19 @@ it("preserves constant decimal fields in sampling, fan vertices and boundary clo
   const value = 0.1,
     values = new Float64Array(mesh.count).fill(value),
     sample = physicalSampler(mesh, values);
-  for (let i = 0; i < mesh.contentCount; i++) {
-    const x = mesh.x[i] + mesh.spacing * 0.12,
-      y = mesh.y[i] - mesh.spacing * 0.17;
+  for (let i = 0; i < mesh.count; i++) {
+    if (mesh.membership(i) !== 1) continue;
+    const x = mesh.x(i) + mesh.spacing * 0.12,
+      y = mesh.y(i) - mesh.spacing * 0.17;
     expect(sample(x, y)).toBe(value);
     expect(triangleValue(triangleSample(mesh, x, y), values)).toBe(value);
   }
   for (const samples of [
-    triangleFans(mesh, [...mesh.x.keys()], () => value),
+    triangleFans(
+      mesh,
+      Array.from({ length: mesh.count }, (_, i) => i),
+      () => value
+    ),
     triangleBoundary(mesh, () => value),
   ])
     for (const segment of samples) for (const station of segment) expect(station[2]).toBe(value);
@@ -25,30 +30,33 @@ it("preserves constant decimal fields in sampling, fan vertices and boundary clo
 
 it("reproduces physical planes at subcell positions and retains exact centre samples", () => {
   const plane = (x: number, y: number) => 700 + x * 0.003 - y * 0.001;
-  const values = Float64Array.from(mesh.x, (x, i) => plane(x, mesh.y[i])),
+  const values = Float64Array.from({ length: mesh.count }, (_, i) => plane(mesh.x(i), mesh.y(i))),
     sample = physicalSampler(mesh, values);
-  for (let i = 0; i < mesh.contentCount; i++) {
-    expect(sample(mesh.x[i], mesh.y[i])).toBeCloseTo(values[i], 8);
-    const x = mesh.x[i] + mesh.spacing * 0.12,
-      y = mesh.y[i] - mesh.spacing * 0.17;
+  for (let i = 0; i < mesh.count; i++) {
+    if (mesh.membership(i) !== 1) continue;
+    expect(sample(mesh.x(i), mesh.y(i))).toBeCloseTo(values[i], 8);
+    const x = mesh.x(i) + mesh.spacing * 0.12,
+      y = mesh.y(i) - mesh.spacing * 0.17;
     expect(sample(x, y)).toBeCloseTo(plane(x, y), 8);
     expect(triangleValue(triangleSample(mesh, x, y), values)).toBeCloseTo(plane(x, y), 8);
   }
 });
 
 it("joins arbitrary terrain continuously across every triangle face without inventing extrema", () => {
-  const values = Float64Array.from(mesh.x, (_, i) => Math.sin(i * 1.7) * 2000),
+  const values = Float64Array.from({ length: mesh.count }, (_, i) => Math.sin(i * 1.7) * 2000),
     sample = physicalSampler(mesh, values);
-  for (let i = 0; i < mesh.contentCount; i++)
+  for (let i = 0; i < mesh.count; i++) {
+    if (mesh.membership(i) !== 1) continue;
     for (let edge = 0; edge < 3; edge++) {
-      const j = mesh.neighbors[i * 3 + edge],
-        x = (mesh.x[i] + mesh.x[j]) / 2,
-        y = (mesh.y[i] + mesh.y[j]) / 2,
-        dx = (mesh.x[j] - mesh.x[i]) * 1e-8,
-        dy = (mesh.y[j] - mesh.y[i]) * 1e-8;
+      const j = mesh.neighbor(i, edge),
+        x = (mesh.x(i) + mesh.x(j)) / 2,
+        y = (mesh.y(i) + mesh.y(j)) / 2,
+        dx = (mesh.x(j) - mesh.x(i)) * 1e-8,
+        dy = (mesh.y(j) - mesh.y(i)) * 1e-8;
       expect(sample(x + dx, y + dy)).toBeCloseTo(sample(x - dx, y - dy), 3);
       expect(Math.abs(sample(x, y))).toBeLessThanOrEqual(2000);
     }
+  }
 });
 
 it("locates the nearest triangle on translated lattices without scanning the world", () => {
@@ -61,14 +69,15 @@ it("locates the nearest triangle on translated lattices without scanning the wor
     let expected = -1,
       distance = Infinity;
     for (let i = 0; i < shifted.count; i++) {
-      const d = (shifted.x[i] - x) ** 2 + (shifted.y[i] - y) ** 2;
+      if (shifted.membership(i) === 0) continue;
+      const d = (shifted.x(i) - x) ** 2 + (shifted.y(i) - y) ** 2;
       if (d < distance) {
         expected = i;
         distance = d;
       }
     }
     const actual = nearestTriangle(shifted, x, y);
-    expect((shifted.x[actual] - x) ** 2 + (shifted.y[actual] - y) ** 2).toBeCloseTo(distance, 5);
+    expect((shifted.x(actual) - x) ** 2 + (shifted.y(actual) - y) ** 2).toBeCloseTo(distance, 5);
     expect(expected).toBeGreaterThanOrEqual(0);
   }
 });

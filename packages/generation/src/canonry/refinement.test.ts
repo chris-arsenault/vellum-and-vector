@@ -1,7 +1,8 @@
 import { expect, it } from "vitest";
 import { createMesh } from "./mesh";
 import { createWorldMesh } from "./worldMesh";
-import { createField } from "./field";
+import { createField, type PhysicalField } from "./field";
+import { releaseWorking } from "./physicalNumerics";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { units } from "./math";
 import { physicalContext } from "./context";
@@ -13,52 +14,70 @@ import { riverNetwork } from "./rivers";
 import { sourceToOutletOrder } from "./flowGraph";
 import { depthRateToDischarge } from "./dimensions";
 
+/** Whether any live (content or halo) cell satisfies the test. */
+function anyLive(map: PhysicalField, test: (i: number) => boolean) {
+  for (let i = 0; i < map.mesh.count; i++) if (map.mesh.membership(i) !== 0 && test(i)) return true;
+  return false;
+}
+const allLive = (map: PhysicalField, test: (i: number) => boolean) =>
+  !anyLive(map, (i) => !test(i));
+
 it("drains an inland rectangular world through its work boundary after sea-level fall", () => {
   const map = createField(createWorldMesh([0, 0, 100_000, 100_000], 256, 10_000));
   map.SeaLevelInitialized = true;
-  for (let i = 0; i < map.mesh.count; i++) map.Elevation[i] = units(200 + map.mesh.x[i] / 1000);
+  for (let i = 0; i < map.mesh.count; i++) map.Elevation.set(i, units(200 + map.mesh.x(i) / 1000));
   map.Runoff.fill(500);
   const context = physicalContext(104729, 0, atlasPhysicalProfile());
   context.SeaLevelOffset = -100;
   oceanConnectivity(map, context);
-  expect(map.WaterKindCodes.every((kind) => kind === 0)).toBe(true);
+  expect(allLive(map, (i) => map.WaterKindCodes.get(i) === 0)).toBe(true);
   drainageConditioning(map, context);
   drainageGuidance(map, context);
   flowRouting(map, context);
   riverNetwork(map, context);
-  expect(sourceToOutletOrder(map)).toHaveLength(map.mesh.count);
+  let live = 0;
+  for (let i = 0; i < map.mesh.count; i++) if (map.mesh.membership(i) !== 0) live++;
+  const order = sourceToOutletOrder(map);
+  expect(order.length).toBe(live);
+  releaseWorking(map, order);
   let exported = 0,
     supplied = 0;
   for (let i = 0; i < map.mesh.count; i++) {
-    supplied += depthRateToDischarge(500, map.mesh.areas[i]);
-    if (map.FlowTargets[i] < 0) {
-      expect(map.mesh.boundary[i]).toBe(1);
-      exported += map.FlowAccumulation[i];
+    if (map.mesh.membership(i) === 0) continue;
+    supplied += depthRateToDischarge(500, map.mesh.area(i));
+    if (map.FlowTargets.get(i) < 0) {
+      expect(map.mesh.boundary(i)).toBe(true);
+      exported += map.FlowAccumulation.get(i);
     }
   }
   expect(exported).toBeCloseTo(supplied, 8);
   context.SeaLevelOffset = 220;
   oceanConnectivity(map, context);
   drainageConditioning(map, context);
-  expect(map.WaterKindCodes.some((kind) => kind === 1)).toBe(true);
-  expect(map.DrainageParents.every((parent, i) => map.WaterKindCodes[i] === 1 || parent >= 0)).toBe(
-    true
-  );
+  expect(anyLive(map, (i) => map.WaterKindCodes.get(i) === 1)).toBe(true);
+  expect(
+    allLive(map, (i) => map.WaterKindCodes.get(i) === 1 || map.DrainageParents.get(i) >= 0)
+  ).toBe(true);
 });
 
 it("routes a lake spill across an open patch boundary while requiring water in a closed world", () => {
-  const map = createField(createMesh(32, 2)),
-    outlet = map.mesh.boundary.findIndex((value) => value === 1),
-    lake = map.mesh.neighbors.slice(outlet * 3, outlet * 3 + 3).find((i) => i >= 0)!;
-  map.WaterKindCodes[lake] = 2;
-  map.WaterBodyIds[lake] = 2;
-  map.LakeOutletTargets[lake] = outlet;
+  const map = createField(createMesh(32, 2));
+  let outlet = -1;
+  for (let i = 0; i < map.mesh.count && outlet < 0; i++)
+    if (map.mesh.membership(i) !== 0 && map.mesh.boundary(i)) outlet = i;
+  const neighbors = Array.from({ length: map.mesh.degree(outlet) }, (_, e) =>
+    map.mesh.neighbor(outlet, e)
+  );
+  const lake = neighbors.find((i) => i >= 0)!;
+  map.WaterKindCodes.set(lake, 2);
+  map.WaterBodyIds.set(lake, 2);
+  map.LakeOutletTargets.set(lake, outlet);
   const context = physicalContext(104729, 0, atlasPhysicalProfile());
   expect(() => flowRouting(map, context)).toThrow("Lake spill route does not reach water.");
   map.OpenBoundary = true;
   flowRouting(map, context);
-  expect(map.FlowTargets[lake]).toBe(outlet);
-  expect(map.FlowTargets[outlet]).toBe(-1);
+  expect(map.FlowTargets.get(lake)).toBe(outlet);
+  expect(map.FlowTargets.get(outlet)).toBe(-1);
 });
 
 function patch(kind: string) {
@@ -71,9 +90,9 @@ function patch(kind: string) {
   map.CrustTypeCodes.fill(kind === "inland" ? 2 : 1);
   map.RockResistance.fill(1000);
   for (let i = 0; i < map.mesh.count; i++)
-    map.Elevation[i] = units(kind === "inland" ? 200 + map.mesh.x[i] / 10_000 : -1800);
-  map.BedrockElevation.set(map.Elevation);
-  map.CrustSupportElevation.set(map.Elevation);
+    map.Elevation.set(i, units(kind === "inland" ? 200 + map.mesh.x(i) / 10_000 : -1800));
+  map.BedrockElevation.copyFrom(map.Elevation);
+  map.CrustSupportElevation.copyFrom(map.Elevation);
   return map;
 }
 it.each(["inland", "ocean"])(
@@ -88,12 +107,10 @@ it.each(["inland", "ocean"])(
     drainageGuidance(map, context);
     flowRouting(map, context);
     riverNetwork(map, context);
-    expect(
-      Array.from(map.WaterKindCodes).every((value) => value === (kind === "inland" ? 0 : 1))
-    ).toBe(true);
+    expect(allLive(map, (i) => map.WaterKindCodes.get(i) === (kind === "inland" ? 0 : 1))).toBe(
+      true
+    );
     if (kind === "inland")
-      expect(map.FlowTargets.some((target, i) => target < 0 && map.mesh.boundary[i] === 1)).toBe(
-        true
-      );
+      expect(anyLive(map, (i) => map.FlowTargets.get(i) < 0 && map.mesh.boundary(i))).toBe(true);
   }
 );

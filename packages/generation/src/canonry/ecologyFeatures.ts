@@ -1,4 +1,4 @@
-import { biomes, SmallIntSet, spatial, type NumericalVector } from "@atlas/domain";
+import { biomes, SmallIntSet, spatial, type Band } from "@atlas/domain";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 import type { GenerationState } from "../process";
 import { components, publishPlace } from "./geographicRegions";
@@ -40,8 +40,9 @@ function authoredTerms(state: GenerationState, rule: BiomeRule): Term[] {
   if (!fixed) return rule.terms;
   const values = fixed.values;
   return rule.terms.map((term) => (i) => {
-    if (!Number.isFinite(values[i])) return term(i);
-    return families[biomes[values[i]]?.name ?? ""] === rule.kind ? 1 : -1;
+    const value = values.get(i);
+    if (!Number.isFinite(value)) return term(i);
+    return families[biomes[value]?.name ?? ""] === rule.kind ? 1 : -1;
   });
 }
 /**
@@ -56,32 +57,40 @@ function waterTerms(state: GenerationState): { terms: Term[]; dry: (v: number[])
     front = workingArray(map, "int32", "biome:lake-front");
   let tail = 0;
   for (let i = 0; i < mesh.count; i++)
-    if (map.WaterKindCodes[i] === 2) {
-      [level[i], body[i]] = [map.WaterSurfaceElevations[i], map.WaterBodyIds[i]];
-      front[tail++] = i;
+    if (map.WaterKindCodes.get(i) === 2) {
+      level.set(i, map.WaterSurfaceElevations.get(i));
+      body.set(i, map.WaterBodyIds.get(i));
+      front.set(tail++, i);
     }
   // A lake's shoreline samples average its neighbours; carry its level past that support.
   for (let ring = 0, start = 0; ring < 3; ring++) {
     const end = tail;
     for (let at = start; at < end; at++) {
-      const i = front[at];
-      for (let edge = 0; edge < mesh.degree[i]; edge++) {
-        const j = mesh.neighbors[i * mesh.stride + edge];
-        if (j < 0 || body[j] >= 0) continue;
-        [level[j], body[j]] = [level[i], body[i]];
-        front[tail++] = j;
+      const i = front.get(at);
+      for (let edge = 0; edge < mesh.degree(i); edge++) {
+        const j = mesh.neighbor(i, edge);
+        if (j < 0 || body.get(j) >= 0) continue;
+        level.set(j, level.get(i));
+        body.set(j, body.get(i));
+        front.set(tail++, j);
       }
     }
     start = end;
   }
   releaseWorking(map, front);
-  const depth = (i: number) => map.EffectiveSeaLevel - map.Elevation[i];
+  const depth = (i: number) => map.EffectiveSeaLevel - map.Elevation.get(i);
   return {
     terms: [
-      (i) => -(map.WaterKindCodes[i] === 1 ? depth(i) : -Math.abs(depth(i))) / 102_400,
-      (i) => 1 - map.IceThickness[i],
-      (i) => (Number.isNaN(level[i]) ? 1 : (map.Elevation[i] - level[i]) / 102_400),
-      (i) => (body[i] >= 0 && map.WaterBodyIds[i] === body[i] ? 1 : 0),
+      (i) => -(map.WaterKindCodes.get(i) === 1 ? depth(i) : -Math.abs(depth(i))) / 102_400,
+      (i) => 1 - map.IceThickness.get(i),
+      (i) => {
+        const held = level.get(i);
+        return Number.isNaN(held) ? 1 : (map.Elevation.get(i) - held) / 102_400;
+      },
+      (i) => {
+        const held = body.get(i);
+        return held >= 0 && map.WaterBodyIds.get(i) === held ? 1 : 0;
+      },
     ],
     dry: ([sea, ice, lake, lakeMember]) =>
       Math.min(sea, ice, Math.max(lake, (0.1 - lakeMember) * 1000)),
@@ -93,29 +102,29 @@ function summarize(
   biome: ReturnType<typeof biomeRules>
 ) {
   const map = state.physical!.map,
-    areas = map.mesh.areas,
-    total = members.reduce((sum, i) => sum + areas[i], 0),
-    mean = (value: Term) => members.reduce((sum, i) => sum + value(i) * areas[i], 0) / total;
+    area = (i: number) => map.mesh.area(i),
+    total = members.reduce((sum, i) => sum + area(i), 0),
+    mean = (value: Term) => members.reduce((sum, i) => sum + value(i) * area(i), 0) / total;
   const systems = new Map<string, number>();
   for (const field of state.physical!.magic?.fields ?? [])
     if (field.definition.enabled)
       systems.set(
         field.definition.id,
-        mean((i) => field.intensity[i])
+        mean((i) => field.intensity.get(i))
       );
   return {
-    broadleaf: mean((i) => map.BroadleafCover[i]),
-    conifer: mean((i) => map.ConiferCover[i]),
-    grass: mean((i) => map.GrassCover[i]),
-    wetland: mean((i) => map.WetlandCover[i]),
-    fire: mean((i) => map.FireActivity[i]),
-    flood: mean((i) => map.FloodFrequency[i]),
-    peat: mean((i) => map.PeatCarbon[i]),
-    temperature: mean((i) => biome.temperature[i]),
-    moisture: mean((i) => biome.moisture[i]),
-    wetness: mean((i) => biome.wetness[i]),
-    slope: mean((i) => map.Slope[i]),
-    elevation: mean((i) => (map.Elevation[i] - map.BaseSeaLevel) / 1024),
+    broadleaf: mean((i) => map.BroadleafCover.get(i)),
+    conifer: mean((i) => map.ConiferCover.get(i)),
+    grass: mean((i) => map.GrassCover.get(i)),
+    wetland: mean((i) => map.WetlandCover.get(i)),
+    fire: mean((i) => map.FireActivity.get(i)),
+    flood: mean((i) => map.FloodFrequency.get(i)),
+    peat: mean((i) => map.PeatCarbon.get(i)),
+    temperature: mean((i) => biome.temperature.get(i)),
+    moisture: mean((i) => biome.moisture.get(i)),
+    wetness: mean((i) => biome.wetness.get(i)),
+    slope: mean((i) => map.Slope.get(i)),
+    elevation: mean((i) => (map.Elevation.get(i) - map.BaseSeaLevel) / 1024),
     systems,
   } satisfies BiomeSummary;
 }
@@ -161,19 +170,23 @@ export function extractEcologicalFeatures(state: GenerationState) {
     const inside = workingValues(map, "float64", "biome:inside", quantity.at);
     components(
       state,
-      (i) => inside[i] > 0,
+      (i) => inside.get(i) > 0,
       (members) => {
-        const area = members.reduce((sum, i) => sum + map.mesh.contentAreas[i], 0);
+        const area = members.reduce((sum, i) => sum + map.mesh.contentArea(i), 0);
         if (area < minimum) return;
         // A region beyond a few times the least named size splits along drainage divides.
         const pieces = partitionRegion(state, members, minimum * largestRegionFactor);
-        pieces.forEach((piece, n) => piece.forEach((i) => (claimed[i] = serial + n)));
+        pieces.forEach((piece, n) => piece.forEach((i) => claimed.set(i, serial + n)));
         pieces.forEach((piece, n) => {
           const own = serial + n;
-          const blocks = (i: number) =>
-            map.WaterKindCodes[i] !== 0 ||
-            map.IceThickness[i] >= 1 ||
-            (claimed[i] >= 0 && claimed[i] !== own);
+          const blocks = (i: number) => {
+            const held = claimed.get(i);
+            return (
+              map.WaterKindCodes.get(i) !== 0 ||
+              map.IceThickness.get(i) >= 1 ||
+              (held >= 0 && held !== own)
+            );
+          };
           const sibling = (label: number) => label >= serial && label < serial + pieces.length;
           publishBiome(
             state,
@@ -188,11 +201,11 @@ export function extractEcologicalFeatures(state: GenerationState) {
           );
         });
         serial += pieces.length;
-        state.numerical?.releaseUnused(pieces, [members]);
       }
     );
     releaseWorking(map, inside);
   });
+  releaseWorking(map, claimed, biome.temperature, biome.moisture, biome.wetness);
 }
 /**
  * Indicators of a piece and of each sibling piece it touches. Combined at every sample as the
@@ -201,7 +214,7 @@ export function extractEcologicalFeatures(state: GenerationState) {
  */
 function pieceTerms(
   state: GenerationState,
-  claimed: NumericalVector,
+  claimed: Band,
   piece: RegionMembers,
   own: number,
   sibling: (label: number) => boolean
@@ -209,11 +222,13 @@ function pieceTerms(
   const mesh = state.physical!.map.mesh,
     siblings = new SmallIntSet();
   for (const i of piece)
-    for (let edge = 0; edge < mesh.degree[i]; edge++) {
-      const j = mesh.neighbors[i * mesh.stride + edge];
-      if (j >= 0 && claimed[j] !== own && sibling(claimed[j])) siblings.add(claimed[j]);
+    for (let edge = 0; edge < mesh.degree(i); edge++) {
+      const j = mesh.neighbor(i, edge);
+      if (j < 0) continue;
+      const held = claimed.get(j);
+      if (held !== own && sibling(held)) siblings.add(held);
     }
-  return [own, ...siblings.items()].map((label) => (i: number) => Number(claimed[i] === label));
+  return [own, ...siblings.items()].map((label) => (i: number) => Number(claimed.get(i) === label));
 }
 function publishBiome(
   state: GenerationState,

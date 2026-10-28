@@ -41,7 +41,7 @@ export function generationPreview(state: GenerationState): RegularGrid {
   for (const binding of atlasChannels.filter((binding) => previewChannels.has(binding.name))) {
     const datum = binding.datum ? map.BaseSeaLevel : 0;
     const values = Float64Array.from(indexes, (i) =>
-      i < 0 ? 0 : (map[binding.native][i] - datum) * binding.scale + (binding.offset ?? 0)
+      i < 0 ? 0 : (map[binding.native].get(i) - datum) * binding.scale + (binding.offset ?? 0)
     );
     putChannel(
       grid,

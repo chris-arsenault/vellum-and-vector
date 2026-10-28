@@ -188,8 +188,8 @@ function miningFixture(availableCores: number) {
     held = fire.stocks[stockKey(origin, stock)],
     cell = samples[1],
     other = (cell + 1) % held.length;
-  held[cell] = availableCores * coreAmount;
-  held[other] = 7 * coreAmount;
+  held.set(cell, availableCores * coreAmount);
+  held.set(other, 7 * coreAmount);
   f.region.magic[0].coreDeposit = 100; // A retained estimate must not override the live reservoir.
   return { ...f, fire, held, cell, other };
 }
@@ -203,13 +203,12 @@ it.each([0, 2, 100])("backs mining and forging with the %i available live cores"
   expect(p.coreDeposit).toBeCloseTo(100 - extracted, 10);
   expect(p.coreSupply).toBeCloseTo(extracted - used, 10);
   expect(p.coreUsed).toBeCloseTo(used, 10);
-  expect(held[cell]).toBeCloseTo((available - extracted) * coreAmount, 5);
-  expect(held[other]).toBe(7 * coreAmount);
+  expect(held.get(cell)).toBeCloseTo((available - extracted) * coreAmount, 5);
+  expect(held.get(other)).toBe(7 * coreAmount);
   expect(reservoirAmount(fire, "forge", cell)).toBeCloseTo(used * coreAmount, 5);
-  expect(held[cell] + reservoirAmount(fire, "forge", cell) + p.coreSupply * coreAmount).toBeCloseTo(
-    available * coreAmount,
-    5
-  );
+  expect(
+    held.get(cell) + reservoirAmount(fire, "forge", cell) + p.coreSupply * coreAmount
+  ).toBeCloseTo(available * coreAmount, 5);
   expect(fire.lost).toBeCloseTo(p.coreSupply * coreAmount, 5);
   expect(state.surface.channels.elevation).toEqual(elevation);
 });

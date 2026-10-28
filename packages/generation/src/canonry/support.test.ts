@@ -14,7 +14,7 @@ function supportDrop(fraction: number, age: number) {
   map.CrustThickness.fill(units(foundation));
   map.CrustAge.fill(age);
   crustalSupport(map, physicalContext(1, 0, profile), false);
-  return (units(crustHeight(foundation, fraction)) - map.CrustSupportTarget[0]) / 1024;
+  return (units(crustHeight(foundation, fraction)) - map.CrustSupportTarget.get(0)) / 1024;
 }
 
 it("sinks aged oceanic crust by the full subsidence depth", () => {

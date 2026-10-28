@@ -65,17 +65,17 @@ export const plantGroups = [
 ] as const;
 export type PlantGroup = (typeof plantGroups)[number];
 export function plantCover(map: PhysicalField, group: PlantGroup, i: number) {
-  return map[group.cover][i] + (group.juvenile ? map[group.juvenile][i] : 0);
+  return map[group.cover].get(i) + (group.juvenile ? map[group.juvenile].get(i) : 0);
 }
 export function canopy(map: PhysicalField, i: number) {
-  return map.BroadleafCover[i] + map.ConiferCover[i];
+  return map.BroadleafCover.get(i) + map.ConiferCover.get(i);
 }
 export function livingPlantCarbon(map: PhysicalField, i: number) {
   return plantGroups.reduce(
     (sum, group) =>
       sum +
-      map[group.cover][i] * group.mass +
-      (group.juvenile ? map[group.juvenile][i] * group.mass * 0.2 : 0),
+      map[group.cover].get(i) * group.mass +
+      (group.juvenile ? map[group.juvenile].get(i) * group.mass * 0.2 : 0),
     0
   );
 }
@@ -93,7 +93,7 @@ export function groupSuitability(
   const drought = unit(1 - e.drought);
   const wet = group.id === "wetland" ? e.wetness : 1 - e.wetness * group.waterlogging;
   const shade = unit(1 - canopy(map, i) * (1 - group.shade));
-  const soil = unit(map.SoilDepth[i] / (group.juvenile ? 0.3 : 0.06));
+  const soil = unit(map.SoilDepth.get(i) / (group.juvenile ? 0.3 : 0.06));
   const heatPreference = group.id === "conifer" ? unit((25 - e.temperature) / 12) : 1;
   const climate = warmth * frost * drought * wet * soil * heatPreference;
   // Greenwood sustains growth past the climate band: verdure is a floor under the climate's
