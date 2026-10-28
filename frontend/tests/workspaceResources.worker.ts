@@ -58,7 +58,8 @@ async function exercise(id: string) {
   return values;
 }
 async function exerciseWorking(id: string) {
-  const working = await openNumericalArena(id, 262_144);
+  // Paged on purpose: this example exercises the scratch file, not resident vectors.
+  const working = await openNumericalArena(id, { cacheBytes: 262_144, residentBytes: 0 });
   try {
     const values = working.arena.allocate({
       type: "float64",
@@ -82,7 +83,7 @@ async function exerciseWorking(id: string) {
 async function exerciseFields(id: string) {
   const store = await OpfsStore.open("atlas-resource-example"),
     resources = new ZarrResources(store);
-  const working = await openNumericalArena(`${id}_fields`, 262_144);
+  const working = await openNumericalArena(`${id}_fields`, { cacheBytes: 262_144 });
   const fields = new FieldWorkingSet(resources, working.arena);
   const layoutId = `${id}:layout`,
     fieldId = `${id}:field`;

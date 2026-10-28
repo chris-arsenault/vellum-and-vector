@@ -6,6 +6,7 @@ import {
   type WorldMetadata,
   type WorkspaceScope,
 } from "@atlas/domain";
+import { registerSavedMap } from "@atlas/storage-browser";
 import { WorkspaceClient } from "../src/WorkspaceClient";
 import { openSpatialRuntime } from "../src/spatialRuntime";
 import type { GenerationExample } from "./workspaceFeatures.worker";
@@ -230,6 +231,14 @@ async function seedCatalog(
       writes: [root, record],
       removes: [],
       resources: [],
+    });
+    // Only a registered save survives the next session's storage cleanup.
+    await registerSavedMap({
+      id: world.id,
+      name: world.name,
+      version: 2,
+      savedAt: new Date().toISOString(),
+      root: { name: `${name}_${world.id}`, path: "/catalog.sqlite3" },
     });
   } finally {
     await client.close();

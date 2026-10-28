@@ -3,7 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PagedArena } from "./pagedArena";
 
-export function arenaFixture(decodedBytes = 32_768, pageSamples = 256) {
+/** Paged by default so storage tests exercise the overflow path; production and the shared
+ * generation run pass a resident budget. */
+export function arenaFixture(decodedBytes = 32_768, pageSamples = 256, residentBytes = 0) {
   const directory = mkdtempSync(join(tmpdir(), "atlas-physical-")),
     fd = openSync(join(directory, "work.bin"), "w+");
   const arena = new PagedArena(
@@ -14,7 +16,8 @@ export function arenaFixture(decodedBytes = 32_768, pageSamples = 256) {
       close: () => closeSync(fd),
     },
     decodedBytes,
-    pageSamples
+    pageSamples,
+    residentBytes
   );
   return {
     arena,

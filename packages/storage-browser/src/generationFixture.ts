@@ -6,14 +6,22 @@ import { SqliteFeatureWorkspace } from "./featureWorkspace";
 import { SqliteNetworkWorkspace } from "./networkWorkspace";
 import { SqliteContourWorkspace } from "./contourWorkspace";
 import { arenaFixture } from "./numericalFixture";
-import { numericalPageSamples, numericalWorkingCacheBytes } from "./pagedArena";
+import {
+  numericalPageSamples,
+  numericalResidentBytes,
+  numericalWorkingCacheBytes,
+} from "./pagedArena";
 
 /** Shared generation uses SQLite WASM in memory, GEOS and a host-file numerical arena. */
 export async function generationStorageFixture() {
   const sqlite = await sqliteInit();
   const db = new sqlite.oo1.DB(":memory:");
   const kernel = await GeometryKernel.create();
-  const working = arenaFixture(numericalWorkingCacheBytes, numericalPageSamples);
+  const working = arenaFixture(
+    numericalWorkingCacheBytes,
+    numericalPageSamples,
+    numericalResidentBytes
+  );
   configureSpatial((precision) => new GeosSpatial(kernel, precision));
   const options = {
     numerical: working.arena,

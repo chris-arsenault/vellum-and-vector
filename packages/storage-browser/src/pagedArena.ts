@@ -1,5 +1,7 @@
 import {
+  readNumericalBlock,
   requireThat,
+  writeNumericalBlock,
   type NumericalAllocation,
   type NumericalAllocator,
   type NumericalVector,
@@ -29,20 +31,61 @@ interface FreeRange {
 }
 export const numericalPageSamples = 16_384;
 export const numericalWorkingCacheBytes = 64 * 1024 * 1024;
+export const numericalResidentBytes = 512 * 1024 * 1024;
 
-/** One worker-owned scratch file and a shared page cache, independent of world coverage. */
+/** A tracked native allocation: the algorithm indexes a plain typed array; the arena only
+ * accounts for its lifetime and resident bytes. */
+interface NativeAllocation {
+  id: number;
+  bytes: number;
+  lifetime: NumericalAllocation["lifetime"];
+  released: boolean;
+}
+export type NativeVector = SampleArray & {
+  retain(): void;
+  immutable?: boolean;
+};
+function allocationBytes(input: NumericalAllocation) {
+  requireThat(
+    Number.isSafeInteger(input.length) && input.length >= 0,
+    "numerical_length",
+    "A numerical allocation needs a nonnegative sample count."
+  );
+  const bytes =
+    Math.ceil((input.length * sampleConstructors[input.type].BYTES_PER_ELEMENT) / 8) * 8;
+  requireThat(
+    Number.isSafeInteger(bytes),
+    "numerical_length",
+    "Numerical addresses must be exact integers."
+  );
+  return bytes;
+}
+
+/** One worker-owned scratch file and a shared page cache, independent of world coverage.
+ * Allocations inside the resident budget are native typed arrays with no indirection on the
+ * sample path; paging is the overflow path, never the default. */
 export class PagedArena implements NumericalAllocator {
   private cache: ByteCache<string, Page>;
-  private allocations = new Map<number, PagedStorage>();
+  private allocations = new Map<number, PagedStorage | NativeAllocation>();
+  private natives = new WeakMap<object, NativeAllocation>();
+  private resident = 0;
   private free: FreeRange[] = [];
   private end = 0;
   private sequence = 0;
   private closed = false;
-  readonly stats = { reads: 0, writes: 0, readBytes: 0, writtenBytes: 0, peakDecodedBytes: 0 };
+  readonly stats = {
+    reads: 0,
+    writes: 0,
+    readBytes: 0,
+    writtenBytes: 0,
+    peakDecodedBytes: 0,
+    peakResidentBytes: 0,
+  };
   constructor(
     private file: RandomAccessFile,
     cacheBytes = numericalWorkingCacheBytes,
-    readonly pageSamples = numericalPageSamples
+    readonly pageSamples = numericalPageSamples,
+    readonly residentBytes = 0
   ) {
     requireThat(
       Number.isSafeInteger(pageSamples) && pageSamples > 0,
@@ -51,23 +94,42 @@ export class PagedArena implements NumericalAllocator {
     );
     this.cache = new ByteCache(cacheBytes, (page) => this.flushPage(page));
   }
-  allocate(input: NumericalAllocation) {
-    return new NumericalView(this.createStorage(input)).view;
+  allocate(input: NumericalAllocation): NumericalVector {
+    requireThat(!this.closed, "numerical_closed", "The numerical workspace is closed.");
+    const bytes = allocationBytes(input);
+    if (this.resident + bytes > this.residentBytes)
+      return new NumericalView(this.createStorage(input)).view;
+    const values = new sampleConstructors[input.type](input.length) as NativeVector;
+    const allocation: NativeAllocation = {
+      id: ++this.sequence,
+      bytes,
+      lifetime: input.lifetime,
+      released: false,
+    };
+    this.resident += bytes;
+    this.stats.peakResidentBytes = Math.max(this.stats.peakResidentBytes, this.resident);
+    this.allocations.set(allocation.id, allocation);
+    this.natives.set(values, allocation);
+    Object.defineProperty(values, "retain", {
+      value: () => {
+        allocation.lifetime = "run";
+      },
+    });
+    return values;
+  }
+  /** Whether this arena hands the vector out as a native typed array it accounts for. */
+  isNative(vector: NumericalVector) {
+    return this.natives.has(vector);
+  }
+  private releaseNative(allocation: NativeAllocation) {
+    if (allocation.released) return;
+    allocation.released = true;
+    this.allocations.delete(allocation.id);
+    this.resident -= allocation.bytes;
   }
   createStorage(input: NumericalAllocation): PagedStorage {
     requireThat(!this.closed, "numerical_closed", "The numerical workspace is closed.");
-    requireThat(
-      Number.isSafeInteger(input.length) && input.length >= 0,
-      "numerical_length",
-      "A numerical allocation needs a nonnegative sample count."
-    );
-    const bytes =
-      Math.ceil((input.length * sampleConstructors[input.type].BYTES_PER_ELEMENT) / 8) * 8;
-    requireThat(
-      Number.isSafeInteger(bytes),
-      "numerical_length",
-      "Numerical addresses must be exact integers."
-    );
+    const bytes = allocationBytes(input);
     const available = this.free.findIndex((range) => range.bytes >= bytes),
       range = available < 0 ? { offset: this.end, bytes } : this.free.splice(available, 1)[0];
     if (available < 0) this.end += bytes;
@@ -83,6 +145,7 @@ export class PagedArena implements NumericalAllocator {
     return storage;
   }
   read(vector: NumericalVector, start: number, count: number) {
+    if (ArrayBuffer.isView(vector)) return readNumericalBlock(vector, start, count);
     const view = numericalViewStorage(vector);
     requireThat(
       start >= 0 && count >= 0 && start + count <= view.length,
@@ -92,6 +155,10 @@ export class PagedArena implements NumericalAllocator {
     return view.storage.readBlock(view.offset + start, count);
   }
   write(vector: NumericalVector, start: number, values: SampleArray) {
+    if (ArrayBuffer.isView(vector)) {
+      writeNumericalBlock(vector, start, values);
+      return;
+    }
     const view = numericalViewStorage(vector);
     requireThat(
       start >= 0 && start + values.length <= view.length,
@@ -101,31 +168,45 @@ export class PagedArena implements NumericalAllocator {
     view.storage.writeBlock(view.offset + start, values);
   }
   release(vector: NumericalVector) {
-    numericalViewStorage(vector).storage.release();
+    const native = this.natives.get(vector);
+    if (native) this.releaseNative(native);
+    else if (!ArrayBuffer.isView(vector)) numericalViewStorage(vector).storage.release();
+  }
+  private owned(vector: NumericalVector): PagedStorage | NativeAllocation | undefined {
+    const native = this.natives.get(vector);
+    if (native) return native;
+    const storage = numericalStorage(vector);
+    return storage instanceof PagedStorage && storage.arena === this ? storage : undefined;
   }
   releaseUnused(candidates: Iterable<NumericalVector>, live: Iterable<NumericalVector>) {
-    const retained = new Set([...live].map(numericalStorage));
+    const retained = new Set<object>();
+    for (const vector of live) {
+      const owner = this.owned(vector);
+      if (owner) retained.add(owner);
+    }
     for (const vector of candidates) {
-      const storage = numericalStorage(vector);
-      if (storage instanceof PagedStorage && storage.arena === this && !retained.has(storage))
-        storage.release();
+      const owner = this.owned(vector);
+      if (!owner || retained.has(owner)) continue;
+      if (owner instanceof PagedStorage) owner.release();
+      else this.releaseNative(owner);
     }
   }
   retain(vector: NumericalVector) {
-    const storage = numericalViewStorage(vector).storage;
-    requireThat(
-      storage instanceof PagedStorage && storage.arena === this,
-      "numerical_owner",
-      "Retain a vector in its owning workspace."
-    );
-    storage.lifetime = "run";
+    // Untracked typed arrays (copies made by slice) are owned by the garbage collector.
+    if (ArrayBuffer.isView(vector) && !this.natives.has(vector)) return;
+    const owner = this.owned(vector);
+    requireThat(owner, "numerical_owner", "Retain a vector in its owning workspace.");
+    owner.lifetime = "run";
   }
   beginProcess() {
     return this.sequence + 1;
   }
   releaseProcess(from = 0) {
-    for (const storage of [...this.allocations.values()])
-      if (storage.lifetime === "process" && storage.id >= from) storage.release();
+    for (const allocation of [...this.allocations.values()])
+      if (allocation.lifetime === "process" && allocation.id >= from) {
+        if (allocation instanceof PagedStorage) allocation.release();
+        else this.releaseNative(allocation);
+      }
   }
   page(owner: PagedStorage, index: number) {
     owner.check();
@@ -200,6 +281,8 @@ export class PagedArena implements NumericalAllocator {
     if (this.closed) return;
     this.closed = true;
     this.cache.clear();
+    this.allocations.clear();
+    this.resident = 0;
     this.file.close();
   }
   isClosed() {

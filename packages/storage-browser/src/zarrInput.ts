@@ -2,6 +2,7 @@ import {
   requireThat,
   type NumericalAllocation,
   type NumericalAllocator,
+  type NumericalVector,
   type ResourceArray,
   type SampleArray,
 } from "@atlas/domain";
@@ -67,13 +68,37 @@ export async function openZarrInput(
   array: ResourceArray,
   allocator: NumericalAllocator,
   cache: ByteCache<string, SampleArray>
-) {
+): Promise<NumericalVector> {
   const metadataBytes = await store.get(`${path}/zarr.json`);
   requireThat(metadataBytes, "resource_encoding", "Numerical input metadata is missing.");
   const metadata = JSON.parse(new TextDecoder().decode(metadataBytes));
   validateMetadata(metadata, array);
   const snapshot = await store.snapshot(chunkKeys(path, array));
-  return new NumericalView(new ZarrInput(path, array, snapshot, allocator, cache)).view;
+  const input = new ZarrInput(path, array, snapshot, allocator, cache);
+  // Inside the resident budget the input is decoded once into a native array; chunk files
+  // are released immediately. Above it, the chunked view reads on demand.
+  const resident = allocator.allocate({
+    type: array.dtype,
+    length: input.length,
+    lifetime: "run",
+    name: `input:${path}`,
+  });
+  if (!ArrayBuffer.isView(resident)) {
+    allocator.release(resident);
+    return new NumericalView(input).view;
+  }
+  try {
+    const block = 1 << 16;
+    for (let start = 0; start < input.length; start += block)
+      (resident as SampleArray).set(
+        input.readBlock(start, Math.min(block, input.length - start)),
+        start
+      );
+  } finally {
+    input.release();
+  }
+  Object.defineProperty(resident, "immutable", { value: true });
+  return resident;
 }
 class ZarrInput implements VectorStorage {
   readonly immutable = true;
