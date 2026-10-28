@@ -16,7 +16,9 @@ export function rasterGeographyKey(reference: RasterGeographyReference) {
     revision,
   ]);
 }
-/** Immutable identities avoid serializing geometry or numerical samples during UI comparisons. */
+/** Immutable resource identity: which channels of which resources this raster samples. The
+ * viewport-dependent geography (ocean windows, lakes) is not part of it, so panning updates a
+ * registered raster in place instead of reopening its inputs. */
 export function rasterIdentity(raster: ResourceRaster) {
   return JSON.stringify([
     raster.id,
@@ -27,6 +29,5 @@ export function rasterIdentity(raster: ResourceRaster) {
     fieldIdentity(raster.water),
     fieldIdentity(raster.ice),
     fieldIdentity(raster.surface),
-    rasterGeographyKey(raster.geography),
   ]);
 }

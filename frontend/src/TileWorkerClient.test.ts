@@ -231,7 +231,7 @@ it("surfaces peer connection failure to waiting tiles and closes the renderer", 
   await Promise.resolve();
   expect(worker.terminated).toBe(true);
 });
-it("retains raster tiles across equivalent references and invalidates changed geographic windows", async () => {
+it("retains a raster source across equivalent references and viewport geography changes", async () => {
   const worker = new WorkerFixture();
   const client = new TileWorkerClient(
     () => worker as unknown as Worker,
@@ -245,11 +245,30 @@ it("retains raster tiles across equivalent references and invalidates changed ge
   sources.begin();
   expect(sources.source(structuredClone(raster))).toBe(first);
   sources.end();
+  // Resource messages wait for the workspace connection, so settle the microtask queue.
+  const settle = async () => {
+    for (let i = 0; i < 3; i++) await Promise.resolve();
+  };
+  const registrations = () => worker.messages.filter((m) => m.kind === "resourceRaster");
+  await settle();
+  expect(registrations()).toHaveLength(1);
+  // A new geographic window updates the same registration in place: no release, no reopen.
   const changed = structuredClone(raster);
   changed.geography.windows = [[20, 20, 80, 80]];
   sources.begin();
-  expect(sources.source(changed)).not.toBe(first);
+  expect(sources.source(changed)).toBe(first);
   sources.end();
+  await settle();
+  expect(registrations().map((m) => m.id)).toEqual([registrations()[0].id, registrations()[0].id]);
+  expect(worker.messages.some((m) => m.kind === "release")).toBe(false);
+  // Different immutable inputs still replace the source.
+  const replaced = structuredClone(raster);
+  replaced.field.resourceId = "field:2";
+  sources.begin();
+  expect(sources.source(replaced)).not.toBe(first);
+  sources.end();
+  await settle();
+  expect(worker.messages.some((m) => m.kind === "release")).toBe(true);
   sources.dispose();
   await Promise.resolve();
   worker.flush();

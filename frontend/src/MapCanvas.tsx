@@ -5,6 +5,7 @@ import { createMap, fitArea, updateFeatures, applyMapUpdate, type MapEngine } fr
 import { updateRaster } from "./rasterLayers";
 import type { RasterPresentation } from "./types";
 import { installMapTools, type MapEvents } from "./mapInteractions";
+import { interactionKey } from "./interactionLifetime";
 import { toolInstruction } from "./cartography";
 import { useGenerationPreview } from "./useAtlas";
 import { updateRegionMap, type RegionPresentation } from "./regionMap";
@@ -218,10 +219,13 @@ function useFeatureTools(
   version: number
 ) {
   const { feature, role } = selection;
+  const selectedId = feature?.id ?? null;
+  const key = interactionKey(tool, selectedId, role, version);
   useEffect(() => {
-    if (engine)
-      return installMapTools(engine, tool, feature?.id ?? null, () => callbacks.current, role);
-  }, [engine, tool, feature, role, version, callbacks]);
+    if (engine) return installMapTools(engine, tool, selectedId, () => callbacks.current, role);
+    // The key carries the tool, its target and (for editing tools) the revision.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine, key, callbacks]);
 }
 function useAreaFit(
   engine: MapEngine | null,

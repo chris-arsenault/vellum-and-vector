@@ -27,7 +27,10 @@ async function register(message: Extract<TileMessage, { kind: "resourceRaster" }
   try {
     const reader = await (resources ??= openRenderResources(workspace));
     const loaded = await reader.load(message.raster);
+    // Load before closing a previous registration so shared inputs never drop to zero users.
+    opened.get(message.id)?.();
     opened.set(message.id, loaded.close);
+    failures.delete(message.id);
     process({ kind: "loadedRaster", id: message.id, raster: loaded.raster });
   } catch (error) {
     failures.set(message.id, error instanceof Error ? error.message : String(error));

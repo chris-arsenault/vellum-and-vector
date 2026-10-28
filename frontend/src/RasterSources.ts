@@ -4,7 +4,7 @@ import { resourceRaster, type Raster } from "./types";
 import { numericTileSource } from "./numericTiles";
 import { TileWorkerClient } from "./TileWorkerClient";
 import type { GridSurface } from "@atlas/domain";
-import { rasterIdentity } from "./rasterIdentity";
+import { rasterGeographyKey, rasterIdentity } from "./rasterIdentity";
 
 function sameGrid(a?: GridSurface, b?: GridSurface): boolean {
   if (a === b) return true;
@@ -57,6 +57,14 @@ export class RasterSources {
     if (entry && !sameData(entry.raster, raster)) {
       this.release(key);
       entry = undefined;
+    } else if (entry && resourceRaster(raster) && resourceRaster(entry.raster)) {
+      // Same immutable inputs, new viewport geography: update the registration in place
+      // and let the tiles reload against the refreshed ocean and lake shapes.
+      if (rasterGeographyKey(entry.raster.geography) !== rasterGeographyKey(raster.geography)) {
+        this.client.update(entry.registration, raster);
+        entry.raster = raster;
+        entry.source.refresh();
+      }
     }
     if (!entry) {
       const registration = this.client.register(raster);

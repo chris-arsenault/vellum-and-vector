@@ -86,6 +86,11 @@ export class TileWorkerClient {
     this.send({ kind: "raster", id, raster: { ...raster, field, water, ice, surface } });
     return id;
   }
+  /** Re-send a resource raster whose geography changed; its inputs stay open in the worker. */
+  update(id: number, raster: Raster) {
+    if (!resourceRaster(raster) || !this.rasters.has(id)) return;
+    this.send({ kind: "resourceRaster", id, raster });
+  }
   load(raster: number, extent: number[], size: number, signal: AbortSignal) {
     if (this.failed) return Promise.reject(this.failed);
     if (signal.aborted || !this.rasters.has(raster))

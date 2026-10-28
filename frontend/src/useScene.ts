@@ -13,7 +13,9 @@ export function useMapData(
   resolution = 0
 ) {
   const scene = useScene(world, areaId, extent, resolution);
-  const window = (extent ?? bounds(world.areas[areaId].footprint)) as Bounds;
+  // Raster references are keyed to a window snapped outward to a power-of-two cell, so a pan
+  // inside that cell neither re-queries references nor changes the registered geography.
+  const window = quantizeWindow((extent ?? bounds(world.areas[areaId].footprint)) as Bounds);
   const windows = sceneWindows(world, window);
   const tolerance = displayTolerance(resolution);
   const fields = useQuery({
@@ -36,6 +38,16 @@ export function useMapData(
   return { scene, raster, baseRaster };
 }
 
+export function quantizeWindow(extent: Bounds): Bounds {
+  const span = Math.max(extent[2] - extent[0], extent[3] - extent[1], 1);
+  const cell = 2 ** Math.ceil(Math.log2(span));
+  return [
+    Math.floor(extent[0] / cell) * cell,
+    Math.floor(extent[1] / cell) * cell,
+    Math.ceil(extent[2] / cell) * cell,
+    Math.ceil(extent[3] / cell) * cell,
+  ];
+}
 export function editArea(world: World, areaId: string, feature: AtlasFeature) {
   for (let current: string | null = areaId; current; current = world.areas[current].parentId)
     if (current === feature.areaId) return areaId;
