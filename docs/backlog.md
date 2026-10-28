@@ -245,6 +245,21 @@ authorize implementation, repair or deletion of their existing code.
       uses cylindrical metre geometry with independent terrain along its closed
       north/south edges; latitude coverage does not enable spherical geometry.
 
+- [ ] **18. Mark blocks used on sample reads.** The [block cache](../packages/domain/src/lattice/blockCache.ts)
+      evicts by a clock whose used flag is set only when a block is pinned;
+      `Band.get` and `Band.set` never set it, so per-sample passes evict first-in,
+      first-out. On a 16 MiB budget, random reads of a million samples took
+      1767 ms against 74 ms resident (`make test-perf`). Set the flag on reads at a
+      cost the resident path does not notice, then rerun the same comparison.
+
+- [ ] **19. Send generated records to the catalog as one encoding.** Each
+      published record's geometry is encoded to WKB once, by the generation worker,
+      and the catalog stores those bytes. The record value still crosses the port by
+      structured clone, and generation keeps CBOR working and source-baseline tables
+      for in-progress records, protection and identity comparison. Carry the stored
+      form (value text plus geometry bytes) across the port and compare against the
+      source in that form.
+
 ## Browser GIS defects — 2026-10-28
 
 Recorded from the review of `bc719c5` and resolved the same day by the structural

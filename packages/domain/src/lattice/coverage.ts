@@ -5,7 +5,16 @@ import { radixOrder } from "../hpc/radixOrder";
 import { Band, type BandSchema, type BlockSource } from "./band";
 import { BlockCache } from "./blockCache";
 import type { BlockArray } from "./blockScratch";
-import { blockCells, blockCount, blockShift, nodata, type Lattice } from "./lattice";
+import {
+  blockCells,
+  blockCount,
+  blockShift,
+  nodata as nodataBinding,
+  type Lattice,
+} from "./lattice";
+
+// A module-local copy for per-cell membership tests (see band.ts).
+const nodata = nodataBinding;
 
 /** What a coverage needs of its cells: how many, how they block, and which are live. */
 export type CoverageLayout = Pick<Lattice, "count" | "blockCount" | "blockLive" | "membership">;

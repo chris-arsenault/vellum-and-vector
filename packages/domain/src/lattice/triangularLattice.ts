@@ -1,12 +1,19 @@
 import {
   blockCount,
-  blockShift,
-  content,
-  halo,
-  nodata,
+  blockShift as blockShiftBinding,
+  content as contentBinding,
+  halo as haloBinding,
+  nodata as nodataBinding,
   type Lattice,
   type PeriodicFrame,
 } from "./lattice";
+
+// Module-local copies for per-cell paths: a module runner (Vitest) turns imported bindings
+// into namespace getters.
+const blockShift = blockShiftBinding,
+  content = contentBinding,
+  halo = haloBinding,
+  nodata = nodataBinding;
 
 const rootThree = Math.sqrt(3);
 /** Area of one lattice triangle at unit spacing. */

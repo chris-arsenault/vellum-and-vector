@@ -4,6 +4,11 @@ import type { BlockCache, BlockOwner } from "./blockCache";
 import { bytesPerSample, newBlock, type BlockArray } from "./blockScratch";
 import { blockCells, blockCount, blockMask, blockShift } from "./lattice";
 
+// Module-local copies for the per-sample paths: a module runner (Vitest) turns imported
+// bindings into namespace getters, which would sit on every read.
+const shift = blockShift,
+  mask = blockMask;
+
 export interface BandSchema {
   name: string;
   type: SampleType;
@@ -77,22 +82,22 @@ export class Band implements BlockOwner {
     return this.blockLength(b) * bytesPerSample(this.schema.type);
   }
   get(i: number): number {
-    const b = this.blocks[i >>> blockShift];
-    return (b === null ? this.load(i >>> blockShift) : b)[i & blockMask];
+    const b = this.blocks[i >>> shift];
+    return (b === null ? this.load(i >>> shift) : b)[i & mask];
   }
   set(i: number, value: number) {
-    const block = i >>> blockShift,
+    const block = i >>> shift,
       b = this.blocks[block],
       values = b === null ? this.load(block) : b;
     if (this.dirty[block] === 0) this.markDirty(block);
-    values[i & blockMask] = value;
+    values[i & mask] = value;
   }
   add(i: number, delta: number) {
-    const block = i >>> blockShift,
+    const block = i >>> shift,
       b = this.blocks[block],
       values = b === null ? this.load(block) : b;
     if (this.dirty[block] === 0) this.markDirty(block);
-    values[i & blockMask] += delta;
+    values[i & mask] += delta;
   }
   /** The native block, pinned until `unpin`; pass `write` when the body writes it. */
   block(b: number, write = false): BlockArray {

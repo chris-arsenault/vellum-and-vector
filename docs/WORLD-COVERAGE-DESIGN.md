@@ -1,9 +1,9 @@
 # World coverage: the base numerical data structures
 
-Design document, 2026-10-28. For review before any implementation. It replaces
-the numerical half of the earlier findings documents; the storage review's
-deferred findings stay in `NUMERICAL-EXECUTION-FINDINGS.md` until this design
-is accepted and planned.
+Design document, 2026-10-28; implemented by plan `2f2eee37` (commits `0df9b62`
+through `1cd45a8`). [ADR 0003](adr/0003-frontend-session.md) and the
+[generation design](generation-workflows.md) carry the resulting mechanisms; the
+[backlog](backlog.md) carries what remains open.
 
 ## 1. What the application holds
 
