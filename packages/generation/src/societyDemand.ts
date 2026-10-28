@@ -1,4 +1,5 @@
 import {
+  CellList,
   gridPosition,
   neighbors,
   population,
@@ -12,7 +13,6 @@ import {
 import type { GenerationState } from "./process";
 import { dryLand, societyValue } from "./societySupport";
 import { isWorldSociety } from "./societyMapScope";
-import { NumericalList } from "./canonry/numericalList";
 
 /**
  * Society as field forcing (ADR 0005). At World a unit's works are demands it makes of its
@@ -136,19 +136,15 @@ function mediumTotals(state: GenerationState, communityId: string, kind: Society
 export function* demandSamples(state: GenerationState, work: SocietyWork) {
   if (isStructural(work.kind)) return;
   // Capture eligibility before applying the work: its effects can change the medium.
-  const cells = new NumericalList("int32", "society:demand-medium", state.numerical);
-  try {
-    let area = 0;
-    for (const i of mediumCells(state, work)) {
-      cells.push(i);
-      area += state.surface.measures[i];
-    }
-    const fraction = mediumShare(area, work.radius);
-    if (fraction <= 0) return;
-    for (let k = 0; k < cells.length; k++) yield { i: cells.at(k), fraction };
-  } finally {
-    cells.close();
+  const cells = new CellList();
+  let area = 0;
+  for (const i of mediumCells(state, work)) {
+    cells.push(i);
+    area += state.surface.measures[i];
   }
+  const fraction = mediumShare(area, work.radius);
+  if (fraction <= 0) return;
+  for (let k = 0; k < cells.length; k++) yield { i: cells.at(k), fraction };
 }
 /**
  * How well a cell of the medium serves a structural work on this profile's terrain: a dam

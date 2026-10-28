@@ -4,9 +4,8 @@ import { clearWaterSurface, setWaterSurface, type PhysicalField } from "./field"
 import type { PhysicalContext } from "./context";
 import { hashUnit } from "./noise";
 import { round } from "./math";
-import type { NumericalVector } from "@atlas/domain";
+import { CellList, type NumericalVector } from "@atlas/domain";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
-import { NumericalList } from "./numericalList";
 import {
   contributingWater,
   qualifies,
@@ -34,7 +33,7 @@ function collectDepressions(
   id: number
 ): Depression[] {
   marks[start] = id;
-  const collected = new NumericalList("int32", "lakes:depression", map.numerical);
+  const collected = new CellList();
   collected.push(start);
   let spill = Number.MAX_VALUE;
   for (let head = 0; head < collected.length; head++) {
@@ -47,16 +46,12 @@ function collectDepressions(
       collected.push(j);
     }
   }
-  const wet = new NumericalList("int32", "lakes:submerged-cells", map.numerical);
+  const wet = new CellList();
   for (let n = 0; n < collected.length; n++) {
     const i = collected.at(n);
     if (spill > map.Elevation[i]) wet.push(i);
   }
-  collected.close();
-  const submerged = wet.finish();
-  const result = splitConnected(map, submerged).map((members) => ({ id, members, spill }));
-  releaseWorking(map, submerged);
-  return result;
+  return splitConnected(map, wet.finish()).map((members) => ({ id, members, spill }));
 }
 function addPools(
   map: PhysicalField,

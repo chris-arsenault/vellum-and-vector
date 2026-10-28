@@ -3,9 +3,8 @@ import type { PhysicalField } from "./field";
 import type { PhysicalProfile } from "./profile";
 import { clamp, truncate, units } from "./math";
 import { depthRateToDischarge } from "./dimensions";
-import type { NumericalVector } from "@atlas/domain";
+import { CellList, type NumericalVector } from "@atlas/domain";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
-import { NumericalList } from "./numericalList";
 import { orderedIndices } from "./numericalOrder";
 
 export interface Depression {
@@ -46,7 +45,7 @@ export function splitConnected(map: PhysicalField, submerged: NumericalVector): 
   for (const start of submerged) {
     if (!remaining[start]) continue;
     remaining[start] = 0;
-    const members = new NumericalList("int32", "lakes:members", map.numerical);
+    const members = new CellList();
     members.push(start);
     for (let head = 0; head < members.length; head++)
       for (let edge = 0; edge < map.mesh.degree[members.at(head)]; edge++) {
@@ -55,7 +54,7 @@ export function splitConnected(map: PhysicalField, submerged: NumericalVector): 
         remaining[j] = 0;
         members.push(j);
       }
-    lobes.push(members.finish().sort((a, b) => a - b));
+    lobes.push(members.sort().finish());
   }
   releaseWorking(map, remaining);
   return lobes;
@@ -163,16 +162,13 @@ export function solveStage(
     budget.count === cells.length
       ? component.spill
       : Math.min(component.spill, map.Elevation[cells[budget.count]]);
-  const selected = new NumericalList("int32", "lakes:wet-cells", map.numerical);
+  const selected = new CellList();
   for (let n = 0; n < budget.count; n++)
     if (map.Elevation[cells[n]] < surface) selected.push(cells[n]);
-  const members = selected.finish().sort((a, b) => a - b);
+  const members = selected.sort().finish();
   const complete = budget.count === cells.length;
   releaseWorking(map, cells);
-  if (members.length === 0) {
-    releaseWorking(map, members);
-    return null;
-  }
+  if (members.length === 0) return null;
   const depth = members.reduce((maximum, i) => Math.max(maximum, surface - map.Elevation[i]), 0);
   const overflow = complete ? Math.max(0, Math.max(0, input + budget.adjustment) - budget.loss) : 0;
   return { component, surface, members, depth, overflow };

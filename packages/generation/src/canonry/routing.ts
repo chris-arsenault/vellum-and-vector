@@ -7,9 +7,8 @@ import { hashUnit } from "./noise";
 import { edgeLeadingTo } from "./mesh";
 import { selectByOutletAlignment } from "./flowGuidance";
 import { sourceToOutletOrder } from "./flowGraph";
-import type { NumericalVector } from "@atlas/domain";
+import { CellQueue, type NumericalVector } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
-import { NumericalQueue } from "./numericalQueue";
 import { lakeMembership } from "./lakeMembership";
 
 function stableRoot(map: PhysicalField, members: Iterable<number>, seed: number): number {
@@ -26,26 +25,22 @@ function stableRoot(map: PhysicalField, members: Iterable<number>, seed: number)
   return selected;
 }
 function lakeRanks(map: PhysicalField, root: number, ranks: NumericalVector) {
-  const queue = new NumericalQueue(map.numerical);
+  const queue = new CellQueue();
   ranks[root] = 0;
   queue.push(root);
-  try {
-    for (let i = queue.shift(); i !== undefined; i = queue.shift()) {
-      for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
-        const j = map.mesh.neighbors[i * map.mesh.stride + edge];
-        if (
-          j < 0 ||
-          map.WaterKindCodes[j] !== 2 ||
-          map.WaterBodyIds[j] !== map.WaterBodyIds[root] ||
-          ranks[j] >= 0
-        )
-          continue;
-        ranks[j] = ranks[i] + 1;
-        queue.push(j);
-      }
+  for (let i = queue.shift(); i >= 0; i = queue.shift()) {
+    for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
+      const j = map.mesh.neighbors[i * map.mesh.stride + edge];
+      if (
+        j < 0 ||
+        map.WaterKindCodes[j] !== 2 ||
+        map.WaterBodyIds[j] !== map.WaterBodyIds[root] ||
+        ranks[j] >= 0
+      )
+        continue;
+      ranks[j] = ranks[i] + 1;
+      queue.push(j);
     }
-  } finally {
-    queue.close();
   }
 }
 function outletEscape(map: PhysicalField, target: number) {

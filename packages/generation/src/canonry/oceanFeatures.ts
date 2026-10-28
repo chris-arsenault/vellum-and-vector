@@ -1,4 +1,4 @@
-import { spatial, type NumericalVector } from "@atlas/domain";
+import { CellList, spatial, type NumericalVector } from "@atlas/domain";
 import type { Geometry, Polygon } from "geojson";
 import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
@@ -6,7 +6,6 @@ import { combinedContour, areaGeometry } from "./geographicContours";
 import { marineRegions, type MarineRegion } from "./marineRegions";
 import { metricSearch } from "./metricSearch";
 import { units } from "./math";
-import { NumericalList } from "./numericalList";
 import { workingValues, releaseWorking } from "./physicalNumerics";
 
 function polygons(shape: Geometry): Polygon[] {
@@ -48,7 +47,7 @@ function regionOutline(
   ocean: Geometry
 ) {
   const mesh = state.physical!.map.mesh,
-    members = new NumericalList("int32", "marine-outline-members", state.numerical),
+    members = new CellList(),
     neighbours = new Set<number>();
   for (let i = 0; i < labels.length; i++) {
     if (labels[i] !== region.id) continue;
@@ -66,7 +65,6 @@ function regionOutline(
     terms,
     ([own, ...other]) => own - Math.max(0, ...other)
   );
-  releaseWorking(state.physical!.map, cells);
   return areaGeometry(contour && spatial.intersection(contour, ocean));
 }
 

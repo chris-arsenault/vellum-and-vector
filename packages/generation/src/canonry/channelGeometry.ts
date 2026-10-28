@@ -6,9 +6,8 @@ import { clamp, toUnits, truncate, units } from "./math";
 import { edgeLeadingTo } from "./mesh";
 import { channelDimensions } from "./dimensions";
 import { physicalDistance } from "./physicalMetric";
-import type { NumericalVector } from "@atlas/domain";
+import { RecordQueue, type NumericalVector } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
-import { NumericalRecordQueue } from "./numericalQueue";
 
 function normalize(x: number, y: number): [number, number] {
   const length = Math.max(0.000001, Math.sqrt(x * x + y * y));
@@ -144,10 +143,7 @@ export function riverChannelGeometry(map: PhysicalField, c: PhysicalContext) {
   map.RiverWidth.fill(0);
   map.RiverDepth.fill(0);
   const upstream = dominantUpstream(map),
-    frontier = new NumericalRecordQueue<Front>(
-      ["triangle", "spine", "depth", "maximum"],
-      map.numerical
-    ),
+    frontier = new RecordQueue(3),
     p = c.Profile;
   for (let i = 0; i < map.mesh.count; i++) {
     const order = map.RiverOrders[i];
@@ -173,31 +169,38 @@ export function riverChannelGeometry(map: PhysicalField, c: PhysicalContext) {
     );
     map.RiverChannelOrders[i] = order;
     const maximum = expansionSteps(map, c, i);
-    if (maximum > 0) frontier.push({ triangle: i, spine: i, depth: 0, maximum });
+    if (maximum > 0) frontier.push(i, i, 0, maximum);
   }
   try {
     expandChannels(map, c, upstream, frontier);
     extendSpines(map);
   } finally {
-    frontier.close();
     releaseWorking(map, upstream);
   }
 }
+/** Frontier records: the widened triangle, then spine, depth and maximum as fields 0..2. */
 function expandChannels(
   map: PhysicalField,
   c: PhysicalContext,
   upstream: NumericalVector,
-  frontier: NumericalRecordQueue<Front>
+  frontier: RecordQueue
 ) {
-  for (let front = frontier.shift(); front; front = frontier.shift()) {
-    for (let edge = 0; edge < map.mesh.degree[front.triangle]; edge++) {
-      const target = map.mesh.neighbors[front.triangle * map.mesh.stride + edge];
+  for (let triangle = frontier.shift(); triangle >= 0; triangle = frontier.shift()) {
+    const front: Front = {
+      triangle,
+      spine: frontier.field(0),
+      depth: frontier.field(1),
+      maximum: frontier.field(2),
+    };
+    for (let edge = 0; edge < map.mesh.degree[triangle]; edge++) {
+      const target = map.mesh.neighbors[triangle * map.mesh.stride + edge];
       if (tryWiden(map, c, upstream, front, target))
-        frontier.push({
-          ...front,
-          triangle: target,
-          depth: front.depth + physicalDistance(map.mesh, front.triangle, target),
-        });
+        frontier.push(
+          target,
+          front.spine,
+          front.depth + physicalDistance(map.mesh, triangle, target),
+          front.maximum
+        );
     }
   }
 }

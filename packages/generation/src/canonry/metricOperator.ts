@@ -1,13 +1,14 @@
 import type { PhysicalMesh } from "./mesh";
 import {
   allocateNumerical,
+  CellList,
+  FloatList,
   readNumericalBlock,
   writeNumericalBlock,
   type NumericalVector,
   type NumericalAllocator,
   type SampleType,
 } from "@atlas/domain";
-import { NumericalList } from "./numericalList";
 export interface MetricOperator {
   numerical?: NumericalAllocator;
   cells: NumericalVector;
@@ -57,8 +58,8 @@ export function metricOperator(
   const areas = metricArray("areas", count, "float64", numerical),
     diagonal = metricArray("diagonal", count, "float64", numerical);
   const offsets = metricArray("offsets", count + 1, "int32", numerical),
-    neighbors = new NumericalList("int32", "metric:neighbors", numerical),
-    weights = new NumericalList("float64", "metric:weights", numerical);
+    neighbors = new CellList(count * 3),
+    weights = new FloatList(count * 3);
   for (let i = 0; i < count; i++) {
     const cell = cells[i];
     areas[i] = diagonal[i] = mesh.areas[cell];

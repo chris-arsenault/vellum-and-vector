@@ -7,9 +7,8 @@ import { meshPoint, nearestTriangle } from "./mesh";
 import { metricSearch } from "./metricSearch";
 import { physicalSampler } from "./physicalMetric";
 import { distance, type Point } from "./landmarkGeometry";
-import type { NumericalVector } from "@atlas/domain";
+import { CellList, radixOrder, type NumericalVector } from "@atlas/domain";
 import { workingArray } from "./physicalNumerics";
-import { NumericalList } from "./numericalList";
 
 /** The field read once per siting pass. */
 export interface Terrain {
@@ -62,24 +61,28 @@ function distanceTo(map: PhysicalField, accept: (i: number) => boolean) {
 export function analyseTerrain(map: PhysicalField): Terrain {
   const sea = distanceTo(map, (i) => map.WaterKindCodes[i] === 1),
     offshore = distanceTo(map, (i) => map.WaterKindCodes[i] === 0);
-  const land = new NumericalList("int32", "landmark:land", map.numerical),
-    ocean = new NumericalList("int32", "landmark:ocean", map.numerical),
-    rivers = new NumericalList("int32", "landmark:rivers", map.numerical);
+  const land = new CellList(),
+    ocean = new CellList(),
+    rivers = new CellList();
   for (let i = 0; i < map.mesh.contentCount; i++) {
     if (map.WaterKindCodes[i] === 1) ocean.push(i);
     if (map.WaterKindCodes[i] !== 0) continue;
     land.push(i);
     if (map.RiverOrders[i] > 0 && height(map, i) > 5) rivers.push(i);
   }
+  // Largest flow first; rivers were pushed ascending, so ties keep index order.
+  const riverCells = rivers.finish(),
+    byFlow = radixOrder(
+      Float64Array.from(riverCells, (i) => map.FlowAccumulation[i]),
+      true
+    );
   return {
     map,
     sea,
     offshore,
     land: land.finish(),
     ocean: ocean.finish(),
-    rivers: rivers
-      .finish()
-      .sort((a, b) => map.FlowAccumulation[b] - map.FlowAccumulation[a] || a - b),
+    rivers: Int32Array.from(byFlow, (k) => riverCells[k]),
   };
 }
 

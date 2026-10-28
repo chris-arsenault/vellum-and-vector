@@ -5,15 +5,10 @@ import { lerp, round, truncate, units } from "./math";
 import { hashUnit } from "./noise";
 import { nearestTriangle, triangleIdentity } from "./mesh";
 import { paintMaximum, triangleDistanceSquared } from "./radial";
-import type { NumericalVector } from "@atlas/domain";
-import { NumericalList } from "./numericalList";
-import { releaseWorking } from "./physicalNumerics";
+import { CellList, type NumericalVector } from "@atlas/domain";
 
 function candidateSets(map: PhysicalField, c: PhysicalContext) {
-  const result = Array.from(
-    { length: 4 },
-    () => new NumericalList("int32", "warmth:candidates", map.numerical)
-  );
+  const result = Array.from({ length: 4 }, () => new CellList());
   for (let i = 0; i < map.mesh.contentCount; i++) {
     if (map.WaterKindCodes[i] === 1) {
       result[0].push(i);
@@ -90,5 +85,4 @@ export function warmthSources(map: PhysicalField, c: PhysicalContext) {
     );
     paintMaximum(map.mesh, map.Warmth, map.mesh.x[source], map.mesh.y[source], radius, strength);
   }
-  releaseWorking(map, ...candidates);
 }

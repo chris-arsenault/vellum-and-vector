@@ -1,12 +1,12 @@
 import {
   allocateNumerical,
+  CellQueue,
   putChannel,
   requireThat,
   type Grid,
   type NumericalVector,
   type NumericalAllocator,
 } from "@atlas/domain";
-import { NumericalQueue } from "./canonry/numericalQueue";
 import { requireChannel } from "./mapFields";
 import {
   adjacency,
@@ -94,19 +94,18 @@ function connectedOcean(
       { type: "uint8", length: floor.length, lifetime: "process", name: "drainage:ocean" },
       numerical
     ),
-    queue = new NumericalQueue(numerical);
+    queue = new CellQueue();
   for (let i = 0; i < floor.length; i++)
     if (grid.active[i] && boundaryCell(grid, i) && floor[i] < seaLevel) {
       ocean[i] = 1;
       queue.push(i);
     }
-  for (let i = queue.shift(); i !== undefined; i = queue.shift())
+  for (let i = queue.shift(); i >= 0; i = queue.shift())
     for (const j of links(i))
       if (!ocean[j] && floor[j] < seaLevel) {
         ocean[j] = 1;
         queue.push(j);
       }
-  queue.close();
   return ocean;
 }
 

@@ -1,4 +1,4 @@
-import { spatial, point, type MagicFeatureRule } from "@atlas/domain";
+import { CellList, spatial, point, type MagicFeatureRule } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
@@ -17,7 +17,6 @@ import { naturalPlaceGeometry, magicPlaceGeometry, type PlaceGeometry } from "./
 import type { MagicField } from "./magicState";
 import type { NumericalVector } from "@atlas/domain";
 import type { RegionMembers } from "./regionMembers";
-import { NumericalList } from "./numericalList";
 import { workingValues, releaseWorking } from "./physicalNumerics";
 import { lakeMembership } from "./lakeMembership";
 
@@ -73,7 +72,7 @@ function connectedMembers(
   start: number,
   region: number
 ) {
-  const members = new NumericalList("int32", "region:frontier", state.numerical),
+  const members = new CellList(),
     mesh = state.physical!.map.mesh;
   members.push(start);
   visited[start] = region;

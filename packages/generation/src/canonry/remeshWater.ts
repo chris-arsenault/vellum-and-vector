@@ -1,9 +1,7 @@
 import type { PhysicalField } from "./field";
 import { clearWaterSurface, reconcileWater } from "./field";
-import type { NumericalVector } from "@atlas/domain";
+import { CellList, type NumericalVector } from "@atlas/domain";
 import { lakeMembership } from "./lakeMembership";
-import { NumericalList } from "./numericalList";
-import { releaseWorking } from "./physicalNumerics";
 
 function lakeLevel(map: PhysicalField, cells: NumericalVector, volume: number) {
   cells.sort((a, b) => map.Elevation[a] - map.Elevation[b]);
@@ -39,17 +37,13 @@ export function reconcileRemeshedWater(previous: PhysicalField, next: PhysicalFi
   }
   try {
     for (const id of membership.bodies.keys()) {
-      const selected = new NumericalList("int32", "lake:level-support", next.numerical);
+      const selected = new CellList();
       for (const i of membership.members(id)) selected.push(i);
       const cells = selected.finish();
-      try {
-        const level = lakeLevel(next, cells, inventory.get(id) ?? 0);
-        for (const i of cells) {
-          next.WaterSurfaceElevations[i] = level;
-          reconcileWater(next, i);
-        }
-      } finally {
-        releaseWorking(next, cells);
+      const level = lakeLevel(next, cells, inventory.get(id) ?? 0);
+      for (const i of cells) {
+        next.WaterSurfaceElevations[i] = level;
+        reconcileWater(next, i);
       }
     }
   } finally {

@@ -1,7 +1,6 @@
-import type { NumericalVector } from "@atlas/domain";
+import { CellList, type NumericalVector } from "@atlas/domain";
 import type { PhysicalField } from "./field";
 import type { RegionMembers } from "./regionMembers";
-import { NumericalList } from "./numericalList";
 import { PriorityQueue } from "./priorityQueue";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 
@@ -18,8 +17,8 @@ export function unitGroups(
 ): RegionGroups {
   const mesh = map.mesh,
     labels = workingArray(map, "int32", "region:groups").fill(-2),
-    cells = new NumericalList("int32", "region:group-members", map.numerical),
-    offsets = new NumericalList("int32", "region:group-offsets", map.numerical);
+    cells = new CellList(),
+    offsets = new CellList();
   for (const i of members) labels[i] = -1;
   for (const start of members) {
     if (labels[start] >= 0) continue;

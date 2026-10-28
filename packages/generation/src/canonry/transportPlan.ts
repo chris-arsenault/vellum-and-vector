@@ -5,8 +5,7 @@ import { clamp, round } from "./math";
 import { adaptiveCell, visitAdaptiveOverlap, type Bounds } from "@atlas/domain";
 import { triangleOverlap } from "./triangleOverlap";
 import { tectonicTransport } from "./tectonicTransport";
-import type { NumericalVector } from "@atlas/domain";
-import { NumericalList } from "./numericalList";
+import { CellList, FloatList, type NumericalVector } from "@atlas/domain";
 import { workingArray } from "./physicalNumerics";
 
 export const weightScale = 1_000_000;
@@ -19,8 +18,8 @@ export interface TransportPlan {
   dominantWeight: NumericalVector;
 }
 type Builder = Omit<TransportPlan, "targets" | "weights"> & {
-  targets: NumericalList;
-  weights: NumericalList;
+  targets: CellList;
+  weights: FloatList;
 };
 function add(map: PhysicalField, plan: Builder, source: number, target: number, weight: number) {
   if (weight <= 0) return;
@@ -97,34 +96,29 @@ export function buildTransportPlan(map: PhysicalField, step: number): TransportP
   const transform = tectonicTransport(map, step);
   const plan: Builder = {
     offsets: workingArray(map, "int32", "transport:offsets", count + 1),
-    targets: new NumericalList("int32", "transport:targets", map.numerical),
-    weights: new NumericalList("float64", "transport:weights", map.numerical),
+    targets: new CellList(count),
+    weights: new FloatList(count),
     arrivals: workingArray(map, "float64", "transport:arrivals"),
     dominant: workingArray(map, "int32", "transport:dominant").fill(-1),
     dominantWeight: workingArray(map, "float64", "transport:dominantWeight"),
   };
-  try {
-    for (let i = 0; i < count; i++) {
-      plan.offsets[i] = plan.targets.length;
-      const move = transform ? (x: number, y: number) => transform(i, x, y) : undefined;
-      const [x, y] = move
-        ? move(map.mesh.x[i], map.mesh.y[i])
-        : [
-            map.mesh.x[i] + (map.CrustMotionX[i] * step) / 1000,
-            map.mesh.y[i] + (map.CrustMotionY[i] * step) / 1000,
-          ];
-      (map.mesh.topology ? scatterVolume : scatter)(map, plan, i, x, y, move);
-    }
-    plan.offsets[count] = plan.targets.length;
-    const ready = {
-      ...plan,
-      targets: plan.targets.finish(),
-      weights: plan.weights.finish(),
-    };
-    for (const vector of Object.values(ready)) vector.retain?.();
-    return ready;
-  } finally {
-    plan.targets.close();
-    plan.weights.close();
+  for (let i = 0; i < count; i++) {
+    plan.offsets[i] = plan.targets.length;
+    const move = transform ? (x: number, y: number) => transform(i, x, y) : undefined;
+    const [x, y] = move
+      ? move(map.mesh.x[i], map.mesh.y[i])
+      : [
+          map.mesh.x[i] + (map.CrustMotionX[i] * step) / 1000,
+          map.mesh.y[i] + (map.CrustMotionY[i] * step) / 1000,
+        ];
+    (map.mesh.topology ? scatterVolume : scatter)(map, plan, i, x, y, move);
   }
+  plan.offsets[count] = plan.targets.length;
+  const ready: TransportPlan = {
+    ...plan,
+    targets: plan.targets.finish(),
+    weights: plan.weights.finish(),
+  };
+  for (const vector of Object.values(ready)) vector.retain?.();
+  return ready;
 }

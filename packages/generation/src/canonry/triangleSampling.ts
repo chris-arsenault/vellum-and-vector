@@ -1,8 +1,7 @@
 import type { PhysicalMesh } from "./mesh";
 import { nearestTriangle, meshDeltaX, meshPoint } from "./mesh";
 import { triangleVertex } from "./triangleVertices";
-import { allocateNumerical, type NumericalAllocator } from "@atlas/domain";
-import { NumericalList } from "./numericalList";
+import { allocateNumerical, CellList, type NumericalAllocator } from "@atlas/domain";
 
 export interface TriangleSample {
   cell: number;
@@ -80,7 +79,7 @@ export function triangleSupport(
     { type: "uint8", length: mesh.count, lifetime: "process", name: "contour:membership" },
     numerical
   );
-  const list = new NumericalList("int32", "contour:support", numerical);
+  const list = new CellList();
   const add = (cell: number) => {
     if (selected[cell]) return;
     selected[cell] = 1;
@@ -94,7 +93,7 @@ export function triangleSupport(
   return {
     has: (cell: number) => !!selected[cell],
     [Symbol.iterator]: () => cells.values(),
-    close: () => numerical?.releaseUnused([selected, cells], []),
+    close: () => numerical?.releaseUnused([selected], []),
   };
 }
 export function* triangleFans(

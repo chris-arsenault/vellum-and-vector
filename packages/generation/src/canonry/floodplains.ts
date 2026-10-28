@@ -3,8 +3,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, toUnits, units } from "./math";
 import { dominantUpstream, longitudinalAlignment } from "./channelGeometry";
-import type { NumericalVector } from "@atlas/domain";
-import { NumericalRecordQueue } from "./numericalQueue";
+import { RecordQueue, type NumericalVector } from "@atlas/domain";
 import { releaseWorking } from "./physicalNumerics";
 
 function canFlood(
@@ -26,12 +25,12 @@ function canFlood(
       p.FloodplainMaximumLongitudinalAlignment / 1000
   );
 }
-type Front = { i: number; distance: number };
+/** Frontier records carry the cell and its distance from the channel (field 0). */
 function seedFloodplains(
   map: PhysicalField,
   c: PhysicalContext,
   upstream: NumericalVector,
-  frontier: NumericalRecordQueue<Front>
+  frontier: RecordQueue
 ) {
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.RiverChannelOrders[i] < c.Profile.FloodplainMinimumRiverOrder) continue;
@@ -48,19 +47,18 @@ function seedFloodplains(
       );
       if (intensity <= map.FloodplainIntensity[j]) continue;
       map.FloodplainIntensity[j] = intensity;
-      frontier.push({ i: j, distance });
+      frontier.push(j, distance);
     }
   }
 }
 export function floodplains(map: PhysicalField, c: PhysicalContext) {
   map.FloodplainIntensity.fill(0);
   const upstream = dominantUpstream(map),
-    frontier = new NumericalRecordQueue<Front>(["i", "distance"], map.numerical);
+    frontier = new RecordQueue(1);
   try {
     seedFloodplains(map, c, upstream, frontier);
     expandFloodplains(map, c, upstream, frontier);
   } finally {
-    frontier.close();
     releaseWorking(map, upstream);
   }
 }
@@ -68,10 +66,10 @@ function expandFloodplains(
   map: PhysicalField,
   c: PhysicalContext,
   upstream: NumericalVector,
-  frontier: NumericalRecordQueue<Front>
+  frontier: RecordQueue
 ) {
-  for (let front = frontier.shift(); front; front = frontier.shift()) {
-    const { i, distance } = front;
+  for (let i = frontier.shift(); i >= 0; i = frontier.shift()) {
+    const distance = frontier.field(0);
     for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
       const at = i * map.mesh.stride + edge,
         j = map.mesh.neighbors[at];
@@ -84,7 +82,7 @@ function expandFloodplains(
         relief;
       if (intensity <= map.FloodplainIntensity[j]) continue;
       map.FloodplainIntensity[j] = intensity;
-      frontier.push({ i: j, distance: next });
+      frontier.push(j, next);
     }
   }
 }

@@ -1,9 +1,8 @@
 import type { PhysicalField } from "./field";
 import { metricSearch } from "./metricSearch";
-import type { NumericalVector } from "@atlas/domain";
+import { CellList, type NumericalVector } from "@atlas/domain";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 import { orderedIndices } from "./numericalOrder";
-import { NumericalList } from "./numericalList";
 
 /** A passage must fall below this share of the smaller sea's breadth to separate names. */
 const passageBreadthRatio = 0.5;
@@ -104,13 +103,12 @@ class MarineWatershed {
 }
 
 function gatherRegions(map: PhysicalField, watershed: MarineWatershed) {
-  const members = new Map<number, NumericalList>(),
+  const members = new Map<number, CellList>(),
     area = new Map<number, number>();
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes[i] !== 1) continue;
     const id = watershed.root(i);
-    if (!members.has(id))
-      members.set(id, new NumericalList("int32", "marine-members", map.numerical));
+    if (!members.has(id)) members.set(id, new CellList());
     members.get(id)!.push(i);
     area.set(id, (area.get(id) ?? 0) + map.mesh.contentAreas[i]);
   }

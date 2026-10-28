@@ -1,6 +1,5 @@
 import { metricArray, metricProduct, releaseMetric, type MetricOperator } from "./metricOperator";
-import type { NumericalVector } from "@atlas/domain";
-import { NumericalList } from "./numericalList";
+import { CellList, FloatList, type NumericalVector } from "@atlas/domain";
 
 type Level = {
   matrix: MetricOperator;
@@ -41,8 +40,8 @@ function coarseOperator(
   const areas = metricArray("coarse-area", count, "float64", numerical),
     diagonal = metricArray("coarse-diagonal", count, "float64", numerical),
     offsets = metricArray("coarse-offsets", count + 1, "int32", numerical),
-    neighbors = new NumericalList("int32", "metric:coarse-neighbors", numerical),
-    weights = new NumericalList("float64", "metric:coarse-weights", numerical);
+    neighbors = new CellList(count * 3),
+    weights = new FloatList(count * 3);
   for (let a = 0; a < count; a++) {
     const row = new Map<number, number>();
     for (let i = heads[a]; i >= 0; i = next[i]) {

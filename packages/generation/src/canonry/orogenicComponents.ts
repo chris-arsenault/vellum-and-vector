@@ -5,9 +5,8 @@ import { round, toUnits } from "./math";
 import { hashUnit } from "./noise";
 import { metricSearch } from "./metricSearch";
 import { meshDeltaX, meshPointX } from "./mesh";
-import type { NumericalVector } from "@atlas/domain";
+import { CellQueue, type NumericalVector } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
-import { NumericalQueue } from "./numericalQueue";
 
 export interface BoundaryComponent {
   id: number;
@@ -53,9 +52,9 @@ function floodComponent(
   component: BoundaryComponent,
   start: number
 ) {
-  const queue = new NumericalQueue(map.numerical);
+  const queue = new CellQueue();
   queue.push(start);
-  for (let i = queue.shift(); i !== undefined; i = queue.shift()) {
+  for (let i = queue.shift(); i >= 0; i = queue.shift()) {
     addCell(component, map, i, map.mesh.x[start]);
     for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
       const j = map.mesh.neighbors[i * map.mesh.stride + edge];
@@ -71,7 +70,6 @@ function floodComponent(
       queue.push(j);
     }
   }
-  queue.close();
   component.collision /= component.area * 1000;
   component.suture /= component.area * 1000;
   component.strain /= component.area * 1000;

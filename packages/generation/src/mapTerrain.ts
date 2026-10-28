@@ -1,5 +1,6 @@
 import {
   allocateNumerical,
+  CellList,
   gridPosition,
   putChannel,
   semanticId,
@@ -8,7 +9,6 @@ import {
   type NumericalVector,
   type NumericalAllocator,
 } from "@atlas/domain";
-import { NumericalList } from "./canonry/numericalList";
 import { requireChannel } from "./mapFields";
 import {
   adjacency,
@@ -112,7 +112,7 @@ function provinces(
 ): Province[] {
   const count = Number(context.parameters.provinces),
     speed = Number(context.parameters.plateSpeed);
-  const active = new NumericalList("int32", "terrain:province-candidates", numerical);
+  const active = new CellList();
   for (let i = 0; i < grid.active.length; i++) if (grid.active[i]) active.push(i);
   const cells = active.finish();
   requireThat(cells.length > 0, "physical_extent", "Terrain needs active mapped cells.");
