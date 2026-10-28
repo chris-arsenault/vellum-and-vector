@@ -33,9 +33,8 @@ test("dividing lines combine with geography and nested subjects retain their own
   await clickWorld(page, 0, 500, [0, 0, 1000, 1000]);
   await clickWorld(page, 1000, 500, [0, 0, 1000, 1000], true);
   await expect(page.locator(".region-draft")).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Use an existing boundary", exact: true })
-  ).toHaveAttribute("aria-pressed", "true");
+  // The finished line hands over to picking a side; the draft replaces the tool buttons.
+  await expect(page.getByText(/Click a place to preview a region/)).toBeVisible();
   await clickWorld(page, 300, 300, [0, 0, 1000, 1000]);
   await expect(page.getByLabel("Boundary choice")).toHaveCount(0);
   await page.getByLabel("Region name", { exact: false }).fill("Green reach");
@@ -52,7 +51,7 @@ test("dividing lines combine with geography and nested subjects retain their own
   await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
   await page
     .locator(".breadcrumbs")
-    .getByRole("button", { name: "Green reach", exact: true })
+    .getByRole("button", { name: /Green reach/ })
     .click();
   await page
     .getByRole("navigation", { name: "Region hierarchy" })
@@ -62,6 +61,8 @@ test("dividing lines combine with geography and nested subjects retain their own
   await page.getByLabel("Rename region").fill("Inner reach");
   await page.getByRole("button", { name: "Rename", exact: true }).click();
   await expect(page.locator(".breadcrumbs")).toContainText("Inner reach");
+  // The renamed region's details reopen collapsed.
+  await page.getByText("Region details", { exact: true }).click();
   await expect(page.getByRole("button", { name: "Remove region", exact: true })).toBeDisabled();
   await openMapSettings(page, "Views");
   await page.getByRole("button", { name: "Inner sheet", exact: true }).click();
