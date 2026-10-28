@@ -2,8 +2,7 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { clamp, round } from "./math";
-import { PriorityQueue } from "./priorityQueue";
-import type { NumericalVector } from "@atlas/domain";
+import { KeyedHeap, type NumericalVector } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
 interface Contact {
@@ -56,24 +55,17 @@ function findContact(
   visit: number
 ): Contact | null {
   const p = context.Profile;
-  const queue = new PriorityQueue<{ i: number; d: number }>(
-    (a, b) => a.d - b.d || a.i - b.i,
-    map.numerical,
-    ["i", "d"]
-  );
+  const queue = new KeyedHeap("min");
   const search = new MaterialSearch();
   visited[start] = visit;
   distance[start] = 0;
-  queue.push({ i: start, d: 0 });
-  while (queue.count) {
-    const { i, d } = queue.pop();
+  queue.push(start, 0);
+  for (let i = queue.pop(); i >= 0; i = queue.pop()) {
+    const d = queue.poppedKey();
     if (d !== distance[i]) continue;
     search.observe(map, context, i, d);
     const contact = search.contact(p.ContinentalSutureDetectionReach);
-    if (contact) {
-      queue.close();
-      return contact;
-    }
+    if (contact) return contact;
     if (d >= p.ContinentalSutureDetectionReach) continue;
     for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
       const j = map.mesh.neighbors[i * map.mesh.stride + edge];
@@ -82,7 +74,7 @@ function findContact(
       if (visited[j] === visit && distance[j] <= next) continue;
       visited[j] = visit;
       distance[j] = next;
-      queue.push({ i: j, d: next });
+      queue.push(j, next);
     }
   }
   return null;

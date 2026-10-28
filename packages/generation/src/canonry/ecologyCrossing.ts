@@ -1,8 +1,7 @@
 import type { PhysicalField } from "./field";
-import { PriorityQueue } from "./priorityQueue";
 import { windStrength } from "./ecologyEnvironment";
 import { workingArray } from "./physicalNumerics";
-import type { NumericalVector } from "@atlas/domain";
+import { KeyedHeap, type NumericalVector } from "@atlas/domain";
 
 export type Carrier = "wind" | "current";
 export interface Crossing {
@@ -43,18 +42,13 @@ export function waterDistance(
 ) {
   const mesh = map.mesh,
     distance = workingArray(map, "float64", "ecology:water-distance").fill(Infinity);
-  const queue = new PriorityQueue<{ i: number; d: number }>(
-    (a, b) => a.d - b.d || a.i - b.i,
-    map.numerical,
-    ["i", "d"]
-  );
+  const queue = new KeyedHeap("min");
   for (let i = 0; i < mesh.count; i++)
     if (!sea(map, i) && occupied(i)) {
       distance[i] = 0;
-      queue.push({ i, d: 0 });
+      queue.push(i, 0);
     }
   traverseWater(map, distance, queue, carrier, limit);
-  queue.close();
   for (let i = 0; i < distance.length; i++)
     if (sea(map, i) || distance[i] === 0) distance[i] = Infinity;
   return distance;
@@ -62,13 +56,13 @@ export function waterDistance(
 function traverseWater(
   map: PhysicalField,
   distance: NumericalVector,
-  queue: PriorityQueue<{ i: number; d: number }>,
+  queue: KeyedHeap,
   carrier: Carrier,
   limit: number
 ) {
   const mesh = map.mesh;
-  while (queue.count) {
-    const { i, d } = queue.pop();
+  for (let i = queue.pop(); i >= 0; i = queue.pop()) {
+    const d = queue.poppedKey();
     if (d !== distance[i]) continue;
     for (let edge = 0; edge < mesh.degree[i]; edge++) {
       const j = mesh.neighbors[i * mesh.stride + edge];
@@ -76,7 +70,7 @@ function traverseWater(
       const next = d + waterStep(map, carrier, i, edge, j);
       if (next > limit || next >= distance[j]) continue;
       distance[j] = next;
-      queue.push({ i: j, d: next });
+      queue.push(j, next);
     }
   }
 }

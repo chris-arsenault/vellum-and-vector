@@ -1,6 +1,5 @@
 import type { PhysicalMesh } from "./mesh";
-import type { NumericalVector, NumericalAllocator } from "@atlas/domain";
-import { PriorityQueue } from "./priorityQueue";
+import { KeyedHeap, type NumericalVector } from "@atlas/domain";
 
 /** Multi-source geodesic distances over physical faces, including coarse/fine interfaces. */
 export function metricSearch(
@@ -8,17 +7,12 @@ export function metricSearch(
   seeds: Iterable<number>,
   distance: NumericalVector,
   reach: number,
-  visit: (target: number, source: number) => void,
-  numerical?: NumericalAllocator
+  visit: (target: number, source: number) => void
 ) {
-  const queue = new PriorityQueue<{ i: number; d: number }>(
-    (a, b) => a.d - b.d || a.i - b.i,
-    numerical,
-    ["i", "d"]
-  );
-  for (const i of seeds) queue.push({ i, d: distance[i] });
-  while (queue.count) {
-    const { i, d } = queue.pop();
+  const queue = new KeyedHeap("min");
+  for (const i of seeds) queue.push(i, distance[i]);
+  for (let i = queue.pop(); i >= 0; i = queue.pop()) {
+    const d = queue.poppedKey();
     if (d !== distance[i]) continue;
     for (let edge = 0; edge < mesh.degree[i]; edge++) {
       const at = i * mesh.stride + edge,
@@ -27,8 +21,7 @@ export function metricSearch(
       if (j < 0 || next > reach || next >= distance[j]) continue;
       distance[j] = next;
       visit(j, i);
-      queue.push({ i: j, d: next });
+      queue.push(j, next);
     }
   }
-  queue.close();
 }

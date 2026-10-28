@@ -1,4 +1,11 @@
-import { gridPosition, semanticId, spatial, type Entity, type Position } from "@atlas/domain";
+import {
+  gridPosition,
+  KeyedHeap,
+  semanticId,
+  spatial,
+  type Entity,
+  type Position,
+} from "@atlas/domain";
 import { initializePolitics, evolvePolitics } from "./societyPolitics";
 import { publishPolitics } from "./societyPoliticalPublication";
 import { dryLand } from "./societySupport";
@@ -14,7 +21,6 @@ import { initializeCultures, diffuseCultures } from "./societyCulture";
 import { publishCultures } from "./societyCulturePublication";
 import { atlasName, geographicNamingCulture } from "./atlasNaming";
 import { bindSocietyProfile } from "./societyProfile";
-import { PriorityQueue } from "./canonry/priorityQueue";
 
 export function* landCells(state: GenerationState) {
   const covers = spatial.pointCoverage(state.domain.scope.footprint);
@@ -73,16 +79,9 @@ export function centers(
   });
 }
 function selectCenters(state: GenerationState, context: MapProcessContext, count: number) {
-  const candidates = new PriorityQueue<{ i: number; score: number }>(
-    (a, b) => b.score - a.score || a.i - b.i,
-    state.numerical,
-    ["i", "score"]
-  );
+  const candidates = new KeyedHeap("max");
   for (const i of landCells(state))
-    candidates.push({
-      i,
-      score: suitability(state, i) * (0.6 + context.random() * 0.4),
-    });
+    candidates.push(i, suitability(state, i) * (0.6 + context.random() * 0.4));
   const selected: number[] = [];
   const span = Math.max(
     state.surface.bounds[2] - state.surface.bounds[0],
@@ -90,23 +89,19 @@ function selectCenters(state: GenerationState, context: MapProcessContext, count
   );
   // Scores never change. Visit the ranked candidates once, including when the
   // remaining land cannot fit another origin at the requested separation.
-  try {
-    while (candidates.count && selected.length < count) {
-      const { i } = candidates.pop();
-      const position = gridPosition(state.surface, i);
-      if (
-        selected.some((j) => {
-          const p = gridPosition(state.surface, j);
-          return Math.hypot(position.x - p.x, position.y - p.y) < span / (count * 1.5);
-        })
-      )
-        continue;
-      selected.push(i);
-    }
-    return selected;
-  } finally {
-    candidates.close();
+  while (candidates.size && selected.length < count) {
+    const i = candidates.pop();
+    const position = gridPosition(state.surface, i);
+    if (
+      selected.some((j) => {
+        const p = gridPosition(state.surface, j);
+        return Math.hypot(position.x - p.x, position.y - p.y) < span / (count * 1.5);
+      })
+    )
+      continue;
+    selected.push(i);
   }
+  return selected;
 }
 export const culturalProcess: MapProcess = {
   contract: {

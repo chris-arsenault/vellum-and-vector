@@ -1,6 +1,5 @@
 import type { PhysicalField } from "./field";
-import type { NumericalVector } from "@atlas/domain";
-import { PriorityQueue } from "./priorityQueue";
+import { KeyedHeap, type NumericalVector } from "@atlas/domain";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 
 export interface EcologicalFront {
@@ -16,20 +15,14 @@ export function ecologicalFront(
 ): EcologicalFront {
   const time = workingValues(map, "float64", "ecology:front-time", (i) => starts[i]),
     source = workingArray(map, "int32", "ecology:front-source").fill(-1);
-  const queue = new PriorityQueue<{ i: number; time: number }>(
-    (a, b) => a.time - b.time || a.i - b.i,
-    map.numerical,
-    ["i", "time"]
-  );
+  const queue = new KeyedHeap("min");
   for (let i = 0; i < time.length; i++)
     if (Number.isFinite(time[i]) && admits(i)) {
       source[i] = i;
-      queue.push({ i, time: time[i] });
+      queue.push(i, time[i]);
     } else time[i] = Infinity;
-  while (queue.count) {
-    const current = queue.pop(),
-      i = current.i;
-    if (current.time !== time[i]) continue;
+  for (let i = queue.pop(); i >= 0; i = queue.pop()) {
+    if (queue.poppedKey() !== time[i]) continue;
     for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
       const j = map.mesh.neighbors[i * map.mesh.stride + edge];
       if (j < 0 || !admits(j)) continue;
@@ -37,7 +30,7 @@ export function ecologicalFront(
       if (!(next < time[j])) continue;
       time[j] = next;
       source[j] = source[i];
-      queue.push({ i: j, time: next });
+      queue.push(j, next);
     }
   }
   return { time, source };

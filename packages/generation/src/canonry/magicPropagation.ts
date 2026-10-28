@@ -1,11 +1,15 @@
 import type { GenerationState } from "../process";
 import type { MagicField } from "./magicState";
-import { PriorityQueue } from "./priorityQueue";
 import { clamp, round } from "./math";
 import { hashUnit } from "./noise";
 import { edgeLeadingTo, triangleIdentity } from "./mesh";
 import { oceanPropagation } from "./magicOcean";
-import type { MagicPropagation, MagicSystem, NumericalVector } from "@atlas/domain";
+import {
+  KeyedHeap,
+  type MagicPropagation,
+  type MagicSystem,
+  type NumericalVector,
+} from "@atlas/domain";
 import { retainedArray, workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 import { orderedIndices } from "./numericalOrder";
 import { reservoirAmount, reservoirStock, withOrigin } from "./magicState";
@@ -15,18 +19,14 @@ function fracturePropagation(state: GenerationState, field: MagicField, activity
   const map = state.physical!.map,
     p = field.definition.parameters;
   field.parents = retainedArray(map, "int32", "magic:fracture-parents").fill(-1);
-  const queue = new PriorityQueue<{ index: number; value: number }>(
-    (a, b) => b.value - a.value || a.index - b.index,
-    map.numerical,
-    ["index", "value"]
-  );
+  const queue = new KeyedHeap("max");
   for (let i = 0; i < map.mesh.count; i++)
     if (field.source[i] > 0) {
       field.intensity[i] = clamp(round(field.source[i] * activity), 0, 1000);
-      queue.push({ index: i, value: field.intensity[i] });
+      queue.push(i, field.intensity[i]);
     }
-  while (queue.count) {
-    const { index: i, value } = queue.pop();
+  for (let i = queue.pop(); i >= 0; i = queue.pop()) {
+    const value = queue.poppedKey();
     if (field.intensity[i] !== value) continue;
     for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
       const j = map.mesh.neighbors[i * map.mesh.stride + edge];
@@ -41,7 +41,7 @@ function fracturePropagation(state: GenerationState, field: MagicField, activity
       if (next <= field.intensity[j]) continue;
       field.intensity[j] = next;
       field.parents[j] = i;
-      queue.push({ index: j, value: next });
+      queue.push(j, next);
     }
   }
 }
@@ -59,18 +59,14 @@ function rootPropagation(state: GenerationState, field: MagicField, activity: nu
     map.IceThickness[i] > 0 ||
     (cover(i) < p.rootFloor && map.SoilDepth[i] < 0.3);
   field.parents = retainedArray(map, "int32", "magic:root-parents").fill(-1);
-  const queue = new PriorityQueue<{ index: number; value: number }>(
-    (a, b) => b.value - a.value || a.index - b.index,
-    map.numerical,
-    ["index", "value"]
-  );
+  const queue = new KeyedHeap("max");
   for (let i = 0; i < map.mesh.count; i++)
     if (field.source[i] > 0) {
       field.intensity[i] = clamp(round(field.source[i] * activity), 0, 1000);
-      queue.push({ index: i, value: field.intensity[i] });
+      queue.push(i, field.intensity[i]);
     }
-  while (queue.count) {
-    const { index: i, value } = queue.pop();
+  for (let i = queue.pop(); i >= 0; i = queue.pop()) {
+    const value = queue.poppedKey();
     if (field.intensity[i] !== value) continue;
     for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
       const j = map.mesh.neighbors[i * map.mesh.stride + edge];
@@ -81,7 +77,7 @@ function rootPropagation(state: GenerationState, field: MagicField, activity: nu
       if (next <= field.intensity[j]) continue;
       field.intensity[j] = next;
       field.parents[j] = i;
-      queue.push({ index: j, value: next });
+      queue.push(j, next);
     }
   }
 }

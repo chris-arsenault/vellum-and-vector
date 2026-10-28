@@ -45,7 +45,7 @@ function coastalBreadth(map: PhysicalField) {
       if (map.WaterKindCodes[i] === 1 && Number.isFinite(distance[i])) yield i;
   }
   // Nonmarine cells already have zero distance, so the search cannot enter them.
-  metricSearch(mesh, seeds(), distance, Infinity, () => {}, map.numerical);
+  metricSearch(mesh, seeds(), distance, Infinity, () => {});
   return distance;
 }
 

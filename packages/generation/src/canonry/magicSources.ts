@@ -6,7 +6,7 @@ import { worldCandidates, separatedCandidates, type WorldCandidate } from "./wor
 import { areaBudget, mediumArea, referenceLandArea, referenceOceanArea } from "./worldScale";
 import type { PhysicalField } from "./field";
 import { hashUnit } from "./noise";
-import type { MagicOrigin, MagicSource, MagicSystem } from "@atlas/domain";
+import { MultiKeyHeap, type MagicOrigin, type MagicSource, type MagicSystem } from "@atlas/domain";
 import { originStocks, stockKey, systemSeed, withOrigin } from "./magicState";
 import { exposure, siteStrength } from "./magicStocks";
 import { impactSources } from "./magicFallenSources";
@@ -15,7 +15,6 @@ import { deadLakeSources, deathSources } from "./magicSaltSources";
 import { keptLineSources, tenureSources } from "./magicHallowed";
 import { pairingSources, strainSources } from "./magicVeil";
 import { workingArray, releaseWorking } from "./physicalNumerics";
-import { PriorityQueue } from "./priorityQueue";
 
 function isHeatMaximum(map: PhysicalField, start: number, radius: number) {
   const { mesh, HeatSourceDensity: density } = map;
@@ -110,42 +109,35 @@ function* geothermalCandidates(state: GenerationState, field: MagicField, seed: 
     p = field.definition.parameters;
   const radius = p.sourceSpacing / 2;
   const maximum = map.HeatSourceDensity.reduce((peak, value) => Math.max(peak, value), 0);
-  const candidates = new PriorityQueue<{ i: number; heat: number; priority: number }>(
-    (a, b) => b.heat - a.heat || b.priority - a.priority || a.i - b.i,
-    state.numerical,
-    ["i", "heat", "priority"]
-  );
-  try {
-    for (let i = 0; i < map.mesh.contentCount; i++) {
-      if (map.HeatSourceDensity[i] < p.sourceThreshold) continue;
-      // Fire rises through fractures in the crust under land; the sea floor belongs to
-      // Pressure, and its heat shows as vents through the geothermal field, not as cores.
-      if (map.WaterKindCodes[i] === 1) continue;
-      // A conduit that sealed after carrying its budget no longer feeds a core, unless new
-      // strain across it has cracked the seal: then it reopens with part of its budget left.
-      if (field.sealed[i] > 0) {
-        if (map.TectonicStrain[i] < p.reopenStrain) continue;
-        field.sealed[i] = 0;
-        field.history[i] = Math.min(field.history[i], p.conduitBudget * (1 - p.reopenShare));
-      }
-      if (map.HeatSourceDensity[i] !== maximum && !isHeatMaximum(map, i, radius)) continue;
-      const x = map.mesh.x[i],
-        y = map.mesh.y[i];
-      const priority = hashUnit(seed, Math.floor(x / radius), Math.floor(y / radius));
-      candidates.push({ i, heat: map.HeatSourceDensity[i], priority });
+  // Hottest first, then the higher seeded priority, then the lower cell.
+  const candidates = new MultiKeyHeap(["desc", "desc"]);
+  for (let i = 0; i < map.mesh.contentCount; i++) {
+    if (map.HeatSourceDensity[i] < p.sourceThreshold) continue;
+    // Fire rises through fractures in the crust under land; the sea floor belongs to
+    // Pressure, and its heat shows as vents through the geothermal field, not as cores.
+    if (map.WaterKindCodes[i] === 1) continue;
+    // A conduit that sealed after carrying its budget no longer feeds a core, unless new
+    // strain across it has cracked the seal: then it reopens with part of its budget left.
+    if (field.sealed[i] > 0) {
+      if (map.TectonicStrain[i] < p.reopenStrain) continue;
+      field.sealed[i] = 0;
+      field.history[i] = Math.min(field.history[i], p.conduitBudget * (1 - p.reopenShare));
     }
-    while (candidates.count) {
-      const { i, priority } = candidates.pop();
-      yield {
-        i,
-        id: Math.round(priority * 2147483647),
-        x: map.mesh.x[i],
-        y: map.mesh.y[i],
-        priority,
-      };
-    }
-  } finally {
-    candidates.close();
+    if (map.HeatSourceDensity[i] !== maximum && !isHeatMaximum(map, i, radius)) continue;
+    const x = map.mesh.x[i],
+      y = map.mesh.y[i];
+    const priority = hashUnit(seed, Math.floor(x / radius), Math.floor(y / radius));
+    candidates.push(i, map.HeatSourceDensity[i], priority);
+  }
+  for (let i = candidates.pop(); i >= 0; i = candidates.pop()) {
+    const priority = candidates.key(1);
+    yield {
+      i,
+      id: Math.round(priority * 2147483647),
+      x: map.mesh.x[i],
+      y: map.mesh.y[i],
+      priority,
+    };
   }
 }
 function strongestHeatSource(values: import("@atlas/domain").NumericalVector, count: number) {

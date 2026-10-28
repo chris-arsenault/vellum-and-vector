@@ -196,18 +196,11 @@ export function propagateInfluence(
       yield i;
     }
   }
-  metricSearch(
-    map.mesh,
-    seeds(),
-    distance,
-    context.Profile.OrogenicInfluenceReach,
-    (j, i) => {
-      source[j] = source[i];
-      map.OrogenicComponentIds[j] = map.OrogenicComponentIds[i];
-      map.OrogenicSystemProminence[j] = map.OrogenicSystemProminence[i];
-    },
-    map.numerical
-  );
+  metricSearch(map.mesh, seeds(), distance, context.Profile.OrogenicInfluenceReach, (j, i) => {
+    source[j] = source[i];
+    map.OrogenicComponentIds[j] = map.OrogenicComponentIds[i];
+    map.OrogenicSystemProminence[j] = map.OrogenicSystemProminence[i];
+  });
   assignSides(map, components, source, side);
   return { distance, source, side };
 }

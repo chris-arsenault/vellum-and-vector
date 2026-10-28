@@ -16,16 +16,9 @@ function expand(
   kind: NumericalVector | null,
   reach: number
 ) {
-  metricSearch(
-    map.mesh,
-    queue,
-    distance,
-    reach,
-    (j, i) => {
-      if (kind) kind[j] = kind[i];
-    },
-    map.numerical
-  );
+  metricSearch(map.mesh, queue, distance, reach, (j, i) => {
+    if (kind) kind[j] = kind[i];
+  });
 }
 export function tectonicMargins(map: PhysicalField, context: PhysicalContext) {
   const count = map.mesh.count,

@@ -4,7 +4,7 @@ import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
 import { clamp, units } from "./math";
 import { deposit } from "./surface";
-import { PriorityQueue } from "./priorityQueue";
+import { KeyedHeap } from "@atlas/domain";
 import { workingValues, releaseWorking } from "./physicalNumerics";
 
 const smooth = (value: number) => {
@@ -59,15 +59,11 @@ function seedLandCoast(map: PhysicalField) {
 function marginFrame(map: PhysicalField) {
   map.OceanMarginDistance.fill(Infinity);
   map.CoastalMarginCodes.fill(0);
-  const queue = new PriorityQueue<{ i: number; distance: number }>(
-    (a, b) => a.distance - b.distance || a.i - b.i,
-    map.numerical,
-    ["i", "distance"]
-  );
-  for (const i of seedOceanCoast(map)) queue.push({ i, distance: map.OceanMarginDistance[i] });
+  const queue = new KeyedHeap("min");
+  for (const i of seedOceanCoast(map)) queue.push(i, map.OceanMarginDistance[i]);
   seedLandCoast(map);
-  while (queue.count) {
-    const { i, distance } = queue.pop();
+  for (let i = queue.pop(); i >= 0; i = queue.pop()) {
+    const distance = queue.poppedKey();
     if (distance !== map.OceanMarginDistance[i]) continue;
     for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
       const at = i * map.mesh.stride + edge,
@@ -76,12 +72,11 @@ function marginFrame(map: PhysicalField) {
       if (j < 0 || map.OceanMarginDistance[j] <= next || map.WaterKindCodes[j] !== 1) continue;
       map.OceanMarginDistance[j] = next;
       map.CoastalMarginCodes[j] = map.CoastalMarginCodes[i];
-      queue.push({ i: j, distance: next });
+      queue.push(j, next);
     }
   }
   for (let i = 0; i < map.mesh.count; i++)
     if (!Number.isFinite(map.OceanMarginDistance[i])) map.OceanMarginDistance[i] = 0;
-  queue.close();
 }
 export function continentalMarginEvolution(map: PhysicalField) {
   // Crust support owns structural relief and subsidence. Distance from today's coast

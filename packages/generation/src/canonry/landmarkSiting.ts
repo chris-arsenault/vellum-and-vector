@@ -5,6 +5,7 @@ import {
   defaultLandmarkParameters,
   landmarkKind,
   semanticId,
+  TopK,
   type Landmark,
   type World,
 } from "@atlas/domain";
@@ -13,7 +14,6 @@ import { clamp } from "./math";
 import { hashUnit } from "./noise";
 import { distance, forwardTrack, type Point } from "./landmarkGeometry";
 import { sitingRules, type Site, type Terrain } from "./landmarkSitingRules";
-import { BoundedCandidates } from "./priorityQueue";
 
 export interface RosterEntry {
   ordinal: number;
@@ -121,9 +121,9 @@ function candidates(t: Terrain, entry: RosterEntry, seed: number) {
   if (rule.pool === "ocean") return t.ocean;
   if (rule.pool === "land") return t.land;
   const priority = (i: number) => hashUnit(seed ^ 0x3b91, i, entry.ordinal);
-  const selected = new BoundedCandidates(samplePool);
+  const selected = new TopK(samplePool);
   for (const i of t.land) selected.consider(i, priority(i));
-  return selected.bestIndexes();
+  return selected.best();
 }
 /**
  * The best anchor for this entry: among the kind's pool, the eligible cells standing apart

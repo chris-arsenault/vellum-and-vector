@@ -26,16 +26,9 @@ function extendedLabels(state: GenerationState, labels: NumericalVector) {
   function* seeds() {
     for (let i = 0; i < labels.length; i++) if (labels[i] >= 0) yield i;
   }
-  metricSearch(
-    mesh,
-    seeds(),
-    distance,
-    Infinity,
-    (target, source) => {
-      extended[target] = extended[source];
-    },
-    map.numerical
-  );
+  metricSearch(mesh, seeds(), distance, Infinity, (target, source) => {
+    extended[target] = extended[source];
+  });
   releaseWorking(map, distance);
   return extended;
 }

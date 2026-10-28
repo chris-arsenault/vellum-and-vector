@@ -5,7 +5,7 @@ import { hashUnit } from "./noise";
 import { traceOceanBeam } from "./magicBeams";
 import { nearestTriangle } from "./mesh";
 import { worldCandidates } from "./worldSources";
-import { PriorityQueue } from "./priorityQueue";
+import { MonotoneHeap } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import { areaBudget, mediumArea, referenceOceanArea, referenceCoastLength } from "./worldScale";
 
@@ -34,25 +34,22 @@ function coastalCell(map: PhysicalField, i: number) {
 function coastDistances(map: PhysicalField, reach: number) {
   const { mesh } = map;
   const distances = workingArray(map, "float64", "magic:coast-distance").fill(Infinity);
-  const queue = new PriorityQueue<{ i: number; distance: number }>(
-    (a, b) => a.distance - b.distance,
-    map.numerical,
-    ["i", "distance"]
-  );
+  // Dijkstra over positive edge lengths: keys never fall below the last popped key.
+  const queue = new MonotoneHeap("min");
   for (let i = 0; i < mesh.contentCount; i++) {
     if (!coastalCell(map, i)) continue;
     distances[i] = Math.min(mesh.cellWidth[i], mesh.cellHeight[i]) / 2;
-    queue.push({ i, distance: distances[i] });
+    queue.push(i, distances[i]);
   }
-  while (queue.count) {
-    const { i, distance } = queue.pop();
+  for (let i = queue.pop(); i >= 0; i = queue.pop()) {
+    const distance = queue.key();
     if (distance !== distances[i]) continue;
     for (let edge = 0; edge < mesh.degree[i]; edge++) {
       const j = mesh.neighbors[i * mesh.stride + edge],
         next = distance + mesh.edgeLength[i * mesh.stride + edge];
       if (j < 0 || map.WaterKindCodes[j] !== 1 || next > reach || next >= distances[j]) continue;
       distances[j] = next;
-      queue.push({ i: j, distance: next });
+      queue.push(j, next);
     }
   }
   return distances;

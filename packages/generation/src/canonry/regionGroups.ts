@@ -1,7 +1,6 @@
-import { CellList, type NumericalVector } from "@atlas/domain";
+import { CellList, KeyedHeap, type NumericalVector } from "@atlas/domain";
 import type { PhysicalField } from "./field";
 import type { RegionMembers } from "./regionMembers";
-import { PriorityQueue } from "./priorityQueue";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 
 interface RegionGroups {
@@ -86,29 +85,22 @@ export function mergeGroups(map: PhysicalField, groups: RegionGroups, maximum: n
     tail = workingValues(map, "int32", "region:tails", (i) => i, count),
     next = workingArray(map, "int32", "region:next", count).fill(-1),
     size = workingArray(map, "float64", "region:sizes", count),
-    queue = new PriorityQueue<{ group: number; size: number }>(
-      (a, b) => a.size - b.size || a.group - b.group,
-      map.numerical,
-      ["group", "size"]
-    );
+    queue = new KeyedHeap("min");
   for (let group = 0; group < count; group++) {
     for (let at = groups.offsets[group]; at < groups.offsets[group + 1]; at++)
       size[group] += map.mesh.contentAreas[groups.members[at]];
-    queue.push({ group, size: size[group] });
+    queue.push(group, size[group]);
   }
-  while (queue.count) {
-    const entry = queue.pop(),
-      group = entry.group;
-    if (parent[group] !== group || size[group] !== entry.size) continue;
+  for (let group = queue.pop(); group >= 0; group = queue.pop()) {
+    if (parent[group] !== group || size[group] !== queue.poppedKey()) continue;
     const into = partner(map, groups, { parent, next, size }, group, maximum);
     if (into < 0) continue;
     parent[group] = into;
     size[into] += size[group];
     next[tail[into]] = group;
     tail[into] = tail[group];
-    queue.push({ group: into, size: size[into] });
+    queue.push(into, size[into]);
   }
-  queue.close();
   releaseWorking(map, tail, size);
   return { parent, next };
 }

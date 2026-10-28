@@ -5,13 +5,12 @@ import { clamp, round } from "./math";
 import { latitudeAt, metresPerDegree } from "./latitude";
 import { circulation } from "./atmosphere";
 import { insolationTemperature } from "./climate";
-import { PriorityQueue } from "./priorityQueue";
 import { physicalGradients } from "./physicalMetric";
 import { sourceOrder } from "./airColumn";
 import { smoothMetric } from "./metricSmoothing";
 import { linkDistance } from "./longitudeWrap";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
-import type { NumericalVector } from "@atlas/domain";
+import { MonotoneHeap, type NumericalVector } from "@atlas/domain";
 
 const unit = (value: number) => Math.min(1, Math.max(0, value));
 
@@ -73,23 +72,19 @@ function coastDistance(map: PhysicalField, reach: number) {
 function oceanPathDistance(map: PhysicalField, start: NumericalVector, reach: number) {
   const mesh = map.mesh,
     distances = start;
-  const queue = new PriorityQueue<{ i: number; distance: number }>(
-    (a, b) => a.distance - b.distance,
-    map.numerical,
-    ["i", "distance"]
-  );
+  // Dijkstra over positive edge lengths: keys never fall below the last popped key.
+  const queue = new MonotoneHeap("min");
   for (let i = 0; i < mesh.count; i++)
-    if (map.WaterKindCodes[i] === 1 && distances[i] < reach)
-      queue.push({ i, distance: distances[i] });
-  while (queue.count) {
-    const { i, distance } = queue.pop();
+    if (map.WaterKindCodes[i] === 1 && distances[i] < reach) queue.push(i, distances[i]);
+  for (let i = queue.pop(); i >= 0; i = queue.pop()) {
+    const distance = queue.key();
     if (distance !== distances[i]) continue;
     for (let edge = 0; edge < mesh.degree[i]; edge++) {
       const j = mesh.neighbors[i * mesh.stride + edge],
         next = distance + mesh.edgeLength[i * mesh.stride + edge];
       if (j < 0 || map.WaterKindCodes[j] !== 1 || next >= distances[j]) continue;
       distances[j] = next;
-      queue.push({ i: j, distance: next });
+      queue.push(j, next);
     }
   }
   return distances;

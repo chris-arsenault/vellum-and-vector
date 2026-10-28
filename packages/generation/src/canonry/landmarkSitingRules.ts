@@ -55,7 +55,7 @@ function distanceTo(map: PhysicalField, accept: (i: number) => boolean) {
         yield i;
       }
   }
-  metricSearch(map.mesh, seeds(), values, Infinity, () => {}, map.numerical);
+  metricSearch(map.mesh, seeds(), values, Infinity, () => {});
   return values;
 }
 export function analyseTerrain(map: PhysicalField): Terrain {

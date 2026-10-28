@@ -2,8 +2,7 @@
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { meshWorldUnitNoise as unitNoise, hashUnit } from "./noise";
-import { PriorityQueue } from "./priorityQueue";
-import type { NumericalVector } from "@atlas/domain";
+import { MultiKeyHeap, type NumericalVector } from "@atlas/domain";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 
 type Front = { i: number; priority: number; cost: number; tie: number };
@@ -67,22 +66,18 @@ export function drainageConditioning(map: PhysicalField, c: PhysicalContext) {
   const priorities = workingArray(map, "float64", "drainage:priorities").fill(Infinity),
     costs = priorities.slice();
   const resistance = corridorResistance(map, c);
-  const queue = new PriorityQueue<Front>(
-    (a, b) => a.priority - b.priority || a.cost - b.cost || a.tie - b.tie || a.i - b.i,
-    map.numerical,
-    ["i", "priority", "cost", "tie"]
-  );
+  // Lowest fill height, then cheapest corridor, then the seeded tie, then the lower cell.
+  const queue = new MultiKeyHeap(["asc", "asc", "asc"]);
   seedOutlets(map, (i) => {
     map.DrainageRanks[i] = 2147483647;
     priorities[i] = map.Elevation[i];
     costs[i] = 0;
-    queue.push({ i, priority: priorities[i], cost: 0, tie: 0 });
+    queue.push(i, priorities[i], 0, 0);
   });
-  if (!queue.count) throw new Error("Priority flood requires a connected ocean outlet.");
+  if (!queue.size) throw new Error("Priority flood requires a connected ocean outlet.");
   let rank = 0;
-  while (queue.count) {
-    const front = queue.pop(),
-      i = front.i;
+  for (let i = queue.pop(); i >= 0; i = queue.pop()) {
+    const front: Front = { i, priority: queue.key(0), cost: queue.key(1), tie: queue.key(2) };
     if (
       front.priority !== priorities[i] ||
       front.cost !== costs[i] ||
@@ -101,7 +96,7 @@ export function drainageConditioning(map: PhysicalField, c: PhysicalContext) {
         resistance,
         priorities,
         costs,
-        (entry) => queue.push(entry),
+        (entry) => queue.push(entry.i, entry.priority, entry.cost, entry.tie),
         c.Seed
       );
   }

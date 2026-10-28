@@ -23,14 +23,7 @@ export function oceanDistance(map: PhysicalField) {
       map.OceanDistance[i] = 0;
       if (touchesLand(map, i)) queue[count++] = i;
     }
-  metricSearch(
-    map.mesh,
-    queue.subarray(0, count),
-    map.OceanDistance,
-    Infinity,
-    () => {},
-    map.numerical
-  );
+  metricSearch(map.mesh, queue.subarray(0, count), map.OceanDistance, Infinity, () => {});
   for (let i = 0; i < map.mesh.count; i++)
     if (!Number.isFinite(map.OceanDistance[i])) map.OceanDistance[i] = -1;
   retainInheritedDistance(map, inherited);
