@@ -161,42 +161,63 @@ export class Coverage {
     return result;
   }
   /**
-   * Live cells in key order as a stream: each block's keys are radix-ordered, and the block
-   * runs merge through a heap of block cursors. Ties keep ascending cell order. Resident
-   * state is one cursor and one ordered run per block, never the whole permutation.
+   * Live cells in key order as a stream: each block's keys are radix-ordered into a run held
+   * in scratch bands at the block's own position, and the runs merge through a heap of block
+   * cursors. Ties keep ascending cell order. Resident state is one cursor per block; the
+   * runs page with the cache like any band and are released when the stream ends.
    */
   *order(key: Band, descending = false): Generator<number> {
+    const runCells = this.scratch("int32", "order:cells", key.length),
+      runKeys = this.scratch("float64", "order:keys", key.length);
+    try {
+      const lengths = this.sortRuns(key, descending, runCells, runKeys),
+        at = new Int32Array(lengths.length),
+        heap = new KeyedHeap(descending ? "max" : "min");
+      for (let block = 0; block < lengths.length; block++)
+        if (lengths[block]) heap.push(block, runKeys.get(block << blockShift));
+      for (let block = heap.pop(); block >= 0; block = heap.pop()) {
+        const base = block << blockShift;
+        yield base + runCells.get(base + at[block]++);
+        if (at[block] < lengths[block]) heap.push(block, runKeys.get(base + at[block]));
+      }
+    } finally {
+      this.release(runCells);
+      this.release(runKeys);
+    }
+  }
+  /** Radix-order each block's live keys into its run; returns the live count per block. */
+  private sortRuns(key: Band, descending: boolean, runCells: Band, runKeys: Band) {
     const lattice = this.lattice,
-      runs: { start: number; order: Int32Array; keys: BlockArray; at: number }[] = [];
-    this.forEachBlock([key], ([values], start, count, block) => {
+      lengths = new Int32Array(blockCount(key.length));
+    // One band block is pinned at a time; the block's keys and cells sort in locals.
+    const write = (band: Band, block: number, fill: (values: BlockArray) => void) => {
+      fill(band.block(block, true));
+      band.unpin(block);
+    };
+    for (let block = 0; block < lengths.length; block++) {
+      if (!this.blockLive(block, key.length)) continue;
+      const start = block << blockShift,
+        values = key.block(block),
+        keys = new Float64Array(values.length),
+        cells = new Int32Array(values.length);
       let live = 0;
-      for (let n = 0; n < count; n++) if (lattice.membership(start + n) !== nodata) live++;
-      if (!live) return;
-      const keys = new Float64Array(live),
-        cells = new Int32Array(live);
-      for (let n = 0, k = 0; n < count; n++)
+      for (let n = 0; n < values.length; n++)
         if (lattice.membership(start + n) !== nodata) {
-          keys[k] = values[n];
-          cells[k++] = n;
+          keys[live] = values[n];
+          cells[live++] = n;
         }
-      const order = radixOrder(keys, descending);
-      runs[block] = {
-        start,
-        order: Int32Array.from(order, (k) => cells[k]),
-        keys: Float64Array.from(order, (k) => keys[k]),
-        at: 0,
-      };
-    });
-    const heap = new KeyedHeap(descending ? "max" : "min");
-    for (let block = 0; block < runs.length; block++) {
-      const run = runs[block];
-      if (run) heap.push(block, run.keys[0]);
+      key.unpin(block);
+      if (!live) continue;
+      const order = radixOrder(keys.subarray(0, live), descending);
+      write(runCells, block, (run) => {
+        for (let k = 0; k < live; k++) run[k] = cells[order[k]];
+      });
+      write(runKeys, block, (run) => {
+        for (let k = 0; k < live; k++) run[k] = keys[order[k]];
+      });
+      lengths[block] = live;
     }
-    for (let block = heap.pop(); block >= 0; block = heap.pop()) {
-      const run = runs[block];
-      yield run.start + run.order[run.at++];
-      if (run.at < run.order.length) heap.push(block, run.keys[run.at]);
-    }
+    return lengths;
   }
   /** A coverage sharing this one's lattice and bands copy-on-write. */
   snapshot(copies = new Map<Band, Band>()): Coverage {

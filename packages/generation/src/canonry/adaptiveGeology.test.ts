@@ -178,7 +178,7 @@ it("solves the fine physical equation at high coarse/fine contrast and long infl
   );
   const result = smoothMetric(map, input, 200_000);
   const matrix = metricOperator(map, 200_000),
-    applied = metricArray(map, "applied", matrix.cells.length);
+    applied = metricArray(map, "applied", matrix.count);
   metricProduct(matrix, result, applied);
   let residual = 0,
     magnitude = 0;

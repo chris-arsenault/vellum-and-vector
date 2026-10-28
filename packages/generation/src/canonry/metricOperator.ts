@@ -1,17 +1,23 @@
 import type { PhysicalField } from "./field";
-import { CellList, FloatList, type Band, type SampleType } from "@atlas/domain";
+import type { Band, SampleType } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
-/** A screened-diffusion operator over the participating cells, in local numbering. */
+/**
+ * A screened-diffusion operator over the participating cells, in local numbering. Every
+ * array is a working band sized by the participating cells or their faces, so the operator
+ * pages with the coverage on a large world.
+ */
 export interface MetricOperator {
   map: PhysicalField;
-  /** Mesh cell of each local index. */
-  cells: Int32Array;
+  /** Participating cells (rows). */
+  count: number;
+  /** Mesh cell of each local index; absent on coarse levels. */
+  cells?: Band;
   areas: Band;
   diagonal: Band;
   offsets: Band;
-  neighbors: Int32Array;
-  weights: Float64Array;
+  neighbors: Band;
+  weights: Band;
 }
 export function metricArray(
   map: PhysicalField,
@@ -22,69 +28,87 @@ export function metricArray(
   return workingArray(map, type, `metric:${name}`, length);
 }
 export function releaseMetric(matrix: MetricOperator) {
-  releaseWorking(matrix.map, matrix.areas, matrix.diagonal, matrix.offsets);
+  releaseWorking(
+    matrix.map,
+    matrix.areas,
+    matrix.diagonal,
+    matrix.offsets,
+    matrix.neighbors,
+    matrix.weights,
+    ...(matrix.cells ? [matrix.cells] : [])
+  );
 }
 function metricCells(map: PhysicalField, active?: Band) {
   const mesh = map.mesh;
   let count = 0;
   for (let i = 0; i < mesh.count; i++) if (!active || active.get(i)) count++;
-  const cells = new Int32Array(count),
+  const cells = metricArray(map, "cells", count, "int32"),
     local = metricArray(map, "local", mesh.count, "int32").fill(-1);
   for (let cell = 0, i = 0; cell < mesh.count; cell++)
     if (!active || active.get(cell)) {
-      cells[i] = cell;
+      cells.set(i, cell);
       local.set(cell, i++);
     }
   return { cells, local };
 }
+/** Visit the participating faces of local row `i`: neighbour index and face weight. */
+function visitFaces(
+  map: PhysicalField,
+  length: number,
+  cell: number,
+  local: Band,
+  visit: (j: number, weight: number) => void
+) {
+  const mesh = map.mesh;
+  for (let edge = 0; edge < mesh.degree(cell); edge++) {
+    const j = mesh.neighbor(cell, edge);
+    if (j < 0 || local.get(j) < 0) continue;
+    visit(
+      local.get(j),
+      (length ** 2 * mesh.faceLength(cell, edge)) / mesh.faceDistance(cell, edge)
+    );
+  }
+}
 export function metricOperator(map: PhysicalField, length: number, active?: Band): MetricOperator {
-  const mesh = map.mesh,
-    { cells, local } = metricCells(map, active),
-    count = cells.length;
-  const areas = metricArray(map, "areas", count),
-    diagonal = metricArray(map, "diagonal", count);
-  const offsets = metricArray(map, "offsets", count + 1, "int32"),
-    neighbors = new CellList(count * 3),
-    weights = new FloatList(count * 3);
+  const { cells, local } = metricCells(map, active),
+    count = cells.length,
+    offsets = metricArray(map, "offsets", count + 1, "int32");
+  // Count faces first so the face arrays are allocated once at their exact length.
+  let faces = 0;
   for (let i = 0; i < count; i++) {
-    const cell = cells[i],
-      area = mesh.area(cell);
+    offsets.set(i, faces);
+    visitFaces(map, length, cells.get(i), local, () => faces++);
+  }
+  offsets.set(count, faces);
+  const areas = metricArray(map, "areas", count),
+    diagonal = metricArray(map, "diagonal", count),
+    neighbors = metricArray(map, "neighbors", faces, "int32"),
+    weights = metricArray(map, "weights", faces);
+  for (let i = 0; i < count; i++) {
+    const cell = cells.get(i),
+      area = map.mesh.area(cell);
+    let at = offsets.get(i),
+      sum = area;
     areas.set(i, area);
-    let sum = area;
-    offsets.set(i, neighbors.length);
-    for (let edge = 0; edge < mesh.degree(cell); edge++) {
-      const j = mesh.neighbor(cell, edge);
-      if (j < 0 || local.get(j) < 0) continue;
-      const weight = (length ** 2 * mesh.faceLength(cell, edge)) / mesh.faceDistance(cell, edge);
-      neighbors.push(local.get(j));
-      weights.push(weight);
+    visitFaces(map, length, cell, local, (j, weight) => {
+      neighbors.set(at, j);
+      weights.set(at++, weight);
       sum += weight;
-    }
+    });
     diagonal.set(i, sum);
   }
-  offsets.set(count, neighbors.length);
   releaseWorking(map, local);
-  return {
-    map,
-    cells,
-    areas,
-    diagonal,
-    offsets,
-    neighbors: neighbors.finish(),
-    weights: weights.finish(),
-  };
+  return { map, count, cells, areas, diagonal, offsets, neighbors, weights };
 }
 /** result = A · values over the local numbering. */
 export function metricProduct(matrix: MetricOperator, values: Band, result: Band) {
-  const count = matrix.cells.length,
-    neighbors = matrix.neighbors,
-    weights = matrix.weights;
+  const { count, neighbors, weights, offsets, areas } = matrix;
   for (let i = 0; i < count; i++) {
     const value = values.get(i),
-      end = matrix.offsets.get(i + 1);
-    let sum = value * matrix.areas.get(i);
-    for (let at = matrix.offsets.get(i); at < end; at++)
-      sum += (value - values.get(neighbors[at])) * weights[at];
+      end = offsets.get(i + 1);
+    let sum = value * areas.get(i);
+    for (let at = offsets.get(i); at < end; at++)
+      sum += (value - values.get(neighbors.get(at))) * weights.get(at);
     result.set(i, sum);
   }
 }

@@ -220,7 +220,7 @@ function accumulateChannel(
     const value = values.get(source),
       end = plan.offsets.get(source + 1);
     for (let offset = plan.offsets.get(source); offset < end; offset++) {
-      const target = plan.targets[offset];
+      const target = plan.targets.get(offset);
       if (target < 0) continue;
       if (areaWeights) scratch.add(target, value * areaWeights.get(offset));
       else scratch.set(target, Math.max(scratch.get(target), value));
@@ -267,14 +267,12 @@ export function transportHistory(map: PhysicalField, plan: TransportPlan) {
     let retained = 0;
     const end = plan.offsets.get(source + 1);
     for (let offset = plan.offsets.get(source); offset < end; offset++) {
-      const target = plan.targets[offset];
+      const target = plan.targets.get(offset),
+        weight = plan.weights.get(offset);
       if (target < 0) continue;
-      areaWeights.set(
-        offset,
-        (plan.weights[offset] * map.mesh.area(source)) / map.mesh.area(target)
-      );
-      addCategories(a, map, source, target, plan.weights[offset]);
-      retained += plan.weights[offset] / weightScale;
+      areaWeights.set(offset, (weight * map.mesh.area(source)) / map.mesh.area(target));
+      addCategories(a, map, source, target, weight);
+      retained += weight / weightScale;
     }
     map.SedimentExportedTotal +=
       (Math.max(0, 1 - retained) * map.SedimentSupply.get(source) * map.mesh.area(source)) / 1024;

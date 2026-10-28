@@ -157,11 +157,11 @@ export function solveStage(
   const overflow = complete ? Math.max(0, Math.max(0, input + budget.adjustment) - budget.loss) : 0;
   return { component, surface, members, depth, overflow };
 }
-function touchesDam(map: PhysicalField, lake: SupportedLake) {
+function touchesDam(map: PhysicalField, dams: Band, lake: SupportedLake) {
   for (const i of lake.members)
     for (let edge = 0; edge < map.mesh.degree(i); edge++) {
       const j = map.mesh.neighbor(i, edge);
-      if (j >= 0 && map.EngineeredDams.has(j)) return true;
+      if (j >= 0 && dams.get(j)) return true;
     }
   return false;
 }
@@ -186,7 +186,8 @@ function compactness(map: PhysicalField, lake: SupportedLake) {
   return (interior * 1000) / Math.max(1e-9, total);
 }
 export function qualifies(map: PhysicalField, p: PhysicalProfile, lake: SupportedLake): boolean {
-  if (map.EngineeredDams && touchesDam(map, lake)) return lake.depth > 0;
+  const dams = map.EngineeredDams;
+  if (dams && touchesDam(map, dams, lake)) return lake.depth > 0;
   let area = 0;
   for (const i of lake.members) area += map.mesh.area(i);
   if (area < p.MinimumLakeArea || lake.depth < units(p.LakeDepthThreshold)) return false;

@@ -3,6 +3,8 @@ import { Band } from "./band";
 import { BlockCache } from "./blockCache";
 import { BlockScratch, type RandomAccessFile } from "./blockScratch";
 import { Coverage } from "./coverage";
+import { BandList } from "./bandList";
+import { sampleCoverage } from "./bandValues";
 import { blockCells, forEachCell } from "./lattice";
 import { createWorldLattice } from "./worldLattice";
 
@@ -96,6 +98,22 @@ it("keeps a committed input read-only, reloads it without spilling and copies it
   expect(copy.get(0)).toBe(1);
   expect(copy.get(blockCells)).toBe(101);
   expect(input.get(0)).toBe(100);
+});
+it("grows a band list from a short chunk across block boundaries and finishes it exactly", () => {
+  const coverage = sampleCoverage(1),
+    short = new BandList(coverage, "int32", "short");
+  for (let i = 0; i < 10; i++) short.push(i * 3);
+  expect(short.length).toBe(10);
+  expect(short.finish().toArray().length).toBe(10);
+  const list = new BandList(coverage, "float64", "values"),
+    count = blockCells * 2 + 7;
+  for (let i = 0; i < count; i++) list.push(i + 0.5);
+  expect(list.get(blockCells - 1)).toBe(blockCells - 0.5);
+  expect(list.get(blockCells)).toBe(blockCells + 0.5);
+  const band = list.finish();
+  expect(band.length).toBe(count);
+  for (const i of [0, 255, 256, blockCells, count - 1]) expect(band.get(i)).toBe(i + 0.5);
+  expect(list.length).toBe(0);
 });
 it("snapshots copy-on-write across memory and spilled blocks", () => {
   const file = memoryFile(),

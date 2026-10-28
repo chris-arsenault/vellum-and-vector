@@ -1,5 +1,5 @@
 import { metricArray, metricProduct, releaseMetric, type MetricOperator } from "./metricOperator";
-import { CellList, FloatList, type Band } from "@atlas/domain";
+import { CellList, type Band } from "@atlas/domain";
 import { releaseWorking } from "./physicalNumerics";
 
 type Level = {
@@ -12,7 +12,7 @@ type Level = {
   exact?: (rhs: Band, x: Band) => void;
 };
 function aggregate(matrix: MetricOperator) {
-  const n = matrix.cells.length,
+  const n = matrix.count,
     groups = metricArray(matrix.map, "groups", n, "int32").fill(-1);
   let count = 0;
   for (let i = 0; i < n; i++) {
@@ -20,98 +20,108 @@ function aggregate(matrix: MetricOperator) {
     groups.set(i, count);
     const end = matrix.offsets.get(i + 1);
     for (let at = matrix.offsets.get(i); at < end; at++) {
-      const j = matrix.neighbors[at];
+      const j = matrix.neighbors.get(at);
       if (groups.get(j) < 0) groups.set(j, count);
     }
     count++;
   }
   return { groups, count };
 }
+/** Fine rows of each aggregate as linked lists, and a scatter row over the aggregates. */
+interface Gather {
+  heads: Band;
+  next: Band;
+  mark: Band;
+  value: Band;
+  columns: CellList;
+}
 /** Accumulate aggregate `a`'s off-diagonal weights per neighbouring aggregate, scattering into
  * `row.value` and listing the touched columns in first-touch order; returns the aggregate area. */
-function coarseRow(
-  matrix: MetricOperator,
-  groups: Band,
-  heads: Int32Array,
-  next: Int32Array,
-  a: number,
-  row: { mark: Int32Array; value: Float64Array; columns: CellList }
-) {
+function coarseRow(matrix: MetricOperator, groups: Band, a: number, row: Gather) {
   let area = 0;
   row.columns.clear();
-  for (let i = heads[a]; i >= 0; i = next[i]) {
+  for (let i = row.heads.get(a); i >= 0; i = row.next.get(i)) {
     area += matrix.areas.get(i);
     const end = matrix.offsets.get(i + 1);
     for (let at = matrix.offsets.get(i); at < end; at++) {
-      const b = groups.get(matrix.neighbors[at]);
+      const b = groups.get(matrix.neighbors.get(at));
       if (a === b) continue;
-      if (row.mark[b] !== a) {
-        row.mark[b] = a;
-        row.value[b] = 0;
+      if (row.mark.get(b) !== a) {
+        row.mark.set(b, a);
+        row.value.set(b, 0);
         row.columns.push(b);
       }
-      row.value[b] += matrix.weights[at];
+      row.value.add(b, matrix.weights.get(at));
     }
   }
   return area;
 }
+function gather(matrix: MetricOperator, groups: Band, count: number): Gather {
+  const map = matrix.map,
+    n = groups.length,
+    heads = metricArray(map, "coarse-heads", count, "int32").fill(-1),
+    next = metricArray(map, "coarse-next", n, "int32");
+  for (let i = n - 1; i >= 0; i--) {
+    const group = groups.get(i);
+    next.set(i, heads.get(group));
+    heads.set(group, i);
+  }
+  return {
+    heads,
+    next,
+    mark: metricArray(map, "coarse-mark", count, "int32").fill(-1),
+    value: metricArray(map, "coarse-value", count),
+    columns: new CellList(),
+  };
+}
 /** Galerkin P' A P for piecewise-constant connected aggregates. */
 function coarseOperator(matrix: MetricOperator, groups: Band, count: number): MetricOperator {
   const map = matrix.map,
-    n = groups.length,
-    heads = new Int32Array(count).fill(-1),
-    next = new Int32Array(n);
-  for (let i = n - 1; i >= 0; i--) {
-    const group = groups.get(i);
-    next[i] = heads[group];
-    heads[group] = i;
+    row = gather(matrix, groups, count),
+    offsets = metricArray(map, "coarse-offsets", count + 1, "int32");
+  // Count each row's columns first so the face arrays are allocated at their exact length.
+  let faces = 0;
+  for (let a = 0; a < count; a++) {
+    offsets.set(a, faces);
+    coarseRow(matrix, groups, a, row);
+    faces += row.columns.length;
   }
+  offsets.set(count, faces);
+  row.mark.fill(-1);
   const areas = metricArray(map, "coarse-area", count),
     diagonal = metricArray(map, "coarse-diagonal", count),
-    offsets = metricArray(map, "coarse-offsets", count + 1, "int32"),
-    neighbors = new CellList(count * 3),
-    weights = new FloatList(count * 3),
-    row = {
-      mark: new Int32Array(count).fill(-1),
-      value: new Float64Array(count),
-      columns: new CellList(),
-    };
+    neighbors = metricArray(map, "coarse-neighbors", faces, "int32"),
+    weights = metricArray(map, "coarse-weights", faces);
   for (let a = 0; a < count; a++) {
-    const area = coarseRow(matrix, groups, heads, next, a, row);
+    const area = coarseRow(matrix, groups, a, row);
+    let at = offsets.get(a),
+      sum = area;
     areas.set(a, area);
-    offsets.set(a, neighbors.length);
-    let sum = area;
     for (let k = 0; k < row.columns.length; k++) {
-      const j = row.columns.at(k);
-      neighbors.push(j);
-      weights.push(row.value[j]);
-      sum += row.value[j];
+      const j = row.columns.at(k),
+        weight = row.value.get(j);
+      neighbors.set(at, j);
+      weights.set(at++, weight);
+      sum += weight;
     }
     diagonal.set(a, sum);
   }
-  offsets.set(count, neighbors.length);
-  return {
-    map,
-    cells: new Int32Array(count),
-    areas,
-    diagonal,
-    offsets,
-    neighbors: neighbors.finish(),
-    weights: weights.finish(),
-  };
+  releaseWorking(map, row.heads, row.next, row.mark, row.value);
+  return { map, count, areas, diagonal, offsets, neighbors, weights };
 }
 function factor(matrix: MetricOperator) {
-  const n = matrix.cells.length;
+  const n = matrix.count;
   if (!matrix.weights.length)
     return (rhs: Band, x: Band) => {
       for (let i = 0; i < n; i++) x.set(i, rhs.get(i) / matrix.diagonal.get(i));
     };
+  // The coarsest level holds at most 32 rows; its dense factor is a fixed small block.
   const lower = new Float64Array(n * n);
   for (let i = 0; i < n; i++) {
     lower[i * n + i] = matrix.diagonal.get(i);
     const end = matrix.offsets.get(i + 1);
     for (let at = matrix.offsets.get(i); at < end; at++)
-      lower[i * n + matrix.neighbors[at]] = -matrix.weights[at];
+      lower[i * n + matrix.neighbors.get(at)] = -matrix.weights.get(at);
     for (let j = 0; j <= i; j++) {
       let value = lower[i * n + j];
       for (let k = 0; k < j; k++) value -= lower[i * n + k] * lower[j * n + k];
@@ -134,7 +144,7 @@ function triangularSolve(lower: Float64Array, rhs: Band, x: Band) {
   }
 }
 function hierarchy(matrix: MetricOperator): Level {
-  const n = matrix.cells.length,
+  const n = matrix.count,
     map = matrix.map;
   const level: Level = {
     matrix,

@@ -17,10 +17,10 @@ export interface Terrain {
   sea: Band;
   /** Metres to the nearest land cell; Infinity on a field without land. */
   offshore: Band;
-  /** Content land cells. */
-  land: Int32Array;
-  /** Content sea cells. */
-  ocean: Int32Array;
+  /** Content land cells, ascending; a scan of the mesh, not a resident list. */
+  land: Iterable<number>;
+  /** Content sea cells, ascending; a scan of the mesh, not a resident list. */
+  ocean: Iterable<number>;
   /** River cells, largest flow first, above base level. */
   rivers: Int32Array;
 }
@@ -61,17 +61,21 @@ function distanceTo(map: PhysicalField, accept: (i: number) => boolean) {
 export function analyseTerrain(map: PhysicalField): Terrain {
   const sea = distanceTo(map, (i) => map.WaterKindCodes.get(i) === 1),
     offshore = distanceTo(map, (i) => map.WaterKindCodes.get(i) === 0);
-  const land = new CellList(),
-    ocean = new CellList(),
-    rivers = new CellList();
-  for (let i = 0; i < map.mesh.count; i++) {
-    if (map.mesh.membership(i) !== 1) continue;
-    const water = map.WaterKindCodes.get(i);
-    if (water === 1) ocean.push(i);
-    if (water !== 0) continue;
-    land.push(i);
-    if (map.RiverOrders.get(i) > 0 && height(map, i) > 5) rivers.push(i);
-  }
+  const rivers = new CellList(),
+    content = (water: number): Iterable<number> => ({
+      *[Symbol.iterator]() {
+        for (let i = 0; i < map.mesh.count; i++)
+          if (map.mesh.membership(i) === 1 && map.WaterKindCodes.get(i) === water) yield i;
+      },
+    });
+  for (let i = 0; i < map.mesh.count; i++)
+    if (
+      map.mesh.membership(i) === 1 &&
+      map.WaterKindCodes.get(i) === 0 &&
+      map.RiverOrders.get(i) > 0 &&
+      height(map, i) > 5
+    )
+      rivers.push(i);
   // Largest flow first; rivers were pushed ascending, so ties keep index order.
   const riverCells = rivers.finish(),
     byFlow = radixOrder(
@@ -82,8 +86,8 @@ export function analyseTerrain(map: PhysicalField): Terrain {
     map,
     sea,
     offshore,
-    land: land.finish(),
-    ocean: ocean.finish(),
+    land: content(0),
+    ocean: content(1),
     rivers: Int32Array.from(byFlow, (k) => riverCells[k]),
   };
 }

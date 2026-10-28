@@ -222,7 +222,6 @@ it("tiles two connected cylinder seas while retaining one identity across the se
     x: map.mesh.x(region.peak),
     y: map.mesh.y(region.peak),
     area: region.area,
-    cells: region.members.length,
   }));
   expect(detected, JSON.stringify(detected)).toHaveLength(2);
   extractOceans(state);

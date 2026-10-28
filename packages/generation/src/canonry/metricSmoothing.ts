@@ -15,32 +15,34 @@ function dot(a: Band, b: Band) {
   for (let i = 0; i < a.length; i++) sum += a.get(i) * b.get(i);
   return sum;
 }
+/** Restore each connected component's total; the visit queue and marks are working bands. */
 function conserveComponents(matrix: MetricOperator, input: Band, result: Band) {
   const n = input.length,
-    visited = new Uint8Array(n),
-    queue = new Int32Array(n);
+    visited = metricArray(matrix.map, "component-visited", n, "uint8"),
+    queue = metricArray(matrix.map, "component-queue", n, "int32");
   for (let start = 0; start < n; start++) {
-    if (visited[start]) continue;
-    queue[0] = start;
+    if (visited.get(start)) continue;
+    queue.set(0, start);
     let tail = 1;
-    visited[start] = 1;
+    visited.set(start, 1);
     let imbalance = 0,
       area = 0;
     for (let head = 0; head < tail; head++) {
-      const i = queue[head],
+      const i = queue.get(head),
         cellArea = matrix.areas.get(i);
       imbalance += (input.get(i) - result.get(i)) * cellArea;
       area += cellArea;
       const end = matrix.offsets.get(i + 1);
       for (let at = matrix.offsets.get(i); at < end; at++) {
-        const j = matrix.neighbors[at];
-        if (visited[j]) continue;
-        visited[j] = 1;
-        queue[tail++] = j;
+        const j = matrix.neighbors.get(at);
+        if (visited.get(j)) continue;
+        visited.set(j, 1);
+        queue.set(tail++, j);
       }
     }
-    for (let at = 0; at < tail; at++) result.add(queue[at], imbalance / area);
+    for (let at = 0; at < tail; at++) result.add(queue.get(at), imbalance / area);
   }
+  releaseWorking(matrix.map, visited, queue);
 }
 function solve(
   matrix: MetricOperator,
@@ -93,14 +95,13 @@ export function prepareMetricSmoother(map: PhysicalField, length: number, active
   const matrix = metricOperator(map, length, active),
     condition = prepareMultigrid(matrix);
   const apply = (input: Band) => {
-    const local = metricArray(map, "local-input", matrix.cells.length),
+    const cells = matrix.cells!,
+      local = metricArray(map, "local-input", matrix.count),
       result = metricArray(map, "full-result", input.length);
     result.copyFrom(input);
-    for (let i = 0; i < local.length; i++) local.set(i, input.get(matrix.cells[i]));
+    for (let i = 0; i < local.length; i++) local.set(i, input.get(cells.get(i)));
     const solved = solve(matrix, local, condition);
-    matrix.cells.forEach((cell, i) => {
-      result.set(cell, solved.get(i));
-    });
+    for (let i = 0; i < matrix.count; i++) result.set(cells.get(i), solved.get(i));
     releaseWorking(map, local, solved);
     return result;
   };

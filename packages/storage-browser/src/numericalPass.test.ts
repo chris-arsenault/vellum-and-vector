@@ -11,22 +11,22 @@ import { blockCacheFixture } from "./blockCacheFixture";
 
 function matrix(map: PhysicalField, count: number): MetricOperator {
   const offsets = metricArray(map, "offsets", count + 1, "int32"),
-    neighbors = new Int32Array((count - 1) * 2);
+    neighbors = metricArray(map, "neighbors", (count - 1) * 2, "int32");
   let at = 0;
   for (let i = 0; i < count; i++) {
     offsets.set(i, at);
-    if (i > 0) neighbors[at++] = i - 1;
-    if (i + 1 < count) neighbors[at++] = i + 1;
+    if (i > 0) neighbors.set(at++, i - 1);
+    if (i + 1 < count) neighbors.set(at++, i + 1);
   }
   offsets.set(count, at);
   return {
     map,
-    cells: Int32Array.from({ length: count }, (_, i) => i),
+    count,
     areas: metricArray(map, "areas", count).fill(2),
     diagonal: metricArray(map, "diagonal", count).fill(3),
     offsets,
     neighbors,
-    weights: new Float64Array(neighbors.length).fill(0.5),
+    weights: metricArray(map, "weights", neighbors.length).fill(0.5),
   };
 }
 function product(cache: BlockCache | undefined, count: number, values: Float64Array) {

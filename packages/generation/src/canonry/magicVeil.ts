@@ -6,7 +6,7 @@ import { strainAt } from "./magicConfluences";
 import { hashUnit } from "./noise";
 import { clamp, round, units } from "./math";
 import { rebuild } from "./surface";
-import { BitSet, CellList, FloatList, radixOrder, type Band } from "@atlas/domain";
+import { CellList, FloatList, radixOrder, SmallIntSet, type Band } from "@atlas/domain";
 
 const tears = (field: MagicField) =>
   field.definition.enabled && field.definition.effects.tearing > 0;
@@ -78,11 +78,12 @@ export function pairingSources(
     strength = field.originSources.tear;
   if (!strength) return;
   const eligible = doorEligibility(state, field, strength);
-  const used = new BitSet(map.mesh.count);
+  // Door ends only: twice the door count, never the mesh.
+  const used = new SmallIntSet(2 * p.doorCount);
   field.doors = field.doors.filter((door) => eligible(door.a) && eligible(door.b));
   for (const door of field.doors) {
-    used.set(door.a);
-    used.set(door.b);
+    used.add(door.a);
+    used.add(door.b);
   }
   // Only the eligible cells are candidates; they are few, ordered strongest first.
   const cells = new CellList(),
@@ -99,8 +100,8 @@ export function pairingSources(
     if (used.has(a)) continue;
     const b = partner(map, strength, candidates, used, a, p.doorDistance, p.doorMatch);
     if (b < 0) continue;
-    used.set(a);
-    used.set(b);
+    used.add(a);
+    used.add(b);
     field.doors.push({ a, b });
   }
   field.doors.forEach((door, index) => {
@@ -142,7 +143,7 @@ function partner(
   map: PhysicalField,
   strength: Band,
   candidates: Int32Array,
-  used: BitSet,
+  used: SmallIntSet,
   a: number,
   span: number,
   match: number

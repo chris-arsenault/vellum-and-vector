@@ -1,4 +1,5 @@
 import { expect, it, vi } from "vitest";
+import type { PhysicalField } from "./canonry/field";
 import {
   builtinLayers,
   createAdaptiveField,
@@ -164,11 +165,13 @@ it("leaves water, terrain and the lake set untouched by a World dam demand", () 
     water = Array.from(map.WaterKindCodes);
   applySocietyWorks(state, context, 20);
   refreshSocietyEnvironment(state, context, 20);
-  expect(map.EngineeredDams.count()).toBe(0);
+  expect(damCount(map)).toBe(0);
   expect(Array.from(map.Elevation)).toEqual(elevation);
   expect(Array.from(map.WaterKindCodes)).toEqual(water);
   expect(Object.values(state.domain.world.features).some((f) => f.kind === "lake")).toBe(false);
 });
+const damCount = (map: PhysicalField) =>
+  map.EngineeredDams ? Array.from(map.EngineeredDams).filter(Boolean).length : 0;
 it("realizes a World dam demand at the era's end only when its impoundment spans the mesh", () => {
   const { state, context } = fixture(),
     map = state.physical!.map;
@@ -182,11 +185,11 @@ it("realizes a World dam demand at the era's end only when its impoundment spans
   const lakeCells = Array.from(map.WaterKindCodes).filter((v) => v === 2).length;
   if (dam.demand) {
     // Below the resolution rule: nothing of the dam exists at World.
-    expect(map.EngineeredDams.count()).toBe(0);
+    expect(damCount(map)).toBe(0);
     expect(lakeCells).toBe(0);
   } else {
     expect(dam.causes.at(-1)).toContain("Realized at World");
-    expect(map.EngineeredDams.count()).toBeGreaterThan(0);
+    expect(damCount(map)).toBeGreaterThan(0);
     expect(lakeCells).toBeGreaterThanOrEqual(resolutionCells);
     expect(dam.position).not.toEqual(c.position);
   }

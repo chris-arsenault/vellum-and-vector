@@ -1,6 +1,6 @@
 import type { PhysicalField } from "./field";
 import { metricSearch } from "./metricSearch";
-import { CellList, radixOrder, SmallIntSet, type Band } from "@atlas/domain";
+import { radixOrder, SmallIntSet, type Band } from "@atlas/domain";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 
 /** A passage must fall below this share of the smaller sea's breadth to separate names. */
@@ -16,10 +16,10 @@ const subordinateSeaRatio = 0.25;
 /** Shelf-dominated regions are seas when at least this share of their area is shallow. */
 const shallowSeaShare = 0.5;
 
+/** A marine region; its cells are those whose label is its id. */
 export interface MarineRegion {
   id: number;
   peak: number;
-  members: Int32Array;
   area: number;
   type: "ocean" | "sea";
 }
@@ -109,24 +109,23 @@ class MarineWatershed {
   }
 }
 
-/** Regions keyed by their watershed root. Membership is one pass over the sea cells. */
+/**
+ * Regions keyed by their watershed root, in ascending root order, with areas summed in cell
+ * order. Membership stays in the watershed's labels; no region holds a cell list.
+ */
 function gatherRegions(map: PhysicalField, watershed: MarineWatershed) {
   // hpc-exempt: region records keyed by root, a few dozen entries.
-  const lists = new Map<number, CellList>(),
-    regions = new Map<number, MarineRegion>();
+  const found = new Map<number, MarineRegion>();
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes.get(i) !== 1) continue;
     const root = watershed.root(i);
-    let list = lists.get(root);
-    if (!list) lists.set(root, (list = new CellList()));
-    list.push(i);
+    let region = found.get(root);
+    if (!region) found.set(root, (region = { id: root, peak: root, area: 0, type: "ocean" }));
+    region.area += map.mesh.contentArea(i);
   }
-  for (const [id, list] of [...lists].sort((a, b) => a[0] - b[0])) {
-    const members = list.finish();
-    let area = 0;
-    for (const i of members) area += map.mesh.contentArea(i);
-    regions.set(id, { id, peak: id, members, area, type: "ocean" });
-  }
+  // hpc-exempt: region records keyed by root, a few dozen entries, in ascending root order.
+  const regions = new Map<number, MarineRegion>();
+  for (const id of Int32Array.from(found.keys()).sort()) regions.set(id, found.get(id)!);
   return regions;
 }
 
@@ -134,7 +133,8 @@ function gatherRegions(map: PhysicalField, watershed: MarineWatershed) {
 function strongestNeighbour(map: PhysicalField, watershed: MarineWatershed, region: MarineRegion) {
   let neighbour = -1,
     passage = -Infinity;
-  for (const i of region.members)
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (map.WaterKindCodes.get(i) !== 1 || watershed.root(i) !== region.id) continue;
     for (let edge = 0; edge < map.mesh.degree(i); edge++) {
       const j = map.mesh.neighbor(i, edge);
       if (j < 0 || map.WaterKindCodes.get(j) !== 1 || watershed.root(j) === watershed.root(i))
@@ -144,6 +144,7 @@ function strongestNeighbour(map: PhysicalField, watershed: MarineWatershed, regi
       passage = breadth;
       neighbour = j;
     }
+  }
   return neighbour;
 }
 
@@ -160,36 +161,54 @@ function mergeSmallRegions(map: PhysicalField, watershed: MarineWatershed) {
       combined = root === current.id ? current : other,
       absorbed = root === current.id ? other : current;
     combined.area += absorbed.area;
-    const members = new Int32Array(combined.members.length + absorbed.members.length);
-    members.set(combined.members);
-    members.set(absorbed.members, combined.members.length);
-    combined.members = members;
     regions.delete(absorbed.id);
   }
   return gatherRegions(map, watershed);
 }
 
-function classifyRegion(
+/** Seas are shelf-dominated or small beside a larger neighbour; one pass over the labels. */
+function classifyRegions(
   map: PhysicalField,
   labels: Band,
   regions: Map<number, MarineRegion>,
-  region: MarineRegion,
   shelfBreak: number
 ) {
-  let shallow = 0,
-    neighbourArea = 0;
-  for (const i of region.members) {
-    if (map.WaterDepths.get(i) <= shelfBreak) shallow += map.mesh.contentArea(i);
-    for (let edge = 0; edge < map.mesh.degree(i); edge++) {
-      const j = map.mesh.neighbor(i, edge);
-      if (j < 0) continue;
-      const label = labels.get(j);
-      if (label < 0 || label === region.id) continue;
-      neighbourArea = Math.max(neighbourArea, regions.get(label)!.area);
-    }
+  const list = [...regions.values()],
+    index = workingArray(map, "int32", "marine-region-index"),
+    shallow = new Float64Array(list.length),
+    neighbourArea = new Float64Array(list.length);
+  list.forEach((region, k) => index.set(region.id, k));
+  for (let i = 0; i < map.mesh.count; i++) {
+    const id = labels.get(i);
+    if (id < 0) continue;
+    const k = index.get(id);
+    if (map.WaterDepths.get(i) <= shelfBreak) shallow[k] += map.mesh.contentArea(i);
+    neighbourArea[k] = Math.max(neighbourArea[k], largestNeighbour(map, labels, regions, i, id));
   }
-  if (shallow >= region.area * shallowSeaShare || region.area < neighbourArea * subordinateSeaRatio)
-    region.type = "sea";
+  releaseWorking(map, index);
+  list.forEach((region, k) => {
+    if (
+      shallow[k] >= region.area * shallowSeaShare ||
+      region.area < neighbourArea[k] * subordinateSeaRatio
+    )
+      region.type = "sea";
+  });
+}
+/** The area of the largest other region beside cell `i`, or 0. */
+function largestNeighbour(
+  map: PhysicalField,
+  labels: Band,
+  regions: Map<number, MarineRegion>,
+  i: number,
+  id: number
+) {
+  let area = 0;
+  for (let edge = 0; edge < map.mesh.degree(i); edge++) {
+    const j = map.mesh.neighbor(i, edge),
+      label = j < 0 ? -1 : labels.get(j);
+    if (label >= 0 && label !== id) area = Math.max(area, regions.get(label)!.area);
+  }
+  return area;
 }
 
 /** Identify named marine geography without changing water connectivity, crust or sea level. */
@@ -206,8 +225,9 @@ export function marineRegions(map: PhysicalField, shelfBreak: number) {
     if (map.WaterKindCodes.get(i) === 1) watershed.activate(map, i);
   const regions = mergeSmallRegions(map, watershed),
     labels = workingArray(map, "int32", "marine-labels").fill(-1);
-  for (const region of regions.values()) for (const i of region.members) labels.set(i, region.id);
-  for (const region of regions.values()) classifyRegion(map, labels, regions, region, shelfBreak);
+  for (let i = 0; i < map.mesh.count; i++)
+    if (map.WaterKindCodes.get(i) === 1) labels.set(i, watershed.root(i));
+  classifyRegions(map, labels, regions, shelfBreak);
   releaseWorking(map, breadth, watershed.parent);
   return { labels, regions: [...regions.values()] };
 }

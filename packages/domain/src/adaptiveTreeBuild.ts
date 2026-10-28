@@ -6,32 +6,30 @@ import {
   type AdaptiveTreeData,
 } from "./adaptiveTree";
 import { BlockCache } from "./lattice/blockCache";
-import type { Band } from "./lattice/band";
+import { BandList } from "./lattice/bandList";
 import { sampleCoverage } from "./lattice/bandValues";
+import { blockCells } from "./lattice/lattice";
 
-const decisionChunkSamples = 16_384;
 /**
  * Disposable decisions keep a refiner's call order independent of allocation and writing.
- * They are planned before the tree's size is known, so they grow in chunk bands.
+ * They are planned before the tree's size is known, so they grow in a band list.
  */
 class TreeDecisions {
-  private readonly coverage;
-  private chunks: Band[] = [];
-  length = 0;
+  private readonly list;
   constructor(cache: BlockCache) {
-    this.coverage = sampleCoverage(decisionChunkSamples, cache);
+    this.list = new BandList(sampleCoverage(blockCells, cache), "uint8", "adaptive:decisions");
+  }
+  get length() {
+    return this.list.length;
   }
   push(split: boolean) {
-    if (this.length % decisionChunkSamples === 0)
-      this.chunks.push(this.coverage.scratch("uint8", "adaptive:decisions", decisionChunkSamples));
-    this.chunks.at(-1)!.set(this.length++ % decisionChunkSamples, Number(split));
+    this.list.push(Number(split));
   }
   read(index: number) {
-    return this.chunks[Math.floor(index / decisionChunkSamples)].get(index % decisionChunkSamples);
+    return this.list.get(index);
   }
   close() {
-    for (const chunk of this.chunks) this.coverage.release(chunk);
-    this.chunks = [];
+    this.list.release();
   }
 }
 export function buildAdaptiveTree(

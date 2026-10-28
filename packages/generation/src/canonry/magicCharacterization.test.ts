@@ -187,8 +187,8 @@ it("carries a crust stock by the transport plan's weights and conserves its tota
   offsets.set(count, targets.length);
   map.transportPlan = {
     offsets,
-    targets: Int32Array.from(targets),
-    weights: Float64Array.from(weights),
+    targets: residentBand("int32", targets),
+    weights: residentBand("float64", weights),
     arrivals: workingArray(map, "float64", "test:arrivals"),
     dominant: workingArray(map, "int32", "test:dominant").fill(-1),
     dominantWeight: workingArray(map, "float64", "test:dominantWeight"),

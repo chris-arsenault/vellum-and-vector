@@ -53,8 +53,8 @@ function accumulate(map: PhysicalField, plan: TransportPlan, old: Columns): Colu
       oceanic = old.oceanic.get(source),
       reserve = old.reserve.get(source);
     for (let offset = plan.offsets.get(source); offset < end; offset++) {
-      const target = plan.targets[offset],
-        share = plan.weights[offset] / weightScale;
+      const target = plan.targets.get(offset),
+        share = plan.weights.get(offset) / weightScale;
       const weight = (share * map.mesh.area(source)) / map.mesh.area(target);
       result.continental.add(target, continental * weight);
       result.oceanic.add(target, oceanic * weight);

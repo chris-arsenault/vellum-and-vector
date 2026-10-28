@@ -5,21 +5,22 @@ import { clamp, round } from "./math";
 import { adaptiveCell, visitAdaptiveOverlap, type Bounds } from "@atlas/domain";
 import { triangleOverlap } from "./triangleOverlap";
 import { tectonicTransport } from "./tectonicTransport";
-import { CellList, FloatList, type Band } from "@atlas/domain";
+import { BandList, type Band } from "@atlas/domain";
 import { workingArray } from "./physicalNumerics";
 
 export const weightScale = 1_000_000;
+/** Where each cell's material goes, as a compressed row per source cell; all bands. */
 export interface TransportPlan {
   offsets: Band;
-  targets: Int32Array;
-  weights: Float64Array;
+  targets: Band;
+  weights: Band;
   arrivals: Band;
   dominant: Band;
   dominantWeight: Band;
 }
 type Builder = Omit<TransportPlan, "targets" | "weights"> & {
-  targets: CellList;
-  weights: FloatList;
+  targets: BandList;
+  weights: BandList;
 };
 function add(map: PhysicalField, plan: Builder, source: number, target: number, weight: number) {
   if (weight <= 0) return;
@@ -97,8 +98,8 @@ export function buildTransportPlan(map: PhysicalField, step: number): TransportP
   const transform = tectonicTransport(map, step);
   const plan: Builder = {
     offsets: workingArray(map, "int32", "transport:offsets", count + 1),
-    targets: new CellList(count),
-    weights: new FloatList(count),
+    targets: new BandList(map.coverage, "int32", "transport:targets"),
+    weights: new BandList(map.coverage, "float64", "transport:weights"),
     arrivals: workingArray(map, "float64", "transport:arrivals"),
     dominant: workingArray(map, "int32", "transport:dominant").fill(-1),
     dominantWeight: workingArray(map, "float64", "transport:dominantWeight"),
@@ -120,12 +121,20 @@ export function buildTransportPlan(map: PhysicalField, step: number): TransportP
     targets: plan.targets.finish(),
     weights: plan.weights.finish(),
   };
-  for (const band of [ready.offsets, ready.arrivals, ready.dominant, ready.dominantWeight])
-    band.retain();
+  for (const band of planBands(ready)) band.retain();
   return ready;
 }
-/** Give a plan's bands back to the coverage; its compact target and weight columns are plain arrays. */
+function planBands(plan: TransportPlan) {
+  return [
+    plan.offsets,
+    plan.targets,
+    plan.weights,
+    plan.arrivals,
+    plan.dominant,
+    plan.dominantWeight,
+  ];
+}
+/** Give a plan's bands back to the coverage. */
 export function releaseTransportPlan(map: PhysicalField, plan: TransportPlan) {
-  for (const band of [plan.offsets, plan.arrivals, plan.dominant, plan.dominantWeight])
-    map.coverage.release(band);
+  for (const band of planBands(plan)) map.coverage.release(band);
 }

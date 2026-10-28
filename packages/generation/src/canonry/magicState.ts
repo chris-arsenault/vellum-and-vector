@@ -276,8 +276,8 @@ export function carryAmount(map: PhysicalField, values: Band) {
     if (amount === 0) continue;
     const end = plan.offsets.get(source + 1);
     for (let offset = plan.offsets.get(source); offset < end; offset++) {
-      const target = plan.targets[offset];
-      if (target >= 0) moved.add(target, (amount * plan.weights[offset]) / weightScale);
+      const target = plan.targets.get(offset);
+      if (target >= 0) moved.add(target, (amount * plan.weights.get(offset)) / weightScale);
     }
   }
   return moved;

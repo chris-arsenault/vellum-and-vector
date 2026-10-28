@@ -1,14 +1,15 @@
 // Publication of authored landmarks: one feature per landmark identity, and no second row for
 // the detected landform that is the landmark itself.
 import {
-  BitSet,
   landmarkKind,
   landmarkLayer,
   lineParts,
   spatial,
   type AtlasFeature,
+  type Band,
   type Landmark,
 } from "@atlas/domain";
+import { releaseWorking, workingArray } from "./physicalNumerics";
 import type { Geometry } from "geojson";
 import type { GenerationState } from "../process";
 import { generationFeatures, removeGenerationFeature } from "../generationFeatures";
@@ -88,11 +89,13 @@ function landmarkPairs(state: GenerationState) {
   }
   return pairs;
 }
+/** Cells the landmarks claim as a mark band, or null when none claims a cell. */
 export function landmarkClaims(state: GenerationState) {
-  const work = state.physical!,
-    claimed = new BitSet(work.map.mesh.count);
+  const work = state.physical!;
+  let claimed: Band | null = null;
   for (const [landmark, record] of landmarkPairs(state))
-    for (const i of claimedCells(work, landmark, record)) claimed.set(i);
+    for (const i of claimedCells(work, landmark, record))
+      (claimed ??= workingArray(work.map, "uint8", "landmark:claimed")).set(i, 1);
   return claimed;
 }
 function cellOf(work: Work, [x, y]: number[]) {
@@ -118,8 +121,8 @@ function anchors(feature: AtlasFeature): number[][] {
 }
 const detectedKinds = new Set(["peak", "gorge", "waterfall", "valley"]);
 /** Drop detected landforms that stand on claimed cells: they are the landmark, published once. */
-export function dropClaimedFeatures(state: GenerationState, claimed: BitSet) {
-  if (!claimed.count()) return;
+export function dropClaimedFeatures(state: GenerationState, claimed: Band | null) {
+  if (!claimed) return;
   const work = state.physical!;
   for (const feature of generationFeatures(state, {
     areaId: state.domain.scope.areaId,
@@ -135,10 +138,11 @@ export function dropClaimedFeatures(state: GenerationState, claimed: BitSet) {
     const points = anchors(feature),
       onClaim = points.filter((p) => {
         const cell = cellOf(work, p);
-        return cell >= 0 && claimed.has(cell);
+        return cell >= 0 && claimed.get(cell) === 1;
       }).length;
     if (onClaim * 2 >= points.length) removeGenerationFeature(state, feature.id);
   }
+  releaseWorking(work.map, claimed);
 }
 function signatureAttributes(record: LandmarkRecord) {
   const attributes: Record<string, unknown> = {};

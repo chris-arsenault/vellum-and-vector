@@ -150,12 +150,10 @@ it("keeps marine regions and community ownership valid across paged frontiers an
     }
     const result = marineRegions(map, 800 * 1024);
     expect(result.regions).toHaveLength(2);
-    for (const region of result.regions) {
-      expect(Array.from(region.members).every((i) => result.labels.get(i) === region.id)).toBe(
-        true
-      );
-      expect(region.area).toBeGreaterThan(0);
-    }
+    const ids = new Set(result.regions.map((region) => region.id));
+    for (const region of result.regions) expect(region.area).toBeGreaterThan(0);
+    for (let i = 0; i < mesh.count; i++)
+      expect(map.WaterKindCodes.get(i) !== 1 || ids.has(result.labels.get(i))).toBe(true);
     const state = onCache(landscape(), f.cache);
     state.domain.world.id = "6ff5503b-19c4-4d95-a407-bf1fc53ac70b";
     putChannel(

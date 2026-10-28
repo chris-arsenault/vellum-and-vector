@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import type { Band } from "@atlas/domain";
+import { residentBand, type Band } from "@atlas/domain";
 import { createField } from "./field";
 import { createMesh } from "./mesh";
 import { units } from "./math";
@@ -63,8 +63,11 @@ function fixture() {
       (i) => (i <= cells[0] ? 0 : i <= cells[1] ? 2 : 4),
       map.mesh.count + 1
     ),
-    targets: Int32Array.from([cells[2], cells[3], cells[2], cells[3]]),
-    weights: Float64Array.from([0.5, 0.5, 0.5, 0.1], (v) => v * weightScale),
+    targets: residentBand("int32", [cells[2], cells[3], cells[2], cells[3]]),
+    weights: residentBand(
+      "float64",
+      [0.5, 0.5, 0.5, 0.1].map((v) => v * weightScale)
+    ),
     arrivals: scratch("float64", [0, 0, 1, 0.4], weightScale),
     dominant,
     dominantWeight: scratch("float64", [0, 0, 0.75, 0.25], weightScale),
@@ -98,8 +101,8 @@ it("preserves convergent crust surplus and clears volcanic flags when transporte
   map.CrustContinentalFraction.fill(1000);
   map.TectonicBoundaryCodes.set(cells[2], 1);
   plan.arrivals.set(cells[2], plan.arrivals.get(cells[2]) * 2);
-  plan.weights[0] *= 2;
-  plan.weights[2] *= 2;
+  plan.weights.set(0, plan.weights.get(0) * 2);
+  plan.weights.set(2, plan.weights.get(2) * 2);
   map.VolcanicConstructionHistory.fill(0);
   map.FeatureFlags.set(cells[0], map.FeatureFlags.get(cells[0]) | 1);
   map.FeatureFlags.set(cells[1], map.FeatureFlags.get(cells[1]) | 2);

@@ -1,5 +1,4 @@
 import {
-  BitSet,
   fieldInterpolator,
   gridPosition,
   putChannel,
@@ -11,6 +10,7 @@ import {
 import type { GenerationState, MapProcessContext } from "./process";
 import { generationNetworks, removeGenerationReach } from "./generationNetworks";
 import type { PhysicalField } from "./canonry/field";
+import { releaseWorking, retainedArray } from "./canonry/physicalNumerics";
 import { generationBindings } from "./generationBindings";
 import { atlasChannels, type ChannelBinding } from "./canonry/atlasChannels";
 import {
@@ -101,8 +101,10 @@ function refreshWater(state: GenerationState, context: MapProcessContext) {
     bound = generationBindings(context);
   const c = physicalContext(bound.seed, 0, work.profile);
   c.SeaLevelOffset = (work.map.EffectiveSeaLevel - work.map.BaseSeaLevel) / 1024;
-  const dams = new BitSet(work.map.mesh.count);
-  for (const i of engineeredDamCells(state)) dams.set(i);
+  if (work.map.EngineeredDams) releaseWorking(work.map, work.map.EngineeredDams);
+  let dams: Band | null = null;
+  for (const i of engineeredDamCells(state))
+    (dams ??= retainedArray(work.map, "uint8", "engineered-dams")).set(i, 1);
   work.map.EngineeredDams = dams;
   // Repair present dependencies only. No tectonic motion, incision epochs or new geological events.
   const incoming = state.domain.world.areas[state.domain.scope.areaId].parentId

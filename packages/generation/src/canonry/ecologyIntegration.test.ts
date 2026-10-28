@@ -298,7 +298,8 @@ it("carries organic carbon with advecting crust without integer truncation of ve
   let exported = 0;
   for (let i = 0; i < map.mesh.count; i++) {
     let retained = 0;
-    for (let k = plan.offsets.get(i); k < plan.offsets.get(i + 1); k++) retained += plan.weights[k];
+    for (let k = plan.offsets.get(i); k < plan.offsets.get(i + 1); k++)
+      retained += plan.weights.get(k);
     exported += 12.5 * map.mesh.area(i) * (1 - retained / 1_000_000);
   }
   transportHistory(map, plan);
