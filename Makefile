@@ -1,4 +1,4 @@
-.PHONY: ci lint format format-check typecheck test test-browser terraform-fmt-check build dev canonry-fixtures
+.PHONY: ci lint format format-check typecheck test test-architecture test-perf test-browser terraform-fmt-check build dev canonry-fixtures
 
 ci: lint format-check typecheck test terraform-fmt-check
 
@@ -17,6 +17,15 @@ typecheck:
 
 test:
 	pnpm --dir frontend run test
+
+# Expected to fail until the generation code adopts the typed-array structures; its output
+# is the conversion list. Not part of ci.
+test-architecture:
+	pnpm exec vitest run -c vitest.architecture.config.ts
+
+# One run of each data structure against its substitute; numbers land in test-results/.
+test-perf:
+	ATLAS_PERF=1 pnpm exec vitest run -c vitest.architecture.config.ts
 
 test-browser:
 	pnpm --dir frontend run test:browser
