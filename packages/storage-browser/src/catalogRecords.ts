@@ -12,8 +12,6 @@ import {
 import type { Geometry } from "geojson";
 import type { GeometryKernel } from "./geometryKernel";
 import { writeIdentity, writeLinks } from "./recordLinks";
-import { writeGeometryBoundaries } from "./geometryBoundaries";
-import { writeGeometryPieces } from "./geometryPieces";
 
 export type CatalogRow = Record<string, SqlValue>;
 function regionMetadata(source: Record<string, unknown>) {
@@ -121,18 +119,18 @@ function validateIdentity(record: CatalogRecord) {
     "Record identity and value must agree."
   );
 }
+/** A write stores the geometry row only. Boundary parts, pieces and overviews derive lazily. */
 function storeGeometry(
   db: Database,
-  kernel: GeometryKernel,
   record: CatalogRecord,
   part: "geometry" | "footprint",
   bytes: Uint8Array | null,
-  precision: number,
   restored?: CatalogRow
 ) {
   if (!bytes) return null;
   const previous = db.selectObject(
-    `SELECT ${part}_id AS id,${part} IS ? AS same FROM records WHERE world_id=? AND kind=? AND id=?`,
+    `SELECT r.${part}_id AS id,g.data IS ? AS same FROM records_core r
+    LEFT JOIN geometry_values g ON g.geometry_id=r.${part}_id WHERE r.world_id=? AND r.kind=? AND r.id=?`,
     [bytes, record.scope.worldId, record.reference.kind, record.reference.id]
   );
   if (previous?.same === 1) return previous.id!;
@@ -146,10 +144,7 @@ function storeGeometry(
   )
     return restoredId;
   db.exec({ sql: "INSERT INTO geometry_values(data) VALUES(?)", bind: [bytes] });
-  const id = Number(db.selectValue("SELECT last_insert_rowid()"));
-  writeGeometryBoundaries(db, kernel, id, precision);
-  writeGeometryPieces(db, kernel, id, precision);
-  return id;
+  return Number(db.selectValue("SELECT last_insert_rowid()"));
 }
 export function writeRecord(
   db: Database,
@@ -191,24 +186,8 @@ export function writeRecord(
       record.reference.id,
       revision,
       value.data,
-      storeGeometry(
-        db,
-        kernel,
-        record,
-        "geometry",
-        value.geometry?.bytes ?? null,
-        precision,
-        restored
-      ),
-      storeGeometry(
-        db,
-        kernel,
-        record,
-        "footprint",
-        value.footprint?.bytes ?? null,
-        precision,
-        restored
-      ),
+      storeGeometry(db, record, "geometry", value.geometry?.bytes ?? null, restored),
+      storeGeometry(db, record, "footprint", value.footprint?.bytes ?? null, restored),
       key,
       presentationLayer(record.data),
       value.geometryType,

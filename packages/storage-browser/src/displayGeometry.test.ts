@@ -52,12 +52,14 @@ it("reads joined viewport pieces, preserves holes and edits canonical geometry t
     coordinates: [circle(450, 16384), circle(100, 4096).reverse()],
   };
   await write(catalog, [record("coast", shape)]);
-  expect(Number(db.selectValue("SELECT count(*) FROM geometry_pieces"))).toBeGreaterThan(2);
-  const overviewCount = Number(db.selectValue("SELECT count(*) FROM geometry_overviews"));
-  expect(overviewCount).toBeGreaterThan(0);
+  // Writes store the geometry row only; the first display read derives pieces and overviews.
+  expect(Number(db.selectValue("SELECT count(*) FROM geometry_pieces"))).toBe(0);
   const canonical = (await catalog.readFeature(scope, "coast")).geometry;
   const extent: [number, number, number, number] = [300, 0, 700, 150];
   const local = (await catalog.readDisplay(query({ extent }), 0)).records[0].feature.geometry;
+  expect(Number(db.selectValue("SELECT count(*) FROM geometry_pieces"))).toBeGreaterThan(2);
+  const overviewCount = Number(db.selectValue("SELECT count(*) FROM geometry_overviews"));
+  expect(overviewCount).toBeGreaterThan(0);
   const expected = kernel.overlay(canonical, rectangle(extent), 1e-6, "intersection")!;
   const shown = kernel.overlay(local, rectangle(extent), 1e-6, "intersection")!;
   expect(kernel.measure(shown, 1e-6).area).toBeCloseTo(kernel.measure(expected, 1e-6).area, 3);

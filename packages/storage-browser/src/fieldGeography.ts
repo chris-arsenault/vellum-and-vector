@@ -8,8 +8,7 @@ import {
   type Bounds,
 } from "@atlas/domain";
 import type { GeometryKernel } from "./geometryKernel";
-import { writeGeometryBoundaries } from "./geometryBoundaries";
-import { geometryWindow, writeGeometryPieces } from "./geometryPieces";
+import type { GeometryDerivations } from "./geometryDerivations";
 
 interface ShapeReference {
   type: Geometry["type"];
@@ -27,7 +26,8 @@ interface StoredGeography {
 export class FieldGeographyCatalog {
   constructor(
     private db: Database,
-    private kernel: GeometryKernel
+    private kernel: GeometryKernel,
+    private derivations: GeometryDerivations
   ) {}
   write(geography: FieldGeography, precision: number) {
     const { scope, id } = geography;
@@ -90,8 +90,6 @@ export class FieldGeographyCatalog {
           [x0, y0, x1, y1] = value.bounds;
         this.db.exec({ sql: "INSERT INTO geometry_values(data) VALUES(?)", bind: [value.bytes] });
         const geometryId = this.db.selectValue("SELECT last_insert_rowid()")!;
-        writeGeometryBoundaries(this.db, this.kernel, Number(geometryId), precision);
-        writeGeometryPieces(this.db, this.kernel, Number(geometryId), precision);
         this.db.exec({
           sql: "INSERT INTO field_geometry_parts(world_id,geography_id,role,geometry_id) VALUES(?,?,?,?)",
           bind: [worldId, id, role, geometryId],
@@ -153,15 +151,8 @@ export class FieldGeographyCatalog {
       ) || 1e-6;
     const pieces = rows.flatMap((row) => {
       const geometryId = Number(row.geometry_id);
-      writeGeometryPieces(this.db, this.kernel, geometryId, precision);
-      const clipped = geometryWindow(
-        this.db,
-        this.kernel,
-        geometryId,
-        extent,
-        precision,
-        tolerance
-      );
+      this.derivations.ensurePieces(geometryId, precision);
+      const clipped = this.derivations.window(geometryId, extent, precision, tolerance);
       return clipped?.type === "Polygon"
         ? [clipped.coordinates]
         : clipped?.type === "MultiPolygon"

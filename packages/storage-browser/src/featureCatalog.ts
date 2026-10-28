@@ -13,6 +13,7 @@ import { ByteCache } from "./byteCache";
 import { CatalogProjection } from "./catalogProjection";
 import type { CatalogRow } from "./catalogRecords";
 import type { GeometryKernel } from "./geometryKernel";
+import type { GeometryDerivations } from "./geometryDerivations";
 import { DisplayFeatures } from "./displayFeatures";
 
 interface Presented {
@@ -31,9 +32,10 @@ export class FeatureCatalog {
   constructor(
     private db: Database,
     private kernel: GeometryKernel,
-    private projection: CatalogProjection
+    private projection: CatalogProjection,
+    derivations: GeometryDerivations
   ) {
-    this.windows = new DisplayFeatures(db, kernel);
+    this.windows = new DisplayFeatures(db, kernel, derivations);
   }
   read(
     query: FeatureQuery,
@@ -57,10 +59,8 @@ export class FeatureCatalog {
       "Choose the area's located space."
     );
     const precision = context.world.reference.precision ?? 1e-6;
-    return this.kernel.withGeometry(
-      query.geometry ?? rectangle(query.extent),
-      precision,
-      (target) => this.page(query, target, precision, tolerance, accept, context)
+    return this.kernel.withShape(query.geometry ?? rectangle(query.extent), precision, (target) =>
+      this.page(query, target, precision, tolerance, accept, context)
     );
   }
   private page(

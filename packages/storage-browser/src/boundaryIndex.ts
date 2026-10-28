@@ -38,9 +38,8 @@ function bindings(scope: WorkspaceScope, extent: Bounds) {
 function segment(row: Record<string, unknown>): BoundarySegment {
   return { ax: Number(row.ax), ay: Number(row.ay), bx: Number(row.bx), by: Number(row.by) };
 }
-/** Raw linework is indexed once; noding belongs to the relevant local neighborhood. */
+/** Raw linework, indexed per scope. Reads here are pure; BoundaryProjection installs sources. */
 export class BoundaryIndex {
-  prepare: (scope: WorkspaceScope, extent?: Bounds) => void = () => {};
   constructor(
     private db: Database,
     private kernel: GeometryKernel
@@ -100,7 +99,6 @@ export class BoundaryIndex {
     });
   }
   segments(scope: WorkspaceScope, extent: Bounds) {
-    this.prepare(scope, extent);
     return this.db
       .selectObjects(
         `SELECT ${columns} FROM boundary_segments s JOIN boundary_bounds b USING(segment_id)
@@ -109,20 +107,26 @@ export class BoundaryIndex {
       )
       .map(segment);
   }
-  nearest(scope: WorkspaceScope, x: number, y: number): BoundarySegment | null {
-    this.prepare(scope, [x, y, Number.MAX_VALUE, y]);
+  /** The nearest crossing of the eastward ray from (x, y), searched only up to `east`. */
+  nearest(scope: WorkspaceScope, x: number, y: number, east: number): BoundarySegment | null {
     const row = this.db.selectObject(
       `SELECT ${columns},s.ax+(:y-s.ay)*(s.bx-s.ax)/(s.by-s.ay) AS hit
       FROM boundary_segments s JOIN boundary_bounds b USING(segment_id)
-      WHERE ${scoped} AND b.min_y<=:y AND b.max_y>=:y AND b.max_x>=:x
+      WHERE ${scoped} AND b.min_y<=:y AND b.max_y>=:y AND b.max_x>=:x AND b.min_x<=:east
       AND ((s.ay<=:y AND s.by>:y) OR (s.by<=:y AND s.ay>:y))
-      AND hit>=:x ORDER BY hit LIMIT 1`,
-      { ":world": scope.worldId, ":space": scope.spaceId, ":area": scope.areaId, ":x": x, ":y": y }
+      AND hit>=:x AND hit<=:east ORDER BY hit LIMIT 1`,
+      {
+        ":world": scope.worldId,
+        ":space": scope.spaceId,
+        ":area": scope.areaId,
+        ":x": x,
+        ":y": y,
+        ":east": east,
+      }
     );
     return row ? segment(row) : null;
   }
   *inside(scope: WorkspaceScope, extent: Bounds) {
-    this.prepare(scope, extent);
     const statement = this.db
       .prepare(`SELECT ${columns} FROM boundary_segments s JOIN boundary_bounds b USING(segment_id)
       WHERE ${scoped} AND b.min_x<=:east AND b.max_x>=:west AND b.min_y<=:north AND b.max_y>=:south

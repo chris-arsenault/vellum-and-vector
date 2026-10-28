@@ -1,22 +1,22 @@
 import type { Database } from "@sqlite.org/sqlite-wasm";
-import { spatial, type Bounds, type WorkspaceScope } from "@atlas/domain";
+import type { Bounds, WorkspaceScope } from "@atlas/domain";
 import type { BoundaryIndex } from "./boundaryIndex";
-import type { BoundaryTiles } from "./boundaryTiles";
+import type { GeometryDerivations } from "./geometryDerivations";
 import type { CatalogProjection } from "./catalogProjection";
-import { geometryBoundaryWindow, writeGeometryBoundaries } from "./geometryBoundaries";
 
 /** Coast pieces participate in the same local topology as feature and authored boundaries. */
 export class CoastBoundaries {
   constructor(
     private db: Database,
     private index: BoundaryIndex,
-    private tiles: BoundaryTiles,
+    private derivations: GeometryDerivations,
     private projection: CatalogProjection
   ) {
     db.exec(`CREATE TABLE IF NOT EXISTS boundary_coasts (
       world_id TEXT NOT NULL,space_id TEXT NOT NULL,area_id TEXT NOT NULL,signature TEXT NOT NULL,
       PRIMARY KEY(world_id,space_id,area_id));`);
   }
+  /** Returns true when the scope's coast sources were reset, so cached tiles are stale. */
   ensure(scope: WorkspaceScope, extent: Bounds) {
     const fields = this.db.selectObjects(
       `WITH RECURSIVE lineage(id) AS (SELECT ? UNION
@@ -37,8 +37,10 @@ export class CoastBoundaries {
         bind
       ) === signature;
     if (!unchanged) this.reset(scope, signature);
+    const precision = this.projection.metadata(scope.worldId).reference.precision ?? 1e-6;
     for (const field of fields)
-      this.install(scope, Number(field.record_id), String(field.geography_id), extent);
+      this.install(scope, Number(field.record_id), String(field.geography_id), extent, precision);
+    return !unchanged;
   }
   private reset(scope: WorkspaceScope, signature: string) {
     const bind = [scope.worldId, scope.spaceId, scope.areaId];
@@ -52,10 +54,14 @@ export class CoastBoundaries {
       DO UPDATE SET signature=excluded.signature`,
       bind: [...bind, signature],
     });
-    const context = this.projection.context(scope.worldId, scope.areaId, []);
-    this.tiles.invalidate(scope, spatial.bounds(context.scope.footprint));
   }
-  private install(scope: WorkspaceScope, recordId: number, geographyId: string, b: Bounds) {
+  private install(
+    scope: WorkspaceScope,
+    recordId: number,
+    geographyId: string,
+    b: Bounds,
+    precision: number
+  ) {
     const statement = this.db.prepare(`SELECT p.geometry_id FROM field_geometry_parts p
       JOIN field_geometry_bounds b USING(part_id)
       WHERE p.world_id=? AND p.geography_id=? AND p.role='ocean'
@@ -64,11 +70,9 @@ export class CoastBoundaries {
     try {
       statement.bind([scope.worldId, geographyId, b[2], b[0], b[3], b[1]]);
       while (statement.step()) {
-        const row = statement.get({}),
-          geometryId = Number(row.geometry_id),
-          precision = this.projection.metadata(scope.worldId).reference.precision ?? 1e-6;
-        writeGeometryBoundaries(this.db, this.tiles.kernel, geometryId, precision);
-        for (const part of geometryBoundaryWindow(this.db, geometryId, b))
+        const geometryId = Number(statement.get({}).geometry_id);
+        this.derivations.ensureBoundaries(geometryId, precision);
+        for (const part of this.derivations.boundaryWindow(geometryId, b))
           this.index.refresh(recordId, scope, part.bytes, part.partId);
       }
     } finally {

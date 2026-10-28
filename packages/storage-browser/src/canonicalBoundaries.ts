@@ -7,15 +7,14 @@ import {
   type WorkspaceScope,
 } from "@atlas/domain";
 import type { BoundaryIndex } from "./boundaryIndex";
-import type { GeometryKernel } from "./geometryKernel";
-import { geometryBoundaryWindow, writeGeometryBoundaries } from "./geometryBoundaries";
+import type { GeometryDerivations } from "./geometryDerivations";
 
 /** Uncomposed sources can expose indexed original edges without decoding their full shape. */
 export class CanonicalBoundaries {
   constructor(
     private db: Database,
-    private kernel: GeometryKernel,
-    private index: BoundaryIndex
+    private index: BoundaryIndex,
+    private derivations: GeometryDerivations
   ) {}
   install(scope: WorkspaceScope, extent: Bounds, areas: Record<string, Area>, precision: number) {
     const handled = new Set<string>();
@@ -47,8 +46,8 @@ export class CanonicalBoundaries {
         handled.add(feature.id);
         if (row.geometry_id === null) continue;
         const geometryId = Number(row.geometry_id);
-        writeGeometryBoundaries(this.db, this.kernel, geometryId, precision);
-        for (const part of geometryBoundaryWindow(this.db, geometryId, extent))
+        this.derivations.ensureBoundaries(geometryId, precision);
+        for (const part of this.derivations.boundaryWindow(geometryId, extent))
           this.index.refresh(Number(row.record_id), scope, part.bytes, part.partId);
       }
     } finally {

@@ -9,7 +9,8 @@ import {
 } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { BoundaryIndex } from "./boundaryIndex";
-import type { BoundaryTiles } from "./boundaryTiles";
+import type { GeometryKernel } from "./geometryKernel";
+import type { GeometryDerivations } from "./geometryDerivations";
 import type { CatalogProjection } from "./catalogProjection";
 import type { FeatureCatalog } from "./featureCatalog";
 import { CoastBoundaries } from "./coastBoundaries";
@@ -43,18 +44,23 @@ export class BoundaryProjection {
   constructor(
     private db: Database,
     private index: BoundaryIndex,
-    private tiles: BoundaryTiles,
+    private kernel: GeometryKernel,
+    derivations: GeometryDerivations,
     private features: FeatureCatalog,
     private projection: CatalogProjection
   ) {
     db.exec(schema);
-    this.coasts = new CoastBoundaries(db, index, tiles, projection);
-    this.canonical = new CanonicalBoundaries(db, tiles.kernel, index);
+    this.coasts = new CoastBoundaries(db, index, derivations, projection);
+    this.canonical = new CanonicalBoundaries(db, index, derivations);
   }
-  ensure(scope: WorkspaceScope, requested?: Bounds) {
+  /** Install every source intersecting the extent. Reports the covered extent and the bounds of
+   * sources whose linework was (re)installed so cached tiles can be dropped. */
+  ensure(scope: WorkspaceScope, requested?: Bounds): { covered: Bounds | null; changed: Bounds[] } {
     const context = this.projection.context(scope.worldId, scope.areaId, []);
     const precision = context.world.reference.precision ?? 1e-6;
-    const area = this.tiles.kernel.encode(context.scope.footprint, precision).bounds;
+    const area = this.kernel.withShape(context.scope.footprint, precision, (shape) =>
+      this.kernel.bounds(shape)
+    );
     const extent: Bounds = requested
       ? [
           Math.max(area[0], requested[0]),
@@ -63,17 +69,19 @@ export class BoundaryProjection {
           Math.min(area[3], requested[3]),
         ]
       : area;
-    if (extent[0] > extent[2] || extent[1] > extent[3]) return;
+    if (extent[0] > extent[2] || extent[1] > extent[3]) return { covered: null, changed: [] };
+    const changed: Bounds[] = [];
     this.db.transaction(() => {
       this.db.exec({
         sql: "INSERT OR IGNORE INTO boundary_scopes VALUES(?,?,?)",
         bind: [scope.worldId, scope.spaceId, scope.areaId],
       });
       this.clearDirty(scope);
-      this.coasts.ensure(scope, extent);
+      if (this.coasts.ensure(scope, extent)) changed.push(area);
       const handled = this.canonical.install(scope, extent, context.world.areas, precision);
-      this.installWindow(scope, extent, handled);
+      this.installWindow(scope, extent, handled, changed);
     });
+    return { covered: extent, changed };
   }
   private clearDirty(scope: WorkspaceScope) {
     const bind = [scope.worldId, scope.spaceId, scope.areaId];
@@ -88,7 +96,12 @@ export class BoundaryProjection {
       bind,
     });
   }
-  private installWindow(scope: WorkspaceScope, extent: Bounds, handled: Set<string>) {
+  private installWindow(
+    scope: WorkspaceScope,
+    extent: Bounds,
+    handled: Set<string>,
+    changed: Bounds[]
+  ) {
     let after: string | null = null;
     const missing = (id: string) =>
       !handled.has(id) &&
@@ -111,7 +124,10 @@ export class BoundaryProjection {
         undefined,
         missing
       );
-      for (const { feature } of page.records) this.install(scope, feature);
+      for (const { feature } of page.records) {
+        const bounds = this.install(scope, feature);
+        if (bounds) changed.push(bounds);
+      }
       after = page.next;
     } while (after);
   }
@@ -121,14 +137,13 @@ export class BoundaryProjection {
       [worldId, id]
     );
   }
-  private install(scope: WorkspaceScope, feature: AtlasFeature) {
+  private install(scope: WorkspaceScope, feature: AtlasFeature): Bounds | null {
     const recordId = this.recordId(scope.worldId, feature.id);
-    if (recordId === undefined) return;
+    if (recordId === undefined) return null;
     const precision = this.projection.metadata(scope.worldId).reference.precision ?? 1e-6;
     const geometry = feature.footprint ?? feature.geometry;
-    const encoded = this.tiles.kernel.encode(geometry, precision);
-    if (this.index.refresh(Number(recordId), scope, encoded.bytes))
-      this.tiles.invalidate(scope, encoded.bounds);
+    const encoded = this.kernel.encode(geometry, precision);
+    return this.index.refresh(Number(recordId), scope, encoded.bytes) ? encoded.bounds : null;
   }
   changed(worldId: string, reference: RecordReference): WorkspaceChange["extents"] {
     if (reference.kind === "area") return this.changedArea(worldId);
@@ -148,7 +163,7 @@ export class BoundaryProjection {
           Number(row.south),
           Number(row.east),
           Number(row.north),
-        ] as import("@atlas/domain").Bounds,
+        ] as Bounds,
       }));
     this.db.exec({
       sql: `INSERT OR IGNORE INTO boundary_dirty SELECT s.world_id,s.space_id,s.area_id,j.value
@@ -172,7 +187,7 @@ export class BoundaryProjection {
           Number(row.south),
           Number(row.east),
           Number(row.north),
-        ] as import("@atlas/domain").Bounds,
+        ] as Bounds,
       }));
     this.db.exec({
       sql: `INSERT OR IGNORE INTO boundary_dirty SELECT s.world_id,s.space_id,s.area_id,r.id

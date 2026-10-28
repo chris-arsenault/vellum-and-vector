@@ -247,12 +247,7 @@ export class RegionCatalog {
   }
   private snap(query: RegionQuery, context: Context, line: LineString, tolerance: number) {
     const nearby = [line.coordinates[0], line.coordinates.at(-1)!].flatMap(([x, y]) =>
-      this.tiles.index.segments(query.scope, [
-        x - tolerance,
-        y - tolerance,
-        x + tolerance,
-        y + tolerance,
-      ])
+      this.tiles.segments(query.scope, [x - tolerance, y - tolerance, x + tolerance, y + tolerance])
     );
     const boundaries: Geometry[] = [
       context.available,

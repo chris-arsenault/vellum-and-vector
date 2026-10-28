@@ -21,6 +21,12 @@ interface Tile {
   edges: BoundarySegment[];
   nodes: Map<string, BoundarySegment[]>;
 }
+/** Installs boundary sources for an extent before it is read. Returns the extent actually
+ * covered (clipped to the area) and the bounds of sources whose linework changed. */
+export type PrepareBoundaries = (
+  scope: WorkspaceScope,
+  extent: Bounds
+) => { covered: Bounds | null; changed: Bounds[] };
 function overlaps(a: Bounds, b: Bounds) {
   return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
 }
@@ -41,11 +47,14 @@ function makeTile(
   }
   return { scope, bounds, edges, nodes };
 }
+/** Noded tiles over the boundary index. Preparation is explicit and bounded to the tiles a
+ * query visits; this is the only place that asks the projection to install sources. */
 export class BoundaryTiles {
   private cache = new ByteCache<string, Tile>(regionTopologyCacheBytes);
   constructor(
     readonly index: BoundaryIndex,
     readonly kernel: GeometryKernel,
+    private prepare: PrepareBoundaries,
     readonly size = regionTopologyTileMetres
   ) {}
   invalidate(scope: Pick<WorkspaceScope, "worldId" | "spaceId">, bounds: Bounds) {
@@ -55,6 +64,31 @@ export class BoundaryTiles {
         tile.scope.spaceId === scope.spaceId &&
         overlaps(tile.bounds, bounds)
     );
+  }
+  /** Prepare an extent, dropping cached tiles whose sources changed. */
+  private ensure(scope: WorkspaceScope, extent: Bounds) {
+    const prepared = this.prepare(scope, extent);
+    for (const bounds of prepared.changed) this.invalidate(scope, bounds);
+    return prepared.covered;
+  }
+  segments(scope: WorkspaceScope, extent: Bounds) {
+    this.ensure(scope, extent);
+    return this.index.segments(scope, extent);
+  }
+  *inside(scope: WorkspaceScope, extent: Bounds) {
+    this.ensure(scope, extent);
+    yield* this.index.inside(scope, extent);
+  }
+  /** Expand the eastward search window locally until a crossing appears or the area ends. */
+  nearest(scope: WorkspaceScope, x: number, y: number): BoundarySegment | null {
+    for (let width = this.size; ; width *= 2) {
+      const covered = this.ensure(scope, [x, y, x + width, y]);
+      if (!covered) return null;
+      const east = Math.min(x + width, covered[2]);
+      const hit = this.index.nearest(scope, x, y, east);
+      if (hit) return hit;
+      if (covered[2] < x + width) return null;
+    }
   }
   private base(scope: WorkspaceScope, column: number, row: number, precision: number): Tile {
     const key = JSON.stringify([
@@ -70,7 +104,7 @@ export class BoundaryTiles {
     const x = column * this.size,
       y = row * this.size;
     const bounds: Bounds = [x, y, x + this.size, y + this.size];
-    const edges = this.node(this.index.segments(scope, bounds), bounds, precision);
+    const edges = this.node(this.segments(scope, bounds), bounds, precision);
     const tile = makeTile(scope, bounds, edges, precision);
     this.cache.set(key, tile, edges.length * 512 + 128);
     return tile;

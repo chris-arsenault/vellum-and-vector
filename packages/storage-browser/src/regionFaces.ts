@@ -65,7 +65,7 @@ function* seamProbes(shape: Geometry, bounds: Bounds, precision: number) {
 export class RegionFaces {
   constructor(private tiles: BoundaryTiles) {}
   private start(scope: WorkspaceScope, graph: BoundaryGraph, x: number, y: number) {
-    const source = this.tiles.index.nearest(scope, x, y);
+    const source = this.tiles.nearest(scope, x, y);
     const hits = [...graph.dynamic, ...(source ? [source] : [])].flatMap((s) => {
       const hit = rayCrossing(s, x, y);
       return hit === null ? [] : [hit];
@@ -162,7 +162,7 @@ export class RegionFaces {
   private *candidates(scope: WorkspaceScope, graph: BoundaryGraph, bounds: Bounds) {
     const local = graph.dynamic.slice().sort((a, b) => Math.min(a.ax, a.bx) - Math.min(b.ax, b.bx));
     let at = 0;
-    for (const s of this.tiles.index.inside(scope, bounds)) {
+    for (const s of this.tiles.inside(scope, bounds)) {
       while (at < local.length && Math.min(local[at].ax, local[at].bx) <= Math.min(s.ax, s.bx))
         yield local[at++];
       yield s;

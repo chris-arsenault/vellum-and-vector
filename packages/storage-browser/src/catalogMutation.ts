@@ -104,8 +104,8 @@ export class CatalogMutation {
         "Write must belong to the command's world."
       );
       this.requireExpected(changes, record.reference);
-      this.parts.registry.changed(world.id, record.reference, record);
       this.put(record, result.value.revision, world, extents, geometry, undoOf);
+      // Followers link to this identity, so one marking after the write covers old and new.
       this.parts.registry.changed(world.id, record.reference, record);
     }
     for (const remove of changes.removes) {

@@ -273,7 +273,7 @@ export class RegistryCatalog {
     }
     const b = input.extent,
       precision = world.reference.precision ?? 1e-6;
-    this.kernel.withGeometry(rectangle(b), precision, (target) => {
+    this.kernel.withShape(rectangle(b), precision, (target) => {
       const stmt = this.db.prepare(`SELECT r.row_id,r.feature_id,r.area_id FROM registry_cache r
         JOIN registry_bounds b USING(row_id) WHERE r.world_id=? AND b.min_x<=? AND b.max_x>=? AND b.min_y<=? AND b.max_y>=?`);
       try {

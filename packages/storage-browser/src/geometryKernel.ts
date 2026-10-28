@@ -34,7 +34,20 @@ export class GeometryKernel {
   private get geos() {
     return this.native;
   }
+  /** Validated conversion for geometry entering storage or an overlay. */
   withGeometry<T>(value: Geometry, precision: number, work: (geometry: number) => T): T {
+    return this.convert(value, precision, true, work);
+  }
+  /** Trusted conversion for query shapes and already-stored geography: no validity pass. */
+  withShape<T>(value: Geometry, precision: number, work: (geometry: number) => T): T {
+    return this.convert(value, precision, false, work);
+  }
+  private convert<T>(
+    value: Geometry,
+    precision: number,
+    validate: boolean,
+    work: (geometry: number) => T
+  ): T {
     const g = this.geos,
       text = new TextEncoder().encode(JSON.stringify(value));
     const buffer = g.Module._malloc(text.byteLength + 1);
@@ -44,7 +57,12 @@ export class GeometryKernel {
       g.Module.HEAPU8.set(text, buffer);
       g.Module.HEAPU8[buffer + text.byteLength] = 0;
       raw = g.GEOSGeoJSONReader_readGeometry(this.reader, buffer);
-      requireThat(raw && g.GEOSisValid(raw) === 1, "invalid_geometry", "Geometry must be valid.");
+      requireThat(raw, "invalid_geometry", "Geometry must be readable.");
+      requireThat(
+        !validate || g.GEOSisValid(raw) === 1,
+        "invalid_geometry",
+        "Geometry must be valid."
+      );
       geometry = g.GEOSGeom_setPrecision(raw, precision, 0);
       requireThat(
         geometry && g.GEOSisEmpty(geometry) === 0,

@@ -34,6 +34,7 @@ import { PresentationCatalog } from "./presentationCatalog";
 import { exportFeaturePage } from "./exportCatalog";
 import { CatalogMutation } from "./catalogMutation";
 import { PublicationStaging } from "./catalogPublication";
+import { GeometryDerivations } from "./geometryDerivations";
 
 export class SpatialCatalog implements SpatialStore {
   readonly boundaries: BoundaryIndex;
@@ -55,23 +56,31 @@ export class SpatialCatalog implements SpatialStore {
     tileMetres = regionTopologyTileMetres
   ) {
     db.exec(catalogSchema);
+    const derivations = new GeometryDerivations(db, kernel);
     this.journal = new CatalogHistory(db, kernel);
-    this.geography = new FieldGeographyCatalog(db, kernel);
+    this.geography = new FieldGeographyCatalog(db, kernel, derivations);
     this.projection = new CatalogProjection(db, kernel);
-    this.features = new FeatureCatalog(db, kernel, this.projection);
+    this.features = new FeatureCatalog(db, kernel, this.projection, derivations);
     this.registry = new RegistryCatalog(db, this.projection, this.features, kernel);
     this.settlements = new SettlementCatalog(db, this.features);
     this.presentation = new PresentationCatalog(db, this.features);
     this.boundaries = new BoundaryIndex(db, kernel);
-    this.boundaryTiles = new BoundaryTiles(this.boundaries, kernel, tileMetres);
     this.topology = new BoundaryProjection(
       db,
       this.boundaries,
-      this.boundaryTiles,
+      kernel,
+      derivations,
       this.features,
       this.projection
     );
-    this.boundaries.prepare = (scope, extent) => this.topology.ensure(scope, extent);
+    // Tiles ask the projection to install sources for the extent they visit; the projection
+    // reports what changed and never reaches back into the tile cache.
+    this.boundaryTiles = new BoundaryTiles(
+      this.boundaries,
+      kernel,
+      (scope, extent) => this.topology.ensure(scope, extent),
+      tileMetres
+    );
     this.regions = new RegionCatalog(db, this.boundaryTiles, (query) => this.readFeatures(query));
     this.mutation = new CatalogMutation(db, kernel, {
       journal: this.journal,

@@ -8,13 +8,14 @@ import {
 } from "@atlas/domain";
 import type { CatalogRow } from "./catalogRecords";
 import type { GeometryKernel } from "./geometryKernel";
-import { geometryPieceMatches, geometryWindow, writeGeometryPieces } from "./geometryPieces";
+import type { GeometryDerivations } from "./geometryDerivations";
 
 /** Canonical edits still read complete objects. Map products read spatial pieces and overviews. */
 export class DisplayFeatures {
   constructor(
     private db: Database,
-    private kernel: GeometryKernel
+    private kernel: GeometryKernel,
+    private derivations: GeometryDerivations
   ) {}
   read(
     query: FeatureQuery,
@@ -32,10 +33,10 @@ export class DisplayFeatures {
     const precision = context.world.reference.precision ?? 1e-6,
       geometryId = Number(row.geometry_id),
       footprintId = Number(row.footprint_id);
-    writeGeometryPieces(this.db, this.kernel, geometryId, precision);
-    if (footprintId) writeGeometryPieces(this.db, this.kernel, footprintId, precision);
+    this.derivations.ensurePieces(geometryId, precision);
+    if (footprintId) this.derivations.ensurePieces(footprintId, precision);
     if (!this.matches(geometryId, footprintId, query.extent, target)) return null;
-    const inArea = this.kernel.withGeometry(area.footprint, precision, (mask) =>
+    const inArea = this.kernel.withShape(area.footprint, precision, (mask) =>
       this.matches(geometryId, footprintId, this.kernel.bounds(mask), mask)
     );
     if (!inArea) return null;
@@ -51,11 +52,11 @@ export class DisplayFeatures {
   ) {
     const gutter = Math.max(precision * 2, tolerance * 128),
       window: Bounds = [b[0] - gutter, b[1] - gutter, b[2] + gutter, b[3] + gutter];
-    const geometry = geometryWindow(this.db, this.kernel, geometryId, window, precision, tolerance);
+    const geometry = this.derivations.window(geometryId, window, precision, tolerance);
     // A distant glyph or course can have a local affected footprint; retain that full presentation.
     if (!geometry) return undefined;
     const footprint = footprintId
-      ? geometryWindow(this.db, this.kernel, footprintId, window, precision, tolerance)
+      ? this.derivations.window(footprintId, window, precision, tolerance)
       : null;
     return { ...feature, geometry, ...(footprint ? { footprint } : {}), detail: {} };
   }
@@ -72,8 +73,8 @@ export class DisplayFeatures {
   }
   private matches(geometryId: number, footprintId: number, bounds: Bounds, target: number) {
     return (
-      geometryPieceMatches(this.db, this.kernel, geometryId, bounds, target) ||
-      (!!footprintId && geometryPieceMatches(this.db, this.kernel, footprintId, bounds, target))
+      this.derivations.pieceMatches(geometryId, bounds, target) ||
+      (!!footprintId && this.derivations.pieceMatches(footprintId, bounds, target))
     );
   }
 }
