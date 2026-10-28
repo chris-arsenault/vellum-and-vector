@@ -3,6 +3,7 @@ import {
   createAdaptiveField,
   createAdaptiveTopology,
   rectangle,
+  residentBand,
   type AdaptiveLattice,
   type Band,
   type ParameterValues,
@@ -66,7 +67,8 @@ function fixture(size: number) {
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
-    samples: (map.mesh as AdaptiveLattice).leafCells(),
+    samples: residentBand("int32", (map.mesh as AdaptiveLattice).leafCells()),
+    grid: state.surface.coverage,
     fixed: [],
     inherited: false,
     sampling: { maximumSize: size, minimumSize: 3125, featureSamples: 2 },

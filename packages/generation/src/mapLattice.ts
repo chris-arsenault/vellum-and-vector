@@ -5,8 +5,9 @@ import {
   point,
   requireThat,
   spatial,
+  type Band,
   type Grid,
-  generateNumerical,
+  fillBand,
   KeyedHeap,
 } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
@@ -25,7 +26,7 @@ export function checkProgress(
 }
 
 export function adjacency(grid: Grid, diagonal = true) {
-  return (i: number) => (grid.active[i] ? neighbors(grid, i, diagonal) : []);
+  return (i: number) => (grid.active.get(i) ? neighbors(grid, i, diagonal) : []);
 }
 
 export function cellDistance(grid: Grid, a: number, b: number): number {
@@ -34,18 +35,22 @@ export function cellDistance(grid: Grid, a: number, b: number): number {
   return Math.hypot(from.x - to.x, from.y - to.y);
 }
 
+function adaptiveBoundaryCell(grid: Grid, i: number) {
+  const b = gridCellBounds(grid, i),
+    t = grid.topology!;
+  if (
+    b[0] <= grid.bounds[0] ||
+    b[1] <= grid.bounds[1] ||
+    b[2] >= grid.bounds[2] ||
+    b[3] >= grid.bounds[3]
+  )
+    return true;
+  for (let n = t.offsets.get(i), end = t.offsets.get(i + 1); n < end; n++)
+    if (!grid.active.get(t.neighbors.get(n))) return true;
+  return false;
+}
 export function boundaryCell(grid: Grid, i: number): boolean {
-  if (grid.topology) {
-    const b = gridCellBounds(grid, i),
-      t = grid.topology;
-    return (
-      b[0] <= grid.bounds[0] ||
-      b[1] <= grid.bounds[1] ||
-      b[2] >= grid.bounds[2] ||
-      b[3] >= grid.bounds[3] ||
-      Array.from(t.neighbors.subarray(t.offsets[i], t.offsets[i + 1])).some((j) => !grid.active[j])
-    );
-  }
+  if (grid.topology) return adaptiveBoundaryCell(grid, i);
   const x = i % grid.width,
     y = Math.floor(i / grid.width);
   return (
@@ -53,7 +58,7 @@ export function boundaryCell(grid: Grid, i: number): boolean {
     y === 0 ||
     x === grid.width - 1 ||
     y === grid.height - 1 ||
-    [i - 1, i + 1, i - grid.width, i + grid.width].some((j) => !grid.active[j])
+    [i - 1, i + 1, i - grid.width, i + grid.width].some((j) => !grid.active.get(j))
   );
 }
 
@@ -74,19 +79,15 @@ export function movableTerrain(state: GenerationState) {
         (f.state === "authored" && !patches.some((p) => p.fieldId === f.id))) &&
       (f.channels ?? [f.layerId]).some((c) => ["elevation", "bedrock", "sediment"].includes(c))
   );
-  return generateNumerical(
-    { type: "uint8", length: grid.active.length, lifetime: "process", name: "terrain:movable" },
-    (i) => {
-      const active = grid.active[i];
-      if (!active || (area?.boundary && boundaryCell(grid, i))) return 0;
-      const location = point(gridPosition(grid, i));
-      return patches.some((p) => spatial.covers(p.footprint, location)) ||
-        fixedFields.some((f) => spatial.covers(f.footprint ?? area.footprint, location))
-        ? 0
-        : 1;
-    },
-    state.numerical
-  );
+  return fillBand(grid.coverage.scratch("uint8", "terrain:movable", grid.active.length), (i) => {
+    const active = grid.active.get(i);
+    if (!active || (area?.boundary && boundaryCell(grid, i))) return 0;
+    const location = point(gridPosition(grid, i));
+    return patches.some((p) => spatial.covers(p.footprint, location)) ||
+      fixedFields.some((f) => spatial.covers(f.footprint ?? area.footprint, location))
+      ? 0
+      : 1;
+  });
 }
 
 export function epochYears(context: MapProcessContext, fallback = 1): number {
@@ -119,9 +120,9 @@ export function smoothNoise(x: number, y: number, seed: number): number {
 /** Lowest cell first by its height at push time; ties to the lower cell. `pop()` gives -1 when empty. */
 export class CellHeap {
   private readonly cells = new KeyedHeap("min");
-  constructor(private readonly heights: ArrayLike<number>) {}
+  constructor(private readonly heights: Band) {}
   push(cell: number) {
-    this.cells.push(cell, this.heights[cell]);
+    this.cells.push(cell, this.heights.get(cell));
   }
   pop() {
     return this.cells.pop();

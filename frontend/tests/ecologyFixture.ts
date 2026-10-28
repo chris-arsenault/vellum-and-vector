@@ -1,4 +1,4 @@
-import { builtinLayers, createAdaptiveField, createAdaptiveTopology } from "@atlas/domain";
+import { Band, builtinLayers, createAdaptiveField, createAdaptiveTopology } from "@atlas/domain";
 import { landscape } from "../../packages/generation/src/mapFixtures";
 import {
   adaptivePhysicalMesh,
@@ -24,7 +24,12 @@ export function ecologicalPolygons() {
     profile: atlasPhysicalProfile(),
     fixed: [],
     inherited: false,
-    samples: (map.mesh as AdaptiveLattice).leafCells(),
+    samples: Band.over(
+      (map.mesh as AdaptiveLattice).leafCells(),
+      { name: "physical:samples", type: "int32", lifetime: "run" },
+      state.surface.coverage.cache
+    ),
+    grid: state.surface.coverage,
     sampling: { maximumSize: 250, minimumSize: 250, featureSamples: 2 },
   };
   map.Elevation.fill(100 * 1024);

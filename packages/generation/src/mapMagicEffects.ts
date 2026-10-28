@@ -23,8 +23,8 @@ export const materialMagicProcess: MapProcess = {
     contribute(state, context) {
       const grid = state.surface;
       if (!grid.channels.naturalRock)
-        putChannel(grid, "naturalRock", "ratio", grid.channels.rock.slice());
-      grid.channels.rock.set(grid.channels.naturalRock);
+        putChannel(grid, "naturalRock", "ratio", grid.coverage.copyBand(grid.channels.rock));
+      grid.channels.rock.copyFrom(grid.channels.naturalRock);
       const pressure = surfaceArray(state, "magic:coastal-pressure");
       for (const source of state.domain.world.magic) {
         if (
@@ -34,17 +34,17 @@ export const materialMagicProcess: MapProcess = {
         )
           continue;
         const values = surfaceValues(state, `magic:${source.id}`, (i) =>
-          grid.active[i] ? magicalForcing(state, context, source, i) : 0
+          grid.active.get(i) ? magicalForcing(state, context, source, i) : 0
         );
         const key = `magic:${source.id}`;
         putChannel(grid, key, "ratio", values);
         for (let i = 0; i < values.length; i++) {
           if (source.effect === "erosionResistance")
-            grid.channels.rock[i] = Math.max(
-              0.1,
-              Math.min(1, grid.channels.rock[i] + values[i] / 1000)
+            grid.channels.rock.set(
+              i,
+              Math.max(0.1, Math.min(1, grid.channels.rock.get(i) + values.get(i) / 1000))
             );
-          if (source.effect === "pressure") pressure[i] += Math.abs(values[i]);
+          if (source.effect === "pressure") pressure.add(i, Math.abs(values.get(i)));
         }
         context.recordCause({
           kind: "magic",

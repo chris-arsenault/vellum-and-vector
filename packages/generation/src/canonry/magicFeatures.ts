@@ -182,7 +182,8 @@ function projectedMagicValues(
     (i) => values.get(i) / work.map.mesh.area(i)
   );
   const output = projectedValues(work, density);
-  for (let i = 0; i < output.length; i++) output[i] *= state.surface.measures[i];
+  for (let i = 0; i < output.length; i++)
+    output.set(i, output.get(i) * state.surface.measures.get(i));
   releaseWorking(work.map, density);
   return output;
 }

@@ -46,7 +46,8 @@ function fixture(pattern: "plane" | "coast" | "island") {
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
-    samples: new Int32Array(0),
+    samples: state.surface.coverage.scratch("int32", "physical:samples", 0),
+    grid: state.surface.coverage,
     fixed: [],
     inherited: false,
     sampling: { maximumSize: map.mesh.spacing, minimumSize: map.mesh.spacing, featureSamples: 2 },

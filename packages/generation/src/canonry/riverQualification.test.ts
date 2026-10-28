@@ -5,7 +5,7 @@ import { atlasPhysicalProfile } from "./atlasProfile";
 import { physicalContext } from "./context";
 import { riverNetwork } from "./rivers";
 import { secondsPerYear, depthRateToDischarge } from "./dimensions";
-import { createGrid, rectangle, type Profile } from "@atlas/domain";
+import { createGrid, rectangle, residentBand, type Profile } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { extractNativeGeography } from "./atlasFeatures";
 import { riverChannelGeometry } from "./channelGeometry";
@@ -66,7 +66,8 @@ function publish(map: PhysicalField, profileName: Profile = "world") {
   state.physical = {
     map,
     profile,
-    samples: new Int32Array(0),
+    samples: residentBand("int32", new Int32Array(0)),
+    grid: state.surface.coverage,
     fixed: [],
     inherited: false,
     sampling: { maximumSize: map.mesh.spacing, minimumSize: map.mesh.spacing, featureSamples: 2 },

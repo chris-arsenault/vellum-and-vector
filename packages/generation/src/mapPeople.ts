@@ -29,11 +29,11 @@ export function* landCells(state: GenerationState) {
 }
 export function suitability(state: GenerationState, i: number) {
   const grid = state.surface;
-  const temperature = grid.channels.temperature?.[i] ?? 15;
-  const rain = grid.channels.rainfall?.[i] ?? 0.5;
+  const temperature = grid.channels.temperature?.get(i) ?? 15;
+  const rain = grid.channels.rainfall?.get(i) ?? 0.5;
   return (
     (Math.exp(-Math.abs(temperature - 16) / 20) * (0.2 + Math.min(1, rain))) /
-    (1 + Math.max(0, grid.channels.elevation[i]) / 1500)
+    (1 + Math.max(0, grid.channels.elevation.get(i)) / 1500)
   );
 }
 export function centers(

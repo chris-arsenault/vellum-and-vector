@@ -3,6 +3,7 @@ import {
   builtinLayers,
   createAdaptiveField,
   createAdaptiveTopology,
+  generateChannel,
   gridPosition,
   neighbors,
   putChannel,
@@ -55,7 +56,7 @@ function fixture() {
     state.surface,
     "elevation",
     "metre",
-    new Float64Array(state.surface.active.length).fill(100)
+    generateChannel(state.surface, "elevation", () => 100)
   );
   const context: MapProcessContext = {
     scope: state.domain.scope,
@@ -92,8 +93,8 @@ function town(id: string, x: number): SocietyCommunity {
 it("routes across a supplied seam region by the nearby geographic edge, not through the missing middle of the chart", () => {
   const { state, context } = fixture(),
     grid = state.surface;
-  const west = Array.from(grid.active.keys()).find(
-    (i) => grid.active[i] && gridPosition(grid, i).x < 400
+  const west = Array.from(grid.active, (_, i) => i).find(
+    (i) => grid.active.get(i) && gridPosition(grid, i).x < 400
   )!;
   expect(neighbors(grid, west).some((i) => gridPosition(grid, i).x > 9600)).toBe(true);
   const route = findRoute(grid, { x: 500, y: 4500, z: 0 }, { x: 9500, y: 4500, z: 0 }, "road");

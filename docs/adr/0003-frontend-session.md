@@ -53,7 +53,7 @@ locally. Storage boundaries do not become geographic borders. Display reads
 return a fragment per seam window; the editor keeps every fragment under the
 feature's canonical identity. Render workers register a raster by the immutable
 resources it samples and update viewport geography in place; immutable inputs
-decode once into resident arrays.
+are bands over their chunks in the renderer's block cache.
 Raster ranges and category legends include applicable patches and finer map coverage.
 The UI and each worker initialize the same GEOS spatial adapter. There is no JSTS
 fallback or snapshot-based session engine. Released snapshot saves retain a narrow
@@ -67,16 +67,18 @@ working map and report stage progress. The physical world is a coverage of typed
 over a block-major lattice: a band is blocks of one native typed-array type, a read is
 two indexings, and a block cache keeps blocks resident within the worker's budget and
 spills them to worker-owned scratch beyond it, owning process lifetimes, release and
-retention either way (`docs/WORLD-COVERAGE-DESIGN.md`). The surface grid's channels are
-native typed arrays within the same budget through the numerical arena. No indirection
+retention either way (`docs/WORLD-COVERAGE-DESIGN.md`). Grids, adaptive topologies,
+society and committed field inputs are coverages in the same cache; an input band
+decodes the chunks under each block on demand and reloads them instead of spilling.
+Grids cross a worker port only as detached arrays (previews, tile grids). No indirection
 sits on the sample path. Canonical feature inputs arrive in revision-pinned pages. The
 catalog worker serves the editor's own requests ahead of queued generation and render
 traffic, so publication batches never delay a scene read. Private SQLite tables keep the source baseline separate from generated features,
 network reaches and junctions. Processes read detached domain values and explicitly write
 changes; protection checks, identity reuse and publication compare against the source records.
 Contour edges use indexed working tables; face assembly consumes bounded line batches through
-the geometry kernel. Numerical queues, rankings and transient channels share the execution
-allocator. Native geometry assembly still scales with the size of an individual feature.
+the geometry kernel. Numerical queues, rankings and transient channels share the
+operation's block cache. Native geometry assembly still scales with the size of an individual feature.
 Cancellation belongs to the host: it asks the worker to stop, terminates it after a
 short grace period, and discards its staged batches and working files.
 Per the user's 2026-10-24 direction, initial generation shows independent sampled

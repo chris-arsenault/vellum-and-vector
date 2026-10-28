@@ -77,9 +77,12 @@ function latticeMembership(grid: GridSurface, channel: string, width: number) {
   let previous = -1,
     held: { codes: number[]; mask: number[] };
   return (cell: number) => {
-    if (cell !== previous || !values.immutable || !active.immutable) {
+    if (cell !== previous || !values.schema.immutable || !active.schema.immutable) {
       const corners = [cell, cell + 1, cell + width, cell + width + 1];
-      held = { codes: corners.map((i) => values[i]), mask: corners.map((i) => active[i]) };
+      held = {
+        codes: corners.map((i) => values.get(i)),
+        mask: corners.map((i) => active.get(i)),
+      };
       previous = cell;
     }
     return held;
@@ -96,7 +99,7 @@ function baseClassSampler(grid: GridSurface, channel: string, locate: AdaptivePo
     let patch = patches.get(code);
     if (!patch) {
       patch = prepareAdaptivePatches(t, (leaf: number) =>
-        active[leaf] && values[leaf] === code ? 1 : 0
+        active.get(leaf) && values.get(leaf) === code ? 1 : 0
       );
       patches.set(code, patch);
     }
@@ -109,10 +112,10 @@ function baseClassSampler(grid: GridSurface, channel: string, locate: AdaptivePo
     if (codes) return codes;
     const found = new Set<number>();
     const visit = (cell: number, ring: number) => {
-      if (active[cell]) found.add(values[cell]);
+      if (active.get(cell)) found.add(values.get(cell));
       if (!ring) return;
-      for (let at = t.offsets[cell]; at < t.offsets[cell + 1]; at++)
-        visit(t.neighbors[at], ring - 1);
+      for (let at = t.offsets.get(cell); at < t.offsets.get(cell + 1); at++)
+        visit(t.neighbors.get(at), ring - 1);
     };
     visit(leaf, 2);
     codes = [...found];
@@ -125,8 +128,8 @@ function baseClassSampler(grid: GridSurface, channel: string, locate: AdaptivePo
     const { leaf, u, v } = locate(t, x, y);
     if (leaf < 0) return NaN;
     const codes = candidatesAt(leaf);
-    if (codes.length <= 1) return codes[0] ?? values[leaf];
-    let best = values[leaf],
+    if (codes.length <= 1) return codes[0] ?? values.get(leaf);
+    let best = values.get(leaf),
       bestValue = -Infinity;
     for (const code of codes) {
       const value = evaluatePreparedAdaptiveCell(membership(code)(leaf), u, v);

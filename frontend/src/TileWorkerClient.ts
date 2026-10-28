@@ -1,4 +1,4 @@
-import type { GridSurface } from "@atlas/domain";
+import { detachGrid, type GridSurface } from "@atlas/domain";
 import { resourceRaster, type Raster } from "./types";
 import type { TileMessage, TileReply } from "./tileProtocol";
 import { connectAtlasWorker } from "./connectAtlasWorker";
@@ -60,7 +60,7 @@ export class TileWorkerClient {
     if (!entry) {
       entry = { id: ++this.sequence, users: 0 };
       this.grids.set(grid, entry);
-      this.send({ kind: "grid", id: entry.id, grid });
+      this.send({ kind: "grid", id: entry.id, grid: detachGrid(grid) });
     }
     entry.users++;
     return entry.id;

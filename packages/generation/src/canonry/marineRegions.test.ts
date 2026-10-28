@@ -4,6 +4,7 @@ import {
   createAdaptiveTopology,
   createGrid,
   rectangle,
+  residentBand,
   spatial,
   type Band,
 } from "@atlas/domain";
@@ -149,7 +150,8 @@ function publicationFixture(map: ReturnType<typeof fixture>) {
   state.physical = {
     map,
     profile: { ...atlasPhysicalProfile(), ShelfBreakDepth: 800 },
-    samples: new Int32Array(15),
+    samples: residentBand("int32", new Int32Array(15)),
+    grid: state.surface.coverage,
     fixed: [],
     inherited: false,
     sampling: { maximumSize: 50_000, minimumSize: 25_000, featureSamples: 2 },

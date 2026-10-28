@@ -1,56 +1,53 @@
 import type { Bounds } from "./spatial";
-import type { NumericalAllocator, NumericalVector } from "./numericalVector";
-import { allocateNumerical } from "./numericalAllocation";
 import {
   allocateAdaptiveTree,
   releaseAdaptiveTree,
   splitTreeBox,
   type AdaptiveTreeData,
 } from "./adaptiveTree";
+import { BlockCache } from "./lattice/blockCache";
+import type { Band } from "./lattice/band";
+import { sampleCoverage } from "./lattice/bandValues";
 
 const decisionChunkSamples = 16_384;
-/** Disposable decisions keep a refiner's call order independent of allocation and writing. */
+/**
+ * Disposable decisions keep a refiner's call order independent of allocation and writing.
+ * They are planned before the tree's size is known, so they grow in chunk bands.
+ */
 class TreeDecisions {
-  private chunks: NumericalVector[] = [];
+  private readonly coverage;
+  private chunks: Band[] = [];
   length = 0;
-  constructor(private numerical?: NumericalAllocator) {}
+  constructor(cache: BlockCache) {
+    this.coverage = sampleCoverage(decisionChunkSamples, cache);
+  }
   push(split: boolean) {
     if (this.length % decisionChunkSamples === 0)
-      this.chunks.push(
-        allocateNumerical(
-          {
-            type: "uint8",
-            length: decisionChunkSamples,
-            lifetime: "process",
-            name: "adaptive:decisions",
-          },
-          this.numerical
-        )
-      );
-    this.chunks.at(-1)![this.length++ % decisionChunkSamples] = Number(split);
+      this.chunks.push(this.coverage.scratch("uint8", "adaptive:decisions", decisionChunkSamples));
+    this.chunks.at(-1)!.set(this.length++ % decisionChunkSamples, Number(split));
   }
   read(index: number) {
-    return this.chunks[Math.floor(index / decisionChunkSamples)][index % decisionChunkSamples];
+    return this.chunks[Math.floor(index / decisionChunkSamples)].get(index % decisionChunkSamples);
   }
   close() {
-    if (this.numerical) for (const chunk of this.chunks) this.numerical.release(chunk);
+    for (const chunk of this.chunks) this.coverage.release(chunk);
     this.chunks = [];
   }
 }
 export function buildAdaptiveTree(
   bounds: Bounds,
   refine: (box: Bounds, level: number) => boolean,
-  numerical?: NumericalAllocator
+  cache: BlockCache = new BlockCache(Infinity)
 ): AdaptiveTreeData {
-  const decisions = new TreeDecisions(numerical);
+  const decisions = new TreeDecisions(cache);
   try {
     const leaves = planTree(bounds, refine, decisions),
-      tree = allocateAdaptiveTree(bounds, decisions.length, leaves, numerical);
+      tree = allocateAdaptiveTree(bounds, decisions.length, leaves, cache);
     try {
       writeTree(tree, decisions);
       return tree;
     } catch (error) {
-      releaseAdaptiveTree(tree, numerical);
+      releaseAdaptiveTree(tree);
       throw error;
     }
   } finally {
@@ -77,16 +74,16 @@ function writeTree(tree: AdaptiveTreeData, decisions: TreeDecisions) {
     nextDecision = 0,
     leaf = 0;
   const write = (node: number, box: Bounds, level: number) => {
-    tree.boxes.set(box, node * 4);
-    tree.levels[node] = level;
+    for (let k = 0; k < 4; k++) tree.boxes.set(node * 4 + k, box[k]);
+    tree.levels.set(node, level);
     if (decisions.read(nextDecision++)) {
       const child = nextNode;
       nextNode += 4;
-      tree.children[node] = child;
+      tree.children.set(node, child);
       splitTreeBox(box).forEach((bounds, i) => write(child + i, bounds, level + 1));
     } else {
-      tree.leaves[leaf] = node;
-      tree.leafIndex[node] = leaf++;
+      tree.leaves.set(leaf, node);
+      tree.leafIndex.set(node, leaf++);
     }
   };
   write(0, tree.bounds, 0);

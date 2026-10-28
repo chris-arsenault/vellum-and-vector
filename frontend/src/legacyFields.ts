@@ -1,23 +1,29 @@
 import {
+  attachGrid,
+  Band,
   gridType,
   requireThat,
   type DomainSnapshot,
+  type GridArrays,
   type GridSurface,
   type ChangeSet,
 } from "@atlas/domain";
 
 /** Only explicit imports of the released IndexedDB format contain resident grids. Mint
- * immutable resource identities because that format allowed arrays to change in place. */
+ * immutable resource identities because that format allowed arrays to change in place.
+ * That format stored plain typed arrays; they become resident bands here. */
 export class LegacyFields {
   private ids = new WeakMap<GridSurface, string>();
   prepare(source: DomainSnapshot) {
     const artifacts: NonNullable<ChangeSet["fieldArtifacts"]> = [];
-    const publish = (grid: GridSurface | undefined) => {
-      requireThat(grid, "saved_field", "A saved numerical field is missing its samples.");
-      const previous = this.ids.get(grid);
+    const publish = (saved: GridSurface | undefined) => {
+      requireThat(saved, "saved_field", "A saved numerical field is missing its samples.");
+      const previous = this.ids.get(saved);
       if (previous) return previous;
       const id = crypto.randomUUID();
-      this.ids.set(grid, id);
+      this.ids.set(saved, id);
+      const grid =
+        saved.active instanceof Band ? saved : attachGrid(saved as unknown as GridArrays);
       const { overlays, ...samples } = grid;
       void overlays;
       artifacts.push({

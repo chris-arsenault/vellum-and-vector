@@ -32,7 +32,7 @@ export function coldAgeWorks(state: GenerationState, c: SocietyCommunity): Socie
   if (reaches("quarrying", "magic:aurora:feature:prism", 1, 30_000)) kinds.push("quarrying");
   const shore = isWorldSociety(state)
     ? hasMedium(state, { communityId: c.id, kind: "weir" })
-    : state.society!.coast[i] > 0;
+    : i >= 0 && state.society!.coast.get(i) > 0;
   if (shore && population(c) >= 100) kinds.push("weir");
   return kinds;
 }

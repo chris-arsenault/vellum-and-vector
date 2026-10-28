@@ -1,4 +1,5 @@
 import { expect, it, vi } from "vitest";
+import { generateBand } from "@atlas/domain";
 import { ProductLedger, bindNativeFacts, processRequirements } from "./productLedger";
 import { MapRunner } from "./mapRunner";
 import { preflight } from "./preflight";
@@ -65,7 +66,14 @@ function nativeState(): GenerationState {
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
-    samples: new Int32Array(state.surface.active.length),
+    samples: generateBand(
+      state.surface.coverage,
+      "int32",
+      "physical:samples",
+      () => 0,
+      state.surface.active.length
+    ),
+    grid: state.surface.coverage,
     fixed: [],
     inherited: false,
     sampling: { maximumSize: 1000, minimumSize: 1000, featureSamples: 2 },
@@ -105,8 +113,9 @@ it("commits native to atlas to native transitions once and serializes observed s
       registry
     ).run(nativeState(), options);
     expect(spy).toHaveBeenCalledTimes(4);
-    const cloned = structuredClone(result.state);
-    expect([...cloned.physical!.map.AvailableFacts]).toContain("Ocean");
+    // Bands stay with their block cache; the observed fact set itself is an ordinary Set.
+    const cloned = structuredClone(result.state.physical!.map.AvailableFacts);
+    expect([...cloned]).toContain("Ocean");
   } finally {
     spy.mockRestore();
   }

@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import type { Geometry } from "geojson";
 import { fromWorld, point, rectangle, spatial, toWorld, transformGeometry } from "./spatial";
 import { createGrid, gridPosition, neighbors, putChannel, resample, sample } from "./grids";
+import { generateBand } from "./lattice/bandValues";
 import type { SpatialScope } from "./schemas";
 
 const scope = (footprint: Geometry): SpatialScope => ({
@@ -271,7 +272,7 @@ it("refines inherited fields over arbitrary coverage with reciprocal adjacency",
     parent,
     "elevation",
     "metre",
-    Float64Array.from(parent.active, (_v, i) => {
+    generateBand(parent.coverage, "float64", "elevation", (i) => {
       const p = gridPosition(parent, i);
       return 100 + p.x * 2 + p.y;
     })
@@ -292,7 +293,7 @@ it("refines inherited fields over arbitrary coverage with reciprocal adjacency",
   expect(sample(child, "elevation", { x: 6, y: 4, z: 0 })).toBe(116);
   expect([...child.measures].reduce((a, b) => a + b, 0)).toBeCloseTo(spatial.area(triangle), 8);
   for (let i = 0; i < child.active.length; i++)
-    if (child.active[i])
+    if (child.active.get(i))
       for (const j of neighbors(child, i)) expect(neighbors(child, j)).toContain(i);
   expect(() => sample(child, "elevation", { x: 18, y: 18, z: 0 })).toThrow();
 });

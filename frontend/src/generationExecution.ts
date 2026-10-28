@@ -5,6 +5,7 @@ import {
   type MapRunnerOptions,
 } from "@atlas/generation";
 import {
+  detachGrid,
   requireThat,
   type DomainSnapshot,
   type Diagnostic,
@@ -12,7 +13,7 @@ import {
   type NetworkWorkspace,
   type ContourWorkspace,
 } from "@atlas/domain";
-import type { openBlockCache, openNumericalArena, ZarrResources } from "@atlas/storage-browser";
+import type { openBlockCache, ZarrResources } from "@atlas/storage-browser";
 import type { WorkspaceClient } from "./WorkspaceClient";
 import type { WorkspaceFields } from "./workspaceFields";
 import type {
@@ -29,8 +30,7 @@ export interface GenerationExecution {
   networks: NetworkWorkspace;
   sourceNetworks: NetworkWorkspace;
   contours: ContourWorkspace;
-  working: Awaited<ReturnType<typeof openNumericalArena>>;
-  /** The physical coverage's block cache and its scratch file. */
+  /** The block cache every coverage of the run pages through, and its scratch file. */
   blocks: Awaited<ReturnType<typeof openBlockCache>>;
   store: ZarrResources;
   fields: WorkspaceFields;
@@ -70,7 +70,6 @@ export async function executeGeneration(
   });
   const result = await generateAtlas(source, input, {
     ...observers,
-    numerical: execution.working.arena,
     cache: execution.blocks.cache,
     features: execution.features,
     sourceFeatures: execution.sourceFeatures,
@@ -80,12 +79,14 @@ export async function executeGeneration(
     cancelled: execution.cancelled,
     yieldControl,
     async saveBoundary(boundary) {
-      const grid = generationPreview(boundary.state);
-      if (!grid.channels.elevation) return;
+      const preview = generationPreview(boundary.state);
+      if (!preview.channels.elevation) return;
       const label =
         boundary.kind === "epoch"
           ? boundary.ancestry.map((epoch) => epoch.id).join(" / ")
           : "Present geography";
+      // Bands belong to this worker's cache; the small preview crosses as plain arrays.
+      const grid = detachGrid(preview);
       execution.send({ kind: "preview", grid, label }, transferableBuffers(grid));
       await yieldControl();
     },

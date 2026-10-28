@@ -10,7 +10,7 @@ import {
   type PartitionReference,
   type ResourceArray,
   type SampleArray,
-  type NumericalAllocator,
+  type BlockCache,
 } from "@atlas/domain";
 import type { BinaryStore } from "./opfsStore";
 import { ByteCache } from "./byteCache";
@@ -98,7 +98,7 @@ export class ZarrResources implements ResourceStore {
   async describe(id: string) {
     return structuredClone(await this.descriptors.get(id));
   }
-  async openArray(id: string, name: string, allocator: NumericalAllocator) {
+  async openArray(id: string, name: string, blocks: BlockCache) {
     const resource = await this.descriptors.get(id),
       array = resource.arrays.find((a) => a.name === name);
     requireThat(
@@ -116,7 +116,7 @@ export class ZarrResources implements ResourceStore {
       this.store,
       `${prefix(source.resource.id)}/${source.array.name}`,
       source.array,
-      allocator,
+      blocks,
       this.cache
     );
   }

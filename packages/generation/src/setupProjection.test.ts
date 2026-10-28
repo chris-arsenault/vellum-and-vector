@@ -3,6 +3,7 @@ import {
   builtinLayers,
   putChannel,
   rectangle,
+  residentBand,
   canonryMagicPresets,
   spatial,
   type Landmark,
@@ -110,8 +111,13 @@ function region() {
     profile: "region",
     footprint: rectangle([1000, 0, 3000, 1000]),
   };
-  putChannel(state.surface, "impactExcavation", "metre", new Float64Array(10));
-  putChannel(state.surface, "province", "category", new Float64Array(10));
+  putChannel(
+    state.surface,
+    "impactExcavation",
+    "metre",
+    residentBand("float64", Array(10).fill(0))
+  );
+  putChannel(state.surface, "province", "category", residentBand("float64", Array(10).fill(0)));
   domain.world.fields.push({
     id: "parent",
     areaId: "area",

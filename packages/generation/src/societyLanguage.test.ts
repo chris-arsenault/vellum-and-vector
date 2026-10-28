@@ -8,6 +8,8 @@ import {
   populationGroupsSchema,
   storableValue,
   putChannel,
+  everySample,
+  residentBand,
   type PopulationGroup,
 } from "@atlas/domain";
 import { landscape } from "./mapFixtures";
@@ -21,7 +23,12 @@ export function languageFixture() {
   const state = landscape();
   state.domain.world.id = "bc07dcd0-7cba-46b1-8e56-5f7829dde8cb";
   state.domain.world.areas.area.profile = "local";
-  putChannel(state.surface, "elevation", "metre", new Float64Array(10).fill(100));
+  putChannel(
+    state.surface,
+    "elevation",
+    "metre",
+    residentBand("float64", new Float64Array(10).fill(100))
+  );
   const context: MapProcessContext = {
     scope: state.domain.scope,
     invocation: [],
@@ -106,17 +113,17 @@ it("publishes exclusive use alongside overlapping bilingual knowledge", () => {
     { ...group("B", 250), languages: ["A", "B"] },
   ];
   publishCultures(state);
-  expect(state.surface.channels["language:A"][0]).toBe(1);
-  expect(state.surface.channels["language:B"][0]).toBe(1);
-  expect(state.surface.channels["languageUse:A"][0]).toBe(0.75);
-  expect(state.surface.channels["languageUse:B"][0]).toBe(0.25);
+  expect(state.surface.channels["language:A"].get(0)).toBe(1);
+  expect(state.surface.channels["language:B"].get(0)).toBe(1);
+  expect(state.surface.channels["languageUse:A"].get(0)).toBe(0.75);
+  expect(state.surface.channels["languageUse:B"].get(0)).toBe(0.25);
   const merged = mergePopulation(region.communities[0].groups);
   expect(merged).toHaveLength(1);
   expect(languageUse(merged)).toEqual({ A: 0.75, B: 0.25 });
   expect(languageKnowledge(merged)).toEqual({ A: 1, B: 1 });
   region.communities[0].groups = [];
   publishCultures(state);
-  expect(state.surface.channels["languageUse:A"].every((n) => n === 0)).toBe(true);
+  expect(everySample(state.surface.channels["languageUse:A"], (n) => n === 0)).toBe(true);
 });
 it("learns naming usage from multiple connected neighbors without moving people or erasing knowledge", () => {
   const { state, context, region } = languageFixture();
@@ -147,9 +154,9 @@ it("publishes partial knowledge without counting everyone as a speaker", () => {
     },
   ];
   publishCultures(state);
-  expect(state.surface.channels["language:A"][0]).toBe(1);
-  expect(state.surface.channels["language:B"][0]).toBe(0.4);
-  expect(state.surface.channels["languageUse:B"][0]).toBe(0.25);
+  expect(state.surface.channels["language:A"].get(0)).toBe(1);
+  expect(state.surface.channels["language:B"].get(0)).toBe(0.4);
+  expect(state.surface.channels["languageUse:B"].get(0)).toBe(0.25);
 });
 
 it("migration conserves both mixed naming use and overlapping language knowledge", () => {

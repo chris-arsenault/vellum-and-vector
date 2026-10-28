@@ -4,6 +4,7 @@ import {
   isLivelihood,
   putChannel,
   rectangle,
+  residentBand,
   withPracticeShares,
   type PopulationGroup,
   type SocietyRegion,
@@ -102,7 +103,12 @@ it("publishes each polity's character and names it from it after the eras run", 
   state.domain.scope.footprint = rectangle([0, 0, 300000, 100000]);
   state.domain.world.areas.area.footprint = state.domain.scope.footprint;
   state.surface = createGrid("society", state.domain.scope, 13, 5);
-  putChannel(state.surface, "elevation", "metre", new Float64Array(65).fill(100));
+  putChannel(
+    state.surface,
+    "elevation",
+    "metre",
+    residentBand("float64", new Float64Array(65).fill(100))
+  );
   const original = structuredClone(state.domain);
   const context: MapProcessContext = {
     scope: state.domain.scope,

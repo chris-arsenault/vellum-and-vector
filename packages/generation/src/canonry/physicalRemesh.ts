@@ -80,7 +80,8 @@ function transferChannels(
     );
     const target = next[name];
     for (let cell = 0; cell < next.mesh.count; cell++)
-      target.set(cell, transferred[next.mesh.cellToLeaf(cell)]);
+      target.set(cell, transferred.get(next.mesh.cellToLeaf(cell)));
+    transferred.release();
   }
 }
 /** Transfer represented material and history; index-valued diagnostics must be rebuilt. */

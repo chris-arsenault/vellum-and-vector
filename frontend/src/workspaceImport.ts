@@ -3,13 +3,13 @@ import {
   type DomainSnapshot,
   type ChangeSet,
   type History,
-  type NumericalAllocator,
+  type BlockCache,
   sameValue,
 } from "@atlas/domain";
 import { catalogChanges } from "@atlas/application";
 import type { BrowserWorkspace } from "@atlas/storage-browser";
 import { WorkspaceFields } from "./workspaceFields";
-import { openNumericalArena } from "@atlas/storage-browser";
+import { openBlockCache } from "@atlas/storage-browser";
 import { LegacyFields } from "./legacyFields";
 import type { LegacySavedWorld } from "./legacySave";
 import { snapshotRecords } from "./snapshotRecords";
@@ -40,7 +40,7 @@ export async function importState(
   source: DomainSnapshot,
   previous?: DomainSnapshot,
   history?: History,
-  numerical?: NumericalAllocator
+  blocks?: BlockCache
 ) {
   const { snapshot, artifacts } = legacy.prepare(source),
     { world } = snapshot;
@@ -51,8 +51,8 @@ export async function importState(
     await current.catalog.createWorld({ ...worldMetadata(world), version: world.version - 1 });
   const changes = importedChanges(snapshot, previous, history);
   changes.fieldArtifacts = artifacts;
-  const working = await importWorking(numerical);
-  const fields = new WorkspaceFields(current.catalog, current.resources, working.arena);
+  const working = await importWorking(blocks);
+  const fields = new WorkspaceFields(current.catalog, current.resources, working.cache);
   try {
     await fields.publish(changes, world.reference.precision ?? 1e-6);
     const publication = catalogChanges(before, changes, fields.outputs, history?.kind ?? "import");
@@ -75,10 +75,8 @@ export async function importState(
     await working.close();
   }
 }
-async function importWorking(numerical?: NumericalAllocator) {
-  return numerical
-    ? { arena: numerical, close() {} }
-    : openNumericalArena(`import_${crypto.randomUUID()}`);
+async function importWorking(blocks?: BlockCache) {
+  return blocks ? { cache: blocks, close() {} } : openBlockCache(`import_${crypto.randomUUID()}`);
 }
 function importedChanges(
   snapshot: DomainSnapshot,

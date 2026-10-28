@@ -32,10 +32,10 @@ export function workMedium(state: GenerationState, kind: SocietyWorkKind) {
   switch (kind) {
     case "dam":
     case "irrigation":
-      return (i: number) => state.society!.river[i] > 0.2 || v("riverOrder", i) >= 1;
+      return (i: number) => state.society!.river.get(i) > 0.2 || v("riverOrder", i) >= 1;
     case "harbor":
     case "weir":
-      return (i: number) => state.society!.coast[i] > 0;
+      return (i: number) => state.society!.coast.get(i) > 0;
     case "tapping":
       return (i: number) => v("magic:fire:intensity", i) >= 100;
     case "quarrying":
@@ -59,7 +59,7 @@ function* mediumCells(
     medium = workMedium(state, work.kind);
   if (!units.size) return;
   for (let i = 0; i < society.owner.length; i++)
-    if (units.has(society.owner[i]) && dryLand(state, i) && medium(i)) yield i;
+    if (units.has(society.owner.get(i)) && dryLand(state, i) && medium(i)) yield i;
 }
 /** The share of the unit's medium a located work of this radius would have covered. */
 function mediumShare(area: number, radius: number) {
@@ -118,13 +118,13 @@ function mediumTotals(state: GenerationState, communityId: string, kind: Society
     maximum = 0,
     shore = 0;
   for (const i of mediumCells(state, { communityId, kind })) {
-    area += state.surface.measures[i];
+    area += state.surface.measures.get(i);
     if (kind === "irrigation" || kind === "dam") {
       const amount = societyValue(state, "flow", i) * 0.2;
       flow += amount;
       maximum = Math.max(maximum, amount);
     }
-    if (kind === "weir") shore += Math.sqrt(state.surface.measures[i]);
+    if (kind === "weir") shore += Math.sqrt(state.surface.measures.get(i));
   }
   return { area, flow, maximum, shore };
 }
@@ -140,7 +140,7 @@ export function* demandSamples(state: GenerationState, work: SocietyWork) {
   let area = 0;
   for (const i of mediumCells(state, work)) {
     cells.push(i);
-    area += state.surface.measures[i];
+    area += state.surface.measures.get(i);
   }
   const fraction = mediumShare(area, work.radius);
   if (fraction <= 0) return;
@@ -233,7 +233,7 @@ export function realizeDemands(state: GenerationState) {
     const { amount, unit } = work.demand;
     work.position = gridPosition(state.surface, site.cell);
     // The heir whose land holds the site owns the work.
-    work.communityId = state.society!.region.communities[state.society!.owner[site.cell]].id;
+    work.communityId = state.society!.region.communities[state.society!.owner.get(site.cell)].id;
     work.applied = 0;
     work.realizedAt = area;
     delete work.demand;

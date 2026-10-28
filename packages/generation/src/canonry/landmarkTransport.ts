@@ -34,7 +34,8 @@ export function remeshLandmarkDrainage(
     const moved = transfer((leaf) => Number(source.has(leaf)), "category");
     record.corridor = [];
     for (let cell = 0; cell < next.mesh.count; cell++)
-      if (moved[next.mesh.cellToLeaf(cell)] === 1) record.corridor.push(cell);
+      if (moved.get(next.mesh.cellToLeaf(cell)) === 1) record.corridor.push(cell);
+    moved.release();
     if (record.capture) {
       record.capture.x += previous.mesh.origin[0] - next.mesh.origin[0];
       record.capture.y += previous.mesh.origin[1] - next.mesh.origin[1];

@@ -8,12 +8,13 @@ import {
 } from "@atlas/generation";
 import { MapRunner } from "../../packages/generation/src/mapRunner";
 import { constructedWorld } from "./constructedWorldFixture";
+import { numericalValues, snapshotCopy } from "./testSupport/snapshotCopy";
 
 it("publishes conditioned regional geography from supplied parent products without changing the parent", async () => {
   const { input, result } = constructedWorld(),
     parent = generationSnapshot(result, input, crypto.randomUUID()),
-    original = structuredClone(parent),
-    domain = structuredClone(parent),
+    original = snapshotCopy(parent),
+    domain = snapshotCopy(parent),
     areaId = crypto.randomUUID(),
     footprint = rectangle([2200, 100, 3800, 900]);
   domain.world.areas[areaId] = {
@@ -66,8 +67,10 @@ it("publishes conditioned regional geography from supplied parent products witho
   expect(snapshot.world.areas[input.areaId]).toEqual(original.world.areas[input.areaId]);
   expect(snapshot.world.epochs).toEqual(original.world.epochs);
   expect(snapshot.world.features).toMatchObject(original.world.features);
+  const published = numericalValues(snapshot),
+    parentValues = numericalValues(original);
   for (const field of original.world.fields)
-    expect(snapshot.numerical[field.id].channels).toEqual(original.numerical[field.id].channels);
+    expect(published[field.id].channels).toEqual(parentValues[field.id].channels);
   expect(snapshot.world.fields.some((field) => field.areaId === areaId)).toBe(true);
   const elevation = snapshot.world.fields.find(
     (field) => field.areaId === areaId && field.channels?.includes("elevation")

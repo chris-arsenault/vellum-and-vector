@@ -1,5 +1,10 @@
 import { expect, it } from "vitest";
-import { builtinLayers, type SocietyCommunity, type SocietyRegion } from "@atlas/domain";
+import {
+  builtinLayers,
+  residentBand,
+  type SocietyCommunity,
+  type SocietyRegion,
+} from "@atlas/domain";
 import { landscape } from "./mapFixtures";
 import { emptySupport } from "./societySupport";
 import { relocatePolitySeats, settlementHierarchy } from "./societyHierarchy";
@@ -86,10 +91,10 @@ function fixture() {
   };
   state.society = {
     region,
-    owner: new Int32Array(10),
+    owner: residentBand("int32", new Int32Array(10)),
     mediumChanged: new Set(),
-    river: new Float64Array(10),
-    coast: new Float64Array(10),
+    river: residentBand("float64", new Float64Array(10)),
+    coast: residentBand("float64", new Float64Array(10)),
     inherited: false,
     changed: new Set(),
   };

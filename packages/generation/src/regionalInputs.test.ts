@@ -1,5 +1,11 @@
 import { expect, it } from "vitest";
-import { createGrid, putChannel, rectangle, resampleChannels } from "@atlas/domain";
+import {
+  createGrid,
+  generateChannel,
+  putChannel,
+  rectangle,
+  resampleChannels,
+} from "@atlas/domain";
 import { landscape } from "./mapFixtures";
 import { regionalInputFields, regionalInputChannels, regionalResolution } from "./regionalInputs";
 
@@ -21,12 +27,17 @@ function fixture() {
       width,
       3
     );
-    putChannel(grid, "elevation", "metre", new Float64Array(grid.active.length).fill(elevation));
+    putChannel(
+      grid,
+      "elevation",
+      "metre",
+      generateChannel(grid, "elevation", () => elevation)
+    );
     putChannel(
       grid,
       "stock",
       "amount",
-      Float64Array.from(grid.measures, (area) => area * 2),
+      generateChannel(grid, "stock", (i) => grid.measures.get(i) * 2),
       "extensive"
     );
     domain.numerical[id] = grid;
@@ -66,8 +77,11 @@ it("transfers amounts by physical area and resolves recursively within the same 
       9
     );
   resampleChannels(source, target);
-  expect(target.channels.stock.reduce((sum, amount) => sum + amount, 0)).toBeCloseTo(4_000_000, 6);
-  expect(target.channels.elevation.every((height) => height === 200)).toBe(true);
+  expect(Array.from(target.channels.stock).reduce((sum, amount) => sum + amount, 0)).toBeCloseTo(
+    4_000_000,
+    6
+  );
+  expect(Array.from(target.channels.elevation).every((height) => height === 200)).toBe(true);
   expect(target.quantities!.stock).toBe("extensive");
   expect(resolution.cellSpan).toBeLessThan(source.scope.resolution!);
   domain.world.areas.nested = {

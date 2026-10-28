@@ -1,12 +1,16 @@
 import { expect, it } from "vitest";
+import type { Band } from "@atlas/domain";
 import { downscaleRegionalClimate } from "./regionalClimate";
 import { refineRegionalMagic } from "./regionalMagic";
 import { projectMagic, classifyMagicFeatures } from "./magicFeatures";
 import { regionalEnvironmentFixture } from "./regionalEnvironmentFixture";
 
+const channelValues = (channels: Record<string, Band>) =>
+  Object.fromEntries(Object.entries(channels).map(([name, band]) => [name, Array.from(band)]));
+
 it("downscales colder and snowier high ground without changing the parent's climate or ecological age", () => {
   const { state, map, parent } = regionalEnvironmentFixture(),
-    climate = parent.channels.temperature.slice(),
+    climate = Array.from(parent.channels.temperature),
     age = Array.from(map.CanopyAge),
     middle = Math.floor(map.mesh.count / 2);
   map.Elevation.add(middle, 2000 * 1024);
@@ -16,11 +20,11 @@ it("downscales colder and snowier high ground without changing the parent's clim
   expect(map.Rainfall.get(middle)).toBeLessThan(map.Rainfall.get(0));
   expect(map.Temperature.get(0)).toBe(400);
   expect(Array.from(map.CanopyAge)).toEqual(age);
-  expect(parent.channels.temperature).toEqual(climate);
+  expect(Array.from(parent.channels.temperature)).toEqual(climate);
 });
 it("refines seven distinct influences without creating stock or repeating their historical events", () => {
   const { state, map, parent } = regionalEnvironmentFixture(),
-    original = structuredClone(parent.channels),
+    original = channelValues(parent.channels),
     age = Array.from(map.CanopyAge);
   refineRegionalMagic(state, 19);
   const fields = state.physical!.magic!.fields;
@@ -40,13 +44,13 @@ it("refines seven distinct influences without creating stock or repeating their 
   classifyMagicFeatures(state, 19);
   projectMagic(state);
   expect(state.surface.quantities!["magic:fire:stock:vein/held"]).toBe("extensive");
-  expect(state.surface.channels["magic:fire:origin:vein:source"].some((value) => value > 0)).toBe(
-    true
-  );
+  expect(
+    Array.from(state.surface.channels["magic:fire:origin:vein:source"]).some((value) => value > 0)
+  ).toBe(true);
   expect(Array.from(map.CanopyAge)).toEqual(age);
   expect(map.events).toEqual([]);
   expect(map.CompletedEpochCount).toBe(0);
-  expect(parent.channels).toEqual(original);
+  expect(channelValues(parent.channels)).toEqual(original);
 });
 it("does not materialize an absent system or its confluences when refining a nonmagical scene", () => {
   const { state } = regionalEnvironmentFixture(false);

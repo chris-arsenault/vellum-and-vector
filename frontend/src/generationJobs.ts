@@ -1,4 +1,4 @@
-import { requireThat, type World, type Diagnostic, type Grid } from "@atlas/domain";
+import { attachGrid, requireThat, type World, type Diagnostic, type Grid } from "@atlas/domain";
 import { atlasParametersSchema, type AtlasGenerationInput } from "@atlas/generation";
 import { changed } from "./workspaceEvents";
 import { atlasWorkspace, readEditorWorld, rememberWorld } from "./atlasWorkspace";
@@ -159,7 +159,7 @@ async function receive(id: string, message: GenerationWorkspaceMessage) {
       active.job.progress = message.fraction;
       break;
     case "preview":
-      active.preview = { grid: message.grid, label: message.label };
+      active.preview = { grid: attachGrid(message.grid) as Grid, label: message.label };
       break;
     case "published":
       active.job.partial = message.partial;

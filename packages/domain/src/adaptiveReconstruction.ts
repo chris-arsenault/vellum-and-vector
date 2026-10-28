@@ -1,61 +1,20 @@
-import {
-  adaptiveCell,
-  adaptiveGeometry,
-  adaptiveLeafAt,
-  type AdaptiveTopology,
-} from "./adaptiveTopology";
+import { adaptiveCell, adaptiveLeafAt, type AdaptiveTopology } from "./adaptiveTopology";
 import { prepareAdaptivePatches } from "./adaptivePoint";
-import type { NumericalVector } from "./numericalVector";
+import type { Band } from "./lattice/band";
 import { evaluatePreparedAdaptiveCell, type PreparedAdaptiveCell } from "./adaptiveHermite";
 export { evaluateAdaptiveCell } from "./adaptiveHermite";
 
 export interface AdaptiveReconstruction {
   topology: AdaptiveTopology;
-  values: NumericalVector;
+  values: Band;
   corners: Float64Array;
   patches: Float64Array;
   cells: PreparedAdaptiveCell[];
 }
 
-/** Weighted least-squares gradients use all physical neighbors, including split faces. */
-export function adaptiveGradients(
-  topology: AdaptiveTopology,
-  values: ArrayLike<number>,
-  geometry = adaptiveGeometry(topology),
-  selected?: ArrayLike<number>
-) {
-  const x = new Float64Array(values.length),
-    y = new Float64Array(values.length);
-  for (let cell = 0; cell < (selected?.length ?? values.length); cell++) {
-    const i = selected ? selected[cell] : cell;
-    let xx = 0,
-      xy = 0,
-      yy = 0,
-      vx = 0,
-      vy = 0;
-    for (let at = topology.offsets[i]; at < topology.offsets[i + 1]; at++) {
-      const j = topology.neighbors[at];
-      const dx = geometry.x[j] - geometry.x[i],
-        dy = geometry.y[j] - geometry.y[i];
-      const weight = topology.faceLengths[at] / topology.distances[at] ** 2;
-      const delta = values[j] - values[i];
-      xx += weight * dx * dx;
-      xy += weight * dx * dy;
-      yy += weight * dy * dy;
-      vx += weight * dx * delta;
-      vy += weight * dy * delta;
-    }
-    const determinant = xx * yy - xy * xy;
-    if (determinant > 0) {
-      x[i] = (vx * yy - vy * xy) / determinant;
-      y[i] = (vy * xx - vx * xy) / determinant;
-    }
-  }
-  return { x, y };
-}
 export function reconstructAdaptive(
   topology: AdaptiveTopology,
-  values: NumericalVector
+  values: Band
 ): AdaptiveReconstruction {
   const at = prepareAdaptivePatches(topology, values);
   const patches = new Float64Array(values.length * 16),

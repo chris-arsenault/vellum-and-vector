@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { generateBand } from "@atlas/domain";
 import { blockCacheFixture } from "./blockCacheFixture";
 import { landscape } from "../../generation/src/mapFixtures";
 import { createWorldMesh } from "../../generation/src/canonry/worldMesh";
@@ -30,7 +31,14 @@ it("extracts complete connected catchment pieces on disk and releases membership
     state.physical = {
       map,
       profile: atlasPhysicalProfile(),
-      samples: Int32Array.from({ length: mesh.count }, (_, i) => i),
+      samples: generateBand(
+        state.surface.coverage,
+        "int32",
+        "physical:samples",
+        (i) => i,
+        mesh.count
+      ),
+      grid: state.surface.coverage,
       fixed: [],
       inherited: false,
       sampling: { maximumSize: mesh.spacing, minimumSize: mesh.spacing, featureSamples: 2 },

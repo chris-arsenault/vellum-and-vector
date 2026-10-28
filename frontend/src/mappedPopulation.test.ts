@@ -2,6 +2,7 @@ import { readFeature, fixtureState, undoWorld } from "./testSupport/workspaceFix
 import { expect, it } from "vitest";
 import type { PopulationGroup, SocietyCommunity, SocietyRegion } from "@atlas/domain";
 import { mapEditingFixture } from "./mapEditingFixture";
+import { snapshotCopy } from "./testSupport/snapshotCopy";
 import { settlementCommunity } from "./settlementSurfaceData";
 
 async function residentFixture() {
@@ -70,7 +71,7 @@ async function residentFixture() {
 
 it("keeps mapped group edits, settlement totals, inspection and undo coherent without changing retained society", async () => {
   const f = await residentFixture(),
-    before = structuredClone(f.current()),
+    before = snapshotCopy(f.current()),
     feature = await readFeature(f.id, f.town, f.child);
   await f.command("putMapFeature", {
     areaId: f.child,
@@ -114,7 +115,7 @@ it("keeps mapped group edits, settlement totals, inspection and undo coherent wi
 
 it("updates mapped urban counts and resident groups together while keeping the mapped rural population", async () => {
   const f = await residentFixture(),
-    before = structuredClone(f.current()),
+    before = snapshotCopy(f.current()),
     feature = await readFeature(f.id, f.town, f.child);
   await f.command("putMapFeature", {
     areaId: f.child,

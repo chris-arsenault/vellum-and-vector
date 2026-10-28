@@ -15,7 +15,7 @@ import {
   resourceBase,
   type LayoutVector,
 } from "./fieldLayout";
-import { arraySelection, readVectorPartition } from "./resourceVectors";
+import { arraySelection, readBandPartition } from "./resourceVectors";
 import { summarizeField } from "./fieldSummaries";
 
 function layoutVectors(grid: Grid): LayoutVector[] {
@@ -73,7 +73,7 @@ async function writeVectors(
         const spec = arraySelection(vector.array, reference);
         arrays[vector.array.name] = vector.read
           ? vector.read(spec.offset[0], spec.shape[0])
-          : readVectorPartition(vector.values, vector.array, reference);
+          : readBandPartition(vector.values, vector.array, reference);
       }
       await store.writePartition(resource.id, { reference, arrays });
     }

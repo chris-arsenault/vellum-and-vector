@@ -78,7 +78,8 @@ function composeSamples(
       valueAt = gridSampler(source, channel);
     for (let i = 0; i < grid.active.length; i++) {
       const position = gridPosition(grid, i);
-      if (covers(position) && sourceCovers(position)) grid.channels[channel][i] = valueAt(position);
+      if (covers(position) && sourceCovers(position))
+        grid.channels[channel].set(i, valueAt(position));
     }
   }
 }

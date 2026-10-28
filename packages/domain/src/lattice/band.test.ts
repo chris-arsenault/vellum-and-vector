@@ -79,6 +79,24 @@ it("loads from a committed source and keeps writes over it", () => {
   expect(band.get(0)).toBe(3);
   expect(band.get(1)).toBe(100);
 });
+it("keeps a committed input read-only, reloads it without spilling and copies it to write", () => {
+  const file = memoryFile(),
+    cache = new BlockCache(blockCells * 8, new BlockScratch(file)),
+    input = new Band({ ...schema, immutable: true }, blockCells * 4, cache, (block, into) =>
+      into.fill(block + 100)
+    );
+  for (let b = 0; b < input.blockCount; b++) expect(input.get(b * blockCells)).toBe(b + 100);
+  expect(cache.stats.evictions).toBeGreaterThan(0);
+  expect(cache.scratch!.stats.writes).toBe(0);
+  expect(() => input.set(0, 1)).toThrow(/Immutable/);
+  expect(() => input.add(0, 1)).toThrow(/Immutable/);
+  expect(() => input.fill(1)).toThrow(/Immutable/);
+  const copy = input.snapshot();
+  copy.set(0, 1);
+  expect(copy.get(0)).toBe(1);
+  expect(copy.get(blockCells)).toBe(101);
+  expect(input.get(0)).toBe(100);
+});
 it("snapshots copy-on-write across memory and spilled blocks", () => {
   const file = memoryFile(),
     cache = new BlockCache(blockCells * 8 * 2, new BlockScratch(file)),

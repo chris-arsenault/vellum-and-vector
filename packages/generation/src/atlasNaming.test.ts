@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { generate } from "@atlas/name-forge";
-import { rectangle, builtinLayers, putChannel } from "@atlas/domain";
+import { rectangle, builtinLayers, putChannel, residentBand } from "@atlas/domain";
 import { atlasName, geographicNamingCulture } from "./atlasNaming";
 import {
   atlasNamingCultures,
@@ -126,7 +126,7 @@ it("keeps naming cultures geographic and independent of generated feature iterat
 it("uses founding culture profiles for settlements and preserves authored community names", () => {
   const state = fixture();
   state.domain.world.areas.area.profile = "region";
-  putChannel(state.surface, "elevation", "metre", new Float64Array(10).fill(100));
+  putChannel(state.surface, "elevation", "metre", residentBand("float64", Array(10).fill(100)));
   const context: MapProcessContext = {
     scope: state.domain.scope,
     invocation: [],

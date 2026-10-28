@@ -59,11 +59,11 @@ function fishedWaters(state: GenerationState) {
     taken = new Map<number, number>();
   const take = (j: number, load: number) => taken.set(j, Math.max(taken.get(j) ?? 0, load));
   for (let i = 0; i < work.owner.length; i++) {
-    const load = loads[work.owner[i]] ?? 0;
+    const load = loads[work.owner.get(i)] ?? 0;
     if (load <= 0) continue;
-    if (work.river[i] > 0.2) take(i, load);
-    if (work.coast[i] > 0 && water)
-      for (const j of neighbors(grid, i, true, covers)) if (water[j] === 1) take(j, load);
+    if (work.river.get(i) > 0.2) take(i, load);
+    if (work.coast.get(i) > 0 && water)
+      for (const j of neighbors(grid, i, true, covers)) if (water.get(j) === 1) take(j, load);
   }
   return taken;
 }

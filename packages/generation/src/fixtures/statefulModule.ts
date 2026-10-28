@@ -1,6 +1,6 @@
 /** Test-only module, imported explicitly by extension acceptance fixtures. */
 import { z } from "zod";
-import { builtinLayers, putChannel, rectangle } from "@atlas/domain";
+import { builtinLayers, generateChannel, putChannel, rectangle } from "@atlas/domain";
 import type { GenerationModule } from "../generationModules";
 import { generationBindings } from "../generationBindings";
 import type { GenerationState, MapProcess, MapProcessContext } from "../process";
@@ -30,8 +30,8 @@ function initializeInventory(state: GenerationState, context: MapProcessContext)
     state.surface,
     carriedChannel,
     "kilogram",
-    Float64Array.from(state.surface.measures, (area, i) =>
-      state.surface.active[i] ? area * initialDensity : 0
+    generateChannel(state.surface, carriedChannel, (i) =>
+      state.surface.active.get(i) ? state.surface.measures.get(i) * initialDensity : 0
     ),
     "extensive"
   );
@@ -42,7 +42,7 @@ function advanceInventory(state: GenerationState, context: MapProcessContext, ye
     density = Number(context.parameters.deposition) * multiplier * years;
   const grid = state.surface;
   for (let i = 0; i < grid.active.length; i++)
-    if (grid.active[i]) grid.channels[carriedChannel][i] += grid.measures[i] * density;
+    if (grid.active.get(i)) grid.channels[carriedChannel].add(i, grid.measures.get(i) * density);
   context.recordCause({
     kind: "domain",
     process: "test.inventory.advance",
@@ -55,7 +55,7 @@ function extractInventory(state: GenerationState) {
     state.surface,
     inventoryChannel,
     "kilogram",
-    state.surface.channels[carriedChannel].slice(),
+    state.surface.coverage.copyBand(state.surface.channels[carriedChannel]),
     "extensive"
   );
 }

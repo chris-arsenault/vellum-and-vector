@@ -11,7 +11,7 @@ import {
 export function* samplesInBox(grid: Grid, box: Bounds) {
   if (grid.topology) {
     for (const i of overlappingAdaptiveLeaves(grid.topology, box, true))
-      if (grid.active[i]) yield i;
+      if (grid.active.get(i)) yield i;
   } else {
     const [w, s, e, n] = grid.bounds;
     const dx = (e - w) / (grid.width - 1),
@@ -26,7 +26,7 @@ export function* samplesInBox(grid: Grid, box: Bounds) {
         x <= Math.min(grid.width - 1, Math.floor((box[2] - w) / dx));
         x++
       )
-        if (grid.active[y * grid.width + x]) yield y * grid.width + x;
+        if (grid.active.get(y * grid.width + x)) yield y * grid.width + x;
   }
 }
 

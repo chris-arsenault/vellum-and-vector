@@ -1,11 +1,12 @@
 import { expect, it } from "vitest";
 import { adaptiveCell, createAdaptiveTopology } from "./adaptiveTopology";
 import { adaptivePointSampler } from "./adaptivePoint";
+import { generateBand } from "./lattice/bandValues";
 
 it("retains the same reconstructed plane after visiting enough cells to evict derived geometry and fits", () => {
   const topology = createAdaptiveTopology([0, 0, 64, 64], { maximumSize: 1, minimumSize: 1 });
   const plane = (x: number, y: number) => 100 + x * 3 - y * 0.25;
-  const values = Float64Array.from(topology.leaves, (_, i) => {
+  const values = generateBand(topology.coverage, "float64", "plane", (i) => {
     const [x0, y0, x1, y1] = adaptiveCell(topology, i);
     return plane((x0 + x1) / 2, (y0 + y1) / 2);
   });

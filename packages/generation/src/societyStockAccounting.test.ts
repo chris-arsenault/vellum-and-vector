@@ -1,8 +1,10 @@
 import { expect, it } from "vitest";
 import {
   canonryMagicPresets,
+  generateBand,
   gridPosition,
   putChannel,
+  residentBand,
   type SocietyCommunity,
   type SocietyMagicPractice,
 } from "@atlas/domain";
@@ -45,7 +47,12 @@ function fixture() {
     count = state.surface.active.length;
   state.domain.world.id = "bc07dcd0-7cba-46b1-8e56-5f7829dde8cb";
   state.domain.world.magicSystems = [];
-  putChannel(state.surface, "temperature", "celsius", new Float64Array(count).fill(20));
+  putChannel(
+    state.surface,
+    "temperature",
+    "celsius",
+    residentBand("float64", new Float64Array(count).fill(20))
+  );
   const communities: SocietyCommunity[] = [1, 3].map((sample, i) => ({
     id: `town-${i}`,
     name: `Town ${i}`,
@@ -78,9 +85,9 @@ function fixture() {
       events: [],
       magic: communities.map((c) => practice(c.id)),
     },
-    owner: new Int32Array(count),
-    river: new Float64Array(count),
-    coast: new Float64Array(count),
+    owner: residentBand("int32", new Int32Array(count)),
+    river: residentBand("float64", new Float64Array(count)),
+    coast: residentBand("float64", new Float64Array(count)),
     inherited: false,
     changed: new Set(),
     mediumChanged: new Set(),
@@ -113,7 +120,7 @@ it.each([0, 10, 60, 80, 100])(
   (years) => {
     const { state, context, region } = tradeFixture(),
       people = structuredClone(region.communities.map((c) => c.groups)),
-      elevation = state.surface.channels.elevation.slice(),
+      elevation = Array.from(state.surface.channels.elevation),
       connection = structuredClone(region.connections);
     useSocietyMagic(state, context, years);
     for (const ledger of ledgers) {
@@ -126,7 +133,7 @@ it.each([0, 10, 60, 80, 100])(
       expect(a + b + consumed).toBeCloseTo(100, 10);
     }
     expect(region.communities.map((c) => c.groups)).toEqual(people);
-    expect(state.surface.channels.elevation).toEqual(elevation);
+    expect(Array.from(state.surface.channels.elevation)).toEqual(elevation);
     expect(region.connections).toEqual(connection);
   }
 );
@@ -160,7 +167,7 @@ function miningFixture(availableCores: number) {
     state.surface,
     "magic:fire:intensity",
     "relative-intensity",
-    new Float64Array(state.surface.active.length).fill(1000)
+    residentBand("float64", new Float64Array(state.surface.active.length).fill(1000))
   );
   const map = createField(
     createAdaptiveWorldMesh(
@@ -169,14 +176,21 @@ function miningFixture(availableCores: number) {
       0
     )
   );
-  const samples = Int32Array.from(state.surface.active, (_, i) => {
-    const p = gridPosition(state.surface, i);
-    return nearestTriangle(map.mesh, p.x - map.mesh.origin[0], p.y - map.mesh.origin[1]);
-  });
+  const samples = generateBand(
+    state.surface.coverage,
+    "int32",
+    "physical-samples",
+    (i) => {
+      const p = gridPosition(state.surface, i);
+      return nearestTriangle(map.mesh, p.x - map.mesh.origin[0], p.y - map.mesh.origin[1]);
+    },
+    state.surface.active.length
+  );
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
     samples,
+    grid: state.surface.coverage,
     fixed: [],
     inherited: false,
     sampling: { maximumSize: 1000, minimumSize: 1000, featureSamples: 2 },
@@ -186,7 +200,7 @@ function miningFixture(availableCores: number) {
     origin = fire.definition.origins.find((o) => o.stocks.some((s) => s.reservoir === "held"))!,
     stock = origin.stocks.find((s) => s.reservoir === "held")!,
     held = fire.stocks[stockKey(origin, stock)],
-    cell = samples[1],
+    cell = samples.get(1),
     other = (cell + 1) % held.length;
   held.set(cell, availableCores * coreAmount);
   held.set(other, 7 * coreAmount);
@@ -195,7 +209,7 @@ function miningFixture(availableCores: number) {
 }
 it.each([0, 2, 100])("backs mining and forging with the %i available live cores", (available) => {
   const { state, context, region, fire, held, cell, other } = miningFixture(available),
-    elevation = state.surface.channels.elevation.slice();
+    elevation = Array.from(state.surface.channels.elevation);
   useSocietyMagic(state, context, 10);
   const p = region.magic[0],
     extracted = Math.min(20, available),
@@ -210,7 +224,7 @@ it.each([0, 2, 100])("backs mining and forging with the %i available live cores"
     held.get(cell) + reservoirAmount(fire, "forge", cell) + p.coreSupply * coreAmount
   ).toBeCloseTo(available * coreAmount, 5);
   expect(fire.lost).toBeCloseTo(p.coreSupply * coreAmount, 5);
-  expect(state.surface.channels.elevation).toEqual(elevation);
+  expect(Array.from(state.surface.channels.elevation)).toEqual(elevation);
 });
 it("cannot mine a depleted reservoir again or mine the cores already cracked at its forge", () => {
   const { state, context, region, fire, cell } = miningFixture(2);

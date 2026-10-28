@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import {
   builtinLayers,
   createGrid,
+  generateChannel,
   population,
   putChannel,
   rectangle,
@@ -116,7 +117,7 @@ function fixture() {
       state.surface,
       key,
       key === "elevation" ? "metre" : "index",
-      new Float64Array(117).fill(value)
+      generateChannel(state.surface, key, () => value)
     );
   const context: MapProcessContext = {
     scope: state.domain.scope,

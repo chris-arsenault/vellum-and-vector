@@ -1,76 +1,48 @@
-import { closeSync, mkdtempSync, openSync, readSync, rmSync, writeSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { expect, it } from "vitest";
 import {
   adaptiveCell,
   createAdaptiveTopology,
+  everySample,
+  foldSamples,
+  generateBand,
   refineAdaptiveWhere,
   prepareAdaptiveTransfer,
   rectangle,
-  generateNumerical,
 } from "@atlas/domain";
 import { adaptivePhysicalMesh } from "../../generation/src/canonry/adaptiveMesh";
 import { edgeLeadingTo } from "../../generation/src/canonry/mesh";
-import { PagedArena } from "./pagedArena";
+import { blockCacheFixture } from "./blockCacheFixture";
 import { physicalFace } from "../../generation/src/canonry/physicalMetric";
 
-function fixture() {
-  const directory = mkdtempSync(join(tmpdir(), "atlas-adaptive-")),
-    fd = openSync(join(directory, "work.bin"), "w+"),
-    arena = new PagedArena(
-      {
-        read: (bytes, offset) => readSync(fd, bytes, 0, bytes.byteLength, offset),
-        write: (bytes, offset) => writeSync(fd, bytes, 0, bytes.byteLength, offset),
-        flush() {},
-        close: () => closeSync(fd),
-      },
-      65_536,
-      128
-    );
-  return {
-    arena,
-    close() {
-      arena.close();
-      rmSync(directory, { recursive: true, force: true });
-    },
-  };
-}
-it("refines on disk and transfers all material across unchanged, split and coarsened cells", () => {
-  const f = fixture();
+/** One full float64 block resident: topology and material bands evict to scratch and reload. */
+const blockBudget = 16_384 * 8;
+const total = (values: Parameters<typeof foldSamples>[0]) =>
+  foldSamples(values, (sum: number, amount) => sum + amount, 0);
+it("refines on an evicting cache and transfers all material across unchanged, split and coarsened cells", () => {
+  const f = blockCacheFixture(blockBudget);
   try {
     const bounds: [number, number, number, number] = [0, 0, 1024, 1024],
       source = createAdaptiveTopology(
         bounds,
         { maximumSize: 64, minimumSize: 32, refine: (box) => box[0] < 256 },
-        f.arena
+        f.cache
       ),
-      target = refineAdaptiveWhere(source, 16, (box) => box[0] > 700 && box[1] < 400, f.arena),
-      sourceValues = generateNumerical(
-        { type: "float64", length: source.leaves.length, lifetime: "run", name: "test:material" },
-        (i) => {
-          const box = adaptiveCell(source, i);
-          return (box[2] - box[0]) * (box[3] - box[1]) * (1 + (box[0] + box[2]) / 2048);
-        },
-        f.arena
-      ),
-      transferred = prepareAdaptiveTransfer(source, target, f.arena)(sourceValues, "extensive");
-    expect(transferred.reduce((sum, amount) => sum + amount, 0)).toBeCloseTo(
-      sourceValues.reduce((sum, amount) => sum + amount, 0),
-      7
-    );
-    const coarse = createAdaptiveTopology(bounds, { maximumSize: 128, minimumSize: 128 }, f.arena),
-      coarsened = prepareAdaptiveTransfer(target, coarse, f.arena)(transferred, "extensive");
-    expect(coarsened.reduce((sum, amount) => sum + amount, 0)).toBeCloseTo(
-      sourceValues.reduce((sum, amount) => sum + amount, 0),
-      7
-    );
-    f.arena.retain(transferred);
-    f.arena.releaseProcess();
-    expect(transferred.every(Number.isFinite)).toBe(true);
+      target = refineAdaptiveWhere(source, 16, (box) => box[0] > 700 && box[1] < 400),
+      sourceValues = generateBand(source.coverage, "float64", "test:material", (i) => {
+        const box = adaptiveCell(source, i);
+        return (box[2] - box[0]) * (box[3] - box[1]) * (1 + (box[0] + box[2]) / 2048);
+      }),
+      transferred = prepareAdaptiveTransfer(source, target)(sourceValues, "extensive");
+    expect(total(transferred)).toBeCloseTo(total(sourceValues), 7);
+    const coarse = createAdaptiveTopology(bounds, { maximumSize: 128, minimumSize: 128 }, f.cache),
+      coarsened = prepareAdaptiveTransfer(target, coarse)(transferred, "extensive");
+    expect(total(coarsened)).toBeCloseTo(total(sourceValues), 7);
+    target.coverage.releaseProcess();
+    expect(everySample(transferred, Number.isFinite)).toBe(true);
     expect(target.leaves.length).toBeGreaterThan(source.leaves.length);
-    expect(f.arena.stats.reads).toBeGreaterThan(0);
-    expect(f.arena.stats.peakDecodedBytes).toBeLessThanOrEqual(65_536);
+    expect(f.cache.stats.evictions).toBeGreaterThan(0);
+    expect(f.scratch.stats.reads).toBeGreaterThan(0);
+    expect(f.cache.stats.peakBytes).toBeLessThanOrEqual(blockBudget);
   } finally {
     f.close();
   }
@@ -86,18 +58,18 @@ it("locates both physical seam faces when one cell spans the cylinder", () => {
     { x: 512, y: 0, nx: 1, ny: 0, length: 512 },
   ]);
 });
-it("keeps reciprocal metric faces across an uneven cylindrical seam on disk", () => {
-  const f = fixture();
+it("keeps reciprocal metric faces across an uneven cylindrical seam on an evicting cache", () => {
+  const f = blockCacheFixture(blockBudget);
   try {
     const bounds: [number, number, number, number] = [0, 0, 1024, 512],
       topology = createAdaptiveTopology(
         bounds,
         { maximumSize: 128, minimumSize: 16, refine: (box) => box[0] < 64 && box[1] < 192 },
-        f.arena
+        f.cache
       ),
       mesh = adaptivePhysicalMesh(topology, rectangle([0, 64, 1024, 448]));
     mesh.joinSeam();
-    f.arena.releaseProcess();
+    topology.coverage.releaseProcess();
     let seamFaces = 0,
       contentArea = 0;
     for (let i = 0; i < mesh.count; i++) {
@@ -113,7 +85,7 @@ it("keeps reciprocal metric faces across an uneven cylindrical seam on disk", ()
     }
     expect(seamFaces).toBeGreaterThan(0);
     expect(contentArea).toBe(1024 * 384);
-    expect(f.arena.stats.peakDecodedBytes).toBeLessThanOrEqual(65_536);
+    expect(f.cache.stats.peakBytes).toBeLessThanOrEqual(blockBudget);
   } finally {
     f.close();
   }

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { canonryMagicPresets, putChannel } from "@atlas/domain";
+import { canonryMagicPresets, putChannel, residentBand } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { createField } from "./field";
 import { createAdaptiveWorldMesh } from "./adaptiveMesh";
@@ -14,23 +14,26 @@ it("inherits material amounts by receiving area and retains origin strengths and
     surface,
     "magic:fire:stock:vein/held",
     "intensity-square-metre",
-    Float64Array.from(surface.measures, (area) => area * 3),
+    residentBand(
+      "float64",
+      Float64Array.from(surface.measures, (area) => area * 3)
+    ),
     "extensive"
   );
   putChannel(
     surface,
     "magic:fire:origin:vein:source",
     "relative-intensity",
-    new Float64Array(10).fill(750)
+    residentBand("float64", new Float64Array(10).fill(750))
   );
   putChannel(
     surface,
     "magic:fire:firstEpoch",
     "category",
-    new Float64Array(10).fill(2),
+    residentBand("float64", new Float64Array(10).fill(2)),
     "category"
   );
-  const before = surface.channels["magic:fire:stock:vein/held"].slice();
+  const before = Array.from(surface.channels["magic:fire:stock:vein/held"]);
   const map = createField(
     createAdaptiveWorldMesh(
       surface.bounds,
@@ -41,7 +44,8 @@ it("inherits material amounts by receiving area and retains origin strengths and
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
-    samples: new Int32Array(10),
+    samples: residentBand("int32", new Int32Array(10)),
+    grid: surface.coverage,
     fixed: [],
     inherited: true,
     sampling: { maximumSize: 250, minimumSize: 250, featureSamples: 2 },
@@ -57,6 +61,6 @@ it("inherits material amounts by receiving area and retains origin strengths and
   );
   expect(content.every((i) => fire.originSources.vein.get(i) === 750)).toBe(true);
   expect(content.every((i) => fire.firstEpoch.get(i) === 2)).toBe(true);
-  expect(surface.channels["magic:fire:stock:vein/held"]).toEqual(before);
+  expect(Array.from(surface.channels["magic:fire:stock:vein/held"])).toEqual(before);
   expect(fire.lost).toBe(0);
 });

@@ -17,6 +17,7 @@ import {
   snapRegionCut,
 } from "@atlas/domain";
 import type { Geometry } from "geojson";
+import { numericalValues } from "./testSupport/snapshotCopy";
 
 function fixture() {
   const world = fixtureWorld({
@@ -79,7 +80,7 @@ it("supports arbitrary named and unnamed-depth regions without changing geograph
   expect(after.world.areas).toEqual(before.world.areas);
   expect(after.world.features).toEqual(before.world.features);
   expect(after.world.fields).toEqual(before.world.fields);
-  expect(after.numerical).toEqual(before.numerical);
+  expect(numericalValues(after)).toEqual(numericalValues(before));
   expect(after.world.generations).toEqual([]);
   expect(await readScene(f.world.id, f.areaId)).toEqual(scene);
   expect((await exportWorld(f.world.id)).regions).toHaveLength(12);

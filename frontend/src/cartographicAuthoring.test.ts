@@ -69,7 +69,7 @@ it("paints a complete stroke once, supports erase and smooth, and undoes all its
     )
   ).candidate;
   expect(elevation(world, fieldId)).toBeCloseTo(0, 0);
-  expect(original.channels.elevation[60]).toBe(0);
+  expect(original.channels.elevation.get(60)).toBe(0);
   world = await undoWorld(world.id, fixtureState(world.id).history[0].operationId);
   expect(elevation(world, fieldId)).toBeCloseTo(20, 0);
   world = (

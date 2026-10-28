@@ -1,4 +1,4 @@
-import { overlayField, type Grid, type NumericalAllocator } from "@atlas/domain";
+import { overlayField, type Grid } from "@atlas/domain";
 import {
   FieldWorkingSet,
   type FieldInputStore,
@@ -9,12 +9,11 @@ import type { FieldReference, LoadedRaster, ResourceRaster, RasterGeography } fr
 /** A rendering operation opens immutable chunks directly; no samples cross the UI boundary. */
 export async function loadResourceRaster(
   store: FieldInputStore,
-  numerical: NumericalAllocator,
   raster: ResourceRaster,
   geography: RasterGeography,
   inputs: FieldInputCache
 ) {
-  const working = new FieldWorkingSet(store, numerical, inputs);
+  const working = new FieldWorkingSet(store, inputs.blocks, inputs);
   async function field(
     reference: FieldReference | undefined,
     names: string[]

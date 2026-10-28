@@ -32,9 +32,9 @@ function openLine(state: GenerationState, a: SocietyCommunity, b: SocietyCommuni
         y: a.position.y + (b.position.y - a.position.y) * t,
       });
     if (i < 0 || !dryLand(state, i)) return false;
-    if ((channels.slope?.[i] ?? 0) > openCountry.slope) return false;
-    if ((channels.treeCover?.[i] ?? 0) > openCountry.trees) return false;
-    const z = channels.elevation[i];
+    if ((channels.slope?.get(i) ?? 0) > openCountry.slope) return false;
+    if ((channels.treeCover?.get(i) ?? 0) > openCountry.trees) return false;
+    const z = channels.elevation.get(i);
     low = Math.min(low, z);
     high = Math.max(high, z);
   }

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { putChannel, population } from "@atlas/domain";
+import { putChannel, population, residentBand } from "@atlas/domain";
 import { landscape, epoch } from "./mapFixtures";
 import { initializePolitics, evolvePolitics } from "./societyPolitics";
 import type { MapProcessContext } from "./process";
@@ -8,7 +8,12 @@ function fixture() {
   const state = landscape();
   state.domain.world.id = "bc07dcd0-7cba-46b1-8e56-5f7829dde8cb";
   state.domain.world.areas.area.profile = "local";
-  putChannel(state.surface, "elevation", "metre", new Float64Array(10).fill(100));
+  putChannel(
+    state.surface,
+    "elevation",
+    "metre",
+    residentBand("float64", new Float64Array(10).fill(100))
+  );
   const context: MapProcessContext = {
     scope: state.domain.scope,
     invocation: [],

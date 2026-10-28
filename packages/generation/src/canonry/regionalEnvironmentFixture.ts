@@ -1,6 +1,7 @@
 import {
   canonryMagicPresets,
   createGrid,
+  generateBand,
   gridPosition,
   putChannel,
   resampleChannels,
@@ -15,7 +16,12 @@ import { atlasPhysicalProfile } from "./atlasProfile";
 
 function seedChannels(parent: Grid, systems: MagicSystem[], enabled: boolean) {
   const channel = (key: string, unit: string, value: number) =>
-    putChannel(parent, key, unit, new Float64Array(10).fill(value));
+    putChannel(
+      parent,
+      key,
+      unit,
+      generateBand(parent.coverage, "float64", key, () => value, 10)
+    );
   channel("elevation", "metre", 100);
   channel("temperature", "celsius", 10);
   channel("rainfall", "metre/year", 1);
@@ -36,7 +42,13 @@ function seedChannels(parent: Grid, systems: MagicSystem[], enabled: boolean) {
           parent,
           `magic:${system.id}:stock:${origin.id}/${stock.id}`,
           "intensity-square-metre",
-          Float64Array.from(parent.measures, (area) => (enabled ? area * 3 : 0)),
+          generateBand(
+            parent.coverage,
+            "float64",
+            `magic:${system.id}:stock:${origin.id}/${stock.id}`,
+            (i) => (enabled ? parent.measures.get(i) * 3 : 0),
+            parent.measures.length
+          ),
           "extensive"
         );
     }
@@ -75,10 +87,17 @@ export function regionalEnvironmentFixture(enabled = true) {
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
-    samples: Int32Array.from(state.surface.active, (_, i) => {
-      const p = gridPosition(state.surface, i);
-      return nearestTriangle(map.mesh, p.x - map.mesh.origin[0], p.y - map.mesh.origin[1]);
-    }),
+    samples: generateBand(
+      state.surface.coverage,
+      "int32",
+      "physical:samples",
+      (i) => {
+        const p = gridPosition(state.surface, i);
+        return nearestTriangle(map.mesh, p.x - map.mesh.origin[0], p.y - map.mesh.origin[1]);
+      },
+      state.surface.active.length
+    ),
+    grid: state.surface.coverage,
     fixed: [],
     inherited: true,
     sampling: { maximumSize: 250, minimumSize: 250, featureSamples: 2 },

@@ -1,5 +1,12 @@
 import { expect, it } from "vitest";
-import { createGrid, fieldInterpolator, gridPosition, putChannel, rectangle } from "@atlas/domain";
+import {
+  createGrid,
+  fieldInterpolator,
+  generateBand,
+  gridPosition,
+  putChannel,
+  rectangle,
+} from "@atlas/domain";
 import { terrainDisplaySampler } from "./terrainDisplay";
 import { numericTileSampler, terrainSampleBands } from "./numericTiles";
 import { terrainTile } from "./terrainTile";
@@ -25,7 +32,7 @@ function fixture(at: (x: number, y: number) => number): Raster {
     grid,
     "elevation",
     "metre",
-    Float64Array.from(grid.active, (_, i) => {
+    generateBand(grid.coverage, "float64", "elevation", (i) => {
       const p = gridPosition(grid, i);
       return at(p.x, p.y);
     })
@@ -44,17 +51,17 @@ it("retains every height sample, planes and constants including the field edges"
   for (const height of [(x: number, y: number) => 200 + x * 0.3 - y * 0.2, () => 0.1]) {
     const raster = fixture(height),
       display = terrainDisplaySampler(raster.field);
-    const before = raster.field.channels.elevation.slice();
+    const before = Array.from(raster.field.channels.elevation);
     for (let x = 0; x <= 1000; x += 25)
       for (let y = 0; y <= 1000; y += 25)
         expect(display({ x, y, z: 0 })).toBeCloseTo(height(x, y), 9);
-    expect(raster.field.channels.elevation).toEqual(before);
+    expect(Array.from(raster.field.channels.elevation)).toEqual(before);
   }
   const raster = fixture((x, y) => 100 + 300 * Math.sin(x / 200) * Math.cos(y / 150));
   const display = terrainDisplaySampler(raster.field);
   for (let i = 0; i < raster.field.active.length; i++)
     expect(display(gridPosition(raster.field, i))).toBeCloseTo(
-      raster.field.channels.elevation[i],
+      raster.field.channels.elevation.get(i),
       9
     );
 });
@@ -74,7 +81,7 @@ it("removes lattice slope jumps while retaining bounded ridges and valleys", () 
   for (let x = 1; x < 1000; x += 13)
     for (let y = 1; y < 1000; y += 17) {
       const i = Math.min(7, Math.floor(y / 125)) * 9 + Math.min(7, Math.floor(x / 125));
-      const corners = [i, i + 1, i + 9, i + 10].map((j) => grid.channels.elevation[j]);
+      const corners = [i, i + 1, i + 9, i + 10].map((j) => grid.channels.elevation.get(j));
       const value = display({ x, y, z: 0 });
       expect(value).toBeGreaterThanOrEqual(Math.min(...corners) - 1e-9);
       expect(value).toBeLessThanOrEqual(Math.max(...corners) + 1e-9);
@@ -101,12 +108,12 @@ it("retains overlay precedence and falls back beside inactive or nonfinite sampl
   const display = terrainDisplaySampler(raster.field);
   expect(display({ x: 500, y: 500, z: 0 })).toBe(700);
   expect(display({ x: 399, y: 500, z: 0 })).toBeLessThan(200);
-  raster.field.active[4 * 9 + 1] = 0;
+  raster.field.active.set(4 * 9 + 1, 0);
   const point = { x: 270, y: 500, z: 0 },
     raw = fieldInterpolator(raster.field, "elevation");
   expect(display(point)).toBe(raw(point));
-  raster.field.active[4 * 9 + 1] = 1;
-  raster.field.channels.elevation[4 * 9 + 1] = NaN;
+  raster.field.active.set(4 * 9 + 1, 1);
+  raster.field.channels.elevation.set(4 * 9 + 1, NaN);
   expect(display(point)).toBe(raw(point));
 });
 

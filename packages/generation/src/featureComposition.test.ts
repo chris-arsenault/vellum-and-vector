@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { canonryMagicPresets, putChannel, valueRecordSchema } from "@atlas/domain";
+import { canonryMagicPresets, generateChannel, putChannel, valueRecordSchema } from "@atlas/domain";
 import { atlasConfiguration, prepareAtlasGeneration } from "./atlasWorkflow";
 import { featureContribution, resolveGenerationFeatures, type GenerationFeature } from "./features";
 import { physicalFeatureDefinitions } from "./physicalFeatures";
@@ -148,7 +148,7 @@ it("registers and executes a feature-owned setting absent from the legacy parame
           state.surface,
           "survey",
           "ratio",
-          new Float64Array(state.surface.active.length).fill(Number(context.parameters.threshold))
+          generateChannel(state.surface, "survey", () => Number(context.parameters.threshold))
         );
       },
     },
@@ -164,7 +164,7 @@ it("registers and executes a feature-owned setting absent from the legacy parame
     seed: "73",
     seedScope: "survey",
   });
-  expect(result.state.surface.channels.survey).toEqual(new Float64Array(10));
+  expect(Array.from(result.state.surface.channels.survey)).toEqual(Array(10).fill(0));
   expect(Object.hasOwn(resolved.parameters, "threshold")).toBe(false);
   expect(() =>
     resolveGenerationFeatures([survey], {
@@ -247,7 +247,9 @@ function randomModule(id: string): GenerationModule {
                 state.surface,
                 `${id}:${persistent ? "structure" : "variation"}`,
                 "ratio",
-                Float64Array.from(state.surface.active, () => context.random(persistent))
+                generateChannel(state.surface, `${id}:${persistent}`, () =>
+                  context.random(persistent)
+                )
               );
           },
         },
@@ -354,11 +356,11 @@ it("preserves both random streams when an unrelated module with the same local i
     alone = await run([a]),
     expanded = await run([b, a]);
   for (const stream of ["variation", "structure"]) {
-    const samples = alone.state.surface.channels[`test.a:${stream}`];
+    const samples = Array.from(alone.state.surface.channels[`test.a:${stream}`]);
     expect(new Set(samples).size).toBeGreaterThan(1);
-    expect(expanded.state.surface.channels[`test.a:${stream}`]).toEqual(samples);
+    expect(Array.from(expanded.state.surface.channels[`test.a:${stream}`])).toEqual(samples);
     expect(expanded.state.surface.channels[`test.b:${stream}`]).toHaveLength(samples.length);
-    expect(expanded.state.surface.channels[`test.b:${stream}`]).not.toEqual(samples);
+    expect(Array.from(expanded.state.surface.channels[`test.b:${stream}`])).not.toEqual(samples);
   }
 });
 

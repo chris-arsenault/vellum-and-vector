@@ -175,12 +175,14 @@ export function adaptivePointSampler(
 function locateAdaptivePoint(t: AdaptiveTopology, x: number, y: number) {
   const leaf = adaptiveLeafAt(t, x, y);
   if (leaf < 0) return { leaf, u: NaN, v: NaN };
-  const at = t.leaves[leaf] * 4,
-    b = t.boxes;
+  const at = t.leaves.get(leaf) * 4,
+    b = t.boxes,
+    x0 = b.get(at),
+    y0 = b.get(at + 1);
   return {
     leaf,
-    u: (x - b[at]) / (b[at + 2] - b[at]),
-    v: (y - b[at + 1]) / (b[at + 3] - b[at + 1]),
+    u: (x - x0) / (b.get(at + 2) - x0),
+    v: (y - y0) / (b.get(at + 3) - y0),
   };
 }
 export type AdaptivePointLocator = typeof locateAdaptivePoint;

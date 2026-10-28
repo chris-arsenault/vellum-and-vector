@@ -268,7 +268,7 @@ it("uses impact-contributed fracture state without executing a fault-network fea
   expect(map.faults).toEqual([]);
   expect(output.state.facts.has("canonry:FractureState")).toBe(true);
   expect(output.state.facts.has("canonry:Fractures")).toBe(false);
-  const control = generationWorkingState(output.state, undefined, false);
+  const control = generationWorkingState(output.state, false);
   control.physical!.map.FractureConductance.fill(0);
   const comparison = await runPhysical(
     control,

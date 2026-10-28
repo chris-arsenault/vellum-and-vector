@@ -25,11 +25,13 @@ export function categorical(raster: Raster): boolean {
 export function rasterLimits(data: Raster[]): number[] {
   const limits = [Infinity, -Infinity];
   const include = (field: GridSurface, channel: string) => {
-    field.channels[channel]?.forEach((value, i) => {
-      if (!field.active[i] || !Number.isFinite(value)) return;
+    const values = field.channels[channel];
+    for (let i = 0; values && i < values.length; i++) {
+      const value = values.get(i);
+      if (!field.active.get(i) || !Number.isFinite(value)) continue;
       limits[0] = Math.min(limits[0], value);
       limits[1] = Math.max(limits[1], value);
-    });
+    }
     for (const overlay of field.overlays ?? [])
       if (overlay.channels.includes(channel)) include(overlay.grid, channel);
   };

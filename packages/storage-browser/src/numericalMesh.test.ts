@@ -12,8 +12,8 @@ import {
 } from "../../generation/src/canonry/atlasSampling";
 import { createField } from "../../generation/src/canonry/field";
 import { atlasPhysicalProfile } from "../../generation/src/canonry/atlasProfile";
-import { arenaFixture } from "./numericalFixture";
 import { blockCacheFixture } from "./blockCacheFixture";
+import { sampleCoverage } from "@atlas/domain";
 
 it.each([
   [false, false],
@@ -46,9 +46,9 @@ it.each([
   expect(sample(0, 0)).toBe(0.1);
   console.info("connected mesh", { wrap, poles, cells: mesh.count, constructionMs });
 });
-it("reuses file-backed interpolation across channels and mathematical block boundaries", () => {
+it("reuses evicting interpolation bands across channels and block boundaries", () => {
   const f = blockCacheFixture(262_144),
-    projection = arenaFixture(262_144, 512);
+    projection = blockCacheFixture(262_144);
   try {
     const mesh = createWorldMesh(
       [0, 0, 400_000, 200_000],
@@ -65,11 +65,13 @@ it("reuses file-backed interpolation across channels and mathematical block boun
         mesh.x(i % mesh.count) + mesh.spacing * 0.23,
         mesh.y(i % mesh.count) - mesh.spacing * 0.17,
       ];
-    const interpolation = projectionInterpolation(mesh, count, position, projection.arena);
+    const grid = sampleCoverage(count, projection.cache),
+      interpolation = projectionInterpolation(mesh, count, position, grid);
     const map = createField(mesh, f.cache);
     const work = {
       map,
       samples: interpolation.samples,
+      grid,
       interpolation,
       profile: atlasPhysicalProfile(),
       fixed: [],
@@ -78,19 +80,18 @@ it("reuses file-backed interpolation across channels and mathematical block boun
     };
     const input = (i: number) => 0.1 + mesh.x(i) * 0.003 - mesh.y(i) * 0.001;
     const result = projectedValues(work, input);
-    result.retain?.();
-    projection.arena.flush();
-    projection.arena.releaseProcess();
+    result.retain();
+    grid.releaseProcess();
     map.coverage.releaseProcess();
     for (const i of [0, 1, 4095, 4096, 8200]) {
       const [x, y] = position(i),
         sample = triangleSample(mesh, x, y);
       const values = sample.cells.map((cell) => input(cell));
       const expected = triangleValue({ ...sample, cells: values.map((_, j) => j) }, values);
-      expect(result[i]).toBeCloseTo(expected, 10);
+      expect(result.get(i)).toBeCloseTo(expected, 10);
     }
-    expect(projection.arena.stats.reads).toBeGreaterThan(0);
-    expect(projection.arena.stats.peakDecodedBytes).toBeLessThanOrEqual(262_144);
+    expect(projection.scratch.stats.reads).toBeGreaterThan(0);
+    expect(projection.cache.stats.peakBytes).toBeLessThanOrEqual(262_144);
   } finally {
     f.close();
     projection.close();

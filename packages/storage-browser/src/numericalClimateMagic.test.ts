@@ -36,7 +36,8 @@ function scenario(cache: BlockCache) {
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
-    samples: new Int32Array(0),
+    samples: state.surface.coverage.scratch("int32", "physical:samples", 0),
+    grid: state.surface.coverage,
     fixed: [],
     inherited: false,
     sampling: { maximumSize: 25_000, minimumSize: 12_500, featureSamples: 2 },

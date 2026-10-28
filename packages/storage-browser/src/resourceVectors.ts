@@ -1,13 +1,12 @@
 import {
-  readNumericalBlock,
+  newBlock,
+  readRange,
   requireThat,
-  writeNumericalBlock,
-  type NumericalVector,
+  type Band,
   type PartitionReference,
   type ResourceArray,
   type SampleArray,
 } from "@atlas/domain";
-import { sampleConstructors } from "./vectorStorage";
 
 export function arraySelection(array: ResourceArray, partition: PartitionReference) {
   return (
@@ -29,34 +28,14 @@ function selectionRows(array: ResourceArray, partition: PartitionReference) {
     stride: array.shape[1],
   };
 }
-export function readVectorPartition(
-  vector: NumericalVector,
+export function readBandPartition(
+  band: Band,
   array: ResourceArray,
   partition: PartitionReference
 ): SampleArray {
   const { start, rows, width, stride } = selectionRows(array, partition),
-    result = new sampleConstructors[array.dtype](rows * width);
+    result = newBlock(array.dtype, rows * width);
   for (let row = 0; row < rows; row++)
-    if (width) result.set(readNumericalBlock(vector, start + row * stride, width), row * width);
+    if (width) readRange(band, start + row * stride, width, result, row * width);
   return result;
-}
-export function writeVectorPartition(
-  vector: NumericalVector,
-  array: ResourceArray,
-  partition: PartitionReference,
-  samples: SampleArray
-) {
-  const { start, rows, width, stride } = selectionRows(array, partition);
-  requireThat(
-    samples.length === rows * width,
-    "field_shape",
-    "Loaded field samples retain their shape."
-  );
-  for (let row = 0; row < rows; row++)
-    if (width)
-      writeNumericalBlock(
-        vector,
-        start + row * stride,
-        samples.subarray(row * width, (row + 1) * width)
-      );
 }

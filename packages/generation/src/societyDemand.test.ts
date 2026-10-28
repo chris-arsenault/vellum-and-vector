@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { gridPosition, putChannel, societyWorkNatures } from "@atlas/domain";
+import { gridPosition, putChannel, residentBand, societyWorkNatures } from "@atlas/domain";
 import { landscape, epoch } from "./mapFixtures";
 import { initializePopulation } from "./societyPopulation";
 import { refreshSocietyConnections } from "./societyGeography";
@@ -12,7 +12,12 @@ function fixture(profile: "world" | "local") {
   state.domain.world.id = "bc07dcd0-7cba-46b1-8e56-5f7829dde8cb";
   state.domain.world.areas.area.profile = profile;
   const set = (name: string, value: number, unit = "ratio") =>
-    putChannel(state.surface, name, unit, new Float64Array(10).fill(value));
+    putChannel(
+      state.surface,
+      name,
+      unit,
+      residentBand("float64", new Float64Array(10).fill(value))
+    );
   set("elevation", 100, "metre");
   set("treeCover", 0.6);
   set("broadleafCover", 0.6);
@@ -46,7 +51,12 @@ const unit = 0;
 it("keeps a demand's initial medium when applying its first effect changes later cells", () => {
   const { state } = fixture("world"),
     community = state.society!.region.communities[unit];
-  putChannel(state.surface, "magic:fire:intensity", "intensity", new Float64Array(10).fill(200));
+  putChannel(
+    state.surface,
+    "magic:fire:intensity",
+    "intensity",
+    residentBand("float64", new Float64Array(10).fill(200))
+  );
   const work = makeWork(state, community, "tapping"),
     before = [...demandSamples(state, work)],
     samples = demandSamples(state, work);
@@ -69,26 +79,31 @@ it("makes World works demands that act over the unit's whole country, conserving
   expect(spread.length).toBeGreaterThan(1);
   expect([...workSamples(state, demand)]).toEqual(spread);
   // The total the demand covers equals the located work's footprint, bounded by the country.
-  const area = spread.reduce((sum, s) => sum + s.fraction * state.surface.measures[s.i], 0);
+  const area = spread.reduce((sum, s) => sum + s.fraction * state.surface.measures.get(s.i), 0);
   expect(area).toBeCloseTo(
     Math.min(
       Math.PI * demand.radius ** 2,
-      spread.reduce((sum, s) => sum + state.surface.measures[s.i], 0)
+      spread.reduce((sum, s) => sum + state.surface.measures.get(s.i), 0)
     ),
     3
   );
   expect(demand.demand!.amount).toBeCloseTo(spread[0].fraction, 9);
   state.society!.region.works = [{ ...demand, radius: 10000 }];
   applySocietyWorks(state, context, 100);
-  const cleared = spread.filter((s) => state.surface.channels.treeCover[s.i] < 0.6);
+  const cleared = spread.filter((s) => state.surface.channels.treeCover.get(s.i) < 0.6);
   expect(cleared.length).toBe(spread.length);
 });
 
 it("gives a structural demand an amount and a unit but no samples or terrain change at World", () => {
   const { state, context } = fixture("world"),
     c = state.society!.region.communities[unit];
-  putChannel(state.surface, "slope", "gradient", new Float64Array(10).fill(0.2));
-  const before = state.surface.channels.elevation.slice();
+  putChannel(
+    state.surface,
+    "slope",
+    "gradient",
+    residentBand("float64", new Float64Array(10).fill(0.2))
+  );
+  const before = state.surface.channels.elevation.toArray();
   const pass = makeWork(state, c, "pass"),
     harbor = makeWork(state, c, "harbor"),
     dam = makeWork(state, c, "dam");
@@ -110,7 +125,7 @@ it("demands a harbour only of the shore the unit holds", () => {
   planSocietyWorks(state);
   expect(state.society!.region.works.some((w) => w.kind === "harbor")).toBe(false);
   const shore = Array.from(state.society!.owner).findIndex((o) => o === unit);
-  state.society!.coast[shore] = 1;
+  state.society!.coast.set(shore, 1);
   planSocietyWorks(state);
   const harbor = state.society!.region.works.find((w) => w.kind === "harbor");
   expect(harbor?.demand).toEqual({ amount: 1000, unit: "people" });
@@ -122,8 +137,13 @@ it("filters a demand's cells by the kind's medium and realizes it at a finer pro
     c = state.society!.region.communities[unit];
   // A pass acts only on steep ground: give the unit one such cell away from its seat.
   const steep = 7;
-  putChannel(state.surface, "slope", "gradient", new Float64Array(10).fill(0.01));
-  state.surface.channels.slope[steep] = 0.2;
+  putChannel(
+    state.surface,
+    "slope",
+    "gradient",
+    residentBand("float64", new Float64Array(10).fill(0.01))
+  );
+  state.surface.channels.slope.set(steep, 0.2);
   const land = workMedium(state, "clearance"),
     pass = workMedium(state, "pass");
   expect(land(0)).toBe(true);

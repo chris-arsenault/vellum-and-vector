@@ -16,8 +16,9 @@ export function applyNativeColdAgeWork(
 ) {
   const physical = state.physical;
   if (!physical) return;
-  const cell = physical.samples[i];
-  if (cell === undefined || cell < 0) return;
+  if (i < 0 || i >= physical.samples.length) return;
+  const cell = physical.samples.get(i);
+  if (cell < 0) return;
   if (work.kind === "weir") markWeir(state, work, cell);
   if (work.kind === "quarrying") quarryPrism(state, cell, Math.exp((-amount * years) / 100));
 }

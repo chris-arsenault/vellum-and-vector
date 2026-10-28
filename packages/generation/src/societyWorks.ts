@@ -68,13 +68,14 @@ function settledWorks(state: GenerationState, c: SocietyCommunity): SocietyWorkK
   if (v("treeCover") > 0.25 && c.support.farming > c.support.gathering) kinds.push("clearance");
   const wildlife = wildlifeWork(state, c, i);
   if (wildlife) kinds.push(wildlife);
-  if (needsWater(state, c, i)) kinds.push("irrigation");
+  if (needsWater(state, c, i, 0.2)) kinds.push("irrigation");
   if (v("slope") > 0.08 && state.society!.region.connections.length) kinds.push("pass");
-  if (c.support.water < 0.5 && state.society!.river[i] > 0.4) kinds.push("dam");
+  if (needsWater(state, c, i, 0.4)) kinds.push("dam");
   return kinds;
 }
-function needsWater(state: GenerationState, c: SocietyCommunity, i: number) {
-  return c.support.water < 0.5 && state.society!.river[i] > 0.2;
+/** A dry community beside a river carrying more than `flow`; -1 is no surface sample. */
+function needsWater(state: GenerationState, c: SocietyCommunity, i: number, flow: number) {
+  return c.support.water < 0.5 && i >= 0 && state.society!.river.get(i) > flow;
 }
 function wildlifeWork(
   state: GenerationState,
@@ -206,12 +207,12 @@ export function changeSample(
   cause: "work" | "practice" = "work"
 ) {
   const values = state.surface.channels[channel];
-  if (!values || !Number.isFinite(value) || values[i] === value) return;
+  if (!values || !Number.isFinite(value) || values.get(i) === value) return;
   if (state.physical && channel === "elevation") {
-    state.society!.elevationBefore ??= values.slice();
-    state.society!.elevationBefore.retain?.();
+    state.society!.elevationBefore ??= state.surface.coverage.copyBand(values);
+    state.society!.elevationBefore.retain();
   }
-  values[i] = value;
+  values.set(i, value);
   state.society!.changed.add(channel);
   if (cause === "work") state.society!.mediumChanged.add(channel);
 }
@@ -236,7 +237,7 @@ export function* workSamples(state: GenerationState, work: SocietyWork) {
     if (i >= 0)
       yield {
         i,
-        fraction: Math.min(1, (Math.PI * work.radius ** 2) / state.surface.measures[i]),
+        fraction: Math.min(1, (Math.PI * work.radius ** 2) / state.surface.measures.get(i)),
       };
   }
 }

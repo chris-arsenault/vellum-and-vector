@@ -2,7 +2,10 @@ import { fixtureWorld } from "./testSupport/workspaceFixture";
 import { it, expect } from "vitest";
 import {
   areaSpace,
+  copyGrid,
   createGrid,
+  detachGrid,
+  generateBand,
   defaultCartographicPresentation,
   rectangle,
   spatial,
@@ -36,13 +39,15 @@ function fixture(): DrawnMapInput {
     9,
     9
   );
-  field.channels.elevation = Float64Array.from(
-    field.active,
-    (_, i) => 500 + 3000 * Math.exp(-(((i % 9) - 5) ** 2 + (Math.floor(i / 9) - 5) ** 2) / 5)
+  field.channels.elevation = generateBand(
+    field.coverage,
+    "float64",
+    "elevation",
+    (i) => 500 + 3000 * Math.exp(-(((i % 9) - 5) ** 2 + (Math.floor(i / 9) - 5) ** 2) / 5)
   );
-  field.channels.treeCover = new Float64Array(81).fill(0.7);
-  field.channels["culture:a"] = new Float64Array(81).fill(0.6);
-  field.channels["language:b"] = new Float64Array(81).fill(0.8);
+  field.channels.treeCover = generateBand(field.coverage, "float64", "treeCover", () => 0.7);
+  field.channels["culture:a"] = generateBand(field.coverage, "float64", "culture:a", () => 0.6);
+  field.channels["language:b"] = generateBand(field.coverage, "float64", "language:b", () => 0.8);
   field.units = { elevation: "m", treeCover: "ratio", "culture:a": "ratio", "language:b": "ratio" };
   field.ocean = rectangle([0, 0, 25000, 100000]);
   const raster: Raster = {
@@ -85,26 +90,28 @@ it("retains ocean geometry and derives water when only elevation is available", 
   const input = fixture(),
     raster = input.base[0];
   expect(drawnOcean(raster)).toBe(raster.field.ocean);
-  const field = structuredClone(raster.field);
+  const field = copyGrid(raster.field);
   delete field.ocean;
-  field.channels.elevation = Float64Array.from(field.active, (_, i) => (i % 9 < 3 ? -500 : 1000));
-  const before = structuredClone(field);
+  field.channels.elevation = generateBand(field.coverage, "float64", "elevation", (i) =>
+    i % 9 < 3 ? -500 : 1000
+  );
+  const before = detachGrid(field);
   const shape = drawnOcean({ ...raster, field });
   expect(shape).toBeTruthy();
   const covers = spatial.pointCoverage(shape!);
   expect(covers({ x: 10000, y: 50000, z: 0 })).toBe(true);
   expect(covers({ x: 90000, y: 50000, z: 0 })).toBe(false);
-  expect(field).toEqual(before);
+  expect(detachGrid(field)).toEqual(before);
 });
 it("places deterministic terrain on land without changing source fields", async () => {
   const input = fixture(),
-    before = structuredClone(input.base[0].field);
+    before = detachGrid(input.base[0].field);
   const marks = terrainMarks(input, input.area.footprint);
   expect(marks.filter((m) => m.kind === "mountain").length).toBeGreaterThan(10);
   expect(marks.filter((m) => m.kind === "tree").length).toBeGreaterThan(10);
   expect(marks.every((m) => m.coordinate[0] > 25000)).toBe(true);
   expect(terrainMarks(input, input.area.footprint)).toEqual(marks);
-  expect(input.base[0].field).toEqual(before);
+  expect(detachGrid(input.base[0].field)).toEqual(before);
 });
 it("keeps terrain marks out of holes and handles disconnected subjects", async () => {
   const input = fixture();
@@ -125,7 +132,7 @@ it("honours existing terrain-layer visibility without changing the numerical sou
   expect(terrainMarks(input, input.area.footprint).every((m) => m.kind === "tree")).toBe(true);
   input.styles = input.styles.map((s) => (s.layerId === "ecology" ? { ...s, visible: false } : s));
   expect(terrainMarks(input, input.area.footprint)).toEqual([]);
-  expect(input.base[0].field.channels.treeCover[0]).toBe(0.7);
+  expect(input.base[0].field.channels.treeCover.get(0)).toBe(0.7);
 });
 it("shows coexisting cultural fields independently and explains them in the legend", async () => {
   const input = fixture();

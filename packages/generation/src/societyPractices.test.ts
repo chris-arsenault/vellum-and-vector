@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import {
   communityPractices,
   putChannel,
+  residentBand,
   withPracticeShares,
   type SocietyMagicPractice,
 } from "@atlas/domain";
@@ -17,7 +18,12 @@ function fixture() {
   const state = landscape();
   state.domain.world.id = "bc07dcd0-7cba-46b1-8e56-5f7829dde8cb";
   state.domain.world.areas.area.profile = "local";
-  putChannel(state.surface, "elevation", "metre", new Float64Array(10).fill(100));
+  putChannel(
+    state.surface,
+    "elevation",
+    "metre",
+    residentBand("float64", new Float64Array(10).fill(100))
+  );
   const context: MapProcessContext = {
     scope: state.domain.scope,
     invocation: [],
@@ -140,8 +146,13 @@ it("mines more cores with a fire-working people than with the same people unskil
 it("takes fish from the sea beside a fishing people's shore and leaves the land alone", () => {
   const { state } = fixture();
   const water = Float64Array.from({ length: 10 }, (_v, i) => Number(i % 5 === 0));
-  putChannel(state.surface, "water", "category", water);
-  putChannel(state.surface, "aquaticFauna", "kg-carbon/square-metre", new Float64Array(10).fill(1));
+  putChannel(state.surface, "water", "category", residentBand("float64", water));
+  putChannel(
+    state.surface,
+    "aquaticFauna",
+    "kg-carbon/square-metre",
+    residentBand("float64", new Float64Array(10).fill(1))
+  );
   state.society!.coast = coastalFishery(state);
   for (const c of state.society!.region.communities) {
     c.groups = c.groups.map((g) => withPracticeShares(g, { fishing: 1 }));
@@ -149,9 +160,9 @@ it("takes fish from the sea beside a fishing people's shore and leaves the land 
   }
   fishWaters(state, 10);
   const fauna = state.surface.channels.aquaticFauna;
-  expect(fauna[0]).toBeCloseTo(Math.exp(-10 / 150), 9);
-  expect(fauna[5]).toBeCloseTo(Math.exp(-10 / 150), 9);
-  expect(fauna[3]).toBe(1);
+  expect(fauna.get(0)).toBeCloseTo(Math.exp(-10 / 150), 9);
+  expect(fauna.get(5)).toBeCloseTo(Math.exp(-10 / 150), 9);
+  expect(fauna.get(3)).toBe(1);
   expect(state.society!.changed.has("aquaticFauna")).toBe(true);
   expect(state.society!.mediumChanged.has("aquaticFauna")).toBe(false);
 });

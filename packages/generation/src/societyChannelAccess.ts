@@ -1,4 +1,4 @@
-import { allocateNumerical, gridPosition, type NumericalVector } from "@atlas/domain";
+import { gridPosition, type Band } from "@atlas/domain";
 import type { GenerationState } from "./process";
 import { nativePosition } from "./canonry/atlasWorkspace";
 
@@ -44,23 +44,15 @@ function channelBounds(state: GenerationState, size: number) {
 }
 /** Packed bucket links replace one object, tuple and Map entry per channel sample. */
 class ChannelIndex {
-  private columns: NumericalVector[];
-  private heads: NumericalVector;
+  private columns: Band[];
+  private heads: Band;
   constructor(
     private state: GenerationState,
     private size: number,
     private bounds: ReturnType<typeof channelBounds>
   ) {
     const allocate = (type: "float64" | "int32", length: number, name: string) =>
-      allocateNumerical(
-        {
-          type,
-          length,
-          lifetime: "process",
-          name: `society-channels:${name}`,
-        },
-        state.numerical
-      );
+      state.surface.coverage.scratch(type, `society-channels:${name}`, length);
     this.heads = allocate("int32", bounds.width * bounds.height, "heads").fill(-1);
     this.columns = [
       allocate("int32", bounds.count, "next"),
@@ -70,11 +62,11 @@ class ChannelIndex {
     const [next, xs, ys, flows] = this.columns;
     for (const [x, y, flow] of channelPoints(state)) {
       const bucket = this.bucket(Math.floor(x / size), Math.floor(y / size));
-      next[at] = this.heads[bucket];
-      this.heads[bucket] = at;
-      xs[at] = x;
-      ys[at] = y;
-      flows[at++] = flow;
+      next.set(at, this.heads.get(bucket));
+      this.heads.set(bucket, at);
+      xs.set(at, x);
+      ys.set(at, y);
+      flows.set(at++, flow);
     }
   }
   private bucket(x: number, y: number) {
@@ -90,39 +82,32 @@ class ChannelIndex {
       for (let dy = -1; dy <= 1; dy++) {
         const bucket = this.bucket(column + dx, row + dy);
         if (bucket < 0) continue;
-        for (let i = this.heads[bucket]; i >= 0; i = next[i])
+        for (let i = this.heads.get(bucket); i >= 0; i = next.get(i))
           access = Math.max(
             access,
-            Math.exp(-Math.hypot(xs[i] - x, ys[i] - y) / this.size) *
-              (1 - Math.exp(-Math.max(0, flows[i])))
+            Math.exp(-Math.hypot(xs.get(i) - x, ys.get(i) - y) / this.size) *
+              (1 - Math.exp(-Math.max(0, flows.get(i))))
           );
       }
     return access;
   }
   close() {
-    this.state.numerical?.releaseUnused([this.heads, ...this.columns], []);
+    this.state.surface.coverage.releaseUnused([this.heads, ...this.columns], []);
   }
 }
 /** Sample every retained channel, including reaches omitted from visible cartography. */
 export function channelAccess(state: GenerationState) {
   const grid = state.surface,
-    result = allocateNumerical(
-      {
-        type: "float64",
-        length: grid.active.length,
-        lifetime: "run",
-        name: "society-river-access",
-      },
-      state.numerical
-    ),
+    result = grid.coverage.scratch("float64", "society-river-access", grid.active.length),
     size = Math.max(1000, grid.scope.resolution ?? 1000),
     bounds = channelBounds(state, size);
+  result.retain();
   if (!bounds.count) return result;
   const channels = new ChannelIndex(state, size, bounds);
   try {
     for (let i = 0; i < result.length; i++) {
       const p = gridPosition(grid, i);
-      result[i] = channels.access(p.x, p.y);
+      result.set(i, channels.access(p.x, p.y));
     }
     return result;
   } finally {

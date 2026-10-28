@@ -12,7 +12,7 @@ import {
   type DomainSnapshot,
   type Grid,
   type SpatialScope,
-  type NumericalAllocator,
+  type BlockCache,
 } from "@atlas/domain";
 import type { AtlasGenerationInput } from "./atlasWorkflow";
 import type { GenerationState } from "./process";
@@ -23,7 +23,7 @@ import { atlasGenerationModules } from "./atlasModules";
 export function atlasInitialState(
   source: DomainSnapshot,
   input: AtlasGenerationInput,
-  numerical?: NumericalAllocator
+  cache?: BlockCache
 ): GenerationState {
   const domain = cloneSnapshot(source),
     area = domain.world.areas[input.areaId];
@@ -64,8 +64,8 @@ export function atlasInitialState(
       ? createAdaptiveField(
           id,
           { ...scope, footprint: interior },
-          initialTopology(scope, cellSpan, numerical),
-          numerical
+          initialTopology(scope, cellSpan, cache),
+          cache
         )
       : createGrid(
           id,
@@ -73,11 +73,10 @@ export function atlasInitialState(
           Math.max(2, Math.ceil((extent[2] - extent[0]) / cellSpan) + 1),
           Math.max(2, Math.ceil((extent[3] - extent[1]) / cellSpan) + 1),
           undefined,
-          numerical
+          cache
         );
-  inheritSurface(source, surface, input, numerical);
+  inheritSurface(source, surface, input);
   return {
-    numerical,
     domain,
     surface,
     facts: initialFacts(surface),
@@ -86,7 +85,7 @@ export function atlasInitialState(
     publications: atlasGenerationModules.publications(input, domain.world),
   };
 }
-function initialTopology(scope: SpatialScope, cellSpan: number, numerical?: NumericalAllocator) {
+function initialTopology(scope: SpatialScope, cellSpan: number, cache?: BlockCache) {
   const extent = spatial.bounds(scope.footprint);
   return createAdaptiveTopology(
     extent,
@@ -95,20 +94,15 @@ function initialTopology(scope: SpatialScope, cellSpan: number, numerical?: Nume
       minimumSize: cellSpan,
       refine: (box) => spatial.intersects(rectangle(box), scope.footprint),
     },
-    numerical
+    cache
   );
 }
-function inheritSurface(
-  source: DomainSnapshot,
-  target: Grid,
-  input: AtlasGenerationInput,
-  numerical?: NumericalAllocator
-) {
+function inheritSurface(source: DomainSnapshot, target: Grid, input: AtlasGenerationInput) {
   const world = source.world;
   const channels = regionalInputChannels(
     regionalInputFields(source, input.areaId, input.domains.includes("physical"))
   );
-  for (const [name, grid] of channels) resampleChannels(grid, target, [name], numerical);
+  for (const [name, grid] of channels) resampleChannels(grid, target, [name]);
   requireThat(
     input.domains.includes("physical") ||
       target.channels.elevation ||

@@ -1,5 +1,6 @@
 import {
   createGrid,
+  generateChannel,
   putChannel,
   rectangle,
   type Area,
@@ -109,7 +110,7 @@ export function landscape(): GenerationState {
     surface,
     "elevation",
     "metre",
-    Float64Array.from({ length: 10 }, (_v, i) => [-10, 100, 1100, 100, 100][i % 5])
+    generateChannel(surface, "elevation", (i) => [-10, 100, 1100, 100, 100][i % 5])
   );
   return { domain, surface, facts: new Set(["elevation"]), history: [] };
 }

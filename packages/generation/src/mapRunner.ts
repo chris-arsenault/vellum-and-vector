@@ -1,10 +1,4 @@
-import {
-  DomainError,
-  requireThat,
-  sameValue,
-  type ParameterValues,
-  type NumericalAllocator,
-} from "@atlas/domain";
+import { DomainError, requireThat, sameValue, type ParameterValues } from "@atlas/domain";
 import {
   MapProcessRegistry,
   verifyReconciliationBindings,
@@ -43,9 +37,10 @@ export interface MapRunnerOptions {
   cancelled?(): boolean;
   progress?(path: string[], fraction: number, message: string): void;
   diagnostic?(diagnostic: GenerationDiagnostic): void;
-  /** Worker-owned numerical storage; never serialized into a boundary or save. */
-  numerical?: NumericalAllocator;
-  /** Worker-owned block cache for the physical coverage; resident when absent. */
+  /**
+   * Worker-owned block cache for every coverage of the run (physical, surface, society);
+   * resident when absent. Never serialized into a boundary or save.
+   */
   cache?: import("@atlas/domain").BlockCache;
   features?: import("@atlas/domain").FeatureWorkspace;
   sourceFeatures?: import("@atlas/domain").FeatureReader;
@@ -198,7 +193,7 @@ export class MapRunner {
     }
     const parameters = invocationParameters(process.contract, this.configuration, stage);
     products.checkProviders(process.contract);
-    const releaseNumerical = numericalProcessLifetime(options.numerical, state, true);
+    const releaseNumerical = numericalProcessLifetime(state);
     try {
       const diagnostics = await this.applyProcess(
         state,

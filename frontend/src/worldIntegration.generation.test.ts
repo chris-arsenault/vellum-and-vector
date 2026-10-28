@@ -3,8 +3,10 @@ import { generateAtlas, type AtlasGenerationInput } from "@atlas/generation";
 import {
   landmarkKind,
   landmarkLayer,
+  everySample,
   languageUse,
   population,
+  someSample,
   spatial,
   type DomainSnapshot,
 } from "@atlas/domain";
@@ -94,13 +96,13 @@ it("completes causal physical and human history while retaining authored geograp
 it("publishes finite dimensional terrain, rivers, living cover and retained drainage together", () => {
   const grid = result.state.surface;
   for (const channel of ["elevation", "temperature", "flow", "treeCover", "glacialErosion"])
-    expect(grid.channels[channel].every(Number.isFinite), channel).toBe(true);
-  expect(grid.channels.flow.some((value) => value > 0)).toBe(true);
+    expect(everySample(grid.channels[channel], Number.isFinite), channel).toBe(true);
+  expect(someSample(grid.channels.flow, (value) => value > 0)).toBe(true);
   const features = Object.values(published.world.features);
   const rivers = features.filter((feature) => feature.kind === "river");
   expect(rivers.length).toBeGreaterThan(0);
   // Erosion can erase a crater's outline while its excavated material history remains.
-  expect(grid.channels.impactExcavation.some((value) => value > 0)).toBe(true);
+  expect(someSample(grid.channels.impactExcavation, (value) => value > 0)).toBe(true);
   for (const river of rivers) {
     expect(river.geometry.type).toBe("LineString");
     if (river.geometry.type !== "LineString") continue;
@@ -124,12 +126,13 @@ it("carries the seven configured systems through physical history into located m
   const grid = result.state.surface;
   expect(source.world.magicSystems).toHaveLength(7);
   for (const system of source.world.magicSystems!)
-    expect(grid.channels[`magic:${system.id}:intensity`].every(Number.isFinite), system.id).toBe(
-      true
-    );
+    expect(
+      everySample(grid.channels[`magic:${system.id}:intensity`], Number.isFinite),
+      system.id
+    ).toBe(true);
   for (const id of ["fire", "aurora", "pressure"])
     expect(
-      grid.channels[`magic:${id}:history`].some((value) => value > 0),
+      someSample(grid.channels[`magic:${id}:history`], (value) => value > 0),
       id
     ).toBe(true);
   const sites = Object.values(published.world.features).filter(

@@ -239,8 +239,8 @@ export function fieldContour(
       const adjacent: Bounds[] = [];
       if ("leaves" in source) {
         const i = adaptiveLeafAt(source, ...center);
-        for (let edge = source.offsets[i]; edge < source.offsets[i + 1]; edge++)
-          adjacent.push(adaptiveCell(source, source.neighbors[edge]));
+        for (let edge = source.offsets.get(i); edge < source.offsets.get(i + 1); edge++)
+          adjacent.push(adaptiveCell(source, source.neighbors.get(edge)));
       }
       const points = boundary(box, adjacent);
       for (let i = 0; i < points.length; i++) {
@@ -255,7 +255,8 @@ export function fieldContour(
 }
 function* contourBoxes(source: AdaptiveTopology | RegularGrid, leaves?: Iterable<number>) {
   if ("leaves" in source) {
-    for (const leaf of leaves ?? source.leaves.keys()) yield adaptiveCell(source, leaf);
+    if (leaves) for (const leaf of leaves) yield adaptiveCell(source, leaf);
+    else for (let leaf = 0; leaf < source.leaves.length; leaf++) yield adaptiveCell(source, leaf);
     return;
   }
   const [x0, y0, x1, y1] = source.bounds,

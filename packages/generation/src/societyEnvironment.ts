@@ -4,8 +4,9 @@ import {
   gridPosition,
   putChannel,
   resolutionCells,
-  type NumericalVector,
+  fillBand,
   type AtlasFeature,
+  type Band,
 } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
 import { generationNetworks, removeGenerationReach } from "./generationNetworks";
@@ -60,7 +61,8 @@ function synchronizeChannel(state: GenerationState, binding: ChannelBinding) {
     map = work.map,
     name = binding.name;
   const before = name === "elevation" ? state.society!.elevationBefore : undefined;
-  const at = fieldInterpolator(changedSurface(state, name, before), name),
+  const surface = changedSurface(state, name, before),
+    at = fieldInterpolator(surface, name),
     values = map[binding.native],
     integer = values.type === "int32";
   for (let i = 0; i < map.mesh.count; i++) {
@@ -68,26 +70,31 @@ function synchronizeChannel(state: GenerationState, binding: ChannelBinding) {
     if (before && sample === 0) continue;
     const value = before ? values.get(i) + sample / scale : (sample - offset) / scale;
     values.set(i, integer ? Math.round(value) : value);
-    if (name === "elevation") {
-      if (!before) map.Elevation.add(i, map.BaseSeaLevel);
-      const sediment = map.SedimentThickness.get(i),
-        bedrock = map.Elevation.get(i) - sediment;
-      map.BedrockElevation.set(i, bedrock);
-      // The landscape invariant is exact equality; rebuild the surface from its parts.
-      map.Elevation.set(i, bedrock + sediment);
-    }
+    if (name === "elevation") rebuildElevation(map, i, !before);
   }
+  if (surface !== state.surface) state.surface.coverage.release(surface.channels[name]);
 }
-function changedSurface(state: GenerationState, name: string, before?: NumericalVector) {
-  return before
-    ? {
-        ...state.surface,
-        channels: {
-          ...state.surface.channels,
-          [name]: state.surface.channels[name].map((value, i) => value - before[i]),
-        },
-      }
-    : state.surface;
+function rebuildElevation(map: PhysicalField, i: number, datum: boolean) {
+  if (datum) map.Elevation.add(i, map.BaseSeaLevel);
+  const sediment = map.SedimentThickness.get(i),
+    bedrock = map.Elevation.get(i) - sediment;
+  map.BedrockElevation.set(i, bedrock);
+  // The landscape invariant is exact equality; rebuild the surface from its parts.
+  map.Elevation.set(i, bedrock + sediment);
+}
+function changedSurface(state: GenerationState, name: string, before?: Band) {
+  if (!before) return state.surface;
+  const current = state.surface.channels[name];
+  return {
+    ...state.surface,
+    channels: {
+      ...state.surface.channels,
+      [name]: fillBand(
+        state.surface.coverage.scratch(current.type, `society-change:${name}`, current.length),
+        (i) => current.get(i) - before.get(i)
+      ),
+    },
+  };
 }
 function refreshWater(state: GenerationState, context: MapProcessContext) {
   const work = state.physical!,
@@ -118,7 +125,7 @@ function refreshWater(state: GenerationState, context: MapProcessContext) {
 function* engineeredDamCells(state: GenerationState) {
   for (const work of state.society!.region.works) {
     if (work.kind !== "dam" || work.condition <= 0.1) continue;
-    for (const { i } of workSamples(state, work)) yield state.physical!.samples[i];
+    for (const { i } of workSamples(state, work)) yield state.physical!.samples.get(i);
   }
 }
 export function refreshSocietyEnvironment(
@@ -148,7 +155,7 @@ export function refreshSocietyEnvironment(
 }
 function releaseElevationBefore(state: GenerationState) {
   const before = state.society!.elevationBefore;
-  if (before?.readBlock) state.numerical?.release(before);
+  if (before) state.surface.coverage.release(before);
   delete state.society!.elevationBefore;
 }
 function refreshNative(
@@ -227,7 +234,7 @@ function realizeWorldDams(state: GenerationState, context: MapProcessContext) {
   const demands = society.region.works.filter((w) => w.kind === "dam" && w.demand);
   for (const dam of demands) {
     const sample = damCandidateCell(state, dam),
-      cell = sample >= 0 ? work.samples[sample] : -1;
+      cell = sample >= 0 && sample < work.samples.length ? work.samples.get(sample) : -1;
     if (cell === undefined || cell < 0) continue;
     const demand = dam.demand!,
       seat = dam.position;

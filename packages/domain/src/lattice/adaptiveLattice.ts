@@ -9,6 +9,7 @@ import {
 import { adaptiveMeasures } from "../adaptiveField";
 import { visitAdaptiveFace } from "../adaptiveFaceQuery";
 import { rectangle, type Bounds } from "../spatial";
+import type { Band } from "./band";
 import { blockCount, blockShift, content, halo, type Lattice, type PeriodicFrame } from "./lattice";
 
 /** Quadtree leaves of a region, content first then halo, with stored padded adjacency.
@@ -53,12 +54,12 @@ export class AdaptiveLattice implements Lattice {
     this.leafOf = new Int32Array(leaves);
     this.cellOf = new Int32Array(leaves);
     let contentCount = 0;
-    for (let leaf = 0; leaf < leaves; leaf++) if (measures[leaf] > 0) contentCount++;
+    for (let leaf = 0; leaf < leaves; leaf++) if (measures.get(leaf) > 0) contentCount++;
     this.contentCount = contentCount;
     let inside = 0,
       outside = contentCount;
     for (let leaf = 0; leaf < leaves; leaf++) {
-      const cell = measures[leaf] > 0 ? inside++ : outside++;
+      const cell = measures.get(leaf) > 0 ? inside++ : outside++;
       this.leafOf[cell] = leaf;
       this.cellOf[leaf] = cell;
     }
@@ -72,13 +73,14 @@ export class AdaptiveLattice implements Lattice {
     ];
     this.workRadius = Math.hypot(bounds[2] - bounds[0], bounds[3] - bounds[1]) / 2;
     const { totalArea, contentArea } = this.measureCells(measures);
+    topology.coverage.release(measures);
     this.contentRadius = Math.sqrt(contentArea / Math.PI);
     this.spacing = Math.sqrt(totalArea / leaves);
     this.stride = this.connectCells();
     this.live = new Int32Array(this.blockCount);
     for (let cell = 0; cell < leaves; cell++) this.live[cell >>> blockShift]++;
   }
-  private measureCells(measures: ArrayLike<number>) {
+  private measureCells(measures: Band) {
     const leaves = this.count,
       bounds = this.topology.bounds;
     this.xs = new Float64Array(leaves);
@@ -97,7 +99,7 @@ export class AdaptiveLattice implements Lattice {
       this.widths[cell] = b[2] - b[0];
       this.heights[cell] = b[3] - b[1];
       this.areas[cell] = (b[2] - b[0]) * (b[3] - b[1]);
-      this.contentAreas[cell] = measures[this.leafOf[cell]];
+      this.contentAreas[cell] = measures.get(this.leafOf[cell]);
       this.edges[cell] = Number(
         b[0] === bounds[0] || b[1] === bounds[1] || b[2] === bounds[2] || b[3] === bounds[3]
       );
@@ -113,7 +115,7 @@ export class AdaptiveLattice implements Lattice {
     this.degrees = new Int32Array(leaves);
     for (let cell = 0; cell < leaves; cell++) {
       const leaf = this.leafOf[cell];
-      this.degrees[cell] = topology.offsets[leaf + 1] - topology.offsets[leaf];
+      this.degrees[cell] = topology.offsets.get(leaf + 1) - topology.offsets.get(leaf);
     }
     const stride = this.degrees.reduce((maximum, value) => Math.max(maximum, value), 0),
       slots = leaves * stride;
@@ -126,19 +128,18 @@ export class AdaptiveLattice implements Lattice {
     for (let cell = 0; cell < leaves; cell++) {
       const leaf = this.leafOf[cell];
       for (let edge = 0; edge < this.degrees[cell]; edge++) {
-        const source = topology.offsets[leaf] + edge,
-          at = cell * stride + edge;
-        this.neighbors[at] = this.cellOf[topology.neighbors[source]];
-        this.edgeXs[at] = topology.directionX[source];
-        this.edgeYs[at] = topology.directionY[source];
-        this.edgeLengths[at] = topology.distances[source];
-        this.faceLengths[at] = topology.faceLengths[source];
+        const source = topology.offsets.get(leaf) + edge,
+          at = cell * stride + edge,
+          dx = topology.directionX.get(source),
+          dy = topology.directionY.get(source);
+        this.neighbors[at] = this.cellOf[topology.neighbors.get(source)];
+        this.edgeXs[at] = dx;
+        this.edgeYs[at] = dy;
+        this.edgeLengths[at] = topology.distances.get(source);
+        this.faceLengths[at] = topology.faceLengths.get(source);
         this.faceDistances[at] =
           this.edgeLengths[at] *
-          Math.abs(
-            topology.directionX[source] * topology.normalX[source] +
-              topology.directionY[source] * topology.normalY[source]
-          );
+          Math.abs(dx * topology.normalX.get(source) + dy * topology.normalY.get(source));
       }
     }
     return stride;

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { canonryMagicPresets, type SocietyCommunity } from "@atlas/domain";
+import { canonryMagicPresets, residentBand, type SocietyCommunity } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import type { MapProcessContext } from "../process";
 import type { SocietyWorkspace } from "../societyGeography";
@@ -50,7 +50,8 @@ function scenario() {
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
-    samples: new Int32Array(state.surface.active.length),
+    samples: residentBand("int32", new Int32Array(state.surface.active.length)),
+    grid: state.surface.coverage,
     fixed: [],
     inherited: false,
     sampling: { maximumSize: map.mesh.spacing, minimumSize: map.mesh.spacing, featureSamples: 2 },
@@ -80,10 +81,10 @@ function scenario() {
       events: [],
       magic: [],
     },
-    owner: new Int32Array(0),
+    owner: residentBand("int32", new Int32Array(0)),
     edges: [],
-    river: new Float64Array(0),
-    coast: new Float64Array(0),
+    river: residentBand("float64", new Float64Array(0)),
+    coast: residentBand("float64", new Float64Array(0)),
     inherited: false,
     changed: new Set(),
     mediumChanged: new Set(),

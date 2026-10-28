@@ -15,11 +15,11 @@ export function applyFieldBrush(data: BrushInput, source: GridSurface, grid: Gri
     valueAt = fieldInterpolator(source, data.channel);
   for (let i = 0; i < values.length; i++) {
     const distance = strokeDistance(gridPosition(grid, i), data.stroke ?? [data.center]);
-    if (distance > data.radius || !grid.active[i]) continue;
+    if (distance > data.radius || !grid.active.get(i)) continue;
     const t = Math.max(0, 1 - distance / data.radius),
       weight =
         data.falloff === "constant" ? 1 : data.falloff === "linear" ? t : t * t * (3 - 2 * t);
-    values[i] = brushValue(data, grid, valueAt, i, weight);
+    values.set(i, brushValue(data, grid, valueAt, i, weight));
   }
 }
 function brushValue(

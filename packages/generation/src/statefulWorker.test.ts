@@ -71,11 +71,14 @@ it("rebinds a reviewed stateful module in a separately bundled worker and publis
         .filter((entry) => entry.path[0] !== "present")
         .map((entry) => entry.ancestry.at(-1)?.id)
     ).toEqual(["Formation", "Recent"]);
-    expect(grid.channels[inventoryChannel]).toBeInstanceOf(Float64Array);
     expect(grid.quantities?.[inventoryChannel]).toBe("extensive");
-    for (let i = 0; i < grid.active.length; i++)
-      if (grid.active[i])
-        expect(grid.channels[inventoryChannel][i] / grid.measures[i]).toBeCloseTo(17, 10);
+    // Samples cross the worker boundary as plain values, whatever their storage in the worker.
+    const active = Array.from(grid.active),
+      inventory = Array.from(grid.channels[inventoryChannel]),
+      measures = Array.from(grid.measures);
+    expect(inventory).toHaveLength(active.length);
+    for (let i = 0; i < active.length; i++)
+      if (active[i]) expect(inventory[i] / measures[i]).toBeCloseTo(17, 10);
     expect(prepared.input.resolvedFeatures!.selection[inventoryFeature].settings.deposition).toBe(
       2
     );

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { createGrid, putChannel, rectangle } from "@atlas/domain";
+import { createGrid, putChannel, rectangle, residentBand } from "@atlas/domain";
 import { landscape, epoch } from "./mapFixtures";
 import type { MapProcessContext } from "./process";
 import { initializePopulation } from "./societyPopulation";
@@ -11,7 +11,12 @@ function fixture() {
   state.domain.scope.footprint = rectangle([0, 0, 300000, 100000]);
   state.domain.world.areas.area.footprint = state.domain.scope.footprint;
   state.surface = createGrid("society", state.domain.scope, 13, 5);
-  putChannel(state.surface, "elevation", "metre", new Float64Array(65).fill(100));
+  putChannel(
+    state.surface,
+    "elevation",
+    "metre",
+    residentBand("float64", new Float64Array(65).fill(100))
+  );
   const context: MapProcessContext = {
     scope: state.domain.scope,
     invocation: [],
@@ -33,10 +38,10 @@ it("connects the two shores of a strait by sea while land connections stay on th
   const water = new Float64Array(65);
   for (let i = 0; i < 65; i++)
     if (i % 13 === 6) {
-      state.surface.channels.elevation[i] = -100;
+      state.surface.channels.elevation.set(i, -100);
       water[i] = 1;
     }
-  putChannel(state.surface, "water", "category", water);
+  putChannel(state.surface, "water", "category", residentBand("float64", water));
   initializePopulation(state, context);
   const region = state.society!.region,
     nodes = new Map(region.communities.map((c) => [c.id, c]));
@@ -55,7 +60,7 @@ it("carries a connection along a river at half the cost of the land way", () => 
   const { state, context } = fixture();
   const order = new Float64Array(65);
   for (let i = 0; i < 65; i++) if (Math.floor(i / 13) === 2) order[i] = 1;
-  putChannel(state.surface, "riverOrder", "order", order);
+  putChannel(state.surface, "riverOrder", "order", residentBand("float64", order));
   initializePopulation(state, context);
   const rivers = state.society!.region.connections.filter((link) => link.kind === "river");
   expect(rivers.length).toBeGreaterThan(0);

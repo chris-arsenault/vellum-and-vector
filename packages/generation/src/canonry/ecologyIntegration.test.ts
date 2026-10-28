@@ -6,6 +6,7 @@ import {
   refineAdaptiveWhere,
   rectangle,
   magicSystemSchema,
+  residentBand,
 } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import type { MapProcessContext, GenerationCause } from "../process";
@@ -41,7 +42,8 @@ function fixture() {
     profile: atlasPhysicalProfile(),
     fixed: [],
     inherited: false,
-    samples: lattice.leafCells(),
+    samples: residentBand("int32", lattice.leafCells()),
+    grid: state.surface.coverage,
     sampling: { maximumSize: 500, minimumSize: 125, featureSamples: 2 },
   };
   map.Temperature.fill(450);
@@ -103,7 +105,7 @@ it("publishes all ecological channels in the same located field and records comp
   for (const [name, native, unit] of ecologyBindings) {
     expect(state.surface.units[name]).toBe(unit);
     for (let leaf = 0; leaf < state.surface.active.length; leaf++)
-      expect(state.surface.channels[name][leaf]).toBeCloseTo(
+      expect(state.surface.channels[name].get(leaf)).toBeCloseTo(
         state.physical!.map[native].get(state.physical!.map.mesh.leafToCell(leaf)),
         8
       );
@@ -166,7 +168,7 @@ it("applies present-day magical fire without replaying epochs or maturing source
   projectNative(state);
   extractEcologicalFeatures(state);
   expect(Object.values(state.domain.world.features).some((f) => f.kind === "forest")).toBe(true);
-  const elevation = state.surface.channels.elevation.slice();
+  const elevation = Array.from(state.surface.channels.elevation);
   executeProcessBehavior(prepareGeneratedProcess(["magic"]), state, c);
   const present = ecologyProcesses({ ...input, domains: ["magic"] }).find(
     (p) => p.contract.id === "atlas.ecology-present"
@@ -178,10 +180,10 @@ it("applies present-day magical fire without replaying epochs or maturing source
   map.Elevation.fill(200 * 1024); // A magic-only projection retains the existing terrain.
   projectNative(state, false, true);
   extractEcologicalFeatures(state);
-  expect(state.surface.channels.elevation).toEqual(elevation);
-  expect(state.surface.channels.treeCover[0]).toBeCloseTo(0.08);
-  expect(state.surface.channels.biome[0]).toBe(map.BiomeCodes.get(0));
-  expect(state.surface.channels.soilCarbon[0]).toBeGreaterThan(0);
+  expect(Array.from(state.surface.channels.elevation)).toEqual(elevation);
+  expect(state.surface.channels.treeCover.get(0)).toBeCloseTo(0.08);
+  expect(state.surface.channels.biome.get(0)).toBe(map.BiomeCodes.get(0));
+  expect(state.surface.channels.soilCarbon.get(0)).toBeGreaterThan(0);
   expect(Object.values(state.domain.world.features).some((f) => f.kind === "forest")).toBe(false);
 });
 
@@ -368,7 +370,7 @@ it("keeps protected biome samples authoritative for both polygons and published 
   process("present").apply(state, context());
   projectNative(state);
   extractEcologicalFeatures(state);
-  expect(state.surface.channels.biome.every((v) => v === 7)).toBe(true);
+  expect(Array.from(state.surface.channels.biome).every((v) => v === 7)).toBe(true);
   const features = Object.values(state.domain.world.features);
   expect(features.length).toBeGreaterThan(0);
   expect(features.every((f) => f.kind === "grassland")).toBe(true);

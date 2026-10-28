@@ -1,4 +1,4 @@
-import { gridPosition, putChannel, allocateNumerical, type NumericalVector } from "@atlas/domain";
+import { gridPosition, putChannel, type Band } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { atlasChannels, type ChannelBinding } from "./atlasChannels";
 import { nativeIndexAtSurface } from "./atlasWorkspace";
@@ -45,13 +45,15 @@ function projectChannel(state: GenerationState, binding: ChannelBinding) {
   const scale = binding.scale,
     offset = binding.offset ?? 0;
   for (let i = 0; i < values.length; i++) {
-    const value = values[i];
-    values[i] =
+    const value = values.get(i);
+    values.set(
+      i,
       binding.unit === "cell-index"
         ? value < 0
           ? -1
           : map.mesh.cellToLeaf(value)
-        : (value - datum) * scale + offset;
+        : (value - datum) * scale + offset
+    );
   }
   putChannel(grid, binding.name, binding.unit, values);
 }
@@ -77,14 +79,19 @@ export function projectNative(
   const grid = state.surface;
   projectChannels(state, forcingOnly, preserveTerrain, bindings);
   if (forcingOnly) {
-    putChannel(grid, "naturalTemperature", "celsius", grid.channels.temperature.slice());
-    putChannel(grid, "naturalRock", "ratio", grid.channels.rock.slice());
+    putChannel(
+      grid,
+      "naturalTemperature",
+      "celsius",
+      grid.coverage.copyBand(grid.channels.temperature)
+    );
+    putChannel(grid, "naturalRock", "ratio", grid.coverage.copyBand(grid.channels.rock));
     return;
   }
   const emit = (
     name: string,
     unit: string,
-    values: () => NumericalVector,
+    values: () => Band,
     quantity: "category" | "intensive" = "intensive"
   ) => {
     if (!selectedChannels || selectedChannels.has(name))
@@ -97,7 +104,7 @@ export function projectNative(
 type DerivedEmitter = (
   name: string,
   unit: string,
-  values: () => NumericalVector,
+  values: () => Band,
   quantity?: "category" | "intensive"
 ) => void;
 
@@ -105,15 +112,15 @@ function projectDerivedClimate(state: GenerationState, emit: DerivedEmitter) {
   const work = state.physical!,
     map = work.map;
   emit("seaDatum", "metre", () =>
-    allocateNumerical(
-      { type: "float64", length: work.samples.length, lifetime: "run", name: "seaDatum" },
-      work.numerical
-    ).fill(map.BaseSeaLevel / 1024)
+    work.grid.scratch("float64", "seaDatum", work.samples.length).fill(map.BaseSeaLevel / 1024)
   );
   emit("flow", "cubic-metre/second", () => projectedValues(work, map.FlowAccumulation));
-  emit("drainageElevation", "metre", () =>
-    projectedValues(work, map.DrainageElevations).map((value) => (value - map.BaseSeaLevel) / 1024)
-  );
+  emit("drainageElevation", "metre", () => {
+    const values = projectedValues(work, map.DrainageElevations);
+    for (let i = 0; i < values.length; i++)
+      values.set(i, (values.get(i) - map.BaseSeaLevel) / 1024);
+    return values;
+  });
   emit("precipitation", "metre/year", () =>
     projectedValues(work, (i) => (map.Rainfall.get(i) + map.Snowfall.get(i)) / 1000)
   );
@@ -163,10 +170,9 @@ function projectWaterLevels(work: AtlasPhysicalWorkspace, emit: DerivedEmitter) 
     "category"
   );
   emit("seaLevel", "metre", () =>
-    allocateNumerical(
-      { type: "float64", length: work.samples.length, lifetime: "run", name: "seaLevel" },
-      work.numerical
-    ).fill((map.EffectiveSeaLevel - map.BaseSeaLevel) / 1024)
+    work.grid
+      .scratch("float64", "seaLevel", work.samples.length)
+      .fill((map.EffectiveSeaLevel - map.BaseSeaLevel) / 1024)
   );
 }
 

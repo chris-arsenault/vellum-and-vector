@@ -183,13 +183,7 @@ function publishRoutes(
     // A highway is the straight shot its builders surveyed; every other way follows the land.
     const path = link.highway
       ? [a.position, b.position]
-      : findRoute(
-          state.surface,
-          a.position,
-          b.position,
-          link.kind === "sea" ? "sea" : "road",
-          state.numerical
-        );
+      : findRoute(state.surface, a.position, b.position, link.kind === "sea" ? "sea" : "road");
     if (path.length < 2) continue;
     const feature = generatedFeature(
       state,

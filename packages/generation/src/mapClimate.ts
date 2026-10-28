@@ -1,4 +1,5 @@
 import {
+  everySample,
   neighbors,
   putChannel,
   requireThat,
@@ -49,12 +50,14 @@ export const temperatureProcess: MapProcess = {
         temperature = surfaceArray(state, "temperature"),
         natural = surfaceArray(state, "natural-temperature");
       for (let i = 0; i < elevation.length; i++) {
-        natural[i] =
+        natural.set(
+          i,
           Number(context.parameters.temperature) +
-          Number(context.parameters.temperatureOffset) -
-          Math.max(0, elevation[i] - Number(context.parameters.seaLevel)) *
-            Number(context.parameters.lapseRate);
-        temperature[i] = natural[i] + heat[i];
+            Number(context.parameters.temperatureOffset) -
+            Math.max(0, elevation.get(i) - Number(context.parameters.seaLevel)) *
+              Number(context.parameters.lapseRate)
+        );
+        temperature.set(i, natural.get(i) + heat.get(i));
       }
       putChannel(grid, "naturalTemperature", "celsius", natural);
       putChannel(grid, "temperature", "celsius", temperature);
@@ -157,13 +160,15 @@ export const precipitationProcess: MapProcess = {
         let previous = -1;
         for (const i of path) {
           const connected = previous >= 0 && neighbors(grid, i).includes(previous),
-            incoming = connected ? moisture[previous] : Number(context.parameters.incomingMoisture),
-            ocean = elevation[i] <= Number(context.parameters.seaLevel),
+            incoming = connected
+              ? moisture.get(previous)
+              : Number(context.parameters.incomingMoisture),
+            ocean = elevation.get(i) <= Number(context.parameters.seaLevel),
             evaporation = ocean
               ? Number(context.parameters.evaporation) *
-                Math.max(0, Math.min(2, (temperature[i] + 20) / 40))
+                Math.max(0, Math.min(2, (temperature.get(i) + 20) / 40))
               : 0,
-            lift = connected ? Math.max(0, elevation[i] - elevation[previous]) : 0,
+            lift = connected ? Math.max(0, elevation.get(i) - elevation.get(previous)) : 0,
             fraction = Math.min(
               1,
               Number(context.parameters.condensation) +
@@ -176,14 +181,14 @@ export const precipitationProcess: MapProcess = {
                 1,
                 (Number(context.parameters.snowTemperature) +
                   Number(context.parameters.snowTransition) / 2 -
-                  temperature[i]) /
+                  temperature.get(i)) /
                   Number(context.parameters.snowTransition)
               )
             );
-          precipitation[i] = available * fraction;
-          moisture[i] = available - precipitation[i];
-          snowfall[i] = precipitation[i] * snowFraction;
-          rainfall[i] = precipitation[i] - snowfall[i];
+          precipitation.set(i, available * fraction);
+          moisture.set(i, available - precipitation.get(i));
+          snowfall.set(i, precipitation.get(i) * snowFraction);
+          rainfall.set(i, precipitation.get(i) - snowfall.get(i));
           previous = i;
         }
       }
@@ -202,7 +207,7 @@ export const precipitationProcess: MapProcess = {
   validate(state) {
     for (const name of ["precipitation", "snowfall", "rainfall", "moisture"])
       requireThat(
-        requireChannel(state.surface, name, "metre/year").every((value) => value >= 0),
+        everySample(requireChannel(state.surface, name, "metre/year"), (value) => value >= 0),
         "precipitation_invalid",
         "Atmospheric water rates remain nonnegative."
       );
@@ -251,19 +256,22 @@ export const iceBalanceProcess: MapProcess = {
         meltwater = surfaceArray(state, "meltwater"),
         accumulation = surfaceArray(state, "accumulation");
       requireThat(
-        snowfall.every((value) => value >= 0) && ice.every((value) => value >= 0),
+        everySample(snowfall, (value) => value >= 0) && everySample(ice, (value) => value >= 0),
         "ice_input",
         "Snowfall and inherited ice remain nonnegative."
       );
       for (let i = 0; i < ice.length; i++) {
-        maximum[i] = Math.max(maximum[i], ice[i]);
-        accumulation[i] = snowfall[i] * years;
-        meltwater[i] = Math.min(
-          ice[i] + accumulation[i],
-          Math.max(0, temperature[i]) * Number(context.parameters.meltFactor) * years
+        maximum.set(i, Math.max(maximum.get(i), ice.get(i)));
+        accumulation.set(i, snowfall.get(i) * years);
+        meltwater.set(
+          i,
+          Math.min(
+            ice.get(i) + accumulation.get(i),
+            Math.max(0, temperature.get(i)) * Number(context.parameters.meltFactor) * years
+          )
         );
-        ice[i] = Math.max(0, ice[i] + accumulation[i] - meltwater[i]);
-        maximum[i] = Math.max(maximum[i], ice[i]);
+        ice.set(i, Math.max(0, ice.get(i) + accumulation.get(i) - meltwater.get(i)));
+        maximum.set(i, Math.max(maximum.get(i), ice.get(i)));
       }
       putChannel(grid, "ice", "metre", ice);
       putChannel(grid, "maximumIce", "metre", maximum);
@@ -281,7 +289,7 @@ export const iceBalanceProcess: MapProcess = {
   validate(state) {
     for (const name of ["ice", "maximumIce", "meltwater"])
       requireThat(
-        requireChannel(state.surface, name, "metre").every((value) => value >= 0),
+        everySample(requireChannel(state.surface, name, "metre"), (value) => value >= 0),
         "ice_invalid",
         "Ice and meltwater depths remain nonnegative."
       );

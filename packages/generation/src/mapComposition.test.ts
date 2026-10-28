@@ -1,6 +1,10 @@
 import { expect, it } from "vitest";
 import {
+  cloneSnapshot,
+  copyGrid,
   createGrid,
+  foldSamples,
+  generateChannel,
   gridPosition,
   overlayField,
   putChannel,
@@ -34,12 +38,23 @@ const flatten: MapProcess = {
   },
 };
 
+function channelValues(grid: GridSurface) {
+  return Object.fromEntries(
+    Object.entries(grid.channels).map(([name, band]) => [name, Array.from(band)])
+  );
+}
+
 function authoredRidge(): GenerationState {
   const initial = landscape(),
-    base: GridSurface = structuredClone(initial.surface),
+    base: GridSurface = copyGrid(initial.surface),
     footprint = rectangle([1500, 0, 2500, 1000]),
     patch = createGrid("authored-ridge", { ...initial.domain.scope, footprint }, 3, 2);
-  putChannel(patch, "elevation", "metre", new Float64Array(6).fill(2000));
+  putChannel(
+    patch,
+    "elevation",
+    "metre",
+    generateChannel(patch, "elevation", () => 2000)
+  );
   overlayField(base, patch);
   initial.domain.numerical.height = base;
   initial.domain.numerical[patch.id] = patch;
@@ -79,21 +94,26 @@ it("composes an authored fine ridge into regenerated base samples before climate
     ]),
     registry(flatten)
   ).run(initial, options);
-  expect(result.state.surface.channels.elevation[1]).toBe(0);
-  expect(result.state.surface.channels.elevation[2]).toBe(2000);
-  expect(result.state.surface.channels.temperature[2]).toBe(2);
-  expect(result.state.surface.channels.temperature[1]).toBe(15);
-  expect(result.state.surface.channels.precipitation[2]).toBeGreaterThan(
-    result.state.surface.channels.precipitation[3]
+  expect(result.state.surface.channels.elevation.get(1)).toBe(0);
+  expect(result.state.surface.channels.elevation.get(2)).toBe(2000);
+  expect(result.state.surface.channels.temperature.get(2)).toBe(2);
+  expect(result.state.surface.channels.temperature.get(1)).toBe(15);
+  expect(result.state.surface.channels.precipitation.get(2)).toBeGreaterThan(
+    result.state.surface.channels.precipitation.get(3)
   );
   expect(result.state.domain.fieldPatches).toEqual(initial.domain.fieldPatches);
-  expect(result.state.domain.numerical.height.overlays).toEqual(
-    initial.domain.numerical.height.overlays
+  const overlays = (grid: GridSurface) =>
+    (grid.overlays ?? []).map((overlay) => ({
+      ...overlay,
+      grid: { id: overlay.grid.id, channels: channelValues(overlay.grid) },
+    }));
+  expect(overlays(result.state.domain.numerical.height)).toEqual(
+    overlays(initial.domain.numerical.height)
   );
-  expect(result.state.domain.numerical["authored-ridge"]).toEqual(
-    initial.domain.numerical["authored-ridge"]
+  expect(channelValues(result.state.domain.numerical["authored-ridge"])).toEqual(
+    channelValues(initial.domain.numerical["authored-ridge"])
   );
-  expect(initial.surface.channels.elevation[2]).toBe(1100);
+  expect(initial.surface.channels.elevation.get(2)).toBe(1100);
 });
 
 it("rejects incompatible authored units and changes to exact authored patch resources", async () => {
@@ -108,7 +128,7 @@ it("rejects incompatible authored units and changes to exact authored patch reso
     behavior: {
       kind: "model-pass",
       applyPass(state) {
-        state.domain.numerical["authored-ridge"].channels.elevation[0] = 1;
+        state.domain.numerical["authored-ridge"].channels.elevation.set(0, 1);
       },
     },
   };
@@ -130,12 +150,16 @@ const highPoint: MapProcess = {
     kind: "extract",
     extract(state, context) {
       const elevation = state.surface.channels.elevation,
-        i = elevation.reduce(
-          (highest, value, index) => (value > elevation[highest] ? index : highest),
+        i = foldSamples(
+          elevation,
+          (highest, value, index) => (value > elevation.get(highest) ? index : highest),
           0
         ),
         position = gridPosition(state.surface, i),
-        geometry = { type: "Point" as const, coordinates: [position.x, position.y, elevation[i]] },
+        geometry = {
+          type: "Point" as const,
+          coordinates: [position.x, position.y, elevation.get(i)],
+        },
         old = state.domain.world.features.ridge;
       if (old)
         old.detail[context.scope.areaId] = {
@@ -191,7 +215,13 @@ it("reuses a registered GIS process and repeated climate passes over world and r
     scope = { ...world.domain.scope, areaId: "region", footprint },
     surface = createGrid("regional", scope, 3, 2);
   resample(world.surface, surface, "elevation");
-  const initial = structuredClone(world);
+  const initial: GenerationState = {
+    ...world,
+    domain: cloneSnapshot(world.domain),
+    facts: new Set(world.facts),
+    history: structuredClone(world.history),
+    causes: structuredClone(world.causes),
+  };
   initial.domain.world.areas.region = {
     ...initial.domain.world.areas.area,
     id: "region",
@@ -210,7 +240,9 @@ it("reuses a registered GIS process and repeated climate passes over world and r
   expect(region.domain.world.features.ridge.detail.region.geometry).toEqual(
     world.domain.world.features.ridge.geometry
   );
-  expect(region.surface.channels.temperature[1]).toBe(world.surface.channels.temperature[2]);
+  expect(region.surface.channels.temperature.get(1)).toBe(
+    world.surface.channels.temperature.get(2)
+  );
 });
 
 it("rejects overwriting authored vectors and completed history before a boundary is exposed", async () => {

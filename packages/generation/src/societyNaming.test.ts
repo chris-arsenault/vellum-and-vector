@@ -3,6 +3,7 @@ import {
   builtinLayers,
   rectangle,
   putChannel,
+  residentBand,
   isSocietyWork,
   type SocietyCommunity,
   type Entity,
@@ -18,14 +19,8 @@ import { makeWork } from "./societyWorks";
 import { publishSocietyWorks } from "./societyWorkPublication";
 import { workTerms } from "./namingCultures";
 
-function fixture() {
-  const state = landscape(),
-    world = state.domain.world;
-  world.areas.area.profile = "region";
-  world.id = "bc07dcd0-7cba-46b1-8e56-5f7829dde8cb";
-  world.layers = Object.fromEntries(builtinLayers().map((layer) => [layer.id, layer]));
-  putChannel(state.surface, "elevation", "metre", new Float64Array(10).fill(100));
-  const communities: SocietyCommunity[] = ["B", "C"].map((language, i) => ({
+function abandonedCommunities(): SocietyCommunity[] {
+  return ["B", "C"].map((language, i) => ({
     id: `community-${i}`,
     name: "Provisional",
     position: { x: 1000 + i * 2000, y: 500, z: 0 },
@@ -48,6 +43,20 @@ function fixture() {
     causes: [],
     footprint: rectangle([i * 2000, 0, (i + 1) * 2000, 1000]),
   }));
+}
+function fixture() {
+  const state = landscape(),
+    world = state.domain.world;
+  world.areas.area.profile = "region";
+  world.id = "bc07dcd0-7cba-46b1-8e56-5f7829dde8cb";
+  world.layers = Object.fromEntries(builtinLayers().map((layer) => [layer.id, layer]));
+  putChannel(
+    state.surface,
+    "elevation",
+    "metre",
+    residentBand("float64", new Float64Array(10).fill(100))
+  );
+  const communities = abandonedCommunities();
   const region = {
     areaId: "area",
     spaceId: "surface",
@@ -60,9 +69,9 @@ function fixture() {
   };
   state.society = {
     region,
-    owner: new Int32Array(10).fill(0),
-    river: new Float64Array(10),
-    coast: new Float64Array(10),
+    owner: residentBand("int32", new Int32Array(10)),
+    river: residentBand("float64", new Float64Array(10)),
+    coast: residentBand("float64", new Float64Array(10)),
     mediumChanged: new Set(),
     inherited: false,
     changed: new Set(),

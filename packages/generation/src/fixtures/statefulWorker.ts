@@ -4,7 +4,7 @@ import { atlasGenerationModules } from "../atlasModules";
 import { statefulInventoryModule } from "./statefulModule";
 import { generateAtlas, type AtlasGenerationInput } from "../atlasWorkflow";
 import { generationSnapshot } from "../atlasPublication";
-import { configureSpatial, type DomainSnapshot } from "@atlas/domain";
+import { configureSpatial, detachGrid, type DomainSnapshot } from "@atlas/domain";
 import { GeometryKernel } from "../../../storage-browser/src/geometryKernel";
 import { GeosSpatial } from "../../../storage-browser/src/geosSpatial";
 
@@ -20,7 +20,15 @@ port.on(
     try {
       const result = await generateAtlas(data.snapshot, data.input);
       const snapshot = generationSnapshot(result, data.input, data.operationId, data.snapshot, []);
-      port.postMessage({ kind: "completed", snapshot, history: result.state.history });
+      // Bands belong to this realm's cache; published grids cross the port as plain arrays.
+      const numerical = Object.fromEntries(
+        Object.entries(snapshot.numerical).map(([id, grid]) => [id, detachGrid(grid)])
+      );
+      port.postMessage({
+        kind: "completed",
+        snapshot: { ...snapshot, numerical },
+        history: result.state.history,
+      });
     } catch (error) {
       port.postMessage({ kind: "failed", error: String(error) });
     }

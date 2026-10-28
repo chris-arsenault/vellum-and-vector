@@ -21,7 +21,7 @@ export function territoryShape(state: GenerationState, members: Set<string>): Ge
   const work = state.society!;
   const rows = new Map<string, Bounds[]>();
   for (let i = 0; i < work.owner.length; i++) {
-    if (!members.has(work.region.communities[work.owner[i]]?.id)) continue;
+    if (!members.has(work.region.communities[work.owner.get(i)]?.id)) continue;
     const bounds = ownershipBox(state, i);
     const key = `${bounds[1]}:${bounds[3]}`;
     const row = rows.get(key) ?? [];

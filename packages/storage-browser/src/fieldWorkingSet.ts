@@ -1,17 +1,19 @@
 import {
   requireThat,
+  sampleCoverage,
   type AdaptiveTopology,
+  type Band,
+  type BlockCache,
   type FieldGeography,
   type Grid,
-  type NumericalAllocator,
   type NumericalResource,
-  type NumericalVector,
   type ResourceStore,
 } from "@atlas/domain";
+import type { FieldInput } from "./zarrInput";
 
 /** Local execution adapter; the domain resource repository remains asynchronous and portable. */
 export interface FieldInputStore extends ResourceStore {
-  openArray(id: string, name: string, allocator: NumericalAllocator): Promise<NumericalVector>;
+  openArray(id: string, name: string, blocks: BlockCache): Promise<FieldInput>;
 }
 const topologyCells = [
   "leaves",
@@ -29,26 +31,26 @@ function vectorKey(resource: NumericalResource, name: string) {
   const array = resource.arrays.find((a) => a.name === name)!;
   return `${array.source?.resourceId ?? resource.id}:${array.source?.array ?? name}`;
 }
-/** Active readers share immutable array handles; the last reader closes the underlying input. */
+/** Active readers share immutable input bands; the last reader closes the underlying input. */
 export class FieldInputCache {
   private entries = new Map<
     string,
-    { users: number; opened: Promise<NumericalVector>; vector?: NumericalVector }
+    { users: number; opened: Promise<FieldInput>; input?: FieldInput }
   >();
   constructor(
     private store: FieldInputStore,
-    private allocator: NumericalAllocator
+    readonly blocks: BlockCache
   ) {}
   async acquire(resource: NumericalResource, name: string) {
     const key = vectorKey(resource, name);
     let entry = this.entries.get(key);
     if (!entry) {
-      entry = { users: 0, opened: this.store.openArray(resource.id, name, this.allocator) };
+      entry = { users: 0, opened: this.store.openArray(resource.id, name, this.blocks) };
       this.entries.set(key, entry);
     }
     entry.users++;
     try {
-      return (entry.vector ??= await entry.opened);
+      return (entry.input ??= await entry.opened).values;
     } catch (error) {
       this.release(key);
       throw error;
@@ -58,16 +60,12 @@ export class FieldInputCache {
     const entry = this.entries.get(key);
     if (!entry || --entry.users > 0) return;
     this.entries.delete(key);
-    if (entry.vector) this.allocator.release(entry.vector);
+    entry.input?.close();
   }
 }
-function fieldChannels(
-  resource: NumericalResource,
-  vectors: Record<string, NumericalVector>,
-  names: string[]
-) {
+function fieldChannels(resource: NumericalResource, bands: Record<string, Band>, names: string[]) {
   const field = resource.field!,
-    channels: Record<string, NumericalVector> = {},
+    channels: Record<string, Band> = {},
     units: Record<string, string> = {},
     quantities: Record<string, "category" | "intensive" | "extensive"> = {};
   for (const name of names) {
@@ -77,20 +75,23 @@ function fieldChannels(
       "field_channel",
       "Field channel quantities must describe samples."
     );
-    channels[name] = vectors[array.name];
+    channels[name] = bands[array.name];
     units[name] = array.unit;
     quantities[name] = array.quantity;
   }
   return { channels, units, quantities };
 }
-/** Immutable input handles share decoded chunks; working outputs use the operation's arena. */
+/**
+ * Immutable inputs are bands over committed chunks in the operation's block cache; working
+ * outputs allocate in the same cache through the loaded grid's coverage.
+ */
 export class FieldWorkingSet {
-  private loaded = new Map<string, NumericalVector>();
+  private loaded = new Map<string, Band>();
   private closed = false;
   constructor(
     private store: FieldInputStore,
-    allocator: NumericalAllocator,
-    private inputs = new FieldInputCache(store, allocator)
+    blocks: BlockCache,
+    private inputs = new FieldInputCache(store, blocks)
   ) {}
   async load(id: string, names: string[], geography: FieldGeography): Promise<Grid> {
     requireThat(!this.closed, "field_closed", "The numerical operation has ended.");
@@ -115,15 +116,16 @@ export class FieldWorkingSet {
     );
     const selected = ["active", "measures", ...names.map((name) => field.channels[name])];
     if (resource.layout === "adaptive") selected.push(...topologyCells);
-    const vectors = await this.openVectors(resource, selected);
+    const bands = await this.openBands(resource, selected);
     const common = {
       id: field.id,
       scope: field.scope,
       bounds: resource.bounds,
       periodicWidth: resource.periodicWidth,
-      active: vectors.active,
-      measures: vectors.measures,
-      ...fieldChannels(resource, vectors, names),
+      coverage: sampleCoverage(bands.active.length, this.inputs.blocks),
+      active: bands.active,
+      measures: bands.measures,
+      ...fieldChannels(resource, bands, names),
       ocean: geography.ocean,
       waterBodies: geography.waterBodies,
     };
@@ -131,23 +133,24 @@ export class FieldWorkingSet {
       requireThat(resource.sampling, "field_layout", "Regular fields declare their dimensions.");
       return { ...common, ...resource.sampling };
     }
-    const topology = await this.openTopology(resource, vectors);
+    const topology = await this.openTopology(resource, bands);
     return { ...common, topology };
   }
-  private async openTopology(resource: NumericalResource, cells: Record<string, NumericalVector>) {
+  private async openTopology(resource: NumericalResource, cells: Record<string, Band>) {
     requireThat(
       resource.layout === "adaptive" && resource.field?.treeResourceId,
       "field_layout",
       "Adaptive fields declare their tree resource."
     );
     const tree = await this.store.describe(resource.field.treeResourceId),
-      vectors = await this.openVectors(tree, topologyTree);
+      bands = await this.openBands(tree, topologyTree);
     const topology: AdaptiveTopology = {
       bounds: tree.bounds,
-      boxes: vectors.boxes,
-      children: vectors.children,
-      levels: vectors.levels,
-      leafIndex: vectors.leafIndex,
+      coverage: sampleCoverage(cells.leaves.length, this.inputs.blocks),
+      boxes: bands.boxes,
+      children: bands.children,
+      levels: bands.levels,
+      leafIndex: bands.leafIndex,
       leaves: cells.leaves,
       offsets: cells.offsets,
       neighbors: cells.neighbors,
@@ -160,9 +163,9 @@ export class FieldWorkingSet {
     };
     return topology;
   }
-  private async openVectors(resource: NumericalResource, names: string[]) {
-    const result: Record<string, NumericalVector> = {},
-      staged = new Map<string, NumericalVector>();
+  private async openBands(resource: NumericalResource, names: string[]) {
+    const result: Record<string, Band> = {},
+      staged = new Map<string, Band>();
     try {
       for (const name of names) {
         requireThat(
@@ -178,7 +181,7 @@ export class FieldWorkingSet {
         }
         result[name] = values;
       }
-      for (const [key, vector] of staged) this.loaded.set(key, vector);
+      for (const [key, band] of staged) this.loaded.set(key, band);
       return result;
     } catch (error) {
       for (const key of staged.keys()) this.inputs.release(key);

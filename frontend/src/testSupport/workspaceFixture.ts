@@ -1,11 +1,14 @@
 import { afterEach } from "vitest";
 import {
   areaSpace,
+  attachGrid,
+  Band,
+  cloneSnapshot,
   configureSpatial,
-  isNumericalVector,
+  Coverage,
+  detachGrid,
   mappedField,
   projectChanges,
-  readNumericalBlock,
   spatial,
   type Command,
   type DomainSnapshot,
@@ -16,7 +19,7 @@ import {
 } from "@atlas/domain";
 import { GeometryKernel, GeosSpatial, SpatialCatalog, ZarrResources } from "@atlas/storage-browser";
 import { sqliteFixture } from "../../../packages/storage-browser/src/sqliteFixture";
-import { arenaFixture } from "../../../packages/storage-browser/src/numericalFixture";
+import { blockCacheFixture } from "../../../packages/storage-browser/src/blockCacheFixture";
 import { fileStoreFixture } from "../../../packages/storage-browser/src/fileStoreFixture";
 import { createWorldSnapshot, worldScope, type WorldCreationInput } from "../worldCreation";
 import { executeWorkspaceCommand } from "../workspaceCommands";
@@ -45,7 +48,8 @@ async function open() {
   const kernel = await GeometryKernel.create();
   const catalog = new SpatialCatalog(db, kernel);
   const files = fileStoreFixture();
-  const working = arenaFixture();
+  // A small budget so field inputs and command outputs exercise eviction and reload.
+  const working = blockCacheFixture(1024 * 1024);
   configureSpatial((precision) => new GeosSpatial(kernel, precision));
   return { db, catalog, resources: new ZarrResources(files.store), files, working };
 }
@@ -82,7 +86,7 @@ export function listWorlds() {
 async function ready(id: string) {
   const current = await (opened ??= open());
   const entry = fixtureState(id);
-  const signature = JSON.stringify(entry.snapshot);
+  const signature = snapshotSignature(entry.snapshot);
   if (signature !== entry.signature) {
     entry.saved = await importState(
       current,
@@ -90,18 +94,29 @@ async function ready(id: string) {
       entry.snapshot,
       entry.saved,
       undefined,
-      current.working.arena
+      current.working.cache
     );
     entry.signature = signature;
   }
   return current;
 }
-function native(value: unknown): unknown {
-  if (isNumericalVector(value)) return readNumericalBlock(value, 0, value.length);
-  if (Array.isArray(value)) return value.map(native);
-  if (value && typeof value === "object")
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, native(item)]));
-  return value;
+/** Bands serialize as their samples; coverages are accounting, not content. */
+function snapshotSignature(snapshot: DomainSnapshot) {
+  return JSON.stringify(snapshot, (_key, value) =>
+    value instanceof Band ? Array.from(value) : value instanceof Coverage ? undefined : value
+  );
+}
+/** Loaded grids page through the read's inputs; keep resident copies past its close. */
+function resident(snapshot: DomainSnapshot): DomainSnapshot {
+  return {
+    ...snapshot,
+    numerical: Object.fromEntries(
+      Object.entries(snapshot.numerical).map(([id, grid]) => [
+        id,
+        attachGrid(detachGrid(grid)) as (typeof snapshot.numerical)[string],
+      ])
+    ),
+  };
 }
 async function observe(id: string, current: Awaited<ReturnType<typeof open>>) {
   const world = await current.catalog.readEditor(id);
@@ -116,13 +131,13 @@ async function observe(id: string, current: Awaited<ReturnType<typeof open>>) {
     dependencies: false,
   };
   const snapshot = await current.catalog.readAuthoring(requirements);
-  const fields = new WorkspaceFields(current.catalog, current.resources, current.working.arena);
+  const fields = new WorkspaceFields(current.catalog, current.resources, current.working.cache);
   try {
     await fields.read(snapshot, requirements);
     const entry = fixtureState(id);
-    entry.snapshot = native(snapshot) as DomainSnapshot;
-    entry.saved = structuredClone(entry.snapshot);
-    entry.signature = JSON.stringify(entry.snapshot);
+    entry.snapshot = resident(snapshot);
+    entry.saved = cloneSnapshot(entry.snapshot);
+    entry.signature = snapshotSignature(entry.snapshot);
     entry.history = await current.catalog.readHistory(id, null, 1000);
     return entry.snapshot;
   } finally {
@@ -149,7 +164,7 @@ async function execute(id: string, command: Command, preview: boolean): Promise<
       preview,
       template: listTemplates().find((template) => template.id === command.data.templateId),
     },
-    current.working.arena
+    current.working.cache
   );
   const candidate = preview
     ? projectChanges(source, {

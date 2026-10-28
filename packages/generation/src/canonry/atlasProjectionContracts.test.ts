@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { residentBand } from "@atlas/domain";
 import { MapRunner } from "../mapRunner";
 import { MapProcessRegistry, type MapProcess } from "../process";
 import { configuration, invoke, landscape, options } from "../mapFixtures";
@@ -42,7 +43,8 @@ function fixture(disabled: string[] = []) {
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
-    samples: new Int32Array(state.surface.active.length),
+    samples: residentBand("int32", new Int32Array(state.surface.active.length)),
+    grid: state.surface.coverage,
     fixed: [],
     inherited: false,
     sampling: { maximumSize: 1000, minimumSize: 1000, featureSamples: 2 },

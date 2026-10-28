@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { putChannel } from "@atlas/domain";
+import { putChannel, residentBand } from "@atlas/domain";
 import { landscape, epoch } from "./mapFixtures";
 import { initializePopulation } from "./societyPopulation";
 import { refreshSocietyConnections } from "./societyGeography";
@@ -14,7 +14,12 @@ function fixture(profile: "world" | "local" = "world") {
   state.domain.world.id = "bc07dcd0-7cba-46b1-8e56-5f7829dde8cb";
   state.domain.world.areas.area.profile = profile;
   const set = (name: string, value: number, unit = "ratio") =>
-    putChannel(state.surface, name, unit, new Float64Array(10).fill(value));
+    putChannel(
+      state.surface,
+      name,
+      unit,
+      residentBand("float64", new Float64Array(10).fill(value))
+    );
   set("elevation", 100, "metre");
   set("treeCover", 0.1);
   set("herbivores", 0.05);
@@ -67,7 +72,7 @@ it("realizes a camp as a ruin field only where a sealed vein marks its ground", 
   const scar = new Float64Array(10);
   const cell = Array.from(state.society!.owner).findIndex((o) => o === 0);
   scar[cell] = 1;
-  putChannel(state.surface, "magic:fire:feature:scar", "ratio", scar);
+  putChannel(state.surface, "magic:fire:feature:scar", "ratio", residentBand("float64", scar));
   publishRuinFields(state);
   const field = ruins(state).find((f) => f.attributes.ruinField === "a sealed vein");
   expect(field?.attributes).toMatchObject({ era: "Ice age", round: true, peakPopulation: 40 });
@@ -91,7 +96,7 @@ it("proposes cold-age tapping at World from the unit's own vein cells", () => {
   expect(state.society!.region.works.some((w) => w.kind === "tapping")).toBe(false);
   const vein = new Float64Array(10);
   vein[Array.from(state.society!.owner).findIndex((o) => o === 0)] = 500;
-  putChannel(state.surface, "magic:fire:intensity", "per-mille", vein);
+  putChannel(state.surface, "magic:fire:intensity", "per-mille", residentBand("float64", vein));
   planSocietyWorks(state);
   const tapping = state.society!.region.works.find((w) => w.kind === "tapping");
   expect(tapping?.communityId).toBe(state.society!.region.communities[0].id);

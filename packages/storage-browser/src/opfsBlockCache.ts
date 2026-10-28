@@ -7,7 +7,7 @@ interface Access {
   close(): void;
 }
 type SyncFile = FileSystemFileHandle & { createSyncAccessHandle(): Promise<Access> };
-/** Resident bytes the physical coverage keeps before spilling blocks to scratch. */
+/** Resident bytes an operation's coverages keep before spilling blocks to scratch. */
 export const blockCacheBudgetBytes = 512 * 1024 * 1024;
 /** The scratch file is disposable working data, never a checkpoint. */
 export async function openBlockCache(name: string, budgetBytes = blockCacheBudgetBytes) {
@@ -30,6 +30,7 @@ export async function openBlockCache(name: string, budgetBytes = blockCacheBudge
     cache = new BlockCache(budgetBytes, scratch);
   return {
     cache,
+    scratch,
     async close() {
       scratch.close();
       await directory.removeEntry(`${name}.blocks`);

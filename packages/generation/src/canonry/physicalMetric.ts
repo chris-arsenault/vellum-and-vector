@@ -27,10 +27,10 @@ function adaptiveFace(mesh: PhysicalMesh, i: number, edge: number) {
   const topology = mesh.topology!,
     j = mesh.neighbor(i, edge),
     leaf = mesh.cellToLeaf(i),
-    start = topology.offsets[leaf],
-    local = edge < topology.offsets[leaf + 1] - start,
-    nx = local ? topology.normalX[start + edge] : Math.sign(mesh.edgeX(i, edge)),
-    ny = local ? topology.normalY[start + edge] : 0,
+    start = topology.offsets.get(leaf),
+    local = edge < topology.offsets.get(leaf + 1) - start,
+    nx = local ? topology.normalX.get(start + edge) : Math.sign(mesh.edgeX(i, edge)),
+    ny = local ? topology.normalY.get(start + edge) : 0,
     otherX = mesh.x(j) + (local ? 0 : nx * mesh.periodic!.width),
     x =
       (Math.max(mesh.x(i) - mesh.cellWidth(i) / 2, otherX - mesh.cellWidth(j) / 2) +

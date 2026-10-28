@@ -1,5 +1,12 @@
 import { expect, it } from "vitest";
-import { createGrid, population, putChannel, rectangle, withPracticeShares } from "@atlas/domain";
+import {
+  createGrid,
+  population,
+  putChannel,
+  rectangle,
+  residentBand,
+  withPracticeShares,
+} from "@atlas/domain";
 import { landscape, epoch } from "./mapFixtures";
 import type { MapProcessContext } from "./process";
 import { initializePopulation, migratePopulation } from "./societyPopulation";
@@ -13,7 +20,12 @@ function fixture(parameters: MapProcessContext["parameters"] = {}) {
   state.domain.scope.footprint = rectangle([0, 0, 300000, 100000]);
   state.domain.world.areas.area.footprint = state.domain.scope.footprint;
   state.surface = createGrid("society", state.domain.scope, 13, 5);
-  putChannel(state.surface, "elevation", "metre", new Float64Array(65).fill(100));
+  putChannel(
+    state.surface,
+    "elevation",
+    "metre",
+    residentBand("float64", new Float64Array(65).fill(100))
+  );
   const context: MapProcessContext = {
     scope: state.domain.scope,
     invocation: [],

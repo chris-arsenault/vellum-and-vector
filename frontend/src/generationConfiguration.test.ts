@@ -8,7 +8,7 @@ import {
   type ProcessConfiguration,
 } from "@atlas/generation";
 import { planHash } from "../../packages/generation/src/planHash";
-import { createGrid, putChannel } from "@atlas/domain";
+import { createGrid, generateBand, putChannel } from "@atlas/domain";
 
 function request() {
   const world = fixtureWorld({
@@ -107,7 +107,12 @@ it("accepts authored elevation with initialized absent histories and rejects mis
   const { source, input } = request();
   const id = crypto.randomUUID();
   const grid = createGrid(id, source.scope, 4, 4);
-  putChannel(grid, "elevation", "metre", new Float64Array(16).fill(100));
+  putChannel(
+    grid,
+    "elevation",
+    "metre",
+    generateBand(grid.coverage, "float64", "elevation", () => 100)
+  );
   source.numerical[id] = grid;
   source.world.fields.push({
     id,

@@ -4,7 +4,7 @@ import {
   GeosSpatial,
   OpfsStore,
   ZarrResources,
-  openNumericalArena,
+  openBlockCache,
   FieldInputCache,
 } from "@atlas/storage-browser";
 import { loadResourceRaster } from "./resourceRaster";
@@ -20,11 +20,11 @@ export async function openRenderResources(
 ) {
   const kernel = await GeometryKernel.create();
   configureSpatial((precision) => new GeosSpatial(kernel, precision));
-  let working: Awaited<ReturnType<typeof openNumericalArena>>;
+  let working: Awaited<ReturnType<typeof openBlockCache>>;
   let store: ZarrResources;
   try {
     store = new ZarrResources(await OpfsStore.open("atlas-resources"));
-    working = await openNumericalArena(`render_${crypto.randomUUID()}`);
+    working = await openBlockCache(`render_${crypto.randomUUID()}`);
   } catch (error) {
     configureSpatial();
     kernel.close();
@@ -32,7 +32,7 @@ export async function openRenderResources(
   }
   const opened = new Set<() => void>();
   const geography = new ByteCache<string, RasterGeography>(geographyCacheBytes);
-  const inputs = new FieldInputCache(store, working.arena);
+  const inputs = new FieldInputCache(store, working.cache);
   return {
     async load(raster: Raster): Promise<{ raster: LoadedRaster; close(): void }> {
       if (!resourceRaster(raster)) return { raster, close() {} };
@@ -47,7 +47,7 @@ export async function openRenderResources(
         shapes = await workspace.readRasterGeography(raster.geography);
         geography.set(key, shapes, JSON.stringify(shapes).length * 2);
       }
-      const loaded = await loadResourceRaster(store, working.arena, raster, shapes, inputs);
+      const loaded = await loadResourceRaster(store, raster, shapes, inputs);
       const close = () => {
         loaded.close();
         opened.delete(close);

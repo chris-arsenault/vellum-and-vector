@@ -15,6 +15,8 @@ export interface BandSchema {
   retained?: boolean;
   /** Written to the committed resource at publication. */
   published?: boolean;
+  /** A committed input: shared by copies rather than duplicated. */
+  immutable?: boolean;
 }
 /** Reads a block of a committed resource into memory. */
 export type BlockSource = (block: number, into: BlockArray) => void;
@@ -80,22 +82,33 @@ export class Band implements BlockOwner {
   }
   set(i: number, value: number) {
     const block = i >>> blockShift,
-      b = this.blocks[block];
-    (b === null ? this.load(block) : b)[i & blockMask] = value;
-    this.dirty[block] = 1;
+      b = this.blocks[block],
+      values = b === null ? this.load(block) : b;
+    if (this.dirty[block] === 0) this.markDirty(block);
+    values[i & blockMask] = value;
   }
   add(i: number, delta: number) {
     const block = i >>> blockShift,
-      b = this.blocks[block];
-    (b === null ? this.load(block) : b)[i & blockMask] += delta;
-    this.dirty[block] = 1;
+      b = this.blocks[block],
+      values = b === null ? this.load(block) : b;
+    if (this.dirty[block] === 0) this.markDirty(block);
+    values[i & blockMask] += delta;
   }
   /** The native block, pinned until `unpin`; pass `write` when the body writes it. */
   block(b: number, write = false): BlockArray {
     const values = this.blocks[b] ?? this.load(b);
-    if (write) this.dirty[b] = 1;
+    if (write && this.dirty[b] === 0) this.markDirty(b);
     this.cache.pin(this, b);
     return values;
+  }
+  /** A committed input is shared by every reader; it is never written in place. */
+  private markDirty(b: number) {
+    requireThat(
+      !this.schema.immutable,
+      "immutable_band",
+      `Immutable band ${this.schema.name} needs a separate working output.`
+    );
+    this.dirty[b] = 1;
   }
   unpin(b: number) {
     this.cache.unpin(this, b);
@@ -137,11 +150,15 @@ export class Band implements BlockOwner {
     this.blocks[b] = null;
     this.dirty[b] = 0;
   }
-  /** A band that reads what this one reads now and diverges on either side's next write. */
+  /**
+   * A band that reads what this one reads now and diverges on either side's next write. A
+   * snapshot of a committed input is a working copy: writable, reloading untouched blocks
+   * from the input's source, so it lives no longer than the input stays open.
+   */
   snapshot(schema: Partial<BandSchema> = {}, sequence = this.sequence): Band {
     this.check();
     const copy = new Band(
-      { ...this.schema, ...schema },
+      { ...this.schema, immutable: false, ...schema },
       this.length,
       this.cache,
       this.source,
@@ -149,7 +166,9 @@ export class Band implements BlockOwner {
     );
     for (let b = 0; b < this.blockCount; b++) {
       const values = this.blocks[b];
-      if (values !== null && this.dirty[b] === 1) {
+      // A resident block with nowhere else to reload from (unsaved writes, or an array a
+      // band was made over) is copied; anything else is shared through its spill or source.
+      if (values !== null && (this.dirty[b] === 1 || (this.spill[b] < 0 && !this.source))) {
         copy.blocks[b] = values.slice() as BlockArray;
         copy.dirty[b] = 1;
         this.cache.admit(copy, b, this.blockBytes(b));

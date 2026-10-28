@@ -1,4 +1,4 @@
-import type { GridSurface } from "@atlas/domain";
+import type { GridArrays } from "@atlas/domain";
 import type { LoadedRaster, ResourceRaster } from "./types";
 
 export type TileRaster = Omit<LoadedRaster, "field" | "water" | "ice" | "surface"> & {
@@ -9,7 +9,8 @@ export type TileRaster = Omit<LoadedRaster, "field" | "water" | "ice" | "surface
 };
 export type TileMessage =
   | { kind: "connect"; port: MessagePort }
-  | { kind: "grid"; id: number; grid: GridSurface }
+  /** An in-memory grid crosses as plain arrays; bands never leave their worker's cache. */
+  | { kind: "grid"; id: number; grid: GridArrays }
   | { kind: "raster"; id: number; raster: TileRaster }
   | { kind: "resourceRaster"; id: number; raster: ResourceRaster }
   | { kind: "tile"; id: number; request: number; extent: number[]; size: number }

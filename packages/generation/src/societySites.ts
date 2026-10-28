@@ -4,8 +4,7 @@ import {
   neighbors,
   settlementSiteKinds,
   spatial,
-  allocateNumerical,
-  type NumericalVector,
+  type Band,
   type SettlementSiteKind,
   type SocietyCommunity,
 } from "@atlas/domain";
@@ -37,7 +36,7 @@ class SiteReader {
     this.covers = spatial.geometryCoverage(this.grid.scope.footprint);
   }
   value(name: string, i: number, fallback = 0) {
-    return this.grid.channels[name]?.[i] ?? fallback;
+    return this.grid.channels[name]?.get(i) ?? fallback;
   }
   /** Eight neighbours in angular order, so a saddle shows as alternating high and low. */
   ring(i: number) {
@@ -78,7 +77,7 @@ class SiteReader {
   /** A class holds a site where its coverage passes a tenth; membership stands in where none is published. */
   feature(system: string, rule: string, i: number) {
     const coverage = this.grid.channels[`magic:${system}:coverage:${rule}`];
-    if (coverage) return coverage[i] >= 0.1;
+    if (coverage) return coverage.get(i) >= 0.1;
     return this.value(`magic:${system}:feature:${rule}`, i) > 0;
   }
 }
@@ -315,10 +314,10 @@ function fortress(r: SiteReader, site: number, kind: SettlementSiteKind) {
 export function chooseSettlementSites(
   state: GenerationState,
   context: MapProcessContext,
-  owner: NumericalVector,
+  owner: Band,
   seeds: number[],
-  river: NumericalVector,
-  coast: NumericalVector,
+  river: Band,
+  coast: Band,
   options: SiteOptions = settled
 ): { cell: number; site: SettlementSite | null }[] {
   const r = new SiteReader(state);
@@ -327,19 +326,18 @@ export function chooseSettlementSites(
     site: null as SettlementSite | null,
     key: [Infinity, 0],
   }));
-  const ties = allocateNumerical(
-    { type: "float64", length: owner.length, lifetime: "process", name: "society-site-ties" },
-    state.numerical
-  ).fill(NaN);
+  const ties = state.surface.coverage
+    .scratch("float64", "society-site-ties", owner.length)
+    .fill(NaN);
   const draw = (i: number) => {
-    if (Number.isNaN(ties[i])) ties[i] = context.random();
-    return ties[i];
+    if (Number.isNaN(ties.get(i))) ties.set(i, context.random());
+    return ties.get(i);
   };
   for (let i = 0; i < owner.length; i++) {
-    const k = owner[i],
+    const k = owner.get(i),
       site = siteAt(r, i, options);
     if (k < 0 || k >= best.length || !site) continue;
-    const capacity = supportAt(state, i, river[i], coast[i]).capacity,
+    const capacity = supportAt(state, i, river.get(i), coast.get(i)).capacity,
       key = [rank(site.kind), -site.score * (1 + capacity)];
     const current = best[k];
     if (!betterSite(key, current.key, () => draw(i) > draw(current.cell))) continue;
@@ -347,7 +345,7 @@ export function chooseSettlementSites(
     current.key = key;
     current.site = { kind: site.kind, reason: site.reason, fortress: false };
   }
-  state.numerical?.releaseUnused([ties], []);
+  state.surface.coverage.release(ties);
   // A band on the move holds no fortress and camps on the col itself.
   if (options.mobile) return best;
   return distinctSeats(
@@ -382,7 +380,7 @@ function distinctSeats(
 function passFoot(
   r: SiteReader,
   choice: { cell: number; site: SettlementSite | null },
-  owner: NumericalVector,
+  owner: Band,
   unit: number,
   seed: number
 ) {
@@ -393,8 +391,8 @@ function passFoot(
     .ring(choice.cell)
     .filter((j) => dryLand(r.state, j) && col - r.elevation(j) >= 50)
     .sort((a, b) => {
-      const ownA = Number(owner[a] === unit),
-        ownB = Number(owner[b] === unit);
+      const ownA = Number(owner.get(a) === unit),
+        ownB = Number(owner.get(b) === unit);
       if (ownA !== ownB) return ownB - ownA;
       const slopeA = r.value("slope", a),
         slopeB = r.value("slope", b);

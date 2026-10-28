@@ -4,6 +4,7 @@ import {
   adaptiveGeometry,
   adaptiveLeafAt,
   createAdaptiveTopology,
+  type AdaptiveTopology,
 } from "./adaptiveTopology";
 import { reconstructAdaptive, sampleAdaptive } from "./adaptiveReconstruction";
 import { transferAdaptive, visitAdaptiveOverlap } from "./adaptiveTransfer";
@@ -13,6 +14,7 @@ import { sampleAdaptivePoint, adaptivePointLocator } from "./adaptivePoint";
 import { gridSampler, fieldInterpolator } from "./grids";
 import { adaptiveExtrema } from "./adaptiveExtrema";
 import { adaptiveFits } from "./adaptiveFit";
+import { residentBand } from "./lattice/bandValues";
 
 const topology = () =>
   createAdaptiveTopology([0, 0, 1000, 1000], {
@@ -20,28 +22,36 @@ const topology = () =>
     minimumSize: 15.625,
     refine: (box) => box[0] < 500 && box[2] > 450 && box[1] < 600 && box[3] > 400,
   });
+const centres = (tree: AdaptiveTopology) => {
+  const geometry = adaptiveGeometry(tree);
+  return { x: geometry.x.toArray(), y: geometry.y.toArray(), areas: geometry.areas.toArray() };
+};
+const float = (values: ArrayLike<number>) => residentBand("float64", values);
+const sum = (values: ArrayLike<number>) => Array.from(values).reduce((a, b) => a + b, 0);
 it("partitions physical area and shares reciprocal face lengths across different cell sizes", () => {
   const tree = topology(),
-    geometry = adaptiveGeometry(tree);
-  expect(geometry.areas.reduce((a, b) => a + b, 0)).toBe(1_000_000);
+    geometry = centres(tree),
+    offsets = tree.offsets.toArray(),
+    neighbors = tree.neighbors.toArray(),
+    faces = tree.faceLengths.toArray(),
+    normalX = tree.normalX.toArray(),
+    normalY = tree.normalY.toArray(),
+    levels = tree.levels.toArray(),
+    leaves = tree.leaves.toArray();
+  expect(sum(geometry.areas)).toBe(1_000_000);
   expect(new Set(geometry.areas).size).toBeGreaterThan(1);
-  expect(
-    Math.max(...Array.from(tree.leaves, (_, i) => tree.offsets[i + 1] - tree.offsets[i]))
-  ).toBeGreaterThan(4);
-  for (let i = 0; i < tree.leaves.length; i++) {
+  expect(Math.max(...Array.from(leaves, (_, i) => offsets[i + 1] - offsets[i]))).toBeGreaterThan(4);
+  for (let i = 0; i < leaves.length; i++) {
     expect(adaptiveLeafAt(tree, geometry.x[i], geometry.y[i])).toBe(i);
-    for (let at = tree.offsets[i]; at < tree.offsets[i + 1]; at++) {
-      const j = tree.neighbors[at];
+    for (let at = offsets[i]; at < offsets[i + 1]; at++) {
+      const j = neighbors[at];
       const reverse =
-        Array.from(tree.neighbors.subarray(tree.offsets[j], tree.offsets[j + 1])).indexOf(i) +
-        tree.offsets[j];
-      expect(tree.neighbors[reverse]).toBe(i);
-      expect(tree.faceLengths[reverse]).toBe(tree.faceLengths[at]);
-      expect(tree.normalX[reverse] + tree.normalX[at]).toBe(0);
-      expect(tree.normalY[reverse] + tree.normalY[at]).toBe(0);
-      expect(
-        Math.abs(tree.levels[tree.leaves[i]] - tree.levels[tree.leaves[j]])
-      ).toBeLessThanOrEqual(1);
+        Array.from(neighbors.subarray(offsets[j], offsets[j + 1])).indexOf(i) + offsets[j];
+      expect(neighbors[reverse]).toBe(i);
+      expect(faces[reverse]).toBe(faces[at]);
+      expect(normalX[reverse] + normalX[at]).toBe(0);
+      expect(normalY[reverse] + normalY[at]).toBe(0);
+      expect(Math.abs(levels[leaves[i]] - levels[leaves[j]])).toBeLessThanOrEqual(1);
     }
   }
 });
@@ -58,27 +68,29 @@ it("visits precisely the overlapping cells across split faces and outside the fi
     visitAdaptiveOverlap(tree, box as [number, number, number, number], (leaf) =>
       visited.push(leaf)
     );
-    const expected = Array.from(tree.leaves.keys()).filter((leaf) => {
-      const cell = adaptiveCell(tree, leaf);
-      return (
-        Math.min(cell[2], box[2]) > Math.max(cell[0], box[0]) &&
-        Math.min(cell[3], box[3]) > Math.max(cell[1], box[1])
-      );
-    });
+    const expected = Array.from({ length: tree.leaves.length }, (_, leaf) => leaf).filter(
+      (leaf) => {
+        const cell = adaptiveCell(tree, leaf);
+        return (
+          Math.min(cell[2], box[2]) > Math.max(cell[0], box[0]) &&
+          Math.min(cell[3], box[3]) > Math.max(cell[1], box[1])
+        );
+      }
+    );
     expect(visited.sort((a, b) => a - b)).toEqual(expected);
   }
 });
 it("reconstructs rotated planes and stays continuous at coarse/fine interfaces", () => {
   const tree = topology(),
-    geometry = adaptiveGeometry(tree);
+    geometry = centres(tree);
   const values = Float64Array.from(geometry.x, (x, i) => 3 + x * 0.3 - geometry.y[i] * 0.7);
-  const surface = reconstructAdaptive(tree, values);
+  const surface = reconstructAdaptive(tree, float(values));
   for (let y = 1; y < 1000; y += 37)
     for (let x = 1; x < 1000; x += 41)
       expect(sampleAdaptive(surface, x, y)).toBeCloseTo(3 + x * 0.3 - y * 0.7, 8);
   const relief = reconstructAdaptive(
     tree,
-    Float64Array.from(values, (_, i) => Math.sin(geometry.x[i] / 80) * 200 + geometry.y[i])
+    float(Float64Array.from(values, (_, i) => Math.sin(geometry.x[i] / 80) * 200 + geometry.y[i]))
   );
   for (let y = 401; y < 600; y += 11)
     expect(
@@ -94,31 +106,31 @@ it("reconstructs rotated planes and stays continuous at coarse/fine interfaces",
 it("preserves intensive integrals and extensive totals through refinement and coarsening", () => {
   const coarse = createAdaptiveTopology([0, 0, 1000, 1000], { maximumSize: 250, minimumSize: 250 });
   const fine = topology(),
-    cg = adaptiveGeometry(coarse),
-    fg = adaptiveGeometry(fine);
+    cg = centres(coarse),
+    fg = centres(fine);
   const values = Float64Array.from(cg.x, (x, i) => 4 + x / 200 + cg.y[i] / 1000);
-  const refined = transferAdaptive(coarse, fine, values, "intensive");
-  const integral = (v: import("./numericalVector").NumericalVector, area: ArrayLike<number>) =>
-    v.reduce((sum, value, i) => sum + value * area[i], 0);
-  expect(integral(refined, fg.areas)).toBeCloseTo(integral(values, cg.areas), 6);
-  expect(Array.from(transferAdaptive(fine, coarse, refined, "intensive"))).toEqual(
+  const refined = transferAdaptive(coarse, fine, float(values), "intensive");
+  const integral = (v: ArrayLike<number>, area: ArrayLike<number>) =>
+    Array.from(v).reduce((total, value, i) => total + value * area[i], 0);
+  expect(integral(refined.toArray(), fg.areas)).toBeCloseTo(integral(values, cg.areas), 6);
+  expect(Array.from(transferAdaptive(fine, coarse, refined, "intensive").toArray())).toEqual(
     Array.from(values)
   );
   const extensive = Float64Array.from(values, (v, i) => v * cg.areas[i]);
-  expect(
-    transferAdaptive(coarse, fine, extensive, "extensive").reduce((a, b) => a + b, 0)
-  ).toBeCloseTo(
-    extensive.reduce((a, b) => a + b, 0),
+  expect(sum(transferAdaptive(coarse, fine, float(extensive), "extensive").toArray())).toBeCloseTo(
+    sum(extensive),
     6
   );
   const classes = Float64Array.from(cg.x, (x) => (x < 500 ? 11 : 29));
-  expect(new Set(transferAdaptive(coarse, fine, classes, "category"))).toEqual(new Set([11, 29]));
+  expect(new Set(transferAdaptive(coarse, fine, float(classes), "category").toArray())).toEqual(
+    new Set([11, 29])
+  );
 });
 it("resolves a narrow physical feature where its support requests detail", () => {
   const tree = topology(),
-    geometry = adaptiveGeometry(tree);
+    geometry = centres(tree);
   const values = Float64Array.from(geometry.x, (x) => -100 * Math.exp(-(((x - 475) / 18) ** 2)));
-  const field = reconstructAdaptive(tree, values);
+  const field = reconstructAdaptive(tree, float(values));
   expect(sampleAdaptive(field, 475, 500)).toBeLessThan(-80);
   expect(Math.abs(sampleAdaptive(field, 550, 500))).toBeLessThan(3);
   expect(
@@ -129,23 +141,27 @@ it("resolves a narrow physical feature where its support requests detail", () =>
 
 it("retains measured heights and continuous slopes across coarse/fine faces", () => {
   const tree = topology(),
-    geometry = adaptiveGeometry(tree);
+    geometry = centres(tree),
+    offsets = tree.offsets.toArray(),
+    neighbors = tree.neighbors.toArray(),
+    normalX = tree.normalX.toArray(),
+    normalY = tree.normalY.toArray();
   const values = Float64Array.from(
     geometry.x,
     (x, i) => 100 * Math.sin(x / 150) * Math.cos(geometry.y[i] / 190)
   );
-  const surface = reconstructAdaptive(tree, values);
+  const surface = reconstructAdaptive(tree, float(values));
   for (let i = 0; i < values.length; i++)
     expect(sampleAdaptive(surface, geometry.x[i], geometry.y[i])).toBeCloseTo(values[i], 9);
   const epsilon = 1e-4;
   for (let i = 0; i < values.length; i++) {
     const box = adaptiveCell(tree, i);
-    for (let edge = tree.offsets[i]; edge < tree.offsets[i + 1]; edge++) {
-      const j = tree.neighbors[edge];
+    for (let edge = offsets[i]; edge < offsets[i + 1]; edge++) {
+      const j = neighbors[edge];
       if (i > j) continue;
       const other = adaptiveCell(tree, j),
-        nx = tree.normalX[edge],
-        ny = tree.normalY[edge];
+        nx = normalX[edge],
+        ny = normalY[edge];
       const x = nx
         ? nx > 0
           ? box[2]
@@ -166,12 +182,12 @@ it("retains measured heights and continuous slopes across coarse/fine faces", ()
 
 it("reproduces smooth curvature without manufacturing one hump per sampling cell", () => {
   const tree = topology(),
-    geometry = adaptiveGeometry(tree);
+    geometry = centres(tree);
   const height = (x: number, y: number) =>
     20 + x * 0.1 + y * 0.2 + x * x * 0.0004 + x * y * 0.0002 + y * y * 0.0003;
   const at = reconstructAdaptive(
     tree,
-    Float64Array.from(geometry.x, (x, i) => height(x, geometry.y[i]))
+    float(Float64Array.from(geometry.x, (x, i) => height(x, geometry.y[i])))
   );
   for (let y = 21; y < 1000; y += 59)
     for (let x = 17; x < 1000; x += 53)
@@ -180,18 +196,19 @@ it("reproduces smooth curvature without manufacturing one hump per sampling cell
 
 it("does not invent interior peaks or negative values between nonnegative samples", () => {
   const tree = topology(),
-    geometry = adaptiveGeometry(tree);
+    geometry = centres(tree);
   const values = Float64Array.from(geometry.x, (x, i) =>
     Math.max(0, 100 - Math.hypot(x - 500, geometry.y[i] - 500))
   );
-  const field = reconstructAdaptive(tree, values),
+  const band = float(values),
+    field = reconstructAdaptive(tree, band),
     maximum = Math.max(...values);
   for (let y = 10; y < 1000; y += 13)
     for (let x = 10; x < 1000; x += 17) {
       const value = sampleAdaptive(field, x, y);
       expect(value).toBeGreaterThanOrEqual(0);
       expect(value).toBeLessThanOrEqual(maximum);
-      expect(sampleAdaptivePoint(tree, values, x, y)).toBeCloseTo(value, 8);
+      expect(sampleAdaptivePoint(tree, band, x, y)).toBeCloseTo(value, 8);
     }
 });
 
@@ -211,8 +228,8 @@ it("retains clipped physical measures and discrete category meaning in published
     },
     tree
   );
-  field.channels.elevation = new Float64Array(tree.leaves.length).fill(12);
-  field.channels.material = Float64Array.from(adaptiveGeometry(tree).x, (x) => (x < 500 ? 11 : 29));
+  field.channels.elevation = float(new Float64Array(tree.leaves.length).fill(12));
+  field.channels.material = float(Float64Array.from(centres(tree).x, (x) => (x < 500 ? 11 : 29)));
   field.units.elevation = "metre";
   field.units.material = "category";
   expect(adaptiveIntegral(field, "elevation")).toBeCloseTo(720 * 720 * 12, 6);
@@ -229,14 +246,16 @@ it("retains clipped physical measures and discrete category meaning in published
 
 it("shares fitting geometry while retaining each channel's signed quadratic derivatives", () => {
   const tree = topology(),
-    geometry = adaptiveGeometry(tree);
+    geometry = centres(tree);
   for (const sign of [1, -3, 0]) {
     const fit = adaptiveFits(
       tree,
-      Float64Array.from(geometry.x, (x, i) => {
-        const y = geometry.y[i];
-        return sign * (20 + x * 0.1 + y * 0.2 + x * x * 0.0004 + x * y * 0.0002 + y * y * 0.0003);
-      })
+      float(
+        Float64Array.from(geometry.x, (x, i) => {
+          const y = geometry.y[i];
+          return sign * (20 + x * 0.1 + y * 0.2 + x * x * 0.0004 + x * y * 0.0002 + y * y * 0.0003);
+        })
+      )
     );
     for (let i = 0; i < geometry.x.length; i++) {
       const expected = [
@@ -257,10 +276,10 @@ it("retains planar and constant fallbacks when a curvature stencil is singular",
         maximumSize: size,
         minimumSize: size,
       }),
-      geometry = adaptiveGeometry(tree);
+      geometry = centres(tree);
     const fit = adaptiveFits(
       tree,
-      Float64Array.from(geometry.x, (x, i) => 2 + 0.3 * x - 0.7 * geometry.y[i])
+      float(Float64Array.from(geometry.x, (x, i) => 2 + 0.3 * x - 0.7 * geometry.y[i]))
     );
     for (let i = 0; i < geometry.x.length; i++)
       fit(i).forEach((value, k) =>
@@ -271,7 +290,7 @@ it("retains planar and constant fallbacks when a curvature stencil is singular",
 
 it("shares point lookup without mixing channels, topology identities or discrete samples", () => {
   const tree = topology(),
-    geometry = adaptiveGeometry(tree),
+    geometry = centres(tree),
     locate = adaptivePointLocator();
   const field = createAdaptiveField(
     "shared",
@@ -287,9 +306,10 @@ it("shares point lookup without mixing channels, topology identities or discrete
     },
     tree
   );
-  field.channels.elevation = Float64Array.from(geometry.x, (x, i) => x * 0.3 - geometry.y[i] * 0.7);
-  field.channels.temperature = Float64Array.from(field.channels.elevation, (v) => -v * 2);
-  field.channels.rock = Float64Array.from(geometry.x, (x) => (x < 500 ? 11 : 29));
+  const elevation = Float64Array.from(geometry.x, (x, i) => x * 0.3 - geometry.y[i] * 0.7);
+  field.channels.elevation = float(elevation);
+  field.channels.temperature = float(Float64Array.from(elevation, (v) => -v * 2));
+  field.channels.rock = float(Float64Array.from(geometry.x, (x) => (x < 500 ? 11 : 29)));
   field.units = { elevation: "metre", temperature: "celsius", rock: "category" };
   const at = ["elevation", "temperature", "rock"].map((key) =>
     fieldInterpolator(field, key, false, locate)

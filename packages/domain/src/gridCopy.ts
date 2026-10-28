@@ -1,34 +1,36 @@
 import type { AdaptiveTopology } from "./adaptiveTopology";
 import type { GridSurface } from "./grids";
-import type { NumericalVector } from "./numericalVector";
+import type { Band } from "./lattice/band";
+import type { Coverage } from "./lattice/coverage";
 
-/** Copy working samples through their allocator; a disk vector never becomes a whole buffer. */
+/** Copy a grid's samples copy-on-write: no band is read whole, blocks diverge on write. */
 export function copyGrid<T extends GridSurface>(source: T): T {
   return copyGridSamples(source, new Map(), new Map());
 }
 function copyGridSamples<T extends GridSurface>(
   source: T,
   grids: Map<GridSurface, GridSurface>,
-  samples: Map<NumericalVector, NumericalVector>
+  samples: Map<Band, Band>
 ): T {
   const existing = grids.get(source);
   if (existing) return existing as T;
-  const copy = (vector: NumericalVector) => {
-    if (!samples.has(vector)) {
-      const copied = vector.slice();
-      copied.retain?.();
-      samples.set(vector, copied);
+  const copy = (coverage: Coverage) => (band: Band) => {
+    if (!samples.has(band)) {
+      const copied = coverage.copyBand(band);
+      copied.retain();
+      samples.set(band, copied);
     }
-    return samples.get(vector)!;
+    return samples.get(band)!;
   };
+  const sampleCopy = copy(source.coverage);
   const grid = {
     ...source,
     scope: structuredClone(source.scope),
     bounds: [...source.bounds],
-    active: copy(source.active),
-    measures: copy(source.measures),
+    active: sampleCopy(source.active),
+    measures: sampleCopy(source.measures),
     channels: Object.fromEntries(
-      Object.entries(source.channels).map(([name, values]) => [name, copy(values)])
+      Object.entries(source.channels).map(([name, values]) => [name, sampleCopy(values)])
     ),
     units: { ...source.units },
     ...(source.quantities ? { quantities: { ...source.quantities } } : {}),
@@ -38,7 +40,8 @@ function copyGridSamples<T extends GridSurface>(
       : {}),
   } as T;
   grids.set(source, grid);
-  if (source.topology) grid.topology = copyTopology(source.topology, copy);
+  if (source.topology)
+    grid.topology = copyTopology(source.topology, copy(source.topology.coverage));
   if (source.overlays)
     grid.overlays = source.overlays.map((overlay) => ({
       ...overlay,
@@ -47,12 +50,10 @@ function copyGridSamples<T extends GridSurface>(
     }));
   return grid;
 }
-function copyTopology(
-  source: AdaptiveTopology,
-  copy: (vector: NumericalVector) => NumericalVector
-): AdaptiveTopology {
+function copyTopology(source: AdaptiveTopology, copy: (band: Band) => Band): AdaptiveTopology {
   return {
     bounds: [...source.bounds],
+    coverage: source.coverage,
     boxes: copy(source.boxes),
     children: copy(source.children),
     levels: copy(source.levels),

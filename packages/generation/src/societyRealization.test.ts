@@ -1,5 +1,14 @@
 import { expect, it } from "vitest";
-import { createGrid, gridPosition, isSocietyWork, putChannel, rectangle } from "@atlas/domain";
+import {
+  createGrid,
+  generateBand,
+  gridPosition,
+  isSocietyWork,
+  putChannel,
+  rectangle,
+  residentBand,
+  type Grid,
+} from "@atlas/domain";
 import { landscape, epoch } from "./mapFixtures";
 import { initializePopulation } from "./societyPopulation";
 import { refreshSocietyConnections } from "./societyGeography";
@@ -26,10 +35,15 @@ function fixture() {
   );
   const river = new Float64Array(n).map((_, i) => (row(i) === 2 ? 1 : 0));
   const flow = new Float64Array(n).map((_, i) => (row(i) === 2 ? 10 + column(i) : 0));
-  putChannel(state.surface, "elevation", "metre", elevation);
-  putChannel(state.surface, "riverOrder", "count", river);
-  putChannel(state.surface, "flow", "cubic-metre/second", flow);
-  putChannel(state.surface, "treeCover", "ratio", new Float64Array(n).fill(0.2));
+  putChannel(state.surface, "elevation", "metre", residentBand("float64", elevation));
+  putChannel(state.surface, "riverOrder", "count", residentBand("float64", river));
+  putChannel(state.surface, "flow", "cubic-metre/second", residentBand("float64", flow));
+  putChannel(
+    state.surface,
+    "treeCover",
+    "ratio",
+    residentBand("float64", new Float64Array(n).fill(0.2))
+  );
   const context: MapProcessContext = {
     scope: state.domain.scope,
     invocation: [],
@@ -68,14 +82,14 @@ it("realizes an inherited dam demand on the gorge, not on the river cell nearest
   expect(dam.position).toEqual(gridPosition(state.surface, gorge));
   expect(dam.causes.at(-1)).toContain("4.00 cubic-metre/second");
   // The present applies what this profile realized, and only once.
-  const before = state.surface.channels.elevation[gorge];
+  const before = state.surface.channels.elevation.get(gorge);
   state.society!.inherited = true;
   applyPresentWorks(state);
-  expect(state.surface.channels.elevation[gorge]).toBeGreaterThan(before);
+  expect(state.surface.channels.elevation.get(gorge)).toBeGreaterThan(before);
   expect(dam.applied).toBe(dam.magnitude * dam.condition);
-  const raised = state.surface.channels.elevation[gorge];
+  const raised = state.surface.channels.elevation.get(gorge);
   applyPresentWorks(state);
-  expect(state.surface.channels.elevation[gorge]).toBe(raised);
+  expect(state.surface.channels.elevation.get(gorge)).toBe(raised);
 });
 
 it("searches the whole inherited country for a site and gives the work to the heir whose land holds it", () => {
@@ -85,7 +99,7 @@ it("searches the whole inherited country for a site and gives the work to the he
   east.position = gridPosition(state.surface, 13 * 2 + 11);
   state.society!.region.communities.push(east);
   for (let i = 0; i < state.society!.owner.length; i++)
-    state.society!.owner[i] = i % 13 >= 6 ? 1 : 0;
+    state.society!.owner.set(i, i % 13 >= 6 ? 1 : 0);
   const dam = makeWork(state, c, "dam", c.position);
   dam.demand = { amount: 4, unit: "cubic-metre/second" };
   dam.country = [c.id, east.id];
@@ -107,6 +121,9 @@ it("never publishes a demand as a feature, at World or at a finer profile", () =
   expect(published.map((f) => f.kind)).toEqual(["dam"]);
 });
 
+function channel(grid: Grid, name: string, unit: string, value: (i: number) => number) {
+  putChannel(grid, name, unit, generateBand(grid.coverage, "float64", name, value));
+}
 it("inherits a World dam demand into a child and realizes it on the child's own river", () => {
   // The World: one unit over the whole 300 × 100 km country, demanding a dam.
   const world = landscape();
@@ -115,7 +132,7 @@ it("inherits a World dam demand into a child and realizes it on the child's own 
   world.domain.scope.footprint = footprint;
   world.domain.world.areas.area.footprint = footprint;
   world.surface = createGrid("society", world.domain.scope, 13, 5);
-  putChannel(world.surface, "elevation", "metre", new Float64Array(65).fill(100));
+  channel(world.surface, "elevation", "metre", () => 100);
   const context: MapProcessContext = {
     scope: world.domain.scope,
     invocation: [],
@@ -151,27 +168,16 @@ it("inherits a World dam demand into a child and realizes it on the child's own 
   };
   world.domain.scope = { ...world.domain.scope, areaId: "child", footprint: childFootprint };
   world.surface = createGrid("child", world.domain.scope, 15, 9);
-  const n = 135,
-    row = (i: number) => Math.floor(i / 15);
-  putChannel(world.surface, "elevation", "metre", new Float64Array(n).fill(100));
-  putChannel(
-    world.surface,
-    "riverOrder",
-    "count",
-    new Float64Array(n).map((_, i) => (row(i) === 4 ? 1 : 0))
-  );
-  putChannel(
-    world.surface,
-    "flow",
-    "cubic-metre/second",
-    new Float64Array(n).map((_, i) => (row(i) === 4 ? 20 : 0))
-  );
+  const row = (i: number) => Math.floor(i / 15);
+  channel(world.surface, "elevation", "metre", () => 100);
+  channel(world.surface, "riverOrder", "count", (i) => (row(i) === 4 ? 1 : 0));
+  channel(world.surface, "flow", "cubic-metre/second", (i) => (row(i) === 4 ? 20 : 0));
   initializePopulation(world, { ...context, scope: world.domain.scope });
   const inherited = world.society!.region.works.find((w) => w.kind === "dam")!;
   expect(inherited.demand).toBeUndefined();
   expect(inherited.realizedAt).toBe("child");
   expect(inherited.country).toBeUndefined();
-  const cell = world.surface.channels.riverOrder.findIndex(
+  const cell = Array.from(world.surface.channels.riverOrder).findIndex(
     (_, i) =>
       gridPosition(world.surface, i).x === inherited.position.x &&
       gridPosition(world.surface, i).y === inherited.position.y
@@ -190,7 +196,7 @@ it("keeps a demand with no medium here latent and records its whole amount as un
   expect(harbor.demand).toEqual({ amount: 2000, unit: "people", unmet: 2000 });
   expect(harbor.realizedAt).toBeUndefined();
   state.society!.inherited = true;
-  const elevation = state.surface.channels.elevation.slice();
+  const elevation = state.surface.channels.elevation.toArray();
   applyPresentWorks(state);
   expect(Array.from(state.surface.channels.elevation)).toEqual(Array.from(elevation));
 });

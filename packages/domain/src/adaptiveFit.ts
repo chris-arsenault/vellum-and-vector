@@ -1,11 +1,12 @@
 import { adaptiveCell, type AdaptiveTopology } from "./adaptiveTopology";
 import { ByteCache } from "./byteCache";
+import type { Band } from "./lattice/band";
 
 const adaptiveStencilCacheBytes = 4 * 1024 * 1024;
 const adaptiveFitCacheBytes = 256 * 1024;
-export type AdaptiveSamples = ArrayLike<number> | ((index: number) => number);
+export type AdaptiveSamples = Band | ((index: number) => number);
 export const adaptiveSample = (values: AdaptiveSamples, i: number) =>
-  typeof values === "function" ? values(i) : values[i];
+  typeof values === "function" ? values(i) : values.get(i);
 
 function factor(matrix: number[][]) {
   const n = matrix.length,
@@ -48,7 +49,8 @@ function prepareFits(t: AdaptiveTopology) {
     const cells = new Set<number>([i]);
     for (let ring = 0; ring < 2; ring++)
       for (const cell of [...cells])
-        for (let at = t.offsets[cell]; at < t.offsets[cell + 1]; at++) cells.add(t.neighbors[at]);
+        for (let at = t.offsets.get(cell); at < t.offsets.get(cell + 1); at++)
+          cells.add(t.neighbors.get(at));
     const matrix = Array.from({ length: 5 }, () => new Array<number>(5).fill(0)),
       neighbors = [...cells].filter((j) => j !== i),
       weights = new Float64Array(neighbors.length * 5);

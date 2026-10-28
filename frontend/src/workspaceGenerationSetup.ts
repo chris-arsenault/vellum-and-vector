@@ -1,5 +1,5 @@
 import {
-  openNumericalArena,
+  openBlockCache,
   openGenerationWorkspace,
   type BrowserWorkspace,
 } from "@atlas/storage-browser";
@@ -18,8 +18,8 @@ export async function workspaceGenerationSetup(
   input: AtlasGenerationInput
 ) {
   const source = await generationSource(current.catalog, worldId, input.areaId);
-  const working = await openNumericalArena(`setup_${crypto.randomUUID()}`);
-  const fields = new WorkspaceFields(current.catalog, current.resources, working.arena);
+  const working = await openBlockCache(`setup_${crypto.randomUUID()}`);
+  const fields = new WorkspaceFields(current.catalog, current.resources, working.cache);
   let features: Awaited<ReturnType<typeof openGenerationWorkspace>> | undefined;
   try {
     features = await openGenerationWorkspace(`setup_features_${crypto.randomUUID()}`);

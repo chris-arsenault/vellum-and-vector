@@ -10,12 +10,13 @@ import {
 } from "@atlas/domain";
 import { prepareAtlasGeneration } from "@atlas/generation";
 import { mapEditingFixture } from "./mapEditingFixture";
+import { snapshotCopy } from "./testSupport/snapshotCopy";
 
 function selected(
   f: Awaited<ReturnType<typeof mapEditingFixture>>,
   box: [number, number, number, number]
 ) {
-  const snapshot = structuredClone(f.current());
+  const snapshot = snapshotCopy(f.current());
   snapshot.world.areas[f.child].footprint = rectangle(box);
   return mappedGenerationConflicts(snapshot, f.child);
 }
@@ -135,7 +136,7 @@ it("keeps visual layer styling eligible and applies edit footprints at arbitrary
   await f.command("putLayer", { ...f.current().world.layers.settlements, color: "#ff00ff" });
   expect(mappedGenerationConflicts(f.current(), f.root)).toEqual([]);
   await editTown(f, 550, 450);
-  const snapshot = structuredClone(f.current()),
+  const snapshot = snapshotCopy(f.current()),
     nested = crypto.randomUUID();
   snapshot.world.areas[nested] = {
     ...snapshot.world.areas[f.child],
@@ -163,7 +164,7 @@ it("uses actual brush footprints, excludes unrelated located spaces and restores
   expect(selected(f, [390, 390, 410, 410])[0].name).toBe("elevation painting");
   // Inside the brush envelope but outside its circular support.
   expect(selected(f, [301, 301, 310, 310])).toEqual([]);
-  const snapshot = structuredClone(f.current());
+  const snapshot = snapshotCopy(f.current());
   snapshot.world.areas[f.child].spaceId = "independent-space";
   expect(mappedGenerationConflicts(snapshot, f.root)).toEqual([]);
   await undoWorld(f.id, fixtureState(f.id).history[0].operationId);
@@ -186,7 +187,7 @@ it("explains the mapped edits that prevent overlapping generation", async () => 
 
 it("hides an existing feature only on its edited map and retains source context and undo", async () => {
   const f = await mapEditingFixture(),
-    before = structuredClone(f.current());
+    before = snapshotCopy(f.current());
   await f.command("deleteMapFeature", { areaId: f.child, featureId: f.town });
   expect((await readScene(f.id, f.child)).some((feature) => feature.id === f.town)).toBe(false);
   expect((await readScene(f.id, f.root)).some((feature) => feature.id === f.town)).toBe(true);
@@ -229,7 +230,7 @@ it("protects a new drawing's current location and releases it when removed", asy
 
 it("keeps a changed mapped relationship out of procedural input and classifies it as structural", async () => {
   const f = await mapEditingFixture(),
-    before = structuredClone(f.current());
+    before = snapshotCopy(f.current());
   await f.command("putMapFeature", {
     areaId: f.root,
     feature: {

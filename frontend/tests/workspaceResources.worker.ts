@@ -1,12 +1,20 @@
 import {
   OpfsStore,
   ZarrResources,
-  openNumericalArena,
+  openBlockCache,
   FieldWorkingSet,
   writeFieldLayout,
   writeFieldChannels,
 } from "@atlas/storage-browser";
-import { createGrid, putChannel, rectangle, type NumericalResource } from "@atlas/domain";
+import {
+  Band,
+  createGrid,
+  generateBand,
+  putChannel,
+  rectangle,
+  writeRange,
+  type NumericalResource,
+} from "@atlas/domain";
 import { openSpatialRuntime } from "../src/spatialRuntime";
 
 async function exercise(id: string) {
@@ -58,24 +66,26 @@ async function exercise(id: string) {
   return values;
 }
 async function exerciseWorking(id: string) {
-  // Paged on purpose: this example exercises the scratch file, not resident vectors.
-  const working = await openNumericalArena(id, { cacheBytes: 262_144, residentBytes: 0 });
+  // Paged on purpose: this example exercises the scratch file, not resident blocks.
+  const working = await openBlockCache(id, 262_144);
   try {
-    const values = working.arena.allocate({
-      type: "float64",
-      length: 200_000,
-      lifetime: "run",
-      name: "access-example",
-    });
+    const values = new Band(
+      { name: "access-example", type: "float64", lifetime: "run" },
+      200_000,
+      working.cache
+    );
     for (let start = 0; start < values.length; start += 16_384) {
       const chunk = Float64Array.from(
         { length: Math.min(16_384, values.length - start) },
         (_, i) => start + i + 1
       );
-      working.arena.write(values, start, chunk);
+      writeRange(values, start, chunk);
     }
-    working.arena.flush();
-    return { samples: [values[0], values[99_999], values[199_999]], ...working.arena.stats };
+    return {
+      samples: [values.get(0), values.get(99_999), values.get(199_999)],
+      writes: working.scratch.stats.writes,
+      peakDecodedBytes: working.cache.stats.peakBytes,
+    };
   } finally {
     await working.close();
   }
@@ -83,8 +93,8 @@ async function exerciseWorking(id: string) {
 async function exerciseFields(id: string) {
   const store = await OpfsStore.open("atlas-resource-example"),
     resources = new ZarrResources(store);
-  const working = await openNumericalArena(`${id}_fields`, { cacheBytes: 262_144 });
-  const fields = new FieldWorkingSet(resources, working.arena);
+  const working = await openBlockCache(`${id}_fields`, 262_144);
+  const fields = new FieldWorkingSet(resources, working.cache);
   const layoutId = `${id}:layout`,
     fieldId = `${id}:field`;
   try {
@@ -103,26 +113,27 @@ async function exerciseFields(id: string) {
       517,
       71,
       undefined,
-      working.arena
+      working.cache
     );
-    const values = working.arena.allocate({
-      type: "float64",
-      length: grid.active.length,
-      lifetime: "run",
-      name: "height",
-    });
-    for (let i = 0; i < values.length; i++) values[i] = i + 0.25;
-    putChannel(grid, "height", "metre", values);
+    putChannel(
+      grid,
+      "height",
+      "metre",
+      generateBand(grid.coverage, "float64", "height", (i) => i + 0.25)
+    );
     const layout = await writeFieldLayout(resources, grid, layoutId, 0.000001);
     const resource = await writeFieldChannels(resources, grid, fieldId, layout);
-    const writtenBefore = working.arena.stats.writtenBytes;
-    const loaded = await fields.load(fieldId, ["height"], layout.geography);
-    const samples = [loaded.channels.height[0], loaded.channels.height.at(-1)];
+    const writtenBefore = working.scratch.stats.writtenBytes;
+    const loaded = await fields.load(fieldId, ["height"], layout.geography),
+      height = loaded.channels.height;
+    // Committed input blocks reload from their chunks; reading them never spills.
+    for (let i = 0; i < height.length; i++) height.get(i);
+    const samples = [height.get(0), height.get(height.length - 1)];
     return {
       samples,
       input: {
         ...store.inputStats,
-        scratchWriteBytes: working.arena.stats.writtenBytes - writtenBefore,
+        scratchWriteBytes: working.scratch.stats.writtenBytes - writtenBefore,
       },
       partitions: resource.partitions.length,
       shared: resource.arrays.filter((array) => array.source).map((array) => array.name),

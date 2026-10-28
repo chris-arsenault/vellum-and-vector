@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { canonryMagicPresets, rectangle } from "@atlas/domain";
+import { canonryMagicPresets, rectangle, residentBand } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import type { MapProcessContext } from "../process";
 import { createAdaptiveWorldMesh } from "./adaptiveMesh";
@@ -31,7 +31,8 @@ function scenario(samples = 4096, width = 2_000_000, height = 1_000_000) {
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
-    samples: new Int32Array(state.surface.active.length),
+    samples: residentBand("int32", new Int32Array(state.surface.active.length)),
+    grid: state.surface.coverage,
     fixed: [],
     inherited: false,
     sampling: { maximumSize: map.mesh.spacing, minimumSize: map.mesh.spacing, featureSamples: 2 },

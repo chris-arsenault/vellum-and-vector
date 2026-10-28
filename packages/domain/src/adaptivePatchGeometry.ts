@@ -49,7 +49,9 @@ function prepare(t: AdaptiveTopology) {
       epsilon,
       cells: neighbors,
       hanging: hanging[0],
-      coarse: hanging.sort((a, b) => t.levels[t.leaves[a]] - t.levels[t.leaves[b]])[0],
+      coarse: hanging.sort(
+        (a, b) => t.levels.get(t.leaves.get(a)) - t.levels.get(t.leaves.get(b))
+      )[0],
     };
     vertices.set(key, result, 192 + key.length * 2 + neighbors.length * 8);
     return result;

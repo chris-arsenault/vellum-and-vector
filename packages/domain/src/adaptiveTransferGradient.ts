@@ -1,7 +1,8 @@
 import { adaptiveCell, type AdaptiveTopology } from "./adaptiveTopology";
 import { ByteCache } from "./byteCache";
+import type { Band } from "./lattice/band";
 
-export type TransferSamples = ArrayLike<number> | ((index: number) => number);
+export type TransferSamples = Band | ((index: number) => number);
 const transferGradientCacheBytes = 256 * 1024;
 /** Face-weighted least squares with the same neighbor extrema limiter used by remeshing. */
 export function transferGradients(topology: AdaptiveTopology, sample: (i: number) => number) {
@@ -18,12 +19,12 @@ export function transferGradients(topology: AdaptiveTopology, sample: (i: number
       vy = 0,
       low = value,
       high = value;
-    for (let at = topology.offsets[i]; at < topology.offsets[i + 1]; at++) {
-      const j = topology.neighbors[at],
+    for (let at = topology.offsets.get(i); at < topology.offsets.get(i + 1); at++) {
+      const j = topology.neighbors.get(at),
         other = adaptiveCell(topology, j),
         dx = (other[0] + other[2] - box[0] - box[2]) / 2,
         dy = (other[1] + other[3] - box[1] - box[3]) / 2,
-        weight = topology.faceLengths[at] / topology.distances[at] ** 2,
+        weight = topology.faceLengths.get(at) / topology.distances.get(at) ** 2,
         next = sample(j),
         delta = next - value;
       xx += weight * dx * dx;

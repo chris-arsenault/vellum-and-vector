@@ -16,7 +16,10 @@ export function societyWorkGeometry(state: GenerationState, work: SocietyWork) {
   if (nature !== "intensive")
     return { geometry: site, meaning: "located work site; radius describes modeled reach" };
   const cell = nearestSample(state, work.position);
-  if (cell < 0 || work.radius * 2 < Math.sqrt(state.surface.measures[cell]) * activitySamplesAcross)
+  if (
+    cell < 0 ||
+    work.radius * 2 < Math.sqrt(state.surface.measures.get(cell)) * activitySamplesAcross
+  )
     return { geometry: site, meaning: "work site; activity extent unresolved at this profile" };
   const disk = spatial.buffer(site, work.radius);
   const extent = disk && spatial.intersection(disk, state.domain.scope.footprint);

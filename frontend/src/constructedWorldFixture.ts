@@ -1,4 +1,4 @@
-import { createGrid, putChannel } from "@atlas/domain";
+import { createGrid, generateBand, putChannel } from "@atlas/domain";
 import { atlasPublicationDefinitions, type CompletedBoundary } from "@atlas/generation";
 import { createWorldSnapshot } from "./worldCreation";
 
@@ -23,7 +23,7 @@ export function constructedWorld() {
       surface,
       name,
       unit,
-      Float64Array.from(surface.active, (_, i) => row[i % 5])
+      generateBand(surface.coverage, "float64", name, (i) => row[i % 5])
     );
   const result: CompletedBoundary = {
     kind: "final",

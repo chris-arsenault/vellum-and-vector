@@ -3,6 +3,8 @@ import {
   adaptiveGeometry,
   createAdaptiveField,
   createAdaptiveTopology,
+  fillBand,
+  generateBand,
   rectangle,
   putChannel,
   canonryMagicPresets,
@@ -39,9 +41,10 @@ function fixture(channel = "elevation"): Raster {
     field,
     channel,
     channel === "material" ? "category" : "metre",
-    Float64Array.from(geometry.x, (x, i) =>
-      channel === "material" ? (x < 500 ? 0 : 1) : 400 + x * 0.2 + geometry.y[i] * 0.1
-    )
+    generateBand(field.coverage, "float64", channel, (i) => {
+      const x = geometry.x.get(i);
+      return channel === "material" ? (x < 500 ? 0 : 1) : 400 + x * 0.2 + geometry.y.get(i) * 0.1;
+    })
   );
   return {
     id: field.id,
@@ -95,7 +98,7 @@ it("shades dry coastal terrain from its height rather than a nearest-cell water 
     dry = tilePainter(raster, [0, 1000]);
   raster.water = {
     ...raster.field,
-    channels: { water: new Float64Array(raster.field.active.length).fill(1) },
+    channels: { water: generateBand(raster.field.coverage, "float64", "water", () => 1) },
     units: { water: "category" },
   };
   expect(tilePainter(raster, [0, 1000])([400, 400, 600, 600], 32)).toEqual(
@@ -123,7 +126,7 @@ it("colors sea and exposed coast relative to the current sea level rather than z
   raster.field.channels.elevation.fill(100);
   raster.water = {
     ...raster.field,
-    channels: { seaLevel: new Float64Array(raster.field.active.length).fill(200) },
+    channels: { seaLevel: generateBand(raster.field.coverage, "float64", "seaLevel", () => 200) },
     units: { seaLevel: "metre" },
   };
   const submerged = tilePainter(raster, [-1000, 1000])([400, 400, 600, 600], 1);
@@ -155,9 +158,9 @@ it("preserves natural cover contrast beneath Aurora in exported terrain", () => 
     classes = surfaceCategories(canonryMagicPresets());
   raster.field.channels.elevation.fill(400);
   raster.surface = raster.field;
-  const count = raster.field.active.length;
-  putChannel(raster.surface, "naturalSurface", "category", new Float64Array(count), "category");
-  putChannel(raster.surface, "finalSurface", "category", new Float64Array(count), "category");
+  const zeros = (name: string) => generateBand(raster.field.coverage, "float64", name, () => 0);
+  putChannel(raster.surface, "naturalSurface", "category", zeros("naturalSurface"), "category");
+  putChannel(raster.surface, "finalSurface", "category", zeros("finalSurface"), "category");
   const color = (natural: "Boreal forest" | "Scree field", magic: boolean) => {
     raster.surface!.channels.naturalSurface.fill(surfaceCode(natural));
     raster.surface!.channels.finalSurface.fill(
@@ -175,12 +178,10 @@ it("preserves natural cover contrast beneath Aurora in exported terrain", () => 
 it("retains opposite-facing relief under completely opaque ice in exported terrain", () => {
   const raster = fixture(),
     geometry = adaptiveGeometry(raster.field.topology!);
-  raster.field.channels.elevation.set(
-    Float64Array.from(geometry.x, (x) => 400 + Math.abs(x - 500) * 0.2)
-  );
+  fillBand(raster.field.channels.elevation, (i) => 400 + Math.abs(geometry.x.get(i) - 500) * 0.2);
   raster.ice = {
     ...raster.field,
-    channels: { ice: new Float64Array(raster.field.active.length).fill(1) },
+    channels: { ice: generateBand(raster.field.coverage, "float64", "ice", () => 1) },
     units: { ice: "ratio" },
   };
   const paint = tilePainter(raster, [0, 1000]);
@@ -193,7 +194,7 @@ it("shows submerged relief instead of flattening every ocean feature to a depth 
   const sloped = fixture(),
     flat = fixture();
   const geometry = adaptiveGeometry(sloped.field.topology!);
-  sloped.field.channels.elevation.set(Float64Array.from(geometry.x, (x) => -600 + x * 0.2));
+  fillBand(sloped.field.channels.elevation, (i) => -600 + geometry.x.get(i) * 0.2);
   flat.field.channels.elevation.fill(-500);
   expect(tilePainter(sloped, [-1000, 0])([490, 490, 510, 510], 1)).not.toEqual(
     tilePainter(flat, [-1000, 0])([490, 490, 510, 510], 1)

@@ -4,6 +4,13 @@ import { fieldContour, contourSupport } from "./fieldContours";
 import { adaptivePointSampler } from "./adaptivePoint";
 import { point, rectangle, spatial } from "./spatial";
 import { createGrid } from "./grids";
+import { residentBand } from "./lattice/bandValues";
+import type { AdaptiveTopology } from "./adaptiveTopology";
+
+const centres = (tree: AdaptiveTopology) => {
+  const geometry = adaptiveGeometry(tree);
+  return { x: geometry.x.toArray(), y: geometry.y.toArray() };
+};
 
 const topology = () =>
   createAdaptiveTopology([0, 0, 1000, 1000], {
@@ -100,14 +107,14 @@ it("closes staged lake shores reconstructed across nonuniform physical samples",
       refine: ([x, y, right, top]) =>
         x < 530_000 && right > 450_000 && y < 800_000 && top > 100_000,
     }),
-    geometry = adaptiveGeometry(tree);
+    geometry = centres(tree);
   for (let phase = 0; phase < 8; phase++) {
     const values = Float64Array.from(
       geometry.x,
       (x, i) => 100 * (Math.sin(x / 70_000 + phase) + Math.cos(geometry.y[i] / 45_000))
     );
     const members = Array.from(values.keys()).filter((i) => values[i] < 0);
-    const floor = adaptivePointSampler(tree, values);
+    const floor = adaptivePointSampler(tree, residentBand("float64", values));
     const wet = adaptivePointSampler(tree, (i) => Number(values[i] < 0));
     expect(
       () =>
@@ -151,7 +158,7 @@ it("keeps disconnected islands separate and leaves the intervening water empty",
 
 it("matches full-field contours when restricted to a reconstructed feature's support", () => {
   const tree = topology(),
-    geometry = adaptiveGeometry(tree);
+    geometry = centres(tree);
   const members = Array.from(geometry.x.keys()).filter(
     (i) => Math.hypot(geometry.x[i] - 475, geometry.y[i] - 500) < 90
   );
@@ -171,11 +178,11 @@ it.each(Array.from({ length: 16 }, (_, i) => i))(
   "polygonizes fragmented reconstructed labels, pattern %s",
   (phase) => {
     const tree = topology(),
-      geometry = adaptiveGeometry(tree);
+      geometry = centres(tree);
     const labels = Float64Array.from(geometry.x, (x, i) =>
       Number(Math.sin(x / 45 + phase) * Math.cos(geometry.y[i] / 37 - phase) > 0.1)
     );
-    const at = adaptivePointSampler(tree, labels);
+    const at = adaptivePointSampler(tree, residentBand("float64", labels));
     const shape = fieldContour(tree, at, undefined, 0.5, 0.1)!;
     expect(spatial.area(shape)).toBeGreaterThan(0);
     expect(spatial.covers(rectangle([0, 0, 1000, 1000]), shape)).toBe(true);

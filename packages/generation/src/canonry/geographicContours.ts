@@ -225,7 +225,7 @@ export function geographicContour(
     return fieldContour(
       mesh.topology,
       valueAt,
-      contourSupport(mesh.topology, memberLeaves(mesh, members), state.numerical),
+      contourSupport(mesh.topology, memberLeaves(mesh, members)),
       level,
       undefined,
       state.contours
@@ -246,14 +246,14 @@ export function geographicContour(
       Math.ceil((bounds[2] - bounds[0]) / spacing) + 1,
       Math.ceil((bounds[3] - bounds[1]) / spacing) + 1,
       bounds,
-      state.numerical
+      state.cache
     );
   try {
     return fieldContour(grid, valueAt, undefined, level, undefined, state.contours);
   } finally {
-    // The contour grid lives in the surface arena, not the world coverage.
-    state.numerical?.release(grid.active);
-    state.numerical?.release(grid.measures);
+    // The contour grid has its own coverage in the worker's cache; free its blocks.
+    grid.coverage.release(grid.active);
+    grid.coverage.release(grid.measures);
   }
 }
 function* memberLeaves(mesh: PhysicalMesh, members: Iterable<number>) {

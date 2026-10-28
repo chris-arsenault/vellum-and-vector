@@ -1,4 +1,5 @@
 import {
+  Band,
   createAdaptiveField,
   prepareAdaptiveTransfer,
   resampleChannels,
@@ -6,7 +7,6 @@ import {
   putChannel,
   type AdaptiveField,
   type AdaptiveLattice,
-  type NumericalAllocator,
   type Grid,
 } from "@atlas/domain";
 import type { GenerationState } from "../process";
@@ -27,8 +27,10 @@ function projectRegular(state: GenerationState, work: AtlasPhysicalWorkspace) {
     mesh.origin,
     mesh.periodic,
   ]);
+  work.grid = grid.coverage;
   if (work.interpolation && work.interpolationKey === key) return;
-  if (work.interpolation) releaseProjection(work.interpolation, state.numerical);
+  if (work.interpolation) releaseProjection(work.interpolation);
+  work.samples.release();
   work.interpolation = projectionInterpolation(
     mesh,
     grid.active.length,
@@ -36,7 +38,7 @@ function projectRegular(state: GenerationState, work: AtlasPhysicalWorkspace) {
       const p = gridPosition(grid, i);
       return [p.x - mesh.origin[0], p.y - mesh.origin[1]];
     },
-    state.numerical
+    grid.coverage
   );
   work.interpolationKey = key;
   work.samples = work.interpolation.samples;
@@ -51,20 +53,28 @@ export function refreshWorkspaceSamples(
     return;
   }
   if (work.interpolation) {
-    releaseProjection(work.interpolation, state.numerical);
+    releaseProjection(work.interpolation);
     delete work.interpolation;
     delete work.interpolationKey;
   }
   const previous = state.surface,
     topology = work.map.mesh.topology;
-  work.samples = (work.map.mesh as AdaptiveLattice).leafCells();
+  work.samples.release();
+  // The adaptive lattice holds its leaf table resident; the band is a view over it.
+  work.samples = Band.over(
+    (work.map.mesh as AdaptiveLattice).leafCells(),
+    { name: "physical:samples", type: "int32", lifetime: "run" },
+    previous.coverage.cache
+  );
+  work.grid = previous.coverage;
   if (previous.topology === topology) return;
-  const next = createAdaptiveField(previous.id, previous.scope, topology, state.numerical);
+  const next = createAdaptiveField(previous.id, previous.scope, topology, previous.coverage.cache);
+  work.grid = next.coverage;
   if (!Object.keys(previous.channels).length) {
     state.surface = next;
     return;
   }
-  resampleSurface(previous, next, prepared, state.numerical);
+  resampleSurface(previous, next, prepared);
   state.surface = next;
   if (state.domain.world.areas[state.domain.scope.areaId].parentId && work.map.mesh.periodic)
     state.surface.periodicWidth = work.map.mesh.periodic.width;
@@ -72,12 +82,11 @@ export function refreshWorkspaceSamples(
 function resampleSurface(
   previous: Grid,
   next: AdaptiveField,
-  prepared: ReturnType<typeof prepareAdaptiveTransfer> | undefined,
-  numerical?: NumericalAllocator
+  prepared: ReturnType<typeof prepareAdaptiveTransfer> | undefined
 ) {
   if (previous.topology?.bounds.every((value, i) => value === next.topology.bounds[i])) {
     const transfer =
-      prepared ?? prepareAdaptiveTransfer(previous.topology, next.topology, numerical);
+      prepared ?? prepareAdaptiveTransfer(previous.topology, next.topology, next.coverage);
     for (const [name, values] of Object.entries(previous.channels)) {
       putChannel(
         next,
@@ -87,7 +96,7 @@ function resampleSurface(
         channelQuantity(previous, name)
       );
     }
-  } else resampleChannels(previous, next, undefined, numerical);
+  } else resampleChannels(previous, next, undefined);
 }
 function channelQuantity(grid: Grid, name: string) {
   return (

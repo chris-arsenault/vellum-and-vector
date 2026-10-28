@@ -48,7 +48,7 @@ function displayCell(grid: RegularGrid) {
     held: number[][] | null = null;
   return (col: number, row: number) => {
     const cell = row * width + col;
-    if (cell === previous && values.immutable && active.immutable) return held;
+    if (cell === previous && values.schema.immutable && active.schema.immutable) return held;
     previous = cell;
     held = [];
     for (let j = row - 1; j <= row + 2; j++) {
@@ -56,8 +56,9 @@ function displayCell(grid: RegularGrid) {
       for (let i = col - 1; i <= col + 2; i++) {
         const at =
           Math.max(0, Math.min(height - 1, j)) * width + Math.max(0, Math.min(width - 1, i));
-        if (!active[at] || !Number.isFinite(values[at])) return (held = null);
-        samples.push(values[at]);
+        const value = values.get(at);
+        if (!active.get(at) || !Number.isFinite(value)) return (held = null);
+        samples.push(value);
       }
       held.push(samples);
     }

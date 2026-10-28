@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import { sampleCoverage } from "@atlas/domain";
 import { createWorldMesh } from "./worldMesh";
 import { createField } from "./field";
 import { atlasPhysicalProfile } from "./atlasProfile";
@@ -26,11 +27,13 @@ it.each(["open", "cylinder", "globe"])(
             mesh.x(i % mesh.count) + mesh.spacing * 0.23,
             mesh.y(i % mesh.count) - mesh.spacing * 0.17,
           ];
-    const interpolation = projectionInterpolation(mesh, count, position);
+    const grid = sampleCoverage(count),
+      interpolation = projectionInterpolation(mesh, count, position, grid);
     const work = {
       map: createField(mesh),
       profile: atlasPhysicalProfile(),
       samples: interpolation.samples,
+      grid,
       interpolation,
       fixed: [],
       inherited: false,
@@ -40,19 +43,20 @@ it.each(["open", "cylinder", "globe"])(
       { length: mesh.count },
       (_, i) => 0.1 + mesh.x(i) * 0.003 - mesh.y(i) * 0.001
     );
-    const expected = Float64Array.from({ length: count }, (_, i) => {
+    const expected = Array.from({ length: count }, (_, i) => {
       const [x, y] = position(i);
       const sample = triangleSample(mesh, x, y);
-      expect(interpolation.samples[i]).toBe(sample.cell);
+      expect(interpolation.samples.get(i)).toBe(sample.cell);
       return triangleValue(sample, values);
     });
-    expect(projectedValues(work, values)).toEqual(expected);
-    expect(projectedValues(work, values, true)).toEqual(
-      Float64Array.from(interpolation.samples, (cell) => values[cell])
+    expect(Array.from(projectedValues(work, values))).toEqual(expected);
+    expect(Array.from(projectedValues(work, values, true))).toEqual(
+      // A sample without support reads cell -1, which a float64 sample stores as NaN.
+      Array.from(interpolation.samples, (cell) => values[cell] ?? NaN)
     );
-    const reused = new Float64Array(count);
+    const reused = grid.scratch("float64", "reused", count);
     expect(projectedValues(work, values, false, reused)).toBe(reused);
-    expect(reused).toEqual(expected);
+    expect(Array.from(reused)).toEqual(expected);
     expect(interpolation.degree).toHaveLength(count);
     expect(interpolation.cells).toHaveLength(count * interpolation.stride);
     expect(

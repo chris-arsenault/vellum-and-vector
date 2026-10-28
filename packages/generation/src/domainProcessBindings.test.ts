@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { magicSystemSchema } from "@atlas/domain";
+import { generateBand, magicSystemSchema } from "@atlas/domain";
 import { landscape, epoch } from "./mapFixtures";
 import type { GenerationState, MapProcessContext } from "./process";
 import { defaultAtlasParameters } from "./atlasParameters";
@@ -20,7 +20,14 @@ function fixture(): GenerationState {
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
-    samples: new Int32Array(state.surface.active.length),
+    samples: generateBand(
+      state.surface.coverage,
+      "int32",
+      "physical:samples",
+      () => 0,
+      state.surface.active.length
+    ),
+    grid: state.surface.coverage,
     fixed: [],
     inherited: false,
     sampling: { maximumSize: 1000, minimumSize: 1000, featureSamples: 2 },

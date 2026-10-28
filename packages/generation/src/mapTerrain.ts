@@ -1,13 +1,12 @@
 import {
-  allocateNumerical,
-  CellList,
+  everySample,
+  foldSamples,
   gridPosition,
   putChannel,
   semanticId,
   requireThat,
+  type Band,
   type Grid,
-  type NumericalVector,
-  type NumericalAllocator,
 } from "@atlas/domain";
 import { requireChannel } from "./mapFields";
 import {
@@ -67,12 +66,12 @@ export const initializeTerrainProcess: MapProcess = {
     initialize(state, context) {
       const grid = state.surface,
         seed = Math.floor(context.random(true) * 4294967296);
-      const plates = provinces(grid, context, state.numerical),
-        fields = initialFields(grid, state.numerical);
+      const plates = provinces(grid, context),
+        fields = initialFields(grid);
       const scale = Math.max(grid.bounds[2] - grid.bounds[0], grid.bounds[3] - grid.bounds[1]);
       for (let i = 0; i < grid.active.length; i++) {
         checkProgress(context, i, grid.active.length, "Assembling persistent crustal provinces");
-        if (!grid.active[i]) continue;
+        if (!grid.active.get(i)) continue;
         initializeCell(grid, i, plates, fields, seed, scale, context);
       }
       for (const [name, values] of Object.entries(fields))
@@ -105,21 +104,20 @@ export const initializeTerrainProcess: MapProcess = {
   },
 };
 
-function provinces(
-  grid: Grid,
-  context: MapProcessContext,
-  numerical?: NumericalAllocator
-): Province[] {
+function provinces(grid: Grid, context: MapProcessContext): Province[] {
   const count = Number(context.parameters.provinces),
     speed = Number(context.parameters.plateSpeed);
-  const active = new CellList();
-  for (let i = 0; i < grid.active.length; i++) if (grid.active[i]) active.push(i);
-  const cells = active.finish();
+  const cells = grid.coverage.scratch(
+    "int32",
+    "terrain:active-cells",
+    foldSamples(grid.active, (sum, v) => sum + (v ? 1 : 0), 0)
+  );
+  for (let i = 0, n = 0; i < grid.active.length; i++) if (grid.active.get(i)) cells.set(n++, i);
   requireThat(cells.length > 0, "physical_extent", "Terrain needs active mapped cells.");
   const chosen: Province[] = [];
   for (let n = 0; n < count; n++) {
     const candidates = Array.from({ length: 12 }, () =>
-      gridPosition(grid, cells[Math.floor(context.random(true) * cells.length)])
+      gridPosition(grid, cells.get(Math.floor(context.random(true) * cells.length)))
     );
     const selected = candidates.sort((a, b) => separation(b, chosen) - separation(a, chosen))[0];
     const angle = context.random(true) * Math.PI * 2;
@@ -131,7 +129,7 @@ function provinces(
       continental: context.random(true),
     });
   }
-  numerical?.release(cells);
+  grid.coverage.release(cells);
   return chosen;
 }
 function separation(p: { x: number; y: number }, previous: Province[]) {
@@ -140,10 +138,7 @@ function separation(p: { x: number; y: number }, previous: Province[]) {
     Infinity
   );
 }
-function initialFields(
-  grid: Grid,
-  numerical?: NumericalAllocator
-): Record<string, NumericalVector> {
+function initialFields(grid: Grid): Record<string, Band> {
   return Object.fromEntries(
     [
       "elevation",
@@ -156,18 +151,7 @@ function initialFields(
       "crustMotionY",
       "uplift",
       "carbonate",
-    ].map((key) => [
-      key,
-      allocateNumerical(
-        {
-          type: "float64",
-          length: grid.active.length,
-          lifetime: "process",
-          name: `terrain:${key}`,
-        },
-        numerical
-      ),
-    ])
+    ].map((key) => [key, grid.coverage.scratch("float64", `terrain:${key}`, grid.active.length)])
   );
 }
 function channelUnit(name: string) {
@@ -179,7 +163,7 @@ function initializeCell(
   grid: Grid,
   i: number,
   plates: Province[],
-  fields: Record<string, NumericalVector>,
+  fields: Record<string, Band>,
   seed: number,
   scale: number,
   context: MapProcessContext
@@ -205,19 +189,27 @@ function initializeCell(
     Math.max(1, Math.hypot(dx, dy));
   const ridge =
     (Math.max(0, convergence) / Math.max(0.001, Number(context.parameters.plateSpeed))) * margin;
-  fields.elevation[i] =
+  fields.elevation.set(
+    i,
     Number(context.parameters.seaLevel) +
-    relief * ((continental - 0.48) * 3 + hills * 0.22 + fine * 0.06 + ridge * 0.8);
-  fields.bedrock[i] =
-    grid.channels.bedrock?.[i] ??
-    (grid.channels.elevation?.[i] ?? fields.elevation[i]) - (grid.channels.sediment?.[i] ?? 0);
-  fields.province[i] = first.n + 1;
-  fields.crustMotionX[i] = first.plate.dx;
-  fields.crustMotionY[i] = first.plate.dy;
-  fields.fracture[i] = Math.min(1, 0.08 + margin * 0.75);
-  fields.uplift[i] = convergence * 0.1 * margin;
-  fields.rock[i] = 0.25 + 0.65 * mixHash(first.n, 73, seed);
-  fields.carbonate[i] = Math.max(0, 0.5 - Math.abs(continental - 0.5)) * (1 - fields.rock[i]);
+      relief * ((continental - 0.48) * 3 + hills * 0.22 + fine * 0.06 + ridge * 0.8)
+  );
+  fields.bedrock.set(
+    i,
+    grid.channels.bedrock?.get(i) ??
+      (grid.channels.elevation?.get(i) ?? fields.elevation.get(i)) -
+        (grid.channels.sediment?.get(i) ?? 0)
+  );
+  fields.province.set(i, first.n + 1);
+  fields.crustMotionX.set(i, first.plate.dx);
+  fields.crustMotionY.set(i, first.plate.dy);
+  fields.fracture.set(i, Math.min(1, 0.08 + margin * 0.75));
+  fields.uplift.set(i, convergence * 0.1 * margin);
+  fields.rock.set(i, 0.25 + 0.65 * mixHash(first.n, 73, seed));
+  fields.carbonate.set(
+    i,
+    Math.max(0, 0.5 - Math.abs(continental - 0.5)) * (1 - fields.rock.get(i))
+  );
 }
 
 export const tectonicsProcess: MapProcess = {
@@ -253,20 +245,12 @@ export const tectonicsProcess: MapProcess = {
         years = epochYears(context);
       const activity = Number(context.parameters.activity),
         rate = Number(context.parameters.upliftRate);
-      const uplift = allocateNumerical(
-          {
-            type: "float64",
-            length: elevation.length,
-            lifetime: "process",
-            name: "terrain:uplift",
-          },
-          state.numerical
-        ),
+      const uplift = grid.coverage.scratch("float64", "terrain:uplift", elevation.length),
         fracture = requireChannel(grid, "fracture", "ratio");
       if (context.parameters.advection) advect(state, mobile, years * activity, motionX, motionY);
       for (let i = 0; i < elevation.length; i++) {
         checkProgress(context, i, elevation.length, "Evolving crust motion and accumulated uplift");
-        if (!mobile[i]) continue;
+        if (!mobile.get(i)) continue;
         const closure =
           links(i).reduce((sum, j) => {
             const a = gridPosition(grid, i),
@@ -274,14 +258,15 @@ export const tectonicsProcess: MapProcess = {
               length = cellDistance(grid, i, j);
             return (
               sum +
-              ((motionX[i] - motionX[j]) * (b.x - a.x) + (motionY[i] - motionY[j]) * (b.y - a.y)) /
+              ((motionX.get(i) - motionX.get(j)) * (b.x - a.x) +
+                (motionY.get(i) - motionY.get(j)) * (b.y - a.y)) /
                 Math.max(1, length)
             );
           }, 0) / Math.max(1, links(i).length);
-        uplift[i] = rate * Math.tanh(closure / 0.01) * activity;
-        bedrock[i] += uplift[i] * years;
-        elevation[i] = bedrock[i] + sediment[i];
-        fracture[i] = Math.min(1, fracture[i] + Math.abs(closure) * years * 0.0001);
+        uplift.set(i, rate * Math.tanh(closure / 0.01) * activity);
+        bedrock.add(i, uplift.get(i) * years);
+        elevation.set(i, bedrock.get(i) + sediment.get(i));
+        fracture.set(i, Math.min(1, fracture.get(i) + Math.abs(closure) * years * 0.0001));
       }
       putChannel(grid, "uplift", "metre/year", uplift);
       context.recordCause({
@@ -297,13 +282,7 @@ export const tectonicsProcess: MapProcess = {
   },
 };
 
-function advect(
-  state: GenerationState,
-  movable: import("@atlas/domain").NumericalVector,
-  years: number,
-  dx: import("@atlas/domain").NumericalVector,
-  dy: import("@atlas/domain").NumericalVector
-) {
+function advect(state: GenerationState, movable: Band, years: number, dx: Band, dy: Band) {
   const grid = state.surface,
     channels = [
       "bedrock",
@@ -314,7 +293,9 @@ function advect(
       "crustMotionX",
       "crustMotionY",
     ];
-  const source = Object.fromEntries(channels.map((key) => [key, grid.channels[key].slice()]));
+  const source = Object.fromEntries(
+    channels.map((key) => [key, grid.coverage.copyBand(grid.channels[key])])
+  );
   requireThat(
     !grid.topology,
     "prototype_grid",
@@ -322,15 +303,19 @@ function advect(
   );
   const stepX = (grid.bounds[2] - grid.bounds[0]) / (grid.width - 1),
     stepY = (grid.bounds[3] - grid.bounds[1]) / (grid.height - 1);
-  for (let i = 0; i < movable.length; i++) {
-    if (!movable[i]) continue;
-    const x = Math.round((i % grid.width) - (dx[i] * years) / stepX),
-      y = Math.round(Math.floor(i / grid.width) - (dy[i] * years) / stepY);
-    if (x < 0 || y < 0 || x >= grid.width || y >= grid.height) continue;
+  // The movable upstream cell material arrives from, or -1.
+  const origin = (i: number) => {
+    const x = Math.round((i % grid.width) - (dx.get(i) * years) / stepX),
+      y = Math.round(Math.floor(i / grid.width) - (dy.get(i) * years) / stepY);
+    if (x < 0 || y < 0 || x >= grid.width || y >= grid.height) return -1;
     const from = y * grid.width + x;
-    if (!grid.active[from] || !movable[from]) continue;
-    for (const key of channels) grid.channels[key][i] = source[key][from];
+    return grid.active.get(from) && movable.get(from) ? from : -1;
+  };
+  for (let i = 0; i < movable.length; i++) {
+    const from = movable.get(i) ? origin(i) : -1;
+    if (from >= 0) for (const key of channels) grid.channels[key].set(i, source[key].get(from));
   }
+  for (const band of Object.values(source)) grid.coverage.release(band);
 }
 function validateTerrain(state: GenerationState) {
   for (const name of ["elevation", "bedrock", "sediment"])
@@ -338,7 +323,7 @@ function validateTerrain(state: GenerationState) {
   for (const name of ["rock", "fracture", "carbonate"])
     requireChannel(state.surface, name, "ratio");
   requireThat(
-    state.surface.channels.sediment.every((v) => v >= 0),
+    everySample(state.surface.channels.sediment, (v) => v >= 0),
     "negative_sediment",
     "Sediment thickness cannot be negative."
   );

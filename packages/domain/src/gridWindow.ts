@@ -10,14 +10,14 @@ export function* adaptiveWindowLeaves(topology: AdaptiveTopology, bounds: Bounds
     const node = stack.pop()!,
       at = node * 4;
     if (
-      boxes[at] > bounds[2] ||
-      boxes[at + 2] < bounds[0] ||
-      boxes[at + 1] > bounds[3] ||
-      boxes[at + 3] < bounds[1]
+      boxes.get(at) > bounds[2] ||
+      boxes.get(at + 2) < bounds[0] ||
+      boxes.get(at + 1) > bounds[3] ||
+      boxes.get(at + 3) < bounds[1]
     )
       continue;
-    const child = topology.children[node];
-    if (child < 0) yield topology.leafIndex[node];
+    const child = topology.children.get(node);
+    if (child < 0) yield topology.leafIndex.get(node);
     else for (let offset = 3; offset >= 0; offset--) stack.push(child + offset);
   }
 }

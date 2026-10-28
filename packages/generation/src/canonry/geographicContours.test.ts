@@ -1,4 +1,4 @@
-import { createGrid, point, rectangle, spatial, type Bounds } from "@atlas/domain";
+import { createGrid, point, rectangle, residentBand, spatial, type Bounds } from "@atlas/domain";
 import { expect, it } from "vitest";
 import { landscape } from "../mapFixtures";
 import { createField } from "./field";
@@ -56,7 +56,8 @@ function fixture(bounds: Bounds = [0, 0, 2000, 1000], cylinder = false) {
   state.physical = {
     map: createField(mesh),
     profile: atlasPhysicalProfile(),
-    samples: new Int32Array(state.surface.active.length),
+    samples: residentBand("int32", new Int32Array(state.surface.active.length)),
+    grid: state.surface.coverage,
     fixed: [],
     inherited: false,
     sampling: { maximumSize: mesh.spacing, minimumSize: mesh.spacing, featureSamples: 2 },

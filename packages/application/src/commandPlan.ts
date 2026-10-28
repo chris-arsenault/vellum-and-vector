@@ -10,7 +10,7 @@ import {
   type ReadRequirements,
   type IntentContext,
   type Template,
-  type NumericalAllocator,
+  type BlockCache,
 } from "@atlas/domain";
 import { normalizeCommand } from "./commandNormalization";
 import { supplementalChanges } from "./supplemental";
@@ -39,11 +39,11 @@ export function planCommand(
   source: DomainSnapshot,
   command: Command,
   template?: Template,
-  numerical?: NumericalAllocator
+  blocks?: BlockCache
 ): CommandPlan {
   const data = normalizeCommand(source, command);
   const context: IntentContext = {
-    numerical,
+    blocks,
     scope: source.scope,
     owner: source.world.owner,
     actor: "user",

@@ -2,7 +2,7 @@ import OLMap from "ol/Map.js";
 import View from "ol/View.js";
 import Projection from "ol/proj/Projection.js";
 import WebGLTile from "ol/layer/WebGLTile.js";
-import { createGrid, gridPosition, putChannel, rectangle } from "@atlas/domain";
+import { createGrid, generateBand, gridPosition, putChannel, rectangle } from "@atlas/domain";
 import { numericTileSampler, numericTileSource } from "../src/numericTiles";
 import { terrainTile } from "../src/terrainTile";
 import { terrainStyle } from "../src/rasterStyles";
@@ -43,7 +43,7 @@ function terrain(options: MountainOptions): Raster {
     field,
     "elevation",
     "metre",
-    Float64Array.from(field.active, (_, i) => {
+    generateBand(field.coverage, "float64", "elevation", (i) => {
       const { x, y } = gridPosition(field, i);
       if (options.shape === "slope") return 1000 + x * 0.1;
       const ridge = 50_000 + 7000 * Math.sin(y / 16_000);
@@ -54,7 +54,12 @@ function terrain(options: MountainOptions): Raster {
       );
     })
   );
-  putChannel(field, "ice", "ratio", new Float64Array(field.active.length).fill(options.ice ?? 0));
+  putChannel(
+    field,
+    "ice",
+    "ratio",
+    generateBand(field.coverage, "float64", "ice", () => options.ice ?? 0)
+  );
   return {
     id: field.id,
     areaId: "area",

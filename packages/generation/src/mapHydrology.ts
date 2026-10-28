@@ -1,13 +1,12 @@
 import {
-  allocateNumerical,
-  generateNumerical,
+  everySample,
+  fillBand,
+  foldSamples,
   putChannel,
   requireThat,
+  type Band,
   type Grid,
-  type NumericalVector,
-  type NumericalAllocator,
 } from "@atlas/domain";
-import { radixOrder } from "@atlas/domain";
 import { requireChannel } from "./mapFields";
 import { conditionDrainage, routeRunoff, writeDrainage } from "./mapDrainage";
 import {
@@ -50,9 +49,9 @@ export const drainageProcess: MapProcess = {
     kind: "model-pass",
     applyPass(state, context) {
       const level = Number(context.parameters.seaLevel),
-        graph = conditionDrainage(state.surface, level, context, state.numerical);
+        graph = conditionDrainage(state.surface, level, context);
       routeRunoff(state, graph, context);
-      writeDrainage(state.surface, graph, level, state.numerical);
+      writeDrainage(state.surface, graph, level);
     },
   },
   validate(state) {
@@ -68,19 +67,19 @@ function validateDrainage(grid: Grid) {
     rank = requireChannel(grid, "drainageRank", "cell-index");
   const flow = requireChannel(grid, "flow", "cubic-metre/second");
   for (let i = 0; i < floor.length; i++) {
-    if (!grid.active[i]) continue;
-    const target = targets[i];
+    if (!grid.active.get(i)) continue;
+    const target = targets.get(i);
     requireThat(
-      filled[i] >= floor[i] && flow[i] >= 0,
+      filled.get(i) >= floor.get(i) && flow.get(i) >= 0,
       "invalid_drainage",
       "Drainage retains the floor and nonnegative discharge."
     );
     requireThat(
       target === -1 ||
         (Number.isInteger(target) &&
-          grid.active[target] === 1 &&
-          rank[target] < rank[i] &&
-          filled[target] <= filled[i]),
+          grid.active.get(target) === 1 &&
+          rank.get(target) < rank.get(i) &&
+          filled.get(target) <= filled.get(i)),
       "drainage_cycle",
       "Each reach drains to a lower-ranked active receiver."
     );
@@ -143,46 +142,41 @@ export const erosionProcess: MapProcess = {
         mobile = movableTerrain(state),
         years = epochYears(context);
       const values = (name: string) =>
-        allocateNumerical(
-          {
-            type: "float64",
-            length: grid.active.length,
-            lifetime: "process",
-            name: `erosion:${name}`,
-          },
-          state.numerical
-        );
+        grid.coverage.scratch("float64", `erosion:${name}`, grid.active.length);
       const moving = values("moving"),
         eroded = values("eroded"),
         deposited = values("deposited");
-      const order = radixOrder(grid.channels.drainageRank, true);
-      let exported = 0;
-      for (let n = 0; n < order.length; n++) {
-        checkProgress(
-          context,
-          n,
-          order.length,
-          "Eroding material and depositing downstream sediment"
+      const count = grid.active.length;
+      let exported = 0,
+        n = 0;
+      for (const i of grid.coverage.order(grid.channels.drainageRank, true)) {
+        checkProgress(context, n++, count, "Eroding material and depositing downstream sediment");
+        const target = grid.channels.receiver.get(i);
+        if (!grid.active.get(i)) continue;
+        const supply = removeMaterial(grid, i, target, mobile.get(i) === 1, years, context);
+        eroded.set(i, supply);
+        const load = moving.get(i) + supply;
+        const retained = depositMaterial(
+          grid,
+          i,
+          target,
+          load,
+          mobile.get(i) === 1,
+          years,
+          context
         );
-        const i = order[n],
-          target = grid.channels.receiver[i];
-        if (!grid.active[i]) continue;
-        const supply = removeMaterial(grid, i, target, mobile[i] === 1, years, context);
-        eroded[i] = supply;
-        const load = moving[i] + supply;
-        const retained = depositMaterial(grid, i, target, load, mobile[i] === 1, years, context);
-        deposited[i] = retained;
-        if (target >= 0) moving[target] += load - retained;
+        deposited.set(i, retained);
+        if (target >= 0) moving.add(target, load - retained);
         else exported += load - retained;
       }
-      recordTransport(grid, eroded, deposited, exported, context, state.numerical);
+      recordTransport(grid, eroded, deposited, exported, context);
     },
   },
   validate(state) {
     requireChannel(state.surface, "bedrock", "metre");
     const sediment = requireChannel(state.surface, "sediment", "metre");
     requireThat(
-      sediment.every((v) => v >= 0),
+      everySample(sediment, (v) => v >= 0),
       "negative_sediment",
       "Transport cannot remove more loose sediment than exists."
     );
@@ -198,13 +192,13 @@ function removeMaterial(
   years: number,
   context: MapProcessContext
 ) {
-  if (!movable || target < 0 || grid.measures[i] <= 0) return 0;
+  if (!movable || target < 0 || grid.measures.get(i) <= 0) return 0;
   const elevation = grid.channels.elevation,
     bedrock = grid.channels.bedrock,
     sediment = grid.channels.sediment;
   const rock = grid.channels.rock,
-    flow = grid.channels.flow[i];
-  const fall = Math.max(0, elevation[i] - elevation[target]);
+    flow = grid.channels.flow.get(i);
+  const fall = Math.max(0, elevation.get(i) - elevation.get(target));
   const slope = fall / Math.max(1, cellDistance(grid, i, target));
   const depth = Math.min(
     fall * 0.35,
@@ -212,14 +206,14 @@ function removeMaterial(
       Math.sqrt(flow) *
       slope *
       years *
-      (1 + (grid.channels.coastalPressure?.[i] ?? 0) / 1000)) /
-      Math.max(0.1, rock[i])
+      (1 + (grid.channels.coastalPressure?.get(i) ?? 0) / 1000)) /
+      Math.max(0.1, rock.get(i))
   );
-  const loose = Math.min(sediment[i], depth);
-  sediment[i] -= loose;
-  bedrock[i] -= depth - loose;
-  elevation[i] -= depth;
-  return depth * grid.measures[i];
+  const loose = Math.min(sediment.get(i), depth);
+  sediment.add(i, -loose);
+  bedrock.add(i, -(depth - loose));
+  elevation.add(i, -depth);
+  return depth * grid.measures.get(i);
 }
 function depositMaterial(
   grid: Grid,
@@ -230,31 +224,32 @@ function depositMaterial(
   years: number,
   context: MapProcessContext
 ) {
-  if (!movable || load <= 0 || grid.measures[i] <= 0) return 0;
+  if (!movable || load <= 0 || grid.measures.get(i) <= 0) return 0;
   const elevation = grid.channels.elevation;
   const slope =
     target < 0
       ? 0
-      : Math.max(0, elevation[i] - elevation[target]) / Math.max(1, cellDistance(grid, i, target));
+      : Math.max(0, elevation.get(i) - elevation.get(target)) /
+        Math.max(1, cellDistance(grid, i, target));
   const concentration = Number(context.parameters.transportConcentration);
   const capacity =
-    grid.channels.flow[i] * secondsPerYear * years * concentration * Math.sqrt(slope);
-  const fraction = grid.channels.water[i] > 0 ? 1 : Number(context.parameters.depositionFraction);
+    grid.channels.flow.get(i) * secondsPerYear * years * concentration * Math.sqrt(slope);
+  const fraction =
+    grid.channels.water.get(i) > 0 ? 1 : Number(context.parameters.depositionFraction);
   const volume = Math.max(0, load - capacity) * fraction;
-  grid.channels.sediment[i] += volume / grid.measures[i];
-  elevation[i] += volume / grid.measures[i];
+  grid.channels.sediment.add(i, volume / grid.measures.get(i));
+  elevation.add(i, volume / grid.measures.get(i));
   return volume;
 }
 function recordTransport(
   grid: Grid,
-  removed: NumericalVector,
-  retained: NumericalVector,
+  removed: Band,
+  retained: Band,
   exported: number,
-  context: MapProcessContext,
-  numerical?: NumericalAllocator
+  context: MapProcessContext
 ) {
-  const eroded = removed.reduce((sum, v) => sum + v, 0),
-    deposited = retained.reduce((sum, v) => sum + v, 0);
+  const eroded = foldSamples(removed, (sum, v) => sum + v, 0),
+    deposited = foldSamples(retained, (sum, v) => sum + v, 0);
   requireThat(
     Math.abs(eroded - deposited - exported) <= Math.max(1e-7, eroded * 1e-10),
     "sediment_balance",
@@ -264,20 +259,16 @@ function recordTransport(
     grid,
     "erosion",
     "metre",
-    generateNumerical(
-      { type: "float64", length: removed.length, lifetime: "process", name: "erosion:depth" },
-      (i) => (grid.measures[i] > 0 ? removed[i] / grid.measures[i] : 0),
-      numerical
+    fillBand(grid.coverage.scratch("float64", "erosion:depth", removed.length), (i) =>
+      grid.measures.get(i) > 0 ? removed.get(i) / grid.measures.get(i) : 0
     )
   );
   putChannel(
     grid,
     "deposition",
     "metre",
-    generateNumerical(
-      { type: "float64", length: retained.length, lifetime: "process", name: "deposition:depth" },
-      (i) => (grid.measures[i] > 0 ? retained[i] / grid.measures[i] : 0),
-      numerical
+    fillBand(grid.coverage.scratch("float64", "deposition:depth", retained.length), (i) =>
+      grid.measures.get(i) > 0 ? retained.get(i) / grid.measures.get(i) : 0
     )
   );
   context.recordCause({

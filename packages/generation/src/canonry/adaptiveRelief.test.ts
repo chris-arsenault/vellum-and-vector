@@ -1,5 +1,11 @@
 import { expect, it } from "vitest";
-import { createGrid, fieldInterpolator, rectangle, type SpatialScope } from "@atlas/domain";
+import {
+  createGrid,
+  fieldInterpolator,
+  rectangle,
+  residentBand,
+  type SpatialScope,
+} from "@atlas/domain";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { createField, type PhysicalField } from "./field";
 import { units } from "./math";
@@ -28,7 +34,7 @@ function parentGrid() {
     const x = (size * (index % grid.width)) / (grid.width - 1);
     values[index] = x < size / 2 ? 100 + x * 0.0005 : 200 + (x - size / 2) * 0.02;
   }
-  grid.channels.elevation = values;
+  grid.channels.elevation = residentBand("float64", values);
   grid.units.elevation = "metre";
   return grid;
 }

@@ -1,8 +1,9 @@
 import { requireThat } from "./errors";
 import type { Bounds } from "./spatial";
 import { adaptiveCell, adaptiveLeafAt, type AdaptiveTopology } from "./adaptiveTopology";
-import type { NumericalAllocator, NumericalVector } from "./numericalVector";
-import { generateNumerical } from "./numericalAllocation";
+import type { Band } from "./lattice/band";
+import type { Coverage } from "./lattice/coverage";
+import { generateBand } from "./lattice/bandValues";
 import { transferGradients, type TransferSamples } from "./adaptiveTransferGradient";
 
 type Quantity = "intensive" | "extensive" | "category";
@@ -25,14 +26,14 @@ export function* overlappingAdaptiveLeaves(
     const node = pending.pop()!,
       at = node * 4;
     if (
-      boxes[at] >= bounds[2] ||
-      boxes[at + 2] <= bounds[0] ||
-      boxes[at + 1] >= bounds[3] ||
-      boxes[at + 3] <= bounds[1]
+      boxes.get(at) >= bounds[2] ||
+      boxes.get(at + 2) <= bounds[0] ||
+      boxes.get(at + 1) >= bounds[3] ||
+      boxes.get(at + 3) <= bounds[1]
     )
       continue;
-    const child = topology.children[node];
-    if (child < 0) yield topology.leafIndex[node];
+    const child = topology.children.get(node);
+    if (child < 0) yield topology.leafIndex.get(node);
     else if (ascending) pending.push(child + 3, child + 2, child + 1, child);
     else pending.push(child, child + 1, child + 2, child + 3);
   }
@@ -91,48 +92,48 @@ function sampleTransfer(
   if (quantity === "category") return category;
   return quantity === "extensive" ? total : total / cellArea(targetBox);
 }
-/** Integrate local overlaps without retaining a world-sized overlap or gradient table. */
+/**
+ * Integrate local overlaps without retaining a world-sized overlap or gradient table.
+ * Results are run-lifetime bands, one sample per target leaf, in `coverage`.
+ */
 export function prepareAdaptiveTransfer(
   source: AdaptiveTopology,
   target: AdaptiveTopology,
-  numerical?: NumericalAllocator
+  coverage: Coverage = target.coverage
 ) {
   requireThat(
     source.bounds.every((value, i) => value === target.bounds[i]),
     "adaptive_transfer",
     "Conservative transfer requires the same extent."
   );
-  return (values: TransferSamples, quantity: Quantity): NumericalVector => {
+  return (values: TransferSamples, quantity: Quantity): Band => {
     if (typeof values !== "function")
       requireThat(
         values.length === source.leaves.length,
         "adaptive_transfer",
         "Transfer requires one value per source cell."
       );
-    const sample = typeof values === "function" ? values : (j: number) => values[j],
+    const sample = typeof values === "function" ? values : (j: number) => values.get(j),
       density =
         quantity === "extensive"
           ? (j: number) => sample(j) / cellArea(adaptiveCell(source, j))
           : sample,
       gradient = transferGradients(source, density);
-    return generateNumerical(
-      {
-        type: "float64",
-        length: target.leaves.length,
-        lifetime: "process",
-        name: "adaptive:transfer",
-      },
+    return generateBand(
+      coverage,
+      "float64",
+      "adaptive:transfer",
       (i) => sampleTransfer(source, target, i, sample, quantity, gradient),
-      numerical
+      target.leaves.length
     );
   };
 }
 export function transferAdaptive(
   source: AdaptiveTopology,
   target: AdaptiveTopology,
-  values: NumericalVector,
+  values: Band,
   quantity: Quantity,
-  numerical?: NumericalAllocator
-): NumericalVector {
-  return prepareAdaptiveTransfer(source, target, numerical)(values, quantity);
+  coverage?: Coverage
+): Band {
+  return prepareAdaptiveTransfer(source, target, coverage)(values, quantity);
 }

@@ -36,4 +36,16 @@ export {
 } from "./blockScratch";
 export { BlockCache, type BlockOwner } from "./blockCache";
 export { Band, type BandSchema, type BlockSource } from "./band";
-export { Coverage } from "./coverage";
+export { Coverage, sampleLayout, type CoverageLayout } from "./coverage";
+export {
+  sampleCoverage,
+  fillBand,
+  generateBand,
+  bandFrom,
+  residentBand,
+  readRange,
+  writeRange,
+  everySample,
+  someSample,
+  foldSamples,
+} from "./bandValues";

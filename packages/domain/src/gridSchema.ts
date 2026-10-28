@@ -10,9 +10,11 @@ import {
 import type { Grid } from "./grids";
 import { adaptiveTopologySchema } from "./adaptiveSchema";
 import { numericalSchema } from "./numericalSchema";
+import { Coverage } from "./lattice/coverage";
+import { everySample } from "./lattice/bandValues";
 
 const channel = numericalSchema("float64").refine(
-  (values) => values.every(Number.isFinite),
+  (values) => everySample(values, Number.isFinite),
   "Numerical channels require finite samples."
 );
 const bodySchema = z.object({
@@ -41,8 +43,9 @@ const fieldSchema = z
     periodicWidth: finite.positive().optional(),
     scope: scopeSchema,
     bounds: z.tuple([finite, finite, finite, finite]),
-    active: numericalSchema("uint8").refine((values) => values.every((value) => value <= 1)),
-    measures: channel.refine((values) => values.every((value) => value >= 0)),
+    coverage: z.custom<Coverage>((value) => value instanceof Coverage),
+    active: numericalSchema("uint8").refine((values) => everySample(values, (v) => v <= 1)),
+    measures: channel.refine((values) => everySample(values, (v) => v >= 0)),
     channels: z.record(identifier, channel),
     units: z.record(identifier, identifier),
     quantities: z.record(identifier, z.enum(["intensive", "extensive", "category"])).optional(),

@@ -1,5 +1,5 @@
 import {
-  generateNumerical,
+  generateBand,
   population,
   putChannel,
   languageUse,
@@ -25,15 +25,12 @@ export function publishCultures(state: GenerationState) {
       }, 0);
       return members / Math.max(1e-12, population(c));
     });
-    const values = generateNumerical(
-      {
-        type: "float64",
-        length: work.owner.length,
-        lifetime: "run",
-        name: `${entity.kind}:${entity.id}`,
-      },
-      (i) => fractions[work.owner[i]] ?? 0,
-      state.numerical
+    const values = generateBand(
+      state.surface.coverage,
+      "float64",
+      `${entity.kind}:${entity.id}`,
+      (i) => fractions[work.owner.get(i)] ?? 0,
+      work.owner.length
     );
     putChannel(state.surface, `${entity.kind}:${entity.id}`, "ratio", values);
     if (entity.kind === "language")
@@ -41,15 +38,12 @@ export function publishCultures(state: GenerationState) {
         state.surface,
         `languageUse:${entity.id}`,
         "ratio",
-        generateNumerical(
-          {
-            type: "float64",
-            length: work.owner.length,
-            lifetime: "run",
-            name: `languageUse:${entity.id}`,
-          },
-          (i) => use[work.owner[i]]?.[entity.id] ?? 0,
-          state.numerical
+        generateBand(
+          state.surface.coverage,
+          "float64",
+          `languageUse:${entity.id}`,
+          (i) => use[work.owner.get(i)]?.[entity.id] ?? 0,
+          work.owner.length
         )
       );
   }

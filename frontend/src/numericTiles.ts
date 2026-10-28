@@ -124,13 +124,16 @@ function activeSampler(
   return (p) => {
     const overlay = overlays.find(({ footprint }) => footprint.intersectsCoordinate([p.x, p.y]));
     if (overlay) return overlay.at(p);
-    if (grid.topology) return grid.active[locate(grid.topology, p.x, p.y).leaf] === 1;
+    if (grid.topology) {
+      const leaf = locate(grid.topology, p.x, p.y).leaf;
+      return leaf >= 0 && grid.active.get(leaf) === 1;
+    }
     const x = Math.round(
       ((p.x - grid.bounds[0]) / (grid.bounds[2] - grid.bounds[0])) * (grid.width - 1)
     );
     const y = Math.round(
       ((p.y - grid.bounds[1]) / (grid.bounds[3] - grid.bounds[1])) * (grid.height - 1)
     );
-    return grid.active[y * grid.width + x] === 1;
+    return grid.active.get(y * grid.width + x) === 1;
   };
 }

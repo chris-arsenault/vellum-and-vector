@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { createGrid, putChannel, rectangle } from "@atlas/domain";
+import { createGrid, putChannel, rectangle, residentBand } from "@atlas/domain";
 import { landscape, epoch } from "./mapFixtures";
 import { randomStream } from "./random";
 import type { MapProcessContext } from "./process";
@@ -15,7 +15,12 @@ function fixture() {
   state.domain.world.areas.area.footprint = footprint;
   state.surface = createGrid("society", state.domain.scope, 25, 9);
   const set = (name: string, value: number) =>
-    putChannel(state.surface, name, "ratio", new Float64Array(225).fill(value));
+    putChannel(
+      state.surface,
+      name,
+      "ratio",
+      residentBand("float64", new Float64Array(225).fill(value))
+    );
   set("elevation", 100);
   set("temperature", 18);
   set("moisture", 0.7);

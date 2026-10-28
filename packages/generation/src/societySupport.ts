@@ -1,4 +1,4 @@
-import { allocateNumerical, neighbors, spatial, type SocietySupport } from "@atlas/domain";
+import { neighbors, spatial, type SocietySupport } from "@atlas/domain";
 import type { GenerationState } from "./process";
 export { channelAccess } from "./societyChannelAccess";
 
@@ -11,11 +11,13 @@ export const emptySupport = (): SocietySupport => ({
   capacity: 0,
 });
 export function societyValue(state: GenerationState, channel: string, i: number, fallback = 0) {
-  return state.surface.channels[channel]?.[i] ?? fallback;
+  const values = state.surface.channels[channel];
+  return values && i >= 0 && i < values.length ? values.get(i) : fallback;
 }
 export function dryLand(state: GenerationState, i: number) {
   const { active, channels: c } = state.surface;
-  return Boolean(active[i] && (c.water ? c.water[i] === 0 : c.elevation[i] > 0));
+  if (i < 0 || i >= active.length) return false;
+  return Boolean(active.get(i) && (c.water ? c.water.get(i) === 0 : c.elevation.get(i) > 0));
 }
 /**
  * Livelihoods a cell supports, from the climate, soil, cover and water it has. Magic enters
@@ -69,27 +71,20 @@ export function supportAt(
 export function coastalFishery(state: GenerationState) {
   const grid = state.surface,
     covers = spatial.geometryCoverage(grid.scope.footprint),
-    result = allocateNumerical(
-      {
-        type: "float64",
-        length: grid.active.length,
-        lifetime: "run",
-        name: "society-coastal-fishery",
-      },
-      state.numerical
-    );
+    result = grid.coverage.scratch("float64", "society-coastal-fishery", grid.active.length);
+  result.retain();
   const water = grid.channels.water;
   if (!water) return result;
   for (let i = 0; i < result.length; i++) {
     if (!dryLand(state, i)) continue;
-    const sea = neighbors(grid, i, true, covers).filter((j) => water[j] === 1);
+    const sea = neighbors(grid, i, true, covers).filter((j) => water.get(j) === 1);
     if (!sea.length) continue;
     const fauna = sea.reduce((s, j) => s + societyValue(state, "aquaticFauna", j), 0) / sea.length,
       upwelling = Math.max(...sea.map((j) => societyValue(state, "upwelling", j))),
       crushed =
         Math.max(...sea.map((j) => societyValue(state, "magic:pressure:intensity", j))) >= 360;
     // Upwelling is a 0..1 ratio on the surface: a full front doubles the catch.
-    result[i] = (0.5 + 4 * fauna + 2 * upwelling) * (crushed ? 0.3 : 1);
+    result.set(i, (0.5 + 4 * fauna + 2 * upwelling) * (crushed ? 0.3 : 1));
   }
   return result;
 }

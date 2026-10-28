@@ -5,9 +5,8 @@ import {
   point,
   spatial,
   type Band,
+  type Coverage,
   type Grid,
-  type NumericalAllocator,
-  type NumericalVector,
   type Position,
   rectangle,
   isDescendant,
@@ -41,9 +40,10 @@ export interface AtlasPhysicalWorkspace {
   landmarkRoster?: import("./landmarkSiting").RosterEntry[];
   map: PhysicalField;
   profile: PhysicalProfile;
-  /** The surface grid's sample cells; grid-side vectors use the grid allocator. */
-  samples: NumericalVector;
-  numerical?: NumericalAllocator;
+  /** The physical cell under each surface grid sample. */
+  samples: Band;
+  /** The surface grid's coverage, which holds grid-side tables: samples, projection weights. */
+  grid: Coverage;
   interpolation?: ProjectionInterpolation;
   interpolationKey?: string;
   fixed: { binding: ChannelBinding; values: Band }[];
@@ -101,7 +101,7 @@ function inheritNumerical(state: GenerationState, work: AtlasPhysicalWorkspace) 
   const map = work.map,
     parent = parentChannels(state),
     surface = state.surface;
-  const datum = surface.channels.seaDatum?.[0] ?? 0;
+  const datum = surface.channels.seaDatum?.get(0) ?? 0;
   map.OpenBoundary = true;
   map.BaseSeaLevel = units(datum);
   map.EffectiveSeaLevel = map.BaseSeaLevel;
@@ -232,8 +232,8 @@ export function createAtlasWorkspace(
   const work: AtlasPhysicalWorkspace = {
     map,
     profile,
-    samples: new Int32Array(0),
-    numerical: state.numerical,
+    samples: state.surface.coverage.scratch("int32", "physical:samples", 0),
+    grid: state.surface.coverage,
     fixed: [],
     inherited: Boolean(state.surface.channels.elevation),
     sampling,
@@ -333,7 +333,7 @@ export function sampleSurfaceAtNative(state: GenerationState, name: string, i: n
   // Publication and physical feedback share these exact cell centres. Reading
   // their stored samples avoids rebuilding a Hermite evaluator for every cell.
   if (state.surface.topology === work.map.mesh.topology && state.surface.topology)
-    return state.surface.channels[name][work.map.mesh.cellToLeaf(i)];
+    return state.surface.channels[name].get(work.map.mesh.cellToLeaf(i));
   return interpolateSample(state.surface, name, nativePosition(work, i));
 }
 export function nativeIndexAtSurface(state: GenerationState, x: number, y: number) {

@@ -7,6 +7,7 @@ import {
   gridPosition,
   point,
   rectangle,
+  residentBand,
   spatial,
   type AdaptiveLattice,
 } from "@atlas/domain";
@@ -53,7 +54,8 @@ function fixture() {
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
-    samples: (map.mesh as AdaptiveLattice).leafCells(),
+    samples: residentBand("int32", (map.mesh as AdaptiveLattice).leafCells()),
+    grid: state.surface.coverage,
     fixed: [],
     inherited: false,
     sampling: { maximumSize: 12_500, minimumSize: 3125, featureSamples: 2 },
@@ -83,19 +85,19 @@ it("projects evolved channels in leaf order with SI units and the same vertical 
   expect(grid.quantities?.waterLevel).toBe("category");
   for (let leaf = 0; leaf < grid.active.length; leaf++) {
     const cell = map.mesh.leafToCell(leaf);
-    expect(grid.channels.elevation[leaf]).toBeCloseTo(200 + map.mesh.x(cell) / 1000, 9);
-    expect(grid.channels.flow[leaf]).toBe(17 + cell);
-    expect(grid.channels.seaLevel[leaf]).toBe(20);
-    expect(grid.channels.waterLevel[leaf]).toBe(cell % 2 ? 150 : 20);
+    expect(grid.channels.elevation.get(leaf)).toBeCloseTo(200 + map.mesh.x(cell) / 1000, 9);
+    expect(grid.channels.flow.get(leaf)).toBe(17 + cell);
+    expect(grid.channels.seaLevel.get(leaf)).toBe(20);
+    expect(grid.channels.waterLevel.get(leaf)).toBe(cell % 2 ? 150 : 20);
   }
 });
 
 it("reads physical feedback in cell order across refined terrain and its numerical halo", () => {
   const state = fixture(),
     mesh = state.physical!.map.mesh;
-  state.surface.channels.heat = Float64Array.from(
-    leafCells(state.physical!.map),
-    (_, leaf) => Math.sin(leaf * 0.3) * 20
+  state.surface.channels.heat = residentBand(
+    "float64",
+    Float64Array.from(leafCells(state.physical!.map), (_, leaf) => Math.sin(leaf * 0.3) * 20)
   );
   state.surface.units.heat = "celsius";
   const expected = fieldInterpolator(state.surface, "heat");
@@ -106,7 +108,7 @@ it("reads physical feedback in cell order across refined terrain and its numeric
       9
     );
   // A later channel replacement must be visible without a cached evaluator.
-  state.surface.channels.heat = new Float64Array(mesh.count).fill(37);
+  state.surface.channels.heat = residentBand("float64", new Float64Array(mesh.count).fill(37));
   expect(sampleSurfaceAtNative(state, "heat", 0)).toBe(37);
 });
 
@@ -118,7 +120,10 @@ it("interpolates feedback when its source and physical topology differ", () => {
     minimumSize: 25_000,
   });
   state.surface = createAdaptiveField("coarse", state.domain.scope, tree);
-  state.surface.channels.heat = Float64Array.from(tree.leaves, (_, leaf) => leaf * 3);
+  state.surface.channels.heat = residentBand(
+    "float64",
+    Float64Array.from(tree.leaves, (_, leaf) => leaf * 3)
+  );
   state.surface.units.heat = "celsius";
   const expected = fieldInterpolator(state.surface, "heat");
   for (let i = 0; i < mesh.count; i++)
@@ -139,12 +144,19 @@ it.each(["same", "coarser"])(
         minimumSize: 25000,
       });
       state.surface = createAdaptiveField("coarse-history", state.domain.scope, tree);
-      state.physical!.samples = Int32Array.from(state.surface.active, (_, leaf) => {
-        const p = gridPosition(state.surface, leaf);
-        return nativeIndexAtSurface(state, p.x, p.y);
-      });
+      state.physical!.samples = residentBand(
+        "int32",
+        Int32Array.from(state.surface.active, (_, leaf) => {
+          const p = gridPosition(state.surface, leaf);
+          return nativeIndexAtSurface(state, p.x, p.y);
+        })
+      );
+      state.physical!.grid = state.surface.coverage;
     }
-    const values = Float64Array.from(state.surface.active, (_, leaf) => Math.sin(leaf * 1.3) * 20);
+    const values = residentBand(
+      "float64",
+      Float64Array.from(state.surface.active, (_, leaf) => Math.sin(leaf * 1.3) * 20)
+    );
     state.surface.channels[name] = values;
     state.surface.units[name] = "celsius";
     const read = fieldInterpolator(state.surface, name),
@@ -170,11 +182,11 @@ it.each(["same", "coarser"])(
       cancelled: () => false,
     });
     for (let leaf = 0; leaf < expected.length; leaf++)
-      expect(state.surface.channels[name][leaf]).toBeCloseTo(expected[leaf], 9);
-    expect(state.surface.channels[name].some((value) => value < 0)).toBe(true);
-    expect(state.surface.channels[name].some((value) => value > 0)).toBe(true);
-    expect(values).toEqual(
-      Float64Array.from(state.surface.active, (_, leaf) => Math.sin(leaf * 1.3) * 20)
+      expect(state.surface.channels[name].get(leaf)).toBeCloseTo(expected[leaf], 9);
+    expect(Array.from(state.surface.channels[name]).some((value) => value < 0)).toBe(true);
+    expect(Array.from(state.surface.channels[name]).some((value) => value > 0)).toBe(true);
+    expect(Array.from(values)).toEqual(
+      Array.from(state.surface.active, (_, leaf) => Math.sin(leaf * 1.3) * 20)
     );
   }
 );
@@ -188,8 +200,8 @@ it("inherits continuous magic histories and discrete epoch markers in physical c
     epochKey = magicKey(field, "firstEpoch");
   const history = Float64Array.from(leafCells(work.map), (_, leaf) => 7 + leaf / 10);
   const epochs = Float64Array.from(history, (_, leaf) => (leaf % 4) - 1);
-  state.surface.channels[historyKey] = history;
-  state.surface.channels[epochKey] = epochs;
+  state.surface.channels[historyKey] = residentBand("float64", history);
+  state.surface.channels[epochKey] = residentBand("float64", epochs);
   state.surface.units[historyKey] = "ratio";
   state.surface.units[epochKey] = "epoch";
   work.inherited = true;

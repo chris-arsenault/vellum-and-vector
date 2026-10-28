@@ -176,8 +176,9 @@ reload from the resource). When the whole coverage fits, nothing is ever
 evicted and the cache is a bookkeeping table. The budget is the only memory
 bound and it bounds working set, not world size.
 
-Block size is `2^14` cells, the same as the arena page and the resource chunk
-today, so a block is one chunk on disk and one unit in memory. At ~1 KB of
+Block size is `2^14` cells, the same as a one-dimensional resource chunk, so
+such a block is one chunk on disk and one unit in memory; a block of a tiled
+raster decodes each overlapping tile once. At ~1 KB of
 bands per cell a full-coverage block is ~16 MB, but bands load independently,
 so a typical pass touching five bands holds ~500 KB per block.
 

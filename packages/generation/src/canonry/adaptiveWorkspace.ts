@@ -2,7 +2,6 @@ import {
   refineAdaptiveWhere,
   prepareAdaptiveTransfer,
   type Band,
-  type NumericalAllocator,
   type SampleType,
 } from "@atlas/domain";
 import type { GenerationState } from "../process";
@@ -60,15 +59,14 @@ function remapBand(
   values: Band,
   quantity: "category" | "intensive" | "extensive",
   transfer: ReturnType<typeof prepareAdaptiveTransfer>,
-  numerical?: NumericalAllocator,
   type: SampleType = "float64"
 ) {
-  // The transfer works on adaptive leaves in the surface arena; the result is a new band.
+  // The transfer works on adaptive leaves in the topology's coverage; the result is a new band.
   const leaves = transfer((leaf) => values.get(old.leafToCell(leaf)), quantity);
   const result = retainedArray(map, type, values.name);
   for (let cell = 0; cell < map.mesh.count; cell++)
-    result.set(cell, leaves[map.mesh.cellToLeaf(cell)]);
-  if (numerical) numerical.release(leaves);
+    result.set(cell, leaves.get(map.mesh.cellToLeaf(cell)));
+  leaves.release();
   return result;
 }
 function remapMagic(
@@ -84,7 +82,7 @@ function remapMagic(
     quantity: "category" | "intensive" | "extensive",
     type: SampleType = "float64"
   ) => {
-    const next = remapBand(old.mesh, work.map, values, quantity, transfer, state.numerical, type);
+    const next = remapBand(old.mesh, work.map, values, quantity, transfer, type);
     old.coverage.release(values);
     return next;
   };
@@ -110,15 +108,10 @@ export function refineWorkspace(
   if (!old.topology || !supports.length) return false;
   const started = performance.now();
   const minimum = supports.reduce((size, support) => Math.min(size, support.size), Infinity);
-  const topology = refineAdaptiveWhere(
-    old.topology,
-    minimum,
-    (box) => supported(box, supports),
-    state.numerical
-  );
+  const topology = refineAdaptiveWhere(old.topology, minimum, (box) => supported(box, supports));
   if (topology === old.topology) return false;
   const assembled = performance.now();
-  const transfer = prepareAdaptiveTransfer(old.topology, topology, state.numerical);
+  const transfer = prepareAdaptiveTransfer(old.topology, topology);
   work.map = remeshPhysical(previous, topology, state.domain.scope.footprint, transfer);
   refreshGrounding(work.map, work.profile);
   if (invalidation === "standalone")

@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { population, putChannel } from "@atlas/domain";
+import { everySample, population, putChannel, residentBand } from "@atlas/domain";
 import { landscape, epoch } from "./mapFixtures";
 import { initializeCultures, diffuseCultures } from "./societyCulture";
 import { publishCultures } from "./societyCulturePublication";
@@ -10,7 +10,12 @@ function fixture() {
   const state = landscape();
   state.domain.world.id = "bc07dcd0-7cba-46b1-8e56-5f7829dde8cb";
   state.domain.world.areas.area.profile = "local";
-  putChannel(state.surface, "elevation", "metre", new Float64Array(10).fill(100));
+  putChannel(
+    state.surface,
+    "elevation",
+    "metre",
+    residentBand("float64", new Float64Array(10).fill(100))
+  );
   const context: MapProcessContext = {
     scope: state.domain.scope,
     invocation: [],
@@ -64,6 +69,7 @@ it("publishes cultural, language and religious prevalence independently", () => 
       key.startsWith(`${kind}:`)
     );
     expect(channels.length).toBeGreaterThan(0);
-    for (const [, values] of channels) expect(values.every((v) => v >= 0 && v <= 1)).toBe(true);
+    for (const [, values] of channels)
+      expect(everySample(values, (v) => v >= 0 && v <= 1)).toBe(true);
   }
 });

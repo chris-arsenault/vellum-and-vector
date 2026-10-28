@@ -41,10 +41,12 @@ test("production workspace reads actual OPFS SQLite and Zarr after reopening", a
     partitions: 6,
     shared: ["active", "measures"],
   });
-  // Resident inputs decode their chunks once into native arrays and release every file.
+  // Committed inputs are bands over their chunks: blocks decode on demand, an evicted block
+  // reloads from its chunk, and reading never spills to scratch. The chunk files stay open
+  // while the field is loaded.
   expect(result.fields.input.scratchWriteBytes).toBe(0);
   expect(result.fields.input.reads).toBeGreaterThanOrEqual(3);
   expect(result.fields.input.readBytes).toBeGreaterThanOrEqual(393_216);
-  expect(result.fields.input.openedFiles).toBe(0);
+  expect(result.fields.input.openedFiles).toBeGreaterThan(0);
   console.info("immutable numerical input", result.fields.input);
 });

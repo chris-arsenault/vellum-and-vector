@@ -88,16 +88,17 @@ export function adaptiveExtrema(
     const box = adaptiveCell(field.topology, i),
       shape = rectangle(box);
     if (!spatial.intersects(region, shape)) return;
+    const value = values.get(i);
     if (discrete) {
-      low = Math.min(low, values[i]);
-      high = Math.max(high, values[i]);
+      low = Math.min(low, value);
+      high = Math.max(high, value);
       return;
     }
     if (spatial.covers(region, shape)) {
       const coefficients = patch(i).coefficients,
         c = [0, 4, 8, 12].map((at) => coefficients[at]);
-      low = Math.min(low, values[i], ...c);
-      high = Math.max(high, values[i], ...c);
+      low = Math.min(low, value, ...c);
+      high = Math.max(high, value, ...c);
     } else {
       const clipped = spatial.intersection(region, shape);
       if (clipped) pending.push({ i, box, region: clipped });

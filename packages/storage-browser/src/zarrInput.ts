@@ -1,16 +1,21 @@
 import {
+  Band,
+  blockShift,
+  newBlock,
   requireThat,
-  type NumericalAllocation,
-  type NumericalAllocator,
-  type NumericalVector,
+  type BlockArray,
+  type BlockCache,
   type ResourceArray,
   type SampleArray,
 } from "@atlas/domain";
-import { NumericalView, numericalViewStorage } from "./numericalView";
-import { sampleConstructors, type VectorStorage } from "./vectorStorage";
 import type { BinarySnapshot, BinaryStore } from "./opfsStore";
 import { ByteCache } from "./byteCache";
 
+/** A committed array open as an immutable band; closing releases the band and its snapshot. */
+export interface FieldInput {
+  values: Band;
+  close(): void;
+}
 function chunkKeys(path: string, array: ResourceArray) {
   const counts = array.shape.map((n, i) => Math.ceil(n / array.chunkShape[i])),
     result: string[] = [];
@@ -62,179 +67,129 @@ function validateMetadata(metadata: Record<string, unknown>, array: ResourceArra
     "Direct numerical views require little-endian typed arrays."
   );
 }
+/**
+ * Open a committed array as a band whose blocks decode from its chunks on demand. Nothing
+ * decodes the whole array; the block cache decides what stays resident, and an evicted
+ * block reloads from the committed chunk rather than spilling.
+ */
 export async function openZarrInput(
   store: BinaryStore,
   path: string,
   array: ResourceArray,
-  allocator: NumericalAllocator,
-  cache: ByteCache<string, SampleArray>
-): Promise<NumericalVector> {
+  blocks: BlockCache,
+  chunks: ByteCache<string, SampleArray>
+): Promise<FieldInput> {
   const metadataBytes = await store.get(`${path}/zarr.json`);
   requireThat(metadataBytes, "resource_encoding", "Numerical input metadata is missing.");
   const metadata = JSON.parse(new TextDecoder().decode(metadataBytes));
   validateMetadata(metadata, array);
   const snapshot = await store.snapshot(chunkKeys(path, array));
-  const input = new ZarrInput(path, array, snapshot, allocator, cache);
-  // Inside the resident budget the input is decoded once into a native array; chunk files
-  // are released immediately. Above it, the chunked view reads on demand.
-  const resident = allocator.allocate({
-    type: array.dtype,
-    length: input.length,
-    lifetime: "run",
-    name: `input:${path}`,
-  });
-  if (!ArrayBuffer.isView(resident)) {
-    allocator.release(resident);
-    return new NumericalView(input).view;
-  }
-  try {
-    const block = 1 << 16;
-    for (let start = 0; start < input.length; start += block)
-      (resident as SampleArray).set(
-        input.readBlock(start, Math.min(block, input.length - start)),
-        start
-      );
-  } finally {
-    input.release();
-  }
-  Object.defineProperty(resident, "immutable", { value: true });
-  return resident;
+  const input = new ZarrInput(path, array, snapshot, chunks);
+  const values = new Band(
+    { name: `input:${path}`, type: array.dtype, lifetime: "run", immutable: true },
+    input.length,
+    blocks,
+    (block, into) => input.readBlock(block << blockShift, into)
+  );
+  return {
+    values,
+    close() {
+      values.release();
+      input.release();
+    },
+  };
 }
-class ZarrInput implements VectorStorage {
-  readonly immutable = true;
-  readonly type;
+class ZarrInput {
   readonly length;
   private closed = false;
-  private current?: { key: string; row: number; column: number };
   constructor(
     private path: string,
     private array: ResourceArray,
     private snapshot: BinarySnapshot,
-    private allocator: NumericalAllocator,
     private cache: ByteCache<string, SampleArray>
   ) {
-    this.type = array.dtype;
     this.length = array.shape.reduce((a, b) => a * b, 1);
-  }
-  private address(index: number) {
-    requireThat(!this.closed, "resource_closed", "This numerical input has been closed.");
-    requireThat(
-      Number.isInteger(index) && index >= 0 && index < this.length,
-      "numerical_range",
-      "Read stays inside its numerical input."
-    );
-    const coordinates = new Array<number>(this.array.shape.length);
-    let cell = index,
-      within = 0,
-      stride = 1;
-    for (let axis = coordinates.length - 1; axis >= 0; axis--) {
-      const coordinate = cell % this.array.shape[axis],
-        size = this.array.chunkShape[axis];
-      cell = Math.floor(cell / this.array.shape[axis]);
-      coordinates[axis] = Math.floor(coordinate / size);
-      within += (coordinate % size) * stride;
-      stride *= size;
-    }
-    const last = this.array.shape.length - 1,
-      coordinate = index % this.array.shape[last],
-      contiguous = Math.min(
-        this.array.shape[last] - coordinate,
-        this.array.chunkShape[last] - (coordinate % this.array.chunkShape[last])
-      );
-    return { key: `${this.path}/c/${coordinates.join("/")}`, within, contiguous };
-  }
-  read(index: number) {
-    const previous = this.cachedValue(index);
-    if (previous !== undefined) return previous;
-    const { key, within } = this.address(index);
-    const values = this.chunk(key);
-    if (this.array.shape.length <= 2) {
-      const width = this.array.shape.at(-1)!,
-        rows = this.array.chunkShape.length === 1 ? 1 : this.array.chunkShape[0],
-        columns = this.array.chunkShape.at(-1)!;
-      this.current = {
-        key,
-        row: Math.floor(Math.floor(index / width) / rows) * rows,
-        column: Math.floor((index % width) / columns) * columns,
-      };
-    }
-    return values[within];
-  }
-  private cachedValue(index: number) {
-    const cached = this.current;
-    if (!cached || this.closed || !Number.isInteger(index) || index < 0 || index >= this.length)
-      return;
-    const width = this.array.shape.at(-1)!,
-      row = Math.floor(index / width),
-      column = index % width,
-      rows = this.array.chunkShape.length === 1 ? 1 : this.array.chunkShape[0],
-      columns = this.array.chunkShape.at(-1)!;
-    if (!insideChunk(row, column, cached, rows, columns)) return;
-    return this.cache.peek(cached.key)?.[(row - cached.row) * columns + column - cached.column];
   }
   private chunk(key: string) {
     const previous = this.cache.get(key);
     if (previous) return previous;
     const bytes = this.snapshot.read(key);
     requireThat(bytes, "incomplete_resource", "A completed input chunk is missing.");
-    const Constructor = sampleConstructors[this.type],
-      count = this.array.chunkShape.reduce((a, b) => a * b, 1);
+    const count = this.array.chunkShape.reduce((a, b) => a * b, 1),
+      values = newBlock(this.array.dtype, count);
     requireThat(
-      bytes.byteLength === count * Constructor.BYTES_PER_ELEMENT,
+      bytes.byteLength === values.byteLength,
       "resource_samples",
       "Input chunks retain their declared type and shape."
     );
-    const values = new Constructor(Uint8Array.from(bytes).buffer);
+    new Uint8Array(values.buffer).set(bytes);
     this.cache.set(key, values, values.byteLength);
     return values;
   }
-  readBlock(start: number, count: number) {
-    requireThat(
-      start >= 0 && count >= 0 && start + count <= this.length,
-      "numerical_range",
-      "Read stays inside its numerical input."
-    );
-    const result = new sampleConstructors[this.type](count);
-    for (let i = 0; i < count;) {
-      const { key, within, contiguous } = this.address(start + i),
-        size = Math.min(count - i, contiguous);
-      result.set(this.chunk(key).subarray(within, within + size), i);
-      i += size;
-    }
-    return result;
-  }
-  write() {
-    throw new Error("Immutable numerical input requires a separate working output.");
-  }
-  writeBlock() {
-    this.write();
-  }
-  fill() {
-    this.write();
-  }
-  retain() {
+  /**
+   * Fill `into` with the samples from `start`. Chunk-major: each chunk the range touches is
+   * decoded once and every row of it inside the range is copied, so a block of a tiled
+   * raster costs one read per tile however many rows it spans.
+   */
+  readBlock(start: number, into: BlockArray) {
     requireThat(!this.closed, "resource_closed", "This numerical input has been closed.");
+    requireThat(
+      start >= 0 && start + into.length <= this.length && this.array.shape.length <= 2,
+      "numerical_range",
+      "Read stays inside its one- or two-dimensional numerical input."
+    );
+    if (!into.length) return;
+    const { rows, columns, chunkRows, chunkColumns } = this.tiles(),
+      firstRow = Math.floor(start / columns),
+      lastRow = Math.min(rows - 1, Math.floor((start + into.length - 1) / columns));
+    for (let tileRow = Math.floor(firstRow / chunkRows); tileRow * chunkRows <= lastRow; tileRow++)
+      for (let tileColumn = 0; tileColumn * chunkColumns < columns; tileColumn++)
+        this.copyTile(tileRow, tileColumn, [firstRow, lastRow], start, into);
+  }
+  /** The array as rows of tiles; a one-dimensional array is one row. */
+  private tiles() {
+    const { shape, chunkShape } = this.array,
+      flat = shape.length === 1;
+    return {
+      rows: flat ? 1 : shape[0],
+      columns: flat ? shape[0] : shape[1],
+      chunkRows: flat ? 1 : chunkShape[0],
+      chunkColumns: flat ? chunkShape[0] : chunkShape[1],
+    };
+  }
+  /** Copy the rows of one tile that fall inside `[start, start + into.length)`. */
+  private copyTile(
+    tileRow: number,
+    tileColumn: number,
+    [firstRow, lastRow]: [number, number],
+    start: number,
+    into: BlockArray
+  ) {
+    const { columns, chunkRows, chunkColumns } = this.tiles(),
+      end = start + into.length,
+      c0 = tileColumn * chunkColumns,
+      c1 = Math.min(columns, c0 + chunkColumns),
+      key =
+        this.array.shape.length === 1
+          ? `${this.path}/c/${tileColumn}`
+          : `${this.path}/c/${tileRow}/${tileColumn}`;
+    let values: SampleArray | undefined;
+    for (
+      let row = Math.max(firstRow, tileRow * chunkRows);
+      row <= Math.min(lastRow, tileRow * chunkRows + chunkRows - 1);
+      row++
+    ) {
+      const from = Math.max(row * columns + c0, start),
+        to = Math.min(row * columns + c1, end);
+      if (from >= to) continue;
+      values ??= this.chunk(key);
+      const at = (row - tileRow * chunkRows) * chunkColumns + (from - row * columns - c0);
+      into.set(values.subarray(at, at + to - from), from - start);
+    }
   }
   release() {
+    if (this.closed) return;
     this.closed = true;
-    this.current = undefined;
     this.snapshot.close();
   }
-  allocate(input: NumericalAllocation) {
-    return numericalViewStorage(this.allocator.allocate(input)).storage;
-  }
-}
-function insideChunk(
-  row: number,
-  column: number,
-  start: { row: number; column: number },
-  rows: number,
-  columns: number
-) {
-  return (
-    row >= start.row &&
-    row < start.row + rows &&
-    column >= start.column &&
-    column < start.column + columns
-  );
 }

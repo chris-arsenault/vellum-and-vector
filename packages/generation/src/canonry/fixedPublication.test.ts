@@ -35,17 +35,16 @@ it("publishes a fixed triangle world as continuous metre channels and discrete m
   projectMagic(state);
   for (let i = 0; i < state.surface.active.length; i++) {
     const p = gridPosition(state.surface, i);
-    expect(state.surface.channels.elevation[i]).toBeCloseTo(
+    expect(state.surface.channels.elevation.get(i)).toBeCloseTo(
       500 + (p.x - mesh.origin[0]) * 0.002,
       7
     );
-    expect(state.surface.channels.bedrock[i] + state.surface.channels.sediment[i]).toBeCloseTo(
-      state.surface.channels.elevation[i],
-      7
-    );
-    expect(Number.isInteger(state.surface.channels.province[i])).toBe(true);
-    expect(state.surface.channels["magic:fire:retained"][i]).toBeCloseTo(
-      state.surface.measures[i] * 7,
+    expect(
+      state.surface.channels.bedrock.get(i) + state.surface.channels.sediment.get(i)
+    ).toBeCloseTo(state.surface.channels.elevation.get(i), 7);
+    expect(Number.isInteger(state.surface.channels.province.get(i))).toBe(true);
+    expect(state.surface.channels["magic:fire:retained"].get(i)).toBeCloseTo(
+      state.surface.measures.get(i) * 7,
       5
     );
   }

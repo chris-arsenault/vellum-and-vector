@@ -3,14 +3,12 @@ import {
   BlockCache,
   Coverage,
   cloneSnapshot,
-  isNumericalVector,
   requireThat,
   type Lattice,
-  type NumericalAllocator,
 } from "@atlas/domain";
 import type { GenerationState } from "./process";
 import type { MapRunnerOptions } from "./mapRunner";
-import { generationBands, generationNumericalState } from "./generationNumericalState";
+import { generationBands, generationGridBands } from "./generationNumericalState";
 import { initializeFeatureWorkspace, originalFeatureReader } from "./generationFeatures";
 import { preparePublicationLayers } from "./publication";
 import { initializeNetworkWorkspace } from "./generationNetworks";
@@ -25,7 +23,7 @@ export function prepareWorkingState(
     "feature_workspace",
     "Stored source geography requires a writable feature workspace."
   );
-  const state = generationWorkingState(initial, options.numerical, owned, options.cache);
+  const state = generationWorkingState(initial, owned, options.cache);
   state.contours = options.contours;
   initializeFeatureWorkspace(state, options.features);
   state.sourceFeatures = options.sourceFeatures;
@@ -43,84 +41,78 @@ export function prepareWorkingState(
   return state;
 }
 /**
- * Process boundaries release what the process left behind: grid vectors no longer reachable
- * and process-lifetime allocations, in the allocator and in the physical coverage. The
- * coverage may be created by the process itself, so it is looked up afterwards.
+ * Process boundaries release what the process left behind, in every coverage: bands no longer
+ * reachable from the state and process-lifetime bands. Coverages may be created by the
+ * process itself (the physical coverage, a replaced surface grid), so they are looked up
+ * afterwards and a new one releases all of its process bands.
  */
-export function numericalProcessLifetime(
-  numerical?: NumericalAllocator,
-  state?: GenerationState,
-  coverage = false
-) {
-  const releaseAllocator = allocatorProcessLifetime(numerical, state),
-    releaseCoverage = coverage && state ? coverageProcessLifetime(state) : () => {};
+export function numericalProcessLifetime(state: GenerationState) {
+  const gridBefore = generationGridBands(state),
+    physical = state.physical?.map.coverage,
+    physicalBefore = generationBands(state),
+    starts = new Map<Coverage, number>();
+  for (const coverage of gridBefore.keys()) starts.set(coverage, coverage.beginProcess());
+  if (physical) starts.set(physical, physical.beginProcess());
   return () => {
-    releaseAllocator();
-    releaseCoverage();
-  };
-}
-function allocatorProcessLifetime(numerical?: NumericalAllocator, state?: GenerationState) {
-  const start = numerical?.beginProcess();
-  const previous = numerical && state ? generationNumericalState(state) : [];
-  return () => {
-    if (numerical && state) numerical.releaseUnused(previous, generationNumericalState(state));
-    numerical?.releaseProcess(start);
-  };
-}
-function coverageProcessLifetime(state: GenerationState) {
-  const physical = state.physical?.map.coverage,
-    bandsBefore = physical ? generationBands(state) : new Set<Band>(),
-    bandStart = physical?.beginProcess() ?? 0;
-  return () => {
-    const after = state.physical?.map.coverage;
-    if (!after) return;
-    if (after === physical) after.releaseUnused(bandsBefore, generationBands(state));
-    after.releaseProcess(after === physical ? bandStart : 0);
+    const gridAfter = generationGridBands(state),
+      after = state.physical?.map.coverage,
+      live = new Set<Band>(generationBands(state));
+    for (const group of gridAfter.values()) for (const band of group) live.add(band);
+    const before = new Set<Band>(physicalBefore);
+    for (const group of gridBefore.values()) for (const band of group) before.add(band);
+    const coverages = new Set<Coverage>([...gridBefore.keys(), ...gridAfter.keys()]);
+    if (physical) coverages.add(physical);
+    if (after) coverages.add(after);
+    for (const coverage of coverages) {
+      coverage.releaseUnused(before, live);
+      coverage.releaseProcess(starts.get(coverage) ?? 0);
+    }
   };
 }
 
 export function generationWorkingState(
   initial: GenerationState,
-  numerical: NumericalAllocator | undefined,
   owned: boolean,
   cache?: BlockCache
 ): GenerationState {
   return {
-    ...(owned ? initial : copyWorkingState(initial, numerical)),
+    ...(owned ? initial : copyWorkingState(initial)),
     domain: cloneSnapshot(initial.domain),
     history: structuredClone(initial.history),
     causes: structuredClone(initial.causes),
-    numerical,
     cache: cache ?? initial.cache,
   };
 }
-
-function copyWorkingState(initial: GenerationState, numerical?: NumericalAllocator) {
+/** Coverages snapshot copy-on-write; each reachable band maps to its copy in the new coverage. */
+function snapshotCoverage(
+  coverage: Coverage,
+  members: Iterable<Band>,
+  copies: Map<object, unknown>
+) {
+  const bandCopies = new Map<Band, Band>(),
+    copy = coverage.snapshot(bandCopies);
+  copies.set(coverage, copy);
+  for (const [band, snapshot] of bandCopies) if (!copies.has(band)) copies.set(band, snapshot);
+  for (const band of members) if (!copies.has(band)) copies.set(band, copy.copyBand(band));
+}
+function copyWorkingState(initial: GenerationState) {
   const copies = new Map<object, unknown>();
   const map = initial.physical?.map;
   if (map) {
     // The lattice is immutable; the coverage and its bands snapshot copy-on-write.
     copies.set(map.mesh, map.mesh);
-    const bandCopies = new Map<Band, Band>(),
-      coverage = map.coverage.snapshot(bandCopies);
-    copies.set(map.coverage, coverage);
-    for (const [band, copy] of bandCopies) copies.set(band, copy);
-    for (const band of generationBands(initial))
-      if (!copies.has(band)) copies.set(band, coverage.copyBand(band));
+    snapshotCoverage(map.coverage, generationBands(initial), copies);
   }
-  if (initial.numerical) copies.set(initial.numerical, numerical);
-  return copyValue(
-    { ...initial, domain: undefined, numerical: undefined, cache: undefined },
-    copies
-  ) as GenerationState;
+  for (const [coverage, members] of generationGridBands(initial))
+    snapshotCoverage(coverage, members, copies);
+  return copyValue({ ...initial, domain: undefined, cache: undefined }, copies) as GenerationState;
 }
 function copyValue(value: unknown, copies: Map<object, unknown>): unknown {
   if (!value || typeof value !== "object") return value;
   if (copies.has(value)) return copies.get(value);
   if (value instanceof Band || value instanceof Coverage || isLattice(value)) return value;
-  if (isNumericalVector(value)) {
-    const copy = value.slice();
-    copy.retain?.();
+  if (ArrayBuffer.isView(value)) {
+    const copy = (value as unknown as { slice(): object }).slice();
     copies.set(value, copy);
     return copy;
   }

@@ -1,38 +1,49 @@
 import type { Bounds } from "./spatial";
 import { requireThat } from "./errors";
 import { adaptiveFaces } from "./adaptiveFaces";
-import type { NumericalVector, NumericalAllocator } from "./numericalVector";
-import { allocateNumerical } from "./numericalAllocation";
 import { buildAdaptiveTree } from "./adaptiveTreeBuild";
 import { balanceAdaptiveTree } from "./adaptiveTreeBalance";
 import { refineSelectedTree, refineWhereTree } from "./adaptiveTreeRefine";
+import type { Band } from "./lattice/band";
+import type { BlockCache } from "./lattice/blockCache";
+import type { Coverage } from "./lattice/coverage";
 
-/** Quadtree and reciprocal control-volume interfaces, independent of numerical storage. */
+/**
+ * Quadtree and reciprocal control-volume interfaces. Every array is a band in the topology's
+ * coverage (one cell per leaf), so a large hierarchy pages like any other world state.
+ * Node arrays (`boxes`, `children`, `levels`, `leafIndex`) and face arrays (`neighbors` and
+ * the face metrics, indexed through `offsets`) have their own lengths.
+ */
 export interface AdaptiveTopology {
   bounds: Bounds;
-  boxes: NumericalVector;
-  children: NumericalVector;
-  levels: NumericalVector;
-  leaves: NumericalVector;
-  leafIndex: NumericalVector;
-  offsets: NumericalVector;
-  neighbors: NumericalVector;
-  faceLengths: NumericalVector;
-  distances: NumericalVector;
-  directionX: NumericalVector;
-  directionY: NumericalVector;
-  normalX: NumericalVector;
-  normalY: NumericalVector;
+  coverage: Coverage;
+  boxes: Band;
+  children: Band;
+  levels: Band;
+  leaves: Band;
+  leafIndex: Band;
+  offsets: Band;
+  neighbors: Band;
+  faceLengths: Band;
+  distances: Band;
+  directionX: Band;
+  directionY: Band;
+  normalX: Band;
+  normalY: Band;
 }
 export interface AdaptiveSampling {
   maximumSize: number;
   minimumSize: number;
   refine?: (bounds: Bounds, level: number) => boolean;
 }
+/** Leaves of the topology. */
+export function adaptiveLeafCount(topology: AdaptiveTopology) {
+  return topology.leaves.length;
+}
 export function createAdaptiveTopology(
   bounds: Bounds,
   sampling: AdaptiveSampling,
-  numerical?: NumericalAllocator
+  cache?: BlockCache
 ): AdaptiveTopology {
   requireThat(
     bounds.every(Number.isFinite) && bounds[2] > bounds[0] && bounds[3] > bounds[1],
@@ -55,10 +66,10 @@ export function createAdaptiveTopology(
         (size > sampling.minimumSize && !!sampling.refine?.(box, level))
       );
     },
-    numerical
+    cache
   );
-  const balanced = balanceAdaptiveTree(tree, numerical);
-  return { ...balanced, ...adaptiveFaces(balanced, numerical) };
+  const balanced = balanceAdaptiveTree(tree);
+  return { ...balanced, ...adaptiveFaces(balanced) };
 }
 function validateMinimum(minimumSize: number) {
   requireThat(
@@ -70,66 +81,63 @@ function validateMinimum(minimumSize: number) {
 export function refineAdaptiveTopology(
   source: AdaptiveTopology,
   selected: Iterable<number>,
-  minimumSize: number,
-  numerical?: NumericalAllocator
+  minimumSize: number
 ): AdaptiveTopology {
   validateMinimum(minimumSize);
-  return refineSelectedTree(source, selected, minimumSize, numerical);
+  return refineSelectedTree(source, selected, minimumSize);
 }
 /** Refine requested support and grade its interfaces before building final adjacency. */
 export function refineAdaptiveWhere(
   source: AdaptiveTopology,
   minimumSize: number,
-  refine: (box: Bounds) => boolean,
-  numerical?: NumericalAllocator
+  refine: (box: Bounds) => boolean
 ): AdaptiveTopology {
   validateMinimum(minimumSize);
-  return refineWhereTree(source, minimumSize, refine, numerical);
+  return refineWhereTree(source, minimumSize, refine);
 }
 export function adaptiveCell(topology: AdaptiveTopology, leaf: number): Bounds {
-  const at = topology.leaves[leaf] * 4,
+  const at = topology.leaves.get(leaf) * 4,
     boxes = topology.boxes;
-  return [boxes[at], boxes[at + 1], boxes[at + 2], boxes[at + 3]];
+  return [boxes.get(at), boxes.get(at + 1), boxes.get(at + 2), boxes.get(at + 3)];
 }
 export function adaptiveLeafAt(topology: AdaptiveTopology, x: number, y: number): number {
   const [x0, y0, x1, y1] = topology.bounds;
   if (!Number.isFinite(x) || !Number.isFinite(y)) return -1;
   if (x < x0 || x > x1 || y < y0 || y > y1) return -1;
+  const { children, boxes } = topology;
   let node = 0;
-  while (topology.children[node] >= 0) {
+  for (let child = children.get(0); child >= 0; child = children.get(node)) {
     const at = node * 4;
-    const east = x >= (topology.boxes[at] + topology.boxes[at + 2]) / 2;
-    const north = y >= (topology.boxes[at + 1] + topology.boxes[at + 3]) / 2;
-    node = topology.children[node] + Number(east) + 2 * Number(north);
+    const east = x >= (boxes.get(at) + boxes.get(at + 2)) / 2;
+    const north = y >= (boxes.get(at + 1) + boxes.get(at + 3)) / 2;
+    node = child + Number(east) + 2 * Number(north);
   }
-  return topology.leafIndex[node];
+  return topology.leafIndex.get(node);
 }
-export function adaptiveGeometry(topology: AdaptiveTopology, numerical?: NumericalAllocator) {
-  const count = topology.leaves.length;
-  const vector = (type: "float64" | "uint8", name: string) =>
-    allocateNumerical(
-      { type, length: count, lifetime: "run", name: `adaptive:${name}` },
-      numerical
-    );
-  const x = vector("float64", "x"),
-    y = vector("float64", "y"),
-    width = vector("float64", "width"),
-    height = vector("float64", "height"),
-    areas = vector("float64", "areas"),
-    boundary = vector("uint8", "boundary");
+/** Per-leaf geometry bands in the topology's coverage. */
+export function adaptiveGeometry(topology: AdaptiveTopology) {
+  const count = adaptiveLeafCount(topology),
+    coverage = topology.coverage;
+  const band = (type: "float64" | "uint8", name: string) => {
+    const values = coverage.scratch(type, `adaptive:${name}`, count);
+    values.retain();
+    return values;
+  };
+  const x = band("float64", "x"),
+    y = band("float64", "y"),
+    width = band("float64", "width"),
+    height = band("float64", "height"),
+    areas = band("float64", "areas"),
+    boundary = band("uint8", "boundary");
+  const [bx0, by0, bx1, by1] = topology.bounds;
   for (let i = 0; i < count; i++) {
-    const b = adaptiveCell(topology, i);
-    x[i] = (b[0] + b[2]) / 2;
-    y[i] = (b[1] + b[3]) / 2;
-    width[i] = b[2] - b[0];
-    height[i] = b[3] - b[1];
-    areas[i] = width[i] * height[i];
-    boundary[i] = Number(
-      b[0] === topology.bounds[0] ||
-        b[1] === topology.bounds[1] ||
-        b[2] === topology.bounds[2] ||
-        b[3] === topology.bounds[3]
-    );
+    const [x0, y0, x1, y1] = adaptiveCell(topology, i);
+    x.set(i, (x0 + x1) / 2);
+    y.set(i, (y0 + y1) / 2);
+    width.set(i, x1 - x0);
+    height.set(i, y1 - y0);
+    areas.set(i, (x1 - x0) * (y1 - y0));
+    boundary.set(i, Number(x0 === bx0 || y0 === by0 || x1 === bx1 || y1 === by1));
   }
   return { x, y, width, height, areas, boundary };
 }

@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { z } from "zod";
-import { builtinLayers, putChannel } from "@atlas/domain";
+import { builtinLayers, everySample, generateChannel, putChannel } from "@atlas/domain";
 import { atlasGenerationModules, type GenerationModule } from "./generationModules";
 import { prepareAtlasGeneration, type AtlasGenerationInput } from "./atlasWorkflow";
 import { landscape, epoch } from "./mapFixtures";
@@ -68,8 +68,10 @@ const survey: GenerationModule = {
             state.surface,
             "testSurvey",
             "ratio",
-            new Float64Array(state.surface.active.length).fill(
-              Number(context.parameters.temperature) * Number(context.parameters.multiplier)
+            generateChannel(
+              state.surface,
+              "testSurvey",
+              () => Number(context.parameters.temperature) * Number(context.parameters.multiplier)
             )
           );
           context.recordCause({
@@ -164,7 +166,8 @@ it("extends the real atlas recipe, runtime and new-layer publication by register
     const snapshotOutput = completed.snapshot;
     const field = snapshotOutput.world.fields.find((field) => field.layerId === "survey")!;
     expect(
-      snapshotOutput.numerical[field.id].channels.testSurvey.every(
+      everySample(
+        snapshotOutput.numerical[field.id].channels.testSurvey,
         (value) => Math.abs(value - 1.2) < 1e-12
       )
     ).toBe(true);

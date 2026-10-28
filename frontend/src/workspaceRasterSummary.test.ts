@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { createGrid, putChannel, rectangle, type FieldPatch } from "@atlas/domain";
+import { createGrid, generateBand, putChannel, rectangle, type FieldPatch } from "@atlas/domain";
 import { ZarrResources, writeFieldLayout, writeFieldChannels } from "@atlas/storage-browser";
 import { landscape } from "../../packages/generation/src/mapFixtures";
 import { mappedPatches, patchRanges, rasterCategorySummaries } from "./workspaceRasterSummary";
@@ -48,7 +48,13 @@ it("includes patch ranges and excludes classes hidden by patches and finer field
     code: number
   ): Promise<FieldReference> {
     const grid = createGrid(id, { ...domain.scope, footprint: rectangle(extent) }, 3, 3, extent);
-    putChannel(grid, "cover", "category", new Float64Array(9).fill(code), "category");
+    putChannel(
+      grid,
+      "cover",
+      "category",
+      generateBand(grid.coverage, "float64", "cover", () => code),
+      "category"
+    );
     const layout = await writeFieldLayout(store, grid, `${id}:layout`, 1e-6),
       resource = await writeFieldChannels(store, grid, id, layout);
     return {

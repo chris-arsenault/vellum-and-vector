@@ -3,6 +3,7 @@ import {
   createGrid,
   createAdaptiveField,
   createAdaptiveTopology,
+  generateChannel,
   gridPosition,
   putChannel,
   rectangle,
@@ -27,7 +28,7 @@ it.each([384, 768])(
       state.surface,
       "elevation",
       "metre",
-      Float64Array.from(state.surface.active, (_, i) => {
+      generateChannel(state.surface, "elevation", (i) => {
         const p = gridPosition(state.surface, i);
         return p.x > 40000 && p.x < 60000 ? 100 : -10;
       })
@@ -67,7 +68,7 @@ it("dissolves territory strips while preserving coastal holes and disconnected i
     state.surface,
     "elevation",
     "metre",
-    Float64Array.from(state.surface.active, (_, i) => {
+    generateChannel(state.surface, "elevation", (i) => {
       const x = i % 48,
         y = Math.floor(i / 48);
       return (x < 20 && !(x > 5 && x < 13 && y > 12 && y < 30)) || (x > 30 && y % 3 !== 0)
@@ -83,7 +84,7 @@ it("dissolves territory strips while preserving coastal holes and disconnected i
     (feature) => feature.kind === "sovereignty"
   )!.geometry;
   const contains = spatial.pointCoverage(geometry);
-  for (const [i, value] of state.surface.channels.elevation.entries())
+  for (const [i, value] of Array.from(state.surface.channels.elevation).entries())
     expect(contains(gridPosition(state.surface, i))).toBe(value > 0);
   expect(geometry.type).toBe("MultiPolygon");
 });
@@ -101,7 +102,7 @@ it("preserves cultural distributions and political territories on adaptive world
     state.surface,
     "elevation",
     "metre",
-    Float64Array.from(state.surface.active, (_, i) => {
+    generateChannel(state.surface, "elevation", (i) => {
       const p = gridPosition(state.surface, i);
       return 200 - Math.abs(p.y - 500) / 2;
     })
@@ -144,7 +145,7 @@ it.each([1, 3])(
       state.surface,
       "elevation",
       "metre",
-      new Float64Array(topology.leaves.length).fill(100)
+      generateChannel(state.surface, "elevation", () => 100)
     );
     const result = await new MapRunner(
       configuration([invoke(politicalProcess)], { polityCount: count }),

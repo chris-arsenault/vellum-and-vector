@@ -35,46 +35,42 @@ The 2026-10-28 structural review named nine findings. The storage plan
 (`1830dffc`) fixed most of them; this plan owns what it left. Dispositions are
 from the plan's phase notes and the current source, not from the phase titles.
 
-| #   | Finding                                                                     | Disposition                                                                                                                                                                                                                                                                                                         | Owner here   |
-| --- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| 1   | Every numerical sample read goes through a Proxy trap                       | **Physical world fixed** (plan `2f2eee37` A1–A3): bands over blocks, no Proxy at any budget; the shared node generation runs on a forced-evicting cache. **Open for the surface grid** until it becomes a coverage (A4): its vectors still come from the arena, native within the budget and a Proxy view above it. | A4, F2       |
-| 2   | Catalog write derives every index eagerly, per record, hooks run twice      | Fixed (M3, `d7b4736`): writes no longer derive; one upsert plus bounds. **Residual:** `geometryKernel.ts` still runs `GEOSisValid` on every conversion unless `validate` is false; confirm query rectangles skip it.                                                                                                | P5           |
-| 3   | Five geometry indexes with separate invalidation                            | Fixed (M3): `GeometryDerivations` is the one lazy owner. Region picking derives on first visit by design.                                                                                                                                                                                                           | closed       |
-| 4   | Feature presentation is an N+1 projection                                   | Fixed (M4, `fb4a22c`): one context per page, per-feature cache keyed by revision.                                                                                                                                                                                                                                   | closed       |
-| 5   | Reads trigger write transactions through a mutable callback                 | Fixed (M3): prepare hook removed; tiles prepare explicitly.                                                                                                                                                                                                                                                         | closed       |
-| 6   | `SpatialStore` is not what anything consumes                                | Fixed (M5, `3a40899`): one typed catalog call plus 14 lifecycle operations. **Residual:** a hosted adapter has not been written against the collapsed surface, so "consumed only" is asserted, not demonstrated.                                                                                                    | out of scope |
-| 7   | One serial worker; publication queues behind pans                           | **Partial** (M5): two-lane scheduler, interactive first. A second SQLite connection from the generation worker is impossible (OPFS sync handles are exclusive per file), so publication still runs on the catalog worker in idle slices.                                                                            | P5 (verify)  |
-| 8   | Generation moves each feature through five encodings                        | **Deferred** (M5 note): records still pass through the private CBOR scratch store, structured clone across the port, and WKB. The CBOR store carries protection and identity semantics and was left in place.                                                                                                       | P5           |
-| 9   | One OPFS pool per world and per save, kept forever; root discovery off-lock | Fixed (M1, `7fd8773`): roots discovered under the catalog worker's lock; paused VFS releases handles.                                                                                                                                                                                                               | closed       |
+| #   | Finding                                                                     | Disposition                                                                                                                                                                                                                                                                              | Owner here   |
+| --- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| 1   | Every numerical sample read goes through a Proxy trap                       | **Fixed** (plan `2f2eee37` A1–A4): the physical world, grids, adaptive topologies, society and committed field inputs are bands over blocks; the arena, `NumericalView` and the vector types are deleted. The shared node generation runs on a forced-evicting cache for every coverage. | closed       |
+| 2   | Catalog write derives every index eagerly, per record, hooks run twice      | Fixed (M3, `d7b4736`): writes no longer derive; one upsert plus bounds. **Residual:** `geometryKernel.ts` still runs `GEOSisValid` on every conversion unless `validate` is false; confirm query rectangles skip it.                                                                     | P5           |
+| 3   | Five geometry indexes with separate invalidation                            | Fixed (M3): `GeometryDerivations` is the one lazy owner. Region picking derives on first visit by design.                                                                                                                                                                                | closed       |
+| 4   | Feature presentation is an N+1 projection                                   | Fixed (M4, `fb4a22c`): one context per page, per-feature cache keyed by revision.                                                                                                                                                                                                        | closed       |
+| 5   | Reads trigger write transactions through a mutable callback                 | Fixed (M3): prepare hook removed; tiles prepare explicitly.                                                                                                                                                                                                                              | closed       |
+| 6   | `SpatialStore` is not what anything consumes                                | Fixed (M5, `3a40899`): one typed catalog call plus 14 lifecycle operations. **Residual:** a hosted adapter has not been written against the collapsed surface, so "consumed only" is asserted, not demonstrated.                                                                         | out of scope |
+| 7   | One serial worker; publication queues behind pans                           | **Partial** (M5): two-lane scheduler, interactive first. A second SQLite connection from the generation worker is impossible (OPFS sync handles are exclusive per file), so publication still runs on the catalog worker in idle slices.                                                 | P5 (verify)  |
+| 8   | Generation moves each feature through five encodings                        | **Deferred** (M5 note): records still pass through the private CBOR scratch store, structured clone across the port, and WKB. The CBOR store carries protection and identity semantics and was left in place.                                                                            | P5           |
+| 9   | One OPFS pool per world and per save, kept forever; root discovery off-lock | Fixed (M1, `7fd8773`): roots discovered under the catalog worker's lock; paused VFS releases handles.                                                                                                                                                                                    | closed       |
 
 Also deferred by the storage plan and carried here: Safari and large-world
 measurements were declared separate evidence, not closeout gates. This plan's
-gate runs the shared node generation on a paged arena with the budget forced
+gate runs the shared node generation on a block cache with the budget forced
 below the world's needs, which is the large-world evidence that matters.
 
 ## What exists now
 
-- `packages/domain/src/numericalVector.ts` — `NumericalVector` is typed to
-  look like a typed array: `[index: number]: number` plus the array methods.
-  Optional `readBlock`/`writeBlock`/`retain`/`immutable`. Any typed array
-  satisfies it, so nothing in the compiler distinguishes resident from paged.
-- `packages/storage-browser/src/numericalView.ts` — `NumericalView` wraps a
-  `VectorStorage` in a `Proxy` whose `get`/`set` traps parse the property key,
-  range-check, and call `storage.read(i)`. Every array method (`map`,
-  `slice`, `sort`, iteration) is reimplemented on top of per-sample reads.
-- `packages/storage-browser/src/pagedArena.ts` — `PagedArena.allocate` returns
-  a native typed array while `resident + bytes <= residentBytes`, otherwise a
-  `NumericalView` over `PagedStorage` with 16 384-sample pages, a 64 MiB page
-  cache and a scratch file. Lifetimes (`process`/`run`), `retain`,
-  `releaseProcess` and `releaseUnused` work for both kinds.
-- `packages/storage-browser/src/zarrInput.ts` — immutable inputs decode once
-  into a resident array when the allocator grants one; otherwise a chunked
-  `NumericalView` reads on demand with a 32 MiB decoded-chunk cache.
+- Grids (`packages/domain/src/grids.ts`) and adaptive topologies
+  (`adaptiveTopology.ts`) hold `Band`s in a coverage of their own samples
+  (`sampleCoverage`); topology arrays with their own lengths share the
+  topology's coverage. `GridArrays` (`gridArrays.ts`) is the plain-array form
+  that crosses a worker port; bands never cross one.
+- `packages/storage-browser/src/zarrInput.ts` — a committed array opens as an
+  immutable band whose block source decodes the chunks it overlaps,
+  chunk-major, once per block. An evicted input block reloads from its chunk
+  and never spills; a write to an input band throws; a snapshot of one is a
+  writable working copy.
 - `packages/generation/src/generationWorkingState.ts` — process boundaries
-  call `numericalProcessLifetime`, which releases process-lifetime vectors
-  and bands not reachable from the state after each process. Copies between
-  runs snapshot the physical coverage copy-on-write; surface grid vectors
-  still copy with `vector.slice()`.
+  release, in every coverage, the bands no longer reachable from the state and
+  the process-lifetime bands. Grid-side state (surface, published grids,
+  society, projection tables) is enumerated per coverage; copies between runs
+  snapshot each coverage copy-on-write.
+- Every operation (generation, command, import, analysis, render) opens one
+  block cache with a scratch file; there is no separate arena.
 - `packages/domain/src/hpc` — resident structures for frontiers, lists,
   orderings, grouping and marks. `MonotoneHeap` and `EdgeTable` had no users
   (the keyed heap won the one-run flood comparison; adjacency is arithmetic on

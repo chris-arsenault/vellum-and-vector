@@ -32,7 +32,7 @@ function buildOppositeCells(grid: Grid) {
     east: number[] = [],
     result = new Map<number, number[]>();
   for (let i = 0; i < grid.active.length; i++) {
-    if (!grid.active[i]) continue;
+    if (!grid.active.get(i)) continue;
     const box = gridCellBounds(grid, i);
     if (Math.abs(box[0] - grid.bounds[0]) < 1e-6) west.push(i);
     if (Math.abs(box[2] - grid.bounds[2]) < 1e-6) east.push(i);
@@ -68,7 +68,7 @@ function connectedAcrossSeam(
 }
 /** Extra neighbors use two short chart segments, preserving holes and irregular coastlines. */
 export function seamNeighbors(grid: Grid, index: number, covers: (geometry: Geometry) => boolean) {
-  if (!grid.periodicWidth || !grid.active[index]) return [];
+  if (!grid.periodicWidth || !grid.active.get(index)) return [];
   const a = gridPosition(grid, index);
   return (oppositeCells(grid).get(index) ?? []).filter((i) =>
     connectedAcrossSeam(grid, a, gridPosition(grid, i), covers)

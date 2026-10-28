@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { canonryMagicPresets } from "@atlas/domain";
+import { canonryMagicPresets, residentBand } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import { createField } from "./field";
@@ -39,7 +39,8 @@ function fixture() {
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
-    samples: new Int32Array(state.surface.active.length),
+    samples: residentBand("int32", new Int32Array(state.surface.active.length)),
+    grid: state.surface.coverage,
     fixed: [],
     inherited: false,
     sampling: { maximumSize: 1, minimumSize: 1, featureSamples: 2 },

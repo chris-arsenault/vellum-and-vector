@@ -1,6 +1,14 @@
 import { createWorldSnapshot } from "../src/worldCreation";
 import { planCommand } from "@atlas/application";
-import { gridPosition, gridSampler, projectChanges } from "@atlas/domain";
+import {
+  attachGrid,
+  detachGrid,
+  gridPosition,
+  gridSampler,
+  projectChanges,
+  type DomainSnapshot,
+  type GridArrays,
+} from "@atlas/domain";
 import type { LegacySavedWorld } from "../src/legacySave";
 import { openSpatialRuntime } from "../src/spatialRuntime";
 
@@ -34,11 +42,11 @@ export async function installLegacySave() {
     } finally {
       db.close();
     }
-    const grid = Object.values(data.snapshot.numerical)[0];
+    const grid = attachGrid(Object.values(data.snapshot.numerical)[0] as unknown as GridArrays);
     const sample = gridSampler(grid, "elevation");
     let maximum = -Infinity;
     for (let i = 0; i < grid.active.length; i++)
-      if (grid.active[i]) maximum = Math.max(maximum, sample(gridPosition(grid, i)));
+      if (grid.active.get(i)) maximum = Math.max(maximum, sample(gridPosition(grid, i)));
     return { id: world.id, areaId, history: data.history, maximum };
   } finally {
     closeSpatial();
@@ -98,5 +106,17 @@ function legacyData() {
       ],
     },
   ];
+  // The released format stored grids as plain typed arrays.
+  const released = (snapshot: DomainSnapshot): DomainSnapshot => ({
+    ...snapshot,
+    numerical: Object.fromEntries(
+      Object.entries(snapshot.numerical).map(([id, grid]) => [
+        id,
+        detachGrid(grid) as unknown as DomainSnapshot["numerical"][string],
+      ])
+    ),
+  });
+  data.snapshot = released(data.snapshot);
+  data.undo = data.undo.map(released);
   return { world, areaId, data };
 }

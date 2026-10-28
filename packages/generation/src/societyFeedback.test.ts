@@ -1,5 +1,11 @@
 import { expect, it } from "vitest";
-import { canonryMagicPresets, population, putChannel, type SocietyEvent } from "@atlas/domain";
+import {
+  canonryMagicPresets,
+  population,
+  putChannel,
+  residentBand,
+  type SocietyEvent,
+} from "@atlas/domain";
 import { landscape, epoch } from "./mapFixtures";
 import { initializePopulation, populationTotal } from "./societyPopulation";
 import { applySocietyWorks, makeWork } from "./societyWorks";
@@ -11,7 +17,12 @@ function fixture() {
   state.domain.world.id = "bc07dcd0-7cba-46b1-8e56-5f7829dde8cb";
   state.domain.world.areas.area.profile = "local";
   const set = (name: string, value: number, unit = "ratio") =>
-    putChannel(state.surface, name, unit, new Float64Array(10).fill(value));
+    putChannel(
+      state.surface,
+      name,
+      unit,
+      residentBand("float64", new Float64Array(10).fill(value))
+    );
   set("elevation", 100, "metre");
   set("treeCover", 0.6);
   set("broadleafCover", 0.6);
@@ -47,12 +58,12 @@ it("changes real vegetation and hunting quantities, while conservation restores 
     radius: 10000,
   }));
   applySocietyWorks(state, context, 100);
-  expect(state.surface.channels.treeCover[0]).toBeLessThan(0.6);
-  expect(state.surface.channels.herbivores[0]).toBeLessThan(0.05);
+  expect(state.surface.channels.treeCover.get(0)).toBeLessThan(0.6);
+  expect(state.surface.channels.herbivores.get(0)).toBeLessThan(0.05);
   state.surface.channels.herbivores.fill(0.001);
   state.society!.region.works = [{ ...makeWork(state, c, "conservation"), radius: 10000 }];
   applySocietyWorks(state, context, 100);
-  expect(state.surface.channels.herbivores[0]).toBeGreaterThan(0.001);
+  expect(state.surface.channels.herbivores.get(0)).toBeGreaterThan(0.001);
 });
 it("constructs a pass once and lets abandoned earthworks deteriorate", () => {
   const { state, context } = fixture(),
@@ -61,12 +72,12 @@ it("constructs a pass once and lets abandoned earthworks deteriorate", () => {
   c.groups[0].count = 1000;
   state.society!.region.works = [work];
   applySocietyWorks(state, context, 10);
-  const height = state.surface.channels.elevation[0];
+  const height = state.surface.channels.elevation.get(0);
   applySocietyWorks(state, context, 10);
-  expect(state.surface.channels.elevation[0]).toBeCloseTo(height, 8);
+  expect(state.surface.channels.elevation.get(0)).toBeCloseTo(height, 8);
   work.maintained = false;
   applySocietyWorks(state, context, 100);
-  expect(state.surface.channels.elevation[0]).toBeGreaterThan(height);
+  expect(state.surface.channels.elevation.get(0)).toBeGreaterThan(height);
 });
 it("consumes finite core deposits and removes supplied heat when fuel is exhausted", () => {
   const { state, context, set } = fixture();
@@ -86,14 +97,14 @@ it("consumes finite core deposits and removes supplied heat when fuel is exhaust
   expect(p.coreUsed).toBeGreaterThan(0);
   useSocietyMagic(state, context, 100);
   expect(accounted()).toBeCloseTo(total, 7);
-  const warm = state.surface.channels.temperature[0];
+  const warm = state.surface.channels.temperature.get(0);
   for (const practice of state.society!.region.magic) {
     practice.coreDeposit = 0;
     practice.coreSupply = 0;
   }
   useSocietyMagic(state, context, 100);
-  expect(state.surface.channels.temperature[0]).toBeLessThan(warm);
-  expect(state.surface.channels["magic:fire:intensity"][0]).toBe(800);
+  expect(state.surface.channels.temperature.get(0)).toBeLessThan(warm);
+  expect(state.surface.channels["magic:fire:intensity"].get(0)).toBe(800);
 });
 it("requires reachable ocean depth for Pressure and cold crystals for Aurora knowledge", () => {
   const { state, context, set } = fixture();

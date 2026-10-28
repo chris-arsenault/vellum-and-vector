@@ -1,34 +1,34 @@
 import {
   adaptiveCell,
-  numericalSampleType,
-  requireThat,
+  blockCells,
+  type Band,
   type Bounds,
   type Grid,
   type NumericalResource,
-  type NumericalVector,
   type PartitionReference,
   type ResourceArray,
   type SampleArray,
+  requireThat,
 } from "@atlas/domain";
 
-export const fieldPartitionSamples = 16_384;
+/** One resource partition is one band block, so a committed chunk backs a block directly. */
+export const fieldPartitionSamples = blockCells;
 export const regularPartitionWidth = 256;
 export const regularPartitionHeight = 64;
 export interface LayoutVector {
   array: ResourceArray;
-  values: NumericalVector;
+  values: Band;
   group: "cells" | "faces" | "tree";
   components: number;
   read?: (start: number, count: number) => SampleArray;
 }
 export function layoutVector(
   name: string,
-  values: NumericalVector,
+  values: Band,
   group: LayoutVector["group"],
   components = 1
 ): LayoutVector {
-  const dtype = numericalSampleType(values);
-  requireThat(dtype, "field_storage", "Field storage needs declared sample types.");
+  const dtype = values.type;
   return {
     values,
     group,
@@ -55,12 +55,12 @@ function cellExtent(grid: Grid, start: number, count: number): Bounds {
   }
   return count ? bounds : grid.bounds;
 }
-function faceOwner(offsets: NumericalVector, face: number) {
+function faceOwner(offsets: Band, face: number) {
   let low = 0,
     high = offsets.length - 1;
   while (low + 1 < high) {
     const middle = Math.floor((low + high) / 2);
-    if (offsets[middle] <= face) low = middle;
+    if (offsets.get(middle) <= face) low = middle;
     else high = middle;
   }
   return low;

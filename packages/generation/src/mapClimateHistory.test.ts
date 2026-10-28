@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { putChannel } from "@atlas/domain";
+import { putChannel, residentBand } from "@atlas/domain";
 import {
   iceBalanceProcess,
   precipitationProcess,
@@ -11,9 +11,22 @@ import { MapRunner } from "./mapRunner";
 import type { GenerationState, ProcessSequence } from "./process";
 import { configuration, epoch, invoke, landscape, options, registry, source } from "./mapFixtures";
 
+/** Boundary values as plain arrays: the working state's bands keep changing after the boundary. */
+function capture(state: GenerationState) {
+  return {
+    history: structuredClone(state.history),
+    surface: {
+      channels: Object.fromEntries(
+        Object.entries(state.surface.channels).map(([name, band]) => [name, Array.from(band)])
+      ),
+    },
+  };
+}
+type Captured = ReturnType<typeof capture>;
+
 it("transports moisture over a mountain barrier, accumulates snowy ice and retains retreat history", async () => {
   const initial = landscape(),
-    snapshots: GenerationState[] = [],
+    snapshots: Captured[] = [],
     boundaries: string[] = [],
     config = configuration(
       [
@@ -40,7 +53,7 @@ it("transports moisture over a mountain barrier, accumulates snowy ice and retai
     ...options,
     async saveBoundary(boundary) {
       boundaries.push(boundary.kind);
-      if (boundary.kind === "epoch") snapshots.push(structuredClone(boundary.state));
+      if (boundary.kind === "epoch") snapshots.push(capture(boundary.state));
     },
   });
   const [warm, glacial, present] = snapshots;
@@ -86,14 +99,14 @@ it("refreshes thermal fields repeatedly without advancing zero-decay storage mor
     ]),
     registry()
   ).run(initial, options);
-  expect(result.state.surface.channels["magic:thermal-core:stored"][2]).toBe(4);
-  expect(result.state.surface.channels.heat[2]).toBeCloseTo(8.8);
+  expect(result.state.surface.channels["magic:thermal-core:stored"].get(2)).toBe(4);
+  expect(result.state.surface.channels.heat.get(2)).toBeCloseTo(8.8);
   expect(
     result.state.history[0].causes.filter(
       (cause) => cause.kind === "magic" && cause.process === "magic.advanceStorage"
     )
   ).toHaveLength(2);
-  expect(result.state.surface.channels["magic:fracture-core:stored"][2]).toBeCloseTo(0.4);
+  expect(result.state.surface.channels["magic:fracture-core:stored"].get(2)).toBeCloseTo(0.4);
 });
 
 it("decays retained influence when its source becomes inactive and separates heat and cold forcing", async () => {
@@ -102,7 +115,7 @@ it("decays retained influence when its source becomes inactive and separates hea
     source({ decay: 0.5 }),
     source({ id: "cold-core", effect: "cold", storage: 0 }),
   ];
-  const snapshots: GenerationState[] = [];
+  const snapshots: Captured[] = [];
   await new MapRunner(
     configuration([
       {
@@ -125,7 +138,7 @@ it("decays retained influence when its source becomes inactive and separates hea
   ).run(initial, {
     ...options,
     async saveBoundary(boundary) {
-      if (boundary.kind === "epoch") snapshots.push(structuredClone(boundary.state));
+      if (boundary.kind === "epoch") snapshots.push(capture(boundary.state));
     },
   });
   expect(snapshots[1].surface.channels["magic:thermal-core:stored"][2]).toBeCloseTo(
@@ -141,7 +154,7 @@ it("decays retained influence when its source becomes inactive and separates hea
 it("keeps nested history ancestry and does not activate physical sources from unrelated completed eras", async () => {
   const initial = landscape();
   initial.domain.world.magic = [source({ startsAtEpoch: 1, storage: 0 })];
-  const snapshots: GenerationState[] = [];
+  const snapshots: Captured[] = [];
   const result = await new MapRunner(
     configuration([
       {
@@ -166,7 +179,7 @@ it("keeps nested history ancestry and does not activate physical sources from un
     ...options,
     async saveBoundary(boundary) {
       if (boundary.kind === "epoch" && boundary.ancestry.length === 1)
-        snapshots.push(structuredClone(boundary.state));
+        snapshots.push(capture(boundary.state));
     },
   });
   expect(snapshots[0].surface.channels.heat[2]).toBe(0);
@@ -183,7 +196,12 @@ it("keeps nested history ancestry and does not activate physical sources from un
 
 it("skips stale climatic inputs after a changing epoch without consuming old buffers", async () => {
   const initial = landscape();
-  putChannel(initial.surface, "temperature", "celsius", new Float64Array(10).fill(-10));
+  putChannel(
+    initial.surface,
+    "temperature",
+    "celsius",
+    residentBand("float64", Array(10).fill(-10))
+  );
   initial.facts.add("temperature");
   const config = configuration([
     {
@@ -214,8 +232,8 @@ it("skips stale climatic inputs after a changing epoch without consuming old buf
       outcome: "skipped",
     })
   );
-  expect(temperature.state.surface.channels.temperature).toEqual(
-    initial.surface.channels.temperature
+  expect(Array.from(temperature.state.surface.channels.temperature)).toEqual(
+    Array.from(initial.surface.channels.temperature)
   );
 });
 
@@ -240,7 +258,9 @@ it("omits duplicate elapsed-time advances and rejects invalid parameter configur
     })
   );
   const single = await new MapRunner(wrap(body.slice(0, 4)), registry()).run(landscape(), options);
-  expect(result.state.surface.channels.ice).toEqual(single.state.surface.channels.ice);
+  expect(Array.from(result.state.surface.channels.ice)).toEqual(
+    Array.from(single.state.surface.channels.ice)
+  );
   await expect(
     new MapRunner(
       wrap(body.slice(0, 3).concat(invoke(iceBalanceProcess, "negative", { meltFactor: -1 }))),
@@ -281,7 +301,12 @@ it("restarts a cancelled job from pinned inputs with identical geography and cau
   ).rejects.toThrow(/cancelled/);
   const restarted = await runner.run(initial, options),
     uninterrupted = await runner.run(initial, options);
-  expect(restarted).toEqual(uninterrupted);
+  const plain = (outcome: typeof restarted) => ({
+    ...outcome,
+    state: { ...outcome.state, surface: undefined, cache: undefined },
+    channels: capture(outcome.state).surface.channels,
+  });
+  expect(plain(restarted)).toEqual(plain(uninterrupted));
   expect(initial.surface.channels.heat).toBeUndefined();
   expect(initial.history).toEqual([]);
 });

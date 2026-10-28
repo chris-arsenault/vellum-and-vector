@@ -56,8 +56,6 @@ export function publishRuinFields(state: GenerationState) {
 function drownedShoal(state: GenerationState, i: number) {
   const physical = state.physical;
   if (!physical || societyValue(state, "water", i) !== 1) return false;
-  const cell = physical.samples[i];
-  return (
-    cell !== undefined && cell >= 0 && (physical.map.FeatureFlags.get(cell) & Feature.Shoal) !== 0
-  );
+  const cell = i >= 0 && i < physical.samples.length ? physical.samples.get(i) : -1;
+  return cell >= 0 && (physical.map.FeatureFlags.get(cell) & Feature.Shoal) !== 0;
 }

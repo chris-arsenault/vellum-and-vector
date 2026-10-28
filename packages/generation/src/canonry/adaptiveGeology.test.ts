@@ -4,6 +4,7 @@ import {
   reconstructAdaptive,
   rectangle,
   refineAdaptiveTopology,
+  residentBand,
   sampleAdaptive,
   type AdaptiveLattice,
   type Band,
@@ -112,7 +113,10 @@ it("samples an immutable physical surface lazily with the same coarse/fine recon
   assign(map, map.Elevation, (i) => 200 + Math.sin(mesh.x(i) / 10000) * Math.cos(mesh.y(i) / 9000));
   const expected = reconstructAdaptive(
     mesh.topology!,
-    Float64Array.from((mesh as AdaptiveLattice).leafCells(), (cell) => map.Elevation.get(cell))
+    residentBand(
+      "float64",
+      Float64Array.from((mesh as AdaptiveLattice).leafCells(), (cell) => map.Elevation.get(cell))
+    )
   );
   // physicalSampler reads the band it is given; the immutable surface is a copy-on-write snapshot.
   const at = physicalSampler(mesh, map.Elevation.snapshot());

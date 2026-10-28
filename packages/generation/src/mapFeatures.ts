@@ -4,6 +4,7 @@ import {
   spatial,
   canonicalPosition,
   isDescendant,
+  foldSamples,
   representationId,
   lineParts,
   type AtlasFeature,
@@ -269,14 +270,16 @@ export const extractGeographyProcess: MapProcess = {
     extract(state, context) {
       const grid = state.surface,
         flow = grid.channels.flow;
-      const maximum = flow.reduce(
-        (a, b, i) => (grid.channels.elevation[i] > 0 ? Math.max(a, b) : a),
+      const maximum = foldSamples(
+        flow,
+        (a, b, i) => (grid.channels.elevation.get(i) > 0 ? Math.max(a, b) : a),
         0
       );
       const threshold = maximum * 0.075;
       for (let i = 0; i < grid.active.length; i++) {
-        if (!grid.active[i] || flow[i] <= threshold || grid.channels.elevation[i] <= 0) continue;
-        const receiver = grid.channels.receiver[i];
+        if (!grid.active.get(i) || flow.get(i) <= threshold || grid.channels.elevation.get(i) <= 0)
+          continue;
+        const receiver = grid.channels.receiver.get(i);
         if (receiver < 0) continue;
         const a = gridPosition(grid, i),
           b = gridPosition(grid, receiver);
@@ -295,11 +298,11 @@ export const extractGeographyProcess: MapProcess = {
           },
           {
             elevations: [
-              grid.channels.drainageElevation[i],
-              grid.channels.drainageElevation[receiver],
+              grid.channels.drainageElevation.get(i),
+              grid.channels.drainageElevation.get(receiver),
             ],
-            discharges: [flow[i], flow[receiver]],
-            discharge: flow[i],
+            discharges: [flow.get(i), flow.get(receiver)],
+            discharge: flow.get(i),
           }
         );
         // New tributaries do not invent crossings at a child's fixed interface.

@@ -1,9 +1,11 @@
 import { expect, it } from "vitest";
 import {
   canonryMagicPresets,
+  generateBand,
   gridPosition,
   population,
   putChannel,
+  residentBand,
   type SocietyCommunity,
 } from "@atlas/domain";
 import { landscape, epoch } from "./mapFixtures";
@@ -36,7 +38,7 @@ function fixture() {
   state.domain.world.areas.area.profile = "local";
   const n = state.surface.active.length;
   const set = (name: string, value: number, unit = "ratio") =>
-    putChannel(state.surface, name, unit, new Float64Array(n).fill(value));
+    putChannel(state.surface, name, unit, residentBand("float64", new Float64Array(n).fill(value)));
   set("elevation", 100, "metre");
   set("grazers", 1);
   set("browsers", 1);
@@ -70,14 +72,21 @@ function fixture() {
   map.WaterKindCodes.fill(0);
   map.Temperature.fill(290);
   map.RockResistance.fill(1000);
-  const samples = Int32Array.from(state.surface.active, (_active, i) => {
-    const p = gridPosition(state.surface, i);
-    return nearestTriangle(map.mesh, p.x - map.mesh.origin[0], p.y - map.mesh.origin[1]);
-  });
+  const samples = generateBand(
+    state.surface.coverage,
+    "int32",
+    "physical-samples",
+    (i) => {
+      const p = gridPosition(state.surface, i);
+      return nearestTriangle(map.mesh, p.x - map.mesh.origin[0], p.y - map.mesh.origin[1]);
+    },
+    state.surface.active.length
+  );
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
     samples,
+    grid: state.surface.coverage,
     fixed: [],
     inherited: false,
     sampling: { maximumSize: map.mesh.spacing, minimumSize: map.mesh.spacing, featureSamples: 2 },
@@ -93,7 +102,7 @@ function fixture() {
   region.connections = [
     { from: a.id, to: b.id, distance: 2000, travelCost: 2000, kind: "land", wear: 500 },
   ];
-  const cellOf = (c: SocietyCommunity) => samples[nearestSample(state, c.position)];
+  const cellOf = (c: SocietyCommunity) => samples.get(nearestSample(state, c.position));
   const field = (id: string) => state.physical!.magic!.fields.find((f) => f.definition.id === id)!;
   expect(cellOf(a)).not.toBe(cellOf(b));
   return { state, context, a, b, cellOf, field, map, region };
@@ -159,9 +168,9 @@ it("hunts the herds Greenwood's carrier reads and clears ground wetter and empti
   const kinds = state.society!.region.works.map((w) => w.kind);
   expect(kinds).toContain("hunting");
   expect(kinds).toContain("clearance");
-  expect(state.surface.channels.grazers[sample]).toBeLessThan(1);
-  expect(state.surface.channels.treeCover[sample]).toBeLessThan(0.7);
-  expect(state.surface.channels.soilWater[sample]).toBeGreaterThan(0.02);
+  expect(state.surface.channels.grazers.get(sample)).toBeLessThan(1);
+  expect(state.surface.channels.treeCover.get(sample)).toBeLessThan(0.7);
+  expect(state.surface.channels.soilWater.get(sample)).toBeGreaterThan(0.02);
   expect(sap.get(cellOf(a))).toBeLessThan(before);
   expect(state.society!.magicTouched!.has("greenwood")).toBe(true);
   // The herds and cover edited here are the mesh fields the ecology and the gut carrier read.
@@ -270,7 +279,7 @@ it("kills where a confluence covers the ground a community stands on", () => {
     state.surface,
     "magic:confluence:war:coverage",
     "ratio",
-    new Float64Array(state.surface.active.length).fill(1)
+    residentBand("float64", new Float64Array(state.surface.active.length).fill(1))
   );
   resolveSocietyHazards(state, context, 5000);
   const rims = region.events.filter((e) => e.kind === "thermal-fracture");

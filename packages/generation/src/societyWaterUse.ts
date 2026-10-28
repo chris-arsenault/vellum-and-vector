@@ -69,7 +69,7 @@ function divertDownstream(
 function* irrigationIntakes(state: GenerationState, work: SocietyWork) {
   if (work.demand) {
     for (const { i, fraction } of workSamples(state, work))
-      yield { cell: state.physical!.samples[i], share: fraction };
+      yield { cell: state.physical!.samples.get(i), share: fraction };
   } else {
     yield { cell: nativeIndexAtSurface(state, work.position.x, work.position.y), share: 1 };
   }

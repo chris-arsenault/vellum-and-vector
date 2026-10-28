@@ -1,33 +1,46 @@
-import { Band, isNumericalVector, type GridSurface, type NumericalVector } from "@atlas/domain";
+import { Band, type Coverage, type GridSurface } from "@atlas/domain";
 import type { GenerationState } from "./process";
 import type { MagicWorkspace } from "./canonry/magicState";
 
-function columns(record: object | null | undefined, result: Set<NumericalVector>) {
-  for (const value of Object.values(record ?? {})) if (isNumericalVector(value)) result.add(value);
-}
-function gridColumns(grid: GridSurface, result: Set<NumericalVector>) {
-  result.add(grid.active);
-  result.add(grid.measures);
-  columns(grid.channels, result);
-  columns(grid.topology, result);
-  for (const overlay of grid.overlays ?? []) gridColumns(overlay.grid, result);
-}
-/** Enumerate resource handles, never samples or GIS records. Closures own no replaceable fields. */
-export function generationNumericalState(state: GenerationState) {
-  const result = new Set<NumericalVector>(),
-    work = state.physical;
-  gridColumns(state.surface, result);
-  for (const grid of Object.values(state.domain.numerical)) gridColumns(grid, result);
-  columns(state.society, result);
-  columns(state.society?.urban, result);
-  for (const path of state.society?.urban?.paths.values() ?? []) columns(path, result);
-  if (!work) return result;
-  columns(work.map.mesh.topology, result);
-  columns(work.interpolation, result);
-  return result;
+type Groups = Map<Coverage, Set<Band>>;
+function add(groups: Groups, coverage: Coverage, band: Band) {
+  let bands = groups.get(coverage);
+  if (!bands) groups.set(coverage, (bands = new Set()));
+  bands.add(band);
 }
 function bands(record: object | null | undefined, result: Set<Band>) {
   for (const value of Object.values(record ?? {})) if (value instanceof Band) result.add(value);
+}
+function record(groups: Groups, coverage: Coverage, values: object | null | undefined) {
+  const found = new Set<Band>();
+  bands(values, found);
+  for (const band of found) add(groups, coverage, band);
+}
+function gridBands(grid: GridSurface, groups: Groups) {
+  add(groups, grid.coverage, grid.active);
+  add(groups, grid.coverage, grid.measures);
+  record(groups, grid.coverage, grid.channels);
+  if (grid.topology) record(groups, grid.topology.coverage, grid.topology);
+  for (const overlay of grid.overlays ?? []) gridBands(overlay.grid, groups);
+}
+/**
+ * Enumerate the grid-side bands reachable from the state with the coverage that accounts for
+ * each: grids own theirs; society and the projection's sampling tables live in the surface
+ * grid's coverage. Handles only, never samples or GIS records.
+ */
+export function generationGridBands(state: GenerationState): Groups {
+  const groups: Groups = new Map(),
+    surface = state.surface.coverage,
+    work = state.physical;
+  gridBands(state.surface, groups);
+  for (const grid of Object.values(state.domain.numerical)) gridBands(grid, groups);
+  record(groups, surface, state.society);
+  record(groups, surface, state.society?.urban);
+  for (const path of state.society?.urban?.paths.values() ?? []) record(groups, surface, path);
+  if (!work) return groups;
+  add(groups, surface, work.samples);
+  record(groups, surface, work.interpolation);
+  return groups;
 }
 /** Enumerate the physical coverage's bands reachable from the state. */
 export function generationBands(state: GenerationState) {

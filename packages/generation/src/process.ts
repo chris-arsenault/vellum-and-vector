@@ -5,7 +5,6 @@ import type {
   ParameterDefinitions,
   ParameterValues,
   SpatialScope,
-  NumericalAllocator,
   EpochHistory,
   GenerationCause,
   GenerationEpoch,
@@ -39,8 +38,7 @@ export interface GenerationState {
   networks?: import("@atlas/domain").NetworkWorkspace;
   sourceNetworks?: import("@atlas/domain").NetworkReader;
   contours?: import("@atlas/domain").ContourWorkspace;
-  numerical?: NumericalAllocator;
-  /** Worker-owned block cache and scratch for the physical coverage; resident when absent. */
+  /** Worker-owned block cache and scratch for every coverage; resident when absent. */
   cache?: import("@atlas/domain").BlockCache;
   retainedFeatureNames?: Record<string, { name: string; attributes: Record<string, unknown> }>;
   society?: import("./societyGeography").SocietyWorkspace;

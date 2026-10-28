@@ -1,4 +1,4 @@
-import { DomainError } from "@atlas/domain";
+import { DomainError, readRange } from "@atlas/domain";
 import { expect, it, vi } from "vitest";
 import { configuration, epoch, invoke, landscape, options } from "./mapFixtures";
 import { MapRunner } from "./mapRunner";
@@ -43,10 +43,10 @@ it.each([false, true])(
   async (asyncFailure) => {
     const initial = landscape();
     const good = process("good", (state) => {
-      state.surface.channels.elevation[0] = 17;
+      state.surface.channels.elevation.set(0, 17);
     });
     const bad = process("bad", (state) => {
-      state.surface.channels.elevation[1] = 23;
+      state.surface.channels.elevation.set(1, 23);
       const error = new Error("Failed output");
       if (asyncFailure) return Promise.reject(error);
       throw error;
@@ -55,7 +55,7 @@ it.each([false, true])(
     const dependent = process("dependent", consume);
     dependent.contract.requires = ["bad"];
     const independent = process("independent", (state) => {
-      state.surface.channels.elevation[2] = 31;
+      state.surface.channels.elevation.set(2, 31);
     });
     const registry = new MapProcessRegistry();
     for (const entry of [good, bad, dependent, independent]) registry.register(entry);
@@ -64,7 +64,7 @@ it.each([false, true])(
       configuration([good, bad, dependent, independent].map((entry) => invoke(entry))),
       registry
     ).run(initial, { ...options, diagnostic });
-    expect([...state.surface.channels.elevation.slice(0, 3)]).toEqual([17, 23, 31]);
+    expect([...readRange(state.surface.channels.elevation, 0, 3)]).toEqual([17, 23, 31]);
     expect(state.facts).toEqual(new Set(["elevation", "good", "independent"]));
     expect(state.diagnostics).toMatchObject([
       {
@@ -77,7 +77,7 @@ it.each([false, true])(
     ]);
     expect(diagnostic).toHaveBeenCalledTimes(2);
     expect(consume).not.toHaveBeenCalled();
-    expect(initial.surface.channels.elevation[0]).toBe(-10);
+    expect(initial.surface.channels.elevation.get(0)).toBe(-10);
   }
 );
 

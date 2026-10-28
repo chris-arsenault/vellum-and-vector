@@ -1,6 +1,6 @@
 /* eslint-disable max-lines-per-function -- The browser worker fixture keeps its lifecycle in one closure. */
 import type { AtlasFeature, DomainSnapshot, Grid, Landmark, SocietyRegion } from "@atlas/domain";
-import { layerSupports } from "@atlas/domain";
+import { attachGrid, detachGrid, layerSupports } from "@atlas/domain";
 import { generationSnapshot } from "@atlas/generation";
 import { WorkspaceClient } from "../src/WorkspaceClient";
 import { openSpatialRuntime } from "../src/spatialRuntime";
@@ -12,6 +12,18 @@ import type {
   GenerationDiagnostic,
 } from "@atlas/generation";
 
+/** A snapshot whose grids are plain arrays, for crossing a worker port. */
+function detached(snapshot: DomainSnapshot): DomainSnapshot {
+  return {
+    ...snapshot,
+    numerical: Object.fromEntries(
+      Object.entries(snapshot.numerical).map(([id, grid]) => [
+        id,
+        detachGrid(grid) as unknown as DomainSnapshot["numerical"][string],
+      ])
+    ),
+  };
+}
 /** The records a fixture run leaves in the world, as the real run would leave them. */
 function seedFixtureWorld(
   snapshot: DomainSnapshot,
@@ -165,7 +177,7 @@ export function installGenerationFixtureRuntime({
               if (!ecologicalFeatures.length) return i % size < 8 ? 10 : 14;
               return i % size < 5 ? 10 : i % size < 11 ? 7 : 15;
             };
-            const channels: Grid["channels"] = {};
+            const channels: Record<string, Float64Array> = {};
             // Without fields the fixture publishes features and society only: no raster map.
             const fixtureChannels = !fields
               ? []
@@ -211,7 +223,7 @@ export function installGenerationFixtureRuntime({
                 return -500 + 2400 * Math.exp(-8 * ((x - 0.6) ** 2 + (y - 0.6) ** 2));
               });
             }
-            const surface: Grid = {
+            const surface = attachGrid({
               id: "browser-fixture",
               scope: { ...snapshot.scope, resolution: (bounds[2] - bounds[0]) / (size - 1) },
               bounds,
@@ -228,7 +240,7 @@ export function installGenerationFixtureRuntime({
               quantities: Object.fromEntries(
                 Object.keys(channels).map((name) => [name, fieldPublications.get(name)!.quantity])
               ),
-            };
+            }) as Grid;
             const result: CompletedBoundary = {
               kind: "final",
               configurationHash: "browser-fixture",
@@ -257,8 +269,8 @@ export function installGenerationFixtureRuntime({
               message.port.onmessage = null;
               publicationWorker!.postMessage(
                 {
-                  original,
-                  snapshot: output,
+                  original: detached(original),
+                  snapshot: detached(output),
                   operationId: message.operationId,
                   port: message.port,
                 },

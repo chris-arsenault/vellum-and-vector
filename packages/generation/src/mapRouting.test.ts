@@ -1,5 +1,12 @@
 import { expect, it } from "vitest";
-import { createGrid, gridPosition, putChannel, rectangle, spatial } from "@atlas/domain";
+import {
+  createGrid,
+  generateChannel,
+  gridPosition,
+  putChannel,
+  rectangle,
+  spatial,
+} from "@atlas/domain";
 import { landscape } from "./mapFixtures";
 import { findRoute } from "./mapRouting";
 
@@ -10,7 +17,7 @@ it("routes a road around water within its exact mapped footprint", () => {
     grid,
     "elevation",
     "metre",
-    Float64Array.from(grid.active, (_, i) => {
+    generateChannel(grid, "elevation", (i) => {
       const x = i % grid.width,
         y = Math.floor(i / grid.width);
       return x > 85 && x < 105 && y < 150 ? -10 : 100;
@@ -51,7 +58,12 @@ it("keeps roads out of footprint holes even when samples on either side are acti
     ],
   };
   const grid = createGrid("hole", state.domain.scope, 30, 12);
-  putChannel(grid, "elevation", "metre", new Float64Array(grid.active.length).fill(100));
+  putChannel(
+    grid,
+    "elevation",
+    "metre",
+    generateChannel(grid, "elevation", () => 100)
+  );
   const route = findRoute(grid, { x: 1000, y: 500, z: 0 }, { x: 3000, y: 500, z: 0 }, "road");
   expect(route.length).toBeGreaterThan(2);
   expect(
@@ -70,7 +82,7 @@ it("takes a ridge through its saddle rather than over its crest", () => {
     grid,
     "elevation",
     "metre",
-    Float64Array.from(grid.active, (_, i) => {
+    generateChannel(grid, "elevation", (i) => {
       const x = i % grid.width,
         y = Math.floor(i / grid.width);
       if (x < 27 || x > 33) return 100;
@@ -88,13 +100,18 @@ it("takes a ridge through its saddle rather than over its crest", () => {
 it("follows a river bank instead of cutting across the open interfluve", () => {
   const state = landscape();
   const grid = createGrid("river", state.domain.scope, 60, 20);
-  putChannel(grid, "elevation", "metre", new Float64Array(grid.active.length).fill(100));
+  putChannel(
+    grid,
+    "elevation",
+    "metre",
+    generateChannel(grid, "elevation", () => 100)
+  );
   // A river runs west–east along row 15; the straight line between the towns is row 10.
   putChannel(
     grid,
     "riverOrder",
     "ratio",
-    Float64Array.from(grid.active, (_, i) => (Math.floor(i / grid.width) === 15 ? 2 : 0))
+    generateChannel(grid, "riverOrder", (i) => (Math.floor(i / grid.width) === 15 ? 2 : 0))
   );
   const start = gridPosition(grid, 10 * grid.width + 2),
     end = gridPosition(grid, 10 * grid.width + 57);
@@ -112,7 +129,7 @@ it("keeps a lane on the water and along the shallow coast between two harbours",
     grid,
     "elevation",
     "metre",
-    Float64Array.from(grid.active, (_, i) => {
+    generateChannel(grid, "elevation", (i) => {
       const y = Math.floor(i / grid.width);
       return y < 5 ? 50 : y < 9 ? -50 : -3000;
     })

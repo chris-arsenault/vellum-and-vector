@@ -5,10 +5,10 @@ import {
   type ChangeSet,
   type Impact,
   type ReadRequirements,
-  type NumericalAllocator,
+  type BlockCache,
 } from "@atlas/domain";
 import { planCommand, catalogChanges } from "@atlas/application";
-import { openNumericalArena, type FieldInputStore } from "@atlas/storage-browser";
+import { openBlockCache, type FieldInputStore } from "@atlas/storage-browser";
 import type { WorkspaceCommand, WorkspaceCommandResult } from "./workspaceProtocol";
 import { WorkspaceFields } from "./workspaceFields";
 
@@ -48,16 +48,16 @@ export async function executeWorkspaceCommand(
   catalog: SpatialStore,
   resources: FieldInputStore,
   input: WorkspaceCommand,
-  numerical?: NumericalAllocator
+  blocks?: BlockCache
 ): Promise<WorkspaceCommandResult> {
   const scope = await commandScope(catalog, input);
   const source = await catalog.readAuthoring(bootstrap(scope, input));
-  const working = numerical
-    ? { arena: numerical, close() {} }
-    : await openNumericalArena(`command_${input.command.operationId}`);
-  const fields = new WorkspaceFields(catalog, resources, working.arena);
+  const working = blocks
+    ? { cache: blocks, close() {} }
+    : await openBlockCache(`command_${input.command.operationId}`);
+  const fields = new WorkspaceFields(catalog, resources, working.cache);
   try {
-    const plan = planCommand(source, input.command, input.template, working.arena);
+    const plan = planCommand(source, input.command, input.template, working.cache);
     const snapshot = await catalog.readAuthoring(plan.requirements);
     await fields.read(snapshot, plan.requirements);
     const changes = plan.evaluate(snapshot),

@@ -5,7 +5,25 @@ import { radixOrder } from "../hpc/radixOrder";
 import { Band, type BandSchema, type BlockSource } from "./band";
 import { BlockCache } from "./blockCache";
 import type { BlockArray } from "./blockScratch";
-import { blockCells, blockShift, nodata, type Lattice } from "./lattice";
+import { blockCells, blockCount, blockShift, nodata, type Lattice } from "./lattice";
+
+/** What a coverage needs of its cells: how many, how they block, and which are live. */
+export type CoverageLayout = Pick<Lattice, "count" | "blockCount" | "blockLive" | "membership">;
+
+/**
+ * The layout of a sample set with no geometry of its own: a raster's or an adaptive field's
+ * samples, or a topology's leaves. Every sample is a live cell; masks are bands, not layout.
+ */
+export function sampleLayout(count: number): CoverageLayout {
+  const blocks = blockCount(count);
+  return {
+    count,
+    blockCount: blocks,
+    blockLive: (block) =>
+      block < 0 || block >= blocks ? 0 : Math.min(blockCells, count - (block << blockShift)),
+    membership: (cell) => (cell >= 0 && cell < count ? 1 : nodata),
+  };
+}
 
 /**
  * A lattice with a schema of typed bands: the world's numerical state. Bands are allocated
@@ -17,7 +35,7 @@ export class Coverage {
   private readonly allocated: Band[] = [];
   private sequence = 0;
   constructor(
-    readonly lattice: Lattice,
+    readonly lattice: CoverageLayout,
     readonly cache: BlockCache = new BlockCache(Infinity)
   ) {}
   /** The band of a registered name. */

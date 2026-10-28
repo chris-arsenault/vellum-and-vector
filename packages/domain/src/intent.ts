@@ -12,7 +12,7 @@ import type { FactDependencies } from "./factDependencies";
 import { Spatial } from "./spatial";
 import { areaSpace } from "./composition";
 import { assertAgentChangeSafety } from "./changeSafety";
-import type { NumericalAllocator } from "./numericalVector";
+import type { BlockCache } from "./lattice/blockCache";
 
 export const intentSchema = z.object({
   operationId: z.uuid(),
@@ -25,7 +25,8 @@ export const intentSchema = z.object({
 });
 export type Intent = z.infer<typeof intentSchema>;
 export interface IntentContext {
-  numerical?: NumericalAllocator;
+  /** Block cache that grids created by the intent page through; resident when absent. */
+  blocks?: BlockCache;
   owner: string;
   actor: string;
   operationId: string;

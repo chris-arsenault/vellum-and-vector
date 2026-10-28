@@ -5,12 +5,13 @@ import { createAtlasWorkspace } from "../../packages/generation/src/canonry/atla
 import { sequenceStages } from "../../packages/generation/src/sequence";
 import { generationSnapshot } from "./generationJobs";
 import { constructedWorld } from "./constructedWorldFixture";
+import { comparableSnapshot, snapshotCopy } from "./testSupport/snapshotCopy";
 
 it("inherits impact history and fixed geography from supplied parent cells with new impacts disabled", () => {
   const { input, result } = constructedWorld();
   const parent = generationSnapshot(result, input, crypto.randomUUID());
-  const before = structuredClone(parent);
-  const domain = structuredClone(parent);
+  const before = snapshotCopy(parent);
+  const domain = snapshotCopy(parent);
   const areaId = crypto.randomUUID();
   const footprint = rectangle([2200, 100, 3800, 900]);
   domain.world.areas[areaId] = {
@@ -44,7 +45,7 @@ it("inherits impact history and fixed geography from supplied parent cells with 
   expect(prepared.input.configuration!.sequence.some((step) => step.kind === "epochs")).toBe(false);
   expect(prepared.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
   expect(state.domain.world.epochs).toEqual(before.world.epochs);
-  expect(parent).toEqual(before);
+  expect(comparableSnapshot(parent)).toEqual(comparableSnapshot(before));
 });
 
 it("explains missing parent geography without scheduling child geological history", () => {

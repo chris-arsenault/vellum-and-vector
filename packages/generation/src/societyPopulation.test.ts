@@ -1,5 +1,13 @@
 import { expect, it } from "vitest";
-import { builtinLayers, createGrid, population, putChannel, rectangle } from "@atlas/domain";
+import {
+  builtinLayers,
+  createGrid,
+  population,
+  putChannel,
+  rectangle,
+  residentBand,
+  someSample,
+} from "@atlas/domain";
 import { landscape, epoch, configuration, invoke, options, registry } from "./mapFixtures";
 import {
   initializePopulation,
@@ -25,7 +33,12 @@ export function societyFixture() {
   state.domain.scope.footprint = rectangle([0, 0, 300000, 100000]);
   state.domain.world.areas.area.footprint = state.domain.scope.footprint;
   state.surface = createGrid("society", state.domain.scope, 13, 5);
-  putChannel(state.surface, "elevation", "metre", new Float64Array(65).fill(100));
+  putChannel(
+    state.surface,
+    "elevation",
+    "metre",
+    residentBand("float64", new Float64Array(65).fill(100))
+  );
   const context: MapProcessContext = {
     scope: state.domain.scope,
     invocation: [],
@@ -94,7 +107,7 @@ it("transfers joint affiliations conservatively and leaves protected people fixe
 });
 it("does not connect communities across impassable water", () => {
   const { state, context } = societyFixture();
-  for (let i = 0; i < 65; i++) if (i % 13 === 6) state.surface.channels.elevation[i] = -100;
+  for (let i = 0; i < 65; i++) if (i % 13 === 6) state.surface.channels.elevation.set(i, -100);
   initializePopulation(state, context);
   const nodes = new Map(state.society!.region.communities.map((c) => [c.id, c]));
   for (const link of state.society!.region.connections) {
@@ -132,7 +145,7 @@ it("runs elapsed population through the common process runner deterministically"
   const first = await run(),
     second = await run();
   expect(first.state.domain.world.societies).toEqual(second.state.domain.world.societies);
-  expect(first.state.surface.channels.populationDensity.some((n) => n > 0)).toBe(true);
+  expect(someSample(first.state.surface.channels.populationDensity, (n) => n > 0)).toBe(true);
 });
 
 it("honors an authored population before growth and migration", () => {

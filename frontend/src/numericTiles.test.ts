@@ -1,8 +1,11 @@
 import { expect, it } from "vitest";
 import {
+  copyGrid,
   createGrid,
   createAdaptiveField,
   createAdaptiveTopology,
+  fillBand,
+  generateBand,
   putChannel,
   rectangle,
   overlayField,
@@ -49,7 +52,7 @@ function fixture(channel = "temperature"): Raster {
     field,
     channel,
     "metre",
-    Float64Array.from({ length: 25 }, (_, i) => (i % 5) - 2)
+    generateBand(field.coverage, "float64", channel, (i) => (i % 5) - 2)
   );
   return {
     id: field.id,
@@ -71,7 +74,7 @@ it("reports composed biome categories rather than hidden base or superseded patc
   overlayField(raster.field, patch);
   expect(rasterCategories([raster])).toEqual([15]);
   expect(numericTileSampler(raster)([49, 49, 51, 51], 1)[0]).toBe(15);
-  const restored = structuredClone(patch);
+  const restored = copyGrid(patch);
   restored.scope.footprint = rectangle([0, 0, 40, 100]);
   restored.channels.biome.fill(7);
   overlayField(raster.field, restored);
@@ -108,7 +111,10 @@ it("samples adjacent numerical tiles identically to a combined view", () => {
 it("preserves authored patches, physical sea level, lakes and emergent islands", () => {
   const raster = fixture("elevation");
   raster.field.channels.elevation.fill(100);
-  raster.water = { ...raster.field, channels: { seaLevel: new Float64Array(25).fill(200) } };
+  raster.water = {
+    ...raster.field,
+    channels: { seaLevel: generateBand(raster.field.coverage, "float64", "seaLevel", () => 200) },
+  };
   raster.lakes = [{ geometry: rectangle([20, 20, 80, 80]), level: 300 }];
   expect([...numericTileSampler(raster)([29, 29, 31, 31], 1)]).toEqual([
     100, 1, -100, 2, 0, 2, -1, -1, 100,
@@ -127,9 +133,7 @@ it("carries the surface class as a discrete terrain band and marks its absence",
   expect(numericTileSampler(raster)([49, 49, 51, 51], 1)[6]).toBe(-1);
   raster.surface = fixture("finalSurface").field;
   raster.surface.units.finalSurface = "category";
-  raster.surface.channels.finalSurface.set(
-    Float64Array.from({ length: 25 }, (_, i) => (i % 5 < 2 ? 3 : 102))
-  );
+  fillBand(raster.surface.channels.finalSurface, (i) => (i % 5 < 2 ? 3 : 102));
   const sample = numericTileSampler(raster)([0, 0, 100, 100], 32);
   const classes = new Set<number>();
   for (let i = 0; i < sample.length; i += terrainSampleBands)
@@ -145,14 +149,14 @@ it("carries natural cover beneath a shared magical class", () => {
     raster.surface,
     "finalSurface",
     "category",
-    new Float64Array(25).fill(magic),
+    generateBand(raster.surface.coverage, "float64", "finalSurface", () => magic),
     "category"
   );
   putChannel(
     raster.surface,
     "naturalSurface",
     "category",
-    Float64Array.from({ length: 25 }, (_, i) =>
+    generateBand(raster.surface.coverage, "float64", "naturalSurface", (i) =>
       surfaceCode(i % 5 < 2 ? "Boreal forest" : "Scree field")
     ),
     "category"
@@ -178,16 +182,26 @@ it("shares adaptive locations across terrain bands while respecting distinct ove
     raster.field,
     "elevation",
     "metre",
-    new Float64Array(raster.field.active.length).fill(100)
+    generateBand(raster.field.coverage, "float64", "elevation", () => 100)
   );
   raster.water = {
     ...raster.field,
-    channels: { seaLevel: new Float64Array(raster.field.active.length).fill(200) },
+    channels: { seaLevel: generateBand(raster.field.coverage, "float64", "seaLevel", () => 200) },
   };
   raster.ice = field("ice", 50, [0, 0, 100, 100]);
-  putChannel(raster.ice, "ice", "ratio", new Float64Array(raster.ice.active.length).fill(0.25));
+  putChannel(
+    raster.ice,
+    "ice",
+    "ratio",
+    generateBand(raster.ice.coverage, "float64", "ice", () => 0.25)
+  );
   const patch = field("patch", 5, [45, 45, 55, 55]);
-  putChannel(patch, "elevation", "metre", new Float64Array(patch.active.length).fill(400));
+  putChannel(
+    patch,
+    "elevation",
+    "metre",
+    generateBand(patch.coverage, "float64", "elevation", () => 400)
+  );
   raster.field.overlays = [{ grid: patch, channels: ["elevation"] }];
   const sample = numericTileSampler(raster);
   expect([...sample([29, 29, 31, 31], 1)]).toEqual([100, 1, -100, 1, 0.25, 2, -1, -1, 100]);
@@ -250,9 +264,7 @@ it("samples biome categories without interpolating fictional intermediate biomes
   const raster = fixture("biome");
   raster.field.units.biome = "category";
   raster.field.quantities = { biome: "category" };
-  raster.field.channels.biome.set(
-    Float64Array.from({ length: 25 }, (_, i) => (i % 5 < 2 ? 5 : 12))
-  );
+  fillBand(raster.field.channels.biome, (i) => (i % 5 < 2 ? 5 : 12));
   const sample = numericTileSampler(raster)([0, 0, 100, 100], 32);
   for (let i = 0; i < sample.length; i += 3)
     if (sample[i + 1]) expect([5, 12]).toContain(sample[i]);

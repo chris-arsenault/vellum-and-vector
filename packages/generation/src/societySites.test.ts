@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { createGrid, putChannel, rectangle } from "@atlas/domain";
+import { createGrid, putChannel, rectangle, residentBand } from "@atlas/domain";
 import { landscape } from "./mapFixtures";
 import { chooseSettlementSites, rankSites } from "./societySites";
 import type { MapProcessContext } from "./process";
@@ -42,13 +42,13 @@ function country() {
   // A tributary joins at column 14 from the north, making a junction there.
   riverOrder[cell(14, 3)] = 1;
   riverOrder[cell(14, 2)] = 1;
-  putChannel(grid, "elevation", "metre", elevation);
-  putChannel(grid, "water", "category", water);
-  putChannel(grid, "riverOrder", "category", riverOrder);
-  putChannel(grid, "flow", "cubic-metre/second", flow);
-  putChannel(grid, "slope", "gradient", slope);
-  putChannel(grid, "waterDepth", "metre", waterDepth);
-  putChannel(grid, "waveExposure", "ratio", waveExposure);
+  putChannel(grid, "elevation", "metre", residentBand("float64", elevation));
+  putChannel(grid, "water", "category", residentBand("float64", water));
+  putChannel(grid, "riverOrder", "category", residentBand("float64", riverOrder));
+  putChannel(grid, "flow", "cubic-metre/second", residentBand("float64", flow));
+  putChannel(grid, "slope", "gradient", residentBand("float64", slope));
+  putChannel(grid, "waterDepth", "metre", residentBand("float64", waterDepth));
+  putChannel(grid, "waveExposure", "ratio", residentBand("float64", waveExposure));
   state.surface = grid;
   const context = {
     scope: state.domain.scope,
@@ -87,9 +87,16 @@ it("moves each unit's settlement to its best site and keeps the draw where there
   const seeds = [cell(4, 7), cell(13, 7)];
   const owner = new Int32Array(grid.active.length);
   for (let i = 0; i < owner.length; i++) owner[i] = i % 21 <= 10 ? 0 : 1;
-  const river = new Float64Array(owner.length),
-    coast = new Float64Array(owner.length);
-  const chosen = chooseSettlementSites(state, context, owner, seeds, river, coast);
+  const river = residentBand("float64", new Float64Array(owner.length)),
+    coast = residentBand("float64", new Float64Array(owner.length));
+  const chosen = chooseSettlementSites(
+    state,
+    context,
+    residentBand("int32", owner),
+    seeds,
+    river,
+    coast
+  );
   // The western unit owns the col, the best class there is; the town sits at its foot on
   // the unit's own side, on the flat ground nearest the people who settled it.
   expect(chosen[0].cell).toBe(cell(9, 5));
@@ -102,19 +109,26 @@ it("moves each unit's settlement to its best site and keeps the draw where there
   // A unit of nothing but plain keeps its draw and carries no site.
   const plainOwner = new Int32Array(owner.length).fill(-1);
   for (let y = 6; y < 10; y++) for (let x = 0; x < 9; x++) plainOwner[cell(x, y)] = 0;
-  const plain = chooseSettlementSites(state, context, plainOwner, [cell(4, 7)], river, coast);
+  const plain = chooseSettlementSites(
+    state,
+    context,
+    residentBand("int32", plainOwner),
+    [cell(4, 7)],
+    river,
+    coast
+  );
   expect(plain[0].cell).toBe(cell(4, 7));
   expect(plain[0].site).toBeNull();
 });
 
 it("holds a pass from a spur only when a hazard lies below it", () => {
   const { state, grid, cell, context } = country();
-  const owner = new Int32Array(grid.active.length).fill(0);
-  const river = new Float64Array(owner.length),
-    coast = new Float64Array(owner.length);
+  const owner = residentBand("int32", new Int32Array(grid.active.length));
+  const river = residentBand("float64", new Float64Array(owner.length)),
+    coast = residentBand("float64", new Float64Array(owner.length));
   // A reachable spur beside the col, 300 m above it, on a moderate slope.
-  state.surface.channels.elevation[cell(9, 3)] = 650;
-  state.surface.channels.slope[cell(9, 3)] = 0.02;
+  state.surface.channels.elevation.set(cell(9, 3), 650);
+  state.surface.channels.slope.set(cell(9, 3), 0.02);
   const quiet = chooseSettlementSites(state, context, owner, [cell(4, 7)], river, coast);
   expect(quiet[0].site?.fortress).toBe(false);
   // A Fire halo in the valley below gives a reason to hold it.
@@ -122,7 +136,10 @@ it("holds a pass from a spur only when a hazard lies below it", () => {
     state.surface,
     "quickening",
     "ratio",
-    Float64Array.from(owner, (_, i) => (i === cell(11, 4) ? 0.3 : 0))
+    residentBand(
+      "float64",
+      Float64Array.from({ length: owner.length }, (_, i) => (i === cell(11, 4) ? 0.3 : 0))
+    )
   );
   const held = chooseSettlementSites(state, context, owner, [cell(4, 7)], river, coast);
   expect(held[0].site?.kind).toBe("pass");
@@ -138,7 +155,10 @@ it("seats a necropolis on a Salt killing ground where the plain offered nothing"
     state.surface,
     "magic:salt:feature:ground",
     "category",
-    Float64Array.from({ length: grid.active.length }, (_, i) => (i === cell(3, 7) ? 1 : 0))
+    residentBand(
+      "float64",
+      Float64Array.from({ length: grid.active.length }, (_, i) => (i === cell(3, 7) ? 1 : 0))
+    )
   );
   const sites = rankSites(state);
   expect(sites[cell(3, 7)]?.kind).toBe("necropolis");
@@ -149,7 +169,10 @@ it("seats a necropolis on a Salt killing ground where the plain offered nothing"
     state.surface,
     "magic:hallowed:feature:ring",
     "category",
-    Float64Array.from({ length: grid.active.length }, (_, i) => (i === cell(3, 7) ? 1 : 0))
+    residentBand(
+      "float64",
+      Float64Array.from({ length: grid.active.length }, (_, i) => (i === cell(3, 7) ? 1 : 0))
+    )
   );
   expect(rankSites(state)[cell(3, 7)]?.kind).toBe("sanctuary");
 });

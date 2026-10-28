@@ -1,6 +1,13 @@
 import { fixtureWorld, fixtureState } from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
-import { createGrid, putChannel, rectangle, cloneSnapshot } from "@atlas/domain";
+import {
+  createGrid,
+  copyGrid,
+  generateBand,
+  putChannel,
+  rectangle,
+  cloneSnapshot,
+} from "@atlas/domain";
 import { TileWorkerClient } from "./TileWorkerClient";
 import { tileProcessor } from "./tileProcessor";
 import { numericTileSampler, terrainSampleBands } from "./numericTiles";
@@ -29,13 +36,13 @@ function fixture(): Raster {
     field,
     "elevation",
     "metre",
-    Float64Array.from({ length: 25 }, (_, i) => i - 10)
+    generateBand(field.coverage, "float64", "elevation", (i) => i - 10)
   );
   putChannel(
     field,
     "temperature",
     "celsius",
-    Float64Array.from({ length: 25 }, (_, i) => i)
+    generateBand(field.coverage, "float64", "temperature", (i) => i)
   );
   return {
     id: "terrain",
@@ -145,7 +152,7 @@ it("reuses sources for presentation changes and replaces them when numerical dat
   expect(sources.source({ ...raster, field: cloned })).toBe(first);
   sources.end();
   expect(worker.messages.filter((m) => m.kind === "grid")).toHaveLength(1);
-  const next = { ...raster, field: structuredClone(raster.field) };
+  const next = { ...raster, field: copyGrid(raster.field) };
   next.field.channels.elevation.fill(400);
   sources.begin();
   expect(sources.source(next)).not.toBe(first);

@@ -1,27 +1,16 @@
 import type { AdaptiveTopology } from "./adaptiveTopology";
-import type { NumericalAllocator } from "./numericalVector";
-import { allocateNumerical } from "./numericalAllocation";
 
 /** Reconstruction uses incident-cell gradients; retain the complete three-face stencil. */
-export function* contourSupport(
-  topology: AdaptiveTopology,
-  members: Iterable<number>,
-  numerical?: NumericalAllocator
-) {
-  const count = topology.leaves.length;
-  const selected = allocateNumerical(
-    { type: "uint8", length: count, lifetime: "process", name: "contour:adaptive-membership" },
-    numerical
-  );
-  const queue = allocateNumerical(
-    { type: "int32", length: count, lifetime: "process", name: "contour:adaptive-support" },
-    numerical
-  );
+export function* contourSupport(topology: AdaptiveTopology, members: Iterable<number>) {
+  const count = topology.leaves.length,
+    coverage = topology.coverage;
+  const selected = coverage.scratch("uint8", "contour:adaptive-membership", count);
+  const queue = coverage.scratch("int32", "contour:adaptive-support", count);
   let end = 0;
   const add = (cell: number) => {
-    if (!selected[cell]) {
-      selected[cell] = 1;
-      queue[end++] = cell;
+    if (!selected.get(cell)) {
+      selected.set(cell, 1);
+      queue.set(end++, cell);
     }
   };
   try {
@@ -30,14 +19,15 @@ export function* contourSupport(
     for (let ring = 0; ring < 3; ring++) {
       const stop = end;
       for (let index = start; index < stop; index++) {
-        const cell = queue[index];
-        for (let at = topology.offsets[cell]; at < topology.offsets[cell + 1]; at++)
-          add(topology.neighbors[at]);
+        const cell = queue.get(index);
+        for (let at = topology.offsets.get(cell); at < topology.offsets.get(cell + 1); at++)
+          add(topology.neighbors.get(at));
       }
       start = stop;
     }
-    for (let i = 0; i < end; i++) yield queue[i];
+    for (let i = 0; i < end; i++) yield queue.get(i);
   } finally {
-    numerical?.releaseUnused([selected, queue], []);
+    coverage.release(selected);
+    coverage.release(queue);
   }
 }

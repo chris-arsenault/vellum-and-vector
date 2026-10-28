@@ -5,6 +5,7 @@ import { adaptiveGeometry, createAdaptiveTopology } from "./adaptiveTopology";
 import { adaptivePointSampler } from "./adaptivePoint";
 import { createGrid, putChannel } from "./grids";
 import { rectangle } from "./spatial";
+import { residentBand } from "./lattice/bandValues";
 
 const scope = {
   worldId: "world",
@@ -19,16 +20,20 @@ const scope = {
 function classes(bounds: [number, number, number, number], size: number) {
   const topology = createAdaptiveTopology(bounds, { maximumSize: size, minimumSize: size });
   const field = createAdaptiveField("classes", scope, topology);
-  const geometry = adaptiveGeometry(topology);
+  const bands = adaptiveGeometry(topology),
+    geometry = { x: bands.x.toArray(), y: bands.y.toArray() };
   // A diagonal boundary between two classes, plus one island cell of a third.
   putChannel(
     field,
     "finalSurface",
     "category",
-    Float64Array.from(geometry.x, (x, i) => {
-      if (Math.abs(x - 125) < 1 && Math.abs(geometry.y[i] - 875) < 1) return 102;
-      return x + geometry.y[i] < 1001 ? 3 : 28;
-    })
+    residentBand(
+      "float64",
+      Float64Array.from(geometry.x, (x, i) => {
+        if (Math.abs(x - 125) < 1 && Math.abs(geometry.y[i] - 875) < 1) return 102;
+        return x + geometry.y[i] < 1001 ? 3 : 28;
+      })
+    )
   );
   return { field, topology, geometry };
 }
@@ -37,7 +42,7 @@ it("keeps stored classes at cell centres and never invents intermediate codes", 
   const { field, geometry } = classes([0, 0, 1000, 1000], 250);
   const at = classInterpolator(field, "finalSurface");
   geometry.x.forEach((x, i) =>
-    expect(at({ x, y: geometry.y[i], z: 0 })).toBe(field.channels.finalSurface[i])
+    expect(at({ x, y: geometry.y[i], z: 0 })).toBe(field.channels.finalSurface.get(i))
   );
   const seen = new Set<number>();
   for (let y = 5; y < 1000; y += 10)
@@ -48,7 +53,9 @@ it("places the class boundary where interpolated membership crosses one half", (
   const { field, topology } = classes([0, 0, 1000, 1000], 250);
   const at = classInterpolator(field, "finalSurface");
   const share = (code: number) =>
-    adaptivePointSampler(topology, (leaf) => Number(field.channels.finalSurface[leaf] === code));
+    adaptivePointSampler(topology, (leaf) =>
+      Number(field.channels.finalSurface.get(leaf) === code)
+    );
   const upper = share(28),
     lower = share(3),
     island = share(102);
@@ -77,7 +84,10 @@ it("blends classes over a regular grid's bilinear support and rounds corners", (
     grid,
     "finalSurface",
     "category",
-    Float64Array.from({ length: 16 }, (_, i) => (i % 4 < 2 && i !== 5 ? 3 : 28))
+    residentBand(
+      "float64",
+      Float64Array.from({ length: 16 }, (_, i) => (i % 4 < 2 && i !== 5 ? 3 : 28))
+    )
   );
   const at = classInterpolator(grid, "finalSurface");
   expect(at({ x: 100, y: 800, z: 0 })).toBe(3);

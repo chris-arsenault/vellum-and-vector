@@ -2,8 +2,11 @@ import { expect, it } from "vitest";
 import { executeProcessBehavior } from "./processTraits";
 import {
   createGrid,
+  foldSamples,
+  generateChannel,
   gridPosition,
   putChannel,
+  someSample,
   rectangle,
   resolveParameters,
   type DomainSnapshot,
@@ -126,21 +129,27 @@ function suppliedSurface(target: GenerationState, heights: (i: number) => number
     target.surface,
     "elevation",
     "metre",
-    Float64Array.from(target.surface.active, (_, i) => heights(i))
+    generateChannel(target.surface, "elevation", heights)
   );
   apply(initializeTerrainProcess, target);
   putChannel(
     target.surface,
     "rainfall",
     "metre/year",
-    new Float64Array(target.surface.active.length).fill(1)
+    generateChannel(target.surface, "rainfall", () => 1)
   );
   target.facts.add("rainfall");
 }
 function materialVolume(target: GenerationState) {
-  return target.surface.channels.elevation.reduce(
-    (sum, z, i) => sum + z * target.surface.measures[i],
+  return foldSamples(
+    target.surface.channels.elevation,
+    (sum, z, i) => sum + z * target.surface.measures.get(i),
     0
+  );
+}
+function channelValues(target: GenerationState) {
+  return Object.fromEntries(
+    Object.entries(target.surface.channels).map(([name, band]) => [name, Array.from(band)])
   );
 }
 
@@ -149,8 +158,8 @@ it("initializes deterministic provinces, material and spatially correlated terra
     second = state(25);
   apply(initializeTerrainProcess, first);
   apply(initializeTerrainProcess, second);
-  expect(first.surface.channels).toEqual(second.surface.channels);
-  const z = first.surface.channels.elevation;
+  expect(channelValues(first)).toEqual(channelValues(second));
+  const z = Array.from(first.surface.channels.elevation);
   expect(Math.max(...z) - Math.min(...z)).toBeGreaterThan(1000);
   const near =
     z.slice(0, -1).reduce((sum, v, i) => sum + Math.abs(v - z[i + 1]), 0) / (z.length - 1);
@@ -168,31 +177,32 @@ it("keeps inherited elevation and accumulates tectonic uplift over elapsed epoch
     second = state();
   suppliedSurface(first, (i) => 100 + i);
   suppliedSurface(second, (i) => 100 + i);
-  expect(first.surface.channels.elevation[40]).toBe(140);
+  expect(first.surface.channels.elevation.get(40)).toBe(140);
   apply(tectonicsProcess, first, { advection: false }, 1000);
   apply(tectonicsProcess, first, { advection: false }, 1000);
   apply(tectonicsProcess, second, { advection: false }, 2000);
-  first.surface.channels.elevation.forEach((z, i) =>
-    expect(z).toBeCloseTo(second.surface.channels.elevation[i], 10)
+  Array.from(first.surface.channels.elevation).forEach((z, i) =>
+    expect(z).toBeCloseTo(second.surface.channels.elevation.get(i), 10)
   );
-  expect(first.surface.channels.elevation.some((z, i) => Math.abs(z - (100 + i)) > 0.01)).toBe(
-    true
-  );
+  expect(
+    someSample(first.surface.channels.elevation, (z, i) => Math.abs(z - (100 + i)) > 0.01)
+  ).toBe(true);
 });
 
 it("conditions an inland depression into an acyclic spill path without cutting its floor", () => {
   const target = state(7);
   suppliedSurface(target, (i) => (i === 24 ? -8 : i === 3 ? 1 : 10));
-  const original = target.surface.channels.elevation.slice();
+  const original = Array.from(target.surface.channels.elevation);
   apply(drainageProcess, target, { seaLevel: -100, evaporation: 0, runoffFraction: 1 });
-  expect(target.surface.channels.elevation).toEqual(original);
-  expect(target.surface.channels.depressionDepth[24]).toBe(18);
-  expect(target.surface.channels.water[24]).toBe(2);
-  const runoff = target.surface.channels.runoff.reduce(
-    (sum, v, i) => sum + (v * target.surface.measures[i]) / secondsPerYear,
+  expect(Array.from(target.surface.channels.elevation)).toEqual(original);
+  expect(target.surface.channels.depressionDepth.get(24)).toBe(18);
+  expect(target.surface.channels.water.get(24)).toBe(2);
+  const runoff = foldSamples(
+    target.surface.channels.runoff,
+    (sum, v, i) => sum + (v * target.surface.measures.get(i)) / secondsPerYear,
     0
   );
-  const exported = target.surface.channels.outletFlow.reduce((sum, v) => sum + v, 0);
+  const exported = foldSamples(target.surface.channels.outletFlow, (sum, v) => sum + v, 0);
   expect(exported).toBeCloseTo(runoff, 12);
   expect(target.causes?.at(-1)).toMatchObject({ kind: "drainage", runoff, outflow: exported });
 });
@@ -200,12 +210,12 @@ it("conditions an inland depression into an acyclic spill path without cutting i
 it("keeps dry closed depressions distinct from ocean and excludes inactive cells", () => {
   const target = state(7);
   suppliedSurface(target, (i) => (i === 24 ? -8 : 10));
-  target.surface.active[16] = 0;
+  target.surface.active.set(16, 0);
   target.surface.channels.rainfall.fill(0);
   apply(drainageProcess, target, { evaporation: 0 });
-  expect(target.surface.channels.depressionDepth[24]).toBe(18);
-  expect(target.surface.channels.water[24]).toBe(0);
-  expect(target.surface.channels.flow[16]).toBe(0);
+  expect(target.surface.channels.depressionDepth.get(24)).toBe(18);
+  expect(target.surface.channels.water.get(24)).toBe(0);
+  expect(target.surface.channels.flow.get(16)).toBe(0);
   expect(Array.from(target.surface.channels.receiver)).not.toContain(16);
 });
 
@@ -213,11 +223,16 @@ it("routes fresh meltwater as a rate over its actual elapsed years", () => {
   const target = state(5);
   suppliedSurface(target, (i) => 100 + i);
   target.surface.channels.rainfall.fill(0);
-  putChannel(target.surface, "meltwater", "metre", new Float64Array(25).fill(20));
+  putChannel(
+    target.surface,
+    "meltwater",
+    "metre",
+    generateChannel(target.surface, "meltwater", () => 20)
+  );
   target.facts.add("meltwater");
   apply(drainageProcess, target, { evaporation: 0, runoffFraction: 1 }, 10);
-  expect(target.surface.channels.runoff[12]).toBe(2);
-  expect(target.surface.channels.outletFlow.reduce((sum, v) => sum + v, 0)).toBeCloseTo(
+  expect(target.surface.channels.runoff.get(12)).toBe(2);
+  expect(foldSamples(target.surface.channels.outletFlow, (sum, v) => sum + v, 0)).toBeCloseTo(
     (800 * 800 * 2) / secondsPerYear,
     12
   );
@@ -240,7 +255,7 @@ it("conserves eroded material through deposition/export and preserves an authore
     protected: true,
     createdVersion: 1,
   });
-  const protectedHeight = target.surface.channels.elevation[protectedIndex];
+  const protectedHeight = target.surface.channels.elevation.get(protectedIndex);
   apply(drainageProcess, target, { evaporation: 0, runoffFraction: 1 });
   const before = materialVolume(target);
   apply(erosionProcess, target, { transportConcentration: 0 }, 10000);
@@ -248,11 +263,11 @@ it("conserves eroded material through deposition/export and preserves an authore
   expect(cause.eroded).toBeGreaterThan(0);
   expect(cause.eroded).toBeCloseTo(cause.deposited + cause.exported, 6);
   expect(materialVolume(target) - before).toBeCloseTo(-cause.exported, 5);
-  expect(target.surface.channels.elevation[protectedIndex]).toBe(protectedHeight);
+  expect(target.surface.channels.elevation.get(protectedIndex)).toBe(protectedHeight);
   expect(target.facts.has("flow")).toBe(false);
-  target.surface.channels.elevation.forEach((z, i) =>
+  Array.from(target.surface.channels.elevation).forEach((z, i) =>
     expect(z).toBeCloseTo(
-      target.surface.channels.bedrock[i] + target.surface.channels.sediment[i],
+      target.surface.channels.bedrock.get(i) + target.surface.channels.sediment.get(i),
       10
     )
   );

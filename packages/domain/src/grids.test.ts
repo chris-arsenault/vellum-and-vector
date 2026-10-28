@@ -32,9 +32,9 @@ function compareClipping(footprint: Geometry, bounds: Bounds) {
         Math.min(bounds[3], p.y + dy),
       ]),
       clipped = spatial.intersection(cell, footprint);
-    expect(grid.active[i]).toBe(spatial.covers(footprint, point(p)) ? 1 : 0);
+    expect(grid.active.get(i)).toBe(spatial.covers(footprint, point(p)) ? 1 : 0);
     expect(covers(p)).toBe(spatial.covers(footprint, point(p)));
-    expect(grid.measures[i]).toBeCloseTo(clipped ? spatial.area(clipped) : 0, 10);
+    expect(grid.measures.get(i)).toBeCloseTo(clipped ? spatial.area(clipped) : 0, 10);
   }
 }
 

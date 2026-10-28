@@ -72,17 +72,19 @@ function propagationWeight(state: GenerationState, source: Source, i: number) {
   const grid = state.surface;
   switch (source.propagation) {
     case "fracture":
-      return 0.1 + 0.9 * (grid.channels.fracture?.[i] ?? 0);
+      return 0.1 + 0.9 * (grid.channels.fracture?.get(i) ?? 0);
     case "cold":
       return Math.max(
         0,
         Math.min(
           1,
-          (20 - (grid.channels.temperature?.[i] ?? 15 - grid.channels.elevation[i] * 0.0065)) / 30
+          (20 -
+            (grid.channels.temperature?.get(i) ?? 15 - grid.channels.elevation.get(i) * 0.0065)) /
+            30
         )
       );
     case "ocean":
-      return grid.channels.elevation[i] < 0 ? 1 : 0;
+      return grid.channels.elevation.get(i) < 0 ? 1 : 0;
     default:
       return 1;
   }
@@ -123,8 +125,8 @@ export const thermalMagicProcess: MapProcess = {
           ),
           forcingKey = `magic:${source.id}:forcing`;
         for (let i = 0; i < heat.length; i++) {
-          heat[i] += forcing[i] + memory[i];
-          stored[i] += memory[i];
+          heat.add(i, forcing.get(i) + memory.get(i));
+          stored.add(i, memory.get(i));
         }
         putChannel(grid, forcingKey, "celsius", forcing);
         putChannel(grid, key, "celsius", memory);
@@ -132,7 +134,7 @@ export const thermalMagicProcess: MapProcess = {
           grid,
           `magic:${source.id}`,
           "celsius",
-          surfaceValues(state, `magic:${source.id}`, (i) => forcing[i] + memory[i])
+          surfaceValues(state, `magic:${source.id}`, (i) => forcing.get(i) + memory.get(i))
         );
         context.recordCause({
           kind: "magic",
@@ -209,7 +211,7 @@ export const magicStorageProcess: MapProcess = {
           loadingYears =
             years === 0 ? 0 : source.decay === 0 ? years : -Math.expm1(-rate * years) / rate;
         for (let i = 0; i < memory.length; i++)
-          memory[i] = memory[i] * retention + forcing[i] * source.storage * loadingYears;
+          memory.set(i, memory.get(i) * retention + forcing.get(i) * source.storage * loadingYears);
         putChannel(grid, key, "celsius", memory);
         context.recordCause({
           kind: "magic",

@@ -26,7 +26,8 @@ function scenario() {
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
-    samples: new Int32Array(state.surface.active.length),
+    samples: state.surface.coverage.scratch("int32", "physical:samples"),
+    grid: state.surface.coverage,
     fixed: [],
     inherited: false,
     sampling: { maximumSize: map.mesh.spacing, minimumSize: map.mesh.spacing, featureSamples: 2 },
@@ -46,7 +47,7 @@ function scenario() {
     map.UpwindTargets.set(i, alignedNeighbor(map, i, -1, 0));
   }
   initializeMagic(state);
-  return { state, map, pressure: state.physical.magic!.fields[2] };
+  return { state, map, pressure: state.physical!.magic!.fields[2] };
 }
 const band = (map: ReturnType<typeof scenario>["map"], low: number, high: number) =>
   Array.from({ length: map.mesh.count }, (_, i) => i).filter(

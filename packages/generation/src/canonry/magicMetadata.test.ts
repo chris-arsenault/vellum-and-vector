@@ -5,6 +5,7 @@ import {
   magicPropagations,
   magicSources,
   magicSystemSchema,
+  residentBand,
   type AdaptiveLattice,
   type Band,
 } from "@atlas/domain";
@@ -52,7 +53,8 @@ function fixture() {
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
-    samples: (map.mesh as AdaptiveLattice).leafCells(),
+    samples: residentBand("int32", (map.mesh as AdaptiveLattice).leafCells()),
+    grid: state.surface.coverage,
     fixed: [],
     inherited: false,
     sampling: { maximumSize: 1000, minimumSize: 500, featureSamples: 2 },

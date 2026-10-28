@@ -25,10 +25,10 @@ it.each([false, true])(
         )
       : createGrid("test", state.domain.scope, 17, 5);
     const grid = state.surface;
-    grid.active.forEach((_a, i) => {
-      if (i % 7 === 0) grid.active[i] = 0;
-    });
-    const indices = [...grid.active.keys()].filter((i) => grid.active[i]);
+    for (let i = 0; i < grid.active.length; i++) if (i % 7 === 0) grid.active.set(i, 0);
+    const indices = Array.from({ length: grid.active.length }, (_, i) => i).filter((i) =>
+      grid.active.get(i)
+    );
     for (const p of [
       { x: 0, y: 0 },
       { x: 1777, y: 532 },
@@ -63,7 +63,7 @@ it.each([false, true])(
             : [
                 {
                   i: expected,
-                  fraction: Math.min(1, (Math.PI * radius ** 2) / grid.measures[expected]),
+                  fraction: Math.min(1, (Math.PI * radius ** 2) / grid.measures.get(expected)),
                 },
               ]
         );

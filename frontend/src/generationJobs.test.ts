@@ -1,7 +1,12 @@
 import { fixtureWorld, fixtureState, readFeature } from "./testSupport/workspaceFixture";
 import { afterEach, expect, it, vi } from "vitest";
 import { cancelGeneration, listJobs, startGeneration, generationSnapshot } from "./generationJobs";
-import { createAdaptiveField, createAdaptiveTopology, putChannel } from "@atlas/domain";
+import {
+  createAdaptiveField,
+  createAdaptiveTopology,
+  generateBand,
+  putChannel,
+} from "@atlas/domain";
 import { atlasPublicationDefinitions, type GenerationDiagnostic } from "@atlas/generation";
 import { mapEditingFixture } from "./mapEditingFixture";
 vi.mock("./atlasWorkspace", async () => {
@@ -189,7 +194,12 @@ it("publishes adaptive world quantities in their geographic layers without raste
     ["treeCover", "ratio"],
     ["oilCarbon", "kg-carbon/square-metre"],
   ])
-    putChannel(grid, channel, unit, new Float64Array(grid.active.length).fill(1));
+    putChannel(
+      grid,
+      channel,
+      unit,
+      generateBand(grid.coverage, "float64", channel, () => 1)
+    );
   const output = generationSnapshot(
     {
       kind: "final",

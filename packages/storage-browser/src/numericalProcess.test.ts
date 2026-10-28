@@ -1,10 +1,14 @@
 import { expect, it } from "vitest";
 import {
+  attachGrid,
   Band,
   createAdaptiveTopology,
+  detachGrid,
+  everySample,
+  generateBand,
   rectangle,
   putChannel,
-  type NumericalVector,
+  type BlockCache,
 } from "@atlas/domain";
 import { adaptivePhysicalMesh } from "../../generation/src/canonry/adaptiveMesh";
 import { createField, type PhysicalField } from "../../generation/src/canonry/field";
@@ -14,7 +18,6 @@ import { initializeLandscape, validateLandscape } from "../../generation/src/can
 import { oceanConnectivity } from "../../generation/src/canonry/ocean";
 import { bathymetry, oceanDistance } from "../../generation/src/canonry/geography";
 import { temperature } from "../../generation/src/canonry/climate";
-import { arenaFixture } from "./numericalFixture";
 import { blockCacheFixture } from "./blockCacheFixture";
 import { MapRunner } from "../../generation/src/mapRunner";
 import { MapProcessRegistry, type MapProcess } from "../../generation/src/process";
@@ -28,7 +31,7 @@ import { buildTransportPlan } from "../../generation/src/canonry/transportPlan";
 import { transportHistory } from "../../generation/src/canonry/transportHistory";
 import { marineRegions } from "../../generation/src/canonry/marineRegions";
 import { createSocietyGeography } from "../../generation/src/societyGeography";
-import { generationNumericalState } from "../../generation/src/generationNumericalState";
+import { numericalProcessLifetime } from "../../generation/src/generationWorkingState";
 
 function execute(map: PhysicalField) {
   for (let i = 0; i < map.mesh.count; i++) map.Elevation.set(i, map.mesh.x(i) / 10);
@@ -128,7 +131,7 @@ function runnerProcess(
   };
 }
 it("keeps marine regions and community ownership valid across paged frontiers and scratch release", () => {
-  const f = arenaFixture(2048),
+  const f = blockCacheFixture(2048),
     blocks = blockCacheFixture(2048);
   try {
     const box: [number, number, number, number] = [-100000, -50000, 100000, 50000],
@@ -153,15 +156,15 @@ it("keeps marine regions and community ownership valid across paged frontiers an
       );
       expect(region.area).toBeGreaterThan(0);
     }
-    const state = landscape();
-    state.numerical = f.arena;
+    const state = onCache(landscape(), f.cache);
     state.domain.world.id = "6ff5503b-19c4-4d95-a407-bf1fc53ac70b";
     putChannel(
       state.surface,
       "elevation",
       "metre",
-      new Float64Array(state.surface.active.length).fill(100)
+      generateBand(state.surface.coverage, "float64", "elevation", () => 100)
     );
+    const end = numericalProcessLifetime(state);
     const work = createSocietyGeography(state, {
       scope: state.domain.scope,
       invocation: [],
@@ -174,11 +177,14 @@ it("keeps marine regions and community ownership valid across paged frontiers an
       cancelled: () => false,
       progress() {},
     });
-    for (const vector of generationNumericalState(state)) vector.retain?.();
-    f.arena.releaseProcess();
-    expect(work.owner.every((owner) => owner >= 0 && !!work.region.communities[owner])).toBe(true);
+    // The process boundary releases the pass's scratch; society's bands stay reachable.
+    state.society = work;
+    end();
+    expect(everySample(work.owner, (owner) => owner >= 0 && !!work.region.communities[owner])).toBe(
+      true
+    );
     expect(work.region.communities.every((community) => community.areaKm2 > 0)).toBe(true);
-    expect(work.river.every(Number.isFinite)).toBe(true);
+    expect(everySample(work.river, Number.isFinite)).toBe(true);
     expect(blocks.cache.stats.loads).toBeGreaterThan(0);
     expect(blocks.cache.stats.evictions).toBeGreaterThan(0);
   } finally {
@@ -187,36 +193,20 @@ it("keeps marine regions and community ownership valid across paged frontiers an
   }
 });
 function lifetimeProcesses(): MapProcess[] {
-  let scratch: NumericalVector, failedScratch: NumericalVector;
+  let scratch: Band, failedScratch: Band;
   return [
     runnerProcess("retained", (state) => {
-      scratch = state.numerical!.allocate({
-        type: "float64",
-        length: 1000,
-        lifetime: "process",
-        name: "scratch",
-      });
-      scratch[0] = 7;
-      const values = state
-        .numerical!.allocate({
-          type: "float64",
-          length: state.surface.active.length,
-          lifetime: "process",
-          name: "output",
-        })
-        .fill(9);
+      const coverage = state.surface.coverage;
+      scratch = coverage.scratch("float64", "scratch", 1000);
+      scratch.set(0, 7);
+      const values = coverage.scratch("float64", "output").fill(9);
       putChannel(state.surface, "elevation", "metre", values);
     }),
     runnerProcess(
       "discarded",
       (state) => {
-        failedScratch = state.numerical!.allocate({
-          type: "float64",
-          length: 1000,
-          lifetime: "process",
-          name: "failure",
-        });
-        failedScratch[0] = 11;
+        failedScratch = state.surface.coverage.scratch("float64", "failure", 1000);
+        failedScratch.set(0, 11);
         throw new Error("Deliberate process failure");
       },
       ["retained"]
@@ -224,9 +214,9 @@ function lifetimeProcesses(): MapProcess[] {
     runnerProcess(
       "checked",
       (state) => {
-        expect(() => scratch[0]).toThrow(/released/);
-        expect(() => failedScratch[0]).toThrow(/released/);
-        expect(state.surface.channels.elevation[0]).toBe(9);
+        expect(() => scratch.get(0)).toThrow(/released/);
+        expect(() => failedScratch.get(0)).toThrow(/released/);
+        expect(state.surface.channels.elevation.get(0)).toBe(9);
       },
       ["retained"]
     ),
@@ -234,7 +224,7 @@ function lifetimeProcesses(): MapProcess[] {
   ];
 }
 function replacementProcesses() {
-  let previous: NumericalVector;
+  let previous: Band;
   return [
     runnerProcess(
       "replaced",
@@ -244,7 +234,7 @@ function replacementProcesses() {
           state.surface,
           "elevation",
           "metre",
-          previous.map((value) => value + 1)
+          generateBand(state.surface.coverage, "float64", "next", (i) => previous.get(i) + 1)
         );
       },
       ["checked"]
@@ -252,15 +242,21 @@ function replacementProcesses() {
     runnerProcess(
       "released",
       (state) => {
-        expect(() => previous[0]).toThrow(/released/);
-        expect(state.surface.channels.elevation[0]).toBe(10);
+        expect(() => previous.get(0)).toThrow(/released/);
+        expect(state.surface.channels.elevation.get(0)).toBe(10);
       },
       ["replaced"]
     ),
   ];
 }
-it("carries published disk outputs across runner stages and releases successful and failed scratch", async () => {
-  const fixture = arenaFixture(),
+/** The landscape fixture with its surface grid paging through `cache`. */
+function onCache(state: ReturnType<typeof landscape>, cache: BlockCache) {
+  state.surface = attachGrid(detachGrid(state.surface), cache) as typeof state.surface;
+  state.cache = cache;
+  return state;
+}
+it("carries published evicting outputs across runner stages and releases successful and failed scratch", async () => {
+  const fixture = blockCacheFixture(),
     processes = lifetimeProcesses();
   try {
     const registry = new MapProcessRegistry();
@@ -268,11 +264,11 @@ it("carries published disk outputs across runner stages and releases successful 
     const result = await new MapRunner(
       configuration(processes.map((process) => invoke(process))),
       registry
-    ).runOwned(landscape(), { ...options, numerical: fixture.arena });
+    ).runOwned(onCache(landscape(), fixture.cache), { ...options, cache: fixture.cache });
     expect(result.state.facts.has("checked")).toBe(true);
     expect(result.state.facts.has("discarded")).toBe(false);
     expect(result.state.facts.has("released")).toBe(true);
-    expect(result.state.surface.channels.elevation[0]).toBe(10);
+    expect(result.state.surface.channels.elevation.get(0)).toBe(10);
   } finally {
     fixture.close();
   }

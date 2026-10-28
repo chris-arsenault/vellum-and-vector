@@ -1,5 +1,12 @@
 import { expect, it } from "vitest";
-import { createGrid, fieldInterpolator, gridPosition, putChannel, rectangle } from "@atlas/domain";
+import {
+  createGrid,
+  fieldInterpolator,
+  gridPosition,
+  putChannel,
+  rectangle,
+  residentBand,
+} from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { createAdaptiveWorldMesh } from "./adaptiveMesh";
 import { createField } from "./field";
@@ -20,7 +27,10 @@ function parentFixture() {
     parent,
     "elevation",
     "metre",
-    Float64Array.from(parent.active, (_, i) => 100 + gridPosition(parent, i).x / 100)
+    residentBand(
+      "float64",
+      Float64Array.from(parent.active, (_, i) => 100 + gridPosition(parent, i).x / 100)
+    )
   );
   state.domain.numerical.parent = parent;
   world.areas.area.footprint = footprint;
@@ -121,7 +131,8 @@ function fixture(inflow = 100) {
     profile: atlasPhysicalProfile(),
     fixed: [],
     inherited: true,
-    samples: new Int32Array(0),
+    samples: residentBand("int32", new Int32Array(0)),
+    grid: state.surface.coverage,
     sampling: { maximumSize: 2000, minimumSize: 2000, featureSamples: 2 },
   };
   return { state, parent, map };
@@ -153,12 +164,12 @@ it("constructs deterministic finer relief inside an irregular region without adv
   const a = fixture(),
     b = fixture(),
     before = Array.from(a.map.Elevation),
-    parent = a.parent.channels.elevation.slice();
+    parent = Array.from(a.parent.channels.elevation);
   constructRegionalRelief(a.state, 123);
   constructRegionalRelief(b.state, 123);
   expect(Array.from(a.map.Elevation)).toEqual(Array.from(b.map.Elevation));
   expect(Array.from(a.map.Elevation).some((height, i) => height !== before[i])).toBe(true);
-  expect(a.parent.channels.elevation).toEqual(parent);
+  expect(Array.from(a.parent.channels.elevation)).toEqual(parent);
   expect(a.map.CompletedEpochCount).toBe(0);
   expect(a.map.events).toEqual([]);
   expect(Array.from(a.map.CumulativeFluvialErosion).every((amount) => amount === 0)).toBe(true);

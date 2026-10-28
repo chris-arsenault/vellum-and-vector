@@ -1,7 +1,5 @@
 import type { Geometry } from "geojson";
 import type { Position } from "./model";
-import type { NumericalVector, NumericalAllocator } from "./numericalVector";
-import { allocateNumerical, generateNumerical } from "./numericalAllocation";
 import type { SpatialScope } from "./schemas";
 import { requireThat } from "./errors";
 import { point, rectangle, spatial, type Bounds } from "./spatial";
@@ -13,15 +11,25 @@ import {
   adaptivePointSampler,
   type AdaptivePointLocator,
 } from "./adaptivePoint";
+import type { Band } from "./lattice/band";
+import type { BlockCache } from "./lattice/blockCache";
+import type { Coverage } from "./lattice/coverage";
+import { generateBand, sampleCoverage, someSample } from "./lattice/bandValues";
 
+/**
+ * Samples of a located field. The samples are the cells of the grid's coverage; every value
+ * the grid holds (its active mask, its measures and its channels) is a band in that coverage,
+ * paged through the coverage's block cache.
+ */
 export interface FieldSamples {
   periodicWidth?: number;
   id: string;
   scope: SpatialScope;
   bounds: Bounds;
-  active: NumericalVector;
-  measures: NumericalVector;
-  channels: Record<string, NumericalVector>;
+  coverage: Coverage;
+  active: Band;
+  measures: Band;
+  channels: Record<string, Band>;
   units: Record<string, string>;
   waterBodies?: WaterBody[] | null;
   /** Physical ocean extent; resampling elevation must not move its shoreline. */
@@ -51,6 +59,10 @@ export interface WaterBody {
   outletPath: Position[] | null;
 }
 
+/** Samples in the grid. */
+export function gridSamples(grid: FieldSamples) {
+  return grid.active.length;
+}
 export function gridPosition(grid: Grid, index: number): Position {
   if (grid.topology) {
     const [x0, y0, x1, y1] = adaptiveCell(grid.topology, index);
@@ -78,33 +90,37 @@ export function gridCellBounds(grid: Grid, index: number): Bounds {
   ];
 }
 
+/**
+ * A regular raster over the sample bounds. Its bands page through `cache`; without one the
+ * grid is resident.
+ */
 export function createGrid(
   id: string,
   scope: SpatialScope,
   width: number,
   height: number,
   sampleBounds?: Bounds,
-  numerical?: NumericalAllocator
+  cache?: BlockCache
 ): RegularGrid {
   requireThat(
     Number.isInteger(width) && Number.isInteger(height) && width >= 2 && height >= 2,
     "invalid_grid",
     "Grid dimensions must be integers of at least two samples."
   );
+  const coverage = sampleCoverage(width * height, cache),
+    active = coverage.scratch("uint8", `${id}:active`),
+    measures = coverage.scratch("float64", `${id}:measures`);
+  active.retain();
+  measures.retain();
   const grid: RegularGrid = {
     id,
     scope,
     bounds: sampleBounds ?? spatial.bounds(scope.footprint),
     width,
     height,
-    active: allocateNumerical(
-      { type: "uint8", length: width * height, lifetime: "run", name: `${id}:active` },
-      numerical
-    ),
-    measures: allocateNumerical(
-      { type: "float64", length: width * height, lifetime: "run", name: `${id}:measures` },
-      numerical
-    ),
+    coverage,
+    active,
+    measures,
     channels: {},
     units: {},
   };
@@ -120,11 +136,11 @@ export function createGrid(
     rectangularMeasures(grid);
     return grid;
   }
-  for (let i = 0; i < grid.active.length; i++) {
+  for (let i = 0; i < width * height; i++) {
     const cell = rectangle(gridCellBounds(grid, i));
     const clipped = spatial.intersection(cell, scope.footprint);
-    grid.active[i] = spatial.covers(scope.footprint, point(gridPosition(grid, i))) ? 1 : 0;
-    grid.measures[i] = clipped ? spatial.area(clipped) : 0;
+    grid.active.set(i, spatial.covers(scope.footprint, point(gridPosition(grid, i))) ? 1 : 0);
+    grid.measures.set(i, clipped ? spatial.area(clipped) : 0);
   }
   return grid;
 }
@@ -135,7 +151,7 @@ function rectangularMeasures(grid: RegularGrid) {
   const scale = 1 / spatial.precision,
     precise = (value: number) => Math.round(value * scale) / scale;
   grid.active.fill(1);
-  for (let i = 0; i < grid.active.length; i++) {
+  for (let i = 0; i < grid.width * grid.height; i++) {
     const [x0, y0, x1, y1] = gridCellBounds(grid, i),
       width = precise(x1) - precise(x0),
       height = precise(y1) - precise(y0);
@@ -144,7 +160,7 @@ function rectangularMeasures(grid: RegularGrid) {
       "precision_collapse",
       "Grid cells collapse at the declared precision."
     );
-    grid.measures[i] = width * height;
+    grid.measures.set(i, width * height);
   }
 }
 
@@ -192,34 +208,60 @@ export function neighbors(
   const local = offsets
     .filter(([dx, dy]) => x + dx >= 0 && x + dx < grid.width && y + dy >= 0 && y + dy < grid.height)
     .map(([dx, dy]) => (y + dy) * grid.width + x + dx)
-    .filter((i) => grid.active[i] === 1)
-    .filter((i) => {
-      const a = gridPosition(grid, index),
-        b = gridPosition(grid, i);
-      return covers({
-        type: "LineString",
-        coordinates: [
-          [a.x, a.y],
-          [b.x, b.y],
-        ],
-      });
-    });
+    .filter((i) => grid.active.get(i) === 1)
+    .filter((i) => linkCovered(grid, index, i, covers));
   return seam.length ? local.concat(seam) : local;
+}
+function linkCovered(
+  grid: Grid,
+  from: number,
+  to: number,
+  covers: (geometry: Geometry) => boolean
+) {
+  const a = gridPosition(grid, from),
+    b = gridPosition(grid, to);
+  return covers({
+    type: "LineString",
+    coordinates: [
+      [a.x, a.y],
+      [b.x, b.y],
+    ],
+  });
+}
+
+/** A run-lifetime channel band of the grid's sample count, initially zero. */
+export function channelBand(
+  grid: FieldSamples,
+  name: string,
+  type: "float64" | "int32" | "uint8" = "float64"
+) {
+  const band = grid.coverage.scratch(type, `${grid.id}:${name}`, gridSamples(grid));
+  band.retain();
+  return band;
+}
+/** A run-lifetime channel band of the grid filled from a function of the sample index. */
+export function generateChannel(
+  grid: FieldSamples,
+  name: string,
+  value: (i: number) => number,
+  type: "float64" | "int32" | "uint8" = "float64"
+) {
+  return generateBand(grid.coverage, type, `${grid.id}:${name}`, value, gridSamples(grid));
 }
 
 export function putChannel(
   grid: Grid,
   name: string,
   unit: string,
-  values: NumericalVector,
+  values: Band,
   quantity: "intensive" | "extensive" | "category" = unit === "category" ? "category" : "intensive"
 ): void {
   requireThat(
-    values.length === grid.active.length && values.every(Number.isFinite),
+    values.length === gridSamples(grid) && !someSample(values, (v) => !Number.isFinite(v)),
     "invalid_channel",
     "Field channels require one finite value per sample."
   );
-  values.retain?.();
+  values.retain();
   grid.channels[name] = values;
   grid.units[name] = unit;
   (grid.quantities ??= {})[name] = quantity;
@@ -275,22 +317,22 @@ function rawSample(grid: Grid, channel: string, p: Position, discrete = false): 
     const i = adaptiveLeafAt(grid.topology, x, y);
     if (i < 0) return NaN;
     return discreteChannel(grid, channel, discrete)
-      ? values[i]
+      ? values.get(i)
       : sampleAdaptivePoint(grid.topology, values, x, y);
   }
   const [x0, y0, x1, y1] = grid.bounds;
   const gx = Math.max(0, Math.min(grid.width - 1, ((p.x - x0) / (x1 - x0)) * (grid.width - 1)));
   const gy = Math.max(0, Math.min(grid.height - 1, ((p.y - y0) / (y1 - y0)) * (grid.height - 1)));
   if (discreteChannel(grid, channel, discrete))
-    return values[Math.round(gy) * grid.width + Math.round(gx)];
+    return values.get(Math.round(gy) * grid.width + Math.round(gx));
   const x = Math.min(Math.floor(gx), grid.width - 2),
     y = Math.min(Math.floor(gy), grid.height - 2);
   const tx = gx - x,
     ty = gy - y,
     i = y * grid.width + x;
   return (
-    (1 - ty) * ((1 - tx) * values[i] + tx * values[i + 1]) +
-    ty * ((1 - tx) * values[i + grid.width] + tx * values[i + grid.width + 1])
+    (1 - ty) * ((1 - tx) * values.get(i) + tx * values.get(i + 1)) +
+    ty * ((1 - tx) * values.get(i + grid.width) + tx * values.get(i + grid.width + 1))
   );
 }
 function discreteChannel(grid: Grid, channel: string, discrete: boolean) {
@@ -305,8 +347,7 @@ export function resample(
   source: GridSurface,
   target: Grid,
   channel: string,
-  discrete = false,
-  numerical?: NumericalAllocator
+  discrete = false
 ): void {
   requireThat(
     source.scope.crsId === target.scope.crsId && source.scope.spaceId === target.scope.spaceId,
@@ -323,16 +364,7 @@ export function resample(
     target,
     channel,
     source.units[channel],
-    generateNumerical(
-      {
-        type: "float64",
-        length: target.active.length,
-        lifetime: "run",
-        name: `${target.id}:${channel}`,
-      },
-      (i) => valueAt(gridPosition(target, i)),
-      numerical
-    ),
+    generateChannel(target, channel, (i) => valueAt(gridPosition(target, i))),
     source.quantities?.[channel]
   );
 }
@@ -372,7 +404,7 @@ function baseInterpolator(
     const x = Math.max(t.bounds[0], Math.min(t.bounds[2], p.x)),
       y = Math.max(t.bounds[1], Math.min(t.bounds[3], p.y));
     if (surface) return surface(x, y);
-    return values[locate ? locate(t, x, y).leaf : adaptiveLeafAt(t, x, y)];
+    return values.get(locate ? locate(t, x, y).leaf : adaptiveLeafAt(t, x, y));
   };
 }
 export function interpolateSample(
@@ -393,18 +425,11 @@ function adaptiveNeighbors(
   index: number,
   covers: (geometry: Geometry) => boolean
 ) {
-  const t: AdaptiveTopology = grid.topology;
-  const a = gridPosition(grid, index);
-  return Array.from(t.neighbors.subarray(t.offsets[index], t.offsets[index + 1]))
-    .filter((i) => grid.active[i] === 1)
-    .filter((i) => {
-      const b = gridPosition(grid, i);
-      return covers({
-        type: "LineString",
-        coordinates: [
-          [a.x, a.y],
-          [b.x, b.y],
-        ],
-      });
-    });
+  const t: AdaptiveTopology = grid.topology,
+    result: number[] = [];
+  for (let at = t.offsets.get(index); at < t.offsets.get(index + 1); at++) {
+    const i = t.neighbors.get(at);
+    if (grid.active.get(i) === 1 && linkCovered(grid, index, i, covers)) result.push(i);
+  }
+  return result;
 }

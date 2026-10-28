@@ -6,6 +6,7 @@ import {
   createGrid,
   putChannel,
   rectangle,
+  residentBand,
   surfaceCode,
   surfaceCategories,
   magicSurfaceCode,
@@ -110,30 +111,35 @@ function terrain(options: RenderingOptions): Raster {
     33
   );
   const count = field.active.length;
+  const band = (values: Float64Array) => residentBand("float64", values);
   putChannel(
     field,
     "elevation",
     "metre",
-    Float64Array.from({ length: count }, (_, i) => {
-      const x = ((i % 33) * 1000) / 32;
-      return (
-        1000 +
-        (options.shape === "ridge" ? Math.abs(x - 500) : options.shape === "slope" ? x / 2 : 0)
-      );
-    })
+    band(
+      Float64Array.from({ length: count }, (_, i) => {
+        const x = ((i % 33) * 1000) / 32;
+        return (
+          1000 +
+          (options.shape === "ridge" ? Math.abs(x - 500) : options.shape === "slope" ? x / 2 : 0)
+        );
+      })
+    )
   );
-  putChannel(field, "ice", "ratio", new Float64Array(count).fill(options.ice ?? 0));
+  putChannel(field, "ice", "ratio", band(new Float64Array(count).fill(options.ice ?? 0)));
   const natural = Float64Array.from({ length: count }, (_, i) =>
     surfaceCode(i % 33 < 16 ? "Boreal forest" : "Scree field")
   );
-  putChannel(field, "naturalSurface", "category", natural, "category");
+  putChannel(field, "naturalSurface", "category", band(natural), "category");
   putChannel(
     field,
     "finalSurface",
     "category",
-    options.magic === false
-      ? natural.slice()
-      : new Float64Array(count).fill(magicSurfaceCode(canonryMagicPresets(), "aurora", "field")!),
+    band(
+      options.magic === false
+        ? natural.slice()
+        : new Float64Array(count).fill(magicSurfaceCode(canonryMagicPresets(), "aurora", "field")!)
+    ),
     "category"
   );
   return {

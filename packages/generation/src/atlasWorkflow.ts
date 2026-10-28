@@ -70,7 +70,7 @@ export async function generateAtlas(
       prepared.diagnostics
     );
   options.progress?.(["prepare"], 0, "Sampling inherited geography");
-  const initial = atlasInitialState(source, input, options.numerical);
+  const initial = atlasInitialState(source, input, options.cache);
   const registry = atlasRegistry(source, input);
   const configuration = input.configuration!;
   const result = await new MapRunner(configuration, registry).runOwned(initial, {

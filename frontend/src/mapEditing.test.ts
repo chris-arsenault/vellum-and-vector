@@ -8,10 +8,11 @@ import {
 import { expect, it } from "vitest";
 import { proceduralSnapshot, restoreMappedEdits, sample } from "@atlas/domain";
 import { mapEditingFixture } from "./mapEditingFixture";
+import { numericalValues, snapshotCopy } from "./testSupport/snapshotCopy";
 
 it("reshapes a river's mapped region without inverse terrain, discharge or boundary reconstruction", async () => {
   const f = await mapEditingFixture(),
-    before = structuredClone(f.current());
+    before = snapshotCopy(f.current());
   const feature = await readFeature(f.id, f.river, f.child);
   const geometry = {
     type: "LineString",
@@ -55,7 +56,7 @@ it("reshapes a river's mapped region without inverse terrain, discharge or bound
   expect(f.current().world.areas[f.child].boundary).toEqual(before.world.areas[f.child].boundary);
   expect(f.current().world.networkNodes).toEqual(before.world.networkNodes);
   expect(f.current().world.networkReaches).toEqual(before.world.networkReaches);
-  expect(f.current().numerical).toEqual(before.numerical);
+  expect(numericalValues(f.current())).toEqual(numericalValues(before));
   expect(proceduralSnapshot(f.current()).world.features[f.river]).toEqual(
     before.world.features[f.river]
   );
@@ -75,7 +76,7 @@ it("reshapes a river's mapped region without inverse terrain, discharge or bound
 
 it("moves a mapped town and attached route together while preserving their procedural identities", async () => {
   const f = await mapEditingFixture(),
-    before = structuredClone(f.current());
+    before = snapshotCopy(f.current());
   const feature = await readFeature(f.id, f.town, f.child);
   await f.command("putMapFeature", {
     areaId: f.child,
@@ -108,7 +109,7 @@ it("moves a mapped town and attached route together while preserving their proce
 
 it("paints across frozen physical samples with a regional overlay, preserving source arrays and undo", async () => {
   const f = await mapEditingFixture(),
-    before = structuredClone(f.current());
+    before = snapshotCopy(f.current());
   const position = { x: 210, y: 400, z: 0 };
   await f.command("paintMapField", {
     areaId: f.child,
@@ -124,17 +125,21 @@ it("paints across frozen physical samples with a regional overlay, preserving so
   expect(
     sample((await readRaster(f.id, f.field, "elevation", f.root)).field, "elevation", position)
   ).toBe(100);
-  expect(f.current().numerical[f.field].channels).toEqual(before.numerical[f.field].channels);
+  expect(numericalValues(f.current())[f.field].channels).toEqual(
+    numericalValues(before)[f.field].channels
+  );
   const procedural = proceduralSnapshot(f.current());
   expect(sample(procedural.numerical[f.field], "elevation", position)).toBe(100);
   expect(procedural.fieldPatches).toEqual(before.fieldPatches);
-  const restored = structuredClone(procedural);
+  const restored = snapshotCopy(procedural);
   restoreMappedEdits(restored, f.current());
   expect(restored.fieldPatches).toEqual(f.current().fieldPatches);
-  expect(restored.numerical[f.field].overlays).toEqual(f.current().numerical[f.field].overlays);
+  expect(numericalValues(restored)[f.field].overlays).toEqual(
+    numericalValues(f.current())[f.field].overlays
+  );
   expect(f.current().world.areas[f.child].boundary).toEqual(before.world.areas[f.child].boundary);
   await undoWorld(f.id, fixtureState(f.id).history[0].operationId);
-  expect(f.current().numerical).toEqual(before.numerical);
+  expect(numericalValues(f.current())).toEqual(numericalValues(before));
 });
 
 it("keeps shared mapped crossings attached without imposing their numerical elevations", async () => {
@@ -181,7 +186,7 @@ it("paints the visible parent surface without absorbing or overwriting an existi
 
 it("moves a town's local route endpoint while retaining its connection across the region boundary", async () => {
   const f = await mapEditingFixture([900, 650]),
-    before = structuredClone(f.current());
+    before = snapshotCopy(f.current());
   const feature = await readFeature(f.id, f.town, f.child);
   await f.command("putMapFeature", {
     areaId: f.child,

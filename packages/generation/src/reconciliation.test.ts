@@ -154,7 +154,9 @@ it("retains usable nested work and records child and parent failures", async () 
   const config = reviewed(configuration([invoke(parent)]), registry);
   const result = await new MapRunner(config, registry).run(state, options);
   expect(result.state.domain.world.name).toBe("In-progress map");
-  expect(result.state.surface.channels.elevation.every((value) => value === 999)).toBe(true);
+  expect(Array.from(result.state.surface.channels.elevation).every((value) => value === 999)).toBe(
+    true
+  );
   expect(result.state.facts.has("routing")).toBe(false);
   expect(result.state.causes).toMatchObject([{ process: "routing" }]);
   expect(result.state.diagnostics).toMatchObject([

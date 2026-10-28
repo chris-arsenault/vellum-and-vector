@@ -5,6 +5,7 @@ import {
   createAdaptiveField,
   builtinLayers,
   rectangle,
+  residentBand,
   spatial,
   type AdaptiveLattice,
 } from "@atlas/domain";
@@ -31,7 +32,8 @@ function fixture() {
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
-    samples: (map.mesh as AdaptiveLattice).leafCells(),
+    samples: residentBand("int32", (map.mesh as AdaptiveLattice).leafCells()),
+    grid: state.surface.coverage,
     fixed: [],
     inherited: false,
     sampling: { maximumSize: 250, minimumSize: 250, featureSamples: 2 },

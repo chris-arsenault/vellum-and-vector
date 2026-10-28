@@ -6,7 +6,7 @@ import {
   type NumericalResource,
   type FieldGeography,
   type ResourceStore,
-  type NumericalVector,
+  type Band,
   type EpochHistory,
   type WorkspaceChange,
   type FeatureReader,
@@ -87,7 +87,7 @@ export async function publishWorkspaceGeneration(
 }
 async function publishFields(store: ResourceStore, publication: Publication) {
   const { original, snapshot, operationId, ready, check } = publication;
-  const layouts = new Map<NumericalVector, FieldLayoutResources>();
+  const layouts = new Map<Band, FieldLayoutResources>();
   for (const field of snapshot.world.fields) {
     if (
       !field.resourceId ||

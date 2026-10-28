@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { canonryMagicPresets, type Band, type MagicSystem } from "@atlas/domain";
+import { canonryMagicPresets, residentBand, type Band, type MagicSystem } from "@atlas/domain";
 import { magicCartography } from "../magicCartography";
 import { applyCartographicSelection } from "../cartographicControls";
 import { landscape } from "../mapFixtures";
@@ -25,7 +25,8 @@ function scenario(id: string, index: number) {
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
-    samples: new Int32Array(state.surface.active.length),
+    samples: residentBand("int32", new Int32Array(state.surface.active.length)),
+    grid: state.surface.coverage,
     fixed: [],
     inherited: false,
     sampling: { maximumSize: map.mesh.spacing, minimumSize: map.mesh.spacing, featureSamples: 2 },

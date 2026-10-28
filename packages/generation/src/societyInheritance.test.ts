@@ -1,5 +1,13 @@
 import { expect, it } from "vitest";
-import { createGrid, putChannel, rectangle, spatial } from "@atlas/domain";
+import type { Geometry } from "geojson";
+import {
+  createGrid,
+  putChannel,
+  rectangle,
+  residentBand,
+  spatial,
+  type SocietyCommunity,
+} from "@atlas/domain";
 import { landscape, epoch } from "./mapFixtures";
 import type { MapProcessContext } from "./process";
 import { initializePopulation, evolvePopulation, populationTotal } from "./societyPopulation";
@@ -13,7 +21,12 @@ function societyFixture() {
   state.domain.scope.footprint = footprint;
   state.domain.world.areas.area.footprint = footprint;
   state.surface = createGrid("society", state.domain.scope, 13, 5);
-  putChannel(state.surface, "elevation", "metre", new Float64Array(65).fill(100));
+  putChannel(
+    state.surface,
+    "elevation",
+    "metre",
+    residentBand("float64", new Float64Array(65).fill(100))
+  );
   const context: MapProcessContext = {
     scope: state.domain.scope,
     invocation: [],
@@ -29,6 +42,21 @@ function societyFixture() {
   return { state, context };
 }
 
+/** Rural people by footprint overlap, plus settlements whose seat lies inside. */
+function populationWithin(communities: SocietyCommunity[], footprint: Geometry) {
+  return communities.reduce((sum, c) => {
+    const overlap = c.footprint && spatial.intersection(c.footprint, footprint);
+    return (
+      sum +
+      (overlap
+        ? ((c.groups.reduce((n, g) => n + g.count, 0) - (c.settlement?.population ?? 0)) *
+            spatial.area(overlap)) /
+            spatial.area(c.footprint!) +
+          (spatial.pointCoverage(footprint)(c.position) ? (c.settlement?.population ?? 0) : 0)
+        : 0)
+    );
+  }, 0);
+}
 it("refines rural catchments and located settlements without replaying eras", async () => {
   const { state, context } = societyFixture();
   initializePopulation(state, context);
@@ -52,18 +80,7 @@ it("refines rural catchments and located settlements without replaying eras", as
     (f) => f.kind === "settlement"
   );
   const footprint = rectangle([0, 0, 150000, 100000]);
-  const expected = original.communities.reduce((sum, c) => {
-    const overlap = c.footprint && spatial.intersection(c.footprint, footprint);
-    return (
-      sum +
-      (overlap
-        ? ((c.groups.reduce((n, g) => n + g.count, 0) - (c.settlement?.population ?? 0)) *
-            spatial.area(overlap)) /
-            spatial.area(c.footprint!) +
-          (spatial.pointCoverage(footprint)(c.position) ? (c.settlement?.population ?? 0) : 0)
-        : 0)
-    );
-  }, 0);
+  const expected = populationWithin(original.communities, footprint);
   state.domain.world.areas.child = {
     ...state.domain.world.areas.area,
     id: "child",
@@ -73,7 +90,12 @@ it("refines rural catchments and located settlements without replaying eras", as
   };
   state.domain.scope = { ...state.domain.scope, areaId: "child", footprint };
   state.surface = createGrid("child", state.domain.scope, 17, 9);
-  putChannel(state.surface, "elevation", "metre", new Float64Array(153).fill(100));
+  putChannel(
+    state.surface,
+    "elevation",
+    "metre",
+    residentBand("float64", new Float64Array(153).fill(100))
+  );
   initializePopulation(state, { ...context, scope: state.domain.scope });
   evolvePopulation(state, context, 1000);
   expect(populationTotal(state)).toBeCloseTo(expected, 5);

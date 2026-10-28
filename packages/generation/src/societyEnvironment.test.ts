@@ -4,6 +4,7 @@ import {
   createAdaptiveField,
   createAdaptiveTopology,
   gridPosition,
+  residentBand,
   resolutionCells,
 } from "@atlas/domain";
 import { landscape, epoch } from "./mapFixtures";
@@ -64,7 +65,8 @@ function fixture() {
   state.physical = {
     map,
     profile,
-    samples: lattice.leafCells(),
+    samples: residentBand("int32", lattice.leafCells()),
+    grid: state.surface.coverage,
     inherited: false,
     fixed: [],
     sampling: { maximumSize: 250, minimumSize: 250, featureSamples: 2 },
@@ -144,8 +146,9 @@ it("refreshes a dam reservoir and downstream routing without advancing geologica
   expect(Object.values(state.domain.world.features).some((f) => f.kind === "lake")).toBe(true);
   expect(map.events).toEqual(geologicalEvents);
   expect(Array.from(map.CrustMotionX)).toEqual(tectonics);
-  for (const [i, water] of state.surface.channels.water.entries())
-    if (water === 2) expect(state.surface.channels.waterDepth[i]).toBeGreaterThan(0);
+  const { water, waterDepth } = state.surface.channels;
+  for (let i = 0; i < water.length; i++)
+    if (water.get(i) === 2) expect(waterDepth.get(i)).toBeGreaterThan(0);
   expect(Number.isFinite(gridPosition(state.surface, 0).x)).toBe(true);
 });
 it("leaves water, terrain and the lake set untouched by a World dam demand", () => {
@@ -220,9 +223,11 @@ it("retains Pressure rays for inland earthworks and retraces them when ocean con
   const trace = vi.spyOn(propagation, "propagateMagic");
   try {
     const water = Array.from(state.physical!.map.WaterKindCodes);
-    state.surface.channels.elevation.forEach((height, i) => {
+    const elevation = state.surface.channels.elevation;
+    for (let i = 0; i < elevation.length; i++) {
+      const height = elevation.get(i);
       if (height > 0) changeSample(state, "elevation", i, height + 1);
-    });
+    }
     state.society!.changed.add("elevation");
     refreshSocietyEnvironment(state, context, 10, false);
     expect(Array.from(state.physical!.map.WaterKindCodes, (v) => Number(v === 1))).toEqual(
@@ -231,9 +236,8 @@ it("retains Pressure rays for inland earthworks and retraces them when ocean con
     expect(
       trace.mock.calls.some(([, field]) => field.definition.origins[0].propagation === "ocean-rays")
     ).toBe(false);
-    state.surface.channels.elevation.forEach((_height, i) =>
-      changeSample(state, "elevation", i, -100)
-    );
+    for (let i = 0; i < state.surface.channels.elevation.length; i++)
+      changeSample(state, "elevation", i, -100);
     state.society!.changed.add("elevation");
     refreshSocietyEnvironment(state, context, 10, false);
     expect(

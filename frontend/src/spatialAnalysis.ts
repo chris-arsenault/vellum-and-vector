@@ -131,7 +131,7 @@ function statistics(result: AnalysisResult, snapshot: DomainSnapshot, input: Ana
       covered = spatial.pointCoverage(grid.scope.footprint);
     for (const i of gridWindowCells(grid, bounds)) {
       const p = gridPosition(grid, i);
-      if (!grid.active[i] || !covered(p) || !covers(p)) continue;
+      if (!grid.active.get(i) || !covered(p) || !covers(p)) continue;
       const value = valueAt(p);
       minimum = Math.min(minimum, value);
       maximum = Math.max(maximum, value);

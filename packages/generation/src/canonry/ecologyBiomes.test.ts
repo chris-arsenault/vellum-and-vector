@@ -4,6 +4,7 @@ import {
   createAdaptiveField,
   createAdaptiveTopology,
   magicSystemSchema,
+  residentBand,
   spatial,
 } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
@@ -28,7 +29,8 @@ function fixture() {
     profile: atlasPhysicalProfile(),
     fixed: [],
     inherited: false,
-    samples: lattice.leafCells(),
+    samples: residentBand("int32", lattice.leafCells()),
+    grid: state.surface.coverage,
     sampling: { maximumSize: 500, minimumSize: 125, featureSamples: 2 },
   };
   map.Rainfall.fill(800);

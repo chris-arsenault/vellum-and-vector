@@ -1,5 +1,5 @@
 import { OpfsStore, ZarrResources } from "@atlas/storage-browser";
-import type { DomainSnapshot } from "@atlas/domain";
+import { attachGrid, type DomainSnapshot, type GridArrays } from "@atlas/domain";
 import { WorkspaceClient } from "../src/WorkspaceClient";
 import { publishWorkspaceGeneration } from "../src/generationPublication";
 import { openSpatialRuntime } from "../src/spatialRuntime";
@@ -13,7 +13,19 @@ self.onmessage = async (
     port: MessagePort;
   }>
 ) => {
-  const { original, snapshot, operationId, port } = event.data;
+  // Grids cross the port as plain arrays; attach them to this worker's cache.
+  const attached = (value: DomainSnapshot): DomainSnapshot => ({
+    ...value,
+    numerical: Object.fromEntries(
+      Object.entries(value.numerical).map(([id, grid]) => [
+        id,
+        attachGrid(grid as unknown as GridArrays) as DomainSnapshot["numerical"][string],
+      ])
+    ),
+  });
+  const { operationId, port } = event.data,
+    original = attached(event.data.original),
+    snapshot = attached(event.data.snapshot);
   const closeSpatial = await openSpatialRuntime();
   try {
     const workspace = new WorkspaceClient(port);

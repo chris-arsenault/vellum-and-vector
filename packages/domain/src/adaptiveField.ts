@@ -5,8 +5,9 @@ import type { SpatialScope } from "./schemas";
 import { rectangle, spatial } from "./spatial";
 import { adaptiveCell, adaptiveLeafAt, type AdaptiveTopology } from "./adaptiveTopology";
 import { adaptivePointSampler } from "./adaptivePoint";
-import type { NumericalAllocator } from "./numericalVector";
-import { generateNumerical } from "./numericalAllocation";
+import type { BlockCache } from "./lattice/blockCache";
+import type { Coverage } from "./lattice/coverage";
+import { foldSamples, generateBand, sampleCoverage } from "./lattice/bandValues";
 
 /** Generated fields retain adaptive physical samples instead of a mandatory uniform raster. */
 export interface AdaptiveField extends FieldSamples {
@@ -14,16 +15,19 @@ export interface AdaptiveField extends FieldSamples {
   height?: never;
   topology: AdaptiveTopology;
 }
+/** Area of each leaf inside the footprint, as a band in `coverage`. */
 export function adaptiveMeasures(
   topology: AdaptiveTopology,
   footprint: Geometry,
-  numerical?: NumericalAllocator
+  coverage: Coverage = topology.coverage
 ) {
   const extent = spatial.bounds(footprint);
   const rectangular = spatial.covers(footprint, rectangle(extent));
   const measure = spatial.intersectionArea(footprint);
-  return generateNumerical(
-    { type: "float64", length: topology.leaves.length, lifetime: "run", name: "adaptive:measures" },
+  return generateBand(
+    coverage,
+    "float64",
+    "adaptive:measures",
     (i) => {
       const box = adaptiveCell(topology, i);
       if (rectangular)
@@ -33,38 +37,40 @@ export function adaptiveMeasures(
         );
       return measure(rectangle(box));
     },
-    numerical
+    topology.leaves.length
   );
 }
 export function createAdaptiveField(
   id: string,
   scope: SpatialScope,
   topology: AdaptiveTopology,
-  numerical?: NumericalAllocator
+  cache: BlockCache = topology.coverage.cache
 ): AdaptiveField {
   requireThat(
     spatial.covers(rectangle(topology.bounds), scope.footprint),
     "adaptive_extent",
     "Adaptive topology must cover its field footprint."
   );
-  const measures = adaptiveMeasures(topology, scope.footprint, numerical);
+  const coverage = sampleCoverage(topology.leaves.length, cache),
+    measures = adaptiveMeasures(topology, scope.footprint, coverage);
   return {
     id,
     scope: {
       ...scope,
-      resolution: measures.reduce((maximum, area, i) => {
-        if (area <= 0) return maximum;
-        const box = adaptiveCell(topology, i);
-        return Math.max(maximum, box[2] - box[0], box[3] - box[1]);
-      }, 0),
+      resolution: foldSamples(
+        measures,
+        (maximum, area, i) => {
+          if (area <= 0) return maximum;
+          const box = adaptiveCell(topology, i);
+          return Math.max(maximum, box[2] - box[0], box[3] - box[1]);
+        },
+        0
+      ),
     },
     bounds: spatial.bounds(scope.footprint),
     topology,
-    active: generateNumerical(
-      { type: "uint8", length: measures.length, lifetime: "run", name: `${id}:active` },
-      (i) => Number(measures[i] > 0),
-      numerical
-    ),
+    coverage,
+    active: generateBand(coverage, "uint8", `${id}:active`, (i) => Number(measures.get(i) > 0)),
     measures,
     channels: {},
     units: {},
@@ -86,20 +92,17 @@ export function adaptiveFieldSampler(field: AdaptiveField, channel: string, disc
   return (p: { x: number; y: number }): number => {
     if (!covers({ x: p.x, y: p.y, z: 0 })) return NaN;
     const i = adaptiveLeafAt(field.topology, p.x, p.y);
-    if (i < 0 || !field.active[i]) return NaN;
-    return reconstructed ? reconstructed(p.x, p.y) : values[i];
+    if (i < 0 || !field.active.get(i)) return NaN;
+    return reconstructed ? reconstructed(p.x, p.y) : values.get(i);
   };
 }
 export function adaptiveIntegral(field: AdaptiveField, channel: string) {
   requireThat(field.channels[channel], "missing_channel", `No ${channel} channel in this field.`);
-  return field.channels[channel].reduce(
+  const extensive = field.quantities?.[channel] === "extensive";
+  return foldSamples(
+    field.channels[channel],
     (sum, value, i) =>
-      sum +
-      (field.quantities?.[channel] === "extensive"
-        ? field.active[i]
-          ? value
-          : 0
-        : value * field.measures[i]),
+      sum + (extensive ? (field.active.get(i) ? value : 0) : value * field.measures.get(i)),
     0
   );
 }

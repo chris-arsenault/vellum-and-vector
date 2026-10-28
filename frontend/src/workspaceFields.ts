@@ -5,7 +5,7 @@ import {
   type DomainSnapshot,
   type ReadRequirements,
   type SpatialStore,
-  type NumericalAllocator,
+  type BlockCache,
   type Grid,
   type NumericalResource,
   type FieldGeography,
@@ -26,9 +26,9 @@ export class WorkspaceFields {
   constructor(
     private catalog: SpatialStore,
     private resources: FieldInputStore,
-    numerical: NumericalAllocator
+    readonly blocks: BlockCache
   ) {
-    this.working = new FieldWorkingSet(resources, numerical);
+    this.working = new FieldWorkingSet(resources, blocks);
   }
   async read(snapshot: DomainSnapshot, input: ReadRequirements) {
     for (const { fieldId, names } of input.channels) {

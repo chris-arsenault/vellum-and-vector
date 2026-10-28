@@ -1,5 +1,11 @@
 import { expect, it } from "vitest";
-import { putChannel, validateLayerChange, type Layer } from "@atlas/domain";
+import {
+  generateChannel,
+  putChannel,
+  residentBand,
+  validateLayerChange,
+  type Layer,
+} from "@atlas/domain";
 import { landscape } from "./mapFixtures";
 import { MapRunner } from "./mapRunner";
 import { MapProcessRegistry, type MapProcess } from "./process";
@@ -30,6 +36,8 @@ const output: FieldPublicationDefinition = {
   quantity: "intensive",
   layer,
 };
+
+const filled = (value: number) => residentBand("float64", Array(10).fill(value));
 
 function initial() {
   const state = landscape(),
@@ -87,9 +95,10 @@ function surveyModule() {
           state.surface,
           output.channel,
           output.unit,
-          Float64Array.from(
-            state.surface.active,
-            (_, i) => (precision * (i + 1)) / state.surface.active.length
+          generateChannel(
+            state.surface,
+            output.channel,
+            (i) => (precision * (i + 1)) / state.surface.active.length
           )
         );
       },
@@ -113,9 +122,8 @@ it("publishes a registered new parameter, channel and layer without an atlas-spe
     },
     new MapProcessRegistry().register(module.process)
   ).run(initial(), { seed: "73", seedScope: "survey" });
-  const transferred = structuredClone(result);
-  const layers = publishGenerationProducts(transferred.state, "survey-run"),
-    snapshot = transferred.state.domain,
+  const layers = publishGenerationProducts(result.state, "survey-run"),
+    snapshot = result.state.domain,
     field = snapshot.world.fields.find((field) => field.layerId === layer.id)!;
   expect(layers).toEqual(new Set([layer.id]));
   expect(snapshot.world.layers[layer.id]).toMatchObject({
@@ -124,8 +132,9 @@ it("publishes a registered new parameter, channel and layer without an atlas-spe
     facts: [output.channel],
   });
   expect(field.channels).toEqual([output.channel]);
-  expect(snapshot.numerical[field.id].channels[output.channel][0]).toBeCloseTo(0.025);
-  expect(snapshot.numerical[field.id].channels[output.channel].at(-1)).toBe(0.25);
+  const published = snapshot.numerical[field.id].channels[output.channel];
+  expect(published.get(0)).toBeCloseTo(0.025);
+  expect(published.get(published.length - 1)).toBe(0.25);
   expect(snapshot.numerical[field.id].units[output.channel]).toBe("ratio");
   expect(snapshot.numerical[field.id].quantities?.[output.channel]).toBe("intensive");
   expect(snapshot.coverage).toContainEqual(
@@ -137,7 +146,7 @@ it("publishes a registered new parameter, channel and layer without an atlas-spe
 
 it("rejects an unregistered channel instead of classifying it as climate", () => {
   const state = initial();
-  putChannel(state.surface, "unregisteredOutput", "ratio", new Float64Array(10).fill(1));
+  putChannel(state.surface, "unregisteredOutput", "ratio", filled(1));
   expect(() => publishGenerationProducts(state, "unknown-run")).toThrow("unregisteredOutput");
   expect(state.domain.world.fields).toEqual([]);
   expect(state.domain.coverage).toEqual([]);
@@ -146,7 +155,7 @@ it("rejects an unregistered channel instead of classifying it as climate", () =>
 it("distinguishes a declared inactive working buffer from a requested geographic output", () => {
   const state = initial();
   state.publications = [{ ...output, publish: false }];
-  putChannel(state.surface, output.channel, output.unit, new Float64Array(10).fill(1));
+  putChannel(state.surface, output.channel, output.unit, filled(1));
   expect(publishGenerationProducts(state, "inactive-run")).toEqual(new Set());
   expect(state.domain.world.fields).toEqual([]);
   expect(state.domain.coverage).toEqual([]);
@@ -155,16 +164,10 @@ it("distinguishes a declared inactive working buffer from a requested geographic
 
 it("validates units and quantity semantics from the registered product", () => {
   const wrongUnit = initial();
-  putChannel(wrongUnit.surface, output.channel, "metre", new Float64Array(10).fill(1));
+  putChannel(wrongUnit.surface, output.channel, "metre", filled(1));
   expect(() => publishGenerationProducts(wrongUnit, "wrong-unit")).toThrow("requires ratio");
   const wrongQuantity = initial();
-  putChannel(
-    wrongQuantity.surface,
-    output.channel,
-    output.unit,
-    new Float64Array(10).fill(1),
-    "extensive"
-  );
+  putChannel(wrongQuantity.surface, output.channel, output.unit, filled(1), "extensive");
   expect(() => publishGenerationProducts(wrongQuantity, "wrong-quantity")).toThrow(
     "requires intensive"
   );
@@ -180,8 +183,8 @@ it("combines declared channels on one layer and preserves existing cartographic 
     facts: ["authoredSurveyNote"],
   };
   state.publications = [output, { ...output, channel: "surveyConfidence" }];
-  putChannel(state.surface, output.channel, output.unit, new Float64Array(10).fill(0.25));
-  putChannel(state.surface, "surveyConfidence", output.unit, new Float64Array(10).fill(0.75));
+  putChannel(state.surface, output.channel, output.unit, filled(0.25));
+  putChannel(state.surface, "surveyConfidence", output.unit, filled(0.75));
   publishGenerationProducts(state, "shared-layer");
   const fields = state.domain.world.fields.filter((field) => field.layerId === layer.id);
   expect(fields).toHaveLength(1);
@@ -203,7 +206,7 @@ it.each([
   const state = initial();
   state.domain.world.layers[layer.id] = { ...layer, ...conflict };
   const original = structuredClone(state.domain.world.layers[layer.id]);
-  putChannel(state.surface, output.channel, output.unit, new Float64Array(10).fill(1));
+  putChannel(state.surface, output.channel, output.unit, filled(1));
   expect(() =>
     preparePublicationLayers(state.domain, state.publications!, state.domain.scope.areaId)
   ).toThrow("registered family, generator and attribute schema");
@@ -344,7 +347,11 @@ it("registers a new vector layer before common extractor validation and worker t
     },
     new MapProcessRegistry().register(process)
   ).run(state, { seed: "73", seedScope: "survey" });
-  const transferred = structuredClone(result);
+  // The domain crosses to the publishing realm; numerical bands stay with their block cache.
+  const transferred = {
+    ...result,
+    state: { ...result.state, domain: structuredClone(result.state.domain) },
+  };
   publishGenerationProducts(transferred.state, "survey-vector", state.domain);
   const feature = Object.values(transferred.state.domain.world.features)[0];
   expect(feature.generationDomain).toBe("test.survey");

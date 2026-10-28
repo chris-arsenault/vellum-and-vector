@@ -1,15 +1,15 @@
-import { closeSync, fsyncSync, mkdtempSync, openSync, readSync, rmSync, writeSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   adaptiveLeafAt,
+  Band,
   createAdaptiveField,
   createAdaptiveTopology,
   createGrid,
+  generateBand,
   gridSchema,
   putChannel,
   cloneSnapshot,
+  readRange,
   sameValue,
   restoreMappedEdits,
   rectangle,
@@ -19,7 +19,7 @@ import {
 import { writeFieldChannels, writeFieldLayout } from "./fieldResources";
 import { FieldInputCache, FieldWorkingSet } from "./fieldWorkingSet";
 import { resourceCategories } from "./fieldSummaries";
-import { PagedArena } from "./pagedArena";
+import { blockCacheFixture } from "./blockCacheFixture";
 import type { BinaryStore } from "./opfsStore";
 import { ZarrResources } from "./zarrResources";
 import { landscape } from "../../generation/src/mapFixtures";
@@ -31,23 +31,11 @@ afterEach(() =>
     .reverse()
     .forEach((cleanup) => cleanup())
 );
+/** Two float64 blocks resident: loading a field of several blocks evicts and reloads. */
+const blockBudget = 262_144;
 function fixture() {
-  const directory = mkdtempSync(join(tmpdir(), "atlas-field-")),
-    fd = openSync(join(directory, "work.bin"), "w+");
-  const arena = new PagedArena(
-    {
-      read: (bytes, offset) => readSync(fd, bytes, 0, bytes.byteLength, offset),
-      write: (bytes, offset) => writeSync(fd, bytes, 0, bytes.byteLength, offset),
-      flush: () => fsyncSync(fd),
-      close: () => closeSync(fd),
-    },
-    32_768,
-    512
-  );
-  cleanups.push(() => {
-    arena.close();
-    rmSync(directory, { force: true, recursive: true });
-  });
+  const blocks = blockCacheFixture(blockBudget);
+  cleanups.push(() => blocks.close());
   const values = new Map<string, Uint8Array>(),
     reads: string[] = [];
   const fault = { write: null as string | null };
@@ -80,9 +68,9 @@ function fixture() {
     },
   };
   const resources = new ZarrResources(store, 262_144),
-    working = new FieldWorkingSet(resources, arena);
+    working = new FieldWorkingSet(resources, blocks.cache);
   cleanups.push(() => working.close());
-  return { arena, values, reads, resources, working, fault };
+  return { blocks, values, reads, resources, working, fault };
 }
 function scope(): SpatialScope {
   return {
@@ -101,53 +89,63 @@ function channels(grid: Grid) {
     grid,
     "height",
     "metre",
-    Float64Array.from(grid.active, (_, i) => Math.sin(i / 17) * 200)
+    generateBand(grid.coverage, "float64", "height", (i) => Math.sin(i / 17) * 200)
   );
   putChannel(
     grid,
     "water",
     "category",
-    Float64Array.from(grid.active, (_, i) => i % 3),
+    generateBand(grid.coverage, "float64", "water", (i) => i % 3),
     "category"
   );
   grid.ocean = rectangle([0, 0, 50, 1000]);
 }
-it("publishes channel views with different offsets into one source buffer", async () => {
+const bandNames = (topology: object) =>
+  Object.entries(topology)
+    .filter(([, value]) => value instanceof Band)
+    .map(([name]) => name);
+it("publishes channel bands over different offsets of one source buffer", async () => {
   const f = fixture(),
     grid = createGrid("offsets", scope(), 3, 3);
-  const values = Float64Array.from({ length: 18 }, (_, i) => i + 0.5);
-  putChannel(grid, "first", "metre", values.subarray(0, 9));
-  putChannel(grid, "second", "metre", values.subarray(9));
+  const values = Float64Array.from({ length: 18 }, (_, i) => i + 0.5),
+    over = (start: number, end: number, name: string) =>
+      Band.over(
+        values.subarray(start, end),
+        { name, type: "float64", lifetime: "run" },
+        grid.coverage.cache
+      );
+  putChannel(grid, "first", "metre", over(0, 9, "first"));
+  putChannel(grid, "second", "metre", over(9, 18, "second"));
   const shared = await writeFieldLayout(f.resources, grid, "offset-layout", 1e-6);
   await writeFieldChannels(f.resources, grid, "offset-channels", shared);
   const input = await f.working.load("offset-channels", ["first", "second"], shared.geography);
   expect(Array.from(input.channels.first)).toEqual(Array.from(values.subarray(0, 9)));
   expect(Array.from(input.channels.second)).toEqual(Array.from(values.subarray(9)));
-  expect(input.channels.second[0]).toBe(9.5);
+  expect(input.channels.second.get(0)).toBe(9.5);
   expect(values.byteLength).toBe(144);
 });
-it("shares immutable handles across readers and closes them after the last reader", async () => {
+it("shares immutable input bands across readers and releases them after the last reader", async () => {
   const f = fixture(),
     grid = createGrid("surface", scope(), 9, 9);
   channels(grid);
   const shared = await writeFieldLayout(f.resources, grid, "layout", 1e-6);
   await writeFieldChannels(f.resources, grid, "height", shared, ["height"]);
   await writeFieldChannels(f.resources, grid, "water", shared, ["water"]);
-  const inputs = new FieldInputCache(f.resources, f.arena),
-    first = new FieldWorkingSet(f.resources, f.arena, inputs),
-    second = new FieldWorkingSet(f.resources, f.arena, inputs);
+  const inputs = new FieldInputCache(f.resources, f.blocks.cache),
+    first = new FieldWorkingSet(f.resources, f.blocks.cache, inputs),
+    second = new FieldWorkingSet(f.resources, f.blocks.cache, inputs);
   const a = await first.load("height", ["height"], shared.geography),
     b = await second.load("water", ["water"], shared.geography);
   expect(a.active).toBe(b.active);
   expect(a.measures).toBe(b.measures);
   first.close();
-  expect(b.active[0]).toBe(1);
-  expect(b.channels.water[12]).toBe(grid.channels.water[12]);
-  expect(() => a.channels.height[0]).toThrow(/closed/);
+  expect(b.active.get(0)).toBe(1);
+  expect(b.channels.water.get(12)).toBe(grid.channels.water.get(12));
+  expect(() => a.channels.height.get(0)).toThrow(/released/);
   second.close();
-  expect(() => b.active[0]).toThrow(/closed/);
+  expect(() => b.active.get(0)).toThrow(/released/);
 });
-it("preserves immutable authored input handles through snapshot copies without sample reads", async () => {
+it("preserves immutable authored input bands through snapshot copies without sample reads", async () => {
   const f = fixture(),
     grid = createGrid("surface", scope(), 517, 71);
   channels(grid);
@@ -182,31 +180,32 @@ it("preserves immutable authored input handles through snapshot copies without s
   );
   expect(f.reads).toEqual([]);
 });
-it("opens immutable inputs without copying samples and reads only accessed source chunks", async () => {
+it("opens immutable inputs without copying samples and reads only the touched blocks' chunks", async () => {
   const f = fixture(),
     grid = createGrid("surface", scope(), 517, 71);
   channels(grid);
   const shared = await writeFieldLayout(f.resources, grid, "layout", 1e-6);
   await writeFieldChannels(f.resources, grid, "height", shared, ["height"]);
-  const source = await f.resources.openArray("height", "channel_0", f.arena);
+  const height = grid.channels.height,
+    input = await f.resources.openArray("height", "channel_0", f.blocks.cache),
+    source = input.values;
   f.reads.length = 0;
-  expect(f.arena.stats.writtenBytes).toBe(0);
-  expect(source[0]).toBe(grid.channels.height[0]);
-  expect(source[516]).toBe(grid.channels.height[516]);
-  expect(source[70 * 517 + 516]).toBe(grid.channels.height.at(-1));
-  expect(f.reads.filter((key) => key.includes("/c/")).length).toBe(3);
-  expect(() => {
-    source[0] = 99;
-  }).toThrow(/Immutable/);
-  expect(Array.from(source.readBlock!(510, 30))).toEqual(
-    Array.from(grid.channels.height.subarray(510, 540))
-  );
-  const output = source.slice(510, 540);
+  expect(source.get(0)).toBe(height.get(0));
+  expect(source.get(516)).toBe(height.get(516));
+  // The first block holds 31 rows of 517 samples: the first chunk row's three chunks.
+  const chunks = f.reads.filter((key) => key.includes("/c/"));
+  expect(chunks.length).toBe(3);
+  expect(chunks.every((key) => key.includes("/c/0/"))).toBe(true);
+  expect(source.get(70 * 517 + 516)).toBe(height.get(height.length - 1));
+  expect(f.blocks.scratch.stats.writtenBytes).toBe(0);
+  expect(() => source.set(0, 99)).toThrow(/Immutable/);
+  expect(Array.from(readRange(source, 510, 30))).toEqual(Array.from(readRange(height, 510, 30)));
+  const output = readRange(source, 510, 30);
   output[0] = 99;
-  expect(source[510]).toBe(grid.channels.height[510]);
+  expect(source.get(510)).toBe(height.get(510));
   expect(output[0]).toBe(99);
-  f.arena.release(source);
-  expect(() => source[0]).toThrow(/closed/);
+  input.close();
+  expect(() => source.get(0)).toThrow(/released/);
   expect(output[0]).toBe(99);
 });
 describe("regular resource field round trips", () => {
@@ -217,7 +216,9 @@ describe("regular resource field round trips", () => {
       grid,
       "cover",
       "category",
-      Float64Array.from(grid.active, (_, i) => (i % 517 < 256 ? 1 : i % 517 < 512 ? 2 : 3)),
+      generateBand(grid.coverage, "float64", "cover", (i) =>
+        i % 517 < 256 ? 1 : i % 517 < 512 ? 2 : 3
+      ),
       "category"
     );
     const shared = await writeFieldLayout(f.resources, grid, "layout", 1e-6),
@@ -263,19 +264,20 @@ describe("regular resource field round trips", () => {
     const selected = [];
     for await (const part of f.resources.readWindow(window)) selected.push(part);
     expect(selected.length).toBe(1);
-    expect(() => {
-      loaded.channels.height[0] = 123;
-    }).toThrow(/Immutable/);
+    expect(() => loaded.channels.height.set(0, 123)).toThrow(/Immutable/);
     expect(
       (await f.resources.readPartition("height", first.partitions[0].id, ["channel_0"])).arrays
         .channel_0[0]
     ).toBe(0);
-    expect(f.arena.stats.peakDecodedBytes).toBeLessThanOrEqual(32_768);
+    // Inputs larger than the budget evict and reload from their chunks; nothing spills.
+    expect(f.blocks.cache.stats.peakBytes).toBeLessThanOrEqual(blockBudget);
+    expect(f.blocks.cache.stats.evictions).toBeGreaterThan(0);
+    expect(f.blocks.scratch.stats.writtenBytes).toBe(0);
     f.working.close();
-    expect(() => loaded.channels.height[0]).toThrow();
+    expect(() => loaded.channels.height.get(0)).toThrow();
   });
 });
-describe("adaptive resource fields and disk working copies", () => {
+describe("adaptive resource fields", () => {
   it("uses adaptive cell footprints for category visibility", async () => {
     const f = fixture(),
       grid = createAdaptiveField(
@@ -287,14 +289,14 @@ describe("adaptive resource fields and disk working copies", () => {
       grid,
       "cover",
       "category",
-      Float64Array.from(grid.active, (_, i) => i + 1),
+      generateBand(grid.coverage, "float64", "cover", (i) => i + 1),
       "category"
     );
     const shared = await writeFieldLayout(f.resources, grid, "layout", 1e-6),
       resource = await writeFieldChannels(f.resources, grid, "classes", shared);
     expect(
       await resourceCategories(f.resources, resource, "cover", rectangle([10, 10, 100, 100]))
-    ).toEqual([grid.channels.cover[adaptiveLeafAt(grid.topology!, 50, 50)]]);
+    ).toEqual([grid.channels.cover.get(adaptiveLeafAt(grid.topology!, 50, 50))]);
   });
   it("preserves adaptive tree identities, reciprocal faces, units and shared layouts", async () => {
     const f = fixture();
@@ -309,8 +311,11 @@ describe("adaptive resource fields and disk working copies", () => {
     await writeFieldChannels(f.resources, grid, "terrain", shared);
     const loaded = await f.working.load("terrain", ["height", "water"], shared.geography);
     expect(loaded.topology).toBeDefined();
-    for (const name of Object.keys(topology) as (keyof typeof topology)[])
-      expect(Array.from(loaded.topology![name])).toEqual(Array.from(topology[name]));
+    expect(loaded.topology!.bounds).toEqual(topology.bounds);
+    for (const name of bandNames(topology) as (keyof typeof topology)[])
+      expect(Array.from(loaded.topology![name] as Band)).toEqual(
+        Array.from(topology[name] as Band)
+      );
     expect(adaptiveLeafAt(loaded.topology!, 100, 100)).toBe(adaptiveLeafAt(topology, 100, 100));
     expect(loaded.units).toEqual(grid.units);
     expect(loaded.quantities).toEqual(grid.quantities);
@@ -328,6 +333,8 @@ describe("adaptive resource fields and disk working copies", () => {
       cells.push(part);
     expect(cells.length).toBe(1);
   });
+});
+describe("adaptive resource field edge cases", () => {
   it("handles a single adaptive cell with no faces and rejects missing inputs", async () => {
     const f = fixture(),
       topology = createAdaptiveTopology([0, 0, 1000, 1000], {

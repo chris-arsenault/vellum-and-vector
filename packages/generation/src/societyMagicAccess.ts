@@ -37,8 +37,8 @@ export function magicFieldForRole(state: GenerationState, role: MagicRole) {
 }
 /** The mesh cell under a surface sample, or -1 without a live mesh. */
 function cellOf(state: GenerationState, sample: number) {
-  const cell = state.physical?.samples[sample];
-  return sample >= 0 && cell !== undefined ? cell : -1;
+  const samples = state.physical?.samples;
+  return samples && sample >= 0 && sample < samples.length ? samples.get(sample) : -1;
 }
 function touch(state: GenerationState, systemId: string) {
   if (state.society) (state.society.magicTouched ??= new Set()).add(systemId);

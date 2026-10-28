@@ -65,7 +65,7 @@ it("registers a carried extensive product that advances over two epochs and publ
     expect(result.state.facts.has("test:inventory-output")).toBe(true);
     expect(grid.quantities?.[inventoryChannel]).toBe("extensive");
     for (let i = 0; i < grid.active.length; i++)
-      expect(grid.channels[inventoryChannel][i] / grid.measures[i]).toBeCloseTo(17, 12);
+      expect(grid.channels[inventoryChannel].get(i) / grid.measures.get(i)).toBeCloseTo(17, 12);
     expect(state.surface.channels[inventoryChannel]).toBeUndefined();
     expect(result.state.domain.world.layers[inventoryLayer].name).toBe("Carried inventory");
     expect(result.state.domain.world.fields.some((field) => field.layerId === inventoryLayer)).toBe(
@@ -76,7 +76,7 @@ it("registers a carried extensive product that advances over two epochs and publ
     ).toBe(true);
     const changed = await execute(4);
     expect(
-      changed.result.state.surface.channels[inventoryChannel][0] / grid.measures[0]
+      changed.result.state.surface.channels[inventoryChannel].get(0) / grid.measures.get(0)
     ).toBeCloseTo(33, 12);
   } finally {
     atlasGenerationModules.unregister(statefulInventoryModule.id);

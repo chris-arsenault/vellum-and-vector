@@ -1,4 +1,4 @@
-import { builtinLayers, createGrid, rectangle, type Bounds } from "@atlas/domain";
+import { builtinLayers, createGrid, generateBand, rectangle, type Bounds } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { atlasPhysicalProfile } from "./atlasProfile";
 import type { PhysicalField } from "./field";
@@ -28,7 +28,14 @@ export function numericalState(map: PhysicalField, extent: Bounds) {
   state.physical = {
     map,
     profile: atlasPhysicalProfile(),
-    samples: new Int32Array(state.surface.active.length),
+    samples: generateBand(
+      state.surface.coverage,
+      "int32",
+      "physical:samples",
+      () => 0,
+      state.surface.active.length
+    ),
+    grid: state.surface.coverage,
     fixed: [],
     inherited: false,
     sampling: { maximumSize: map.mesh.spacing, minimumSize: map.mesh.spacing, featureSamples: 2 },

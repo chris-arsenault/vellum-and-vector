@@ -1,4 +1,5 @@
 import {
+  foldSamples,
   languageUse,
   population,
   spatial,
@@ -86,7 +87,7 @@ function namingFootprint(state: GenerationState, feature: AtlasFeature): Geometr
   const line = feature.geometry.type.includes("LineString");
   if (!line && !["ocean", "lake", "river"].includes(feature.kind)) return feature.geometry;
   const grid = state.surface;
-  const area = grid.measures.reduce((sum, value) => sum + value, 0);
+  const area = foldSamples(grid.measures, (sum, value) => sum + value, 0);
   const width = Math.sqrt(area / Math.max(1, grid.active.length)) / 2;
   // Water names sample their banks/coasts, where the speakers live, at the map's own resolution.
   return spatial.buffer(feature.geometry, width) ?? feature.geometry;

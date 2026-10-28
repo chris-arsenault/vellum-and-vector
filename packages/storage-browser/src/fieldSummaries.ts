@@ -11,7 +11,7 @@ import {
   type SampleArray,
 } from "@atlas/domain";
 import type { Geometry } from "geojson";
-import { readVectorPartition } from "./resourceVectors";
+import { readBandPartition } from "./resourceVectors";
 
 function summarize(values: SampleArray, active: SampleArray, categorical: boolean): ChannelSummary {
   let minimum = Infinity,
@@ -33,12 +33,12 @@ export function summarizeField(grid: Grid, resource: NumericalResource) {
     partitionSummaries: Record<string, Record<string, ChannelSummary>> = {};
   for (const partition of resource.partitions) {
     if (!partition.cellCount) continue;
-    const active = readVectorPartition(grid.active, activeArray, partition),
+    const active = readBandPartition(grid.active, activeArray, partition),
       current: Record<string, ChannelSummary> = {};
     for (const [name, key] of Object.entries(field.channels)) {
       const array = resource.arrays.find((array) => array.name === key)!,
         summary = summarize(
-          readVectorPartition(grid.channels[name], array, partition),
+          readBandPartition(grid.channels[name], array, partition),
           active,
           array.quantity === "category"
         );

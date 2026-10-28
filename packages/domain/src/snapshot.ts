@@ -1,7 +1,7 @@
 import type { DomainSnapshot } from "./operations";
 import { copyGrid } from "./gridCopy";
 import type { GridSurface } from "./grids";
-import { isNumericalVector } from "./numericalVector";
+import { Band } from "./lattice/band";
 
 /** Numerical resources are immutable inputs. Copy mutable records, share their typed data. */
 export function cloneSnapshot(source: DomainSnapshot): DomainSnapshot {
@@ -35,18 +35,19 @@ export function cloneSnapshot(source: DomainSnapshot): DomainSnapshot {
   );
   return { ...structuredClone({ ...source, numerical: {} }), numerical };
 }
+const immutable = (band: Band) => band.schema.immutable === true;
 function immutableSamples(grid: GridSurface): boolean {
   return (
-    !!grid.active.immutable &&
-    !!grid.measures.immutable &&
-    Object.values(grid.channels).every((values) => values.immutable) &&
+    immutable(grid.active) &&
+    immutable(grid.measures) &&
+    Object.values(grid.channels).every(immutable) &&
     Object.values(grid.topology ?? {})
-      .filter(isNumericalVector)
-      .every((values) => values.immutable) &&
+      .filter((value): value is Band => value instanceof Band)
+      .every(immutable) &&
     (grid.overlays ?? []).every((overlay) => immutableSamples(overlay.grid))
   );
 }
-/** Copy input metadata without expanding immutable disk views into resident samples. */
+/** Copy input metadata without expanding immutable committed bands into resident samples. */
 export function cloneFieldInput(grid: GridSurface): GridSurface {
   return immutableSamples(grid) ? shareInputs(grid) : copyGrid(grid);
 }

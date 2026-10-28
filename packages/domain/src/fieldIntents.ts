@@ -16,7 +16,7 @@ import { requireThat } from "./errors";
 import { validateAuthoredField, fieldFact } from "./fieldValidation";
 import { invalidateFacts } from "./authoringBasics";
 import { fieldArea, fieldArtifact as artifact, authoredFieldChanges } from "./fieldAuthoring";
-import { generateNumerical } from "./numericalAllocation";
+import { generateBand } from "./lattice/bandValues";
 import { mappedField } from "./mapAuthority";
 
 const channelSchema = z.object({
@@ -62,22 +62,17 @@ export function createField(
   reconcile = false
 ): ChangeSet {
   const grid = authoredGrid(data, context, snapshot);
-  populateChannels(data, snapshot, grid, context);
+  populateChannels(data, snapshot, grid);
   return authoredFieldChanges(data, grid, context, snapshot, reconcile);
 }
 function authoredGrid(data: CreateField, context: IntentContext, snapshot: DomainSnapshot) {
   const id = semanticId(snapshot.world.id, "authored-grid", context.operationId);
   const scope = { ...context.scope, footprint: data.footprint };
   return data.topology
-    ? createAdaptiveField(id, scope, data.topology, context.numerical)
-    : createGrid(id, scope, data.width!, data.height!, undefined, context.numerical);
+    ? createAdaptiveField(id, scope, data.topology, context.blocks)
+    : createGrid(id, scope, data.width!, data.height!, undefined, context.blocks);
 }
-function populateChannels(
-  data: CreateField,
-  snapshot: DomainSnapshot,
-  grid: Grid,
-  context: IntentContext
-) {
+function populateChannels(data: CreateField, snapshot: DomainSnapshot, grid: Grid) {
   if (data.parentFieldId) {
     const parent = snapshot.numerical[data.parentFieldId];
     requireThat(
@@ -85,25 +80,23 @@ function populateChannels(
       "missing_parent_field",
       "Load a containing parent field before refining sampled geography."
     );
-    for (const name of Object.keys(parent.channels))
-      resample(parent, grid, name, false, context.numerical);
+    for (const name of Object.keys(parent.channels)) resample(parent, grid, name, false);
   }
-  for (const [name, channel] of Object.entries(data.channels))
+  for (const [name, channel] of Object.entries(data.channels)) {
+    const values = channel.values;
     putChannel(
       grid,
       name,
       channel.unit,
-      generateNumerical(
-        {
-          type: "float64",
-          length: typeof channel.values === "number" ? grid.active.length : channel.values.length,
-          lifetime: "run",
-          name: `${grid.id}:${name}`,
-        },
-        (i) => (typeof channel.values === "number" ? channel.values : channel.values[i]),
-        context.numerical
+      generateBand(
+        grid.coverage,
+        "float64",
+        `${grid.id}:${name}`,
+        (i) => (typeof values === "number" ? values : values[i]),
+        typeof values === "number" ? grid.active.length : values.length
       )
     );
+  }
   requireThat(
     Object.keys(grid.channels).length > 0,
     "empty_field",
@@ -212,21 +205,15 @@ function brushField(
       minimumSize,
       refine: (box) => intersects(rectangle(box)),
     },
-    context.numerical
+    context.blocks
   );
   const grid = createAdaptiveField(
     semanticId(snapshot.world.id, "authored-grid", context.operationId),
     { ...context.scope, footprint },
     topology,
-    context.numerical
+    context.blocks
   );
-  resample(
-    support,
-    grid,
-    data.channel,
-    support.units[data.channel] === "category",
-    context.numerical
-  );
+  resample(support, grid, data.channel, support.units[data.channel] === "category");
   return grid;
 }
 export function registerFieldIntents(registry: IntentRegistry): void {

@@ -34,8 +34,11 @@ function collectSamples(
   result: Set<number>
 ) {
   const whole = spatial.covers(footprint, grid.scope.footprint);
-  for (const [i, code] of (grid.channels[channel] ?? []).entries()) {
-    if (!grid.active[i] || !Number.isFinite(code) || result.has(code)) continue;
+  const values = grid.channels[channel];
+  if (!values) return;
+  for (let i = 0; i < values.length; i++) {
+    const code = values.get(i);
+    if (!grid.active.get(i) || !Number.isFinite(code) || result.has(code)) continue;
     if (whole || overlapsCell(grid, i, footprint)) result.add(code);
   }
 }

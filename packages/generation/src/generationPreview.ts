@@ -1,4 +1,11 @@
-import { createGrid, gridPosition, gridSampler, putChannel, type RegularGrid } from "@atlas/domain";
+import {
+  createGrid,
+  generateChannel,
+  gridPosition,
+  gridSampler,
+  putChannel,
+  type RegularGrid,
+} from "@atlas/domain";
 import type { GenerationState } from "./process";
 import { atlasChannels } from "./canonry/atlasChannels";
 import { nativeIndexAtSurface } from "./canonry/atlasWorkspace";
@@ -24,7 +31,9 @@ export function generationPreview(state: GenerationState): RegularGrid {
         grid,
         name,
         state.surface.units[name],
-        Float64Array.from(grid.active, (active, i) => (active ? sample(gridPosition(grid, i)) : 0)),
+        generateChannel(grid, name, (i) =>
+          grid.active.get(i) ? sample(gridPosition(grid, i)) : 0
+        ),
         state.surface.quantities?.[name]
       );
     }
@@ -36,13 +45,16 @@ export function generationPreview(state: GenerationState): RegularGrid {
     return nativeIndexAtSurface(state, p.x, p.y);
   });
   indexes.forEach((index, i) => {
-    if (index < 0) grid.active[i] = 0;
+    if (index < 0) grid.active.set(i, 0);
   });
   for (const binding of atlasChannels.filter((binding) => previewChannels.has(binding.name))) {
     const datum = binding.datum ? map.BaseSeaLevel : 0;
-    const values = Float64Array.from(indexes, (i) =>
-      i < 0 ? 0 : (map[binding.native].get(i) - datum) * binding.scale + (binding.offset ?? 0)
-    );
+    const values = generateChannel(grid, binding.name, (n) => {
+      const i = indexes[n];
+      return i < 0
+        ? 0
+        : (map[binding.native].get(i) - datum) * binding.scale + (binding.offset ?? 0);
+    });
     putChannel(
       grid,
       binding.name,
