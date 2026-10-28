@@ -90,6 +90,7 @@ export * from "./numericalBlocks";
 export * from "./byteCache";
 export * from "./numericalAllocation";
 export * from "./hpc/index";
+export * from "./lattice/index";
 export * from "./gridCopy";
 export { authoredFieldChanges } from "./fieldAuthoring";
 export * from "./scale";
