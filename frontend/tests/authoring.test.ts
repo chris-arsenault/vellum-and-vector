@@ -2,7 +2,7 @@ import { test, expect } from "./uiTest";
 
 test.use({ actionTimeout: 15000 });
 
-test("typed survey features, located people and spatial analysis share the editor", async ({
+test("typed survey features, located people and spatial analysis share the editor @deferred-authoring", async ({
   page,
 }) => {
   await page.goto("/");

@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url";
 import { test, expect } from "./uiTest";
 import { exportMap, pageErrors } from "./harness";
 
-test("a released snapshot save imports samples, completed history and successive undo states", async ({
+test("a released snapshot save imports samples, completed history and successive undo states @deferred-authoring", async ({
   page,
 }) => {
   const errors = pageErrors(page);

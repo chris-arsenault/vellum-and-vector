@@ -152,6 +152,27 @@ export async function openRegistry(page: Page) {
 }
 
 /** Choose an arbitrary geographic subject, then attach its finer geographic map. */
+export async function chooseOutline(
+  page: Page,
+  name: string,
+  extent: [number, number, number, number] = [0, 0, 1000, 1000]
+) {
+  await page.getByRole("button", { name: "Regions", exact: true }).click();
+  await page.getByRole("button", { name: "Trace a custom outline", exact: true }).click();
+  const [w, s, e, n] = extent;
+  for (const [i, [x, y]] of [
+    [0.2, 0.2],
+    [0.8, 0.2],
+    [0.8, 0.8],
+    [0.2, 0.8],
+  ].entries())
+    await clickWorld(page, w + x * (e - w), s + y * (n - s), extent, i === 3);
+  await page.getByLabel("Region name", { exact: false }).fill(name);
+  await page.getByRole("button", { name: "Keep region", exact: true }).click();
+  await expect(page.locator(".breadcrumbs")).toContainText(name);
+}
+
+/** Choose a region, then attach its finer geographic map. */
 export async function createArea(
   page: Page,
   name: string,
@@ -167,7 +188,7 @@ export async function createArea(
     Math.max(...ring.map((p) => p[1])),
   ];
   await page.getByRole("button", { name: "Regions", exact: true }).click();
-  await page.getByRole("button", { name: "Draw outline", exact: true }).click();
+  await page.getByRole("button", { name: "Trace a custom outline", exact: true }).click();
   const [w, s, e, n] = extent;
   for (const [index, [x, y]] of [
     [w, s],

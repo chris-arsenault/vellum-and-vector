@@ -19,13 +19,13 @@ file is deleted once its durable content has moved. Durable documentation
 describes mechanisms and leaves parameter values to the code, per the
 [documentation rules](AGENTS.md#documentation).
 
-## Authoring workflow
+## Map workflow
 
 Start with the generation workflow: define the world, then choose land and
 materials, water/climate/life, magical influences, and people/places. Each feature
 has its switch and operative settings together. Direct navigation preserves the
 draft; **Use defaults & review** skips ahead when the defaults suit the map.
-Select **Blank world** to create an empty atlas for manual editing.
+Select **Blank world** to create an empty atlas; its context panel offers starting-landscape generation.
 
 World size and latitude are independent. **Latitude frame** places any map as a
 northern band (10° to 70°), two hemispheres or a full globe; latitudes use an
@@ -57,36 +57,30 @@ the Biomes overlay uses named categories and is visible by default. Organic depo
 and their later burial remain downstream consequences. See the
 [ecology model](docs/generation-workflows.md#ecology-and-organic-geology).
 
-Use **Draw a region to develop** to drag a rectangle or trace an outline, adjust
-its vertices and choose a profile. The map previews the selected extent and its
-dimensions. Coordinates are optional precision controls. Double-click a mapped
-child area to enter it, or use the atlas tree and geographic breadcrumbs.
-Selecting **Generate local detail** opens the shared workflow in a full workspace
-dialog for the new area, with parent context and effective spatial traits.
-Parent history and crossings remain fixed, and inherited geological construction
-controls are read-only. Manual and intentionally empty areas remain available.
-Existing-map regeneration continues through **Develop**.
+The editor's context panel follows the selection. Click a feature to read its
+properties, origin and relationships; settlements also show their residents,
+livelihoods and retained history. **Inspect** returns to feature selection.
+**Atlas → Features** searches existing geography across the world.
 
-Choose **Work on** to get tools for terrain, rivers and lakes, roads, places,
-political boundaries, communities, magic, interiors or a custom layer. Drawing
-places ordinary features immediately; select a feature to rename, move, reshape
-or develop it. Community origins establish groups whose distributions can be
-painted. Political tools distinguish sovereignty, administration, claims and
-control. Each field stroke is one undoable edit; **Undo** stays beside the map.
+Choose **Regions** to explore a smaller geographic subject. Use an existing
+boundary, trace a custom outline, or combine a dividing line with rivers, shores
+and the current boundary. Each tool explains its map interaction. Keep the
+outline as a named region, then select **Refine this region** to add finer
+geography. A feature's **Use boundary as region** action enters the same flow.
+Point features instead offer selection of a surrounding geographic region.
 
-Double-click or press Enter to finish a line or polygon, use Backspace to remove
-its last vertex, and Escape to cancel. Hold Space to pan without discarding an
-unfinished drawing. The Pan tool provides ordinary drag navigation. Magnetic
-snapping uses existing feature vertices and edges.
+Regional detail controls terrain spacing. Optional settings hold the detail seed
+and inclusion of inherited magical geography, settlements and routes. Refinement
+retains completed history and connected parent geography. Choosing a region alone
+does not generate detail. Regions can nest to any useful geographic depth, without
+fixed ranks or changing into city, site or interior map types. Use the breadcrumbs
+and region hierarchy to move between them. A blank map offers starting-landscape
+generation separately from regional refinement.
 
-For magic, draw a source and its reach, configure its effects (heating, cooling,
-rock hardening, coastal forcing, quickening, conduit opening, stillness, ice
-persistence, upwelling, sea surface, wake warming, fog) and apply it to the
-current geography. Sources can be selected,
-moved and edited, with propagation, decay, storage, interactions and starting epoch
-settings. **Library** retains templates and the supporting analysis, connection
-and schema tools. Templates can be placed on the map; precise placement and access
-bindings remain available.
+Double-click or press Enter to finish an outline or dividing line. Escape cancels
+the unfinished selection. Hold Space to pan, or choose **Pan** for drag navigation.
+Manual feature editing, drawing, field painting, templates and undo are deferred;
+their implementations remain in the repository for a later design.
 
 Open **Map → Appearance** to switch between the **Surface**, **Topographic** and
 **Relief** base maps. Surface, the default, paints natural and magical surface classes under the
@@ -133,10 +127,7 @@ or rock motifs; named landmarks and sites have their own symbols. Fault traces
 are optional geological detail rather than ordinary atlas linework.
 Under **Map → Layers**, **Social distributions** adds independent cultural, language
 and religious hatches and population dots. Several distributions can coexist on the same map.
-Select a feature and open **Label and symbol** in **Inspect** to adjust its label,
-draw a label curve, change its symbol or suppress its illustration. Finishing
-edits use the saved composition and Undo while source feature positions remain
-unchanged.
+Per-feature label and symbol authoring is deferred with the manual editing tools.
 
 **Map → Sheet** supplies a title, frame, legend, compass and scale.
 **Download map PNG** renders the same composition at the chosen image dimensions
@@ -193,9 +184,8 @@ numerical work occupies the interior.
 
 ## Implementation state
 
-Create a world, generate its geography, refine areas with skipped profiles, draw
-and inspect protected features, compose layers, author entities and fields, place
-located templates, inspect causes and undo session edits.
+Create a world, generate its geography, inspect features and causes, select nested
+geographic regions, refine their detail, and compose map layers and sheets.
 
 Choose **Save map** in the editor to store the current world in this browser.
 Saving again updates that world's saved copy. **Saved maps**, available in the
@@ -246,6 +236,13 @@ make test-browser
 
 The browser tests start and stop their own temporary Vite server. The production
 build is `frontend/dist/` and includes its generation worker.
+
+Scenarios that require the deferred manual authoring UI retain their bodies and
+assertions with the `@deferred-authoring` tag. The standard Playwright configuration
+excludes that tag until editing design resumes. Active inspection, region,
+presentation and save journeys use supplied geography rather than drawing test
+setup through deferred tools. Remove the Playwright exclusion when manual
+authoring resumes so these retained scenarios run again.
 
 Use `BROWSER=firefox pnpm --dir frontend test:browser` to run Firefox. On Linux,
 the command uses headed Firefox under Xvfb because headless Firefox cannot create

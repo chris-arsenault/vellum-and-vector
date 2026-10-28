@@ -44,7 +44,7 @@ async function storedData(page: Page, id: string) {
   }, id);
 }
 
-test("a saved map reopens its generated fields and authored edits after reload", async ({
+test("a saved map reopens its generated fields and authored edits after reload @deferred-authoring", async ({
   page,
 }) => {
   const errors = pageErrors(page);
@@ -73,7 +73,7 @@ test("a saved map reopens its generated fields and authored edits after reload",
   expect(errors).toEqual([]);
 });
 
-test("a saved map opens in another tab while the first tab keeps editing", async ({
+test("a saved map opens in another tab while the first tab keeps editing @deferred-authoring", async ({
   page,
   context,
 }) => {
@@ -97,7 +97,7 @@ test("a saved map opens in another tab while the first tab keeps editing", async
   }
 });
 
-test("one save per world, independent saves, and the old save survives a failed write", async ({
+test("one save per world, independent saves, and the old save survives a failed write @deferred-authoring", async ({
   page,
 }) => {
   await page.goto("/");

@@ -88,20 +88,12 @@ function RegionalContext({
       <p className="eyebrow">REFINE THE EXISTING MAP</p>
       <h2>{editor.region?.name ?? editor.area.name}</h2>
       <p>
-        Develop smaller valleys, tributaries and places from the parent geography. Completed history
-        stays fixed.
+        Add smaller valleys, tributaries and places inside this outline. The parent map stays
+        unchanged.
       </p>
       <p className="hint">
-        Climate and habitats follow the finer relief and connected water. Existing magical
-        landscapes retain their sources and history.
-      </p>
-      <p className="hint">
-        Known towns and routes keep their identities. Smaller places resolve from inherited
-        residents where the landscape offers a site; no new settlement era runs.
-      </p>
-      <p className="hint">
-        Generation uses the original geography. Structural map edits protect the geography they
-        touch; choose an untouched region to refine further. Names and styles remain editable.
+        Known towns, connected rivers and completed history are inherited; no new settlement era
+        runs. Climate and habitats follow the finer terrain.
       </p>
       {setup.magic && (
         <p className="hint">
@@ -150,22 +142,32 @@ function RegionalForm({ editor, setup }: { editor: EditorState; setup: RegionalS
       <label>
         Regional detail
         <select value={quality} onChange={(event) => setQuality(event.target.value)}>
-          <option value="draft">Draft</option>
-          <option value="standard">Standard</option>
-          <option value="fine">Fine</option>
+          <option value="draft">Draft · quicker preview</option>
+          <option value="standard">Standard · everyday detail</option>
+          <option value="fine">Fine · denser terrain, more work</option>
         </select>
       </label>
-      <label>
-        Detail seed
-        <input
-          type="number"
-          step="1"
-          value={seed}
-          onChange={(event) => setSeed(Number(event.target.value))}
-          required
-        />
-      </label>
-      <RegionalDomains setup={setup} />
+      <p className="hint">
+        More detail uses closer terrain samples. It does not advance the world's history.
+      </p>
+      <details>
+        <summary>Optional refinement settings</summary>
+        <label>
+          Detail seed
+          <input
+            type="number"
+            step="1"
+            value={seed}
+            onChange={(event) => setSeed(Number(event.target.value))}
+            required
+          />
+        </label>
+        <p className="hint">
+          The same seed and settings reproduce the same detail. Change the seed to try a different
+          local variation.
+        </p>
+        <RegionalDomains setup={setup} />
+      </details>
       {errors.map((item, index) => (
         <p className="error" key={index}>
           {item.message}

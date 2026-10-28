@@ -2,6 +2,7 @@ import { expect, test } from "./uiTest";
 import type { AtlasGenerationInput } from "@atlas/generation";
 import {
   canvas,
+  generatedWorld,
   closeDrawer,
   installGenerationFixture,
   openRegistry,
@@ -78,7 +79,31 @@ const wellspringFeature = {
   id: wellspringId,
 };
 
-test("landmarks are a generation count, sited by the run, then edited and removed from the result", async ({
+test("generated physical and magic landmarks open as information rather than editing forms", async ({
+  page,
+}) => {
+  const errors = pageErrors(page);
+  await generatedWorld(
+    page,
+    "Landmark inspection",
+    { landmarks: [sited, wellspring], features: [published, wellspringFeature] },
+    { width: 2000, height: 1000 }
+  );
+  await openRegistry(page);
+  await page.getByLabel("Search registry").fill("Kibo");
+  await page.getByLabel("Show Kibo on map").click();
+  await expect(panel(page).getByRole("heading", { name: "Kibo", exact: true })).toBeVisible();
+  await expect(panel(page)).toContainText("5,890");
+  await expect(page.getByLabel("Landmark name")).toHaveCount(0);
+  await page.getByLabel("Search registry").fill("Emberwell");
+  await page.getByLabel("Show Emberwell on map").click();
+  await expect(panel(page).getByRole("heading", { name: "Emberwell", exact: true })).toBeVisible();
+  await expect(panel(page)).toContainText("905");
+  await expect(panel(page).getByRole("textbox")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test("landmarks are a generation count, sited by the run, then edited and removed from the result @deferred-authoring", async ({
   page,
 }) => {
   const errors = pageErrors(page);

@@ -34,6 +34,8 @@ export interface GenerationFixtureOptions {
   life?: boolean;
   /** Features the fixture publishes as generated. */
   features?: AtlasFeature[];
+  /** Optional separate features for finer maps, so navigation fixtures need no manual editing. */
+  regionalFeatures?: AtlasFeature[];
   /** Landmark records the fixture's run leaves in the world, as the generator would. */
   landmarks?: Landmark[];
   society?: SocietyRegion;
@@ -48,6 +50,7 @@ export async function installGenerationFixture(page: Page, options: GenerationFi
     terrain: options.terrain ?? false,
     life: options.life ?? false,
     ecologicalFeatures: options.features ?? [],
+    regionalFeatures: options.regionalFeatures,
     landmarks: options.landmarks ?? [],
     society: options.society,
     diagnostics: options.diagnostics ?? [],

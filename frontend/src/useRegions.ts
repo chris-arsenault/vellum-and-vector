@@ -132,7 +132,10 @@ export function useRegions(o: Options) {
       name: c.region?.name ?? o.world.areas[o.areaId].name,
       regions: c.regions,
     },
-    chooseRegionCandidate: d.setDraft,
+    chooseRegionCandidate: (candidate: RegionCandidate) => {
+      d.setDraft(candidate);
+      o.setTool("regionEdit");
+    },
     ...regionDrawing(o, d, c, enterRegion),
     ...regionCommands(o, d, c, enterRegion),
     openRegions: () => {
@@ -175,6 +178,7 @@ function regionDrawing(o: Options, d: Draft, c: Context, enter: (id: string) => 
           }
           d.setCandidates(result.candidates);
           d.setDraft(result.candidates[0] ?? null);
+          if (result.candidates.length) o.setTool("regionEdit");
           if (!result.candidates.length)
             throw new Error(
               "No smaller enclosed region here. Draw an outline or connect a dividing line to existing boundaries."

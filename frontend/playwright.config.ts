@@ -4,6 +4,8 @@ const port = Number(process.env.ATLAS_TEST_PORT ?? 26001);
 const outDir = port === 26001 ? "dist" : `.artifacts/test-${port}`;
 export default defineConfig({
   testDir: "./tests",
+  // Retained scenarios for the manual authoring work deferred in AGENTS.md.
+  grepInvert: /@deferred-authoring/,
   timeout: 120000,
   expect: { timeout: 30000 },
   workers: 1,

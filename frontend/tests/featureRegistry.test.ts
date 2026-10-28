@@ -14,7 +14,39 @@ import {
   status,
 } from "./harness";
 
-test("the registry browses, sorts, filters and edits named features", async ({ page }) => {
+test("the registry browses, sorts and filters named features into read-only inspection", async ({
+  page,
+}) => {
+  await generatedWorld(page, "Registry inspection", {
+    features: [
+      pointFeature("Small town", "settlement", "settlements", { population: 20 }),
+      pointFeature("Large town", "settlement", "settlements", { population: 900 }),
+      pointFeature("Silver Falls", "waterfall", "geology", { height: 42 }),
+    ],
+  });
+  await openRegistry(page);
+  const registry = page.getByLabel("World feature registry");
+  await expect(registry.getByRole("status")).toContainText("3 matching features");
+  await registry.getByRole("button", { name: "Expand table", exact: true }).click();
+  await registry.getByRole("button", { name: "Settlement residents", exact: true }).click();
+  await expect(registry.locator("tbody tr").first()).toContainText("Small town");
+  await registry.getByRole("button", { name: "Settlement residents", exact: true }).click();
+  await expect(registry.locator("tbody tr").first()).toContainText("Large town");
+  await registry.getByText("Attribute filters (0)", { exact: true }).click();
+  await page.getByLabel("Attribute minimum", { exact: true }).fill("100");
+  await page.getByRole("button", { name: "Add attribute filter", exact: true }).click();
+  await expect(registry.locator("tbody tr")).toHaveCount(1);
+  await page.getByLabel("Remove attribute filter 1").click();
+  await page.getByLabel("Search registry").fill("Silver");
+  await page.getByLabel("Show Silver Falls on map").click();
+  await expect(panel(page).locator("h2")).toHaveText("Silver Falls");
+  await expect(panel(page)).toContainText("42");
+  await expect(panel(page).getByRole("textbox")).toHaveCount(0);
+});
+
+test("the registry browses, sorts, filters and edits named features @deferred-authoring", async ({
+  page,
+}) => {
   const errors = pageErrors(page);
   await generatedWorld(
     page,
@@ -97,7 +129,9 @@ test("feature types toggle individually and a saved view restores them", async (
   await expect(page.getByLabel("Show Waterfalls", { exact: true })).toBeChecked();
 });
 
-test("reshaping a site's footprint keeps its point, and undo restores it", async ({ page }) => {
+test("reshaping a site's footprint keeps its point, and undo restores it @deferred-authoring", async ({
+  page,
+}) => {
   const spring = pointFeature(
     "Clear Spring",
     "fire:spring",

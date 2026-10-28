@@ -7,7 +7,7 @@ import {
 
 test.beforeEach(async ({ page }) => installGenerationFixture(page, { hold: true }));
 
-test("editing, undo, cancellation and independent worlds work without services", async ({
+test("editing, undo, cancellation and independent worlds work without services @deferred-authoring", async ({
   page,
 }) => {
   await page.goto("/");
@@ -48,7 +48,9 @@ test("editing, undo, cancellation and independent worlds work without services",
   await expect(page.locator(".header-meta")).toHaveText("Session only · not saved");
 });
 
-test("manual edits made during generation survive its outdated result", async ({ page }) => {
+test("manual edits made during generation survive its outdated result @deferred-authoring", async ({
+  page,
+}) => {
   await page.goto("/");
   await page.getByLabel("World name").fill("Editable while generating");
   await page.getByRole("radio", { name: "Blank world", exact: true }).check();

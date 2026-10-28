@@ -87,7 +87,7 @@ const parameterLabels: Record<string, string> = Object.fromEntries(
     `${definition.label} · ${definition.unit}`,
   ])
 );
-function GenerationForm({ world, editor }: { world: World; editor: EditorState }) {
+export function GenerationForm({ world, editor }: { world: World; editor: EditorState }) {
   const generate = useGenerate(world, editor.area.id);
   const previous = inheritedGeneration(world, editor.area.id);
   const extent = bounds(editor.area.footprint);

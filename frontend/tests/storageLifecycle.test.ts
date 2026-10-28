@@ -42,7 +42,7 @@ async function openSaved(page: Page) {
     .click();
   await expect(page.getByRole("dialog", { name: "Saved maps", exact: true })).toHaveCount(0);
 }
-test("cleanup protects live tabs and saved undo inputs, then reclaims abandoned work", async ({
+test("cleanup protects live tabs and saved undo inputs, then reclaims abandoned work @deferred-authoring", async ({
   page,
   context,
 }) => {

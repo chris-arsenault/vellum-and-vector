@@ -1,18 +1,17 @@
 import { expect, test, type Page } from "./uiTest";
-import { createArea } from "./harness";
+import { createArea, generate, installGenerationFixture, pointFeature } from "./harness";
 
 test("world registry finds a finer place and opens its compatible map", async ({ page }) => {
+  await installGenerationFixture(page, {
+    fields: true,
+    regionalFeatures: [pointFeature("Region marker", "waterfall", "geology", {}, [300, 300])],
+  });
   await createBlank(page);
+  await generate(page);
   await region(page);
-  await page
-    .getByRole("toolbar", { name: "Map tools" })
-    .getByRole("button", { name: "Place point", exact: true })
-    .click();
-  await page.getByLabel("Feature name", { exact: true }).fill("Region marker");
-  await page
-    .getByRole("application", { name: "World map canvas" })
-    .click({ position: { x: 300, y: 300 } });
-  await expect(page.locator(".right-panel h2")).toHaveText("Region marker");
+  await page.getByRole("button", { name: "Refine this region", exact: true }).click();
+  await page.getByRole("button", { name: "Generate regional detail", exact: true }).click();
+  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
   await page.locator(".breadcrumbs button").first().click();
   await page.getByRole("button", { name: "Atlas", exact: true }).click();
   await page.getByRole("button", { name: "Features", exact: true }).click();
@@ -25,7 +24,7 @@ test("world registry finds a finer place and opens its compatible map", async ({
   await expect(page.locator(".breadcrumbs")).toContainText("River region");
   await expect(page.locator(".right-panel h2")).toHaveText("Region marker");
 });
-test("registry locates separately owned authored magic and opens its real source editor", async ({
+test("registry locates separately owned authored magic and opens its real source editor @deferred-authoring", async ({
   page,
 }) => {
   await createBlank(page);

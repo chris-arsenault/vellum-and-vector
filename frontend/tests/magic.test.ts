@@ -1,7 +1,9 @@
 import { expect, test } from "./uiTest";
 import { createWorld, generate, installGenerationFixture, openLayers, pageErrors } from "./harness";
 
-test("a magic variant is saved, reopened and named in the surface legend", async ({ page }) => {
+test("a magic variant is saved, reopened and named in the surface legend @deferred-authoring", async ({
+  page,
+}) => {
   const errors = pageErrors(page);
   await installGenerationFixture(page, { fields: true });
   await createWorld(page, "Magic histories");

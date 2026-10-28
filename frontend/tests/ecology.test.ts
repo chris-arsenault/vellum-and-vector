@@ -17,7 +17,9 @@ import {
 
 test.use({ actionTimeout: 15000 });
 
-test("the physical history form edits an epoch's ecological regime", async ({ page }) => {
+test("the physical history form edits an epoch's ecological regime @deferred-authoring", async ({
+  page,
+}) => {
   const errors = pageErrors(page);
   await createWorld(page, "Living atlas");
   await page.getByText("Configure physical history", { exact: true }).click();
@@ -56,7 +58,9 @@ test("ecological fields are opt-in overlays beside named biome regions", async (
   expect(errors).toEqual([]);
 });
 
-test("extracted ecological polygons select, protect, export and refine", async ({ page }) => {
+test("extracted ecological polygons select, protect, export and refine @deferred-authoring", async ({
+  page,
+}) => {
   const errors = pageErrors(page);
   const features = ecologicalPolygons();
   await generatedWorld(page, "Ecological GIS", { features }, { width: 4, height: 1 });

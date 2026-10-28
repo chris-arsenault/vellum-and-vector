@@ -1,7 +1,7 @@
 import { test, expect } from "./uiTest";
 import { generatedWorld, pointFeature, pageErrors } from "./harness";
 
-test("access features page and search canonical geography and retain the selected attachment", async ({
+test("access features page and search canonical geography and retain the selected attachment @deferred-authoring", async ({
   page,
 }) => {
   const errors = pageErrors(page);

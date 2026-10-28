@@ -7,7 +7,9 @@ import {
   pageErrors,
 } from "./harness";
 
-test("a reusable template is drawn, saved and placed as a new area", async ({ page }) => {
+test("a reusable template is drawn, saved and placed as a new area @deferred-authoring", async ({
+  page,
+}) => {
   const errors = pageErrors(page);
   await installGenerationFixture(page);
   await createWorld(page, "Template atlas", { km: 10 });

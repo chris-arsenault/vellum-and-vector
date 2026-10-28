@@ -13,7 +13,7 @@ import {
 
 test.use({ actionTimeout: 15000 });
 
-test("landscape and history choices survive generation and pass to a new child area", async ({
+test("landscape and history choices survive generation and pass to a new child area @deferred-authoring", async ({
   page,
 }) => {
   await installGenerationFixture(page);
@@ -46,7 +46,8 @@ test("landscape and history choices survive generation and pass to a new child a
 
 test("regions are drawn, adjusted and entered without coordinate entry", async ({ page }) => {
   await createWorld(page, "Region drawing");
-  await page.getByRole("button", { name: "Draw a region to develop", exact: true }).click();
+  await page.getByRole("button", { name: "Regions", exact: true }).click();
+  await page.getByRole("button", { name: "Trace a custom outline", exact: true }).click();
   await page.keyboard.down("Space");
   await drag(page, [300, 300], [340, 340]);
   await page.keyboard.up("Space");
@@ -57,10 +58,9 @@ test("regions are drawn, adjusted and entered without coordinate entry", async (
   await canvas(page).click({ position: { x: 650, y: 600 } });
   await canvas(page).dblclick({ position: { x: 300, y: 600 } });
   await expect(page.getByRole("heading", { name: "Selected outline" })).toBeVisible();
-  const before = await page.locator(".region-draft p").textContent();
-  await page.getByRole("button", { name: "Adjust selected outline", exact: true }).click();
+  const before = await page.locator(".region-draft p").nth(1).textContent();
   await drag(page, [650, 600], [680, 620]);
-  await expect(page.locator(".region-draft p")).not.toHaveText(before!);
+  await expect(page.locator(".region-draft p").nth(1)).not.toHaveText(before!);
   await page.getByLabel("Region name", { exact: false }).fill("River crossing");
   await page.getByRole("button", { name: "Keep region", exact: true }).click();
   await expect(page.locator(".breadcrumbs")).toContainText("River crossing");
@@ -70,12 +70,14 @@ test("regions are drawn, adjusted and entered without coordinate entry", async (
   expect(data.areas).toHaveLength(1);
   await page.locator(".breadcrumbs button").first().click();
   await page.getByRole("button", { name: "Regions", exact: true }).click();
-  await page.getByRole("button", { name: "Pick region", exact: true }).click();
+  await page.getByRole("button", { name: "Use an existing boundary", exact: true }).click();
   await canvas(page).click({ position: { x: 450, y: 450 } });
   await expect(page.locator(".breadcrumbs")).toContainText("River crossing");
 });
 
-test("features are placed, moved, reshaped and drafts cancelled on the map", async ({ page }) => {
+test("features are placed, moved, reshaped and drafts cancelled on the map @deferred-authoring", async ({
+  page,
+}) => {
   await createWorld(page, "Feature editing");
   await tool(page, "Place point").click();
   await page.getByLabel("Feature name").fill("Crossing");
@@ -122,7 +124,9 @@ test("features are placed, moved, reshaped and drafts cancelled on the map", asy
   expect((await exportMap(page)).features).toHaveLength(2);
 });
 
-test("a field stroke paints a blank field and undo removes it", async ({ page }) => {
+test("a field stroke paints a blank field and undo removes it @deferred-authoring", async ({
+  page,
+}) => {
   await createWorld(page, "Field strokes");
   await page.getByRole("button", { name: "Edit this map by hand", exact: true }).click();
   await page.getByRole("button", { name: "Start blank field", exact: true }).click();
@@ -133,7 +137,7 @@ test("a field stroke paints a blank field and undo removes it", async ({ page })
   await expect(status(page)).toContainText("Revision 4");
 });
 
-test("cultural distributions need an origin, and claims belong to a named polity", async ({
+test("cultural distributions need an origin, and claims belong to a named polity @deferred-authoring", async ({
   page,
 }) => {
   await createWorld(page, "People and polities");
@@ -165,7 +169,9 @@ test("cultural distributions need an origin, and claims belong to a named polity
   expect(origin.properties.relations[0].kind).toBe("originOf");
 });
 
-test("magical sources are drawn, edited, moved and applied", async ({ page }) => {
+test("magical sources are drawn, edited, moved and applied @deferred-authoring", async ({
+  page,
+}) => {
   await installGenerationFixture(page);
   await createWorld(page, "Magical sources");
   await page.getByRole("button", { name: "Edit this map by hand", exact: true }).click();

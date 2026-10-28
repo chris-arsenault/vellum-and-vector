@@ -41,7 +41,7 @@ const rectangle = (w: number, s: number, e: number, n: number): AtlasFeature["ge
     ],
   ],
 });
-async function createAtlas(page: Page) {
+async function createAtlas(page: Page, authorRoad = false) {
   await mkdir(".artifacts/cartographic-mode", { recursive: true });
   await installGenerationFixture(page, {
     fields: true,
@@ -71,6 +71,22 @@ async function createAtlas(page: Page) {
         { settlementRole: "capital", population: 42000 }
       ),
       ...drawingPlacesAndBiomes(),
+      feature("99999999-9999-4999-8999-999999999999", "Silver falls", "waterfall", "geology", {
+        type: "Point",
+        coordinates: [75000, 35000],
+      }),
+      ...(!authorRoad
+        ? [
+            feature("88888888-8888-4888-8888-888888888888", "Old Road", "road", "roads", {
+              type: "LineString",
+              coordinates: [
+                [42000, 46000],
+                [60000, 40000],
+                [85000, 60000],
+              ],
+            }),
+          ]
+        : []),
     ],
   });
   await page.goto("/");
@@ -84,11 +100,12 @@ async function createAtlas(page: Page) {
   await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
   // The road leaves from beside the capital, so clicking the capital selects only the capital.
-  await authoredLine(page, "routes", "Draw road", "Old Road", [
-    [42000, 46000],
-    [60000, 40000],
-    [85000, 60000],
-  ]);
+  if (authorRoad)
+    await authoredLine(page, "routes", "Draw road", "Old Road", [
+      [42000, 46000],
+      [60000, 40000],
+      [85000, 60000],
+    ]);
   await openMapSettings(page);
   await page.getByRole("radio", { name: "Drawn map", exact: true }).check();
   await expect(page.locator(".map-frame")).toHaveClass(/drawn-map/);
@@ -167,7 +184,19 @@ test("drawn atlas reuses the canvas and switches back to raster", async ({ page 
   expect(errors).toEqual([]);
 });
 
-test("major landmarks and named sites have pickable drawn symbols", async ({ page }) => {
+test("generated landmarks and named sites have pickable drawn symbols", async ({ page }) => {
+  await createAtlas(page);
+  await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
+  await page.getByRole("button", { name: "Fit area", exact: true }).click();
+  await clickWorld(page, [65000, 65000], false, true);
+  await expect(page.locator(".right-panel h2")).toHaveText("Blackspire");
+  await clickWorld(page, [75000, 35000], false, true);
+  await expect(page.locator(".right-panel h2")).toHaveText("Silver falls");
+});
+
+test("major landmarks and named sites have pickable drawn symbols @deferred-authoring", async ({
+  page,
+}) => {
   await createAtlas(page);
   await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
   await page.getByRole("button", { name: "Fit area", exact: true }).click();
@@ -223,10 +252,12 @@ async function downloadSheet(page: Page) {
   await copyFile(path, ".artifacts/cartographic-mode/sheet.png");
   await expect(page.locator(".cartographic-export-surface")).toHaveCount(0);
 }
-test("finishes, undoes, exports and reopens independent drawn compositions", async ({ page }) => {
+test("finishes, undoes, exports and reopens independent drawn compositions @deferred-authoring", async ({
+  page,
+}) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await createAtlas(page);
+  await createAtlas(page, true);
   const before = await exported(page);
   await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
   await page.getByRole("button", { name: "Fit area", exact: true }).click();
@@ -278,7 +309,7 @@ test("drawn compositions reuse selected regions and preserve their source map", 
   await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
   await page.getByRole("button", { name: "Fit area", exact: true }).click();
   await page.getByRole("button", { name: "Regions", exact: true }).click();
-  await page.getByRole("button", { name: "Draw outline", exact: true }).click();
+  await page.getByRole("button", { name: "Trace a custom outline", exact: true }).click();
   for (const [i, point] of [
     [20000, 20000],
     [60000, 20000],

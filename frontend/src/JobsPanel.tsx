@@ -13,6 +13,7 @@ export function JobsPanel({ world }: { world: World }) {
       void cache.invalidateQueries({ queryKey: ["jobs", world.id] });
     },
   });
+  if (!jobs.data?.length && !jobs.error) return null;
   return (
     <section className="jobs-panel">
       <div className="section-title">
@@ -22,9 +23,7 @@ export function JobsPanel({ world }: { world: World }) {
         </span>
       </div>
       {!jobs.data?.length && (
-        <p className="hint">
-          Generation runs in this tab. You can pan, inspect and edit while it works.
-        </p>
+        <p className="hint">Generation runs in this tab. You can pan and inspect while it works.</p>
       )}
       {jobs.data?.slice(0, 5).map((job) => (
         <div key={job.id} className="job-row">

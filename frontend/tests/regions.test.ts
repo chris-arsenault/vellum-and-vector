@@ -42,13 +42,13 @@ async function keep(page: Page, name: string) {
   await expect(page.locator(".region-draft")).toHaveCount(0);
 }
 async function outline(page: Page, name: string, extent: Box, points: number[][]) {
-  await page.getByRole("button", { name: "Draw outline", exact: true }).click();
+  await page.getByRole("button", { name: "Trace a custom outline", exact: true }).click();
   for (const [i, p] of points.entries())
     await clickWorld(page, p[0], p[1], extent, i === points.length - 1);
   await keep(page, name);
 }
 async function centralOutline(page: Page, name: string) {
-  await page.getByRole("button", { name: "Draw outline", exact: true }).click();
+  await page.getByRole("button", { name: "Trace a custom outline", exact: true }).click();
   const box = (await canvas(page).boundingBox())!;
   for (const [i, [x, y]] of [
     [0.3, 0.3],
@@ -149,7 +149,7 @@ test("refines a selected subject recursively with regional controls and cancella
   expect(errors).toEqual([]);
 });
 
-test("mixed-boundary regions and nested cartographic subjects work without regional generation", async ({
+test("mixed-boundary regions and nested cartographic subjects work without regional generation @deferred-authoring", async ({
   page,
 }) => {
   const errors: string[] = [];
@@ -157,7 +157,7 @@ test("mixed-boundary regions and nested cartographic subjects work without regio
   await create(page);
   await woodland(page);
   await page.getByRole("button", { name: "Regions", exact: true }).click();
-  await page.getByRole("button", { name: "Draw dividing line", exact: true }).click();
+  await page.getByRole("button", { name: "Divide along a line", exact: true }).click();
   await clickWorld(page, 0, 50_000);
   await clickWorld(page, 100_000, 50_000, source, true);
   await expect(page.locator(".region-draft")).toBeVisible();
@@ -224,7 +224,7 @@ test("reject undersized selections without starting a job", async ({ page }) => 
     [70_000, 70_000],
     [20_000, 70_000],
   ]);
-  await page.getByRole("button", { name: "Draw outline", exact: true }).click();
+  await page.getByRole("button", { name: "Trace a custom outline", exact: true }).click();
   const parent: Box = [20_000, 20_000, 70_000, 70_000];
   await clickWorld(page, 30_000, 30_000, parent);
   await clickWorld(page, 30_010, 30_000, parent);
@@ -235,7 +235,7 @@ test("reject undersized selections without starting a job", async ({ page }) => 
   await expect(page.locator(".breadcrumbs")).toContainText("First");
 });
 
-test("pick an existing feature, adjust its region and remove unreferenced regions", async ({
+test("pick an existing feature, adjust its region and remove unreferenced regions @deferred-authoring", async ({
   page,
 }) => {
   await create(page);
@@ -305,7 +305,7 @@ test("frames existing terrain as a region without another generation", async ({ 
   await expect(page.locator(".breadcrumbs")).toContainText("Hill country");
 });
 
-test("regional generation explains structural overlap, permits renaming and follows undo", async ({
+test("regional generation explains structural overlap, permits renaming and follows undo @deferred-authoring", async ({
   page,
 }) => {
   const errors: string[] = [];

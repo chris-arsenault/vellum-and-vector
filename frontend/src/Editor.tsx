@@ -4,18 +4,14 @@ import { Brand } from "./App";
 import { ErrorMessage } from "./ErrorMessage";
 import { MapCanvas } from "./MapCanvas";
 import { MapDrawer, type MapSection } from "./MapPanel";
-import { Inspector } from "./Inspector";
-import { WorkflowPanel } from "./WorkflowPanel";
+import { SelectionPanel } from "./SelectionPanel";
 import { JobsPanel } from "./JobsPanel";
 import { useEditor, type EditorState } from "./useEditor";
 import { lineage } from "./presentation";
 import { exportWorkspaceWorld as exportWorld } from "./workspaceReads";
 import { download } from "./download";
-import type { Tool, World } from "./types";
-import { ToolIcon } from "./ToolIcon";
+import type { World } from "./types";
 import { useJobs } from "./useAtlas";
-import { UndoButton } from "./UndoButton";
-import { paletteTools, toolLabel, workspaces, type Workspace } from "./cartography";
 import { MapStorage } from "./MapStorage";
 import { RegionList } from "./RegionsPanel";
 
@@ -77,7 +73,7 @@ export function Editor({ world, worlds, changeWorld, newWorld, openLore, openSav
         />
       )}
       <MapWorkspace world={world} editor={editor} />
-      <AuthoringPanel world={world} editor={editor} />
+      <SelectionSidebar world={world} editor={editor} />
     </div>
   );
 }
@@ -131,31 +127,7 @@ function MapWorkspace({ world, editor }: { world: World; editor: EditorState }) 
   return (
     <main className="map-workspace">
       <MapBreadcrumbs world={world} editor={editor} />
-      <div className="map-toolbar">
-        <ToolButtons
-          current={editor.tool}
-          choose={editor.setTool}
-          palette={paletteTools(editor.workspace, world.layers[editor.customLayer])}
-        />
-        <UndoButton world={world} />
-        <button onClick={editor.openRegions} aria-pressed={editor.panel === "regions"}>
-          Regions
-        </button>
-        <label>
-          Work on
-          <select
-            aria-label="Working layer"
-            value={editor.workspace}
-            onChange={(event) => editor.setWorkspace(event.target.value as Workspace)}
-          >
-            {Object.entries(workspaces).map(([id, label]) => (
-              <option key={id} value={id}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+      <SelectionTools editor={editor} />
       <SubjectCanvas world={world} editor={editor} />
       <MapStatus world={world} editor={editor} />
     </main>
@@ -263,31 +235,15 @@ function MapStatus({ world, editor }: { world: World; editor: EditorState }) {
     </div>
   );
 }
-function AuthoringPanel({ world, editor }: { world: World; editor: EditorState }) {
+function SelectionSidebar({ world, editor }: { world: World; editor: EditorState }) {
   return (
-    <aside className="right-panel">
-      <nav className="panel-tabs" aria-label="Authoring panels">
-        {[
-          ["generate", "Develop"],
-          ["author", "Draw & edit"],
-          ["inspect", "Inspect"],
-          ["more", "Library"],
-        ].map(([name, label]) => (
-          <button
-            key={name}
-            aria-pressed={editor.panel === name}
-            onClick={() => editor.setPanel(name)}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
+    <aside className="right-panel" aria-label="Selection and refinement">
+      <header className="selection-heading">
+        <strong>Explore the map</strong>
+        <span>Inspect a place · choose a region · add detail</span>
+      </header>
       <div className="panel-content">
-        {editor.panel === "inspect" ? (
-          <Inspector world={world} editor={editor} />
-        ) : (
-          <WorkflowPanel world={world} editor={editor} />
-        )}
+        <SelectionPanel world={world} editor={editor} />
         <ErrorMessage
           error={
             editor.commit.error ??
@@ -338,35 +294,32 @@ function AtlasTree({
         </button>
       ))}
       <p className="hint tree-hint">
-        Draw a refinement extent or select a place to develop it. Other areas retain their existing
-        detail.
+        Open a map or choose a geographic region within it to explore at a smaller scale.
       </p>
     </div>
   );
 }
-function ToolButtons({
-  current,
-  choose,
-  palette,
-}: {
-  current: Tool;
-  choose: (tool: Tool) => void;
-  palette: Tool[];
-}) {
-  const tools: Tool[] = ["select", "pan", "move", "reshape", ...palette, "regionOutline", "refine"];
+function SelectionTools({ editor }: { editor: EditorState }) {
   return (
-    <div className="tools" role="toolbar" aria-label="Map tools">
-      {tools.map((id) => (
-        <button
-          key={id}
-          title={toolLabel(id)}
-          aria-label={toolLabel(id)}
-          aria-pressed={current === id}
-          onClick={() => choose(id)}
-        >
-          <ToolIcon tool={id} />
-        </button>
-      ))}
+    <div className="map-toolbar" role="toolbar" aria-label="Map tools">
+      <button
+        aria-pressed={
+          editor.tool === "select" && !["regions", "configure-generation"].includes(editor.panel)
+        }
+        onClick={() => {
+          editor.cancelRegion();
+          editor.setPanel("inspect");
+        }}
+      >
+        Inspect
+      </button>
+      <button aria-pressed={editor.tool === "pan"} onClick={() => editor.setTool("pan")}>
+        Pan
+      </button>
+      <button onClick={editor.openRegions} aria-pressed={editor.panel === "regions"}>
+        Regions
+      </button>
+      <span className="hint">Scroll to zoom · hold Space to pan</span>
     </div>
   );
 }

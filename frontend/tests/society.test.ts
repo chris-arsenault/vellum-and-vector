@@ -117,7 +117,35 @@ async function settlementWorld(page: Page, name: string, settlement: AtlasFeatur
   await expect(panel(page).locator("h2")).toHaveText("River town");
 }
 
-test("the settlement surface shows the community and its edits reach the export", async ({
+test("settlement inspection shows residents, mixed languages and history without editing the population", async ({
+  page,
+}) => {
+  const errors = pageErrors(page);
+  const settlement = settlementFeature();
+  (settlement.attributes.groups as PopulationGroup[])[0].languageShares = {
+    "River speech": { knowledge: 1, use: 0.75 },
+    "Coast speech": { knowledge: 0.4, use: 0.25 },
+  };
+  await settlementWorld(page, "Society inspection", settlement);
+  const before = await exportMap(page);
+  await expect(page.getByTitle("200 settlement residents", { exact: true })).toBeVisible();
+  await expect(page.getByTitle("800 rural residents", { exact: true })).toBeVisible();
+  await expect(legend(page, "Naming-language use")).toHaveText([
+    "River speech 75.0%",
+    "Coast speech 25.0%",
+  ]);
+  await expect(legend(page, "Languages residents know")).toHaveText([
+    "River speech 100.0%",
+    "Coast speech 40.0%",
+  ]);
+  await page.getByText("Local population history", { exact: true }).click();
+  await expect(page.getByRole("cell", { name: "Settlement / 10", exact: true })).toBeVisible();
+  await expect(panel(page).getByRole("textbox")).toHaveCount(0);
+  expect((await exportMap(page)).features).toEqual(before.features);
+  expect(errors).toEqual([]);
+});
+
+test("the settlement surface shows the community and its edits reach the export @deferred-authoring", async ({
   page,
 }) => {
   const errors = pageErrors(page);
@@ -166,11 +194,16 @@ test("the settlement surface shows the community and its edits reach the export"
     exported.features.find(
       (f: { properties: { kind: string } }) => f.properties.kind === "conservation"
     ).properties
-  ).toMatchObject({ workKind: "conservation", layerId: "landUse", radius: 250, maintained: true });
+  ).toMatchObject({
+    workKind: "conservation",
+    layerId: "landUse",
+    radius: 250,
+    maintained: true,
+  });
   expect(errors).toEqual([]);
 });
 
-test("mixed language shares are shown, edited and kept without flattening the population", async ({
+test("mixed language shares are shown, edited and kept without flattening the population @deferred-authoring", async ({
   page,
 }) => {
   const settlement = settlementFeature();

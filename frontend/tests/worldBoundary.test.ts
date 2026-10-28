@@ -14,7 +14,7 @@ async function markerPosition(page: Page) {
   return marker.geometry.coordinates;
 }
 
-test("authors and reshapes a point in a repeated cylinder while exporting canonical coordinates", async ({
+test("authors and reshapes a point in a repeated cylinder while exporting canonical coordinates @deferred-authoring", async ({
   page,
 }) => {
   const errors: string[] = [];

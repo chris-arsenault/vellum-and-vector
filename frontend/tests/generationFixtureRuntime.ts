@@ -1,5 +1,6 @@
 /* eslint-disable max-lines-per-function -- The browser worker fixture keeps its lifecycle in one closure. */
 import type { AtlasFeature, DomainSnapshot, Grid, Landmark, SocietyRegion } from "@atlas/domain";
+import { layerSupports } from "@atlas/domain";
 import { generationSnapshot } from "@atlas/generation";
 import { WorkspaceClient } from "../src/WorkspaceClient";
 import { openSpatialRuntime } from "../src/spatialRuntime";
@@ -18,10 +19,43 @@ function seedFixtureWorld(
 ) {
   const { areaId, spaceId } = snapshot.scope;
   if (records.society) snapshot.world.societies = { [areaId]: { ...records.society, areaId } };
-  for (const feature of records.ecologicalFeatures)
+  for (const feature of records.ecologicalFeatures) {
     snapshot.world.features[feature.id] = { ...feature, areaId };
+    seedFixtureNetwork(snapshot, feature);
+  }
   for (const landmark of records.landmarks)
     snapshot.world.landmarks.push({ ...landmark, areaId, spaceId });
+}
+function seedFixtureNetwork(snapshot: DomainSnapshot, feature: AtlasFeature) {
+  if (
+    feature.geometry.type !== "LineString" ||
+    !layerSupports(snapshot.world.layers[feature.layerId], "network")
+  )
+    return;
+  const coordinates = feature.geometry.coordinates;
+  const ends = [coordinates[0], coordinates.at(-1)!];
+  snapshot.world.networkNodes ??= {};
+  for (const [index, [x, y]] of ends.entries()) {
+    const id = `${feature.id}:endpoint:${index}`;
+    snapshot.world.networkNodes[id] = {
+      id,
+      kind: `network:${feature.layerId}`,
+      position: { x, y, z: 0 },
+      spaceId: snapshot.scope.spaceId,
+      waterLevel: null,
+    };
+  }
+  snapshot.world.networkReaches ??= {};
+  const reachId = `${feature.id}:reach`;
+  snapshot.world.networkReaches[reachId] = {
+    id: reachId,
+    featureId: feature.id,
+    start: `${feature.id}:endpoint:0`,
+    end: `${feature.id}:endpoint:1`,
+    geometry: feature.geometry,
+    flow: 0,
+    endFlow: null,
+  };
 }
 /** Small generated fields use the production publication and transfer path. */
 export function installGenerationFixtureRuntime({
@@ -30,6 +64,7 @@ export function installGenerationFixtureRuntime({
   terrain,
   life,
   ecologicalFeatures,
+  regionalFeatures,
   landmarks,
   society,
   diagnostics,
@@ -40,6 +75,7 @@ export function installGenerationFixtureRuntime({
   terrain: boolean;
   life: boolean;
   ecologicalFeatures: AtlasFeature[];
+  regionalFeatures?: AtlasFeature[];
   landmarks: Landmark[];
   society?: SocietyRegion;
   diagnostics: GenerationDiagnostic[];
@@ -106,7 +142,13 @@ export function installGenerationFixtureRuntime({
           complete = async () => {
             if (complete) pending.delete(complete);
             if (stopped) return;
-            seedFixtureWorld(snapshot, { society, ecologicalFeatures, landmarks });
+            seedFixtureWorld(snapshot, {
+              society,
+              ecologicalFeatures: snapshot.world.areas[snapshot.scope.areaId].parentId
+                ? (regionalFeatures ?? ecologicalFeatures)
+                : ecologicalFeatures,
+              landmarks,
+            });
             const footprint = snapshot.scope.footprint;
             if (footprint.type !== "Polygon") throw new Error("Fixture expects a polygon scope");
             const rings = footprint.coordinates.flat(2);

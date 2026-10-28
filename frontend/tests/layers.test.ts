@@ -3,12 +3,13 @@ import {
   canvas,
   createWorld,
   generate,
+  generatedWorld,
   installGenerationFixture,
   mapImage,
   openLayers,
   openMapSettings,
   pageErrors,
-  tool,
+  pointFeature,
 } from "./harness";
 
 test.use({ actionTimeout: 15000 });
@@ -173,13 +174,15 @@ async function expectFieldOrder(page: Page) {
 
 test("road symbols are styled with GeoStyler and kept in a session view", async ({ page }) => {
   const errors = pageErrors(page);
-  await createWorld(page, "Vector styles");
-  await page.getByRole("button", { name: "Edit this map by hand", exact: true }).click();
-  await page.getByLabel("Working layer").selectOption("routes");
-  await tool(page, "Draw road").click();
-  await canvas(page).click({ position: { x: 260, y: 280 } });
-  await canvas(page).dblclick({ position: { x: 500, y: 350 } });
-  await expect(page.locator(".map-status")).toContainText("Revision 2");
+  const road = pointFeature("Old road", "road", "roads");
+  road.geometry = {
+    type: "LineString",
+    coordinates: [
+      [200, 300],
+      [700, 500],
+    ],
+  };
+  await generatedWorld(page, "Vector styles", { features: [road] });
   await canvas(page).click({ position: { x: 650, y: 500 } });
   const original = await mapImage(page);
   await openLayers(page);
