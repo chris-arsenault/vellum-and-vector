@@ -13,4 +13,12 @@ export { openNumericalArena } from "./opfsArena";
 export { writeFieldLayout, writeFieldChannels, type FieldLayoutResources } from "./fieldResources";
 export { FieldWorkingSet, FieldInputCache, type FieldInputStore } from "./fieldWorkingSet";
 export { resourceCategories, mergeSummary } from "./fieldSummaries";
-export { openStorageSession } from "./storageSession";
+export { openStorageSession, collectSavedStorage } from "./storageSession";
+export {
+  listSavedMaps,
+  readSavedMap,
+  registerSavedMap,
+  savedRoots,
+  type SavedMapSummary,
+  type SavedMapRecord,
+} from "./savedMaps";

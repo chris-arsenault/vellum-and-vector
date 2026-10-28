@@ -1,5 +1,6 @@
 import { readSavedCatalog, type CatalogRoot } from "./catalogPool";
 import { resourcePrefix } from "./resourcePaths";
+import { savedRoots } from "./savedMaps";
 import { requireThat } from "@atlas/domain";
 
 type Directory = FileSystemDirectoryHandle & {
@@ -58,10 +59,26 @@ async function collectStorage(roots: CatalogRoot[]) {
   await removeExcept(await directory(root, "atlas-work"), new Set());
   await removeExcept(await directory(root, "atlas-exports"), new Set());
 }
+/** Root discovery and deletion run together under the exclusive lock: a save registered by
+ * another tab before this tab took the lock is always visible to the collector. */
+export async function collectSavedStorage() {
+  const roots = await savedRoots();
+  if (roots) await collectStorage(roots);
+}
 
+export interface SessionLocks {
+  request<T>(
+    name: string,
+    options: LockOptions,
+    callback: (lock: Lock | null) => Promise<T>
+  ): Promise<T>;
+}
 /** A shared tab lease protects generation and render workers too. Cleanup never waits for
  * another tab to finish and never treats an unsaved catalog as a recoverable session. */
-export async function openStorageSession(roots?: CatalogRoot[] | null) {
+export async function openStorageSession(
+  collect?: () => Promise<void>,
+  locks: SessionLocks = navigator.locks
+) {
   let release!: () => void;
   const released = new Promise<void>((resolve) => {
     release = resolve;
@@ -73,11 +90,11 @@ export async function openStorageSession(roots?: CatalogRoot[] | null) {
     reject = fail;
   });
   let lease: Promise<void>;
-  await navigator.locks.request("atlas-storage-session", { ifAvailable: true }, async (lock) => {
-    if (lock && roots) await collectStorage(roots);
+  await locks.request("atlas-storage-session", { ifAvailable: true }, async (lock) => {
+    if (lock && collect) await collect();
     // Queue the shared lease before releasing exclusivity, so another collector cannot
     // overtake this tab after it starts constructing a workspace.
-    lease = navigator.locks
+    lease = locks
       .request("atlas-storage-session", { mode: "shared" }, async () => {
         acquired();
         await released;

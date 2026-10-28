@@ -29,7 +29,7 @@ export interface WorkspaceCommandResult {
 }
 
 export type WorkspaceOperation =
-  | { kind: "open"; name: string; roots?: { name: string; path: string }[] | null }
+  | { kind: "open"; name: string }
   | { kind: "connect"; port: MessagePort }
   | { kind: "createWorld"; world: WorldMetadata }
   | { kind: "importWorld"; snapshot: DomainSnapshot }

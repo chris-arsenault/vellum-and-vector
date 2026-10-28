@@ -7,7 +7,6 @@ import {
 } from "@atlas/domain";
 import { WorkspaceClient } from "./WorkspaceClient";
 import { changed } from "./workspaceEvents";
-import { savedMapRoots } from "./savedMaps";
 
 let workspace: WorkspaceClient | undefined;
 let ready: Promise<void> | undefined;
@@ -18,8 +17,7 @@ export async function atlasWorkspace() {
     workspace = new WorkspaceClient(
       new Worker(new URL("./workspace.worker.ts", import.meta.url), { type: "module" })
     );
-    const client = workspace;
-    ready = savedMapRoots().then((roots) => client.open(`session_${crypto.randomUUID()}`, roots));
+    ready = workspace.open(`session_${crypto.randomUUID()}`);
   }
   await ready;
   return workspace;

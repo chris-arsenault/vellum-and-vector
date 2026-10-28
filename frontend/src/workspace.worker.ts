@@ -3,6 +3,7 @@ import {
   GeometryKernel,
   GeosSpatial,
   openStorageSession,
+  collectSavedStorage,
   type BrowserWorkspace,
 } from "@atlas/storage-browser";
 import { configureSpatial } from "@atlas/domain";
@@ -29,7 +30,7 @@ async function operate(operation: WorkspaceOperation) {
   }
   if (operation.kind === "open") {
     if (name) throw new Error("A workspace is already open.");
-    const release = await openStorageSession(operation.roots);
+    const release = await openStorageSession(collectSavedStorage);
     try {
       spatialKernel = await GeometryKernel.create();
     } catch (error) {

@@ -53,8 +53,8 @@ export class WorkspaceClient implements SpatialStore {
       this.fail(new Error("Could not read geographic workspace output."));
     if ("start" in worker) worker.start();
   }
-  async open(name: string, roots?: { name: string; path: string }[] | null) {
-    await this.request<void>({ kind: "open", name, roots });
+  async open(name: string) {
+    await this.request<void>({ kind: "open", name });
   }
   private fail(error: Error) {
     this.failed = error;
