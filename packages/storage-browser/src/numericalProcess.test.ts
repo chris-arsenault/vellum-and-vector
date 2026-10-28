@@ -262,7 +262,7 @@ it("carries published evicting outputs across runner stages and releases success
     const result = await new MapRunner(
       configuration(processes.map((process) => invoke(process))),
       registry
-    ).runOwned(onCache(landscape(), fixture.cache), { ...options, cache: fixture.cache });
+    ).run(onCache(landscape(), fixture.cache), { ...options, cache: fixture.cache });
     expect(result.state.facts.has("checked")).toBe(true);
     expect(result.state.facts.has("discarded")).toBe(false);
     expect(result.state.facts.has("released")).toBe(true);

@@ -73,7 +73,7 @@ export async function generateAtlas(
   const initial = atlasInitialState(source, input, options.cache);
   const registry = atlasRegistry(source, input);
   const configuration = input.configuration!;
-  const result = await new MapRunner(configuration, registry).runOwned(initial, {
+  const result = await new MapRunner(configuration, registry).run(initial, {
     ...options,
     seed: String(input.seed),
     seedScope: JSON.stringify([

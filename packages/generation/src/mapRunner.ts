@@ -70,21 +70,14 @@ export class MapRunner {
     for (const stage of this.stages)
       if (stage.invocation) registry.get(stage.invocation.process, stage.invocation.version);
   }
+  /**
+   * Run the sequence. The run owns the initial state's working parts (physical, society,
+   * surface) and changes them; its domain snapshot, history and causes stay as given.
+   */
   async run(initial: GenerationState, options: MapRunnerOptions): Promise<CompletedBoundary> {
-    return this.runState(initial, options, false);
-  }
-  /** The execution adapter transfers its private working state; immutable inputs stay scoped. */
-  async runOwned(initial: GenerationState, options: MapRunnerOptions): Promise<CompletedBoundary> {
-    return this.runState(initial, options, true);
-  }
-  private async runState(
-    initial: GenerationState,
-    options: MapRunnerOptions,
-    owned: boolean
-  ): Promise<CompletedBoundary> {
     verifyReconciliationBindings(this.configuration, this.registry);
     const configurationHash = await this.configurationHash(initial, options);
-    const state = prepareWorkingState(initial, options, owned);
+    const state = prepareWorkingState(initial, options);
     const causes: GenerationCause[][] = [];
     const products = new ProductLedger(state.facts, this.registry.productDefinitions());
     bindNativeFacts(state, products);

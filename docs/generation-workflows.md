@@ -241,9 +241,12 @@ profile configuration. Its private working state includes:
 - Traits, authored protections and magical definitions.
 - Historical states, forcing and accumulated consequences.
 
-Resource references identify committed numerical inputs. The browser execution
-adapter supplies native numerical vectors within a resident budget, paging to
-scratch only beyond it, with block access and process lifetimes either way. Processes share typed domain state directly, independently of React,
+Resource references identify committed numerical inputs, which open as immutable
+bands over their chunks. Every numerical value of a run is a band in a coverage
+(`docs/WORLD-COVERAGE-DESIGN.md`): the physical world, the surface grid and its
+topology, society and the projection tables. One block cache per worker keeps blocks
+resident within its budget and spills them to scratch beyond it; process lifetimes
+release bands the state no longer reaches. Processes share typed domain state directly, independently of React,
 database connections and browser messaging. Completed history retains causal
 results rather than copies of numerical scratch.
 
@@ -452,10 +455,12 @@ from immutable resources without sending samples through the catalog worker.
 Status, stage progress and failure diagnostics live in memory. Terminating the
 worker cancels generation. Closing or reloading the tab discards the session.
 
-Numerical working storage belongs to the execution worker. Completed epochs retain their ancestry and
-typed causal consequences without duplicating every intermediate field. The
-epoch/final callback samples an independent display grid before generation
-continues; transferring that preview never detaches live workspace arrays.
+Numerical working storage belongs to the execution worker. A run owns its initial
+state's working parts; a caller that needs that state afterwards builds another.
+Completed epochs retain their ancestry and typed causal consequences without
+duplicating every intermediate field. The epoch/final callback samples an
+independent display grid before generation continues and sends it as detached
+arrays; bands never cross a worker port.
 
 Plate advection transports carried fields one at a time through reusable scratch
 space. It resolves category provenance before updating source fractions and
@@ -465,8 +470,8 @@ World-to-display interpolation builds compact typed weights in batches rather
 than retaining JavaScript sample objects for every display cell. Repeated physical
 projections reuse the working surface's channel buffers. The browser adapter yields
 between process stages so the worker returns to its event loop during a run.
-Processes operate on the shared working geography through the numerical allocator.
-Local scratch is disposable and does not constitute saved execution state.
+Processes operate on the shared working geography through its coverages. Local
+scratch bands are disposable and do not constitute saved execution state.
 
 Regular-grid contour extraction releases sampled-point and crossing caches as it
 advances between rows. The generation worker stores the directed contour graph in
@@ -475,8 +480,9 @@ Shared crossings retain canonical endpoint order when recomputed. This bounds th
 decoded edge graph and tracing buffers; the native overlay and final geometry still require memory
 proportional to the feature being assembled.
 
-Connected numerical passes keep queues, rankings, lake membership and scratch
-channels in the execution allocator. Society demands capture their eligible medium
+Connected numerical passes keep frontiers resident and sized by the frontier;
+per-cell labels, ranks, marks and scratch channels are bands. Whole-world orderings
+stream over block runs held in bands. Society demands capture their eligible medium
 before applying changes, then stream the forcing across those cells. Local work
 queries traverse the sampling topology without collecting the entire surface.
 
@@ -580,8 +586,9 @@ above the default world's Standard workload. This warning does not limit map
 size or detail. Numerical boundary support and authored refinement can add cells.
 
 All qualities execute the physical processes and configured epochs. Generation
-cost increases with physical extent and numerical detail. Native scratch arrays
-are discarded before the result leaves the worker; no intermediate state is stored.
+cost increases with physical extent and numerical detail. Scratch bands and the
+scratch file are discarded before the result leaves the worker; no intermediate
+state is stored.
 
 Continental deformation and crust transitions follow the characteristic province
 size, so a larger world retains broad, irregular land masses. Candidate placement

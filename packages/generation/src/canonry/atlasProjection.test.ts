@@ -5,7 +5,6 @@ import { resolveGenerationFeatures, type FeatureSelection } from "../features";
 import { physicalFeatureDefinitions } from "../physicalFeatures";
 import { atlasPublicationDefinitions, selectedAtlasChannels } from "./atlasPublications";
 import { projectNative } from "./atlasProjection";
-import { generationWorkingState } from "../generationWorkingState";
 import { createField } from "./field";
 import { createMesh } from "./mesh";
 import { atlasPhysicalProfile } from "./atlasProfile";
@@ -98,9 +97,9 @@ const surfaceValues = (grid: GridSurface) => ({
 });
 
 it("retains the existing numerical output and quantity semantics for selected derived products", () => {
-  // A structured clone drops the coverage's classes; the working-state copy snapshots it.
+  // Two fixtures built alike: one projects every binding, the other the selected channels.
   const { state, channels, bindings } = fixture(),
-    legacy = generationWorkingState(state, false);
+    legacy = fixture().state;
   projectNative(legacy, false, false, bindings);
   projectNative(state, false, false, bindings, channels);
   expect(surfaceValues(state.surface)).toEqual(surfaceValues(legacy.surface));

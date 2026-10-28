@@ -228,11 +228,15 @@ directly.
 
 - `NumericalVector` as a typed-array look-alike, `NumericalView` and its Proxy,
   and the per-allocation resident-or-paged decision in `PagedArena`. The arena
-  becomes the block cache plus scratch file.
-- `PhysicalField` as an interface of ~180 ad hoc fields; it becomes a schema
-  registered by the physical modules, and `MagicField`, ecology and society
-  register theirs. `createField` becomes `coverage.allocate(schema)`.
-- `copyWorkingState`'s reflective object walk; snapshots are COW bands.
+  became the block cache plus scratch file. Removed.
+- `PhysicalField` as an interface of ~180 ad hoc fields. Its bands are allocated
+  from one schema (`physicalSchema`: name, sample type, initial value) through
+  `coverage.allocate`; the remaining members are scalar workspace state. Splitting
+  the schema per module (magic, ecology, society) was proposed and dropped: it
+  changes declarations, not paging or world size.
+- `copyWorkingState`'s reflective object walk. Removed: a run owns its initial
+  state's working parts, so nothing copies them; band snapshots remain for the
+  callers that want a copy-on-write twin.
 - Stored world-mesh columns and the lattice address table; adjacency is
   arithmetic on the triangular lattice.
 - `contentCount` ordering (content cells first) as an invariant that loops

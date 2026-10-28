@@ -1,11 +1,4 @@
-import {
-  Band,
-  BlockCache,
-  Coverage,
-  cloneSnapshot,
-  requireThat,
-  type Lattice,
-} from "@atlas/domain";
+import { Band, BlockCache, Coverage, cloneSnapshot, requireThat } from "@atlas/domain";
 import type { GenerationState } from "./process";
 import type { MapRunnerOptions } from "./mapRunner";
 import { generationBands, generationGridBands } from "./generationNumericalState";
@@ -13,17 +6,19 @@ import { initializeFeatureWorkspace, originalFeatureReader } from "./generationF
 import { preparePublicationLayers } from "./publication";
 import { initializeNetworkWorkspace } from "./generationNetworks";
 
-export function prepareWorkingState(
-  initial: GenerationState,
-  options: MapRunnerOptions,
-  owned: boolean
-) {
+/**
+ * The run takes ownership of the initial state's working parts (physical, society, surface);
+ * the domain snapshot, history and causes are copied so validation compares against the
+ * original inputs. There is no copy of the working parts: a caller that needs its state
+ * afterwards builds another.
+ */
+export function prepareWorkingState(initial: GenerationState, options: MapRunnerOptions) {
   requireThat(
     !options.sourceFeatures || options.features,
     "feature_workspace",
     "Stored source geography requires a writable feature workspace."
   );
-  const state = generationWorkingState(initial, owned, options.cache);
+  const state = generationWorkingState(initial, options.cache);
   state.contours = options.contours;
   initializeFeatureWorkspace(state, options.features);
   state.sourceFeatures = options.sourceFeatures;
@@ -72,71 +67,13 @@ export function numericalProcessLifetime(state: GenerationState) {
 
 export function generationWorkingState(
   initial: GenerationState,
-  owned: boolean,
   cache?: BlockCache
 ): GenerationState {
   return {
-    ...(owned ? initial : copyWorkingState(initial)),
+    ...initial,
     domain: cloneSnapshot(initial.domain),
     history: structuredClone(initial.history),
     causes: structuredClone(initial.causes),
     cache: cache ?? initial.cache,
   };
-}
-/** Coverages snapshot copy-on-write; each reachable band maps to its copy in the new coverage. */
-function snapshotCoverage(
-  coverage: Coverage,
-  members: Iterable<Band>,
-  copies: Map<object, unknown>
-) {
-  const bandCopies = new Map<Band, Band>(),
-    copy = coverage.snapshot(bandCopies);
-  copies.set(coverage, copy);
-  for (const [band, snapshot] of bandCopies) if (!copies.has(band)) copies.set(band, snapshot);
-  for (const band of members) if (!copies.has(band)) copies.set(band, copy.copyBand(band));
-}
-function copyWorkingState(initial: GenerationState) {
-  const copies = new Map<object, unknown>();
-  const map = initial.physical?.map;
-  if (map) {
-    // The lattice is immutable; the coverage and its bands snapshot copy-on-write.
-    copies.set(map.mesh, map.mesh);
-    snapshotCoverage(map.coverage, generationBands(initial), copies);
-  }
-  for (const [coverage, members] of generationGridBands(initial))
-    snapshotCoverage(coverage, members, copies);
-  return copyValue({ ...initial, domain: undefined, cache: undefined }, copies) as GenerationState;
-}
-function copyValue(value: unknown, copies: Map<object, unknown>): unknown {
-  if (!value || typeof value !== "object") return value;
-  if (copies.has(value)) return copies.get(value);
-  if (value instanceof Band || value instanceof Coverage || isLattice(value)) return value;
-  if (ArrayBuffer.isView(value)) {
-    const copy = (value as unknown as { slice(): object }).slice();
-    copies.set(value, copy);
-    return copy;
-  }
-  return copyContainer(value, copies);
-}
-function isLattice(value: object): value is Lattice {
-  return "blockLive" in value && "neighbor" in value && "cellAt" in value;
-}
-function copyContainer(value: object, copies: Map<object, unknown>) {
-  if (value instanceof Map) {
-    const copy = new Map();
-    copies.set(value, copy);
-    for (const [key, item] of value) copy.set(copyValue(key, copies), copyValue(item, copies));
-    return copy;
-  }
-  if (value instanceof Set) {
-    const copy = new Set();
-    copies.set(value, copy);
-    for (const item of value) copy.add(copyValue(item, copies));
-    return copy;
-  }
-  const copy = Array.isArray(value) ? [] : {};
-  copies.set(value, copy);
-  for (const [key, item] of Object.entries(value))
-    (copy as Record<string, unknown>)[key] = copyValue(item, copies);
-  return copy;
 }

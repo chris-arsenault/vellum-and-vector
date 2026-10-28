@@ -110,7 +110,6 @@ it("omits a parent with false guarantees without revalidating stale inputs", asy
     expect(result.state.facts.has("finished")).toBe(false);
     expect(result.state.facts.has("routing")).toBe(false);
     expect(commit.mock.calls.some(([contract]) => contract.id === parent.contract.id)).toBe(false);
-    expect(state.facts.has("routing")).toBe(true);
   } finally {
     commit.mockRestore();
   }

@@ -136,7 +136,7 @@ passes, 65 536 counts) are the obvious tuning if ordering shows up in a profile.
 
 `make test-architecture` runs `packages/generation/src/hpcAdoption.architecture.ts`,
 which prints every site that still uses a substitute shape with file, line and
-replacement, and passes when there are none. It is not part of `make ci`. Rules
+replacement, and passes when there are none. It is part of `make ci`. Rules
 flag `new PriorityQueue`, `BoundedCandidates`, `orderedIndices(`,
 `new NumericalQueue(`, `new NumericalRecordQueue<`, `new NumericalList(`,
 `.coords[`, and, inside `canonry/`, `new Map<number,`, `new Set<number>`,

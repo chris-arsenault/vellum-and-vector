@@ -1,6 +1,6 @@
 .PHONY: ci lint format format-check typecheck test test-architecture test-perf test-browser terraform-fmt-check build dev canonry-fixtures
 
-ci: lint format-check typecheck test terraform-fmt-check
+ci: lint format-check typecheck test test-architecture terraform-fmt-check
 
 lint:
 	pnpm lint
@@ -18,8 +18,8 @@ typecheck:
 test:
 	pnpm --dir frontend run test
 
-# Expected to fail until the generation code adopts the typed-array structures; its output
-# is the conversion list. Not part of ci.
+# Generation uses the typed-array structures and bands, not object, Map or comparator
+# substitutes; a finding names the site and its replacement.
 test-architecture:
 	pnpm exec vitest run -c vitest.architecture.config.ts
 

@@ -17,7 +17,6 @@ import { units } from "./math";
 import { validateLandscape } from "./surface";
 import { extractNativeGeography } from "./atlasFeatures";
 import { preflight } from "../preflight";
-import { generationWorkingState } from "../generationWorkingState";
 import { numericalState } from "./physicalFeatureFixture";
 
 function suppliedProducts(
@@ -137,7 +136,6 @@ it("executes coupled glacial erosion and deposition with one conserved material 
     7
   );
   expect(() => validateLandscape(map)).not.toThrow();
-  expect(values(initial.physical!.map.Elevation)).toEqual(before);
 });
 
 function coast() {
@@ -180,7 +178,6 @@ it("executes external and natural coastal cutting through the shared material ex
       map.SedimentProducedTotal
   ).toBeLessThan(1e-9);
   expect(() => validateLandscape(map)).not.toThrow();
-  expect(values(initial.physical!.map.Elevation)).toEqual(before);
 });
 
 function catchment() {
@@ -249,26 +246,30 @@ it("publishes a dimensional river network without performing terrain incision", 
 
 it("uses impact-contributed fracture state without executing a fault-network feature", async () => {
   const extent: [number, number, number, number] = [-500_000, -500_000, 500_000, 500_000];
-  const initial = numericalState(createField(createWorldMesh(extent, 1024, 0)), extent),
-    selected = {
-      "physical.fractures": { enabled: false },
-      "physical.volcanism": { enabled: false },
-    };
-  initial.physical!.map.Elevation.fill(units(500));
-  initial.physical!.map.BedrockElevation.copyFrom(initial.physical!.map.Elevation);
-  const output = await runPhysical(
-    initial,
-    ["impact-cratering", "geothermal"],
-    ["Elevation", "LandscapeHistory", "TectonicProvinces", "FractureState"],
-    selected
-  );
+  const selected = {
+    "physical.fractures": { enabled: false },
+    "physical.volcanism": { enabled: false },
+  };
+  // A run owns its state; the control repeats the same impacted run rather than copying it.
+  const impacted = () => {
+    const initial = numericalState(createField(createWorldMesh(extent, 1024, 0)), extent);
+    initial.physical!.map.Elevation.fill(units(500));
+    initial.physical!.map.BedrockElevation.copyFrom(initial.physical!.map.Elevation);
+    return runPhysical(
+      initial,
+      ["impact-cratering", "geothermal"],
+      ["Elevation", "LandscapeHistory", "TectonicProvinces", "FractureState"],
+      selected
+    );
+  };
+  const output = await impacted();
   const map = output.state.physical!.map;
   expect(map.events.some((event) => event.kind === "impact")).toBe(true);
   expect(values(map.FractureConductance).some((value) => value > 0)).toBe(true);
   expect(map.faults).toEqual([]);
   expect(output.state.facts.has("canonry:FractureState")).toBe(true);
   expect(output.state.facts.has("canonry:Fractures")).toBe(false);
-  const control = generationWorkingState(output.state, false);
+  const control = (await impacted()).state;
   control.physical!.map.FractureConductance.fill(0);
   const comparison = await runPhysical(
     control,
@@ -354,7 +355,6 @@ it("computes a valid empty ocean and bathymetry before finding no deep-ocean pre
   expect(values(pressure.source).every((value) => value === 0)).toBe(true);
   expect(values(pressure.intensity).every((value) => value === 0)).toBe(true);
   expect(output.state.facts.has(pressurePass(initial).replace("canonry.", "atlas:"))).toBe(true);
-  expect(values(initial.physical!.map.BathymetricZoneCodes).every((zone) => zone === 4)).toBe(true);
 });
 
 it("skips missing bathymetry before the pressure source operation can mutate magic", async () => {
@@ -384,5 +384,4 @@ it("skips missing bathymetry before the pressure source operation can mutate mag
   );
   expect(started).toContain("Starting canonry.magic-initialize");
   expect(started).not.toContain(`Starting ${pressurePass(initial)}`);
-  expect(initial.physical!.magic).toBeUndefined();
 });

@@ -113,7 +113,6 @@ it("composes an authored fine ridge into regenerated base samples before climate
   expect(channelValues(result.state.domain.numerical["authored-ridge"])).toEqual(
     channelValues(initial.domain.numerical["authored-ridge"])
   );
-  expect(initial.surface.channels.elevation.get(2)).toBe(1100);
 });
 
 it("rejects incompatible authored units and changes to exact authored patch resources", async () => {
@@ -246,13 +245,18 @@ it("reuses a registered GIS process and repeated climate passes over world and r
 });
 
 it("rejects overwriting authored vectors and completed history before a boundary is exposed", async () => {
-  const initial = (
-    await new MapRunner(configuration([invoke(highPoint)]), registry(highPoint)).run(
-      landscape(),
-      options
-    )
-  ).state;
-  initial.domain.world.features.ridge.state = "authored";
+  // A run owns its working state; each attempt starts from its own authored world.
+  const authored = async () => {
+    const state = (
+      await new MapRunner(configuration([invoke(highPoint)]), registry(highPoint)).run(
+        landscape(),
+        options
+      )
+    ).state;
+    state.domain.world.features.ridge.state = "authored";
+    return state;
+  };
+  let initial = await authored();
   const overwrite: MapProcess = {
     ...flatten,
     contract: { ...flatten.contract, id: "gis.overwrite" },
@@ -266,6 +270,7 @@ it("rejects overwriting authored vectors and completed history before a boundary
   await expect(
     new MapRunner(configuration([invoke(overwrite)]), registry(overwrite)).run(initial, options)
   ).rejects.toThrow(/preserves authored feature/);
+  initial = await authored();
   initial.history.push({ path: ["old"], ancestry: [], causes: [] });
   const rewriteHistory: MapProcess = {
     ...flatten,

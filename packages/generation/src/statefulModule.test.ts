@@ -52,7 +52,7 @@ async function execute(deposition: number, enabled = true) {
 it("registers a carried extensive product that advances over two epochs and publishes a new layer", async () => {
   atlasGenerationModules.register(statefulInventoryModule);
   try {
-    const { result, state } = await execute(2);
+    const { result } = await execute(2);
     const grid = result.state.surface;
     expect(result.state.history.map((entry) => entry.ancestry.at(-1)!.id)).toEqual([
       "Formation",
@@ -66,7 +66,6 @@ it("registers a carried extensive product that advances over two epochs and publ
     expect(grid.quantities?.[inventoryChannel]).toBe("extensive");
     for (let i = 0; i < grid.active.length; i++)
       expect(grid.channels[inventoryChannel].get(i) / grid.measures.get(i)).toBeCloseTo(17, 12);
-    expect(state.surface.channels[inventoryChannel]).toBeUndefined();
     expect(result.state.domain.world.layers[inventoryLayer].name).toBe("Carried inventory");
     expect(result.state.domain.world.fields.some((field) => field.layerId === inventoryLayer)).toBe(
       true

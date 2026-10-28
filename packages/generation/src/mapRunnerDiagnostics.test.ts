@@ -77,7 +77,6 @@ it.each([false, true])(
     ]);
     expect(diagnostic).toHaveBeenCalledTimes(2);
     expect(consume).not.toHaveBeenCalled();
-    expect(initial.surface.channels.elevation.get(0)).toBe(-10);
   }
 );
 

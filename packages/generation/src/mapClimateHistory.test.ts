@@ -74,7 +74,6 @@ it("transports moisture over a mountain barrier, accumulates snowy ice and retai
   expect(result.state.history).toHaveLength(3);
   expect(result.state.history.every((entry) => !Object.hasOwn(entry, "surface"))).toBe(true);
   expect(initial.history).toEqual([]);
-  expect(initial.surface.channels.ice).toBeUndefined();
 });
 
 it("refreshes thermal fields repeatedly without advancing zero-decay storage more than once", async () => {
@@ -270,8 +269,13 @@ it("omits duplicate elapsed-time advances and rejects invalid parameter configur
 });
 
 it("restarts a cancelled job from pinned inputs with identical geography and causal history", async () => {
-  const initial = landscape();
-  initial.domain.world.magic = [source({ decay: 0.1 })];
+  // A run owns its working state; each attempt starts from the same pinned inputs.
+  const pinned = () => {
+    const state = landscape();
+    state.domain.world.magic = [source({ decay: 0.1 })];
+    return state;
+  };
+  const initial = pinned();
   const config = configuration([
     {
       kind: "epochs",
@@ -299,15 +303,14 @@ it("restarts a cancelled job from pinned inputs with identical geography and cau
       },
     })
   ).rejects.toThrow(/cancelled/);
-  const restarted = await runner.run(initial, options),
-    uninterrupted = await runner.run(initial, options);
+  const restarted = await runner.run(pinned(), options),
+    uninterrupted = await runner.run(pinned(), options);
   const plain = (outcome: typeof restarted) => ({
     ...outcome,
     state: { ...outcome.state, surface: undefined, cache: undefined },
     channels: capture(outcome.state).surface.channels,
   });
   expect(plain(restarted)).toEqual(plain(uninterrupted));
-  expect(initial.surface.channels.heat).toBeUndefined();
   expect(initial.history).toEqual([]);
 });
 
