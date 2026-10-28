@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./uiTest";
 import { completeGenerationFixture, installGenerationFixture } from "./generationFixture";
-import { createWorld, generate, pageErrors, placePoint } from "./harness";
+import { chooseOutline, createWorld, generate, pageErrors, placePoint } from "./harness";
 
 async function save(page: Page) {
   await page.getByRole("button", { name: "Save map", exact: true }).click();
@@ -138,11 +138,20 @@ test("one save per world, independent saves, and the old save survives a failed 
 });
 
 test("saving waits for generation and a running world cannot be replaced", async ({ page }) => {
-  await installGenerationFixture(page, { hold: true });
-  await createWorld(page, "Generating map");
+  await installGenerationFixture(page, { hold: true, fields: true });
+  await page.goto("/");
+  await page.getByLabel("World name").fill("Generating map");
+  await page.getByLabel("Width · km").fill("1");
+  await page.getByLabel("Height · km").fill("1");
+  await page.getByRole("button", { name: /Review & generate/ }).click();
+  await page.getByRole("button", { name: "Generate world", exact: true }).click();
+  await completeGenerationFixture(page);
+  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
   await save(page);
-  await page.getByLabel("Detail level").selectOption("draft");
-  await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
+  await chooseOutline(page, "Saved region");
+  await page.getByRole("button", { name: "Refine this region", exact: true }).click();
+  await page.getByRole("button", { name: "Generate regional detail", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Cancel generation", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Save map", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Saved maps", exact: true }).click();
   await page

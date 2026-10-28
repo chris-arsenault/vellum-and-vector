@@ -6,9 +6,7 @@ import {
   closeDrawer,
   createWorld,
   exportMap,
-  generate,
   generatedWorld,
-  installGenerationFixture,
   mapImage,
   openLayers,
   pageErrors,
@@ -41,9 +39,7 @@ test("the physical history form edits an epoch's ecological regime @deferred-aut
 
 test("ecological fields are opt-in overlays beside named biome regions", async ({ page }) => {
   const errors = pageErrors(page);
-  await installGenerationFixture(page, { fields: true, life: true });
-  await createWorld(page, "Living overlays");
-  await generate(page);
+  await generatedWorld(page, "Living overlays", { fields: true, life: true });
   await openLayers(page);
   // Named biomes are vector regions; the per-cell category is not drawn by default.
   await expect(

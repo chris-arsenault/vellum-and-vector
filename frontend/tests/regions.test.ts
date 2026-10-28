@@ -19,13 +19,19 @@ async function clickWorld(page: Page, x: number, y: number, extent = source, twi
   if (twice) await canvas(page).dblclick({ position });
   else await canvas(page).click({ position });
 }
-async function create(page: Page) {
+async function create(page: Page, generate = false) {
   await page.goto("/");
   await page.getByLabel("World name").fill("Region desk");
   await page.getByLabel("Width · km").fill("100");
   await page.getByLabel("Height · km").fill("100");
-  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
-  await page.getByRole("button", { name: "Create world", exact: true }).click();
+  if (generate) {
+    await page.getByLabel("Detail level").selectOption("draft");
+    await page.getByRole("button", { name: /Review & generate/ }).click();
+    await page.getByRole("button", { name: "Generate world", exact: true }).click();
+  } else {
+    await page.getByRole("radio", { name: "Blank world", exact: true }).check();
+    await page.getByRole("button", { name: "Create world", exact: true }).click();
+  }
   await expect(canvas(page)).toBeVisible();
   await expect(canvas(page)).toHaveAttribute("aria-busy", "false");
 }
@@ -48,6 +54,7 @@ async function outline(page: Page, name: string, extent: Box, points: number[][]
   await keep(page, name);
 }
 async function centralOutline(page: Page, name: string) {
+  await page.getByRole("button", { name: "Regions", exact: true }).click();
   await page.getByRole("button", { name: "Trace a custom outline", exact: true }).click();
   const box = (await canvas(page).boundingBox())!;
   for (const [i, [x, y]] of [
@@ -108,13 +115,12 @@ test("refines a selected subject recursively with regional controls and cancella
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await installGenerationFixture(page, { fields: true, terrain: true, hold: true });
-  await create(page);
+  await create(page, true);
   // Terrain supplies refinement inputs; raster rendering is covered by the framing journey.
   await openMapSettings(page, "Appearance");
   await page.getByRole("radio", { name: "Drawn map", exact: true }).check();
   await page.getByLabel("Illustrated terrain", { exact: true }).uncheck();
   await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
-  await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
   await completeGenerationFixture(page);
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
   const original = await exported(page);
@@ -278,9 +284,7 @@ test("pick an existing feature, adjust its region and remove unreferenced region
 
 test("frames existing terrain as a region without another generation", async ({ page }) => {
   await installGenerationFixture(page, { fields: true, terrain: true, life: true });
-  await create(page);
-  await page.getByLabel("Detail level").selectOption("draft");
-  await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
+  await create(page, true);
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
   const before = await exported(page);
   await page.getByRole("button", { name: "Regions", exact: true }).click();

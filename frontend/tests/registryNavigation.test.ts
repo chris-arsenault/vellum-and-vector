@@ -1,13 +1,11 @@
 import { expect, test, type Page } from "./uiTest";
-import { createArea, generate, installGenerationFixture, pointFeature } from "./harness";
+import { createArea, generatedWorld, pointFeature } from "./harness";
 
 test("world registry finds a finer place and opens its compatible map", async ({ page }) => {
-  await installGenerationFixture(page, {
+  await generatedWorld(page, "Registry navigation", {
     fields: true,
     regionalFeatures: [pointFeature("Region marker", "waterfall", "geology", {}, [300, 300])],
   });
-  await createBlank(page);
-  await generate(page);
   await region(page);
   await page.getByRole("button", { name: "Refine this region", exact: true }).click();
   await page.getByRole("button", { name: "Generate regional detail", exact: true }).click();

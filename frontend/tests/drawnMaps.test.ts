@@ -93,11 +93,9 @@ async function createAtlas(page: Page, authorRoad = false) {
   await page.getByLabel("World name").fill("Drawn atlas");
   await page.getByLabel("Width · km").fill("100");
   await page.getByLabel("Height · km").fill("100");
-  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
-  await page.getByRole("button", { name: "Create world", exact: true }).click();
   await page.getByLabel("Detail level").selectOption("draft");
-  await page.getByRole("checkbox", { name: "Territory & claims", exact: true }).check();
-  await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
+  await page.getByRole("button", { name: /Review & generate/ }).click();
+  await page.getByRole("button", { name: "Generate world", exact: true }).click();
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
   // The road leaves from beside the capital, so clicking the capital selects only the capital.
   if (authorRoad)

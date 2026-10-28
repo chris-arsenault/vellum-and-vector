@@ -3,34 +3,48 @@ import { minimumRegionWidthMetres, spatial } from "@atlas/domain";
 import type { EditorState } from "./useEditor";
 import { ErrorMessage } from "./ErrorMessage";
 import "./regions.css";
+import { isRegionTool } from "./useRegions";
 
 export function RegionsPanel({ editor }: { editor: EditorState }) {
-  const { region, regionDraft, regions } = editor;
+  const { region, regions } = editor;
+  const choosing = Boolean(editor.regionDraft) || isRegionTool(editor.tool);
   const children = regions.filter((r) => r.region.parentId === (region?.id ?? null));
   return (
     <section className="regions-panel">
       <RegionHeading editor={editor} />
-      {region && !regionDraft && <SelectedRegion editor={editor} />}
-      {regionDraft ? (
-        <RegionDraft key={region?.id ?? "new"} editor={editor} />
-      ) : (
-        <RegionTools editor={editor} />
+      {region && !choosing && <SelectedRegion editor={editor} />}
+      <RegionSelection editor={editor} />
+      {region && !choosing && (
+        <button className="secondary" onClick={editor.openRegions}>
+          Choose a smaller region
+        </button>
       )}
       <ErrorMessage error={editor.regionError} />
       {!!editor.regionCuts.length && (
         <button onClick={editor.cancelRegion}>Clear dividing lines</button>
       )}
-      <h3>{region ? "Regions inside this one" : "Chosen regions"}</h3>
+      <h3>{region ? "Region navigation" : "Chosen regions"}</h3>
       <RegionList editor={editor} />
       <ErrorMessage error={editor.commit.error} />
       {!children.length && <p className="hint">No smaller regions chosen here yet.</p>}
     </section>
   );
 }
+function RegionSelection({ editor }: { editor: EditorState }) {
+  if (editor.regionDraft && editor.tool !== "regionPick")
+    return <RegionDraft key={editor.region?.id ?? "new"} editor={editor} />;
+  return isRegionTool(editor.tool) ? <RegionTools editor={editor} /> : null;
+}
 function RegionHeading({ editor }: { editor: EditorState }) {
   return (
     <>
-      <p className="eyebrow">{editor.region ? "SELECTED REGION" : "CHOOSE A REGION"}</p>
+      <p className="eyebrow">
+        {editor.regionDraft
+          ? "REGION OUTLINE"
+          : isRegionTool(editor.tool)
+            ? "CHOOSE A REGION"
+            : "SELECTED REGION"}
+      </p>
       <h2>{editor.region?.name ?? editor.area.name}</h2>
       {!editor.region && (
         <p>
@@ -74,8 +88,9 @@ function SelectedRegion({ editor }: { editor: EditorState }) {
 }
 function RegionTools({ editor }: { editor: EditorState }) {
   const instructions: Record<string, string> = {
-    regionPick:
-      "Click inside a geographic or territorial boundary. Zoom in for smaller candidates. If no boundary fits, draw an outline.",
+    regionPick: editor.regionCuts.length
+      ? "Click the side of the dividing line you want to keep. Its boundary will be combined with the surrounding geography."
+      : "Click inside a geographic or territorial boundary. Zoom in for smaller candidates. If no boundary fits, draw an outline.",
     regionOutline:
       "Click around the region you want. Double-click or press Enter to finish. The outline stays within the current region.",
     regionCut:
@@ -115,6 +130,9 @@ function RegionTools({ editor }: { editor: EditorState }) {
           {instructions[editor.tool]} Press Escape to cancel.
         </p>
       )}
+      <button className="quiet" onClick={editor.cancelRegion}>
+        Cancel region selection
+      </button>
     </>
   );
 }
@@ -131,8 +149,9 @@ function RegionDraft({ editor }: { editor: EditorState }) {
     >
       <h3>Selected outline</h3>
       <p>
-        This outline becomes a region within {editor.region?.name ?? editor.area.name}. Keep it to
-        inspect or refine it.
+        {editor.editingRegion
+          ? `Adjust the boundary of ${editor.region!.name}. Keeping this outline updates the same region.`
+          : `This outline becomes a region within ${editor.region?.name ?? editor.area.name}. Keep it to inspect or refine it.`}
       </p>
       <p>
         {(spatial.area(draft.footprint) / 1e6).toLocaleString(undefined, {
@@ -141,8 +160,10 @@ function RegionDraft({ editor }: { editor: EditorState }) {
         km²
       </p>
       <p className="hint">
-        Drag outline vertices to adjust the boundary. Minimum useful width:{" "}
-        {minimumRegionWidthMetres} m.
+        {editor.tool === "regionEdit"
+          ? "Drag outline vertices to adjust the boundary."
+          : "Choose Adjust selected outline to move its vertices."}{" "}
+        Minimum useful width: {minimumRegionWidthMetres} m.
       </p>
       {editor.regionCandidates.length > 1 && (
         <label>
@@ -172,6 +193,11 @@ function RegionDraft({ editor }: { editor: EditorState }) {
       <button className="primary" disabled={editor.commit.isPending}>
         Keep region
       </button>
+      {editor.tool !== "regionEdit" && (
+        <button type="button" onClick={() => editor.setTool("regionEdit")}>
+          Adjust selected outline
+        </button>
+      )}
       <button type="button" onClick={editor.cancelRegion}>
         Discard outline
       </button>

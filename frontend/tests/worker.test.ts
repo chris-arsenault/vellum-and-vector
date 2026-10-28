@@ -1,21 +1,11 @@
 import { expect, test } from "./uiTest";
-import {
-  canvas,
-  createArea,
-  createWorld,
-  exportMap,
-  generate,
-  installGenerationFixture,
-  pageErrors,
-} from "./harness";
+import { canvas, createArea, generatedWorld, exportMap, pageErrors } from "./harness";
 
 test("publishes a finer geographic map through the worker while retaining its source map", async ({
   page,
 }) => {
   const errors = pageErrors(page);
-  await installGenerationFixture(page, { fields: true });
-  await createWorld(page, "Worker smoke");
-  await generate(page);
+  await generatedWorld(page, "Worker smoke", { fields: true });
   const parent = await exportMap(page);
   await createArea(page, "River country", [200, 200, 800, 800]);
   await page.getByRole("button", { name: "Refine this region", exact: true }).click();

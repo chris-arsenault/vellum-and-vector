@@ -53,17 +53,22 @@ test("shows live workload warnings on a narrow screen without generating a large
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test("updates the existing-map generation controls when detail changes", async ({ page }) => {
+test("world generation controls stay in New world instead of the map sidebar", async ({ page }) => {
   await installGenerationFixture(page, { hold: true });
   await page.goto("/");
   await page.getByLabel("World name", { exact: true }).fill("Editable workload");
   await page.getByRole("radio", { name: "Blank world", exact: true }).check();
   await page.getByRole("button", { name: "Create world", exact: true }).click();
+  const sidebar = page.getByRole("complementary", { name: "Selection and refinement" });
+  await expect(sidebar.getByLabel("Detail level")).toHaveCount(0);
+  await expect(sidebar.getByText("Generate a starting landscape", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "+ New world", exact: true }).click();
   await page.getByLabel("Detail level").selectOption("fine");
-  await expect(page.locator(".generation-workload")).toHaveAttribute("data-cell-count", "240000");
-  await expect(page.locator(".generation-workload [role=alert]")).toContainText("crash this tab");
-  await expect(page.getByRole("button", { name: "Generate selected domains" })).toBeEnabled();
+  const workload = page.locator(".setup-content .generation-workload");
+  await expect(workload).toHaveAttribute("data-cell-count", "240000");
+  await expect(workload.getByRole("alert")).toContainText("crash this tab");
+  await expect(page.getByRole("button", { name: /Review & generate/ })).toBeEnabled();
   await page.getByLabel("Detail level").selectOption("draft");
-  await expect(page.locator(".generation-workload")).toHaveAttribute("data-cell-count", "15000");
-  await expect(page.locator(".generation-workload [role=alert]")).toHaveCount(0);
+  await expect(workload).toHaveAttribute("data-cell-count", "15000");
+  await expect(workload.getByRole("alert")).toHaveCount(0);
 });

@@ -29,16 +29,19 @@ export interface WorldOptions {
 
 /** Create a blank world through the setup page and land on its map. */
 export async function createWorld(page: Page, name: string, options: WorldOptions = {}) {
+  await configureWorld(page, name, options);
+  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
+  await page.getByRole("button", { name: "Create world", exact: true }).click();
+  await expect(canvas(page)).toBeVisible();
+}
+async function configureWorld(page: Page, name: string, options: WorldOptions) {
   await page.goto("/");
   await page.getByLabel("World name", { exact: true }).fill(name);
   await page.getByLabel("Width · km").fill(String(options.width ?? options.km ?? 1));
   await page.getByLabel("Height · km").fill(String(options.height ?? options.km ?? 1));
-  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
   await page
     .getByLabel("Map boundary", { exact: true })
     .selectOption(options.boundary === "cylinder" ? "1" : "0");
-  await page.getByRole("button", { name: "Create world", exact: true }).click();
-  await expect(canvas(page)).toBeVisible();
 }
 
 /** Install the fixture, create a world and run one generation through it. */
@@ -46,21 +49,20 @@ export async function generatedWorld(
   page: Page,
   name: string,
   fixture: GenerationFixtureOptions = {},
-  options: WorldOptions & { detail?: "draft" | "standard"; domains?: string[] } = {}
+  options: WorldOptions & { detail?: "draft" | "standard" } = {}
 ) {
   await installGenerationFixture(page, fixture);
-  await createWorld(page, name, options);
+  await configureWorld(page, name, options);
   if (options.detail) await page.getByLabel("Detail level").selectOption(options.detail);
-  for (const domain of options.domains ?? [])
-    await page.getByRole("checkbox", { name: domain, exact: true }).check();
   await generate(page);
 }
 
-/** Start the current map's generation and wait for the fixture job to complete. */
+/** Review the New world recipe, generate it and enter its completed map. */
 export async function generate(page: Page) {
-  const previous = await page.locator(".job-row").count();
-  await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
-  await expect(page.locator(".job-row")).toHaveCount(previous + 1);
+  await page.getByRole("button", { name: /Review & generate/ }).click();
+  await page.getByRole("button", { name: "Generate world", exact: true }).click();
+  await expect(canvas(page)).toBeVisible();
+  await expect(page.locator(".job-row")).toHaveCount(1);
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
 }
 

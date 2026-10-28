@@ -87,9 +87,8 @@ test("procedural refinement configures a new region with fixed parent history", 
   await page.getByLabel("World name").fill("Regional atlas");
   await page.getByLabel("Width · km").fill("100");
   await page.getByLabel("Height · km").fill("100");
-  await page.getByRole("radio", { name: "Blank world", exact: true }).check();
-  await page.getByRole("button", { name: "Create world", exact: true }).click();
-  await page.getByRole("button", { name: "Generate selected domains", exact: true }).click();
+  await page.getByRole("button", { name: /Review & generate/ }).click();
+  await page.getByRole("button", { name: "Generate world", exact: true }).click();
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
   const parent = await page.evaluate(
     () =>

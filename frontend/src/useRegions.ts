@@ -101,6 +101,7 @@ export function useRegions(o: Options) {
     region: c.region,
     regions: c.regions,
     regionDraft: d.regionDraft,
+    editingRegion: d.editingId !== null,
     regionCandidates: d.candidates,
     regionError: d.regionError,
     regionCuts: d.cuts,

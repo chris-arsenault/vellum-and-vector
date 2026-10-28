@@ -2,9 +2,7 @@ import { expect, test, type Page } from "./uiTest";
 import {
   canvas,
   createWorld,
-  generate,
   generatedWorld,
-  installGenerationFixture,
   mapImage,
   openLayers,
   openMapSettings,
@@ -36,9 +34,7 @@ test("the compact layer drawer leaves the map accessible on a narrow screen", as
 
 test("overlays are chosen, hidden and legended without expanding the stack", async ({ page }) => {
   const errors = pageErrors(page);
-  await installGenerationFixture(page, { fields: true, life: true });
-  await createWorld(page, "Overlay workbench");
-  await generate(page);
+  await generatedWorld(page, "Overlay workbench", { fields: true, life: true });
   await openLayers(page);
   await page.getByRole("button", { name: "+ Add overlay", exact: true }).click();
   for (const name of ["Temperature", "Natural land cover"])
@@ -78,9 +74,7 @@ test("overlays are chosen, hidden and legended without expanding the stack", asy
 
 test("base maps switch and field styles compose into a restorable view", async ({ page }) => {
   const errors = pageErrors(page);
-  await installGenerationFixture(page, { fields: true, terrain: true });
-  await createWorld(page, "GIS layer composition");
-  await generate(page);
+  await generatedWorld(page, "GIS layer composition", { fields: true, terrain: true });
   await openLayers(page);
   await checkFaultControl(page);
   await openMapSettings(page);

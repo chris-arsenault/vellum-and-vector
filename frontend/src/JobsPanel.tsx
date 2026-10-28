@@ -13,45 +13,58 @@ export function JobsPanel({ world }: { world: World }) {
       void cache.invalidateQueries({ queryKey: ["jobs", world.id] });
     },
   });
-  if (!jobs.data?.length && !jobs.error) return null;
+  const records = jobs.data ?? [];
+  if (!records.length && !jobs.error) return null;
   return (
     <section className="jobs-panel">
       <div className="section-title">
         <span>GENERATION JOBS</span>
-        <span>
-          {jobs.data?.filter((j) => ["running", "queued"].includes(j.status)).length ?? 0} active
-        </span>
+        <span>{records.filter((j) => ["running", "queued"].includes(j.status)).length} active</span>
       </div>
-      {!jobs.data?.length && (
+      {!records.length && (
         <p className="hint">Generation runs in this tab. You can pan and inspect while it works.</p>
       )}
-      {jobs.data?.slice(0, 5).map((job) => (
-        <div key={job.id} className="job-row">
-          <div>
-            <strong>{job.status}</strong>
-          </div>
-          <p>{job.stage}</p>
-          <progress aria-label="Generation progress" value={job.progress} max="1" />
-          {job.error && <p className="error">{job.error}</p>}
-          {!!job.diagnostics?.length && (
-            <details>
-              <summary>Inspect diagnostics ({job.diagnostics.length})</summary>
-              {job.diagnostics.map((item, i) => (
-                <details key={i}>
-                  <summary>{item.message}</summary>
-                  <pre>{JSON.stringify(item, null, 2)}</pre>
-                </details>
-              ))}
-            </details>
-          )}
-          {["running", "queued"].includes(job.status) && (
-            <button className="quiet" onClick={() => control.mutate(job.id)}>
-              Cancel generation
-            </button>
-          )}
-        </div>
+      {records.slice(0, 1).map((job) => (
+        <JobRow key={job.id} job={job} cancel={control.mutate} />
       ))}
+      {records.length > 1 && (
+        <details>
+          <summary>Earlier generations ({records.length - 1})</summary>
+          {records.slice(1).map((job) => (
+            <JobRow key={job.id} job={job} cancel={control.mutate} />
+          ))}
+        </details>
+      )}
       <ErrorMessage error={jobs.error ?? control.error} />
     </section>
+  );
+}
+type Job = NonNullable<ReturnType<typeof useJobs>["data"]>[number];
+function JobRow({ job, cancel }: { job: Job; cancel: (id: string) => void }) {
+  return (
+    <div className="job-row">
+      <div>
+        <strong>{job.status}</strong>
+      </div>
+      <p>{job.stage}</p>
+      <progress aria-label="Generation progress" value={job.progress} max="1" />
+      {job.error && <p className="error">{job.error}</p>}
+      {!!job.diagnostics?.length && (
+        <details>
+          <summary>Inspect diagnostics ({job.diagnostics.length})</summary>
+          {job.diagnostics.map((item, i) => (
+            <details key={i}>
+              <summary>{item.message}</summary>
+              <pre>{JSON.stringify(item, null, 2)}</pre>
+            </details>
+          ))}
+        </details>
+      )}
+      {["running", "queued"].includes(job.status) && (
+        <button className="quiet" onClick={() => cancel(job.id)}>
+          Cancel generation
+        </button>
+      )}
+    </div>
   );
 }

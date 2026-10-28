@@ -25,7 +25,8 @@ Start with the generation workflow: define the world, then choose land and
 materials, water/climate/life, magical influences, and people/places. Each feature
 has its switch and operative settings together. Direct navigation preserves the
 draft; **Use defaults & review** skips ahead when the defaults suit the map.
-Select **Blank world** to create an empty atlas; its context panel offers starting-landscape generation.
+Select **Blank world** to create an empty atlas for geographic selection and presentation.
+Initial generation belongs to **New world** and never appears in the editor sidebar.
 
 World size and latitude are independent. **Latitude frame** places any map as a
 northern band (10° to 70°), two hemispheres or a full globe; latitudes use an
@@ -57,7 +58,21 @@ the Biomes overlay uses named categories and is visible by default. Organic depo
 and their later burial remain downstream consequences. See the
 [ecology model](docs/generation-workflows.md#ecology-and-organic-geology).
 
-The editor's context panel follows the selection. Click a feature to read its
+The editor's right sidebar follows this workflow:
+
+| Current task      | Sidebar content                                                                        | Next action                                     |
+| ----------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Explore the map   | Map name, area and previously chosen regions                                           | Choose a region or click a feature              |
+| Inspect a feature | Feature information, origin and relationships                                          | Use its boundary or choose a surrounding region |
+| Inspect a region  | Extent, current detail and child regions                                               | Refine this region or choose a smaller one      |
+| Choose an outline | Existing-boundary, custom-outline and dividing-line tools with instructions            | Preview and keep the region, or cancel          |
+| Refine a region   | Inherited context, detail setting, optional variation settings and generation feedback | Generate detail or return to the region         |
+
+World setup, manual authoring and library workspaces are outside this sidebar.
+Boundary tools appear during outline selection. Earlier generation jobs stay
+collapsed behind a history disclosure.
+
+Click a feature to read its
 properties, origin and relationships; settlements also show their residents,
 livelihoods and retained history. **Inspect** returns to feature selection.
 **Atlas → Features** searches existing geography across the world.
@@ -74,8 +89,7 @@ and inclusion of inherited magical geography, settlements and routes. Refinement
 retains completed history and connected parent geography. Choosing a region alone
 does not generate detail. Regions can nest to any useful geographic depth, without
 fixed ranks or changing into city, site or interior map types. Use the breadcrumbs
-and region hierarchy to move between them. A blank map offers starting-landscape
-generation separately from regional refinement.
+and region hierarchy to move between them.
 
 Double-click or press Enter to finish an outline or dividing line. Escape cancels
 the unfinished selection. Hold Space to pan, or choose **Pan** for drag navigation.

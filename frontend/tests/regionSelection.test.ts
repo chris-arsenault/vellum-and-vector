@@ -32,9 +32,9 @@ test("dividing lines combine with geography and nested subjects retain their own
   await page.getByRole("button", { name: "Divide along a line", exact: true }).click();
   await clickWorld(page, 0, 500, [0, 0, 1000, 1000]);
   await clickWorld(page, 1000, 500, [0, 0, 1000, 1000], true);
-  await expect(page.locator(".region-draft")).toBeVisible();
-  // The finished line hands over to picking a side; the draft replaces the tool buttons.
-  await expect(page.getByText(/Click a place to preview a region/)).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Click the side of the dividing line" })
+  ).toBeVisible();
   await clickWorld(page, 300, 300, [0, 0, 1000, 1000]);
   await expect(page.getByLabel("Boundary choice")).toHaveCount(0);
   await page.getByLabel("Region name", { exact: false }).fill("Green reach");
@@ -83,6 +83,10 @@ test("region outlines can be adjusted and removed without changing feature geogr
   const first = await exportMap(page);
   await page.getByText("Region details", { exact: true }).click();
   await page.getByRole("button", { name: "Adjust outline", exact: true }).click();
+  await expect(page.getByText(/Keeping this outline updates the same region/)).toBeVisible();
+  await page.getByRole("button", { name: "Pan", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Selected outline", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Adjust selected outline", exact: true }).click();
   const box = (await canvas(page).boundingBox())!;
   // Adjust an existing boundary, then retain its stable region identity.
   const scale = Math.min((box.width - 70) / 600, (box.height - 70) / 600);
