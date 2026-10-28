@@ -1,6 +1,7 @@
 import { polygonParts } from "@atlas/domain";
 import type { SpatialCatalog } from "@atlas/storage-browser";
 import type { RasterGeography, RasterGeographyReference } from "./types";
+import { mergeDisplayFragments } from "./sceneWindows";
 
 /** Geometry moves directly from its GIS owner to the renderer, at the requested map scale. */
 export async function workspaceRasterGeography(
@@ -33,11 +34,15 @@ export async function workspaceRasterGeography(
         reference.tolerance
       );
       for (const { feature } of page.records)
-        if (feature.kind === "lake" && typeof feature.attributes.waterLevel === "number")
+        if (feature.kind === "lake" && typeof feature.attributes.waterLevel === "number") {
+          const previous = lakes.get(feature.id);
           lakes.set(feature.id, {
-            geometry: feature.geometry,
+            geometry: previous
+              ? mergeDisplayFragments(previous.geometry, feature.geometry)
+              : feature.geometry,
             level: feature.attributes.waterLevel,
           });
+        }
       after = page.next;
     } while (after);
   }

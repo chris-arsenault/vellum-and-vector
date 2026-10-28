@@ -3,6 +3,7 @@ import type { Geometry, Position } from "geojson";
 import { rectangle, requireThat, type Bounds } from "@atlas/domain";
 import type { GeometryKernel } from "./geometryKernel";
 import { boundarySegments } from "./boundarySegments";
+import { ByteCache } from "./byteCache";
 
 /** Storage pieces retain original edges; their endpoints never introduce geographic cuts. */
 const boundaryPartSegments = 256;
@@ -11,7 +12,9 @@ const geometryPieceCoordinates = 4096;
 
 /** Every derived product of a stored geometry row (boundary parts, spatial pieces, overviews)
  * is prepared here, lazily, keyed by the immutable geometry id. Writes never derive. */
+export const displayGeometryCacheBytes = 16 * 1024 * 1024;
 export class GeometryDerivations {
+  private shown = new ByteCache<string, Geometry>(displayGeometryCacheBytes);
   constructor(
     private db: Database,
     private kernel: GeometryKernel
@@ -158,16 +161,30 @@ export class GeometryDerivations {
       if (this.kernel.matches(`piece:${row.id}`, row.bytes, target, "intersects")) return true;
     return false;
   }
+  private overview(id: number, tolerance: number) {
+    if (!(tolerance > 0)) return undefined;
+    const bytes = this.db.selectValue(
+      "SELECT data FROM geometry_overviews WHERE geometry_id=? AND tolerance<=? ORDER BY tolerance DESC LIMIT 1",
+      [id, tolerance]
+    );
+    return bytes instanceof Uint8Array ? bytes : undefined;
+  }
+  /** The whole geometry at a display tolerance, for features that fit inside the window. */
+  whole(id: number, precision: number, tolerance = 0): Geometry {
+    const key = `${id}:${tolerance}`;
+    const cached = this.shown.get(key);
+    if (cached) return cached;
+    const overview = this.overview(id, tolerance);
+    const geometry = this.kernel.withBinary(overview ?? this.stored(id), (source) =>
+      displayPart(this.kernel, source, overview ? 0 : tolerance)
+    );
+    void precision;
+    this.shown.set(key, geometry, JSON.stringify(geometry).length * 2);
+    return geometry;
+  }
   window(id: number, bounds: Bounds, precision: number, tolerance = 0): Geometry | null {
-    const overview =
-      tolerance > 0
-        ? this.db.selectValue(
-            "SELECT data FROM geometry_overviews WHERE geometry_id=? AND tolerance<=? ORDER BY tolerance DESC LIMIT 1",
-            [id, tolerance]
-          )
-        : undefined;
-    const inputs =
-      overview instanceof Uint8Array ? [{ id: -id, bytes: overview }] : this.pieces(id, bounds);
+    const overview = this.overview(id, tolerance);
+    const inputs = overview ? [{ id: -id, bytes: overview }] : this.pieces(id, bounds);
     return this.clippedWindow(inputs, bounds, precision, tolerance);
   }
   private *pieces(id: number, b: Bounds) {

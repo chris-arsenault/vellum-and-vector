@@ -14,7 +14,7 @@ import {
   type CatalogRecord,
 } from "@atlas/domain";
 import type { CatalogProjection } from "./catalogProjection";
-import type { FeatureCatalog } from "./featureCatalog";
+import type { FeatureCatalog, Presented } from "./featureCatalog";
 import type { GeometryKernel } from "./geometryKernel";
 import { registryPath, registryWhere } from "./registryQuery";
 
@@ -31,8 +31,11 @@ END;
 CREATE TABLE IF NOT EXISTS registry_revision (world_id TEXT PRIMARY KEY,revision INTEGER,area_id TEXT);
 CREATE TABLE IF NOT EXISTS registry_dirty (world_id TEXT,feature_id TEXT,PRIMARY KEY(world_id,feature_id));
 CREATE TEMP TABLE IF NOT EXISTS registry_visible (row_id INTEGER PRIMARY KEY);`;
+const presentationBatch = 128;
 
-/** A disk projection supports filtering/sorting without a browser-wide feature collection. */
+/** A disk projection supports filtering/sorting without a browser-wide feature collection.
+ * Rows are presented in batches from one context per batch; invalidation marks only the
+ * features a write can affect. */
 export class RegistryCatalog {
   constructor(
     private db: Database,
@@ -73,6 +76,10 @@ export class RegistryCatalog {
       json_extract(r.data,?) COLLATE NOCASE ${direction},r.feature_id LIMIT ? OFFSET ?`,
       [...bind, key, key, key, input.limit, page * input.limit]
     );
+    const presented = this.present(
+      world,
+      rows.map((row) => ({ id: String(row.feature_id), areaId: String(row.area_id) }))
+    );
     return {
       total,
       matching,
@@ -80,18 +87,29 @@ export class RegistryCatalog {
       facets: this.facets(selection),
       columns: this.columns(selection, world),
       rows: rows.map((row) => ({
-        feature: this.features.one(
-          {
-            worldId: world.id,
-            areaId: String(row.area_id),
-            spaceId: areaSpace(world, String(row.area_id)),
-          },
-          String(row.feature_id)
-        )!.feature,
+        feature: presented.get(String(row.feature_id))!.feature,
         type: JSON.parse(String(row.type)),
         values: JSON.parse(String(row.data)),
       })),
     };
+  }
+  /** Present features grouped by their presentation area, one context per batch. */
+  private present(world: World, items: { id: string; areaId: string }[]) {
+    const result = new Map<string, Presented>();
+    const groups = new Map<string, string[]>();
+    for (const item of items) {
+      if (!groups.has(item.areaId)) groups.set(item.areaId, []);
+      groups.get(item.areaId)!.push(item.id);
+    }
+    for (const [areaId, ids] of groups)
+      for (let start = 0; start < ids.length; start += presentationBatch) {
+        const batch = this.features.many(
+          { worldId: world.id, areaId, spaceId: areaSpace(world, areaId) },
+          ids.slice(start, start + presentationBatch)
+        );
+        for (const [id, item] of batch) result.set(id, item);
+      }
+    return result;
   }
   private ensure(world: World, areaId?: string) {
     const previous = this.db.selectObject("SELECT * FROM registry_revision WHERE world_id=?", [
@@ -104,41 +122,28 @@ export class RegistryCatalog {
     this.db.transaction(() => {
       this.db.exec({ sql: "DELETE FROM registry_cache WHERE world_id=?", bind: [world.id] });
       this.db.exec({ sql: "DELETE FROM registry_dirty WHERE world_id=?", bind: [world.id] });
-      const stmt = this.db.prepare(`SELECT r.id,r.area_id FROM records_core r
+      const rows = this.db.selectObjects(
+        `SELECT r.id,r.area_id FROM records_core r
         WHERE r.world_id=? AND r.kind IN ('feature','magic','landmark')
         AND (r.kind<>'feature' OR NOT EXISTS (SELECT 1 FROM records_core s
           WHERE s.world_id=r.world_id AND s.id=r.id AND s.kind IN ('magic','landmark')))
-        ORDER BY r.id`);
-      try {
-        stmt.bind([world.id]);
-        while (stmt.step()) this.insert(world, String(stmt.get(0)), areaId ?? String(stmt.get(1)));
-      } finally {
-        stmt.finalize();
-      }
+        ORDER BY r.id`,
+        [world.id]
+      );
+      this.insert(
+        world,
+        rows.map((row) => ({ id: String(row.id), areaId: areaId ?? String(row.area_id) }))
+      );
       this.db.exec({
         sql: "INSERT OR REPLACE INTO registry_revision VALUES(?,?,?)",
         bind: [world.id, world.version, areaId ?? ""],
       });
     });
   }
-  /** Mark dependencies before and after writes, including removed representations. */
+  /** Mark the features a write can affect. Only entity writes still drop the whole projection. */
   changed(worldId: string, reference: RecordReference, next?: CatalogRecord) {
-    if (reference.kind === "area" && next?.data.kind === "area") {
-      if (this.unchangedArea(worldId, next.data.value)) return;
-    }
-    if (["area", "layer", "entity", "society"].includes(reference.kind)) {
-      this.db.exec({ sql: "DELETE FROM registry_revision WHERE world_id=?", bind: [worldId] });
-      return;
-    }
-    const id =
-      reference.kind === "representation"
-        ? this.db.selectValue(
-            "SELECT json_extract(data,'$.value.featureId') FROM records_core WHERE world_id=? AND kind='representation' AND id=?",
-            [worldId, reference.id]
-          )
-        : ["feature", "magic", "landmark"].includes(reference.kind)
-          ? reference.id
-          : null;
+    if (this.changedContext(worldId, reference, next)) return;
+    const id = this.changedFeature(worldId, reference);
     if (!id) return;
     this.db.exec({
       sql: `WITH RECURSIVE affected(id) AS (SELECT ? UNION SELECT r.id FROM affected a
@@ -146,6 +151,53 @@ export class RegistryCatalog {
         JOIN records_core r ON r.record_id=l.source)
         INSERT OR IGNORE INTO registry_dirty SELECT ?,id FROM affected`,
       bind: [id, worldId, worldId],
+    });
+  }
+  /** Area, layer, society and entity writes: true when handled here. */
+  private changedContext(worldId: string, reference: RecordReference, next?: CatalogRecord) {
+    switch (reference.kind) {
+      case "area":
+        if (next?.data.kind === "area" && this.unchangedArea(worldId, next.data.value)) return true;
+        this.markWhere(
+          worldId,
+          `r.area_id IN (WITH RECURSIVE descendants(id) AS (SELECT ? UNION SELECT a.id FROM records_core a
+            JOIN descendants d ON json_extract(a.data,'$.value.parentId')=d.id WHERE a.world_id=? AND a.kind='area')
+            SELECT id FROM descendants)`,
+          [reference.id, worldId]
+        );
+        return true;
+      case "layer":
+        this.markWhere(worldId, "r.layer_id=?", [reference.id]);
+        return true;
+      case "society":
+        this.markWhere(worldId, "r.area_id=?", [
+          next?.data.kind === "society"
+            ? next.data.value.areaId
+            : String(reference.id).replace(/^society:/, ""),
+        ]);
+        return true;
+      case "entity":
+        this.db.exec({ sql: "DELETE FROM registry_revision WHERE world_id=?", bind: [worldId] });
+        return true;
+      default:
+        return false;
+    }
+  }
+  private changedFeature(worldId: string, reference: RecordReference) {
+    if (reference.kind === "representation")
+      return this.db.selectValue(
+        "SELECT json_extract(data,'$.value.featureId') FROM records_core WHERE world_id=? AND kind='representation' AND id=?",
+        [worldId, reference.id]
+      );
+    return ["feature", "magic", "landmark"].includes(reference.kind) ? reference.id : null;
+  }
+  /** Features owned by, or represented in, the matching areas become dirty. */
+  private markWhere(worldId: string, where: string, bind: (string | number)[]) {
+    this.db.exec({
+      sql: `INSERT OR IGNORE INTO registry_dirty
+        SELECT ?,CASE WHEN r.kind='representation' THEN json_extract(r.data,'$.value.featureId') ELSE r.id END
+        FROM records_core r WHERE r.world_id=? AND r.kind IN ('feature','magic','landmark','representation') AND ${where}`,
+      bind: [worldId, worldId, ...bind],
     });
   }
   private unchangedArea(worldId: string, after: import("@atlas/domain").Area) {
@@ -176,37 +228,35 @@ export class RegistryCatalog {
   }
   private refresh(world: World, areaId?: string) {
     this.db.transaction(() => {
-      const statement = this.db.prepare(
-        "SELECT feature_id FROM registry_dirty WHERE world_id=? ORDER BY feature_id"
+      const dirty = this.db.selectObjects(
+        `SELECT d.feature_id,(SELECT area_id FROM records_core r WHERE r.world_id=d.world_id AND r.id=d.feature_id
+          AND r.kind IN ('feature','magic','landmark') LIMIT 1) AS area_id
+        FROM registry_dirty d WHERE d.world_id=? ORDER BY d.feature_id`,
+        [world.id]
       );
-      try {
-        statement.bind([world.id]);
-        while (statement.step()) {
-          const id = String(statement.get(0));
-          this.db.exec({
-            sql: "DELETE FROM registry_cache WHERE world_id=? AND feature_id=?",
-            bind: [world.id, id],
-          });
-          const owner = this.db.selectValue(
-            "SELECT area_id FROM records_core WHERE world_id=? AND id=? AND kind IN ('feature','magic','landmark') LIMIT 1",
-            [world.id, id]
-          );
-          if (owner !== undefined) this.insert(world, id, areaId ?? String(owner));
-        }
-      } finally {
-        statement.finalize();
-      }
+      if (!dirty.length) return;
+      this.db.exec({
+        sql: `DELETE FROM registry_cache WHERE world_id=? AND feature_id IN (SELECT feature_id FROM registry_dirty WHERE world_id=?)`,
+        bind: [world.id, world.id],
+      });
+      this.insert(
+        world,
+        dirty
+          .filter((row) => row.area_id !== null)
+          .map((row) => ({ id: String(row.feature_id), areaId: areaId ?? String(row.area_id) }))
+      );
       this.db.exec({ sql: "DELETE FROM registry_dirty WHERE world_id=?", bind: [world.id] });
     });
   }
-  private insert(world: World, id: string, areaId: string) {
-    const item = this.features.one(
-      { worldId: world.id, areaId, spaceId: areaSpace(world, areaId) },
-      id
-    );
-    if (!item) return;
-    const feature = item.feature,
-      precision = world.reference.precision ?? 1e-6;
+  private insert(world: World, items: { id: string; areaId: string }[]) {
+    const presented = this.present(world, items);
+    for (const { id, areaId } of items) {
+      const item = presented.get(id);
+      if (item) this.insertRow(world, id, areaId, item.feature);
+    }
+  }
+  private insertRow(world: World, id: string, areaId: string, feature: AtlasFeature) {
+    const precision = world.reference.precision ?? 1e-6;
     const extent = feature.footprint ?? feature.geometry;
     const measures = this.kernel.measure(extent, precision);
     const row = registryRow(world, feature, this.communities(world.id, feature), {
@@ -273,26 +323,25 @@ export class RegistryCatalog {
     }
     const b = input.extent,
       precision = world.reference.precision ?? 1e-6;
+    const candidates = this.db.selectObjects(
+      `SELECT r.row_id,r.feature_id,r.area_id FROM registry_cache r
+      JOIN registry_bounds b USING(row_id) WHERE r.world_id=? AND b.min_x<=? AND b.max_x>=? AND b.min_y<=? AND b.max_y>=?`,
+      [world.id, b[2], b[0], b[3], b[1]]
+    );
+    const presented = this.present(
+      world,
+      candidates.map((row) => ({ id: String(row.feature_id), areaId: String(row.area_id) }))
+    );
     this.kernel.withShape(rectangle(b), precision, (target) => {
-      const stmt = this.db.prepare(`SELECT r.row_id,r.feature_id,r.area_id FROM registry_cache r
-        JOIN registry_bounds b USING(row_id) WHERE r.world_id=? AND b.min_x<=? AND b.max_x>=? AND b.min_y<=? AND b.max_y>=?`);
-      try {
-        stmt.bind([world.id, b[2], b[0], b[3], b[1]]);
-        while (stmt.step()) {
-          const areaId = String(stmt.get(2));
-          const item = this.features.one(
-            { worldId: world.id, areaId, spaceId: areaSpace(world, areaId) },
-            String(stmt.get(1))
-          )!;
-          if (
-            this.kernel.matches(`${item.key}:geometry`, item.geometry, target, "intersects") ||
+      for (const row of candidates) {
+        const item = presented.get(String(row.feature_id));
+        if (
+          item &&
+          (this.kernel.matches(`${item.key}:geometry`, item.geometry, target, "intersects") ||
             (item.footprint &&
-              this.kernel.matches(`${item.key}:footprint`, item.footprint, target, "intersects"))
-          )
-            this.db.exec({ sql: "INSERT INTO registry_visible VALUES(?)", bind: [stmt.get(0)] });
-        }
-      } finally {
-        stmt.finalize();
+              this.kernel.matches(`${item.key}:footprint`, item.footprint, target, "intersects")))
+        )
+          this.db.exec({ sql: "INSERT INTO registry_visible VALUES(?)", bind: [row.row_id] });
       }
     });
   }

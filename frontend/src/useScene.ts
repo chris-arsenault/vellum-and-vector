@@ -4,7 +4,7 @@ import { atlasWorkspace, workspaceScope } from "./atlasWorkspace";
 import { bounds } from "./presentation";
 import { spatial, type Bounds } from "@atlas/domain";
 import { type AtlasFeature, type World } from "./types";
-import { sceneWindows, displayTolerance } from "./sceneWindows";
+import { sceneWindows, displayTolerance, mergeDisplayFragments } from "./sceneWindows";
 
 export function useMapData(
   world: World,
@@ -83,7 +83,21 @@ export function useScene(
             },
             tolerance
           );
-          for (const { feature } of page.records) features.set(feature.id, feature);
+          for (const { feature } of page.records) {
+            const previous = features.get(feature.id);
+            features.set(
+              feature.id,
+              previous
+                ? {
+                    ...feature,
+                    geometry: mergeDisplayFragments(previous.geometry, feature.geometry),
+                    ...(previous.footprint && feature.footprint
+                      ? { footprint: mergeDisplayFragments(previous.footprint, feature.footprint) }
+                      : {}),
+                  }
+                : feature
+            );
+          }
           after = page.next;
         } while (after);
       }
