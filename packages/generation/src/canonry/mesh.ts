@@ -9,15 +9,15 @@ export interface TriangleCoord {
   v: number;
   inverted: boolean;
 }
-export interface TriangleCoordinates extends Iterable<TriangleCoord> {
-  readonly [index: number]: TriangleCoord;
-  readonly length: number;
-  forEach(visit: (p: TriangleCoord, index: number) => void): void;
-  findIndex(predicate: (p: TriangleCoord, index: number) => boolean): number;
-}
+/** Lattice address lookup. Meshes without lattice addresses (adaptive) answer undefined. */
 export interface TriangleIndex {
-  get(key: string): number | undefined;
-  at?(u: number, v: number, inverted: boolean): number | undefined;
+  at(u: number, v: number, inverted: boolean): number | undefined;
+}
+/** Adaptive meshes have no lattice addresses; a class keeps the mesh structured-cloneable. */
+export class NoTriangleIndex implements TriangleIndex {
+  at(): undefined {
+    return undefined;
+  }
 }
 export interface PhysicalMesh {
   /** Only full-width world meshes identify their east/west edges. */
@@ -26,7 +26,10 @@ export interface PhysicalMesh {
   contentCount: number;
   contentRadius: number;
   workRadius: number;
-  coords: TriangleCoordinates;
+  /** Lattice address columns; adaptive meshes leave them empty. */
+  coordU: Int32Array;
+  coordV: Int32Array;
+  coordInverted: Uint8Array;
   indexes: TriangleIndex;
   x: NumericalVector;
   y: NumericalVector;
@@ -52,22 +55,41 @@ export interface PhysicalMesh {
   cellToLeaf: NumericalVector;
   leafToCell: NumericalVector;
 }
-const key = (p: TriangleCoord) => `${p.u}:${p.v}:${Number(p.inverted)}`;
 export function triangleIndex(mesh: PhysicalMesh, u: number, v: number, inverted: boolean) {
-  return mesh.indexes.at
-    ? mesh.indexes.at(u, v, inverted)
-    : mesh.indexes.get(`${u}:${v}:${Number(inverted)}`);
+  return mesh.indexes.at(u, v, inverted);
 }
 function centroid(p: TriangleCoord): [number, number] {
   return [1.5 * (p.u + p.v) + (p.inverted ? 2 : 1), rootThree * 0.5 * (-p.u + p.v)];
 }
-export function neighborCoord(p: TriangleCoord, edge: number): TriangleCoord {
-  const step = p.inverted ? 1 : -1;
-  return {
-    u: p.u + (edge === 1 ? step : 0),
-    v: p.v + (edge === 2 ? step : 0),
-    inverted: !p.inverted,
-  };
+/** The u address across `edge` from (u, v, inverted); v moves only across edge 2. */
+export function neighborU(u: number, inverted: number, edge: number) {
+  return edge === 1 ? u + (inverted ? 1 : -1) : u;
+}
+export function neighborV(v: number, inverted: number, edge: number) {
+  return edge === 2 ? v + (inverted ? 1 : -1) : v;
+}
+/** Dense address table over the enumerated lattice extent, for the reference mesh. */
+class DenseTriangleIndex implements TriangleIndex {
+  private readonly table: Int32Array;
+  private readonly side: number;
+  constructor(
+    private readonly extent: number,
+    coords: TriangleCoord[]
+  ) {
+    this.side = 2 * extent + 1;
+    this.table = new Int32Array(this.side * this.side * 2).fill(-1);
+    coords.forEach((p, i) => {
+      this.table[this.slot(p.u, p.v, p.inverted)] = i;
+    });
+  }
+  private slot(u: number, v: number, inverted: boolean) {
+    return ((u + this.extent) * this.side + (v + this.extent)) * 2 + Number(inverted);
+  }
+  at(u: number, v: number, inverted: boolean) {
+    if (Math.abs(u) > this.extent || Math.abs(v) > this.extent) return undefined;
+    const index = this.table[this.slot(u, v, inverted)];
+    return index < 0 ? undefined : index;
+  }
 }
 function centeredDomain(count: number): TriangleCoord[] {
   const radius = Math.sqrt((count * triangleArea) / Math.PI);
@@ -96,7 +118,8 @@ export function createMesh(contentCount: number, padding: number): PhysicalMesh 
     Math.ceil((Math.PI * (radius + padding) ** 2) / triangleArea)
   );
   const coords = centeredDomain(count),
-    indexes = new Map(coords.map((p, i) => [key(p), i]));
+    extent = Math.ceil((2 * Math.sqrt((count * triangleArea) / Math.PI)) / 3) + 4,
+    indexes = new DenseTriangleIndex(extent, coords);
   const x = new Float32Array(count),
     y = new Float32Array(count);
   for (let i = 0; i < count; i++) [x[i], y[i]] = centroid(coords[i]);
@@ -105,7 +128,9 @@ export function createMesh(contentCount: number, padding: number): PhysicalMesh 
     contentCount,
     contentRadius: Math.hypot(x[contentCount - 1], y[contentCount - 1]),
     workRadius: Math.hypot(x[count - 1], y[count - 1]),
-    coords,
+    coordU: Int32Array.from(coords, (p) => p.u),
+    coordV: Int32Array.from(coords, (p) => p.v),
+    coordInverted: Uint8Array.from(coords, (p) => Number(p.inverted)),
     indexes,
     x,
     y,
@@ -139,7 +164,13 @@ export function createMesh(contentCount: number, padding: number): PhysicalMesh 
 function connectMesh(mesh: PhysicalMesh) {
   for (let i = 0; i < mesh.count; i++)
     for (let edge = 0; edge < 3; edge++) {
-      const j = mesh.indexes.get(key(neighborCoord(mesh.coords[i], edge))) ?? -1;
+      const inverted = mesh.coordInverted[i],
+        j =
+          mesh.indexes.at(
+            neighborU(mesh.coordU[i], inverted, edge),
+            neighborV(mesh.coordV[i], inverted, edge),
+            !inverted
+          ) ?? -1;
       mesh.neighbors[i * 3 + edge] = j;
       if (j < 0) {
         mesh.boundary[i] = 1;
@@ -159,8 +190,11 @@ export function triangleIdentity(mesh: PhysicalMesh, i: number): number {
       Math.imul(round((mesh.x[i] + mesh.origin[0]) * 1000), 73856093) ^
       Math.imul(round((mesh.y[i] + mesh.origin[1]) * 1000), 19349663)
     );
-  const p = mesh.coords[i];
-  return Math.imul(p.u, 73856093) ^ Math.imul(p.v, 19349663) ^ (p.inverted ? 83492791 : 0);
+  return (
+    Math.imul(mesh.coordU[i], 73856093) ^
+    Math.imul(mesh.coordV[i], 19349663) ^
+    (mesh.coordInverted[i] ? 83492791 : 0)
+  );
 }
 function latticeCandidate(mesh: PhysicalMesh, x: number, y: number, inverted: boolean) {
   const sum = (x - (inverted ? 2 : 1)) / 1.5,

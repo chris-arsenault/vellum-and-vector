@@ -4,7 +4,7 @@ type Point = [number, number];
 const rootThree = Math.sqrt(3);
 
 function triangle(mesh: PhysicalMesh, cell: number, x: number, y: number): Point[] {
-  const sign = mesh.coords[cell].inverted ? 1 : -1,
+  const sign = mesh.coordInverted[cell] ? 1 : -1,
     sx = mesh.spacing,
     sy = mesh.periodic?.poles?.spacingY ?? sx;
   return [

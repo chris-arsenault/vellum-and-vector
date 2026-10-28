@@ -63,20 +63,21 @@ it.each([
       const constructionMs = performance.now() - start;
       f.arena.flush();
       f.arena.releaseProcess();
-      expect(Array.isArray(mesh.coords)).toBe(false);
+      expect(mesh.coordU).toBeInstanceOf(Int32Array);
       expect(mesh.indexes instanceof Map).toBe(false);
       expect(mesh.contentAreas.reduce((sum, area) => sum + area, 0) / 1e15).toBeCloseTo(1, 10);
       for (let i = 0; i < mesh.count; i += 17) {
-        const p = mesh.coords[i];
-        expect(triangleIndex(mesh, p.u, p.v, p.inverted)).toBe(i);
+        expect(triangleIndex(mesh, mesh.coordU[i], mesh.coordV[i], !!mesh.coordInverted[i])).toBe(
+          i
+        );
         expect(nearestTriangle(mesh, mesh.x[i], mesh.y[i])).toBe(i);
         if (mesh.periodic)
           expect(
             triangleIndex(
               mesh,
-              p.u + mesh.periodic.columns,
-              p.v + mesh.periodic.columns,
-              p.inverted
+              mesh.coordU[i] + mesh.periodic.columns,
+              mesh.coordV[i] + mesh.periodic.columns,
+              !!mesh.coordInverted[i]
             )
           ).toBe(i);
         for (let edge = 0; edge < 3; edge++) {

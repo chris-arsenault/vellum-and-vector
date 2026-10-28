@@ -12,7 +12,7 @@ import { riverChannelGeometry } from "./channelGeometry";
 import type { MapProcessContext } from "../process";
 
 function index(map: PhysicalField, u: number, v: number, inverted: boolean) {
-  return map.mesh.indexes.get(`${u}:${v}:${Number(inverted)}`)!;
+  return map.mesh.indexes.at(u, v, inverted)!;
 }
 function catchment(
   map: PhysicalField,

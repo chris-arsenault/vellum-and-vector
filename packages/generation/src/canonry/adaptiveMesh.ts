@@ -12,7 +12,7 @@ import {
   type NumericalVector,
 } from "@atlas/domain";
 import type { Geometry } from "geojson";
-import type { PhysicalMesh } from "./mesh";
+import { NoTriangleIndex, type PhysicalMesh } from "./mesh";
 import { joinAdaptiveSeam } from "./adaptiveSeam";
 import { physicalAdaptiveFaces } from "./adaptiveMeshFaces";
 
@@ -103,8 +103,10 @@ export function adaptivePhysicalMesh(
       bounds[2] - origin[0],
       bounds[3] - origin[1],
     ],
-    coords: [],
-    indexes: new Map(),
+    coordU: new Int32Array(0),
+    coordV: new Int32Array(0),
+    coordInverted: new Uint8Array(0),
+    indexes: new NoTriangleIndex(),
     latticeOffset: [0, 0],
     ...physicalAdaptiveFaces(topology, order.cellToLeaf, order.leafToCell, numerical),
   };

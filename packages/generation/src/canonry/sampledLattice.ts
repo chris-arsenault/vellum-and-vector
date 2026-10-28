@@ -1,6 +1,6 @@
 import { allocateNumerical, type Bounds, type NumericalAllocator } from "@atlas/domain";
 import { latticeRows, forEachLatticeCell, type LatticeFrame } from "./latticeRows";
-import { LatticeCoordinates, LatticeIndex } from "./latticeCoordinates";
+import { LatticeIndex } from "./latticeCoordinates";
 
 /** Classify candidates once, then write content and halo into compact numerical columns. */
 export function sampledLattice(
@@ -35,9 +35,10 @@ export function sampledLattice(
   }
   const vector = (type: "int32" | "uint8", length: number, name: string) =>
     allocateNumerical({ type, length, lifetime: "run", name }, numerical);
-  const u = vector("int32", count, "lattice:u"),
-    v = vector("int32", count, "lattice:v"),
-    inverted = vector("uint8", count, "lattice:orientation"),
+  // Address columns are read on every stencil and identity hash: plain typed arrays.
+  const u = new Int32Array(count),
+    v = new Int32Array(count),
+    inverted = new Uint8Array(count),
     indexes = vector("int32", rows.slots, "lattice:index").fill(-1);
   let index = 0;
   for (const kind of [1, 2])
@@ -50,7 +51,9 @@ export function sampledLattice(
     });
   if (numerical) numerical.release(membership);
   return {
-    coords: new LatticeCoordinates(u, v, inverted).view,
+    coordU: u,
+    coordV: v,
+    coordInverted: inverted,
     indexes: new LatticeIndex(rows, indexes, frame, periodicColumns),
     contentCount,
     count,

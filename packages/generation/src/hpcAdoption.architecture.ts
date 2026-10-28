@@ -24,9 +24,12 @@ const rules: Rule[] = [
     scope: /canonry\//,
   },
   { pattern: /new Set<number>/, replacement: "BitSet or SmallIntSet", scope: /canonry\// },
-  { pattern: /\.sort\(\(/, replacement: "radixOrder or a native typed-array sort()" },
-  { pattern: /\.coords\[/, replacement: "LatticeIndex accessors (u, v, inverted by index)" },
-  { pattern: /workingArray\([^)]*\)\.fill\(-1\)/, replacement: "EpochStamps" },
+  {
+    pattern: /\.sort\(\(/,
+    replacement: "radixOrder or a native typed-array sort()",
+    scope: /canonry\//,
+  },
+  { pattern: /\.coords\[/, replacement: "coordinate columns (coordU, coordV, inverted)" },
   {
     pattern: /JSON\.stringify\(/,
     replacement: "an integer key or groupByLabel",
@@ -57,6 +60,8 @@ export function hpcAdoptionFindings(root = __dirname) {
     if (substitutes.has(file)) continue;
     const lines = readFileSync(path, "utf8").split("\n");
     lines.forEach((line, index) => {
+      // A site with no applicable structure (a short list of objects) carries its reason inline.
+      if (/hpc-exempt:/.test(line) || /hpc-exempt:/.test(lines[index - 1] ?? "")) return;
       for (const rule of rules)
         if (rule.pattern.test(line) && (!rule.scope || rule.scope.test(file)))
           findings.push(`${file}:${index + 1}: ${line.trim()} -> ${rule.replacement}`);

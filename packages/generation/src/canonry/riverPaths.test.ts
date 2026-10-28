@@ -8,7 +8,7 @@ import { createRiverPaths, riverPath } from "./riverPaths";
 function network() {
   const map = createField(createWorldMesh([-100_000, -100_000, 100_000, 100_000], 1024, 0));
   const index = (u: number, v: number, inverted: boolean) => {
-    const i = map.mesh.coords.findIndex((p) => p.u === u && p.v === v && p.inverted === inverted);
+    const i = map.mesh.indexes.at(u, v, inverted) ?? -1;
     expect(i).toBeGreaterThanOrEqual(0);
     return i;
   };
@@ -140,13 +140,12 @@ it("carries finite dimensional station profiles without changing the drainage si
   expect(physicalData(map)).toEqual(original);
 });
 function physicalData(map: import("./field").PhysicalField) {
-  const coords = Array.from(map.mesh.coords);
+  const { coordU, coordV, coordInverted, indexes } = map.mesh;
   return {
     ...map,
     mesh: {
       ...map.mesh,
-      coords,
-      indexes: coords.map((p) => map.mesh.indexes.get(`${p.u}:${p.v}:${Number(p.inverted)}`)),
+      indexes: Array.from(coordU, (u, i) => indexes.at(u, coordV[i], !!coordInverted[i])),
     },
   };
 }

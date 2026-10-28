@@ -4,7 +4,7 @@ import {
   type NumericalAllocator,
   type SampleType,
 } from "@atlas/domain";
-import { neighborCoord, triangleIndex, type PhysicalMesh } from "./mesh";
+import { neighborU, neighborV, type PhysicalMesh } from "./mesh";
 import { worldLattice, joinWorldEdges } from "./periodicMesh";
 import { latticePosition, type LatticeFrame } from "./latticeRows";
 import { sampledLattice } from "./sampledLattice";
@@ -88,7 +88,7 @@ function buildMesh(
   closePoles: boolean,
   numerical?: NumericalAllocator
 ): PhysicalMesh {
-  const { count, contentCount, coords, indexes } = sampled,
+  const { count, contentCount, coordU, coordV, coordInverted, indexes } = sampled,
     { spacing } = frame;
   const vector = (type: SampleType, size: number, name: string, value = 0) =>
     allocateNumerical(
@@ -104,7 +104,9 @@ function buildMesh(
   const mesh: PhysicalMesh = {
     count,
     contentCount,
-    coords,
+    coordU,
+    coordV,
+    coordInverted,
     indexes,
     origin,
     latticeOffset: frame.offset,
@@ -144,18 +146,28 @@ function buildMesh(
     cellToLeaf: identity(),
     leafToCell: identity(),
   };
-  coords.forEach((p, i) => {
-    [mesh.x[i], mesh.y[i]] = latticePosition(p, frame);
-  });
+  placeCentroids(mesh, frame);
   if (wrapX) joinWorldEdges(mesh, lattice, closePoles);
   connect(mesh, frame);
   return mesh;
 }
+function placeCentroids(mesh: PhysicalMesh, frame: LatticeFrame) {
+  for (let i = 0; i < mesh.count; i++)
+    [mesh.x[i], mesh.y[i]] = latticePosition(
+      { u: mesh.coordU[i], v: mesh.coordV[i], inverted: !!mesh.coordInverted[i] },
+      frame
+    );
+}
 function connect(mesh: PhysicalMesh, frame: LatticeFrame) {
   for (let i = 0; i < mesh.count; i++)
     for (let edge = 0; edge < 3; edge++) {
-      const p = neighborCoord(mesh.coords[i], edge),
-        j = triangleIndex(mesh, p.u, p.v, p.inverted) ?? -1,
+      const inverted = mesh.coordInverted[i],
+        p = {
+          u: neighborU(mesh.coordU[i], inverted, edge),
+          v: neighborV(mesh.coordV[i], inverted, edge),
+          inverted: !inverted,
+        },
+        j = mesh.indexes.at(p.u, p.v, p.inverted) ?? -1,
         at = i * 3 + edge;
       mesh.neighbors[at] = j;
       if (j < 0) {

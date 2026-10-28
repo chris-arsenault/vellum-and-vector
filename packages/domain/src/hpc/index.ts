@@ -2,6 +2,7 @@ export { CellQueue } from "./cellQueue";
 export { RecordQueue } from "./recordQueue";
 export { MonotoneHeap } from "./monotoneHeap";
 export { KeyedHeap, TopK } from "./keyedHeap";
+export { MultiKeyHeap } from "./multiKeyHeap";
 export { radixOrder } from "./radixOrder";
 export { UnionFind } from "./unionFind";
 export { groupByLabel, type LabelGroups } from "./groupByLabel";

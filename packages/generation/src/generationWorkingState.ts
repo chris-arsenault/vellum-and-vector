@@ -67,7 +67,9 @@ function copyWorkingState(initial: GenerationState, numerical?: NumericalAllocat
   // Lattice addresses are immutable after construction. Keep their column views and lookup
   // behavior; structuredClone cannot represent them and expanding them would rebuild the mesh.
   if (mesh) {
-    copies.set(mesh.coords, mesh.coords);
+    copies.set(mesh.coordU, mesh.coordU);
+    copies.set(mesh.coordV, mesh.coordV);
+    copies.set(mesh.coordInverted, mesh.coordInverted);
     copies.set(mesh.indexes, mesh.indexes);
   }
   if (initial.numerical) copies.set(initial.numerical, numerical);

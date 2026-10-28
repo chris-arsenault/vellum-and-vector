@@ -38,8 +38,9 @@ function latticeLimits(mesh: PhysicalMesh, bounds: Bounds) {
 function canonicalCell(mesh: PhysicalMesh, u: number, v: number, inverted: boolean) {
   const cell = triangleIndex(mesh, u, v, inverted);
   if (cell === undefined) return undefined;
-  const coordinate = mesh.coords[cell];
-  return coordinate.u === u && coordinate.v === v && coordinate.inverted === inverted
+  return mesh.coordU[cell] === u &&
+    mesh.coordV[cell] === v &&
+    !!mesh.coordInverted[cell] === inverted
     ? cell
     : undefined;
 }

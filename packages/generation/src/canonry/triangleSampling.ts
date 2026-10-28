@@ -15,7 +15,7 @@ function locate(mesh: PhysicalMesh, x: number, y: number) {
   [x, y] = meshPoint(mesh, x, y);
   const cell = nearestTriangle(mesh, x, y);
   if (cell < 0) return { cell, barycentric: [0, 0, 0], minimum: 0 };
-  const sign = mesh.coords[cell].inverted ? -1 : 1,
+  const sign = mesh.coordInverted[cell] ? -1 : 1,
     dx = (meshDeltaX(mesh, x - mesh.x[cell]) / mesh.spacing) * sign,
     dy = (y - mesh.y[cell]) / (mesh.periodic?.poles?.spacingY ?? mesh.spacing);
   const barycentric = [
@@ -39,7 +39,7 @@ function fanWeights(barycentric: number[], minimum: number) {
   };
 }
 function faceNeighbor(mesh: PhysicalMesh, cell: number, opposite: number) {
-  const edge = mesh.coords[cell].inverted && opposite > 0 ? 3 - opposite : opposite;
+  const edge = mesh.coordInverted[cell] && opposite > 0 ? 3 - opposite : opposite;
   const neighbor = mesh.neighbors[cell * 3 + edge];
   return neighbor < 0 ? cell : neighbor;
 }
@@ -136,7 +136,7 @@ export function* triangleCellFans(
       ];
       return [a, middle];
     });
-    if (mesh.coords[cell].inverted) boundary.reverse();
+    if (mesh.coordInverted[cell]) boundary.reverse();
     for (let i = 0; i < boundary.length; i++)
       yield [center, boundary[i], boundary[(i + 1) % boundary.length]];
   }
@@ -176,8 +176,8 @@ function* boundarySegments(
           (a[1] + b[1]) / 2,
           (read(cell) + read(neighbor)) / 2,
         ];
-      yield mesh.coords[cell].inverted ? [b, middle] : [a, middle];
-      yield mesh.coords[cell].inverted ? [middle, a] : [middle, b];
+      yield mesh.coordInverted[cell] ? [b, middle] : [a, middle];
+      yield mesh.coordInverted[cell] ? [middle, a] : [middle, b];
     }
   }
 }

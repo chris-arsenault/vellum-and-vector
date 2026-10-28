@@ -185,8 +185,7 @@ function catchment() {
     profile = atlasPhysicalProfile();
   map.WaterKindCodes.fill(1);
   map.Slope.fill(profile.ChannelReferenceSlope);
-  const index = (u: number, inverted: boolean) =>
-    map.mesh.indexes.get(`${u}:0:${Number(inverted)}`)!;
+  const index = (u: number, inverted: boolean) => map.mesh.indexes.at(u, 0, inverted)!;
   const members = Array.from({ length: 12 }, (_, k) => [
     index(k - 6, false),
     index(k - 6, true),

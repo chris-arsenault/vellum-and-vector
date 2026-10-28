@@ -6,10 +6,12 @@ export interface TriangleVertex {
 }
 /** Six incident lattice triangles, derived locally instead of indexing every world vertex. */
 export function triangleVertex(mesh: PhysicalMesh, cell: number, corner: number): TriangleVertex {
-  const p = mesh.coords[cell],
-    sign = p.inverted ? -1 : 1;
-  const x = 3 * (p.u + p.v) + (p.inverted ? 4 : 2) + (corner === 0 ? -2 * sign : sign);
-  const y = -p.u + p.v + (corner === 0 ? 0 : corner === 1 ? -1 : 1);
+  const u = mesh.coordU[cell],
+    v = mesh.coordV[cell],
+    inverted = mesh.coordInverted[cell],
+    sign = inverted ? -1 : 1;
+  const x = 3 * (u + v) + (inverted ? 4 : 2) + (corner === 0 ? -2 * sign : sign);
+  const y = -u + v + (corner === 0 ? 0 : corner === 1 ? -1 : 1);
   const a = (x / 3 - y) / 2,
     b = (x / 3 + y) / 2;
   const candidates = [
