@@ -1,4 +1,5 @@
 // AtmosphericFlow.cs and AtmosphericFlowLayer.cs, Canonry 0f62584c.
+import { EpochStamps } from "@atlas/domain";
 import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { PhysicalProfile } from "./profile";
@@ -72,18 +73,18 @@ function windDirection(map: PhysicalField, c: PhysicalContext, i: number): [numb
   const angle = Math.atan2(across, along) + wander;
   return [Math.cos(angle), Math.sin(angle)];
 }
-function traceAirMass(map: PhysicalField, scale: number, start: number) {
+function traceAirMass(map: PhysicalField, scale: number, start: number, visited: EpochStamps) {
   let current = start,
     barrier = 0,
     moistureBarrier = -1,
     ocean = -1;
-  const visited = new Set<number>();
+  visited.begin();
   for (let distance = 0; distance < 180_000;) {
     const next = map.UpwindTargets[current];
-    if (next < 0 || visited.has(next)) break;
+    if (next < 0 || visited.marked(next)) break;
     distance += physicalDistance(map.mesh, current, next);
     if (distance > 180_000) break;
-    visited.add(next);
+    visited.mark(next);
     current = next;
     barrier = Math.max(barrier, map.Elevation[current] - map.Elevation[start]);
     if (distance <= 140_000) moistureBarrier = barrier;
@@ -109,8 +110,9 @@ export function atmosphericFlow(map: PhysicalField, c: PhysicalContext) {
     map.UpwindTargets[i] = alignedNeighbor(map, i, -x, -y);
   }
   wrapLinks(map, p, map.UpwindTargets);
+  const visited = new EpochStamps(map.mesh.count);
   for (let i = 0; i < map.mesh.count; i++) {
-    const barrier = traceAirMass(map, p.ElevationScale, i);
+    const barrier = traceAirMass(map, p.ElevationScale, i, visited);
     map.WindSpeed[i] = windSpeed(map, terrain, p, i, beltSpeed(p, latitudeAt(p, map, i)), barrier);
   }
 }

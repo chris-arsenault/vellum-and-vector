@@ -1,4 +1,4 @@
-import { biomes, spatial, type NumericalVector } from "@atlas/domain";
+import { biomes, SmallIntSet, spatial, type NumericalVector } from "@atlas/domain";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 import type { GenerationState } from "../process";
 import { components, publishPlace } from "./geographicRegions";
@@ -207,13 +207,13 @@ function pieceTerms(
   sibling: (label: number) => boolean
 ) {
   const mesh = state.physical!.map.mesh,
-    siblings = new Set<number>();
+    siblings = new SmallIntSet();
   for (const i of piece)
     for (let edge = 0; edge < mesh.degree[i]; edge++) {
       const j = mesh.neighbors[i * mesh.stride + edge];
       if (j >= 0 && claimed[j] !== own && sibling(claimed[j])) siblings.add(claimed[j]);
     }
-  return [own, ...siblings].map((label) => (i: number) => Number(claimed[i] === label));
+  return [own, ...siblings.items()].map((label) => (i: number) => Number(claimed[i] === label));
 }
 function publishBiome(
   state: GenerationState,

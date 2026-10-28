@@ -38,20 +38,23 @@ function validateWaterState(map: PhysicalField, i: number) {
   if (!dry && surface - map.Elevation[i] !== depth)
     throw new Error("Physical water depth does not match surface minus floor.");
 }
-function validateLakeSurface(map: PhysicalField, i: number, surfaces: Map<number, number>) {
+/** `surfaces` holds each body's surface by id, NaN until its first lake triangle. */
+function validateLakeSurface(map: PhysicalField, i: number, surfaces: Float64Array) {
   const body = map.WaterBodyIds[i],
     surface = map.WaterSurfaceElevations[i];
   if (
     body <= 1 ||
     map.WaterDepths[i] <= 0 ||
-    (surfaces.has(body) && surfaces.get(body) !== surface)
+    (!Number.isNaN(surfaces[body]) && surfaces[body] !== surface)
   )
     throw new Error("Lake triangle lacks a consistent water surface.");
-  surfaces.set(body, surface);
+  surfaces[body] = surface;
 }
 function validateWater(map: PhysicalField) {
-  let ocean = 0;
-  const surfaces = new Map<number, number>();
+  let ocean = 0,
+    bodies = 0;
+  for (let i = 0; i < map.mesh.count; i++) bodies = Math.max(bodies, map.WaterBodyIds[i] + 1);
+  const surfaces = new Float64Array(bodies).fill(NaN);
   for (let i = 0; i < map.mesh.count; i++) {
     validateWaterState(map, i);
     if (map.WaterKindCodes[i] === 1) {

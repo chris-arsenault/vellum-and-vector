@@ -6,7 +6,7 @@ import { strainAt } from "./magicConfluences";
 import { hashUnit } from "./noise";
 import { clamp, round, units } from "./math";
 import { rebuild } from "./surface";
-import { radixOrder, type NumericalVector } from "@atlas/domain";
+import { BitSet, radixOrder, type NumericalVector } from "@atlas/domain";
 import { workingValues, releaseWorking } from "./physicalNumerics";
 
 const tears = (field: MagicField) =>
@@ -79,9 +79,12 @@ export function pairingSources(
     strength = field.originSources.tear;
   if (!strength) return;
   const eligible = doorEligibility(state, field, strength);
-  const used = new Set<number>();
+  const used = new BitSet(map.mesh.count);
   field.doors = field.doors.filter((door) => eligible(door.a) && eligible(door.b));
-  for (const door of field.doors) used.add(door.a).add(door.b);
+  for (const door of field.doors) {
+    used.set(door.a);
+    used.set(door.b);
+  }
   const scores = workingValues(map, "float64", "magic:door-candidates", (i) =>
     !used.has(i) && eligible(i) ? strength[i] : -Infinity
   );
@@ -91,7 +94,8 @@ export function pairingSources(
     if (used.has(a)) continue;
     const b = partner(map, scores, candidates, used, a, p.doorDistance, p.doorMatch);
     if (b < 0) continue;
-    used.add(a).add(b);
+    used.set(a);
+    used.set(b);
     field.doors.push({ a, b });
   }
   releaseWorking(map, scores, candidates);
@@ -134,7 +138,7 @@ function partner(
   map: PhysicalField,
   strength: NumericalVector,
   candidates: NumericalVector,
-  used: Set<number>,
+  used: BitSet,
   a: number,
   span: number,
   match: number

@@ -15,6 +15,7 @@ import { projectionInterpolation, releaseProjection } from "./atlasSampling";
 function projectRegular(state: GenerationState, work: AtlasPhysicalWorkspace) {
   const mesh = work.map.mesh,
     grid = state.surface;
+  // hpc-exempt: projection cache identity, built once per projection, never per cell.
   const key = JSON.stringify([
     grid.bounds,
     grid.active.length,

@@ -24,6 +24,33 @@ function aggregate(matrix: MetricOperator) {
   }
   return { groups, count };
 }
+/** Accumulate aggregate `a`'s off-diagonal weights per neighbouring aggregate, scattering into
+ * `row.value` and listing the touched columns in first-touch order; returns the aggregate area. */
+function coarseRow(
+  matrix: MetricOperator,
+  groups: NumericalVector,
+  heads: NumericalVector,
+  next: NumericalVector,
+  a: number,
+  row: { mark: Int32Array; value: Float64Array; columns: CellList }
+) {
+  let area = 0;
+  row.columns.clear();
+  for (let i = heads[a]; i >= 0; i = next[i]) {
+    area += matrix.areas[i];
+    for (let at = matrix.offsets[i]; at < matrix.offsets[i + 1]; at++) {
+      const b = groups[matrix.neighbors[at]];
+      if (a === b) continue;
+      if (row.mark[b] !== a) {
+        row.mark[b] = a;
+        row.value[b] = 0;
+        row.columns.push(b);
+      }
+      row.value[b] += matrix.weights[at];
+    }
+  }
+  return area;
+}
 /** Galerkin P' A P for piecewise-constant connected aggregates. */
 function coarseOperator(
   matrix: MetricOperator,
@@ -41,22 +68,21 @@ function coarseOperator(
     diagonal = metricArray("coarse-diagonal", count, "float64", numerical),
     offsets = metricArray("coarse-offsets", count + 1, "int32", numerical),
     neighbors = new CellList(count * 3),
-    weights = new FloatList(count * 3);
+    weights = new FloatList(count * 3),
+    row = {
+      mark: new Int32Array(count).fill(-1),
+      value: new Float64Array(count),
+      columns: new CellList(),
+    };
   for (let a = 0; a < count; a++) {
-    const row = new Map<number, number>();
-    for (let i = heads[a]; i >= 0; i = next[i]) {
-      areas[a] += matrix.areas[i];
-      for (let at = matrix.offsets[i]; at < matrix.offsets[i + 1]; at++) {
-        const b = groups[matrix.neighbors[at]];
-        if (a !== b) row.set(b, (row.get(b) ?? 0) + matrix.weights[at]);
-      }
-    }
+    areas[a] = coarseRow(matrix, groups, heads, next, a, row);
     offsets[a] = neighbors.length;
     diagonal[a] = areas[a];
-    for (const [j, value] of row) {
+    for (let k = 0; k < row.columns.length; k++) {
+      const j = row.columns.at(k);
       neighbors.push(j);
-      weights.push(value);
-      diagonal[a] += value;
+      weights.push(row.value[j]);
+      diagonal[a] += row.value[j];
     }
   }
   offsets[count] = neighbors.length;

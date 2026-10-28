@@ -1,6 +1,6 @@
 import type { PhysicalField } from "./field";
 import { metricSearch } from "./metricSearch";
-import { CellList, radixOrder, type NumericalVector } from "@atlas/domain";
+import { groupByLabel, radixOrder, SmallIntSet, type NumericalVector } from "@atlas/domain";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
 
 /** A passage must fall below this share of the smaller sea's breadth to separate names. */
@@ -51,6 +51,7 @@ function coastalBreadth(map: PhysicalField) {
 /** Descending breadth merges minor local maxima but retains seas separated by narrow saddles. */
 class MarineWatershed {
   readonly parent: NumericalVector;
+  private readonly neighbours = new SmallIntSet();
   constructor(
     readonly breadth: NumericalVector,
     map: PhysicalField
@@ -85,38 +86,44 @@ class MarineWatershed {
   }
   activate(map: PhysicalField, i: number) {
     this.parent[i] = i;
-    const neighbours = new Set<number>();
+    const neighbours = this.neighbours;
+    neighbours.clear();
     for (let edge = 0; edge < map.mesh.degree[i]; edge++) {
       const j = map.mesh.neighbors[i * map.mesh.stride + edge];
       if (j >= 0 && this.parent[j] >= 0) neighbours.add(this.root(j));
     }
-    const roots = [...neighbours].sort((a, b) => this.breadth[b] - this.breadth[a] || a - b);
-    if (!roots.length) return;
-    this.parent[i] = roots[0];
-    for (const other of roots.slice(1)) {
+    if (!neighbours.size) return;
+    // Broadest root first; among equal breadths the lower root (items sorted ascending).
+    const roots = neighbours.items().sort(),
+      order = radixOrder(
+        Float64Array.from(roots, (root) => this.breadth[root]),
+        true
+      );
+    this.parent[i] = roots[order[0]];
+    for (let k = 1; k < order.length; k++) {
       const a = this.root(i),
-        b = this.root(other);
+        b = this.root(roots[order[k]]);
       if (!this.separated(map, a, b, i)) this.join(a, b);
     }
   }
 }
 
+/** Regions keyed by their watershed root. Membership is one counting pass over root labels. */
 function gatherRegions(map: PhysicalField, watershed: MarineWatershed) {
-  const members = new Map<number, CellList>(),
-    area = new Map<number, number>();
-  for (let i = 0; i < map.mesh.count; i++) {
-    if (map.WaterKindCodes[i] !== 1) continue;
-    const id = watershed.root(i);
-    if (!members.has(id)) members.set(id, new CellList());
-    members.get(id)!.push(i);
-    area.set(id, (area.get(id) ?? 0) + map.mesh.contentAreas[i]);
+  const count = map.mesh.count,
+    labels = new Int32Array(count).fill(-1);
+  for (let i = 0; i < count; i++) if (map.WaterKindCodes[i] === 1) labels[i] = watershed.root(i);
+  const groups = groupByLabel(labels, count),
+    // hpc-exempt: region records keyed by root, a few dozen entries.
+    regions = new Map<number, MarineRegion>();
+  for (let id = 0; id < count; id++) {
+    const members = groups.members_of(id);
+    if (!members.length) continue;
+    let area = 0;
+    for (const i of members) area += map.mesh.contentAreas[i];
+    regions.set(id, { id, peak: id, members, area, type: "ocean" });
   }
-  return new Map<number, MarineRegion>(
-    [...members].map(([id, list]) => [
-      id,
-      { id, peak: id, members: list.finish(), area: area.get(id)!, type: "ocean" },
-    ])
-  );
+  return regions;
 }
 
 /** The widest shared passage chooses which neighbour absorbs an unresolved patch. */

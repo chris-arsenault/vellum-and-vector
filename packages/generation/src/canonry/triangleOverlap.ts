@@ -1,3 +1,4 @@
+import { SmallIntSet } from "@atlas/domain";
 import { meshDeltaX, nearestTriangle, type PhysicalMesh } from "./mesh";
 
 type Point = [number, number];
@@ -58,12 +59,10 @@ function targetOverlap(mesh: PhysicalMesh, cell: number, polygon: Point[], x: nu
   if (Math.abs(cx - x) > mesh.spacing * 2 || Math.abs(cy - y) > mesh.spacing * 2) return 0;
   return overlap(polygon, triangle(mesh, cell, cx, cy));
 }
-function appendNeighbors(mesh: PhysicalMesh, cell: number, seen: Set<number>, queue: number[]) {
+function appendNeighbors(mesh: PhysicalMesh, cell: number, seen: SmallIntSet, queue: number[]) {
   for (let edge = 0; edge < mesh.degree[cell]; edge++) {
     const target = mesh.neighbors[cell * mesh.stride + edge];
-    if (target < 0 || seen.has(target)) continue;
-    seen.add(target);
-    queue.push(target);
+    if (target >= 0 && seen.add(target)) queue.push(target);
   }
 }
 
@@ -83,8 +82,9 @@ export function triangleOverlap(
       : triangle(mesh, source, x, y),
     sourceArea = area(polygon),
     queue = [nearest],
-    seen = new Set<number>(queue),
+    seen = new SmallIntSet(),
     result: [number, number][] = [];
+  seen.add(nearest);
   for (let head = 0; head < queue.length; head++) {
     const cell = queue[head],
       covered = targetOverlap(mesh, cell, polygon, x, y);

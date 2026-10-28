@@ -99,9 +99,8 @@ function routeLakes(map: PhysicalField, seed: number) {
   const membership = lakeMembership(map),
     ranks = workingArray(map, "int32", "lake:ranks").fill(-1);
   try {
-    for (const id of membership.bodies.keys()) routeLake(map, membership.members(id), seed, ranks);
+    for (const id of membership.bodies()) routeLake(map, membership.members(id), seed, ranks);
   } finally {
-    membership.close();
     releaseWorking(map, ranks);
   }
 }

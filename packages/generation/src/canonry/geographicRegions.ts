@@ -1,4 +1,4 @@
-import { CellList, spatial, point, type MagicFeatureRule } from "@atlas/domain";
+import { CellList, SmallIntSet, spatial, point, type MagicFeatureRule } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
@@ -29,37 +29,33 @@ export function extractLakes(state: GenerationState) {
   const membership = lakeMembership(map);
   // A visible lake can continue into the numerical halo. Trace its complete
   // basin before clipping; truncating its support leaves an open shoreline.
-  try {
-    for (const [body, held] of membership.bodies) {
-      if (held.first >= mesh.contentCount) continue;
-      const members = membership.members(body);
-      const level = map.WaterSurfaceElevations[held.first];
-      const contour = lakeFootprint(state, members, body, level);
-      const shape = clipRegion(state, contour);
-      if (!shape) continue;
-      putGenerated(
+  for (const body of membership.bodies()) {
+    const members = membership.members(body);
+    if (members[0] >= mesh.contentCount) continue;
+    const level = map.WaterSurfaceElevations[members[0]];
+    const contour = lakeFootprint(state, members, body, level);
+    const shape = clipRegion(state, contour);
+    if (!shape) continue;
+    putGenerated(
+      state,
+      generatedFeature(
         state,
-        generatedFeature(
-          state,
-          `lake:${spatial
-            .bounds(shape)
-            .map((value) => value.toFixed(3))
-            .join(":")}`,
-          `Lake ${body}`,
-          "lake",
-          "lakes",
-          shape,
-          {
-            sourceAlgorithm: "canonry-0f62584c",
-            waterBody: body,
-            waterLevel: (level - map.BaseSeaLevel) / 1024,
-            area: spatial.area(shape),
-          }
-        )
-      );
-    }
-  } finally {
-    membership.close();
+        `lake:${spatial
+          .bounds(shape)
+          .map((value) => value.toFixed(3))
+          .join(":")}`,
+        `Lake ${body}`,
+        "lake",
+        "lakes",
+        shape,
+        {
+          sourceAlgorithm: "canonry-0f62584c",
+          waterBody: body,
+          waterLevel: (level - map.BaseSeaLevel) / 1024,
+          area: spatial.area(shape),
+        }
+      )
+    );
   }
 }
 function clipRegion(state: GenerationState, shape: Geometry | null) {
@@ -130,7 +126,7 @@ function labelContour(
   weight?: (i: number) => number
 ) {
   const mesh = state.physical!.map.mesh,
-    touching = new Set<number>();
+    touching = new SmallIntSet();
   for (const i of leaves)
     for (let edge = 0; edge < mesh.degree[i]; edge++) {
       const other = labels[mesh.neighbors[i * mesh.stride + edge]];
@@ -139,7 +135,7 @@ function labelContour(
   const peak = weight ? leaves.reduce((maximum, i) => Math.max(maximum, weight(i)), 1e-9) : 1,
     share = (cell: number) => (labels[cell] === label ? (weight ? weight(cell) / peak : 1) : 0);
   if (!touching.size) return membershipContour(state, leaves, share);
-  const terms = [label, ...touching].map((value) =>
+  const terms = [label, ...touching.items()].map((value) =>
     value === label ? share : (cell: number) => Number(labels[cell] === value)
   );
   return combinedContour(state, leaves, terms, ([own, ...others]) => {

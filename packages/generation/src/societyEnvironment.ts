@@ -1,4 +1,5 @@
 import {
+  BitSet,
   fieldInterpolator,
   gridPosition,
   putChannel,
@@ -91,7 +92,9 @@ function refreshWater(state: GenerationState, context: MapProcessContext) {
     bound = generationBindings(context);
   const c = physicalContext(bound.seed, 0, work.profile);
   c.SeaLevelOffset = (work.map.EffectiveSeaLevel - work.map.BaseSeaLevel) / 1024;
-  work.map.EngineeredDams = new Set(engineeredDamCells(state));
+  const dams = new BitSet(work.map.mesh.count);
+  for (const i of engineeredDamCells(state)) dams.set(i);
+  work.map.EngineeredDams = dams;
   // Repair present dependencies only. No tectonic motion, incision epochs or new geological events.
   const incoming = state.domain.world.areas[state.domain.scope.areaId].parentId
     ? regionalIncomingWater(state)

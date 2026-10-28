@@ -1,6 +1,6 @@
 import type { PhysicalField } from "./field";
 import { clearWaterSurface, reconcileWater } from "./field";
-import { CellList, radixOrder, type NumericalVector } from "@atlas/domain";
+import { radixOrder, type NumericalVector } from "@atlas/domain";
 import { lakeMembership } from "./lakeMembership";
 
 function lakeLevel(map: PhysicalField, members: NumericalVector, volume: number) {
@@ -21,12 +21,14 @@ function lakeLevel(map: PhysicalField, members: NumericalVector, volume: number)
 }
 /** Remeshing changes support, not lake inventory or elapsed hydrological time. */
 function lakeInventory(previous: PhysicalField) {
-  const inventory = new Map<number, number>();
+  // Water volume per body id; ids are small positive integers.
+  let size = 0;
+  for (let i = 0; i < previous.mesh.count; i++)
+    if (previous.WaterKindCodes[i] === 2) size = Math.max(size, previous.WaterBodyIds[i] + 1);
+  const inventory = new Float64Array(size);
   for (let i = 0; i < previous.mesh.count; i++) {
     if (previous.WaterKindCodes[i] !== 2) continue;
-    const id = previous.WaterBodyIds[i];
-    if (!inventory.has(id)) inventory.set(id, 0);
-    inventory.set(id, inventory.get(id)! + previous.WaterDepths[i] * previous.mesh.areas[i]);
+    inventory[previous.WaterBodyIds[i]] += previous.WaterDepths[i] * previous.mesh.areas[i];
   }
   return inventory;
 }
@@ -38,18 +40,12 @@ export function reconcileRemeshedWater(previous: PhysicalField, next: PhysicalFi
     if (next.WaterKindCodes[i] === 1) reconcileWater(next, i);
     else clearWaterSurface(next, i);
   }
-  try {
-    for (const id of membership.bodies.keys()) {
-      const selected = new CellList();
-      for (const i of membership.members(id)) selected.push(i);
-      const cells = selected.finish();
-      const level = lakeLevel(next, cells, inventory.get(id) ?? 0);
-      for (const i of cells) {
-        next.WaterSurfaceElevations[i] = level;
-        reconcileWater(next, i);
-      }
+  for (const id of membership.bodies()) {
+    const cells = membership.members(id),
+      level = lakeLevel(next, cells, inventory[id] ?? 0);
+    for (const i of cells) {
+      next.WaterSurfaceElevations[i] = level;
+      reconcileWater(next, i);
     }
-  } finally {
-    membership.close();
   }
 }

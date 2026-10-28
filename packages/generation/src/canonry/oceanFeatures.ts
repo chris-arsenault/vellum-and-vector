@@ -1,4 +1,4 @@
-import { CellList, spatial, type NumericalVector } from "@atlas/domain";
+import { CellList, SmallIntSet, spatial, type NumericalVector } from "@atlas/domain";
 import type { Geometry, Polygon } from "geojson";
 import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
@@ -41,7 +41,7 @@ function regionOutline(
 ) {
   const mesh = state.physical!.map.mesh,
     members = new CellList(),
-    neighbours = new Set<number>();
+    neighbours = new SmallIntSet();
   for (let i = 0; i < labels.length; i++) {
     if (labels[i] !== region.id) continue;
     members.push(i);
@@ -50,7 +50,9 @@ function regionOutline(
       if (j >= 0 && labels[j] !== region.id) neighbours.add(labels[j]);
     }
   }
-  const terms = [region.id, ...neighbours].map((id) => (i: number) => Number(labels[i] === id));
+  const terms = [region.id, ...neighbours.items()].map(
+    (id) => (i: number) => Number(labels[i] === id)
+  );
   const cells = members.finish();
   const contour = combinedContour(
     state,

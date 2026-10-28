@@ -1,32 +1,26 @@
+import { groupByLabel } from "@atlas/domain";
 import type { PhysicalField } from "./field";
-import { workingArray, releaseWorking } from "./physicalNumerics";
 
-/** Water-body identities own linked numerical membership, including off-content support. */
+/** Water-body identities own grouped membership, including off-content support. Body ids
+ * are small positive integers, so one counting pass over the lake cells groups them. */
 export function lakeMembership(map: PhysicalField) {
-  const bodies = new Map<number, { first: number; last: number; count: number }>(),
-    next = workingArray(map, "int32", "lake:members").fill(-1);
+  const labels = new Int32Array(map.mesh.count).fill(-1);
+  let labelCount = 0;
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes[i] !== 2) continue;
-    const body = map.WaterBodyIds[i],
-      held = bodies.get(body);
-    if (!held) bodies.set(body, { first: i, last: i, count: 1 });
-    else {
-      next[held.last] = i;
-      held.last = i;
-      held.count++;
-    }
+    labels[i] = map.WaterBodyIds[i];
+    labelCount = Math.max(labelCount, labels[i] + 1);
   }
+  const groups = groupByLabel(labels, labelCount);
   return {
-    bodies,
-    members(id: number) {
-      return {
-        *[Symbol.iterator]() {
-          for (let i = bodies.get(id)!.first; i >= 0; i = next[i]) yield i;
-        },
-      };
+    /** Body ids with at least one cell, ascending. */
+    *bodies() {
+      for (let id = 0; id < labelCount; id++)
+        if (groups.offsets[id + 1] > groups.offsets[id]) yield id;
     },
-    close() {
-      releaseWorking(map, next);
+    /** The body's cells in ascending index order. */
+    members(id: number) {
+      return groups.members_of(id);
     },
   };
 }

@@ -6,7 +6,12 @@ import { noWaterSurface } from "./math";
 import type { TectonicState } from "./tectonicState";
 import type { LandmarkLedger } from "./landmarkLedger";
 import type { CrustBudget } from "./crustTransport";
-import { allocateNumerical, type NumericalAllocator, type NumericalVector } from "@atlas/domain";
+import {
+  allocateNumerical,
+  BitSet,
+  type NumericalAllocator,
+  type NumericalVector,
+} from "@atlas/domain";
 
 const integerFields = [
   "BiomeCodes",
@@ -204,7 +209,7 @@ export type PhysicalField = Record<PhysicalBufferName, NumericalVector> & {
   CrustColumnsInitialized: boolean;
   crustBudget: CrustBudget;
   /** Present engineered barriers; natural-lake size filters do not erase their reservoirs. */
-  EngineeredDams: Set<number>;
+  EngineeredDams: BitSet;
   events: {
     id: string;
     kind: "impact" | "plume" | "volcano" | "landmark";
@@ -266,7 +271,7 @@ export function createField(mesh: PhysicalMesh, numerical?: NumericalAllocator):
     events: [] as PhysicalField["events"],
     faults: [] as PhysicalField["faults"],
     AvailableFacts: new Set<string>(),
-    EngineeredDams: new Set<number>(),
+    EngineeredDams: new BitSet(mesh.count),
     EffectiveSeaLevel: 0,
     BaseSeaLevel: 0,
     BaseOceanVolume: 0,

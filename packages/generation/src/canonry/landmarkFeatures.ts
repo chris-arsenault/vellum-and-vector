@@ -1,6 +1,7 @@
 // Publication of authored landmarks: one feature per landmark identity, and no second row for
 // the detected landform that is the landmark itself.
 import {
+  BitSet,
   landmarkKind,
   landmarkLayer,
   lineParts,
@@ -89,9 +90,9 @@ function landmarkPairs(state: GenerationState) {
 }
 export function landmarkClaims(state: GenerationState) {
   const work = state.physical!,
-    claimed = new Set<number>();
+    claimed = new BitSet(work.map.mesh.count);
   for (const [landmark, record] of landmarkPairs(state))
-    for (const i of claimedCells(work, landmark, record)) claimed.add(i);
+    for (const i of claimedCells(work, landmark, record)) claimed.set(i);
   return claimed;
 }
 function cellOf(work: Work, [x, y]: number[]) {
@@ -117,8 +118,8 @@ function anchors(feature: AtlasFeature): number[][] {
 }
 const detectedKinds = new Set(["peak", "gorge", "waterfall", "valley"]);
 /** Drop detected landforms that stand on claimed cells: they are the landmark, published once. */
-export function dropClaimedFeatures(state: GenerationState, claimed: Set<number>) {
-  if (!claimed.size) return;
+export function dropClaimedFeatures(state: GenerationState, claimed: BitSet) {
+  if (!claimed.count()) return;
   const work = state.physical!;
   for (const feature of generationFeatures(state, {
     areaId: state.domain.scope.areaId,
@@ -132,7 +133,10 @@ export function dropClaimedFeatures(state: GenerationState, claimed: Set<number>
     )
       continue;
     const points = anchors(feature),
-      onClaim = points.filter((p) => claimed.has(cellOf(work, p))).length;
+      onClaim = points.filter((p) => {
+        const cell = cellOf(work, p);
+        return cell >= 0 && claimed.has(cell);
+      }).length;
     if (onClaim * 2 >= points.length) removeGenerationFeature(state, feature.id);
   }
 }

@@ -160,7 +160,7 @@ it("leaves water, terrain and the lake set untouched by a World dam demand", () 
     water = map.WaterKindCodes.slice();
   applySocietyWorks(state, context, 20);
   refreshSocietyEnvironment(state, context, 20);
-  expect(map.EngineeredDams.size).toBe(0);
+  expect(map.EngineeredDams.count()).toBe(0);
   expect(map.Elevation).toEqual(elevation);
   expect(map.WaterKindCodes).toEqual(water);
   expect(Object.values(state.domain.world.features).some((f) => f.kind === "lake")).toBe(false);
@@ -178,11 +178,11 @@ it("realizes a World dam demand at the era's end only when its impoundment spans
   const lakeCells = map.WaterKindCodes.filter((v) => v === 2).length;
   if (dam.demand) {
     // Below the resolution rule: nothing of the dam exists at World.
-    expect(map.EngineeredDams.size).toBe(0);
+    expect(map.EngineeredDams.count()).toBe(0);
     expect(lakeCells).toBe(0);
   } else {
     expect(dam.causes.at(-1)).toContain("Realized at World");
-    expect(map.EngineeredDams.size).toBeGreaterThan(0);
+    expect(map.EngineeredDams.count()).toBeGreaterThan(0);
     expect(lakeCells).toBeGreaterThanOrEqual(resolutionCells);
     expect(dam.position).not.toEqual(c.position);
   }

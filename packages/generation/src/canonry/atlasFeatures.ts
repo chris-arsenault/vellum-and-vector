@@ -168,10 +168,10 @@ function* drainageReaches(
   }
 }
 /** World maps keep their major basins; a dry world still shows its largest river systems. */
-function worldRiverMinimum(state: GenerationState, basinDischarge: Map<number, number>) {
+function worldRiverMinimum(state: GenerationState, basinDischarge: Float64Array) {
   if (state.domain.world.areas[state.domain.scope.areaId].profile !== "world") return 0;
   let largest = 0;
-  for (const discharge of basinDischarge.values()) largest = Math.max(largest, discharge);
+  for (const discharge of basinDischarge) largest = Math.max(largest, discharge);
   return Math.min(state.physical!.profile.WorldRiverMinimumBasinDischarge, largest / 2);
 }
 /**
@@ -192,11 +192,12 @@ function shortHeadwater(
   return length < work.profile.MappedHeadwaterMinimumLength;
 }
 function riverInputs(map: PhysicalField) {
+  // Basin ids are numbered from one per outlet, so the largest is at most the cell count.
   const incoming = workingArray(map, "int32", "rivers:incoming"),
-    basinDischarge = new Map<number, number>();
+    basinDischarge = new Float64Array(map.mesh.count + 1);
   for (let i = 0; i < map.mesh.count; i++) {
     const basin = map.DrainageBasinIds[i];
-    basinDischarge.set(basin, Math.max(basinDischarge.get(basin) ?? 0, map.FlowAccumulation[i]));
+    basinDischarge[basin] = Math.max(basinDischarge[basin], map.FlowAccumulation[i]);
     const j = map.FlowTargets[i];
     if (map.RiverOrders[i] > 0 && j >= 0 && map.RiverOrders[j] > 0) incoming[j]++;
   }
@@ -266,6 +267,7 @@ function extractRiverGeography(
     map = work.map,
     paths = createRiverPaths(map),
     { incoming, basinDischarge } = riverInputs(map);
+  // hpc-exempt: one feature id per published lake, read while clipping river mouths.
   const lakes = new Map<number, string>();
   for (const feature of generationFeatures(state, {
     kind: "lake",
@@ -287,7 +289,7 @@ function extractRiverGeography(
     // The map shows a subset; the stored network keeps every reach for finer areas.
     for (const { start, members, reach } of drainageReaches(state, incoming)) {
       reaches.push(reach);
-      const discharge = basinDischarge.get(reach.basin) ?? 0;
+      const discharge = basinDischarge[reach.basin] ?? 0;
       if (discharge < minimum) continue;
       if (!spatial.covers(state.domain.scope.footprint, point(nativePosition(work, start))))
         continue;
