@@ -46,6 +46,30 @@ it("routes domain spatial operations through native precision and bounded prepar
   });
   expect(covers({ x: 50, y: 50, z: 0 })).toBe(true);
 });
+it("validates geometry entering an overlay but never a read-only query rectangle", async () => {
+  await configure();
+  const native = kernel!.native,
+    isValid = native.GEOSisValid.bind(native);
+  let validations = 0;
+  native.GEOSisValid = (geometry: number) => {
+    validations++;
+    return isValid(geometry);
+  };
+  const footprint = rectangle([0, 0, 1000, 1000]),
+    intersects = spatial.intersectionPredicate(footprint),
+    covered = spatial.geometryCoverage(footprint);
+  validations = 0;
+  for (let x = -100; x < 1100; x += 50) {
+    const cell = rectangle([x, x, x + 50, x + 50]);
+    intersects(cell);
+    covered(cell);
+    spatial.bounds(cell);
+  }
+  expect(validations).toBe(0);
+  spatial.intersection(footprint, rectangle([500, 500, 1500, 1500]));
+  expect(validations).toBe(2);
+  native.GEOSisValid = isValid;
+});
 it("nodes the reported nearly coincident lines and preserves directed crossings", async () => {
   await configure();
   const a = {

@@ -45,6 +45,7 @@ self.onmessage = async (event: MessageEvent<GenerationWorkspaceStart | { kind: "
       {
         blocks,
         store,
+        kernel,
         fields,
         workspace,
         features: featureWorkspace.features,

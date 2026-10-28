@@ -1,5 +1,7 @@
 import {
   type CatalogChanges,
+  type CatalogRecord,
+  type RecordGeometry,
   type ChangeSet,
   type DomainSnapshot,
   type DomainWrite,
@@ -36,6 +38,8 @@ interface GenerationRecordStores {
   sourceFeatures?: FeatureReader;
   networks?: NetworkReader;
   sourceNetworks?: NetworkReader;
+  /** Encodes a record's geometry in stored form at the world's precision. */
+  encode?: (record: CatalogRecord) => RecordGeometry;
 }
 interface Publication extends GenerationRecordStores {
   workspace: GenerationCatalog;
@@ -165,23 +169,32 @@ function mappedChanges(
     const feature = publication.features.get(write.value.featureId);
     if (feature) owners[feature.id] = feature;
   }
-  return catalogChanges(
-    publicationSource(publication, writes, removes),
-    {
-      operationId,
-      worldId: snapshot.world.id,
-      actor: "generator",
-      expectedVersion: original.world.version,
-      readSet: [],
-      writes,
-      removes,
-      invalidations: [],
-      highImpact: false,
-    },
-    [],
-    "generate",
-    { ...snapshot.world, features: owners }
+  return encodedChanges(
+    publication,
+    catalogChanges(
+      publicationSource(publication, writes, removes),
+      {
+        operationId,
+        worldId: snapshot.world.id,
+        actor: "generator",
+        expectedVersion: original.world.version,
+        readSet: [],
+        writes,
+        removes,
+        invalidations: [],
+        highImpact: false,
+      },
+      [],
+      "generate",
+      { ...snapshot.world, features: owners }
+    )
   );
+}
+/** Each record's geometry is encoded here, once; the catalog stores the bytes as given. */
+function encodedChanges(publication: Publication, changes: CatalogChanges) {
+  const encode = publication.encode;
+  if (encode) for (const write of changes.writes) write.encoded = encode(write);
+  return changes;
 }
 function publicationSource(
   publication: Publication,

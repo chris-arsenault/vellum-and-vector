@@ -28,8 +28,9 @@ export class GeosSpatial implements SpatialOperations {
   private predicate(value: Geometry, kind: "covers" | "intersects") {
     const bytes = this.kernel.encode(value, this.precision).bytes,
       key = `domain:${++sequence}`;
+    // The prepared mask was validated on entry; each query shape is read-only and trusted.
     return (other: Geometry) =>
-      this.kernel.withGeometry(other, this.precision, (target) =>
+      this.kernel.withShape(other, this.precision, (target) =>
         this.kernel.matches(key, bytes, target, kind)
       );
   }
@@ -57,7 +58,7 @@ export class GeosSpatial implements SpatialOperations {
     return this.kernel.measure(value, this.precision).length;
   }
   bounds(value: Geometry) {
-    return this.kernel.withGeometry(value, this.precision, (shape) => this.kernel.bounds(shape));
+    return this.kernel.withShape(value, this.precision, (shape) => this.kernel.bounds(shape));
   }
   intersection(a: Geometry, b: Geometry) {
     return this.kernel.overlay(a, b, this.precision, "intersection");

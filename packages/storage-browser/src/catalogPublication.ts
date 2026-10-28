@@ -1,10 +1,15 @@
 import type { Database } from "@sqlite.org/sqlite-wasm";
 import { requireThat, type CatalogChanges, type CatalogPublication } from "@atlas/domain";
+import { Encoder } from "cbor-x";
 import type { CatalogMutation } from "./catalogMutation";
 
-/** Session scratch in SQLite's file, never authoritative geography or resumable execution. */
+/**
+ * Session scratch in SQLite's file, never authoritative geography or resumable execution.
+ * Batches are staged as CBOR so producer-encoded geometry stays bytes until the commit.
+ */
 export class PublicationStaging {
   private active = new Map<string, CatalogPublication>();
+  private codec = new Encoder({ useRecords: false });
   constructor(
     private db: Database,
     private mutation: CatalogMutation
@@ -15,7 +20,7 @@ export class PublicationStaging {
       bind: [file ? `${file}.publication` : ":memory:"],
     });
     db.exec(`CREATE TABLE IF NOT EXISTS publication_scratch.batches (
-      sequence INTEGER PRIMARY KEY, token TEXT NOT NULL, data TEXT NOT NULL);
+      sequence INTEGER PRIMARY KEY, token TEXT NOT NULL, data BLOB NOT NULL);
       CREATE INDEX IF NOT EXISTS publication_scratch.batch_owner ON batches(token,sequence);
       DELETE FROM publication_scratch.batches;`);
   }
@@ -33,7 +38,7 @@ export class PublicationStaging {
     );
     this.db.exec({
       sql: "INSERT INTO publication_scratch.batches(token,data) VALUES(?,?)",
-      bind: [token, JSON.stringify(batch)],
+      bind: [token, this.codec.encode(batch)],
     });
   }
   finish(token: string) {
@@ -75,7 +80,7 @@ export class PublicationStaging {
       if (!row) return;
       after = Number(row.sequence);
       yield {
-        ...(JSON.parse(String(row.data)) as CatalogChanges),
+        ...(this.codec.decode(row.data as Uint8Array) as CatalogChanges),
         expectedWorldRevision: input.expectedWorldRevision,
       };
     }

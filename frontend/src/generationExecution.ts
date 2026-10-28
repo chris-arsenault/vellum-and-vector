@@ -7,13 +7,19 @@ import {
 import {
   detachGrid,
   requireThat,
+  spatial,
   type DomainSnapshot,
   type Diagnostic,
   type FeatureWorkspace,
   type NetworkWorkspace,
   type ContourWorkspace,
 } from "@atlas/domain";
-import type { openBlockCache, ZarrResources } from "@atlas/storage-browser";
+import {
+  encodeRecordGeometry,
+  type GeometryKernel,
+  type openBlockCache,
+  type ZarrResources,
+} from "@atlas/storage-browser";
 import type { WorkspaceClient } from "./WorkspaceClient";
 import type { WorkspaceFields } from "./workspaceFields";
 import type {
@@ -33,6 +39,8 @@ export interface GenerationExecution {
   /** The block cache every coverage of the run pages through, and its scratch file. */
   blocks: Awaited<ReturnType<typeof openBlockCache>>;
   store: ZarrResources;
+  /** The worker's geometry kernel, which encodes published records once. */
+  kernel: GeometryKernel;
   fields: WorkspaceFields;
   workspace: WorkspaceClient;
   cancelled(): boolean;
@@ -122,7 +130,19 @@ async function publishGeneration(
     (change) =>
       execution.send({ kind: "published", revision: change.revision, change, partial: initial }),
     () => requireThat(!execution.cancelled(), "generation_cancelled", "Generation was cancelled."),
-    result.state
+    {
+      features: result.state.features,
+      sourceFeatures: result.state.sourceFeatures,
+      networks: result.state.networks,
+      sourceNetworks: result.state.sourceNetworks,
+      // The worker holds the kernel; records reach the catalog already encoded.
+      encode: (record) =>
+        encodeRecordGeometry(
+          record,
+          execution.kernel,
+          source.world.reference.precision ?? spatial.precision
+        ),
+    }
   );
   for (const diagnostic of warnings) execution.send({ kind: "diagnostic", diagnostic });
 }

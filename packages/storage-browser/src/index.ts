@@ -1,6 +1,7 @@
 export { GeometryKernel } from "./geometryKernel";
 export { GeosSpatial } from "./geosSpatial";
 export { SpatialCatalog } from "./spatialCatalog";
+export { encodeRecordGeometry } from "./catalogRecords";
 export { SqliteFeatureWorkspace } from "./featureWorkspace";
 export { openGenerationWorkspace } from "./openGenerationWorkspace";
 export { SqliteNetworkWorkspace } from "./networkWorkspace";

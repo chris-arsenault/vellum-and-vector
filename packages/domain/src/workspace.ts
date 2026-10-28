@@ -62,10 +62,28 @@ export interface RecordReference {
   id: string;
   revision: number;
 }
+/** A geometry in its stored form: canonical WKB at a precision, and its bounds. */
+export interface EncodedShape {
+  bytes: Uint8Array;
+  bounds: Bounds;
+}
+/**
+ * A record's geometry encoded by its producer at the world's precision. The catalog stores
+ * it as given, so a generated record is encoded once on its way to storage.
+ */
+export interface RecordGeometry {
+  precision: number;
+  geometry: EncodedShape | null;
+  footprint: EncodedShape | null;
+  geometryType: string | null;
+  /** Bounds of the record's finer representations, which the catalog indexes with it. */
+  detailBounds: Bounds[];
+}
 export interface CatalogRecord {
   scope: WorkspaceScope;
   reference: RecordReference;
   data: DomainWrite;
+  encoded?: RecordGeometry;
 }
 export interface FeatureQuery {
   scope: WorkspaceScope;

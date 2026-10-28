@@ -8,6 +8,7 @@ import {
   type Bounds,
   type CatalogRecord,
   type DomainWrite,
+  type RecordGeometry,
 } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { GeometryKernel } from "./geometryKernel";
@@ -84,27 +85,43 @@ function presentationLayer(data: DomainWrite) {
   if (data.kind === "landmark") return landmarkLayer(landmarkKind(data.value.kind));
   return "layerId" in data.value ? data.value.layerId : null;
 }
+/**
+ * A record's geometry in stored form. The catalog runs this for records that arrive without
+ * an encoding; a producer that holds the kernel (the generation worker) runs it instead, and
+ * the catalog then stores its bytes as given.
+ */
+export function encodeRecordGeometry(
+  record: CatalogRecord,
+  kernel: GeometryKernel,
+  precision: number
+): RecordGeometry {
+  const shape = shapes(record, kernel, precision);
+  return {
+    precision,
+    geometry: shape.geometry ? kernel.encode(shape.geometry, precision) : null,
+    footprint: shape.footprint ? kernel.encode(shape.footprint, precision) : null,
+    geometryType: shape.geometry?.type ?? null,
+    detailBounds: representationBounds(record, kernel, precision),
+  };
+}
 function encoded(record: CatalogRecord, kernel: GeometryKernel, precision: number) {
   const source = record.data.value as unknown as Record<string, unknown>;
-  const shape = shapes(record, kernel, precision);
-  const geometry = shape.geometry ? kernel.encode(shape.geometry, precision) : null;
-  const footprint = shape.footprint ? kernel.encode(shape.footprint, precision) : null;
+  const { geometry, footprint, geometryType, detailBounds } =
+    record.encoded?.precision === precision
+      ? record.encoded
+      : encodeRecordGeometry(record, kernel, precision);
   const value = regionMetadata({ ...source });
   if (geometry) delete value.geometry;
-  if (footprint) {
-    delete value.footprint;
-  }
-  const detailBounds = representationBounds(record, kernel, precision);
+  if (footprint) delete value.footprint;
   const boxes = [geometry?.bounds, footprint?.bounds, ...detailBounds].filter(
     (b): b is Bounds => !!b
   );
-  const bounds = combinedBounds(boxes);
   return {
     data: JSON.stringify({ kind: record.data.kind, value }),
     geometry,
     footprint,
-    bounds,
-    geometryType: shape.geometry?.type ?? null,
+    bounds: combinedBounds(boxes),
+    geometryType,
   };
 }
 function validateIdentity(record: CatalogRecord) {
