@@ -29,6 +29,7 @@ export function triangleVertex(mesh: PhysicalMesh, cell: number, corner: number)
         return index === undefined ? [] : [index];
       })
     ),
+    // hpc-exempt: at most six fan members.
   ].sort((left, right) => left - right);
   return {
     members,

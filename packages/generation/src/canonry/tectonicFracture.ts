@@ -52,6 +52,7 @@ function components(state: TectonicState, id: number) {
       }
     result.push(group);
   }
+  // hpc-exempt: province groups of one plate, a handful of arrays.
   return result.sort((a, b) => b.length - a.length || a[0] - b[0]);
 }
 function splitPlates(map: PhysicalField, state: TectonicState, myr: number) {

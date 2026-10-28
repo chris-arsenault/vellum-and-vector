@@ -10,7 +10,7 @@ import {
 import type { GenerationState, MapProcessContext } from "./process";
 import { SocietySpread, landEdges, seaEdges } from "./societyTraversal";
 export type { SocietyEdge } from "./societyTraversal";
-import { orderedIndices } from "./canonry/numericalOrder";
+import { radixOrder } from "@atlas/domain";
 import { channelAccess, coastalFishery, dryLand, emptySupport, supportAt } from "./societySupport";
 import { practiceSkill } from "./societySkill";
 import { atlasName } from "./atlasNaming";
@@ -79,7 +79,7 @@ function seedCells(
       },
       state.numerical
     ),
-    ranked = orderedIndices(scores, false, state.numerical);
+    ranked = radixOrder(scores);
   const spacing = regionalCommunitySpacing(state, retained);
   const buckets = new Map<string, number[]>(),
     selected: number[] = [];

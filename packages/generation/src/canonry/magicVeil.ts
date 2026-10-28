@@ -6,9 +6,8 @@ import { strainAt } from "./magicConfluences";
 import { hashUnit } from "./noise";
 import { clamp, round, units } from "./math";
 import { rebuild } from "./surface";
-import type { NumericalVector } from "@atlas/domain";
+import { radixOrder, type NumericalVector } from "@atlas/domain";
 import { workingValues, releaseWorking } from "./physicalNumerics";
-import { orderedIndices } from "./numericalOrder";
 
 const tears = (field: MagicField) =>
   field.definition.enabled && field.definition.effects.tearing > 0;
@@ -86,7 +85,7 @@ export function pairingSources(
   const scores = workingValues(map, "float64", "magic:door-candidates", (i) =>
     !used.has(i) && eligible(i) ? strength[i] : -Infinity
   );
-  const candidates = orderedIndices(scores, true, map.numerical);
+  const candidates = radixOrder(scores, true);
   for (const a of candidates) {
     if (field.doors.length >= p.doorCount || scores[a] === -Infinity) break;
     if (used.has(a)) continue;

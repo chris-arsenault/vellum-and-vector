@@ -3,9 +3,8 @@ import type { PhysicalField } from "./field";
 import type { PhysicalProfile } from "./profile";
 import { clamp, truncate, units } from "./math";
 import { depthRateToDischarge } from "./dimensions";
-import { CellList, type NumericalVector } from "@atlas/domain";
+import { CellList, radixOrder, type NumericalVector } from "@atlas/domain";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
-import { orderedIndices } from "./numericalOrder";
 
 export interface Depression {
   id: number;
@@ -82,7 +81,7 @@ function basinCells(map: PhysicalField, component: Depression) {
       (i) => map.Elevation[component.members[i]],
       component.members.length
     ),
-    order = orderedIndices(keys, false, map.numerical),
+    order = radixOrder(keys),
     cells = workingValues(
       map,
       "int32",

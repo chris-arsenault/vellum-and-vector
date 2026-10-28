@@ -18,6 +18,7 @@ export function initialTectonicSites(map: PhysicalField, context: PhysicalContex
       index,
       priority: hashUnit(context.EpochStableSeed ^ 0x7143, index, 0),
     }))
+    // hpc-exempt: province site records, sorted once.
     .sort((a, b) => b.priority - a.priority)
     .slice(0, count);
   const samples = worldCandidates(map.mesh, context.EpochStableSeed, source.length * 24);

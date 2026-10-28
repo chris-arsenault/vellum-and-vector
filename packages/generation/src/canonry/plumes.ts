@@ -17,6 +17,7 @@ export function mantlePlumeRoots(map: PhysicalField, context: PhysicalContext) {
       const cell = nearestTriangle(map.mesh, source.x, source.y);
       return { ...source, priority: 1000 - map.TectonicStrain[cell] + source.priority * 420 };
     })
+    // hpc-exempt: seeded candidate objects that separatedCandidates consumes as records.
     .sort((a, b) => b.priority - a.priority);
   const selected = separatedCandidates(ranked, count, p.MantlePlumeMinimumSpacing, map.mesh);
   selected.forEach((source, rank) => {

@@ -5,7 +5,7 @@ import { hashUnit } from "./noise";
 import { traceOceanBeam } from "./magicBeams";
 import { nearestTriangle } from "./mesh";
 import { worldCandidates } from "./worldSources";
-import { MonotoneHeap } from "@atlas/domain";
+import { CellList, FloatList, MonotoneHeap, radixOrder } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import { areaBudget, mediumArea, referenceOceanArea, referenceCoastLength } from "./worldScale";
 
@@ -54,20 +54,39 @@ function coastDistances(map: PhysicalField, reach: number) {
   }
   return distances;
 }
-function oceanSources(map: PhysicalField, count: number, seed: number, coastalDistance?: number) {
-  if (count === 0) return [];
+function oceanCandidates(
+  map: PhysicalField,
+  count: number,
+  seed: number,
+  coastalDistance?: number
+) {
   const distances = coastalDistance === undefined ? null : coastDistances(map, coastalDistance);
-  const candidates: { i: number; priority: number }[] = [];
+  const cells = new CellList(),
+    priorities = new FloatList();
   for (const source of worldCandidates(map.mesh, seed, Math.max(256, count * 16))) {
     const i = nearestTriangle(map.mesh, source.x, source.y);
     if (i < 0 || i >= map.mesh.contentCount || map.WaterKindCodes[i] !== 1) continue;
     if (distances && distances[i] > coastalDistance!) continue;
-    candidates.push({ i, priority: source.priority });
+    cells.push(i);
+    priorities.push(source.priority);
   }
   if (distances) releaseWorking(map, distances);
-  return [
-    ...new Set(candidates.sort((a, b) => b.priority - a.priority).map((source) => source.i)),
-  ].slice(0, count);
+  return { cells, priorities: priorities.finish() };
+}
+function oceanSources(map: PhysicalField, count: number, seed: number, coastalDistance?: number) {
+  if (count === 0) return [];
+  const { cells, priorities } = oceanCandidates(map, count, seed, coastalDistance);
+  // Highest priority first; a cell reached by several candidates is taken once.
+  const taken = workingArray(map, "uint8", "magic:ocean-sources"),
+    selected: number[] = [];
+  for (const k of radixOrder(priorities, true)) {
+    const i = cells.at(k);
+    if (taken[i] || selected.length >= count) continue;
+    taken[i] = 1;
+    selected.push(i);
+  }
+  releaseWorking(map, taken);
+  return selected;
 }
 export function oceanPropagation(
   state: GenerationState,

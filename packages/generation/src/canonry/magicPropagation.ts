@@ -6,12 +6,12 @@ import { edgeLeadingTo, triangleIdentity } from "./mesh";
 import { oceanPropagation } from "./magicOcean";
 import {
   KeyedHeap,
+  radixOrder,
   type MagicPropagation,
   type MagicSystem,
   type NumericalVector,
 } from "@atlas/domain";
 import { retainedArray, workingArray, workingValues, releaseWorking } from "./physicalNumerics";
-import { orderedIndices } from "./numericalOrder";
 import { reservoirAmount, reservoirStock, withOrigin } from "./magicState";
 import { applyWarding, wardPropagation } from "./magicHallowed";
 
@@ -117,7 +117,7 @@ function coldPropagation(state: GenerationState, field: MagicField, seed: number
     (i) => field.source[i] * map.mesh.areas[i]
   );
   // Equal temperatures cannot exchange charge: coldTarget requires a strictly colder cell.
-  const order = orderedIndices(map.Temperature, true, map.numerical);
+  const order = radixOrder(map.Temperature, true);
   for (const i of order) {
     const target = coldTarget(state, i, seed),
       capacity = clamp(map.IceThickness[i], 0, 900);

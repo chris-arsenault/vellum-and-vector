@@ -127,6 +127,7 @@ export function rankComponents(components: BoundaryComponent[], context: Physica
         c.code === 1 && c.area >= p.OrogenicMinimumComponentArea && c.maximumContinental >= 0.35
     )
     .map((c) => ({ c, score: componentScore(c, context) }))
+    // hpc-exempt: boundary component records, sorted once.
     .sort((a, b) => b.score - a.score || a.c.pair - b.c.pair);
   ranked.forEach(({ c }, rank) => {
     c.prominence = round(

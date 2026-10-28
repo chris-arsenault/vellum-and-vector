@@ -4,8 +4,7 @@ import type { PhysicalContext } from "./context";
 import { units } from "./math";
 import { canCarryIce, refreshGrounding, supportElevation } from "./glacierSurface";
 import { workingValues, releaseWorking } from "./physicalNumerics";
-import { orderedIndices } from "./numericalOrder";
-import type { NumericalVector } from "@atlas/domain";
+import { radixOrder, type NumericalVector } from "@atlas/domain";
 
 function assignTargets(map: PhysicalField, surface: NumericalVector) {
   for (let i = 0; i < surface.length; i++) {
@@ -36,7 +35,7 @@ export function iceFlow(map: PhysicalField, c: PhysicalContext) {
   for (let i = 0; i < map.mesh.count; i++)
     map.IceFlux[i] = (map.IceThickness[i] * map.mesh.areas[i]) / c.Profile.IceTransportYears;
   assignTargets(map, surface);
-  const order = orderedIndices(surface, true, map.numerical);
+  const order = radixOrder(surface, true);
   for (const i of order) {
     const target = map.IceFlowTargets[i];
     if (target >= 0) map.IceFlux[target] += map.IceFlux[i];

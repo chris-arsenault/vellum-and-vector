@@ -158,6 +158,7 @@ export function lakeBasins(map: PhysicalField, c: PhysicalContext, incoming?: Nu
       if (supported.length === before) releaseWorking(map, component.members);
     }
   }
+  // hpc-exempt: one record per retained lake, ordered by first member.
   supported.sort((a, b) => a.members[0] - b.members[0]);
   for (const [index, lake] of supported.entries()) markLake(map, c, lake, marks, index + 2);
   for (const lake of supported) releaseWorking(map, lake.members, lake.component.members);

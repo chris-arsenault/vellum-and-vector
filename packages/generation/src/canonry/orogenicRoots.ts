@@ -4,7 +4,7 @@ import type { BoundaryComponent, OrogenicFrame } from "./orogenicComponents";
 import { constructionWeight } from "./orogenicShape";
 import { clamp, crustHeight, maximumCrustThickness, units } from "./math";
 import { workingArray, releaseWorking } from "./physicalNumerics";
-import { orderedIndices } from "./numericalOrder";
+import { radixOrder } from "@atlas/domain";
 function addRoot(map: PhysicalField, cell: number, volume: number) {
   const before = map.CrustThickness[cell] / 1024,
     fraction = map.CrustContinentalFraction[cell] / 1000,
@@ -80,7 +80,7 @@ export function distributeOrogenicRoots(
     remaining = reserves.slice(),
     admitted = workingArray(map, "float64", "roots:admitted");
   // One external order preserves the capacity order within every independent belt.
-  const order = orderedIndices(ratios, false, map.numerical);
+  const order = radixOrder(ratios);
   for (const i of order) {
     if (!Number.isFinite(ratios[i])) break;
     const id = map.OrogenicComponentIds[i];

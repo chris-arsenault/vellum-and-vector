@@ -166,7 +166,7 @@ function ringClasses(map: PhysicalField, placed: Placed) {
   }
   let split = 0.25;
   if (!cells.some((c) => c.phase < split) || !cells.some((c) => c.phase >= split)) {
-    const phases = cells.map((c) => c.phase).sort((a, b) => a - b);
+    const phases = Float64Array.from(cells, (c) => c.phase).sort();
     split = phases[Math.floor(phases.length / 2)] + 1e-9;
   }
   const crests = new Set(cells.filter((c) => c.phase < split).map((c) => c.i));

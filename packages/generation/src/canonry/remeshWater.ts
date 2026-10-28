@@ -1,10 +1,13 @@
 import type { PhysicalField } from "./field";
 import { clearWaterSurface, reconcileWater } from "./field";
-import { CellList, type NumericalVector } from "@atlas/domain";
+import { CellList, radixOrder, type NumericalVector } from "@atlas/domain";
 import { lakeMembership } from "./lakeMembership";
 
-function lakeLevel(map: PhysicalField, cells: NumericalVector, volume: number) {
-  cells.sort((a, b) => map.Elevation[a] - map.Elevation[b]);
+function lakeLevel(map: PhysicalField, members: NumericalVector, volume: number) {
+  const cells = Int32Array.from(
+    radixOrder(Float64Array.from(members, (i) => map.Elevation[i])),
+    (k) => members[k]
+  );
   let area = 0,
     floorIntegral = 0;
   for (let n = 0; n < cells.length; n++) {

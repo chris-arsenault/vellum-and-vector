@@ -237,6 +237,7 @@ export function retainGeographicIdentities(
       .filter((candidate) => !used.has(candidate.id))
       .map((candidate) => ({ candidate, score: similarity(feature, candidate, tolerance, source) }))
       .filter((match) => match.score < 0.35)
+      // hpc-exempt: feature match objects, a handful per feature.
       .sort((a, b) => a.score - b.score);
     const previous = matches[0] && source.get(matches[0].candidate.id);
     if (!previous) continue;
@@ -251,5 +252,6 @@ function rankedFeatures(state: GenerationState, original: DomainSnapshot, genera
     if (feature && !feature.attributes.causeId && !originalFeatureReader(state, original).get(id))
       next.push({ id, length: spatial.length(feature.geometry) });
   }
+  // hpc-exempt: generated feature records, sorted once by length.
   return next.sort((a, b) => b.length - a.length);
 }

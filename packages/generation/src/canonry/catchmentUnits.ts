@@ -1,5 +1,5 @@
 import type { PhysicalField } from "./field";
-import { orderedIndices } from "./numericalOrder";
+import { radixOrder } from "@atlas/domain";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 
 /** Each trunk cell's reach: the river between confluences, named by its uppermost cell. */
@@ -16,7 +16,7 @@ function trunkReaches(map: PhysicalField, trunk: number) {
     upstream[target] = i;
   }
   // Catchment grows downstream, so ascending catchment visits upstream reaches first.
-  const order = orderedIndices(map.CatchmentArea, false, map.numerical);
+  const order = radixOrder(map.CatchmentArea);
   for (const t of order)
     if (isTrunk(t)) reach[t] = inflow[t] === 1 && reach[upstream[t]] >= 0 ? reach[upstream[t]] : t;
   releaseWorking(map, inflow, upstream, order);

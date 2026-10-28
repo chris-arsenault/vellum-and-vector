@@ -164,6 +164,7 @@ export function fractureNetwork(map: PhysicalField, c: PhysicalContext) {
       score:
         candidateScore(map, nearestTriangle(map.mesh, source.x, source.y)) + source.priority * 90,
     }))
+    // hpc-exempt: a few hundred seeded candidate objects, sorted once.
     .sort((a, b) => b.score - a.score)
     .map((source): Coordinate => [source.x, source.y]);
   const nodes: Coordinate[] = [],

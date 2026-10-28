@@ -191,6 +191,7 @@ export function createProvinceSites(map: PhysicalField, context: PhysicalContext
   // Independent seeded positions allow both sparse interiors and clusters of small blocks.
   // Farthest-site packing imposed a nearly uniform spacing before any geology occurred.
   const selected = [...candidates]
+    // hpc-exempt: seeded candidate objects, sorted once.
     .sort((a, b) => b.priority - a.priority)
     .slice(0, p.TectonicProvinceCount);
   const width = map.mesh.periodic?.width ?? 0;

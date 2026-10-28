@@ -168,6 +168,7 @@ function oceanSource(state: GenerationState, field: MagicField, seed: number) {
     }
     candidates.push({ ...source, i, score: depth });
   }
+  // hpc-exempt: seeded candidate objects that separatedCandidates consumes as records.
   candidates.sort((a, b) => b.score - a.score || b.priority - a.priority);
   const selected = separatedCandidates(
     candidates,

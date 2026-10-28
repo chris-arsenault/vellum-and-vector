@@ -7,7 +7,7 @@ import {
   type NumericalVector,
   type NumericalAllocator,
 } from "@atlas/domain";
-import { orderedIndices } from "./canonry/numericalOrder";
+import { radixOrder } from "@atlas/domain";
 import { requireChannel } from "./mapFields";
 import { conditionDrainage, routeRunoff, writeDrainage } from "./mapDrainage";
 import {
@@ -155,7 +155,7 @@ export const erosionProcess: MapProcess = {
       const moving = values("moving"),
         eroded = values("eroded"),
         deposited = values("deposited");
-      const order = orderedIndices(grid.channels.drainageRank, true, state.numerical);
+      const order = radixOrder(grid.channels.drainageRank, true);
       let exported = 0;
       for (let n = 0; n < order.length; n++) {
         checkProgress(

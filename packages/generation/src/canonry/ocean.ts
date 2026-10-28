@@ -3,10 +3,10 @@ import { setWaterSurface, type PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import { noWaterSurface, units } from "./math";
 import { oceanSeeds, OceanComponents, visitConnectedOcean } from "./oceanComponents";
-import { orderedIndices } from "./numericalOrder";
+import { radixOrder } from "@atlas/domain";
 import { releaseWorking } from "./physicalNumerics";
 function connectedOceanLevel(map: PhysicalField, target: number): number {
-  const order = orderedIndices(map.Elevation, true, map.numerical);
+  const order = radixOrder(map.Elevation, true);
   const components = new OceanComponents(map);
   let cursor = order.length - 1,
     elevation = map.Elevation[order[0]];

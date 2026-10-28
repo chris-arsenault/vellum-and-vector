@@ -1,4 +1,5 @@
 // The great canyon: resistant rims, a channel incised below them, and a captured river.
+import { CellList, radixOrder } from "@atlas/domain";
 import type { PhysicalField } from "./field";
 import type { PhysicalProfile } from "./profile";
 import { clamp, rockResistance, round, units } from "./math";
@@ -195,14 +196,20 @@ function reachesSea(map: PhysicalField, from: number, steps: number) {
 function riversNear(map: PhysicalField, head: number, reach: number, floor: Set<number>) {
   const base = baseLevel(map),
     nearSea = Math.ceil(reach / map.mesh.spacing),
-    candidates: number[] = [];
+    candidates = new CellList();
   for (let i = 0; i < map.mesh.count; i++) {
     if (map.WaterKindCodes[i] !== 0 || map.RiverOrders[i] <= 0 || floor.has(i)) continue;
     if (map.Elevation[i] <= base + units(5) || reachesSea(map, i, nearSea)) continue;
     if (distance(map, i, [map.mesh.x[head], map.mesh.y[head]]) > reach) continue;
     candidates.push(i);
   }
-  return candidates.sort((a, b) => map.FlowAccumulation[b] - map.FlowAccumulation[a]);
+  // Largest flow first; ties keep ascending cell order.
+  const cells = candidates.finish(),
+    byFlow = radixOrder(
+      Float64Array.from(cells, (i) => map.FlowAccumulation[i]),
+      true
+    );
+  return Array.from(byFlow, (k) => cells[k]);
 }
 const riverAt = (map: PhysicalField, i: number) => ({
   x: map.mesh.x[i],

@@ -8,7 +8,7 @@ import { Landform as L } from "./codes";
 import { measureSlopes } from "./geography";
 import { physicalSampler } from "./physicalMetric";
 import { workingArray, releaseWorking } from "./physicalNumerics";
-import { orderedIndices } from "./numericalOrder";
+import { radixOrder } from "@atlas/domain";
 
 function shape(
   map: PhysicalField,
@@ -230,7 +230,7 @@ export function prominence(map: PhysicalField) {
     rise[summit[low]] = map.Elevation[summit[low]] - map.Elevation[cell];
     parent[low] = high;
   };
-  const order = orderedIndices(map.Elevation, true, map.numerical);
+  const order = radixOrder(map.Elevation, true);
   for (const cell of order) {
     if (map.Elevation[cell] <= map.EffectiveSeaLevel) break;
     parent[cell] = cell;

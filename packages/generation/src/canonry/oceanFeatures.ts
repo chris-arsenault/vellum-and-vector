@@ -95,6 +95,7 @@ export function extractOceans(state: GenerationState) {
   releaseWorking(work.map, labels);
   // Cut smaller seas out of the existing outline; its remainder belongs to the broadest.
   // Independent contour approximations must not leave gaps or overlapping water geography.
+  // hpc-exempt: marine region records, a few dozen, sorted once.
   regions.sort((a, b) => a.area - b.area || a.id - b.id);
   let remaining: Geometry | null = ocean;
   for (const [index, region] of regions.entries()) {

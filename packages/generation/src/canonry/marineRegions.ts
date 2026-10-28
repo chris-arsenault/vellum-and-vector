@@ -1,8 +1,7 @@
 import type { PhysicalField } from "./field";
 import { metricSearch } from "./metricSearch";
-import { CellList, type NumericalVector } from "@atlas/domain";
+import { CellList, radixOrder, type NumericalVector } from "@atlas/domain";
 import { workingArray, workingValues, releaseWorking } from "./physicalNumerics";
-import { orderedIndices } from "./numericalOrder";
 
 /** A passage must fall below this share of the smaller sea's breadth to separate names. */
 const passageBreadthRatio = 0.5;
@@ -138,6 +137,7 @@ function strongestNeighbour(map: PhysicalField, watershed: MarineWatershed, regi
 
 function mergeSmallRegions(map: PhysicalField, watershed: MarineWatershed) {
   const regions = gatherRegions(map, watershed);
+  // hpc-exempt: marine region records, a few dozen, sorted once.
   for (const region of [...regions.values()].sort((a, b) => a.area - b.area || a.id - b.id)) {
     const current = regions.get(watershed.root(region.id))!;
     if (current.area >= minimumRegionCells * map.mesh.areas[current.peak]) continue;
@@ -191,7 +191,7 @@ export function marineRegions(map: PhysicalField, shelfBreak: number) {
   for (let i = 0; i < breadth.length; i++)
     breadth[i] *= 1 - shallowBreadthReduction * (1 - Math.min(1, map.WaterDepths[i] / shelfBreak));
   const watershed = new MarineWatershed(breadth, map),
-    order = orderedIndices(breadth, true, map.numerical);
+    order = radixOrder(breadth, true);
   for (const i of order) if (map.WaterKindCodes[i] === 1) watershed.activate(map, i);
   releaseWorking(map, order);
   const regions = mergeSmallRegions(map, watershed),
