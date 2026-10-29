@@ -2,16 +2,17 @@ import {
   classInterpolator,
   fieldInterpolator,
   surfaceCategories,
+  type Bounds,
   type GridSurface,
   type Position,
   type SurfaceCategory,
 } from "@atlas/domain";
-import GeoJSON from "ol/format/GeoJSON.js";
 import ImageTileSource from "ol/source/ImageTile.js";
 import { createXYZ } from "ol/tilegrid.js";
 import type Projection from "ol/proj/Projection.js";
 import { resourceRaster, type Raster, type LoadedRaster } from "./types";
 import { terrainWater } from "./terrainWater";
+import { insideAt, tileCoverage } from "./tileCoverage";
 
 type ColorAt = (position: Position, dx: number, dy: number) => number[];
 
@@ -55,7 +56,7 @@ export function tilePainter(
   limits: number[],
   classes: SurfaceCategory[] = surfaceCategories()
 ): (extent: number[], size: number) => Uint8ClampedArray {
-  const footprint = new GeoJSON().readGeometry(raster.footprint)!;
+  const footprint = tileCoverage(raster.footprint);
   const valueAt = fieldInterpolator(raster.field, raster.channel);
   const colorAt: ColorAt =
     raster.channel === "elevation"
@@ -65,10 +66,12 @@ export function tilePainter(
     const pixels = new Uint8ClampedArray(size * size * 4);
     const dx = (extent[2] - extent[0]) / size,
       dy = (extent[3] - extent[1]) / size;
+    const inside = footprint(extent as Bounds);
+    if (inside === false) return pixels;
     for (let row = 0; row < size; row++)
       for (let col = 0; col < size; col++) {
         const p = { x: extent[0] + (col + 0.5) * dx, y: extent[3] - (row + 0.5) * dy, z: 0 };
-        if (!footprint.intersectsCoordinate([p.x, p.y])) continue;
+        if (!insideAt(inside, p)) continue;
         const color = colorAt(p, dx, dy);
         if (color.every(Number.isFinite)) pixels.set(color, (row * size + col) * 4);
       }

@@ -3,11 +3,11 @@ import {
   fieldInterpolator,
   adaptivePointLocator,
   type AdaptivePointLocator,
+  type Bounds,
   type Position,
   type GridSurface,
 } from "@atlas/domain";
 import DataTileSource from "ol/source/DataTile.js";
-import GeoJSON from "ol/format/GeoJSON.js";
 import type Projection from "ol/proj/Projection.js";
 import { createXYZ } from "ol/tilegrid.js";
 import type { Raster, LoadedRaster } from "./types";
@@ -15,6 +15,7 @@ import { categorical } from "./rasterTiles";
 import { scaledValue } from "./rasterPresentation";
 import { terrainWater } from "./terrainWater";
 import { terrainDisplaySampler } from "./terrainDisplay";
+import { insideAt, sampledExtent, tileCoverage, type TileInside } from "./tileCoverage";
 
 function terrainAt(raster: LoadedRaster, locate: AdaptivePointLocator) {
   const waterAt = terrainWater(raster, locate);
@@ -38,7 +39,7 @@ export const terrainSampleBands = 9;
 
 /** Physical bands share geographic reads; display height only generalizes contours and relief. */
 export function numericTileSampler(raster: LoadedRaster) {
-  const footprint = new GeoJSON().readGeometry(raster.footprint)!;
+  const footprint = tileCoverage(raster.footprint);
   const locate = adaptivePointLocator();
   // Classes are reconstructed from memberships so their boundaries match region outlines.
   const valueAt = categorical(raster)
@@ -54,6 +55,10 @@ export function numericTileSampler(raster: LoadedRaster) {
     const values = new Float32Array(size * size * bands);
     const dx = (extent[2] - extent[0]) / size,
       dy = (extent[3] - extent[1]) / size;
+    const sampled = sampledExtent(extent, raster.wrap),
+      inside = footprint(sampled);
+    if (inside === false) return values;
+    const activeAt = active(sampled);
     for (let row = 0; row < size; row++)
       for (let col = 0; col < size; col++) {
         const p = { x: extent[0] + (col + 0.5) * dx, y: extent[3] - (row + 0.5) * dy, z: 0 };
@@ -62,7 +67,7 @@ export function numericTileSampler(raster: LoadedRaster) {
             width = east - west;
           p.x = west + ((((p.x - west) % width) + width) % width);
         }
-        if (!footprint.intersectsCoordinate([p.x, p.y]) || !active(p)) continue;
+        if (!insideAt(inside, p) || !activeAt(p)) continue;
         const value = valueAt(p);
         if (!Number.isFinite(value)) continue;
         const companions = terrain
@@ -108,22 +113,36 @@ export function numericTileSource(
     },
   });
 }
+/** Per tile, the overlays that reach it; a covering overlay answers the whole tile. */
 function activeSampler(
   grid: GridSurface,
   channel: string,
   locate: AdaptivePointLocator
-): (p: Position) => boolean {
+): (extent: Bounds) => (p: Position) => boolean {
   const overlays = (grid.overlays ?? [])
     .filter((overlay) => overlay.channels.includes(channel))
     .slice()
     .reverse()
     .map(({ grid }) => ({
-      footprint: new GeoJSON().readGeometry(grid.scope.footprint)!,
+      footprint: tileCoverage(grid.scope.footprint),
       at: activeSampler(grid, channel, locate),
     }));
-  return (p) => {
-    const overlay = overlays.find(({ footprint }) => footprint.intersectsCoordinate([p.x, p.y]));
-    if (overlay) return overlay.at(p);
+  const base = baseActive(grid, locate);
+  return (extent) => {
+    const reaching: { inside: TileInside; at: (p: Position) => boolean }[] = [];
+    for (const overlay of overlays) {
+      const inside = overlay.footprint(extent);
+      if (inside === false) continue;
+      reaching.push({ inside, at: overlay.at(extent) });
+      if (inside === true) break;
+    }
+    if (!reaching.length) return base;
+    if (reaching[0].inside === true) return reaching[0].at;
+    return (p) => (reaching.find(({ inside }) => insideAt(inside, p))?.at ?? base)(p);
+  };
+}
+function baseActive(grid: GridSurface, locate: AdaptivePointLocator) {
+  return (p: Position) => {
     if (grid.topology) {
       const leaf = locate(grid.topology, p.x, p.y).leaf;
       return leaf >= 0 && grid.active.get(leaf) === 1;

@@ -158,14 +158,11 @@ function installMapNavigation(
         z: 0,
       }),
       coordinate = [p.x, p.y];
+    // Each vector source answers from its own R-tree, then tests the candidates exactly.
     const region = engine.regions
       .getSource()!
-      .getFeatures()
-      .find(
-        (f) =>
-          f.get("region").region.parentId === engine.regions.get("currentRegion") &&
-          f.getGeometry()!.intersectsCoordinate(coordinate)
-      );
+      .getFeaturesAtCoordinate(coordinate)
+      .find((f) => f.get("region").region.parentId === engine.regions.get("currentRegion"));
     if (region) {
       event.preventDefault();
       events().enterRegion?.(region.get("region").id);
@@ -173,12 +170,8 @@ function installMapNavigation(
     }
     const child = engine.areas
       .getSource()!
-      .getFeatures()
-      .find(
-        (feature) =>
-          feature.get("area").parentId === engine.areas.get("currentArea") &&
-          feature.getGeometry()!.intersectsCoordinate(coordinate)
-      );
+      .getFeaturesAtCoordinate(coordinate)
+      .find((feature) => feature.get("area").parentId === engine.areas.get("currentArea"));
     if (child) {
       event.preventDefault();
       events().enter(child.get("area").id);

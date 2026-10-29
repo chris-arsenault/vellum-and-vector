@@ -2,6 +2,7 @@ import { tileProcessor } from "./tileProcessor";
 import type { TileMessage } from "./tileProtocol";
 import { openRenderResources } from "./renderResources";
 import { WorkspaceClient } from "./WorkspaceClient";
+import { openSpatialRuntime } from "./spatialRuntime";
 
 const process = tileProcessor();
 let resources: ReturnType<typeof openRenderResources> | undefined;
@@ -9,7 +10,8 @@ let workspace: WorkspaceClient | undefined;
 let port: MessagePort | undefined;
 const opened = new Map<number, () => void>();
 const failures = new Map<number, string>();
-let pending = Promise.resolve();
+// Tile footprints use prepared GEOS predicates; the engine is ready before any message.
+let pending: Promise<unknown> = openSpatialRuntime();
 let closing = false;
 const queue: Extract<TileMessage, { kind: "tile" }>[] = [];
 let scheduled = false;
