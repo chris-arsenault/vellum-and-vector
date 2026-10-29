@@ -32,6 +32,7 @@ import { exportFeaturePage } from "./exportCatalog";
 import { CatalogMutation } from "./catalogMutation";
 import { PublicationStaging } from "./catalogPublication";
 import { GeometryDerivations } from "./geometryDerivations";
+import { ComposedFeatures } from "./composedFeatures";
 
 export class SpatialCatalog implements SpatialStore {
   private regions: RegionCatalog;
@@ -44,16 +45,18 @@ export class SpatialCatalog implements SpatialStore {
   private presentation: PresentationCatalog;
   private mutation: CatalogMutation;
   private publication: PublicationStaging;
+  private composed: ComposedFeatures;
   constructor(
     private db: Database,
     readonly kernel: GeometryKernel
   ) {
     db.exec(catalogSchema);
     const derivations = new GeometryDerivations(db, kernel);
+    this.composed = new ComposedFeatures(db);
     this.journal = new CatalogHistory(db, kernel);
     this.geography = new FieldGeographyCatalog(db, kernel, derivations);
     this.projection = new CatalogProjection(db, kernel);
-    this.features = new FeatureCatalog(db, kernel, this.projection, derivations);
+    this.features = new FeatureCatalog(db, kernel, this.projection, derivations, this.composed);
     this.registry = new RegistryCatalog(db, this.projection, this.features, kernel);
     this.settlements = new SettlementCatalog(db, this.features);
     this.presentation = new PresentationCatalog(db, this.features);
@@ -63,6 +66,7 @@ export class SpatialCatalog implements SpatialStore {
       projection: this.projection,
       registry: this.registry,
       geography: this.geography,
+      composed: this.composed,
     });
     this.publication = new PublicationStaging(db, this.mutation);
   }
@@ -159,6 +163,8 @@ export class SpatialCatalog implements SpatialStore {
         sql: "UPDATE records_core SET revision=? WHERE world_id=? AND revision=?",
         bind: [version, changes.worldId, result.revision],
       });
+      // Stored products carry the revisions they were composed at.
+      this.composed.clear(changes.worldId);
       if (history)
         this.db.exec({
           sql: "UPDATE operations SET revision=?,actor=?,kind=?,at=? WHERE world_id=? AND operation_id=?",

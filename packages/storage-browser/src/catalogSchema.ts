@@ -4,13 +4,13 @@ CREATE TABLE IF NOT EXISTS worlds (
   id TEXT PRIMARY KEY, revision INTEGER NOT NULL, data TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS geometry_values (
-  geometry_id INTEGER PRIMARY KEY,data BLOB NOT NULL
+  geometry_id INTEGER PRIMARY KEY AUTOINCREMENT,data BLOB NOT NULL
 );
 CREATE TABLE IF NOT EXISTS geometry_piece_ready (
   geometry_id INTEGER PRIMARY KEY REFERENCES geometry_values ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS geometry_pieces (
-  piece_id INTEGER PRIMARY KEY,geometry_id INTEGER NOT NULL REFERENCES geometry_values ON DELETE CASCADE,
+  piece_id INTEGER PRIMARY KEY AUTOINCREMENT,geometry_id INTEGER NOT NULL REFERENCES geometry_values ON DELETE CASCADE,
   data BLOB NOT NULL
 );
 CREATE INDEX IF NOT EXISTS geometry_piece_owner ON geometry_pieces(geometry_id);

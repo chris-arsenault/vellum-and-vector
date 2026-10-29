@@ -11,8 +11,8 @@ import {
   type WorkspaceScope,
 } from "@atlas/domain";
 import type { Geometry } from "geojson";
-import { ByteCache } from "./byteCache";
 import { CatalogProjection } from "./catalogProjection";
+import type { ComposedFeatures, StoredComposition } from "./composedFeatures";
 import type { CatalogRow } from "./catalogRecords";
 import type { GeometryKernel } from "./geometryKernel";
 import type { GeometryDerivations } from "./geometryDerivations";
@@ -22,10 +22,15 @@ export interface Presented {
   feature: AtlasFeature;
   geometry: Uint8Array;
   footprint: Uint8Array | null;
+  geometryId: number;
+  footprintId: number | null;
   revision: number;
+  /** Prepared-geometry cache identity; stored geometry rows are immutable. */
   key: string;
 }
-export const composedFeatureCacheBytes = 16 * 1024 * 1024;
+function presented(stored: StoredComposition): Presented {
+  return { ...stored, key: `composed:${stored.geometryId}:${stored.footprintId ?? ""}` };
+}
 function rectangular(geometry: Geometry, bounds: Bounds) {
   if (geometry.type !== "Polygon" || geometry.coordinates.length !== 1) return false;
   const ring = geometry.coordinates[0];
@@ -36,17 +41,16 @@ function rectangular(geometry: Geometry, bounds: Bounds) {
     )
   );
 }
-/** Canonical identity is stored once. A query composes its page from one context; a feature is
- * cached by identity and world revision until the next commit. */
+/** Canonical identity is stored once. A query composes its missing products from one context
+ * and stores them; a product is composed again only after one of its input records changes. */
 export class FeatureCatalog {
-  private cache = new ByteCache<string, Presented>(composedFeatureCacheBytes);
-  private display = new ByteCache<string, AtlasFeature>(composedFeatureCacheBytes);
   private windows: DisplayFeatures;
   constructor(
     private db: Database,
     private kernel: GeometryKernel,
     private projection: CatalogProjection,
-    derivations: GeometryDerivations
+    private derivations: GeometryDerivations,
+    private composed: ComposedFeatures
   ) {
     this.windows = new DisplayFeatures(db, kernel, derivations);
   }
@@ -152,20 +156,16 @@ export class FeatureCatalog {
     }
     return page;
   }
+  /** Display simplification of a stored product, itself stored per tolerance. */
   private product(item: Presented, precision: number, tolerance: number) {
     if (!tolerance) return item.feature;
-    const key = `${item.key}:${tolerance}`;
-    const previous = this.display.get(key);
-    if (previous) return previous;
-    const feature = {
+    return {
       ...item.feature,
-      geometry: this.kernel.simplify(item.feature.geometry, precision, tolerance),
-      ...(item.feature.footprint
-        ? { footprint: this.kernel.simplify(item.feature.footprint, precision, tolerance) }
+      geometry: this.derivations.whole(item.geometryId, precision, tolerance),
+      ...(item.footprintId !== null
+        ? { footprint: this.derivations.whole(item.footprintId, precision, tolerance) }
         : {}),
     };
-    this.display.set(key, feature, JSON.stringify(feature).length * 2);
-    return feature;
   }
   one(scope: WorkspaceScope, id: string) {
     return this.many(scope, [id]).get(id) ?? null;
@@ -184,51 +184,65 @@ export class FeatureCatalog {
     const precision = this.projection.metadata(scope.worldId).reference.precision ?? 1e-6;
     return this.presentRows(scope, [...first.values()], precision);
   }
+  /** Window candidates join the R-tree to each feature's stored reach: its own records, its
+   * representations and those of the features it follows. */
   private candidates(query: FeatureQuery, after: string) {
     const { worldId, spaceId, areaId } = query.scope,
       b = query.extent;
+    this.composed.reach(worldId);
     return this.db.selectObjects(
       `WITH RECURSIVE
-      lineage(id) AS (SELECT ? UNION SELECT json_extract(a.data,'$.value.parentId') FROM records a JOIN lineage l ON a.id=l.id WHERE a.world_id=? AND a.kind='area' AND json_extract(a.data,'$.value.parentId') IS NOT NULL),
-      spatial(id) AS (SELECT CASE WHEN r.kind='representation' THEN json_extract(r.data,'$.value.featureId') ELSE r.id END FROM records r JOIN record_bounds b USING(record_id) WHERE r.world_id=? AND r.space_id=? AND r.kind IN ('feature','representation','landmark','magic') AND b.min_x<=? AND b.max_x>=? AND b.min_y<=? AND b.max_y>=?
-        UNION SELECT f.id FROM spatial s JOIN record_links l ON l.world_id=? AND l.target=s.id AND l.relation='follows' JOIN records f ON f.record_id=l.source AND f.kind='feature')
+      lineage(id) AS (SELECT ? UNION SELECT json_extract(a.data,'$.value.parentId') FROM records_core a JOIN lineage l ON a.id=l.id WHERE a.world_id=? AND a.kind='area' AND json_extract(a.data,'$.value.parentId') IS NOT NULL),
+      spatial(id) AS (SELECT f.feature_id FROM record_bounds b JOIN feature_reach f ON f.record_id=b.record_id AND f.world_id=?
+        WHERE b.min_x<=? AND b.max_x>=? AND b.min_y<=? AND b.max_y>=?)
       SELECT r.*,b.min_x,b.min_y,b.max_x,b.max_y FROM records_core r LEFT JOIN record_bounds b USING(record_id)
       WHERE r.world_id=? AND r.space_id=? AND r.kind IN ('feature','landmark','magic')
-      AND (r.kind<>'feature' OR NOT EXISTS(SELECT 1 FROM records source WHERE source.world_id=r.world_id AND source.id=r.id AND source.kind IN ('landmark','magic')))
+      AND (r.kind<>'feature' OR NOT EXISTS(SELECT 1 FROM records_core source WHERE source.world_id=r.world_id AND source.id=r.id AND source.kind IN ('landmark','magic')))
       AND r.area_id IN (SELECT id FROM lineage) AND r.id IN (SELECT id FROM spatial) AND r.id>?
-      AND (?=0 OR r.layer_id IN (SELECT value FROM json_each(?))) ORDER BY r.id LIMIT ?`,
+      AND (?=0 OR r.layer_id IN (SELECT value FROM json_each(?)))
+      AND (?=0 OR r.geometry_type IN ('Polygon','MultiPolygon')) ORDER BY r.id LIMIT ?`,
       [
         areaId,
         worldId,
         worldId,
-        spaceId,
         b[2],
         b[0],
         b[3],
         b[1],
         worldId,
-        worldId,
         spaceId,
         after,
         query.layers.length,
         JSON.stringify(query.layers),
+        Number(query.dimension === "polygon"),
         Math.max(64, query.limit + 1),
       ]
     );
   }
-  /** Compose the uncached rows from one context; a commit invalidates every cached entry. */
+  /** Read stored products; compose only the missing ones, from one context, and store them. */
   private presentRows(scope: WorkspaceScope, rows: CatalogRow[], precision: number) {
     const result = new Map<string, Presented>();
     if (!rows.length) return result;
-    const version = this.projection.metadata(scope.worldId).version;
-    const key = (id: string) => JSON.stringify([scope.worldId, scope.areaId, id, version]);
+    const stored = this.composed.read(
+      scope.worldId,
+      scope.areaId,
+      rows.map((row) => String(row.id))
+    );
     const missing: CatalogRow[] = [];
     for (const row of rows) {
-      const cached = this.cache.get(key(String(row.id)));
-      if (cached) result.set(String(row.id), cached);
-      else missing.push(row);
+      const item = stored.get(String(row.id));
+      if (item) result.set(String(row.id), presented(item));
+      else if (item === undefined) missing.push(row);
     }
-    if (!missing.length) return result;
+    if (missing.length) this.compose(scope, missing, precision, result);
+    return result;
+  }
+  private compose(
+    scope: WorkspaceScope,
+    missing: CatalogRow[],
+    precision: number,
+    result: Map<string, Presented>
+  ) {
     const context = this.projection.context(
       scope.worldId,
       scope.areaId,
@@ -249,26 +263,26 @@ export class FeatureCatalog {
         source = sources.get(id);
       requireThat(source, "missing_feature", "Choose an existing geographic feature.");
       const feature = presentAtlasFeature(context.world, source, scope.areaId, gis);
-      if (!feature) continue;
-      const geometry = this.kernel.encode(feature.geometry, precision).bytes;
-      const footprint = feature.footprint
-        ? this.kernel.encode(feature.footprint, precision).bytes
-        : null;
-      const item: Presented = {
-        feature: { ...feature, detail: {} },
-        geometry,
-        footprint,
-        revision: Math.max(latest, Number(row.revision)),
-        key: key(id),
+      const record = {
+        id,
+        geometryId: row.geometry_id === null ? null : Number(row.geometry_id),
+        footprintId: row.footprint_id === null ? null : Number(row.footprint_id),
       };
-      this.cache.set(
-        item.key,
-        item,
-        JSON.stringify(item.feature).length * 2 + geometry.byteLength + (footprint?.byteLength ?? 0)
-      );
-      result.set(id, item);
+      if (!feature) {
+        this.composed.write(scope.worldId, scope.areaId, record, null);
+        continue;
+      }
+      const product = {
+        feature: { ...feature, detail: {} },
+        geometry: this.kernel.encode(feature.geometry, precision).bytes,
+        footprint: feature.footprint
+          ? this.kernel.encode(feature.footprint, precision).bytes
+          : null,
+        revision: Math.max(latest, Number(row.revision)),
+      };
+      const ids = this.composed.write(scope.worldId, scope.areaId, record, product)!;
+      result.set(id, presented({ ...product, ...ids }));
     }
-    return result;
   }
   private matches(item: Presented, target: number, predicate: FeatureQuery["predicate"]) {
     return (

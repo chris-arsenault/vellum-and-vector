@@ -17,12 +17,14 @@ import type { CatalogProjection } from "./catalogProjection";
 import type { RegistryCatalog } from "./registryCatalog";
 import type { FieldGeographyCatalog } from "./fieldGeography";
 import { ChangeAccumulator } from "./changeAccumulator";
+import type { ComposedFeatures } from "./composedFeatures";
 
 interface Components {
   journal: CatalogHistory;
   projection: CatalogProjection;
   registry: RegistryCatalog;
   geography: FieldGeographyCatalog;
+  composed: ComposedFeatures;
 }
 /** A synchronous transaction consumes one batch at a time. No decoded result is retained. */
 export class CatalogMutation {
@@ -55,6 +57,8 @@ export class CatalogMutation {
         this.apply(batch, world, result, undoOf);
         Object.assign(metadata, batch.metadata);
       }
+      // Authored magic sources and landmarks are presented as features of the world.
+      if (["magic", "landmarks"].some((key) => key in metadata)) this.parts.composed.clear(worldId);
       this.updateWorld(world, metadata, result.value.revision);
       this.parts.registry.advance(worldId, result.value.revision);
       if (undoOf) this.parts.journal.remove(worldId, undoOf);
@@ -98,13 +102,17 @@ export class CatalogMutation {
         "Write must belong to the command's world."
       );
       this.requireExpected(changes, record.reference);
+      // Before and after: a representation can move between features.
+      this.parts.composed.changed(world.id, record.reference);
       this.put(record, result.value.revision, world, extents, geometry, undoOf);
+      this.parts.composed.changed(world.id, record.reference);
       // Followers link to this identity, so one marking after the write covers old and new.
       this.parts.registry.changed(world.id, record.reference, record);
     }
     for (const remove of changes.removes) {
       this.requireExpected(changes, remove);
       this.parts.registry.changed(world.id, remove);
+      this.parts.composed.changed(world.id, remove);
       this.affected(world.id, remove, geometry);
       this.affected(world.id, remove, extents);
       this.db.exec({

@@ -128,6 +128,7 @@ export class RegionCatalog {
         limit: 64,
         predicate,
         geometry,
+        dimension: "polygon",
       });
       for (const { feature } of page.records) {
         const footprint = feature.geometry;

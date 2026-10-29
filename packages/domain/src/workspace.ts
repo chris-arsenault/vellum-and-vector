@@ -93,6 +93,8 @@ export interface FeatureQuery {
   limit: number;
   predicate: "intersects" | "covers";
   geometry: Geometry | null;
+  /** Only features whose stored geometry is areal. */
+  dimension?: "polygon";
 }
 export interface FeaturePage {
   records: { feature: AtlasFeature; revision: number }[];
