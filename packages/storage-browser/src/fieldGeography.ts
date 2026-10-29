@@ -154,9 +154,12 @@ export class FieldGeographyCatalog {
       [scope.worldId, id, extent[2], extent[0], extent[3], extent[1]]
     );
     const pieces = rows.flatMap((row) => {
-      const geometryId = Number(row.geometry_id);
-      this.derivations.ensurePieces(geometryId, precision);
-      const clipped = this.derivations.window(geometryId, extent, precision, tolerance);
+      const clipped = this.derivations.window(
+        Number(row.geometry_id),
+        extent,
+        precision,
+        tolerance
+      );
       return clipped?.type === "Polygon"
         ? [clipped.coordinates]
         : clipped?.type === "MultiPolygon"
@@ -189,9 +192,12 @@ export class FieldGeographyCatalog {
       [scope.worldId, scope.spaceId, scope.areaId, id, extent[2], extent[0], extent[3], extent[1]]
     );
     return rows.flatMap((row) => {
-      const geometryId = Number(row.geometry_id);
-      this.derivations.ensurePieces(geometryId, precision);
-      const geometry = this.derivations.window(geometryId, extent, precision, tolerance);
+      const geometry = this.derivations.window(
+        Number(row.geometry_id),
+        extent,
+        precision,
+        tolerance
+      );
       return geometry ? [{ id: String(row.lake_id), level: Number(row.level), geometry }] : [];
     });
   }

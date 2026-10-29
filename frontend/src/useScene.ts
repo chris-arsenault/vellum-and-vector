@@ -69,7 +69,12 @@ export function useScene(
   resolution = 0
 ) {
   const tolerance = displayTolerance(resolution);
-  const windows = sceneWindows(world, (extent ?? bounds(world.areas[areaId].footprint)) as Bounds);
+  // Snapped like the raster window: a pan inside the cell keeps the key and reads nothing, and
+  // the catalog stores each feature's product for a snapped window once.
+  const windows = sceneWindows(
+    world,
+    quantizeWindow((extent ?? bounds(world.areas[areaId].footprint)) as Bounds)
+  );
   return useQuery<AtlasFeature[]>({
     queryKey: ["scene", world.id, areaId, windows, tolerance],
     staleTime: Infinity,

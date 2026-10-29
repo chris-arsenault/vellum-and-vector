@@ -1,8 +1,13 @@
 import type { Database } from "@sqlite.org/sqlite-wasm";
 import type { Geometry } from "geojson";
-import { expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { rectangle } from "@atlas/domain";
 import { fixture, query, record, scope, write } from "./catalogFixture";
+
+// The GEOS module is shared by every kernel; spies on it must not outlive a test.
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 it("partitions mixed-dimensional geography and preserves its areas, lines and points", async () => {
   const catalog = await fixture(),
@@ -100,4 +105,15 @@ it("tests small features without pieces and simplifies each tolerance once", asy
   expect((await read()).records.map((r) => r.feature)).toEqual(first);
   expect(simplify).toHaveBeenCalledTimes(1);
   expect(Number(db.selectValue("SELECT count(*) FROM geometry_pieces"))).toBe(0);
+});
+it("clips a large feature to a window once and reads the stored window afterwards", async () => {
+  const catalog = await fixture();
+  await write(catalog, [record("coast", { type: "Polygon", coordinates: [circle(450, 16384)] })]);
+  const read = () => catalog.readDisplay(query({ extent: [0, 0, 512, 512] }), 2);
+  const first = (await read()).records[0].feature.geometry;
+  const clip = vi.spyOn(catalog.kernel.native, "GEOSIntersectionPrec");
+  const simplify = vi.spyOn(catalog.kernel.native, "GEOSTopologyPreserveSimplify");
+  expect((await read()).records[0].feature.geometry).toEqual(first);
+  expect(clip).not.toHaveBeenCalled();
+  expect(simplify).not.toHaveBeenCalled();
 });

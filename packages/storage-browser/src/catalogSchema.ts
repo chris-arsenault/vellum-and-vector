@@ -22,6 +22,11 @@ CREATE TABLE IF NOT EXISTS geometry_display (
   geometry_id INTEGER NOT NULL REFERENCES geometry_values ON DELETE CASCADE,
   tolerance REAL NOT NULL,data TEXT NOT NULL,PRIMARY KEY(geometry_id,tolerance)
 );
+CREATE TABLE IF NOT EXISTS geometry_windows (
+  geometry_id INTEGER NOT NULL REFERENCES geometry_values ON DELETE CASCADE,
+  tolerance REAL NOT NULL,min_x REAL NOT NULL,min_y REAL NOT NULL,max_x REAL NOT NULL,
+  max_y REAL NOT NULL,data TEXT NOT NULL,PRIMARY KEY(geometry_id,tolerance,min_x,min_y,max_x,max_y)
+);
 CREATE TABLE IF NOT EXISTS geometry_overviews (
   geometry_id INTEGER NOT NULL REFERENCES geometry_values ON DELETE CASCADE,
   tolerance REAL NOT NULL,data BLOB NOT NULL,PRIMARY KEY(geometry_id,tolerance)

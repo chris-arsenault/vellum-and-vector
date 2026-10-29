@@ -150,11 +150,24 @@ export class GeometryDerivations {
     this.ensurePieces(id, precision);
     return this.pieceMatches(id, bounds, target);
   }
+  /** A geometry clipped to a window at a display tolerance. Scene windows are snapped to a
+   * grid, so each (window, tolerance) product is derived once and stored. */
   window(id: number, bounds: Bounds, precision: number, tolerance = 0): Geometry | null {
+    const key = [id, tolerance, ...bounds];
+    const stored = this.db.selectValue(
+      "SELECT data FROM geometry_windows WHERE geometry_id=? AND tolerance=? AND min_x=? AND min_y=? AND max_x=? AND max_y=?",
+      key
+    );
+    if (typeof stored === "string") return JSON.parse(stored);
     this.ensurePieces(id, precision);
     const overview = this.overview(id, tolerance);
     const inputs = overview ? [{ id: -id, bytes: overview }] : this.pieces(id, bounds);
-    return this.clippedWindow(inputs, bounds, precision, tolerance);
+    const geometry = this.clippedWindow(inputs, bounds, precision, tolerance);
+    this.db.exec({
+      sql: "INSERT OR REPLACE INTO geometry_windows VALUES(?,?,?,?,?,?,?)",
+      bind: [...key, JSON.stringify(geometry)],
+    });
+    return geometry;
   }
   private *pieces(id: number, b: Bounds) {
     const statement = this.db.prepare(`SELECT p.piece_id,p.data FROM geometry_pieces p
