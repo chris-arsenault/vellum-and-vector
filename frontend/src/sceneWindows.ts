@@ -2,7 +2,7 @@ import { spatial, type Bounds, type World } from "@atlas/domain";
 import type { Geometry } from "geojson";
 
 /** Query both sides of a seam; the map renderer repeats the returned canonical chart. */
-export function sceneWindows(world: World, extent: Bounds): Bounds[] {
+export function sceneWindows(world: Pick<World, "reference">, extent: Bounds): Bounds[] {
   if (world.reference.boundaryMode !== "cylinder") return [extent];
   const [west, , east] = spatial.bounds(world.reference.domain),
     width = east - west;

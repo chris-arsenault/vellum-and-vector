@@ -49,6 +49,9 @@ async function reference(
   await patchRanges(current.resources, result);
   return result;
 }
+/** Raster references and their legends depend on the area's fields, patches and coverage,
+ * not on the window: they are assembled once per input stamp and stored. A request only
+ * attaches its windows and scale. */
 export async function workspaceRasters(
   current: BrowserWorkspace,
   worldId: string,
@@ -56,8 +59,37 @@ export async function workspaceRasters(
   extent: Bounds,
   tolerance: number
 ): Promise<ResourceRaster[]> {
-  const world = await current.catalog.readEditor(worldId),
+  const catalog = current.catalog,
+    family = `rasters:${areaId}`,
+    stamp = catalog.productStamp(worldId, ["area", "field", "fieldPatch", "coverage"]);
+  let rasters = await catalog.readProduct<ResourceRaster[]>(worldId, family, stamp);
+  if (!rasters) {
+    rasters = await rasterReferences(current, worldId, areaId);
+    await catalog.writeProduct(worldId, family, stamp, rasters);
+  }
+  const world = await catalog.readWorld(worldId),
     windows = sceneWindows(world, extent);
+  return rasters.map((raster) => ({
+    ...raster,
+    geography: {
+      ...raster.geography,
+      windows: windows.map(([x0, y0, x1, y1]): Bounds => [
+        x0 - 128 * tolerance,
+        y0 - 128 * tolerance,
+        x1 + 128 * tolerance,
+        y1 + 128 * tolerance,
+      ]),
+      tolerance,
+      revision: world.version,
+    },
+  }));
+}
+async function rasterReferences(
+  current: BrowserWorkspace,
+  worldId: string,
+  areaId: string
+): Promise<ResourceRaster[]> {
+  const world = await current.catalog.readEditor(worldId);
   const fields = world.fields
     .filter(
       (field) =>
@@ -94,13 +126,8 @@ export async function workspaceRasters(
           scope: { worldId, spaceId: data.scope.spaceId, areaId: data.scope.areaId },
           areaId,
           geographyId: geographyIds.get(field.id)!,
-          windows: windows.map(([x0, y0, x1, y1]): Bounds => [
-            x0 - 128 * tolerance,
-            y0 - 128 * tolerance,
-            x1 + 128 * tolerance,
-            y1 + 128 * tolerance,
-          ]),
-          tolerance,
+          windows: [],
+          tolerance: 0,
           revision: world.version,
         },
         ...(channel === "elevation"
