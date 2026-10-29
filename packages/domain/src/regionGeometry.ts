@@ -1,4 +1,5 @@
 import type { Geometry, LineString, Polygon, Position } from "geojson";
+import { spatial } from "./spatial";
 
 export interface RegionCandidate {
   name: string;
@@ -25,27 +26,20 @@ export function snapRegionCut(
   boundaries: Geometry[],
   tolerance: number
 ): LineString {
-  const edges = boundaries
-    .flatMap(regionBoundaryLines)
-    .flatMap((l) => l.coordinates.slice(1).map((b, i) => [l.coordinates[i], b]));
+  const lines = boundaries.flatMap(regionBoundaryLines).map((l) => l.coordinates);
+  if (!lines.length) return line;
+  const edges: Geometry = { type: "MultiLineString", coordinates: lines };
+  // GEOS clips the edges to the snap window, then finds the closest point on what remains.
   const nearest = (p: Position) => {
-    let best = p,
-      distance = tolerance;
-    for (const [a, b] of edges) {
-      const dx = b[0] - a[0],
-        dy = b[1] - a[1];
-      const t = Math.max(
-        0,
-        Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy || 1))
-      );
-      const q = [a[0] + dx * t, a[1] + dy * t];
-      const d = Math.hypot(q[0] - p[0], q[1] - p[1]);
-      if (d <= distance) {
-        best = q;
-        distance = d;
-      }
-    }
-    return best;
+    const window = spatial.clipByRect(edges, [
+      p[0] - tolerance,
+      p[1] - tolerance,
+      p[0] + tolerance,
+      p[1] + tolerance,
+    ]);
+    if (!window) return p;
+    const [q] = spatial.nearestPoints(window, { type: "Point", coordinates: [p[0], p[1]] });
+    return Math.hypot(q.x - p[0], q.y - p[1]) <= tolerance ? [q.x, q.y] : p;
   };
   return {
     ...line,

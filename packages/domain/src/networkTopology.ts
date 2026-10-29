@@ -2,6 +2,7 @@ import type { AtlasFeature, NetworkNode, NetworkReach, Position, World } from ".
 import type { ChangeSet, DomainSnapshot } from "./operations";
 import type { Geometry } from "geojson";
 import { Spatial, point } from "./spatial";
+import { TopologySpatial, withNetworkIndexes } from "./networkIndexes";
 import { composeFeature, combineGeometry, areaSpace, geometryParts } from "./composition";
 import { projectChanges } from "./projection";
 import { lineEndpoints, splitDirectedLine } from "./networkGeometry";
@@ -10,10 +11,15 @@ import { featureStation } from "./boundaryContracts";
 import { requireThat } from "./errors";
 import { sameValue } from "./values";
 import { layerSupports } from "./builtinLayers";
-import { locateOnLine, lineParts } from "./lineStations";
+import { locateOnLine } from "./lineStations";
 import { canonicalPosition, chartCopies } from "./worldBoundary";
 
-function junctionPosition(path: Path, position: Position, snapshot: DomainSnapshot, gis: Spatial) {
+function junctionPosition(
+  path: Path,
+  position: Position,
+  snapshot: DomainSnapshot,
+  gis: TopologySpatial<Path>
+) {
   const candidates = chartCopies(snapshot.world.reference, point(position));
   const nearest = candidates.reduce((a, b) =>
     gis.distance(path.geometry, a) <= gis.distance(path.geometry, b) ? a : b
@@ -27,7 +33,7 @@ interface Path {
   geometry: Geometry;
   space: string;
 }
-function networkPaths(world: World, footprint: Geometry, gis: Spatial): Path[] {
+function networkPaths(world: World, footprint: Geometry, gis: TopologySpatial<Path>): Path[] {
   return Object.values(world.features).flatMap((feature) => {
     const layer = world.layers[feature.layerId];
     if (!layer || !layerSupports(layer, "network")) return [];
@@ -42,7 +48,7 @@ function affectedPaths(
   paths: Path[],
   ids: string[],
   snapshot: DomainSnapshot,
-  gis: Spatial
+  gis: TopologySpatial<Path>
 ): Path[] {
   const changed = paths.filter((p) => ids.includes(p.feature.id));
   const neighbors = new Set(
@@ -67,7 +73,12 @@ function affectedPaths(
       )
   );
 }
-function preserveJunctions(snapshot: DomainSnapshot, paths: Path[], ids: string[], gis: Spatial) {
+function preserveJunctions(
+  snapshot: DomainSnapshot,
+  paths: Path[],
+  ids: string[],
+  gis: TopologySpatial<Path>
+) {
   const reaches = Object.values(snapshot.world.networkReaches ?? {}),
     nodes = snapshot.world.networkNodes ?? {};
   for (const path of paths.filter((p) => ids.includes(p.feature.id))) {
@@ -102,16 +113,23 @@ function pathAnchors(
   path: Path,
   paths: Path[],
   snapshot: DomainSnapshot,
-  gis: Spatial
+  gis: TopologySpatial<Path>
 ): Position[] {
-  const compatible = paths.filter(
-    (p) => p.space === path.space && p.feature.layerId === path.feature.layerId
-  );
-  const line = combineGeometry(
-    compatible.map((p) => p.geometry),
-    1
-  )!;
-  const noded = lineEndpoints(gis.nodeLines(line));
+  const key = JSON.stringify([path.space, path.feature.layerId]),
+    known = gis.anchors.get(paths) ?? new Map<string, Position[]>();
+  gis.anchors.set(paths, known);
+  let noded = known.get(key);
+  if (!noded) {
+    const compatible = paths.filter(
+      (p) => p.space === path.space && p.feature.layerId === path.feature.layerId
+    );
+    const line = combineGeometry(
+      compatible.map((p) => p.geometry),
+      1
+    )!;
+    noded = lineEndpoints(gis.nodeLines(line));
+    known.set(key, noded);
+  }
   const boundaries = Object.values(snapshot.world.areas)
     .filter((a) => areaSpace(snapshot.world, a.id) === path.space)
     .flatMap(
@@ -132,20 +150,22 @@ function nodeIdentity(
   p: Position,
   elevation: number,
   snapshot: DomainSnapshot,
-  gis: Spatial
+  gis: TopologySpatial<Path>
 ): string {
   const compatible = new Set(
     Object.values(snapshot.world.networkReaches ?? {})
       .filter((r) => snapshot.world.features[r.featureId]?.layerId === path.feature.layerId)
       .flatMap((r) => [r.start, r.end])
   );
-  const existing = Object.values(snapshot.world.networkNodes ?? {}).find(
-    (n) =>
-      compatible.has(n.id) &&
-      n.spaceId === path.space &&
-      Math.hypot(n.position.x - p.x, n.position.y - p.y) <= gis.precision &&
-      Math.abs(n.position.z - elevation) <= gis.precision
-  );
+  const existing = gis
+    .near(snapshot, p)
+    .nodes.find(
+      (n) =>
+        compatible.has(n.id) &&
+        n.spaceId === path.space &&
+        Math.hypot(n.position.x - p.x, n.position.y - p.y) <= gis.precision &&
+        Math.abs(n.position.z - elevation) <= gis.precision
+    );
   if (existing) return existing.id;
   return (
     boundaryNode(path, p, snapshot, gis) ??
@@ -156,10 +176,15 @@ function nodeIdentity(
     )
   );
 }
-function boundaryNode(path: Path, p: Position, snapshot: DomainSnapshot, gis: Spatial) {
-  const boundary = Object.values(snapshot.world.areas)
-    .flatMap((a) => a.boundary?.crossings ?? [])
-    .find(
+function boundaryNode(
+  path: Path,
+  p: Position,
+  snapshot: DomainSnapshot,
+  gis: TopologySpatial<Path>
+) {
+  const boundary = gis
+    .near(snapshot, p)
+    .crossings.find(
       (c) =>
         c.featureId === path.feature.id &&
         Math.hypot(c.point.x - p.x, c.point.y - p.y) <= gis.precision
@@ -171,7 +196,7 @@ function nodeFor(
   p: Position,
   snapshot: DomainSnapshot,
   nodes: Map<string, NetworkNode>,
-  gis: Spatial
+  gis: TopologySpatial<Path>
 ): NetworkNode {
   const elevation = nodeElevation(snapshot, path, p);
   p = canonicalPosition(snapshot.world.reference, p);
@@ -197,7 +222,7 @@ function pathReaches(
   paths: Path[],
   snapshot: DomainSnapshot,
   nodes: Map<string, NetworkNode>,
-  gis: Spatial
+  gis: TopologySpatial<Path>
 ): NetworkReach[] {
   const occurrences = new Map<string, number>();
   return splitDirectedLine(
@@ -232,27 +257,30 @@ export function updateNetworkTopology(
   ids: string[]
 ): void {
   const candidate = projectChanges(snapshot, changes),
-    gis = new Spatial(snapshot.world.reference.precision),
-    paths = affectedPaths(
-      networkPaths(candidate.world, snapshot.scope.footprint, gis),
-      ids,
-      snapshot,
-      gis
-    );
-  if (paths.length === 0) return;
-  preserveJunctions(candidate, paths, ids, gis);
-  const nodes = new Map<string, NetworkNode>(),
-    reaches = paths.flatMap((p) => pathReaches(p, paths, candidate, nodes, gis));
-  reaches.push(...outsideReaches(snapshot, paths, nodes, gis));
-  const affected = new Set(paths.map((p) => p.feature.id)),
-    retained = new Set(reaches.map((r) => r.id));
-  publishTopology(snapshot, changes, affected, retained, reaches, nodes);
+    precision = new Spatial(snapshot.world.reference.precision).precision;
+  withNetworkIndexes(precision, [candidate, snapshot], (near) => {
+    const gis = new TopologySpatial<Path>(precision, near),
+      paths = affectedPaths(
+        networkPaths(candidate.world, snapshot.scope.footprint, gis),
+        ids,
+        snapshot,
+        gis
+      );
+    if (paths.length === 0) return;
+    preserveJunctions(candidate, paths, ids, gis);
+    const nodes = new Map<string, NetworkNode>(),
+      reaches = paths.flatMap((p) => pathReaches(p, paths, candidate, nodes, gis));
+    reaches.push(...outsideReaches(snapshot, paths, nodes, gis));
+    const affected = new Set(paths.map((p) => p.feature.id)),
+      retained = new Set(reaches.map((r) => r.id));
+    publishTopology(snapshot, changes, affected, retained, reaches, nodes);
+  });
 }
 function outsideReaches(
   snapshot: DomainSnapshot,
   paths: Path[],
   nodes: Map<string, NetworkNode>,
-  gis: Spatial
+  gis: TopologySpatial<Path>
 ): NetworkReach[] {
   return paths.flatMap((path) => {
     const old = Object.values(snapshot.world.networkReaches ?? {}).filter(
@@ -281,7 +309,7 @@ function outsideReach(
   path: Path,
   snapshot: DomainSnapshot,
   nodes: Map<string, NetworkNode>,
-  gis: Spatial
+  gis: TopologySpatial<Path>
 ): NetworkReach {
   const endpoints = lineEndpoints(geometry),
     oldNodes = [snapshot.world.networkNodes![old.start], snapshot.world.networkNodes![old.end]];
@@ -293,7 +321,7 @@ function outsideReach(
   nodes.set(start.id, start);
   nodes.set(end.id, end);
   const rate = (p: Position) =>
-    old.flow + ((old.endFlow ?? old.flow) - old.flow) * reachFraction(old.geometry, p);
+    old.flow + ((old.endFlow ?? old.flow) - old.flow) * gis.lineFraction(old.geometry, p);
   return {
     id: semanticId(
       snapshot.world.id,
@@ -307,23 +335,6 @@ function outsideReach(
     flow: rate(endpoints[0]),
     endFlow: old.endFlow === null ? null : rate(endpoints[1]),
   };
-}
-function reachFraction(geometry: Geometry, p: Position): number {
-  const location = locateOnLine(geometry, p);
-  let length = 0,
-    before = 0;
-  for (const [part, coordinates] of lineParts(geometry).entries())
-    for (let i = 1; i < coordinates.length; i++) {
-      const step = Math.hypot(
-        coordinates[i][0] - coordinates[i - 1][0],
-        coordinates[i][1] - coordinates[i - 1][1]
-      );
-      if (part < location.part || (part === location.part && i - 1 < location.segment))
-        before += step;
-      if (part === location.part && i - 1 === location.segment) before += step * location.fraction;
-      length += step;
-    }
-  return length === 0 ? 0 : before / length;
 }
 function publishTopology(
   snapshot: DomainSnapshot,
