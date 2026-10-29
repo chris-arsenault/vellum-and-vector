@@ -750,24 +750,16 @@ network. Landmark points identify connected regions; numerical masks retain
 their full extent. Completed session generations retain epoch and magical
 definitions when current settings change.
 
-Named relief reads the final surface. Peaks are summits with at least
-`PeakMinimumProminence` of topographic prominence. Ranges are connected land
-above `MountainElevation`, or above `HillElevation` with `MountainLocalRelief`
-across `ReliefRadius`. Valleys are runs of published rivers whose flanks stand
-`ValleyMinimumDepth` above the channel for `ValleyMinimumLength`. A fjord is a
-glacially eroded ocean cell with land on opposite flanks within
-`FjordMaximumHalfWidth`; scoured open shelf is seabed. Moraines are terminus
-till of at least `MoraineMinimumGlacialDeposition`; U-valleys are drainage
-lines with `UValleyMinimumGlacialErosion`; cirques are strict ice-thickness
-maxima on mountain land, so a level ice-sheet plateau has none. A crater is mapped only
-while its rim stands `ImpactVisibleRelief` above both its floor and the
-surrounding plain.
+Named relief reads the final surface. Detection distinguishes summit prominence,
+mountain relief, incised river flanks, glacially enclosed marine inlets, deposited
+moraines and ice-carved hollows. A crater must retain a rim above its floor and
+surrounding plain. World publication additionally evaluates the geographic
+significance described below; a detected local landform need not become a name.
 
-Regions larger than a few times their least named size split along catchment
-units: river reaches between confluences with the catchments draining into
-them, so pieces meet at drainage divides. Pieces of one region tile it exactly.
-Enclosed gaps smaller than a region's least named size join it unless they hold
-water or another named region.
+World regions receive internal divisions only at continental extent. Terrain,
+drainage and broad climate transitions guide those divisions. Finer profiles keep
+their catchment-based partitioning. Small internal gaps can join a surrounding
+landscape while physical water remains separate.
 
 Major landmarks ([ADR 0006](adr/0006-landmarks-are-injected-causes.md)) run
 inside the epoch loop. `physical.landmarks` carries the counts of landscape and
@@ -2287,13 +2279,13 @@ problems are solved. Do not hide them by pruning rivers to a quota or adding
 display-only terrain. Further quality work must address the physical causes or
 the map's scale-aware presentation explicitly.
 
-River correction (`631863c8-fbac-4df6-8e46-6ad82decf7d5`, 2026-10-20): world
-river vectors now require a basin with at least 350 m³/s annual mean discharge,
-while retaining the qualifying basin's smaller tributaries. This restores a
-distinction between substantial mapped basins and their headwaters. The physical
-25 m³/s basin threshold remains unchanged: raising it also removed smaller
-channels used by waterfall detection. Complete runoff routing, physical channels,
-erosion and landform detection remain independent of world vector qualification.
+World river publication assembles continuous main courses through confluences.
+Each tributary qualifies from its own pre-confluence discharge, drainage extent
+and course length. A major basin does not promote all its tributaries. Complete
+runoff routing, physical channels, erosion and landform detection remain
+independent of World vector qualification. The retained drainage preserves
+unpublished reaches for refinement; network nodes retain confluences within a
+single named course.
 River symbols distinguish measured channel widths at continental zoom and use
 the longitudinal physical width profile when zoomed in.
 
@@ -2313,7 +2305,8 @@ world's regular scalar grid approximates the physical field between publication
 samples. Reconstructing a second shoreline from that grid moved it away from
 the physical river mouths. Completed fields now carry the physical ocean extent
 as geometry; river clipping and both raster renderers use that boundary. Lake
-inlets and raster water likewise use the published lake polygon. Explicit terrain
+inlets and raster water likewise use retained physical lake polygons, whether or
+not those lakes qualify for names. Explicit terrain
 overlays still expose authored islands. Small curved-coast and island cases check
 this through physical generation, scalar publication, field validation and tile
 sampling, including nonzero sea level and intentionally coarse publication.
@@ -2359,16 +2352,51 @@ the tile renderer (36 seconds; fixture generation). The temporary test server is
 stopped. This does not establish real-world relief fidelity. The complete headless
 world and its display at multiple extents remain required for M7/M8 acceptance.
 
+## World geographic significance
+
+World publication recognizes coherent places before evaluating their significance.
+The domain judgments in `worldSignificance.ts` combine physical extent with
+breadth, occupation, relief, contrast, network role or supported authority as
+appropriate to each kind. They do not impose a feature quota or named coverage.
+Resolution controls evidence precision; zoom does not reveal a hidden local
+catalog. Finer creation profiles retain their own publication rules.
+
+Ecological families preserve broad forests and wetland complexes across ordinary
+internal variation. Their outer margins reuse the existing categorical sampler;
+the raster classifier, palettes and shading remain independent of naming.
+Only continental domains enter geographic subdivision, using terrain and drainage
+costs to form substantial connected provinces. Mountain systems also require
+relief; a broad flat plateau does not qualify as a range.
+
+Emergent summits use prominence and isolation; falls use drop and sustained flow.
+Lake and marine names require a substantial waterbody or an exceptional physical
+role. Physical ocean and lake geometry remains available even where no named
+water region exists. Magical places retain each system's causal evidence and
+actual propagation courses. Configured injected landmarks keep the guarantees
+and identities in [ADR 0006](adr/0006-landmarks-are-injected-causes.md).
+
+World founding claims require reachable communities. A successor needs a viable
+population with an institutional or connected regional base. Territorial extent
+follows supported population and terrain travel costs, leaving unsupported land
+unclaimed. Competing continuous cost margins establish shared frontiers. Claims
+can survive retreating control. Continental political subdivisions retain their
+parent territory and sovereign identity and use subordinate outlines.
+
+Published area geometry serves drawing, indexed selection and export. Generated
+travel-cost frontiers do not receive a second display-only border relaxation.
+Site and course influence footprints remain context rather than selectable
+regions. Existing saved maps are not reclassified when opened.
+
 ## Ecology and organic geology
 
 Physical generation now runs atlas ecology processes on the same numerical map as
 climate, drainage, erosion, ice and magic. The biome field describes living cover;
 `landform` continues to describe relief. A plain can carry forest or grassland.
 The **Biomes and life** layer contains cover, productivity, functional animal
-biomass and organic source fields. A categorical Biomes overlay is visible by
-default. Forests, woodland, swamps, marshes, grassland, savanna, desert, tundra,
-barren land and the magical biomes (Ember grove, Thaw meadow, Rime forest,
-Glow-lichen barrens, Fog heath, Moss forest) also become selectable polygons.
+biomass and organic source fields. Local-condition surface coloring is independent
+of named biomes. Significant forests, wetlands, grasslands, barren landscapes and
+magical ecological complexes become selectable polygons at World; ordinary
+patches remain in the fields.
 Default vector colors follow the
 biome palette. GeoStyler starts with biome-specific rules, so editing symbols
 retains the classification. Categorical legends use composed coverage, including
@@ -2456,14 +2484,15 @@ type as its subkind, `ocean`, `river`, `lake`, `landform`, `settlement`, `polity
 `culture` and configured magical places. Existing ecological feature kinds such
 as `forest` and `wetland` retain their rendering and geometry contracts; the naming
 adapter maps them to `biome` and carries `attributes.biome` as the naming subkind.
-The Oceans and seas layer partitions the shared sea outline into named marine
-regions. Broad expanses remain distinct where their connecting passages narrow
+The Oceans and seas layer names significant marine regions from the physical sea
+outline. Broad expanses remain distinct where their connecting passages narrow
 substantially; shallow sills support this distinction, while minor seafloor relief
 and changes below the sampling scale do not create more names. Smaller adjoining
 basins and shelf-dominated regions use the Sea descriptor. Detection follows the
 physical mesh across the cylindrical seam and does not use plate or province
-boundaries. Region extents partition the existing sea outline, preserving its
-shoreline and islands. The existing naming and authored-protection rules apply.
+boundaries. Named extents preserve the existing shoreline and islands without
+requiring all water to belong to a named region. The existing naming and
+authored-protection rules apply.
 
 Names depend on the world seed and stable geographic key, using a separate random
 stream. Seeded geographic naming traditions cover physical geography even without

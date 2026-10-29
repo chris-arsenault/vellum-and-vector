@@ -85,6 +85,17 @@ export function featureStyle(feature: AtlasFeature, style: LayerStyle, resolutio
   )
     return [];
   if (feature.kind === "settlement") return settlementStyle(feature, style);
+  if (feature.kind === "politicalRegion")
+    return new Style({
+      stroke: new Stroke({ color: style.color, width: 0.7, lineDash: [6, 4] }),
+      text: style.labels
+        ? new Text({
+            text: feature.name,
+            font: "11px system-ui",
+            fill: new Fill({ color: style.color }),
+          })
+        : undefined,
+    });
   if (style.layerId === "magic" && typeof feature.attributes.rule === "string")
     return magicPlaceStyle(feature, style);
   return geographicStyle(feature, style, resolution);

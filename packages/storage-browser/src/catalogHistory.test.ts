@@ -3,6 +3,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   createWorldBlueprint,
   rectangle,
+  spatial,
   type CatalogRecord,
   type WorldMetadata,
   type AtlasFeature,
@@ -150,6 +151,7 @@ describe("immutable field geography", () => {
       id: "layout",
       scope: f.scope,
       ocean,
+      lakes: [{ id: "unnamed-lake", geometry: rectangle([600, 600, 700, 700]), level: 12 }],
       waterBodies: [
         {
           id: "lake",
@@ -185,7 +187,13 @@ describe("immutable field geography", () => {
     expect(restored.waterBodies![0].volume).toBe(1000);
     expect(restored.waterBodies![0].slices[1].footprint).toBeNull();
     expect(restored.waterBodies![0].outlet).toEqual({ x: 700, y: 650, z: 12 });
-    expect(f.db.selectValue("SELECT count(*) FROM field_geometry_parts")).toBe(4);
+    expect(restored.lakes?.[0]).toMatchObject({ id: "unnamed-lake", level: 12 });
+    expect(spatial.area(restored.lakes![0].geometry)).toBe(10_000);
+    const waterWindow = await f.catalog.readFieldWindow(f.scope, "layout", [650, 650, 800, 800]);
+    expect(waterWindow.lakes?.[0].level).toBe(12);
+    expect(spatial.area(waterWindow.lakes![0].geometry)).toBe(2500);
+    expect((await f.catalog.readFieldWindow(f.scope, "layout", [0, 0, 100, 100])).lakes).toEqual([]);
+    expect(f.db.selectValue("SELECT count(*) FROM field_geometry_parts")).toBe(5);
     expect(f.db.selectValue("SELECT count(*) FROM field_geometry_bounds WHERE max_x<200")).toBe(1);
     expect(String(f.db.selectValue("SELECT data FROM field_geography"))).not.toContain(
       "coordinates"

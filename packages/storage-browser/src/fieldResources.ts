@@ -134,6 +134,7 @@ export async function writeFieldLayout(
         scope: ready.scope,
         ocean: grid.ocean,
         waterBodies: grid.waterBodies,
+        lakes: grid.lakes,
       },
     };
   } catch (error) {

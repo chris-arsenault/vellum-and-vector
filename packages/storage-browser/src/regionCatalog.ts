@@ -130,7 +130,7 @@ export class RegionCatalog {
         geometry,
       });
       for (const { feature } of page.records) {
-        const footprint = feature.footprint ?? feature.geometry;
+        const footprint = feature.geometry;
         if (footprint.type.includes("Polygon")) found.push({ name: feature.name, footprint });
       }
       after = page.next;

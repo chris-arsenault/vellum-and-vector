@@ -24,6 +24,8 @@ import { extractOceans } from "./oceanFeatures";
 import { dropClaimedFeatures, extractLandmarks, landmarkClaims } from "./landmarkFeatures";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import { generationFeature, generationFeatures } from "../generationFeatures";
+import { isWorldGeography } from "../worldSignificance";
+import { worldRiverCourses } from "./worldRiverCourses";
 
 function riverReach(state: GenerationState, start: number, incoming: Band) {
   const map = state.physical!.map,
@@ -66,7 +68,10 @@ function publishReach(
         copy as typeof geometry,
         profiles,
         basinDischarge,
-        ids.length
+        ids.length,
+        members
+          .filter((i) => (paths.incoming?.get(i) ?? 0) > 1)
+          .map((i) => [paths.x.get(i) + map.mesh.origin[0], paths.y.get(i) + map.mesh.origin[1]])
       )
     );
   }
@@ -79,7 +84,8 @@ function publishReachCopy(
   geometry: ReturnType<typeof riverPath>["geometry"],
   profiles: ReturnType<typeof riverPath>["profiles"],
   basinDischarge: number,
-  offset: number
+  offset: number,
+  junctions: number[][]
 ) {
   const work = state.physical!,
     map = work.map,
@@ -116,6 +122,7 @@ function publishReachCopy(
       reach,
       {
         order: map.RiverOrders.get(start),
+        junctions,
         discharge: discharges[0],
         basinDischarge,
         ...attributes,
@@ -175,14 +182,6 @@ function* drainageReaches(
   } finally {
     releaseWorking(map, starts);
   }
-}
-/** World maps keep their major basins; a dry world still shows its largest river systems. */
-function worldRiverMinimum(state: GenerationState, basinDischarge: Band) {
-  if (state.domain.world.areas[state.domain.scope.areaId].profile !== "world") return 0;
-  let largest = 0;
-  for (let basin = 0; basin < basinDischarge.length; basin++)
-    largest = Math.max(largest, basinDischarge.get(basin));
-  return Math.min(state.physical!.profile.WorldRiverMinimumBasinDischarge, largest / 2);
 }
 /**
  * A short first-order tributary draws one lattice step of valley side as a parallel tooth.
@@ -268,6 +267,27 @@ export function extractNativeGeography(
   }
   context.progress(1, "Geographic extraction complete");
 }
+function riverWater(state: GenerationState) {
+  const work = state.physical!;
+  // hpc-exempt: one feature id per published lake, read while clipping river mouths.
+  const lakes = new Map<number, string>();
+  for (const feature of generationFeatures(state, {
+    kind: "lake",
+    areaId: state.domain.scope.areaId,
+  }))
+    lakes.set(Number(feature.attributes.waterBody), feature.id);
+  return {
+    ocean: state.surface.ocean ?? null,
+    lakes: {
+      get(id: number) {
+        const physical = work.lakeOutlines?.get(id);
+        if (physical) return physical;
+        const featureId = lakes.get(id);
+        return featureId ? generationFeature(state, featureId)?.geometry : undefined;
+      },
+    },
+  };
+}
 function extractRiverGeography(
   state: GenerationState,
   context: MapProcessContext,
@@ -277,30 +297,29 @@ function extractRiverGeography(
     map = work.map,
     paths = createRiverPaths(map),
     { incoming, basinDischarge } = riverInputs(map);
-  // hpc-exempt: one feature id per published lake, read while clipping river mouths.
-  const lakes = new Map<number, string>();
-  for (const feature of generationFeatures(state, {
-    kind: "lake",
-    areaId: state.domain.scope.areaId,
-  }))
-    lakes.set(Number(feature.attributes.waterBody), feature.id);
-  paths.water = {
-    ocean: state.surface.ocean ?? null,
-    lakes: {
-      get(id) {
-        const featureId = lakes.get(id);
-        return featureId ? generationFeature(state, featureId)?.geometry : undefined;
-      },
-    },
-  };
-  const minimum = worldRiverMinimum(state, basinDischarge),
-    reaches: DrainageReach[] = [];
+  paths.water = riverWater(state);
+  const records = [...drainageReaches(state, incoming)],
+    reaches = records.map((record) => record.reach);
   function* publish() {
     // The map shows a subset; the stored network keeps every reach for finer areas.
-    for (const { start, members, reach } of drainageReaches(state, incoming)) {
-      reaches.push(reach);
+    if (isWorldGeography(state)) {
+      for (const course of worldRiverCourses(reaches)) {
+        const members = course.flatMap((i, n) => records[i].members.slice(n ? 1 : 0)),
+          first = records[course[0]],
+          ids = publishReach(
+            state,
+            first.start,
+            members,
+            paths,
+            basinDischarge.get(first.reach.basin)
+          );
+        for (const i of course) reaches[i].featureIds = ids;
+        yield { members, featureIds: ids };
+      }
+      return;
+    }
+    for (const { start, members, reach } of records) {
       const discharge = basinDischarge.get(reach.basin);
-      if (discharge < minimum) continue;
       if (!spatial.covers(state.domain.scope.footprint, point(nativePosition(work, start))))
         continue;
       if (shortHeadwater(work, incoming, members)) continue;
@@ -313,6 +332,8 @@ function extractRiverGeography(
     else for (const reach of publish()) void reach;
   } finally {
     releaseWorking(map, incoming, basinDischarge);
+    releaseWorking(map, paths.x, paths.y, paths.upstream);
+    if (paths.incoming) releaseWorking(map, paths.incoming);
   }
   state.domain.world.drainage = {
     ...state.domain.world.drainage,

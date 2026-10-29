@@ -7,6 +7,8 @@ import { combinedContour, fillSmallHoles } from "./geographicContours";
 import { biomeRules, type BiomeRule, type BiomeSummary } from "./ecologyBiomes";
 import { largestRegionFactor, landArea, partitionRegion } from "./regionPartition";
 import type { RegionMembers } from "./regionMembers";
+import { isWorldGeography } from "../worldSignificance";
+import { extractWorldEcologicalFeatures } from "./worldEcologyFeatures";
 
 type Term = (i: number) => number;
 const families: Record<string, string> = {
@@ -157,6 +159,7 @@ function ruleQuantity(
  * or magic quantity that defines them. Continuous cover remains the ecological representation.
  */
 export function extractEcologicalFeatures(state: GenerationState) {
+  if (isWorldGeography(state)) return extractWorldEcologicalFeatures(state, families, summarize);
   const map = state.physical!.map,
     biome = biomeRules(state),
     water = waterTerms(state),

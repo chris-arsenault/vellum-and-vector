@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { classInterpolator } from "./classSampler";
+import { classInterpolator, classMarginInterpolator } from "./classSampler";
 import { createAdaptiveField } from "./adaptiveField";
 import { adaptiveGeometry, createAdaptiveTopology } from "./adaptiveTopology";
 import { adaptivePointSampler } from "./adaptivePoint";
@@ -103,4 +103,32 @@ it("blends classes over a regular grid's bilinear support and rounds corners", (
   for (let y = 0; y <= 1000; y += 25)
     for (let x = 0; x <= 1000; x += 25) seen.add(at({ x, y, z: 0 }));
   expect([...seen].sort((a, b) => a - b)).toEqual([3, 28]);
+});
+
+it("traces a family against competing classes without changing the raster's winning class", () => {
+  const { field } = classes([0, 0, 1000, 1000], 250);
+  const raster = classInterpolator(field, "finalSurface");
+  const forest = (code: number) => code === 3 || code === 102;
+  const margin = classMarginInterpolator(field, "finalSurface", forest);
+  for (let y = 13; y < 1000; y += 37)
+    for (let x = 17; x < 1000; x += 31) {
+      const p = { x, y, z: 0 };
+      if (Math.abs(margin(p)) < 1e-8) continue;
+      expect(margin(p) > 0).toBe(forest(raster(p)));
+    }
+});
+
+it("keeps the categorical edge when continuous cover crosses its threshold elsewhere", () => {
+  const grid = createGrid("transition", scope, 2, 2);
+  putChannel(grid, "cover", "ratio", residentBand("float64", [0.1, 0.6, 0.1, 0.6]));
+  putChannel(grid, "class", "category", residentBand("float64", [0, 1, 0, 1]));
+  const raster = classInterpolator(grid, "class");
+  const margin = classMarginInterpolator(grid, "class", (code) => code === 1);
+  // A 0.4 cover threshold would cross at x=600. The existing raster crosses at x=500.
+  for (const x of [450, 550, 650]) {
+    const p = { x, y: 350, z: 0 };
+    expect(margin(p) > 0).toBe(x > 500);
+    expect(raster(p)).toBe(Number(x > 500));
+  }
+  expect([...grid.channels.cover]).toEqual([0.1, 0.6, 0.1, 0.6]);
 });

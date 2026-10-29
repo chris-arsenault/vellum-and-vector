@@ -25,6 +25,7 @@ it("extracts complete connected catchment pieces on disk and releases membership
   const f = blockCacheFixture(2048);
   try {
     const state = landscape();
+    state.domain.world.areas.area.profile = "region";
     state.cache = f.cache;
     const mesh = createWorldMesh(state.surface.bounds, 512, 0);
     const map = createField(mesh, f.cache);

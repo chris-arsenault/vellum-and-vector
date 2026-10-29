@@ -132,7 +132,7 @@ export function territoryWashes(
   const layer = input.styles.find((s) => s.layerId === "sovereignty");
   if (!layer?.visible) return [];
   return input.features
-    .filter((f) => f.layerId === "sovereignty")
+    .filter((f) => f.layerId === "sovereignty" && f.kind !== "politicalRegion")
     .flatMap((f) => {
       if (!territoryShown(input, f, layer)) return [];
       const shape = geography.get(f.id);

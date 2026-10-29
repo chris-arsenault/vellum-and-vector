@@ -13,23 +13,39 @@ import { evaluatePreparedAdaptiveCell } from "./adaptiveHermite";
 /**
  * The class at a point, reconstructed from per-cell memberships. Each candidate class's
  * 0/1 membership is interpolated with the shared Hermite patches and the highest wins.
- * Cell centres keep their stored class; boundaries fall where membership crosses one
- * half, which is where region outlines are traced, so raster fills and vector outlines
- * agree. Grids without an adaptive topology keep their nearest-cell class.
+ * Cell centres keep their stored class. Regular grids blend memberships bilinearly.
+ * Region margins can use classMarginInterpolator to trace the same winning transition.
  */
 export function classInterpolator(
   grid: GridSurface,
   channel: string,
   locate: AdaptivePointLocator = adaptivePointLocator()
 ): (p: Position) => number {
+  return classEvaluator(grid, channel, locate);
+}
+/** Signed margin of a family against other classes, using the raster's exact class weights. */
+export function classMarginInterpolator(
+  grid: GridSurface,
+  channel: string,
+  includes: (code: number) => boolean,
+  locate: AdaptivePointLocator = adaptivePointLocator()
+) {
+  return classEvaluator(grid, channel, locate, includes);
+}
+function classEvaluator(
+  grid: GridSurface,
+  channel: string,
+  locate: AdaptivePointLocator,
+  includes?: (code: number) => boolean
+): (p: Position) => number {
   const overlays = [...(grid.overlays ?? [])]
     .reverse()
     .filter((overlay) => overlay.channels.includes(channel))
     .map((overlay) => ({
       covered: spatial.pointCoverage(overlay.grid.scope.footprint),
-      at: classInterpolator(overlay.grid, channel, locate),
+      at: classEvaluator(overlay.grid, channel, locate, includes),
     }));
-  const base = baseClassSampler(grid, channel, locate);
+  const base = baseClassSampler(grid, channel, locate, includes);
   return (p: Position) => {
     const overlay = overlays.find((candidate) => candidate.covered(p));
     return overlay ? overlay.at(p) : base(p);
@@ -39,10 +55,15 @@ export function classInterpolator(
  * Regular grids interpolate continuous channels bilinearly, so class memberships blend
  * over the same four corner cells; ties go to the nearest cell.
  */
-function latticeClassSampler(grid: GridSurface, channel: string) {
+function latticeClassSampler(
+  grid: GridSurface,
+  channel: string,
+  includes?: (code: number) => boolean
+) {
   const width = grid.width ?? 0,
     height = grid.height ?? 0;
-  if (width < 2 || height < 2) return (p: Position) => interpolateSample(grid, channel, p, true);
+  if (width < 2 || height < 2)
+    return (p: Position) => singleClass(interpolateSample(grid, channel, p, true), includes);
   const [x0, y0, x1, y1] = grid.bounds;
   const readCell = latticeMembership(grid, channel, width);
   return (p: Position) => {
@@ -57,19 +78,29 @@ function latticeClassSampler(grid: GridSurface, channel: string) {
       weights = [(1 - tx) * (1 - ty), tx * (1 - ty), (1 - tx) * ty, tx * ty];
     const nearest = codes[(Math.round(gy) - y) * 2 + Math.round(gx) - x];
     let best = nearest,
-      bestWeight = -Infinity;
+      bestWeight = -Infinity,
+      inside = 0,
+      outside = 0;
     for (let a = 0; a < 4; a++) {
       if (!mask[a]) continue;
       const code = codes[a];
-      let weight = 0;
-      for (let b = 0; b < 4; b++) if (mask[b] && codes[b] === code) weight += weights[b];
+      const weight = membershipWeight(codes, mask, weights, code);
+      if (includes) {
+        if (includes(code)) inside = Math.max(inside, weight);
+        else outside = Math.max(outside, weight);
+      }
       if (weight > bestWeight || (weight === bestWeight && code === nearest)) {
         best = code;
         bestWeight = weight;
       }
     }
-    return best;
+    return includes ? inside - outside : best;
   };
+}
+function membershipWeight(codes: number[], mask: number[], weights: number[], code: number) {
+  let weight = 0;
+  for (let b = 0; b < codes.length; b++) if (mask[b] && codes[b] === code) weight += weights[b];
+  return weight;
 }
 function latticeMembership(grid: GridSurface, channel: string, width: number) {
   const values = grid.channels[channel],
@@ -88,11 +119,19 @@ function latticeMembership(grid: GridSurface, channel: string, width: number) {
     return held;
   };
 }
-function baseClassSampler(grid: GridSurface, channel: string, locate: AdaptivePointLocator) {
+function singleClass(code: number, includes?: (code: number) => boolean) {
+  return includes ? (includes(code) ? 1 : -1) : code;
+}
+function baseClassSampler(
+  grid: GridSurface,
+  channel: string,
+  locate: AdaptivePointLocator,
+  includes?: (code: number) => boolean
+) {
   const values = grid.channels[channel];
   requireThat(values, "missing_channel", `Field channel ${channel} is unavailable.`);
   const t = grid.topology;
-  if (!t) return latticeClassSampler(grid, channel);
+  if (!t) return latticeClassSampler(grid, channel, includes);
   const active = grid.active;
   const patches = new Map<number, ReturnType<typeof prepareAdaptivePatches>>();
   const membership = (code: number) => {
@@ -128,16 +167,22 @@ function baseClassSampler(grid: GridSurface, channel: string, locate: AdaptivePo
     const { leaf, u, v } = locate(t, x, y);
     if (leaf < 0) return NaN;
     const codes = candidatesAt(leaf);
-    if (codes.length <= 1) return codes[0] ?? values.get(leaf);
+    if (codes.length <= 1) return singleClass(codes[0] ?? values.get(leaf), includes);
     let best = values.get(leaf),
-      bestValue = -Infinity;
+      bestValue = -Infinity,
+      inside = 0,
+      outside = 0;
     for (const code of codes) {
       const value = evaluatePreparedAdaptiveCell(membership(code)(leaf), u, v);
+      if (includes) {
+        if (includes(code)) inside = Math.max(inside, value);
+        else outside = Math.max(outside, value);
+      }
       if (value > bestValue) {
         best = code;
         bestValue = value;
       }
     }
-    return best;
+    return includes ? inside - outside : best;
   };
 }

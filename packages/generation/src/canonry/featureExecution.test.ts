@@ -85,6 +85,7 @@ async function runPhysical(
     version: 1,
     parameters: {},
     inputs: serializableBindings({
+      reconciliations: registry.reconciliations(),
       seed: 73,
       quality: "draft",
       domains: ["physical"],
@@ -208,6 +209,7 @@ function catchment() {
 it("publishes a dimensional river network without performing terrain incision", async () => {
   const initial = catchment(),
     before = values(initial.physical!.map.Elevation);
+  initial.domain.world.areas.area.profile = "region";
   const output = await runPhysical(
     initial,
     ["river-network", "river-channel-geometry", "fixture.extract-rivers"],

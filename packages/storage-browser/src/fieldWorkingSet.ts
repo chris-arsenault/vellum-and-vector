@@ -128,6 +128,7 @@ export class FieldWorkingSet {
       ...fieldChannels(resource, bands, names),
       ocean: geography.ocean,
       waterBodies: geography.waterBodies,
+      lakes: geography.lakes,
     };
     if (resource.layout === "regular") {
       requireThat(resource.sampling, "field_layout", "Regular fields declare their dimensions.");

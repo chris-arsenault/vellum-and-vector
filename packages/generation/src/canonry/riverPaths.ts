@@ -11,6 +11,7 @@ export interface RiverPaths {
   x: Band;
   y: Band;
   upstream: Band;
+  incoming?: Band;
   elevationAt?: (x: number, y: number) => number;
   water?: { ocean: Geometry | null; lakes: { get(id: number): Geometry | undefined } };
 }
@@ -26,11 +27,13 @@ export function createRiverPaths(map: PhysicalField): RiverPaths {
     x: workingValues(map, "float64", "river:x", (i) => map.mesh.x(i)),
     y: workingValues(map, "float64", "river:y", (i) => map.mesh.y(i)),
     upstream: workingArray(map, "int32", "river:upstream").fill(-1),
+    incoming: workingArray(map, "int32", "river:incoming-count"),
     elevationAt: physicalSampler(map.mesh, map.Elevation),
   };
   for (let i = 0; i < map.mesh.count; i++) {
     const target = map.FlowTargets.get(i);
     if (map.RiverOrders.get(i) <= 0 || target < 0) continue;
+    paths.incoming!.add(target, 1);
     const previous = paths.upstream.get(target);
     if (previous < 0 || map.FlowAccumulation.get(i) > map.FlowAccumulation.get(previous))
       paths.upstream.set(target, i);

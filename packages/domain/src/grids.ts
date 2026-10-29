@@ -32,6 +32,8 @@ export interface FieldSamples {
   channels: Record<string, Band>;
   units: Record<string, string>;
   waterBodies?: WaterBody[] | null;
+  /** Physical lake shores survive omission from the named geographic catalog. */
+  lakes?: { id: string; geometry: Geometry; level: number }[];
   /** Physical ocean extent; resampling elevation must not move its shoreline. */
   ocean?: Geometry | null;
   quantities?: Record<string, "intensive" | "extensive" | "category">;

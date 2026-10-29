@@ -5,6 +5,8 @@ import { generationFeatures } from "./generationFeatures";
 import { generatedFeature, putGenerated } from "./mapFeatures";
 import { isWorldSociety } from "./societyMapScope";
 import { polityCharacter } from "./societyCharacter";
+import { worldTerritories } from "./worldTerritoryGeography";
+import { publishPoliticalRegions } from "./worldPoliticalRegions";
 
 const oceanMasks = new WeakMap<Geometry, (geometry: Geometry) => Geometry | null>();
 function excludeOcean(shape: Geometry, ocean: Geometry) {
@@ -74,9 +76,10 @@ function publishTerritory(
   kind: string,
   layer: string,
   relation: string,
-  members: Set<string>
+  members: Set<string>,
+  frontier?: ReturnType<typeof worldTerritories>
 ) {
-  const shape = territoryShape(state, members);
+  const shape = frontier ? frontier.shape(polity) : territoryShape(state, members);
   if (!shape) return;
   const p = state.society!.region.politics!.polities.find((p) => p.id === polity)!;
   const entity = state.domain.world.entities[polity];
@@ -87,46 +90,88 @@ function publishTerritory(
     kind,
     layer,
     shape,
-    { support: p.support, status: p.status, communities: [...members], seat: p.seat }
+    {
+      support: p.support,
+      status: p.status,
+      communities: [...members],
+      seat: p.seat,
+      ...(frontier ? { boundaryDerivation: "supported-reach" } : {}),
+    }
   );
   feature.relations = [{ targetId: polity, kind: relation }];
   feature.causes = p.causes;
   putGenerated(state, feature);
+  if (frontier && kind === "sovereignty") publishPoliticalRegions(state, feature);
+}
+function politicalFrontiers(state: GenerationState) {
+  if (!isWorldSociety(state)) return {};
+  return {
+    held: worldTerritories(state),
+    effective: worldTerritories(state, "control"),
+    claims: worldTerritories(state, "claim"),
+  };
 }
 export function publishPolitics(state: GenerationState) {
   const region = state.society!.region,
     politics = region.politics!;
-  for (const polity of politics.polities) {
-    // What the polity is, read from the communities it holds; the territories carry the rest.
-    const entity = state.domain.world.entities[polity.id];
-    if (entity && (!state.society!.inherited || isWorldSociety(state)))
-      entity.attributes.character = polityCharacter(region, polity);
-    const sovereign = new Set(
-      Object.keys(politics.sovereignty).filter((id) => politics.sovereignty[id] === polity.id)
-    );
-    const control = new Set(
-      Object.keys(politics.control).filter((id) => politics.control[id] === polity.id)
-    );
-    publishTerritory(state, polity.id, "sovereignty", "sovereignty", "sovereign", sovereign);
-    publishTerritory(state, polity.id, "control", "control", "controlledBy", control);
-    publishTerritory(state, polity.id, "claim", "claims", "claimedBy", new Set(polity.claims));
-    if (isWorldSociety(state)) continue;
-    // Administration is delegated locally and only where effective control exists.
-    for (const id of control) {
-      const c = state.society!.region.communities.find((c) => c.id === id)!;
-      const shape = c.footprint ?? territoryShape(state, new Set([id]));
-      if (!shape) continue;
-      const feature = generatedFeature(
-        state,
-        `administration:${id}`,
-        `${c.name} district`,
-        "jurisdiction",
-        "administration",
-        shape,
-        { communityId: id, contested: politics.contested[id] ?? [] }
+  const { held, effective, claims } = politicalFrontiers(state);
+  try {
+    for (const polity of politics.polities) {
+      // What the polity is, read from the communities it holds; the territories carry the rest.
+      const entity = state.domain.world.entities[polity.id];
+      if (entity && (!state.society!.inherited || isWorldSociety(state)))
+        entity.attributes.character = polityCharacter(region, polity);
+      const sovereign = new Set(
+        Object.keys(politics.sovereignty).filter((id) => politics.sovereignty[id] === polity.id)
       );
-      feature.relations = [{ targetId: polity.id, kind: "administeredBy" }];
-      putGenerated(state, feature);
+      const control = new Set(
+        Object.keys(politics.control).filter((id) => politics.control[id] === polity.id)
+      );
+      publishTerritory(
+        state,
+        polity.id,
+        "sovereignty",
+        "sovereignty",
+        "sovereign",
+        sovereign,
+        held
+      );
+      publishTerritory(state, polity.id, "control", "control", "controlledBy", control, effective);
+      publishTerritory(
+        state,
+        polity.id,
+        "claim",
+        "claims",
+        "claimedBy",
+        new Set(polity.claims),
+        claims
+      );
+      if (isWorldSociety(state)) continue;
+      publishAdministration(state, polity.id, control);
     }
+  } finally {
+    held?.close();
+    effective?.close();
+    claims?.close();
+  }
+}
+function publishAdministration(state: GenerationState, polity: string, control: Set<string>) {
+  const politics = state.society!.region.politics!;
+  // Administration is delegated locally and only where effective control exists.
+  for (const id of control) {
+    const c = state.society!.region.communities.find((c) => c.id === id)!;
+    const shape = c.footprint ?? territoryShape(state, new Set([id]));
+    if (!shape) continue;
+    const feature = generatedFeature(
+      state,
+      `administration:${id}`,
+      `${c.name} district`,
+      "jurisdiction",
+      "administration",
+      shape,
+      { communityId: id, contested: politics.contested[id] ?? [] }
+    );
+    feature.relations = [{ targetId: polity, kind: "administeredBy" }];
+    putGenerated(state, feature);
   }
 }

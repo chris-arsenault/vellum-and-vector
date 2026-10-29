@@ -9,6 +9,9 @@ import { prominence } from "./landforms";
 import { physicalSampler } from "./physicalMetric";
 import { releaseWorking } from "./physicalNumerics";
 import { generationFeature } from "../generationFeatures";
+import { isWorldGeography, rangeSignificance } from "../worldSignificance";
+import { regionEvidence } from "./worldRegionEvidence";
+import { significantSummit, worldGorgeLength, worldGorgeRelief } from "./worldSiteEvidence";
 
 /**
  * Heights on a ring around each cell. The ring reaches at least one cell spacing, since nearer
@@ -17,7 +20,7 @@ import { generationFeature } from "../generationFeatures";
 function rings(state: GenerationState) {
   const { map, profile } = state.physical!,
     height = physicalSampler(map.mesh, map.Elevation),
-    radius = Math.max(profile.ReliefRadius, map.mesh.spacing);
+    radius = Math.max(profile.ReliefRadius, map.mesh.spacing, isWorldGeography(state) ? 50_000 : 0);
   return (i: number) => {
     const values: number[] = [],
       x = map.mesh.x(i),
@@ -64,6 +67,8 @@ export function extractReliefFeatures(state: GenerationState) {
     (i) => map.LandformCodes.get(i) === Landform.Peak,
     (members) => {
       const summit = members.reduce((best, i) => (rise.get(i) > rise.get(best) ? i : best));
+      if (isWorldGeography(state) && !significantSummit(state, summit, rise.get(summit) / 1024))
+        return;
       publishPlace(
         state,
         "peak",
@@ -92,6 +97,12 @@ export function extractReliefFeatures(state: GenerationState) {
       const area = members.reduce((sum, i) => sum + map.mesh.contentArea(i), 0),
         surface = extent && dry(extent);
       if (area < profile.RangeMinimumArea || !surface) return;
+      const evidence = regionEvidence(map, members);
+      if (
+        isWorldGeography(state) &&
+        !rangeSignificance(evidence, evidence.relief, evidence.span).publish
+      )
+        return;
       const summits = members.filter(
         (i) => rise.get(i) >= profile.PeakMinimumProminence * 1024
       ).length;
@@ -105,7 +116,8 @@ export function extractReliefFeatures(state: GenerationState) {
         surface
       );
     },
-    true
+    true,
+    isWorldGeography(state) ? 0 : Infinity
   );
   releaseWorking(map, rise);
 }
@@ -170,13 +182,15 @@ function incisedRuns(state: GenerationState, ring: (i: number) => number[], memb
         meshDeltaX(map.mesh, map.mesh.x(run[k]) - map.mesh.x(run[k - 1])),
         map.mesh.y(run[k]) - map.mesh.y(run[k - 1])
       );
-    if (run.length > 1 && length >= profile.ValleyMinimumLength) runs.push(run);
+    const minimum = isWorldGeography(state) ? worldGorgeLength : profile.ValleyMinimumLength;
+    if (run.length > 1 && length >= minimum) runs.push(run);
     run = [];
   };
   for (const i of members)
     if (
       map.WaterKindCodes.get(i) === 0 &&
-      valleyDepth(state, ring, i) >= profile.ValleyMinimumDepth
+      valleyDepth(state, ring, i) >=
+        (isWorldGeography(state) ? worldGorgeRelief : profile.ValleyMinimumDepth)
     )
       run.push(i);
     else close();

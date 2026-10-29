@@ -6,12 +6,12 @@ import {
   isDescendant,
   foldSamples,
   representationId,
-  lineParts,
   type AtlasFeature,
   type RegularGrid,
 } from "@atlas/domain";
 import type { GenerationState, MapProcess } from "./process";
 import { nameGeographicFeature, nameMetadata } from "./atlasNaming";
+import { networkParts } from "./mapNetworkParts";
 import {
   generationFeature,
   generationFeatures,
@@ -142,11 +142,11 @@ function networkHeight(feature: AtlasFeature, index: number, coordinate: number[
 }
 export function putGeneratedNetwork(state: GenerationState, feature: AtlasFeature) {
   if (!putGenerated(state, feature)) return;
-  const parts = lineParts(feature.geometry);
-  for (const [part, coordinates] of parts.entries())
+  const parts = networkParts(feature, state.domain.world.reference);
+  for (const [part, { coordinates, attributes }] of parts.entries())
     putNetworkPart(
       state,
-      feature,
+      { ...feature, attributes },
       coordinates,
       parts.length === 1 ? feature.id : `${feature.id}:${part}`
     );

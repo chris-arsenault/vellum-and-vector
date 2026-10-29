@@ -144,7 +144,8 @@ it("refreshes a dam reservoir and downstream routing without advancing geologica
   applySocietyWorks(state, context, 20);
   refreshSocietyEnvironment(state, context, 20);
   expect(Array.from(map.WaterKindCodes).some((v) => v === 2)).toBe(true);
-  expect(Object.values(state.domain.world.features).some((f) => f.kind === "lake")).toBe(true);
+  expect(state.surface.lakes?.length).toBeGreaterThan(0);
+  expect(Object.values(state.domain.world.features).some((f) => f.kind === "lake")).toBe(false);
   expect(map.events).toEqual(geologicalEvents);
   expect(Array.from(map.CrustMotionX)).toEqual(tectonics);
   const { water, waterDepth } = state.surface.channels;

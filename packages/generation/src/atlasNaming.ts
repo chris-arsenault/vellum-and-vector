@@ -90,6 +90,15 @@ const landformTerms: Record<string, string> = {
   dome: "Dome",
   escarpment: "Escarpment",
 };
+const geographicDescriptors: Record<string, Pick<AtlasNameRequest, "kind" | "subkind" | "term">> = {
+  ...Object.fromEntries(
+    Object.entries(landformTerms).map(([subkind, term]) => [
+      subkind,
+      { kind: "landform" as const, subkind, term },
+    ])
+  ),
+  politicalRegion: { kind: "polity", subkind: "province", term: "Province" },
+};
 const biomeFamilies = new Set([
   "forest",
   "grassland",
@@ -121,12 +130,10 @@ export function nameGeographicFeature(
     position = { x: (w + e) / 2, y: (s + n) / 2 };
   if (biomeFamilies.has(kind) && typeof attributes.biome === "string")
     return atlasName(world, { key, kind: "biome", subkind: attributes.biome, position, ...source });
-  if (landformTerms[kind])
+  if (geographicDescriptors[kind])
     return atlasName(world, {
       key,
-      kind: "landform",
-      subkind: kind,
-      term: landformTerms[kind],
+      ...geographicDescriptors[kind],
       position,
       ...source,
     });

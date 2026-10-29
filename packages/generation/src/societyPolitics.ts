@@ -17,6 +17,8 @@ import { namePolity } from "./societyNaming";
 import { relocatePolitySeats } from "./societyHierarchy";
 import { besiegeLost } from "./societySiege";
 import { generationFeatures } from "./generationFeatures";
+import { isWorldSociety } from "./societyMapScope";
+import { independentPoliticalBase } from "./worldPoliticalAuthority";
 
 export function initializePolitics(state: GenerationState, context: MapProcessContext) {
   if (!state.society) initializePopulation(state, context);
@@ -45,6 +47,10 @@ export function initializePolitics(state: GenerationState, context: MapProcessCo
       : [];
   });
   region.politics = { polities, sovereignty: {}, control: {}, contested: {}, history: [] };
+  if (isWorldSociety(state)) {
+    foundReachableClaims(state);
+    return;
+  }
   // Founding claims can span disconnected land; effective control requires actual reach.
   for (const c of region.communities) {
     const rank = entities
@@ -59,6 +65,18 @@ export function initializePolitics(state: GenerationState, context: MapProcessCo
     region.politics.sovereignty[c.id] = polity.id;
     region.politics.control[c.id] = polity.id;
   }
+}
+function foundReachableClaims(state: GenerationState) {
+  const politics = state.society!.region.politics!,
+    offers = practiceOpportunities(state);
+  controlCommunities(
+    state,
+    politics.polities.map((p) => polityReach(state, p, profileOf(state).politicalReach, offers)),
+    0
+  );
+  for (const p of politics.polities)
+    for (const [community, polity] of Object.entries(politics.control))
+      if (polity === p.id) consolidate(state, p, community);
 }
 function namePolityAtSeat(
   state: GenerationState,
@@ -159,7 +177,13 @@ function consolidate(state: GenerationState, polity: SocietyPolity, id: string) 
   state.society!.region.politics!.sovereignty[id] = polity.id;
   if (!polity.claims.includes(id)) polity.claims.push(id);
 }
-function successor(state: GenerationState, parent: SocietyPolity, community: string, era: string) {
+function successor(
+  state: GenerationState,
+  parent: SocietyPolity,
+  community: string,
+  era: string,
+  claims = [community]
+) {
   const region = state.society!.region,
     politics = region.politics!;
   const c = region.communities.find((c) => c.id === community)!;
@@ -182,11 +206,13 @@ function successor(state: GenerationState, parent: SocietyPolity, community: str
     seat: c.id,
     support: 0.65,
     status: "active",
-    claims: [c.id],
+    claims,
     causes: [`${era}: local authority formed after ${parent.id} lost effective reach.`],
   });
-  politics.sovereignty[c.id] = id;
-  politics.control[c.id] = id;
+  for (const community of claims) {
+    politics.sovereignty[community] = id;
+    politics.control[community] = id;
+  }
 }
 function recordPoliticalChanges(state: GenerationState, years: number, era: string) {
   const region = state.society!.region,
@@ -207,12 +233,30 @@ function recordPoliticalChanges(state: GenerationState, years: number, era: stri
     politics.history.push({ era, polity: p.id, status, communities: controlled, cause });
     politics.isolation[p.id] = status === "active" ? 0 : (politics.isolation[p.id] ?? 0) + years;
     if (politics.isolation[p.id] < 100) continue;
-    const independent = region.communities.filter(
-      (c) => politics.sovereignty[c.id] === p.id && !politics.control[c.id] && c.status !== "ruined"
-    );
-    const seat = independent.sort((a, b) => population(b) - population(a))[0];
-    if (seat && population(seat) > 100) successor(state, p, seat.id, era);
+    formSuccessor(state, p, politics.isolation[p.id], era);
   }
+}
+function formSuccessor(state: GenerationState, parent: SocietyPolity, years: number, era: string) {
+  if (isWorldSociety(state)) {
+    const base = independentPoliticalBase(state, parent, years);
+    if (base.length)
+      successor(
+        state,
+        parent,
+        base[0].id,
+        era,
+        base.map((c) => c.id)
+      );
+    return;
+  }
+  const region = state.society!.region,
+    politics = region.politics!,
+    independent = region.communities.filter(
+      (c) =>
+        politics.sovereignty[c.id] === parent.id && !politics.control[c.id] && c.status !== "ruined"
+    ),
+    seat = independent.sort((a, b) => population(b) - population(a))[0];
+  if (seat && population(seat) > 100) successor(state, parent, seat.id, era);
 }
 export function evolvePolitics(state: GenerationState, context: MapProcessContext, years: number) {
   initializePolitics(state, context);

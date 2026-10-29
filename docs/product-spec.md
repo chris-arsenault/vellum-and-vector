@@ -190,6 +190,19 @@ Geographic **views** and thematic **features** may overlap freely. Two independe
 
 ### 4.5 Geographic region selection
 
+World geography is selective. Named regions represent coherent major landscapes,
+water systems and supported political territories; exceptional mountains, falls
+and magical sites can qualify without large area. Extent alone does not establish
+significance. Ordinary local patches and tributaries remain in the physical
+fields and retained networks. Unnamed landscapes and unclaimed country are valid.
+Only genuinely continental domains require internal geographic subdivisions.
+
+The raster independently colors local conditions across the map. Naming a region
+does not recolor it or remove color elsewhere. Corresponding ecological margins
+reuse the raster's classification and sampling so forest-to-plains transitions
+agree. A point or course's influence footprint does not make it a selectable
+region. Drawing, selection and export consume the published area geometry.
+
 Regions subdivide an existing geographic map on demand. Their parent links support
 arbitrary nesting until the selected area is too small or narrow to be useful.
 Country, state and county are examples of names, with no required sequence or

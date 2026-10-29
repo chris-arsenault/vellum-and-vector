@@ -21,6 +21,8 @@ export interface MarineRegion {
   id: number;
   peak: number;
   area: number;
+  /** Coast-to-coast breadth at the basin's widest support, after the bounded sill correction. */
+  breadth: number;
   type: "ocean" | "sea";
 }
 
@@ -120,7 +122,17 @@ function gatherRegions(map: PhysicalField, watershed: MarineWatershed) {
     if (map.WaterKindCodes.get(i) !== 1) continue;
     const root = watershed.root(i);
     let region = found.get(root);
-    if (!region) found.set(root, (region = { id: root, peak: root, area: 0, type: "ocean" }));
+    if (!region)
+      found.set(
+        root,
+        (region = {
+          id: root,
+          peak: root,
+          area: 0,
+          breadth: 2 * watershed.breadth.get(root),
+          type: "ocean",
+        })
+      );
     region.area += map.mesh.contentArea(i);
   }
   // hpc-exempt: region records keyed by root, a few dozen entries, in ascending root order.

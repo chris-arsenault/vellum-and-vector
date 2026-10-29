@@ -267,7 +267,7 @@ export const atlasNamingKinds = {
   ],
   ocean: ["ocean", "sea"],
   settlement: ["city", "town", "village"],
-  polity: ["state", "commonwealth"],
+  polity: ["state", "commonwealth", "province"],
   culture: [],
   river: [],
   lake: [],

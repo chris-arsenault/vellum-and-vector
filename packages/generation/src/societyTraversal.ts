@@ -74,12 +74,13 @@ export class SocietySpread {
   private edges: ReturnType<typeof localEdges>;
   constructor(
     state: GenerationState,
-    private marine = false
+    private marine = false,
+    unreached = Infinity
   ) {
-    const allocate = (type: "int32" | "float64", name: string) =>
-      state.surface.coverage.scratch(type, name, state.surface.active.length);
-    this.owner = allocate("int32", "society-owner").fill(-1);
-    this.distances = allocate("float64", "society-distance").fill(Infinity);
+    const allocate = (type: "int32" | "float64", name: string, initial: number) =>
+      state.surface.coverage.scratch(type, name, state.surface.active.length, initial);
+    this.owner = allocate("int32", "society-owner", -1);
+    this.distances = allocate("float64", "society-distance", unreached);
     this.queue = new RouteHeap();
     this.edges = localEdges(state, marine);
   }
@@ -89,15 +90,16 @@ export class SocietySpread {
     this.distances.set(cell, cost);
     this.queue.push(cell, cost);
   }
-  run() {
+  run(maximum = Infinity, visit?: (cell: number) => void) {
     for (let cell = this.queue.pop(); cell >= 0; cell = this.queue.pop()) {
       const here = this.queue.cost();
       if (here !== this.distances.get(cell)) continue;
+      visit?.(cell);
       for (const edge of this.edges(cell)) {
         if (this.marine && edge.a !== cell) continue;
         const next = edge.b,
           cost = here + edge.cost;
-        if (cost >= this.distances.get(next)) continue;
+        if (cost > maximum || cost >= this.distances.get(next)) continue;
         this.owner.set(next, this.owner.get(cell));
         this.distances.set(next, cost);
         this.queue.push(next, cost);

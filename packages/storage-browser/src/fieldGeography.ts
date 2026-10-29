@@ -21,6 +21,7 @@ type StoredBody = Omit<WaterBody, "footprint" | "slices"> & {
 interface StoredGeography {
   ocean?: ShapeReference | null;
   waterBodies?: StoredBody[] | null;
+  lakes?: { id: string; geometry: ShapeReference; level: number }[];
 }
 /** Immutable physical geography is indexed GIS data, separate from numerical chunk metadata. */
 export class FieldGeographyCatalog {
@@ -56,6 +57,7 @@ export class FieldGeographyCatalog {
       this.storeShape(scope.worldId, id, geometry, role, precision);
     const data: StoredGeography = {
       ocean: geography.ocean ? shape(geography.ocean, "ocean") : geography.ocean,
+      lakes: geography.lakes?.map((lake) => ({ ...lake, geometry: shape(lake.geometry, "lake") })),
       waterBodies: geography.waterBodies
         ? geography.waterBodies.map((body) => ({
             ...body,
@@ -115,6 +117,7 @@ export class FieldGeographyCatalog {
       id,
       scope,
       ocean: data.ocean ? shape(data.ocean) : data.ocean,
+      lakes: data.lakes?.map((lake) => ({ ...lake, geometry: shape(lake.geometry) })),
       waterBodies: data.waterBodies
         ? data.waterBodies.map((body) => ({
             ...body,
@@ -128,20 +131,6 @@ export class FieldGeographyCatalog {
     };
   }
   window(scope: WorkspaceScope, id: string, extent: Bounds, tolerance = 0): FieldGeography {
-    const ocean = this.db.selectValue(
-      `SELECT json_type(data,'$.ocean') FROM field_geography
-      WHERE world_id=? AND space_id=? AND area_id=? AND id=?`,
-      [scope.worldId, scope.spaceId, scope.areaId, id]
-    );
-    if (ocean === undefined || ocean === null) return { id, scope };
-    if (ocean === "null") return { id, scope, ocean: null };
-    const rows = this.db.selectObjects(
-      `SELECT p.geometry_id FROM field_geometry_parts p
-      JOIN field_geometry_bounds b USING(part_id)
-      WHERE p.world_id=? AND p.geography_id=? AND p.role='ocean'
-      AND b.min_x<=? AND b.max_x>=? AND b.min_y<=? AND b.max_y>=?`,
-      [scope.worldId, id, extent[2], extent[0], extent[3], extent[1]]
-    );
     const precision =
       Number(
         this.db.selectValue(
@@ -149,6 +138,21 @@ export class FieldGeographyCatalog {
           [scope.worldId]
         )
       ) || 1e-6;
+    const lakes = this.lakeWindow(scope, id, extent, tolerance, precision);
+    const ocean = this.db.selectValue(
+      `SELECT json_type(data,'$.ocean') FROM field_geography
+      WHERE world_id=? AND space_id=? AND area_id=? AND id=?`,
+      [scope.worldId, scope.spaceId, scope.areaId, id]
+    );
+    if (ocean === undefined || ocean === null) return { id, scope, lakes };
+    if (ocean === "null") return { id, scope, ocean: null, lakes };
+    const rows = this.db.selectObjects(
+      `SELECT p.geometry_id FROM field_geometry_parts p
+      JOIN field_geometry_bounds b USING(part_id)
+      WHERE p.world_id=? AND p.geography_id=? AND p.role='ocean'
+      AND b.min_x<=? AND b.max_x>=? AND b.min_y<=? AND b.max_y>=?`,
+      [scope.worldId, id, extent[2], extent[0], extent[3], extent[1]]
+    );
     const pieces = rows.flatMap((row) => {
       const geometryId = Number(row.geometry_id);
       this.derivations.ensurePieces(geometryId, precision);
@@ -162,8 +166,34 @@ export class FieldGeographyCatalog {
     return {
       id,
       scope,
+      lakes,
       ocean: pieces.length ? { type: "MultiPolygon", coordinates: pieces } : null,
     };
+  }
+  private lakeWindow(
+    scope: WorkspaceScope,
+    id: string,
+    extent: Bounds,
+    tolerance: number,
+    precision: number
+  ) {
+    const rows = this.db.selectObjects(
+      `SELECT json_extract(l.value,'$.id') AS lake_id,
+        json_extract(l.value,'$.level') AS level, p.geometry_id
+      FROM field_geography g, json_each(g.data,'$.lakes') l,
+        json_each(l.value,'$.geometry.parts') ids
+      JOIN field_geometry_parts p ON p.part_id=ids.value
+      JOIN field_geometry_bounds b ON b.part_id=p.part_id
+      WHERE g.world_id=? AND g.space_id=? AND g.area_id=? AND g.id=?
+        AND b.min_x<=? AND b.max_x>=? AND b.min_y<=? AND b.max_y>=?`,
+      [scope.worldId, scope.spaceId, scope.areaId, id, extent[2], extent[0], extent[3], extent[1]]
+    );
+    return rows.flatMap((row) => {
+      const geometryId = Number(row.geometry_id);
+      this.derivations.ensurePieces(geometryId, precision);
+      const geometry = this.derivations.window(geometryId, extent, precision, tolerance);
+      return geometry ? [{ id: String(row.lake_id), level: Number(row.level), geometry }] : [];
+    });
   }
   private readShape(worldId: string, id: string, reference: ShapeReference): Geometry {
     const parts = reference.parts.map((part) => {

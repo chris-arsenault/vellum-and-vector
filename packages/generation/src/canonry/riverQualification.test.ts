@@ -88,7 +88,7 @@ function publish(map: PhysicalField, profileName: Profile = "world") {
   return Object.values(state.domain.world.features).filter((feature) => feature.kind === "river");
 }
 
-it("publishes qualifying world basins with their smaller tributaries and preserves the full physical network", () => {
+it("preserves a local physical network and omits it from World publication", () => {
   const { map, main, branch, coast } = fixture(),
     profile = atlasPhysicalProfile(),
     targets = map.coverage.copyBand(map.FlowTargets);
@@ -109,18 +109,7 @@ it("publishes qualifying world basins with their smaller tributaries and preserv
   expect(Array.from(map.FlowTargets)).toEqual(Array.from(targets));
   riverChannelGeometry(map, physicalContext(1, 0, profile));
   const features = publish(map);
-  expect(features.length).toBeGreaterThan(1);
-  expect(
-    features.every(
-      (feature) =>
-        Number(feature.attributes.basinDischarge) > profile.WorldRiverMinimumBasinDischarge
-    )
-  ).toBe(true);
-  expect(
-    features.some(
-      (feature) => Number(feature.attributes.discharge) < profile.WorldRiverMinimumBasinDischarge
-    )
-  ).toBe(true);
+  expect(features).toEqual([]);
   expect(publish(map, "region").length).toBeGreaterThan(features.length);
 });
 

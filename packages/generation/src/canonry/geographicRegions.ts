@@ -15,7 +15,6 @@ import { Landform } from "./codes";
 import {
   combinedContour,
   fillSmallHoles,
-  lakeFootprint,
   membershipContour,
   areaGeometry,
 } from "./geographicContours";
@@ -24,46 +23,15 @@ import { naturalPlaceGeometry, magicPlaceGeometry, type PlaceGeometry } from "./
 import type { MagicField } from "./magicState";
 import type { RegionMembers } from "./regionMembers";
 import { workingValues, releaseWorking } from "./physicalNumerics";
-import { lakeMembership } from "./lakeMembership";
+import { isWorldGeography } from "../worldSignificance";
+import { partitionWorldRegion } from "./worldRegionPartition";
+import { significantLandform } from "./worldSiteEvidence";
+import { significantMagicArea, significantMagicPlace } from "./worldMagicSignificance";
+export { extractLakes } from "./lakeFeatures";
 
 /** Largest enclosed gap, in square metres, that a landform or magic region absorbs. */
 const smallHole = 2_000_000_000;
 
-export function extractLakes(state: GenerationState) {
-  const map = state.physical!.map,
-    mesh = map.mesh;
-  const membership = lakeMembership(map);
-  // A visible lake can continue into the numerical halo. Trace its complete
-  // basin before clipping; truncating its support leaves an open shoreline.
-  for (const body of membership.bodies()) {
-    const members = membership.members(body);
-    if (!members.some((i) => mesh.membership(i) === 1)) continue;
-    const level = map.WaterSurfaceElevations.get(members[0]);
-    const contour = lakeFootprint(state, members, body, level);
-    const shape = clipRegion(state, contour);
-    if (!shape) continue;
-    putGenerated(
-      state,
-      generatedFeature(
-        state,
-        `lake:${spatial
-          .bounds(shape)
-          .map((value) => value.toFixed(3))
-          .join(":")}`,
-        `Lake ${body}`,
-        "lake",
-        "lakes",
-        shape,
-        {
-          sourceAlgorithm: "canonry-0f62584c",
-          waterBody: body,
-          waterLevel: (level - map.BaseSeaLevel) / 1024,
-          area: spatial.area(shape),
-        }
-      )
-    );
-  }
-}
 function clipRegion(state: GenerationState, shape: Geometry | null) {
   return areaGeometry(shape && spatial.intersection(shape, state.domain.scope.footprint));
 }
@@ -101,13 +69,17 @@ export function components(
     mesh = map.mesh,
     // Regions are made of content cells; the halo never starts or joins one.
     content = (i: number) => mesh.membership(i) === 1 && includes(i),
-    visited = workingValues(map, "int32", "region:labels", (i) => (content(i) ? -2 : -1));
+    visited = workingValues(map, "int32", "region:labels", (i) => (content(i) ? -2 : -1)),
+    worldLand = isWorldGeography(state) && Number.isFinite(maximum) ? landArea(state) : null;
   let serial = 0;
   for (let i = 0; i < visited.length; i++) {
     if (visited.get(i) !== -2) continue;
     const members = connectedMembers(state, visited, content, i, serial);
     // Oversized regions split along drainage divides; each piece is its own label.
-    const pieces = partitionRegion(state, members, maximum);
+    const pieces =
+      worldLand === null
+        ? partitionRegion(state, members, maximum)
+        : partitionWorldRegion(state, members, worldLand);
     pieces.forEach((piece, n) => piece.forEach((cell) => visited.set(cell, serial + n)));
     pieces.forEach((piece, n) =>
       publish(piece, polygonal ? regionShape(state, visited, serial + n, piece, weight) : undefined)
@@ -179,20 +151,21 @@ export function publishPlace(
   layer: string,
   attributes: Record<string, unknown> = {},
   extent?: Geometry,
-  placement?: PlaceGeometry | null
+  placement?: PlaceGeometry | null,
+  relations: import("@atlas/domain").AtlasFeature["relations"] = []
 ) {
   const work = state.physical!;
   const representative = placeRepresentative(state, members);
   if (representative < 0) return;
   const identityPosition = nativePosition(work, representative);
-  const position = nativePosition(work, placement?.anchor ?? representative),
-    geometry = placement?.geometry ?? extent ?? point(position);
+  const geometry = placement?.geometry ?? extent ?? point(identityPosition);
   const identity = coordinateKey(identityPosition.x, identityPosition.y);
   const feature = generatedFeature(state, `${kind}:${identity}`, name, kind, layer, geometry, {
     ...placeAttributes(state, name, members, representative, extent, placement),
     ...attributes,
   });
   if (extent && !geometry.type.includes("Polygon")) feature.footprint = extent;
+  feature.relations = relations;
   putGenerated(state, feature);
 }
 function placeRepresentative(state: GenerationState, members: RegionMembers) {
@@ -245,6 +218,7 @@ export function extractNamedLandforms(state: GenerationState) {
       state,
       includes,
       (members, extent) => {
+        if (isWorldGeography(state) && !significantLandform(state, kind, members)) return;
         const surface = extent && kind !== "fjord" ? dry(extent) : extent;
         if (extent && !surface) return;
         publishPlace(
@@ -281,7 +255,9 @@ export function extractMagicPlaces(state: GenerationState) {
       state,
       (i) => Boolean(held.members.get(i)) && held.coverage.get(i) > 0,
       (region, extent) =>
-        region.length >= placeMinimumCells.area &&
+        (isWorldGeography(state)
+          ? significantMagicArea(state, region, (i) => held.coverage.get(i))
+          : region.length >= placeMinimumCells.area) &&
         publishPlace(
           state,
           `confluence:${held.definition.id}`,
@@ -309,13 +285,7 @@ export function extractMagicPlaces(state: GenerationState) {
   for (const field of magic?.fields ?? [])
     for (const rule of field.definition.features) publishRulePlaces(state, field, rule);
 }
-/**
- * Every component of one rule's class past its cartography's minimum, as a named place. An
- * area or a site complex that would span more of the land than a landform may is split along
- * drainage divides into several named places, as forests and landforms are: one Aurora field
- * over a tenth of the land, or one light well of five hundred cells, is not one place. A
- * course keeps its whole length.
- */
+/** World places require causal significance; finer profiles retain local class components. */
 function publishRulePlaces(state: GenerationState, field: MagicField, rule: MagicFeatureRule) {
   const cartography = rule.cartography ?? "area",
     members = field.features[rule.id],
@@ -327,8 +297,13 @@ function publishRulePlaces(state: GenerationState, field: MagicField, rule: Magi
   components(
     state,
     (i) => Boolean(members.get(i)) && (coverage?.get(i) ?? 1) > 0,
-    (region, extent) =>
-      region.length >= minimum &&
+    (region, extent) => {
+      const eligible = isWorldGeography(state)
+        ? significantMagicPlace(state, field, rule, region)
+        : region.length >= minimum;
+      if (!eligible) return;
+      const placement = extent ? magicPlaceGeometry(state, field, rule.id, region, extent) : null;
+      if (isWorldGeography(state) && cartography === "course" && !placement) return;
       publishPlace(
         state,
         `${field.definition.id}:${rule.id}`,
@@ -344,8 +319,9 @@ function publishRulePlaces(state: GenerationState, field: MagicField, rule: Magi
             region.reduce((sum, i) => sum + mesh.area(i), 0),
         },
         extent,
-        extent ? magicPlaceGeometry(state, field, rule.id, region, extent) : null
-      ),
+        placement
+      );
+    },
     true,
     maximum,
     coverage ? (i) => coverage.get(i) : undefined

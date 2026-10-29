@@ -33,6 +33,8 @@ import { mapBoundaryValue } from "../atlasParameters";
 import { releaseWorking, retainedArray } from "./physicalNumerics";
 
 export interface AtlasPhysicalWorkspace {
+  /** Physical lake shores used while tracing mouths, independent of named publication. */
+  lakeOutlines?: Map<number, import("geojson").Geometry>;
   magic?: import("./magicState").MagicWorkspace;
   /** Landmarks emplaced in this run, with their measured signatures. */
   landmarks?: import("./landmarks").LandmarkLedger;

@@ -33,6 +33,7 @@ const leafCells = (map: ReturnType<typeof createField>) =>
 // tectonics, climate or epochs to run before their algorithms can be tested.
 function fixture() {
   const state = landscape();
+  state.domain.world.areas.area.profile = "region";
   state.domain.world.id = "2f6e0134-6017-4e80-9196-052a12218500";
   const bounds: [number, number, number, number] = [2_000_000, 3_000_000, 2_100_000, 3_100_000];
   const footprint = rectangle([2_015_000, 3_015_000, 2_085_000, 3_085_000]);

@@ -50,6 +50,7 @@ const fieldSchema = z
     units: z.record(identifier, identifier),
     quantities: z.record(identifier, z.enum(["intensive", "extensive", "category"])).optional(),
     waterBodies: z.array(bodySchema).nullable().optional(),
+    lakes: z.array(z.object({ id: identifier, geometry: geometrySchema, level: finite })).optional(),
     ocean: geometrySchema.nullable().optional(),
   })
   .strict();

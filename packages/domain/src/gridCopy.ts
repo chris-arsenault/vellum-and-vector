@@ -35,6 +35,7 @@ function copyGridSamples<T extends GridSurface>(
     units: { ...source.units },
     ...(source.quantities ? { quantities: { ...source.quantities } } : {}),
     ...(Object.hasOwn(source, "ocean") ? { ocean: structuredClone(source.ocean) } : {}),
+    ...(source.lakes ? { lakes: structuredClone(source.lakes) } : {}),
     ...(Object.hasOwn(source, "waterBodies")
       ? { waterBodies: structuredClone(source.waterBodies) }
       : {}),

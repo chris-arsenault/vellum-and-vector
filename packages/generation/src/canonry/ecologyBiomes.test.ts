@@ -17,6 +17,8 @@ import { oceanFootprint } from "./geographicContours";
 
 function fixture() {
   const state = landscape();
+  // These cases exercise local cover contours; World significance has its own constructed cases.
+  state.domain.world.areas.area.profile = "region";
   const topology = createAdaptiveTopology(state.surface.bounds, {
     maximumSize: 500,
     minimumSize: 125,

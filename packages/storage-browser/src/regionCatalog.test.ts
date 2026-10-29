@@ -88,7 +88,7 @@ async function fixture() {
     kind: "area",
     value: { ...blueprint.root, id: scope.areaId, spaceId: scope.spaceId },
   });
-  const put = async (id: string, geometry: Geometry) => {
+  const put = async (id: string, geometry: Geometry, footprint?: Geometry) => {
     const feature: AtlasFeature = {
       id,
       areaId: "root",
@@ -96,6 +96,7 @@ async function fixture() {
       name: id,
       kind: "forest",
       geometry,
+      ...(footprint ? { footprint } : {}),
       detail: {},
       attributes: {},
       relations: [],
@@ -146,6 +147,19 @@ const across: Geometry = {
   ],
 };
 describe("region picks", () => {
+  it("uses published polygon boundaries and excludes point and course influence footprints", async () => {
+    const f = await fixture();
+    await f.put("forest", rectangle([100, 100, 600, 600]), rectangle([50, 50, 700, 700]));
+    await f.put(
+      "summit",
+      { type: "Point", coordinates: [300, 300] },
+      rectangle([200, 200, 400, 400])
+    );
+    await f.put("river", across, rectangle([100, 450, 800, 550]));
+    expect(f.areas((await f.pick(300, 300)).candidates)).toEqual([250_000]);
+    expect(f.areas((await f.pick(300, 500)).candidates)).toEqual([250_000]);
+    expect((await f.pick(650, 650)).candidates).toEqual([]);
+  });
   it("proposes the indexed polygons under a click and nothing elsewhere", async () => {
     const f = await fixture();
     await f.put("forest", rectangle([100, 100, 600, 600]));

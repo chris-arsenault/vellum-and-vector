@@ -30,6 +30,8 @@ import { executeProcessBehavior } from "../processTraits";
 
 function fixture() {
   const state = landscape();
+  // These kilometre-scale cases exercise local ecological response and publication.
+  state.domain.world.areas.area.profile = "region";
   const topology = createAdaptiveTopology(state.surface.bounds, {
     maximumSize: 500,
     minimumSize: 125,

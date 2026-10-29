@@ -71,6 +71,7 @@ export const featureDefinitions: Definition[] = [
   ["languageCenter", "languages", "Language centers", "Society and culture", "Communities"],
   ["religiousCenter", "religions", "Religious centers", "Society and culture", "Communities"],
   ["sovereignty", "sovereignty", "Sovereignty", "Politics", "Territories"],
+  ["politicalRegion", "sovereignty", "Geographic provinces", "Politics", "Territories"],
   ["jurisdiction", "administration", "Administration", "Politics", "Territories"],
   ["administration", "administration", "Authored administration", "Politics", "Territories"],
   ["claim", "claims", "Territorial claims", "Politics", "Territories"],

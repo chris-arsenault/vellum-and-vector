@@ -62,6 +62,7 @@ it.each([384, 768])(
 
 it("dissolves territory strips while preserving coastal holes and disconnected islands", async () => {
   const state = landscape();
+  state.domain.world.areas.area.profile = "region";
   state.domain.world.id = state.domain.scope.worldId = "bc07dcd0-7cba-46b1-8e56-5f7829dde8cb";
   state.surface = createGrid("islands", state.domain.scope, 48, 48);
   putChannel(
@@ -89,8 +90,9 @@ it("dissolves territory strips while preserving coastal holes and disconnected i
   expect(geometry.type).toBe("MultiPolygon");
 });
 
-it("preserves cultural distributions and political territories on adaptive world terrain", async () => {
+it("preserves cultural distributions and political territories on adaptive regional terrain", async () => {
   const state = landscape();
+  state.domain.world.areas.area.profile = "region";
   state.domain.world.id = state.domain.scope.worldId = "bc07dcd0-7cba-46b1-8e56-5f7829dde8cb";
   const topology = createAdaptiveTopology([0, 0, 4000, 1000], {
     maximumSize: 250,
@@ -128,9 +130,10 @@ it("preserves cultural distributions and political territories on adaptive world
 });
 
 it.each([1, 3])(
-  "closes %i political boundaries when numerical terrain extends beyond the world's footprint",
+  "closes %i regional political boundaries when numerical terrain extends beyond the footprint",
   async (count) => {
     const state = landscape();
+    state.domain.world.areas.area.profile = "region";
     state.domain.world.id = state.domain.scope.worldId = "bc07dcd0-7cba-46b1-8e56-5f7829dde8cb";
     const footprint = rectangle([0, 0, 1000, 1000]);
     state.domain.scope.footprint = footprint;

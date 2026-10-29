@@ -8,8 +8,29 @@ import {
 import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
 import { physicalSampler } from "./physicalMetric";
+import { isWorldGeography } from "../worldSignificance";
 
 type Event = NonNullable<GenerationState["physical"]>["map"]["events"][number];
+/** Surviving relief distinguishes a major volcanic mountain from an old event location. */
+const worldVolcanicRelief = 1_000;
+const worldCraterRelief = 150;
+const worldCraterRadius = 15_000;
+/** Fault systems need a long retained trace; individual local fractures remain physical. */
+const worldFaultLength = 150_000;
+
+function volcanicRelief(state: GenerationState, event: Event) {
+  const map = state.physical!.map,
+    height = physicalSampler(map.mesh, map.Elevation);
+  let surrounding = 0;
+  for (let i = 0; i < 16; i++) {
+    const angle = (i * Math.PI) / 8;
+    surrounding += height(
+      event.x + Math.cos(angle) * event.radius * 2,
+      event.y + Math.sin(angle) * event.radius * 2
+    );
+  }
+  return (height(event.x, event.y) - surrounding / 16) / 1024;
+}
 
 function eventDisk(
   state: GenerationState,
@@ -122,9 +143,14 @@ function selectedEvent(
 ): false | { relief?: number } {
   // Plume roots have no surface form; landmark events publish through their own record.
   if (event.kind === "plume" || event.kind === "landmark") return false;
-  if (event.kind !== "impact") return selected.volcanism && {};
+  if (event.kind !== "impact") return selected.volcanism && selectedVolcano(state, event);
   const relief = craterRelief(state, event);
+  if (isWorldGeography(state) && (event.radius < worldCraterRadius || relief < worldCraterRelief))
+    return false;
   return selected.impacts && relief >= state.physical!.profile.ImpactVisibleRelief && { relief };
+}
+function selectedVolcano(state: GenerationState, event: Event) {
+  return (!isWorldGeography(state) || volcanicRelief(state, event) >= worldVolcanicRelief) && {};
 }
 function extractFaults(state: GenerationState) {
   const { map } = state.physical!,
@@ -132,6 +158,14 @@ function extractFaults(state: GenerationState) {
   for (const fault of map.faults) {
     // A landmark's own fault trace publishes as the landmark, not as a second fault row.
     if (fault.coordinates.length < 2 || fault.id.startsWith("landmark:")) continue;
+    const length = fault.coordinates
+      .slice(1)
+      .reduce(
+        (sum, p, i) =>
+          sum + Math.hypot(p[0] - fault.coordinates[i][0], p[1] - fault.coordinates[i][1]),
+        0
+      );
+    if (isWorldGeography(state) && length < worldFaultLength) continue;
     const line = {
       type: "LineString" as const,
       coordinates: unwrapCoordinates(

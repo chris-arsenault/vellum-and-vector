@@ -7,6 +7,7 @@ import { marineRegions, type MarineRegion } from "./marineRegions";
 import { metricSearch } from "./metricSearch";
 import { units } from "./math";
 import { workingValues, releaseWorking } from "./physicalNumerics";
+import { isWorldGeography, marineSignificance } from "../worldSignificance";
 
 function polygons(shape: Geometry): Polygon[] {
   if (shape.type === "Polygon") return [shape];
@@ -79,6 +80,17 @@ function publishOcean(state: GenerationState, shape: Geometry, type: "ocean" | "
     })
   );
 }
+function publishedMarineOutline(
+  state: GenerationState,
+  labels: Band,
+  region: MarineRegion,
+  remaining: Geometry,
+  last: boolean
+) {
+  return !isWorldGeography(state) && last
+    ? remaining
+    : regionOutline(state, labels, region, remaining);
+}
 
 /** Name geographic seas within connected water while retaining its existing shoreline. */
 export function extractOceans(state: GenerationState) {
@@ -90,21 +102,35 @@ export function extractOceans(state: GenerationState) {
     return;
   }
   const { labels, regions } = marineRegions(work.map, units(work.profile.ShelfBreakDepth));
+  const selected = isWorldGeography(state)
+    ? regions.filter(
+        (region) => marineSignificance(region.area, region.breadth, region.type).publish
+      )
+    : regions;
+  if (!selected.length) {
+    releaseWorking(work.map, labels);
+    return;
+  }
   if (regions.length === 1) {
     releaseWorking(work.map, labels);
     return publishOcean(state, ocean, regions[0].type);
   }
   const extended = extendedLabels(state, labels);
   releaseWorking(work.map, labels);
-  // Cut smaller seas out of the existing outline; its remainder belongs to the broadest.
-  // Independent contour approximations must not leave gaps or overlapping water geography.
+  // Neighbors share edges. World publication leaves omitted marine geography unnamed;
+  // the finer-profile path retains its existing broadest-region remainder behavior.
   // hpc-exempt: marine region records, a few dozen, sorted once.
-  regions.sort((a, b) => a.area - b.area || a.id - b.id);
+  selected.sort((a, b) => a.area - b.area || a.id - b.id);
   let remaining: Geometry | null = ocean;
-  for (const [index, region] of regions.entries()) {
+  for (const [index, region] of selected.entries()) {
     if (!remaining) break;
-    const shape =
-      index === regions.length - 1 ? remaining : regionOutline(state, extended, region, remaining);
+    const shape = publishedMarineOutline(
+      state,
+      extended,
+      region,
+      remaining,
+      index === selected.length - 1
+    );
     if (!shape) continue;
     publishOcean(state, shape, region.type);
     remaining = areaGeometry(spatial.difference(remaining, shape));

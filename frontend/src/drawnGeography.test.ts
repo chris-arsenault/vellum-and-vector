@@ -20,6 +20,7 @@ import { drawnLabelGeometry } from "./drawnLabels";
 import { drawnLegend } from "./drawnLegend";
 import type { Point } from "ol/geom.js";
 import { drawnOcean } from "./drawnWater";
+import { drawingGeography } from "./drawnGeography";
 
 function fixture(): DrawnMapInput {
   const world = fixtureWorld({ name: "Drawn geography", seed: 31, width: 100000, height: 100000 });
@@ -152,6 +153,48 @@ it("keeps territory washes below illustrations and honours feature visibility", 
   input.view.overrides[feature.id] = { illustrationHidden: true };
   expect(territoryWashes(input)).toEqual([]);
   expect(feature.geometry).toEqual(rectangle([0, 0, 100000, 100000]));
+});
+it("keeps generated travel frontiers canonical and subdivisions subordinate to their country", () => {
+  const input = fixture(),
+    parent = country(input);
+  parent.attributes.boundaryDerivation = "supported-reach";
+  parent.geometry = {
+    type: "Polygon",
+    coordinates: [
+      [
+        [30000, 0],
+        [60000, 0],
+        [65000, 40000],
+        [60000, 100000],
+        [30000, 100000],
+        [30000, 0],
+      ],
+    ],
+  };
+  const neighbour = {
+    ...country(input),
+    id: "neighbour",
+    attributes: parent.attributes,
+    geometry: {
+      type: "Polygon" as const,
+      coordinates: [
+        [
+          [60000, 0],
+          [100000, 0],
+          [100000, 100000],
+          [60000, 100000],
+          [65000, 40000],
+          [60000, 0],
+        ],
+      ],
+    },
+  };
+  const part = { ...parent, id: "province", kind: "politicalRegion" };
+  input.features = [parent, neighbour, part];
+  const shapes = drawingGeography(input.features);
+  expect(shapes.get(parent.id)).toEqual(parent.geometry);
+  expect(shapes.get(neighbour.id)).toEqual(neighbour.geometry);
+  expect(territoryWashes(input, shapes)).toHaveLength(2);
 });
 it("locates regional country labels inside the selected geography and retains manual paths", async () => {
   const input = fixture(),

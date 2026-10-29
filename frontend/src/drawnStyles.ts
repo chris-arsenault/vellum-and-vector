@@ -201,12 +201,12 @@ function river(
 }
 function territory(f: AtlasFeature, c: DrawnStyleContext) {
   const colour = c.view.style === "ink" ? ink : atlasColour(polityIdentity(f));
-  const sovereignty = f.layerId === "sovereignty";
+  const sovereignty = f.layerId === "sovereignty" && f.kind !== "politicalRegion";
   return new Style({
     fill: new Fill({ color: "#00000000" }),
     stroke: new Stroke({
       color: sovereignty ? "#69563f" : colour,
-      width: f.layerId === "control" ? 3 : 1.2,
+      width: f.kind === "politicalRegion" ? 0.7 : f.layerId === "control" ? 3 : 1.2,
       lineDash: sovereignty ? undefined : [6, 4],
     }),
     zIndex: sovereignty ? -10 : -5,
@@ -248,7 +248,7 @@ function landmark(f: AtlasFeature, c: DrawnStyleContext) {
 }
 function labelStyle(f: AtlasFeature, name: string, c: DrawnStyleContext, resolution: number) {
   const own = c.view.overrides[f.id] ?? {};
-  const polity = f.layerId === "sovereignty";
+  const polity = f.layerId === "sovereignty" && f.kind !== "politicalRegion";
   const width = labelPixelWidth(f, c, resolution);
   return new Style({
     geometry: labelGeometry(f, c, own),
@@ -279,7 +279,7 @@ function labelPlacement(f: AtlasFeature, own: CartographicOverride) {
   return own.path || (f.geometry.type.includes("Line") && !placeMark(f)) ? "line" : "point";
 }
 function labelFont(f: AtlasFeature, own: CartographicOverride, width: number, length: number) {
-  const polity = f.layerId === "sovereignty",
+  const polity = f.layerId === "sovereignty" && f.kind !== "politicalRegion",
     capital = f.attributes.settlementRole === "capital";
   const size =
     own.size ??

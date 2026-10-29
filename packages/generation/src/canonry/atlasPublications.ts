@@ -258,7 +258,7 @@ function geographicPublications(
     ["ecology.living", "ecology", biomeFeatureKinds],
     ["human.cultures", "cultures", ["culturalOrigin"]],
     ["human.cultures", "institutions", ["institution"]],
-    ["human.politics", "sovereignty", ["sovereignty"]],
+    ["human.politics", "sovereignty", ["sovereignty", "politicalRegion"]],
     ["human.politics", "control", ["control"]],
     ["human.politics", "administration", ["jurisdiction"]],
     ["human.politics", "claims", ["claim"]],

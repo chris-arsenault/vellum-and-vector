@@ -62,6 +62,7 @@ export interface FieldGeography {
   scope: WorkspaceScope;
   ocean?: Grid["ocean"];
   waterBodies?: Grid["waterBodies"];
+  lakes?: Grid["lakes"];
 }
 export interface ResourcePartition {
   reference: PartitionReference;

@@ -47,6 +47,10 @@ export async function workspaceRasterGeography(
     } while (after);
   }
   const parts = geography.flatMap((g) => (g.ocean ? polygonParts(g.ocean) : []));
+  mergePhysicalLakes(
+    lakes,
+    geography.flatMap((g) => g.lakes ?? [])
+  );
   return {
     ocean: parts.length
       ? { type: "MultiPolygon", coordinates: parts.map((p) => p.coordinates) }
@@ -55,4 +59,16 @@ export async function workspaceRasterGeography(
         : undefined,
     lakes: [...lakes.values()],
   };
+}
+function mergePhysicalLakes(
+  lakes: Map<string, RasterGeography["lakes"][number]>,
+  physical: ({ id: string } & RasterGeography["lakes"][number])[]
+) {
+  for (const lake of physical) {
+    const previous = lakes.get(lake.id);
+    lakes.set(lake.id, {
+      level: lake.level,
+      geometry: previous ? mergeDisplayFragments(previous.geometry, lake.geometry) : lake.geometry,
+    });
+  }
 }

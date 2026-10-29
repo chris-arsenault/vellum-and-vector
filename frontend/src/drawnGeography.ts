@@ -16,7 +16,12 @@ export function drawingGeography(features: AtlasFeature[], base = noBase): Drawi
   const shapes = new Map(features.map((f) => [f.id, f.geometry as Geometry | null]));
   for (const layer of politicalLayers)
     softenSharedCorners(
-      features.filter((f) => f.layerId === layer && f.geometry.type.includes("Polygon")),
+      features.filter(
+        (f) =>
+          f.layerId === layer &&
+          f.geometry.type.includes("Polygon") &&
+          f.attributes.boundaryDerivation !== "supported-reach"
+      ),
       shapes
     );
   const water = [

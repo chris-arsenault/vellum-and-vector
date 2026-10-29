@@ -22,6 +22,7 @@ import { naturalPlaceGeometry, magicPlaceGeometry } from "./placeGeometry";
 function fixture() {
   const state = landscape(),
     topology = createAdaptiveTopology([0, 0, 4000, 1000], { maximumSize: 250, minimumSize: 250 });
+  state.domain.world.areas.area.profile = "region";
   state.domain.world.id = state.domain.scope.worldId = "00112233-4455-6677-8899-aabbccddeeff";
   state.domain.world.layers = Object.fromEntries(builtinLayers().map((l) => [l.id, l]));
   state.domain.world.magicSystems = canonryMagicPresets();
