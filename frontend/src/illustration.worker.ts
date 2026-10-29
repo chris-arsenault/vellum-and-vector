@@ -34,11 +34,15 @@ async function illustrate(request: IllustrationRequest) {
   const reply = await assemble(request);
   if (!reply) return;
   self.postMessage(reply);
-  const { id: _, ...products } = reply;
-  await workspace?.writeProduct(worldId, family, stamp, {
-    ...products,
+  const products: StoredDrawing = {
+    oceans: reply.oceans,
+    coasts: reply.coasts,
+    outside: reply.outside,
+    terrain: reply.terrain,
+    fields: reply.fields,
     geography: [...reply.geography],
-  });
+  };
+  await workspace?.writeProduct(worldId, family, stamp, products);
 }
 async function assemble({ id, input, footprint }: IllustrationRequest) {
   const reader = await (resources ??= openRenderResources(workspace));

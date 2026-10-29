@@ -4,14 +4,22 @@ import { atlasWorkspace, workspaceScope } from "./atlasWorkspace";
 import { bounds } from "./presentation";
 import { spatial, type Bounds } from "@atlas/domain";
 import { type AtlasFeature, type World } from "./types";
+import type { Geometry } from "geojson";
 import { sceneWindows, displayTolerance, mergeDisplayFragments } from "./sceneWindows";
 
+/** A drawn sheet depicts its whole subject, so its reads follow the subject, not the viewport:
+ * panning the sheet changes no input and the illustration is assembled once per scale. */
+export function mapDataExtent(sheet: Geometry | null, viewport: number[] | null) {
+  return sheet && viewport ? bounds(sheet) : viewport;
+}
 export function useMapData(
   world: World,
   areaId: string,
-  extent: number[] | null = null,
-  resolution = 0
+  viewport: number[] | null = null,
+  resolution = 0,
+  sheet: Geometry | null = null
 ) {
+  const extent = mapDataExtent(sheet, viewport);
   const scene = useScene(world, areaId, extent, resolution);
   // Raster references are keyed to a window snapped outward to a power-of-two cell, so a pan
   // inside that cell neither re-queries references nor changes the registered geography.
