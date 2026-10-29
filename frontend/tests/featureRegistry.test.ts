@@ -5,6 +5,7 @@ import {
   closeDrawer,
   exportMap,
   generatedWorld,
+  openFixtureMap,
   openLayers,
   openMapSettings,
   openRegistry,
@@ -17,7 +18,7 @@ import {
 test("the registry browses, sorts and filters named features into read-only inspection", async ({
   page,
 }) => {
-  await generatedWorld(page, "Registry inspection", {
+  await openFixtureMap(page, "Registry inspection", {
     features: [
       pointFeature("Small town", "settlement", "settlements", { population: 20 }),
       pointFeature("Large town", "settlement", "settlements", { population: 900 }),
@@ -96,8 +97,7 @@ test("the registry browses, sorts, filters and edits named features @deferred-au
 
 test("feature types toggle individually and a saved view restores them", async ({ page }) => {
   // The layer drawer's type toggles and saved views read the completed layer styles.
-  await generatedWorld(page, "Type world", {
-    fields: true,
+  await openFixtureMap(page, "Type world", {
     features: [
       pointFeature("Falls", "waterfall", "geology"),
       pointFeature("Spring", "fire:spring", "magic", { system: "fire", rule: "spring" }),

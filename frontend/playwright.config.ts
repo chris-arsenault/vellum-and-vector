@@ -16,7 +16,7 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: `pnpm build --outDir ${outDir} ${process.env.ATLAS_WORKSPACE ? "--mode workspace" : ""} && pnpm exec vite preview --host 127.0.0.1 --port ${port} --outDir ${outDir} --strictPort`,
+    command: `pnpm build --outDir ${outDir} --mode ${process.env.ATLAS_WORKSPACE ? "workspace" : "browser"} && pnpm exec vite preview --host 127.0.0.1 --port ${port} --outDir ${outDir} --strictPort`,
     url: `http://127.0.0.1:${port}`,
     timeout: 120000,
     reuseExistingServer: false,

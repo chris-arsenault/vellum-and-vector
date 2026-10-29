@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "./uiTest";
+test.use({ generationLifecycle: "Verify history configuration in the submitted worker request." });
 import type { AtlasGenerationInput } from "@atlas/generation";
 import { installGenerationFixture } from "./generationFixture";
 import { tuneGeneration, advancedChanges } from "./generationSetup";

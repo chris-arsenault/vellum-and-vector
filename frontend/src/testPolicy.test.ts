@@ -51,3 +51,14 @@ it.each([
   const [result] = await eslint.lintText(code, { filePath });
   expect(result.messages.some((message) => message.ruleId === "no-restricted-imports")).toBe(true);
 });
+
+it.each([
+  'test("navigation", () => setup({ fields: true }));',
+  'test("navigation", () => generatedWorld(page, "Atlas"));',
+])("rejects repeated generation or rendering-coupled setup: %s", async (code) => {
+  const eslint = new ESLint({ cwd: fileURLToPath(new URL("../", import.meta.url)) });
+  const [result] = await eslint.lintText(code, {
+    filePath: "tests/example.test.ts",
+  });
+  expect(result.messages.some((message) => message.ruleId === "no-restricted-syntax")).toBe(true);
+});

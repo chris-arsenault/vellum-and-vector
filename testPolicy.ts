@@ -35,6 +35,21 @@ export const testPolicy: Linter.Config[] = [
   {
     files: ["tests/**/*.test.ts"],
     rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            'CallExpression[callee.name="test"]:not([arguments.0.value=/@deferred-authoring/]) Property[key.name="fields"]',
+          message:
+            "Use numerical for data preconditions; raster rendering is a separate @rendering scenario boundary.",
+        },
+        {
+          selector:
+            'CallExpression[callee.name="test"]:not([arguments.0.value=/@deferred-authoring/]) CallExpression[callee.name="generatedWorld"]',
+          message:
+            "Reuse a completed map with openFixtureMap. generatedWorld is retained only for deferred authoring scenarios.",
+        },
+      ],
       "no-restricted-imports": [
         "error",
         {

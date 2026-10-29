@@ -11,7 +11,7 @@ const bundle = build({
   format: "iife",
 }).then((result) => result.outputFiles[0].text);
 
-test("renders coarse mountain samples across map scales", async ({ page }) => {
+test("renders coarse mountain samples across map scales @rendering", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
@@ -35,7 +35,7 @@ test("renders coarse mountain samples across map scales", async ({ page }) => {
 const contrast = (a: number[], b: number[]) =>
   a.slice(0, 3).reduce((sum, value, i) => sum + Math.abs(value - b[i]), 0);
 
-test("retains continuous index contours on crowded slopes even at zero exaggeration", async ({
+test("retains continuous index contours on crowded slopes even at zero exaggeration @rendering", async ({
   page,
 }) => {
   await page.goto("/");
@@ -60,7 +60,7 @@ test("retains continuous index contours on crowded slopes even at zero exaggerat
   await page.evaluate(() => window.mountainRendering.dispose());
 });
 
-test("updates scale during navigation and keeps rocky peaks distinct from ice", async ({
+test("updates scale during navigation and keeps rocky peaks distinct from ice @rendering", async ({
   page,
 }) => {
   await page.goto("/");

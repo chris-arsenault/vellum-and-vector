@@ -7,7 +7,7 @@ import {
   closeDrawer,
   createWorld,
   exportMap,
-  generatedWorld,
+  openFixtureMap,
   openRegistry,
   pageErrors,
   pointFeature,
@@ -23,10 +23,10 @@ async function expectMapOverview(page: import("./uiTest").Page) {
   await expect(panel.getByRole("combobox")).toHaveCount(0);
 }
 
-test("the sidebar follows the map, outline and refinement workflow through initial generation and reopen", async ({
+test("the sidebar follows the map, outline and refinement workflow through initial generation and reopen @generation", async ({
   page,
 }) => {
-  await installGenerationFixture(page, { hold: true, fields: true });
+  await installGenerationFixture(page, { hold: true, numerical: true });
   await page.goto("/");
   await page.getByLabel("World name").fill("Workflow atlas");
   await page.getByLabel("Width · km").fill("1");
@@ -85,7 +85,7 @@ test("inspection offers information and a geographic next step without authoring
   page,
 }) => {
   const errors = pageErrors(page);
-  await generatedWorld(page, "Selection desk", {
+  await openFixtureMap(page, "Selection desk", {
     features: [pointFeature("Known falls", "waterfall", "geology", { height: 42 }, [500, 500])],
   });
   const panel = page.getByRole("complementary", { name: "Selection and refinement" });
@@ -136,7 +136,7 @@ test("a selected feature boundary becomes a region and keeps refinement settings
       ],
     ],
   };
-  await generatedWorld(page, "Boundary desk", { fields: true, features: [forest] });
+  await openFixtureMap(page, "Boundary desk", { numerical: true, features: [forest] });
   await openRegistry(page);
   await page.getByRole("button", { name: "Juniper country", exact: true }).click();
   await closeDrawer(page);

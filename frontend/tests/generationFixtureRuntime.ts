@@ -4,6 +4,7 @@ import { attachGrid, detachGrid, layerSupports } from "@atlas/domain";
 import { generationSnapshot } from "@atlas/generation";
 import { WorkspaceClient } from "../src/WorkspaceClient";
 import { openSpatialRuntime } from "../src/spatialRuntime";
+import { assertGenerationScenario } from "./scenarioBoundary";
 import { loadGenerationFeatures } from "../src/generationInputs";
 import type { GenerationWorkspaceStart } from "../src/generationWorkspaceProtocol";
 import type {
@@ -107,6 +108,7 @@ export function installGenerationFixtureRuntime({
   window.Worker = new Proxy(NativeWorker, {
     construct(target, args) {
       if (!String(args[0]).includes("generation.worker")) return Reflect.construct(target, args);
+      assertGenerationScenario();
       let stopped = false;
       let complete: (() => Promise<void>) | undefined;
       let publicationWorker: Worker | undefined;

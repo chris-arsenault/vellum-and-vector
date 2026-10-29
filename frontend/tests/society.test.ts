@@ -1,6 +1,14 @@
 import { expect, test, type Page } from "./uiTest";
 import type { AtlasFeature, PopulationGroup, SocietyRegion } from "@atlas/domain";
-import { canvas, drag, exportMap, generatedWorld, pageErrors, panel } from "./harness";
+import {
+  canvas,
+  drag,
+  exportMap,
+  generatedWorld,
+  openFixtureMap,
+  pageErrors,
+  panel,
+} from "./harness";
 
 /** The legend items of a share bar on the inspection surface, by the bar's label. */
 function legend(page: Page, label: string) {
@@ -105,8 +113,13 @@ function societyState(feature: AtlasFeature): SocietyRegion {
   };
 }
 /** A 4 × 1 km world whose only settlement sits at the map centre. */
-async function settlementWorld(page: Page, name: string, settlement: AtlasFeature) {
-  await generatedWorld(
+async function settlementWorld(
+  page: Page,
+  name: string,
+  settlement: AtlasFeature,
+  supplied = false
+) {
+  await (supplied ? openFixtureMap : generatedWorld)(
     page,
     name,
     { features: [settlement], society: societyState(settlement) },
@@ -126,7 +139,7 @@ test("settlement inspection shows residents, mixed languages and history without
     "River speech": { knowledge: 1, use: 0.75 },
     "Coast speech": { knowledge: 0.4, use: 0.25 },
   };
-  await settlementWorld(page, "Society inspection", settlement);
+  await settlementWorld(page, "Society inspection", settlement, true);
   const before = await exportMap(page);
   await expect(page.getByTitle("200 settlement residents", { exact: true })).toBeVisible();
   await expect(page.getByTitle("800 rural residents", { exact: true })).toBeVisible();

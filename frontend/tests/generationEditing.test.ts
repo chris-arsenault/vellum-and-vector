@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "./uiTest";
+test.use({ generationLifecycle: "Verify unfinished configuration and repaired worker requests." });
 import { installGenerationFixture } from "./generationFixture";
 import { tuneGeneration, sharedHistory, recipeEditor } from "./generationSetup";
 

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "./uiTest";
-import { chooseOutline, createWorld, exportMap, generatedWorld, pointFeature } from "./harness";
+import { chooseOutline, createWorld, exportMap, openFixtureMap, pointFeature } from "./harness";
 import { installGenerationFixture } from "./generationFixture";
 
 async function save(page: Page) {
@@ -19,8 +19,8 @@ test("local saves retain generated geography and chosen regions across reload an
   page,
   context,
 }) => {
-  await generatedWorld(page, "Local region atlas", {
-    fields: true,
+  await openFixtureMap(page, "Local region atlas", {
+    numerical: true,
     features: [pointFeature("Falls", "waterfall", "geology")],
   });
   await chooseOutline(page, "Saved reach");

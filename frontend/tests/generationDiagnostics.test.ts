@@ -1,4 +1,5 @@
 import { expect, test } from "./uiTest";
+test.use({ generationLifecycle: "Verify diagnostics during generation and publication." });
 import { completeGenerationFixture, installGenerationFixture } from "./generationFixture";
 
 test("every process diagnostic stays inspectable during generation and after publication", async ({

@@ -1,16 +1,14 @@
 import { expect, test, type Page } from "./uiTest";
-import { createArea, generatedWorld, pointFeature } from "./harness";
+import { openFixtureMap, pointFeature } from "./harness";
 
 test("world registry finds a finer place and opens its compatible map", async ({ page }) => {
-  await generatedWorld(page, "Registry navigation", {
-    fields: true,
-    regionalFeatures: [pointFeature("Region marker", "waterfall", "geology", {}, [300, 300])],
+  await openFixtureMap(page, "Registry navigation", {
+    mappedRegion: {
+      name: "River region",
+      extent: [100, 100, 600, 600],
+      features: [pointFeature("Region marker", "waterfall", "geology", {}, [300, 300])],
+    },
   });
-  await region(page);
-  await page.getByRole("button", { name: "Refine this region", exact: true }).click();
-  await page.getByRole("button", { name: "Generate regional detail", exact: true }).click();
-  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
-  await page.locator(".breadcrumbs button").first().click();
   await page.getByRole("button", { name: "Atlas", exact: true }).click();
   await page.getByRole("button", { name: "Features", exact: true }).click();
   await page.getByLabel("Search registry").fill("Region marker");
@@ -52,7 +50,4 @@ async function createBlank(page: Page) {
   await page.getByLabel("Height · km").fill("1");
   await page.getByRole("radio", { name: "Blank world", exact: true }).check();
   await page.getByRole("button", { name: "Create world", exact: true }).click();
-}
-async function region(page: Page) {
-  await createArea(page, "River region", [100, 100, 600, 600]);
 }

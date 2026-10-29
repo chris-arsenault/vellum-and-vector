@@ -1,5 +1,12 @@
 import { expect, test, type Page } from "./uiTest";
-import { mapImage, mapPixel, mapEasting, openMapSettings, pointFeature } from "./harness";
+import {
+  mapImage,
+  mapPixel,
+  mapEasting,
+  openFixtureMap,
+  openMapSettings,
+  pointFeature,
+} from "./harness";
 import { readFile } from "node:fs/promises";
 import { installGenerationFixture, completeGenerationFixture } from "./generationFixture";
 
@@ -109,20 +116,17 @@ async function reopenComposition(page: Page) {
   await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
 }
 
-test("refines a selected subject recursively with regional controls and cancellable jobs", async ({
+test("refines a selected subject recursively with regional controls and cancellable jobs @generation", async ({
   page,
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await installGenerationFixture(page, { fields: true, terrain: true, hold: true });
-  await create(page, true);
-  // Terrain supplies refinement inputs; raster rendering is covered by the framing journey.
-  await openMapSettings(page, "Appearance");
-  await page.getByRole("radio", { name: "Drawn map", exact: true }).check();
-  await page.getByLabel("Illustrated terrain", { exact: true }).uncheck();
-  await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
-  await completeGenerationFixture(page);
-  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
+  await openFixtureMap(
+    page,
+    "Region desk",
+    { numerical: true, hold: true },
+    { km: 100, detail: "draft" }
+  );
   const original = await exported(page);
   await page.getByRole("button", { name: "Regions", exact: true }).click();
   await centralOutline(page, "River country");
@@ -132,7 +136,7 @@ test("refines a selected subject recursively with regional controls and cancella
   await page.getByRole("button", { name: "Generate regional detail", exact: true }).click();
   await expect(page.getByRole("button", { name: "Cancel generation", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Cancel generation", exact: true }).click();
-  await expect(page.locator(".job-row strong")).toContainText(["cancelled", "completed"]);
+  await expect(page.locator(".job-row strong")).toHaveText(["cancelled"]);
   await page.getByRole("button", { name: "Refine this region", exact: true }).click();
   await page.getByRole("button", { name: "Generate regional detail", exact: true }).click();
   await completeGenerationFixture(page);
@@ -286,9 +290,12 @@ test("pick an existing feature, adjust its region and remove unreferenced region
 test("frames existing terrain and keeps a separate child map when zooming out @rendering", async ({
   page,
 }) => {
-  await installGenerationFixture(page, { fields: true, terrain: true, life: true });
-  await create(page, true);
-  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
+  await openFixtureMap(
+    page,
+    "Terrain regions",
+    { numerical: true, terrain: true, life: true },
+    { km: 100 }
+  );
   const wholeMap = await mapImage(page);
   const before = await exported(page);
   await page.getByRole("button", { name: "Regions", exact: true }).click();
@@ -306,8 +313,7 @@ test("frames existing terrain and keeps a separate child map when zooming out @r
   expect(after.features).toEqual(before.features);
   expect(after.areas).toEqual(before.areas);
   expect(after.regions).toHaveLength(1);
-  await expect(page.locator(".job-row")).toHaveCount(1);
-  await expect(page.locator(".job-row strong")).toHaveText("completed");
+  await expect(page.locator(".job-row")).toHaveCount(0);
   await page.locator(".breadcrumbs button").first().click();
   await page.getByRole("button", { name: "Regions", exact: true }).click();
   await clickWorld(page, 50_000, 50_000);
@@ -330,7 +336,7 @@ test("frames existing terrain and keeps a separate child map when zooming out @r
     .toBe(true);
   await expect.poll(() => mapPixel(page, 0.5, 0.5)).not.toEqual([49, 87, 91]);
   await expect(page.locator(".breadcrumbs")).toContainText("Hill country");
-  await expect(page.locator(".job-row")).toHaveCount(1);
+  await expect(page.locator(".job-row")).toHaveCount(0);
 });
 
 test("regional generation explains structural overlap, permits renaming and follows undo @deferred-authoring", async ({

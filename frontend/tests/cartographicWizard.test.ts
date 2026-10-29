@@ -1,4 +1,5 @@
 import { expect, test } from "./uiTest";
+test.use({ generationLifecycle: "Verify the reviewed cartographic recipe sent to the worker." });
 import type { AtlasGenerationInput } from "@atlas/generation";
 import { installGenerationFixture } from "./generationFixture";
 import { setupStep, tuneGeneration, recipeEditor } from "./generationSetup";

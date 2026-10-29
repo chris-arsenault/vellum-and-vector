@@ -11,7 +11,7 @@ const bundle = build({
   format: "iife",
 }).then((result) => result.outputFiles[0].text);
 
-test("retains natural-cover contrast and icy relief in the real base-map shader without overlays", async ({
+test("retains natural-cover contrast and icy relief in the real base-map shader without overlays @rendering", async ({
   page,
 }) => {
   const errors: string[] = [];

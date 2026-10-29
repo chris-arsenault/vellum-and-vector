@@ -5,11 +5,12 @@ import type { AtlasFeature } from "@atlas/domain";
 import { installGenerationFixture, type GenerationFixtureOptions } from "./generationFixture";
 
 export { installGenerationFixture, completeGenerationFixture } from "./generationFixture";
+export { openFixtureMap } from "./preparedMaps";
 
 /**
- * Shared steps for UI wiring journeys. A journey creates the smallest world that shows the
- * control under test, generates only through the fixture and only when the control exists
- * after generation, and asserts on what the editor shows or exports.
+ * Shared steps for UI wiring journeys. Start from openFixtureMap when a completed map
+ * is a precondition. Run the supplied worker only to observe configuration submission,
+ * progress, cancellation or publication; assert on what the editor shows or exports.
  */
 
 export const canvas = (page: Page) => page.getByRole("application", { name: "World map canvas" });
@@ -44,7 +45,7 @@ async function configureWorld(page: Page, name: string, options: WorldOptions) {
     .selectOption(options.boundary === "cylinder" ? "1" : "0");
 }
 
-/** Install the fixture, create a world and run one generation through it. */
+/** Retained deferred authoring setup. Active scenarios use openFixtureMap instead. */
 export async function generatedWorld(
   page: Page,
   name: string,

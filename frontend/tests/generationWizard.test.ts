@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "./uiTest";
+test.use({ generationLifecycle: "Verify initial and regional configuration sent to the worker." });
 import { installGenerationFixture } from "./generationFixture";
 import { tuneGeneration, sharedHistory } from "./generationSetup";
-import { createArea } from "./harness";
+import { createArea, openFixtureMap } from "./harness";
 
 const steps = (page: Page) => page.getByRole("navigation", { name: "Generation steps" });
 const stage = (page: Page, name: RegExp) => steps(page).getByRole("button", { name });
@@ -81,19 +82,11 @@ test("configures a first world, preserves choices, explains dependencies and sen
 test("procedural refinement configures a new region with fixed parent history", async ({
   page,
 }) => {
-  // A region inherits fixed history only from a parent whose fields were generated.
-  await installGenerationFixture(page, { fields: true });
-  await page.goto("/");
-  await page.getByLabel("World name").fill("Regional atlas");
-  await page.getByLabel("Width · km").fill("100");
-  await page.getByLabel("Height · km").fill("100");
-  await page.getByRole("button", { name: /Review & generate/ }).click();
-  await page.getByRole("button", { name: "Generate world", exact: true }).click();
-  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
-  const parent = await page.evaluate(
-    () =>
-      (window as unknown as { generationFixtureInput: { settings: unknown; areaId: string } })
-        .generationFixtureInput
+  const { input: parent } = await openFixtureMap(
+    page,
+    "Regional atlas",
+    { numerical: true },
+    { km: 100 }
   );
   await createProceduralRegion(page);
   const panel = page.locator(".regional-generation");
@@ -111,9 +104,9 @@ test("procedural refinement configures a new region with fixed parent history", 
     panel.getByRole("button", { name: "Generate regional detail", exact: true })
   ).toBeInViewport();
   await page.setViewportSize({ width: 1500, height: 1000 });
-  await expect(page.locator(".job-row")).toHaveCount(1);
+  await expect(page.locator(".job-row")).toHaveCount(0);
   await panel.getByRole("button", { name: "Generate regional detail", exact: true }).click();
-  await expect(page.locator(".job-row")).toHaveCount(2);
+  await expect(page.locator(".job-row")).toHaveCount(1);
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
   const child = await page.evaluate(
     () =>

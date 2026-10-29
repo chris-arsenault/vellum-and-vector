@@ -1,7 +1,6 @@
 import { test, expect, type Page } from "./uiTest";
 import type { AtlasFeature } from "@atlas/domain";
-import { installGenerationFixture } from "./generationFixture";
-import { openMapSettings } from "./harness";
+import { generatedWorld, mapImage, mapPixel, openFixtureMap, openMapSettings } from "./harness";
 import { readFile, copyFile, mkdir } from "node:fs/promises";
 
 function feature(
@@ -41,62 +40,59 @@ const rectangle = (w: number, s: number, e: number, n: number): AtlasFeature["ge
     ],
   ],
 });
-async function createAtlas(page: Page, authorRoad = false) {
+async function createAtlas(page: Page, authorRoad = false, supplied = true) {
   await mkdir(".artifacts/cartographic-mode", { recursive: true });
-  await installGenerationFixture(page, {
-    fields: true,
-    terrain: true,
-    life: true,
-    features: [
-      feature(
-        "11111111-1111-4111-8111-111111111111",
-        "The Western March",
-        "sovereignty",
-        "sovereignty",
-        rectangle(0, 0, 50000, 100000)
-      ),
-      feature(
-        "22222222-2222-4222-8222-222222222222",
-        "The Eastern Reach",
-        "sovereignty",
-        "sovereignty",
-        rectangle(50000, 0, 100000, 100000)
-      ),
-      feature(
-        "33333333-3333-4333-8333-333333333333",
-        "Cairnwatch",
-        "settlement",
-        "settlements",
-        { type: "Point", coordinates: [35000, 50000] },
-        { settlementRole: "capital", population: 42000 }
-      ),
-      ...drawingPlacesAndBiomes(),
-      feature("99999999-9999-4999-8999-999999999999", "Silver falls", "waterfall", "geology", {
-        type: "Point",
-        coordinates: [75000, 35000],
-      }),
-      ...(!authorRoad
-        ? [
-            feature("88888888-8888-4888-8888-888888888888", "Old Road", "road", "roads", {
-              type: "LineString",
-              coordinates: [
-                [42000, 46000],
-                [60000, 40000],
-                [85000, 60000],
-              ],
-            }),
-          ]
-        : []),
-    ],
-  });
-  await page.goto("/");
-  await page.getByLabel("World name").fill("Drawn atlas");
-  await page.getByLabel("Width · km").fill("100");
-  await page.getByLabel("Height · km").fill("100");
-  await page.getByLabel("Detail level").selectOption("draft");
-  await page.getByRole("button", { name: /Review & generate/ }).click();
-  await page.getByRole("button", { name: "Generate world", exact: true }).click();
-  await expect(page.locator(".job-row strong").first()).toHaveText("completed");
+  await (supplied ? openFixtureMap : generatedWorld)(
+    page,
+    "Drawn atlas",
+    {
+      numerical: true,
+      terrain: true,
+      life: true,
+      features: [
+        feature(
+          "11111111-1111-4111-8111-111111111111",
+          "The Western March",
+          "sovereignty",
+          "sovereignty",
+          rectangle(0, 0, 50000, 100000)
+        ),
+        feature(
+          "22222222-2222-4222-8222-222222222222",
+          "The Eastern Reach",
+          "sovereignty",
+          "sovereignty",
+          rectangle(50000, 0, 100000, 100000)
+        ),
+        feature(
+          "33333333-3333-4333-8333-333333333333",
+          "Cairnwatch",
+          "settlement",
+          "settlements",
+          { type: "Point", coordinates: [35000, 50000] },
+          { settlementRole: "capital", population: 42000 }
+        ),
+        ...drawingPlacesAndBiomes(),
+        feature("99999999-9999-4999-8999-999999999999", "Silver falls", "waterfall", "geology", {
+          type: "Point",
+          coordinates: [75000, 35000],
+        }),
+        ...(!authorRoad
+          ? [
+              feature("88888888-8888-4888-8888-888888888888", "Old Road", "road", "roads", {
+                type: "LineString",
+                coordinates: [
+                  [42000, 46000],
+                  [60000, 40000],
+                  [85000, 60000],
+                ],
+              }),
+            ]
+          : []),
+      ],
+    },
+    { km: 100, detail: "draft" }
+  );
   // The road leaves from beside the capital, so clicking the capital selects only the capital.
   if (authorRoad)
     await authoredLine(page, "routes", "Draw road", "Old Road", [
@@ -165,7 +161,7 @@ async function authoredLine(
   await page.getByRole("button", { name: "Fit area", exact: true }).click();
 }
 
-test("drawn atlas reuses the canvas and switches back to raster", async ({ page }) => {
+test("drawn atlas reuses the canvas and switches back to raster @rendering", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await createAtlas(page);
@@ -176,9 +172,12 @@ test("drawn atlas reuses the canvas and switches back to raster", async ({ page 
     "false"
   );
   await page.screenshot({ path: ".artifacts/cartographic-mode/political-atlas.png" });
+  const drawn = await mapImage(page);
   await openMapSettings(page);
   await page.getByRole("radio", { name: "Raster investigation", exact: true }).check();
   await expect(page.locator(".map-frame")).not.toHaveClass(/drawn-map/);
+  await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
+  await expect.poll(() => mapImage(page)).not.toBe(drawn);
   expect(errors).toEqual([]);
 });
 
@@ -186,6 +185,9 @@ test("generated landmarks and named sites have pickable drawn symbols", async ({
   await createAtlas(page);
   await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
   await page.getByRole("button", { name: "Fit area", exact: true }).click();
+  // The illustration worker paints the supplied territories before their symbols are pickable.
+  const paper = await mapPixel(page, 0.05, 0.5);
+  await expect.poll(() => mapPixel(page, 0.5, 0.5)).not.toEqual(paper);
   await clickWorld(page, [65000, 65000], false, true);
   await expect(page.locator(".right-panel h2")).toHaveText("Blackspire");
   await clickWorld(page, [75000, 35000], false, true);
@@ -195,7 +197,7 @@ test("generated landmarks and named sites have pickable drawn symbols", async ({
 test("major landmarks and named sites have pickable drawn symbols @deferred-authoring", async ({
   page,
 }) => {
-  await createAtlas(page);
+  await createAtlas(page, false, false);
   await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
   await page.getByRole("button", { name: "Fit area", exact: true }).click();
   await clickWorld(page, [65000, 65000], false, true);
@@ -255,7 +257,7 @@ test("finishes, undoes, exports and reopens independent drawn compositions @defe
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await createAtlas(page, true);
+  await createAtlas(page, true, false);
   const before = await exported(page);
   await page.getByRole("button", { name: "Close map drawer", exact: true }).click();
   await page.getByRole("button", { name: "Fit area", exact: true }).click();
@@ -339,5 +341,5 @@ test("drawn compositions reuse selected regions and preserve their source map", 
   expect(after.features).toEqual(before.features);
   expect(after.areas).toEqual(before.areas);
   expect(after.regions).toHaveLength(1);
-  await expect(page.locator(".job-row strong")).toHaveText("completed");
+  await expect(page.locator(".job-row")).toHaveCount(0);
 });

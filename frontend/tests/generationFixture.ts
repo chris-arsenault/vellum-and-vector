@@ -23,18 +23,23 @@ const publicationBundle = build({
 export interface GenerationFixtureOptions {
   /** Keep the job running until `completeGenerationFixture` is called. */
   hold?: boolean;
-  /**
-   * Publish the fixture's raster fields. Off by default: a journey that is not about the
-   * raster map renders nothing on the GPU and every later edit costs milliseconds.
-   */
+  /** Legacy spelling retained for deferred authoring tests. Use `numerical` in active scenarios. */
   fields?: boolean;
-  /** Shape the fixture elevation as a hill instead of a ramp (needs `fields`). */
+  /** Supply numerical preconditions without opting into raster presentation. */
+  numerical?: boolean;
+  /** An already completed child map for navigation scenarios. No refinement job is needed. */
+  mappedRegion?: {
+    name: string;
+    extent: [number, number, number, number];
+    features: AtlasFeature[];
+  };
+  /** Shape the fixture elevation as a hill instead of a ramp (needs `numerical`). */
   terrain?: boolean;
-  /** Add ecology channels (needs `fields`). */
+  /** Add ecology channels (needs `numerical`). */
   life?: boolean;
   /** Features the fixture publishes as generated. */
   features?: AtlasFeature[];
-  /** Optional separate features for finer maps, so navigation fixtures need no manual editing. */
+  /** Output of an observed refinement job; use mappedRegion for completed child-map setup. */
   regionalFeatures?: AtlasFeature[];
   /** Landmark records the fixture's run leaves in the world, as the generator would. */
   landmarks?: Landmark[];
@@ -46,7 +51,7 @@ export interface GenerationFixtureOptions {
 export async function installGenerationFixture(page: Page, options: GenerationFixtureOptions = {}) {
   const runtime = {
     hold: options.hold ?? false,
-    fields: options.fields ?? false,
+    fields: options.numerical ?? options.fields ?? false,
     terrain: options.terrain ?? false,
     life: options.life ?? false,
     ecologicalFeatures: options.features ?? [],

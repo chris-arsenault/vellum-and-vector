@@ -2,7 +2,7 @@ import { expect, test } from "./uiTest";
 import type { AtlasGenerationInput } from "@atlas/generation";
 import {
   canvas,
-  generatedWorld,
+  openFixtureMap,
   closeDrawer,
   installGenerationFixture,
   openRegistry,
@@ -83,7 +83,7 @@ test("generated physical and magic landmarks open as information rather than edi
   page,
 }) => {
   const errors = pageErrors(page);
-  await generatedWorld(
+  await openFixtureMap(
     page,
     "Landmark inspection",
     { landmarks: [sited, wellspring], features: [published, wellspringFeature] },

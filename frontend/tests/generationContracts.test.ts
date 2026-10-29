@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "./uiTest";
+test.use({ generationLifecycle: "Verify generation controls and submitted configuration." });
 import { installGenerationFixture } from "./generationFixture";
 import { tuneGeneration } from "./generationSetup";
 

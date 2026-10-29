@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "./uiTest";
+test.use({ generationLifecycle: "Verify setup controls and their submitted worker request." });
 import type { DomainSnapshot } from "@atlas/domain";
 import type { AtlasGenerationInput } from "@atlas/generation";
 import { installGenerationFixture } from "./generationFixture";

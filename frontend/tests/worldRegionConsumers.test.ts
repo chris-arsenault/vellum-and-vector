@@ -1,8 +1,8 @@
 import { expect, test } from "./uiTest";
 import { rectangle, spatial } from "@atlas/domain";
-import { clickWorld, exportMap, generatedWorld, pointFeature } from "./harness";
+import { clickWorld, exportMap, openFixtureMap, pointFeature } from "./harness";
 
-test("keeps overlapping world regions distinct and carries the chosen geography into refinement", async ({
+test("keeps overlapping world regions distinct and carries the chosen geography into refinement @generation", async ({
   page,
 }) => {
   const forest = pointFeature("Great forest", "forest", "ecology"),
@@ -13,10 +13,9 @@ test("keeps overlapping world regions distinct and carries the chosen geography 
   forest.geometry = rectangle([100, 100, 650, 700]);
   country.geometry = rectangle([200, 200, 800, 800]);
   peak.footprint = rectangle([820, 820, 900, 900]);
-  await generatedWorld(page, "World subjects", {
+  await openFixtureMap(page, "World subjects", {
     features: [forest, country, peak],
-    fields: true,
-    terrain: true,
+    numerical: true,
   });
   const original = await exportMap(page);
   await page.getByRole("button", { name: "Regions", exact: true }).click();
@@ -51,7 +50,7 @@ test("selects canonical geography from a repeated cylindrical chart without dupl
 }) => {
   const forest = pointFeature("Seam forest", "forest", "ecology");
   forest.geometry = spatial.union(rectangle([0, 100, 200, 700]), rectangle([800, 100, 1000, 700]));
-  await generatedWorld(
+  await openFixtureMap(
     page,
     "Cylindrical regions",
     { features: [forest] },

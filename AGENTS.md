@@ -193,9 +193,31 @@ workflows and the product's physical-plausibility requirements.
   recover a passing result.
 - Browser tests test UI behavior on small supplied worlds. Import `test` from
   `frontend/tests/uiTest.ts`; its automatic fixture uses at most 256 cells and
-  blocks real generation workers. Enable raster fields only for rendering tests.
+  blocks real generation workers. Numerical preconditions and raster presentation
+  are separate: `numerical: true` supplies data; only `@rendering` scenarios enable
+  the raster adapter. Those scenarios must assert rendered output, not merely
+  controls, metadata, or job completion. Do not opt in to rendering to satisfy an
+  unrelated fixture dependency.
   A large dimension entered to test a form is configuration, not permission to
   generate that world. Test physical and society algorithms in Vitest.
+- Start ordinary browser scenarios with `openFixtureMap` from `tests/harness.ts`.
+  It reuses completed map catalogs and numerical resources across scenarios, then
+  restores independent copies into their isolated browser contexts. Reuse the
+  same numerical/map configuration; add scenario-specific features, society or
+  existing child maps to the copy. Do not rerun generation, resource publication,
+  wizard navigation or refinement just to prepare a navigation, inspection, save
+  or presentation test. Never share a mutable page/context or depend on test order.
+- Exercise the supplied generation worker only when configuration submission,
+  progress, cancellation or publication is the assertion under test. Declare
+  `@generation` on that scenario, or a reason in `test.use({ generationLifecycle:
+  "..." })` for a file dedicated to that boundary. The fixture rejects undeclared
+  generation. This declaration does not justify unrelated upstream setup; reuse
+  the parent map even when the test must run a regional job.
+- Before adding a browser scenario, identify its UI assertion, the existing map
+  fixture it can reuse, and whether generation or rendering is actually observed.
+  Extend a suitable existing scenario when it can share the same setup. Keep
+  numerical, geometric and combinatorial cases in constructed Vitest tests.
+  See `frontend/tests/README.md` for the fixture lifecycle and examples.
 - Select checks by the changed boundary. A pure algorithm change uses its
   constructed Vitest cases and the routine unit suite. Run browser cases for
   changed controls, rendering, editing or worker/UI publication; an algorithm

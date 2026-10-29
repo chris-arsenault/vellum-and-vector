@@ -2,7 +2,7 @@ import { expect, test, type Page } from "./uiTest";
 import {
   canvas,
   createWorld,
-  generatedWorld,
+  openFixtureMap,
   mapImage,
   openLayers,
   openMapSettings,
@@ -34,7 +34,7 @@ test("the compact layer drawer leaves the map accessible on a narrow screen", as
 
 test("overlays are chosen, hidden and legended without expanding the stack", async ({ page }) => {
   const errors = pageErrors(page);
-  await generatedWorld(page, "Overlay workbench", { fields: true, life: true });
+  await openFixtureMap(page, "Overlay workbench", { numerical: true, life: true });
   await openLayers(page);
   await page.getByRole("button", { name: "+ Add overlay", exact: true }).click();
   for (const name of ["Temperature", "Natural land cover"])
@@ -72,9 +72,11 @@ test("overlays are chosen, hidden and legended without expanding the stack", asy
   expect(errors).toEqual([]);
 });
 
-test("base maps switch and field styles compose into a restorable view", async ({ page }) => {
+test("base maps switch and field styles compose into a restorable view @rendering", async ({
+  page,
+}) => {
   const errors = pageErrors(page);
-  await generatedWorld(page, "GIS layer composition", { fields: true, terrain: true });
+  await openFixtureMap(page, "GIS layer composition", { numerical: true, terrain: true });
   await openLayers(page);
   await checkFaultControl(page);
   await openMapSettings(page);
@@ -176,7 +178,7 @@ test("road symbols are styled with GeoStyler and kept in a session view", async 
       [700, 500],
     ],
   };
-  await generatedWorld(page, "Vector styles", { features: [road] });
+  await openFixtureMap(page, "Vector styles", { features: [road] });
   await canvas(page).click({ position: { x: 650, y: 500 } });
   const original = await mapImage(page);
   await openLayers(page);

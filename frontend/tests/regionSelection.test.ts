@@ -4,7 +4,7 @@ import {
   chooseOutline,
   clickWorld,
   exportMap,
-  generatedWorld,
+  openFixtureMap,
   openMapSettings,
   pointFeature,
 } from "./harness";
@@ -26,7 +26,7 @@ test("dividing lines combine with geography and nested subjects retain their own
       ],
     ],
   };
-  await generatedWorld(page, "Mixed boundaries", { features: [forest] });
+  await openFixtureMap(page, "Mixed boundaries", { features: [forest] });
   const before = await exportMap(page);
   await page.getByRole("button", { name: "Regions", exact: true }).click();
   await page.getByRole("button", { name: "Divide along a line", exact: true }).click();
@@ -71,13 +71,13 @@ test("dividing lines combine with geography and nested subjects retain their own
   expect(after.features).toEqual(before.features);
   expect(after.areas).toEqual(before.areas);
   expect(after.regions).toHaveLength(2);
-  await expect(page.locator(".job-row")).toHaveCount(1);
+  await expect(page.locator(".job-row")).toHaveCount(0);
 });
 
 test("region outlines can be adjusted and removed without changing feature geography", async ({
   page,
 }) => {
-  await generatedWorld(page, "Boundary choices");
+  await openFixtureMap(page, "Boundary choices");
   const before = await exportMap(page);
   await chooseOutline(page, "First outline");
   const first = await exportMap(page);

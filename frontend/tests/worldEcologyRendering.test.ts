@@ -11,7 +11,7 @@ const bundle = build({
   format: "iife",
 }).then((r) => r.outputFiles[0].text);
 
-test("keeps the forest edge on its outline across a tile seam, zoom, palette and hillshade changes", async ({
+test("keeps the forest edge on its outline across a tile seam, zoom, palette and hillshade changes @rendering", async ({
   page,
 }) => {
   const errors: string[] = [];
