@@ -1,4 +1,4 @@
-import type { DrainageReach } from "@atlas/domain";
+import { BitSet, type DrainageReach } from "@atlas/domain";
 import { riverSignificance } from "../worldSignificance";
 
 /** Confluence samples include the receiving river; tributary evidence stops upstream of it. */
@@ -19,7 +19,7 @@ function length(reach: DrainageReach) {
 /** Follow the strongest upstream continuation through junctions; other branches stand alone. */
 export function worldRiverCourses(reaches: DrainageReach[]) {
   const upstream = reaches.map(() => [] as number[]),
-    visited = new Set<number>();
+    visited = new BitSet(reaches.length);
   reaches.forEach((reach, i) => {
     if (reach.downstream !== null && reach.downstream !== i) upstream[reach.downstream]?.push(i);
   });
