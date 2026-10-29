@@ -102,7 +102,7 @@ test("procedural refinement configures a new region with fixed parent history", 
   await expect(panel.getByLabel("History starting point")).toHaveCount(0);
   await panel.getByLabel("Regional detail").selectOption("draft");
   await expect(steps(page)).toHaveCount(0);
-  await expect(panel).toContainText("no new settlement era");
+  await expect(panel).toContainText("It does not advance the world's history");
   await page.setViewportSize({ width: 390, height: 844 });
   await panel
     .getByRole("button", { name: "Generate regional detail", exact: true })
