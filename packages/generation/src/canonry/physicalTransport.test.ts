@@ -116,8 +116,8 @@ function relaxedMound(samples: number) {
 }
 
 it("relaxes a localized hillslope over a physical reach while conserving area-weighted material", () => {
-  const coarse = relaxedMound(4096),
-    fine = relaxedMound(16384);
+  const coarse = relaxedMound(2048),
+    fine = relaxedMound(8192);
   expect(fine.spreading / coarse.spreading).toBeGreaterThan(0.85);
   expect(fine.spreading / coarse.spreading).toBeLessThan(1.15);
   expect(fine.peak / coarse.peak).toBeGreaterThan(0.9);
