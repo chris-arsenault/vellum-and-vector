@@ -15,7 +15,26 @@ import {
   type BoundarySegment,
 } from "./boundarySegments";
 import { leftOf, reverse, walkFace } from "./faceWalk";
+import type { GeometryKernel } from "./geometryKernel";
 
+/**
+ * Where a face may be selected. `boundary` is linework the walk adds to the indexed sources;
+ * closed exclusions (sibling regions) need none, since clipping the walked face by them gives
+ * the face their linework would have bounded.
+ */
+export interface RegionMask {
+  boundary: Geometry[];
+  covers(position: Position): boolean;
+  clip(shape: Geometry): Geometry | null;
+}
+/** A mask of one available shape whose whole boundary joins the walk. */
+export function shapeMask(kernel: GeometryKernel, shape: Geometry, precision: number): RegionMask {
+  return {
+    boundary: [shape],
+    covers: ({ x, y }) => kernel.relation(shape, point(x, y), precision, "covers"),
+    clip: (face) => kernel.overlay(face, shape, precision, "intersection"),
+  };
+}
 function point(x: number, y: number): Geometry {
   return { type: "Point", coordinates: [x, y] };
 }
@@ -84,13 +103,13 @@ export class RegionFaces {
   }
   at(
     scope: WorkspaceScope,
-    available: Geometry,
+    mask: RegionMask,
     cuts: Geometry[],
     position: Position,
     precision: number,
     periodicBounds: Bounds | null = null
   ): Geometry | null {
-    const first = this.planarAt(scope, available, cuts, position, precision);
+    const first = this.planarAt(scope, mask, cuts, position, precision);
     if (!first || !periodicBounds) return first;
     const visited = new Set<string>(),
       queue: Geometry[] = [first];
@@ -100,7 +119,7 @@ export class RegionFaces {
       if (visited.has(key)) continue;
       visited.add(key);
       for (const probe of seamProbes(shape, periodicBounds, precision)) {
-        const neighbor = this.planarAt(scope, available, cuts, probe, precision);
+        const neighbor = this.planarAt(scope, mask, cuts, probe, precision);
         if (!neighbor) continue;
         const nextKey = JSON.stringify(this.tiles.kernel.canonical(neighbor, precision));
         if (visited.has(nextKey)) continue;
@@ -112,15 +131,15 @@ export class RegionFaces {
   }
   private planarAt(
     scope: WorkspaceScope,
-    available: Geometry,
+    mask: RegionMask,
     cuts: Geometry[],
     position: Position,
     precision: number
   ) {
-    const graph = this.tiles.graph(scope, [available, ...cuts], precision),
+    if (!mask.covers(position)) return null;
+    const graph = this.tiles.graph(scope, [...mask.boundary, ...cuts], precision),
       kernel = this.tiles.kernel;
     const probe = point(position.x, position.y);
-    if (!kernel.relation(available, probe, precision, "covers")) return null;
     let cursor = position.x,
       outer: Polygon | null = null;
     const visited = new Set<string>();
@@ -157,7 +176,17 @@ export class RegionFaces {
       type: "Polygon",
       coordinates: [...outer.coordinates, ...holes.map((p) => p.coordinates[0])],
     };
-    return kernel.overlay(shape, available, precision, "intersection");
+    return this.select(mask, shape, probe, precision);
+  }
+  /** Exclusions without linework can split the face; the selection is the piece at the probe. */
+  private select(mask: RegionMask, face: Geometry, probe: Geometry, precision: number) {
+    const clipped = mask.clip(face);
+    if (!clipped) return null;
+    const parts = polygonParts(clipped);
+    return parts.length === 1
+      ? clipped
+      : (parts.find((part) => this.tiles.kernel.relation(part, probe, precision, "covers")) ??
+          null);
   }
   private *candidates(scope: WorkspaceScope, graph: BoundaryGraph, bounds: Bounds) {
     const local = graph.dynamic.slice().sort((a, b) => Math.min(a.ax, a.bx) - Math.min(b.ax, b.bx));

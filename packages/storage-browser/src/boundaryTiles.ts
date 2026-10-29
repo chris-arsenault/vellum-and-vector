@@ -21,14 +21,29 @@ interface Tile {
   edges: BoundarySegment[];
   nodes: Map<string, BoundarySegment[]>;
 }
-/** Installs boundary sources for an extent before it is read. Returns the extent actually
- * covered (clipped to the area) and the bounds of sources whose linework changed. */
+/** Installs boundary sources for an extent before it is read. Returns the area's bounds and
+ * the bounds of sources whose linework changed. */
 export type PrepareBoundaries = (
   scope: WorkspaceScope,
   extent: Bounds
-) => { covered: Bounds | null; changed: Bounds[] };
+) => { area: Bounds; changed: Bounds[] };
+/** Tile cells whose sources are installed for one scope at one world revision. */
+interface Prepared {
+  revision: number;
+  area: Bounds | null;
+  cells: Set<string>;
+}
 function overlaps(a: Bounds, b: Bounds) {
   return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
+}
+function clip(extent: Bounds, area: Bounds): Bounds | null {
+  const covered: Bounds = [
+    Math.max(area[0], extent[0]),
+    Math.max(area[1], extent[1]),
+    Math.min(area[2], extent[2]),
+    Math.min(area[3], extent[3]),
+  ];
+  return covered[0] > covered[2] || covered[1] > covered[3] ? null : covered;
 }
 function makeTile(
   scope: WorkspaceScope,
@@ -51,10 +66,12 @@ function makeTile(
  * query visits; this is the only place that asks the projection to install sources. */
 export class BoundaryTiles {
   private cache = new ByteCache<string, Tile>(regionTopologyCacheBytes);
+  private prepared = new Map<string, Prepared>();
   constructor(
     readonly index: BoundaryIndex,
     readonly kernel: GeometryKernel,
     private prepare: PrepareBoundaries,
+    private revision: (worldId: string) => number,
     readonly size = regionTopologyTileMetres
   ) {}
   invalidate(scope: Pick<WorkspaceScope, "worldId" | "spaceId">, bounds: Bounds) {
@@ -65,11 +82,47 @@ export class BoundaryTiles {
         overlaps(tile.bounds, bounds)
     );
   }
-  /** Prepare an extent, dropping cached tiles whose sources changed. */
+  /**
+   * Prepare an extent, dropping cached tiles whose sources changed. Sources are installed once
+   * per tile cell and world revision: the cells an extent adds are prepared in one call, and
+   * an extent of prepared cells installs nothing.
+   */
   private ensure(scope: WorkspaceScope, extent: Bounds) {
-    const prepared = this.prepare(scope, extent);
-    for (const bounds of prepared.changed) this.invalidate(scope, bounds);
-    return prepared.covered;
+    const key = JSON.stringify([scope.worldId, scope.spaceId, scope.areaId]),
+      revision = this.revision(scope.worldId);
+    let state = this.prepared.get(key);
+    if (state?.revision !== revision)
+      this.prepared.set(key, (state = { revision, area: null, cells: new Set() }));
+    const size = this.size,
+      missing: string[] = [];
+    // Cells are closed, so an extent ending on a cell edge lies in the lower cell.
+    const cells = (low: number, high: number) => [
+      Math.floor(low / size),
+      Math.max(Math.floor(low / size), Math.ceil(high / size) - 1),
+    ];
+    const [firstColumn, lastColumn] = cells(extent[0], extent[2]),
+      [firstRow, lastRow] = cells(extent[1], extent[3]);
+    let west = Infinity,
+      south = Infinity,
+      east = -Infinity,
+      north = -Infinity;
+    for (let column = firstColumn; column <= lastColumn; column++)
+      for (let row = firstRow; row <= lastRow; row++) {
+        const cell = `${column},${row}`;
+        if (state.cells.has(cell)) continue;
+        missing.push(cell);
+        west = Math.min(west, column * size);
+        south = Math.min(south, row * size);
+        east = Math.max(east, (column + 1) * size);
+        north = Math.max(north, (row + 1) * size);
+      }
+    if (missing.length) {
+      const prepared = this.prepare(scope, [west, south, east, north]);
+      for (const bounds of prepared.changed) this.invalidate(scope, bounds);
+      state.area = prepared.area;
+      for (const cell of missing) state.cells.add(cell);
+    }
+    return clip(extent, state.area!);
   }
   segments(scope: WorkspaceScope, extent: Bounds) {
     this.ensure(scope, extent);

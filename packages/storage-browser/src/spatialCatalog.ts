@@ -79,6 +79,7 @@ export class SpatialCatalog implements SpatialStore {
       this.boundaries,
       kernel,
       (scope, extent) => this.topology.ensure(scope, extent),
+      (worldId) => Number(db.selectValue("SELECT revision FROM worlds WHERE id=?", [worldId])),
       tileMetres
     );
     this.regions = new RegionCatalog(db, this.boundaryTiles, (query) => this.readFeatures(query));

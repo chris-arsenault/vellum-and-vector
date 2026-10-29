@@ -5,8 +5,10 @@ import {
   polygonParts,
   requireThat,
   snapRegionCut,
+  type Bounds,
   type FeaturePage,
   type FeatureQuery,
+  type Position,
   type RegionCandidate,
   type RegionChoices,
   type RegionDrawing,
@@ -14,20 +16,30 @@ import {
   type RegionQuery,
 } from "@atlas/domain";
 import { decodeRecord } from "./catalogRecords";
-import { segmentLine } from "./boundarySegments";
+import { boundarySegments, segmentBounds, segmentLine } from "./boundarySegments";
 import { BoundaryTiles } from "./boundaryTiles";
-import { RegionFaces } from "./regionFaces";
+import { RegionFaces, type RegionMask } from "./regionFaces";
 import { cutProbes } from "./cutProbes";
 
 interface Context {
-  available: Geometry;
   parent: Geometry;
+  parentArea: number;
+  parentLength: number;
   precision: number;
   revision: number;
-  childId: string | null;
-  periodicBounds: import("@atlas/domain").Bounds | null;
+  periodicBounds: Bounds | null;
 }
-/** A region operation owns overlays and reads beside the indexed catalog. */
+interface Sibling {
+  id: string;
+  footprint: Geometry;
+}
+function point({ x, y }: Position): Geometry {
+  return { type: "Point", coordinates: [x, y] };
+}
+/**
+ * A region operation owns overlays and reads beside the indexed catalog. Sibling regions are
+ * read through their indexed bounds, so a pick touches only the siblings near its face.
+ */
 export class RegionCatalog {
   private faces: RegionFaces;
   constructor(
@@ -66,17 +78,12 @@ export class RegionCatalog {
           ? record.data.value.footprint
           : null;
     requireThat(parent, "missing_region", "Choose a geographic parent.");
-    const { available, childId } = this.excludeSiblings(query, parent, precision);
-    requireThat(
-      available || childId,
-      "region_subdivided",
-      "This parent is fully subdivided. Open one of its regions."
-    );
+    const { area, length } = this.tiles.kernel.measure(parent, precision);
     return {
-      available: available ?? parent,
       parent,
+      parentArea: area,
+      parentLength: length,
       precision,
-      childId,
       revision: Number(world.revision),
       periodicBounds:
         reference.boundaryMode === "cylinder"
@@ -84,86 +91,101 @@ export class RegionCatalog {
           : null,
     };
   }
-  private excludeSiblings(query: RegionQuery, parent: Geometry, precision: number) {
-    let available: Geometry | null = parent,
-      childId: string | null = null;
+  /** The parent's other children, all of them or those whose bounds meet `bounds`. */
+  private siblings(query: RegionQuery, bounds: Bounds | null): Sibling[] {
     const rows = this.db.selectObjects(
-      `SELECT * FROM records WHERE world_id=? AND space_id=? AND area_id=? AND kind='view'
-      AND json_type(data,'$.value.region')='object'
-      AND json_extract(data,'$.value.region.parentId') IS ? AND id IS NOT ? ORDER BY id`,
+      `SELECT r.* FROM records r JOIN record_bounds b USING(record_id)
+      WHERE r.world_id=? AND r.space_id=? AND r.area_id=? AND r.kind='view'
+      AND json_type(r.data,'$.value.region')='object'
+      AND json_extract(r.data,'$.value.region.parentId') IS ? AND r.id IS NOT ?
+      AND (? OR (b.min_x<=? AND b.max_x>=? AND b.min_y<=? AND b.max_y>=?)) ORDER BY r.id`,
       [
         query.scope.worldId,
         query.scope.spaceId,
         query.sourceAreaId,
         query.parentId,
         query.editingId,
+        bounds ? 0 : 1,
+        bounds?.[2] ?? 0,
+        bounds?.[0] ?? 0,
+        bounds?.[3] ?? 0,
+        bounds?.[1] ?? 0,
       ]
     );
-    for (const row of rows) {
+    return rows.flatMap((row) => {
       const record = decodeRecord(row, this.tiles.kernel);
-      if (record.data.kind !== "view" || !record.data.value.region) continue;
-      const geometry = record.data.value.region.footprint;
-      if (
-        query.position &&
-        !query.cuts.length &&
-        this.tiles.kernel.relation(
-          geometry,
-          { type: "Point", coordinates: [query.position.x, query.position.y] },
-          precision,
-          "covers"
-        )
-      )
-        childId = record.reference.id;
-      if (available)
-        available = this.tiles.kernel.overlay(available, geometry, precision, "difference");
-    }
-    return { available, childId };
+      return record.data.kind === "view" && record.data.value.region
+        ? [{ id: record.reference.id, footprint: record.data.value.region.footprint }]
+        : [];
+    });
+  }
+  private childAt(query: RegionQuery, context: Context, position: Position) {
+    const { x, y } = position;
+    return (
+      this.siblings(query, [x, y, x, y]).find((sibling) =>
+        this.tiles.kernel.relation(sibling.footprint, point(position), context.precision, "covers")
+      )?.id ?? null
+    );
+  }
+  /**
+   * The available part of the parent, as a mask. Siblings are closed shapes, so a face is
+   * clipped by those near it instead of walking their linework; siblings a cut meets stay in
+   * the walk, where the cut's snapped ends node against their edges.
+   */
+  private mask(query: RegionQuery, context: Context): RegionMask {
+    const { kernel } = this.tiles,
+      { parent, precision } = context;
+    const touched = new Map<string, Geometry>();
+    for (const cut of query.cuts)
+      for (const segment of boundarySegments(cut))
+        for (const sibling of this.siblings(query, segmentBounds(segment)))
+          touched.set(sibling.id, sibling.footprint);
+    return {
+      boundary: [parent, ...touched.values()],
+      covers: (position) =>
+        kernel.relation(parent, point(position), precision, "covers") &&
+        !this.childAt(query, context, position),
+      clip: (shape) => {
+        let clipped = kernel.overlay(shape, parent, precision, "intersection");
+        if (!clipped) return null;
+        for (const sibling of this.siblings(query, kernel.encode(clipped, precision).bounds)) {
+          clipped = kernel.overlay(clipped, sibling.footprint, precision, "difference");
+          if (!clipped) return null;
+        }
+        return clipped;
+      },
+    };
   }
   async choices(query: RegionQuery): Promise<RegionChoices> {
     const context = this.context(query);
-    if (context.childId)
-      return { revision: context.revision, childId: context.childId, candidates: [] };
-    const candidates = await this.candidates(query, context);
+    const childId =
+      query.position && !query.cuts.length ? this.childAt(query, context, query.position) : null;
+    if (childId) return { revision: context.revision, childId, candidates: [] };
+    const candidates = await this.candidates(query, context, this.mask(query, context));
     return { revision: context.revision, childId: null, candidates };
   }
-  private async candidates(query: RegionQuery, context: Context) {
-    const { available, precision, parent } = context;
+  private async candidates(query: RegionQuery, context: Context, mask: RegionMask) {
+    const { precision, parentArea } = context;
     const kernel = this.tiles.kernel;
-    const parentArea = kernel.measure(parent, precision).area;
     const unique = new Map<string, { candidate: RegionCandidate; area: number }>();
     const add = (name: string, geometry: Geometry | null) => {
       if (!geometry) return;
-      const clipped = kernel.overlay(geometry, available, precision, "intersection");
+      const clipped = mask.clip(geometry);
       if (!clipped) return;
       for (const shape of polygonParts(clipped)) {
         const { area, length } = kernel.measure(shape, precision);
         if (area >= parentArea || (2 * area) / length < minimumRegionWidthMetres) continue;
-        if (
-          query.position &&
-          !kernel.relation(
-            shape,
-            { type: "Point", coordinates: [query.position.x, query.position.y] },
-            precision,
-            "covers"
-          )
-        )
+        if (query.position && !kernel.relation(shape, point(query.position), precision, "covers"))
           continue;
         const key = JSON.stringify(kernel.canonical(shape, precision));
         if (!unique.has(key)) unique.set(key, { candidate: { name, footprint: shape }, area });
       }
     };
     if (query.position && !query.cuts.length) await this.covering(query, add);
-    for (const position of this.probes(query, context)) {
+    for (const position of this.probes(query, context, mask)) {
       add(
         "Region",
-        this.faces.at(
-          query.scope,
-          available,
-          query.cuts,
-          position,
-          precision,
-          context.periodicBounds
-        )
+        this.faces.at(query.scope, mask, query.cuts, position, precision, context.periodicBounds)
       );
     }
     const target =
@@ -192,20 +214,35 @@ export class RegionCatalog {
       after = page.next;
     } while (after);
   }
-  private *probes(query: RegionQuery, context: Context) {
+  private *probes(query: RegionQuery, context: Context, mask: RegionMask) {
     if (query.position) {
       yield query.position;
       return;
     }
     const graph = this.tiles.graph(
       query.scope,
-      [context.available, ...query.cuts],
+      [...mask.boundary, ...query.cuts],
       context.precision
     );
     yield* cutProbes(graph, query.cuts, this.tiles.size, context.precision);
   }
+  /** Siblings fill the parent when their areas leave less than a precision strip of it. */
+  private requireRoom(query: RegionQuery, context: Context) {
+    const { kernel } = this.tiles,
+      { precision } = context;
+    const taken = this.siblings(query, null).reduce(
+      (sum, sibling) => sum + kernel.measure(sibling.footprint, precision).area,
+      0
+    );
+    requireThat(
+      context.parentArea - taken > precision * context.parentLength,
+      "region_subdivided",
+      "This parent is fully subdivided. Open one of its regions."
+    );
+  }
   async draw(input: RegionDrawing): Promise<RegionDrawingResult> {
     const context = this.context(input.query);
+    this.requireRoom(input.query, context);
     const geometry = input.geometry;
     const lines: LineString[] =
       geometry.type === "LineString"
@@ -214,12 +251,7 @@ export class RegionCatalog {
           ? geometry.coordinates.map((coordinates) => ({ type: "LineString", coordinates }))
           : [];
     if (!lines.length) {
-      const clipped = this.tiles.kernel.overlay(
-        context.available,
-        geometry,
-        context.precision,
-        "intersection"
-      );
+      const clipped = this.mask(input.query, context).clip(geometry);
       requireThat(
         clipped,
         "region_outline",
@@ -242,15 +274,24 @@ export class RegionCatalog {
       ...input.query.cuts,
       ...lines.map((line) => this.snap(input.query, context, line, input.tolerance)),
     ];
-    const choices = await this.candidates({ ...input.query, cuts, position: null }, context);
+    const query = { ...input.query, cuts, position: null };
+    const choices = await this.candidates(query, context, this.mask(query, context));
     return { revision: context.revision, cuts, candidate: choices[0] ?? null, candidates: choices };
   }
   private snap(query: RegionQuery, context: Context, line: LineString, tolerance: number) {
-    const nearby = [line.coordinates[0], line.coordinates.at(-1)!].flatMap(([x, y]) =>
-      this.tiles.segments(query.scope, [x - tolerance, y - tolerance, x + tolerance, y + tolerance])
+    const windows = [line.coordinates[0], line.coordinates.at(-1)!].map(([x, y]): Bounds => [
+      x - tolerance,
+      y - tolerance,
+      x + tolerance,
+      y + tolerance,
+    ]);
+    const nearby = windows.flatMap((window) => this.tiles.segments(query.scope, window));
+    const siblings = new Map(
+      windows.flatMap((window) => this.siblings(query, window)).map((s) => [s.id, s.footprint])
     );
     const boundaries: Geometry[] = [
-      context.available,
+      context.parent,
+      ...siblings.values(),
       ...query.cuts,
       { type: "MultiLineString", coordinates: nearby.map(segmentLine) },
     ];

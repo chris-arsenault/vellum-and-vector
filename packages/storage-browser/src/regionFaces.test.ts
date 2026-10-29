@@ -12,7 +12,7 @@ import {
 import type { Geometry } from "geojson";
 import { GeometryKernel } from "./geometryKernel";
 import { SpatialCatalog } from "./spatialCatalog";
-import { RegionFaces } from "./regionFaces";
+import { RegionFaces, shapeMask } from "./regionFaces";
 
 let sqlite: Awaited<ReturnType<typeof sqliteInit>>;
 const opened: SpatialCatalog[] = [];
@@ -107,12 +107,13 @@ async function fixture() {
     };
     await putRecord({ kind: "feature", value: feature });
   };
-  const faces = new RegionFaces(catalog.boundaryTiles);
+  const faces = new RegionFaces(catalog.boundaryTiles),
+    mask = shapeMask(kernel, available, 0.000001);
   const at = (x: number, y: number, cuts: Geometry[] = []) =>
-    faces.at(scope, available, cuts, { x, y, z: 0 }, 0.000001);
+    faces.at(scope, mask, cuts, { x, y, z: 0 }, 0.000001);
   const area = (geometry: Geometry | null) =>
     geometry ? kernel.measure(geometry, 0.000001).area : 0;
-  return { kernel, catalog, put, putRecord, at, area, faces };
+  return { kernel, catalog, put, putRecord, at, area, faces, mask };
 }
 function regionQuery(patch: Partial<RegionQuery> = {}): RegionQuery {
   return {
@@ -184,14 +185,7 @@ describe("connected geographic faces", () => {
         (rectangle([800, 200, 1000, 800]) as import("geojson").Polygon).coordinates,
       ],
     });
-    const shape = f.faces.at(
-      scope,
-      available,
-      [],
-      { x: 100, y: 400, z: 0 },
-      1e-6,
-      [0, 0, 1000, 1000]
-    );
+    const shape = f.faces.at(scope, f.mask, [], { x: 100, y: 400, z: 0 }, 1e-6, [0, 0, 1000, 1000]);
     expect(shape?.type).toBe("MultiPolygon");
     expect(f.area(shape)).toBeCloseTo(240_000);
   });
@@ -254,5 +248,39 @@ describe("scoped region operations", () => {
     });
     const view = saved[0].data;
     expect(view.kind === "view" && f.area(view.value.region!.footprint)).toBeCloseTo(400_000);
+  });
+});
+describe("sibling regions", () => {
+  it("clips picked faces by siblings and nodes cuts that end on a sibling edge", async () => {
+    const f = await fixture();
+    await f.putRecord({
+      kind: "view",
+      value: {
+        id: "west",
+        name: "West",
+        areaId: scope.areaId,
+        layers: [],
+        region: { parentId: null, footprint: rectangle([0, 0, 400, 1000]) },
+      },
+    });
+    const picked = await f.catalog.regionChoices(
+      regionQuery({ position: { x: 800, y: 500, z: 0 } })
+    );
+    expect(picked.childId).toBeNull();
+    expect(picked.candidates.map((c) => Math.round(f.area(c.footprint)))).toEqual([600_000]);
+    const divided = await f.catalog.drawRegion({
+      query: regionQuery({ position: null }),
+      tolerance: 15,
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [410, 500],
+          [990, 500],
+        ],
+      },
+    });
+    expect(
+      divided.candidates.map((c) => Math.round(f.area(c.footprint))).sort((a, b) => a - b)
+    ).toEqual([300_000, 300_000]);
   });
 });

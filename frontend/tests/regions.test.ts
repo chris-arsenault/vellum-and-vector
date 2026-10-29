@@ -230,6 +230,7 @@ test("reject undersized selections without starting a job", async ({ page }) => 
     [70_000, 70_000],
     [20_000, 70_000],
   ]);
+  await page.getByRole("button", { name: "Choose a smaller region", exact: true }).click();
   await page.getByRole("button", { name: "Trace a custom outline", exact: true }).click();
   const parent: Box = [20_000, 20_000, 70_000, 70_000];
   await clickWorld(page, 30_000, 30_000, parent);

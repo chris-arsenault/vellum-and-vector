@@ -53,9 +53,9 @@ export class BoundaryProjection {
     this.coasts = new CoastBoundaries(db, index, derivations, projection);
     this.canonical = new CanonicalBoundaries(db, index, derivations);
   }
-  /** Install every source intersecting the extent. Reports the covered extent and the bounds of
+  /** Install every source intersecting the extent. Reports the area's bounds and the bounds of
    * sources whose linework was (re)installed so cached tiles can be dropped. */
-  ensure(scope: WorkspaceScope, requested?: Bounds): { covered: Bounds | null; changed: Bounds[] } {
+  ensure(scope: WorkspaceScope, requested?: Bounds): { area: Bounds; changed: Bounds[] } {
     const context = this.projection.context(scope.worldId, scope.areaId, []);
     const precision = context.world.reference.precision ?? 1e-6;
     const area = this.kernel.withShape(context.scope.footprint, precision, (shape) =>
@@ -69,7 +69,7 @@ export class BoundaryProjection {
           Math.min(area[3], requested[3]),
         ]
       : area;
-    if (extent[0] > extent[2] || extent[1] > extent[3]) return { covered: null, changed: [] };
+    if (extent[0] > extent[2] || extent[1] > extent[3]) return { area, changed: [] };
     const changed: Bounds[] = [];
     this.db.transaction(() => {
       this.db.exec({
@@ -81,7 +81,7 @@ export class BoundaryProjection {
       const handled = this.canonical.install(scope, extent, context.world.areas, precision);
       this.installWindow(scope, extent, handled, changed);
     });
-    return { covered: extent, changed };
+    return { area, changed };
   }
   private clearDirty(scope: WorkspaceScope) {
     const bind = [scope.worldId, scope.spaceId, scope.areaId];
