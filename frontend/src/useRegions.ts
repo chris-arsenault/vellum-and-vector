@@ -181,9 +181,7 @@ function regionDrawing(o: Options, d: Draft, c: Context, enter: (id: string) => 
           d.setDraft(result.candidates[0] ?? null);
           if (result.candidates.length) o.setTool("regionEdit");
           if (!result.candidates.length)
-            throw new Error(
-              "No smaller enclosed region here. Draw an outline or connect a dividing line to existing boundaries."
-            );
+            throw new Error("No region here. Draw an outline or a dividing line.");
         };
       }),
     regionDraw: (geometry: Geometry) =>

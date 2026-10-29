@@ -9,8 +9,6 @@ import {
 import { describe, expect, it } from "vitest";
 import {
   availableRegionFootprint,
-  regionCandidates,
-  regionFaces,
   regionLineage,
   rectangle,
   spatial,
@@ -143,7 +141,7 @@ it("reuses sibling borders and keeps cartographic compositions linked to their s
   );
 });
 
-describe("geographic boundary composition", () => {
+describe("region line snapping", () => {
   const parent: Geometry = {
     type: "Polygon",
     coordinates: [
@@ -157,41 +155,6 @@ describe("geographic boundary composition", () => {
       ],
     ],
   };
-  const river: Geometry = {
-    type: "LineString",
-    coordinates: [
-      [4000, -100],
-      [4000, 11_000],
-    ],
-  };
-  const cut: Geometry = {
-    type: "LineString",
-    coordinates: [
-      [-100, 5000],
-      [11_000, 5000],
-    ],
-  };
-  it("composes a nonrectangular shoreline, river and authored cut into shared polygon faces", async () => {
-    const faces = regionFaces(parent, [river, cut]);
-    expect(faces).toHaveLength(4);
-    expect(faces.reduce((area, f) => area + spatial.area(f), 0)).toBeCloseTo(spatial.area(parent));
-    for (const face of faces) expect(spatial.covers(parent, face)).toBe(true);
-    expect(
-      faces.every((f) => f.coordinates.flat().some(([x, y]) => x === 4000 && y === 5000))
-    ).toBe(true);
-  });
-  it("ranks useful candidates by viewport scale and takes the component under the pointer", async () => {
-    const forest = rectangle([1000, 1000, 3000, 3000]);
-    const candidates = regionCandidates(
-      parent,
-      [{ name: "Woodland", footprint: forest }],
-      [],
-      { x: 2000, y: 2000, z: 0 },
-      [0, 0, 3500, 3500]
-    );
-    expect(candidates[0].name).toBe("Woodland");
-    expect(candidates).toHaveLength(1);
-  });
   it("snaps cut endpoints to the existing parent edge without moving interior bends", async () => {
     const line = snapRegionCut(
       {

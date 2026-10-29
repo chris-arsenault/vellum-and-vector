@@ -6,7 +6,7 @@ import { fixture, query, record, scope, write } from "./catalogFixture";
 
 it("partitions mixed-dimensional geography and preserves its areas, lines and points", async () => {
   const catalog = await fixture(),
-    kernel = catalog.boundaryTiles.kernel;
+    kernel = catalog.kernel;
   const shape: Geometry = {
     type: "GeometryCollection",
     geometries: [
@@ -46,7 +46,7 @@ it("reads joined viewport pieces, preserves holes and edits canonical geometry t
   const catalog = await fixture((opened) => {
       db = opened;
     }),
-    kernel = catalog.boundaryTiles.kernel;
+    kernel = catalog.kernel;
   const shape: Geometry = {
     type: "Polygon",
     coordinates: [circle(450, 16384), circle(100, 4096).reverse()],

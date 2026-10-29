@@ -198,13 +198,14 @@ Selecting or entering it does not start generation, copy numerical fields or
 reveal latent rivers and settlements. Other map types, including city layouts,
 sites and interiors, are outside this regional selection and refinement flow.
 
-The Regions tool proposes outlines near the clicked location using existing
-geographic and social polygons, shorelines and river lines. Current zoom guides
-candidate size. Creators can draw a closed outline, or divide existing boundaries
-with polylines whose endpoints snap to nearby edges. Mixed boundaries form one
-polygonal footprint. Candidates remain previews until kept; the atlas does not
-precompute every region. Committed siblings form a partial subdivision with
-shared edges and no overlapping interiors.
+A Regions click queries the spatial index. An existing child region under the
+click opens; otherwise the generated geographic and social polygons covering the
+click become candidates, clipped to the parent and outside committed siblings. A
+location without a polygon offers no candidate; regions never need to cover the
+map. Current zoom ranks candidate size. Creators can draw a closed outline, or a
+dividing line whose endpoints snap to nearby edges and which splits the polygons
+it crosses. Candidates remain previews until kept. Committed siblings form a
+partial subdivision with shared edges and no overlapping interiors.
 
 Creators can revisit children through the region list and ancestor breadcrumbs,
 rename regions, adjust outlines and remove unreferenced leaves. Outline changes

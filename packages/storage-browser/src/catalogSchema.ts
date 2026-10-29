@@ -6,18 +6,6 @@ CREATE TABLE IF NOT EXISTS worlds (
 CREATE TABLE IF NOT EXISTS geometry_values (
   geometry_id INTEGER PRIMARY KEY,data BLOB NOT NULL
 );
-CREATE TABLE IF NOT EXISTS geometry_boundary_ready (
-  geometry_id INTEGER PRIMARY KEY REFERENCES geometry_values ON DELETE CASCADE
-);
-CREATE TABLE IF NOT EXISTS geometry_boundaries (
-  part_id INTEGER PRIMARY KEY, geometry_id INTEGER NOT NULL REFERENCES geometry_values ON DELETE CASCADE,
-  data BLOB NOT NULL
-);
-CREATE INDEX IF NOT EXISTS geometry_boundary_owner ON geometry_boundaries(geometry_id);
-CREATE VIRTUAL TABLE IF NOT EXISTS geometry_boundary_bounds USING rtree(part_id,min_x,max_x,min_y,max_y);
-CREATE TRIGGER IF NOT EXISTS geometry_boundary_remove AFTER DELETE ON geometry_boundaries BEGIN
-  DELETE FROM geometry_boundary_bounds WHERE part_id=old.part_id;
-END;
 CREATE TABLE IF NOT EXISTS geometry_piece_ready (
   geometry_id INTEGER PRIMARY KEY REFERENCES geometry_values ON DELETE CASCADE
 );

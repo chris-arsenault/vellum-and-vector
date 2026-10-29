@@ -4,7 +4,6 @@ import {
   type AtlasFeature,
   type CatalogRecord,
   type ReadRequirements,
-  spatial,
 } from "@atlas/domain";
 import { fixture, scope, world, record, write, query } from "./catalogFixture";
 it("generalizes display geometry while preserving the canonical source and edit revisions", async () => {
@@ -219,45 +218,6 @@ describe("located canonical reads", () => {
     });
   });
 });
-describe("composed boundary topology", () => {
-  it("keeps parent topology stable while a finer representation changes its connected faces", async () => {
-    const { catalog, childScope } = await locatedFixture();
-    const pick = (areaId: string, x: number, y: number) =>
-      catalog.regionChoices({
-        scope: { ...scope, areaId },
-        sourceAreaId: areaId,
-        parentId: null,
-        editingId: null,
-        cuts: [],
-        position: { x, y, z: 0 },
-        viewport: [0, 0, 1000, 1000],
-      });
-    const rootFaceArea = 500_000 - 90 * 90; // The unrelated woodland is a hole in this face.
-    expect(spatial.area((await pick("root", 500, 300)).candidates[0].footprint)).toBeCloseTo(
-      rootFaceArea
-    );
-    expect(spatial.area((await pick("child", 500, 300)).candidates[0].footprint)).toBeCloseTo(
-      240_000
-    );
-    const detail = (await catalog.readRecords(childScope, "representation", ["course-detail"]))[0];
-    if (detail.data.kind !== "representation") throw new Error("Missing representation fixture.");
-    detail.data.value.geometry = {
-      type: "LineString",
-      coordinates: [
-        [200, 400],
-        [800, 400],
-      ],
-    };
-    await write(catalog, [detail]);
-    expect(spatial.area((await pick("child", 500, 300)).candidates[0].footprint)).toBeCloseTo(
-      120_000
-    );
-    expect(spatial.area((await pick("root", 500, 300)).candidates[0].footprint)).toBeCloseTo(
-      rootFaceArea
-    );
-  });
-});
-
 it("filters and sorts the entire registry before paging, and refreshes edited values", async () => {
   const catalog = await fixture();
   const records = Array.from({ length: 130 }, (_, i) => {

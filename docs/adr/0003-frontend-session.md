@@ -44,12 +44,11 @@ features and registry rows through scoped, paged queries. A page composes its
 features from one context and caches each presented feature by identity until the
 next commit; the registry presents rows in batches through the same path and marks
 only the features a write can affect. Canonical geometry stays separate from
-indexed boundary pieces and generalized display products: a record write stores
-the geometry row, links and bounds, and one owner derives boundary parts, spatial
-pieces and overviews lazily, keyed by the immutable geometry id. Region picking
-follows connected edges through locally noded tiles, installing boundary sources
-only for the tiles a query visits and widening the nearest-boundary search
-locally. Storage boundaries do not become geographic borders. Display reads
+generalized display products: a record write stores the geometry row, links and
+bounds, and one owner derives spatial pieces and overviews lazily, keyed by the
+immutable geometry id. Region picking is a spatial index query for the polygons
+covering the click; a dividing line splits only the indexed polygons it crosses.
+Storage pieces do not become geographic borders. Display reads
 return a fragment per seam window; the editor keeps every fragment under the
 feature's canonical identity. Render workers register a raster by the immutable
 resources it samples and update viewport geography in place; immutable inputs

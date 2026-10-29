@@ -20,12 +20,9 @@ import {
 import { catalogSchema } from "./catalogSchema";
 import { decodeRecord } from "./catalogRecords";
 import type { GeometryKernel } from "./geometryKernel";
-import { BoundaryIndex } from "./boundaryIndex";
-import { BoundaryTiles, regionTopologyTileMetres } from "./boundaryTiles";
 import { RegionCatalog } from "./regionCatalog";
 import { CatalogProjection } from "./catalogProjection";
 import { FeatureCatalog } from "./featureCatalog";
-import { BoundaryProjection } from "./boundaryProjection";
 import { CatalogHistory } from "./catalogHistory";
 import { FieldGeographyCatalog } from "./fieldGeography";
 import { RegistryCatalog } from "./registryCatalog";
@@ -37,12 +34,9 @@ import { PublicationStaging } from "./catalogPublication";
 import { GeometryDerivations } from "./geometryDerivations";
 
 export class SpatialCatalog implements SpatialStore {
-  readonly boundaries: BoundaryIndex;
-  readonly boundaryTiles: BoundaryTiles;
   private regions: RegionCatalog;
   private projection: CatalogProjection;
   private features: FeatureCatalog;
-  private topology: BoundaryProjection;
   private journal: CatalogHistory;
   private geography: FieldGeographyCatalog;
   private registry: RegistryCatalog;
@@ -52,8 +46,7 @@ export class SpatialCatalog implements SpatialStore {
   private publication: PublicationStaging;
   constructor(
     private db: Database,
-    private kernel: GeometryKernel,
-    tileMetres = regionTopologyTileMetres
+    readonly kernel: GeometryKernel
   ) {
     db.exec(catalogSchema);
     const derivations = new GeometryDerivations(db, kernel);
@@ -64,31 +57,11 @@ export class SpatialCatalog implements SpatialStore {
     this.registry = new RegistryCatalog(db, this.projection, this.features, kernel);
     this.settlements = new SettlementCatalog(db, this.features);
     this.presentation = new PresentationCatalog(db, this.features);
-    this.boundaries = new BoundaryIndex(db, kernel);
-    this.topology = new BoundaryProjection(
-      db,
-      this.boundaries,
-      kernel,
-      derivations,
-      this.features,
-      this.projection
-    );
-    // Tiles ask the projection to install sources for the extent they visit; the projection
-    // reports what changed and never reaches back into the tile cache.
-    this.boundaryTiles = new BoundaryTiles(
-      this.boundaries,
-      kernel,
-      (scope, extent) => this.topology.ensure(scope, extent),
-      (worldId) => Number(db.selectValue("SELECT revision FROM worlds WHERE id=?", [worldId])),
-      tileMetres
-    );
-    this.regions = new RegionCatalog(db, this.boundaryTiles, (query) => this.readFeatures(query));
+    this.regions = new RegionCatalog(db, kernel, (query) => this.readFeatures(query));
     this.mutation = new CatalogMutation(db, kernel, {
       journal: this.journal,
       projection: this.projection,
       registry: this.registry,
-      topology: this.topology,
-      tiles: this.boundaryTiles,
       geography: this.geography,
     });
     this.publication = new PublicationStaging(db, this.mutation);

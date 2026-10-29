@@ -49,13 +49,10 @@ export const world: WorldMetadata = {
   generations: [],
   epochs: [],
 };
-export async function fixture(
-  inspect?: (db: import("@sqlite.org/sqlite-wasm").Database) => void,
-  tileMetres?: number
-) {
+export async function fixture(inspect?: (db: import("@sqlite.org/sqlite-wasm").Database) => void) {
   const db = new sqlite.oo1.DB(":memory:"),
     kernel = await GeometryKernel.create(1024),
-    catalog = new SpatialCatalog(db, kernel, tileMetres);
+    catalog = new SpatialCatalog(db, kernel);
   opened.push(catalog);
   await catalog.createWorld(world);
   const blueprint = createWorldBlueprint({

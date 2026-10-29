@@ -1,16 +1,13 @@
 import type { Database } from "@sqlite.org/sqlite-wasm";
-import type { Geometry, Position } from "geojson";
+import type { Geometry } from "geojson";
 import { rectangle, requireThat, type Bounds } from "@atlas/domain";
 import type { GeometryKernel } from "./geometryKernel";
-import { boundarySegments } from "./boundarySegments";
 import { ByteCache } from "./byteCache";
 
-/** Storage pieces retain original edges; their endpoints never introduce geographic cuts. */
-const boundaryPartSegments = 256;
 /** These are storage partitions and display products; canonical feature geometry is unchanged. */
 const geometryPieceCoordinates = 4096;
 
-/** Every derived product of a stored geometry row (boundary parts, spatial pieces, overviews)
+/** Every derived product of a stored geometry row (spatial pieces, overviews)
  * is prepared here, lazily, keyed by the immutable geometry id. Writes never derive. */
 export const displayGeometryCacheBytes = 16 * 1024 * 1024;
 export class GeometryDerivations {
@@ -19,56 +16,6 @@ export class GeometryDerivations {
     private db: Database,
     private kernel: GeometryKernel
   ) {}
-  ensureBoundaries(geometryId: number, precision: number, shape?: Geometry) {
-    if (
-      this.db.selectValue("SELECT 1 FROM geometry_boundary_ready WHERE geometry_id=?", [geometryId])
-    )
-      return;
-    this.db.savepoint(() => this.prepareBoundaries(geometryId, precision, shape));
-  }
-  private prepareBoundaries(geometryId: number, precision: number, shape?: Geometry) {
-    const db = this.db,
-      kernel = this.kernel;
-    if (!shape) shape = kernel.decode(this.stored(geometryId));
-    let lines: Position[][] = [];
-    const flush = () => {
-      if (!lines.length) return;
-      const encoded = kernel.encode({ type: "MultiLineString", coordinates: lines }, precision),
-        [x0, y0, x1, y1] = encoded.bounds;
-      db.exec({
-        sql: "INSERT INTO geometry_boundaries(geometry_id,data) VALUES(?,?)",
-        bind: [geometryId, encoded.bytes],
-      });
-      db.exec({
-        sql: "INSERT INTO geometry_boundary_bounds VALUES(last_insert_rowid(),?,?,?,?)",
-        bind: [x0, x1, y0, y1],
-      });
-      lines = [];
-    };
-    for (const { ax, ay, bx, by } of boundarySegments(shape)) {
-      lines.push([
-        [ax, ay],
-        [bx, by],
-      ]);
-      if (lines.length === boundaryPartSegments) flush();
-    }
-    flush();
-    db.exec({ sql: "INSERT INTO geometry_boundary_ready VALUES(?)", bind: [geometryId] });
-  }
-  *boundaryWindow(geometryId: number, b: Bounds) {
-    const statement = this.db.prepare(`SELECT p.part_id,p.data FROM geometry_boundaries p
-      JOIN geometry_boundary_bounds b USING(part_id) WHERE p.geometry_id=?
-      AND b.min_x<=? AND b.max_x>=? AND b.min_y<=? AND b.max_y>=? ORDER BY p.part_id`);
-    try {
-      statement.bind([geometryId, b[2], b[0], b[3], b[1]]);
-      while (statement.step()) {
-        const row = statement.get({});
-        yield { partId: -Number(row.part_id), bytes: row.data as Uint8Array };
-      }
-    } finally {
-      statement.finalize();
-    }
-  }
   private stored(geometryId: number) {
     const bytes = this.db.selectValue("SELECT data FROM geometry_values WHERE geometry_id=?", [
       geometryId,

@@ -15,8 +15,6 @@ import type { GeometryKernel } from "./geometryKernel";
 import type { CatalogHistory } from "./catalogHistory";
 import type { CatalogProjection } from "./catalogProjection";
 import type { RegistryCatalog } from "./registryCatalog";
-import type { BoundaryProjection } from "./boundaryProjection";
-import type { BoundaryTiles } from "./boundaryTiles";
 import type { FieldGeographyCatalog } from "./fieldGeography";
 import { ChangeAccumulator } from "./changeAccumulator";
 
@@ -24,8 +22,6 @@ interface Components {
   journal: CatalogHistory;
   projection: CatalogProjection;
   registry: RegistryCatalog;
-  topology: BoundaryProjection;
-  tiles: BoundaryTiles;
   geography: FieldGeographyCatalog;
 }
 /** A synchronous transaction consumes one batch at a time. No decoded result is retained. */
@@ -63,8 +59,6 @@ export class CatalogMutation {
       this.parts.registry.advance(worldId, result.value.revision);
       if (undoOf) this.parts.journal.remove(worldId, undoOf);
     });
-    for (const change of result.value.geometryExtents!)
-      this.parts.tiles.invalidate({ worldId, spaceId: change.spaceId }, change.bounds);
     return result.value;
   }
   private validate(changes: CatalogChanges, world: WorldMetadata) {
@@ -111,7 +105,6 @@ export class CatalogMutation {
     for (const remove of changes.removes) {
       this.requireExpected(changes, remove);
       this.parts.registry.changed(world.id, remove);
-      geometry.push(...this.parts.topology.changed(world.id, remove));
       this.affected(world.id, remove, geometry);
       this.affected(world.id, remove, extents);
       this.db.exec({
@@ -185,11 +178,7 @@ export class CatalogMutation {
         : undefined
     );
     this.affected(world.id, record.reference, extents);
-    if (written.changed)
-      geometry.push(
-        ...extents.slice(start),
-        ...this.parts.topology.changed(world.id, record.reference)
-      );
+    if (written.changed) geometry.push(...extents.slice(start));
   }
   private publishResource(worldId: string, resource: NumericalResource) {
     requireThat(

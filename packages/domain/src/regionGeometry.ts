@@ -1,6 +1,4 @@
 import type { Geometry, LineString, Polygon, Position } from "geojson";
-import { spatial, point, type Bounds } from "./spatial";
-import { usefulRegionSize } from "./regionViews";
 
 export interface RegionCandidate {
   name: string;
@@ -19,56 +17,6 @@ export function regionBoundaryLines(geometry: Geometry): LineString[] {
     return geometry.coordinates.map((coordinates) => ({ type: "LineString", coordinates }));
   return polygonParts(geometry).flatMap((p) =>
     p.coordinates.map((coordinates) => ({ type: "LineString" as const, coordinates }))
-  );
-}
-/** Node shared river/shore/territory/cut edges once, then assemble enclosed faces. */
-export function regionFaces(footprint: Geometry, boundaries: Geometry[]): Polygon[] {
-  const lines = [...regionBoundaryLines(footprint), ...boundaries.flatMap(regionBoundaryLines)];
-  const faces = spatial.polygonize({
-    type: "MultiLineString",
-    coordinates: lines.map((line) => line.coordinates),
-  });
-  const result: Polygon[] = [];
-  for (const geometry of faces) {
-    const probe = point(spatial.interiorPosition(geometry));
-    if (spatial.covers(footprint, probe)) {
-      const clipped = spatial.intersection(footprint, geometry);
-      if (clipped) result.push(...polygonParts(clipped).filter(usefulRegionSize));
-    }
-  }
-  return result;
-}
-export function regionCandidates(
-  available: Geometry,
-  sources: RegionCandidate[],
-  cuts: Geometry[],
-  position: { x: number; y: number; z: number } | null,
-  viewport: Bounds
-): RegionCandidate[] {
-  const result: RegionCandidate[] = [];
-  const add = (name: string, geometry: Geometry) => {
-    if (!spatial.intersects(available, geometry)) return;
-    const clipped = spatial.intersection(available, geometry);
-    if (!clipped) return;
-    for (const shape of polygonParts(clipped)) {
-      if (position && !spatial.covers(shape, point(position))) continue;
-      if (!usefulRegionSize(shape)) continue;
-      const canonical = spatial.canonical(shape);
-      if (!result.some((c) => JSON.stringify(c.footprint) === JSON.stringify(canonical)))
-        result.push({ name, footprint: canonical });
-    }
-  };
-  if (!cuts.length)
-    for (const source of sources.filter((s) => s.footprint.type.includes("Polygon")))
-      add(source.name, source.footprint);
-  const boundaries = sources.map((s) => s.footprint);
-  for (const [i, face] of regionFaces(available, [...boundaries, ...cuts]).entries())
-    add(`Region ${i + 1}`, face);
-  const target = ((viewport[2] - viewport[0]) * (viewport[3] - viewport[1])) / 3;
-  return result.sort(
-    (a, b) =>
-      Math.abs(Math.log(spatial.area(a.footprint) / target)) -
-      Math.abs(Math.log(spatial.area(b.footprint) / target))
   );
 }
 /** Snap cut endpoints to existing geographic edges at the map's current pixel tolerance. */
