@@ -34,7 +34,8 @@ it("pages complete canonical inputs and linked geography without decoding the ot
   if (follower.data.kind !== "feature") throw new Error("Expected a feature");
   follower.data.value.relations = [{ kind: "follows", targetId: "outside" }];
   const outside = record("outside", rectangle([1200, 0, 1500, 100]));
-  await write(catalog, [follower, outside]);
+  const unlinked = record("unlinked", rectangle([2000, 0, 2500, 100]));
+  await write(catalog, [follower, outside, unlinked]);
   const source = await generationSource(catalog, scope.worldId, scope.areaId);
   expect(source.world.features).toEqual({});
   const sizes: number[] = [];
@@ -49,8 +50,11 @@ it("pages complete canonical inputs and linked geography without decoding the ot
     },
     features
   );
-  expect(sizes).toEqual([64, 64, 4]);
-  expect([...features.values()]).toHaveLength(132);
+  expect(sizes).toEqual([64, 64, 5]);
+  expect([...features.values()]).toHaveLength(133);
+  const unlinkedGeometry = features.get("unlinked")!.geometry;
+  expect(spatial.bounds(unlinkedGeometry)).toEqual([2000, 0, 2500, 100]);
+  expect(spatial.area(unlinkedGeometry)).toBe(50_000);
   expect(features.get("outside")!.geometry).toBeDefined();
   expect(features.get("follower")!.relations).toEqual([{ kind: "follows", targetId: "outside" }]);
   expect(source.world.features).toEqual({});
@@ -70,6 +74,42 @@ it("rejects a changed catalog revision between pages", async () => {
   const first = await catalog.readAuthoringPage(input, null, 64);
   await write(catalog, [record("added-later")]);
   await expect(catalog.readAuthoringPage(input, first.next, 64)).rejects.toThrow("world changed");
+});
+it("loads a child's outlying geometry without following links into parent geography", async () => {
+  const { catalog, features } = await sourceFixture(),
+    root = (await catalog.readRecords(scope, "area", [scope.areaId]))[0];
+  if (root.data.kind !== "area") throw new Error("Expected an area");
+  const childScope = { ...scope, areaId: "child" },
+    child = record("child-forest", rectangle([2000, 0, 2500, 100]));
+  if (child.data.kind !== "feature") throw new Error("Expected a feature");
+  child.scope = childScope;
+  child.data.value.areaId = "child";
+  child.data.value.relations = [{ kind: "dependsOn", targetId: "feature-000" }];
+  await write(catalog, [
+    {
+      scope: childScope,
+      reference: { kind: "area", id: "child", revision: 0 },
+      data: {
+        kind: "area",
+        value: {
+          ...root.data.value,
+          id: "child",
+          parentId: scope.areaId,
+          profile: "region",
+          footprint: rectangle([20, 20, 80, 80]),
+          map: { sourceAreaId: scope.areaId, sourceRevision: 1 },
+        },
+      },
+    },
+    child,
+  ]);
+  const source = await generationSource(catalog, scope.worldId, "child");
+  await loadGenerationFeatures(source, catalog, features);
+  expect([...features.values()].map((feature) => feature.id)).toEqual(["child-forest"]);
+  const loaded = features.get("child-forest")!;
+  expect(loaded).toMatchObject({ areaId: "child", relations: child.data.value.relations });
+  expect(spatial.difference(loaded.geometry, child.data.value.geometry)).toBeNull();
+  expect(spatial.difference(child.data.value.geometry, loaded.geometry)).toBeNull();
 });
 it("loads connected reaches outside the source window directly into the graph store", async () => {
   const { catalog, features, networks } = await sourceFixture();

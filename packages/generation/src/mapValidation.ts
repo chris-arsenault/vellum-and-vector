@@ -14,6 +14,7 @@ import {
   type Grid,
   type AtlasFeature,
   featureWorkspaceWorld,
+  ownsMapGeography,
 } from "@atlas/domain";
 import type { GenerationState } from "./process";
 import { validateAuthoredInputs } from "./mapAuthored";
@@ -72,6 +73,16 @@ function validateInterfaces(state: GenerationState, original: DomainSnapshot) {
   }
 }
 function validateChangedFeature(state: GenerationState, original: DomainSnapshot, id: string) {
+  if (ownsMapGeography(original.world, original.scope.areaId)) {
+    const before = originalFeatureReader(state, original).get(id),
+      after = generationFeature(state, id);
+    requireThat(
+      [before, after].every((feature) => !feature || feature.areaId === original.scope.areaId),
+      "generation_map_ownership",
+      "Generation changes only geography owned by the active map."
+    );
+    return;
+  }
   const world = generationFeatureWorld(state, [id]);
   validateGeometryWriteScopes(
     {

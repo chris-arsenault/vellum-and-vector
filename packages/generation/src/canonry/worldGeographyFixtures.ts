@@ -10,11 +10,15 @@ import { landscape } from "../mapFixtures";
 import { adaptivePhysicalMesh } from "./adaptiveMesh";
 import { createField } from "./field";
 import { atlasPhysicalProfile } from "./atlasProfile";
+import type { Geometry } from "geojson";
 
 /** Supplied geography only: no schedule, climate pass, hydrology or world generation. */
-export function worldGeographyFixture(bounds: Bounds = [0, 0, 600_000, 400_000], size = 25_000) {
-  const state = landscape(),
-    footprint = rectangle(bounds);
+export function worldGeographyFixture(
+  bounds: Bounds = [0, 0, 600_000, 400_000],
+  size = 25_000,
+  footprint: Geometry = rectangle(bounds)
+) {
+  const state = landscape();
   state.domain.scope.footprint = footprint;
   state.domain.world.reference.domain = footprint;
   state.domain.world.areas.area.footprint = footprint;

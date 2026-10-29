@@ -1,40 +1,18 @@
 import { expect, it, vi } from "vitest";
+import { rectangle, sample, type DomainSnapshot } from "@atlas/domain";
 import {
-  rectangle,
-  regionRefinementInput,
-  refinedRegionArea,
-  sample,
-  type DomainSnapshot,
-} from "@atlas/domain";
-import {
-  fixtureState,
-  commitCommand,
   readScene,
   readMapRasters,
   commitFixtureRecords,
   fixtureWorkspace,
-  registerWorldSnapshot,
 } from "./testSupport/workspaceFixture";
 import { landscape } from "../../packages/generation/src/mapFixtures";
 import { putGenerated, putGeneratedDetail } from "../../packages/generation/src/mapFeatures";
 import { generationSource } from "./workspaceGeneration";
 import { WorkspaceFields } from "./workspaceFields";
-import { loadGenerationFeatures } from "./generationInputs";
-import {
-  SqliteFeatureWorkspace,
-  SqliteNetworkWorkspace,
-  SpatialCatalog,
-  GeometryKernel,
-} from "@atlas/storage-browser";
-import {
-  sqliteFixture,
-  reopenSqliteFixture,
-} from "../../packages/storage-browser/src/sqliteFixture";
-import { prepareAtlasGeneration, generationSnapshot } from "@atlas/generation";
-import { atlasInitialState } from "../../packages/generation/src/atlasInitialState";
-import { MapRunner } from "../../packages/generation/src/mapRunner";
+import { SpatialCatalog, GeometryKernel } from "@atlas/storage-browser";
+import { reopenSqliteFixture } from "../../packages/storage-browser/src/sqliteFixture";
 import { publishWorkspaceGeneration } from "./generationPublication";
-import { constructedWorld } from "./constructedWorldFixture";
 import { snapshotCopy } from "./testSupport/snapshotCopy";
 import { independentMapFixture as fixture } from "./testSupport/independentMapFixture";
 
@@ -185,123 +163,6 @@ it("keeps frozen numerical inputs when parent resources are replaced and after c
   }
 });
 
-async function refinementFixture() {
-  const constructed = constructedWorld(),
-    parent = generationSnapshot(constructed.result, constructed.input, crypto.randomUUID());
-  registerWorldSnapshot(parent);
-  const id = parent.world.id,
-    root = parent.scope.areaId,
-    current = () => fixtureState(id).snapshot,
-    command = (kind: string, data: Record<string, unknown>) =>
-      commitCommand(id, {
-        operationId: crypto.randomUUID(),
-        expectedVersion: current().world.version,
-        kind,
-        data,
-      }),
-    regionId = crypto.randomUUID();
-  await command("putView", {
-    id: regionId,
-    name: "Closer coast",
-    areaId: root,
-    layers: [],
-    region: { parentId: null, footprint: rectangle([1000, 100, 3000, 900]) },
-  });
-  await command("createArea", regionRefinementInput(current().world, regionId));
-  const child = refinedRegionArea(current().world, regionId)!.id,
-    workspace = await fixtureWorkspace(id);
-  return { id, root, child, workspace, current, parent };
-}
-function denyParentReads(
-  workspace: Awaited<ReturnType<typeof fixtureWorkspace>>,
-  child: string,
-  parentFields: Set<string>
-) {
-  const originalRead = workspace.catalog.readAuthoring.bind(workspace.catalog);
-  const deny = vi.spyOn(workspace.catalog, "readAuthoring").mockImplementation(async (request) => {
-    expect(request.scope.areaId).toBe(child);
-    expect(request.channels.some((field) => parentFields.has(field.fieldId))).toBe(false);
-    const snapshot = await originalRead(request);
-    expect(snapshot.world.fields.every((field) => field.areaId === child)).toBe(true);
-    expect(
-      Object.values(snapshot.world.features).every((feature) => feature.areaId === child)
-    ).toBe(true);
-    return snapshot;
-  });
-  return deny;
-}
-it("refines and publishes from captured inputs with parent geography reads denied", async () => {
-  const { id, root, child, workspace, current, parent } = await refinementFixture(),
-    before = workspace.catalog.exportFeatures(id, root, null, 128),
-    parentFields = new Set(
-      current()
-        .world.fields.filter((field) => field.areaId === root)
-        .map((field) => field.id)
-    ),
-    rootScope = { worldId: id, areaId: root, spaceId: parent.scope.spaceId },
-    rootFields = await workspace.catalog.readRecords(rootScope, "field", [...parentFields]),
-    deny = denyParentReads(workspace, child, parentFields),
-    db = await sqliteFixture(),
-    features = new SqliteFeatureWorkspace(db),
-    sourceFeatures = new SqliteFeatureWorkspace(db, "source_features"),
-    networks = new SqliteNetworkWorkspace(db),
-    sourceNetworks = new SqliteNetworkWorkspace(db, "source_networks"),
-    fields = new WorkspaceFields(workspace.catalog, workspace.resources, workspace.working.cache);
-  try {
-    const source = await generationSource(workspace.catalog, id, child);
-    await loadGenerationFeatures(
-      source,
-      workspace.catalog,
-      sourceFeatures,
-      undefined,
-      sourceNetworks
-    );
-    await fields.read(source, numericalReads(source));
-    const prepared = prepareAtlasGeneration(
-        source,
-        { areaId: child, quality: "draft", seed: 73, domains: ["physical"] },
-        sourceFeatures
-      ),
-      initial = atlasInitialState(prepared.source, prepared.input, workspace.working.cache);
-    expect(prepared.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
-    const result = await new MapRunner(prepared.input.configuration!, prepared.registry).run(
-      initial,
-      {
-        seed: "73",
-        seedScope: child,
-        cache: workspace.working.cache,
-        features,
-        sourceFeatures,
-        networks,
-        sourceNetworks,
-      }
-    );
-    const operationId = crypto.randomUUID(),
-      output = generationSnapshot(result, prepared.input, operationId, source);
-    await publishWorkspaceGeneration(
-      workspace.catalog,
-      workspace.resources,
-      source,
-      output,
-      operationId,
-      false,
-      [],
-      () => {},
-      undefined,
-      { features, sourceFeatures, networks, sourceNetworks }
-    );
-    expect(workspace.catalog.exportFeatures(id, root, null, 128)).toEqual(before);
-    expect(await workspace.catalog.readRecords(rootScope, "field", [...parentFields])).toEqual(
-      rootFields
-    );
-    expect(output.world.fields.some((field) => field.areaId === child && !field.input)).toBe(true);
-    expect(output.world.epochs).toEqual(parent.world.epochs);
-  } finally {
-    deny.mockRestore();
-    await fields.close();
-    db.close();
-  }
-});
 function numericalReads(source: DomainSnapshot) {
   return {
     scope: source.scope,

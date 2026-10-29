@@ -145,7 +145,10 @@ it("checks authored protection and scope against stored values", async () => {
     rectangle([5000, 0, 6000, 100])
   );
   putGenerated(state, outside);
-  expect(() => validateWorkingMap(state, original)).toThrow("declared edit extent");
+  expect(() => validateWorkingMap(state, original)).not.toThrow();
+  expect(features.get(outside.id)?.geometry).toEqual(outside.geometry);
+  features.put({ ...outside, areaId: "another-map" });
+  expect(() => validateWorkingMap(state, original)).toThrow("owned by the active map");
 });
 it("prepares separate child geometry clipped to a slanted regional extent", async () => {
   const { state, features, sourceFeatures } = await working();

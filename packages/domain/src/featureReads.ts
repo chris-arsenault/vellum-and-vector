@@ -8,7 +8,7 @@ import {
 import { profiles, type AtlasFeature, type World } from "./model";
 import { spatial, type Spatial } from "./spatial";
 import { authoredLandmarkFeatures } from "./landmarks";
-import { geographyAreas } from "./mapOwnership";
+import { geographyAreas, ownsMapGeography } from "./mapOwnership";
 
 /** Sources stay owned by world.magic; readers and selection share their semantic identities. */
 export function authoredMagicFeatures(world: World): AtlasFeature[] {
@@ -67,9 +67,7 @@ export function presentAtlasFeature(
   let geometry = composeFeature(world, feature, [], area.profile, areaId, gis);
   if (!geometry) return null;
   let footprint = composeFootprint(world, feature, area.profile, areaId, gis);
-  if (!featureIntersects({ geometry, footprint: footprint ?? undefined }, area.footprint, gis))
-    return null;
-  ({ geometry, footprint } = clipToMap(area, geometry, footprint, gis ?? spatial));
+  ({ geometry, footprint } = clipToMap(world, areaId, geometry, footprint, gis ?? spatial));
   if (!geometry) return null;
   const result = {
     ...feature,
@@ -81,11 +79,16 @@ export function presentAtlasFeature(
   return result;
 }
 function clipToMap(
-  area: World["areas"][string],
+  world: World,
+  areaId: string,
   geometry: Geometry,
   footprint: Geometry | null,
-  gis: CompositionSpatial
+  gis: CompositionSpatial & Pick<Spatial, "intersects">
 ) {
+  if (ownsMapGeography(world, areaId)) return { geometry, footprint };
+  const area = world.areas[areaId];
+  if (!featureIntersects({ geometry, footprint: footprint ?? undefined }, area.footprint, gis))
+    return { geometry: null, footprint: null };
   return area.regionId
     ? {
         geometry: gis.intersection(geometry, area.footprint),

@@ -1,5 +1,10 @@
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { generateAtlas, type AtlasGenerationInput } from "@atlas/generation";
+import {
+  generateAtlas,
+  prepareAtlasGeneration,
+  type CompletedBoundary,
+  type AtlasGenerationInput,
+} from "@atlas/generation";
 import {
   landmarkKind,
   landmarkLayer,
@@ -9,11 +14,146 @@ import {
   someSample,
   spatial,
   type DomainSnapshot,
+  type FeatureReader,
 } from "@atlas/domain";
 import { newGenerationDraft, prepareDraft } from "./generationDraft";
 import { generationSnapshot } from "./generationJobs";
 import { presentHumanEras } from "../../packages/generation/src/societyRound";
 import { generationStorageFixture } from "../../packages/storage-browser/src/generationFixture";
+import {
+  refinementFixture,
+  denyParentReads,
+  numericalReads,
+} from "./testSupport/regionalRefinementFixture";
+import { generationSource } from "./workspaceGeneration";
+import { WorkspaceFields } from "./workspaceFields";
+import { loadGenerationFeatures } from "./generationInputs";
+import {
+  GeometryKernel,
+  SpatialCatalog,
+  SqliteFeatureWorkspace,
+  SqliteNetworkWorkspace,
+} from "@atlas/storage-browser";
+import {
+  sqliteFixture,
+  reopenSqliteFixture,
+} from "../../packages/storage-browser/src/sqliteFixture";
+import { atlasInitialState } from "../../packages/generation/src/atlasInitialState";
+import { MapRunner } from "../../packages/generation/src/mapRunner";
+import { publishWorkspaceGeneration } from "./generationPublication";
+it("completes physical and society refinement and publishes local geometry outside the outline with parent reads denied", async () => {
+  const fixture = await refinementFixture(),
+    { id, root, child, workspace, parent } = fixture,
+    before = workspace.catalog.exportFeatures(id, root, null, 128),
+    parentFields = new Set(parent.world.fields.map((field) => field.id)),
+    rootScope = { worldId: id, areaId: root, spaceId: parent.scope.spaceId },
+    rootFields = await workspace.catalog.readRecords(rootScope, "field", [...parentFields]),
+    deny = denyParentReads(workspace, child, parentFields),
+    db = await sqliteFixture(),
+    features = new SqliteFeatureWorkspace(db),
+    sourceFeatures = new SqliteFeatureWorkspace(db, "source_features"),
+    networks = new SqliteNetworkWorkspace(db),
+    sourceNetworks = new SqliteNetworkWorkspace(db, "source_networks"),
+    fields = new WorkspaceFields(workspace.catalog, workspace.resources, workspace.working.cache);
+  try {
+    const source = await generationSource(workspace.catalog, id, child);
+    await loadGenerationFeatures(
+      source,
+      workspace.catalog,
+      sourceFeatures,
+      undefined,
+      sourceNetworks
+    );
+    await fields.read(source, numericalReads(source));
+    const prepared = prepareAtlasGeneration(
+        source,
+        {
+          areaId: child,
+          quality: "draft",
+          seed: 73,
+          domains: ["physical", "magic", "cultural", "political", "built"],
+        },
+        sourceFeatures
+      ),
+      initial = atlasInitialState(prepared.source, prepared.input, workspace.working.cache);
+    expect(prepared.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
+    const result = await new MapRunner(prepared.input.configuration!, prepared.registry).run(
+      initial,
+      {
+        seed: "73",
+        seedScope: child,
+        cache: workspace.working.cache,
+        features,
+        sourceFeatures,
+        networks,
+        sourceNetworks,
+      }
+    );
+    const operationId = crypto.randomUUID(),
+      output = generationSnapshot(result, prepared.input, operationId, source);
+    await publishWorkspaceGeneration(
+      workspace.catalog,
+      workspace.resources,
+      source,
+      output,
+      operationId,
+      false,
+      [],
+      () => {},
+      undefined,
+      { features, sourceFeatures, networks, sourceNetworks }
+    );
+    expect(workspace.catalog.exportFeatures(id, root, null, 128)).toEqual(before);
+    expect(await workspace.catalog.readRecords(rootScope, "field", [...parentFields])).toEqual(
+      rootFields
+    );
+    await assertRegionalPublication(fixture, result, output, source, features);
+  } finally {
+    deny.mockRestore();
+    await fields.close();
+    db.close();
+  }
+}, 300_000);
+
+async function assertRegionalPublication(
+  { id, root, child, workspace, parent }: Awaited<ReturnType<typeof refinementFixture>>,
+  result: CompletedBoundary,
+  output: DomainSnapshot,
+  source: DomainSnapshot,
+  features: FeatureReader
+) {
+  expect(output.world.fields.some((field) => field.areaId === child && !field.input)).toBe(true);
+  expect(output.world.epochs).toEqual(parent.world.epochs);
+  expect(result.state.diagnostics?.filter((d) => d.outcome !== "retained") ?? []).toEqual([]);
+  expect(result.state.society!.inherited).toBe(true);
+  expect(result.state.society!.region.history).toEqual(parent.world.societies![root].history);
+  expect(
+    result.state.society!.region.works.some((work) => work.realizedAt === child && work.applied > 0)
+  ).toBe(true);
+  const event = [...features.values()].find((feature) => feature.kind === "societyEvent")!;
+  expect(event).toBeDefined();
+  expect(spatial.covers(source.scope.footprint, event.geometry)).toBe(false);
+  const exported = workspace.catalog.exportFeatures(id, child, null, 128);
+  expect(exported.features.find((feature) => feature.id === event.id)?.geometry).toEqual(
+    event.geometry
+  );
+  const path = `/refined_${crypto.randomUUID()}.sqlite3`;
+  workspace.catalog.snapshot(path);
+  const restoredDb = reopenSqliteFixture(workspace.db, path),
+    reopened = new SpatialCatalog(restoredDb, await GeometryKernel.create());
+  try {
+    expect(reopened.exportFeatures(id, child, null, 128)).toEqual(exported);
+    const reopenedSource = await generationSource(reopened, id, child);
+    const restoredFeatures = new SqliteFeatureWorkspace(restoredDb);
+    await loadGenerationFeatures(reopenedSource, reopened, restoredFeatures);
+    expect(restoredFeatures.get(event.id)?.geometry).toEqual(event.geometry);
+    expect(reopenedSource.world.societies![child].history).toEqual(
+      parent.world.societies![root].history
+    );
+  } finally {
+    await reopened.close();
+  }
+}
 
 let result: Awaited<ReturnType<typeof generateAtlas>>;
 let published: DomainSnapshot;
@@ -23,7 +163,7 @@ let storage: Awaited<ReturnType<typeof generationStorageFixture>>;
 const epochs: { id: string; ice: number; maximum: number; impacts: number }[] = [];
 const markerId = "7f6292e2-2b50-42b4-a599-abdbbdceda21";
 
-// The entire end-to-end suite shares this one world. Assertions below are read-only.
+// World assertions share one generation; the regional case supplies its parent directly.
 beforeAll(async () => {
   storage = await generationStorageFixture();
   const draft = newGenerationDraft();

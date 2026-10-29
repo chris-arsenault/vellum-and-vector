@@ -5,7 +5,9 @@ tool for tabletop roleplaying. Generation supplies interesting maps and world
 history; numerical accuracy is secondary. Regional maps share coordinates and
 completed history, but develop independently. Elevation, coastlines and other
 geography need not remain physically consistent with parent maps or old history
-under revision. Child refinement never changes parent or sibling maps. Zoom
+under revision. Child refinement never changes parent or sibling maps.
+The starting regional outline does not limit changes to that map's own geometry;
+generation, later reads and export retain local geography beyond it. Zoom
 stays on the current map; switching maps is explicit. Seamless cross-map zoom is
 undesired. This supersedes the older single-authority and frozen-boundary
 requirements throughout this design baseline.

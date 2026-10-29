@@ -124,7 +124,11 @@ test("refines a selected subject recursively with regional controls and cancella
   await openFixtureMap(
     page,
     "Region desk",
-    { numerical: true, hold: true },
+    {
+      numerical: true,
+      hold: true,
+      regionalFeatures: [pointFeature("Child falls", "waterfall", "geology", {}, [95_000, 95_000])],
+    },
     { km: 100, detail: "draft" }
   );
   const original = await exported(page);
@@ -142,6 +146,12 @@ test("refines a selected subject recursively with regional controls and cancella
   await completeGenerationFixture(page);
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
   const refined = await exported(page);
+  expect(refined.features).toContainEqual(
+    expect.objectContaining({
+      geometry: { type: "Point", coordinates: [95_000, 95_000] },
+      properties: expect.objectContaining({ name: "Child falls" }),
+    })
+  );
   expect(refined.areas).toHaveLength(2);
   expect(refined.areas.find((area: { parentId: string | null }) => !area.parentId)).toEqual(
     original.areas[0]

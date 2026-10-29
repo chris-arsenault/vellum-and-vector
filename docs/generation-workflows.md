@@ -30,6 +30,11 @@ Selection can use whole landmasses from physical shore geometry as well as named
 geographic and social polygons. Child map extents include surrounding context so
 a coastal subject can develop its shore. Generation publishes only map-owned
 features and fields; it does not write finer detail onto parent feature records.
+The selected outline does not constrain generated feature geometry. Generation
+can change its own map's records beyond that outline; cross-map writes remain
+invalid regardless of where their geometry lies.
+Later generation pages all of the map's own feature records, including geometry
+beyond the starting outline. Presentation and export preserve that geometry.
 Presentation, inspection, registry and export read the open map's geography.
 Existing saved regions capture their composed detail once when opened, retaining
 their finer geometry and surface patches. Zoom never opens another map or exposes

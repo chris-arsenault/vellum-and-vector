@@ -17,6 +17,9 @@ Creation records its source revision, imports bounded geographic context and
 pins map-owned numerical descriptors to immutable resources. Shared bytes are
 storage reuse: later parent publications replace their own references, never a
 child's captured inputs. Child generation publishes local records and resources.
+The selected footprint supplies starting context, not a geographic write limit.
+Generation may add, move or remove its map's geography beyond that outline;
+validation enforces record ownership rather than containment in the selection.
 Active readers stop at the map's ownership boundary. Parent links locate maps
 and record provenance; they do not supply live fallback geography. Opening an
 older saved region captures its existing composed geography before detaching it.
