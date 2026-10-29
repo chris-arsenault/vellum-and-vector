@@ -18,6 +18,10 @@ CREATE VIRTUAL TABLE IF NOT EXISTS geometry_piece_bounds USING rtree(piece_id,mi
 CREATE TRIGGER IF NOT EXISTS geometry_piece_remove AFTER DELETE ON geometry_pieces BEGIN
   DELETE FROM geometry_piece_bounds WHERE piece_id=old.piece_id;
 END;
+CREATE TABLE IF NOT EXISTS geometry_display (
+  geometry_id INTEGER NOT NULL REFERENCES geometry_values ON DELETE CASCADE,
+  tolerance REAL NOT NULL,data TEXT NOT NULL,PRIMARY KEY(geometry_id,tolerance)
+);
 CREATE TABLE IF NOT EXISTS geometry_overviews (
   geometry_id INTEGER NOT NULL REFERENCES geometry_values ON DELETE CASCADE,
   tolerance REAL NOT NULL,data BLOB NOT NULL,PRIMARY KEY(geometry_id,tolerance)

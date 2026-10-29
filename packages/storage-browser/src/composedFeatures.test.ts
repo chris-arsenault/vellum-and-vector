@@ -71,7 +71,8 @@ it("finds followers through their targets' stored reach, and refreshes it after 
   expect(await ids([490, 740, 510, 760])).toEqual(["course", "follower"]);
   expect(await ids([710, 710, 720, 720])).toEqual(["wood"]);
   expect(
-    (await catalog.readFeatures(query({ extent: [0, 0, 1000, 1000], dimension: "polygon" })))
-      .records.map((r) => r.feature.id)
+    (
+      await catalog.readFeatures(query({ extent: [0, 0, 1000, 1000], dimension: "polygon" }))
+    ).records.map((r) => r.feature.id)
   ).toEqual(["wood"]);
 });

@@ -48,8 +48,6 @@ export class DisplayFeatures {
     const geometryId = Number(row.geometry_id),
       footprintId = Number(row.footprint_id),
       bounds = rowBounds(row);
-    this.derivations.ensurePieces(geometryId, precision);
-    if (footprintId) this.derivations.ensurePieces(footprintId, precision);
     if (!this.visible(display, geometryId, footprintId, bounds)) return null;
     const gutter = Math.max(precision * 2, tolerance * 128),
       b = query.extent,
@@ -76,9 +74,11 @@ export class DisplayFeatures {
     footprintId: number,
     bounds: Bounds | null
   ) {
-    if (!this.matches(geometryId, footprintId, display.query.extent, display.target)) return false;
+    const p = display.precision;
+    if (!this.matches(geometryId, footprintId, display.query.extent, display.target, p))
+      return false;
     if (display.areaRectangular && bounds && inside(bounds, display.areaBounds)) return true;
-    return this.matches(geometryId, footprintId, display.areaBounds, display.areaMask);
+    return this.matches(geometryId, footprintId, display.areaBounds, display.areaMask, p);
   }
   private window(
     feature: AtlasFeature,
@@ -107,10 +107,16 @@ export class DisplayFeatures {
       )
     );
   }
-  private matches(geometryId: number, footprintId: number, bounds: Bounds, target: number) {
+  private matches(
+    geometryId: number,
+    footprintId: number,
+    bounds: Bounds,
+    target: number,
+    precision: number
+  ) {
     return (
-      this.derivations.pieceMatches(geometryId, bounds, target) ||
-      (!!footprintId && this.derivations.pieceMatches(footprintId, bounds, target))
+      this.derivations.matches(geometryId, bounds, target, precision) ||
+      (!!footprintId && this.derivations.matches(footprintId, bounds, target, precision))
     );
   }
 }

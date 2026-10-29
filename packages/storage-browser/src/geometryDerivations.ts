@@ -2,16 +2,16 @@ import type { Database } from "@sqlite.org/sqlite-wasm";
 import type { Geometry } from "geojson";
 import { rectangle, requireThat, type Bounds } from "@atlas/domain";
 import type { GeometryKernel } from "./geometryKernel";
-import { ByteCache } from "./byteCache";
 
 /** These are storage partitions and display products; canonical feature geometry is unchanged. */
 const geometryPieceCoordinates = 4096;
+/** Above this WKB size a geometry can exceed the piece size (three-dimensional coordinates). */
+const partitionBytes = geometryPieceCoordinates * 16;
 
-/** Every derived product of a stored geometry row (spatial pieces, overviews)
- * is prepared here, lazily, keyed by the immutable geometry id. Writes never derive. */
-export const displayGeometryCacheBytes = 16 * 1024 * 1024;
+/** Every derived product of a stored geometry row (spatial pieces, overviews, display
+ * simplifications) is prepared here lazily, once, and stored under the immutable geometry id.
+ * Writes never derive. */
 export class GeometryDerivations {
-  private shown = new ByteCache<string, Geometry>(displayGeometryCacheBytes);
   constructor(
     private db: Database,
     private kernel: GeometryKernel
@@ -116,20 +116,42 @@ export class GeometryDerivations {
     );
     return bytes instanceof Uint8Array ? bytes : undefined;
   }
-  /** The whole geometry at a display tolerance, for features that fit inside the window. */
+  /** The whole geometry at a display tolerance, for features that fit inside the window;
+   * simplified once per tolerance and stored. */
   whole(id: number, precision: number, tolerance = 0): Geometry {
-    const key = `${id}:${tolerance}`;
-    const cached = this.shown.get(key);
-    if (cached) return cached;
+    const stored = this.db.selectValue(
+      "SELECT data FROM geometry_display WHERE geometry_id=? AND tolerance=?",
+      [id, tolerance]
+    );
+    if (typeof stored === "string") return JSON.parse(stored);
+    // Overviews are written with the pieces of a large geometry.
+    if (tolerance > 0 && this.partitioned(id)) this.ensurePieces(id, precision);
     const overview = this.overview(id, tolerance);
     const geometry = this.kernel.withBinary(overview ?? this.stored(id), (source) =>
       displayPart(this.kernel, source, overview ? 0 : tolerance)
     );
-    void precision;
-    this.shown.set(key, geometry, JSON.stringify(geometry).length * 2);
+    this.db.exec({
+      sql: "INSERT OR REPLACE INTO geometry_display VALUES(?,?,?)",
+      bind: [id, tolerance, JSON.stringify(geometry)],
+    });
     return geometry;
   }
+  /** Large geometries are tested through their pieces; others through the stored whole. */
+  partitioned(id: number) {
+    return (
+      Number(
+        this.db.selectValue("SELECT length(data) FROM geometry_values WHERE geometry_id=?", [id])
+      ) > partitionBytes
+    );
+  }
+  matches(id: number, bounds: Bounds, target: number, precision: number) {
+    if (!this.partitioned(id))
+      return this.kernel.matches(`geometry:${id}`, this.stored(id), target, "intersects");
+    this.ensurePieces(id, precision);
+    return this.pieceMatches(id, bounds, target);
+  }
   window(id: number, bounds: Bounds, precision: number, tolerance = 0): Geometry | null {
+    this.ensurePieces(id, precision);
     const overview = this.overview(id, tolerance);
     const inputs = overview ? [{ id: -id, bytes: overview }] : this.pieces(id, bounds);
     return this.clippedWindow(inputs, bounds, precision, tolerance);

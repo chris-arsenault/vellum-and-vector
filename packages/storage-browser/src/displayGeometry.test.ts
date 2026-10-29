@@ -1,6 +1,6 @@
 import type { Database } from "@sqlite.org/sqlite-wasm";
 import type { Geometry } from "geojson";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { rectangle } from "@atlas/domain";
 import { fixture, query, record, scope, write } from "./catalogFixture";
 
@@ -82,4 +82,22 @@ it("reads joined viewport pieces, preserves holes and edits canonical geometry t
     local
   );
   expect(Number(db.selectValue("SELECT count(*) FROM geometry_overviews"))).toBe(overviewCount);
+});
+it("tests small features without pieces and simplifies each tolerance once", async () => {
+  let db!: Database;
+  const catalog = await fixture((opened) => {
+    db = opened;
+  });
+  await write(catalog, [
+    record("wood", { type: "Polygon", coordinates: [circle(40, 64)] }),
+    record("far", rectangle([900, 900, 950, 950])),
+  ]);
+  const simplify = vi.spyOn(catalog.kernel.native, "GEOSTopologyPreserveSimplify");
+  const read = () => catalog.readDisplay(query({ extent: [400, 400, 600, 600] }), 4);
+  const first = (await read()).records.map((r) => r.feature);
+  expect(first.map((f) => f.id)).toEqual(["wood"]);
+  expect(simplify).toHaveBeenCalledTimes(1);
+  expect((await read()).records.map((r) => r.feature)).toEqual(first);
+  expect(simplify).toHaveBeenCalledTimes(1);
+  expect(Number(db.selectValue("SELECT count(*) FROM geometry_pieces"))).toBe(0);
 });
