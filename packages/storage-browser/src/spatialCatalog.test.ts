@@ -305,8 +305,24 @@ it("keeps retained society out of editor metadata and reads just one settlement'
   expect(await catalog.readEditor(scope.worldId)).not.toHaveProperty("societies");
   const result = await catalog.readSettlement(scope, "town");
   expect(result?.region.communities.map((c) => c.id)).toEqual(["near", "far"]);
+  expect(result?.region.connections).toHaveLength(1);
+  expect(result?.region).toMatchObject({ areaId: "root", spaceId: "surface" });
+  expect(result?.region).not.toHaveProperty("id");
   expect(result?.related.map((f) => f.id)).toEqual(["town"]);
+  // The community index follows the society record's revisions.
+  const edited = (await catalog.readRecords(scope, "society", ["society:root"]))[0];
+  if (edited.data.kind !== "society") throw new Error("Missing society.");
+  edited.data.value.connections = [];
+  edited.data.value.communities[0].name = "Nearby";
+  await write(catalog, [edited]);
+  const again = await catalog.readSettlement(scope, "town");
+  expect(again?.region.communities.map((c) => c.name)).toEqual(["Nearby"]);
+  await catalog.undo(
+    scope.worldId,
+    (await catalog.readHistory(scope.worldId, null, 1))[0].operationId
+  );
   const history = await catalog.readHistory(scope.worldId, null, 1);
   await catalog.undo(scope.worldId, history[0].operationId);
   expect(await catalog.readRecords(scope, "society", ["society:root"])).toEqual([]);
+  expect(await catalog.readSettlement(scope, "town")).toBeNull();
 });

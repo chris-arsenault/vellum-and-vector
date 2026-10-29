@@ -18,6 +18,7 @@ import type { FeatureCatalog, Presented } from "./featureCatalog";
 import type { GeometryKernel } from "./geometryKernel";
 import { registryPath, registryWhere } from "./registryQuery";
 import { RegistryMarks } from "./registryMarks";
+import type { CommunityIndex } from "./communityIndex";
 
 /** Rows are kept per presentation scope (an area, or '' for each feature's own area), so a
  * scope is built once and switching back reads it. Marks name the features a write can
@@ -55,7 +56,8 @@ export class RegistryCatalog {
     private db: Database,
     private projection: CatalogProjection,
     private features: FeatureCatalog,
-    private kernel: GeometryKernel
+    private kernel: GeometryKernel,
+    private communityIndex: CommunityIndex
   ) {
     db.exec(schema);
     this.marks = new RegistryMarks(db, projection, kernel);
@@ -264,16 +266,7 @@ export class RegistryCatalog {
       ...(Array.isArray(communities) ? communities : []),
     ].filter((id): id is string => typeof id === "string");
     if (!ids.length) return new Map<string, string>();
-    return new Map(
-      this.db
-        .selectObjects(
-          `SELECT json_extract(c.value,'$.id') id,json_extract(c.value,'$.name') name
-      FROM records_core r,json_each(r.data,'$.value.communities') c
-      WHERE r.world_id=? AND r.kind='society' AND json_extract(c.value,'$.id') IN (SELECT value FROM json_each(?))`,
-          [worldId, JSON.stringify(ids)]
-        )
-        .map((row) => [String(row.id), String(row.name)])
-    );
+    return this.communityIndex.names(worldId, ids);
   }
   private visible(world: World, scope: string, input: RegistryRequest) {
     this.db.exec("DELETE FROM registry_visible");

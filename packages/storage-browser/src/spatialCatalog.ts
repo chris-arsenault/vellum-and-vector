@@ -34,6 +34,7 @@ import { PublicationStaging } from "./catalogPublication";
 import { GeometryDerivations } from "./geometryDerivations";
 import { ComposedFeatures } from "./composedFeatures";
 import { StoredProducts } from "./storedProducts";
+import { CommunityIndex } from "./communityIndex";
 
 export class SpatialCatalog implements SpatialStore {
   private regions: RegionCatalog;
@@ -60,8 +61,9 @@ export class SpatialCatalog implements SpatialStore {
     this.geography = new FieldGeographyCatalog(db, kernel, derivations);
     this.projection = new CatalogProjection(db, kernel);
     this.features = new FeatureCatalog(db, kernel, this.projection, derivations, this.composed);
-    this.registry = new RegistryCatalog(db, this.projection, this.features, kernel);
-    this.settlements = new SettlementCatalog(db, this.features);
+    const communities = new CommunityIndex(db);
+    this.registry = new RegistryCatalog(db, this.projection, this.features, kernel, communities);
+    this.settlements = new SettlementCatalog(db, this.features, communities);
     this.presentation = new PresentationCatalog(db, this.features);
     this.regions = new RegionCatalog(db, kernel, (query) => this.readFeatures(query));
     this.mutation = new CatalogMutation(db, kernel, {
