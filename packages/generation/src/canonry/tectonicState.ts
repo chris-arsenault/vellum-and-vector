@@ -2,7 +2,7 @@ import type { PhysicalField } from "./field";
 import type { PhysicalContext } from "./context";
 import type { ProvinceSite } from "./provinceSites";
 import { initialTectonicSites } from "./tectonicInitialization";
-import { provinceTerritories } from "./provinceTerritories";
+import { provinceAdjacency } from "./provinceTerritories";
 import { meshDeltaX, meshPoint } from "./mesh";
 import { hashUnit } from "./noise";
 import { tectonicReferenceMyr } from "./tectonicControls";
@@ -72,7 +72,7 @@ export function plateOf(map: PhysicalField, sites: TectonicSite[], id: number): 
   };
 }
 function initialBonds(map: PhysicalField, sites: TectonicSite[], seed: number) {
-  const { adjacent } = provinceTerritories(sites, sites, map.mesh.periodic?.width ?? 0);
+  const adjacent = provinceAdjacency(sites, map.mesh.periodic?.width ?? 0);
   const bonds: TectonicBond[] = [];
   for (let a = 0; a < sites.length; a++)
     for (let b = a + 1; b < sites.length; b++) {

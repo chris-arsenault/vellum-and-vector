@@ -17,7 +17,7 @@ import {
 } from "@atlas/domain";
 import type { GenerationState, MapProcess, MapProcessContext } from "./process";
 import { centers } from "./mapPeople";
-import { initializePopulation, nearestCommunity } from "./societyPopulation";
+import { initializePopulation, withCommunityIndex } from "./societyPopulation";
 import { communityReach, contactCosts } from "./societyContact";
 import { namingCulture } from "./atlasNaming";
 import { evolveLanguageUse } from "./societyLanguage";
@@ -43,9 +43,13 @@ export function culturalIdentity(
   };
   return id;
 }
-function originReach(state: GenerationState, origin: Entity) {
+function originReach(
+  state: GenerationState,
+  origin: Entity,
+  nearestTo: (x: number, y: number) => SocietyCommunity
+) {
   const p = origin.attributes.center as Position;
-  const nearest = nearestCommunity(state, p.x, p.y);
+  const nearest = nearestTo(p.x, p.y);
   return communityReach(state.society!.region, state.society!.region.communities.indexOf(nearest));
 }
 function foundingGroup(state: GenerationState, group: PopulationGroup, origin: Entity) {
@@ -65,7 +69,9 @@ export function initializeCultures(state: GenerationState, context: MapProcessCo
   if (!state.society) initializePopulation(state, context);
   const work = state.society!;
   const origins = centers(state, context, "culture", Number(context.parameters.cultureCount ?? 3));
-  const distances = origins.map((origin) => originReach(state, origin));
+  const distances = withCommunityIndex(state, (nearest) =>
+    origins.map((origin) => originReach(state, origin, nearest))
+  );
   for (const [i, c] of work.region.communities.entries()) {
     if (c.groups.every((g) => g.culture !== null)) continue;
     const scores = distances.map((d) => d[i]),

@@ -197,7 +197,7 @@ export function createProvinceSites(map: PhysicalField, context: PhysicalContext
   const width = map.mesh.periodic?.width ?? 0;
   const groups = assemblies(
     selected,
-    provinceTerritories(selected, candidates, width),
+    provinceTerritories(selected, map.mesh.bounds, width),
     context,
     width
   );

@@ -12,7 +12,7 @@ import {
 import type { GenerationState, MapProcessContext } from "./process";
 import { generationFeatures } from "./generationFeatures";
 import { applyNativeColdAgeWork } from "./societyNativeWorks";
-import { nearestCommunity } from "./societyPopulation";
+import { withCommunityIndex } from "./societyPopulation";
 import { societyValue, soilWaterCapacity } from "./societySupport";
 import { drawShareAt } from "./societyMagicAccess";
 import { isWorldSociety } from "./societyMapScope";
@@ -135,13 +135,20 @@ function harborSample(state: GenerationState, position: SocietyCommunity["positi
   return undefined;
 }
 function addAuthoredWorks(state: GenerationState, existing: Set<string>) {
+  withCommunityIndex(state, (nearest) => addAuthoredWorksNear(state, existing, nearest));
+}
+function addAuthoredWorksNear(
+  state: GenerationState,
+  existing: Set<string>,
+  nearest: (x: number, y: number) => SocietyCommunity
+) {
   const work = state.society!;
   for (const f of generationFeatures(state)) {
     if (!isSocietyWork(f) || f.state === "generated") continue;
     const id = String(f.attributes.workId ?? f.id);
     if (f.areaId !== state.domain.scope.areaId || existing.has(id)) continue;
     const { x, y } = spatial.interiorPosition(f.geometry),
-      c = nearestCommunity(state, x, y);
+      c = nearest(x, y);
     if (!c) continue;
     const candidate = makeWork(state, c, f.attributes.workKind as SocietyWorkKind, { x, y, z: 0 });
     candidate.id = id;

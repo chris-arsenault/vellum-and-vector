@@ -1,9 +1,12 @@
 import {
+  point,
   population,
   requireThat,
   populationGroupsSchema,
   semanticId,
+  spatial,
   type PopulationGroup,
+  type SocietyCommunity,
   type SocietyEraRecord,
 } from "@atlas/domain";
 import type { GenerationState, MapProcessContext } from "./process";
@@ -56,17 +59,25 @@ export function initializePopulation(state: GenerationState, context: MapProcess
   }
   (state.domain.world.societies ??= {})[state.society!.region.areaId] = state.society!.region;
 }
+/** Nearest communities through a native index. On a cylinder the chart's images are indexed
+ * too, so a community across the seam is as near as it is on the globe. */
+export function withCommunityIndex<T>(
+  state: GenerationState,
+  work: (nearest: (x: number, y: number) => SocietyCommunity) => T
+): T {
+  const communities = state.society!.region.communities,
+    reference = state.domain.world.reference;
+  const [west, , east] = spatial.bounds(reference.domain),
+    offsets = reference.boundaryMode === "cylinder" ? [0, west - east, east - west] : [0];
+  const points = offsets.flatMap((dx) =>
+    communities.map((c) => point({ x: c.position.x + dx, y: c.position.y, z: 0 }))
+  );
+  return spatial.withIndex(points, (index) =>
+    work((x, y) => communities[index.nearest({ x, y, z: 0 }) % communities.length])
+  );
+}
 export function nearestCommunity(state: GenerationState, x: number, y: number) {
-  let nearest = state.society!.region.communities[0],
-    distance = Infinity;
-  for (const c of state.society!.region.communities) {
-    const d = Math.hypot(c.position.x - x, c.position.y - y);
-    if (d < distance) {
-      distance = d;
-      nearest = c;
-    }
-  }
-  return nearest;
+  return withCommunityIndex(state, (nearest) => nearest(x, y));
 }
 function applyStartingCommunities(state: GenerationState) {
   for (const f of generationFeatures(state)) {

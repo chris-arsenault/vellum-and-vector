@@ -5,8 +5,7 @@ import { createProvinceSites } from "./provinceSites";
 import { meshDeltaX } from "./mesh";
 import { hashUnit } from "./noise";
 import { tectonicInitialProvincesPerPlate, tectonicLocalDrivingShare } from "./tectonicControls";
-import { provinceTerritories } from "./provinceTerritories";
-import { worldCandidates } from "./worldSources";
+import { provinceAreas } from "./provinceTerritories";
 
 /** Mechanical territories are sampled independently of continental material origins. */
 export function initialTectonicSites(map: PhysicalField, context: PhysicalContext): TectonicSite[] {
@@ -21,10 +20,7 @@ export function initialTectonicSites(map: PhysicalField, context: PhysicalContex
     // hpc-exempt: province site records, sorted once.
     .sort((a, b) => b.priority - a.priority)
     .slice(0, count);
-  const samples = worldCandidates(map.mesh, context.EpochStableSeed, source.length * 24);
-  const { areas } = provinceTerritories(source, samples, map.mesh.periodic?.width ?? 0);
-  const bounds = map.mesh.bounds;
-  const sampleArea = ((bounds[2] - bounds[0]) * (bounds[3] - bounds[1])) / samples.length;
+  const areas = provinceAreas(source, map.mesh.bounds, map.mesh.periodic?.width ?? 0);
   return source.map((site, index) => {
     let plate = 0,
       minimum = Infinity;
@@ -49,8 +45,8 @@ export function initialTectonicSites(map: PhysicalField, context: PhysicalContex
       driveY,
       motionX: driveX,
       motionY: driveY,
-      area: areas[index] * sampleArea,
-      mass: areas[index] * sampleArea * (site.assembly > 0 ? 4 : 1),
+      area: areas[index],
+      mass: areas[index] * (site.assembly > 0 ? 4 : 1),
       compliance: 0,
     };
   });

@@ -1,12 +1,12 @@
 import type { PhysicalField } from "./field";
-import { provinceTerritories } from "./provinceTerritories";
+import { provinceAdjacency } from "./provinceTerritories";
 import { hashUnit } from "./noise";
 import { indexTectonicBonds, type TectonicState } from "./tectonicState";
 
 /** Keep structural history, but apply contact forces only where current territories meet. */
 export function refreshTectonicContacts(map: PhysicalField, state: TectonicState) {
   const n = state.sites.length,
-    { adjacent } = provinceTerritories(state.sites, state.sites, map.mesh.periodic?.width ?? 0);
+    adjacent = provinceAdjacency(state.sites, map.mesh.periodic?.width ?? 0);
   indexTectonicBonds(state);
   for (const bond of state.bonds) bond.active = false;
   for (let a = 0; a < n; a++)

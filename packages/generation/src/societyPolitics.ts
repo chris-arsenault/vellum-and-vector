@@ -10,7 +10,7 @@ import type { GenerationState, MapProcessContext, MapProcess } from "./process";
 import { practiceOpportunities, seekingFactor } from "./societySeeking";
 import { centers } from "./mapPeople";
 import { profileOf } from "./societyProfile";
-import { initializePopulation, nearestCommunity } from "./societyPopulation";
+import { initializePopulation, nearestCommunity, withCommunityIndex } from "./societyPopulation";
 import { communityReach } from "./societyContact";
 import { generationBindings } from "./generationBindings";
 import { namePolity } from "./societyNaming";
@@ -29,9 +29,14 @@ export function initializePolitics(state: GenerationState, context: MapProcessCo
     (context.inputs?.features ? generationBindings(context).parameters.polityCount : 3);
   const established = new Set(Object.keys(state.domain.world.entities));
   const entities = centers(state, context, "polity", Number(count));
-  const polities: SocietyPolity[] = entities.flatMap((entity) => {
-    const p = entity.attributes.center as { x: number; y: number };
-    const seat = nearestCommunity(state, p.x, p.y);
+  const seats = withCommunityIndex(state, (nearest) =>
+    entities.map((entity) => {
+      const p = entity.attributes.center as { x: number; y: number };
+      return nearest(p.x, p.y);
+    })
+  );
+  const polities: SocietyPolity[] = entities.flatMap((entity, i) => {
+    const seat = seats[i];
     if (!established.has(entity.id)) namePolityAtSeat(state, entity, seat);
     return seat
       ? [

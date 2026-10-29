@@ -4,6 +4,7 @@ import {
   population,
   spatial,
   type AtlasFeature,
+  type Bounds,
   type DomainSnapshot,
   type Entity,
   type SocietyCommunity,
@@ -80,9 +81,6 @@ export function namePolity(
   Object.assign(entity.attributes, nameMetadata(named));
 }
 
-function boundsOverlap(a: number[], b: number[]) {
-  return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
-}
 function namingFootprint(state: GenerationState, feature: AtlasFeature): Geometry {
   const line = feature.geometry.type.includes("LineString");
   if (!line && !["ocean", "lake", "river"].includes(feature.kind)) return feature.geometry;
@@ -98,7 +96,6 @@ function namingPopulation(state: GenerationState) {
     return [
       {
         footprint: c.footprint,
-        bounds: spatial.bounds(c.footprint),
         area: Math.max(1, spatial.area(c.footprint)),
         covers: spatial.pointCoverage(c.footprint),
         speakers: Object.entries(languageUse(c.groups)).map(
@@ -108,17 +105,13 @@ function namingPopulation(state: GenerationState) {
     ];
   });
 }
-function influence(
-  state: GenerationState,
-  feature: AtlasFeature,
-  residents: ReturnType<typeof namingPopulation>
-) {
+type Residents = (bounds: Bounds) => ReturnType<typeof namingPopulation>;
+function influence(state: GenerationState, feature: AtlasFeature, residents: Residents) {
   const shape = namingFootprint(state, feature),
     bounds = spatial.bounds(shape);
   const measure = shape.type === "Point" ? null : spatial.intersectionArea(shape);
   const result: Record<string, number> = {};
-  for (const c of residents) {
-    if (!boundsOverlap(bounds, c.bounds)) continue;
+  for (const c of residents(bounds)) {
     const fraction =
       shape.type === "Point"
         ? Number(
@@ -153,7 +146,7 @@ function resolveGeographicName(
   state: GenerationState,
   feature: AtlasFeature,
   era: string,
-  residents: ReturnType<typeof namingPopulation>
+  residents: Residents
 ) {
   const world = state.domain.world;
   const language = state.society
@@ -179,11 +172,18 @@ function finalizeGeography(state: GenerationState, original: DomainSnapshot) {
   const era = state.society?.region.history.at(-1)?.id ?? "Before societies";
   finalizePolities(state, original, era);
   const residents = namingPopulation(state);
-  for (const feature of generationFeatures(state))
-    if (newGeographicName(state, original, feature)) {
-      resolveGeographicName(state, feature, era, residents);
-      writeGenerationFeature(state, feature);
+  // Communities whose footprint envelopes meet a feature's naming footprint, from a native index.
+  spatial.withIndex(
+    residents.map((c) => c.footprint),
+    (index) => {
+      const near: Residents = (bounds) => index.query(bounds).map((i) => residents[i]);
+      for (const feature of generationFeatures(state))
+        if (newGeographicName(state, original, feature)) {
+          resolveGeographicName(state, feature, era, near);
+          writeGenerationFeature(state, feature);
+        }
     }
+  );
 }
 function finalizePolities(state: GenerationState, original: DomainSnapshot, era: string) {
   const world = state.domain.world,
