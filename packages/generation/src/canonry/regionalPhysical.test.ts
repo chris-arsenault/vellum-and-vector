@@ -174,6 +174,37 @@ it("constructs deterministic finer relief inside an irregular region without adv
   expect(a.map.events).toEqual([]);
   expect(Array.from(a.map.CumulativeFluvialErosion).every((amount) => amount === 0)).toBe(true);
 });
+it("develops coastal relief at the map edge and on both sides of sea level without changing its source", () => {
+  const f = fixture(),
+    original = Array.from(f.parent.channels.elevation);
+  // A supplied west-to-east shore crosses the selected region. No upstream schedule is needed.
+  for (let i = 0; i < f.map.mesh.count; i++) {
+    const height = units((f.map.mesh.origin[0] + f.map.mesh.x(i) - 20_000) / 100);
+    f.map.Elevation.set(i, height);
+    f.map.BedrockElevation.set(i, height);
+  }
+  for (let i = 0; i < f.parent.active.length; i++)
+    f.parent.channels.elevation.set(i, (gridPosition(f.parent, i).x - 20_000) / 100);
+  f.state.domain.world.drainage = {};
+  const before = Array.from(f.map.Elevation),
+    parent = Array.from(f.parent.channels.elevation);
+  constructRegionalRelief(f.state, 123);
+  const changed = (wet: boolean) =>
+    before.some(
+      (height, i) =>
+        f.map.mesh.membership(i) === 1 && height < 0 === wet && f.map.Elevation.get(i) !== height
+    );
+  expect(changed(true)).toBe(true);
+  expect(changed(false)).toBe(true);
+  expect(
+    before.some(
+      (height, i) => f.map.mesh.membership(i) === 1 && height < 0 !== f.map.Elevation.get(i) < 0
+    )
+  ).toBe(true);
+  expect(Array.from(f.parent.channels.elevation)).toEqual(parent);
+  expect(parent).not.toEqual(original);
+  expect(f.map.CompletedEpochCount).toBe(0);
+});
 it("routes supplied upstream water plus local runoff through connected tributaries without inventing water", () => {
   const wet = fixture(100),
     dry = fixture(0);
@@ -195,6 +226,16 @@ it("routes supplied upstream water plus local runoff through connected tributari
   expect(sourceToOutletOrder(wet.map)).toHaveLength(wet.map.mesh.count);
   expect(Array.from(wet.map.RiverOrders).some((order) => order > 0)).toBe(true);
   expect(wet.state.history).toEqual([]);
+});
+it("updates inherited ice grounding when a child's terrain becomes deep water", () => {
+  const { state, map } = fixture(0);
+  map.IceThickness.fill(10);
+  map.GroundedIce.fill(1);
+  map.Elevation.fill(units(-1000));
+  map.BedrockElevation.copyFrom(map.Elevation);
+  expect(() => constructRegionalWater(state, 123)).not.toThrow();
+  expect(Array.from(map.WaterKindCodes).some((value) => value === 1)).toBe(true);
+  expect(Array.from(map.GroundedIce).every((value) => value === 0)).toBe(true);
 });
 it("keeps both sides of a seam-spanning region joined by short physical edges", () => {
   const footprint = {

@@ -17,12 +17,19 @@ export function exportFeaturePage(
   after: string | null,
   limit: number
 ) {
+  const owned =
+    areaId &&
+    db.selectValue(
+      "SELECT json_type(data,'$.value.map') IS NOT NULL OR json_extract(data,'$.value.parentId') IS NULL FROM records_core WHERE world_id=? AND kind='area' AND id=?",
+      [worldId, areaId]
+    );
+  const owner = owned ? areaId! : null;
   const rows = db.selectObjects(
     `SELECT id,area_id FROM records_core r WHERE world_id=?
-    AND kind IN ('feature','landmark','magic') AND id>?
+    AND kind IN ('feature','landmark','magic') AND id>? AND (? IS NULL OR area_id=?)
     AND (kind<>'feature' OR NOT EXISTS(SELECT 1 FROM records_core s WHERE s.world_id=r.world_id
       AND s.id=r.id AND s.kind IN ('landmark','magic'))) ORDER BY id LIMIT ?`,
-    [worldId, after ?? "", limit]
+    [worldId, after ?? "", owner, owner, limit]
   );
   const features = rows.flatMap((row) => {
     const world = projection.context(
@@ -43,6 +50,7 @@ export function exportFeaturePage(
         properties: {
           ...feature.attributes,
           name: feature.name,
+          placeId: feature.placeId ?? feature.id,
           kind: feature.kind,
           layerId: feature.layerId,
           footprint: areaId ? feature.footprint : composeFootprint(world, feature),

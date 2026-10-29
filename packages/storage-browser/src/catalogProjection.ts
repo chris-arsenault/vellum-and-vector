@@ -30,6 +30,22 @@ function worldProjection(metadata: WorldMetadata): World {
     views: [],
   };
 }
+function emptySnapshot(
+  metadata: WorldMetadata,
+  scope: DomainSnapshot["scope"],
+  identities: DomainSnapshot["identities"]
+): DomainSnapshot {
+  return {
+    world: worldProjection(metadata),
+    scope,
+    identities,
+    revisions: [],
+    resources: [],
+    numerical: {},
+    coverage: [],
+    fieldPatches: [],
+  };
+}
 type Projection = Pick<DomainSnapshot, "world" | "revisions" | "coverage" | "fieldPatches">;
 function install(snapshot: Projection, selection: RecordSelection) {
   const world = snapshot.world;
@@ -178,16 +194,7 @@ export class CatalogProjection {
     selection.representations();
     this.areas(input, selection);
     this.fields(input, selection);
-    const snapshot: DomainSnapshot = {
-      world: worldProjection(metadata),
-      scope: input.scope,
-      revisions: [],
-      resources: [],
-      numerical: {},
-      identities: selection.identities(),
-      coverage: [],
-      fieldPatches: [],
-    };
+    const snapshot = emptySnapshot(metadata, input.scope, selection.identities());
     install(snapshot, selection);
     return snapshot;
   }
@@ -223,8 +230,16 @@ export class CatalogProjection {
       input.scope.footprint,
       this.metadata(selection.worldId).reference.precision ?? 1e-6
     ).bounds;
+    const owner = selection.ownedArea(input.scope.areaId);
     if (input.spatialLayers.length) {
-      this.intersecting(selection, input.scope.spaceId, bounds, "feature", input.spatialLayers);
+      this.intersecting(
+        selection,
+        input.scope.spaceId,
+        bounds,
+        "feature",
+        input.spatialLayers,
+        owner
+      );
     }
     if (input.layerContents?.length)
       selection.select(
@@ -232,8 +247,8 @@ export class CatalogProjection {
         [JSON.stringify(input.layerContents)]
       );
     if (input.channels.length || input.constraints?.intersectingAreas) {
-      this.intersecting(selection, input.scope.spaceId, bounds, "coverage");
-      this.intersecting(selection, input.scope.spaceId, bounds, "fieldPatch");
+      this.intersecting(selection, input.scope.spaceId, bounds, "coverage", null, owner);
+      this.intersecting(selection, input.scope.spaceId, bounds, "fieldPatch", null, owner);
     }
     this.constraints(input, selection, bounds);
   }
@@ -248,11 +263,13 @@ export class CatalogProjection {
     spaceId: string,
     b: Bounds,
     kind: string,
-    layers: string[] | null = null
+    layers: string[] | null = null,
+    owner: string | null = null
   ) {
     return selection.select(
       `r.space_id=? AND r.kind=? AND r.record_id IN (SELECT record_id FROM record_bounds WHERE min_x<=? AND max_x>=? AND min_y<=? AND max_y>=?)
-      AND (? IS NULL OR json_extract(r.data,'$.value.layerId') IN (SELECT value FROM json_each(?)))`,
+      AND (? IS NULL OR json_extract(r.data,'$.value.layerId') IN (SELECT value FROM json_each(?)))
+      AND (? IS NULL OR r.area_id=?)`,
       [
         spaceId,
         kind,
@@ -262,6 +279,8 @@ export class CatalogProjection {
         b[1],
         layers ? JSON.stringify(layers) : null,
         JSON.stringify(layers),
+        owner,
+        owner,
       ]
     );
   }
@@ -316,7 +335,9 @@ export class CatalogProjection {
   }
   private fields(input: ReadRequirements, selection: RecordSelection) {
     for (const { fieldId } of input.channels) selection.get("field", fieldId);
-    const areas = selection.ofKind("area").map((r) => r.reference.id);
+    const areas = selection.ownedArea(input.scope.areaId)
+      ? [input.scope.areaId]
+      : selection.ofKind("area").map((r) => r.reference.id);
     selection.select(
       "(r.kind='layer' OR (r.kind='field' AND r.area_id IN (SELECT value FROM json_each(?))))",
       [JSON.stringify(areas)]
@@ -363,30 +384,14 @@ export class CatalogProjection {
     };
     if (complete) return this.read({ ...reads, references: featureIds });
     this.areas(reads, selection, false);
-    const ancestors = selection.db
-      .selectValues(
-        `WITH RECURSIVE lineage(id) AS (SELECT ? UNION
-      SELECT json_extract(r.data,'$.value.parentId') FROM records r JOIN lineage l ON r.id=l.id
-      WHERE r.world_id=? AND r.kind='area' AND json_extract(r.data,'$.value.parentId') IS NOT NULL) SELECT id FROM lineage`,
-        [areaId, worldId]
-      )
-      .map(String);
+    const ancestors = selection.lineage(areaId);
     selection.representations(ancestors);
     for (const { data } of selection.ofKind("feature"))
       if (data.kind === "feature")
         data.value.detail = Object.fromEntries(
           Object.entries(data.value.detail).filter(([id]) => ancestors.includes(id))
         );
-    const snapshot: DomainSnapshot = {
-      world: worldProjection(metadata),
-      scope,
-      revisions: [],
-      resources: [],
-      numerical: {},
-      identities: {},
-      coverage: [],
-      fieldPatches: [],
-    };
+    const snapshot = emptySnapshot(metadata, scope, {});
     install(snapshot, selection);
     return snapshot;
   }

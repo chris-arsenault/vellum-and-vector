@@ -8,7 +8,7 @@ import { isRegionTool } from "./useRegions";
 export function RegionsPanel({ editor }: { editor: EditorState }) {
   const { region, regions } = editor;
   const choosing = Boolean(editor.regionDraft) || isRegionTool(editor.tool);
-  const children = regions.filter((r) => r.region.parentId === (region?.id ?? null));
+  const children = regions.filter((r) => r.region.parentId === selectionParent(editor));
   return (
     <section className="regions-panel">
       <RegionHeading editor={editor} />
@@ -59,7 +59,8 @@ function SelectedRegion({ editor }: { editor: EditorState }) {
   const region = editor.region!;
   const refined = Object.values(editor.world.areas).some(
     (area) =>
-      area.regionId === region.id && editor.world.fields.some((field) => field.areaId === area.id)
+      area.regionId === region.id &&
+      editor.world.fields.some((field) => field.areaId === area.id && !field.input)
   );
   return (
     <>
@@ -205,7 +206,7 @@ function RegionDraft({ editor }: { editor: EditorState }) {
   );
 }
 export function RegionList({ editor }: { editor: EditorState }) {
-  const children = editor.regions.filter((r) => r.region.parentId === (editor.region?.id ?? null));
+  const children = editor.regions.filter((r) => r.region.parentId === selectionParent(editor));
   return (
     <nav aria-label="Region hierarchy" className="region-list">
       {!!editor.region && (
@@ -223,6 +224,9 @@ export function RegionList({ editor }: { editor: EditorState }) {
       ))}
     </nav>
   );
+}
+function selectionParent(editor: EditorState) {
+  return editor.region?.areaId === editor.area.id ? editor.region.id : null;
 }
 function RegionDetails({ editor }: { editor: EditorState }) {
   const [name, setName] = useState(editor.region!.name);

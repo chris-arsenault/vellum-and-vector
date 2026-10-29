@@ -1,11 +1,18 @@
-import { areaSpace, isDescendant, areaDepth, type World, type Bounds } from "@atlas/domain";
+import {
+  areaSpace,
+  areaDepth,
+  spatial,
+  type World,
+  type Bounds,
+  geographyAreas,
+} from "@atlas/domain";
 import type { BrowserWorkspace } from "@atlas/storage-browser";
 import type { FieldReference, ResourceRaster } from "./types";
 import { sceneWindows } from "./sceneWindows";
 import { mappedPatches, patchRanges, rasterCategorySummaries } from "./workspaceRasterSummary";
 
 async function reference(
-  current: BrowserWorkspace,
+  current: Pick<BrowserWorkspace, "catalog" | "resources">,
   world: World,
   id: string,
   fieldId: string,
@@ -53,7 +60,7 @@ async function reference(
  * not on the window: they are assembled once per input stamp and stored. A request only
  * attaches its windows and scale. */
 export async function workspaceRasters(
-  current: BrowserWorkspace,
+  current: Pick<BrowserWorkspace, "catalog" | "resources">,
   worldId: string,
   areaId: string,
   extent: Bounds,
@@ -85,7 +92,7 @@ export async function workspaceRasters(
   }));
 }
 async function rasterReferences(
-  current: BrowserWorkspace,
+  current: Pick<BrowserWorkspace, "catalog" | "resources">,
   worldId: string,
   areaId: string
 ): Promise<ResourceRaster[]> {
@@ -95,9 +102,13 @@ async function rasterReferences(
       (field) =>
         field.resourceId &&
         areaSpace(world, field.areaId) === areaSpace(world, areaId) &&
-        isDescendant(world.areas, areaId, field.areaId)
+        geographyAreas(world, areaId).includes(field.areaId)
     )
-    .sort((a, b) => areaDepth(world.areas, a.areaId) - areaDepth(world.areas, b.areaId));
+    .sort(
+      (a, b) =>
+        areaDepth(world.areas, a.areaId) - areaDepth(world.areas, b.areaId) ||
+        Number(!!b.input) - Number(!!a.input)
+    );
   const references = new Map<string, FieldReference>();
   for (const field of fields)
     references.set(field.id, await reference(current, world, field.resourceId!, field.id, areaId));
@@ -108,9 +119,16 @@ async function rasterReferences(
       (await current.resources.describe(field.resourceId!)).field!.geographyId
     );
   const rasters: ResourceRaster[] = fields.flatMap((field) => {
-    const data = references.get(field.id)!;
+    const data = references.get(field.id)!,
+      footprint = spatial.intersection(data.scope.footprint, world.areas[areaId].footprint);
+    if (!footprint) return [];
     const companion = (channel: string) => {
-      const found = fields.find((f) => f.areaId === field.areaId && f.channels?.includes(channel));
+      const found = [...fields]
+        .reverse()
+        .find(
+          (f) =>
+            f.areaId === field.areaId && f.input === field.input && f.channels?.includes(channel)
+        );
       return found ? references.get(found.id) : undefined;
     };
     return (field.channels ?? [])
@@ -118,7 +136,7 @@ async function rasterReferences(
       .map((channel) => ({
         id: field.id,
         areaId: field.areaId,
-        footprint: data.scope.footprint,
+        footprint,
         bounds: data.bounds,
         channel,
         field: data,
@@ -139,6 +157,10 @@ async function rasterReferences(
           : {}),
       }));
   });
-  await rasterCategorySummaries(current.resources, rasters);
-  return rasters;
+  // Each map shows its nearest available source per channel. Zoom never switches maps.
+  const nearest = new Map<string, string>();
+  for (const raster of rasters) nearest.set(raster.channel, raster.id);
+  const shown = rasters.filter((raster) => nearest.get(raster.channel) === raster.id);
+  await rasterCategorySummaries(current.resources, shown);
+  return shown;
 }

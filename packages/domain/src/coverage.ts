@@ -48,7 +48,8 @@ export function validateCoverage(
     "Materialization stays within its mapped area."
   );
   if (coverage.state === "unmaterialized") return;
-  for (const other of existing) {
+  const sharedAuthority = existing.filter((other) => !area.map && !world.areas[other.areaId]?.map);
+  for (const other of sharedAuthority) {
     if (!competing(coverage, other)) continue;
     if (
       isDescendant(world.areas, coverage.areaId, other.areaId) ||

@@ -19,6 +19,7 @@ import {
 } from "@atlas/domain";
 import { decodeRecord } from "./catalogRecords";
 import type { GeometryKernel } from "./geometryKernel";
+import type { FieldGeographyCatalog } from "./fieldGeography";
 
 interface Context {
   parent: Geometry;
@@ -47,7 +48,8 @@ export class RegionCatalog {
   constructor(
     private db: Database,
     private kernel: GeometryKernel,
-    private readFeatures: (query: FeatureQuery) => Promise<FeaturePage>
+    private readFeatures: (query: FeatureQuery) => Promise<FeaturePage>,
+    private geography: FieldGeographyCatalog
   ) {}
   private context(query: RegionQuery): Context {
     const { worldId, spaceId } = query.scope;
@@ -193,6 +195,31 @@ export class RegionCatalog {
     for (const cut of query.cuts) sources.push(...(await this.polygons(query, cut, "intersects")));
     return sources;
   }
+  /** Use the actual physical shore, rather than the approximated edge of a named region. */
+  private land(query: RegionQuery, context: Context): Geometry | null {
+    for (let areaId: string | null = query.scope.areaId; areaId;) {
+      const row = this.db.selectObject(
+        `SELECT g.id FROM records f JOIN resources r ON r.id=json_extract(f.data,'$.value.resourceId')
+        JOIN field_geography g ON g.id=json_extract(r.data,'$.field.geographyId') AND g.world_id=f.world_id
+        WHERE f.world_id=? AND f.area_id=? AND f.kind='field'
+        AND json_type(g.data,'$.ocean') IS NOT NULL ORDER BY f.revision DESC LIMIT 1`,
+        [query.scope.worldId, areaId]
+      );
+      if (row) {
+        const ocean = this.geography.read({ ...query.scope, areaId }, String(row.id)).ocean;
+        return ocean
+          ? this.kernel.overlay(context.parent, ocean, context.precision, "difference")
+          : context.parent;
+      }
+      const parent = this.db.selectObject(
+        "SELECT json_extract(data,'$.value.parentId') AS parent, json_type(data,'$.value.map') AS owned FROM records WHERE world_id=? AND kind='area' AND id=?",
+        [query.scope.worldId, areaId]
+      );
+      if (parent?.owned) return null;
+      areaId = parent?.parent ? String(parent.parent) : null;
+    }
+    return null;
+  }
   async choices(query: RegionQuery): Promise<RegionChoices> {
     const context = this.context(query),
       position = query.position;
@@ -204,9 +231,22 @@ export class RegionCatalog {
         )?.id ?? null;
       if (childId) return { revision: context.revision, childId, candidates: [] };
     }
-    const sources = query.cuts.length
+    let sources = query.cuts.length
       ? await this.cutSources(query)
       : await this.polygons(query, point(position), "covers");
+    const land = this.land(query, context);
+    if (land && this.kernel.relation(land, point(position), context.precision, "covers")) {
+      sources = sources.flatMap((source) => {
+        const footprint = this.kernel.overlay(
+          source.footprint,
+          land,
+          context.precision,
+          "intersection"
+        );
+        return footprint ? [{ ...source, footprint }] : [];
+      });
+      sources.push({ name: "Landmass", footprint: land });
+    }
     return {
       revision: context.revision,
       childId: null,

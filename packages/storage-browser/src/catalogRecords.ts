@@ -59,6 +59,7 @@ function geometryKey(data: DomainWrite) {
       data.value.context,
       data.value.frame,
       data.value.spaceId,
+      data.value.map,
     ]);
   return "";
 }

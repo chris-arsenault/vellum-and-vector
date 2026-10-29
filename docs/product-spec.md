@@ -1,5 +1,15 @@
 # World Atlas Creator
 
+**Product and map authority — 2026-10-29 user correction:** This is a mapmaking
+tool for tabletop roleplaying. Generation supplies interesting maps and world
+history; numerical accuracy is secondary. Regional maps share coordinates and
+completed history, but develop independently. Elevation, coastlines and other
+geography need not remain physically consistent with parent maps or old history
+under revision. Child refinement never changes parent or sibling maps. Zoom
+stays on the current map; switching maps is explicit. Seamless cross-map zoom is
+undesired. This supersedes the older single-authority and frozen-boundary
+requirements throughout this design baseline.
+
 **Deferred product scope — 2026-10-28:** Manual editing, its associated authoring
 tools, and undo are out of active scope pending proper design. Stop implementation
 and repair work on them. Preserve the existing code and tests for future redesign;
@@ -47,7 +57,10 @@ and [magic source authority](../AGENTS.md#magic-source-authority).
 
 ## 1. Executive summary
 
-Build a web-based, GIS-oriented creator for fictional worlds in which geography can be procedurally generated, edited, and progressively refined from global scale to individual sites and interiors. The differentiator is **sparse, geographically anchored, multi-level creation**: users generate only the level of detail they care about, while maintaining physical, spatial, historical, political, and cultural consistency with the larger world.
+Build a web-based creator for fictional-world maps used in tabletop roleplaying.
+Generate interesting geography and history, then develop the maps the creator
+needs. Maps remain geographically located in their world and can diverge under
+revision without reconstructing the world's past.
 
 The product draws heavily on _The Canonry Game_'s deterministic, causal, multi-epoch physical geography generator. Its generation model includes geology, crust evolution, tectonics, hydrology, erosion, climate, glaciation, coasts, and several interacting magical forces. The new product must generalize and extend this approach to:
 
@@ -248,16 +261,20 @@ detail generation; selection and cartographic framing remain usable without it.
 Returning from setup or cancelling a job retains the selected subject. Completed
 regional output arrives through the existing worker and undoable publication.
 
-Terrain and water develop locally while major corridors, crossing identities and
-parent geography remain recognizable. Climate responds to finer relief; habitats
+Terrain and water develop from parent context without locking inherited heights
+or shores. The child map includes room around the selected subject for coastal
+development. Climate responds to finer relief; habitats
 and existing magical landscapes follow their own media without creating another
 history or renewing inherited material stocks. Known settlements retain their
 seats; unresolved local residents can become mapped towns where a finer site
 exists. This is allocation of existing people, not another settlement era.
 Routes retain their historical wear, shipping, highway and door meanings.
 
-Finer features and fields appear on their regional map and descendants. Returning
-to a parent map retains its own feature space, regardless of zoom.
+Finer features and fields stay on their regional map. Creation captures context
+within the child's extent and pins its numerical input resources. Replacing the
+parent's resources cannot change an existing child. Zooming out shows that
+map's extent, never the surrounding parent world. Returning to the parent uses
+explicit map navigation and retains the parent's geography.
 
 ---
 
@@ -300,7 +317,10 @@ Prefer recognized standards and established libraries when feasible (e.g., OGC S
 
 **World** owns the global spatial reference, world topology/physical law configuration, magical-system definitions, epoch schedule, available creation profiles, registered layer definitions, root map, and world provenance/version.
 
-**Mapped area** owns a parent reference, creation profile, geographic footprint, local coordinate frame, inherited-effective traits, boundary-contract version, area-specific generation configuration, generation/materialization state, and authored-content protections.
+**Mapped area** owns its geography, generation inputs, local traits, footprint,
+coordinate frame and generation configuration. Its parent and captured source
+revision record location and provenance. Regional maps share the world catalog
+and immutable resource storage without sharing mutable geographic authority.
 
 **Layer definition** owns a semantic name, supported geometry/field/network representation(s), feature schema, allowed creation profiles, style/filter metadata, validation rules, source (manual/imported/generated/derived), and optional generation-domain registration.
 
@@ -315,11 +335,12 @@ Prefer recognized standards and established libraries when feasible (e.g., OGC S
 ### 6.2 Feature identity and cross-scale geometry
 
 - A river, kingdom, mountain range, or road retains stable **semantic identity** regardless of the current rendering scale.
-- At coarse scale, a feature may have a generalized geometry or skeletal constraint; refinement may produce detailed geometry for only part of its extent.
-- Detailed geometry is linked to the same feature identity, not represented as an unrelated duplicate feature.
-- Coarse display geometry is generalized/derived from available authoritative detail where possible, while previously established parent skeletons remain constraints where detail has not been materialized.
-- No generalized map may invent a contradictory new source, endpoint, border ownership, or connection for the same feature.
-- Significant boundary-altering changes require explicit reconciliation, potentially including updates to the parent summary and adjacent mapped areas.
+- A feature record belongs to one map. A separate place identity relates captured
+  geography across maps while allowing each map's geometry and attributes to change.
+- Refinement initializes local records from source geography once. Later source
+  changes do not propagate to the child, and child generation does not update the
+  parent feature or its displayed shape.
+- Each map's scene, inspection and export use its own geography at every zoom.
 - **Feature identity is not the same as a specific coordinate or sample index.** IDs should remain stable under reasonable editing and resampling.
 
 A feature's primary geometry expresses its geographic meaning: a located site,
@@ -493,57 +514,45 @@ budget, climate or society underneath it.
 
 ## 9. Boundary contracts and successive refinement
 
-### 9.1 Why boundaries are locked
+### 9.1 Independent regional geography
 
-A child map must be generatable and editable without requiring the whole world to be regenerated. Establish **stable boundary conditions for each mapped area**, derived from its parent and neighboring authoritative features. These are **generation interfaces**, not physical walls or necessarily political borders.
+A child is a separate map, initialized from its parent. Its footprint bounds
+generation and presentation; it does not freeze physical samples or coastline
+intersections. Regional generation may change elevation, drainage and shores
+without reconciling the parent. Completed history remains available as context.
 
-Procedural refinement retains its inherited interfaces. Ordinary map editing
-keeps shared two-dimensional junctions and region crossings attached, but does
-not enforce frozen field samples, river elevations or discharge profiles against
-the drawing. Specialized physical reconciliation remains separate from ordinary
-creative work.
+### 9.2 Inherited context
 
-### 9.2 Initial boundary contract contents
-
-| Category           | Required inherited/cross-boundary data                                                                                               |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Physical surface   | Edge elevation/relief or equivalent boundary samples; coastline intersections; major terrain form continuity                         |
-| Hydrology          | River inlet/outlet locations and direction, receiving water bodies, relevant water-surface levels and approximate discharge/balance  |
-| Networks           | Road/path/cave connections, crossing positions, connection classifications and topology                                              |
-| Fields             | Required edge behavior/samples for climate, relevant magical influences, and other causally coupled fields                           |
-| Spatial features   | IDs and crossing anchors of features spanning the area; stable parent-feature references                                             |
-| Thematic layers    | Parent political/cultural coverage or distributions and any necessary border-crossing relationships, interpreted at the target scale |
-| Historical context | Relevant epoch forcing, physical substrate history, migration/settlement history and preserved consequences                          |
-
-For continuous fields, a boundary may require a profile/gradient or neighboring influence halo, not a single scalar. The actual interpolation/numerical representation is an implementation decision.
+Terrain, climate, drainage, materials, landmarks and society provide starting
+conditions. Shared coordinates locate places across maps. Their earlier numerical
+values are not obligations on the new geography. Creating a region records its
+identity and outline; it does not load and copy every numerical layer.
 
 ### 9.3 Refinement contract — normative behavior
 
 1. **Select:** Choose a geographic subject and outline within its parent.
 2. **Resolve:** Gather the nearest inherited fields, drainage, landmarks, society and completed history.
-3. **Connect:** Retain crossing identities, geographic corridors and external water supply.
+3. **Locate:** Keep the map's world coordinates and source relationships.
 4. **Choose:** Select regional detail, seed and applicable domains.
 5. **Refine:** Construct unresolved geography without advancing time.
-6. **Validate:** Check geographic scope, physical products, identity, connectivity and authored protection.
+6. **Validate:** Check local geographic products, scope, identity and authored protection without comparing heights to the parent.
 7. **Publish:** Install the finer map as one coherent regional operation; preserve its source map and existing drawings.
-8. **Author:** Edit mapped representations directly with independent history and undo.
+8. **Present:** Explore and export the separate map. Manual authoring remains deferred.
 
 ### 9.4 Allowed and disallowed examples
 
-**Allowed:** At Region scale a river has fixed north inlet and south outlet. Local generation adds many internal bends, tributaries, oxbows, river terraces, and islands while preserving the in/out connections and physically coherent downstream flow.
+**Allowed:** Select an island and refine its bays, cliffs, rivers and relief on a
+separate regional map. The world map retains its original island.
 
-**Disallowed ordinary edit:** Move the river's southern outlet to an adjacent watershed without modifying the boundary contract and the relevant parent/neighbor areas.
-
-**Allowed by explicit reconciliation:** User elects to redirect the river across the region boundary. System shows the affected upstream/downstream reaches, areas, road crossings, and political boundaries that follow the waterway, and requires an explicit higher-impact change.
-
-**Allowed with supernatural cause:** Captured Fire maintains an ice-free river crossing inside an otherwise frozen region. Its heat and meltwater affect downstream processes while contracted external connectivity remains valid.
+**Disallowed:** Require inherited elevation samples to match before refinement
+can run, rewrite the world from the child, or reveal another map by zooming out.
 
 ### 9.5 Reconciling impacts
 
 - Ordinary geometry operations update local visible geometry immediately; expensive derived analyses may be marked dirty and processed later.
 - Regeneration operates over declared affected fields/dependencies and geographic extents, not by replacing all child content.
-- Parent-to-child input changes do not silently overwrite authored content. Show conflicts and allow targeted regeneration/rebase.
-- Explicit boundary modification must identify impacted siblings, parents, connected features, and layers before commit.
+- Later parent changes do not replace a child's captured inputs or local geography.
+- Changing a regional map does not require rewriting parent or sibling maps.
 - Feature relations such as “political border follows river” should bind to river geometry/identity, not duplicate an unrelated approximate polyline.
 - Region creation boundaries can be arbitrary geographic polygons. A continuous river/forest/culture can cross them even though generation responsibility is partitioned.
 

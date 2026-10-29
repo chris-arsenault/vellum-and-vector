@@ -1,6 +1,7 @@
 import type { Database } from "@sqlite.org/sqlite-wasm";
 import {
   presentAtlasFeature,
+  ownsMapGeography,
   canonicalFeatures,
   rectangle,
   requireThat,
@@ -173,11 +174,14 @@ export class FeatureCatalog {
   /** Present several features of one scope from a single context. */
   many(scope: WorkspaceScope, ids: string[]) {
     if (!ids.length) return new Map<string, Presented>();
+    const context = this.projection.context(scope.worldId, scope.areaId, []),
+      owner = ownsMapGeography(context.world, scope.areaId) ? scope.areaId : null;
     const rows = this.db.selectObjects(
       `SELECT * FROM records WHERE world_id=? AND kind IN ('feature','landmark','magic')
       AND id IN (SELECT value FROM json_each(?))
+      AND (? IS NULL OR area_id=?)
       ORDER BY id,CASE kind WHEN 'landmark' THEN 0 WHEN 'magic' THEN 1 ELSE 2 END`,
-      [scope.worldId, JSON.stringify(ids)]
+      [scope.worldId, JSON.stringify(ids), owner, owner]
     );
     const first = new Map<string, CatalogRow>();
     for (const row of rows) if (!first.has(String(row.id))) first.set(String(row.id), row);
@@ -192,7 +196,7 @@ export class FeatureCatalog {
     this.composed.reach(worldId);
     return this.db.selectObjects(
       `WITH RECURSIVE
-      lineage(id) AS (SELECT ? UNION SELECT json_extract(a.data,'$.value.parentId') FROM records_core a JOIN lineage l ON a.id=l.id WHERE a.world_id=? AND a.kind='area' AND json_extract(a.data,'$.value.parentId') IS NOT NULL),
+      lineage(id) AS (SELECT ? UNION SELECT json_extract(a.data,'$.value.parentId') FROM records_core a JOIN lineage l ON a.id=l.id WHERE a.world_id=? AND a.kind='area' AND json_type(a.data,'$.value.map') IS NULL AND json_extract(a.data,'$.value.parentId') IS NOT NULL),
       spatial(id) AS (SELECT f.feature_id FROM record_bounds b JOIN feature_reach f ON f.record_id=b.record_id AND f.world_id=?
         WHERE b.min_x<=? AND b.max_x>=? AND b.min_y<=? AND b.max_y>=?)
       SELECT r.*,b.min_x,b.min_y,b.max_x,b.max_y FROM records_core r LEFT JOIN record_bounds b USING(record_id)

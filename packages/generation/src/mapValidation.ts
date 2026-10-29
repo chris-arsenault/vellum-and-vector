@@ -4,6 +4,8 @@ import {
   sameValue,
   spatial,
   validateAuthoredField,
+  validateFieldTraits,
+  fieldFact,
   validateGeometryWriteScopes,
   validateCrossings,
   composeFeature,
@@ -80,6 +82,7 @@ function validateChangedFeature(state: GenerationState, original: DomainSnapshot
     [id]
   );
   for (const area of Object.values(original.world.areas)) {
+    if (area.parentId && area.profile === "region") continue;
     const feature = world.features[id];
     const contracted = area.boundary?.crossings.some((crossing) => crossing.featureId === id);
     requireThat(
@@ -126,6 +129,8 @@ function validateSurface(state: GenerationState, original: DomainSnapshot): void
       channels: { [channel]: values },
       units: { [channel]: state.surface.units[channel] },
     };
-    validateAuthoredField(original, area, grid, layer);
+    if (area.parentId && area.profile === "region")
+      validateFieldTraits(area, grid, channel, fieldFact(layer, channel));
+    else validateAuthoredField(original, area, grid, layer, false);
   }
 }

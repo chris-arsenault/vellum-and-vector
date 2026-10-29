@@ -27,6 +27,7 @@ import { importState } from "../workspaceImport";
 import { LegacyFields } from "../legacyFields";
 import { WorkspaceFields } from "../workspaceFields";
 import { listTemplates } from "../atlasTemplates";
+import { workspaceRasters } from "../workspaceRasters";
 import { catalogChanges } from "@atlas/application";
 
 export {
@@ -68,6 +69,9 @@ export function fixtureState(id: string) {
   const value = fixtures.get(id);
   if (!value) throw new Error("Unknown supplied world.");
   return value;
+}
+export async function fixtureWorkspace(id: string) {
+  return ready(id);
 }
 export function fixtureWorld(input: WorldCreationInput) {
   return registerWorldSnapshot(createWorldSnapshot(input));
@@ -240,6 +244,10 @@ export async function readScene(id: string, areaId: string, extent?: number[]) {
     after = page.next;
   } while (after);
   return features;
+}
+export async function readMapRasters(id: string, areaId: string) {
+  const current = await ready(id);
+  return workspaceRasters(current, id, areaId, [0, 0, 100_000, 100_000], 0);
 }
 export async function readRaster(id: string, fieldId: string, channel: string, areaId?: string) {
   const snapshot = await observe(id, await ready(id));

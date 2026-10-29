@@ -85,15 +85,15 @@ function RegionalContext({
 }) {
   return (
     <>
-      <p className="eyebrow">REFINE THE EXISTING MAP</p>
+      <p className="eyebrow">CREATE REGIONAL DETAIL</p>
       <h2>{editor.region?.name ?? editor.area.name}</h2>
       <p>
-        Add smaller valleys, tributaries and places inside this outline. The parent map stays
-        unchanged.
+        Develop this separate map with finer coastlines, valleys, tributaries and places. The parent
+        map stays unchanged.
       </p>
       <p className="hint">
-        Known towns, connected rivers and completed history are inherited; no new settlement era
-        runs. Climate and habitats follow the finer terrain.
+        Parent geography provides a starting point; heights and shores can change here. Maps share
+        coordinates and completed history. Climate and habitats follow the finer terrain.
       </p>
       {setup.magic && (
         <p className="hint">

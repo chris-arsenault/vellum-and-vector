@@ -8,6 +8,7 @@ import {
   type DomainWrite,
   type RegionCandidate,
   type RegionQuery,
+  type NumericalResource,
   type WorldMetadata,
 } from "@atlas/domain";
 import type { Geometry } from "geojson";
@@ -125,7 +126,60 @@ async function fixture() {
       .sort((a, b) => a - b);
   const pick = (x: number, y: number, cuts: Geometry[] = []) =>
     catalog.regionChoices(regionQuery({ position: { x, y, z: 0 }, cuts }));
-  return { kernel, catalog, put, child, areas, pick };
+  return { kernel, catalog, put, child, areas, pick, putRecord };
+}
+async function coastline(f: Awaited<ReturnType<typeof fixture>>, island: Geometry) {
+  const resource: NumericalResource = {
+    schemaVersion: 1,
+    id: "terrain",
+    revision: 1,
+    scope,
+    crsId: "metres",
+    bounds: [0, 0, 1000, 1000],
+    precision: 1e-6,
+    layout: "regular",
+    state: "ready",
+    arrays: [],
+    partitions: [],
+    field: {
+      id: "terrain",
+      scope: {
+        ...scope,
+        crsId: "metres",
+        footprint: available,
+        revision: 1,
+        time: "present",
+        resolution: 100,
+      },
+      layoutResourceId: "terrain",
+      geographyId: "terrain",
+      channels: {},
+    },
+  };
+  await f.catalog.commit({
+    operationId: crypto.randomUUID(),
+    worldId: scope.worldId,
+    expected: [],
+    writes: [],
+    removes: [],
+    resources: [resource],
+    geography: [
+      { id: "terrain", scope, ocean: f.kernel.overlay(available, island, 1e-6, "difference") },
+    ],
+  });
+  await f.putRecord({
+    kind: "field",
+    value: {
+      id: "terrain",
+      areaId: "root",
+      layerId: "elevation",
+      samples: 0,
+      algorithm: "fixture",
+      source: { kind: "operation", id: "supplied" },
+      channels: ["elevation"],
+      resourceId: "terrain",
+    },
+  });
 }
 function regionQuery(patch: Partial<RegionQuery> = {}): RegionQuery {
   return {
@@ -146,6 +200,41 @@ const across: Geometry = {
     [990, 500],
   ],
 };
+it("offers a whole island and clips named terrestrial regions to its physical coast", async () => {
+  const f = await fixture(),
+    island = {
+      type: "Polygon" as const,
+      coordinates: [
+        [
+          [150, 200],
+          [750, 100],
+          [850, 650],
+          [350, 850],
+          [150, 200],
+        ],
+      ],
+    };
+  await coastline(f, island);
+  await f.put("hill country", rectangle([50, 50, 600, 950]));
+  const picked = (await f.pick(400, 400)).candidates;
+  const landmass = picked.find((candidate) => candidate.name === "Landmass")!;
+  expect(f.kernel.overlay(landmass.footprint, island, 1e-6, "difference")).toBeNull();
+  expect(f.kernel.measure(landmass.footprint, 1e-6).area).toBe(f.kernel.measure(island, 1e-6).area);
+  expect(
+    picked.every((candidate) => !f.kernel.overlay(candidate.footprint, island, 1e-6, "difference"))
+  ).toBe(true);
+  expect((await f.pick(950, 950)).candidates).toEqual([]);
+  await f.child("east", rectangle([600, 0, 1000, 1000]));
+  const remainder = (await f.pick(400, 400)).candidates,
+    expected = f.kernel.overlay(island, rectangle([600, 0, 1000, 1000]), 1e-6, "difference")!;
+  expect(
+    remainder.some(
+      (candidate) =>
+        f.kernel.relation(candidate.footprint, expected, 1e-6, "covers") &&
+        f.kernel.relation(expected, candidate.footprint, 1e-6, "covers")
+    )
+  ).toBe(true);
+});
 describe("region picks", () => {
   it("uses published polygon boundaries and excludes point and course influence footprints", async () => {
     const f = await fixture();

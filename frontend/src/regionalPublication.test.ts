@@ -24,7 +24,14 @@ it("publishes conditioned regional geography from supplied parent products witho
     parentId: input.areaId,
     profile: "region",
     footprint,
-    boundary: null,
+    boundary: {
+      version: 1,
+      parentId: input.areaId,
+      parentVersion: 1,
+      epochs: [],
+      crossings: [],
+      samples: [{ point: { x: 2200, y: 500, z: 0 }, values: { elevation: 9999 } }],
+    },
   };
   domain.scope = { ...domain.scope, areaId, footprint, resolution: 200 };
   const surface = createGrid("regional-surface", domain.scope, 9, 5);

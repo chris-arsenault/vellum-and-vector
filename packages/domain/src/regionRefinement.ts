@@ -16,10 +16,15 @@ export function regionRefinementParent(world: World, regionId: string): Area {
   }
   return world.areas[region.areaId];
 }
+/** Leave room around the subject for coastlines and nearby context to develop on this map. */
+export function regionMapFootprint(parent: Area, subject: Area["footprint"]) {
+  const margin = spatial.area(subject) / spatial.length(subject) / 8;
+  return spatial.intersection(spatial.buffer(subject, margin)!, parent.footprint)!;
+}
 export function regionRefinementInput(world: World, regionId: string) {
   const region = regionLineage(world, regionId).at(-1)!,
     parent = regionRefinementParent(world, regionId),
-    footprint = region.region.footprint;
+    footprint = regionMapFootprint(parent, region.region.footprint);
   return {
     regionId,
     parentId: parent.id,
@@ -43,7 +48,10 @@ export function validateRegionRefinement(world: World, area: Area) {
   requireThat(
     area.parentId === regionRefinementParent(world, region.id).id &&
       spatial.covers(area.footprint, region.region.footprint) &&
-      spatial.covers(region.region.footprint, area.footprint),
+      spatial.covers(
+        regionMapFootprint(regionRefinementParent(world, region.id), region.region.footprint),
+        area.footprint
+      ),
     "region_refinement_scope",
     "Refine the selected region's outline using its nearest refined ancestor."
   );

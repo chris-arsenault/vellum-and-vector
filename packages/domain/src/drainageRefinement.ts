@@ -65,6 +65,7 @@ export function refinedDrainageFeatures(snapshot: DomainSnapshot, area: Area): A
   return result;
 }
 function drainageAncestor(snapshot: DomainSnapshot, area: Area) {
+  if (area.map) return snapshot.world.drainage?.[area.id] ? area.id : null;
   let parent = area.parentId;
   while (parent && !snapshot.world.drainage?.[parent])
     parent = snapshot.world.areas[parent].parentId;

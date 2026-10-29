@@ -3,6 +3,7 @@ import {
   fixtureState,
   undoWorld,
   commitCommand,
+  readMapRasters,
 } from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
 import {
@@ -11,6 +12,7 @@ import {
   regionRefinementInput,
   regionLineage,
   presentAtlasFeature,
+  spatial,
   type AtlasFeature,
 } from "@atlas/domain";
 
@@ -49,9 +51,13 @@ it("links arbitrary recursive geographic refinement to existing selected subject
     const area = refinedRegionArea(f.current(), id)!;
     expect(area.parentId).toBe(parentArea);
     expect(area.profile).toBe("region");
-    expect(area.footprint).toEqual(
-      f.current().views.find((view) => view.id === id)!.region!.footprint
-    );
+    expect(
+      spatial.covers(
+        area.footprint,
+        f.current().views.find((view) => view.id === id)!.region!.footprint
+      )
+    ).toBe(true);
+    expect(area.boundary).toBeNull();
     expect(f.current().views.find((view) => view.id === id)!.areaId).toBe(f.source);
     parent = id;
     parentArea = area.id;
@@ -100,18 +106,18 @@ it("owns fields recursively without disclosing a descendant's same-profile geogr
     areaId: parent.id,
     layerId: "elevation",
     resolution: 5,
-    value: 200,
+    value: 800,
   });
   const inner = await f.region(30_000, outer);
   await f.command("createArea", regionRefinementInput(f.current(), inner));
   const child = refinedRegionArea(f.current(), inner)!;
-  await f.command("createField", {
-    areaId: child.id,
-    layerId: "elevation",
-    resolution: 9,
-    value: 200,
-  });
+  expect(f.current().fields.find((field) => field.areaId === child.id)?.input).toBe(true);
   expect(f.current().fields).toHaveLength(2);
+  const rasters = await readMapRasters(f.world.id, child.id);
+  expect(rasters.filter((r) => r.channel === "elevation").map((r) => r.areaId)).toEqual([child.id]);
+  expect(rasters.every((r) => spatial.covers(child.footprint, r.footprint))).toBe(true);
+  const parentRasters = await readMapRasters(f.world.id, parent.id);
+  expect(parentRasters.every((r) => r.areaId === parent.id)).toBe(true);
   const place: AtlasFeature = {
     id: crypto.randomUUID(),
     name: "A smaller town",
@@ -131,4 +137,17 @@ it("owns fields recursively without disclosing a descendant's same-profile geogr
   expect(presentAtlasFeature(f.current(), place, parent.id)).toBeNull();
   expect(presentAtlasFeature(f.current(), place, child.id)?.id).toBe(place.id);
   expect(presentAtlasFeature(f.current(), place, f.source)).toBeNull();
+  const coast: AtlasFeature = {
+    ...place,
+    areaId: f.source,
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [0, 10_000],
+        [100_000, 10_000],
+      ],
+    },
+  };
+  expect(presentAtlasFeature(f.current(), coast, child.id)).toBeNull();
+  expect(presentAtlasFeature(f.current(), coast, f.source)!.geometry).toEqual(coast.geometry);
 });

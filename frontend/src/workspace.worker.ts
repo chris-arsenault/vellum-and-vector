@@ -1,3 +1,4 @@
+import { captureExistingMaps } from "./mapConversion";
 import {
   openBrowserWorkspace,
   GeometryKernel,
@@ -79,7 +80,7 @@ async function operateWorld(operation: WorldOperation) {
       const world = await importLegacyWorld(imported, operation.saved);
       await current?.close();
       workspaces.set(worldId, imported);
-      return world;
+      return captureExistingMaps(imported, world.id);
     } catch (error) {
       await imported.close();
       throw error;
@@ -91,7 +92,7 @@ async function operateWorld(operation: WorldOperation) {
       current = await openBrowserWorkspace(`${name}_${worldId}`, operation.root);
       workspaces.set(worldId, current);
     }
-    return current.catalog.readEditor(worldId);
+    return captureExistingMaps(current, worldId);
   }
   if (!current) {
     current = await openBrowserWorkspace(`${name}_${worldId}`);
@@ -113,8 +114,10 @@ async function lifecycle(current: BrowserWorkspace, operation: WorldOperation) {
     }
     case "export":
       return current.export(operation.worldId, operation.areaId);
-    case "importWorld":
-      return importWorkspace(current, operation.snapshot);
+    case "importWorld": {
+      const world = await importWorkspace(current, operation.snapshot);
+      return captureExistingMaps(current, world.id);
+    }
     case "abandonOperation":
       // The host terminated the worker: drop staged batches, then its working files.
       await current.catalog.abandonPublication(operation.operationId);

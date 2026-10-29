@@ -70,9 +70,7 @@ function validateRefinedOutline(
 ) {
   const refined = Object.values(world.areas).find((area) => area.regionId === id);
   requireThat(
-    !refined ||
-      (spatial.covers(refined.footprint, footprint) &&
-        spatial.covers(footprint, refined.footprint)),
+    !refined || previousRegionMatches(world, id, footprint),
     "region_refined_outline",
     "Keep a refined region's outline attached to its mapped geography. Choose a new region for a different extent."
   );
@@ -82,6 +80,10 @@ function validateRefinedOutline(
     "region_refined_parent",
     "A refined region retains its geographic ancestry. Choose a new region to move it under another parent."
   );
+}
+function previousRegionMatches(world: World, id: string, footprint: Geometry) {
+  const previous = world.views.find((view) => view.id === id)?.region?.footprint;
+  return !!previous && spatial.covers(previous, footprint) && spatial.covers(footprint, previous);
 }
 export function validateRegionView(world: World, view: World["views"][number]) {
   if (view.regionId) {

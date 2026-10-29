@@ -66,10 +66,7 @@ export class SettlementCatalog {
       [scope.worldId, JSON.stringify(ids), scope.worldId, JSON.stringify(neighbours)]
     );
     return rows.flatMap((row) => {
-      const item = this.features.one(
-        { worldId: scope.worldId, areaId: String(row.area_id), spaceId: String(row.space_id) },
-        String(row.id)
-      );
+      const item = this.features.one(scope, String(row.id));
       return item ? [item.feature] : [];
     });
   }

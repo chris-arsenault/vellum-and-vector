@@ -155,6 +155,38 @@ export function synthesizeRelief(
   }
 }
 
+/** Independent regional maps may change heights and move shores, including at their edges. */
+export function synthesizeRegionalRelief(
+  map: PhysicalField,
+  parent: Grid,
+  seed: number,
+  profile: PhysicalProfile
+): ReliefSynthesis {
+  const elevation = fieldInterpolator(parent, "elevation"),
+    span = parentSpan(parent);
+  let changed = 0,
+    square = 0;
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (map.mesh.membership(i) !== 1) continue;
+    const delta = cellRelief(
+        map,
+        i,
+        nativePosition({ map } as never, i),
+        elevation,
+        span,
+        seed,
+        profile
+      ),
+      applied = units(delta);
+    if (!applied) continue;
+    map.BedrockElevation.add(i, applied);
+    rebuild(map, i);
+    changed++;
+    square += delta * delta;
+  }
+  return { changed, rmsM: changed ? Math.sqrt(square / changed) : 0 };
+}
+
 /** The child-profile step that realizes the relief its parent left latent. */
 export function adaptiveReliefProcess(): MapProcess {
   return {

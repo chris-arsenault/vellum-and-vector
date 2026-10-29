@@ -5,6 +5,7 @@ import {
   type SocietyRegion,
   type SocietyCommunity,
   type SocietyWork,
+  ownsMapGeography,
 } from "@atlas/domain";
 import type { GenerationState } from "./process";
 import { refreshSocietyConnections, refreshSocietySupport } from "./societyGeography";
@@ -22,6 +23,7 @@ export function societyAncestor(state: GenerationState) {
   ) {
     const society = world.societies?.[area];
     if (society) return society;
+    if (ownsMapGeography(world, area)) break;
   }
   return undefined;
 }
@@ -31,7 +33,7 @@ export function retainSocietyFootprints(state: GenerationState) {
 }
 export function inheritSociety(state: GenerationState, prior: SocietyRegion) {
   const work = state.society!;
-  if (prior.areaId === work.region.areaId) {
+  if (prior.areaId === work.region.areaId && !prior.capturedFrom) {
     work.region = structuredClone(prior);
     refreshSocietyConnections(state);
   } else refineSociety(state, prior);

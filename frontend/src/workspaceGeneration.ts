@@ -1,13 +1,16 @@
-import { areaSpace, isDescendant, type SpatialScope } from "@atlas/domain";
+import { areaSpace, isDescendant, ownsMapGeography, type SpatialScope } from "@atlas/domain";
 import type { SpatialCatalog } from "@atlas/storage-browser";
 
 export async function generationSource(catalog: SpatialCatalog, worldId: string, areaId: string) {
   const world = await catalog.readEditor(worldId),
     area = world.areas[areaId];
   if (!area) throw new Error("Choose an existing mapped area.");
-  const stateAreas = Object.keys(world.areas).filter(
-    (id) => isDescendant(world.areas, areaId, id) || isDescendant(world.areas, id, areaId)
-  );
+  const independent = ownsMapGeography(world, areaId);
+  const stateAreas = independent
+    ? [areaId]
+    : Object.keys(world.areas).filter(
+        (id) => isDescendant(world.areas, areaId, id) || isDescendant(world.areas, id, areaId)
+      );
   const related = new Set(stateAreas),
     spaceId = areaSpace(world, areaId);
   const fields = world.fields.filter(
@@ -36,13 +39,17 @@ export async function generationSource(catalog: SpatialCatalog, worldId: string,
       {
         kind: "magic",
         ids: world.magic
-          .filter((source) => !source.areaId || related.has(source.areaId))
+          .filter((source) =>
+            related.has(source.areaId ?? Object.values(world.areas).find((a) => !a.parentId)!.id)
+          )
           .map((source) => source.id),
       },
       {
         kind: "landmark",
         ids: world.landmarks
-          .filter((source) => !source.areaId || related.has(source.areaId))
+          .filter((source) =>
+            related.has(source.areaId ?? Object.values(world.areas).find((a) => !a.parentId)!.id)
+          )
           .map((source) => source.id),
       },
       { kind: "society", ids: stateAreas.map((id) => `society:${id}`) },
@@ -53,8 +60,8 @@ export async function generationSource(catalog: SpatialCatalog, worldId: string,
     dependencies: false,
     parentHistory: [],
     constraints: {
-      intersectingAreas: true,
-      descendantsOf: [areaId],
+      intersectingAreas: !independent,
+      descendantsOf: independent ? [] : [areaId],
       boundaryFeatures: [],
     },
   });

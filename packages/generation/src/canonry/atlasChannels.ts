@@ -1,6 +1,6 @@
 // Explicit projection from Canonry's fixed-point numerical state into GIS channels.
 import type { PhysicalBufferName } from "./field";
-import { ecologyBindings } from "./ecologyState";
+import { ecologyBindings, ecologyRatios } from "./ecologyState";
 
 type ArrayName = PhysicalBufferName;
 export interface ChannelBinding {
@@ -10,6 +10,8 @@ export interface ChannelBinding {
   scale: number;
   datum?: boolean;
   offset?: number;
+  minimum?: number;
+  maximum?: number;
 }
 const height = (name: string, native: ArrayName, datum = false): ChannelBinding => ({
   name,
@@ -18,11 +20,16 @@ const height = (name: string, native: ArrayName, datum = false): ChannelBinding 
   scale: 1 / 1024,
   datum,
 });
-const scalar = (name: string, native: ArrayName): ChannelBinding => ({
+const amount = (name: string, native: ArrayName): ChannelBinding => ({
+  ...height(name, native),
+  minimum: 0,
+});
+const scalar = (name: string, native: ArrayName, signed = false): ChannelBinding => ({
   name,
   native,
   unit: "ratio",
   scale: 1 / 1000,
+  minimum: signed ? undefined : 0,
 });
 const category = (name: string, native: ArrayName): ChannelBinding => ({
   name,
@@ -35,43 +42,51 @@ const metric = (name: string, native: ArrayName, unit: string): ChannelBinding =
   native,
   unit,
   scale: 1,
+  minimum: 0,
 });
 export const atlasChannels: ChannelBinding[] = [
   height("elevation", "Elevation", true),
-  ...ecologyBindings.map(([name, native, unit]) => ({ name, native, unit, scale: 1 })),
+  ...ecologyBindings.map(([name, native, unit]) => ({
+    name,
+    native,
+    unit,
+    scale: 1,
+    minimum: 0,
+    maximum: ecologyRatios.some((ratio) => ratio === native) ? 1 : undefined,
+  })),
   height("bedrock", "BedrockElevation", true),
-  height("sediment", "SedimentThickness"),
-  height("crustThickness", "CrustThickness"),
+  amount("sediment", "SedimentThickness"),
+  amount("crustThickness", "CrustThickness"),
   height("crustSupport", "CrustSupportElevation", true),
   height("rockLoad", "SurfaceRockLoad"),
-  height("fluvialErosion", "CumulativeFluvialErosion"),
-  height("glacialErosion", "CumulativeGlacialErosion"),
-  height("coastalErosion", "CumulativeCoastalErosion"),
-  height("deposition", "CumulativeDeposition"),
-  height("glacialDeposition", "CumulativeGlacialDeposition"),
-  height("volcanicConstruction", "VolcanicConstructionHistory"),
-  height("landmarkMaintenance", "LandmarkMaintenance"),
-  height("impactExcavation", "ImpactExcavation"),
-  height("impactRim", "ImpactRimUplift"),
-  height("impactEjecta", "ImpactEjectaThickness"),
-  height("waterDepth", "WaterDepths"),
+  amount("fluvialErosion", "CumulativeFluvialErosion"),
+  amount("glacialErosion", "CumulativeGlacialErosion"),
+  amount("coastalErosion", "CumulativeCoastalErosion"),
+  amount("deposition", "CumulativeDeposition"),
+  amount("glacialDeposition", "CumulativeGlacialDeposition"),
+  amount("volcanicConstruction", "VolcanicConstructionHistory"),
+  amount("landmarkMaintenance", "LandmarkMaintenance"),
+  amount("impactExcavation", "ImpactExcavation"),
+  amount("impactRim", "ImpactRimUplift"),
+  amount("impactEjecta", "ImpactEjectaThickness"),
+  amount("waterDepth", "WaterDepths"),
   scalar("fracture", "FractureConductance"),
-  { name: "rock", native: "RockResistance", unit: "ratio", scale: 1 / 4000 },
+  { name: "rock", native: "RockResistance", unit: "ratio", scale: 1 / 4000, minimum: 0 },
   scalar("continentalFraction", "CrustContinentalFraction"),
   scalar("crustAge", "CrustAge"),
   scalar("sutureStrength", "CrustSutureStrength"),
   scalar("geothermal", "Geothermal"),
   scalar("tectonicStrain", "TectonicStrain"),
-  scalar("crustMotionX", "CrustMotionX"),
-  scalar("crustMotionY", "CrustMotionY"),
+  scalar("crustMotionX", "CrustMotionX", true),
+  scalar("crustMotionY", "CrustMotionY", true),
   scalar("moisture", "Moisture"),
   { name: "temperature", native: "Temperature", unit: "celsius", scale: 0.1, offset: -30 },
-  scalar("windEast", "WindX"),
-  scalar("windNorth", "WindY"),
+  scalar("windEast", "WindX", true),
+  scalar("windNorth", "WindY", true),
   metric("windSpeed", "WindSpeed", "metre/second"),
-  { name: "rainfall", native: "Rainfall", unit: "metre/year", scale: 1 / 1000 },
-  { name: "snowfall", native: "Snowfall", unit: "metre/year", scale: 1 / 1000 },
-  { name: "runoff", native: "Runoff", unit: "metre/year", scale: 1 / 1000 },
+  { name: "rainfall", native: "Rainfall", unit: "metre/year", scale: 1 / 1000, minimum: 0 },
+  { name: "snowfall", native: "Snowfall", unit: "metre/year", scale: 1 / 1000, minimum: 0 },
+  { name: "runoff", native: "Runoff", unit: "metre/year", scale: 1 / 1000, minimum: 0 },
   scalar("ice", "IceThickness"),
   scalar("maximumIce", "MaximumIceThickness"),
   metric("iceThickness", "IceThickness", "metre"),
@@ -80,14 +95,21 @@ export const atlasChannels: ChannelBinding[] = [
   metric("catchmentArea", "CatchmentArea", "square-metre"),
   metric("riverWidth", "RiverWidth", "metre"),
   metric("riverDepth", "RiverDepth", "metre"),
-  { name: "maximumIceFlux", native: "MaximumIceFlux", unit: "cubic-metre/year", scale: 1 },
+  {
+    name: "maximumIceFlux",
+    native: "MaximumIceFlux",
+    unit: "cubic-metre/year",
+    scale: 1,
+    minimum: 0,
+  },
   {
     name: "maximumGroundedIceFlux",
     native: "MaximumGroundedIceFlux",
     unit: "cubic-metre/year",
     scale: 1,
+    minimum: 0,
   },
-  { name: "oceanDistance", native: "OceanDistance", unit: "metre", scale: 1 },
+  { name: "oceanDistance", native: "OceanDistance", unit: "metre", scale: 1, minimum: 0 },
   scalar("riverChannel", "RiverChannelStrength"),
   scalar("floodplain", "FloodplainIntensity"),
   scalar("delta", "DeltaIntensity"),

@@ -11,6 +11,7 @@ import { planCommand, catalogChanges } from "@atlas/application";
 import { openBlockCache, type FieldInputStore } from "@atlas/storage-browser";
 import type { WorkspaceCommand, WorkspaceCommandResult } from "./workspaceProtocol";
 import { WorkspaceFields } from "./workspaceFields";
+import { captureMap } from "./mapCapture";
 
 async function commandScope(catalog: SpatialStore, input: WorkspaceCommand): Promise<SpatialScope> {
   const world = await catalog.readWorld(input.scope.worldId);
@@ -66,6 +67,15 @@ export async function executeWorkspaceCommand(
     await fields.publish(changes, snapshot.world.reference.precision ?? 1e-6);
     const publication = catalogChanges(snapshot, changes, fields.outputs, input.command.kind);
     publication.geography = fields.geography;
+    const area = changes.writes.find((write) => write.kind === "area" && write.value.map);
+    if (area?.kind === "area" && input.command.kind === "createArea")
+      await captureMap(
+        catalog as import("@atlas/storage-browser").SpatialCatalog,
+        resources,
+        snapshot,
+        area.value,
+        publication
+      );
     const change = await catalog.commit(publication);
     fields.accept();
     return { change, impact, preview: [] };

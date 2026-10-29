@@ -79,7 +79,7 @@ export class RegistryMarks {
     );
     if (previous === undefined) return false;
     const before = JSON.parse(String(previous)).value,
-      keys = ["name", "parentId", "profile", "context", "spaceId", "frame"] as const,
+      keys = ["name", "parentId", "profile", "context", "spaceId", "frame", "map"] as const,
       footprint = this.kernel.encode(
         after.footprint,
         this.projection.metadata(worldId).reference.precision ?? 1e-6

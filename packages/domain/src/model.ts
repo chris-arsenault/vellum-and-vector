@@ -1,5 +1,7 @@
 import type { Geometry } from "geojson";
 import type { MappedDrawing } from "./mapEligibility";
+export type { FieldSample, BoundaryHistory } from "./boundaryContracts";
+import type { FieldSample, BoundaryHistory } from "./boundaryContracts";
 
 export type Optional<T> = T | undefined;
 export type Profile = "world" | "region" | "local" | "site" | "interior";
@@ -55,16 +57,6 @@ export interface WaterFlux {
   rate: number;
   crossing: string;
 }
-export interface BoundaryHistory {
-  epochId: string;
-  parentEpoch: string | null;
-  forcingId: string | null;
-  resources: string[];
-}
-export interface FieldSample {
-  point: Position;
-  values: Record<string, number>;
-}
 export interface Epoch {
   /** Geological interval for plate motion, independent of model-year duration. */
   tectonicDurationMyr?: number;
@@ -82,6 +74,8 @@ export interface Epoch {
   seaLevel: number;
 }
 export interface Area {
+  /** Independent geographic ownership; source is provenance, never a live read fallback. */
+  map?: { sourceAreaId: string; sourceRevision: number };
   /** Selected geographic subject whose finer representation this area owns. */
   regionId?: string;
   spaceId?: string;
@@ -133,6 +127,8 @@ export interface Relation {
   kind: string;
 }
 export interface AtlasFeature extends Pick<Representation, "mapOnly"> {
+  /** Shared place identity; `id` identifies this map's geographic record. */
+  placeId?: string;
   footprint?: Geometry;
   id: string;
   name: string;
@@ -171,6 +167,8 @@ export interface Layer {
   facts?: string[];
 }
 export interface FieldRef {
+  /** Immutable starting geography captured when this map was created. */
+  input?: boolean;
   id: string;
   areaId: string;
   layerId: string;
@@ -184,6 +182,8 @@ export interface FieldRef {
   spaceId?: string;
 }
 export interface FieldPatch extends Pick<Representation, "mapOnly"> {
+  /** Captured starting context, rather than an authored constraint on this map. */
+  input?: boolean;
   id: string;
   fieldId: string;
   areaId: string;

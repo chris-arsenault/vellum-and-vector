@@ -4,7 +4,6 @@ import {
   type Area,
   type AtlasFeature,
   type Crossing,
-  type FieldSample,
   type Position,
   type World,
 } from "./model";
@@ -19,6 +18,17 @@ import { crossingDirection, lineParts, stationAt } from "./lineStations";
 import { semanticId } from "./identity";
 import { requireThat } from "./errors";
 import { fieldFact } from "./fieldValidation";
+
+export interface FieldSample {
+  point: Position;
+  values: Record<string, number>;
+}
+export interface BoundaryHistory {
+  epochId: string;
+  parentEpoch: string | null;
+  forcingId: string | null;
+  resources: string[];
+}
 
 export function sampleFields(snapshot: DomainSnapshot, p: Position): Record<string, number> {
   const result = Object.create(null) as Record<string, number>;

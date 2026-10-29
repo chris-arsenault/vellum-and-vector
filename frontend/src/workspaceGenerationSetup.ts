@@ -40,7 +40,7 @@ export async function workspaceGenerationSetup(
         .filter(
           (field) =>
             field.resourceId &&
-            (!input.domains.includes("physical") || field.areaId !== input.areaId)
+            (!input.domains.includes("physical") || field.areaId !== input.areaId || field.input)
         )
         .map((field) => ({ fieldId: field.id, names: field.channels ?? [] })),
     });

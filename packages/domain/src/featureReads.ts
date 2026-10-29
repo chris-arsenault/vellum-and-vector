@@ -3,12 +3,12 @@ import {
   areaSpace,
   composeFeature,
   composeFootprint,
-  isDescendant,
   type CompositionSpatial,
 } from "./composition";
 import { profiles, type AtlasFeature, type World } from "./model";
 import { spatial, type Spatial } from "./spatial";
 import { authoredLandmarkFeatures } from "./landmarks";
+import { geographyAreas } from "./mapOwnership";
 
 /** Sources stay owned by world.magic; readers and selection share their semantic identities. */
 export function authoredMagicFeatures(world: World): AtlasFeature[] {
@@ -63,12 +63,14 @@ export function presentAtlasFeature(
     owner = world.areas[feature.areaId];
   if (areaSpace(world, owner.id) !== areaSpace(world, areaId)) return null;
   if (profiles.indexOf(owner.profile) > profiles.indexOf(area.profile)) return null;
-  if (!isDescendant(world.areas, areaId, owner.id)) return null;
-  const geometry = composeFeature(world, feature, [], area.profile, areaId, gis);
+  if (!geographyAreas(world, areaId).includes(owner.id)) return null;
+  let geometry = composeFeature(world, feature, [], area.profile, areaId, gis);
   if (!geometry) return null;
-  const footprint = composeFootprint(world, feature, area.profile, areaId, gis);
+  let footprint = composeFootprint(world, feature, area.profile, areaId, gis);
   if (!featureIntersects({ geometry, footprint: footprint ?? undefined }, area.footprint, gis))
     return null;
+  ({ geometry, footprint } = clipToMap(area, geometry, footprint, gis ?? spatial));
+  if (!geometry) return null;
   const result = {
     ...feature,
     geometry,
@@ -77,6 +79,19 @@ export function presentAtlasFeature(
   delete result.footprint;
   if (footprint) result.footprint = footprint;
   return result;
+}
+function clipToMap(
+  area: World["areas"][string],
+  geometry: Geometry,
+  footprint: Geometry | null,
+  gis: CompositionSpatial
+) {
+  return area.regionId
+    ? {
+        geometry: gis.intersection(geometry, area.footprint),
+        footprint: footprint && gis.intersection(footprint, area.footprint),
+      }
+    : { geometry, footprint };
 }
 function representationMetadata(world: World, feature: AtlasFeature, areaId: string) {
   let id: string | null = areaId;

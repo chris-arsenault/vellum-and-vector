@@ -70,7 +70,7 @@ export function effectiveTraits(
   const area = areas[id];
   requireThat(area, "missing_area_context", "Trait inheritance needs its geographic ancestors.");
   const inherited =
-    area.parentId === null ? [] : effectiveTraits(areas, area.parentId, [...path, id]);
+    area.parentId === null || area.map ? [] : effectiveTraits(areas, area.parentId, [...path, id]);
   return specializeTraits(inherited, area.localTraits ?? area.traits, area.footprint);
 }
 export function validateBoundaryTraits(area: Area): void {

@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { atlasWorkspace, workspaceScope } from "./atlasWorkspace";
 import { bounds } from "./presentation";
@@ -30,7 +30,7 @@ export function useMapData(
     queryKey: ["fields", world.id, areaId, windows, tolerance],
     staleTime: Infinity,
     gcTime: 0,
-    placeholderData: keepPreviousData,
+    placeholderData: (previous, query) => (query?.queryKey[2] === areaId ? previous : undefined),
     enabled: extent !== null,
     queryFn: async () => (await atlasWorkspace()).readRasters(world.id, areaId, window, tolerance),
   });

@@ -26,14 +26,17 @@ function areaRequirements(data: AreaInput, context: IntentContext) {
         ? [{ kind: "feature" as const, ids: [data.contextFeatureId] }]
         : []),
     ],
-    spatialLayers: context.layers.map((l) => l.id),
+    spatialLayers: data.regionId ? [] : context.layers.map((l) => l.id),
     constraints: { intersectingAreas: true, descendantsOf: [], boundaryFeatures: [] },
-    channels: context.fields
-      .filter(
-        (f) =>
-          f.channels !== null && (!f.footprint || spatial.intersects(f.footprint, data.footprint))
-      )
-      .map((f) => ({ fieldId: f.id, names: f.channels! })),
+    channels: data.regionId
+      ? []
+      : context.fields
+          .filter(
+            (f) =>
+              f.channels !== null &&
+              (!f.footprint || spatial.intersects(f.footprint, data.footprint))
+          )
+          .map((f) => ({ fieldId: f.id, names: f.channels! })),
   });
   reads.scope = { ...reads.scope, footprint: data.footprint };
   return reads;
@@ -41,7 +44,8 @@ function areaRequirements(data: AreaInput, context: IntentContext) {
 function evaluateArea(data: AreaInput, context: IntentContext, snapshot: DomainSnapshot) {
   const area = areaCandidate(data, context, snapshot);
   validateContextFeature(data, snapshot, area);
-  const rivers = data.approach === "blank" ? [] : refinedDrainageFeatures(snapshot, area);
+  const rivers =
+    data.regionId || data.approach === "blank" ? [] : refinedDrainageFeatures(snapshot, area);
   const inherited = {
     ...snapshot,
     world: {
@@ -50,7 +54,8 @@ function evaluateArea(data: AreaInput, context: IntentContext, snapshot: DomainS
       features: { ...snapshot.world.features, ...Object.fromEntries(rivers.map((f) => [f.id, f])) },
     },
   };
-  area.boundary = establishBoundary(inherited, area);
+  // A geographic child is a separate map. Parent samples are generation inputs, not locks.
+  area.boundary = data.regionId ? null : establishBoundary(inherited, area);
   validateBoundaryTraits(area);
   const changes = intentChanges(context, snapshot);
   upsertArea(changes, area);
@@ -110,6 +115,9 @@ function areaCandidate(data: AreaInput, context: IntentContext, snapshot: Domain
     "Choose registered layers supporting this creation profile."
   );
   const area: Area = {
+    ...(data.regionId
+      ? { map: { sourceAreaId: parent.id, sourceRevision: snapshot.world.version } }
+      : {}),
     id: data.id,
     ...(data.regionId ? { regionId: data.regionId } : {}),
     parentId: parent.id,

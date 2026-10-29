@@ -5,6 +5,7 @@ import {
   type DomainSnapshot,
   type Grid,
   type Diagnostic,
+  ownsMapGeography,
 } from "@atlas/domain";
 import { generationResolution } from "./resolution";
 
@@ -18,8 +19,10 @@ export function regionalInputFields(source: DomainSnapshot, areaId: string, omit
       return (
         grid &&
         grid.scope.spaceId === space &&
-        (!omitSelf || field.areaId !== areaId) &&
-        isDescendant(source.world.areas, areaId, field.areaId) &&
+        (ownsMapGeography(source.world, areaId)
+          ? field.areaId === areaId && (!omitSelf || !!field.input)
+          : (!omitSelf || field.areaId !== areaId) &&
+            isDescendant(source.world.areas, areaId, field.areaId)) &&
         spatial.covers(grid.scope.footprint, area.footprint)
       );
     })

@@ -13,6 +13,10 @@ export function authoringFeatureIds(
 ) {
   requireThat(Number.isInteger(limit) && limit > 0, "page_size", "Choose a positive page size.");
   const b = kernel.encode(input.scope.footprint, precision).bounds;
+  const independent = db.selectValue(
+    "SELECT json_type(data,'$.value.map') IS NOT NULL OR json_extract(data,'$.value.parentId') IS NULL FROM records_core WHERE world_id=? AND kind='area' AND id=?",
+    [input.scope.worldId, input.scope.areaId]
+  );
   const relations = input.dependencies
     ? ["follows", "dependsOn", "boundedBy", "feature", "node"]
     : ["follows", "dependsOn"];
@@ -22,7 +26,7 @@ export function authoringFeatureIds(
     .selectValues(
       `WITH RECURSIVE
     roots(id) AS (
-      SELECT r.id FROM records_core r WHERE r.world_id=? AND r.kind='feature' AND (
+      SELECT r.id FROM records_core r WHERE r.world_id=? AND r.kind='feature' AND (?=0 OR r.area_id=?) AND (
         r.id IN (SELECT value FROM json_each(?)) OR
         (r.space_id=? AND r.layer_id IN (SELECT value FROM json_each(?))
          AND r.record_id IN (SELECT record_id FROM record_bounds
@@ -39,6 +43,8 @@ export function authoringFeatureIds(
     WHERE r.world_id=? AND r.kind='feature' AND (? IS NULL OR r.id>?) ORDER BY r.id LIMIT ?`,
       [
         input.scope.worldId,
+        Number(independent),
+        input.scope.areaId,
         JSON.stringify(input.featureIds),
         input.scope.spaceId,
         JSON.stringify(input.layers),

@@ -2,6 +2,25 @@
 
 Direction recorded 2026-10-18.
 
+**Superseded for regional maps by the user's 2026-10-29 correction:** Maps share
+world coordinates and completed history, but each map develops its own geography.
+Regional refinement does not preserve parent elevation, frozen boundary samples
+or exact shores and does not change parent or sibling maps. Cross-map numerical
+consistency and seamless zoom are not product requirements; seamless zoom is
+explicitly undesired. The older composition and boundary provisions below are
+historical design context where they conflict with that direction. Generation
+serves tabletop mapmaking rather than continued simulation under revision.
+
+Regional maps keep independent records in the existing browser catalog. Feature
+IDs identify map-local geography; `placeId` relates a captured place across maps.
+Creation records its source revision, imports bounded geographic context and
+pins map-owned numerical descriptors to immutable resources. Shared bytes are
+storage reuse: later parent publications replace their own references, never a
+child's captured inputs. Child generation publishes local records and resources.
+Active readers stop at the map's ownership boundary. Parent links locate maps
+and record provenance; they do not supply live fallback geography. Opening an
+older saved region captures its existing composed geography before detaching it.
+
 Current runtime and authority are governed by [ADR 0003](0003-frontend-session.md):
 the browser GIS workspace and shared TypeScript validation. The PostGIS, service and
 hosted persistence provisions here are deferred; spatial identity and authoring rules

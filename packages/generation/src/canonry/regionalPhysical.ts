@@ -2,9 +2,9 @@ import { spatial } from "@atlas/domain";
 import type { GenerationState, MapProcess } from "../process";
 import { generationBindings } from "../generationBindings";
 import { physicalContext } from "./context";
-import { synthesizeRelief } from "./adaptiveRelief";
+import { synthesizeRegionalRelief } from "./adaptiveRelief";
 import { parentChannels, composeNativeAuthoring } from "./atlasWorkspace";
-import { conditionRegionalCorridors, regionalIncomingWater } from "./regionalCorridors";
+import { regionalIncomingWater } from "./regionalCorridors";
 import { oceanConnectivity } from "./ocean";
 import { oceanDistance, bathymetry, landmasses } from "./geography";
 import { drainageConditioning } from "./drainageFlood";
@@ -18,22 +18,14 @@ import { floodplains } from "./floodplains";
 import { deltaFormation } from "./deltas";
 import { validatePhysical } from "./validation";
 import { maintainLandmark } from "./landmarks";
+import { refreshGrounding } from "./glacierSurface";
 
 export function constructRegionalRelief(state: GenerationState, seed: number) {
   const work = state.physical!,
     parent = parentChannels(state).get("elevation"),
     c = physicalContext(seed, 0, work.profile);
   oceanConnectivity(work.map, c);
-  if (parent)
-    synthesizeRelief(
-      work.map,
-      parent,
-      state.domain.scope.footprint,
-      state.domain.scope.resolution ?? work.map.mesh.spacing,
-      seed,
-      work.profile
-    );
-  conditionRegionalCorridors(state);
+  if (parent) synthesizeRegionalRelief(work.map, parent, seed, work.profile);
   composeNativeAuthoring(work);
 }
 function maintainInheritedLandmarks(state: GenerationState) {
@@ -75,6 +67,7 @@ export function constructRegionalWater(state: GenerationState, seed: number) {
   riverChannelGeometry(map, c);
   floodplains(map, c);
   deltaFormation(map, c);
+  refreshGrounding(map, work.profile);
   validatePhysical(map, c);
 }
 const waterFacts = [

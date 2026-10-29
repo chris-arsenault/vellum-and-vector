@@ -119,6 +119,8 @@ export interface SocietyEraRecord {
   cycles?: number;
 }
 export interface SocietyRegion {
+  /** Initial source context, allocated on this map without consulting the source map again. */
+  capturedFrom?: string;
   areaId: string;
   spaceId: string;
   communities: SocietyCommunity[];

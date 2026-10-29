@@ -10,10 +10,33 @@ does not restart or recover. There is no backend or MCP in this product phase.
 
 Selected region subjects retain their original source and arbitrary hierarchy.
 An explicit refinement action links a finer geographic area to that subject,
-using its nearest refined ancestor. The regional sequence reads ancestor fields
-and retained drainage, builds conditioned relief and connected water, adapts local
+using its nearest refined ancestor as a starting point. The child is a separate
+map sharing coordinates and completed history, with independent elevation and
+coastlines. It does not preserve parent height samples or require numerical
+reconciliation. Creation captures local feature, network, drainage, landmark,
+magic and society records. Each geographic record belongs to the new map; a
+separate place identity relates it to the source. Numerical inputs have map-owned
+descriptors pinned to immutable resource bytes. Replacing a parent's resource
+does not change those captured inputs, and creating a child does not copy scalar
+arrays. The regional sequence reads the captured fields and retained drainage,
+develops relief and water, adapts local
 climate, and presents habitats and inherited magic without executing world epochs.
 No region label or nesting depth selects another map type.
+Selection can use whole landmasses from physical shore geometry as well as named
+geographic and social polygons. Child map extents include surrounding context so
+a coastal subject can develop its shore. Generation publishes only map-owned
+features and fields; it does not write finer detail onto parent feature records.
+Presentation, inspection, registry and export read the open map's geography.
+Existing saved regions capture their composed detail once when opened, retaining
+their finer geometry and surface patches. Zoom never opens another map or exposes
+the surrounding world.
+
+Captured source drawings and surface patches become initial context rather than
+authored constraints on the child. Conversion preserves a saved map's own
+drawings and protections. Numerical import respects nonnegative material amounts
+and bounded ecological fractions while keeping height, temperature and vector
+components signed. Regional water updates ice grounding after terrain changes.
+
 Seam-spanning regions retain short periodic field neighbors and travel distances.
 Their mapped ways split at the chart edge while retaining one feature identity
 and a shared network junction.

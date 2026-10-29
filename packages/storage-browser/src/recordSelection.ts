@@ -36,6 +36,20 @@ export class RecordSelection {
   ofKind(kind: ObjectKind) {
     return [...this.records.values()].filter((r) => r.data.kind === kind);
   }
+  ownedArea(id: string): string | null {
+    const data = this.get("area", id)?.data;
+    return data?.kind === "area" && (!data.value.parentId || data.value.map) ? id : null;
+  }
+  lineage(id: string): string[] {
+    return this.db
+      .selectValues(
+        `WITH RECURSIVE lineage(id) AS (SELECT ? UNION
+      SELECT json_extract(r.data,'$.value.parentId') FROM records r JOIN lineage l ON r.id=l.id
+      WHERE r.world_id=? AND r.kind='area' AND json_type(r.data,'$.value.map') IS NULL AND json_extract(r.data,'$.value.parentId') IS NOT NULL) SELECT id FROM lineage`,
+        [id, this.worldId]
+      )
+      .map(String);
+  }
   related(ids: string[], relations: string[], reverse: boolean) {
     if (!ids.length) return [];
     return this.select(

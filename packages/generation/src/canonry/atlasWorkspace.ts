@@ -10,6 +10,7 @@ import {
   type Position,
   rectangle,
   isDescendant,
+  ownsMapGeography,
 } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { authoredFields } from "../mapAuthored";
@@ -69,13 +70,8 @@ export function parentChannels(state: GenerationState) {
   const inputs = new Map<string, Grid>();
   for (const field of state.domain.world.fields) {
     const grid = state.domain.numerical[field.id];
-    if (
-      !grid ||
-      grid.scope.spaceId !== state.surface.scope.spaceId ||
-      field.areaId === state.surface.scope.areaId
-    )
-      continue;
-    if (!isDescendant(state.domain.world.areas, state.surface.scope.areaId, field.areaId)) continue;
+    if (!grid || grid.scope.spaceId !== state.surface.scope.spaceId) continue;
+    if (!inputOwner(state, field)) continue;
     if (!spatial.covers(grid.scope.footprint, state.surface.scope.footprint)) continue;
     for (const name of Object.keys(grid.channels)) {
       const previous = inputs.get(name);
@@ -83,6 +79,15 @@ export function parentChannels(state: GenerationState) {
     }
   }
   return inputs;
+}
+function inputOwner(
+  state: GenerationState,
+  field: GenerationState["domain"]["world"]["fields"][number]
+) {
+  const id = state.surface.scope.areaId;
+  return ownsMapGeography(state.domain.world, id)
+    ? field.areaId === id && !!field.input
+    : field.areaId !== id && isDescendant(state.domain.world.areas, id, field.areaId);
 }
 function initializeInheritedMaterial(map: PhysicalField, surface: Grid) {
   for (let i = 0; i < map.mesh.count; i++) {
@@ -101,7 +106,9 @@ function initializeInheritedMaterial(map: PhysicalField, surface: Grid) {
 }
 function inheritNumerical(state: GenerationState, work: AtlasPhysicalWorkspace) {
   const map = work.map,
-    parent = parentChannels(state),
+    parent = state.domain.world.areas[state.domain.scope.areaId].map
+      ? new Map<string, Grid>()
+      : parentChannels(state),
     surface = state.surface;
   const datum = surface.channels.seaDatum?.get(0) ?? 0;
   map.OpenBoundary = true;
@@ -134,14 +141,19 @@ function inheritChannels(
       band = map[binding.native],
       integer = band.type === "int32";
     for (let i = 0; i < map.mesh.count; i++) {
-      const value = valueAt(nativePosition(work, i));
+      const value = inheritedValue(valueAt(nativePosition(work, i)), binding);
       const native = (value - (binding.offset ?? 0) + (binding.datum ? datum : 0)) / binding.scale;
       band.set(i, integer ? Math.round(native) : native);
     }
   }
 }
+/** Reconstructed field edges can overshoot; imported stocks/fractions retain their meaning. */
+function inheritedValue(value: number, binding: ChannelBinding) {
+  return Math.max(binding.minimum ?? -Infinity, Math.min(binding.maximum ?? Infinity, value));
+}
 function fixedInheritedBoundary(state: GenerationState, work: AtlasPhysicalWorkspace) {
   if (!work.inherited) return;
+  if (state.domain.world.areas[state.domain.scope.areaId].profile === "region") return;
   const values = retainedArray(work.map, "float64", "inherited:boundary").fill(NaN);
   const footprint = state.surface.scope.footprint,
     margin = state.domain.scope.resolution ?? work.map.mesh.spacing;

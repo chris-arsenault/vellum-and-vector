@@ -3,8 +3,23 @@
 ## Product and source authority
 
 Build the fictional-world atlas described in [docs/product-spec.md](docs/product-spec.md).
-Creators progressively generate and explore one geographically coherent world.
-Keep spatial identity and understandable generation history central.
+Creators make maps for tabletop roleplaying, sharing a coordinate system and
+world history. Generation supplies interesting geography to work with; numerical
+accuracy and continued physical consistency under revision are not product goals.
+
+**Independent regional maps — 2026-10-29 user correction:** Refinement creates a
+separate map from parent context. Its elevation and coastline may change freely;
+do not freeze inherited heights, conserve parent height samples or require
+boundary reconciliation. Refining a child does not modify its parent or siblings.
+Later parent changes leave existing children's captured inputs and geography
+unchanged. Sharing immutable resource bytes is allowed; map-owned references stay
+pinned to their captured resources.
+Zooming stays on the open map; seamless navigation between map levels through
+zoom is explicitly undesired. Use explicit map navigation. Preserve completed
+world history without requiring the revised geography to reproduce it. Region
+selection should follow recognizable landforms, including whole islands, and a
+coastal region needs room to develop its coast. These corrections supersede older
+cross-map physical consistency and boundary-lock requirements in the design docs.
 
 **Deferred product scope — 2026-10-28:** Manual editing, its associated authoring
 tools, and undo are deferred until the user resumes their design. Do not implement,

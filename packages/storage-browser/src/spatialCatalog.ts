@@ -65,7 +65,12 @@ export class SpatialCatalog implements SpatialStore {
     this.registry = new RegistryCatalog(db, this.projection, this.features, kernel, communities);
     this.settlements = new SettlementCatalog(db, this.features, communities);
     this.presentation = new PresentationCatalog(db, this.features);
-    this.regions = new RegionCatalog(db, kernel, (query) => this.readFeatures(query));
+    this.regions = new RegionCatalog(
+      db,
+      kernel,
+      (query) => this.readFeatures(query),
+      this.geography
+    );
     this.mutation = new CatalogMutation(db, kernel, {
       journal: this.journal,
       projection: this.projection,

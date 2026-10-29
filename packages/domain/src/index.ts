@@ -107,3 +107,4 @@ export {
   unwrapCoordinates,
 } from "./worldBoundary";
 export * from "./generationHistory";
+export * from "./mapOwnership";

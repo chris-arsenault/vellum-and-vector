@@ -6,6 +6,7 @@ import {
   isDescendant,
   foldSamples,
   representationId,
+  ownsMapGeography,
   type AtlasFeature,
   type RegularGrid,
 } from "@atlas/domain";
@@ -105,6 +106,7 @@ export function putGeneratedDetail(
   matches: (existing: AtlasFeature) => boolean
 ) {
   const world = state.domain.world;
+  if (ownsMapGeography(world, feature.areaId)) return putMapPlace(state, feature, matches);
   const previous = findGenerationFeature(
     state,
     (candidate) =>
@@ -132,6 +134,25 @@ export function putGeneratedDetail(
     generationId: null,
   };
   writeGenerationFeature(state, previous);
+  return true;
+}
+function putMapPlace(
+  state: GenerationState,
+  feature: AtlasFeature,
+  matches: (candidate: AtlasFeature) => boolean
+) {
+  const local = findGenerationFeature(
+    state,
+    (candidate) => candidate.areaId === feature.areaId && matches(candidate)
+  );
+  if (!local) return false;
+  if (local.protected || local.state === "authored") return true;
+  writeGenerationFeature(state, {
+    ...feature,
+    id: local.id,
+    placeId: local.placeId ?? local.id,
+    name: local.name,
+  });
   return true;
 }
 function networkHeight(feature: AtlasFeature, index: number, coordinate: number[]) {
@@ -162,7 +183,9 @@ function putNetworkPart(
   const ids = ends.map((p) =>
     semanticId(
       world.id,
-      "generated-junction",
+      ownsMapGeography(world, state.domain.scope.areaId)
+        ? `generated-junction:${state.domain.scope.areaId}`
+        : "generated-junction",
       JSON.stringify([
         state.domain.scope.spaceId,
         canonicalPosition(world.reference, { x: p[0], y: p[1], z: 0 }).x,

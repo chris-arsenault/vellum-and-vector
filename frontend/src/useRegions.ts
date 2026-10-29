@@ -7,6 +7,7 @@ import {
   refinedRegionArea,
   regionRefinementInput,
   regionSourceAreaId,
+  ownsMapGeography,
   type Bounds,
   type RegionCandidate,
   type RegionQuery,
@@ -73,30 +74,33 @@ function useRegionDraft() {
   };
 }
 type Draft = ReturnType<typeof useRegionDraft>;
+function displayedFootprint(o: Options, sourceAreaId: string, regionId: string | null) {
+  const area = o.world.areas[o.areaId];
+  return area.regionId === regionId
+    ? area.footprint
+    : regionFootprint(o.world, sourceAreaId, regionId);
+}
 function regionContext(o: Options, d: Draft) {
-  const sourceAreaId = regionSourceAreaId(o.world, o.selectedRegionId, o.areaId);
+  const sourceAreaId = ownsMapGeography(o.world, o.areaId)
+    ? o.areaId
+    : regionSourceAreaId(o.world, o.selectedRegionId, o.areaId);
   const regions = regionViews(o.world, sourceAreaId);
-  const region = regions.find((r) => r.id === o.selectedRegionId) ?? null;
-  const parentId = d.editingId ? (region?.region.parentId ?? null) : (region?.id ?? null);
-  const footprint = regionFootprint(o.world, sourceAreaId, region?.id ?? null);
+  const region = o.world.views.find((r) => r.id === o.selectedRegionId && r.region) as
+    (typeof regions)[number] | undefined;
+  const localRegion = region?.areaId === sourceAreaId ? region : null;
+  const parentId = selectionParent(localRegion, !!d.editingId);
+  const footprint = displayedFootprint(o, sourceAreaId, localRegion?.id ?? null);
   const viewport = (o.viewport as Bounds | null) ?? spatial.bounds(footprint);
   return { region, regions, parentId, footprint, viewport, sourceAreaId };
 }
 type Context = ReturnType<typeof regionContext>;
+function selectionParent(region: ReturnType<typeof regionViews>[number] | null, editing: boolean) {
+  return editing ? (region?.region.parentId ?? null) : (region?.id ?? null);
+}
 export function useRegions(o: Options) {
   const d = useRegionDraft(),
     c = regionContext(o, d);
-  const enterRegion = (id: string | null) => {
-    const target = o.world.views.find((v) => v.id === id && v.region);
-    o.setAreaId(
-      target ? (refinedRegionArea(o.world, target.id)?.id ?? target.areaId) : c.sourceAreaId
-    );
-    o.setRegionId(target?.id ?? null);
-    o.setSelected(null);
-    d.clear();
-    o.setTool("select");
-    o.setPanel("regions");
-  };
+  const enterRegion = regionEntry(o, d, c);
   return {
     region: c.region,
     regions: c.regions,
@@ -127,7 +131,7 @@ export function useRegions(o: Options) {
     },
     enterRegion,
     regionPresentation: {
-      id: c.region?.id ?? null,
+      id: c.region?.areaId === c.sourceAreaId ? c.region.id : null,
       sourceAreaId: o.areaId,
       footprint: c.footprint,
       name: c.region?.name ?? o.world.areas[o.areaId].name,
@@ -158,9 +162,24 @@ export function useRegions(o: Options) {
     },
   };
 }
+function regionEntry(o: Options, d: Draft, c: Context) {
+  return (id: string | null) => {
+    const target = o.world.views.find((v) => v.id === id && v.region);
+    o.setAreaId(
+      target
+        ? (refinedRegionArea(o.world, target.id)?.id ?? target.areaId)
+        : (c.region?.areaId ?? c.sourceAreaId)
+    );
+    o.setRegionId(target?.id ?? null);
+    o.setSelected(null);
+    d.clear();
+    o.setTool("select");
+    o.setPanel("regions");
+  };
+}
 function regionDrawing(o: Options, d: Draft, c: Context, enter: (id: string) => void) {
   const query = (position: Position | null): RegionQuery => ({
-    scope: workspaceScope(o.world, c.sourceAreaId),
+    scope: workspaceScope(o.world, o.areaId),
     sourceAreaId: c.sourceAreaId,
     parentId: c.parentId,
     editingId: d.editingId,
