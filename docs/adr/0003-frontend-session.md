@@ -40,16 +40,20 @@ numerical operations that a later hosted adapter can implement; they do not emul
 PostGIS functions or prescribe HTTP routes.
 
 The editor holds configuration, selections and current viewport products. It reads
-features and registry rows through scoped, paged queries. A page composes its
-features from one context and caches each presented feature by identity until the
-next commit; the registry presents rows in batches through the same path and marks
-only the features a write can affect. Canonical geometry stays separate from
-generalized display products: a record write stores the geometry row, links and
-bounds, and one owner derives spatial pieces and overviews lazily, keyed by the
-immutable geometry id. Region picking is a spatial index query for the polygons
-covering the click; a dividing line splits only the indexed polygons it crosses.
-Storage pieces do not become geographic borders. Display reads
-return a fragment per seam window; the editor keeps every fragment under the
+features and registry rows through scoped, paged queries. Derived read products are
+computed at most once per input revision, on first use, and stored in the catalog;
+writes only drop the products of the records they affect, and no product is
+recomputed per pan, page or click. A page composes its missing features from one
+context and stores each presented feature per area until one of its input records
+changes; the registry keeps rows per presentation scope and marks only the features a
+write can affect. Canonical geometry stays separate from generalized display products:
+a record write stores the geometry row, links and bounds, and one owner derives
+spatial pieces, overviews, display simplifications and snapped-window clips lazily,
+keyed by the immutable geometry id. Region picking is a spatial index query for the
+polygons covering the click; a dividing line splits only the indexed polygons it
+crosses. Storage pieces do not become geographic borders. The scene is read for a
+window snapped to a power-of-two grid, so a pan inside the cell reads nothing. Display
+reads return a fragment per seam window; the editor keeps every fragment under the
 feature's canonical identity. Render workers register a raster by the immutable
 resources it samples and update viewport geography in place; immutable inputs
 are bands over their chunks in the renderer's block cache.
