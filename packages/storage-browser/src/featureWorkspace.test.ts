@@ -147,6 +147,43 @@ it("checks authored protection and scope against stored values", async () => {
   putGenerated(state, outside);
   expect(() => validateWorkingMap(state, original)).toThrow("declared edit extent");
 });
+it("prepares separate child geometry clipped to a slanted regional extent", async () => {
+  const { state, features, sourceFeatures } = await working();
+  const parent = { ...structuredClone(state.domain.world.areas.area), id: "parent-map" };
+  const footprint = {
+    type: "Polygon" as const,
+    coordinates: [
+      [
+        [0, 0],
+        [1000, 0],
+        [0, 700],
+        [0, 0],
+      ],
+    ],
+  };
+  state.domain.world.areas[parent.id] = parent;
+  state.domain.world.areas.area = {
+    ...state.domain.world.areas.area,
+    parentId: parent.id,
+    profile: "region",
+    map: { sourceAreaId: parent.id, sourceRevision: 1 },
+  };
+  state.domain.scope.footprint = footprint;
+  state.domain.world.areas.area.footprint = footprint;
+  state.surface.scope.footprint = footprint;
+  const clipped = spatial.intersection(rectangle([123.456789, 0, 400, 700]), footprint)!;
+  sourceFeatures.put(
+    generatedFeature(state, "coastal", "Coastal forest", "forest", "ecology", clipped)
+  );
+  const process = prepareGeneratedProcess(["physical"]);
+  const result = await new MapRunner(
+    configuration([invoke(process)]),
+    new MapProcessRegistry().register(process)
+  ).run(state, { ...options, features, sourceFeatures });
+  expect(result.state.domain.world.areas[parent.id]).toEqual(parent);
+  expect([...features.values()]).toEqual([]);
+  expect([...sourceFeatures.values()]).toHaveLength(1);
+});
 it("repairs stored generated attributes at publication and retains its diagnostics", async () => {
   const { state, features } = await working();
   initializeFeatureWorkspace(state, features);

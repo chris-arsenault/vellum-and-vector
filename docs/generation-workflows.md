@@ -6,6 +6,10 @@ Initial generation displays independent epoch previews and publishes validated
 record batches. Explicit map saves retain completed geography; execution state
 does not restart or recover. There is no backend or MCP in this product phase.
 
+When society feedback moves a map's physical shore, publication refreshes its
+named seas from that shoreline and reuses matching place identities. Other maps
+retain their captured geography.
+
 ## Geographic regional refinement
 
 Selected region subjects retain their original source and arbitrary hierarchy.

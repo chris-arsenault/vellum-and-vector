@@ -20,6 +20,7 @@ import {
 } from "./canonry/atlasWorkspace";
 import { projectNative } from "./canonry/atlasProjection";
 import { extractNativeGeography } from "./canonry/atlasFeatures";
+import { refreshOceans } from "./canonry/oceanFeatures";
 import { physicalContext } from "./canonry/context";
 import { oceanConnectivity } from "./canonry/ocean";
 import { bathymetry, oceanDistance } from "./canonry/geography";
@@ -332,6 +333,7 @@ function publishEnvironmentalChanges(
   const has = (layer: string) => world.fields.some((f) => f.layerId === layer) || physical;
   dropReplaceableFeatures(state);
   const drainage = world.drainage?.[area];
+  const ocean = state.surface.ocean;
   extractNativeGeography(state, context, {
     oceans: false,
     impacts: false,
@@ -345,6 +347,11 @@ function publishEnvironmentalChanges(
     rivers: available.has("riverOrder"),
     landmarks: false,
   });
+  refreshOceans(
+    state,
+    ocean,
+    generationBindings(context).features.selection["ocean.geography"]?.enabled === true
+  );
   if (!available.has("riverOrder") && drainage) world.drainage![area] = drainage;
 }
 function refreshMagicPathways(

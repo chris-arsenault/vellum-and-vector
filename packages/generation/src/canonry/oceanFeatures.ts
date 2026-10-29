@@ -8,6 +8,8 @@ import { metricSearch } from "./metricSearch";
 import { units } from "./math";
 import { workingValues, releaseWorking } from "./physicalNumerics";
 import { isWorldGeography, marineSignificance } from "../worldSignificance";
+import { generationFeatures, removeGenerationFeature } from "../generationFeatures";
+import { retainGeographicIdentities } from "./geographicIdentity";
 
 function polygons(shape: Geometry): Polygon[] {
   if (shape.type === "Polygon") return [shape];
@@ -136,4 +138,40 @@ export function extractOceans(state: GenerationState) {
     remaining = areaGeometry(spatial.difference(remaining, shape));
   }
   releaseWorking(work.map, extended);
+}
+
+/** Refresh this map's named seas when feedback moves its physical shore. */
+export function refreshOceans(
+  state: GenerationState,
+  previousShore: Geometry | null | undefined,
+  enabled: boolean
+) {
+  const shore = state.surface.ocean;
+  if (sameShore(previousShore, shore)) return;
+  const previous = [
+    ...generationFeatures(state, { areaId: state.domain.scope.areaId, kind: "ocean" }),
+  ];
+  if (!enabled && !previous.length) return;
+  const original = {
+    ...state.domain,
+    world: { ...state.domain.world, features: Object.fromEntries(previous.map((f) => [f.id, f])) },
+  };
+  for (const feature of previous)
+    if (feature.state === "generated" && !feature.protected && !Object.keys(feature.detail).length)
+      removeGenerationFeature(state, feature.id);
+  extractOceans(state);
+  const generated = new Set(
+    [...generationFeatures(state, { areaId: state.domain.scope.areaId, kind: "ocean" })].map(
+      (f) => f.id
+    )
+  );
+  retainGeographicIdentities(
+    { ...state, sourceFeatures: undefined, sourceNetworks: undefined },
+    original,
+    state.physical!.map.mesh.spacing * 2,
+    generated
+  );
+}
+function sameShore(a: Geometry | null | undefined, b: Geometry | null | undefined) {
+  return a === b || Boolean(a && b && spatial.covers(a, b) && spatial.covers(b, a));
 }

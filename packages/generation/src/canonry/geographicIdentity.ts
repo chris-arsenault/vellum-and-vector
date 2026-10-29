@@ -166,6 +166,7 @@ function reuseIdentity(
       : {
           ...next,
           id: previous.id,
+          ...(previous.placeId ? { placeId: previous.placeId } : {}),
           name: previous.name,
           relations: previous.relations,
           attributes: { ...next.attributes, ...retainedNameMetadata(previous) },

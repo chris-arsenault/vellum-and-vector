@@ -35,7 +35,10 @@ function validateRoleScope(
   if (sameValue(before, after)) return;
   for (const geometry of changedGeometry(gis, before, after))
     requireThat(
-      gis.covers(source.scope.footprint, geometry),
+      // Clipping rounds new vertices to the precision grid. Use the same overlay
+      // precision here, including where those vertices lie on a slanted edge.
+      gis.covers(source.scope.footprint, geometry) ||
+        gis.difference(geometry, source.scope.footprint) === null,
       "write_scope",
       "The declared edit extent must contain the geography it adds, removes or moves."
     );
