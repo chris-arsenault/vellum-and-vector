@@ -14,10 +14,6 @@ CREATE TABLE IF NOT EXISTS composed_features (
   PRIMARY KEY(world_id,area_id,feature_id)
 );
 CREATE INDEX IF NOT EXISTS composed_feature ON composed_features(world_id,feature_id);
-CREATE TRIGGER IF NOT EXISTS composed_remove AFTER DELETE ON composed_features WHEN old.owned<>0 BEGIN
-  DELETE FROM geometry_values WHERE (old.owned & 1 AND geometry_id=old.geometry_id)
-    OR (old.owned & 2 AND geometry_id=old.footprint_id);
-END;
 CREATE TABLE IF NOT EXISTS feature_reach (
   world_id TEXT NOT NULL,feature_id TEXT NOT NULL,record_id INTEGER NOT NULL,
   PRIMARY KEY(world_id,feature_id,record_id)
@@ -40,9 +36,18 @@ const followers = `WITH RECURSIVE affected(id) AS (SELECT $id UNION SELECT r.id 
   JOIN record_links l ON l.world_id=$world AND l.target=a.id AND l.relation='follows'
   JOIN records_core r ON r.record_id=l.source)`;
 
+/** Prepared geometry is cached by geometry id, so a removed product's rows may be deleted only
+ * where ids never repeat. Catalogs saved before AUTOINCREMENT keep those rows instead. */
+const removeOwnedGeometry = `
+CREATE TRIGGER IF NOT EXISTS composed_remove AFTER DELETE ON composed_features WHEN old.owned<>0 BEGIN
+  DELETE FROM geometry_values WHERE (old.owned & 1 AND geometry_id=old.geometry_id)
+    OR (old.owned & 2 AND geometry_id=old.footprint_id);
+END;`;
 export class ComposedFeatures {
   constructor(private db: Database) {
     db.exec(composedSchema);
+    const table = db.selectValue("SELECT sql FROM sqlite_master WHERE name='geometry_values'");
+    if (String(table).includes("AUTOINCREMENT")) db.exec(removeOwnedGeometry);
   }
   /** Stored products by feature id; null marks a feature not presented in the area. */
   read(worldId: string, areaId: string, ids: string[]) {
