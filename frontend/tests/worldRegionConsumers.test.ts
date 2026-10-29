@@ -37,8 +37,13 @@ test("keeps overlapping world regions distinct and carries the chosen geography 
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
   const refined = await exportMap(page);
   const area = refined.areas.find((a: { parentId: string | null }) => a.parentId);
-  expect(area.footprint).toEqual(selected.regions[0].footprint);
+  expect(spatial.covers(area.footprint, selected.regions[0].footprint)).toBe(true);
+  expect(spatial.area(area.footprint)).toBeGreaterThan(spatial.area(selected.regions[0].footprint));
   expect(refined.regions[0].id).toBe(selected.regions[0].id);
+  await page.locator(".breadcrumbs button").first().click();
+  const parent = await exportMap(page);
+  const summit = (feature: { id: string }) => feature.id === peak.id;
+  expect(parent.features.find(summit)).toEqual(original.features.find(summit));
 });
 
 test("selects canonical geography from a repeated cylindrical chart without duplicating its source", async ({

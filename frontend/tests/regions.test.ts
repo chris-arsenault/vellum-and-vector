@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "./uiTest";
-import { openMapSettings, pointFeature } from "./harness";
+import { mapImage, mapPixel, mapEasting, openMapSettings, pointFeature } from "./harness";
 import { readFile } from "node:fs/promises";
 import { installGenerationFixture, completeGenerationFixture } from "./generationFixture";
 
@@ -283,10 +283,13 @@ test("pick an existing feature, adjust its region and remove unreferenced region
   await expect(page.locator(".job-row")).toHaveCount(0);
 });
 
-test("frames existing terrain as a region without another generation", async ({ page }) => {
+test("frames existing terrain and keeps a separate child map when zooming out @rendering", async ({
+  page,
+}) => {
   await installGenerationFixture(page, { fields: true, terrain: true, life: true });
   await create(page, true);
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
+  const wholeMap = await mapImage(page);
   const before = await exported(page);
   await page.getByRole("button", { name: "Regions", exact: true }).click();
   await outline(page, "Hill country", source, [
@@ -298,6 +301,7 @@ test("frames existing terrain as a region without another generation", async ({ 
   ]);
   await expect(canvas(page)).toHaveAttribute("aria-busy", "false");
   await page.screenshot({ path: "test-results/terrain-region.png" });
+  await expect.poll(() => mapImage(page)).not.toBe(wholeMap);
   const after = await exported(page);
   expect(after.features).toEqual(before.features);
   expect(after.areas).toEqual(before.areas);
@@ -308,6 +312,25 @@ test("frames existing terrain as a region without another generation", async ({ 
   await page.getByRole("button", { name: "Regions", exact: true }).click();
   await clickWorld(page, 50_000, 50_000);
   await expect(page.locator(".breadcrumbs")).toContainText("Hill country");
+  await page.getByRole("button", { name: "Refine this region", exact: true }).click();
+  await expect(page.getByLabel("Regional detail")).toBeVisible();
+  await page.getByRole("button", { name: "Return to region", exact: true }).click();
+  await canvas(page).hover();
+  await page.mouse.wheel(0, 600);
+  await expect(canvas(page)).toHaveAttribute("aria-busy", "false");
+  const west = await mapEasting(page, 0.4),
+    east = await mapEasting(page, 0.6),
+    outside = 0.4 + ((10_000 - west) / (east - west)) * 0.2;
+  // The area outside the child exposes the map-frame background, not the parent's terrain.
+  await expect
+    .poll(async () => {
+      const pixel = await mapPixel(page, outside, 0.5);
+      return pixel.every((value, i) => Math.abs(value - [49, 87, 91][i]) < 20);
+    })
+    .toBe(true);
+  await expect.poll(() => mapPixel(page, 0.5, 0.5)).not.toEqual([49, 87, 91]);
+  await expect(page.locator(".breadcrumbs")).toContainText("Hill country");
+  await expect(page.locator(".job-row")).toHaveCount(1);
 });
 
 test("regional generation explains structural overlap, permits renaming and follows undo @deferred-authoring", async ({

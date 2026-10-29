@@ -86,6 +86,35 @@ export async function mapImage(page: Page) {
   return createHash("sha256").update(buffer).digest("hex");
 }
 
+/** Sample the displayed canvas at fractional screen coordinates. */
+export async function mapPixel(page: Page, x: number, y: number) {
+  const png = (await canvas(page).screenshot()).toString("base64");
+  return page.evaluate(
+    async ({ png, x, y }) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${png}`;
+      await image.decode();
+      const surface = document.createElement("canvas");
+      surface.width = image.width;
+      surface.height = image.height;
+      const context = surface.getContext("2d")!;
+      context.drawImage(image, 0, 0);
+      return [
+        ...context.getImageData(Math.floor(x * image.width), Math.floor(y * image.height), 1, 1)
+          .data,
+      ].slice(0, 3);
+    },
+    { png, x, y }
+  );
+}
+
+export async function mapEasting(page: Page, fraction: number) {
+  const box = (await canvas(page).boundingBox())!;
+  await canvas(page).hover({ position: { x: box.width * fraction, y: box.height / 2 } });
+  const coordinates = await page.locator(".coordinates").textContent();
+  return Number(coordinates!.match(/(-?[\d.]+) E/)![1]);
+}
+
 /** Place a named point feature at a canvas pixel and wait for its panel. */
 export async function placePoint(page: Page, name: string, x = 300, y = 300) {
   await tool(page, "Place point").click();
