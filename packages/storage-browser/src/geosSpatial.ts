@@ -1,7 +1,14 @@
 import type { Geometry, Position as Coordinate } from "geojson";
-import { requireThat, type Position, type SpatialOperations } from "@atlas/domain";
+import {
+  requireThat,
+  type Bounds,
+  type Position,
+  type SpatialIndex,
+  type SpatialOperations,
+} from "@atlas/domain";
 import type { GeometryKernel } from "./geometryKernel";
 import { contourArea } from "./contourArea";
+import * as native from "./nativeOperations";
 
 let sequence = 0;
 /** Native spatial adapter shared by domain commands, generation and worker rendering. */
@@ -166,6 +173,57 @@ export class GeosSpatial implements SpatialOperations {
       );
     } finally {
       g.Module._free(output);
+    }
+  }
+  clipByRect(value: Geometry, bounds: Bounds) {
+    return native.clipByRect(this.kernel, value, bounds, this.precision);
+  }
+  nearestPoints(a: Geometry, b: Geometry): [Position, Position] {
+    const [p, q] = native.nearestPoints(this.kernel, a, b, this.precision);
+    return [
+      { x: p[0], y: p[1], z: 0 },
+      { x: q[0], y: q[1], z: 0 },
+    ];
+  }
+  lineFraction(line: Geometry, position: Position) {
+    return native.project(this.kernel, line, position.x, position.y, this.precision);
+  }
+  lineAt(line: Geometry, fraction: number): Position {
+    const [x, y, z = 0] = native.interpolate(
+      this.kernel,
+      line,
+      fraction,
+      this.precision
+    ).coordinates;
+    return { x, y, z };
+  }
+  voronoiCells(sites: Position[], bounds: Bounds) {
+    return native.voronoi(
+      this.kernel,
+      sites.map((p) => [p.x, p.y]),
+      bounds,
+      this.precision
+    );
+  }
+  withIndex<T>(geometries: Geometry[], work: (index: SpatialIndex) => T): T {
+    const g = this.kernel.native,
+      tree = native.strtree(this.kernel),
+      owned: number[] = [];
+    try {
+      for (const value of geometries) {
+        const geometry = this.kernel.withShape(value, this.precision, (shape) =>
+          g.GEOSGeom_clone(shape)
+        );
+        owned.push(geometry);
+        tree.insert(geometry);
+      }
+      return work({
+        query: (bounds) => this.kernel.withRectangle(bounds, tree.query),
+        nearest: (p) => this.kernel.withRectangle([p.x, p.y, p.x, p.y], tree.nearest),
+      });
+    } finally {
+      tree.close();
+      for (const geometry of owned) g.GEOSGeom_destroy(geometry);
     }
   }
   crossings(value: Geometry, footprint: Geometry): Position[] {

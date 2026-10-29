@@ -350,6 +350,20 @@ export class GeometryKernel {
       }
     }
   }
+  /** A rectangle shape for index queries and clipping; degenerate bounds stay queryable. */
+  withRectangle<T>([x0, y0, x1, y1]: Bounds, work: (geometry: number) => T): T {
+    const g = this.geos,
+      shape =
+        x0 === x1 && y0 === y1
+          ? g.GEOSGeom_createPointFromXY(x0, y0)
+          : g.GEOSGeom_createRectangle(x0, y0, x1, y1);
+    requireThat(shape, "geometry_bounds", "Could not construct the query rectangle.");
+    try {
+      return work(shape);
+    } finally {
+      g.GEOSGeom_destroy(shape);
+    }
+  }
   matchesPoint(key: string, bytes: Uint8Array, x: number, y: number) {
     const point = this.geos.GEOSGeom_createPointFromXY(x, y);
     try {

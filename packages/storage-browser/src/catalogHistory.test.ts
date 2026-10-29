@@ -192,7 +192,9 @@ describe("immutable field geography", () => {
     const waterWindow = await f.catalog.readFieldWindow(f.scope, "layout", [650, 650, 800, 800]);
     expect(waterWindow.lakes?.[0].level).toBe(12);
     expect(spatial.area(waterWindow.lakes![0].geometry)).toBe(2500);
-    expect((await f.catalog.readFieldWindow(f.scope, "layout", [0, 0, 100, 100])).lakes).toEqual([]);
+    expect((await f.catalog.readFieldWindow(f.scope, "layout", [0, 0, 100, 100])).lakes).toEqual(
+      []
+    );
     expect(f.db.selectValue("SELECT count(*) FROM field_geometry_parts")).toBe(5);
     expect(f.db.selectValue("SELECT count(*) FROM field_geometry_bounds WHERE max_x<200")).toBe(1);
     expect(String(f.db.selectValue("SELECT data FROM field_geography"))).not.toContain(

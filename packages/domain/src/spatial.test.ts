@@ -297,3 +297,56 @@ it("refines inherited fields over arbitrary coverage with reciprocal adjacency",
       for (const j of neighbors(child, i)) expect(neighbors(child, j)).toContain(i);
   expect(() => sample(child, "elevation", { x: 18, y: 18, z: 0 })).toThrow();
 });
+
+const bend: Geometry = {
+  type: "LineString",
+  coordinates: [
+    [0, 0],
+    [10, 0],
+    [10, 10],
+  ],
+};
+it("clips to a window and references positions along a line", () => {
+  expect(spatial.clipByRect(bend, [5, -1, 20, 5])).toEqual({
+    type: "LineString",
+    coordinates: [
+      [5, 0],
+      [10, 0],
+      [10, 5],
+    ],
+  });
+  expect(spatial.clipByRect(bend, [20, 20, 30, 30])).toBeNull();
+  expect(spatial.nearestPoints(bend, point({ x: 4, y: 3, z: 0 }))).toEqual([
+    { x: 4, y: 0, z: 0 },
+    { x: 4, y: 3, z: 0 },
+  ]);
+  expect(spatial.lineFraction(bend, { x: 12, y: 5, z: 0 })).toBeCloseTo(0.75);
+  expect(spatial.lineAt(bend, 0.25)).toEqual({ x: 5, y: 0, z: 0 });
+});
+it("divides sites into Voronoi cells in site order", () => {
+  const cells = spatial.voronoiCells(
+    [
+      { x: 75, y: 50, z: 0 },
+      { x: 25, y: 50, z: 0 },
+    ],
+    [0, 0, 100, 100]
+  );
+  expect(cells.map((cell) => cell && spatial.area(cell))).toEqual([5000, 5000]);
+  expect(spatial.covers(cells[0]!, point({ x: 90, y: 10, z: 0 }))).toBe(true);
+  expect(spatial.voronoiCells([], [0, 0, 1, 1])).toEqual([]);
+});
+it("queries a native index by envelope and nearest item", () => {
+  const items = [
+    rectangle([0, 0, 10, 10]),
+    point({ x: 50, y: 50, z: 0 }),
+    rectangle([40, 0, 60, 10]),
+  ];
+  const result = spatial.withIndex(items, (index) => ({
+    window: index.query([5, 5, 45, 45]),
+    corner: index.query([60, 10, 60, 10]),
+    empty: index.query([100, 100, 200, 200]),
+    nearest: index.nearest({ x: 48, y: 40, z: 0 }),
+  }));
+  expect(result).toEqual({ window: [0, 2], corner: [2], empty: [], nearest: 1 });
+  expect(spatial.withIndex([], (index) => index.nearest({ x: 0, y: 0, z: 0 }))).toBe(-1);
+});

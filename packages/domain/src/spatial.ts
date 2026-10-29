@@ -29,7 +29,20 @@ export type SpatialOperations = Pick<
   | "bounds"
   | "interiorPosition"
   | "crossings"
+  | "clipByRect"
+  | "nearestPoints"
+  | "lineFraction"
+  | "lineAt"
+  | "voronoiCells"
+  | "withIndex"
 >;
+/** A native spatial index over geometries, reported by their position in the input list. */
+export interface SpatialIndex {
+  /** Items whose envelopes intersect `bounds`, in input order. */
+  query(bounds: Bounds): number[];
+  /** The item nearest to `position`, or -1 for an empty index. */
+  nearest(position: Position): number;
+}
 let operationFactory: ((precision: number) => SpatialOperations) | undefined;
 const implementations = new Map<number, SpatialOperations>();
 /** Installed once by an execution adapter; domain code never owns native handles. */
@@ -130,6 +143,28 @@ export class Spatial {
   }
   crossings(value: Geometry, footprint: Geometry): Position[] {
     return operations(this.precision).crossings(value, footprint);
+  }
+  clipByRect(value: Geometry, bounds: Bounds): Geometry | null {
+    return operations(this.precision).clipByRect(value, bounds);
+  }
+  /** The closest pair of points, first on `a`, then on `b`. */
+  nearestPoints(a: Geometry, b: Geometry): [Position, Position] {
+    return operations(this.precision).nearestPoints(a, b);
+  }
+  /** The fraction of a line's length at its point closest to `position`. */
+  lineFraction(line: Geometry, position: Position): number {
+    return operations(this.precision).lineFraction(line, position);
+  }
+  lineAt(line: Geometry, fraction: number): Position {
+    return operations(this.precision).lineAt(line, fraction);
+  }
+  /** Voronoi cells in site order, clipped to `bounds`. */
+  voronoiCells(sites: Position[], bounds: Bounds): (Geometry | null)[] {
+    return operations(this.precision).voronoiCells(sites, bounds);
+  }
+  /** The index is released when `work` returns. */
+  withIndex<T>(geometries: Geometry[], work: (index: SpatialIndex) => T): T {
+    return operations(this.precision).withIndex(geometries, work);
   }
 }
 
