@@ -13,6 +13,7 @@ import { useRegions, isRegionTool } from "./useRegions";
 import { useComposition } from "./useComposition";
 import { useQuery } from "@tanstack/react-query";
 import { atlasWorkspace, workspaceScope } from "./atlasWorkspace";
+import type { CartographicPresentation } from "@atlas/domain";
 
 function useEditorState(world: World) {
   const [selectedAreaId, setAreaId] = useState(
@@ -112,7 +113,12 @@ export function useEditor(world: World) {
     world,
     styles,
     viewportExtent: viewport,
-    ...useMapData(world, area.id, viewport, state.mapEngine?.map.getView().getResolution()),
+    ...useMapData(
+      world,
+      area.id,
+      mapDataExtent(composition.cartography, regions.regionPresentation, area, viewport),
+      state.mapEngine?.map.getView().getResolution()
+    ),
     viewport: setViewport,
     ...actions,
     ...regions,
@@ -247,6 +253,17 @@ export function newFeature(
     generationId: null,
     causes: [],
   };
+}
+/** A drawn sheet depicts its whole subject, so its reads follow the subject, not the viewport:
+ * panning the sheet changes no input and the illustration is assembled once per scale. */
+export function mapDataExtent(
+  view: CartographicPresentation,
+  subject: { footprint: Geometry },
+  area: Area,
+  viewport: number[] | null
+) {
+  if (view.mode !== "drawn" || !viewport) return viewport;
+  return bounds(view.clip ? subject.footprint : area.footprint);
 }
 export function areaInput(area: Area, geometry: Geometry, form: FormData) {
   const coordinates =

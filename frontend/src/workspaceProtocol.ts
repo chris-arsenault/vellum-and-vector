@@ -39,6 +39,8 @@ export type CatalogMethod =
   | "readLayerPresentation"
   | "readFeature"
   | "readFieldGeography"
+  | "readProduct"
+  | "writeProduct"
   | "regionChoices"
   | "drawRegion"
   | "readHistory"

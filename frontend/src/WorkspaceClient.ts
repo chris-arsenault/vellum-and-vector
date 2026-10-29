@@ -184,6 +184,12 @@ export class WorkspaceClient implements SpatialStore {
   readFieldGeography(scope: WorkspaceScope, resourceId: string) {
     return this.catalog(scope.worldId, "readFieldGeography", scope, resourceId);
   }
+  readProduct<T>(worldId: string, family: string, stamp: string) {
+    return this.catalog(worldId, "readProduct", worldId, family, stamp) as Promise<T | null>;
+  }
+  writeProduct(worldId: string, family: string, stamp: string, value: unknown) {
+    return this.catalog(worldId, "writeProduct", worldId, family, stamp, value);
+  }
   regionChoices(query: RegionQuery) {
     return this.catalog(query.scope.worldId, "regionChoices", query);
   }

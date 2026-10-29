@@ -33,6 +33,7 @@ import { CatalogMutation } from "./catalogMutation";
 import { PublicationStaging } from "./catalogPublication";
 import { GeometryDerivations } from "./geometryDerivations";
 import { ComposedFeatures } from "./composedFeatures";
+import { StoredProducts } from "./storedProducts";
 
 export class SpatialCatalog implements SpatialStore {
   private regions: RegionCatalog;
@@ -46,6 +47,7 @@ export class SpatialCatalog implements SpatialStore {
   private mutation: CatalogMutation;
   private publication: PublicationStaging;
   private composed: ComposedFeatures;
+  private products: StoredProducts;
   constructor(
     private db: Database,
     readonly kernel: GeometryKernel
@@ -53,6 +55,7 @@ export class SpatialCatalog implements SpatialStore {
     db.exec(catalogSchema);
     const derivations = new GeometryDerivations(db, kernel);
     this.composed = new ComposedFeatures(db);
+    this.products = new StoredProducts(db);
     this.journal = new CatalogHistory(db, kernel);
     this.geography = new FieldGeographyCatalog(db, kernel, derivations);
     this.projection = new CatalogProjection(db, kernel);
@@ -127,6 +130,17 @@ export class SpatialCatalog implements SpatialStore {
     const item = this.features.one(scope, id);
     requireThat(item, "missing_feature", "Choose an existing geographic feature.");
     return item.feature;
+  }
+  /** Read products assembled outside the catalog, valid while their input stamp matches. */
+  async readProduct<T>(worldId: string, family: string, stamp: string) {
+    return this.products.read<T>(worldId, family, stamp);
+  }
+  async writeProduct(worldId: string, family: string, stamp: string, value: unknown) {
+    this.products.write(worldId, family, stamp, value);
+  }
+  /** Changes whenever a record of these kinds is written or removed. */
+  productStamp(worldId: string, kinds: string[]) {
+    return this.products.stamp(worldId, kinds);
   }
   async readFieldGeography(scope: WorkspaceScope, id: string) {
     return this.geography.read(scope, id);

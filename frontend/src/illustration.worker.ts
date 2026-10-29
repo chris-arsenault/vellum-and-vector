@@ -8,6 +8,7 @@ import { bounds } from "./presentation";
 import { openRenderResources } from "./renderResources";
 import type { IllustrationRequest, IllustrationReply } from "./illustrationProtocol";
 import { WorkspaceClient } from "./WorkspaceClient";
+import { drawingIdentity, type StoredDrawing } from "./drawnIdentity";
 
 let latest: IllustrationRequest | undefined;
 let running = false,
@@ -15,7 +16,31 @@ let running = false,
 let resources: ReturnType<typeof openRenderResources> | undefined;
 let workspace: WorkspaceClient | undefined;
 let port: MessagePort | undefined;
-async function illustrate({ id, input, footprint }: IllustrationRequest) {
+/** Products are assembled once per subject, scale and input revision, and stored. */
+async function illustrate(request: IllustrationRequest) {
+  const { family, stamp } = drawingIdentity(request.input, request.footprint),
+    worldId = request.input.world.id;
+  const stored = await workspace?.readProduct<StoredDrawing>(worldId, family, stamp);
+  if (closing || latest) return;
+  if (stored) {
+    const reply: IllustrationReply = {
+      ...stored,
+      id: request.id,
+      geography: new Map(stored.geography),
+    };
+    self.postMessage(reply);
+    return;
+  }
+  const reply = await assemble(request);
+  if (!reply) return;
+  self.postMessage(reply);
+  const { id: _, ...products } = reply;
+  await workspace?.writeProduct(worldId, family, stamp, {
+    ...products,
+    geography: [...reply.geography],
+  });
+}
+async function assemble({ id, input, footprint }: IllustrationRequest) {
   const reader = await (resources ??= openRenderResources(workspace));
   const close: (() => void)[] = [];
   async function load(rasters: Raster[]): Promise<LoadedRaster[]> {
@@ -36,7 +61,7 @@ async function illustrate({ id, input, footprint }: IllustrationRequest) {
       base: await load(input.base),
       rasters: await load(input.rasters.filter((raster) => selected.has(raster.channel))),
     };
-    if (closing || latest) return;
+    if (closing || latest) return null;
     const oceans = drawingOceans(input.features, loaded.base),
       box = bounds(footprint);
     const step = (box[2] - box[0]) / terrainSymbolsAcrossSubject;
@@ -55,7 +80,7 @@ async function illustrate({ id, input, footprint }: IllustrationRequest) {
       terrain: terrainMarks(loaded, footprint),
       fields: fieldMarks(loaded, footprint),
     };
-    self.postMessage(reply);
+    return reply;
   } finally {
     for (const release of close) release();
   }
