@@ -4,11 +4,12 @@ import { captureMap, restoreMap, type MapArchive } from "./mapArchive";
 import { installScenarioBoundary } from "./scenarioBoundary";
 import type { WorldOptions } from "./harness";
 import type { MapCustomization } from "./fixtureMap.worker";
+import type { AtlasGenerationInput } from "@atlas/generation";
 
 const prepared = new WeakMap<Page, PreparedMaps>();
 export const attachPreparedMaps = (page: Page, maps: PreparedMaps) => prepared.set(page, maps);
 interface PreparedMap extends MapArchive {
-  input: { settings: unknown; areaId: string };
+  input: AtlasGenerationInput;
 }
 
 async function storagePage(page: Page) {

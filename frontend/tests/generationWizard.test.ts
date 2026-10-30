@@ -3,6 +3,8 @@ test.use({ generationLifecycle: "Verify initial and regional configuration sent 
 import { installGenerationFixture } from "./generationFixture";
 import { tuneGeneration, sharedHistory } from "./generationSetup";
 import { createArea, openFixtureMap } from "./harness";
+import type { DomainSnapshot } from "@atlas/domain";
+import type { AtlasGenerationInput } from "@atlas/generation";
 
 const steps = (page: Page) => page.getByRole("navigation", { name: "Generation steps" });
 const stage = (page: Page, name: RegExp) => steps(page).getByRole("button", { name });
@@ -79,7 +81,7 @@ test("configures a first world, preserves choices, explains dependencies and sen
   expect(errors).toEqual([]);
 });
 
-test("procedural refinement configures a new region with fixed parent history", async ({
+test("regional refinement submits a dedicated surface operation and retains completed history", async ({
   page,
 }) => {
   const { input: parent } = await openFixtureMap(
@@ -108,12 +110,32 @@ test("procedural refinement configures a new region with fixed parent history", 
   await panel.getByRole("button", { name: "Generate regional detail", exact: true }).click();
   await expect(page.locator(".job-row")).toHaveCount(1);
   await expect(page.locator(".job-row strong").first()).toHaveText("completed");
-  const child = await page.evaluate(
-    () =>
-      (window as unknown as { generationFixtureInput: { settings: unknown; areaId: string } })
-        .generationFixtureInput
-  );
-  expect(child.settings).toEqual(parent.settings);
+  const { child, history, sourceAreaId } = await page.evaluate(() => {
+    const fixture = window as unknown as {
+        generationFixtureInput: AtlasGenerationInput;
+        generationFixtureSnapshot: DomainSnapshot;
+      },
+      child = fixture.generationFixtureInput,
+      world = fixture.generationFixtureSnapshot.world;
+    return {
+      child,
+      history: { epochs: world.epochs, humanEras: world.humanEras },
+      sourceAreaId: world.areas[child.areaId].map?.sourceAreaId,
+    };
+  });
+  expect(child).toMatchObject({ quality: "draft", seed: parent.seed });
+  expect(child.configuration?.id).toBe("regional-surface-refinement");
+  expect(child.configuration!.sequence.length).toBeGreaterThan(0);
+  expect(
+    child.configuration!.sequence.every(
+      (step) => step.kind === "process" && step.process.startsWith("refinement.")
+    )
+  ).toBe(true);
+  expect(history).toEqual({
+    epochs: parent.settings!.epochs,
+    humanEras: parent.settings!.humanEras,
+  });
+  expect(sourceAreaId).toBe(parent.areaId);
   expect(child.areaId).not.toBe(parent.areaId);
 });
 
