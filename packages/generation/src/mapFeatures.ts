@@ -272,11 +272,17 @@ function replaceable(
   return (
     feature.areaId === areaId &&
     feature.state === "generated" &&
-    !feature.protected &&
-    !Object.keys(feature.detail).length &&
-    !retained.has(feature.id) &&
+    !retainsFeature(feature, retained) &&
     (domains.includes(feature.generationDomain ?? "") ||
       (feature.layerId === "ecology" && domains.includes("magic")))
+  );
+}
+function retainsFeature(feature: AtlasFeature, retained: Set<string | null>) {
+  return (
+    feature.protected ||
+    Object.keys(feature.detail).length > 0 ||
+    retained.has(feature.id) ||
+    !!(feature.placeId && feature.geometry.type === "Point")
   );
 }
 export const extractGeographyProcess: MapProcess = {

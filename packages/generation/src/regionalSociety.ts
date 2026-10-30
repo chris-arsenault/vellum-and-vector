@@ -44,7 +44,6 @@ function canRevealTown(c: SocietyCommunity) {
     !c.protected &&
     Math.min(population(c), c.latentSettlementPopulation ?? 0) >= minimumMappedTown &&
     !!c.site &&
-    c.site.kind !== "plain" &&
     c.support.capacity > 0
   );
 }

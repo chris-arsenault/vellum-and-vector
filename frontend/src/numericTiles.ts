@@ -1,6 +1,7 @@
 import {
   classInterpolator,
   fieldInterpolator,
+  fieldPosition,
   adaptivePointLocator,
   type AdaptivePointLocator,
   type Bounds,
@@ -142,7 +143,8 @@ function activeSampler(
   };
 }
 function baseActive(grid: GridSurface, locate: AdaptivePointLocator) {
-  return (p: Position) => {
+  return (position: Position) => {
+    const p = fieldPosition(grid, position);
     if (grid.topology) {
       const leaf = locate(grid.topology, p.x, p.y).leaf;
       return leaf >= 0 && grid.active.get(leaf) === 1;

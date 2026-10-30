@@ -1,8 +1,8 @@
 import type { Linter } from "eslint";
 
 const generation = {
-  group: ["@atlas/generation", "**/atlasWorkflow"],
-  importNames: ["generateAtlas"],
+  group: ["@atlas/generation", "**/atlasWorkflow", "**/refinement/workflow"],
+  importNames: ["generateAtlas", "refineRegionalMap"],
   message:
     "Construct the state and call the relevant process. Full generation belongs only in worldIntegration.generation.test.ts.",
 };

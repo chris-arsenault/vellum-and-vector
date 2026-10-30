@@ -7,6 +7,9 @@ import {
   prepareAtlasGeneration,
   regionalResolution,
   type AtlasGenerationInput,
+  isRegionalRefinement,
+  prepareRegionalRefinement,
+  refinementResolution,
 } from "@atlas/generation";
 import { generationSource } from "./workspaceGeneration";
 import { WorkspaceFields } from "./workspaceFields";
@@ -18,6 +21,14 @@ export async function workspaceGenerationSetup(
   input: AtlasGenerationInput
 ) {
   const source = await generationSource(current.catalog, worldId, input.areaId);
+  if (isRegionalRefinement(source, input.areaId)) {
+    const prepared = prepareRegionalRefinement(source, input);
+    return {
+      input: prepared.input,
+      diagnostics: prepared.diagnostics,
+      resolution: refinementResolution(source, input),
+    };
+  }
   const working = await openBlockCache(`setup_${crypto.randomUUID()}`);
   const fields = new WorkspaceFields(current.catalog, current.resources, working.cache);
   let features: Awaited<ReturnType<typeof openGenerationWorkspace>> | undefined;

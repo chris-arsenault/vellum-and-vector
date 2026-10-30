@@ -21,6 +21,18 @@ it("keeps full generator calls in shared end-to-end setup without a fixed fixtur
     ts.ScriptTarget.Latest,
     true
   );
+  const hooks = new Set<string>();
+  const collectHooks = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.getText(source) === "beforeAll" &&
+      node.arguments[0] &&
+      ts.isIdentifier(node.arguments[0])
+    )
+      hooks.add(node.arguments[0].text);
+    ts.forEachChild(node, collectHooks);
+  };
+  collectHooks(source);
   let generators = 0;
   const visit = (node: ts.Node) => {
     if (ts.isCallExpression(node) && node.expression.getText(source) === "generateAtlas") {
@@ -28,7 +40,8 @@ it("keeps full generator calls in shared end-to-end setup without a fixed fixtur
       let parent: ts.Node | undefined = node.parent;
       while (
         parent &&
-        !(ts.isCallExpression(parent) && parent.expression.getText(source) === "beforeAll")
+        !(ts.isCallExpression(parent) && parent.expression.getText(source) === "beforeAll") &&
+        !(ts.isFunctionDeclaration(parent) && parent.name && hooks.has(parent.name.text))
       )
         parent = parent.parent;
       expect(parent, "full generation must live in the shared beforeAll hook").toBeDefined();

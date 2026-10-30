@@ -97,6 +97,8 @@ export const physicalProfile = {
   ReliefSynthesisGain: 2,
   ReliefSynthesisFloor: 60,
   ReliefSynthesisAnisotropy: 3,
+  // Independent maps resolve rolling lowland relief as well as inherited mountain slopes.
+  RegionalReliefMinimumSlope: 0.008,
   InitialOrogenicConstructionStep: 3200,
   EpochOrogenicConstructionStep: 1200,
   CollisionRangeWidth: 180_000,
@@ -216,8 +218,6 @@ export const physicalProfile = {
   ChannelSlopeFloor: 350,
   ChannelSlopeCeiling: 2600,
   MinimumRiverReachLength: 30_000,
-  // Metres a first-order headwater reach must run before the map publishes it.
-  MappedHeadwaterMinimumLength: 60_000,
   RiverChannelBaseStrength: 260,
   RiverChannelOrderStrength: 145,
   RiverChannelDischargeStrength: 55,

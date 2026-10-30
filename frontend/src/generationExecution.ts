@@ -3,6 +3,8 @@ import {
   generationPreview,
   generationSnapshot,
   type MapRunnerOptions,
+  isRegionalRefinement,
+  refinementReads,
 } from "@atlas/generation";
 import {
   detachGrid,
@@ -72,9 +74,11 @@ export async function executeGeneration(
     spatialLayers: [],
     parentHistory: [],
     dependencies: false,
-    channels: source.world.fields
-      .filter((field) => field.resourceId)
-      .map((field) => ({ fieldId: field.id, names: field.channels ?? [] })),
+    channels: isRegionalRefinement(source, input.areaId)
+      ? refinementReads(source, input.areaId, input.domains.includes("physical"))
+      : source.world.fields
+          .filter((field) => field.resourceId)
+          .map((field) => ({ fieldId: field.id, names: field.channels ?? [] })),
   });
   const result = await generateAtlas(source, input, {
     ...observers,

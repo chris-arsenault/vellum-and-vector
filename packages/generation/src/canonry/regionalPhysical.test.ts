@@ -174,6 +174,25 @@ it("constructs deterministic finer relief inside an irregular region without adv
   expect(a.map.events).toEqual([]);
   expect(Array.from(a.map.CumulativeFluvialErosion).every((amount) => amount === 0)).toBe(true);
 });
+it("develops local relief on gentle lowlands rather than requiring mountain-scale parent relief", () => {
+  const { state, map, parent } = fixture(0);
+  for (let i = 0; i < parent.active.length; i++)
+    parent.channels.elevation.set(i, 100 + gridPosition(parent, i).x / 10_000);
+  const at = fieldInterpolator(parent, "elevation");
+  for (let i = 0; i < map.mesh.count; i++) {
+    const height = units(
+      at({ x: map.mesh.x(i) + map.mesh.origin[0], y: map.mesh.y(i) + map.mesh.origin[1], z: 0 })
+    );
+    map.Elevation.set(i, height);
+    map.BedrockElevation.set(i, height);
+  }
+  const before = Array.from(map.Elevation),
+    source = Array.from(parent.channels.elevation);
+  constructRegionalRelief(state, 123);
+  expect(Array.from(map.Elevation).some((height, i) => height !== before[i])).toBe(true);
+  expect(Array.from(parent.channels.elevation)).toEqual(source);
+  expect(map.CompletedEpochCount).toBe(0);
+});
 it("develops coastal relief at the map edge and on both sides of sea level without changing its source", () => {
   const f = fixture(),
     original = Array.from(f.parent.channels.elevation);
@@ -209,7 +228,6 @@ it("routes supplied upstream water plus local runoff through connected tributari
   const wet = fixture(100),
     dry = fixture(0);
   for (const f of [wet, dry]) {
-    constructRegionalRelief(f.state, 123);
     constructRegionalWater(f.state, 123);
   }
   const exported = (f: typeof wet) => {
@@ -226,6 +244,13 @@ it("routes supplied upstream water plus local runoff through connected tributari
   expect(sourceToOutletOrder(wet.map)).toHaveLength(wet.map.mesh.count);
   expect(Array.from(wet.map.RiverOrders).some((order) => order > 0)).toBe(true);
   expect(wet.state.history).toEqual([]);
+});
+it("resolves small local catchments below the World river discharge threshold", () => {
+  const { state, map } = fixture(0);
+  constructRegionalWater(state, 123);
+  expect(Array.from(map.FlowAccumulation).some((flow) => flow > 0 && flow < 25)).toBe(true);
+  expect(Array.from(map.RiverOrders).some((order) => order > 0)).toBe(true);
+  expect(map.CompletedEpochCount).toBe(0);
 });
 it("updates inherited ice grounding when a child's terrain becomes deep water", () => {
   const { state, map } = fixture(0);

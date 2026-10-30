@@ -52,7 +52,8 @@ function cellRelief(
   elevationAt: (p: Position) => number,
   span: number,
   seed: number,
-  p: PhysicalProfile
+  p: PhysicalProfile,
+  regional = false
 ): number {
   const { x, y } = position,
     half = span / 2;
@@ -61,7 +62,9 @@ function cellRelief(
   const gradient = Math.hypot(gx, gy);
   const amplitude =
     p.ReliefSynthesisGain *
-    Math.max(0, gradient * span - p.ReliefSynthesisFloor) *
+    (regional
+      ? Math.max(p.RegionalReliefMinimumSlope * span, gradient * span)
+      : Math.max(0, gradient * span - p.ReliefSynthesisFloor)) *
     clamp(map.RockResistance.get(i) / 1000, 0.6, 1.4);
   if (amplitude <= 0) return 0;
   // Across-strike coordinate follows the gradient; the along-strike one is compressed so the
@@ -70,7 +73,11 @@ function cellRelief(
     ay = gradient > 0 ? gy / gradient : 0;
   const across = x * ax + y * ay,
     along = (-x * ay + y * ax) / p.ReliefSynthesisAnisotropy;
-  return amplitude * fractalNoise(across, along, seed ^ 0x5e1f, span / 2, 3);
+  // Stop at the local mesh's resolvable wavelength, including on graded meshes.
+  const minimumWavelength = Math.sqrt(map.mesh.area(i)) * 2,
+    scale = regional ? Math.max(span / 2, minimumWavelength) : span / 2,
+    octaves = regional ? Math.max(1, 1 + Math.floor(Math.log2(scale / minimumWavelength))) : 3;
+  return amplitude * fractalNoise(across, along, seed ^ 0x5e1f, scale, octaves);
 }
 function proposeRelief(
   map: PhysicalField,
@@ -175,7 +182,8 @@ export function synthesizeRegionalRelief(
         elevation,
         span,
         seed,
-        profile
+        profile,
+        true
       ),
       applied = units(delta);
     if (!applied) continue;

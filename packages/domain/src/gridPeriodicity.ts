@@ -2,6 +2,14 @@ import type { Geometry } from "geojson";
 import { gridPosition, gridCellBounds, type Grid } from "./grids";
 import type { Position } from "./model";
 
+/** Locate a canonical coordinate in a compact field's continuous seam chart. */
+export function fieldPosition(grid: Grid, p: Position): Position {
+  const width = grid.periodicWidth;
+  if (!width || (p.x >= grid.bounds[0] && p.x <= grid.bounds[2])) return p;
+  const center = (grid.bounds[0] + grid.bounds[2]) / 2;
+  return { ...p, x: p.x + Math.round((center - p.x) / width) * width };
+}
+
 export function gridDistance(
   grid: Grid,
   a: Pick<Position, "x" | "y">,
@@ -68,7 +76,12 @@ function connectedAcrossSeam(
 }
 /** Extra neighbors use two short chart segments, preserving holes and irregular coastlines. */
 export function seamNeighbors(grid: Grid, index: number, covers: (geometry: Geometry) => boolean) {
-  if (!grid.periodicWidth || !grid.active.get(index)) return [];
+  if (
+    !grid.periodicWidth ||
+    grid.bounds[2] - grid.bounds[0] < grid.periodicWidth - 1e-6 ||
+    !grid.active.get(index)
+  )
+    return [];
   const a = gridPosition(grid, index);
   return (oppositeCells(grid).get(index) ?? []).filter((i) =>
     connectedAcrossSeam(grid, a, gridPosition(grid, i), covers)

@@ -10,3 +10,11 @@ vi.mock("../../packages/generation/src/atlasWorkflow", async (original) => ({
     );
   },
 }));
+vi.mock("../../packages/generation/src/refinement/workflow", async (original) => ({
+  ...(await original<Record<string, unknown>>()),
+  refineRegionalMap() {
+    throw new Error(
+      "Full refinement is forbidden in unit tests. Supply present geography and call the relevant refiner. Use worldIntegration.generation.test.ts for complete refinement."
+    );
+  },
+}));

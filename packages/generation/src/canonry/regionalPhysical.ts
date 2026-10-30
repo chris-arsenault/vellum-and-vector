@@ -19,6 +19,7 @@ import { deltaFormation } from "./deltas";
 import { validatePhysical } from "./validation";
 import { maintainLandmark } from "./landmarks";
 import { refreshGrounding } from "./glacierSurface";
+import { generationResolution } from "../resolution";
 
 export function constructRegionalRelief(state: GenerationState, seed: number) {
   const work = state.physical!,
@@ -47,7 +48,21 @@ function maintainInheritedLandmarks(state: GenerationState) {
 export function constructRegionalWater(state: GenerationState, seed: number) {
   const work = state.physical!,
     map = work.map,
-    c = physicalContext(seed, 0, work.profile),
+    // Resolve catchments at the regional map's scale, rather than requiring a World river.
+    // Discharge scales with catchment area; reach length scales with linear resolution.
+    scale = Math.min(
+      1,
+      (state.domain.scope.resolution ?? map.mesh.spacing) /
+        generationResolution("standard").cellSpan
+    ),
+    p = work.profile,
+    c = physicalContext(seed, 0, {
+      ...p,
+      RiverAccumulationThreshold: p.RiverAccumulationThreshold * scale ** 2,
+      RiverMinimumAccumulationThreshold: p.RiverMinimumAccumulationThreshold * scale ** 2,
+      RiverMinimumBasinDischarge: p.RiverMinimumBasinDischarge * scale ** 2,
+      MinimumRiverReachLength: p.MinimumRiverReachLength * scale,
+    }),
     incoming = regionalIncomingWater(state);
   const route = () => {
     oceanConnectivity(map, c);

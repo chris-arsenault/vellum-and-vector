@@ -12,6 +12,15 @@ stays on the current map; switching maps is explicit. Seamless cross-map zoom is
 undesired. This supersedes the older single-authority and frozen-boundary
 requirements throughout this design baseline.
 
+**Dedicated regional refinement — 2026-10-30 user correction:** Refine the captured
+present surface with regional algorithms at the selected physical scale. Do not
+initialize another world, reconstruct tectonics, replay epochs or run society
+eras. Shared physical calculations and browser execution/storage infrastructure
+remain useful. Refinement must add actual terrain, coastal structure, smaller
+drainage, habitat patches and places; denser samples of unchanged classes do not
+meet this requirement. Smaller settlements do not require exact inherited
+population allocations.
+
 **Deferred product scope — 2026-10-28:** Manual editing, its associated authoring
 tools, and undo are out of active scope pending proper design. Stop implementation
 and repair work on them. Preserve the existing code and tests for future redesign;
@@ -261,16 +270,16 @@ Regional setup offers detail, seed and inherited magic/people choices. It does
 not offer another physical or human history. Parent terrain must exist before
 detail generation; selection and cartographic framing remain usable without it.
 Returning from setup or cancelling a job retains the selected subject. Completed
-regional output arrives through the existing worker and undoable publication.
+regional output arrives through the existing worker and atomic publication.
 
 Terrain and water develop from parent context without locking inherited heights
 or shores. The child map includes room around the selected subject for coastal
 development. Climate responds to finer relief; habitats
 and existing magical landscapes follow their own media without creating another
-history or renewing inherited material stocks. Known settlements retain their
-seats; unresolved local residents can become mapped towns where a finer site
-exists. This is allocation of existing people, not another settlement era.
-Routes retain their historical wear, shipping, highway and door meanings.
+history or renewing inherited material stocks. Known places remain available;
+regional algorithms add smaller settlements, local ways and POIs from useful
+sites. Completed society history provides context without a population-accounting
+gate or another settlement era.
 
 Finer features and fields stay on their regional map. Creation captures context
 within the child's extent and pins its numerical input resources. Replacing the
@@ -518,10 +527,12 @@ budget, climate or society underneath it.
 
 ### 9.1 Independent regional geography
 
-A child is a separate map, initialized from its parent. Its footprint bounds
-generation and presentation; it does not freeze physical samples or coastline
-intersections. Regional generation may change elevation, drainage and shores
-without reconciling the parent. Completed history remains available as context.
+A child is a separate map, initialized from captured parent context. The selected
+outline identifies its subject and does not limit its own generated geometry.
+Its working frame includes nearby coastal context, and presentation follows its
+developed fields and features. Regional generation may change elevation,
+drainage and shores without reconciling the parent. Completed history remains
+available as context.
 
 ### 9.2 Inherited context
 
@@ -533,11 +544,11 @@ identity and outline; it does not load and copy every numerical layer.
 ### 9.3 Refinement contract — normative behavior
 
 1. **Select:** Choose a geographic subject and outline within its parent.
-2. **Resolve:** Gather the nearest inherited fields, drainage, landmarks, society and completed history.
+2. **Resolve:** Read this map's pinned present fields, known places and completed history; do not read live parent or sibling products.
 3. **Locate:** Keep the map's world coordinates and source relationships.
 4. **Choose:** Select regional detail, seed and applicable domains.
-5. **Refine:** Construct unresolved geography without advancing time.
-6. **Validate:** Check local geographic products, scope, identity and authored protection without comparing heights to the parent.
+5. **Refine:** Develop finer surface geography through dedicated regional algorithms without world initialization or advancing time.
+6. **Validate:** Check product ownership, located space, identity and authored protection without requiring outline containment or parent-height agreement.
 7. **Publish:** Install the finer map as one coherent regional operation; preserve its source map and existing drawings.
 8. **Present:** Explore and export the separate map. Manual authoring remains deferred.
 
@@ -725,7 +736,7 @@ Culture has identity and spatial prevalence, but should not be assumed to occupy
 - Cultural origins/centers and population distributions, including multiple cultures in the same location.
 - Migration, settlement patterns, language/religious affinities, and cultural diffusion relevant to the scope.
 - Major cultural institutions and sites.
-- Regionally refined distributions, communities, and local variations respecting coarse inherited totals/biases without pretending precision that was never generated.
+- Regionally refined communities and local variations informed by captured context, without requiring exact inherited population totals.
 
 Dependencies can include terrain suitability, navigable routes, water, climate, magical hazards/opportunities, existing populations, historical eras, and neighboring cultures. The cultural generator should support separate seeds/options and targeted regeneration. Historical outcomes are projected into a static present-day state.
 

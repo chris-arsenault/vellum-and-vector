@@ -22,9 +22,12 @@ magic and society records. Each geographic record belongs to the new map; a
 separate place identity relates it to the source. Numerical inputs have map-owned
 descriptors pinned to immutable resource bytes. Replacing a parent's resource
 does not change those captured inputs, and creating a child does not copy scalar
-arrays. The regional sequence reads the captured fields and retained drainage,
-develops relief and water, adapts local
-climate, and presents habitats and inherited magic without executing world epochs.
+arrays. The dedicated regional operation samples present channels directly onto
+one finer surface. It does not create a world physical field, initialize the
+world generator, execute its process schedule or replay physical or human history.
+Preparation reads metadata; resource loading selects the target map's needed
+present channels. Refinement reports its own sampling, terrain, water, landscape,
+magic and place stages.
 No region label or nesting depth selects another map type.
 Selection can use whole landmasses from physical shore geometry as well as named
 geographic and social polygons. Child map extents include surrounding context so
@@ -42,21 +45,32 @@ the surrounding world.
 
 Captured source drawings and surface patches become initial context rather than
 authored constraints on the child. Conversion preserves a saved map's own
-drawings and protections. Numerical import respects nonnegative material amounts
-and bounded ecological fractions while keeping height, temperature and vector
-components signed. Regional water updates ice grounding after terrain changes.
+drawings and protections. Numerical import keeps material amounts distinct from
+influence and scales captured amounts by represented area. Height, temperature
+and vector components remain signed.
 
-Seam-spanning regions retain short periodic field neighbors and travel distances.
-Their mapped ways split at the chart edge while retaining one feature identity
-and a shared network junction.
+The regional surface has a compact continuous chart, including selections across
+the cylindrical seam. A stable captured subject determines its coastal
+neighborhood; repeating refinement does not repeatedly expand that frame.
+Published field coverage and the map's frame describe this surface, rather than
+clipping it to the starting outline. Mapped ways split at the chart edge while
+retaining one feature identity and their network junctions. Physical queries,
+class reads and display interpolation locate canonical coordinates in that chart.
 
-Inherited magic quantities distinguish material amounts from sampled influence.
-Regional propagation reads retained sources and history; it does not locate new
-sources, renew material stocks or replay ocean impulses. Retained landmarks keep
-their signatures and identities. Society allocates rural residents by territorial
-overlap and keeps located residents at their known seats. Finer opportunities
-resolve existing local-town allocations; unmet works remain demands. Routes retain
-their wear, highways, shipping and door meanings without running another era.
+Regional terrain adds correlated relief below the source sampling scale,
+conditioned by gradient, rock and fractures, and develops coastal structure.
+Local drainage routes runoff, establishes supported lakes, incises channels and
+redistributes sediment without advancing chronology. Climate and living cover
+respond to the resulting relief, wetness and soil. Surface classes are recomputed
+on that grid; habitat outlines use the raster's shared class-boundary evaluator.
+
+Each magic system resolves captured effects in its own medium. Regional refinement
+does not place new global sources, renew stocks or replay ocean impulses. Known
+places and completed society history remain context. Smaller settlements, local
+ways and physical sites come from regional terrain and useful locations, without
+demographic allocation gates or another society era. Regenerating society alone
+uses this map's current surface and preserves terrain; physical refinement starts
+from its pinned inputs. Neither path reads live geography from another map.
 
 Ordinary map authoring uses linked feature representations and surface overlays.
 Procedural inputs omit those drawings, leaving terrain, drainage, material stocks
@@ -150,8 +164,8 @@ changes and Aurora's temperature/ice dependencies.
 
 Specialized population and work edits synchronize their retained society records.
 Ordinary mapped geometry and surface edits do not alter those records.
-Refinement subdivides population catchments and retains completed history and
-feature identities; it does not rerun old eras. The inspector exposes population
+Regional refinement retains completed history and known place identities without
+subdividing population budgets or rerunning old eras. The inspector exposes population
 composition read across the groups by culture, tradition, language and livelihood,
 with the groups themselves folded into a table and edited one at a time, beside
 support and practice resources, while generation controls supply era
@@ -248,6 +262,11 @@ Use Canonry's generation structure and algorithms as the baseline: configured
 process sequences operate on a shared working map, check required facts, apply
 changes, validate results and update fact validity. Adapt that structure to the
 atlas's TypeScript GIS/domain model.
+
+This structure governs initial world generation. Independent regional maps use
+the dedicated surface operation described above. They share numerical/spatial
+primitives and publication infrastructure, rather than the world initializer,
+physical schedule, epoch runner or society working state.
 
 Registered processes can perform GIS operations, initialize fields, evolve
 terrain, propagate magic, change populations or generate features. They share
@@ -415,8 +434,8 @@ Invalid input and unapplied JSON stay visible and block launch. See
 Native adapters distinguish initialized absent event histories from facts
 produced by an omitted process. Structural water, material, ice and spatial
 validation still runs. Native and outer fact validity update together. Fresh
-regions reuse the wizard with fixed parent histories and supported local
-processes. Inherited facts are identified from supplied channels and initialized
+regions use dedicated regional preparation and execution, with completed parent
+history retained as context. In the world pipeline, inherited facts are identified from supplied channels and initialized
 material, with scope and unit checks, rather than importing every possible fact.
 Authored elevation without geological fields receives inert geothermal input and
 zero absent event histories; applying present magic does not invent past events.
@@ -538,8 +557,8 @@ Domain processes remain independent of the browser adapter.
   changing variables, persistent state and reset forcing.
 - Produce repeatable geographic consequences from the same scoped inputs.
 - Diagnose stale facts caused by incorrect ordering and execute the corrected sequence.
-- Refine regional/cave history against retained parent inputs, fixed interfaces,
-  stable feature identity and protected authored detail.
+- Refine independent regional present geography without history replay; cave
+  development remains separate future scope.
 - Preserve a job's effective configuration when future profile settings change.
 - Publish selected regeneration safely across cancellation, validation failure
   and concurrent authoring.
@@ -661,20 +680,10 @@ separately from plume chains. Constructed rock moves and loads the crust after
 activity stops. Shelf exposure, basin opening and closure can therefore change
 connections without drawing a new coastline template.
 
-Regional refinement imports parent crust and accumulated material histories. It
-first realizes the relief its parent left latent (`canonry.refine-relief`,
-[ADR 0005](adr/0005-scale-contract.md)): the parent's gradient across one of its
-cells sets how rugged the child's texture is and which way its ridges run, the
-texture is added below the parent's cell at the child's wavelengths, each parent
-cell keeps its mean height, and the inherited boundary band is untouched. It then
-refines climate, drainage, erosion, ice and coasts on that surface without
-assembling a new set of continents or replaying global plate movement. The
-native work boundary can receive drainage outside the write extent, so an
-inland patch does not require
-a fabricated ocean. Inherited ocean distances retain metre units. The authored
-area boundary, protected samples and contracted network crossings stay fixed.
-This uses current inherited material history; it does not reconstruct a separate
-parent terrain snapshot for each historical epoch.
+The retained Canonry regional adapters are legacy implementation, including their
+conserved-cell and boundary-band behavior. Independently owned regional maps
+dispatch to `refinement/workflow.ts` before world preparation. They use the
+dedicated surface algorithms described above, without those numerical locks.
 
 The optional offline `tools/canonry-reference` program reads the original C#
 library to produce reference fixtures and `contracts.generated.json`. With the
@@ -906,11 +915,9 @@ these measurements are examples, not a claim about every seed.
   does not make those calculations independent of sampling density or extent.
   These lattice-based calculations also occur in the reference. They establish
   work needed for the atlas's metric model, not an omitted reference algorithm.
-- `canonry/atlasSequence.ts` omits initial construction and all epoch geology
-  passes for inherited regional refinement. It imports current parent material
-  history rather than reconstructing parent terrain at each epoch. Refinement
-  currently does not supply missing local geological construction merely because
-  it uses a finer mesh.
+- `canonry/atlasSequence.ts` retains the earlier regional adapter for legacy
+  callers. Independent-map refinement bypasses that sequence and the world
+  physical-field initializer entirely.
 - Sea-ice behavior, atlas climate/profile settings and configurable magic contain
   deliberate adaptations. These require behavior checks in the atlas context;
   source provenance alone does not validate them.

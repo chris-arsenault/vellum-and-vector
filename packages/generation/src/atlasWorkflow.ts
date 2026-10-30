@@ -40,6 +40,8 @@ import { societySequence } from "./societyProcesses";
 import { atlasInitialState } from "./atlasInitialState";
 import { boundaryDiagnostics, migrateBoundarySelection, inheritMapBoundary } from "./worldBoundary";
 import { regionalInputDiagnostics } from "./regionalInputs";
+import { isRegionalRefinement } from "./refinement/inputs";
+import { refineRegionalMap } from "./refinement/workflow";
 
 export interface AtlasGenerationInput {
   areaId: string;
@@ -60,6 +62,7 @@ export async function generateAtlas(
   input: AtlasGenerationInput,
   options: Omit<MapRunnerOptions, "seed" | "seedScope"> = {}
 ) {
+  if (isRegionalRefinement(source, input.areaId)) return refineRegionalMap(source, input, options);
   const prepared = prepareAtlasGeneration(source, input, options.sourceFeatures);
   input = prepared.input;
   source = prepared.source;
@@ -102,6 +105,11 @@ export function prepareAtlasGeneration(
   input: AtlasGenerationInput,
   sourceFeatures?: FeatureReader
 ) {
+  requireThat(
+    !isRegionalRefinement(source, input.areaId),
+    "regional_pipeline",
+    "Use dedicated regional preparation for an independently owned map."
+  );
   const mappedDiagnostics = mappedGenerationDiagnostics(
     source,
     input.areaId,

@@ -1,7 +1,11 @@
 /* eslint-disable max-lines-per-function -- The browser worker fixture keeps its lifecycle in one closure. */
 import type { AtlasFeature, DomainSnapshot, Grid, Landmark, SocietyRegion } from "@atlas/domain";
 import { attachGrid, detachGrid, layerSupports } from "@atlas/domain";
-import { generationSnapshot } from "@atlas/generation";
+import {
+  atlasPublicationDefinitions,
+  generationSnapshot,
+  worldGenerationSettings,
+} from "@atlas/generation";
 import { WorkspaceClient } from "../src/WorkspaceClient";
 import { openSpatialRuntime } from "../src/spatialRuntime";
 import { assertGenerationScenario } from "./scenarioBoundary";
@@ -12,6 +16,16 @@ import type {
   PublicationDefinition,
   GenerationDiagnostic,
 } from "@atlas/generation";
+
+function fixturePublications(
+  input: GenerationWorkspaceStart["input"],
+  world: DomainSnapshot["world"]
+) {
+  return (
+    (input.configuration?.inputs?.publications as unknown as PublicationDefinition[] | undefined) ??
+    atlasPublicationDefinitions({ ...input, settings: worldGenerationSettings(world) }, world)
+  );
+}
 
 /** A snapshot whose grids are plain arrays, for crossing a worker port. */
 function detached(snapshot: DomainSnapshot): DomainSnapshot {
@@ -146,8 +160,7 @@ export function installGenerationFixtureRuntime({
           // Pin the same input revision that a real worker receives through structured cloning.
           const snapshot = structuredClone(source);
           const original = structuredClone(snapshot);
-          const publications = message.input.configuration?.inputs
-            ?.publications as unknown as PublicationDefinition[];
+          const publications = fixturePublications(message.input, snapshot.world);
           const fieldPublications = new Map(
             publications.flatMap((definition) =>
               definition.kind === "field" ? [[definition.channel, definition] as const] : []

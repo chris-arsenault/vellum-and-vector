@@ -6,6 +6,7 @@ import {
   gridPosition,
   putChannel,
   rectangle,
+  spatial,
 } from "@atlas/domain";
 import { terrainDisplaySampler } from "./terrainDisplay";
 import { numericTileSampler, terrainSampleBands } from "./numericTiles";
@@ -128,4 +129,35 @@ it("matches display heights and gradients on independent tile halos", () => {
       source = ((row - 1) * 100 + 50) * bands;
     expect(tile.slice(at, at + bands)).toEqual(whole.slice(source, source + bands));
   }
+});
+
+it("renders both canonical sides of a compact regional chart with native classes and display heights", () => {
+  const raster = fixture((x) => 100 + x),
+    g = raster.field;
+  g.bounds = [900, 0, 1100, 1000];
+  g.periodicWidth = 1000;
+  g.scope.footprint = spatial.unionAll([
+    rectangle([900, 0, 1000, 1000]),
+    rectangle([0, 0, 100, 1000]),
+  ])!;
+  raster.footprint = g.scope.footprint;
+  raster.wrap = [0, 1000];
+  putChannel(
+    g,
+    "finalSurface",
+    "category",
+    generateBand(g.coverage, "float64", "class", (i) => (i % 9 < 4 ? 28 : 29))
+  );
+  putChannel(g, "naturalSurface", "category", g.channels.finalSurface);
+  raster.surface = g;
+  const sample = numericTileSampler(raster),
+    east = sample([949, 499, 951, 501], 1),
+    west = sample([49, 499, 51, 501], 1);
+  expect(east[1]).toBe(1);
+  expect(west[1]).toBe(1);
+  expect(east[0]).toBeCloseTo(350, 4);
+  expect(west[0]).toBeCloseTo(850, 4);
+  expect(east[6]).toBe(28);
+  expect(west[6]).toBe(29);
+  expect(west[8]).toBeCloseTo(850, 4);
 });

@@ -1,10 +1,5 @@
-import { afterAll, beforeAll, expect, it } from "vitest";
-import {
-  generateAtlas,
-  prepareAtlasGeneration,
-  type CompletedBoundary,
-  type AtlasGenerationInput,
-} from "@atlas/generation";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { generateAtlas, refineRegionalMap, type AtlasGenerationInput } from "@atlas/generation";
 import {
   landmarkKind,
   landmarkLayer,
@@ -13,8 +8,8 @@ import {
   population,
   someSample,
   spatial,
+  rectangle,
   type DomainSnapshot,
-  type FeatureReader,
 } from "@atlas/domain";
 import { newGenerationDraft, prepareDraft } from "./generationDraft";
 import { generationSnapshot } from "./generationJobs";
@@ -28,19 +23,90 @@ import {
 import { generationSource } from "./workspaceGeneration";
 import { WorkspaceFields } from "./workspaceFields";
 import { loadGenerationFeatures } from "./generationInputs";
-import {
-  GeometryKernel,
-  SpatialCatalog,
-  SqliteFeatureWorkspace,
-  SqliteNetworkWorkspace,
-} from "@atlas/storage-browser";
-import {
-  sqliteFixture,
-  reopenSqliteFixture,
-} from "../../packages/storage-browser/src/sqliteFixture";
-import { atlasInitialState } from "../../packages/generation/src/atlasInitialState";
-import { MapRunner } from "../../packages/generation/src/mapRunner";
+import { SqliteFeatureWorkspace, SqliteNetworkWorkspace } from "@atlas/storage-browser";
+import { sqliteFixture } from "../../packages/storage-browser/src/sqliteFixture";
 import { publishWorkspaceGeneration } from "./generationPublication";
+import {
+  regionalWorkload,
+  siblingRegion,
+  assertRegionalPublication,
+  assertWorkloadDetail,
+  type RegionalWorkloadOutput,
+} from "./testSupport/regionalWorkload";
+import { regionalOverview } from "./testSupport/regionalOverview";
+it("develops regional detail without sibling or repeated-refinement work propagation", async () => {
+  const f = await refinementFixture(480000),
+    catalog = f.workspace.catalog,
+    parentFeatures = catalog.exportFeatures(f.id, f.root, null, 128),
+    rootScope = { worldId: f.id, areaId: f.root, spaceId: f.parent.scope.spaceId },
+    rootFields = await catalog.readRecords(
+      rootScope,
+      "field",
+      f.parent.world.fields.map((r) => r.id)
+    );
+  const outputs: RegionalWorkloadOutput[] = [];
+  let sibling = "";
+  for (const step of ["first", "second", "repeat", "small"]) {
+    if (step === "second")
+      sibling = await siblingRegion(
+        f,
+        "Independent western region",
+        rectangle([40000, 20000, 100000, 100000])
+      );
+    const child =
+        step === "first"
+          ? f.child
+          : step === "small"
+            ? await siblingRegion(
+                f,
+                "Smaller draft coast",
+                rectangle([140000, 80000, 200000, 110000])
+              )
+            : sibling,
+      previousFirst = catalog.exportFeatures(f.id, f.child, null, 128),
+      run = await regionalWorkload(f, child, step === "small" ? "draft" : "standard");
+    try {
+      const result = await refineRegionalMap(run.source, run.input, run.options),
+        published = await run.publish(result);
+      if (step === "first") await regionalOverview(result, [...run.features.values()]);
+      assertWorkloadDetail(result, published);
+      expect(result.state.domain.world.epochs).toEqual(f.parent.world.epochs);
+      if (step === "first")
+        expect(
+          [...run.features.values()].some((feature) => feature.name === "Known inland core")
+        ).toBe(true);
+      if (step === "repeat") {
+        expect(published.signature).toEqual(outputs[1].signature);
+        expect(published.samples).toBe(outputs[1].samples);
+      }
+      if (step !== "first") {
+        expect(catalog.exportFeatures(f.id, f.child, null, 128)).toEqual(previousFirst);
+      }
+      outputs.push(published);
+      console.info("regional workload", {
+        step,
+        quality: run.input.quality,
+        samples: published.samples,
+        fields: published.fields,
+        generationMs: published.generationMs,
+        phases: published.phases,
+        firstRaster: published.rasterResult.milliseconds,
+        peakBytes: published.peakBytes,
+        features: published.counts,
+      });
+    } finally {
+      await run.close();
+    }
+  }
+  expect(catalog.exportFeatures(f.id, f.root, null, 128)).toEqual(parentFeatures);
+  expect(
+    await catalog.readRecords(
+      rootScope,
+      "field",
+      f.parent.world.fields.map((r) => r.id)
+    )
+  ).toEqual(rootFields);
+}, 300000);
 it("completes physical and society refinement and publishes local geometry outside the outline with parent reads denied", async () => {
   const fixture = await refinementFixture(),
     { id, root, child, workspace, parent } = fixture,
@@ -65,32 +131,21 @@ it("completes physical and society refinement and publishes local geometry outsi
       sourceNetworks
     );
     await fields.read(source, numericalReads(source));
-    const prepared = prepareAtlasGeneration(
-        source,
-        {
-          areaId: child,
-          quality: "draft",
-          seed: 73,
-          domains: ["physical", "magic", "cultural", "political", "built"],
-        },
-        sourceFeatures
-      ),
-      initial = atlasInitialState(prepared.source, prepared.input, workspace.working.cache);
-    expect(prepared.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
-    const result = await new MapRunner(prepared.input.configuration!, prepared.registry).run(
-      initial,
-      {
-        seed: "73",
-        seedScope: child,
-        cache: workspace.working.cache,
-        features,
-        sourceFeatures,
-        networks,
-        sourceNetworks,
-      }
-    );
+    const input = {
+      areaId: child,
+      quality: "draft",
+      seed: 73,
+      domains: ["physical", "magic", "cultural", "political", "built"],
+    };
+    const result = await refineRegionalMap(source, input, {
+      cache: workspace.working.cache,
+      features,
+      sourceFeatures,
+      networks,
+      sourceNetworks,
+    });
     const operationId = crypto.randomUUID(),
-      output = generationSnapshot(result, prepared.input, operationId, source);
+      output = generationSnapshot(result, input, operationId, source);
     await publishWorkspaceGeneration(
       workspace.catalog,
       workspace.resources,
@@ -115,46 +170,6 @@ it("completes physical and society refinement and publishes local geometry outsi
   }
 }, 300_000);
 
-async function assertRegionalPublication(
-  { id, root, child, workspace, parent }: Awaited<ReturnType<typeof refinementFixture>>,
-  result: CompletedBoundary,
-  output: DomainSnapshot,
-  source: DomainSnapshot,
-  features: FeatureReader
-) {
-  expect(output.world.fields.some((field) => field.areaId === child && !field.input)).toBe(true);
-  expect(output.world.epochs).toEqual(parent.world.epochs);
-  expect(result.state.diagnostics?.filter((d) => d.outcome !== "retained") ?? []).toEqual([]);
-  expect(result.state.society!.inherited).toBe(true);
-  expect(result.state.society!.region.history).toEqual(parent.world.societies![root].history);
-  expect(
-    result.state.society!.region.works.some((work) => work.realizedAt === child && work.applied > 0)
-  ).toBe(true);
-  const event = [...features.values()].find((feature) => feature.kind === "societyEvent")!;
-  expect(event).toBeDefined();
-  expect(spatial.covers(source.scope.footprint, event.geometry)).toBe(false);
-  const exported = workspace.catalog.exportFeatures(id, child, null, 128);
-  expect(exported.features.find((feature) => feature.id === event.id)?.geometry).toEqual(
-    event.geometry
-  );
-  const path = `/refined_${crypto.randomUUID()}.sqlite3`;
-  workspace.catalog.snapshot(path);
-  const restoredDb = reopenSqliteFixture(workspace.db, path),
-    reopened = new SpatialCatalog(restoredDb, await GeometryKernel.create());
-  try {
-    expect(reopened.exportFeatures(id, child, null, 128)).toEqual(exported);
-    const reopenedSource = await generationSource(reopened, id, child);
-    const restoredFeatures = new SqliteFeatureWorkspace(restoredDb);
-    await loadGenerationFeatures(reopenedSource, reopened, restoredFeatures);
-    expect(restoredFeatures.get(event.id)?.geometry).toEqual(event.geometry);
-    expect(reopenedSource.world.societies![child].history).toEqual(
-      parent.world.societies![root].history
-    );
-  } finally {
-    await reopened.close();
-  }
-}
-
 let result: Awaited<ReturnType<typeof generateAtlas>>;
 let published: DomainSnapshot;
 let input: AtlasGenerationInput;
@@ -164,7 +179,7 @@ const epochs: { id: string; ice: number; maximum: number; impacts: number }[] = 
 const markerId = "7f6292e2-2b50-42b4-a599-abdbbdceda21";
 
 // World assertions share one generation; the regional case supplies its parent directly.
-beforeAll(async () => {
+async function initializeSharedWorld() {
   storage = await generationStorageFixture();
   const draft = newGenerationDraft();
   draft.width = 2_000_000;
@@ -215,11 +230,9 @@ beforeAll(async () => {
   published.world.features = Object.fromEntries(
     [...storage.options.features.values()].map((feature) => [feature.id, feature])
   );
-}, 300_000);
+}
 
-afterAll(() => storage?.close());
-
-it("completes causal physical and human history while retaining authored geography", () => {
+function assertWorldHistory() {
   expect(result.state.diagnostics?.filter((item) => item.severity === "error") ?? []).toEqual([]);
   expect(result.state.physical).toBeUndefined();
   expect(epochs.map((epoch) => epoch.id)).toEqual(source.world.epochs.map((epoch) => epoch.id));
@@ -231,9 +244,9 @@ it("completes causal physical and human history while retaining authored geograp
   expect(epochs.some((epoch) => epoch.ice > 0)).toBe(true);
   expect(epochs.at(-1)!.maximum).toBeGreaterThanOrEqual(epochs.at(-1)!.ice);
   expect(epochs[0].impacts).toBeGreaterThan(0);
-});
+}
 
-it("publishes finite dimensional terrain, rivers, living cover and retained drainage together", () => {
+function assertWorldGeography() {
   const grid = result.state.surface;
   for (const channel of ["elevation", "temperature", "flow", "treeCover", "glacialErosion"])
     expect(everySample(grid.channels[channel], Number.isFinite), channel).toBe(true);
@@ -260,9 +273,9 @@ it("publishes finite dimensional terrain, rivers, living cover and retained drai
     expect(reach.discharges).toHaveLength(reach.coordinates.length);
     if (reach.downstream !== null) expect(reaches[reach.downstream]).toBeDefined();
   }
-});
+}
 
-it("carries the seven configured systems through physical history into located magic places", () => {
+function assertWorldMagic() {
   const grid = result.state.surface;
   expect(source.world.magicSystems).toHaveLength(7);
   for (const system of source.world.magicSystems!)
@@ -285,9 +298,9 @@ it("carries the seven configured systems through physical history into located m
       field.channels?.includes("magic:pressure:coastalHistory")
     )
   ).toBe(true);
-});
+}
 
-it("publishes population, politics, names and linguistic distributions from the same world", () => {
+function assertWorldSociety() {
   const society = published.world.societies![input.areaId];
   expect(society.communities.length).toBeGreaterThan(1);
   expect(
@@ -312,9 +325,9 @@ it("publishes population, politics, names and linguistic distributions from the 
       field.channels?.some((channel) => channel.startsWith("languageUse:"))
     )
   ).toBe(true);
-});
+}
 
-it("sites the configured landscape and magic landmarks, holds their measures and names them", () => {
+function assertWorldLandmarks() {
   const records = published.world.landmarks,
     parameters = input.resolvedFeatures!.parameters,
     magic = (record: { kind: string }) => Boolean(landmarkKind(record.kind)?.system),
@@ -346,7 +359,9 @@ it("sites the configured landscape and magic landmarks, holds their measures and
     if (kind.system) {
       // The injected source is a record of the world, owned by the landmark.
       const sourceRecord = published.world.magic.find((entry) => entry.landmarkId === record.id);
-      expect(sourceRecord, `${record.kind} source record`).toMatchObject({ systemId: kind.system });
+      expect(sourceRecord, `${record.kind} source record`).toMatchObject({
+        systemId: kind.system,
+      });
       expect(feature.attributes).toMatchObject({ system: kind.system });
       expect(Number(feature.attributes.sourceStrength)).toBeGreaterThan(0);
     }
@@ -360,4 +375,29 @@ it("sites the configured landscape and magic landmarks, holds their measures and
         expect(measured, `${record.kind} ${key}`).toBeGreaterThanOrEqual(Number(value) - 0.5);
     }
   }
+}
+
+describe("shared initial world", () => {
+  beforeAll(initializeSharedWorld, 300_000);
+  afterAll(() => storage?.close());
+  it(
+    "completes causal physical and human history while retaining authored geography",
+    assertWorldHistory
+  );
+  it(
+    "publishes finite dimensional terrain, rivers, living cover and retained drainage together",
+    assertWorldGeography
+  );
+  it(
+    "carries the seven configured systems through physical history into located magic places",
+    assertWorldMagic
+  );
+  it(
+    "publishes population, politics, names and linguistic distributions from the same world",
+    assertWorldSociety
+  );
+  it(
+    "sites the configured landscape and magic landmarks, holds their measures and names them",
+    assertWorldLandmarks
+  );
 });

@@ -1,8 +1,59 @@
 import { expect, it } from "vitest";
-import { landscape } from "./mapFixtures";
-import { generatedFeature, putGeneratedNetwork } from "./mapFeatures";
+import { landscape, configuration, invoke, options, registry } from "./mapFixtures";
+import {
+  generatedFeature,
+  putGenerated,
+  putGeneratedNetwork,
+  prepareGeneratedProcess,
+} from "./mapFeatures";
 import { rectangle, readAtlasFeatures } from "@atlas/domain";
 import { validateWorkingMap } from "./mapValidation";
+import { MapRunner } from "./mapRunner";
+
+it("retains known captured POIs while replacing their surrounding generated geography", async () => {
+  const state = landscape(),
+    world = state.domain.world;
+  world.id = "df8d14c5-4f19-4f11-aa7c-fba42fbde872";
+  world.areas.parent = { ...world.areas.area, id: "parent" };
+  world.areas.area = {
+    ...world.areas.area,
+    parentId: "parent",
+    profile: "region",
+    map: { sourceAreaId: "parent", sourceRevision: 1 },
+  };
+  const site = generatedFeature(state, "site", "Known spring", "fire:core", "magic", {
+    type: "Point",
+    coordinates: [2000, 500],
+  });
+  site.placeId = "source-spring";
+  site.generationDomain = "magic";
+  const region = generatedFeature(
+    state,
+    "region",
+    "Old fire country",
+    "fire:burn",
+    "magic",
+    rectangle([1000, 0, 3000, 1000])
+  );
+  region.generationDomain = "magic";
+  world.features[site.id] = site;
+  world.features[region.id] = region;
+  const prepare = prepareGeneratedProcess(["physical", "magic", "built"]),
+    result = await new MapRunner(configuration([invoke(prepare)]), registry(prepare)).run(
+      state,
+      options
+    );
+  expect(result.state.domain.world.features[site.id]).toEqual(site);
+  expect(result.state.domain.world.features[region.id]).toBeUndefined();
+  expect(
+    putGenerated(result.state, { ...site, geometry: { type: "Point", coordinates: [2100, 550] } })
+  ).toBe(true);
+  expect(result.state.domain.world.features[site.id].geometry).toEqual({
+    type: "Point",
+    coordinates: [2100, 550],
+  });
+  expect(world.features[site.id]).toEqual(site);
+});
 
 it("presents complete child geometry beyond the starting outline without exposing parent records", () => {
   const state = landscape(),

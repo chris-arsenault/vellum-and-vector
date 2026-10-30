@@ -47,10 +47,23 @@ function refineSociety(state: GenerationState, prior: SocietyRegion) {
   retainSocietyFootprints(state);
   const heirs = new Map<string, Heir[]>();
   const local = localTownAllocations(prior.communities, prior.connections);
-  for (const origin of prior.communities) {
-    if (!origin.footprint || spatial.area(origin.footprint) <= 0) continue;
-    heirs.set(origin.id, inheritOrigin(region, origin, local.get(origin.id) ?? 0));
-  }
+  const countries = region.communities.filter((c) => c.footprint);
+  spatial.withIndex(
+    countries.map((c) => c.footprint!),
+    (index) => {
+      for (const origin of prior.communities) {
+        if (!origin.footprint) continue;
+        const candidates = index.query(spatial.bounds(origin.footprint)).map((i) => countries[i]);
+        if (!candidates.length || spatial.area(origin.footprint) <= 0) continue;
+        const { x, y } = origin.position,
+          home = index
+            .query([x, y, x, y])
+            .map((i) => countries[i])
+            .find((c) => spatial.pointCoverage(c.footprint!)(origin.position));
+        heirs.set(origin.id, inheritOrigin(candidates, home, origin, local.get(origin.id) ?? 0));
+      }
+    }
+  );
   region.history = structuredClone(prior.history);
   region.works = inheritWorks(state, prior, heirs);
   region.events = structuredClone(
@@ -77,13 +90,15 @@ interface Heir {
  * Each community whose footprint overlaps the origin's inherits people by the share of the
  * origin's country it holds; the one holding the origin's seat carries its identity.
  */
-function inheritOrigin(region: SocietyRegion, origin: SocietyCommunity, latent: number): Heir[] {
+function inheritOrigin(
+  countries: SocietyCommunity[],
+  home: SocietyCommunity | undefined,
+  origin: SocietyCommunity,
+  latent: number
+): Heir[] {
   const area = spatial.area(origin.footprint!),
-    home = region.communities.find(
-      (c) => c.footprint && spatial.pointCoverage(c.footprint)(origin.position)
-    ),
     heirs: Heir[] = [];
-  for (const c of region.communities) {
+  for (const c of countries) {
     if (!c.footprint || !spatial.intersects(origin.footprint!, c.footprint)) continue;
     const overlap = spatial.intersection(origin.footprint!, c.footprint);
     if (!overlap) continue;

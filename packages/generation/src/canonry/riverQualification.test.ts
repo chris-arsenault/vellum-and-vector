@@ -5,7 +5,7 @@ import { atlasPhysicalProfile } from "./atlasProfile";
 import { physicalContext } from "./context";
 import { riverNetwork } from "./rivers";
 import { secondsPerYear, depthRateToDischarge } from "./dimensions";
-import { createGrid, rectangle, residentBand, type Profile } from "@atlas/domain";
+import { createGrid, rectangle, residentBand, spatial, point, type Profile } from "@atlas/domain";
 import { landscape } from "../mapFixtures";
 import { extractNativeGeography } from "./atlasFeatures";
 import { riverChannelGeometry } from "./channelGeometry";
@@ -121,4 +121,26 @@ it("keeps runoff and catchment area when a basin does not qualify as a mapped ri
   expect(coast.every((i) => map.FlowAccumulation.get(i) > 0 && map.FlowTargets.get(i) >= 0)).toBe(
     true
   );
+});
+it("publishes a short regional tributary joining an inland river", () => {
+  const { map, main, branch } = fixture();
+  const profile = atlasPhysicalProfile();
+  riverNetwork(map, physicalContext(1, 0, profile));
+  riverChannelGeometry(map, physicalContext(1, 0, profile));
+  const before = Array.from(map.FlowAccumulation),
+    features = publish(map, "region");
+  expect(branch.some((i) => map.RiverOrders.get(i) > 0)).toBe(true);
+  // The supplied branch is less than the 60 km World cartographic minimum and meets
+  // the main river on dry land. A regional map must retain this finer drainage.
+  const head = branch.find((i) => map.RiverOrders.get(i) > 0)!,
+    source = point({
+      x: map.mesh.x(head) + map.mesh.origin[0],
+      y: map.mesh.y(head) + map.mesh.origin[1],
+      z: 0,
+    });
+  expect(
+    features.some((feature) => spatial.distance(feature.geometry, source) < map.mesh.spacing)
+  ).toBe(true);
+  expect(main.some((i) => map.RiverOrders.get(i) > 1)).toBe(true);
+  expect(Array.from(map.FlowAccumulation)).toEqual(before);
 });

@@ -19,7 +19,6 @@ import type { PhysicalField } from "./field";
 import { oceanFootprint } from "./geographicContours";
 import { extractEcologicalFeatures } from "./ecologyFeatures";
 import { extractReliefFeatures, extractValleys } from "./reliefFeatures";
-import { physicalDistance } from "./physicalMetric";
 import { extractOceans } from "./oceanFeatures";
 import { dropClaimedFeatures, extractLandmarks, landmarkClaims } from "./landmarkFeatures";
 import { workingArray, releaseWorking } from "./physicalNumerics";
@@ -183,23 +182,6 @@ function* drainageReaches(
     releaseWorking(map, starts);
   }
 }
-/**
- * A short first-order tributary draws one lattice step of valley side as a parallel tooth.
- * The physical channel remains for erosion and landforms; only the map omits it. A short
- * river reaching the sea or a lake is a complete river and stays.
- */
-function shortHeadwater(
-  work: NonNullable<GenerationState["physical"]>,
-  incoming: Band,
-  members: number[]
-) {
-  const mouth = members.at(-1)!;
-  if (incoming.get(members[0]) !== 0 || work.map.WaterKindCodes.get(mouth) !== 0) return false;
-  let length = 0;
-  for (let n = 1; n < members.length; n++)
-    length += physicalDistance(work.map.mesh, members[n - 1], members[n]);
-  return length < work.profile.MappedHeadwaterMinimumLength;
-}
 function riverInputs(map: PhysicalField) {
   // Basin ids are numbered from one per outlet, so the largest is at most the cell count.
   const incoming = workingArray(map, "int32", "rivers:incoming"),
@@ -322,7 +304,6 @@ function extractRiverGeography(
       const discharge = basinDischarge.get(reach.basin);
       if (!spatial.covers(state.domain.scope.footprint, point(nativePosition(work, start))))
         continue;
-      if (shortHeadwater(work, incoming, members)) continue;
       reach.featureIds = publishReach(state, start, members, paths, discharge);
       yield { members, featureIds: reach.featureIds };
     }

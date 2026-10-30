@@ -10,6 +10,8 @@ export * from "./atlasPublication";
 export * from "./generationPreview";
 export * from "./resolution";
 export { regionalResolution } from "./regionalInputs";
+export { isRegionalRefinement, refinementReads, refinementResolution } from "./refinement/inputs";
+export { prepareRegionalRefinement, refineRegionalMap } from "./refinement/workflow";
 export * from "./atlasParameters";
 export { migrateBoundarySelection, inheritMapBoundary } from "./worldBoundary";
 export * from "./processCatalogue";

@@ -5,6 +5,7 @@ import {
   type World,
   type Bounds,
   geographyAreas,
+  ownsMapGeography,
 } from "@atlas/domain";
 import type { BrowserWorkspace } from "@atlas/storage-browser";
 import type { FieldReference, ResourceRaster } from "./types";
@@ -120,7 +121,9 @@ async function rasterReferences(
     );
   const rasters: ResourceRaster[] = fields.flatMap((field) => {
     const data = references.get(field.id)!,
-      footprint = spatial.intersection(data.scope.footprint, world.areas[areaId].footprint);
+      footprint = ownsMapGeography(world, areaId)
+        ? data.scope.footprint
+        : spatial.intersection(data.scope.footprint, world.areas[areaId].footprint);
     if (!footprint) return [];
     const companion = (channel: string) => {
       const found = [...fields]

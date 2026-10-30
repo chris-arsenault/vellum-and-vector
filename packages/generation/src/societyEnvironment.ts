@@ -312,6 +312,7 @@ function replaceableFeature(
 ) {
   return (
     feature.kind !== "landmark" &&
+    !(feature.placeId && feature.geometry.type === "Point") &&
     ["rivers", "lakes", "ecology", "magic"].includes(feature.layerId) &&
     feature.state === "generated" &&
     !feature.protected &&

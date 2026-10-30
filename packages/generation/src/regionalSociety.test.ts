@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import {
   builtinLayers,
   createGrid,
@@ -6,6 +6,7 @@ import {
   population,
   putChannel,
   rectangle,
+  spatial,
   type SocietyCommunity,
   type SocietyRegion,
 } from "@atlas/domain";
@@ -199,6 +200,52 @@ it("does not invent settlers when the parent has no society", () => {
   realizeRegionalPlaces(state);
   expect(populationTotal(state)).toBe(0);
   expect(state.society!.region.history).toEqual([]);
+});
+it("reveals a smaller inherited settlement on habitable plains", () => {
+  const { state, context, prior } = fixture(),
+    original = structuredClone(prior);
+  state.surface.channels.riverOrder.fill(0);
+  initializePopulation(state, context);
+  const heir = state.society!.region.communities.find((c) => !c.founded)!;
+  expect(heir).toBeDefined();
+  heir.groups[0].count = 1000;
+  heir.latentSettlementPopulation = 400;
+  heir.site = { kind: "plain", reason: "Inhabited agricultural plain", fortress: false };
+  heir.support.capacity = 2000;
+  const before = populationTotal(state);
+  realizeRegionalPlaces(state);
+  expect(heir.settlement?.population).toBe(400);
+  expect(heir.founded).not.toBe("");
+  expect(populationTotal(state)).toBe(before);
+  expect(state.society!.region.history).toEqual(original.history);
+  expect(prior).toEqual(original);
+});
+it("keeps local population and completed history unchanged by distant parent countries", () => {
+  const local = fixture(),
+    extended = fixture();
+  for (let i = 0; i < 128; i++) {
+    const x = 1_000_000 + i * 100_000;
+    extended.prior.communities.push(
+      community(`Distant ${i}`, x + 30_000, [x, 0, x + 60_000, 80_000])
+    );
+  }
+  initializePopulation(local.state, local.context);
+  const source = structuredClone(extended.prior),
+    intersections = vi.spyOn(spatial, "intersects"),
+    started = performance.now();
+  try {
+    initializePopulation(extended.state, extended.context);
+    console.info("regional inheritance", {
+      parentCountries: source.communities.length,
+      childCountries: extended.state.society!.region.communities.length,
+      intersects: intersections.mock.calls.length,
+      milliseconds: performance.now() - started,
+    });
+    expect(extended.state.society!.region).toEqual(local.state.society!.region);
+    expect(extended.prior).toEqual(source);
+  } finally {
+    intersections.mockRestore();
+  }
 });
 
 it("leaves unresolved local occupation latent when refined ground offers no site", () => {

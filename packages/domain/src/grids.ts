@@ -5,7 +5,7 @@ import { requireThat } from "./errors";
 import { point, rectangle, spatial, type Bounds } from "./spatial";
 import { adaptiveCell, adaptiveLeafAt, type AdaptiveTopology } from "./adaptiveTopology";
 import type { AdaptiveField } from "./adaptiveField";
-import { seamNeighbors } from "./gridPeriodicity";
+import { fieldPosition, seamNeighbors } from "./gridPeriodicity";
 import {
   sampleAdaptivePoint,
   adaptivePointSampler,
@@ -388,7 +388,7 @@ export function fieldInterpolator(
   const base = baseInterpolator(grid, channel, discrete, locate);
   return (p: Position) => {
     const overlay = overlays.find((candidate) => candidate.covered(p));
-    return overlay ? overlay.at(p) : base(p);
+    return overlay ? overlay.at(p) : base(fieldPosition(grid, p));
   };
 }
 function baseInterpolator(

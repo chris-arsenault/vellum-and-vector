@@ -1,5 +1,6 @@
 import {
   fieldInterpolator,
+  fieldPosition,
   spatial,
   type AdaptivePointLocator,
   type GridSurface,
@@ -85,6 +86,6 @@ export function terrainDisplaySampler(grid: GridSurface, locate?: AdaptivePointL
     }));
   return (p: Position): number => {
     const overlay = overlays.find((overlay) => overlay.covers(p));
-    return overlay ? overlay.at(p) : base(p);
+    return overlay ? overlay.at(p) : base(fieldPosition(grid, p));
   };
 }

@@ -3,6 +3,7 @@ import { profiles } from "./model";
 import { areaSpace, isDescendant } from "./composition";
 import { Spatial } from "./spatial";
 import { requireThat } from "./errors";
+import { ownsMapGeography } from "./mapOwnership";
 
 export interface MaterializedCoverage {
   id: string;
@@ -43,7 +44,7 @@ export function validateCoverage(
     "Materialization ownership must match its located area and detail level."
   );
   requireThat(
-    gis.covers(area.footprint, coverage.footprint),
+    ownsMapGeography(world, area.id) || gis.covers(area.footprint, coverage.footprint),
     "coverage_extent",
     "Materialization stays within its mapped area."
   );
