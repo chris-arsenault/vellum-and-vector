@@ -1,8 +1,23 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { fieldInterpolator, rectangle, spatial } from "@atlas/domain";
 import { createRefinementState } from "./inputs";
 import { regionalFixture } from "./refinementFixture";
 import { putRefinementFeature, putRefinementNetwork } from "./features";
+
+it("reads the immutable world bounds once when wrapping regional samples", () => {
+  const f = regionalFixture((x) => 100 + Math.sin((x / 40000) * Math.PI * 2) * 100);
+  f.source.world.reference.boundaryMode = "cylinder";
+  const bounds = vi.spyOn(spatial, "bounds");
+  try {
+    const state = createRefinementState(f.source, f.input);
+    expect(
+      bounds.mock.calls.filter(([geometry]) => geometry === state.domain.world.reference.domain)
+    ).toHaveLength(1);
+    expect(state.surface.channels.elevation.get(0)).toBeCloseTo(f.grid.channels.elevation.get(0));
+  } finally {
+    bounds.mockRestore();
+  }
+});
 
 it("keeps a seam-crossing regional surface local and samples both sides of its chart", () => {
   const f = regionalFixture((x) => 100 + Math.sin((x / 40000) * Math.PI * 2) * 100);

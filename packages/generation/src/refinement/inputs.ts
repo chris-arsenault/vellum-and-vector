@@ -144,10 +144,11 @@ export function createRefinementState(
   surface.scope.footprint = footprint;
   area.footprint = footprint;
   domain.scope = { ...surface.scope };
-  if (domain.world.reference.boundaryMode === "cylinder") {
-    const [west, , east] = spatial.bounds(domain.world.reference.domain);
-    surface.periodicWidth = east - west;
-  }
+  const worldBounds =
+    domain.world.reference.boundaryMode === "cylinder"
+      ? spatial.bounds(domain.world.reference.domain)
+      : undefined;
+  if (worldBounds) surface.periodicWidth = worldBounds[2] - worldBounds[0];
   const locate = adaptivePointLocator(),
     evaluators = [...inputs].map(([name, grid]) => {
       const values = surface.coverage.scratch("float64", name, surface.active.length);
@@ -166,7 +167,7 @@ export function createRefinementState(
     });
   // All channels share each position lookup. No intermediate physical mesh or second projection.
   for (let i = 0; i < surface.active.length; i++) {
-    const p = canonicalPosition(domain.world.reference, gridPosition(surface, i));
+    const p = canonicalPosition(domain.world.reference, gridPosition(surface, i), worldBounds);
     for (const { at, values, measure } of evaluators)
       values.set(i, at(p) * (measure ? surface.measures.get(i) / Math.max(1, measure(p)) : 1));
   }

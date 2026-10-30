@@ -1,6 +1,6 @@
 import type { Geometry, Position as Coordinate } from "geojson";
 import type { Position, World } from "./model";
-import { spatial } from "./spatial";
+import { spatial, type Bounds } from "./spatial";
 
 export interface WorldReference {
   id: string;
@@ -14,9 +14,9 @@ export interface WorldReference {
   precision?: number;
 }
 type Reference = World["reference"];
-export function canonicalPosition(reference: Reference, p: Position): Position {
+export function canonicalPosition(reference: Reference, p: Position, extent?: Bounds): Position {
   if (reference.boundaryMode !== "cylinder") return p;
-  const [west, , east] = spatial.bounds(reference.domain),
+  const [west, , east] = extent ?? spatial.bounds(reference.domain),
     width = east - west;
   return { ...p, x: west + ((((p.x - west) % width) + width) % width) };
 }
