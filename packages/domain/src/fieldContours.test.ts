@@ -1,16 +1,54 @@
 import { expect, it } from "vitest";
 import { createAdaptiveTopology, adaptiveGeometry } from "./adaptiveTopology";
-import { fieldContour, contourSupport } from "./fieldContours";
+import { fieldContour, contourSupport, regularContourSupport } from "./fieldContours";
 import { adaptivePointSampler } from "./adaptivePoint";
 import { point, rectangle, spatial } from "./spatial";
-import { createGrid } from "./grids";
+import { createGrid, fieldInterpolator, gridPosition, putChannel } from "./grids";
 import { residentBand } from "./lattice/bandValues";
+import { generateBand } from "./lattice/bandValues";
 import type { AdaptiveTopology } from "./adaptiveTopology";
 
 const centres = (tree: AdaptiveTopology) => {
   const geometry = adaptiveGeometry(tree);
   return { x: geometry.x.toArray(), y: geometry.y.toArray() };
 };
+
+it("skips uniform regular cells while retaining the same shore, holes and outer edge", () => {
+  const grid = createGrid(
+    "supplied-contours",
+    {
+      worldId: "world",
+      areaId: "area",
+      spaceId: "surface",
+      crsId: "metre",
+      footprint: rectangle([2_400_000, 400_000, 2_500_000, 500_000]),
+      revision: 1,
+      time: "present",
+      resolution: null,
+    },
+    81,
+    71
+  );
+  const values = generateBand(grid.coverage, "float64", "supplied", (i) => {
+    const p = gridPosition(grid, i);
+    return Math.hypot(p.x - 2_450_000, p.y - 450_000) - 20_000;
+  });
+  putChannel(grid, "supplied", "metre", values);
+  const at = fieldInterpolator(grid, "supplied");
+  let calls = 0;
+  const sample = (x: number, y: number) => {
+    calls++;
+    return at({ x, y, z: 0 });
+  };
+  const full = fieldContour(grid, sample, undefined, 0, 10)!;
+  const fullCalls = calls;
+  calls = 0;
+  const selected = regularContourSupport(grid, (i) => values.get(i) > 0);
+  const scoped = fieldContour(grid, sample, selected, 0, 10)!;
+  expect(spatial.difference(full, scoped)).toBeNull();
+  expect(spatial.difference(scoped, full)).toBeNull();
+  expect(calls).toBeLessThan(fullCalls);
+});
 
 const topology = () =>
   createAdaptiveTopology([0, 0, 1000, 1000], {

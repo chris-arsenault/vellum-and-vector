@@ -17,6 +17,7 @@ export type SpatialOperations = Pick<
   | "area"
   | "length"
   | "intersection"
+  | "intersectionWith"
   | "intersectionArea"
   | "difference"
   | "differenceFrom"
@@ -92,6 +93,10 @@ export class Spatial {
   }
   intersectionPredicate(value: Geometry): (geometry: Geometry) => boolean {
     return operations(this.precision).intersectionPredicate(value);
+  }
+  /** Reuse a validated mask while clipping many independent geometries. */
+  intersectionWith(mask: Geometry): (geometry: Geometry) => Geometry | null {
+    return operations(this.precision).intersectionWith(mask);
   }
   distance(a: Geometry, b: Geometry): number {
     return operations(this.precision).distance(a, b);

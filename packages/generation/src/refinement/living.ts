@@ -2,6 +2,7 @@ import {
   biomeCode,
   biomes,
   fieldContour,
+  regularContourSupport,
   classMarginInterpolator,
   gridPosition,
   surfaceCode,
@@ -138,7 +139,7 @@ export function extractRegionalHabitats(state: RefinementState) {
       shape = fieldContour(
         g,
         (x, y) => at({ x, y, z: 0 }),
-        undefined,
+        regularContourSupport(g, (i) => codes.has(g.channels.naturalSurface.get(i))),
         0,
         (g.scope.resolution ?? 1000) / 4,
         state.contours

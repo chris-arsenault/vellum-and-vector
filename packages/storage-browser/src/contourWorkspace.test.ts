@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import type { Database } from "@sqlite.org/sqlite-wasm";
 import {
   configureSpatial,
@@ -34,6 +34,23 @@ async function working() {
   const scope = { ...landscape().domain.scope, footprint: rectangle([0, 0, 1000, 1000]) };
   return { workspace, db, grid: createGrid("contours", scope, 61, 51) };
 }
+it("finds the next edge by its coordinates without scanning the remaining graph", async () => {
+  const { workspace, db } = await working(),
+    prepared = vi.spyOn(db, "prepare"),
+    edges = workspace.open();
+  try {
+    for (let i = 0; i < 1000; i++) edges.add([i, 0], [i + 1, 0]);
+    edges.first();
+    expect(edges.outgoing([500, 0])[0].b).toEqual([501, 0]);
+    const sql = prepared.mock.calls.map(([sql]) => String(sql)).find((sql) => sql.includes("ax=?"));
+    prepared.mockRestore();
+    const plan = db.selectObjects(`EXPLAIN QUERY PLAN ${sql}`, [1, 500, 0]);
+    expect(plan.map((row) => row.detail).join(" ")).toContain("ax=? AND ay=?");
+  } finally {
+    prepared.mockRestore();
+    edges.close();
+  }
+});
 it("traces the complete shore and its holes through indexed working edges", async () => {
   const { workspace, db, grid } = await working();
   const shore = fieldContour(grid, (x, y) => x + y * 0.1 - 500, undefined, 0, 0.1, workspace)!;

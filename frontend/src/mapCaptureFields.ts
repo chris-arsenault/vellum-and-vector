@@ -2,6 +2,7 @@ import {
   semanticId,
   spatial,
   geographyAreas,
+  polygonGeometry,
   type Area,
   type CatalogChanges,
   type DomainSnapshot,
@@ -128,17 +129,36 @@ async function captureLayout(
     ),
     alias = aliasResource(layout, id, area, source);
   publication.resources.push(await publishAlias(store, alias));
-  const geography = await catalog.readFieldGeography(original.scope, original.field!.geographyId);
+  const geography = await catalog.readFieldGeography(
+      original.scope,
+      original.field!.geographyId,
+      spatial.bounds(area.footprint)
+    ),
+    intersect = spatial.intersectionWith(area.footprint),
+    clip = (geometry: import("geojson").Geometry) => polygonGeometry(intersect(geometry));
   (publication.geography ??= []).push({
     ...geography,
     id,
     scope: alias.scope,
-    ocean: geography.ocean
-      ? spatial.intersection(geography.ocean, area.footprint)
-      : geography.ocean,
+    ocean: geography.ocean ? clip(geography.ocean) : geography.ocean,
     lakes: geography.lakes?.flatMap((lake) => {
-      const geometry = spatial.intersection(lake.geometry, area.footprint);
+      const geometry = clip(lake.geometry);
       return geometry ? [{ ...lake, geometry }] : [];
+    }),
+    waterBodies: geography.waterBodies?.flatMap((body) => {
+      const footprint = clip(body.footprint);
+      return footprint
+        ? [
+            {
+              ...body,
+              footprint,
+              slices: body.slices.map((slice) => ({
+                ...slice,
+                footprint: slice.footprint ? clip(slice.footprint) : null,
+              })),
+            },
+          ]
+        : [];
     }),
   });
   layouts.set(original.field!.geographyId, id);

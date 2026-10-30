@@ -12,6 +12,14 @@ export function polygonParts(geometry: Geometry): Polygon[] {
   if (geometry.type === "GeometryCollection") return geometry.geometries.flatMap(polygonParts);
   return [];
 }
+/** Area overlays may also return lines or points where boundaries merely touch. */
+export function polygonGeometry(geometry: Geometry | null): Geometry | null {
+  if (!geometry || geometry.type === "Polygon" || geometry.type === "MultiPolygon") return geometry;
+  const parts = polygonParts(geometry);
+  return parts.length
+    ? { type: "MultiPolygon", coordinates: parts.map((p) => p.coordinates) }
+    : null;
+}
 export function regionBoundaryLines(geometry: Geometry): LineString[] {
   if (geometry.type === "LineString") return [geometry];
   if (geometry.type === "MultiLineString")

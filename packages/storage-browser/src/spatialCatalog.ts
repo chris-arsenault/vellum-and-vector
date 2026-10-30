@@ -149,8 +149,8 @@ export class SpatialCatalog implements SpatialStore {
   productStamp(worldId: string, kinds: string[]) {
     return this.products.stamp(worldId, kinds);
   }
-  async readFieldGeography(scope: WorkspaceScope, id: string) {
-    return this.geography.read(scope, id);
+  async readFieldGeography(scope: WorkspaceScope, id: string, extent?: Bounds) {
+    return this.geography.read(scope, id, extent);
   }
   async readFieldWindow(scope: WorkspaceScope, id: string, extent: Bounds, tolerance = 0) {
     return this.geography.window(scope, id, extent, tolerance);

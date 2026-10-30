@@ -286,12 +286,13 @@ export class ZarrResources implements ResourceStore {
     const resource = await this.descriptors.get(resourceId),
       path = prefix(resourceId);
     if (resource.state === "ready") return structuredClone(resource);
-    for (const partition of resource.partitions) {
+    const local = resource.arrays.filter((array) => !array.source);
+    for (const partition of local.length ? resource.partitions : []) {
       const written =
         (await this.json<string[]>(`${path}/written/${encodeURIComponent(partition.id)}.json`)) ??
         [];
       requireThat(
-        resource.arrays.every((a) => a.source || written.includes(a.name)),
+        local.every((a) => written.includes(a.name)),
         "incomplete_resource",
         "Finish every declared partition and array before publication."
       );

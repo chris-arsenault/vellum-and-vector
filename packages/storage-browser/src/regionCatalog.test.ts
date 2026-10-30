@@ -193,6 +193,21 @@ function regionQuery(patch: Partial<RegionQuery> = {}): RegionQuery {
     ...patch,
   };
 }
+
+it("selects land when a covering feature also touches another island along an edge", async () => {
+  const f = await fixture();
+  await coastline(f, {
+    type: "MultiPolygon",
+    coordinates: [
+      (rectangle([100, 100, 400, 400]) as import("geojson").Polygon).coordinates,
+      (rectangle([600, 100, 900, 400]) as import("geojson").Polygon).coordinates,
+    ],
+  });
+  await f.put("touching-claim", rectangle([200, 150, 600, 350]));
+  const choices = await f.pick(250, 250);
+  expect(f.areas(choices.candidates)).toEqual([40000, 90000]);
+  expect(choices.candidates.every((c) => c.footprint.type === "Polygon")).toBe(true);
+});
 const across: Geometry = {
   type: "LineString",
   coordinates: [

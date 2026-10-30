@@ -1,5 +1,6 @@
 import {
   fieldContour,
+  regularContourSupport,
   fieldInterpolator,
   gridPosition,
   spatial,
@@ -18,7 +19,7 @@ export function extractRegionalWater(state: RefinementState) {
   g.ocean = fieldContour(
     g,
     (x, y) => datum - height({ x, y, z: 0 }),
-    undefined,
+    regularContourSupport(g, (i) => g.channels.elevation.get(i) < datum),
     0,
     tolerance,
     state.contours
@@ -31,7 +32,7 @@ export function extractRegionalWater(state: RefinementState) {
     lakes = fieldContour(
       g,
       (x, y) => (water({ x, y, z: 0 }) === 2 ? depth({ x, y, z: 0 }) : 0),
-      undefined,
+      regularContourSupport(g, (i) => g.channels.water.get(i) === 2, true),
       2,
       tolerance,
       state.contours

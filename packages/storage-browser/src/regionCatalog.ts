@@ -3,6 +3,7 @@ import type { Geometry, LineString } from "geojson";
 import {
   minimumRegionWidthMetres,
   polygonParts,
+  polygonGeometry,
   rectangle,
   regionBoundaryLines,
   requireThat,
@@ -144,10 +145,12 @@ export class RegionCatalog {
   private available(query: RegionQuery, context: Context, shape: Geometry) {
     const { kernel } = this,
       { precision } = context;
-    let clipped = kernel.overlay(shape, context.parent, precision, "intersection");
+    let clipped = polygonGeometry(kernel.overlay(shape, context.parent, precision, "intersection"));
     if (!clipped) return null;
     for (const sibling of this.siblings(query, kernel.encode(clipped, precision).bounds)) {
-      clipped = kernel.overlay(clipped, sibling.footprint, precision, "difference");
+      clipped = polygonGeometry(
+        kernel.overlay(clipped, sibling.footprint, precision, "difference")
+      );
       if (!clipped) return null;
     }
     return clipped;
@@ -237,11 +240,8 @@ export class RegionCatalog {
     const land = this.land(query, context);
     if (land && this.kernel.relation(land, point(position), context.precision, "covers")) {
       sources = sources.flatMap((source) => {
-        const footprint = this.kernel.overlay(
-          source.footprint,
-          land,
-          context.precision,
-          "intersection"
+        const footprint = polygonGeometry(
+          this.kernel.overlay(source.footprint, land, context.precision, "intersection")
         );
         return footprint ? [{ ...source, footprint }] : [];
       });

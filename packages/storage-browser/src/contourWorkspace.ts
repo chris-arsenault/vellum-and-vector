@@ -26,10 +26,24 @@ class SqliteContourEdges implements ContourEdges {
   private sequence = 0;
   private pending: ContourEdge[] = [];
   private consumed = 0;
+  private insert: ReturnType<Database["prepare"]>;
+  private remove: ReturnType<Database["prepare"]>;
+  private head: ReturnType<Database["prepare"]>;
+  private next: ReturnType<Database["prepare"]>;
   constructor(
     private db: Database,
     private graph: number
-  ) {}
+  ) {
+    this.insert = db.prepare("INSERT INTO contour_edges VALUES(?,?,?,?,?,?)");
+    this.remove = db.prepare("DELETE FROM contour_edges WHERE graph=? AND ordinal=?");
+    this.head = db.prepare(
+      "SELECT ordinal,ax,ay,bx,by FROM contour_edges WHERE graph=? ORDER BY ordinal LIMIT 1"
+    );
+    // Ordinal order alone lets SQLite scan the graph once for every next-edge query.
+    this.next = db.prepare(
+      "SELECT ordinal,ax,ay,bx,by FROM contour_edges INDEXED BY contour_starts WHERE graph=? AND ax=? AND ay=? ORDER BY ordinal"
+    );
+  }
   add(a: ContourPoint, b: ContourPoint) {
     this.pending.push({ id: ++this.sequence, a, b });
     if (this.pending.length === EDGE_BATCH) this.flush();
@@ -37,43 +51,45 @@ class SqliteContourEdges implements ContourEdges {
   first() {
     this.flush();
     return workingStorage("contour", "read", () => {
-      const row = this.db.selectObject(
-        "SELECT ordinal,ax,ay,bx,by FROM contour_edges WHERE graph=? ORDER BY ordinal LIMIT 1",
-        [this.graph]
-      );
-      return row ? decodeEdge(row) : undefined;
+      try {
+        this.head.bind([this.graph]);
+        return this.head.step() ? decodeEdge(this.head.get({})) : undefined;
+      } finally {
+        this.head.reset();
+      }
     });
   }
   outgoing([x, y]: ContourPoint) {
     this.flush();
-    return workingStorage("contour", "read", () =>
-      this.db
-        .selectObjects(
-          "SELECT ordinal,ax,ay,bx,by FROM contour_edges WHERE graph=? AND ax=? AND ay=? ORDER BY ordinal",
-          [this.graph, x, y]
-        )
-        .map(decodeEdge)
-    );
+    return workingStorage("contour", "read", () => {
+      const edges: ContourEdge[] = [];
+      try {
+        this.next.bind([this.graph, x, y]);
+        while (this.next.step()) edges.push(decodeEdge(this.next.get({})));
+        return edges;
+      } finally {
+        this.next.reset();
+      }
+    });
   }
   consume(id: number) {
     workingStorage("contour", "write", () => {
       if (!this.consumed) this.db.exec(`SAVEPOINT contour_walk_${this.graph}`);
       this.consumed++;
-      this.db.exec({
-        sql: "DELETE FROM contour_edges WHERE graph=? AND ordinal=?",
-        bind: [this.graph, id],
-      });
+      this.execute(this.remove, [this.graph, id]);
       if (this.consumed === EDGE_BATCH) this.finishWalk();
     });
   }
   close() {
     this.pending = [];
     workingStorage("contour", "write", () => {
-      this.finishWalk();
-      this.db.exec({
-        sql: "DELETE FROM contour_edges WHERE graph=?",
-        bind: [this.graph],
-      });
+      try {
+        this.finishWalk();
+        this.db.exec({ sql: "DELETE FROM contour_edges WHERE graph=?", bind: [this.graph] });
+      } finally {
+        for (const statement of [this.insert, this.remove, this.head, this.next])
+          statement.finalize();
+      }
     });
   }
   private finishWalk() {
@@ -81,16 +97,20 @@ class SqliteContourEdges implements ContourEdges {
     this.db.exec(`RELEASE contour_walk_${this.graph}`);
     this.consumed = 0;
   }
+  private execute(statement: ReturnType<Database["prepare"]>, values: number[]) {
+    try {
+      statement.bind(values).step();
+    } finally {
+      statement.reset();
+    }
+  }
   private flush() {
     if (!this.pending.length) return;
     workingStorage("contour", "write", () => {
       this.db.exec("SAVEPOINT contour_batch");
       try {
         for (const edge of this.pending)
-          this.db.exec({
-            sql: "INSERT INTO contour_edges VALUES(?,?,?,?,?,?)",
-            bind: [this.graph, edge.id, ...edge.a, ...edge.b],
-          });
+          this.execute(this.insert, [this.graph, edge.id, ...edge.a, ...edge.b]);
         this.db.exec("RELEASE contour_batch");
         this.pending = [];
       } catch (error) {

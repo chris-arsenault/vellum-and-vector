@@ -161,7 +161,9 @@ describe("shared numerical layouts", () => {
         arrays: { height: Float64Array.of(9, 9, 9, 9) },
       })
     ).rejects.toThrow(/Shared/);
+    f.store.reads = [];
     await f.resources.finish(alias.id);
+    expect(f.store.reads.some((key) => key.includes("/written/"))).toBe(false);
     expect(
       [...f.store.values.keys()].some((key) => key.startsWith("/resources/display/height/"))
     ).toBe(false);

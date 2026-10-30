@@ -105,28 +105,55 @@ export class FieldGeographyCatalog {
       }),
     };
   }
-  read(scope: WorkspaceScope, id: string): FieldGeography {
+  read(scope: WorkspaceScope, id: string, extent?: Bounds): FieldGeography {
     const row = this.db.selectObject(
       "SELECT data FROM field_geography WHERE world_id=? AND space_id=? AND area_id=? AND id=?",
       [scope.worldId, scope.spaceId, scope.areaId, id]
     );
     requireThat(row, "field_geography", "Field geography belongs to this located resource.");
     const data = JSON.parse(String(row.data)) as StoredGeography;
-    const shape = (reference: ShapeReference) => this.readShape(scope.worldId, id, reference);
+    const selected =
+      extent &&
+      new Set(
+        this.db
+          .selectObjects(
+            `SELECT p.part_id FROM field_geometry_parts p JOIN field_geometry_bounds b USING(part_id)
+       WHERE p.world_id=? AND p.geography_id=?
+       AND b.min_x<=? AND b.max_x>=? AND b.min_y<=? AND b.max_y>=?`,
+            [scope.worldId, id, extent[2], extent[0], extent[3], extent[1]]
+          )
+          .map((part) => Number(part.part_id))
+      );
+    const shape = (reference: ShapeReference) => {
+      const parts = selected
+        ? reference.parts.filter((part) => selected.has(part))
+        : reference.parts;
+      return parts.length ? this.readShape(scope.worldId, id, { ...reference, parts }) : null;
+    };
     return {
       id,
       scope,
       ocean: data.ocean ? shape(data.ocean) : data.ocean,
-      lakes: data.lakes?.map((lake) => ({ ...lake, geometry: shape(lake.geometry) })),
+      lakes: data.lakes?.flatMap((lake) => {
+        const geometry = shape(lake.geometry);
+        return geometry ? [{ ...lake, geometry }] : [];
+      }),
       waterBodies: data.waterBodies
-        ? data.waterBodies.map((body) => ({
-            ...body,
-            footprint: shape(body.footprint),
-            slices: body.slices.map((slice) => ({
-              ...slice,
-              footprint: slice.footprint ? shape(slice.footprint) : null,
-            })),
-          }))
+        ? data.waterBodies.flatMap((body) => {
+            const footprint = shape(body.footprint);
+            return footprint
+              ? [
+                  {
+                    ...body,
+                    footprint,
+                    slices: body.slices.map((slice) => ({
+                      ...slice,
+                      footprint: slice.footprint ? shape(slice.footprint) : null,
+                    })),
+                  },
+                ]
+              : [];
+          })
         : data.waterBodies,
     };
   }

@@ -32,6 +32,10 @@ it("routes domain spatial operations through native precision and bounded prepar
   expect(spatial.area(spatial.differenceFrom(b)(a)!)).toBe(5000);
   expect(spatial.area(spatial.unionAll([a, b]))).toBe(15000);
   expect(spatial.intersectionArea(a)(b)).toBe(5000);
+  const clip = spatial.intersectionWith(a);
+  expect(spatial.area(clip(b)!)).toBe(5000);
+  expect(clip(rectangle([200, 200, 300, 300]))).toBeNull();
+  expect(spatial.area(clip(rectangle([10, 10, 20, 20]))!)).toBe(100);
   expect(spatial.distance(a, rectangle([110, 0, 120, 10]))).toBe(10);
   expect(spatial.geometryCoverage(a)(rectangle([1, 1, 2, 2]))).toBe(true);
   expect(

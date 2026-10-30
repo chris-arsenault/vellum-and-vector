@@ -4,6 +4,7 @@ import {
   semanticId,
   spatial,
   layerSupports,
+  polygonGeometry,
   type Area,
   type AtlasFeature,
   type CatalogChanges,
@@ -53,10 +54,11 @@ export async function captureMap(
       data,
     });
   };
+  const clip = spatial.intersectionWith(area.footprint);
   for (const feature of features) {
     // Sources have a synthetic display feature; the captured magic record owns it.
     if (captured.world.magic.some((entry) => entry.id === feature.id)) continue;
-    const local = capturedFeature(feature, area, ids, sourceId === area.id);
+    const local = capturedFeature(feature, area, ids, sourceId === area.id, clip);
     if (!local) continue;
     put({ kind: "feature", value: local });
     if (layerSupports(world.layers[local.layerId], "network"))
@@ -105,9 +107,11 @@ function capturedFeature(
   feature: AtlasFeature,
   area: Area,
   ids: Map<string, string>,
-  converting: boolean
+  converting: boolean,
+  clip: ReturnType<typeof spatial.intersectionWith>
 ): AtlasFeature | null {
-  const geometry = spatial.intersection(feature.geometry, area.footprint);
+  const clipped = clip(feature.geometry),
+    geometry = feature.geometry.type.includes("Polygon") ? polygonGeometry(clipped) : clipped;
   if (!geometry) return null;
   const local = {
     ...structuredClone(feature),
@@ -127,7 +131,7 @@ function capturedFeature(
       .map((r) => ({ ...r, targetId: ids.get(r.targetId) ?? r.targetId })),
   };
   delete local.footprint;
-  const footprint = feature.footprint && spatial.intersection(feature.footprint, area.footprint);
+  const footprint = feature.footprint && polygonGeometry(clip(feature.footprint));
   if (footprint) local.footprint = footprint;
   return local;
 }

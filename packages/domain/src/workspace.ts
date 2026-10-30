@@ -157,7 +157,7 @@ export interface SpatialStore {
     after: string | null,
     limit: number
   ): Promise<AuthoringPage>;
-  readFieldGeography(scope: WorkspaceScope, id: string): Promise<FieldGeography>;
+  readFieldGeography(scope: WorkspaceScope, id: string, extent?: Bounds): Promise<FieldGeography>;
   regionChoices(query: RegionQuery): Promise<RegionChoices>;
   drawRegion(input: RegionDrawing): Promise<RegionDrawingResult>;
   readHistory(worldId: string, before: number | null, limit: number): Promise<History[]>;

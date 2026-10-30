@@ -1,4 +1,34 @@
 import type { AdaptiveTopology } from "./adaptiveTopology";
+import type { RegularGrid } from "./grids";
+
+/**
+ * Bilinear values and class memberships cannot cross inside a uniform quad. Read
+ * membership once per station and trace only transitions and the selected outer edge.
+ * Include interiors when membership is only a mask for another varying scalar (lakes).
+ */
+export function* regularContourSupport(
+  grid: RegularGrid,
+  inside: (sample: number) => boolean,
+  includeInterior = false
+) {
+  const width = grid.width;
+  let lower = new Uint8Array(width),
+    upper = new Uint8Array(width);
+  for (let x = 0; x < width; x++) lower[x] = Number(inside(x));
+  for (let y = 0; y < grid.height - 1; y++) {
+    for (let x = 0; x < width; x++) upper[x] = Number(inside((y + 1) * width + x));
+    for (let x = 0; x < width - 1; x++) {
+      const count = lower[x] + lower[x + 1] + upper[x] + upper[x + 1];
+      if (!count) continue;
+      const boundary = outerCell(x, y, width, grid.height);
+      if (count !== 4 || includeInterior || boundary) yield y * width + x;
+    }
+    [lower, upper] = [upper, lower];
+  }
+}
+function outerCell(x: number, y: number, width: number, height: number) {
+  return x === 0 || y === 0 || x === width - 2 || y === height - 2;
+}
 
 /** Reconstruction uses incident-cell gradients; retain the complete three-face stencil. */
 export function* contourSupport(topology: AdaptiveTopology, members: Iterable<number>) {

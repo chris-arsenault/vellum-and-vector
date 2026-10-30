@@ -5,7 +5,7 @@ import type { RegularGrid } from "./grids";
 import { ByteCache } from "./byteCache";
 import type { ContourEdges, ContourPoint, ContourWorkspace } from "./contourWorkspace";
 import { addContourEdge, contourLines, withContourEdges } from "./contourLines";
-export { contourSupport } from "./contourSupport";
+export { contourSupport, regularContourSupport } from "./contourSupport";
 
 type Point = ContourPoint;
 type Scalar = (x: number, y: number) => number;
@@ -260,14 +260,21 @@ function* contourBoxes(source: AdaptiveTopology | RegularGrid, leaves?: Iterable
     return;
   }
   const [x0, y0, x1, y1] = source.bounds,
+    width = source.width,
+    height = source.height,
     dx = (x1 - x0) / (source.width - 1),
     dy = (y1 - y0) / (source.height - 1);
-  for (let y = 0; y < source.height - 1; y++)
-    for (let x = 0; x < source.width - 1; x++)
-      yield [
-        x0 + x * dx,
-        y0 + y * dy,
-        x === source.width - 2 ? x1 : x0 + (x + 1) * dx,
-        y === source.height - 2 ? y1 : y0 + (y + 1) * dy,
-      ] as Bounds;
+  function* cells() {
+    for (let y = 0; y < height - 1; y++) for (let x = 0; x < width - 1; x++) yield y * width + x;
+  }
+  for (const index of leaves ?? cells()) {
+    const x = index % source.width,
+      y = Math.floor(index / source.width);
+    yield [
+      x0 + x * dx,
+      y0 + y * dy,
+      x === source.width - 2 ? x1 : x0 + (x + 1) * dx,
+      y === source.height - 2 ? y1 : y0 + (y + 1) * dy,
+    ] as Bounds;
+  }
 }

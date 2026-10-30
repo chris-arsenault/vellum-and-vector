@@ -80,6 +80,10 @@ export class GeosSpatial implements SpatialOperations {
     const apply = this.maskOverlay(mask, "intersection");
     return (value: Geometry) => apply(value, true) as number;
   }
+  intersectionWith(mask: Geometry) {
+    const apply = this.maskOverlay(mask, "intersection");
+    return (value: Geometry) => apply(value, false) as Geometry | null;
+  }
   differenceFrom(mask: Geometry) {
     const apply = this.maskOverlay(mask, "difference");
     return (value: Geometry) => apply(value, false) as Geometry | null;
@@ -93,7 +97,7 @@ export class GeosSpatial implements SpatialOperations {
           const g = this.kernel.native,
             intersects = g.GEOSPreparedIntersects(held.prepared, input);
           requireThat(intersects !== 2, "geometry_predicate", "Geometry query failed.");
-          if (!intersects) return area ? 0 : value;
+          if (!intersects) return area ? 0 : operation === "intersection" ? null : value;
           const result =
             operation === "intersection"
               ? g.GEOSIntersectionPrec(input, held.geometry, this.precision)

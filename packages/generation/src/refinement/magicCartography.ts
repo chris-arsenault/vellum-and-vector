@@ -1,5 +1,6 @@
 import {
   fieldContour,
+  regularContourSupport,
   fieldInterpolator,
   gridPosition,
   magicSurfaceCode,
@@ -123,7 +124,7 @@ function publishClass(
     shape = fieldContour(
       g,
       (x, y) => at({ x, y, z: 0 }),
-      undefined,
+      regularContourSupport(g, (i) => share.get(i) > 0.5),
       0.5,
       (g.scope.resolution ?? 1000) / 4,
       state.contours
