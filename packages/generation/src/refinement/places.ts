@@ -12,6 +12,8 @@ import { generationFeatures } from "../generationFeatures";
 import { putRefinementFeature, putRefinementNetwork } from "./features";
 import { regionalCommunitySpacing } from "../regionalSociety";
 import { clamp, distance, neighbors, type RefinementState } from "./state";
+import { regionalMoisture } from "./environment";
+import { localTownShare } from "../societySettlements";
 
 export function refinePlaces(state: RefinementState) {
   if (!state.input.domains.some((id) => ["built", "cultural", "political"].includes(id))) return;
@@ -30,14 +32,16 @@ export function refinePlaces(state: RefinementState) {
     heap = new KeyedHeap("max");
   for (const seat of seats) addBin(state, bins, seat.cell, spacing);
   for (let i = 0; i < g.active.length; i++) {
-    const score = siteScore(state, i);
-    if (score > 0.25) heap.push(i, score);
+    const residents = localResidents(state, i, spacing);
+    // Unresolved occupation remains in the captured density field. Suitable but empty
+    // country does not imply a village, and no parent population is allocated or spent.
+    if (residents >= 80) heap.push(i, residents);
   }
   while (heap.size) {
     const i = heap.pop(),
       p = gridPosition(g, i);
     if (nearSeat(bins, p, spacing)) continue;
-    const population = Math.round(80 + siteScore(state, i) * 650),
+    const population = Math.round(localResidents(state, i, spacing)),
       f = putRefinementFeature(
         state,
         `village:${i}`,
@@ -117,10 +121,14 @@ function cellAt(state: RefinementState, coordinate: number[]) {
 function siteScore(state: RefinementState, i: number) {
   const c = state.surface.channels;
   if (c.water.get(i) !== 0 || c.temperature.get(i) < -5 || c.slope.get(i) > 0.12) return 0;
-  const water = clamp(Math.log1p(c.catchmentArea.get(i) / 1e6) / 5),
+  const water = Math.max(regionalMoisture(state, i), c.riverOrder.get(i) > 0 ? 1 : 0),
     soil = clamp(c.soilDepth.get(i)),
     climate = clamp((c.temperature.get(i) + 5) / 25);
-  return (soil * 0.35 + water * 0.35 + climate * 0.3) * (1 - clamp(c.slope.get(i) * 5));
+  return soil * water * climate * (1 - clamp(c.slope.get(i) * 5));
+}
+function localResidents(state: RefinementState, i: number, spacing: number) {
+  const density = Math.max(0, state.surface.channels.populationDensity?.get(i) ?? 0);
+  return ((density * spacing ** 2) / 1e6) * localTownShare * siteScore(state, i);
 }
 function binKey(p: Position, size: number) {
   return `${Math.floor(p.x / size)}:${Math.floor(p.y / size)}`;

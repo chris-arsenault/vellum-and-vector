@@ -21,7 +21,7 @@ export function settlementStyle(feature: AtlasFeature, layer: LayerStyle) {
     radius,
     fill: new Fill({ color: deserted ? "#ede6d0" : color }),
     stroke: new Stroke({ color: "#293b3a", width: capital ? 2 : 1.5 }),
-    declutterMode: "none" as const,
+    declutterMode: "declutter" as const,
   };
   return new Style({
     zIndex: settlementPriority(feature),

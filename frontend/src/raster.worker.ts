@@ -10,6 +10,7 @@ let workspace: WorkspaceClient | undefined;
 let port: MessagePort | undefined;
 const opened = new Map<number, () => void>();
 const failures = new Map<number, string>();
+const registrations = new Map<number, Extract<TileMessage, { kind: "resourceRaster" }>>();
 // Tile footprints use prepared GEOS predicates; the engine is ready before any message.
 let pending: Promise<unknown> = openSpatialRuntime();
 let closing = false;
@@ -26,17 +27,27 @@ function next() {
   if (scheduled) setTimeout(next, 0);
 }
 async function register(message: Extract<TileMessage, { kind: "resourceRaster" }>) {
+  if (registrations.get(message.id) !== message) return;
   try {
     const reader = await (resources ??= openRenderResources(workspace));
+    if (obsolete(message)) return;
     const loaded = await reader.load(message.raster);
+    if (obsolete(message)) {
+      loaded.close();
+      return;
+    }
     // Load before closing a previous registration so shared inputs never drop to zero users.
     opened.get(message.id)?.();
     opened.set(message.id, loaded.close);
     failures.delete(message.id);
     process({ kind: "loadedRaster", id: message.id, raster: loaded.raster });
   } catch (error) {
-    failures.set(message.id, error instanceof Error ? error.message : String(error));
+    if (registrations.get(message.id) === message)
+      failures.set(message.id, error instanceof Error ? error.message : String(error));
   }
+}
+function obsolete(message: Extract<TileMessage, { kind: "resourceRaster" }>) {
+  return closing || registrations.get(message.id) !== message;
 }
 function release(message: Extract<TileMessage, { kind: "release" }>) {
   opened.get(message.id)?.();
@@ -73,6 +84,10 @@ async function receive(message: TileMessage) {
 self.addEventListener("message", (event: MessageEvent<TileMessage>) => {
   const message = event.data;
   if (message.kind === "close") closing = true;
+  // Navigation can release an entire map while an earlier file load is awaiting I/O.
+  // Record that immediately, so the serialized queue never opens obsolete registrations.
+  if (message.kind === "resourceRaster") registrations.set(message.id, message);
+  if (message.kind === "release") registrations.delete(message.id);
   if (message.kind === "cancel") {
     const cancel = () => {
       const index = queue.findIndex((item) => item.request === message.request);

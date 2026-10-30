@@ -4,6 +4,19 @@ import { regionalEnvironment } from "./refinementFixture";
 import { refinePlaces, regionalPath } from "./places";
 import { putRefinementFeature } from "./features";
 import { regionalCommunitySpacing } from "../regionalSociety";
+import { channel } from "./state";
+
+it("leaves an unoccupied dry interior empty instead of filling every suitable location", () => {
+  const { state } = regionalEnvironment();
+  state.surface.channels.rainfall.fill(0.04);
+  state.surface.channels.runoff.fill(0);
+  state.surface.channels.catchmentArea.fill(1e11);
+  channel(state, "populationDensity", "people/square-kilometre", 0);
+  refinePlaces(state);
+  expect(
+    Object.values(state.domain.world.features).filter((f) => f.kind === "settlement")
+  ).toHaveLength(0);
+});
 
 it("retains a known town and adds named smaller settlements and local ways on plains", () => {
   const { state } = regionalEnvironment(),
@@ -18,6 +31,7 @@ it("retains a known town and adds named smaller settlements and local ways on pl
       "Known town"
     );
   known.name = "Known town";
+  channel(state, "populationDensity", "people/square-kilometre", 100);
   known.placeId = "original-town";
   const before = structuredClone(known),
     history = structuredClone(state.domain.world.epochs);

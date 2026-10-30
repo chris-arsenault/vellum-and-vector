@@ -12,7 +12,7 @@ import {
 } from "@atlas/domain";
 import { RecordSelection } from "./recordSelection";
 import type { GeometryKernel } from "./geometryKernel";
-import { authoringFeatureIds } from "./authoringPage";
+import { authoringFeatureIds, unconnectedNodeSelection } from "./authoringPage";
 
 function worldProjection(metadata: WorldMetadata): World {
   return {
@@ -131,15 +131,6 @@ function installList(snapshot: Projection, data: DomainWrite) {
       break;
   }
 }
-function recordAreas(selection: RecordSelection, complete: boolean) {
-  const ids: string[] = [];
-  for (const { data, scope } of selection.records.values()) {
-    ids.push(scope.areaId);
-    if (complete && data.kind === "feature") ids.push(...Object.keys(data.value.detail));
-    if (data.kind === "connection") ids.push(data.value.a.areaId, data.value.b.areaId);
-  }
-  return ids;
-}
 /** Reuse the existing domain read contract without hydrating numerical resources. */
 export class CatalogProjection {
   constructor(
@@ -215,7 +206,18 @@ export class CatalogProjection {
       parentHistory: [],
       dependencies: false,
     };
-    return { snapshot: this.read(reads, ids), next: ids.length === limit ? ids.at(-1)! : null };
+    const snapshot = this.read(reads, ids);
+    if (input.unconnectedNodes && after === null) {
+      const nodes = unconnectedNodeSelection(
+        this.db,
+        this.kernel,
+        input.scope,
+        snapshot.world.networkNodes
+      );
+      Object.assign(snapshot.identities, nodes.identities());
+      install(snapshot, nodes);
+    }
+    return { snapshot, next: ids.length === limit ? ids.at(-1)! : null };
   }
   private pageNetwork(selection: RecordSelection, ids: string[]) {
     const related = selection.related(ids, ["feature", "crossing"], true);
@@ -319,7 +321,7 @@ export class CatalogProjection {
   }
   private areas(input: ReadRequirements, selection: RecordSelection, complete = true) {
     selection.get("area", input.scope.areaId);
-    let frontier = [input.scope.areaId, ...recordAreas(selection, complete)];
+    let frontier = [input.scope.areaId, ...selection.areaIds(complete)];
     const seen = new Set<string>();
     while (frontier.length) {
       const next: string[] = [];

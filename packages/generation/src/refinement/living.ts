@@ -12,6 +12,7 @@ import { fractalNoise } from "../canonry/noise";
 import { channel, clamp, type RefinementState } from "./state";
 import { gradient } from "./terrain";
 import { putRefinementFeature } from "./features";
+import { regionalMoisture, regionalWetness } from "./environment";
 
 /** Finer habitat patches follow soil/water variation over several resolved samples. */
 const habitatSamples = 5;
@@ -34,7 +35,8 @@ export function refineLocalConditions(state: RefinementState) {
     rain.set(i, Math.max(0, rain.get(i) * rainFactor));
     moisture.set(i, clamp(moisture.get(i) * rainFactor - delta / 10000));
     soil.set(i, Math.max(0.02, soil.get(i) + (g.channels.sediment?.get(i) ?? 0) * 0.3));
-    runoff.set(i, Math.max(0, rain.get(i) * (0.25 + 0.45 * moisture.get(i))));
+    // Retain the captured runoff regime; exposure changes its local precipitation supply.
+    runoff.set(i, Math.max(0, runoff.get(i) * rainFactor));
   }
 }
 /** Present cover responds locally; no ecological years or stock-renewal schedule are executed. */
@@ -52,7 +54,7 @@ export function refineLivingCover(state: RefinementState) {
   for (let i = 0; i < g.active.length; i++) {
     const p = gridPosition(g, i),
       temperature = g.channels.temperature.get(i),
-      moisture = g.channels.moisture.get(i),
+      moisture = regionalMoisture(state, i),
       patch = fractalNoise(
         p.x,
         p.y,
@@ -60,11 +62,7 @@ export function refineLivingCover(state: RefinementState) {
         (g.scope.resolution ?? 1000) * habitatSamples,
         3
       ),
-      wetness = clamp(
-        moisture +
-          Math.log1p(g.channels.catchmentArea.get(i) / 1e6) * 0.04 -
-          g.channels.slope.get(i) * 4
-      ),
+      wetness = regionalWetness(state, i),
       growth =
         clamp((temperature + 8) / 25) *
         clamp((moisture - 0.12) * 1.5) *
@@ -73,9 +71,9 @@ export function refineLivingCover(state: RefinementState) {
       verdure = g.channels.verdure?.get(i) ?? 0;
     tree.set(
       i,
-      clamp((growth * 0.7 + tree.get(i) * 0.3 + patch * 0.35 + verdure * 0.3) * (1 - salting))
+      clamp((growth * (0.7 + patch * 0.35) + tree.get(i) * 0.3 + verdure * 0.3) * (1 - salting))
     );
-    wetland.set(i, clamp((wetness - 0.65) * 3) * (g.channels.slope.get(i) < 0.015 ? 1 : 0.2));
+    wetland.set(i, clamp((wetness - 0.5) * 2));
     grass.set(i, clamp(growth * (1 - tree.get(i)) * 1.2));
     const name = coverName(state, i),
       code = biomeCode(name);
@@ -94,10 +92,10 @@ function coverName(state: RefinementState, i: number): (typeof biomes)[number]["
   if (c.water.get(i) === 2) return "Freshwater";
   if ((c.ice?.get(i) ?? 0) > 0.3) return "Ice";
   if (t < 2) return "Tundra";
-  if (c.moisture.get(i) < 0.18) return "Desert";
   if (c.wetlandCover.get(i) > 0.55) return wetlandName(c.treeCover.get(i));
+  if (regionalMoisture(state, i) < 0.18) return "Desert";
   if (c.treeCover.get(i) < 0.3) return "Grassland";
-  return forestName(c.treeCover.get(i), t, c.moisture.get(i));
+  return forestName(c.treeCover.get(i), t, regionalMoisture(state, i));
 }
 function forestName(tree: number, temperature: number, moisture: number) {
   if (tree < 0.55) return "Woodland";
@@ -124,7 +122,7 @@ function materialCode(state: RefinementState, i: number) {
   if (c.water.get(i) === 2) return 3;
   if ((c.ice?.get(i) ?? 0) > 0.3) return 5;
   if (c.slope.get(i) > 0.15) return 0;
-  return c.moisture.get(i) > 0.3 ? 3 : 2;
+  return regionalMoisture(state, i) > 0.3 ? 3 : 2;
 }
 export function extractRegionalHabitats(state: RefinementState) {
   const g = state.surface;

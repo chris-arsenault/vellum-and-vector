@@ -19,6 +19,7 @@ export async function loadGenerationFeatures(
     featureIds: Object.keys(source.world.features),
     layers: Object.keys(source.world.layers),
     dependencies: true,
+    unconnectedNodes: Boolean(networks),
   };
   for (const feature of Object.values(source.world.features)) features.put(feature);
   source.world.features = {};

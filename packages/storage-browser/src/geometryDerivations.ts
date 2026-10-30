@@ -42,8 +42,6 @@ export class GeometryDerivations {
           bind: [x0, x1, y0, y1],
         });
       });
-      if (kernel.native.GEOSGetNumCoordinates(geometry) > geometryPieceCoordinates)
-        this.writeOverviews(id, geometry);
     });
     db.exec({ sql: "INSERT INTO geometry_piece_ready VALUES(?)", bind: [id] });
   }
@@ -84,24 +82,23 @@ export class GeometryDerivations {
       });
     }
   }
-  private writeOverviews(id: number, geometry: number) {
+  private writeOverview(id: number, tolerance: number) {
     const kernel = this.kernel,
-      g = kernel.native,
-      b = kernel.bounds(geometry),
-      span = Math.max(b[2] - b[0], b[3] - b[1]);
-    const first = 2 ** Math.floor(Math.log2(span / 2048));
-    for (let tolerance = first; tolerance < span; tolerance *= 4) {
+      g = kernel.native;
+    return kernel.withBinary(this.stored(id), (geometry) => {
       const simplified = g.GEOSTopologyPreserveSimplify(geometry, tolerance);
       requireThat(simplified, "display_geometry", "Could not prepare geographic overview.");
       try {
+        const bytes = kernel.binary(simplified);
         this.db.exec({
           sql: "INSERT INTO geometry_overviews VALUES(?,?,?)",
-          bind: [id, tolerance, kernel.binary(simplified)],
+          bind: [id, tolerance, bytes],
         });
+        return bytes;
       } finally {
         g.GEOSGeom_destroy(simplified);
       }
-    }
+    });
   }
   pieceMatches(id: number, bounds: Bounds, target: number) {
     for (const row of this.pieces(id, bounds))
@@ -109,12 +106,12 @@ export class GeometryDerivations {
     return false;
   }
   private overview(id: number, tolerance: number) {
-    if (!(tolerance > 0)) return undefined;
+    if (!(tolerance > 0) || !this.partitioned(id)) return undefined;
     const bytes = this.db.selectValue(
-      "SELECT data FROM geometry_overviews WHERE geometry_id=? AND tolerance<=? ORDER BY tolerance DESC LIMIT 1",
+      "SELECT data FROM geometry_overviews WHERE geometry_id=? AND tolerance=?",
       [id, tolerance]
     );
-    return bytes instanceof Uint8Array ? bytes : undefined;
+    return bytes instanceof Uint8Array ? bytes : this.writeOverview(id, tolerance);
   }
   /** The whole geometry at a display tolerance, for features that fit inside the window;
    * simplified once per tolerance and stored. */
@@ -124,8 +121,6 @@ export class GeometryDerivations {
       [id, tolerance]
     );
     if (typeof stored === "string") return JSON.parse(stored);
-    // Overviews are written with the pieces of a large geometry.
-    if (tolerance > 0 && this.partitioned(id)) this.ensurePieces(id, precision);
     const overview = this.overview(id, tolerance);
     const geometry = this.kernel.withBinary(overview ?? this.stored(id), (source) =>
       displayPart(this.kernel, source, overview ? 0 : tolerance)

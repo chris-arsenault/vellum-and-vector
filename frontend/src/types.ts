@@ -30,7 +30,7 @@ export interface RasterGeographyReference {
   geographyId: string;
   windows: import("@atlas/domain").Bounds[];
   tolerance: number;
-  revision: number;
+  revision: number | string;
 }
 export interface RasterGeography {
   ocean?: import("geojson").Geometry | null;

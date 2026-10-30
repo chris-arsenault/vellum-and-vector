@@ -26,7 +26,11 @@ arrays. The dedicated regional operation samples present channels directly onto
 one finer surface. It does not create a world physical field, initialize the
 world generator, execute its process schedule or replay physical or human history.
 Preparation reads metadata; resource loading selects the target map's needed
-present channels. Refinement reports its own sampling, terrain, water, landscape,
+present channels. Complete-map reads page owned identities directly and include
+unconnected network junctions; narrower reads follow declared dependencies.
+Spatial partitioning does not build every display scale. Geometry overviews are
+stored when that scale is requested, and cold window reads batch their derived writes.
+Refinement reports its own sampling, terrain, water, landscape,
 magic and place stages.
 No region label or nesting depth selects another map type.
 Selection uses physical shores and named geographic and social polygons. Suitable
@@ -78,10 +82,20 @@ Regional terrain adds correlated relief below the source sampling scale,
 conditioned by gradient, rock and fractures, and develops coastal structure.
 Local drainage routes runoff, establishes supported lakes, incises channels and
 redistributes sediment without advancing chronology. Climate and living cover
-respond to the resulting relief, wetness and soil. Surface classes are recomputed
+respond to the resulting relief, wetness and soil. Ground moisture follows
+precipitation over evaporative demand; atmospheric humidity is a separate input.
+Local exposure modulates captured runoff rather than replacing a dry regime.
+Streams require discharge as well as a drainage route, using the existing regional
+river qualification policy. Flooding and supported water supply wetland cover;
+catchment area alone supplies neither water nor habitation. Surface classes are recomputed
 on that grid; habitat outlines use the raster's shared class-boundary evaluator.
 Contour crossing searches use the map's geometric tolerance. Stored coordinate
 precision does not dictate their numerical accuracy.
+
+Smaller settlements develop from captured occupation density and locally supported
+concentration. Suitable empty ground remains empty. Density remains numerical
+context where it does not support a mapped place; refinement neither spends a
+parent population budget nor advances demographic history.
 
 Each magic system resolves captured effects in its own medium. Named magic places
 use the same connected-class and minimum-component rules as the existing extractor;

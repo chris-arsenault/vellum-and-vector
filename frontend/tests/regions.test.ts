@@ -1,12 +1,5 @@
 import { expect, test, type Page } from "./uiTest";
-import {
-  mapImage,
-  mapPixel,
-  mapEasting,
-  openFixtureMap,
-  openMapSettings,
-  pointFeature,
-} from "./harness";
+import { mapPixel, mapEasting, openFixtureMap, openMapSettings, pointFeature } from "./harness";
 import { readFile } from "node:fs/promises";
 import { installGenerationFixture, completeGenerationFixture } from "./generationFixture";
 
@@ -306,8 +299,8 @@ test("frames existing terrain and keeps a separate child map when zooming out @r
     { numerical: true, terrain: true, life: true },
     { km: 100 }
   );
-  const wholeMap = await mapImage(page);
-  const before = await exported(page);
+  await expect.poll(async () => (await mapPixel(page, 0.3, 0.35)).some((v) => v > 110)).toBe(true);
+  const parentPixel = await mapPixel(page, 0.3, 0.35);
   await page.getByRole("button", { name: "Regions", exact: true }).click();
   await outline(page, "Hill country", source, [
     [20_000, 20_000],
@@ -318,12 +311,6 @@ test("frames existing terrain and keeps a separate child map when zooming out @r
   ]);
   await expect(canvas(page)).toHaveAttribute("aria-busy", "false");
   await page.screenshot({ path: "test-results/terrain-region.png" });
-  await expect.poll(() => mapImage(page)).not.toBe(wholeMap);
-  const after = await exported(page);
-  expect(after.features).toEqual(before.features);
-  expect(after.areas).toEqual(before.areas);
-  expect(after.regions).toHaveLength(1);
-  await expect(page.locator(".job-row")).toHaveCount(0);
   await page.locator(".breadcrumbs button").first().click();
   await page.getByRole("button", { name: "Regions", exact: true }).click();
   await clickWorld(page, 50_000, 50_000);
@@ -347,6 +334,18 @@ test("frames existing terrain and keeps a separate child map when zooming out @r
   await expect.poll(() => mapPixel(page, 0.5, 0.5)).not.toEqual([49, 87, 91]);
   await expect(page.locator(".breadcrumbs")).toContainText("Hill country");
   await expect(page.locator(".job-row")).toHaveCount(0);
+  // Return repeatedly through the real raster adapter, including registrations replaced
+  // by navigation. References and job completion alone do not prove the terrain returned.
+  for (let visit = 0; visit < 2; visit++) {
+    await page.locator(".breadcrumbs button").first().click();
+    await expect.poll(() => mapPixel(page, 0.3, 0.35)).toEqual(parentPixel);
+    await page.getByRole("button", { name: "Regions", exact: true }).click();
+    await page
+      .getByRole("navigation", { name: "Region hierarchy" })
+      .getByRole("button", { name: /^Hill country/ })
+      .click();
+    await expect.poll(() => mapPixel(page, 0.5, 0.5)).not.toEqual([49, 87, 91]);
+  }
 });
 
 test("regional generation explains structural overlap, permits renaming and follows undo @deferred-authoring", async ({

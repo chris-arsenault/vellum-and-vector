@@ -146,14 +146,18 @@ export class SpatialCatalog implements SpatialStore {
     this.products.write(worldId, family, stamp, value);
   }
   /** Changes whenever a record of these kinds is written or removed. */
-  productStamp(worldId: string, kinds: string[]) {
-    return this.products.stamp(worldId, kinds);
+  productStamp(worldId: string, kinds: string[], areaIds?: string[]) {
+    return this.products.stamp(worldId, kinds, areaIds);
   }
   async readFieldGeography(scope: WorkspaceScope, id: string, extent?: Bounds) {
     return this.geography.read(scope, id, extent);
   }
   async readFieldWindow(scope: WorkspaceScope, id: string, extent: Bounds, tolerance = 0) {
-    return this.geography.window(scope, id, extent, tolerance);
+    let result!: ReturnType<FieldGeographyCatalog["window"]>;
+    this.db.savepoint(() => {
+      result = this.geography.window(scope, id, extent, tolerance);
+    });
+    return result;
   }
   async readHistory(worldId: string, before: number | null, limit: number) {
     return this.journal.read(worldId, before, limit);

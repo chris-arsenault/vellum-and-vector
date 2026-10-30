@@ -25,11 +25,12 @@ export class StoredProducts {
     });
   }
   /** Changes when a record of these kinds is written or removed. */
-  stamp(worldId: string, kinds: string[]) {
+  stamp(worldId: string, kinds: string[], areaIds?: string[]) {
     const row = this.db.selectObject(
       `SELECT count(*) AS n,max(revision) AS latest FROM records_core
-      WHERE world_id=? AND kind IN (SELECT value FROM json_each(?))`,
-      [worldId, JSON.stringify(kinds)]
+      WHERE world_id=? AND kind IN (SELECT value FROM json_each(?))
+      ${areaIds ? "AND area_id IN (SELECT value FROM json_each(?))" : ""}`,
+      [worldId, JSON.stringify(kinds), ...(areaIds ? [JSON.stringify(areaIds)] : [])]
     );
     return `${row?.n ?? 0}:${row?.latest ?? 0}`;
   }

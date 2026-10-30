@@ -5,6 +5,37 @@ import { refineTerrain, updateSlopes } from "./terrain";
 import { extractRegionalWater } from "./geography";
 import { channel } from "./state";
 
+it("keeps an isolated rainy boundary sample out of the river network while its valley flows", () => {
+  const { state } = regionalFixture((x, y) => 100 + x / 500 + y / 1000, 40000, 2),
+    g = state.surface,
+    edge = (g.height - 1) * g.width + Math.floor(g.width / 2);
+  g.channels.runoff.fill(10);
+  g.channels.rainfall.fill(10);
+  updateSlopes(state);
+  routeRegionalWater(state);
+  expect(g.channels.catchmentArea.get(edge)).toBeCloseTo(g.measures.get(edge), 6);
+  expect(g.channels.flow.get(edge)).toBeGreaterThan(0);
+  expect(g.channels.riverOrder.get(edge)).toBe(0);
+  expect(Array.from(g.channels.riverOrder).some((order) => order > 0)).toBe(true);
+});
+
+it("does not turn dry drainage area into the same stream network as a wet catchment", () => {
+  const height = (x: number, y: number) => 100 + x / 1000 + Math.abs(y - 20000) / 400,
+    dry = regionalFixture(height, 40000, 2).state,
+    wet = regionalFixture(height, 40000, 2).state;
+  dry.surface.channels.runoff.fill(0.00001);
+  dry.surface.channels.rainfall.fill(0.01);
+  for (const state of [dry, wet]) {
+    updateSlopes(state);
+    routeRegionalWater(state);
+  }
+  expect(Array.from(dry.surface.channels.riverOrder).filter((r) => r > 0)).toHaveLength(0);
+  expect(Array.from(wet.surface.channels.riverOrder).some((r) => r > 0)).toBe(true);
+  expect(Array.from(wet.surface.channels.catchmentArea)).toEqual(
+    Array.from(dry.surface.channels.catchmentArea)
+  );
+});
+
 it("routes a constructed catchment to its local outlets and retains its water budget", () => {
   // Supply kilometre-scale samples so each side valley resolves a separate mapped headwater.
   const f = regionalFixture((x, y) => 100 + x / 1000 + Math.abs(y - 20000) / 400, 40000, 2);

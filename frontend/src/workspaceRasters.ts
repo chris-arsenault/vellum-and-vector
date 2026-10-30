@@ -68,15 +68,24 @@ export async function workspaceRasters(
   tolerance: number
 ): Promise<ResourceRaster[]> {
   const catalog = current.catalog,
+    world = await catalog.readEditor(worldId),
     family = `rasters:${areaId}`,
-    stamp = catalog.productStamp(worldId, ["area", "field", "fieldPatch", "coverage"]);
+    stamp = catalog.productStamp(
+      worldId,
+      ["area", "field", "fieldPatch", "coverage"],
+      geographyAreas(world, areaId)
+    );
   let rasters = await catalog.readProduct<ResourceRaster[]>(worldId, family, stamp);
   if (!rasters) {
-    rasters = await rasterReferences(current, worldId, areaId);
+    rasters = await rasterReferences(current, world, areaId);
     await catalog.writeProduct(worldId, family, stamp, rasters);
   }
-  const world = await catalog.readWorld(worldId),
-    windows = sceneWindows(world, extent);
+  const windows = sceneWindows(world, extent),
+    geographyStamp = catalog.productStamp(
+      worldId,
+      ["area", "field", "fieldPatch", "coverage", "feature"],
+      geographyAreas(world, areaId)
+    );
   return rasters.map((raster) => ({
     ...raster,
     geography: {
@@ -88,16 +97,16 @@ export async function workspaceRasters(
         y1 + 128 * tolerance,
       ]),
       tolerance,
-      revision: world.version,
+      revision: geographyStamp,
     },
   }));
 }
 async function rasterReferences(
   current: Pick<BrowserWorkspace, "catalog" | "resources">,
-  worldId: string,
+  world: World,
   areaId: string
 ): Promise<ResourceRaster[]> {
-  const world = await current.catalog.readEditor(worldId);
+  const worldId = world.id;
   const fields = world.fields
     .filter(
       (field) =>

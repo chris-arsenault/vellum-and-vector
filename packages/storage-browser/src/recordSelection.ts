@@ -36,6 +36,15 @@ export class RecordSelection {
   ofKind(kind: ObjectKind) {
     return [...this.records.values()].filter((r) => r.data.kind === kind);
   }
+  areaIds(complete: boolean) {
+    const ids: string[] = [];
+    for (const { data, scope } of this.records.values()) {
+      ids.push(scope.areaId);
+      if (complete && data.kind === "feature") ids.push(...Object.keys(data.value.detail));
+      if (data.kind === "connection") ids.push(data.value.a.areaId, data.value.b.areaId);
+    }
+    return ids;
+  }
   ownedArea(id: string): string | null {
     const data = this.get("area", id)?.data;
     return data?.kind === "area" && (!data.value.parentId || data.value.map) ? id : null;

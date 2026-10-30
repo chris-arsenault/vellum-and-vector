@@ -60,6 +60,7 @@ it("distinguishes political seats without using zoom to add or remove settlement
   for (const resolution of [10000, 1]) {
     const capital = styles(town, resolution)[0];
     expect((capital.getImage() as RegularShape).getPoints()).toBe(5);
+    expect(capital.getImage()!.getDeclutterMode()).toBe("declutter");
     const regional = styles(
       { ...town, attributes: { ...town.attributes, settlementRole: "regionalCapital" } },
       resolution

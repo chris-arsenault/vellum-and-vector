@@ -46,6 +46,8 @@ function siteDraw(c: SocietyCommunity) {
   if (kind === "pass" || kind === "harbour") return 0.03;
   return 0;
 }
+/** Baseline local concentration outside primary production, before sites and markets. */
+export const localTownShare = 0.025;
 /** Residents a catchment's own people support outside primary production: its town-dwellers. */
 export function concentration(c: SocietyCommunity, contacts: number) {
   const people = population(c);
@@ -53,7 +55,11 @@ export function concentration(c: SocietyCommunity, contacts: number) {
   const density = people / Math.max(1, people + c.areaKm2 * 2);
   const market = contacts / Math.max(1, people + contacts);
   // Local surplus and reachable customers support residents outside primary production.
-  return people * density * (0.025 + siteDraw(c) + 0.2 * farming * market + 0.06 * c.support.water);
+  return (
+    people *
+    density *
+    (localTownShare + siteDraw(c) + 0.2 * farming * market + 0.06 * c.support.water)
+  );
 }
 
 function updateOccupation(c: SocietyCommunity, target: number, years: number, label: string) {

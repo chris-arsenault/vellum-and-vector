@@ -57,6 +57,11 @@ it("reads only intersecting geography parts while retaining local water data and
     geography: [geography],
   });
   const restored = await catalog.readFieldGeography(scope, "layout");
+  const window = await catalog.readFieldWindow(scope, "layout", [0, 0, 300, 800], 10);
+  expect(window.lakes?.map((lake) => lake.id)).toEqual(["100"]);
+  expect(spatial.area(window.lakes![0].geometry)).toBe(10000);
+  expect(spatial.area(window.ocean!)).toBe(20000);
+  expect(await catalog.readFieldWindow(scope, "layout", [0, 0, 300, 800], 10)).toEqual(window);
   const local = await catalog.readFieldGeography(scope, "layout", [0, 0, 200, 250]);
   expect(spatial.area(local.ocean!)).toBe(20_000);
   expect(spatial.bounds(local.ocean!)).toEqual([0, 0, 100, 200]);

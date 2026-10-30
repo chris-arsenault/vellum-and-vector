@@ -35,15 +35,11 @@ function updateParts(
   signature: string
 ) {
   const layers = group.getLayers();
-  const wanted = new Set(data.map((raster) => raster.id));
-  for (const layer of layers.getArray().slice())
-    if (!wanted.has(layer.get("fieldId"))) {
-      layers.remove(layer);
-      layer.dispose();
-    }
+  // A layer owns the WebGL renderer, not a particular map's numerical resource.
+  // Keep it through navigation and hide unused slots while references are loading.
+  for (const [index, layer] of layers.getArray().entries()) layer.setVisible(index < data.length);
   for (const [index, raster] of data.entries()) {
-    let layer = layers.getArray().find((layer) => layer.get("fieldId") === raster.id) as
-      WebGLTile | undefined;
+    let layer = layers.item(index) as WebGLTile | undefined;
     if (!layer) {
       layer = new WebGLTile({
         style,
@@ -52,6 +48,8 @@ function updateParts(
       layers.push(layer);
       layer.set("signature", signature);
     }
+    layer.set("fieldId", raster.id);
+    layer.setVisible(true);
     const source = engine.rasters.source(raster);
     if (layer.getSource() !== source) layer.setSource(source);
     if (layer.get("signature") !== signature) {
@@ -59,10 +57,6 @@ function updateParts(
       layer.set("signature", signature);
     } else layer.updateStyleVariables(style.variables as Record<string, number>);
     if (group === engine.image) configureTerrainContours(layer, Number(style.variables!.interval));
-    if (layers.item(index) !== layer) {
-      layers.remove(layer);
-      layers.insertAt(index, layer);
-    }
   }
 }
 

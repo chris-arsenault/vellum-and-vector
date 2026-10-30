@@ -1,8 +1,39 @@
 import { expect, it } from "vitest";
-import { gridPosition, point, spatial, surfaceCode } from "@atlas/domain";
+import { gridPosition, point, spatial, surfaceCode, biomeCode } from "@atlas/domain";
 import { regionalEnvironment } from "./refinementFixture";
-import { extractRegionalHabitats, refineLivingCover } from "./living";
+import { extractRegionalHabitats, refineLivingCover, refineLocalConditions } from "./living";
 import { channel } from "./state";
+
+it("keeps an arid interior dry despite a humid atmosphere and a large dry catchment", () => {
+  const { state } = regionalEnvironment(),
+    g = state.surface;
+  g.channels.moisture.fill(0.95);
+  g.channels.rainfall.fill(0.06);
+  g.channels.runoff.fill(0.002);
+  g.channels.treeCover.fill(0);
+  g.channels.catchmentArea.fill(1e11);
+  channel(state, "soilWater", "metre", 0.005);
+  channel(state, "floodplain", "ratio");
+  // A supplied wet coastal margin is distinct from the interior at the same temperature.
+  for (let i = 0; i < g.active.length; i++)
+    if (gridPosition(g, i).y < 3000) {
+      g.channels.soilWater.set(i, 0.3);
+      g.channels.floodplain.set(i, 1);
+    }
+  refineLocalConditions(state);
+  expect(Math.max(...g.channels.runoff)).toBeLessThan(0.003);
+  refineLivingCover(state);
+  for (let i = 0; i < g.active.length; i++) {
+    if (gridPosition(g, i).y < 3000) {
+      expect(g.channels.wetlandCover.get(i)).toBeGreaterThan(0.5);
+      expect(g.channels.biome.get(i)).toBe(biomeCode("Marsh"));
+    } else {
+      expect(g.channels.wetlandCover.get(i)).toBe(0);
+      expect(g.channels.treeCover.get(i)).toBeLessThan(0.05);
+      expect(g.channels.biome.get(i)).toBe(biomeCode("Desert"));
+    }
+  }
+});
 
 it("develops sub-parent habitat patches and responds to a local soil perturbation", () => {
   const normal = regionalEnvironment(),
@@ -19,7 +50,7 @@ it("develops sub-parent habitat patches and responds to a local soil perturbatio
     (_, i) => gridPosition(g, i).x < 5000 && gridPosition(g, i).y < 5000
   );
   expect(Math.max(...local) - Math.min(...local)).toBeGreaterThan(0.05);
-  expect(new Set(g.channels.finalSurface).size).toBeGreaterThan(1);
+  expect(Array.from(h.channels.finalSurface)).not.toEqual(Array.from(g.channels.finalSurface));
   expect(Array.from(g.channels.finalSurface)).not.toContain(999);
   let changed = 0;
   for (let i = 0; i < g.active.length; i++) {

@@ -43,6 +43,7 @@ const layers: Record<string, string[]> = {
   ],
   ecology: [
     "soilDepth",
+    "soilWater",
     "soilCarbon",
     "mineralNutrients",
     "treeCover",
@@ -51,6 +52,7 @@ const layers: Record<string, string[]> = {
     "biome",
     "productivity",
   ],
+  population: ["populationDensity", "populationCapacity"],
 };
 function publicationLayer(state: RefinementState, id: string): Layer {
   const base = state.domain.world.layers[id] ?? builtinLayers().find((l) => l.id === id)!;

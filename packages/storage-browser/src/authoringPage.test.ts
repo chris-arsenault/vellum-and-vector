@@ -38,6 +38,12 @@ it("pages complete canonical inputs and linked geography without decoding the ot
   await write(catalog, [follower, outside, unlinked]);
   const source = await generationSource(catalog, scope.worldId, scope.areaId);
   expect(source.world.features).toEqual({});
+  const partial = await catalog.readAuthoringPage(
+    { scope: source.scope, featureIds: ["follower"], layers: [], dependencies: true },
+    null,
+    64
+  );
+  expect(Object.keys(partial.snapshot.world.features).sort()).toEqual(["follower", "outside"]);
   const sizes: number[] = [];
   await loadGenerationFeatures(
     source,
@@ -74,6 +80,51 @@ it("rejects a changed catalog revision between pages", async () => {
   const first = await catalog.readAuthoringPage(input, null, 64);
   await write(catalog, [record("added-later")]);
   await expect(catalog.readAuthoringPage(input, first.next, 64)).rejects.toThrow("world changed");
+});
+it("loads an existing unconnected node and its revision before a regional network reuses its identity", async () => {
+  const { catalog, features, networks } = await sourceFixture(),
+    node = {
+      id: "old-junction",
+      kind: "network:rivers",
+      spaceId: scope.spaceId,
+      position: { x: 50, y: 50, z: 100 },
+      waterLevel: null,
+    };
+  await write(catalog, [
+    {
+      scope,
+      reference: { kind: "node", id: node.id, revision: 0 },
+      data: { kind: "node", value: node },
+    },
+  ]);
+  const source = await generationSource(catalog, scope.worldId, scope.areaId);
+  await loadGenerationFeatures(source, catalog, features, undefined, networks);
+  expect(networks.node(node.id)).toEqual(node);
+  expect(source.revisions.find((r) => r.kind === "node" && r.id === node.id)?.version).toBe(
+    source.world.version
+  );
+  let developed!: SqliteNetworkWorkspace;
+  await fixture((db) => {
+    developed = new SqliteNetworkWorkspace(db);
+  });
+  developed.putNode({ ...node, position: { ...node.position, z: 200 } });
+  const unused = () => {
+    throw new Error("Node publication must not load fields");
+  };
+  await publishWorkspaceGeneration(
+    catalog,
+    new ZarrResources({ get: unused, set: unused, deletePrefix: unused, snapshot: unused }),
+    source,
+    structuredClone(source),
+    crypto.randomUUID(),
+    false,
+    [],
+    () => {},
+    undefined,
+    { features, sourceFeatures: features, networks: developed, sourceNetworks: networks }
+  );
+  const [updated] = await catalog.readRecords(scope, "node", [node.id]);
+  expect(updated.data.kind === "node" && updated.data.value.position.z).toBe(200);
 });
 it("loads a child's outlying geometry without following links into parent geography", async () => {
   const { catalog, features } = await sourceFixture(),

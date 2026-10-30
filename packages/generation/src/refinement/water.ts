@@ -2,9 +2,11 @@ import { KeyedHeap, type Band } from "@atlas/domain";
 import { channel, clamp, distance, neighbors, type RefinementState } from "./state";
 import { relaxSlopes, updateSlopes } from "./terrain";
 import { fillRegionalLakes } from "./lakes";
+import { physicalProfile } from "../canonry/profile";
+import { generationResolution } from "../resolution";
 
 const secondsPerYear = 365.25 * 24 * 3600;
-/** A mapped regional stream gathers at least this many terrain samples. */
+/** Retain the regional catchment support rule as well as requiring actual discharge. */
 const headwaterSamples = 12;
 /** Local channel incision strength in metres, modulated by flow, slope and rock. */
 const incisionStrength = 8;
@@ -101,8 +103,6 @@ function accumulate(state: RefinementState) {
     area = channel(state, "catchmentArea", "square-metre"),
     runoff = channel(state, "runoff", "metre/year", 0.4),
     river = channel(state, "riverOrder", "category");
-  const largest = g.coverage.scratch("int32", "regional:largest-order", g.active.length),
-    ties = g.coverage.scratch("int32", "regional:order-ties", g.active.length);
   for (let i = 0; i < g.active.length; i++) {
     const land = g.channels.water.get(i) !== 1;
     area.set(i, land ? g.measures.get(i) : 0);
@@ -111,21 +111,66 @@ function accumulate(state: RefinementState) {
   }
   for (let k = count - 1; k >= 0; k--) {
     const i = order.get(k),
-      j = receiver.get(i),
-      threshold = headwaterSamples * (g.scope.resolution ?? 1) ** 2;
-    if (isChannel(state, i, threshold))
-      river.set(i, Math.max(1, largest.get(i) + (ties.get(i) > 1 ? 1 : 0)));
+      j = receiver.get(i);
     if (j < 0) continue;
     area.add(j, area.get(i));
     flow.add(j, flow.get(i));
+  }
+  qualifyChannels(state, river, flow);
+  orderChannels(state, river);
+}
+function qualifyChannels(state: RefinementState, river: Band, flow: Band) {
+  const g = state.surface,
+    { receiver, order, count } = state.drainage!,
+    basinFlow = g.coverage.scratch("float64", "regional:basin-flow", g.active.length);
+  // The existing regional river policy scales discharge with resolved catchment area.
+  // Drainage area alone cannot distinguish a dry wash from a flowing stream.
+  const p = physicalProfile,
+    span = g.scope.resolution ?? 1,
+    scale = Math.min(1, span / generationResolution("standard").cellSpan) ** 2;
+  for (let k = 0; k < count; k++) {
+    const i = order.get(k),
+      j = receiver.get(i);
+    basinFlow.set(i, j < 0 ? flow.get(i) : basinFlow.get(j));
+    const discharge = basinFlow.get(i),
+      threshold = clamp(
+        (discharge * p.RiverBasinHeadwaterFraction) / 1000,
+        p.RiverMinimumAccumulationThreshold * scale,
+        p.RiverAccumulationThreshold * scale
+      ),
+      slopeFactor = clamp(
+        Math.sqrt((g.channels.slope?.get(i) ?? 0) / p.ChannelReferenceSlope),
+        p.ChannelSlopeFloor / 1000,
+        p.ChannelSlopeCeiling / 1000
+      );
+    if (
+      waterLand(state, i) &&
+      g.channels.catchmentArea.get(i) >= headwaterSamples * span ** 2 &&
+      discharge >= p.RiverMinimumBasinDischarge * scale &&
+      flow.get(i) * slopeFactor >= threshold
+    )
+      river.set(i, 1);
+  }
+  g.coverage.release(basinFlow);
+}
+function orderChannels(state: RefinementState, river: Band) {
+  const g = state.surface,
+    { receiver, order, count } = state.drainage!,
+    largest = g.coverage.scratch("int32", "regional:largest-order", g.active.length),
+    ties = g.coverage.scratch("int32", "regional:order-ties", g.active.length);
+  for (let k = count - 1; k >= 0; k--) {
+    const i = order.get(k),
+      j = receiver.get(i);
+    if (river.get(i)) river.set(i, Math.max(1, largest.get(i) + (ties.get(i) > 1 ? 1 : 0)));
+    if (j < 0) continue;
+    if (river.get(i) && waterLand(state, j)) river.set(j, Math.max(1, river.get(j)));
     advanceOrder(river, largest, ties, i, j);
   }
   g.coverage.release(largest);
   g.coverage.release(ties);
 }
-function isChannel(state: RefinementState, i: number, threshold: number) {
-  const c = state.surface.channels;
-  return c.catchmentArea.get(i) >= threshold && c.flow.get(i) > 0 && c.water.get(i) !== 1;
+function waterLand(state: RefinementState, i: number) {
+  return state.surface.channels.water.get(i) !== 1;
 }
 function advanceOrder(river: Band, largest: Band, ties: Band, i: number, j: number) {
   if (river.get(i) > largest.get(j)) {

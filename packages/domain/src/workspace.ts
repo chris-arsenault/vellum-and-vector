@@ -110,6 +110,8 @@ export interface AuthoringFeatureQuery {
   featureIds: string[];
   layers: string[];
   dependencies: boolean;
+  /** Generation also needs existing nodes whose former reaches were removed. First page only. */
+  unconnectedNodes?: boolean;
 }
 export interface CatalogChanges {
   operationId: string;

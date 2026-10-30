@@ -14,8 +14,20 @@ import {
   type World,
 } from "@atlas/domain";
 
-function expected(snapshot: DomainSnapshot, kind: ObjectKind, id: string): RecordReference {
-  const revision = snapshot.revisions.find((r) => r.kind === kind && r.id === id)?.version ?? 0;
+function revisionIndex(snapshot: DomainSnapshot) {
+  const revisions = new Map<string, number>();
+  for (const r of snapshot.revisions) {
+    const key = `${r.kind}:${r.id}`;
+    if (!revisions.has(key)) revisions.set(key, r.version);
+  }
+  return revisions;
+}
+function expected(
+  revisions: ReadonlyMap<string, number>,
+  kind: ObjectKind,
+  id: string
+): RecordReference {
+  const revision = revisions.get(`${kind}:${id}`) ?? 0;
   return { kind, id, revision };
 }
 function areaId(data: DomainWrite, snapshot: DomainSnapshot, world: World) {
@@ -27,7 +39,12 @@ function areaId(data: DomainWrite, snapshot: DomainSnapshot, world: World) {
     ? (data.value.areaId ?? snapshot.scope.areaId)
     : snapshot.scope.areaId;
 }
-function record(data: DomainWrite, snapshot: DomainSnapshot, world: World): CatalogRecord {
+function record(
+  data: DomainWrite,
+  snapshot: DomainSnapshot,
+  world: World,
+  revisions: ReadonlyMap<string, number>
+): CatalogRecord {
   const id = data.value.id;
   requireThat(id, "record_identity", "A stored domain record needs its semantic identity.");
   const area = areaId(data, snapshot, world);
@@ -35,7 +52,7 @@ function record(data: DomainWrite, snapshot: DomainSnapshot, world: World): Cata
   requireThat(spaceId, "record_space", "A stored spatial record needs its located space.");
   return {
     scope: { worldId: world.id, spaceId, areaId: area },
-    reference: expected(snapshot, data.kind, id),
+    reference: expected(revisions, data.kind, id),
     data,
   };
 }
@@ -103,12 +120,13 @@ export function catalogChanges(
   resultingWorld?: World
 ): CatalogChanges {
   const world = resultingWorld ?? writtenWorld(snapshot, changes);
+  const revisions = revisionIndex(snapshot);
   const writes = new Map<string, CatalogRecord>(),
     removes = new Map(changes.removes.map((r) => [`${r.kind}:${r.id}`, r]));
   for (const removed of removedRepresentations(snapshot, changes.removes))
     removes.set(`representation:${removed.id}`, removed);
   const put = (data: DomainWrite) =>
-    writes.set(`${data.kind}:${data.value.id}`, record(data, snapshot, world));
+    writes.set(`${data.kind}:${data.value.id}`, record(data, snapshot, world, revisions));
   for (const write of changes.writes) {
     if (write.kind !== "feature") continue;
     const finer = details(write, snapshot);
@@ -118,7 +136,7 @@ export function catalogChanges(
   for (const write of changes.writes)
     put(write.kind === "feature" ? { ...write, value: { ...write.value, detail: {} } } : write);
   const metadata = publishSocieties(changes, put);
-  const removed = [...removes.values()].map((r) => expected(snapshot, r.kind, r.id));
+  const removed = [...removes.values()].map((r) => expected(revisions, r.kind, r.id));
   return {
     operationId: changes.operationId,
     worldId: changes.worldId,

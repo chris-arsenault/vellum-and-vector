@@ -1,5 +1,7 @@
 import type { Band } from "@atlas/domain";
 import { neighbors, type RefinementState } from "./state";
+import { potentialEvaporation } from "../canonry/ecologyEnvironment";
+import { regionalPrecipitation } from "./environment";
 
 /** Standing water is supported by runoff and rain, not by the routing flood's fill height. */
 export function fillRegionalLakes(state: RefinementState) {
@@ -44,7 +46,7 @@ function waterStage(state: RefinementState, cells: number[], spill: number) {
   const g = state.surface,
     height = g.channels.elevation,
     { inflow, area, temperature } = poolSupply(state, cells);
-  const loss = Math.max(0.2, 0.6 + (temperature / area) * 0.03),
+  const loss = potentialEvaporation(temperature / area),
     supportedArea = inflow / loss;
   if (supportedArea >= area) return spill;
   cells.sort((a, b) => height.get(a) - height.get(b));
@@ -64,7 +66,7 @@ function poolSupply(state: RefinementState, cells: number[]) {
   for (const i of cells) {
     const measure = g.measures.get(i);
     area += measure;
-    inflow += (g.channels.rainfall?.get(i) ?? 0) * measure;
+    inflow += regionalPrecipitation(state, i) * measure;
     temperature += (g.channels.temperature?.get(i) ?? 15) * measure;
     for (const j of neighbors(g, i))
       if (!members.has(j) && state.drainage!.receiver.get(j) === i)
