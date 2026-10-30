@@ -1,6 +1,13 @@
 import { expect, test } from "./uiTest";
-import { rectangle, spatial } from "@atlas/domain";
-import { clickWorld, exportMap, openFixtureMap, pointFeature } from "./harness";
+import { rectangle, spatial, compactGeometryBounds, regionalScale } from "@atlas/domain";
+import {
+  clickWorld,
+  exportMap,
+  openFixtureMap,
+  pointFeature,
+  mapEasting,
+  mapPixel,
+} from "./harness";
 
 test("keeps overlapping world regions distinct and carries the chosen geography into refinement @generation", async ({
   page,
@@ -45,7 +52,7 @@ test("keeps overlapping world regions distinct and carries the chosen geography 
   expect(parent.features.find(summit)).toEqual(original.features.find(summit));
 });
 
-test("selects canonical geography from a repeated cylindrical chart without duplicating its source", async ({
+test("selects canonical geography from a repeated cylindrical chart without duplicating its source @rendering", async ({
   page,
 }) => {
   const forest = pointFeature("Seam forest", "forest", "ecology");
@@ -53,7 +60,7 @@ test("selects canonical geography from a repeated cylindrical chart without dupl
   await openFixtureMap(
     page,
     "Cylindrical regions",
-    { features: [forest] },
+    { features: [forest], numerical: true, terrain: true },
     { boundary: "cylinder" }
   );
   await page.getByRole("button", { name: "Regions", exact: true }).click();
@@ -63,8 +70,14 @@ test("selects canonical geography from a repeated cylindrical chart without dupl
   const exported = await exportMap(page);
   expect(exported.features).toHaveLength(1);
   expect(exported.features[0].id).toBe(forest.id);
-  expect(spatial.bounds(exported.regions[0].footprint)).toEqual([800, 100, 1000, 700]);
+  expect(spatial.difference(exported.regions[0].footprint, forest.geometry)).toBeNull();
+  expect(spatial.difference(forest.geometry, exported.regions[0].footprint)).toBeNull();
   expect(exported.features[0].geometry.type).toBe("MultiPolygon");
+  await page.getByRole("button", { name: "Refine this region", exact: true }).click();
+  expect(await mapEasting(page, 0.35)).toBeGreaterThan(700);
+  expect(await mapEasting(page, 0.65)).toBeLessThan(300);
+  await expect.poll(() => mapPixel(page, 0.43, 0.5)).not.toEqual([49, 87, 91]);
+  await expect.poll(() => mapPixel(page, 0.57, 0.5)).not.toEqual([49, 87, 91]);
 });
 
 test("offers a useful subdivision and the fixed Standard scale on a default-sized world", async ({
@@ -96,5 +109,9 @@ test("offers a useful subdivision and the fixed Standard scale on a default-size
   await expect(samples).toBeVisible();
   const count = Number(await samples.getAttribute("data-cell-count"));
   expect(count).toBeGreaterThan(40_000);
-  expect(count).toBeLessThan(140_000);
+  const captured = await exportMap(page),
+    child = captured.areas.find((a: { parentId: string | null }) => a.parentId),
+    [w, s, e, n] = compactGeometryBounds(captured.worldReference, child.footprint),
+    span = regionalScale(1).cellSpan;
+  expect(count).toBe((Math.ceil((e - w) / span) + 1) * (Math.ceil((n - s) / span) + 1));
 });

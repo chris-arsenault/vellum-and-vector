@@ -117,3 +117,37 @@ it("clips a large feature to a window once and reads the stored window afterward
   expect(clip).not.toHaveBeenCalled();
   expect(simplify).not.toHaveBeenCalled();
 });
+it("batches a cold display page's cache writes instead of committing each geometry", async () => {
+  let db!: Database;
+  const catalog = await fixture((opened) => {
+    db = opened;
+  });
+  await write(catalog, [record("a"), record("b"), record("c")]);
+  let depth = 0;
+  const savepoint = db.savepoint.bind(db),
+    exec = db.exec.bind(db),
+    writes: number[] = [];
+  vi.spyOn(db, "savepoint").mockImplementation((callback) => {
+    depth++;
+    try {
+      return savepoint(callback);
+    } finally {
+      depth--;
+    }
+  });
+  vi.spyOn(db, "exec").mockImplementation((...args) => {
+    const value = args[0],
+      sql =
+        typeof value === "string"
+          ? value
+          : typeof value === "object" && value !== null && "sql" in value
+            ? String(value.sql)
+            : "";
+    if (sql.includes("INSERT OR REPLACE INTO geometry_display")) writes.push(depth);
+    return exec(...args);
+  });
+  const page = await catalog.readDisplay(query(), 4);
+  expect(page.records.map((r) => r.feature.id)).toEqual(["a", "b", "c"]);
+  expect(writes).toHaveLength(3);
+  expect(writes.every((level) => level > 0)).toBe(true);
+});

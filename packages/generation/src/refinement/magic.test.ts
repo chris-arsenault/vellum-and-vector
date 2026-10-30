@@ -11,8 +11,8 @@ import { classifyRegionalMagic } from "./magicCartography";
 import { channel } from "./state";
 import { applyRegionalMeetings } from "./meetings";
 
-function magicEnvironment(ids: string[]) {
-  const f = regionalEnvironment();
+function magicEnvironment(ids: string[], refinementLevel = 1) {
+  const f = regionalEnvironment(refinementLevel);
   f.state.domain.world.magicSystems = canonryMagicPresets().map((s) => ({
     ...s,
     enabled: ids.includes(s.id),
@@ -154,4 +154,100 @@ it("classifies new fine geography rather than inheriting a coarse magic color", 
   expect(Array.from(g.channels.finalSurface)).toContain(code);
   expect(Array.from(g.channels.finalSurface)).toContain(28);
   expect(Object.values(state.domain.world.features).some((f) => f.kind === "fire:vein")).toBe(true);
+});
+it("publishes one site complex instead of every peak in the same realized class", () => {
+  const { state } = magicEnvironment(["fire"]),
+    system = state.domain.world.magicSystems![0],
+    g = state.surface;
+  system.features = [
+    {
+      id: "spring",
+      name: "Spring",
+      cartography: "site",
+      priority: 1,
+      seeds: [[{ field: "system:fire", min: 300 }]],
+      coverage: { field: "system:fire", floor: 0, full: 1000 },
+    },
+  ];
+  const intensity = channel(state, "magic:fire:intensity", "relative-intensity", 700);
+  for (let i = 0; i < intensity.length; i++) if (i % 3 === 0) intensity.set(i, 900);
+  const before = Array.from(intensity);
+  classifyRegionalMagic(state);
+  expect(
+    Object.values(state.domain.world.features).filter((f) => f.kind === "fire:spring")
+  ).toHaveLength(1);
+  expect(Array.from(intensity)).toEqual(before);
+  expect(Array.from(g.channels.finalSurface)).toContain(
+    magicSurfaceCode(state.domain.world.magicSystems!, "fire", "spring")!
+  );
+});
+it("keeps an isolated magic area as field coverage without inventing a named place", () => {
+  const { state } = magicEnvironment(["fire"]),
+    system = state.domain.world.magicSystems![0],
+    g = state.surface,
+    center = Math.floor(g.active.length / 2);
+  system.features = [
+    {
+      id: "small",
+      name: "Small field",
+      cartography: "area",
+      priority: 1,
+      seeds: [[{ field: "system:fire", min: 300 }]],
+    },
+  ];
+  channel(state, "magic:fire:intensity", "relative-intensity").set(center, 900);
+  classifyRegionalMagic(state);
+  expect(
+    Object.values(state.domain.world.features).filter((f) => f.kind === "fire:small")
+  ).toHaveLength(0);
+  expect(g.channels.finalSurface.get(center)).toBe(
+    magicSurfaceCode(state.domain.world.magicSystems!, "fire", "small")!
+  );
+});
+it("realizes the same small physical patch when a finer regional mesh resolves it", () => {
+  const counts = [1, 2].map((level) => {
+    const { state } = magicEnvironment(["fire"], level),
+      system = state.domain.world.magicSystems![0],
+      g = state.surface,
+      intensity = channel(state, "magic:fire:intensity", "relative-intensity");
+    system.features = [
+      {
+        id: "patch",
+        name: "Patch",
+        cartography: "area",
+        priority: 1,
+        seeds: [[{ field: "system:fire", min: 300 }]],
+      },
+    ];
+    for (let i = 0; i < intensity.length; i++) {
+      const p = gridPosition(g, i);
+      if (p.x >= 4000 && p.x <= 7000 && p.y >= 4000 && p.y <= 7000) intensity.set(i, 900);
+    }
+    const before = Array.from(intensity);
+    classifyRegionalMagic(state);
+    expect(Array.from(intensity)).toEqual(before);
+    return Object.values(state.domain.world.features).filter((f) => f.kind === "fire:patch").length;
+  });
+  expect(counts).toEqual([0, 1]);
+});
+it("leaves a sub-mesh non-source site as class coverage rather than a new point", () => {
+  const { state } = magicEnvironment(["fire"]),
+    g = state.surface,
+    system = state.domain.world.magicSystems![0],
+    cell = Math.floor(g.active.length / 2);
+  system.features = [
+    {
+      id: "crater",
+      name: "Crater",
+      cartography: "site",
+      priority: 1,
+      seeds: [[{ field: "system:fire", min: 300 }]],
+    },
+  ];
+  channel(state, "magic:fire:intensity", "relative-intensity").set(cell, 900);
+  classifyRegionalMagic(state);
+  expect(Object.values(state.domain.world.features)).toHaveLength(0);
+  expect(g.channels.finalSurface.get(cell)).toBe(
+    magicSurfaceCode(state.domain.world.magicSystems!, "fire", "crater")
+  );
 });

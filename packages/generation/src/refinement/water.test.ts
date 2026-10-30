@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { regionalFixture } from "./refinementFixture";
+import { regionalFixture, regionalEnvironment } from "./refinementFixture";
 import { routeRegionalWater, refineWater } from "./water";
 import { refineTerrain, updateSlopes } from "./terrain";
 import { extractRegionalWater } from "./geography";
@@ -63,4 +63,25 @@ it("adds regional channels and incision without evolving world history", () => {
   expect(Array.from(f.grid.channels.elevation)).toEqual(
     Array.from(f.source.numerical.captured.channels.elevation)
   );
+});
+it("keeps a single-cell pond as physical water and publishes a resolved lake", () => {
+  const { state } = regionalEnvironment(),
+    g = state.surface,
+    receiver = g.coverage.scratch("int32", "supplied-receivers", g.active.length, -1);
+  state.drainage = { receiver, order: receiver, count: 0 };
+  channel(state, "waterLevel", "metre", 100);
+  for (const cell of [
+    g.width + 2,
+    ...[4, 5, 6].flatMap((y) => [10, 11, 12].map((x) => y * g.width + x)),
+  ]) {
+    g.channels.water.set(cell, 2);
+    g.channels.waterDepth.set(cell, 10);
+  }
+  const before = Array.from(g.channels.water);
+  extractRegionalWater(state);
+  expect(g.lakes).toHaveLength(2);
+  expect(Object.values(state.domain.world.features).filter((f) => f.kind === "lake")).toHaveLength(
+    1
+  );
+  expect(Array.from(g.channels.water)).toEqual(before);
 });

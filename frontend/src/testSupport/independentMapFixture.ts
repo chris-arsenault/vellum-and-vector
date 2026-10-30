@@ -47,7 +47,7 @@ export async function independentMapFixture(protectedSource = false) {
   const outside = {
     ...source,
     id: crypto.randomUUID(),
-    geometry: rectangle([90_000, 90_000, 95_000, 95_000]),
+    geometry: rectangle([98_000, 98_000, 99_000, 99_000]),
   };
   source.relations = [{ kind: "dependsOn", targetId: outside.id }];
   await commitFixtureRecords(initial.id, [

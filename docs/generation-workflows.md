@@ -30,7 +30,8 @@ present channels. Refinement reports its own sampling, terrain, water, landscape
 magic and place stages.
 No region label or nesting depth selects another map type.
 Selection uses physical shores and named geographic and social polygons. Suitable
-natural regions rank ahead of tiny patches or whole continents. Oversized polygons
+natural regions rank ahead of tiny patches or whole continents. Long, thin coastal
+belts also receive compact candidates. Oversized polygons
 also offer coastal subdivisions around roughly spaced centres, moved toward nearby
 settlements. This is a single geographic heuristic, without equal-area balancing
 or an exact district count. Keeping a region does not move its neighbours' proposed
@@ -45,8 +46,9 @@ The policy declarations live in `packages/domain/src/regionalScale.ts`. Rectangu
 sampling frames and coastal context add samples beyond the selected land area.
 Setup shows approximate spacing and sample count before generation.
 
-Child map extents include surrounding context so
-a coastal subject can develop its shore. Generation publishes only map-owned
+Child maps use a rectangular working frame around the subject, including nearby
+land and sea. This frame may extend beyond the source map's footprint; the
+surrounding geography can develop independently. Generation publishes only map-owned
 features and fields; it does not write finer detail onto parent feature records.
 The selected outline does not constrain generated feature geometry. Generation
 can change its own map's records beyond that outline; cross-map writes remain
@@ -81,7 +83,13 @@ on that grid; habitat outlines use the raster's shared class-boundary evaluator.
 Contour crossing searches use the map's geometric tolerance. Stored coordinate
 precision does not dictate their numerical accuracy.
 
-Each magic system resolves captured effects in its own medium. Regional refinement
+Each magic system resolves captured effects in its own medium. Named magic places
+use the same connected-class and minimum-component rules as the existing extractor;
+local peaks within one site complex do not create separate places. Class coverage
+remains a field even when no named outline qualifies. The existing physical
+footprint rule also applies to new lakes and non-source sites; unresolved water
+and magic remain field context, while captured source places remain available.
+Regional refinement
 does not place new global sources, renew stocks or replay ocean impulses. Known
 places and completed society history remain context. Smaller settlements, local
 ways and physical sites come from regional terrain and useful locations, without

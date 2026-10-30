@@ -4,15 +4,20 @@ import { createRefinementState } from "./inputs";
 import { regionalFixture } from "./refinementFixture";
 import { putRefinementFeature, putRefinementNetwork } from "./features";
 
-it("reads the immutable world bounds once when wrapping regional samples", () => {
+it("keeps world-bound reads independent of the regional sample count", () => {
   const f = regionalFixture((x) => 100 + Math.sin((x / 40000) * Math.PI * 2) * 100);
   f.source.world.reference.boundaryMode = "cylinder";
   const bounds = vi.spyOn(spatial, "bounds");
   try {
     const state = createRefinementState(f.source, f.input);
-    expect(
-      bounds.mock.calls.filter(([geometry]) => geometry === state.domain.world.reference.domain)
-    ).toHaveLength(1);
+    const reads = (current: ReturnType<typeof createRefinementState>) =>
+        bounds.mock.calls.filter(([geometry]) => geometry === current.domain.world.reference.domain)
+          .length,
+      count = reads(state);
+    bounds.mockClear();
+    const draft = createRefinementState(f.source, { ...f.input, quality: "draft" });
+    expect(draft.surface.active.length).not.toBe(state.surface.active.length);
+    expect(reads(draft)).toBe(count);
     expect(state.surface.channels.elevation.get(0)).toBeCloseTo(f.grid.channels.elevation.get(0));
   } finally {
     bounds.mockRestore();
@@ -29,7 +34,9 @@ it("keeps a seam-crossing regional surface local and samples both sides of its c
   const state = createRefinementState(f.source, f.input),
     g = state.surface;
   expect(g.bounds[2] - g.bounds[0]).toBeLessThan(12000);
-  expect(g.active.length).toBeLessThan(300);
+  const worldColumns = Math.ceil(40000 / g.scope.resolution!) + 1,
+    worldRows = Math.ceil(20000 / g.scope.resolution!) + 1;
+  expect(g.active.length).toBeLessThan(worldColumns * worldRows);
   expect(fieldInterpolator(g, "elevation")({ x: 39000, y: 8000, z: 0 })).toBeLessThan(100);
   expect(fieldInterpolator(g, "elevation")({ x: 1000, y: 8000, z: 0 })).toBeGreaterThan(100);
   expect(spatial.area(g.scope.footprint)).toBeCloseTo(

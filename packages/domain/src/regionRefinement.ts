@@ -1,8 +1,12 @@
 import type { Area, World } from "./model";
 import { regionLineage } from "./regionViews";
 import { requireThat } from "./errors";
-import { spatial } from "./spatial";
+import { spatial, rectangle } from "./spatial";
 import { mapRefinementLevel } from "./regionalScale";
+import { canonicalGeometry, compactGeometryBounds } from "./worldBoundary";
+
+/** Surrounding geography is working map area, not a narrow shoreline halo. */
+const regionalContextFraction = 0.25;
 
 /** Refinement adds a representation to an existing subject, never a second region tree. */
 export function refinedRegionArea(world: World, regionId: string): Area | undefined {
@@ -27,14 +31,23 @@ export function regionRefinementLevel(world: World, regionId: string) {
   return level;
 }
 /** Leave room around the subject for coastlines and nearby context to develop on this map. */
-export function regionMapFootprint(parent: Area, subject: Area["footprint"]) {
-  const margin = spatial.area(subject) / spatial.length(subject) / 8;
-  return spatial.intersection(spatial.buffer(subject, margin)!, parent.footprint)!;
+export function regionMapFootprint(world: Pick<World, "reference">, subject: Area["footprint"]) {
+  const bounds = compactGeometryBounds(world.reference, subject),
+    margin = Math.max(bounds[2] - bounds[0], bounds[3] - bounds[1]) * regionalContextFraction,
+    [w, s, e, n] = spatial.bounds(world.reference.domain),
+    cylinder = world.reference.boundaryMode === "cylinder";
+  const frame = rectangle([
+    cylinder ? bounds[0] - margin : Math.max(w, bounds[0] - margin),
+    Math.max(s, bounds[1] - margin),
+    cylinder ? bounds[2] + margin : Math.min(e, bounds[2] + margin),
+    Math.min(n, bounds[3] + margin),
+  ]);
+  return canonicalGeometry(world.reference, frame);
 }
 export function regionRefinementInput(world: World, regionId: string) {
   const region = regionLineage(world, regionId).at(-1)!,
     parent = regionRefinementParent(world, regionId),
-    footprint = regionMapFootprint(parent, region.region.footprint);
+    footprint = regionMapFootprint(world, region.region.footprint);
   return {
     regionId,
     parentId: parent.id,
@@ -58,10 +71,7 @@ export function validateRegionRefinement(world: World, area: Area) {
   requireThat(
     area.parentId === regionRefinementParent(world, region.id).id &&
       spatial.covers(area.footprint, region.region.footprint) &&
-      spatial.covers(
-        regionMapFootprint(regionRefinementParent(world, region.id), region.region.footprint),
-        area.footprint
-      ),
+      spatial.covers(regionMapFootprint(world, region.region.footprint), area.footprint),
     "region_refinement_scope",
     "Refine the selected region's outline using its nearest refined ancestor."
   );

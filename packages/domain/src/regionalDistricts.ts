@@ -1,6 +1,6 @@
 import type { Geometry } from "geojson";
 import type { Position } from "./model";
-import { Spatial, spatial } from "./spatial";
+import { Spatial, spatial, rectangle } from "./spatial";
 import { polygonGeometry } from "./regionGeometry";
 
 const oversizedRegionRatio = 1.8;
@@ -14,11 +14,16 @@ export function regionalDistricts(
   precision = spatial.precision
 ): Geometry[] {
   const gis = new Spatial(precision),
-    area = gis.area(shape);
-  if (area < targetArea * oversizedRegionRatio) return [];
-  const bounds = gis.bounds(shape),
-    inside = gis.pointCoverage(shape),
-    seeds = districtCentres(bounds, targetArea, anchors.filter(inside), inside);
+    bounds = gis.bounds(shape),
+    width = bounds[2] - bounds[0],
+    height = bounds[3] - bounds[1];
+  if (
+    width * height < targetArea * oversizedRegionRatio &&
+    Math.max(width, height) < Math.sqrt(targetArea) * oversizedRegionRatio
+  )
+    return [];
+  const inside = gis.pointCoverage(shape),
+    seeds = districtCentres(shape, bounds, targetArea, anchors.filter(inside), inside, gis);
   if (!seeds.length) seeds.push(gis.interiorPosition(shape));
   const clip = gis.intersectionWith(shape);
   return gis.voronoiCells(seeds, bounds).flatMap((cell) => {
@@ -28,23 +33,39 @@ export function regionalDistricts(
 }
 
 function districtCentres(
+  shape: Geometry,
   [w, s, e, n]: ReturnType<Spatial["bounds"]>,
   targetArea: number,
   anchors: Position[],
-  inside: (p: Position) => boolean
+  inside: (p: Position) => boolean,
+  gis: Spatial
 ) {
   const spacing = Math.sqrt(targetArea),
     columns = Math.max(1, Math.round((e - w) / spacing)),
     rows = Math.max(1, Math.round((n - s) / spacing)),
-    seeds: Position[] = [];
+    seeds: Position[] = [],
+    clip = gis.intersectionWith(shape);
   for (let y = 0; y < rows; y++)
     for (let x = 0; x < columns; x++) {
-      const centre = {
+      let centre = {
         x: w + ((x + 0.5) * (e - w)) / columns,
         y: s + ((y + 0.5) * (n - s)) / rows,
         z: 0,
       };
-      if (!inside(centre)) continue;
+      if (!inside(centre)) {
+        const patch = polygonGeometry(
+          clip(
+            rectangle([
+              w + (x * (e - w)) / columns,
+              s + (y * (n - s)) / rows,
+              w + ((x + 1) * (e - w)) / columns,
+              s + ((y + 1) * (n - s)) / rows,
+            ])
+          )
+        );
+        if (!patch || gis.area(patch) === 0) continue;
+        centre = gis.interiorPosition(patch);
+      }
       let nearest = centre,
         distance = (spacing * settlementAttraction) ** 2;
       for (const anchor of anchors) {

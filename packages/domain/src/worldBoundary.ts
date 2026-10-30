@@ -14,6 +14,27 @@ export interface WorldReference {
   precision?: number;
 }
 type Reference = World["reference"];
+/** The shortest continuous chart containing a canonical geographic footprint. */
+export function compactGeometryBounds(reference: Reference, footprint: Geometry): Bounds {
+  const bounds = spatial.bounds(footprint);
+  if (reference.boundaryMode !== "cylinder") return bounds;
+  const [west, , east] = spatial.bounds(reference.domain),
+    width = east - west,
+    intervals = parts(footprint, "polygon")
+      .map((part) => spatial.bounds(part))
+      .sort((a, b) => a[0] - b[0]);
+  let end = intervals[0][2],
+    gap = intervals[0][0] + width - intervals.at(-1)![2],
+    start = intervals[0][0];
+  for (const interval of intervals.slice(1)) {
+    if (interval[0] - end > gap) {
+      gap = interval[0] - end;
+      start = interval[0];
+    }
+    end = Math.max(end, interval[2]);
+  }
+  return [start, bounds[1], start + width - Math.max(0, gap), bounds[3]];
+}
 export function canonicalPosition(reference: Reference, p: Position, extent?: Bounds): Position {
   if (reference.boundaryMode !== "cylinder") return p;
   const [west, , east] = extent ?? spatial.bounds(reference.domain),

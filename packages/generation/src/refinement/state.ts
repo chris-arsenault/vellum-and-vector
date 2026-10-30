@@ -8,6 +8,7 @@ import type {
   NetworkReader,
   ContourWorkspace,
 } from "@atlas/domain";
+import { CellList, resolutionCells } from "@atlas/domain";
 
 export interface RefinementInput {
   areaId: string;
@@ -52,6 +53,46 @@ export function* neighbors(grid: RegularGrid, i: number) {
         continue;
       yield i + dy * grid.width + dx;
     }
+}
+
+/** Connected class components, matching place extraction on the initial mesh. */
+export function regionalComponents(
+  grid: RegularGrid,
+  includes: (i: number) => boolean,
+  visit: (members: Int32Array) => void
+) {
+  const seen = grid.coverage.scratch("uint8", "regional:component-seen", grid.active.length);
+  for (let i = 0; i < seen.length; i++) {
+    if (seen.get(i) || !grid.active.get(i) || !includes(i)) continue;
+    const cells = new CellList();
+    cells.push(i);
+    seen.set(i, 1);
+    for (let head = 0; head < cells.length; head++)
+      for (const j of neighbors(grid, cells.at(head))) {
+        if (seen.get(j) || !grid.active.get(j) || !includes(j)) continue;
+        seen.set(j, 1);
+        cells.push(j);
+      }
+    visit(cells.finish());
+  }
+  grid.coverage.release(seen);
+}
+
+/** ADR 0005's physical footprint rule on this map's regular mesh. */
+export function resolvesRegionalComponent(grid: RegularGrid, members: Int32Array) {
+  let west = Infinity,
+    east = -Infinity,
+    south = Infinity,
+    north = -Infinity;
+  for (const i of members) {
+    const x = i % grid.width,
+      y = Math.floor(i / grid.width);
+    west = Math.min(west, x);
+    east = Math.max(east, x);
+    south = Math.min(south, y);
+    north = Math.max(north, y);
+  }
+  return east - west + 1 >= resolutionCells && north - south + 1 >= resolutionCells;
 }
 
 export function spacing(grid: RegularGrid): [number, number] {

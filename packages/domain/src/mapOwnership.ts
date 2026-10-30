@@ -1,4 +1,13 @@
 import type { World } from "./model";
+import type { Geometry } from "geojson";
+
+export interface MapOwnership {
+  sourceAreaId: string;
+  sourceRevision: number;
+  refinementLevel?: number;
+  /** The captured working frame stays stable across repeated refinement. */
+  extent?: Geometry;
+}
 
 /** Ancestry locates independent maps but never supplies their live geographic records. */
 export function ownsMapGeography(world: Pick<World, "areas">, areaId: string): boolean {

@@ -3,6 +3,7 @@ import {
   SmallIntSet,
   spatial,
   point,
+  placeMinimumCells,
   type Band,
   type MagicFeatureRule,
 } from "@atlas/domain";
@@ -243,11 +244,6 @@ export function extractNamedLandforms(state: GenerationState) {
  * size, and only the named, outlined place needs the extent (ADR 0005: outlines generalize
  * a realized field at the minima declared with the rules).
  */
-const placeMinimumCells: Record<NonNullable<MagicFeatureRule["cartography"]>, number> = {
-  site: 1,
-  course: 2,
-  area: 3,
-};
 export function extractMagicPlaces(state: GenerationState) {
   const magic = state.physical!.magic;
   for (const held of Object.values(magic?.confluences.states ?? {}))

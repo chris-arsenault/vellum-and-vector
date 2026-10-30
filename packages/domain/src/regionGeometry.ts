@@ -1,5 +1,7 @@
 import type { Geometry, LineString, Polygon, Position } from "geojson";
 import { spatial } from "./spatial";
+import type { World, Position as LocatedPosition } from "./model";
+import { translateGeometry } from "./worldBoundary";
 
 export interface RegionCandidate {
   name: string;
@@ -11,6 +13,39 @@ export function polygonParts(geometry: Geometry): Polygon[] {
     return geometry.coordinates.map((coordinates) => ({ type: "Polygon", coordinates }));
   if (geometry.type === "GeometryCollection") return geometry.geometries.flatMap(polygonParts);
   return [];
+}
+/** Join the two chart-edge fragments before choosing a component or subdividing it. */
+export function connectedRegionParts(
+  reference: World["reference"],
+  geometry: Geometry,
+  position: LocatedPosition | null
+) {
+  const parts = polygonParts(geometry);
+  if (reference.boundaryMode !== "cylinder" || !position) return parts;
+  const [w, s, e, n] = spatial.bounds(reference.domain),
+    width = e - w,
+    bounds = spatial.bounds(geometry),
+    precision = reference.precision ?? spatial.precision;
+  if (Math.abs(bounds[0] - w) > precision || Math.abs(bounds[2] - e) > precision) return parts;
+  const joined = spatial.unionAll([
+      geometry,
+      translateGeometry(geometry, -width),
+      translateGeometry(geometry, width),
+    ]),
+    window = {
+      type: "Polygon" as const,
+      coordinates: [
+        [
+          [position.x - width / 2, s],
+          [position.x + width / 2, s],
+          [position.x + width / 2, n],
+          [position.x - width / 2, n],
+          [position.x - width / 2, s],
+        ],
+      ],
+    },
+    clipped = joined && spatial.intersection(joined, window);
+  return clipped ? polygonParts(clipped) : [];
 }
 /** Area overlays may also return lines or points where boundaries merely touch. */
 export function polygonGeometry(geometry: Geometry | null): Geometry | null {

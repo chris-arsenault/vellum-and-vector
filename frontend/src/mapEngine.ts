@@ -13,7 +13,7 @@ import { ScaleLine } from "ol/control.js";
 import { defaults as defaultInteractions } from "ol/interaction/defaults.js";
 import { bounds } from "./presentation";
 import { typeStyle } from "./typeStyles";
-import { presentedFeatureStyle } from "@atlas/domain";
+import { presentedFeatureStyle, compactGeometryBounds } from "@atlas/domain";
 import { settlementPriority } from "./settlementStyles";
 import type { Area, AtlasFeature, LayerStyle, World } from "./types";
 import { RasterSources } from "./RasterSources";
@@ -366,7 +366,7 @@ function updateAreas(engine: MapEngine, world: World, area: Area) {
   }
 }
 export function fitArea(engine: MapEngine, area: Pick<Area, "footprint">) {
-  engine.map.getView().fit(bounds(area.footprint), {
+  engine.map.getView().fit(compactGeometryBounds(engine.reference, area.footprint), {
     padding: engine.drawn.getVisible()
       ? sheetPadding(engine.drawn.get("input"), engine.map.getSize()?.[0] ?? 1200)
       : [35, 35, 35, 35],

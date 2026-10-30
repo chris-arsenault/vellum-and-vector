@@ -60,6 +60,19 @@ export class FeatureCatalog {
     tolerance: number | undefined = undefined,
     accept: (id: string) => boolean = () => true
   ): FeaturePage {
+    let page!: FeaturePage;
+    // Derived geometry is cached during a read. Commit the page together rather
+    // than synchronously flushing a SQLite journal for every displayed feature.
+    this.db.savepoint(() => {
+      page = this.readPage(query, tolerance, accept);
+    });
+    return page;
+  }
+  private readPage(
+    query: FeatureQuery,
+    tolerance: number | undefined,
+    accept: (id: string) => boolean
+  ): FeaturePage {
     requireThat(
       tolerance === undefined || (Number.isFinite(tolerance) && tolerance >= 0),
       "display_tolerance",
@@ -238,7 +251,7 @@ export class FeatureCatalog {
       if (item) result.set(String(row.id), presented(item));
       else if (item === undefined) missing.push(row);
     }
-    if (missing.length) this.compose(scope, missing, precision, result);
+    if (missing.length) this.db.savepoint(() => this.compose(scope, missing, precision, result));
     return result;
   }
   private compose(

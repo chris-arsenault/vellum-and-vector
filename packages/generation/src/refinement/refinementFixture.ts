@@ -65,8 +65,8 @@ export function regionalFixture(
   return { source, input, grid, state: createRefinementState(source, input) };
 }
 /** Directly supplied present conditions; tests choose the real refiner they exercise. */
-export function regionalEnvironment() {
-  const f = regionalFixture(() => 100);
+export function regionalEnvironment(refinementLevel = 1) {
+  const f = regionalFixture(() => 100, 20000, refinementLevel);
   for (const [name, unit, value] of [
     ["water", "category", 0],
     ["waterDepth", "metre", 0],

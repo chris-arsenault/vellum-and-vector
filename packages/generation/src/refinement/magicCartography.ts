@@ -9,12 +9,18 @@ import {
   surfaceRuleSources,
   confluenceEffective,
   someSample,
+  placeMinimumCells,
   type MagicFeatureRule,
   type Band,
 } from "@atlas/domain";
 import { generationFeatures } from "../generationFeatures";
 import { putRefinementFeature } from "./features";
-import { channel, neighbors, type RefinementState } from "./state";
+import {
+  channel,
+  regionalComponents,
+  resolvesRegionalComponent,
+  type RefinementState,
+} from "./state";
 import { magicShare } from "./magicConditions";
 import { meetingShare } from "./meetings";
 
@@ -104,7 +110,7 @@ function publishClass(
   state: RefinementState,
   key: string,
   label: string,
-  cartography: string,
+  cartography: NonNullable<MagicFeatureRule["cartography"]>,
   share: Band
 ) {
   if (!someSample(share, (v) => v > 0.5)) return;
@@ -113,10 +119,20 @@ function publishClass(
     publishSites(state, key, label, share);
     return;
   }
+  const eligible = g.coverage.scratch("float64", "regional:place-coverage", share.length);
+  regionalComponents(
+    g,
+    (i) => share.get(i) > 0.5,
+    (members) => {
+      if (members.length < placeMinimumCells[cartography]) return;
+      if (cartography === "area" && !resolvesRegionalComponent(g, members)) return;
+      for (const i of members) eligible.set(i, share.get(i));
+    }
+  );
   const at = fieldInterpolator(
       {
         ...g,
-        channels: { ...g.channels, regionalClass: share },
+        channels: { ...g.channels, regionalClass: eligible },
         units: { ...g.units, regionalClass: "ratio" },
       },
       "regionalClass"
@@ -124,11 +140,12 @@ function publishClass(
     shape = fieldContour(
       g,
       (x, y) => at({ x, y, z: 0 }),
-      regularContourSupport(g, (i) => share.get(i) > 0.5),
+      regularContourSupport(g, (i) => eligible.get(i) > 0.5),
       0.5,
       (g.scope.resolution ?? 1000) / 4,
       state.contours
     );
+  g.coverage.release(eligible);
   if (shape)
     putRefinementFeature(
       state,
@@ -145,24 +162,25 @@ function publishSites(state: RefinementState, key: string, label: string, share:
     known = [...generationFeatures(state, { areaId: state.input.areaId })].filter(
       (f) => f.kind === key && f.geometry.type === "Point"
     );
-  for (let i = 0; i < share.length; i++) {
-    if (share.get(i) <= 0.5) continue;
-    if (
-      [...neighbors(g, i)].some(
-        (j) => share.get(j) > share.get(i) || (share.get(j) === share.get(i) && j < i)
-      )
-    )
-      continue;
-    const p = gridPosition(g, i);
-    if (known.some((f) => spatial.distance(f.geometry, point(p)) < state.parentSpan)) continue;
-    putRefinementFeature(
-      state,
-      `site:${key}:${i}`,
-      key,
-      "magic",
-      point(p),
-      { rule: key.split(":").at(-1), placeType: label },
-      label
-    );
-  }
+  regionalComponents(
+    g,
+    (i) => share.get(i) > 0.5,
+    (members) => {
+      // Captured source places are retained separately. A new non-source site
+      // must resolve a physical footprint, rather than naming a one-cell class.
+      if (!resolvesRegionalComponent(g, members)) return;
+      const i = members.reduce((best, cell) => (share.get(cell) > share.get(best) ? cell : best));
+      const p = gridPosition(g, i);
+      if (known.some((f) => spatial.distance(f.geometry, point(p)) < state.parentSpan)) return;
+      putRefinementFeature(
+        state,
+        `site:${key}:${i}`,
+        key,
+        "magic",
+        point(p),
+        { rule: key.split(":").at(-1), placeType: label },
+        label
+      );
+    }
+  );
 }

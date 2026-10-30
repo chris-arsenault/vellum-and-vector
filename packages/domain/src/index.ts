@@ -104,6 +104,7 @@ export * from "./drainageRefinement";
 export {
   canonicalPosition,
   canonicalGeometry,
+  compactGeometryBounds,
   chartCopies,
   translateGeometry,
   unwrapCoordinates,

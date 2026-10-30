@@ -10,10 +10,9 @@ import {
 import { KeyedHeap } from "@atlas/domain";
 import { generationFeatures } from "../generationFeatures";
 import { putRefinementFeature, putRefinementNetwork } from "./features";
+import { regionalCommunitySpacing } from "../regionalSociety";
 import { clamp, distance, neighbors, type RefinementState } from "./state";
 
-/** Small settlements are separated by local travel distance, not parent population accounting. */
-const villageSpacing = 8000;
 export function refinePlaces(state: RefinementState) {
   if (!state.input.domains.some((id) => ["built", "cultural", "political"].includes(id))) return;
   retainSocietySeats(state);
@@ -26,7 +25,7 @@ export function refinePlaces(state: RefinementState) {
       feature: f,
       cell: cellAt(state, (f.geometry as GeoJSON.Point).coordinates),
     })),
-    spacing = Math.max(villageSpacing, (g.scope.resolution ?? 1000) * 5),
+    spacing = regionalCommunitySpacing(state),
     bins = new Map<string, Position[]>(),
     heap = new KeyedHeap("max");
   for (const seat of seats) addBin(state, bins, seat.cell, spacing);
@@ -154,10 +153,10 @@ function connectSeats(state: RefinementState, seats: { feature: AtlasFeature; ce
   spatial.withIndex(shapes, (index) => {
     for (const [a, seat] of seats.entries()) {
       const p = gridPosition(state.surface, seat.cell),
-        size = Math.max(villageSpacing * 3, (state.surface.scope.resolution ?? 1000) * 15),
+        size = regionalCommunitySpacing(state) * 3,
         nearby = index
           .query([p.x - size, p.y - size, p.x + size, p.y + size])
-          .filter((b) => b !== a)
+          .filter((b) => b !== a && seats[b].cell !== seat.cell)
           .sort(
             (b, c) =>
               distance(state.surface, seat.cell, seats[b].cell) -
@@ -169,7 +168,7 @@ function connectSeats(state: RefinementState, seats: { feature: AtlasFeature; ce
       if (pairs.has(key)) continue;
       pairs.add(key);
       const cells = regionalPath(state, seat.cell, seats[b].cell);
-      if (!cells) continue;
+      if (!cells || cells.length < 2) continue;
       const coordinates = cells.map((i) => {
           const p = gridPosition(state.surface, i);
           return [p.x, p.y];
@@ -226,7 +225,7 @@ function walkPath(previous: Map<number, number>, start: number, end: number) {
 }
 function extractSites(state: RefinementState) {
   const g = state.surface,
-    spacing = Math.max(villageSpacing, (g.scope.resolution ?? 1000) * 5),
+    spacing = regionalCommunitySpacing(state),
     bins = new Map<string, Position[]>();
   for (let i = 0; i < g.active.length; i++) {
     if (g.channels.riverOrder.get(i) <= 0 || g.channels.slope.get(i) < 0.03) continue;

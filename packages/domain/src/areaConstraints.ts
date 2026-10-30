@@ -38,7 +38,7 @@ export function validateAreaPlacement(
     "Choose a finer creation profile; intermediate profiles may be skipped."
   );
   requireThat(
-    gis.covers(parent.footprint, shape),
+    !!area.map || gis.covers(parent.footprint, shape),
     "outside_parent",
     "A mapped area stays within its geographic parent."
   );

@@ -68,7 +68,7 @@ async function capturedContext() {
         id: `drainage:${root.id}`,
         areaId: root.id,
         spaceId: root.spaceId!,
-        reaches: [reach(95_000, null), reach(30_000, 2), reach(40_000, null)],
+        reaches: [reach(99_000, null), reach(30_000, 2), reach(40_000, null)],
       },
     },
     ...contextSources(root),

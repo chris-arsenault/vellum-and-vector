@@ -32,7 +32,7 @@ const scope = {
   areaId: "root",
 };
 const available = rectangle([0, 0, 1000, 1000]);
-function metadata(): WorldMetadata {
+function metadata(domain = available, cylinder = false): WorldMetadata {
   return {
     id: scope.worldId,
     name: "Geography",
@@ -47,7 +47,8 @@ function metadata(): WorldMetadata {
       verticalDatum: "Sea level",
       precision: 0.000001,
       version: 1,
-      domain: available,
+      domain,
+      ...(cylinder ? { boundaryMode: "cylinder" as const } : {}),
     },
     layers: {},
     fields: [],
@@ -58,12 +59,11 @@ function metadata(): WorldMetadata {
     epochs: [],
   };
 }
-async function fixture(domain = available) {
+async function fixture(domain = available, cylinder = false) {
   const kernel = await GeometryKernel.create();
   const catalog = new SpatialCatalog(new sqlite.oo1.DB(":memory:"), kernel);
   opened.push(catalog);
-  const world = metadata();
-  world.reference = { ...world.reference, domain };
+  const world = metadata(domain, cylinder);
   await catalog.createWorld(world);
   const blueprint = createWorldBlueprint({
     id: world.id,
@@ -211,6 +211,17 @@ it("selects land when a covering feature also touches another island along an ed
   const choices = await f.pick(250, 250);
   expect(f.areas(choices.candidates)).toEqual([40000, 90000]);
   expect(choices.candidates.every((c) => c.footprint.type === "Polygon")).toBe(true);
+});
+it("selects one continuous region across the cylindrical seam from either side", async () => {
+  const f = await fixture(available, true),
+    land = spatial.union(rectangle([0, 100, 180, 700]), rectangle([820, 100, 1000, 700]));
+  await coastline(f, land);
+  await f.put("Seam country", land);
+  for (const x of [50, 950]) {
+    const picked = (await f.pick(x, 300)).candidates[0].footprint;
+    expect(spatial.covers(picked, land)).toBe(true);
+    expect(spatial.difference(picked, land)).toBeNull();
+  }
 });
 const across: Geometry = {
   type: "LineString",

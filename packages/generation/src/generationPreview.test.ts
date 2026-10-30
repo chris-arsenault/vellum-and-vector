@@ -4,7 +4,23 @@ import { landscape } from "./mapFixtures";
 import { createField } from "./canonry/field";
 import { createWorldMesh } from "./canonry/worldMesh";
 import { atlasPhysicalProfile } from "./canonry/atlasProfile";
-import { residentBand } from "@atlas/domain";
+import { residentBand, rectangle, createGrid, putChannel, generateBand } from "@atlas/domain";
+
+it("previews fractional field edges from real exported geography without rejecting boundary samples", () => {
+  const state = landscape(),
+    footprint = rectangle([3335862.959279, 390190.374797, 3659397.791327, 753521.126761]);
+  state.surface = createGrid("fractional-region", { ...state.surface.scope, footprint }, 23, 31);
+  putChannel(
+    state.surface,
+    "elevation",
+    "metre",
+    generateBand(state.surface.coverage, "float64", "height", (i) => i + 1)
+  );
+  const before = Array.from(state.surface.channels.elevation),
+    preview = generationPreview(state);
+  expect(Array.from(preview.channels.elevation).every(Number.isFinite)).toBe(true);
+  expect(Array.from(state.surface.channels.elevation)).toEqual(before);
+});
 
 it("samples a bounded independent display grid without modifying live surface channels", () => {
   const state = landscape();

@@ -1,5 +1,6 @@
 import type { Geometry } from "geojson";
 import type { MappedDrawing } from "./mapEligibility";
+import type { MapOwnership } from "./mapOwnership";
 export type { FieldSample, BoundaryHistory } from "./boundaryContracts";
 import type { FieldSample, BoundaryHistory } from "./boundaryContracts";
 
@@ -75,7 +76,7 @@ export interface Epoch {
 }
 export interface Area {
   /** Independent geographic ownership; source is provenance, never a live read fallback. */
-  map?: { sourceAreaId: string; sourceRevision: number; refinementLevel?: number };
+  map?: MapOwnership;
   /** Selected geographic subject whose finer representation this area owns. */
   regionId?: string;
   spaceId?: string;

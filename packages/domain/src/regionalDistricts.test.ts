@@ -45,3 +45,19 @@ it("keeps suitably sized islands as geographic candidates rather than subdividin
     []
   );
 });
+
+it("breaks a sprawling coastal belt into useful local pieces even when its land area is modest", () => {
+  const belt = spatial.difference(
+      rectangle([0, 0, 1_800_000, 1_200_000]),
+      rectangle([80_000, 80_000, 1_720_000, 1_300_000])
+    )!,
+    pieces = regionalDistricts(belt, regionalSelectionArea(1));
+  expect(pieces.length).toBeGreaterThan(2);
+  expect(
+    pieces.every((piece) => {
+      const [w, s, e, n] = spatial.bounds(piece);
+      return Math.max(e - w, n - s) < 1_200_000;
+    })
+  ).toBe(true);
+  expect(spatial.difference(belt, spatial.unionAll(pieces)!)).toBeNull();
+});

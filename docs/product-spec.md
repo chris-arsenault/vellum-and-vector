@@ -244,6 +244,8 @@ map. Candidates rank by useful area at the next fixed regional scale, independen
 of zoom. Large polygons also offer approximate geographic subdivisions clipped to
 the shore and influenced by nearby settlements. Natural regions near the useful
 size take preference; whole landmasses and small named regions remain choices.
+Seam-connected geography remains one candidate on cylindrical worlds. Long coastal
+belts can offer compact subdivisions even when their land area is modest.
 Subdivision size and count are approximate, with no equal-area solve or hard
 size restriction. Creators can draw a closed outline, or a
 dividing line whose endpoints snap to nearby edges and which splits the polygons
@@ -281,8 +283,9 @@ Returning from setup or cancelling a job retains the selected subject. Completed
 regional output arrives through the existing worker and atomic publication.
 
 Terrain and water develop from parent context without locking inherited heights
-or shores. The child map includes room around the selected subject for coastal
-development. Climate responds to finer relief; habitats
+or shores. The child map includes a rectangular working area around the selected
+subject, with surrounding land and sea available for independent development even
+outside the source map's footprint. Climate responds to finer relief; habitats
 and existing magical landscapes follow their own media without creating another
 history or renewing inherited material stocks. Known places remain available;
 regional algorithms add smaller settlements, local ways and POIs from useful

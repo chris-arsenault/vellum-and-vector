@@ -5,3 +5,6 @@
  * unit that contains it, for a finer profile to realize.
  */
 export const resolutionCells = 2;
+
+/** Named magic places use connected class extent; every class remains field coverage. */
+export const placeMinimumCells = { site: 1, course: 2, area: 3 } as const;

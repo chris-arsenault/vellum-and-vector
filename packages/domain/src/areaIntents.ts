@@ -121,6 +121,7 @@ function areaCandidate(data: AreaInput, context: IntentContext, snapshot: Domain
             sourceAreaId: parent.id,
             sourceRevision: snapshot.world.version,
             refinementLevel: regionRefinementLevel(snapshot.world, data.regionId),
+            extent: data.footprint,
           },
         }
       : {}),

@@ -1,6 +1,7 @@
 import {
   canonicalGeometry,
-  geometryParts,
+  compactGeometryBounds,
+  regionMapFootprint,
   rectangle,
   spatial,
   type DomainSnapshot,
@@ -10,6 +11,8 @@ import type { Geometry } from "geojson";
 
 /** Use the pinned selection, so rerunning a map does not repeatedly expand its frame. */
 export function refinementFootprint(source: DomainSnapshot, areaId: string, physical = true) {
+  if (physical && source.world.areas[areaId].map?.extent)
+    return source.world.areas[areaId].map!.extent!;
   const fields = source.world.fields.filter(
     (f) => f.areaId === areaId && f.channels?.includes("elevation")
   );
@@ -21,46 +24,16 @@ export function refinementFootprint(source: DomainSnapshot, areaId: string, phys
 
 /** A region crossing the cylindrical seam uses one short, continuous local chart. */
 export function compactBounds(source: DomainSnapshot, footprint: Geometry): Bounds {
-  const bounds = spatial.bounds(footprint),
-    reference = source.world.reference;
-  if (reference.boundaryMode !== "cylinder") return bounds;
-  const [west, , east] = spatial.bounds(reference.domain),
-    width = east - west,
-    intervals = geometryParts(footprint)
-      .map((part) => spatial.bounds(part))
-      .sort((a, b) => a[0] - b[0]);
-  let end = intervals[0][2],
-    gap = intervals[0][0] + width - intervals.at(-1)![2],
-    start = intervals[0][0];
-  for (const interval of intervals.slice(1)) {
-    if (interval[0] - end > gap) {
-      gap = interval[0] - end;
-      start = interval[0];
-    }
-    end = Math.max(end, interval[2]);
-  }
-  return [start, bounds[1], start + width - Math.max(0, gap), bounds[3]];
+  return compactGeometryBounds(source.world.reference, footprint);
 }
 
-export function refinementFrame(
-  source: DomainSnapshot,
-  areaId: string,
-  span: number,
-  parentSpan: number,
-  physical: boolean
-) {
-  const bounds = compactBounds(source, refinementFootprint(source, areaId, physical));
-  if (physical) {
-    // Coastal context follows source scale without overwhelming a very small selected subject.
-    const margin = Math.max(
-      span * 2,
-      Math.min(parentSpan / 2, Math.min(bounds[2] - bounds[0], bounds[3] - bounds[1]) / 4)
-    );
-    bounds[0] -= margin;
-    bounds[1] -= margin;
-    bounds[2] += margin;
-    bounds[3] += margin;
-  }
+export function refinementFrame(source: DomainSnapshot, areaId: string, physical: boolean) {
+  const input = refinementFootprint(source, areaId, physical),
+    frame =
+      physical && !source.world.areas[areaId].map?.extent
+        ? regionMapFootprint(source.world, input)
+        : input,
+    bounds = compactBounds(source, frame);
   const reference = source.world.reference,
     [w, s, e, n] = spatial.bounds(reference.domain);
   bounds[1] = Math.max(s, bounds[1]);

@@ -3,6 +3,8 @@ import type { Geometry, LineString } from "geojson";
 import {
   minimumRegionWidthMetres,
   polygonParts,
+  connectedRegionParts,
+  canonicalGeometry,
   polygonGeometry,
   regionalDistricts,
   regionalSelectionArea,
@@ -10,6 +12,7 @@ import {
   regionBoundaryLines,
   requireThat,
   snapRegionCut,
+  spatial,
   type Bounds,
   type FeaturePage,
   type FeatureQuery,
@@ -19,6 +22,7 @@ import {
   type RegionDrawing,
   type RegionDrawingResult,
   type RegionQuery,
+  type World,
 } from "@atlas/domain";
 import { decodeRecord } from "./catalogRecords";
 import type { GeometryKernel } from "./geometryKernel";
@@ -27,6 +31,7 @@ import { regionSelectionLevel } from "./regionScale";
 import { GeosSpatial } from "./geosSpatial";
 
 interface Context {
+  reference: World["reference"];
   parent: Geometry;
   parentArea: number;
   precision: number;
@@ -35,7 +40,7 @@ interface Context {
 }
 type RegionSource = RegionCandidate & { district?: boolean };
 const districtPreferencePenalty = 0.2;
-const sparseFootprintPenalty = 0.25;
+const sparseFootprintPenalty = 0.75;
 function point({ x, y }: Position): Geometry {
   return { type: "Point", coordinates: [x, y] };
 }
@@ -64,7 +69,8 @@ export class RegionCatalog {
     const { worldId, spaceId } = query.scope;
     const world = this.db.selectObject("SELECT data,revision FROM worlds WHERE id=?", [worldId]);
     requireThat(world, "missing_world", "Choose an existing world.");
-    const precision = JSON.parse(String(world.data)).reference.precision ?? 1e-6;
+    const reference: World["reference"] = JSON.parse(String(world.data)).reference,
+      precision = reference.precision ?? 1e-6;
     const parentRow = query.parentId
       ? this.db.selectObject("SELECT * FROM records WHERE world_id=? AND kind='view' AND id=?", [
           worldId,
@@ -89,6 +95,7 @@ export class RegionCatalog {
           : null;
     requireThat(parent, "missing_region", "Choose a geographic parent.");
     return {
+      reference,
       parent,
       parentArea: this.kernel.measure(parent, precision).area,
       precision,
@@ -185,12 +192,13 @@ export class RegionCatalog {
       const available = this.available(query, context, source.footprint);
       if (!available) continue;
       for (const piece of this.split(available, query.cuts, precision))
-        for (const shape of polygonParts(piece)) {
+        for (const shape of connectedRegionParts(context.reference, piece, query.position)) {
           const { area, length } = kernel.measure(shape, precision);
           if (area >= parentArea || (2 * area) / length < minimumRegionWidthMetres) continue;
           if (query.position && !kernel.relation(shape, point(query.position), precision, "covers"))
             continue;
-          const key = JSON.stringify(kernel.canonical(shape, precision));
+          const footprint = canonicalGeometry(context.reference, shape),
+            key = JSON.stringify(kernel.canonical(footprint, precision));
           if (!unique.has(key)) {
             const [w, s, e, n] = this.kernel.encode(shape, precision).bounds;
             const score = candidateScore(
@@ -199,7 +207,7 @@ export class RegionCatalog {
               context.targetArea,
               !!source.district
             );
-            unique.set(key, { candidate: { name: source.name, footprint: shape }, score });
+            unique.set(key, { candidate: { name: source.name, footprint }, score });
           }
         }
     }
@@ -209,18 +217,22 @@ export class RegionCatalog {
     const anchors = await this.settlementCentres(query, context.parent);
     const result: RegionSource[] = [...sources];
     for (const source of sources)
-      for (const shape of polygonParts(source.footprint)) {
+      for (const shape of connectedRegionParts(
+        context.reference,
+        source.footprint,
+        query.position
+      )) {
         if (!this.kernel.relation(shape, point(query.position!), context.precision, "covers"))
           continue;
         for (const footprint of regionalDistricts(
           shape,
           context.targetArea,
-          anchors,
+          localAnchors(context.reference, shape, anchors),
           context.precision
         ))
           result.push({
             name: districtName(source.name, shape, footprint, this.kernel, context.precision),
-            footprint,
+            footprint: canonicalGeometry(context.reference, footprint),
             district: true,
           });
       }
@@ -381,8 +393,16 @@ function districtName(
 }
 function candidateScore(area: number, frameArea: number, target: number, district: boolean) {
   return (
-    Math.abs(Math.log(area / target)) +
+    Math.abs(Math.log(frameArea / target)) +
     Math.log(Math.max(1, frameArea / area)) * sparseFootprintPenalty +
     (district ? districtPreferencePenalty : 0)
   );
+}
+function localAnchors(reference: World["reference"], shape: Geometry, anchors: Position[]) {
+  if (reference.boundaryMode !== "cylinder") return anchors;
+  const [w, , e] = spatial.bounds(reference.domain),
+    width = e - w,
+    [low, , high] = spatial.bounds(shape),
+    centre = (low + high) / 2;
+  return anchors.map((p) => ({ ...p, x: p.x + Math.round((centre - p.x) / width) * width }));
 }

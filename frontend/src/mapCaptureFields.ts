@@ -25,7 +25,7 @@ export async function captureMapFields(
   for (const field of fields) {
     if (!field.resourceId) continue;
     const original = await store.describe(field.resourceId);
-    if (!original.field || !spatial.covers(original.field.scope.footprint, area.footprint))
+    if (!original.field || !spatial.intersects(original.field.scope.footprint, area.footprint))
       continue;
     const layoutId = await captureLayout(
         catalog,
@@ -62,7 +62,7 @@ export async function captureMapFields(
           input: true,
           state: "generated",
           resourceId: ready.id,
-          footprint: area.footprint,
+          footprint: resource.field!.scope.footprint,
         },
       },
     });
@@ -188,7 +188,7 @@ function aliasResource(
             scope: {
               ...original.field.scope,
               ...scope,
-              footprint: area.footprint,
+              footprint: spatial.intersection(original.field.scope.footprint, area.footprint)!,
               revision: source.world.version,
             },
           },

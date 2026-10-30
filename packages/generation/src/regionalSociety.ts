@@ -49,7 +49,7 @@ function canRevealTown(c: SocietyCommunity) {
 }
 
 export function regionalCommunitySpacing(
-  state: GenerationState,
+  state: Pick<GenerationState, "domain" | "surface">,
   retained: SocietyCommunity[] = []
 ) {
   const grid = state.surface;

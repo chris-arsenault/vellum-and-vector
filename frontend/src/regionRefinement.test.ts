@@ -15,10 +15,23 @@ import {
   presentAtlasFeature,
   spatial,
   regionalScale,
+  regionMapFootprint,
   type AtlasFeature,
 } from "@atlas/domain";
 import { generationSource } from "./workspaceGeneration";
 import { refinementResolution } from "@atlas/generation";
+
+it("gives an irregular subject a full surrounding map, including land outside its source map", () => {
+  const f = fixture(),
+    world = f.current(),
+    subject = spatial.difference(
+      rectangle([20_000, 20_000, 60_000, 60_000]),
+      rectangle([25_000, 25_000, 65_000, 55_000])
+    )!,
+    frame = regionMapFootprint(world, subject);
+  expect(spatial.covers(frame, rectangle([10_000, 10_000, 70_000, 70_000]))).toBe(true);
+  expect(spatial.covers(frame, rectangle([30_000, 30_000, 50_000, 50_000]))).toBe(true);
+});
 
 function fixture() {
   const world = fixtureWorld({ name: "Refinement", seed: 13, width: 100_000, height: 100_000 }),

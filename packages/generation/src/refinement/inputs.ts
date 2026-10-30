@@ -127,13 +127,7 @@ export function createRefinementState(
     inputs = sampledChannels(source, area.id, physical);
   const parent = inputs.get("elevation");
   requireThat(parent, "regional_parent", "Capture terrain on this map before refining it.");
-  const { bounds, footprint } = refinementFrame(
-    source,
-    area.id,
-    cellSpan,
-    sampleSpan(parent),
-    physical
-  );
+  const { bounds, footprint } = refinementFrame(source, area.id, physical);
   const current = currentLayout(source, parent, physical, cellSpan);
   const surface = createGrid(
     semanticId(domain.world.id, "regional-surface", `${area.id}:${input.seed}`),

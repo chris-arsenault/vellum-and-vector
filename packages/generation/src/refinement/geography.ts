@@ -5,11 +5,13 @@ import {
   gridPosition,
   spatial,
   canonicalGeometry,
+  semanticId,
+  resolutionCells,
   type DrainageReach,
 } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import { putRefinementFeature, putRefinementNetwork } from "./features";
-import type { RefinementState } from "./state";
+import { spacing, type RefinementState } from "./state";
 
 export function extractRegionalWater(state: RefinementState) {
   const g = state.surface,
@@ -52,16 +54,16 @@ function publishLakes(state: RefinementState, shape: Geometry | null) {
   g.lakes = polygons.map((geometry, index) => {
     const p = spatial.interiorPosition(geometry),
       level = levelAt(p),
-      f = putRefinementFeature(
-        state,
-        `lake:${index}`,
-        "lake",
-        "lakes",
-        geometry,
-        { level },
-        "Regional lake"
-      );
-    return { id: f.id, geometry: f.geometry, level };
+      key = `lake:${index}`,
+      [w, s, e, n] = spatial.bounds(geometry),
+      [dx, dy] = spacing(g);
+    if (e - w >= dx * resolutionCells && n - s >= dy * resolutionCells)
+      putRefinementFeature(state, key, "lake", "lakes", geometry, { level }, "Regional lake");
+    return {
+      id: semanticId(state.domain.world.id, `regional:${state.input.areaId}`, key),
+      geometry: canonicalGeometry(state.domain.world.reference, geometry),
+      level,
+    };
   });
 }
 function extractRivers(state: RefinementState) {
