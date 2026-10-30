@@ -4,6 +4,7 @@ import {
   undoWorld,
   commitCommand,
   readMapRasters,
+  fixtureWorkspace,
 } from "./testSupport/workspaceFixture";
 import { expect, it } from "vitest";
 import {
@@ -13,8 +14,11 @@ import {
   regionLineage,
   presentAtlasFeature,
   spatial,
+  regionalScale,
   type AtlasFeature,
 } from "@atlas/domain";
+import { generationSource } from "./workspaceGeneration";
+import { refinementResolution } from "@atlas/generation";
 
 function fixture() {
   const world = fixtureWorld({ name: "Refinement", seed: 13, width: 100_000, height: 100_000 }),
@@ -66,6 +70,23 @@ it("links arbitrary recursive geographic refinement to existing selected subject
   expect(regionLineage(f.current(), parent)).toHaveLength(4);
   expect(f.current().areas[f.source]).toEqual(original);
   expect(f.current().generations).toEqual([]);
+});
+it("prepares an older nested map at its own scale without changing saved map metadata", async () => {
+  const f = fixture(),
+    outer = await f.region(80_000);
+  await f.command("createArea", regionRefinementInput(f.current(), outer));
+  const inner = await f.region(40_000, outer);
+  await f.command("createArea", regionRefinementInput(f.current(), inner));
+  const child = refinedRegionArea(f.current(), inner)!;
+  for (const area of Object.values(f.current().areas))
+    if (area.map) delete area.map.refinementLevel;
+  const workspace = await fixtureWorkspace(f.world.id),
+    before = await workspace.catalog.readEditor(f.world.id),
+    source = await generationSource(workspace.catalog, f.world.id, child.id);
+  expect(
+    refinementResolution(source, { areaId: child.id, quality: "standard" }).cellSpan
+  ).toBeCloseTo(regionalScale(2).cellSpan, 6);
+  expect(await workspace.catalog.readEditor(f.world.id)).toEqual(before);
 });
 it("rejects duplicate, mismatched and unsupported refinements and preserves undo", async () => {
   const f = fixture(),
