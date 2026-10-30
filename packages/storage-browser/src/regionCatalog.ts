@@ -4,6 +4,8 @@ import {
   minimumRegionWidthMetres,
   polygonParts,
   polygonGeometry,
+  regionalDistricts,
+  regionalSelectionArea,
   rectangle,
   regionBoundaryLines,
   requireThat,
@@ -21,13 +23,19 @@ import {
 import { decodeRecord } from "./catalogRecords";
 import type { GeometryKernel } from "./geometryKernel";
 import type { FieldGeographyCatalog } from "./fieldGeography";
+import { regionSelectionLevel } from "./regionScale";
+import { GeosSpatial } from "./geosSpatial";
 
 interface Context {
   parent: Geometry;
   parentArea: number;
   precision: number;
   revision: number;
+  targetArea: number;
 }
+type RegionSource = RegionCandidate & { district?: boolean };
+const districtPreferencePenalty = 0.2;
+const sparseFootprintPenalty = 0.25;
 function point({ x, y }: Position): Geometry {
   return { type: "Point", coordinates: [x, y] };
 }
@@ -85,6 +93,7 @@ export class RegionCatalog {
       parentArea: this.kernel.measure(parent, precision).area,
       precision,
       revision: Number(world.revision),
+      targetArea: regionalSelectionArea(regionSelectionLevel(this.db, this.kernel, query)),
     };
   }
   /** The parent's other children whose indexed bounds meet `bounds`. */
@@ -168,10 +177,10 @@ export class RegionCatalog {
       (face) => this.kernel.overlay(face, shape, precision, "intersection") ?? []
     );
   }
-  private candidates(query: RegionQuery, context: Context, sources: RegionCandidate[]) {
+  private candidates(query: RegionQuery, context: Context, sources: RegionSource[]) {
     const { kernel } = this,
       { precision, parentArea } = context;
-    const unique = new Map<string, { candidate: RegionCandidate; area: number }>();
+    const unique = new Map<string, { candidate: RegionCandidate; score: number }>();
     for (const source of sources) {
       const available = this.available(query, context, source.footprint);
       if (!available) continue;
@@ -182,15 +191,62 @@ export class RegionCatalog {
           if (query.position && !kernel.relation(shape, point(query.position), precision, "covers"))
             continue;
           const key = JSON.stringify(kernel.canonical(shape, precision));
-          if (!unique.has(key))
-            unique.set(key, { candidate: { name: source.name, footprint: shape }, area });
+          if (!unique.has(key)) {
+            const [w, s, e, n] = this.kernel.encode(shape, precision).bounds;
+            const score = candidateScore(
+              area,
+              (e - w) * (n - s),
+              context.targetArea,
+              !!source.district
+            );
+            unique.set(key, { candidate: { name: source.name, footprint: shape }, score });
+          }
         }
     }
-    const target =
-      ((query.viewport[2] - query.viewport[0]) * (query.viewport[3] - query.viewport[1])) / 3;
-    return [...unique.values()]
-      .sort((a, b) => Math.abs(Math.log(a.area / target)) - Math.abs(Math.log(b.area / target)))
-      .map(({ candidate }) => candidate);
+    return [...unique.values()].sort((a, b) => a.score - b.score).map(({ candidate }) => candidate);
+  }
+  private async withDistricts(query: RegionQuery, context: Context, sources: RegionCandidate[]) {
+    const anchors = await this.settlementCentres(query, context.parent);
+    const result: RegionSource[] = [...sources];
+    for (const source of sources)
+      for (const shape of polygonParts(source.footprint)) {
+        if (!this.kernel.relation(shape, point(query.position!), context.precision, "covers"))
+          continue;
+        for (const footprint of regionalDistricts(
+          shape,
+          context.targetArea,
+          anchors,
+          context.precision
+        ))
+          result.push({
+            name: districtName(source.name, shape, footprint, this.kernel, context.precision),
+            footprint,
+            district: true,
+          });
+      }
+    return result;
+  }
+  private async settlementCentres(query: RegionQuery, parent: Geometry) {
+    const points: Position[] = [];
+    let after: string | null = null;
+    do {
+      const page = await this.readFeatures({
+        scope: query.scope,
+        extent: extent(parent),
+        layers: ["settlements"],
+        geometry: parent,
+        predicate: "intersects",
+        after,
+        limit: 128,
+      });
+      for (const { feature } of page.records)
+        if (feature.geometry.type === "Point") {
+          const [x, y, z = 0] = feature.geometry.coordinates;
+          points.push({ x, y, z });
+        }
+      after = page.next;
+    } while (after);
+    return points;
   }
   /** Cuts divide the indexed polygons they cross. */
   private async cutSources(query: RegionQuery) {
@@ -250,7 +306,11 @@ export class RegionCatalog {
     return {
       revision: context.revision,
       childId: null,
-      candidates: this.candidates(query, context, sources),
+      candidates: this.candidates(
+        query,
+        context,
+        query.cuts.length ? sources : await this.withDistricts(query, context, sources)
+      ),
     };
   }
   async draw(input: RegionDrawing): Promise<RegionDrawingResult> {
@@ -302,4 +362,27 @@ export class RegionCatalog {
     }
     return snapRegionCut(line, boundaries, tolerance);
   }
+}
+function districtName(
+  name: string,
+  shape: Geometry,
+  district: Geometry,
+  kernel: GeometryKernel,
+  precision: number
+) {
+  const gis = new GeosSpatial(kernel, precision),
+    [w, s, e, n] = gis.bounds(shape),
+    p = gis.interiorPosition(district);
+  const x = (p.x - w) / (e - w),
+    y = (p.y - s) / (n - s);
+  const horizontal = x < 1 / 3 ? "west" : x > 2 / 3 ? "east" : "";
+  const vertical = y < 1 / 3 ? "south" : y > 2 / 3 ? "north" : "";
+  return `${name} · ${vertical + horizontal || "central"}`;
+}
+function candidateScore(area: number, frameArea: number, target: number, district: boolean) {
+  return (
+    Math.abs(Math.log(area / target)) +
+    Math.log(Math.max(1, frameArea / area)) * sparseFootprintPenalty +
+    (district ? districtPreferencePenalty : 0)
+  );
 }

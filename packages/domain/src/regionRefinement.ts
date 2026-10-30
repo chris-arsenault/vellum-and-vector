@@ -2,6 +2,7 @@ import type { Area, World } from "./model";
 import { regionLineage } from "./regionViews";
 import { requireThat } from "./errors";
 import { spatial } from "./spatial";
+import { mapRefinementLevel } from "./regionalScale";
 
 /** Refinement adds a representation to an existing subject, never a second region tree. */
 export function refinedRegionArea(world: World, regionId: string): Area | undefined {
@@ -15,6 +16,15 @@ export function regionRefinementParent(world: World, regionId: string): Area {
     if (area) return area;
   }
   return world.areas[region.areaId];
+}
+export function regionRefinementLevel(world: World, regionId: string) {
+  const lineage = regionLineage(world, regionId);
+  let level = mapRefinementLevel(world.areas, lineage[0].areaId);
+  for (const region of lineage) {
+    const mapped = region.id !== regionId && refinedRegionArea(world, region.id);
+    level = mapped ? mapRefinementLevel(world.areas, mapped.id) : level + 1;
+  }
+  return level;
 }
 /** Leave room around the subject for coastlines and nearby context to develop on this map. */
 export function regionMapFootprint(parent: Area, subject: Area["footprint"]) {

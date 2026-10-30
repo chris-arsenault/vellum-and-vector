@@ -75,7 +75,7 @@ export interface Epoch {
 }
 export interface Area {
   /** Independent geographic ownership; source is provenance, never a live read fallback. */
-  map?: { sourceAreaId: string; sourceRevision: number };
+  map?: { sourceAreaId: string; sourceRevision: number; refinementLevel?: number };
   /** Selected geographic subject whose finer representation this area owns. */
   regionId?: string;
   spaceId?: string;

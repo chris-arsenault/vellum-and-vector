@@ -1,4 +1,6 @@
 export * from "./model";
+export * from "./regionalScale";
+export * from "./regionalDistricts";
 export * from "./networkWorkspace";
 export * from "./featureCatalogue";
 export * from "./featureReads";

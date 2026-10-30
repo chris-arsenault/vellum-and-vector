@@ -219,7 +219,8 @@ water systems and supported political territories; exceptional mountains, falls
 and magical sites can qualify without large area. Extent alone does not establish
 significance. Ordinary local patches and tributaries remain in the physical
 fields and retained networks. Unnamed landscapes and unclaimed country are valid.
-Only genuinely continental domains require internal geographic subdivisions.
+Selection can suggest subdivisions when a geographic polygon is too large for
+useful detail at the next scale.
 
 The raster independently colors local conditions across the map. Naming a region
 does not recolor it or remove color elsewhere. Corresponding ecological margins
@@ -239,7 +240,12 @@ A Regions click queries the spatial index. An existing child region under the
 click opens; otherwise the generated geographic and social polygons covering the
 click become candidates, clipped to the parent and outside committed siblings. A
 location without a polygon offers no candidate; regions never need to cover the
-map. Current zoom ranks candidate size. Creators can draw a closed outline, or a
+map. Candidates rank by useful area at the next fixed regional scale, independent
+of zoom. Large polygons also offer approximate geographic subdivisions clipped to
+the shore and influenced by nearby settlements. Natural regions near the useful
+size take preference; whole landmasses and small named regions remain choices.
+Subdivision size and count are approximate, with no equal-area solve or hard
+size restriction. Creators can draw a closed outline, or a
 dividing line whose endpoints snap to nearby edges and which splits the polygons
 it crosses. Candidates remain previews until kept. Committed siblings form a
 partial subdivision with shared edges and no overlapping interiors.
@@ -263,8 +269,10 @@ references, and GIS exports include region metadata.
 An explicit Refine action links a finer mapped area to the existing region
 subject. The subject retains its original source and hierarchy; its nearest
 refined ancestor supplies procedural context. A child remains a geographic map
-at every nesting depth. Its resolution follows the requested detail, inherited
-sampling and useful footprint rather than a named administrative rank.
+at every nesting depth. A fixed physical resolution ladder follows its captured
+refinement level and requested detail. The default-world usable land calibrates
+the first scale; successive levels aim for roughly eight to twelve useful
+subregions. Geographic shape and coastal context vary the resulting sample count.
 
 Regional setup offers detail, seed and inherited magic/people choices. It does
 not offer another physical or human history. Parent terrain must exist before

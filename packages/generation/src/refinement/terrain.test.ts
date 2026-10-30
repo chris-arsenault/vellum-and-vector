@@ -80,9 +80,7 @@ it("ignores sibling fields and world historical channels when sampling the targe
   expect(Array.from(next.surface.channels.elevation)).toEqual(
     Array.from(f.state.surface.channels.elevation)
   );
-  // Fitting whole samples to the supplied extent makes actual spacing slightly finer.
-  expect(next.surface.scope.resolution! ** 2 / 1e6).toBeGreaterThan(1.4);
-  expect(next.surface.scope.resolution! ** 2 / 1e6).toBeLessThanOrEqual(1.5);
+  expect(next.surface.scope.resolution).toBe(f.state.surface.scope.resolution);
 });
 
 it.each([5, 65])("uses present terrain at width %i during society-only generation", (width) => {

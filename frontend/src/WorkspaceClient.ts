@@ -124,7 +124,7 @@ export class WorkspaceClient implements SpatialStore {
     return this.request<{
       input: import("@atlas/generation").AtlasGenerationInput;
       diagnostics: import("@atlas/domain").Diagnostic[];
-      resolution: { cellSpan: number; cellArea: number; cellAreaKm2: number };
+      resolution: { cellSpan: number; cellArea: number; cellAreaKm2: number; cells?: number };
     }>({ kind: "generationSetup", worldId, input });
   }
   analyze(worldId: string, input: import("./spatialAnalysis").AnalysisInput) {

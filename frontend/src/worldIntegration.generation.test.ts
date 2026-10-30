@@ -34,16 +34,40 @@ import {
   type RegionalWorkloadOutput,
 } from "./testSupport/regionalWorkload";
 import { regionalOverview } from "./testSupport/regionalOverview";
+import { normalizedRegionFixture } from "./testSupport/normalizedRegionFixture";
+
+it("selects and completes a typical Standard region from a supplied default-sized world", async () => {
+  const f = await normalizedRegionFixture(),
+    before = f.workspace.catalog.exportFeatures(f.id, f.root, null, 128),
+    run = await regionalWorkload(f);
+  try {
+    const result = await refineRegionalMap(run.source, run.input, run.options),
+      published = await run.publish(result);
+    expect(published.samples).toBeGreaterThan(40_000);
+    expect(published.samples).toBeLessThan(140_000);
+    expect(published.counts.river).toBeGreaterThan(1);
+    expect(published.rasterResult.sampled).toBeGreaterThan(0);
+    expect(published.rasterResult.categories.length).toBeGreaterThan(1);
+    expect(result.state.history).toEqual([]);
+    expect(f.workspace.catalog.exportFeatures(f.id, f.root, null, 128)).toEqual(before);
+    console.info("normalized Standard region", {
+      creationMs: f.creationMs,
+      samples: published.samples,
+      generationMs: published.generationMs,
+      phases: published.phases,
+      firstRasterMs: published.rasterResult.milliseconds,
+    });
+  } finally {
+    await run.close();
+  }
+}, 300_000);
 it("develops regional detail without sibling or repeated-refinement work propagation", async () => {
   const f = await refinementFixture(480000),
     catalog = f.workspace.catalog,
     parentFeatures = catalog.exportFeatures(f.id, f.root, null, 128),
     rootScope = { worldId: f.id, areaId: f.root, spaceId: f.parent.scope.spaceId },
-    rootFields = await catalog.readRecords(
-      rootScope,
-      "field",
-      f.parent.world.fields.map((r) => r.id)
-    );
+    rootFieldIds = f.parent.world.fields.map((r) => r.id),
+    rootFields = await catalog.readRecords(rootScope, "field", rootFieldIds);
   const outputs: RegionalWorkloadOutput[] = [];
   let sibling = "";
   for (const step of ["first", "second", "repeat", "small"]) {
@@ -99,13 +123,7 @@ it("develops regional detail without sibling or repeated-refinement work propaga
     }
   }
   expect(catalog.exportFeatures(f.id, f.root, null, 128)).toEqual(parentFeatures);
-  expect(
-    await catalog.readRecords(
-      rootScope,
-      "field",
-      f.parent.world.fields.map((r) => r.id)
-    )
-  ).toEqual(rootFields);
+  expect(await catalog.readRecords(rootScope, "field", rootFieldIds)).toEqual(rootFields);
 }, 300000);
 it("completes physical and society refinement and publishes local geometry outside the outline with parent reads denied", async () => {
   const fixture = await refinementFixture(),
@@ -380,24 +398,9 @@ function assertWorldLandmarks() {
 describe("shared initial world", () => {
   beforeAll(initializeSharedWorld, 300_000);
   afterAll(() => storage?.close());
-  it(
-    "completes causal physical and human history while retaining authored geography",
-    assertWorldHistory
-  );
-  it(
-    "publishes finite dimensional terrain, rivers, living cover and retained drainage together",
-    assertWorldGeography
-  );
-  it(
-    "carries the seven configured systems through physical history into located magic places",
-    assertWorldMagic
-  );
-  it(
-    "publishes population, politics, names and linguistic distributions from the same world",
-    assertWorldSociety
-  );
-  it(
-    "sites the configured landscape and magic landmarks, holds their measures and names them",
-    assertWorldLandmarks
-  );
+  it("retains authored geography through physical and human history", assertWorldHistory);
+  it("publishes finite terrain, rivers, cover and retained drainage", assertWorldGeography);
+  it("locates seven magic systems and their physical history", assertWorldMagic);
+  it("publishes society, politics, names and language distributions", assertWorldSociety);
+  it("sites, measures and names landscape and magic landmarks", assertWorldLandmarks);
 });

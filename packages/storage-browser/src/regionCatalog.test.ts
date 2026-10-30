@@ -3,6 +3,9 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   rectangle,
   createWorldBlueprint,
+  spatial,
+  regionalSelectionArea,
+  regionalScale,
   type AtlasFeature,
   type CatalogRecord,
   type DomainWrite,
@@ -55,11 +58,12 @@ function metadata(): WorldMetadata {
     epochs: [],
   };
 }
-async function fixture() {
+async function fixture(domain = available) {
   const kernel = await GeometryKernel.create();
   const catalog = new SpatialCatalog(new sqlite.oo1.DB(":memory:"), kernel);
   opened.push(catalog);
   const world = metadata();
+  world.reference = { ...world.reference, domain };
   await catalog.createWorld(world);
   const blueprint = createWorldBlueprint({
     id: world.id,
@@ -126,7 +130,7 @@ async function fixture() {
       .sort((a, b) => a - b);
   const pick = (x: number, y: number, cuts: Geometry[] = []) =>
     catalog.regionChoices(regionQuery({ position: { x, y, z: 0 }, cuts }));
-  return { kernel, catalog, put, child, areas, pick, putRecord };
+  return { kernel, catalog, put, child, areas, pick, putRecord, domain };
 }
 async function coastline(f: Awaited<ReturnType<typeof fixture>>, island: Geometry) {
   const resource: NumericalResource = {
@@ -135,7 +139,7 @@ async function coastline(f: Awaited<ReturnType<typeof fixture>>, island: Geometr
     revision: 1,
     scope,
     crsId: "metres",
-    bounds: [0, 0, 1000, 1000],
+    bounds: f.kernel.encode(f.domain, 1e-6).bounds,
     precision: 1e-6,
     layout: "regular",
     state: "ready",
@@ -146,7 +150,7 @@ async function coastline(f: Awaited<ReturnType<typeof fixture>>, island: Geometr
       scope: {
         ...scope,
         crsId: "metres",
-        footprint: available,
+        footprint: f.domain,
         revision: 1,
         time: "present",
         resolution: 100,
@@ -164,7 +168,7 @@ async function coastline(f: Awaited<ReturnType<typeof fixture>>, island: Geometr
     removes: [],
     resources: [resource],
     geography: [
-      { id: "terrain", scope, ocean: f.kernel.overlay(available, island, 1e-6, "difference") },
+      { id: "terrain", scope, ocean: f.kernel.overlay(f.domain, island, 1e-6, "difference") },
     ],
   });
   await f.putRecord({
@@ -215,6 +219,34 @@ const across: Geometry = {
     [990, 500],
   ],
 };
+it("offers a region-sized piece within a large landmass instead of defaulting to a whole continent or tiny biome", async () => {
+  const domain = rectangle([0, 0, 4_000_000, 3_000_000]),
+    f = await fixture(domain);
+  await coastline(f, rectangle([200_000, 200_000, 1_600_000, 2_800_000]));
+  await f.put("Small grove", rectangle([600_000, 1_800_000, 620_000, 1_820_000]));
+  const query = regionQuery({
+    position: { x: 610_000, y: 1_810_000, z: 0 },
+    viewport: [0, 0, 4_000_000, 3_000_000],
+  });
+  const first = (await f.catalog.regionChoices(query)).candidates;
+  const target = regionalSelectionArea(1),
+    area = spatial.area(first[0].footprint);
+  expect(area).toBeGreaterThan(target / 4);
+  expect(area).toBeLessThan(target * 2.5);
+  const [w, s, e, n] = spatial.bounds(first[0].footprint);
+  expect(((e - w) * (n - s)) / regionalScale(1).cellArea).toBeLessThan(180_000);
+  expect(first.some((candidate) => candidate.name === "Landmass")).toBe(true);
+  expect(first.some((candidate) => candidate.name === "Small grove")).toBe(true);
+  const closer = await f.catalog.regionChoices({
+    ...query,
+    viewport: [500_000, 1_700_000, 700_000, 1_900_000],
+  });
+  expect(closer.candidates[0]).toEqual(first[0]);
+  const nearbyQuery = { ...query, position: { x: 1_300_000, y: 500_000, z: 0 } };
+  const nearby = (await f.catalog.regionChoices(nearbyQuery)).candidates[0];
+  await f.child("kept-region", first[0].footprint);
+  expect((await f.catalog.regionChoices(nearbyQuery)).candidates[0]).toEqual(nearby);
+});
 it("offers a whole island and clips named terrestrial regions to its physical coast", async () => {
   const f = await fixture(),
     island = {
@@ -249,6 +281,24 @@ it("offers a whole island and clips named terrestrial regions to its physical co
         f.kernel.relation(expected, candidate.footprint, 1e-6, "covers")
     )
   ).toBe(true);
+});
+it("selects smaller districts using the open map's captured level without a live parent", async () => {
+  const domain = rectangle([0, 0, 700_000, 500_000]),
+    f = await fixture(domain),
+    world = await f.catalog.readEditor(scope.worldId);
+  await f.putRecord({
+    kind: "area",
+    value: {
+      ...world.areas.root,
+      map: { sourceAreaId: "captured-parent", sourceRevision: 1, refinementLevel: 1 },
+    },
+  });
+  await f.put("Regional country", rectangle([10_000, 10_000, 690_000, 490_000]));
+  const picked = await f.pick(300_000, 250_000),
+    target = regionalSelectionArea(2);
+  expect(spatial.area(picked.candidates[0].footprint)).toBeGreaterThan(target / 2);
+  expect(spatial.area(picked.candidates[0].footprint)).toBeLessThan(target * 2);
+  expect(picked.candidates.some((c) => c.name === "Regional country")).toBe(true);
 });
 describe("region picks", () => {
   it("uses published polygon boundaries and excludes point and course influence footprints", async () => {

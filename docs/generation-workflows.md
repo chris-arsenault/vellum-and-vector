@@ -29,8 +29,23 @@ Preparation reads metadata; resource loading selects the target map's needed
 present channels. Refinement reports its own sampling, terrain, water, landscape,
 magic and place stages.
 No region label or nesting depth selects another map type.
-Selection can use whole landmasses from physical shore geometry as well as named
-geographic and social polygons. Child map extents include surrounding context so
+Selection uses physical shores and named geographic and social polygons. Suitable
+natural regions rank ahead of tiny patches or whole continents. Oversized polygons
+also offer coastal subdivisions around roughly spaced centres, moved toward nearby
+settlements. This is a single geographic heuristic, without equal-area balancing
+or an exact district count. Keeping a region does not move its neighbours' proposed
+boundaries. Whole landmasses and smaller named regions remain choices.
+
+Regional terrain uses a fixed physical scale ladder calibrated from the default
+world's usable land and approximate regional subdivision. Each successive level
+uses finer cells and suggests smaller subjects. A map captures its own level when
+created, so resolution does not depend on live parent geography. Quality changes
+sampling density at that level; selection does not fit cell size to a budget.
+The policy declarations live in `packages/domain/src/regionalScale.ts`. Rectangular
+sampling frames and coastal context add samples beyond the selected land area.
+Setup shows approximate spacing and sample count before generation.
+
+Child map extents include surrounding context so
 a coastal subject can develop its shore. Generation publishes only map-owned
 features and fields; it does not write finer detail onto parent feature records.
 The selected outline does not constrain generated feature geometry. Generation

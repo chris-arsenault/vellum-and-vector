@@ -6,8 +6,8 @@ import { extractRegionalWater } from "./geography";
 import { channel } from "./state";
 
 it("routes a constructed catchment to its local outlets and retains its water budget", () => {
-  // Each side valley has enough physical area to support a separate mapped headwater.
-  const f = regionalFixture((x, y) => 100 + x / 1000 + Math.abs(y - 20000) / 400, 40000);
+  // Supply kilometre-scale samples so each side valley resolves a separate mapped headwater.
+  const f = regionalFixture((x, y) => 100 + x / 1000 + Math.abs(y - 20000) / 400, 40000, 2);
   updateSlopes(f.state);
   routeRegionalWater(f.state);
   const g = f.state.surface,

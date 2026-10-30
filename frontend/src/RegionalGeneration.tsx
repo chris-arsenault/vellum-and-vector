@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { spatial } from "@atlas/domain";
-import { generationResolution } from "@atlas/generation";
+import { spatial, regionalScale, mapRefinementLevel } from "@atlas/domain";
 import { atlasWorkspace } from "./atlasWorkspace";
 import { inheritedGeneration } from "./generationJobs";
 import { useGenerate } from "./useAtlas";
@@ -36,7 +35,7 @@ function useRegionalGeneration(world: World, editor: EditorState) {
       queryFn: async () => (await atlasWorkspace()).generationSetup(world.id, input),
     }),
     errors = preparationErrors(prepared.data?.diagnostics, prepared.error),
-    resolution = prepared.data?.resolution ?? generationResolution(quality, editor.area.profile);
+    resolution = prepared.data?.resolution ?? regionalResolution(world, editor.area.id, quality);
   return {
     quality,
     setQuality,
@@ -50,8 +49,15 @@ function useRegionalGeneration(world: World, editor: EditorState) {
     domains,
     errors,
     resolution,
+    cells: resolution.cells,
     preparing: prepared.isPending,
     parameters: previous?.parameters,
+  };
+}
+function regionalResolution(world: World, areaId: string, quality: string) {
+  return {
+    ...regionalScale(Math.max(1, mapRefinementLevel(world.areas, areaId)), quality),
+    cells: undefined,
   };
 }
 function preparationErrors(
@@ -122,6 +128,10 @@ function RegionalContext({
         <div>
           <dt>Approximate terrain spacing</dt>
           <dd>{Math.round(setup.resolution.cellSpan).toLocaleString()} m</dd>
+        </div>
+        <div>
+          <dt>Approximate terrain samples</dt>
+          <dd data-cell-count={setup.cells}>{setup.cells?.toLocaleString() ?? "…"}</dd>
         </div>
       </dl>
     </>

@@ -13,13 +13,13 @@ import {
   type BlockCache,
   type Grid,
   canonicalPosition,
+  regionalScale,
+  mapRefinementLevel,
 } from "@atlas/domain";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
 import type { RefinementState } from "./state";
 import { compactBounds, refinementFootprint, refinementFrame } from "./frame";
 
-/** Physical area per regional sample, in square kilometres. */
-const regionalCellArea = { draft: 6, standard: 1.5, fine: 0.375 };
 const presentChannels = new Set([
   "elevation",
   "rock",
@@ -101,17 +101,19 @@ export function refinementResolution(
   source: DomainSnapshot,
   input: Pick<AtlasGenerationInput, "areaId" | "quality">
 ) {
-  requireThat(
-    Object.hasOwn(regionalCellArea, input.quality),
-    "generation_quality",
-    "Choose draft, standard or fine."
+  const base = regionalScale(
+    Math.max(1, mapRefinementLevel(source.world.areas, input.areaId)),
+    input.quality
   );
   const bounds = compactBounds(source, refinementFootprint(source, input.areaId));
   const cellSpan = Math.min(
-    Math.sqrt(regionalCellArea[input.quality as keyof typeof regionalCellArea] * 1e6),
+    base.cellSpan,
     Math.min(bounds[2] - bounds[0], bounds[3] - bounds[1]) / 8
   );
-  return { cellSpan, cellArea: cellSpan ** 2, cellAreaKm2: cellSpan ** 2 / 1e6 };
+  const cells =
+    (Math.ceil((bounds[2] - bounds[0]) / cellSpan) + 1) *
+    (Math.ceil((bounds[3] - bounds[1]) / cellSpan) + 1);
+  return { cellSpan, cellArea: cellSpan ** 2, cellAreaKm2: cellSpan ** 2 / 1e6, cells };
 }
 export function createRefinementState(
   source: DomainSnapshot,

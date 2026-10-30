@@ -91,16 +91,21 @@ export async function refinementFixture(width?: number) {
   return { id, root, child, workspace, current, parent };
 }
 /** Coarse terrain, weather and residents are inputs; no upstream generator establishes them. */
-function suppliedIsland(width: number) {
+export function suppliedIsland(width: number, height = width / 4, spacing = width / 32) {
   const source = createWorldSnapshot({
       name: "Supplied regional island",
       seed: 73,
       width,
-      height: width / 4,
+      height,
     }),
     input = { areaId: source.scope.areaId, seed: 73, quality: "draft", domains: ["physical"] },
-    surface = createGrid("supplied-island", source.scope, 33, 9);
-  surface.scope.resolution = width / 32;
+    surface = createGrid(
+      "supplied-island",
+      source.scope,
+      Math.ceil(width / spacing) + 1,
+      Math.ceil(height / spacing) + 1
+    );
+  surface.scope.resolution = spacing;
   const values: Record<string, [string, (x: number, y: number) => number]> = {
     elevation: [
       "metre",
@@ -123,7 +128,7 @@ function suppliedIsland(width: number) {
       unit,
       generateBand(surface.coverage, "float64", name, (i) => {
         const p = gridPosition(surface, i);
-        return value(p.x / width, p.y / (width / 4));
+        return value(p.x / width, p.y / height);
       })
     );
   return {

@@ -66,3 +66,35 @@ test("selects canonical geography from a repeated cylindrical chart without dupl
   expect(spatial.bounds(exported.regions[0].footprint)).toEqual([800, 100, 1000, 700]);
   expect(exported.features[0].geometry.type).toBe("MultiPolygon");
 });
+
+test("offers a useful subdivision and the fixed Standard scale on a default-sized world", async ({
+  page,
+}) => {
+  // Selection and setup are observed; the reused parent supplies only 256 samples.
+  const continent = pointFeature("Broad country", "sovereignty", "sovereignty");
+  continent.geometry = rectangle([200_000, 200_000, 1_600_000, 2_800_000]);
+  await openFixtureMap(
+    page,
+    "Regional scale",
+    { features: [continent], numerical: true },
+    { width: 4000, height: 3000 }
+  );
+  await page.getByRole("button", { name: "Regions", exact: true }).click();
+  await clickWorld(page, 610_000, 1_810_000, [0, 0, 4_000_000, 3_000_000]);
+  const choice = page.getByLabel("Boundary choice");
+  await expect(choice.locator("option:checked")).not.toHaveText("Broad country · 3,640,000 km²");
+  await page.getByLabel("Region name", { exact: false }).fill("Useful regional subject");
+  await page.getByRole("button", { name: "Keep region", exact: true }).click();
+  const selected = await exportMap(page),
+    area = spatial.area(selected.regions[0].footprint) / 1e6;
+  expect(area).toBeGreaterThan(150_000);
+  expect(area).toBeLessThan(700_000);
+  await page.getByRole("button", { name: "Refine this region", exact: true }).click();
+  await expect(page.getByLabel("Regional detail")).toHaveValue("standard");
+  await expect(page.locator(".regional-generation")).toContainText("2,415 m");
+  const samples = page.locator("[data-cell-count]");
+  await expect(samples).toBeVisible();
+  const count = Number(await samples.getAttribute("data-cell-count"));
+  expect(count).toBeGreaterThan(40_000);
+  expect(count).toBeLessThan(140_000);
+});

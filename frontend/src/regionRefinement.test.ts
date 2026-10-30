@@ -51,6 +51,7 @@ it("links arbitrary recursive geographic refinement to existing selected subject
     const area = refinedRegionArea(f.current(), id)!;
     expect(area.parentId).toBe(parentArea);
     expect(area.profile).toBe("region");
+    expect(area.map?.refinementLevel).toBe(regionLineage(f.current(), id).length);
     expect(
       spatial.covers(
         area.footprint,

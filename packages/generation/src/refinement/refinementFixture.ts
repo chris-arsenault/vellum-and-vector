@@ -5,7 +5,8 @@ import { channel } from "./state";
 
 export function regionalFixture(
   height = (x: number, y: number) => 120 + x / 200 - y / 500,
-  north = 20000
+  north = 20000,
+  refinementLevel = 1
 ) {
   const initial = landscape(),
     source = initial.domain,
@@ -17,7 +18,7 @@ export function regionalFixture(
     parentId: "parent",
     footprint,
     profile: "region",
-    map: { sourceAreaId: "parent", sourceRevision: 1 },
+    map: { sourceAreaId: "parent", sourceRevision: 1, refinementLevel },
   };
   source.world.reference.domain = footprint;
   source.scope.footprint = footprint;

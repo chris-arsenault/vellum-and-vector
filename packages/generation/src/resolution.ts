@@ -1,4 +1,5 @@
-import { requireThat, type Profile } from "@atlas/domain";
+import { requireThat, defaultTerrainCells, type Profile } from "@atlas/domain";
+export { defaultWorldDimensions, referenceWorldArea, defaultTerrainCells } from "@atlas/domain";
 
 /** Physical area represented by one World terrain cell, independent of map dimensions. */
 export const atlasQuality = {
@@ -14,9 +15,6 @@ const profileArea: Record<Profile, number> = {
   site: 0.000001,
   interior: 0.00000001,
 };
-export const defaultWorldDimensions = { width: 4_000_000, height: 3_000_000 };
-export const referenceWorldArea = defaultWorldDimensions.width * defaultWorldDimensions.height;
-export const defaultTerrainCells = referenceWorldArea / (atlasQuality.standard.cellAreaKm2 * 1e6);
 
 export function generationResolution(quality: string, profile: Profile = "world") {
   const preset = atlasQuality[quality as keyof typeof atlasQuality];
