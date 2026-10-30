@@ -63,6 +63,8 @@ Local drainage routes runoff, establishes supported lakes, incises channels and
 redistributes sediment without advancing chronology. Climate and living cover
 respond to the resulting relief, wetness and soil. Surface classes are recomputed
 on that grid; habitat outlines use the raster's shared class-boundary evaluator.
+Contour crossing searches use the map's geometric tolerance. Stored coordinate
+precision does not dictate their numerical accuracy.
 
 Each magic system resolves captured effects in its own medium. Regional refinement
 does not place new global sources, renew stocks or replay ocean impulses. Known

@@ -10,6 +10,7 @@ export { contourSupport, regularContourSupport } from "./contourSupport";
 type Point = ContourPoint;
 type Scalar = (x: number, y: number) => number;
 type Crossing = (first: Point, last: Point) => Point;
+const crossingToleranceFraction = 1 / 16;
 const mix = (a: Point, b: Point, t: number): Point => [
   a[0] + (b[0] - a[0]) * t,
   a[1] + (b[1] - a[1]) * t,
@@ -21,7 +22,8 @@ function crossing(
   b: Point,
   va: number,
   vb: number,
-  level: number
+  level: number,
+  tolerance: number
 ): Point {
   if (va === level) return a;
   if (vb === level) return b;
@@ -29,17 +31,24 @@ function crossing(
     high = 1;
   const inside = va > level;
   const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
-  while ((high - low) * length > 1e-7) {
+  while ((high - low) * length > tolerance) {
     const middle = (low + high) / 2,
       point = mix(a, b, middle),
       value = valueAt(...point);
     if (value === level) return point;
-    if (value > level === inside) low = middle;
-    else high = middle;
+    if (value > level === inside) {
+      low = middle;
+      va = value;
+    } else {
+      high = middle;
+      vb = value;
+    }
   }
-  return mix(a, b, (low + high) / 2);
+  // Interpolate inside the final bracket: affine shores stay exact, and curved or
+  // discontinuous shores remain within a small part of the cartographic tolerance.
+  return mix(a, b, low + (high - low) * ((level - va) / (vb - va)));
 }
-function prepareQueries(at: Scalar, level: number) {
+function prepareQueries(at: Scalar, level: number, tolerance: number) {
   const stations = new ByteCache<string, number>(2 * 1024 * 1024),
     crossings = new ByteCache<string, Point>(2 * 1024 * 1024);
   const sample: Scalar = (x, y) => {
@@ -57,7 +66,15 @@ function prepareQueries(at: Scalar, level: number) {
       id = `${key(a)}>${key(b)}`;
     const previous = crossings.get(id);
     if (previous) return previous;
-    const result = crossing(at, a, b, sample(...a), sample(...b), level);
+    const result = crossing(
+      at,
+      a,
+      b,
+      sample(...a),
+      sample(...b),
+      level,
+      Math.max(spatial.precision / 10, tolerance * crossingToleranceFraction)
+    );
     crossings.set(id, result, id.length * 2 + 80);
     return result;
   };
@@ -226,7 +243,7 @@ export function fieldContour(
   workspace?: ContourWorkspace
 ): Geometry | null {
   return withContourEdges(workspace, (edges) => {
-    const { sample, cross, clear } = prepareQueries(at, level);
+    const { sample, cross, clear } = prepareQueries(at, level, tolerance);
     let row = NaN;
     for (const box of contourBoxes(source, selected)) {
       // Regular cells arrive in row order. Completed row queries need not stay live;
