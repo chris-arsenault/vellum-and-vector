@@ -78,15 +78,22 @@ clipping it to the starting outline. Mapped ways split at the chart edge while
 retaining one feature identity and their network junctions. Physical queries,
 class reads and display interpolation locate canonical coordinates in that chart.
 
-Regional terrain adds correlated relief below the source sampling scale,
-conditioned by gradient, rock and fractures, and develops coastal structure.
-Local drainage routes runoff, establishes supported lakes, incises channels and
-redistributes sediment without advancing chronology. Climate and living cover
+Regional terrain displaces coasts and divides, then develops connected valley
+profiles and hillsides through local drainage and substrate resistance. Small
+surface variation supplies local differences; drainage gathering, stream power
+and repeated routing develop the relief without advancing chronology. Spill
+routes resolve basins and flats; sloping ground follows downhill gradients.
+Sheet runoff becomes a channel where the terrain gathers it. Stream discharge
+requirements retain their physical meaning as the mesh becomes finer.
+Small artificial pits settle, while captured basins and newly developed coherent
+basins can change shape and hold water. Lake supply balances precipitation and
+runoff against evaporation and seepage. Floodplain coverage follows local channel
+margins rather than repeating a coarse floodplain over the fine map.
+Climate and living cover
 respond to the resulting relief, wetness and soil. Ground moisture follows
 precipitation over evaporative demand; atmospheric humidity is a separate input.
 Local exposure modulates captured runoff rather than replacing a dry regime.
-Streams require discharge as well as a drainage route, using the existing regional
-river qualification policy. Flooding and supported water supply wetland cover;
+Flooding and supported water supply wetland cover;
 catchment area alone supplies neither water nor habitation. Surface classes are recomputed
 on that grid; habitat outlines use the raster's shared class-boundary evaluator.
 Habitat outlines also use the existing mesh footprint, named-biome extent and small-gap
@@ -96,10 +103,21 @@ fragments, so overlapping reads do not create invalid polygon collections.
 Contour crossing searches use the map's geometric tolerance. Stored coordinate
 precision does not dictate their numerical accuracy.
 
-Smaller settlements develop from captured occupation density and locally supported
-concentration. Suitable empty ground remains empty. Density remains numerical
-context where it does not support a mapped place; refinement neither spends a
-parent population budget nor advances demographic history.
+Topographic prominence locates summits and their joining cols. Measured opposing
+flanks identify ridges and valleys; connected mountain relief becomes range
+footprints. Named summit bodies use the existing mesh footprint rule; smaller
+summits remain landform classes. Waterfalls require sharp channel-profile breaks,
+so an uninterrupted steep reach does not become a string of falls.
+
+Smaller settlements use the existing pass, river-node, harbour and material-site
+classifiers, with captured occupation and local support. Plain-site draws vary
+locations without grid-row ties. Where a captured density field is absent,
+located community footprints supply their present population per area. Explicit
+fields remain authoritative, and suitable empty ground remains empty. Refinement
+neither spends a parent population budget nor advances demographic history.
+Living cover remains the surface around a small stream; its presence does not
+paint a whole cell as a wet valley. Bare ridges and actual floodplains retain
+their physical surface classes.
 
 Each magic system resolves captured effects in its own medium. Named magic places
 use the same connected-class and minimum-component rules as the existing extractor;

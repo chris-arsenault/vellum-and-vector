@@ -1,22 +1,23 @@
-import { KeyedHeap, type Band } from "@atlas/domain";
-import { channel, clamp, distance, neighbors, type RefinementState } from "./state";
+import { type Band } from "@atlas/domain";
+import { channel, clamp, distance, neighbors, spacing, type RefinementState } from "./state";
+import { resolutionCells } from "@atlas/domain";
 import { relaxSlopes, updateSlopes } from "./terrain";
 import { fillRegionalLakes } from "./lakes";
 import { physicalProfile } from "../canonry/profile";
-import { generationResolution } from "../resolution";
+import { downhillRoutes, drainageRoutes, regionalBoundary } from "./drainage";
+import { inciseRegionalValleys } from "./valleys";
+import { settleRegionalPits } from "./terrainStructure";
+import { regionalFloodplains } from "./floodplains";
+import { concentratedDrainage } from "./channelFormation";
 
 const secondsPerYear = 365.25 * 24 * 3600;
 /** Retain the regional catchment support rule as well as requiring actual discharge. */
 const headwaterSamples = 12;
-/** Local channel incision strength in metres, modulated by flow, slope and rock. */
-const incisionStrength = 8;
+/** Mean discharge needed for a flowing stream, independent of the sampling mesh. */
+const minimumStreamDischarge = 0.5;
+/** Numerical development of this surface, without advancing physical or human time. */
+const valleyPasses = 3;
 
-function boundary(state: RefinementState, i: number) {
-  const g = state.surface,
-    x = i % g.width,
-    y = Math.floor(i / g.width);
-  return x === 0 || y === 0 || x === g.width - 1 || y === g.height - 1;
-}
 function seaConnected(state: RefinementState, datum: number) {
   const g = state.surface,
     sea = g.coverage.scratch("uint8", "regional:sea", g.active.length),
@@ -24,7 +25,7 @@ function seaConnected(state: RefinementState, datum: number) {
   let read = 0,
     write = 0;
   for (let i = 0; i < g.active.length; i++)
-    if (boundary(state, i) && g.channels.elevation.get(i) <= datum) {
+    if (regionalBoundary(state, i) && g.channels.elevation.get(i) <= datum) {
       sea.set(i, 1);
       queue.set(write++, i);
     }
@@ -41,6 +42,7 @@ function seaConnected(state: RefinementState, datum: number) {
 }
 /** Priority flooding establishes local spill levels and an acyclic route to open map edges. */
 export function routeRegionalWater(state: RefinementState) {
+  updateSlopes(state);
   const g = state.surface,
     n = g.active.length,
     height = g.channels.elevation,
@@ -50,7 +52,7 @@ export function routeRegionalWater(state: RefinementState) {
     water = channel(state, "water", "category"),
     depth = channel(state, "waterDepth", "metre"),
     level = channel(state, "waterLevel", "metre");
-  const { receiver, order, count } = flood(state, sea, filled, datum);
+  const { receiver, order, count } = drainageRoutes(state, height, filled, sea, datum);
   for (let i = 0; i < n; i++) {
     water.set(i, sea.get(i));
     depth.set(i, sea.get(i) ? Math.max(0, datum - height.get(i)) : 0);
@@ -61,40 +63,12 @@ export function routeRegionalWater(state: RefinementState) {
     g.coverage.release(state.drainage.order);
   }
   state.drainage = { receiver, order, count };
+  downhillRoutes(state, state.drainage, filled);
   accumulate(state);
   fillRegionalLakes(state);
+  for (let i = 0; i < n; i++) if (water.get(i) !== 0) g.channels.riverOrder.set(i, 0);
+  regionalFloodplains(state);
   g.coverage.release(sea);
-}
-function flood(state: RefinementState, sea: Band, filled: Band, datum: number) {
-  const g = state.surface,
-    n = g.active.length,
-    height = g.channels.elevation,
-    receiver = g.coverage.scratch("int32", "regional:receiver", n).fill(-1),
-    order = g.coverage.scratch("int32", "regional:drainage-order", n),
-    visited = g.coverage.scratch("uint8", "regional:flood-seen", n),
-    heap = new KeyedHeap();
-  filled.copyFrom(height);
-  for (let i = 0; i < n; i++)
-    if (boundary(state, i) || sea.get(i)) {
-      visited.set(i, 1);
-      heap.push(i, sea.get(i) ? datum : height.get(i));
-      if (sea.get(i)) filled.set(i, datum);
-    }
-  let count = 0;
-  while (heap.size) {
-    const i = heap.pop();
-    order.set(count++, i);
-    for (const j of neighbors(g, i))
-      if (!visited.get(j)) {
-        visited.set(j, 1);
-        receiver.set(j, i);
-        const spill = Math.max(height.get(j), filled.get(i));
-        filled.set(j, spill);
-        heap.push(j, spill);
-      }
-  }
-  g.coverage.release(visited);
-  return { receiver, order, count };
 }
 function accumulate(state: RefinementState) {
   const g = state.surface,
@@ -121,37 +95,40 @@ function accumulate(state: RefinementState) {
 }
 function qualifyChannels(state: RefinementState, river: Band, flow: Band) {
   const g = state.surface,
-    { receiver, order, count } = state.drainage!,
-    basinFlow = g.coverage.scratch("float64", "regional:basin-flow", g.active.length);
-  // The existing regional river policy scales discharge with resolved catchment area.
-  // Drainage area alone cannot distinguish a dry wash from a flowing stream.
-  const p = physicalProfile,
-    span = g.scope.resolution ?? 1,
-    scale = Math.min(1, span / generationResolution("standard").cellSpan) ** 2;
-  for (let k = 0; k < count; k++) {
-    const i = order.get(k),
-      j = receiver.get(i);
-    basinFlow.set(i, j < 0 ? flow.get(i) : basinFlow.get(j));
-    const discharge = basinFlow.get(i),
-      threshold = clamp(
-        (discharge * p.RiverBasinHeadwaterFraction) / 1000,
-        p.RiverMinimumAccumulationThreshold * scale,
-        p.RiverAccumulationThreshold * scale
-      ),
-      slopeFactor = clamp(
-        Math.sqrt((g.channels.slope?.get(i) ?? 0) / p.ChannelReferenceSlope),
-        p.ChannelSlopeFloor / 1000,
-        p.ChannelSlopeCeiling / 1000
-      );
+    [dx, dy] = spacing(g),
+    p = physicalProfile,
+    gathered = concentratedDrainage(state),
+    length = upstreamLengths(state),
+    span = Math.sqrt(dx * dy);
+  for (let i = 0; i < g.active.length; i++) {
+    const slopeFactor = clamp(
+      Math.sqrt((g.channels.slope?.get(i) ?? 0) / p.ChannelReferenceSlope),
+      p.ChannelSlopeFloor / 1000,
+      p.ChannelSlopeCeiling / 1000
+    );
     if (
       waterLand(state, i) &&
-      g.channels.catchmentArea.get(i) >= headwaterSamples * span ** 2 &&
-      discharge >= p.RiverMinimumBasinDischarge * scale &&
-      flow.get(i) * slopeFactor >= threshold
+      gathered.get(i) &&
+      g.channels.catchmentArea.get(i) / (length.get(i) + span) >= resolutionCells * span &&
+      g.channels.catchmentArea.get(i) >= headwaterSamples * dx * dy &&
+      flow.get(i) * slopeFactor >= minimumStreamDischarge
     )
       river.set(i, 1);
   }
-  g.coverage.release(basinFlow);
+  g.coverage.release(gathered);
+  g.coverage.release(length);
+}
+/** An accumulating one-cell strip is sheet flow; a channel gathers a lateral catchment. */
+function upstreamLengths(state: RefinementState) {
+  const g = state.surface,
+    { receiver, order, count } = state.drainage!,
+    length = g.coverage.scratch("float64", "regional:upstream-length", g.active.length);
+  for (let k = count - 1; k >= 0; k--) {
+    const i = order.get(k),
+      j = receiver.get(i);
+    if (j >= 0) length.set(j, Math.max(length.get(j), length.get(i) + distance(g, i, j)));
+  }
+  return length;
 }
 function orderChannels(state: RefinementState, river: Band) {
   const g = state.surface,
@@ -178,33 +155,14 @@ function advanceOrder(river: Band, largest: Band, ties: Band, i: number, j: numb
     ties.set(j, 1);
   } else if (river.get(i) === largest.get(j)) ties.add(j, 1);
 }
-/** Shape the finer drainage once; this is surface development, not another geological epoch. */
+/** Develop the finer drainage through local feedback, without another geological epoch. */
 export function refineWater(state: RefinementState) {
-  routeRegionalWater(state);
-  if (!state.input.domains.includes("physical")) return;
-  const g = state.surface,
-    erosion = channel(state, "erosion", "metre"),
-    sediment = channel(state, "sediment", "metre"),
-    rock = channel(state, "rock", "ratio", 1);
-  for (let k = state.drainage!.count - 1; k >= 0; k--) {
-    const i = state.drainage!.order.get(k),
-      j = state.drainage!.receiver.get(i);
-    if (j < 0 || g.channels.water.get(i) !== 0 || g.channels.riverOrder.get(i) === 0) continue;
-    const slope = Math.max(
-        0,
-        (g.channels.elevation.get(i) - g.channels.elevation.get(j)) / distance(g, i, j)
-      ),
-      cut =
-        (incisionStrength * Math.log1p(g.channels.flow.get(i)) * Math.sqrt(slope)) /
-        clamp(rock.get(i), 0.3, 3);
-    g.channels.elevation.add(i, -cut);
-    erosion.add(i, cut);
-    // Deposited fans emerge where the receiving reach loses slope or meets standing water.
-    const deposit = cut * (g.channels.water.get(j) ? 0.7 : 0.15);
-    sediment.add(j, deposit);
-    g.channels.elevation.add(j, deposit);
-  }
-  relaxSlopes(state);
-  updateSlopes(state);
+  if (state.input.domains.includes("physical"))
+    for (let pass = 0; pass < valleyPasses; pass++) {
+      routeRegionalWater(state);
+      inciseRegionalValleys(state, valleyPasses);
+      relaxSlopes(state);
+      settleRegionalPits(state);
+    }
   routeRegionalWater(state);
 }

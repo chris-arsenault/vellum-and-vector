@@ -90,7 +90,7 @@ export function MapCanvas({
     base: baseRaster ?? [],
     rasters: raster ?? [],
   });
-  useFeatureTools(engine, tool, selection, callbacks, world.version);
+  useFeatureTools(engine, tool, selection, callbacks, world.version, area.id);
   usePreview(engine, proposal);
   return (
     <CanvasSurface
@@ -117,7 +117,7 @@ function useEditableFeatures(features: AtlasFeature[], selected: AtlasFeature | 
 function useDrawnPresentation(engine: MapEngine | null, input: DrawnMapInput) {
   useEffect(() => {
     if (!engine) return;
-    if (input.region) updateRegionMap(engine, input.region);
+    updateRegionMap(engine, input.region);
     updateDrawnMap(engine, input);
   }, [engine, input]);
 }
@@ -216,14 +216,15 @@ function useFeatureTools(
   tool: Tool,
   selection: Props["selection"],
   callbacks: import("react").RefObject<MapEvents>,
-  version: number
+  version: number,
+  areaId: string
 ) {
   const { feature, role } = selection;
   const selectedId = feature?.id ?? null;
-  const key = interactionKey(tool, selectedId, role, version);
+  const key = interactionKey(tool, selectedId, role, version, areaId);
   useEffect(() => {
     if (engine) return installMapTools(engine, tool, selectedId, () => callbacks.current, role);
-    // The key carries the tool, its target and (for editing tools) the revision.
+    // The key carries the active map, tool, target and (for editing tools) revision.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, key, callbacks]);
 }

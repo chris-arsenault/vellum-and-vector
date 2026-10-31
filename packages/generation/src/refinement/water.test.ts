@@ -6,7 +6,7 @@ import { extractRegionalWater } from "./geography";
 import { channel } from "./state";
 
 it("keeps an isolated rainy boundary sample out of the river network while its valley flows", () => {
-  const { state } = regionalFixture((x, y) => 100 + x / 500 + y / 1000, 40000, 2),
+  const { state } = regionalFixture((x, y) => 100 + x / 500 + Math.abs(y - 20000) / 1000, 40000, 2),
     g = state.surface,
     edge = (g.height - 1) * g.width + Math.floor(g.width / 2);
   g.channels.runoff.fill(10);
@@ -36,9 +36,20 @@ it("does not turn dry drainage area into the same stream network as a wet catchm
   );
 });
 
+it("keeps sheet runoff on a planar hillslope out of the mapped river network", () => {
+  const { state } = regionalFixture((x, y) => 100 + x / 100 + y / 200, 40000, 2);
+  routeRegionalWater(state);
+  expect(Math.max(...state.surface.channels.flow)).toBeGreaterThan(0.5);
+  expect(Array.from(state.surface.channels.riverOrder).filter((r) => r > 0)).toHaveLength(0);
+});
+
 it("routes a constructed catchment to its local outlets and retains its water budget", () => {
-  // Supply kilometre-scale samples so each side valley resolves a separate mapped headwater.
-  const f = regionalFixture((x, y) => 100 + x / 1000 + Math.abs(y - 20000) / 400, 40000, 2);
+  // A Y-shaped valley supplies two actual tributary catchments to one main stem.
+  const f = regionalFixture(
+    (x, y) => 100 + x / 1000 + Math.abs(Math.abs(y - 20000) - Math.max(0, x - 20000)) / 400,
+    40000,
+    2
+  );
   updateSlopes(f.state);
   routeRegionalWater(f.state);
   const g = f.state.surface,
@@ -78,6 +89,10 @@ it("leaves an unsupported depression dry and fills it when supplied with runoff"
   routeRegionalWater(wet);
   expect(Array.from(dry.surface.channels.water).every((v) => v === 0)).toBe(true);
   expect(Array.from(wet.surface.channels.water).some((v) => v === 2)).toBe(true);
+  for (let i = 0; i < wet.surface.active.length; i++)
+    if (wet.surface.channels.water.get(i) === 2)
+      expect(wet.surface.channels.riverOrder.get(i)).toBe(0);
+  expect(Math.max(...wet.surface.channels.flow)).toBeGreaterThan(0);
   expect(Array.from(wet.surface.channels.elevation)).toEqual(
     Array.from(dry.surface.channels.elevation)
   );

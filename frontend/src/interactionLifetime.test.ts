@@ -18,3 +18,9 @@ it("still reinstalls editing tools when the world revision changes", () => {
     interactionKey("reshape", "f", "primary", 4)
   );
 });
+
+it("reinstalls region sketches when navigation changes the active map", () => {
+  expect(interactionKey("regionOutline", null, "primary", 3, "parent")).not.toBe(
+    interactionKey("regionOutline", null, "primary", 3, "child")
+  );
+});

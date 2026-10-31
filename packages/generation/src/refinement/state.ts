@@ -30,6 +30,7 @@ export interface RefinementState {
   sourceNetworks?: NetworkReader;
   contours?: ContourWorkspace;
   drainage?: { receiver: Band; order: Band; count: number };
+  terrain?: { basin: Band; relief: Band };
 }
 
 export function channel(state: RefinementState, name: string, unit: string, initial = 0) {

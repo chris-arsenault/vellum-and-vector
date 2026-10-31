@@ -40,11 +40,24 @@ export type RegionalWorkloadOutput = Awaited<
   ReturnType<Awaited<ReturnType<typeof regionalWorkload>>["publish"]>
 >;
 
-export function assertWorkloadDetail(result: CompletedBoundary, published: RegionalWorkloadOutput) {
+export function assertWorkloadDetail(
+  result: CompletedBoundary,
+  published: RegionalWorkloadOutput,
+  branching = true
+) {
   expect(result.state.physical).toBeUndefined();
   expect(result.state.society).toBeUndefined();
   expect(result.state.history).toEqual([]);
-  expect(published.counts.river).toBeGreaterThan(1);
+  const reaches = result.state.domain.world.drainage![result.state.surface.scope.areaId].reaches;
+  expect(reaches.length).toBeGreaterThan(0);
+  expect(published.counts.river).toBe(reaches.length);
+  if (branching) expect(published.counts.river).toBeGreaterThan(1);
+  for (const reach of reaches) {
+    expect(reach.coordinates.length).toBeGreaterThan(1);
+    expect(reach.discharges).toHaveLength(reach.coordinates.length);
+    expect(reach.catchmentAreas).toHaveLength(reach.coordinates.length);
+    expect(reach.discharges.every((flow) => Number.isFinite(flow) && flow > 0)).toBe(true);
+  }
   expect(published.counts.settlement).toBeGreaterThan(2);
   expect(published.counts.road).toBeGreaterThan(0);
   expect(published.rasterResult.categories.length).toBeGreaterThan(1);

@@ -11,6 +11,7 @@ import {
   someSample,
   placeMinimumCells,
   type MagicFeatureRule,
+  type MagicSystem,
   type Band,
 } from "@atlas/domain";
 import { generationFeatures } from "../generationFeatures";
@@ -36,18 +37,15 @@ export function classifyRegionalMagic(state: RefinementState) {
     held = g.coverage.scratch("float64", "regional:class-share", g.active.length),
     second = channel(state, "secondSurface", "category", -1);
   second.fill(-1);
-  for (const system of systems)
-    if (system.enabled)
-      for (const rule of system.features) {
-        const code = magicSurfaceCode(sources, system.id, rule.id)!;
-        classifyRule(state, system.id, rule, code, priority, held);
-      }
+  for (const system of systems) classifySystem(state, system, sources, priority, held);
   const enabledMeetings = meetings.filter((m) => confluenceEffective(m, systems));
   for (const meeting of enabledMeetings) {
-    const share = g.coverage.scratch("float64", `regional:meeting:${meeting.id}`, g.active.length);
+    const share = channel(state, `magic:confluence:${meeting.id}:coverage`, "ratio"),
+      members = channel(state, `magic:confluence:${meeting.id}:members`, "category");
     for (let i = 0; i < share.length; i++) {
       const coverage = meetingShare(state, meeting, i);
       share.set(i, coverage);
+      members.set(i, Number(coverage > 0));
       paint(
         state,
         i,
@@ -65,10 +63,33 @@ export function classifyRegionalMagic(state: RefinementState) {
       meeting.cartography ?? "area",
       share
     );
-    g.coverage.release(share);
   }
   g.coverage.release(priority);
   g.coverage.release(held);
+}
+function classifySystem(
+  state: RefinementState,
+  system: MagicSystem,
+  sources: ReturnType<typeof surfaceRuleSources>,
+  priority: Band,
+  held: Band
+) {
+  channel(state, `magic:${system.id}:coverage`, "ratio").fill(0);
+  for (const rule of system.features) {
+    if (!system.enabled || system.strength === 0) {
+      channel(state, `magic:${system.id}:coverage:${rule.id}`, "ratio").fill(0);
+      channel(state, `magic:${system.id}:feature:${rule.id}`, "category").fill(0);
+    } else {
+      classifyRule(
+        state,
+        system.id,
+        rule,
+        magicSurfaceCode(sources, system.id, rule.id)!,
+        priority,
+        held
+      );
+    }
+  }
 }
 function classifyRule(
   state: RefinementState,
@@ -79,14 +100,17 @@ function classifyRule(
   held: Band
 ) {
   const g = state.surface,
-    share = g.coverage.scratch("float64", `regional:class:${owner}:${rule.id}`, g.active.length);
+    share = channel(state, `magic:${owner}:coverage:${rule.id}`, "ratio"),
+    members = channel(state, `magic:${owner}:feature:${rule.id}`, "category"),
+    total = g.channels[`magic:${owner}:coverage`];
   for (let i = 0; i < share.length; i++) {
     const value = magicShare(state, owner, rule, i);
     share.set(i, value);
+    members.set(i, Number(value > 0));
+    total.set(i, Math.max(total.get(i), value));
     paint(state, i, code, rule.priority, value, priority, held);
   }
   publishClass(state, `${owner}:${rule.id}`, rule.name, rule.cartography ?? "area", share);
-  g.coverage.release(share);
 }
 function paint(
   state: RefinementState,

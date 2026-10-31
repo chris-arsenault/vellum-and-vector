@@ -1,7 +1,11 @@
 import type { Band } from "@atlas/domain";
-import { neighbors, type RefinementState } from "./state";
+import { clamp, neighbors, type RefinementState } from "./state";
 import { potentialEvaporation } from "../canonry/ecologyEnvironment";
 import { regionalPrecipitation } from "./environment";
+
+/** Annual seepage through intact ground and the additional loss through open fractures. */
+const intactSeepage = 0.05;
+const fracturedSeepage = 1.5;
 
 /** Standing water is supported by runoff and rain, not by the routing flood's fill height. */
 export function fillRegionalLakes(state: RefinementState) {
@@ -45,8 +49,8 @@ function pool(state: RefinementState, start: number, seen: Band) {
 function waterStage(state: RefinementState, cells: number[], spill: number) {
   const g = state.surface,
     height = g.channels.elevation,
-    { inflow, area, temperature } = poolSupply(state, cells);
-  const loss = potentialEvaporation(temperature / area),
+    { inflow, area, temperature, seepage } = poolSupply(state, cells);
+  const loss = potentialEvaporation(temperature / area) + seepage / area,
     supportedArea = inflow / loss;
   if (supportedArea >= area) return spill;
   cells.sort((a, b) => height.get(a) - height.get(b));
@@ -62,15 +66,24 @@ function poolSupply(state: RefinementState, cells: number[]) {
     members = new Set(cells);
   let inflow = 0,
     area = 0,
-    temperature = 0;
+    temperature = 0,
+    seepage = 0;
   for (const i of cells) {
     const measure = g.measures.get(i);
     area += measure;
     inflow += regionalPrecipitation(state, i) * measure;
     temperature += (g.channels.temperature?.get(i) ?? 15) * measure;
+    seepage += measure * seepageRate(state, i);
     for (const j of neighbors(g, i))
       if (!members.has(j) && state.drainage!.receiver.get(j) === i)
         inflow += g.channels.flow.get(j) * 31557600;
   }
-  return { inflow, area, temperature };
+  return { inflow, area, temperature, seepage };
+}
+function seepageRate(state: RefinementState, i: number) {
+  const c = state.surface.channels;
+  return (
+    intactSeepage +
+    (fracturedSeepage * clamp(c.fracture?.get(i) ?? 0)) / clamp(c.rock?.get(i) ?? 1, 0.3, 3)
+  );
 }

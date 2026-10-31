@@ -283,7 +283,11 @@ Returning from setup or cancelling a job retains the selected subject. Completed
 regional output arrives through the existing worker and atomic publication.
 
 Terrain and water develop from parent context without locking inherited heights
-or shores. The child map includes a rectangular working area around the selected
+or shores. Refinement develops connected ridges, distinct summits, cols and
+valleys rather than adding roughness alone. Streams follow gathered runoff;
+standing water needs a basin and sufficient supply. Towns follow geographic
+opportunities using captured occupation, without another society history.
+The child map includes a rectangular working area around the selected
 subject, with surrounding land and sea available for independent development even
 outside the source map's footprint. Climate responds to finer relief; habitats
 and existing magical landscapes follow their own media without creating another

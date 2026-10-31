@@ -16,12 +16,14 @@ import { refineLocalConditions, refineLivingCover, extractRegionalHabitats } fro
 import { refineMagic } from "./magic";
 import { classifyRegionalMagic } from "./magicCartography";
 import { refinePlaces } from "./places";
+import { extractRegionalLandforms } from "./landforms";
 
 const stages: [string, (state: RefinementState) => void][] = [
   ["terrain", refineTerrain],
   ["climate", refineLocalConditions],
   ["water", refineWater],
   ["magic", refineMagic],
+  ["landforms", extractRegionalLandforms],
   ["habitats", refineLivingCover],
   ["magic-places", classifyRegionalMagic],
   ["geography", extractRegionalWater],
@@ -74,7 +76,7 @@ export async function refineRegionalMap(
   clearRegionalProducts(state);
   for (const [index, [id, apply]] of stages.entries()) {
     if (
-      ["geography", "landscapes"].includes(id) &&
+      ["landforms", "geography", "landscapes"].includes(id) &&
       !input.domains.some((domain) => domain === "physical" || domain === "magic")
     )
       continue;
@@ -104,13 +106,18 @@ export async function refineRegionalMap(
       sourceNetworks: state.sourceNetworks,
     },
   };
+  releaseWorkingState(state);
+  await options.saveBoundary?.(result);
+  return result;
+}
+function releaseWorkingState(state: RefinementState) {
   state.surface.coverage.release(state.inheritedHeight);
+  if (state.terrain)
+    for (const band of Object.values(state.terrain)) state.surface.coverage.release(band);
   if (state.drainage) {
     state.surface.coverage.release(state.drainage.receiver);
     state.surface.coverage.release(state.drainage.order);
   }
-  await options.saveBoundary?.(result);
-  return result;
 }
 function prepareStores(
   state: RefinementState,

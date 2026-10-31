@@ -35,6 +35,20 @@ it("keeps an arid interior dry despite a humid atmosphere and a large dry catchm
   }
 });
 
+it("keeps a small stream's surrounding land cover instead of painting a cell-wide wet valley", () => {
+  const { state } = regionalEnvironment(),
+    g = state.surface,
+    stream = g.width * 4 + 6;
+  g.channels.treeCover.fill(0);
+  g.channels.rainfall.fill(0.06);
+  g.channels.riverOrder.set(stream, 1);
+  refineLivingCover(state);
+  expect(g.channels.naturalSurface.get(stream)).toBe(surfaceCode("Desert"));
+  expect(g.channels.naturalSurface.get(stream - 1)).toBe(surfaceCode("Desert"));
+  expect(g.channels.riverOrder.get(stream)).toBe(1);
+  expect(g.channels.water.get(stream)).toBe(0);
+});
+
 it("develops sub-parent habitat patches and responds to a local soil perturbation", () => {
   const normal = regionalEnvironment(),
     thin = regionalEnvironment(),

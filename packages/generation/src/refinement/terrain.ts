@@ -1,51 +1,48 @@
 import { gridPosition } from "@atlas/domain";
 import { fractalNoise } from "../canonry/noise";
 import { channel, clamp, distance, neighbors, spacing, type RefinementState } from "./state";
+import { inheritedSampler, regionalTerrainContext, settleRegionalPits } from "./terrainStructure";
 
 /** Minimum rolling relief as a slope over one coarse sample. */
-const rollingSlope = 0.008;
-/** Coastal displacement extends through this vertical band in metres. */
-const coastalBand = 180;
+const rollingSlope = 0.002;
+/** Horizontal displacement varies coastlines and divides without serrating every height. */
+const displacementShare = 0.18;
 /** Local hillslope redistribution, a fraction of neighboring height differences. */
 const relaxationShare = 0.12;
 
 export function refineTerrain(state: RefinementState) {
+  channel(state, "fracture", "ratio");
   const grid = state.surface,
     height = grid.channels.elevation,
     rock = channel(state, "rock", "ratio", 1),
-    fracture = channel(state, "fracture", "ratio"),
     [dx, dy] = spacing(grid),
-    wavelength = Math.max(state.parentSpan / 2, Math.max(dx, dy) * 4),
-    octaves = Math.max(1, 1 + Math.floor(Math.log2(wavelength / (Math.max(dx, dy) * 2)))),
-    datum = grid.channels.seaLevel?.get(0) ?? 0;
+    wavelength = Math.max(state.parentSpan, Math.max(dx, dy) * 4),
+    at = inheritedSampler(state);
   if (!state.input.domains.includes("physical")) {
     updateSlopes(state);
     return;
   }
+  regionalTerrainContext(state);
+  channel(state, "sediment", "metre");
   for (let i = 0; i < height.length; i++) {
     const p = gridPosition(grid, i),
-      { gx, gy } = gradient(state, i, true),
-      slope = Math.hypot(gx, gy),
-      direction = Math.atan2(gy, gx),
-      across = p.x * Math.cos(direction) + p.y * Math.sin(direction),
-      along = (-p.x * Math.sin(direction) + p.y * Math.cos(direction)) / 3,
       resistance = clamp(rock.get(i), 0.6, 1.4),
+      warpX = fractalNoise(p.x, p.y, state.input.seed ^ 0x51a3, wavelength * 2, 2),
+      warpY = fractalNoise(p.x, p.y, state.input.seed ^ 0x7c4b, wavelength * 2, 2),
       amplitude =
-        Math.max(rollingSlope * state.parentSpan, slope * state.parentSpan * 1.2) * resistance,
-      warp =
-        fractalNoise(p.x, p.y, state.input.seed ^ 0x51a3, wavelength * 2, 2) * wavelength * 0.3,
-      relief =
-        fractalNoise(across + warp, along, state.input.seed ^ 0x5e1f, wavelength, octaves) *
-        amplitude,
-      nearShore = Math.max(0, 1 - Math.abs(state.inheritedHeight.get(i) - datum) / coastalBand),
-      shore =
-        fractalNoise(p.x + warp, p.y - warp, state.input.seed ^ 0x7c4b, wavelength / 2, octaves) *
-        coastalBand *
-        nearShore ** 2 *
-        (0.4 + clamp(fracture.get(i)));
-    height.set(i, state.inheritedHeight.get(i) + relief + shore);
+        (rollingSlope * state.parentSpan + state.terrain!.relief.get(i) * 0.06) * resistance,
+      variation = fractalNoise(p.x, p.y, state.input.seed ^ 0x5e1f, wavelength / 2, 2);
+    height.set(
+      i,
+      at(
+        p.x + warpX * wavelength * displacementShare,
+        p.y + warpY * wavelength * displacementShare
+      ) +
+        variation * amplitude
+    );
   }
   relaxSlopes(state);
+  settleRegionalPits(state);
   updateSlopes(state);
 }
 export function gradient(state: RefinementState, i: number, inherited = false) {

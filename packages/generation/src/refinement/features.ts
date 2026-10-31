@@ -103,7 +103,7 @@ export function putRefinementNetwork(
     featureId: feature.id,
     start: nodes[0].id,
     end: nodes[1].id,
-    geometry: feature.geometry,
+    geometry: { type: "LineString" as const, coordinates },
     flow,
     endFlow: null,
   };

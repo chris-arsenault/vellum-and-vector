@@ -23,6 +23,7 @@ import { putRefinementFeature } from "./features";
 import { regionalMoisture, regionalWetness } from "./environment";
 import { namedBiomeLandShare } from "../canonry/ecologyBiomes";
 import { fillContourHoles } from "../canonry/geographicContours";
+import { Landform } from "../canonry/codes";
 
 /** Finer habitat patches follow soil/water variation over several resolved samples. */
 const habitatSamples = 5;
@@ -122,9 +123,18 @@ function naturalName(
   if (biome === "Ocean") return c.waterDepth.get(i) < 150 ? "Shelf" : "Ocean";
   if (biome === "Freshwater") return "Lake";
   if (biome === "Ice") return "Glacier";
-  if (c.slope.get(i) > 0.15) return "Ridge";
-  if (c.riverOrder.get(i) > 0) return "River valley";
-  return biome as NaturalSurfaceName;
+  // As in initial geography, cover owns the surrounding land. A small stream
+  // does not replace a whole resolved cell with wet-looking valley colour.
+  if ((c.floodplain?.get(i) ?? 0) >= 0.25) return "Floodplain";
+  return bareSurface(state, i) ?? (biome as NaturalSurfaceName);
+}
+function bareSurface(state: RefinementState, i: number): NaturalSurfaceName | null {
+  const c = state.surface.channels;
+  const bare = c.treeCover.get(i) + c.grassCover.get(i) + c.wetlandCover.get(i) < 0.12;
+  if (bare && c.slope.get(i) >= 0.0235) return "Scree field";
+  if (bare && [Landform.Ridge, Landform.Peak, Landform.Pass].includes(c.landform?.get(i) ?? 0))
+    return "Ridge";
+  return null;
 }
 function materialCode(state: RefinementState, i: number) {
   const c = state.surface.channels;

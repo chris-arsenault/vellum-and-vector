@@ -36,6 +36,45 @@ it("resolves Fire along captured conductive fractures without placing new source
   expect(Array.from(source)).toEqual(before);
   expect(state.domain.world.epochs).toEqual(history);
 });
+it("resolves weak coarse Fire coverage into localized cores rather than uniformly faint heat", () => {
+  const { state } = magicEnvironment(["fire"], 2),
+    g = state.surface;
+  channel(state, "magic:fire:intensity", "relative-intensity", 40);
+  channel(state, "magic:fire:coverage", "ratio", 0.08);
+  channel(state, "magic:fire:coverage:vein", "ratio", 0.08);
+  channel(state, "geothermal", "ratio", 0.8);
+  g.channels.fracture.fill(0.8);
+  const history = structuredClone(state.domain.world.epochs);
+  refineMagic(state);
+  const sources = Array.from(g.channels["magic:fire:source"]);
+  expect(sources.some((v) => v >= 300)).toBe(true);
+  expect(sources.filter((v) => v >= 300).length).toBeLessThan(sources.length / 3);
+  expect(Math.max(...g.channels["magic:fire:intensity"])).toBeGreaterThan(500);
+  expect(Math.max(...g.channels.temperature)).toBeGreaterThan(16);
+  classifyRegionalMagic(state);
+  expect(Object.values(state.domain.world.features).some((f) => f.kind === "fire:core")).toBe(true);
+  expect(state.domain.world.epochs).toEqual(history);
+});
+it("exposes concentrated held Fire material without an inherited active source", () => {
+  const { state } = magicEnvironment(["fire"], 2),
+    g = state.surface,
+    held = channel(state, "magic:fire:stock:fallen/held", "intensity-square-metre");
+  for (let i = 0; i < held.length; i++) held.set(i, g.measures.get(i) * 1500);
+  g.channels.fracture.fill(0.9);
+  refineMagic(state);
+  expect(Math.max(...g.channels["magic:fire:source"])).toBeGreaterThan(300);
+  expect(Array.from(held).some((v) => v === 0)).toBe(true);
+  expect(Array.from(held).some((v, i) => v / g.measures.get(i) > 1500)).toBe(true);
+});
+it("does not invent Fire material from favorable rock and heat alone", () => {
+  const { state } = magicEnvironment(["fire"]),
+    g = state.surface;
+  channel(state, "geothermal", "ratio", 1);
+  g.channels.fracture.fill(1);
+  refineMagic(state);
+  expect(Array.from(g.channels["magic:fire:source"]).every((v) => v === 0)).toBe(true);
+  expect(Array.from(g.channels["magic:fire:intensity"]).every((v) => v === 0)).toBe(true);
+});
 it("applies a meeting's own physical effects while retaining both contributing fields", () => {
   const { state } = magicEnvironment(["fire", "aurora"]),
     g = state.surface;
@@ -64,7 +103,7 @@ it("applies a meeting's own physical effects while retaining both contributing f
   expect(Array.from(g.channels["magic:aurora:intensity"]).every((v) => v === 900)).toBe(true);
   expect(state.domain.world.epochs).toEqual(history);
 });
-it("resolves Aurora into cold ice while retaining captured material stocks", () => {
+it("resolves Aurora into cold ice and retains thawed charge in the ground", () => {
   const { state } = magicEnvironment(["aurora"]),
     g = state.surface;
   channel(state, "magic:aurora:intensity", "relative-intensity", 400);
@@ -79,7 +118,12 @@ it("resolves Aurora into cold ice while retaining captured material stocks", () 
   expect(g.channels["magic:aurora:intensity"].get(0)).toBeGreaterThan(
     g.channels["magic:aurora:intensity"].get(g.width - 1)
   );
-  expect(Array.from(stock)).toEqual(before);
+  const ground = g.channels["magic:aurora:stock:field/ground"];
+  const sum = (values: Iterable<number>) => Array.from(values).reduce((a, b) => a + b, 0);
+  expect(sum(stock) + sum(ground)).toBeCloseTo(sum(before), 6);
+  for (let i = 0; i < stock.length; i++) {
+    if (gridPosition(g, i).x >= 20000) expect(ground.get(i)).toBeGreaterThan(0);
+  }
   expect(g.channels["magic:aurora:source"]).toBeUndefined();
 });
 it("keeps Pressure in water and Greenwood on rooted ground", () => {

@@ -31,7 +31,7 @@ class SiteReader {
   readonly grid;
   private readonly covers;
   private lastRing: { cell: number; neighbors: number[] } | undefined;
-  constructor(readonly state: GenerationState) {
+  constructor(readonly state: Pick<GenerationState, "surface">) {
     this.grid = state.surface;
     this.covers = spatial.geometryCoverage(this.grid.scope.footprint);
   }
@@ -249,7 +249,7 @@ export interface SiteOptions {
 const settled: SiteOptions = { mobile: false, ruins: new Map() };
 /** The best site class each land cell offers, or null where nothing better than plain exists. */
 export function rankSites(
-  state: GenerationState,
+  state: Pick<GenerationState, "surface">,
   options: SiteOptions = settled
 ): (SiteOpportunity | null)[] {
   const r = new SiteReader(state),

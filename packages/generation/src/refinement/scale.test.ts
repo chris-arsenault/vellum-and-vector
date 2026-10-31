@@ -1,7 +1,36 @@
 import { expect, it } from "vitest";
-import { rectangle } from "@atlas/domain";
+import { putChannel, rectangle } from "@atlas/domain";
 import { regionalFixture } from "./refinementFixture";
-import { refinementResolution } from "./inputs";
+import { createRefinementState, refinementResolution } from "./inputs";
+
+it("samples fractional magic coverage beside its material amounts without altering captured inputs", () => {
+  const { source, input, grid } = regionalFixture();
+  const coverage = "magic:fire:coverage:vein",
+    stock = "magic:fire:stock:vein/held";
+  putChannel(
+    grid,
+    coverage,
+    "ratio",
+    grid.coverage.scratch("float64", coverage, grid.active.length).fill(0.08)
+  );
+  putChannel(
+    grid,
+    stock,
+    "intensity-square-metre",
+    grid.coverage.scratch("float64", stock, grid.active.length).fill(100_000_000),
+    "extensive"
+  );
+  source.world.fields[0].channels!.push(coverage, stock);
+  const { surface } = createRefinementState(source, input);
+  expect(surface.channels[coverage]).toBeDefined();
+  for (const value of surface.channels[coverage]) expect(value).toBeCloseTo(0.08, 12);
+  expect(surface.channels[stock].get(0) / surface.measures.get(0)).toBeCloseTo(
+    100_000_000 / grid.measures.get(0),
+    8
+  );
+  expect(grid.channels[coverage].get(0)).toBe(0.08);
+  expect(grid.channels[stock].get(0)).toBe(100_000_000);
+});
 
 it("calibrates the first Standard region from 35 percent of the default world divided twelve ways", () => {
   const { source, input } = regionalFixture();

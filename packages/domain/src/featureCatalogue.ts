@@ -17,6 +17,7 @@ export const featureDefinitions: Definition[] = [
   ["peak", "geology", "Peaks", "Terrain and geology", "Relief"],
   ["range", "geology", "Mountain ranges", "Terrain and geology", "Relief"],
   ["valley", "geology", "Valleys", "Terrain and geology", "Relief"],
+  ["pass", "geology", "Mountain passes", "Terrain and geology", "Relief"],
   ["gorge", "geology", "Gorges", "Terrain and geology", "Relief"],
   ["hill", "geology", "Hills", "Terrain and geology", "Relief"],
   ["cirque", "geology", "Cirques", "Terrain and geology", "Glacial landforms"],

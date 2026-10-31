@@ -1,6 +1,7 @@
 import { builtinLayers, type Layer } from "@atlas/domain";
 import type { PublicationDefinition } from "../publication";
 import { generationFeatures } from "../generationFeatures";
+import { societyPublications } from "../societyPublication";
 import type { RefinementState } from "./state";
 
 const layers: Record<string, string[]> = {
@@ -14,6 +15,9 @@ const layers: Record<string, string[]> = {
     "sediment",
     "slope",
     "erosion",
+    "landform",
+    "localRelief",
+    "valleyDepth",
     "naturalSurface",
     "finalSurface",
     "secondSurface",
@@ -40,6 +44,8 @@ const layers: Record<string, string[]> = {
     "waterDepth",
     "drainageElevation",
     "riverOrder",
+    "floodplain",
+    "delta",
   ],
   ecology: [
     "soilDepth",
@@ -55,7 +61,11 @@ const layers: Record<string, string[]> = {
   population: ["populationDensity", "populationCapacity"],
 };
 function publicationLayer(state: RefinementState, id: string): Layer {
-  const base = state.domain.world.layers[id] ?? builtinLayers().find((l) => l.id === id)!;
+  const base =
+    state.domain.world.layers[id] ??
+    (id === "population"
+      ? societyPublications(state.input)[0].layer
+      : builtinLayers().find((l) => l.id === id)!);
   return {
     ...base,
     representations: [

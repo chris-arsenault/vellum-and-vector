@@ -7,7 +7,8 @@ import { units, truncate } from "./math";
 import { Landform as L } from "./codes";
 import { measureSlopes } from "./geography";
 import { physicalSampler } from "./physicalMetric";
-import { workingArray, releaseWorking } from "./physicalNumerics";
+import { releaseWorking } from "./physicalNumerics";
+import { topographicProminence } from "../topographicProminence";
 
 function shape(
   map: PhysicalField,
@@ -209,40 +210,18 @@ export function landformClassification(map: PhysicalField, c: PhysicalContext) {
  * highest down; when two summits' areas meet, the lower summit's col is the joining cell.
  */
 export function prominence(map: PhysicalField) {
-  const count = map.mesh.count,
-    parent = workingArray(map, "int32", "prominence:parent").fill(-1),
-    summit = workingArray(map, "int32", "prominence:summit"),
-    rise = workingArray(map, "float64", "prominence:rise"),
-    elevation = map.Elevation,
-    // Equal heights rank by cell index, so a flat summit has one deterministic top.
-    above = (a: number, b: number) =>
-      elevation.get(a) > elevation.get(b) || (elevation.get(a) === elevation.get(b) && a < b);
-  const root = (i: number) => {
-    let r = i;
-    while (parent.get(r) !== r) r = parent.get(r);
-    for (let next = parent.get(i); i !== r; i = next, next = parent.get(i)) parent.set(i, r);
-    return r;
-  };
-  const join = (cell: number, j: number) => {
-    const [a, b] = [root(cell), root(j)];
-    if (a === b) return;
-    const [high, low] = above(summit.get(a), summit.get(b)) ? [a, b] : [b, a];
-    rise.set(summit.get(low), elevation.get(summit.get(low)) - elevation.get(cell));
-    parent.set(low, high);
-  };
-  // Highest first, streamed over the blocks; the join order is what makes cols correct.
-  for (const cell of map.coverage.order(elevation, true)) {
-    if (elevation.get(cell) <= map.EffectiveSeaLevel) break;
-    parent.set(cell, cell);
-    summit.set(cell, cell);
+  const adjacent = function* (cell: number) {
     for (let edge = 0; edge < map.mesh.degree(cell); edge++) {
       const j = map.mesh.neighbor(cell, edge);
-      if (j >= 0 && parent.get(j) >= 0) join(cell, j);
+      if (j >= 0) yield j;
     }
-  }
-  for (let cell = 0; cell < count; cell++)
-    if (parent.get(cell) === cell)
-      rise.set(summit.get(cell), elevation.get(summit.get(cell)) - map.EffectiveSeaLevel);
-  releaseWorking(map, parent, summit);
+  };
+  const { rise, saddle } = topographicProminence(
+    map.coverage,
+    map.Elevation,
+    adjacent,
+    map.EffectiveSeaLevel
+  );
+  map.coverage.release(saddle);
   return rise;
 }

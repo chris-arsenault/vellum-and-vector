@@ -14,7 +14,7 @@ export function societyValue(state: GenerationState, channel: string, i: number,
   const values = state.surface.channels[channel];
   return values && i >= 0 && i < values.length ? values.get(i) : fallback;
 }
-export function dryLand(state: GenerationState, i: number) {
+export function dryLand(state: Pick<GenerationState, "surface">, i: number) {
   const { active, channels: c } = state.surface;
   if (i < 0 || i >= active.length) return false;
   return Boolean(active.get(i) && (c.water ? c.water.get(i) === 0 : c.elevation.get(i) > 0));

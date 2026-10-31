@@ -27,6 +27,11 @@ const presentChannels = new Set([
   "geothermal",
   "margin",
   "glacialErosion",
+  "continentalFraction",
+  "tectonicStrain",
+  "canopyAge",
+  "peatCarbon",
+  "iceThickness",
   "ice",
   "seaDatum",
   "seaLevel",
@@ -71,14 +76,17 @@ const presentChannels = new Set([
   "finalSurface",
   "secondSurface",
   "physicalMaterial",
+  "landform",
+  "waveExposure",
+  "stormTrack",
+  "upwelling",
+  "aquaticFauna",
   "naturalTemperature",
 ]);
 export function refinementChannel(name: string) {
-  const material =
-    name.startsWith("magic:") &&
-    (/:(intensity|source|stored|retained|wake|rogue|sealed|wild|subsided|uplifted)$/.test(name) ||
-      name.includes(":stock:"));
-  return presentChannels.has(name) || material;
+  // Published magic includes fractional classes and origin-specific material context,
+  // not just intensity. These are present inputs, never a historical execution state.
+  return presentChannels.has(name) || name.startsWith("magic:");
 }
 export function isRegionalRefinement(source: DomainSnapshot, areaId: string) {
   return !!source.world.areas[areaId]?.map;

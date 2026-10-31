@@ -6,6 +6,7 @@ import {
   translateGeometry,
   type AtlasFeature,
   type Position,
+  settlementSiteKinds,
 } from "@atlas/domain";
 import { KeyedHeap } from "@atlas/domain";
 import { generationFeatures } from "../generationFeatures";
@@ -14,11 +15,15 @@ import { regionalCommunitySpacing } from "../regionalSociety";
 import { clamp, distance, neighbors, type RefinementState } from "./state";
 import { regionalMoisture } from "./environment";
 import { localTownShare } from "../societySettlements";
+import { rankSites, type SiteOpportunity } from "../societySites";
+import { hashUnit } from "../canonry/noise";
+import { regionalOccupation } from "./occupation";
 
 export function refinePlaces(state: RefinementState) {
   if (!state.input.domains.some((id) => ["built", "cultural", "political"].includes(id))) return;
   retainSocietySeats(state);
   retainSocietyEvents(state);
+  regionalOccupation(state);
   const g = state.surface,
     known = [...generationFeatures(state, { areaId: state.input.areaId })].filter(
       (f) => f.kind === "settlement" && f.geometry.type === "Point"
@@ -29,39 +34,61 @@ export function refinePlaces(state: RefinementState) {
     })),
     spacing = regionalCommunitySpacing(state),
     bins = new Map<string, Position[]>(),
-    heap = new KeyedHeap("max");
+    heap = new KeyedHeap(),
+    sites = rankSites(state);
   for (const seat of seats) addBin(state, bins, seat.cell, spacing);
   for (let i = 0; i < g.active.length; i++) {
     const residents = localResidents(state, i, spacing);
     // Unresolved occupation remains in the captured density field. Suitable but empty
     // country does not imply a village, and no parent population is allocated or spent.
-    if (residents >= 80) heap.push(i, residents);
+    if (residents >= 80) heap.push(i, sitePriority(state, i, residents, sites[i]));
   }
   while (heap.size) {
     const i = heap.pop(),
       p = gridPosition(g, i);
     if (nearSeat(bins, p, spacing)) continue;
     const population = Math.round(localResidents(state, i, spacing)),
-      f = putRefinementFeature(
-        state,
-        `village:${i}`,
-        "settlement",
-        "settlements",
-        point(p),
-        {
-          population,
-          settlementPopulation: population,
-          status: "inhabited",
-          founded: "Revealed in regional detail",
-          scale: "village",
-        },
-        "Village"
-      );
+      f = village(state, i, population, sites[i]);
     seats.push({ feature: f, cell: i });
     addBin(state, bins, i, spacing);
   }
   connectSeats(state, seats);
-  extractSites(state);
+}
+function village(
+  state: RefinementState,
+  i: number,
+  population: number,
+  site: SiteOpportunity | null
+) {
+  return putRefinementFeature(
+    state,
+    `village:${i}`,
+    "settlement",
+    "settlements",
+    point(gridPosition(state.surface, i)),
+    {
+      population,
+      settlementPopulation: population,
+      status: "inhabited",
+      founded: "Revealed in regional detail",
+      scale: "village",
+      siteKind: site?.kind ?? "rural",
+      siteReason: site?.reason ?? "local farming and grazing country",
+    },
+    "Village"
+  );
+}
+function sitePriority(
+  state: RefinementState,
+  i: number,
+  residents: number,
+  site: SiteOpportunity | null
+) {
+  const g = state.surface,
+    draw = hashUnit(state.input.seed ^ 0x517e, i % g.width, Math.floor(i / g.width)),
+    race = -Math.log(Math.max(1e-12, draw)) / (residents * (1 + (site?.score ?? 0))),
+    rank = site ? settlementSiteKinds.indexOf(site.kind) : settlementSiteKinds.length;
+  return rank + race / (1 + race);
 }
 function retainSocietyEvents(state: RefinementState) {
   const society = state.domain.world.societies?.[state.input.areaId];
@@ -230,24 +257,4 @@ function walkPath(previous: Map<number, number>, start: number, end: number) {
     cells.push(i);
   }
   return cells.reverse();
-}
-function extractSites(state: RefinementState) {
-  const g = state.surface,
-    spacing = regionalCommunitySpacing(state),
-    bins = new Map<string, Position[]>();
-  for (let i = 0; i < g.active.length; i++) {
-    if (g.channels.riverOrder.get(i) <= 0 || g.channels.slope.get(i) < 0.03) continue;
-    const p = gridPosition(g, i);
-    if (nearSeat(bins, p, spacing)) continue;
-    putRefinementFeature(
-      state,
-      `fall:${i}`,
-      "waterfall",
-      "geology",
-      point(p),
-      { height: g.channels.slope.get(i) * (g.scope.resolution ?? 1000) },
-      "Falls"
-    );
-    addBin(state, bins, i, spacing);
-  }
 }

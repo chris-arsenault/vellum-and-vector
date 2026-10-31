@@ -8,7 +8,8 @@ export function interactionKey(
   tool: Tool,
   selectedId: string | null,
   role: "primary" | "footprint",
-  version: number
+  version: number,
+  areaId = ""
 ) {
-  return JSON.stringify([tool, selectedId, role, isRegionTool(tool) ? null : version]);
+  return JSON.stringify([areaId, tool, selectedId, role, isRegionTool(tool) ? null : version]);
 }

@@ -1,13 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { generateAtlas, refineRegionalMap, type AtlasGenerationInput } from "@atlas/generation";
 import {
-  landmarkKind,
-  landmarkLayer,
   everySample,
   languageUse,
   population,
   someSample,
-  spatial,
   rectangle,
   type DomainSnapshot,
 } from "@atlas/domain";
@@ -33,8 +30,14 @@ import {
   assertWorkloadDetail,
   type RegionalWorkloadOutput,
 } from "./testSupport/regionalWorkload";
-import { regionalOverview } from "./testSupport/regionalOverview";
+import { regionalOverview, regionalReliefOverview } from "./testSupport/regionalOverview";
 import { normalizedRegionFixture } from "./testSupport/normalizedRegionFixture";
+import {
+  generatedMagicRegion,
+  nestedMagicRegion,
+  assertDevelopedMagic,
+} from "./testSupport/generatedMagicRegion";
+import { assertWorldLandmarks } from "./testSupport/worldLandmarks";
 
 it("selects and completes a typical Standard region from a supplied default-sized world", async () => {
   const f = await normalizedRegionFixture(),
@@ -93,7 +96,7 @@ it("develops regional detail without sibling or repeated-refinement work propaga
       const result = await refineRegionalMap(run.source, run.input, run.options),
         published = await run.publish(result);
       if (step === "first") await regionalOverview(result, [...run.features.values()]);
-      assertWorkloadDetail(result, published);
+      assertWorkloadDetail(result, published, step !== "small");
       expect(result.state.domain.world.epochs).toEqual(f.parent.world.epochs);
       if (step === "first")
         expect(
@@ -345,56 +348,6 @@ function assertWorldSociety() {
   ).toBe(true);
 }
 
-function assertWorldLandmarks() {
-  const records = published.world.landmarks,
-    parameters = input.resolvedFeatures!.parameters,
-    magic = (record: { kind: string }) => Boolean(landmarkKind(record.kind)?.system),
-    [w, s, e, n] = spatial.bounds(source.world.reference.domain);
-  expect(parameters.landscapeLandmarks).toBeGreaterThan(0);
-  expect(parameters.magicLandmarks).toBeGreaterThan(0);
-  expect(records.filter((record) => !magic(record))).toHaveLength(parameters.landscapeLandmarks);
-  expect(records.filter(magic)).toHaveLength(parameters.magicLandmarks);
-  expect(new Set(records.map((record) => record.kind)).size).toBeGreaterThanOrEqual(
-    Math.min(3, parameters.landscapeLandmarks) + Math.min(2, parameters.magicLandmarks)
-  );
-  for (const record of records) {
-    const kind = landmarkKind(record.kind)!;
-    expect(record.origin).toBe("generated");
-    expect(record.name).not.toMatch(/^$|\d|Name-|markov:|slot:/);
-    expect(record.emplacedAtEpoch).toBeLessThan(source.world.epochs.length);
-    const [x0, y0, x1, y1] = spatial.bounds(record.geometry);
-    expect(x0 >= w && x1 <= e && y0 >= s && y1 <= n, `${record.kind} inside the world`).toBe(true);
-    const feature = published.world.features[record.id];
-    expect(feature, `${record.kind} published under its record id`).toBeDefined();
-    expect(feature).toMatchObject({
-      kind: "landmark",
-      layerId: landmarkLayer(kind),
-      name: record.name,
-      attributes: { landmarkKind: record.kind, origin: "generated" },
-    });
-    expect(["realized", "latent"]).toContain(feature.attributes.signature);
-    expect(Number(feature.attributes.maintenance)).toBeGreaterThanOrEqual(0);
-    if (kind.system) {
-      // The injected source is a record of the world, owned by the landmark.
-      const sourceRecord = published.world.magic.find((entry) => entry.landmarkId === record.id);
-      expect(sourceRecord, `${record.kind} source record`).toMatchObject({
-        systemId: kind.system,
-      });
-      expect(feature.attributes).toMatchObject({ system: kind.system });
-      expect(Number(feature.attributes.sourceStrength)).toBeGreaterThan(0);
-    }
-    if (feature.attributes.signature !== "realized") continue;
-    const capped = String(feature.attributes.notes).includes("caps the source");
-    for (const [key, value] of Object.entries(feature.attributes)) {
-      if (!key.endsWith("Target")) continue;
-      const measured = feature.attributes[key.slice(0, -"Target".length)];
-      expect(typeof measured, `${record.kind} ${key} measured ${String(measured)}`).toBe("number");
-      if (!capped)
-        expect(measured, `${record.kind} ${key}`).toBeGreaterThanOrEqual(Number(value) - 0.5);
-    }
-  }
-}
-
 describe("shared initial world", () => {
   beforeAll(initializeSharedWorld, 300_000);
   afterAll(() => storage?.close());
@@ -402,5 +355,38 @@ describe("shared initial world", () => {
   it("publishes finite terrain, rivers, cover and retained drainage", assertWorldGeography);
   it("locates seven magic systems and their physical history", assertWorldMagic);
   it("publishes society, politics, names and language distributions", assertWorldSociety);
-  it("sites, measures and names landscape and magic landmarks", assertWorldLandmarks);
+  it("sites, measures and names landscape and magic landmarks", () =>
+    assertWorldLandmarks(source, published, input));
+  it("develops captured materials through Standard regional publication", async () => {
+    let f = await generatedMagicRegion(published, result.state.surface);
+    for (const depth of [1, 2]) {
+      const run = await regionalWorkload(f),
+        parentBefore = f.workspace.catalog.exportFeatures(f.id, f.root, null, 128);
+      try {
+        const region = await refineRegionalMap(run.source, run.input, run.options),
+          output = await run.publish(region);
+        assertDevelopedMagic(region, run.source);
+        expect(output.rasterResult.sampled).toBeGreaterThan(0);
+        expect(f.workspace.catalog.exportFeatures(f.id, f.root, null, 128)).toEqual(parentBefore);
+        if (depth === 1) {
+          await regionalOverview(region, [...run.features.values()]);
+          await regionalReliefOverview(region);
+        }
+        process.stdout.write(
+          JSON.stringify({
+            workload: "generated magic Standard region",
+            depth,
+            samples: output.samples,
+            generationMs: output.generationMs,
+            phases: output.phases,
+            features: output.counts,
+          }) + "\n"
+        );
+        if (depth === 1)
+          f = await nestedMagicRegion(output.output, f.workspace, region.state.surface);
+      } finally {
+        await run.close();
+      }
+    }
+  }, 300_000);
 });

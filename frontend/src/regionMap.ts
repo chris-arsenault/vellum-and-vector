@@ -12,15 +12,16 @@ export interface RegionPresentation {
   footprint: Geometry;
   regions: RegionView[];
 }
-export function updateRegionMap(engine: MapEngine, presentation: RegionPresentation) {
+export function updateRegionMap(engine: MapEngine, presentation?: RegionPresentation) {
   const source = engine.regions.getSource()!;
-  const shown = presentation.regions.filter(
-    (r) => r.id === presentation.id || r.region.parentId === presentation.id
-  );
-  const signature = JSON.stringify([presentation.id, shown]);
+  const shown =
+    presentation?.regions.filter(
+      (r) => r.id === presentation.id || r.region.parentId === presentation.id
+    ) ?? [];
+  const signature = JSON.stringify([presentation?.id, shown]);
   if (source.get("signature") === signature) return;
   source.set("signature", signature);
-  engine.regions.set("currentRegion", presentation.id);
+  engine.regions.set("currentRegion", presentation?.id ?? null);
   source.clear();
   for (const region of shown) {
     const feature = new GeoJSON().readFeatures({
@@ -28,23 +29,25 @@ export function updateRegionMap(engine: MapEngine, presentation: RegionPresentat
       geometry: region.region.footprint,
       properties: { region },
     })[0];
-    const current = region.id === presentation.id;
-    feature.setStyle(
-      new Style({
-        stroke: new Stroke({
-          color: current ? "#ffdb86" : "#d9cba5",
-          width: current ? 2.5 : 1.5,
-          lineDash: current ? undefined : [7, 5],
-        }),
-        fill: new Fill({ color: current ? "#ffdb8608" : "#e8d6a412" }),
-        text: new Text({
-          text: current ? "" : region.name,
-          font: "13px system-ui",
-          fill: new Fill({ color: "#fff2cd" }),
-          stroke: new Stroke({ color: "#203739", width: 3 }),
-        }),
-      })
-    );
+    const current = region.id === presentation?.id;
+    feature.setStyle(regionStyle(current, region.name));
     source.addFeature(feature);
   }
+}
+
+function regionStyle(current: boolean, name: string) {
+  return new Style({
+    stroke: new Stroke({
+      color: current ? "#ffdb86" : "#d9cba5",
+      width: current ? 2.5 : 1.5,
+      lineDash: current ? undefined : [7, 5],
+    }),
+    fill: new Fill({ color: current ? "#ffdb8608" : "#e8d6a412" }),
+    text: new Text({
+      text: current ? "" : name,
+      font: "13px system-ui",
+      fill: new Fill({ color: "#fff2cd" }),
+      stroke: new Stroke({ color: "#203739", width: 3 }),
+    }),
+  });
 }
