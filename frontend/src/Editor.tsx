@@ -204,6 +204,7 @@ function SubjectCanvas({ world, editor }: { world: World; editor: EditorState })
         enter: editor.enter,
         viewport: editor.viewport,
         pickRegion: editor.regionPick,
+        inspectCell: editor.inspectCell,
         enterRegion: editor.enterRegion,
       }}
       proposal={proposal}
@@ -315,6 +316,15 @@ function SelectionTools({ editor }: { editor: EditorState }) {
       </button>
       <button aria-pressed={editor.tool === "pan"} onClick={() => editor.setTool("pan")}>
         Pan
+      </button>
+      <button
+        aria-pressed={editor.tool === "inspectCell"}
+        onClick={() => {
+          editor.cancelRegion();
+          editor.setTool("inspectCell");
+        }}
+      >
+        Inspect cell
       </button>
       <button onClick={editor.openRegions} aria-pressed={editor.panel === "regions"}>
         Regions

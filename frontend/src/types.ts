@@ -51,6 +51,7 @@ export type Tool =
   | "labelPlace"
   | "labelPath"
   | "select"
+  | "inspectCell"
   | "pan"
   | "reshape"
   | "move"

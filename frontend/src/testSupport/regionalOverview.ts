@@ -24,12 +24,14 @@ export async function regionalOverview(result: CompletedBoundary, features: Atla
     const color = f.kind === "river" ? "#22628f" : f.kind === "road" ? "#705231" : null;
     if (color)
       return [
-        `<path d="${path(f.geometry)}" stroke="${color}" fill="none" stroke-width="1.4" vector-effect="non-scaling-stroke"/>`,
+        `<path data-kind="${f.kind}" d="${path(f.geometry)}" stroke="${color}" fill="none" stroke-width="1.4" vector-effect="non-scaling-stroke"/>`,
       ];
     if (f.geometry.type !== "Point") return [];
     const [x, y] = f.geometry.coordinates,
       fill = f.kind === "settlement" ? "#27251d" : "#b44b21";
-    return [`<circle cx="${x}" cy="${y}" r="${(e - w) / 600}" fill="${fill}"/>`];
+    return [
+      `<circle data-kind="${f.kind}" cx="${x}" cy="${y}" r="${(e - w) / 600}" fill="${fill}"/>`,
+    ];
   });
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="800" viewBox="${w} ${s} ${e - w} ${n - s}"><g transform="translate(0 ${s + n}) scale(1 -1)"><g shape-rendering="crispEdges">${cells.join("")}</g>${paths.join("")}</g></svg>`;
   await mkdir(".artifacts/regional", { recursive: true });

@@ -88,6 +88,8 @@ function sitePriority(
     draw = hashUnit(state.input.seed ^ 0x517e, i % g.width, Math.floor(i / g.width)),
     race = -Math.log(Math.max(1e-12, draw)) / (residents * (1 + (site?.score ?? 0))),
     rank = site ? settlementSiteKinds.indexOf(site.kind) : settlementSiteKinds.length;
+  // Within a geographic site class, support and terrain outrank the randomized tie.
+  if (site) return rank + 1 / (1 + residents * site.score) + draw * 1e-9;
   return rank + race / (1 + race);
 }
 function retainSocietyEvents(state: RefinementState) {

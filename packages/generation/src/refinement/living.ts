@@ -6,6 +6,9 @@ import {
   classMarginInterpolator,
   gridPosition,
   gridWindowCells,
+  fieldPosition,
+  polygonParts,
+  translateGeometry,
   spatial,
   surfaceCode,
   type NaturalSurfaceName,
@@ -61,7 +64,8 @@ export function refineLivingCover(state: RefinementState) {
     natural = channel(state, "naturalSurface", "category"),
     final = channel(state, "finalSurface", "category"),
     material = channel(state, "physicalMaterial", "category"),
-    naturalTemp = channel(state, "naturalTemperature", "celsius");
+    naturalTemp = channel(state, "naturalTemperature", "celsius"),
+    lakes = realizedLakeCells(state);
   for (let i = 0; i < g.active.length; i++) {
     const p = gridPosition(g, i),
       temperature = g.channels.temperature.get(i),
@@ -86,7 +90,7 @@ export function refineLivingCover(state: RefinementState) {
     );
     wetland.set(i, clamp((wetness - 0.5) * 2));
     grass.set(i, clamp(growth * (1 - tree.get(i)) * 1.2));
-    const name = coverName(state, i),
+    const name = coverName(state, i, lakes.get(i) > 0),
       code = biomeCode(name);
     biome.set(i, code);
     naturalTemp.set(i, temperature);
@@ -95,12 +99,32 @@ export function refineLivingCover(state: RefinementState) {
     final.set(i, natural.get(i));
     material.set(i, materialCode(state, i));
   }
+  g.coverage.release(lakes);
 }
-function coverName(state: RefinementState, i: number): (typeof biomes)[number]["name"] {
+/** A submesh pond remains water context without replacing its terrestrial surroundings. */
+function realizedLakeCells(state: RefinementState) {
+  const g = state.surface,
+    mask = g.coverage.scratch("uint8", "regional:realized-lakes", g.active.length);
+  for (const lake of g.lakes ?? [])
+    for (const part of polygonParts(lake.geometry)) {
+      const [x, y] = part.coordinates[0][0],
+        offset = fieldPosition(g, { x, y, z: 0 }).x - x,
+        geometry = offset ? translateGeometry(part, offset) : part,
+        covered = spatial.pointCoverage(geometry);
+      for (const i of gridWindowCells(g, spatial.bounds(geometry)))
+        if (g.channels.water.get(i) === 2 && covered(gridPosition(g, i))) mask.set(i, 1);
+    }
+  return mask;
+}
+function coverName(
+  state: RefinementState,
+  i: number,
+  lake: boolean
+): (typeof biomes)[number]["name"] {
   const c = state.surface.channels,
     t = c.temperature.get(i);
   if (c.water.get(i) === 1) return "Ocean";
-  if (c.water.get(i) === 2) return "Freshwater";
+  if (lake) return "Freshwater";
   if ((c.ice?.get(i) ?? 0) > 0.3) return "Ice";
   if (t < 2) return "Tundra";
   if (c.wetlandCover.get(i) > 0.55) return wetlandName(c.treeCover.get(i));

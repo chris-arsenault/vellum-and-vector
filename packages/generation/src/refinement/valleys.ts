@@ -2,6 +2,7 @@ import { channel, clamp, distance, spacing, type RefinementState } from "./state
 import { gradient } from "./terrain";
 import { gridPosition } from "@atlas/domain";
 import { fractalNoise } from "../canonry/noise";
+import { concentratedDrainage, headwaterSamples } from "./channelFormation";
 
 /** A channel's graded slope declines as its contributing area grows. */
 const referenceGradient = 0.012;
@@ -20,11 +21,12 @@ export function inciseRegionalValleys(state: RefinementState, passes = 1) {
     height = g.channels.elevation,
     cuts = g.coverage.scratch("float64", "regional:valley-cuts", height.length),
     widths = g.coverage.scratch("float64", "regional:valley-widths", height.length),
-    [dx, dy] = spacing(g);
+    [dx, dy] = spacing(g),
+    gathered = concentratedDrainage(state);
   for (let k = 0; k < count; k++) {
     const i = order.get(k),
       j = receiver.get(i);
-    if (j < 0 || g.channels.water.get(i) !== 0 || g.channels.riverOrder.get(i) <= 0) continue;
+    if (j < 0 || !developsValley(state, i, gathered, dx * dy)) continue;
     const reach = distance(g, i, j),
       area = g.channels.catchmentArea.get(i),
       resistance = localResistance(state, i),
@@ -55,7 +57,21 @@ export function inciseRegionalValleys(state: RefinementState, passes = 1) {
     height.add(i, -cut);
     erosion.add(i, cut);
   }
-  for (const band of [cuts, widths, envelope]) g.coverage.release(band);
+  for (const band of [cuts, widths, envelope, gathered]) g.coverage.release(band);
+}
+
+function developsValley(
+  state: RefinementState,
+  i: number,
+  gathered: import("@atlas/domain").Band,
+  cellArea: number
+) {
+  const c = state.surface.channels;
+  return (
+    c.water.get(i) === 0 &&
+    (c.riverOrder.get(i) > 0 ||
+      (gathered.get(i) > 0 && c.catchmentArea.get(i) >= headwaterSamples * cellArea))
+  );
 }
 
 /** Valley walls spread by geographic distance, independent of the raster routing directions. */
@@ -95,6 +111,15 @@ function incisionBudget(state: RefinementState, i: number, resistance: number) {
   const { gx, gy } = gradient(state, i, true),
     relief = state.terrain?.relief.get(i) ?? Math.hypot(gx, gy) * state.parentSpan,
     runoff = state.surface.channels.runoff?.get(i) ?? 0,
-    supply = clamp(Math.sqrt(Math.max(0, runoff) / 0.3), 0, 1.5);
+    supply = Math.max(
+      weatheringSupport(state, i),
+      clamp(Math.sqrt(Math.max(0, runoff) / 0.3), 0, 1.5)
+    );
   return (Math.min(relief * reliefShare, state.parentSpan * 0.12) * supply) / resistance;
+}
+
+function weatheringSupport(state: RefinementState, i: number) {
+  const c = state.surface.channels,
+    bare = 1 - clamp((c.treeCover?.get(i) ?? 0) + (c.grassCover?.get(i) ?? 0));
+  return bare * clamp(c.fracture?.get(i) ?? 0);
 }

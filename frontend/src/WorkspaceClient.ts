@@ -14,6 +14,7 @@ import type {
   AuthoringFeatureQuery,
   CatalogPublication,
   RegistryRequest,
+  Position,
 } from "@atlas/domain";
 import type {
   CatalogMethod,
@@ -101,6 +102,14 @@ export class WorkspaceClient implements SpatialStore {
     return this.request<void>({ kind: "abandonOperation", worldId, operationId });
   }
   // Application operations executed beside the catalog.
+  readCell(worldId: string, areaId: string, position: Position) {
+    return this.request<import("./cellInspection").CellInspection>({
+      kind: "readCell",
+      worldId,
+      areaId,
+      position,
+    });
+  }
   readRasters(worldId: string, areaId: string, extent: Bounds, tolerance = 0) {
     return this.request<ResourceRaster[]>({
       kind: "readRasters",

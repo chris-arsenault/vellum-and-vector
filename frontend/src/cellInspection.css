@@ -1,0 +1,40 @@
+.cell-inspection {
+  padding: 20px;
+}
+.cell-inspection h2 {
+  margin-top: 0;
+}
+.cell-inspection > p {
+  font-size: 12px;
+}
+.cell-inspection input {
+  width: 100%;
+  margin-top: 6px;
+}
+.cell-data {
+  margin-top: 20px;
+}
+.cell-data table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.cell-data th,
+.cell-data td {
+  text-align: left;
+  padding: 7px 4px;
+  border-bottom: 1px solid #43534c;
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+.cell-data th:first-child {
+  width: 45%;
+}
+.cell-data td:last-child {
+  width: 20%;
+}
+.cell-data caption {
+  text-align: left;
+  padding: 8px 0;
+}

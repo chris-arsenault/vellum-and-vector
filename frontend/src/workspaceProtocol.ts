@@ -8,6 +8,7 @@ import type {
   DomainWrite,
   DomainSnapshot,
   Bounds,
+  Position,
 } from "@atlas/domain";
 import type { SpatialCatalog } from "@atlas/storage-browser";
 
@@ -71,6 +72,7 @@ export type WorkspaceOperation =
   | { kind: "saveWorld"; worldId: string }
   | { kind: "export"; worldId: string; areaId?: string }
   | { kind: "readRasters"; worldId: string; areaId: string; extent: Bounds; tolerance: number }
+  | { kind: "readCell"; worldId: string; areaId: string; position: Position }
   | {
       kind: "readRasterGeography";
       worldId: string;

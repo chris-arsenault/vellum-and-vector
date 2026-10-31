@@ -119,6 +119,31 @@ it("moves the regional seat with a supplied river junction while retaining occup
   }
 });
 
+it("chooses a lake-shore terrace over its steep neighbor within the same site class", () => {
+  for (const seed of [17, 73, 91]) {
+    const { state } = regionalEnvironment(),
+      g = state.surface,
+      terrace = 3 * g.width + 7,
+      hillside = terrace + 1;
+    state.input.seed = seed;
+    channel(state, "populationDensity", "people/square-kilometre", 0);
+    g.channels.populationDensity.set(terrace, 100);
+    g.channels.populationDensity.set(hillside, 100);
+    g.channels.water.set(terrace + g.width, 2);
+    g.channels.slope.set(terrace, 0.002);
+    g.channels.slope.set(hillside, 0.07);
+    const density = Array.from(g.channels.populationDensity);
+    refinePlaces(state);
+    const villages = Object.values(state.domain.world.features).filter(
+      (f) => f.kind === "settlement"
+    );
+    expect(villages).toHaveLength(1);
+    expect(villages[0].geometry).toEqual(point(gridPosition(g, terrace)));
+    expect(villages[0].attributes.siteReason).toContain("lake shore");
+    expect(Array.from(g.channels.populationDensity)).toEqual(density);
+  }
+});
+
 it("uses located captured residents when their numerical density is absent, preserving explicit empty density", () => {
   for (const explicitEmpty of [false, true]) {
     const { state } = regionalEnvironment(),

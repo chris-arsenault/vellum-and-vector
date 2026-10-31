@@ -1,5 +1,6 @@
 import { expect, test } from "./uiTest";
-import { chooseOutline, exportMap, openFixtureMap, pointFeature } from "./harness";
+import { canvas, tool, chooseOutline, exportMap, openFixtureMap, pointFeature } from "./harness";
+import { execFileSync } from "node:child_process";
 
 test("reuses completed map resources while keeping each scenario copy independent", async ({
   page,
@@ -11,6 +12,28 @@ test("reuses completed map resources while keeping each scenario copy independen
     features: [pointFeature("First marker", "waterfall", "geology")],
   });
   const before = await exportMap(page);
+  const sha =
+    process.env.GITHUB_SHA ??
+    execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  await expect(page.getByLabel("Application build")).toHaveText(`Build ${sha.slice(0, 7)}`);
+  await expect(page.getByLabel("Application build")).toHaveAttribute(
+    "title",
+    `Application build ${sha}`
+  );
+  await tool(page, "Inspect cell").click();
+  await canvas(page).click();
+  const inspection = page.locator(".cell-inspection"),
+    elevation = inspection
+      .getByRole("row")
+      .filter({ has: page.getByRole("rowheader", { name: "elevation", exact: true }) });
+  await expect(elevation.getByRole("cell").last()).toHaveText("metre");
+  const index = Number(
+    (await inspection.locator(".cell-data h3").first().innerText()).match(/^Cell (\d+)/)![1]
+  );
+  await expect(elevation.getByRole("cell").first()).toHaveText(String(index % 16));
+  await inspection.getByRole("searchbox", { name: "Filter channels" }).fill("water");
+  await expect(inspection.getByRole("rowheader", { name: "water", exact: true })).toBeVisible();
+  await expect(elevation).toHaveCount(0);
   await chooseOutline(page, "Only in this copy");
   await page.getByRole("button", { name: "Save map", exact: true }).click();
   await expect(page.locator(".header-meta")).toHaveText("Saved locally");

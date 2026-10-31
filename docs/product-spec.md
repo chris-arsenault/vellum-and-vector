@@ -481,6 +481,12 @@ Continuous fields remain independent overlays. Their discovery groups distinguis
 magic systems, population and cultural, language and religious distributions.
 Turning off site symbols does not remove a field or alter the base surface.
 
+**Inspect cell** reads the clicked numerical cell directly. It shows its index,
+coordinates, bounds, area and stored channels with values, units and source fields.
+Layers on different grids remain separate cells; inspection does not interpolate
+the clicked point or aggregate a biome or polygon. The header shows the application
+build's Git commit, with its full SHA available on hover.
+
 The Atlas provides **Maps** for mapped-area navigation and **Features** for a
 sortable, filterable registry. Features defaults to named content and can include
 generic components explicitly. Whole-world, current-map and viewport scopes

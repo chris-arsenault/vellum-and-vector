@@ -1,9 +1,18 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
+
+const buildSha =
+  process.env.GITHUB_SHA ??
+  execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
+    encoding: "utf8",
+  }).trim();
 
 export default defineConfig(({ mode }) => ({
   plugins: [react()],
+  define: { "import.meta.env.VITE_BUILD_SHA": JSON.stringify(buildSha) },
   resolve: {
     alias:
       mode === "workspace" || mode === "browser"

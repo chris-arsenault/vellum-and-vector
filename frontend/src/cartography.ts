@@ -223,6 +223,7 @@ export function toolLabel(tool: Tool): string {
     (
       {
         select: "Select",
+        inspectCell: "Inspect cell",
         labelPlace: "Place label",
         labelPath: "Draw label curve",
         pan: "Pan map",
@@ -246,6 +247,7 @@ export function toolInstruction(tool: Tool): string {
     (
       {
         select: "Select a feature; double-click an area to enter it.",
+        inspectCell: "Click a cell to inspect all of its stored numerical values.",
         labelPlace: "Click to place the selected feature's label in this composition.",
         labelPath: "Draw the label's course; double-click or press Enter to finish.",
         pan: "Drag to move around the map.",

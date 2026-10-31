@@ -21,6 +21,7 @@ export interface MapEvents {
   enter: (id: string) => void;
   viewport: (extent: number[]) => void;
   pickRegion?: (position: Position) => void;
+  inspectCell?: (position: Position) => void;
   enterRegion?: (id: string) => void;
 }
 const format = new GeoJSON();
@@ -66,7 +67,11 @@ export function installMapTools(
   const pan = new DragPan({
     condition: (event) =>
       primaryAction(event) &&
-      (navigation.space || tool === "pan" || tool === "select" || tool === "regionPick"),
+      (navigation.space ||
+        tool === "pan" ||
+        tool === "select" ||
+        tool === "regionPick" ||
+        tool === "inspectCell"),
   });
   map.addInteraction(pan);
   for (const interaction of active) map.addInteraction(interaction);
@@ -99,6 +104,7 @@ function canonicalEvents(engine: MapEngine, tool: Tool, original: MapEvents): Ma
       original.modify(feature, canonicalGeometry(reference, shape), role),
     stroke: (points) => original.stroke(points.map((p) => canonicalPosition(reference, p))),
     pickRegion: (p) => original.pickRegion?.(canonicalPosition(reference, p)),
+    inspectCell: (p) => original.inspectCell?.(canonicalPosition(reference, p)),
   };
 }
 /** Recenter by whole worlds before native vertex hit-testing; the rendered view stays identical. */
@@ -149,6 +155,8 @@ function installMapNavigation(
   const pick = map.on("singleclick", (event) => {
     if (tool === "regionPick" && canPick())
       events().pickRegion?.({ x: event.coordinate[0], y: event.coordinate[1], z: 0 });
+    if (tool === "inspectCell" && canPick())
+      events().inspectCell?.({ x: event.coordinate[0], y: event.coordinate[1], z: 0 });
   });
   const enter = map.on("dblclick", (event) => {
     if (tool !== "select") return;

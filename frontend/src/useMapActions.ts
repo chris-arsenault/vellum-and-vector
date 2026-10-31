@@ -52,7 +52,8 @@ export function useMapActions(world: World, state: EditorSessionState, editing: 
       return;
     }
     state.setTool(tool);
-    if (tool.startsWith("region")) state.setPanel("regions");
+    if (tool === "inspectCell") state.setPanel("inspect-cell");
+    else if (tool.startsWith("region")) state.setPanel("regions");
     else if (["refine", "refinePolygon", "extentEdit"].includes(tool)) state.setPanel("refine");
     else if (tool === "magic") state.setPanel("magic");
     else if (!["select", "pan", "move", "reshape", "labelPath", "labelPlace"].includes(tool))

@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { bounds, defaultStyles, frameAt } from "./presentation";
 import { makeCommand, useCommit } from "./useAtlas";
-import type { Area, AtlasFeature, LayerStyle, Tool, World } from "./types";
+import type { Area, AtlasFeature, LayerStyle, Tool, World, Position } from "./types";
 import type { Geometry } from "geojson";
 import { useMapData } from "./useScene";
 import { editArea, scopedFootprint } from "./useScene";
@@ -43,6 +43,7 @@ function useEditorState(world: World) {
     tool,
     setTool,
     selected,
+    ...useCellSelection(areaId, () => setSelected(null)),
     selectedRegionId,
     setRegionId,
     setSelected,
@@ -84,6 +85,16 @@ function useEditorState(world: World) {
     viewport,
     setViewport,
     ...useCartographicState(),
+  };
+}
+function useCellSelection(areaId: string, clearSelection: () => void) {
+  const [cellPoint, setCellPoint] = useState<{ areaId: string; position: Position } | null>(null);
+  return {
+    cellPoint,
+    inspectCell: (position: Position) => {
+      clearSelection();
+      setCellPoint({ areaId, position });
+    },
   };
 }
 function initialBrush(area: Area) {

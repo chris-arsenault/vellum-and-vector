@@ -4,6 +4,7 @@ import {
   GeometryKernel,
   GeosSpatial,
   openStorageSession,
+  openBlockCache,
   collectSavedStorage,
   abandonGenerationStorage,
   type BrowserWorkspace,
@@ -23,6 +24,7 @@ import { workspaceRasters } from "./workspaceRasters";
 import { workspaceRasterGeography } from "./workspaceRasterGeography";
 import { generationSource } from "./workspaceGeneration";
 import { workspaceAnalysis } from "./workspaceAnalysis";
+import { workspaceCell } from "./workspaceCell";
 import { workspaceGenerationSetup } from "./workspaceGenerationSetup";
 import { createRequestScheduler, type Lane } from "./requestScheduler";
 
@@ -130,6 +132,20 @@ async function lifecycle(current: BrowserWorkspace, operation: WorldOperation) {
 async function execute(current: BrowserWorkspace, operation: WorldOperation) {
   const { catalog } = current;
   switch (operation.kind) {
+    case "readCell": {
+      const blocks = await openBlockCache(`cell_${crypto.randomUUID()}`);
+      try {
+        return await workspaceCell(
+          current,
+          operation.worldId,
+          operation.areaId,
+          operation.position,
+          blocks.cache
+        );
+      } finally {
+        await blocks.close();
+      }
+    }
     case "readRasters":
       return workspaceRasters(
         current,

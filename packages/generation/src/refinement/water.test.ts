@@ -43,6 +43,16 @@ it("keeps sheet runoff on a planar hillslope out of the mapped river network", (
   expect(Array.from(state.surface.channels.riverOrder).filter((r) => r > 0)).toHaveLength(0);
 });
 
+it("retains sub-threshold flowing drainage as numerical context rather than mapped rivers", () => {
+  const { state } = regionalFixture((x, y) => 100 + x / 1000 + Math.abs(y - 10000) / 400, 20000, 2),
+    g = state.surface;
+  g.channels.runoff.fill(0.08);
+  routeRegionalWater(state);
+  expect(Math.max(...g.channels.flow)).toBeGreaterThan(0.5);
+  expect(Math.max(...g.channels.flow)).toBeLessThan(3);
+  expect(Array.from(g.channels.riverOrder).every((value) => value === 0)).toBe(true);
+});
+
 it("routes a constructed catchment to its local outlets and retains its water budget", () => {
   // A Y-shaped valley supplies two actual tributary catchments to one main stem.
   const f = regionalFixture(
@@ -110,22 +120,24 @@ it("adds regional channels and incision without evolving world history", () => {
     Array.from(f.source.numerical.captured.channels.elevation)
   );
 });
-it("keeps a single-cell pond as physical water and publishes a resolved lake", () => {
+it("keeps a single-cell pond in field context and publishes a resolved lake", () => {
   const { state } = regionalEnvironment(),
     g = state.surface,
     receiver = g.coverage.scratch("int32", "supplied-receivers", g.active.length, -1);
   state.drainage = { receiver, order: receiver, count: 0 };
   channel(state, "waterLevel", "metre", 100);
+  g.channels.elevation.fill(200);
   for (const cell of [
     g.width + 2,
     ...[4, 5, 6].flatMap((y) => [10, 11, 12].map((x) => y * g.width + x)),
   ]) {
     g.channels.water.set(cell, 2);
     g.channels.waterDepth.set(cell, 10);
+    g.channels.elevation.set(cell, 90);
   }
   const before = Array.from(g.channels.water);
   extractRegionalWater(state);
-  expect(g.lakes).toHaveLength(2);
+  expect(g.lakes).toHaveLength(1);
   expect(Object.values(state.domain.world.features).filter((f) => f.kind === "lake")).toHaveLength(
     1
   );

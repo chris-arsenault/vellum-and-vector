@@ -76,9 +76,9 @@ function supportedBasins(state: RefinementState, filled: import("@atlas/domain")
         relief += state.terrain!.relief.get(i);
       }
       const developed =
-        depth >= Math.max(newBasinDepth, (relief / members.length) * basinReliefShare) &&
-        resolvesRegionalComponent(g, members);
-      if (captured || developed) for (const i of members) supported.set(i, 1);
+        depth >= Math.max(newBasinDepth, (relief / members.length) * basinReliefShare);
+      if (resolvesRegionalComponent(g, members) && (captured || developed))
+        for (const i of members) supported.set(i, 1);
     }
   );
   return supported;

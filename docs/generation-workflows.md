@@ -84,10 +84,19 @@ surface variation supplies local differences; drainage gathering, stream power
 and repeated routing develop the relief without advancing chronology. Spill
 routes resolve basins and flats; sloping ground follows downhill gradients.
 Sheet runoff becomes a channel where the terrain gathers it. Stream discharge
-requirements retain their physical meaning as the mesh becomes finer.
+uses the existing basin-relative headwater criteria as the mesh becomes finer.
+Bare fractured country develops weathered gullies even when its present discharge
+cannot support a mapped flowing stream.
 Small artificial pits settle, while captured basins and newly developed coherent
-basins can change shape and hold water. Lake supply balances precipitation and
-runoff against evaporation and seepage. Floodplain coverage follows local channel
+basins can change shape and hold water. A captured basin does not make each new
+sampling pit into a lake. Lake supply balances precipitation and runoff against
+evaporation and seepage; shores follow the water stage against continuous terrain.
+Ocean outlines use connected sea membership, so closed basins below sea level do
+not become coastal water.
+The footprint rule applies to mapped shores as well as names. Unresolved ponds
+remain numerical water context without removing the surrounding terrestrial cover.
+Magical changes to relief pass through the same basin cleanup before water reroutes.
+Floodplain coverage follows local channel
 margins rather than repeating a coarse floodplain over the fine map.
 Climate and living cover
 respond to the resulting relief, wetness and soil. Ground moisture follows
@@ -110,7 +119,8 @@ summits remain landform classes. Waterfalls require sharp channel-profile breaks
 so an uninterrupted steep reach does not become a string of falls.
 
 Smaller settlements use the existing pass, river-node, harbour and material-site
-classifiers, with captured occupation and local support. Plain-site draws vary
+classifiers, with captured occupation and local support. Within a site class,
+terrain and support rank ahead of random ties. Plain-site draws vary
 locations without grid-row ties. Where a captured density field is absent,
 located community footprints supply their present population per area. Explicit
 fields remain authoritative, and suitable empty ground remains empty. Refinement

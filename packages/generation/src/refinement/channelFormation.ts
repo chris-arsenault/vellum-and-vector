@@ -2,6 +2,8 @@ import { spacing, type RefinementState } from "./state";
 
 /** Cross-slope concavity must exceed unresolved ground roughness, in metres per metre. */
 const convergenceGradient = 0.001;
+/** Catchment samples supporting a developed regional drainage line. */
+export const headwaterSamples = 12;
 
 /** Sheet runoff becomes a channel where terrain gathers it; that course continues downhill. */
 export function concentratedDrainage(state: RefinementState) {

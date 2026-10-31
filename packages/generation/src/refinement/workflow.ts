@@ -24,9 +24,9 @@ const stages: [string, (state: RefinementState) => void][] = [
   ["water", refineWater],
   ["magic", refineMagic],
   ["landforms", extractRegionalLandforms],
+  ["geography", extractRegionalWater],
   ["habitats", refineLivingCover],
   ["magic-places", classifyRegionalMagic],
-  ["geography", extractRegionalWater],
   ["landscapes", extractRegionalHabitats],
   ["places", refinePlaces],
 ];

@@ -3,7 +3,8 @@ import type { FeatureReader, Grid } from "@atlas/domain";
 import { generationSource } from "../workspaceGeneration";
 import { WorkspaceFields } from "../workspaceFields";
 import { workspaceRasters } from "../workspaceRasters";
-import { rectangle, spatial } from "@atlas/domain";
+import { gridPosition, rectangle, spatial } from "@atlas/domain";
+import { workspaceCell } from "../workspaceCell";
 import type { generatedMagicRegion } from "./generatedMagicRegion";
 import { siblingRegion, type RegionalWorkloadOutput } from "./regionalWorkload";
 
@@ -120,6 +121,24 @@ export async function assertMagicMapUnchanged(
   expect(after.records).toEqual(before.records);
 }
 export async function assertMagicPublication(f: Fixture, areaId: string, grid: Grid) {
+  const index = Math.floor(grid.active.length / 2),
+    started = performance.now(),
+    inspection = await workspaceCell(
+      f.workspace,
+      f.id,
+      areaId,
+      gridPosition(grid, index),
+      f.workspace.working.cache
+    ),
+    values = inspection.cells.flatMap((cell) => cell.values);
+  for (const name of ["elevation", "water", "magic:fire:stock:vein/held"])
+    expect(values.find((value) => value.channel === name)?.value, name).toBe(
+      grid.channels[name].get(index)
+    );
+  console.info("regional cell inspection", {
+    milliseconds: performance.now() - started,
+    channels: values.length,
+  });
   const rasters = await workspaceRasters(f.workspace, f.id, areaId, grid.bounds, 100),
     magic = rasters.filter((raster) => raster.channel.startsWith("magic:"));
   expect(magic.map((raster) => raster.channel).sort()).toEqual(

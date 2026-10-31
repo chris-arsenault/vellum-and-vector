@@ -8,13 +8,9 @@ import { downhillRoutes, drainageRoutes, regionalBoundary } from "./drainage";
 import { inciseRegionalValleys } from "./valleys";
 import { settleRegionalPits } from "./terrainStructure";
 import { regionalFloodplains } from "./floodplains";
-import { concentratedDrainage } from "./channelFormation";
+import { concentratedDrainage, headwaterSamples } from "./channelFormation";
 
 const secondsPerYear = 365.25 * 24 * 3600;
-/** Retain the regional catchment support rule as well as requiring actual discharge. */
-const headwaterSamples = 12;
-/** Mean discharge needed for a flowing stream, independent of the sampling mesh. */
-const minimumStreamDischarge = 0.5;
 /** Numerical development of this surface, without advancing physical or human time. */
 const valleyPasses = 3;
 
@@ -99,24 +95,43 @@ function qualifyChannels(state: RefinementState, river: Band, flow: Band) {
     p = physicalProfile,
     gathered = concentratedDrainage(state),
     length = upstreamLengths(state),
+    basin = basinDischarges(state),
     span = Math.sqrt(dx * dy);
   for (let i = 0; i < g.active.length; i++) {
-    const slopeFactor = clamp(
-      Math.sqrt((g.channels.slope?.get(i) ?? 0) / p.ChannelReferenceSlope),
-      p.ChannelSlopeFloor / 1000,
-      p.ChannelSlopeCeiling / 1000
-    );
+    const threshold = clamp(
+        (basin.get(i) * p.RiverBasinHeadwaterFraction) / 1000,
+        p.RiverMinimumAccumulationThreshold,
+        p.RiverAccumulationThreshold
+      ),
+      slopeFactor = clamp(
+        Math.sqrt((g.channels.slope?.get(i) ?? 0) / p.ChannelReferenceSlope),
+        p.ChannelSlopeFloor / 1000,
+        p.ChannelSlopeCeiling / 1000
+      );
     if (
       waterLand(state, i) &&
       gathered.get(i) &&
       g.channels.catchmentArea.get(i) / (length.get(i) + span) >= resolutionCells * span &&
       g.channels.catchmentArea.get(i) >= headwaterSamples * dx * dy &&
-      flow.get(i) * slopeFactor >= minimumStreamDischarge
+      flow.get(i) * slopeFactor >= threshold
     )
       river.set(i, 1);
   }
   g.coverage.release(gathered);
   g.coverage.release(length);
+  g.coverage.release(basin);
+}
+/** Existing physical headwater criteria use each outlet's discharge, not cell count or zoom. */
+function basinDischarges(state: RefinementState) {
+  const g = state.surface,
+    { receiver, order, count } = state.drainage!,
+    basin = g.coverage.scratch("float64", "regional:basin-discharge", g.active.length);
+  for (let k = 0; k < count; k++) {
+    const i = order.get(k),
+      j = receiver.get(i);
+    basin.set(i, j < 0 ? g.channels.flow.get(i) : basin.get(j));
+  }
+  return basin;
 }
 /** An accumulating one-cell strip is sheet flow; a channel gathers a lateral catchment. */
 function upstreamLengths(state: RefinementState) {

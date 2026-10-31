@@ -106,19 +106,8 @@ async function rasterReferences(
   world: World,
   areaId: string
 ): Promise<ResourceRaster[]> {
-  const worldId = world.id;
-  const fields = world.fields
-    .filter(
-      (field) =>
-        field.resourceId &&
-        areaSpace(world, field.areaId) === areaSpace(world, areaId) &&
-        geographyAreas(world, areaId).includes(field.areaId)
-    )
-    .sort(
-      (a, b) =>
-        areaDepth(world.areas, a.areaId) - areaDepth(world.areas, b.areaId) ||
-        Number(!!b.input) - Number(!!a.input)
-    );
+  const worldId = world.id,
+    fields = mapRasterFields(world, areaId);
   const references = new Map<string, FieldReference>();
   for (const field of fields)
     references.set(field.id, await reference(current, world, field.resourceId!, field.id, areaId));
@@ -175,4 +164,20 @@ async function rasterReferences(
   const shown = rasters.filter((raster) => nearest.get(raster.channel) === raster.id);
   await rasterCategorySummaries(current.resources, shown);
   return shown;
+}
+
+/** Field precedence shared by map drawing and exact cell inspection. */
+export function mapRasterFields(world: World, areaId: string) {
+  return world.fields
+    .filter(
+      (field) =>
+        field.resourceId &&
+        areaSpace(world, field.areaId) === areaSpace(world, areaId) &&
+        geographyAreas(world, areaId).includes(field.areaId)
+    )
+    .sort(
+      (a, b) =>
+        areaDepth(world.areas, a.areaId) - areaDepth(world.areas, b.areaId) ||
+        Number(!!b.input) - Number(!!a.input)
+    );
 }

@@ -160,6 +160,7 @@ function CreateWorld({
 }
 
 export function Brand() {
+  const build = import.meta.env.VITE_BUILD_SHA ?? "development";
   return (
     <div className="brand">
       <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
@@ -174,6 +175,13 @@ export function Brand() {
       <span>
         Vellum <i>&</i> Vector
       </span>
+      <small
+        className="build-version"
+        aria-label="Application build"
+        title={`Application build ${build}`}
+      >
+        Build {build.slice(0, 7)}
+      </small>
     </div>
   );
 }

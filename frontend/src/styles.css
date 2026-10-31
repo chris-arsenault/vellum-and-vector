@@ -85,6 +85,14 @@ button.primary:hover {
     serif;
   letter-spacing: -0.6px;
 }
+.build-version {
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0;
+  opacity: 0.7;
+  white-space: nowrap;
+}
 .brand i {
   font-weight: 400;
   font-size: 19px;

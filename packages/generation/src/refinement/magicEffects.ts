@@ -4,6 +4,7 @@ import { channel, clamp, neighbors, type RefinementState } from "./state";
 import { presentValue } from "./magicMaterials";
 import { routeRegionalWater } from "./water";
 import { updateSlopes } from "./terrain";
+import { settleRegionalPits } from "./terrainStructure";
 
 /** Local changes to a captured present, rather than another epoch of cumulative work. */
 export function developMagicGeography(
@@ -33,6 +34,7 @@ export function developMagicGeography(
     }
   }
   if (changed) {
+    settleRegionalPits(state);
     updateSlopes(state);
     routeRegionalWater(state);
   }

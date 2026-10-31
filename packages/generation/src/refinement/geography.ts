@@ -16,55 +16,87 @@ import { spacing, type RefinementState } from "./state";
 export function extractRegionalWater(state: RefinementState) {
   const g = state.surface,
     height = fieldInterpolator(g, "elevation"),
+    marine = g.coverage.scratch("float64", "regional:marine-membership", g.active.length),
+    inside = fieldInterpolator({ ...g, channels: { marine } }, "marine"),
     datum = g.channels.seaLevel?.get(0) ?? 0,
     tolerance = (g.scope.resolution ?? 1000) / 4;
+  for (let i = 0; i < marine.length; i++) marine.set(i, Number(g.channels.water.get(i) === 1));
   g.ocean = fieldContour(
     g,
-    (x, y) => datum - height({ x, y, z: 0 }),
-    regularContourSupport(g, (i) => g.channels.elevation.get(i) < datum),
+    (x, y) => Math.min(datum - height({ x, y, z: 0 }), (inside({ x, y, z: 0 }) - 0.1) * 1e6),
+    regularContourSupport(g, (i) => marine.get(i) === 1),
     0,
     tolerance,
     state.contours
   );
+  g.coverage.release(marine);
   if (g.ocean) g.ocean = canonicalGeometry(state.domain.world.reference, g.ocean);
   if (g.ocean)
     putRefinementFeature(state, "ocean", "ocean", "oceans", g.ocean, {}, "Coastal water");
-  const depth = fieldInterpolator(g, "waterDepth"),
-    water = fieldInterpolator(g, "water", true),
-    lakes = fieldContour(
-      g,
-      (x, y) => (water({ x, y, z: 0 }) === 2 ? depth({ x, y, z: 0 }) : 0),
-      regularContourSupport(g, (i) => g.channels.water.get(i) === 2, true),
-      2,
-      tolerance,
-      state.contours
-    );
-  publishLakes(state, lakes);
+  extractLakes(state);
   extractRivers(state);
 }
-function publishLakes(state: RefinementState, shape: Geometry | null) {
+/** Trace each physical stage against its floor, with continuous connected-basin support. */
+function extractLakes(state: RefinementState) {
   const g = state.surface,
-    levelAt = fieldInterpolator(g, "waterLevel", true);
+    stages = new Map<number, number[]>(),
+    membership = g.coverage.scratch("float64", "regional:lake-membership", g.active.length),
+    floor = fieldInterpolator(g, "elevation"),
+    inside = fieldInterpolator({ ...g, channels: { membership } }, "membership");
+  for (let i = 0; i < g.active.length; i++) {
+    if (g.channels.water.get(i) !== 2) continue;
+    const stage = g.channels.waterLevel.get(i);
+    if (!stages.has(stage)) stages.set(stage, []);
+    stages.get(stage)!.push(i);
+  }
+  g.lakes = [];
+  for (const [stage, members] of stages) {
+    for (const i of members) membership.set(i, 1);
+    const shape = fieldContour(
+      g,
+      (x, y) => Math.min(stage - floor({ x, y, z: 0 }), (inside({ x, y, z: 0 }) - 0.1) * 1e6),
+      lakeSupport(g.width, g.height, members),
+      0,
+      (g.scope.resolution ?? 1000) / 4,
+      state.contours
+    );
+    publishLakes(state, shape, stage);
+    for (const i of members) membership.set(i, 0);
+  }
+  g.coverage.release(membership);
+}
+function lakeSupport(width: number, height: number, members: number[]) {
+  const cells = new Set<number>();
+  for (const i of members) {
+    const x = i % width,
+      y = Math.floor(i / width);
+    for (const dy of [-1, 0])
+      for (const dx of [-1, 0])
+        if (x + dx >= 0 && y + dy >= 0 && x + dx < width - 1 && y + dy < height - 1)
+          cells.add((y + dy) * width + x + dx);
+  }
+  return [...cells].sort((a, b) => a - b);
+}
+function publishLakes(state: RefinementState, shape: Geometry | null, level: number) {
+  const g = state.surface;
   const polygons =
     shape?.type === "Polygon"
       ? [shape]
       : shape?.type === "MultiPolygon"
         ? shape.coordinates.map((coordinates) => ({ type: "Polygon" as const, coordinates }))
         : [];
-  g.lakes = polygons.map((geometry, index) => {
-    const p = spatial.interiorPosition(geometry),
-      level = levelAt(p),
-      key = `lake:${index}`,
+  for (const geometry of polygons) {
+    const key = `lake:${g.lakes!.length}`,
       [w, s, e, n] = spatial.bounds(geometry),
       [dx, dy] = spacing(g);
-    if (e - w >= dx * resolutionCells && n - s >= dy * resolutionCells)
-      putRefinementFeature(state, key, "lake", "lakes", geometry, { level }, "Regional lake");
-    return {
+    if (e - w < dx * resolutionCells || n - s < dy * resolutionCells) continue;
+    putRefinementFeature(state, key, "lake", "lakes", geometry, { level }, "Regional lake");
+    g.lakes!.push({
       id: semanticId(state.domain.world.id, `regional:${state.input.areaId}`, key),
       geometry: canonicalGeometry(state.domain.world.reference, geometry),
       level,
-    };
-  });
+    });
+  }
 }
 function extractRivers(state: RefinementState) {
   const g = state.surface,

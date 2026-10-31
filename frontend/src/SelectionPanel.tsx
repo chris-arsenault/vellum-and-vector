@@ -6,8 +6,11 @@ import type { EditorState } from "./useEditor";
 import type { World } from "./types";
 import "./selection.css";
 import { isRegionTool } from "./useRegions";
+import { CellInspectionPanel } from "./CellInspectionPanel";
 
 export function SelectionPanel({ world, editor }: { world: World; editor: EditorState }) {
+  if (editor.tool === "inspectCell")
+    return <CellInspectionPanel key={editor.area.id} world={world} editor={editor} />;
   if (editor.panel === "configure-generation")
     return <RegionalGeneration key={editor.area.id} world={world} editor={editor} />;
   if (isRegionTool(editor.tool) || editor.regionDraft) return <RegionsPanel editor={editor} />;
