@@ -11,14 +11,26 @@ let port: MessagePort | undefined;
 const opened = new Map<number, () => void>();
 const failures = new Map<number, string>();
 const registrations = new Map<number, Extract<TileMessage, { kind: "resourceRaster" }>>();
+const ready = new Map<number, Promise<unknown>>();
 // Tile footprints use prepared GEOS predicates; the engine is ready before any message.
 let pending: Promise<unknown> = openSpatialRuntime();
 let closing = false;
 const queue: Extract<TileMessage, { kind: "tile" }>[] = [];
 let scheduled = false;
-function next() {
+async function registrationReady(id: number) {
+  let loading = ready.get(id);
+  if (!loading) return true;
+  while (loading) {
+    await loading;
+    const latest = ready.get(id);
+    if (loading === latest) break;
+    loading = latest;
+  }
+  return ready.has(id);
+}
+async function next() {
   const message = queue.shift();
-  if (message && !closing) {
+  if (message && (await registrationReady(message.id)) && !closing) {
     const failure = failures.get(message.id);
     const reply = failure ? { request: message.request, error: failure } : process(message)!;
     self.postMessage(reply, { transfer: "values" in reply ? [reply.values.buffer] : [] });
@@ -87,7 +99,10 @@ self.addEventListener("message", (event: MessageEvent<TileMessage>) => {
   // Navigation can release an entire map while an earlier file load is awaiting I/O.
   // Record that immediately, so the serialized queue never opens obsolete registrations.
   if (message.kind === "resourceRaster") registrations.set(message.id, message);
-  if (message.kind === "release") registrations.delete(message.id);
+  if (message.kind === "release") {
+    registrations.delete(message.id);
+    ready.delete(message.id);
+  }
   if (message.kind === "cancel") {
     const cancel = () => {
       const index = queue.findIndex((item) => item.request === message.request);
@@ -95,5 +110,10 @@ self.addEventListener("message", (event: MessageEvent<TileMessage>) => {
     };
     cancel();
     pending = pending.then(cancel);
-  } else pending = pending.then(() => receive(message));
+  } else {
+    pending = pending.then(() => receive(message));
+    // A viewport can replace geography before its previous load completes. Tiles
+    // must wait for the current registration, including one queued after the tile.
+    if (message.kind === "resourceRaster") ready.set(message.id, pending);
+  }
 });
