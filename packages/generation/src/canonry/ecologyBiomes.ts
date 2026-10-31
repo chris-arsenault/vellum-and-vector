@@ -30,6 +30,13 @@ export interface BiomeRule {
   name: (region: BiomeSummary) => string;
   system?: (region: BiomeSummary) => string | undefined;
 }
+/** Least named habitat extent as a share of the map's land; fine cover remains a field. */
+export const namedBiomeLandShare = {
+  wetland: 0.001,
+  forest: 0.004,
+  grassland: 0.004,
+  barren: 0.004,
+} as const;
 type Systems = NonNullable<NonNullable<GenerationState["physical"]>["magic"]>["fields"];
 
 /** The enabled system with the strongest mean intensity among those with an effect. */
@@ -226,24 +233,29 @@ export function biomeRules(state: GenerationState) {
     ...magicRules(state),
     {
       kind: "wetland",
-      share: 0.001,
+      share: namedBiomeLandShare.wetland,
       terms: [(i) => map.WetlandCover.get(i) - 0.3],
       name: wetlandName,
     },
     {
       kind: "forest",
-      share: 0.004,
+      share: namedBiomeLandShare.forest,
       terms: [(i) => map.BroadleafCover.get(i) + map.ConiferCover.get(i) - 0.4],
       name: forestName,
     },
     // Open grass meets barren land near the same total cover, so the two share an edge.
     {
       kind: "grassland",
-      share: 0.004,
+      share: namedBiomeLandShare.grassland,
       terms: [(i) => map.GrassCover.get(i) - 0.15],
       name: grassName,
     },
-    { kind: "barren", share: 0.004, terms: [(i) => 0.12 - cover(i)], name: barrenName },
+    {
+      kind: "barren",
+      share: namedBiomeLandShare.barren,
+      terms: [(i) => 0.12 - cover(i)],
+      name: barrenName,
+    },
   ];
   return { rules, temperature, moisture, wetness };
 }

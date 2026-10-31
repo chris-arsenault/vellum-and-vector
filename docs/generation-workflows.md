@@ -89,6 +89,10 @@ Streams require discharge as well as a drainage route, using the existing region
 river qualification policy. Flooding and supported water supply wetland cover;
 catchment area alone supplies neither water nor habitation. Surface classes are recomputed
 on that grid; habitat outlines use the raster's shared class-boundary evaluator.
+Habitat outlines also use the existing mesh footprint, named-biome extent and small-gap
+rules; physical water and other named landscapes keep their openings. Smaller patches
+remain field coverage. Raster water masks union geographic window
+fragments, so overlapping reads do not create invalid polygon collections.
 Contour crossing searches use the map's geometric tolerance. Stored coordinate
 precision does not dictate their numerical accuracy.
 

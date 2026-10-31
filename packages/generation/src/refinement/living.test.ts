@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { gridPosition, point, spatial, surfaceCode, biomeCode } from "@atlas/domain";
+import { createGrid, gridPosition, point, spatial, surfaceCode, biomeCode } from "@atlas/domain";
 import { regionalEnvironment } from "./refinementFixture";
 import { extractRegionalHabitats, refineLivingCover, refineLocalConditions } from "./living";
 import { channel } from "./state";
@@ -80,4 +80,47 @@ it("draws habitat outlines from the native surface classes used by the raster", 
   expect(forest).toBeDefined();
   expect(spatial.covers(forest.geometry, point({ x: 10000, y: 10000, z: 0 }))).toBe(true);
   expect(spatial.covers(forest.geometry, point({ x: 30000, y: 10000, z: 0 }))).toBe(false);
+});
+
+it("keeps isolated sub-mesh habitat as field coverage beside a realized forest", () => {
+  const { state } = regionalEnvironment(),
+    g = state.surface,
+    isolated = Math.floor(g.height / 2) * g.width + g.width - 3;
+  g.channels.naturalSurface.fill(surfaceCode("Grassland"));
+  for (let i = 0; i < g.active.length; i++)
+    if (gridPosition(g, i).x < 10000) g.channels.naturalSurface.set(i, surfaceCode("Woodland"));
+  g.channels.naturalSurface.set(isolated, surfaceCode("Woodland"));
+  const before = Array.from(g.channels.naturalSurface);
+  extractRegionalHabitats(state);
+  const forest = Object.values(state.domain.world.features).find((f) => f.kind === "forest")!;
+  expect(spatial.covers(forest.geometry, point({ x: 5000, y: 10000, z: 0 }))).toBe(true);
+  expect(spatial.covers(forest.geometry, point(gridPosition(g, isolated)))).toBe(false);
+  expect(Array.from(g.channels.naturalSurface)).toEqual(before);
+});
+
+it("uses named-biome extent and gap rules without removing fine cover or physical lakes", () => {
+  const { state } = regionalEnvironment();
+  state.surface = createGrid("supplied-habitats", state.surface.scope, 81, 41);
+  const g = state.surface,
+    cover = channel(state, "naturalSurface", "category", surfaceCode("Grassland")),
+    water = channel(state, "water", "category"),
+    patch = (x: number, y: number, code: number) => {
+      for (let row = y; row < y + 2; row++)
+        for (let col = x; col < x + 2; col++) cover.set(row * g.width + col, code);
+      return gridPosition(g, y * g.width + x);
+    };
+  for (let i = 0; i < g.active.length; i++)
+    if (gridPosition(g, i).x < 10000) cover.set(i, surfaceCode("Woodland"));
+  const isolated = patch(65, 20, surfaceCode("Woodland")),
+    clearing = patch(8, 20, surfaceCode("Grassland")),
+    lake = patch(8, 30, surfaceCode("Lake"));
+  for (let row = 30; row < 32; row++)
+    for (let col = 8; col < 10; col++) water.set(row * g.width + col, 2);
+  const before = Array.from(cover);
+  extractRegionalHabitats(state);
+  const forest = Object.values(state.domain.world.features).find((f) => f.kind === "forest")!;
+  expect(spatial.covers(forest.geometry, point(isolated))).toBe(false);
+  expect(spatial.covers(forest.geometry, point(clearing))).toBe(true);
+  expect(spatial.covers(forest.geometry, point(lake))).toBe(false);
+  expect(Array.from(cover)).toEqual(before);
 });

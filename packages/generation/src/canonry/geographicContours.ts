@@ -189,17 +189,8 @@ export function fillSmallHoles(
   maximum: number,
   blocks: (cell: number) => boolean
 ): Geometry {
-  const polygons =
-    shape.type === "Polygon"
-      ? [shape.coordinates]
-      : shape.type === "MultiPolygon"
-        ? shape.coordinates
-        : null;
-  if (!polygons) return shape;
   const mesh = state.physical!.map.mesh;
-  const keep = (ring: Position[]) => {
-    const hole: Geometry = { type: "Polygon", coordinates: [ring] };
-    if (spatial.area(hole) >= maximum) return true;
+  return fillContourHoles(shape, maximum, (hole) => {
     const covers = spatial.pointCoverage(hole);
     for (const cell of meshWindowCells(mesh, spatial.bounds(hole)))
       if (
@@ -208,6 +199,24 @@ export function fillSmallHoles(
       )
         return true;
     return false;
+  });
+}
+/** Shared polygon operation; each surface supplies its own water and named-region samples. */
+export function fillContourHoles(
+  shape: Geometry,
+  maximum: number,
+  blocked: (hole: Geometry) => boolean
+): Geometry {
+  const polygons =
+    shape.type === "Polygon"
+      ? [shape.coordinates]
+      : shape.type === "MultiPolygon"
+        ? shape.coordinates
+        : null;
+  if (!polygons) return shape;
+  const keep = (ring: Position[]) => {
+    const hole: Geometry = { type: "Polygon", coordinates: [ring] };
+    return spatial.area(hole) >= maximum || blocked(hole);
   };
   const filled = polygons.map(([outer, ...holes]) => [outer, ...holes.filter(keep)]);
   return shape.type === "Polygon"

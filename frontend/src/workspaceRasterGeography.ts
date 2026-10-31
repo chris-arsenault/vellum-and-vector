@@ -1,7 +1,6 @@
-import { polygonParts } from "@atlas/domain";
+import { polygonParts, spatial } from "@atlas/domain";
 import type { SpatialCatalog } from "@atlas/storage-browser";
 import type { RasterGeography, RasterGeographyReference } from "./types";
-import { mergeDisplayFragments } from "./sceneWindows";
 
 /** Geometry moves directly from its GIS owner to the renderer, at the requested map scale. */
 export async function workspaceRasterGeography(
@@ -38,7 +37,7 @@ export async function workspaceRasterGeography(
           const previous = lakes.get(feature.id);
           lakes.set(feature.id, {
             geometry: previous
-              ? mergeDisplayFragments(previous.geometry, feature.geometry)
+              ? spatial.union(previous.geometry, feature.geometry)
               : feature.geometry,
             level: feature.attributes.waterLevel,
           });
@@ -53,7 +52,7 @@ export async function workspaceRasterGeography(
   );
   return {
     ocean: parts.length
-      ? { type: "MultiPolygon", coordinates: parts.map((p) => p.coordinates) }
+      ? spatial.unionAll(parts)
       : geography.some((g) => g.ocean !== undefined)
         ? null
         : undefined,
@@ -68,7 +67,7 @@ function mergePhysicalLakes(
     const previous = lakes.get(lake.id);
     lakes.set(lake.id, {
       level: lake.level,
-      geometry: previous ? mergeDisplayFragments(previous.geometry, lake.geometry) : lake.geometry,
+      geometry: previous ? spatial.union(previous.geometry, lake.geometry) : lake.geometry,
     });
   }
 }
