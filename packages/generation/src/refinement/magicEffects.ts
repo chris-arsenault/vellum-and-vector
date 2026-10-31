@@ -3,8 +3,7 @@ import { fractalNoise } from "../canonry/noise";
 import { channel, clamp, neighbors, type RefinementState } from "./state";
 import { presentValue } from "./magicMaterials";
 import { routeRegionalWater } from "./water";
-import { updateSlopes } from "./terrain";
-import { settleRegionalPits } from "./terrainStructure";
+import { fillRegionalPits, updateSlopes } from "./terrain";
 
 /** Local changes to a captured present, rather than another epoch of cumulative work. */
 export function developMagicGeography(
@@ -34,7 +33,7 @@ export function developMagicGeography(
     }
   }
   if (changed) {
-    settleRegionalPits(state);
+    fillRegionalPits(state);
     updateSlopes(state);
     routeRegionalWater(state);
   }

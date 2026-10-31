@@ -37,7 +37,8 @@ it("develops finer rolling relief on gentle plains while preserving captured inp
     f.state.surface.channels.elevation,
     (h, i) => h - f.state.inheritedHeight.get(i)
   );
-  expect(Math.max(...changes) - Math.min(...changes)).toBeGreaterThan(10);
+  // Rolling relief scales with the parent sample span (5 km here, 0.002 slope over it).
+  expect(Math.max(...changes) - Math.min(...changes)).toBeGreaterThan(5);
   expect(changes.some((d) => d > 0)).toBe(true);
   expect(changes.some((d) => d < 0)).toBe(true);
   expect(Array.from(f.grid.channels.elevation)).toEqual(original);

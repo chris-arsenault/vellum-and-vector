@@ -1,18 +1,15 @@
-import { type Band } from "@atlas/domain";
-import { channel, clamp, distance, neighbors, spacing, type RefinementState } from "./state";
-import { resolutionCells } from "@atlas/domain";
-import { relaxSlopes, updateSlopes } from "./terrain";
+import { resolutionCells, type Band } from "@atlas/domain";
+import { channel, distance, neighbors, spacing, type RefinementState } from "./state";
+import { referenceDischarge, updateSlopes } from "./terrain";
 import { fillRegionalLakes } from "./lakes";
-import { physicalProfile } from "../canonry/profile";
 import { downhillRoutes, drainageRoutes, regionalBoundary } from "./drainage";
-import { inciseRegionalValleys } from "./valleys";
-import { settleRegionalPits } from "./terrainStructure";
 import { regionalFloodplains } from "./floodplains";
-import { concentratedDrainage, headwaterSamples } from "./channelFormation";
 
 const secondsPerYear = 365.25 * 24 * 3600;
-/** Numerical development of this surface, without advancing physical or human time. */
-const valleyPasses = 3;
+/** Reference-runoff samples a mapped river drains, in this map's own samples. */
+const riverCells = 128;
+/** Samples a headwater runs before it is drawn as a river. */
+const headwaterCells = 4;
 
 function seaConnected(state: RefinementState, datum: number) {
   const g = state.surface,
@@ -21,7 +18,10 @@ function seaConnected(state: RefinementState, datum: number) {
   let read = 0,
     write = 0;
   for (let i = 0; i < g.active.length; i++)
-    if (regionalBoundary(state, i) && g.channels.elevation.get(i) <= datum) {
+    if (
+      (regionalBoundary(state, i) || g.channels.water?.get(i) === 1) &&
+      g.channels.elevation.get(i) <= datum
+    ) {
       sea.set(i, 1);
       queue.set(write++, i);
     }
@@ -72,11 +72,19 @@ function accumulate(state: RefinementState) {
     flow = channel(state, "flow", "cubic-metre/second"),
     area = channel(state, "catchmentArea", "square-metre"),
     runoff = channel(state, "runoff", "metre/year", 0.4),
-    river = channel(state, "riverOrder", "category");
+    river = channel(state, "riverOrder", "category"),
+    [dx, dy] = spacing(g),
+    cellArea = dx * dy;
   for (let i = 0; i < g.active.length; i++) {
-    const land = g.channels.water.get(i) !== 1;
-    area.set(i, land ? g.measures.get(i) : 0);
-    flow.set(i, land ? (Math.max(0, runoff.get(i)) * g.measures.get(i)) / secondsPerYear : 0);
+    const land = g.channels.water.get(i) !== 1,
+      entering = state.terrain?.inflow.get(i) ?? 0,
+      // An entering river drains country beyond the frame, at about reference runoff.
+      beyond = (entering / referenceDischarge(state)) * cellArea;
+    area.set(i, land ? g.measures.get(i) + beyond : 0);
+    flow.set(
+      i,
+      land ? (Math.max(0, runoff.get(i)) * g.measures.get(i)) / secondsPerYear + entering : 0
+    );
     river.set(i, 0);
   }
   for (let k = count - 1; k >= 0; k--) {
@@ -89,59 +97,53 @@ function accumulate(state: RefinementState) {
   qualifyChannels(state, river, flow);
   orderChannels(state, river);
 }
+/**
+ * A mapped river drains at least `riverCells` samples' worth of reference runoff. The
+ * threshold is in this map's own samples, so every refinement level shows a similar
+ * stream density, while dry or permeable ground needs a larger catchment for the same flow.
+ */
 function qualifyChannels(state: RefinementState, river: Band, flow: Band) {
   const g = state.surface,
+    threshold = riverCells * referenceDischarge(state),
     [dx, dy] = spacing(g),
-    p = physicalProfile,
-    gathered = concentratedDrainage(state),
-    length = upstreamLengths(state),
-    basin = basinDischarges(state),
-    span = Math.sqrt(dx * dy);
-  for (let i = 0; i < g.active.length; i++) {
-    const threshold = clamp(
-        (basin.get(i) * p.RiverBasinHeadwaterFraction) / 1000,
-        p.RiverMinimumAccumulationThreshold,
-        p.RiverAccumulationThreshold
-      ),
-      slopeFactor = clamp(
-        Math.sqrt((g.channels.slope?.get(i) ?? 0) / p.ChannelReferenceSlope),
-        p.ChannelSlopeFloor / 1000,
-        p.ChannelSlopeCeiling / 1000
-      );
+    span = Math.sqrt(dx * dy),
+    flowPath = upstreamLengths(state, () => true);
+  // A channel gathers water from a catchment wider than one sample; a strip
+  // accumulating down a planar slope is sheet flow, however much it carries.
+  for (let i = 0; i < g.active.length; i++)
     if (
       waterLand(state, i) &&
-      gathered.get(i) &&
-      g.channels.catchmentArea.get(i) / (length.get(i) + span) >= resolutionCells * span &&
-      g.channels.catchmentArea.get(i) >= headwaterSamples * dx * dy &&
-      flow.get(i) * slopeFactor >= threshold
+      flow.get(i) >= threshold &&
+      g.channels.catchmentArea.get(i) / (flowPath[i] + span) >= resolutionCells * span
     )
       river.set(i, 1);
-  }
-  g.coverage.release(gathered);
-  g.coverage.release(length);
-  g.coverage.release(basin);
+  // Generalize the network like a map at this scale: a headwater shorter than a few
+  // samples (a planar hillslope's parallel rills) is not drawn, and every stream
+  // begins once it has run that far. A river entering across the frame edge has
+  // already run that far upstream.
+  const shortest = headwaterCells * span,
+    length = upstreamLengths(
+      state,
+      (i) => river.get(i) > 0,
+      (i) => ((state.terrain?.inflow.get(i) ?? 0) > 0 ? shortest : 0)
+    );
+  for (let i = 0; i < g.active.length; i++) if (length[i] < shortest) river.set(i, 0);
 }
-/** Existing physical headwater criteria use each outlet's discharge, not cell count or zoom. */
-function basinDischarges(state: RefinementState) {
+/** Longest upstream path through cells that `along` admits, from each start length. */
+function upstreamLengths(
+  state: RefinementState,
+  along: (i: number) => boolean,
+  start: (i: number) => number = () => 0
+) {
   const g = state.surface,
     { receiver, order, count } = state.drainage!,
-    basin = g.coverage.scratch("float64", "regional:basin-discharge", g.active.length);
-  for (let k = 0; k < count; k++) {
-    const i = order.get(k),
-      j = receiver.get(i);
-    basin.set(i, j < 0 ? g.channels.flow.get(i) : basin.get(j));
-  }
-  return basin;
-}
-/** An accumulating one-cell strip is sheet flow; a channel gathers a lateral catchment. */
-function upstreamLengths(state: RefinementState) {
-  const g = state.surface,
-    { receiver, order, count } = state.drainage!,
-    length = g.coverage.scratch("float64", "regional:upstream-length", g.active.length);
+    length = new Float64Array(g.active.length);
+  for (let i = 0; i < length.length; i++) length[i] = start(i);
   for (let k = count - 1; k >= 0; k--) {
     const i = order.get(k),
       j = receiver.get(i);
-    if (j >= 0) length.set(j, Math.max(length.get(j), length.get(i) + distance(g, i, j)));
+    if (j >= 0 && along(i) && along(j))
+      length[j] = Math.max(length[j], length[i] + distance(g, i, j));
   }
   return length;
 }
@@ -170,14 +172,7 @@ function advanceOrder(river: Band, largest: Band, ties: Band, i: number, j: numb
     ties.set(j, 1);
   } else if (river.get(i) === largest.get(j)) ties.add(j, 1);
 }
-/** Develop the finer drainage through local feedback, without another geological epoch. */
+/** Route present water over the developed surface; valleys already formed in the terrain stage. */
 export function refineWater(state: RefinementState) {
-  if (state.input.domains.includes("physical"))
-    for (let pass = 0; pass < valleyPasses; pass++) {
-      routeRegionalWater(state);
-      inciseRegionalValleys(state, valleyPasses);
-      relaxSlopes(state);
-      settleRegionalPits(state);
-    }
   routeRegionalWater(state);
 }

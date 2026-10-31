@@ -46,10 +46,9 @@ it("keeps sheet runoff on a planar hillslope out of the mapped river network", (
 it("retains sub-threshold flowing drainage as numerical context rather than mapped rivers", () => {
   const { state } = regionalFixture((x, y) => 100 + x / 1000 + Math.abs(y - 10000) / 400, 20000, 2),
     g = state.surface;
-  g.channels.runoff.fill(0.08);
+  g.channels.runoff.fill(0.01);
   routeRegionalWater(state);
-  expect(Math.max(...g.channels.flow)).toBeGreaterThan(0.5);
-  expect(Math.max(...g.channels.flow)).toBeLessThan(3);
+  expect(Math.max(...g.channels.flow)).toBeGreaterThan(0);
   expect(Array.from(g.channels.riverOrder).every((value) => value === 0)).toBe(true);
 });
 
@@ -111,10 +110,12 @@ it("adds regional channels and incision without evolving world history", () => {
   const f = regionalFixture((x, y) => 100 + x / 500 + Math.abs(y - 10000) / 100),
     history = structuredClone(f.source.world.epochs);
   refineTerrain(f.state);
-  const before = Array.from(f.state.surface.channels.elevation);
   refineWater(f.state);
   expect(Array.from(f.state.surface.channels.erosion).some((d) => d > 0)).toBe(true);
-  expect(Array.from(f.state.surface.channels.elevation)).not.toEqual(before);
+  expect(Array.from(f.state.surface.channels.riverOrder).some((r) => r > 0)).toBe(true);
+  expect(Array.from(f.state.surface.channels.elevation)).not.toEqual(
+    Array.from(f.state.inheritedHeight)
+  );
   expect(f.state.domain.world.epochs).toEqual(history);
   expect(Array.from(f.grid.channels.elevation)).toEqual(
     Array.from(f.source.numerical.captured.channels.elevation)

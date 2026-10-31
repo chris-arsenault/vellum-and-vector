@@ -48,8 +48,11 @@ export function drainageRoutes(
   return { receiver, order, count };
 }
 
+/** Open frame edges drain out, except where a captured river enters across them. */
 function outlet(state: RefinementState, i: number, sea?: Band) {
-  return regionalBoundary(state, i) || Boolean(sea?.get(i));
+  return (
+    Boolean(sea?.get(i)) || (regionalBoundary(state, i) && !(state.terrain?.inflow.get(i) ?? 0))
+  );
 }
 
 /** The spill tree resolves flats; sloping ground follows its steepest descending neighbor. */

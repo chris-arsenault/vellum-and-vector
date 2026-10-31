@@ -10,7 +10,8 @@ the [spatial ADR](docs/adr/0001-spatial-authority.md),
 [coupling ADR](docs/adr/0004-coupling-through-each-systems-medium.md),
 [scale contract ADR](docs/adr/0005-scale-contract.md),
 [landmarks ADR](docs/adr/0006-landmarks-are-injected-causes.md) and
-[magic materials ADR](docs/adr/0007-magic-systems-are-materials.md) record
+[magic materials ADR](docs/adr/0007-magic-systems-are-materials.md) and
+[regional refinement ADR](docs/adr/0008-regional-refinement-is-conditioned-amplification.md) record
 implementation direction. User requirements and explicitly agreed boundaries govern revisions
 to agent-derived choices in those documents and the plan.
 

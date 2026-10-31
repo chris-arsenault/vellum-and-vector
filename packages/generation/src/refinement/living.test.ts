@@ -41,6 +41,8 @@ it("keeps a small stream's surrounding land cover instead of painting a cell-wid
     stream = g.width * 4 + 6;
   g.channels.treeCover.fill(0);
   g.channels.rainfall.fill(0.06);
+  g.channels.naturalSurface.fill(surfaceCode("Desert"));
+  channel(state, "biome", "category", biomeCode("Desert"));
   g.channels.riverOrder.set(stream, 1);
   refineLivingCover(state);
   expect(g.channels.naturalSurface.get(stream)).toBe(surfaceCode("Desert"));
@@ -49,7 +51,7 @@ it("keeps a small stream's surrounding land cover instead of painting a cell-wid
   expect(g.channels.water.get(stream)).toBe(0);
 });
 
-it("develops sub-parent habitat patches and responds to a local soil perturbation", () => {
+it("keeps uniform captured cover uniform and thins it on a local soil perturbation", () => {
   const normal = regionalEnvironment(),
     thin = regionalEnvironment(),
     g = normal.state.surface,
@@ -60,11 +62,9 @@ it("develops sub-parent habitat patches and responds to a local soil perturbatio
   h.channels.finalSurface.fill(999);
   refineLivingCover(normal.state);
   refineLivingCover(thin.state);
-  const local = Array.from(g.channels.treeCover).filter(
-    (_, i) => gridPosition(g, i).x < 5000 && gridPosition(g, i).y < 5000
-  );
-  expect(Math.max(...local) - Math.min(...local)).toBeGreaterThan(0.05);
-  expect(Array.from(h.channels.finalSurface)).not.toEqual(Array.from(g.channels.finalSurface));
+  // No sub-parent patch noise: the same conditions give the same cover everywhere.
+  expect(new Set(g.channels.treeCover).size).toBe(1);
+  expect(new Set(g.channels.naturalSurface).size).toBe(1);
   expect(Array.from(g.channels.finalSurface)).not.toContain(999);
   let changed = 0;
   for (let i = 0; i < g.active.length; i++) {

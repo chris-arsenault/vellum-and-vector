@@ -291,7 +291,9 @@ The child map includes a rectangular working area around the selected
 subject, with surrounding land and sea available for independent development even
 outside the source map's footprint. Climate responds to finer relief; habitats
 and existing magical landscapes follow their own media without creating another
-history or renewing inherited material stocks. Known places remain available;
+history or renewing inherited material stocks. Captured cover is the habitat
+prior: finer relief, river margins and coastal flats change it only where they
+are resolved, so uniform country stays uniform rather than gaining noise patches. Known places remain available;
 regional algorithms add smaller settlements, local ways and POIs from useful
 sites. Completed society history provides context without a population-accounting
 gate or another settlement era.

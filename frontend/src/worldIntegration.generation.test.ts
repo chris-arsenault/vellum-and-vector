@@ -69,6 +69,7 @@ it("selects and completes a typical Standard region from a supplied default-size
       generationMs: published.generationMs,
       phases: published.phases,
       firstRasterMs: published.rasterResult.milliseconds,
+      features: published.counts,
     });
   } finally {
     await run.close();

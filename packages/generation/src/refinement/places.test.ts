@@ -164,7 +164,7 @@ it("uses located captured residents when their numerical density is absent, pres
           },
         ],
         support: emptySupport(),
-        founded: null,
+        founded: "",
         status: "inhabited",
         protected: false,
         causes: [],

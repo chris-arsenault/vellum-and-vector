@@ -98,63 +98,88 @@ function publishLakes(state: RefinementState, shape: Geometry | null, level: num
     });
   }
 }
+/**
+ * One feature per river: from its source, a stream continues through each confluence
+ * where it is the larger inflow, and ends where it joins a larger river.
+ */
 function extractRivers(state: RefinementState) {
   const g = state.surface,
     river = g.channels.riverOrder,
-    incoming = g.coverage.scratch("int32", "regional:river-incoming", g.active.length),
+    main = mainInflows(state),
+    stem = new Int32Array(g.active.length).fill(-1),
     reaches: DrainageReach[] = [],
-    starts: number[] = [],
     ends: number[] = [];
-  countIncoming(state, incoming);
   for (let i = 0; i < river.length; i++) {
-    if (river.get(i) <= 0 || incoming.get(i) === 1) continue;
-    const members = reachMembers(state, incoming, i);
+    if (river.get(i) <= 0 || main[i] >= 0) continue;
+    const members = stemMembers(state, main, i);
     if (members.length < 2) continue;
-    const coordinates = smoothCourse(
-        members.map((cell) => {
-          const p = gridPosition(g, cell);
-          return [p.x, p.y, g.channels.elevation.get(cell)];
-        })
-      ),
-      discharge = g.channels.flow.get(i),
-      widths = members.map((cell) => Math.max(1, 3 * Math.sqrt(g.channels.flow.get(cell)))),
-      f = putRefinementFeature(
-        state,
-        `river:${i}`,
-        "river",
-        "rivers",
-        { type: "LineString", coordinates },
-        {
-          discharge,
-          order: river.get(i),
-          width: widths[0],
-          widths,
-          elevations: coordinates.map((p) => p[2]),
-          discharges: members.map((cell) => g.channels.flow.get(cell)),
-        }
-      );
-    putRefinementNetwork(state, f, discharge, coordinates);
-    reaches.push({
-      coordinates: coordinates.map(([x, y]) => [x, y]),
-      discharges: members.map((cell) => g.channels.flow.get(cell)),
-      catchmentAreas: members.map((cell) => g.channels.catchmentArea.get(cell)),
-      waterBody: null,
-      order: river.get(i),
-      basin: 0,
-      featureIds: [f.id],
-      downstream: null,
-    });
-    starts.push(i);
+    const mouth = claimStem(members, main, stem, reaches.length);
+    reaches.push(publishRiver(state, `river:${i}`, members, mouth));
     ends.push(members.at(-1)!);
   }
-  const indices = new Map(starts.map((cell, i) => [cell, i]));
-  for (const [i, reach] of reaches.entries()) reach.downstream = indices.get(ends[i]) ?? null;
+  for (const [i, reach] of reaches.entries()) {
+    const joined = stem[ends[i]];
+    reach.downstream = joined >= 0 && joined !== i ? joined : null;
+  }
+  publishDrainage(state, reaches);
+}
+/** Mark the samples this river owns; returns its mouth, the last sample it owns. */
+function claimStem(members: number[], main: Int32Array, stem: Int32Array, index: number) {
+  for (const [k, cell] of members.entries())
+    if (k === 0 || main[cell] === members[k - 1]) stem[cell] = index;
+  return stem[members.at(-1)!] === index ? members.at(-1)! : members.at(-2)!;
+}
+function publishDrainage(state: RefinementState, reaches: DrainageReach[]) {
+  const g = state.surface;
   (state.domain.world.drainage ??= {})[state.input.areaId] = {
     areaId: state.input.areaId,
     spaceId: g.scope.spaceId,
     reaches,
   };
-  g.coverage.release(incoming);
+}
+function publishRiver(
+  state: RefinementState,
+  key: string,
+  members: number[],
+  mouth: number
+): DrainageReach {
+  const g = state.surface,
+    c = g.channels,
+    coordinates = smoothCourse(
+      members.map((cell) => {
+        const p = gridPosition(g, cell);
+        return [p.x, p.y, c.elevation.get(cell)];
+      })
+    ),
+    discharge = c.flow.get(mouth),
+    discharges = members.map((cell) => c.flow.get(cell)),
+    widths = discharges.map((flow) => Math.max(1, 3 * Math.sqrt(flow))),
+    f = putRefinementFeature(
+      state,
+      key,
+      "river",
+      "rivers",
+      { type: "LineString", coordinates },
+      {
+        discharge,
+        order: c.riverOrder.get(mouth),
+        width: widths[0],
+        widths,
+        elevations: coordinates.map((p) => p[2]),
+        discharges,
+      }
+    );
+  putRefinementNetwork(state, f, discharge, coordinates);
+  return {
+    coordinates: coordinates.map(([x, y]) => [x, y]),
+    discharges,
+    catchmentAreas: members.map((cell) => c.catchmentArea.get(cell)),
+    waterBody: null,
+    order: c.riverOrder.get(mouth),
+    basin: 0,
+    featureIds: [f.id],
+    downstream: null,
+  };
 }
 /** Relax interior stations while retaining the exact shared confluence endpoints. */
 function smoothCourse(points: number[][]) {
@@ -170,27 +195,25 @@ function smoothCourse(points: number[][]) {
     );
   return points;
 }
-function countIncoming(state: RefinementState, incoming: import("@atlas/domain").Band) {
+/** Each river sample's largest river inflow, or -1 at a source. */
+function mainInflows(state: RefinementState) {
   const { receiver } = state.drainage!,
-    river = state.surface.channels.riverOrder;
+    { riverOrder: river, flow } = state.surface.channels,
+    main = new Int32Array(river.length).fill(-1);
   for (let i = 0; i < river.length; i++) {
     const j = receiver.get(i);
-    if (river.get(i) > 0 && j >= 0 && river.get(j) > 0) incoming.add(j, 1);
+    if (river.get(i) <= 0 || j < 0 || river.get(j) <= 0) continue;
+    if (main[j] < 0 || flow.get(i) > flow.get(main[j])) main[j] = i;
   }
+  return main;
 }
-function reachMembers(
-  state: RefinementState,
-  incoming: import("@atlas/domain").Band,
-  start: number
-) {
+function stemMembers(state: RefinementState, main: Int32Array, start: number) {
   const { receiver } = state.drainage!,
     river = state.surface.channels.riverOrder,
     members = [start];
-  let i = start;
-  while (receiver.get(i) >= 0) {
-    i = receiver.get(i);
-    members.push(i);
-    if (river.get(i) <= 0 || incoming.get(i) !== 1) break;
+  for (let i = start, j = receiver.get(i); j >= 0; i = j, j = receiver.get(i)) {
+    members.push(j);
+    if (river.get(j) <= 0 || main[j] !== i) break;
   }
   return members;
 }

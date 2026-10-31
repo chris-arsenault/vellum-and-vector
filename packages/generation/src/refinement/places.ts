@@ -35,10 +35,11 @@ export function refinePlaces(state: RefinementState) {
     spacing = regionalCommunitySpacing(state),
     bins = new Map<string, Position[]>(),
     heap = new KeyedHeap(),
-    sites = rankSites(state);
+    sites = rankSites(state),
+    access = waterAccess(state);
   for (const seat of seats) addBin(state, bins, seat.cell, spacing);
   for (let i = 0; i < g.active.length; i++) {
-    const residents = localResidents(state, i, spacing);
+    const residents = localResidents(state, i, spacing, access);
     // Unresolved occupation remains in the captured density field. Suitable but empty
     // country does not imply a village, and no parent population is allocated or spent.
     if (residents >= 80) heap.push(i, sitePriority(state, i, residents, sites[i]));
@@ -47,7 +48,7 @@ export function refinePlaces(state: RefinementState) {
     const i = heap.pop(),
       p = gridPosition(g, i);
     if (nearSeat(bins, p, spacing)) continue;
-    const population = Math.round(localResidents(state, i, spacing)),
+    const population = Math.round(localResidents(state, i, spacing, access)),
       f = village(state, i, population, sites[i]);
     seats.push({ feature: f, cell: i });
     addBin(state, bins, i, spacing);
@@ -147,17 +148,48 @@ function cellAt(state: RefinementState, coordinate: number[]) {
     y = Math.round(((p.y - g.bounds[1]) / (g.bounds[3] - g.bounds[1])) * (g.height - 1));
   return Math.max(0, Math.min(g.height - 1, y)) * g.width + Math.max(0, Math.min(g.width - 1, x));
 }
-function siteScore(state: RefinementState, i: number) {
+/** Samples over which reach to a river, lake or shore fades out. */
+const waterReach = 4;
+/** Share of a site's support that wells and rain give away from surface water. */
+const drylandShare = 0.25;
+function siteScore(state: RefinementState, i: number, access: Float64Array) {
   const c = state.surface.channels;
   if (c.water.get(i) !== 0 || c.temperature.get(i) < -5 || c.slope.get(i) > 0.12) return 0;
-  const water = Math.max(regionalMoisture(state, i), c.riverOrder.get(i) > 0 ? 1 : 0),
+  // Villages gather along rivers, lakes and shores; humid uplands support fewer.
+  const water = Math.max(access[i], drylandShare * regionalMoisture(state, i)),
     soil = clamp(c.soilDepth.get(i)),
     climate = clamp((c.temperature.get(i) + 5) / 25);
   return soil * water * climate * (1 - clamp(c.slope.get(i) * 5));
 }
-function localResidents(state: RefinementState, i: number, spacing: number) {
+function localResidents(state: RefinementState, i: number, spacing: number, access: Float64Array) {
   const density = Math.max(0, state.surface.channels.populationDensity?.get(i) ?? 0);
-  return ((density * spacing ** 2) / 1e6) * localTownShare * siteScore(state, i);
+  return ((density * spacing ** 2) / 1e6) * localTownShare * siteScore(state, i, access);
+}
+/** Reach to surface water: one at a river, lake or shore, fading over `waterReach` samples. */
+function waterAccess(state: RefinementState) {
+  const g = state.surface,
+    c = g.channels,
+    n = g.active.length,
+    steps = new Int32Array(n).fill(-1),
+    queue = new Int32Array(n),
+    access = new Float64Array(n);
+  let write = 0;
+  for (let i = 0; i < n; i++)
+    if (c.water.get(i) !== 0 || c.riverOrder.get(i) > 0) {
+      steps[i] = 0;
+      queue[write++] = i;
+    }
+  for (let read = 0; read < write; read++) {
+    const i = queue[read];
+    access[i] = clamp(1 - steps[i] / waterReach);
+    if (steps[i] >= waterReach) continue;
+    for (const j of neighbors(g, i))
+      if (steps[j] < 0) {
+        steps[j] = steps[i] + 1;
+        queue[write++] = j;
+      }
+  }
+  return access;
 }
 function binKey(p: Position, size: number) {
   return `${Math.floor(p.x / size)}:${Math.floor(p.y / size)}`;
@@ -223,38 +255,65 @@ function connectSeats(state: RefinementState, seats: { feature: AtlasFeature; ce
     }
   });
 }
+/** Search arrays shared by every path on one map; a stamp marks each search's own entries. */
+interface PathSearch {
+  cost: Float64Array;
+  previous: Int32Array;
+  stamp: Uint32Array;
+  settled: Uint32Array;
+  search: number;
+}
+const searches = new WeakMap<RefinementState, PathSearch>();
+function pathSearch(state: RefinementState) {
+  const n = state.surface.active.length;
+  let s = searches.get(state);
+  if (!s || s.cost.length !== n) {
+    s = {
+      cost: new Float64Array(n),
+      previous: new Int32Array(n),
+      stamp: new Uint32Array(n),
+      settled: new Uint32Array(n),
+      search: 0,
+    };
+    searches.set(state, s);
+  }
+  s.search++;
+  return s;
+}
 /** A* follows dry, passable ground; the search is sized by this map's cells. */
 export function regionalPath(state: RefinementState, start: number, end: number): number[] | null {
   const g = state.surface,
     front = new KeyedHeap(),
-    cost = new Map<number, number>(),
-    previous = new Map<number, number>(),
-    settled = new Set<number>();
-  cost.set(start, 0);
+    s = pathSearch(state),
+    known = (j: number) => (s.stamp[j] === s.search ? s.cost[j] : Infinity);
+  s.stamp[start] = s.search;
+  s.cost[start] = 0;
+  s.previous[start] = -1;
   front.push(start, 0);
   while (front.size) {
     const i = front.pop();
-    if (i === end) return walkPath(previous, start, end);
-    if (settled.has(i)) continue;
-    settled.add(i);
+    if (i === end) return walkPath(s.previous, start, end);
+    if (s.settled[i] === s.search) continue;
+    s.settled[i] = s.search;
     for (const j of neighbors(g, i)) {
       if (g.channels.water.get(j) !== 0) continue;
       const slope =
           Math.abs(g.channels.elevation.get(j) - g.channels.elevation.get(i)) / distance(g, i, j),
-        next = cost.get(i)! + distance(g, i, j) * (1 + slope * 12);
-      if (next >= (cost.get(j) ?? Infinity)) continue;
-      cost.set(j, next);
-      previous.set(j, i);
+        next = s.cost[i] + distance(g, i, j) * (1 + slope * 12);
+      if (next >= known(j)) continue;
+      s.stamp[j] = s.search;
+      s.cost[j] = next;
+      s.previous[j] = i;
       front.push(j, next + distance(g, j, end));
     }
   }
   return null;
 }
-function walkPath(previous: Map<number, number>, start: number, end: number) {
+function walkPath(previous: Int32Array, start: number, end: number) {
   const cells = [end];
   let i = end;
   while (i !== start) {
-    i = previous.get(i) ?? -1;
+    i = previous[i];
     if (i < 0) return null;
     cells.push(i);
   }

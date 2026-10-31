@@ -1,40 +1,82 @@
 import { expect, it } from "vitest";
-import { regionalFixture } from "./refinementFixture";
-import { refineTerrain } from "./terrain";
-import { refineWater, routeRegionalWater } from "./water";
-import { channel, neighbors } from "./state";
-import { settleRegionalPits } from "./terrainStructure";
 import { gridPosition } from "@atlas/domain";
-import { inciseRegionalValleys } from "./valleys";
-import { regionalEnvironment } from "./refinementFixture";
+import { regionalFixture } from "./refinementFixture";
+import { fillRegionalPits, refineTerrain } from "./terrain";
+import { refineWater, routeRegionalWater } from "./water";
+import { channel, neighbors, type RefinementState } from "./state";
 
-it("dissects a sloping plain without making noise pits into a field of lakes", () => {
-  const { state, grid } = regionalFixture((x, y) => 100 + x / 1000 + y / 2000, 40000, 2),
+const mountain = (x: number, y: number) => 100 + x / 25 + Math.abs(y - 20000) / 12;
+const rivers = (state: RefinementState) =>
+  Array.from(state.surface.channels.riverOrder).filter((r) => r > 0).length;
+
+it("develops branching valleys in mountain relief and drains every sampling pit", () => {
+  const { state, grid } = regionalFixture(mountain, 40000, 2),
+    g = state.surface,
     captured = Array.from(grid.channels.elevation);
   refineTerrain(state);
   refineWater(state);
-  expect(Array.from(state.surface.channels.water).filter((v) => v === 2)).toHaveLength(0);
+  expect(Math.max(...g.channels.erosion)).toBeGreaterThan(40);
+  expect(Array.from(g.channels.water).some((v) => v === 2)).toBe(false);
+  for (let i = 0; i < g.active.length; i++)
+    if (g.channels.water.get(i) === 0)
+      expect(g.channels.drainageElevation.get(i) - g.channels.elevation.get(i)).toBeLessThan(1e-3);
+  const { receiver } = state.drainage!,
+    tributaries = new Int32Array(g.active.length);
+  for (let i = 0; i < g.active.length; i++) {
+    const j = receiver.get(i);
+    if (j >= 0 && g.channels.riverOrder.get(i) > 0 && g.channels.riverOrder.get(j) > 0)
+      tributaries[j]++;
+  }
+  expect(tributaries.some((count) => count > 1)).toBe(true);
   expect(Array.from(grid.channels.elevation)).toEqual(captured);
 });
 
-it("cuts connected valley floors and their hillsides into mountain relief", () => {
-  const { state } = regionalFixture((x, y) => 100 + x / 25 + Math.abs(y - 20000) / 12, 40000, 2),
-    g = state.surface;
+it("keeps a captured lake's basin as standing water", () => {
+  const bowl = (x: number, y: number) => 100 + ((x - 20000) ** 2 + (y - 20000) ** 2) / 2e6,
+    { state } = regionalFixture(bowl, 40000, 2),
+    g = state.surface,
+    water = channel(state, "water", "category");
+  for (let i = 0; i < g.active.length; i++) {
+    const p = gridPosition(g, i);
+    if ((p.x - 20000) ** 2 + (p.y - 20000) ** 2 < 4000 ** 2) water.set(i, 2);
+  }
   refineTerrain(state);
   refineWater(state);
-  const erosion = g.channels.erosion,
-    floors = Array.from(g.channels.riverOrder).flatMap((r, i) => (r > 0 ? [i] : []));
-  expect(Math.max(...erosion)).toBeGreaterThan(40);
-  expect(
-    floors.some((i) =>
-      [...neighbors(g, i)].some((j) => g.channels.riverOrder.get(j) === 0 && erosion.get(j) > 10)
-    )
-  ).toBe(true);
-  for (const i of floors) {
-    const j = state.drainage!.receiver.get(i);
-    if (j >= 0 && g.channels.water.get(i) === 0)
-      expect(g.channels.elevation.get(i)).toBeGreaterThanOrEqual(g.channels.elevation.get(j));
+  const center = Math.floor(g.height / 2) * g.width + Math.floor(g.width / 2);
+  expect(g.channels.water.get(center)).toBe(2);
+  expect(g.channels.water.get(g.width + 1)).toBe(0);
+});
+
+it("draws fewer rivers on dry ground than on wet ground of the same relief", () => {
+  const wet = regionalFixture(mountain, 40000, 2).state,
+    dry = regionalFixture(mountain, 40000, 2).state;
+  dry.surface.channels.runoff.fill(0.03);
+  for (const state of [wet, dry]) {
+    refineTerrain(state);
+    refineWater(state);
   }
+  expect(rivers(wet)).toBeGreaterThan(0);
+  expect(rivers(dry)).toBeLessThan(rivers(wet) / 2);
+  expect(Math.max(...dry.surface.channels.erosion)).toBeGreaterThan(30);
+});
+
+it("carries a captured river entering across the frame edge into the region", () => {
+  const { state } = regionalFixture((x) => 100 + x / 100, 20000, 2),
+    g = state.surface,
+    row = Math.floor(g.height / 2),
+    inlet = row * g.width + g.width - 1,
+    order = channel(state, "riverOrder", "category"),
+    flow = channel(state, "flow", "cubic-metre/second");
+  for (const dy of [-1, 0, 1]) {
+    order.set(inlet + dy * g.width, 2);
+    flow.set(inlet + dy * g.width, dy ? 20 : 50);
+  }
+  refineTerrain(state);
+  refineWater(state);
+  expect(state.terrain!.inflow.get(inlet)).toBeCloseTo(50, 6);
+  expect(Math.max(...g.channels.flow)).toBeGreaterThan(50);
+  const below = [...neighbors(g, inlet)].map((j) => g.channels.riverOrder.get(j));
+  expect(Math.max(...below)).toBeGreaterThan(0);
 });
 
 it("does not invent flowing streams merely by labelling the same physical mesh finer", () => {
@@ -82,50 +124,19 @@ it("replaces coarse floodplain coverage with local flowing channel margins", () 
   expect(Array.from(g.channels.rainfall).every((v) => Math.abs(v - 1.2) < 1e-8)).toBe(true);
 });
 
-it("allows a new coherent basin to become a lake without a captured basin or height lock", () => {
-  const { state, grid } = regionalFixture((x) => 100 + x / 1000, 40000, 2),
+it("keeps a substantial new basin as a lake after a later change, but drains a point pit", () => {
+  const { state } = regionalFixture((x) => 100 + x / 1000, 40000, 2),
     g = state.surface,
-    captured = Array.from(grid.channels.elevation);
-  state.terrain = {
-    basin: g.coverage.scratch("uint8", "supplied-nonbasin", g.active.length),
-    relief: g.coverage.scratch("float64", "supplied-relief", g.active.length).fill(100),
-  };
+    pit = 5 * g.width + 5;
+  refineTerrain(state);
   for (let i = 0; i < g.active.length; i++) {
     const p = gridPosition(g, i),
-      radius = ((p.x - 20000) / 4000) ** 2 + ((p.y - 20000) / 4000) ** 2;
+      radius = ((p.x - 25000) / 4000) ** 2 + ((p.y - 25000) / 4000) ** 2;
     g.channels.elevation.add(i, -100 * Math.exp(-radius));
   }
-  settleRegionalPits(state);
+  g.channels.elevation.add(pit, -80);
+  fillRegionalPits(state);
   routeRegionalWater(state);
   expect(Array.from(g.channels.water).some((v) => v === 2)).toBe(true);
-  expect(Array.from(grid.channels.elevation)).toEqual(captured);
-});
-
-it("develops valley walls on both flanks by distance, even where their old routes run parallel", () => {
-  const { state } = regionalEnvironment(),
-    g = state.surface,
-    receiver = g.coverage.scratch("int32", "supplied-parallel-routes", g.active.length).fill(-1),
-    order = g.coverage.scratch("int32", "supplied-order", g.active.length),
-    row = Math.floor(g.height / 2),
-    x = Math.floor(g.width / 2),
-    center = row * g.width + x;
-  state.drainage = { receiver, order, count: g.active.length };
-  channel(state, "flow", "cubic-metre/second", 100);
-  g.channels.catchmentArea.fill(1e9);
-  for (let i = 0; i < g.active.length; i++) {
-    const col = i % g.width;
-    order.set(i, i);
-    if (col) receiver.set(i, i - 1);
-    g.channels.elevation.set(i, 100 + col * 300);
-  }
-  for (let col = 1; col < g.width; col++) g.channels.riverOrder.set(row * g.width + col, 2);
-  state.inheritedHeight.copyFrom(g.channels.elevation);
-  const input = Array.from(state.inheritedHeight);
-  inciseRegionalValleys(state);
-  const erosion = g.channels.erosion;
-  expect(erosion.get(center)).toBeGreaterThan(40);
-  expect(erosion.get(center - g.width)).toBeGreaterThan(10);
-  expect(erosion.get(center + g.width)).toBeCloseTo(erosion.get(center - g.width), 6);
-  expect(erosion.get(center + g.width * 2)).toBeLessThan(erosion.get(center + g.width));
-  expect(Array.from(state.inheritedHeight)).toEqual(input);
+  expect(g.channels.water.get(pit)).toBe(0);
 });

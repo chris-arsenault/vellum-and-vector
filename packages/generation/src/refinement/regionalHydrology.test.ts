@@ -1,30 +1,40 @@
 import { expect, it } from "vitest";
 import { canonryMagicPresets, fieldInterpolator, gridPosition } from "@atlas/domain";
 import { regionalEnvironment, regionalFixture } from "./refinementFixture";
-import { channel } from "./state";
-import { settleRegionalPits } from "./terrainStructure";
+import { channel, type RefinementState } from "./state";
+import { fillRegionalPits, refineTerrain } from "./terrain";
 import { routeRegionalWater } from "./water";
 import { extractRegionalWater } from "./geography";
-import { inciseRegionalValleys } from "./valleys";
 import { developMagicGeography } from "./magicEffects";
 import { refineLivingCover, extractRegionalHabitats } from "./living";
 import { surfaceCode, spatial, canonicalGeometry, rectangle } from "@atlas/domain";
 
-it("drains new sampling pits inside captured basin country while retaining a coherent basin", () => {
+/** Terrain context with no captured basins and no river entering across the frame. */
+function openGround(state: RefinementState, basin: (i: number) => boolean = () => false) {
+  const g = state.surface;
+  state.terrain = {
+    basin: g.coverage.scratch("uint8", "supplied-basins", g.active.length),
+    inflow: g.coverage.scratch("float64", "supplied-inflow", g.active.length),
+  };
+  for (let i = 0; i < g.active.length; i++) state.terrain.basin.set(i, Number(basin(i)));
+}
+
+it("drains new sampling pits outside a captured basin while retaining the basin", () => {
   const { state, grid } = regionalFixture((x) => 100 + x / 1000, 40000, 2),
     g = state.surface,
     source = Array.from(grid.channels.elevation),
-    pit = 5 * g.width + 5;
-  state.terrain = {
-    basin: g.coverage.scratch("uint8", "supplied-captured-basin", g.active.length).fill(1),
-    relief: g.coverage.scratch("float64", "supplied-relief", g.active.length).fill(100),
-  };
+    pit = 5 * g.width + 5,
+    inBowl = (i: number) => {
+      const p = gridPosition(g, i);
+      return (p.x - 25000) ** 2 + (p.y - 25000) ** 2 < 3000 ** 2;
+    };
+  openGround(state, inBowl);
   for (let i = 0; i < g.active.length; i++) {
     const p = gridPosition(g, i);
     g.channels.elevation.add(i, -100 * Math.exp(-((p.x - 25000) ** 2 + (p.y - 25000) ** 2) / 16e6));
   }
   g.channels.elevation.add(pit, -80);
-  settleRegionalPits(state);
+  fillRegionalPits(state);
   routeRegionalWater(state);
   expect(g.channels.water.get(pit)).toBe(0);
   expect(Array.from(g.channels.water).some((value) => value === 2)).toBe(true);
@@ -66,17 +76,9 @@ it("develops dry rocky gullies without declaring them perennial streams", () => 
   g.channels.runoff.fill(0);
   g.channels.rainfall.fill(0);
   channel(state, "fracture", "ratio", 0.8);
-  state.terrain = {
-    basin: g.coverage.scratch("uint8", "supplied-open-ground", g.active.length),
-    relief: g.coverage.scratch("float64", "supplied-relief", g.active.length).fill(600),
-  };
+  refineTerrain(state);
   routeRegionalWater(state);
-  const flow = Array.from(g.channels.flow),
-    height = Array.from(g.channels.elevation);
-  inciseRegionalValleys(state);
   expect(Math.max(...g.channels.erosion)).toBeGreaterThan(30);
-  expect(Array.from(g.channels.elevation)).not.toEqual(height);
-  expect(Array.from(g.channels.flow)).toEqual(flow);
   expect(Array.from(g.channels.riverOrder).every((value) => value === 0)).toBe(true);
 });
 
@@ -86,10 +88,7 @@ it("settles new point pits when magical physical changes reroute water", () => {
     pit = 5 * g.width + 5,
     fire = canonryMagicPresets().find((system) => system.id === "fire")!,
     before = g.coverage.scratch("float64", "supplied-before-fire", g.active.length);
-  state.terrain = {
-    basin: g.coverage.scratch("uint8", "supplied-open-ground", g.active.length),
-    relief: g.coverage.scratch("float64", "supplied-relief", g.active.length).fill(100),
-  };
+  openGround(state);
   routeRegionalWater(state);
   g.channels.elevation.add(pit, -80);
   channel(state, "magic:fire:intensity", "relative-intensity", 600);
@@ -109,6 +108,7 @@ it("keeps an unresolved pond in the field without cutting a hole in its surround
   channel(state, "waterLevel", "metre", 100);
   g.channels.elevation.fill(200);
   g.channels.treeCover.fill(0.8);
+  g.channels.naturalSurface.fill(surfaceCode("Temperate forest"));
   for (const i of [pond, ...[4, 5, 6].flatMap((y) => [10, 11, 12].map((x) => y * g.width + x))]) {
     g.channels.elevation.set(i, 90);
     g.channels.water.set(i, 2);

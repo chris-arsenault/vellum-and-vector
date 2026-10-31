@@ -30,7 +30,8 @@ export interface RefinementState {
   sourceNetworks?: NetworkReader;
   contours?: ContourWorkspace;
   drainage?: { receiver: Band; order: Band; count: number };
-  terrain?: { basin: Band; relief: Band };
+  /** Captured lake basins and river discharge entering across the frame edge (m³/s). */
+  terrain?: { basin: Band; inflow: Band };
 }
 
 export function channel(state: RefinementState, name: string, unit: string, initial = 0) {
