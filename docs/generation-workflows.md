@@ -119,17 +119,37 @@ Living cover remains the surface around a small stream; its presence does not
 paint a whole cell as a wet valley. Bare ridges and actual floodplains retain
 their physical surface classes.
 
-Each magic system resolves captured effects in its own medium. Named magic places
-use the same connected-class and minimum-component rules as the existing extractor;
+Magic refinement develops captured material stocks and fractional coverage into
+local deposits and pathways before classifying their geography. Material stays
+extensive when sampled onto finer cells; unresolved deposits retain their trace
+context. Coverage can support a newly resolved local source without an inherited
+point. An effects-only Fire halo does not establish an ore deposit.
+
+Fire separates held and spent material, exposure and release, with fractures
+carrying vein heat while fallen and forge deposits remain local. Aurora charge
+moves toward cold traps and remains in ice or weaker relict ground. Pressure
+fronts follow connected ocean water, focus over shallow bathymetry and reflect
+from coasts. Greenwood spreads through connected vegetation, while groundwater
+leaches buried charge toward supported spring breaks. Salt beds dissolve into
+brine, follow drainage and supply wind-carried dust; exposed beds harden or
+collapse, and Fire consumes their material. Captured Hallowed kept geography
+develops wards that displace other magical fields to their own sanctuary rims.
+Veil develops strain where systems compete and pairs coherent tears through network doors.
+
+Present magical changes affect rock, ice, soil, water and living cover; altered
+relief and water supply feed back through local drainage. System meetings retain
+their own processes. These operations develop the captured present without
+another physical epoch or human era.
+
+Named magic places use the existing connected-class and minimum-component rules;
 local peaks within one site complex do not create separate places. Class coverage
-remains a field even when no named outline qualifies. The existing physical
-footprint rule also applies to new lakes and non-source sites; unresolved water
-and magic remain field context, while captured source places remain available.
-Regional refinement
-does not place new global sources, renew stocks or replay ocean impulses. Known
-places and completed society history remain context. Smaller settlements, local
-ways and physical sites come from regional terrain and useful locations, without
-demographic allocation gates or another society era. Regenerating society alone
+remains a field even when no named outline qualifies. The physical footprint rule
+also applies to new lakes and non-source sites; unresolved water and magic remain
+field context, while captured source places remain available. Regional refinement
+does not place new global sources, renew historical stocks or replay ocean
+impulses. Known places and completed society history remain context. Smaller
+settlements, local ways and physical sites come from regional terrain and useful
+locations, without demographic allocation gates or another society era. Regenerating society alone
 uses this map's current surface and preserves terrain; physical refinement starts
 from its pinned inputs. Neither path reads live geography from another map.
 

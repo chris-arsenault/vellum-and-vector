@@ -38,6 +38,16 @@ import {
   assertDevelopedMagic,
 } from "./testSupport/generatedMagicRegion";
 import { assertWorldLandmarks } from "./testSupport/worldLandmarks";
+import {
+  magicSamples,
+  assertMagicSamples,
+  magicPlaces,
+  magicMapState,
+  assertMagicMapUnchanged,
+  assertMagicPublication,
+  reportMagicWorkload,
+  adjacentMagicRegion,
+} from "./testSupport/magicPublication";
 
 it("selects and completes a typical Standard region from a supplied default-sized world", async () => {
   const f = await normalizedRegionFixture(),
@@ -359,30 +369,36 @@ describe("shared initial world", () => {
     assertWorldLandmarks(source, published, input));
   it("develops captured materials through Standard regional publication", async () => {
     let f = await generatedMagicRegion(published, result.state.surface);
-    for (const depth of [1, 2]) {
-      const run = await regionalWorkload(f),
-        parentBefore = f.workspace.catalog.exportFeatures(f.id, f.root, null, 128);
+    let previous: ReturnType<typeof magicSamples> | undefined,
+      places: ReturnType<typeof magicPlaces> | undefined;
+    for (const step of ["region", "nested", "repeat", "sibling"]) {
+      const parentBefore = await magicMapState(f, f.root),
+        protectedBefore = step === "sibling" ? await magicMapState(f, f.child) : null,
+        child = step === "sibling" ? await adjacentMagicRegion(f) : f.child,
+        run = await regionalWorkload(f, child),
+        captured = magicSamples(run.source.numerical);
       try {
         const region = await refineRegionalMap(run.source, run.input, run.options),
           output = await run.publish(region);
         assertDevelopedMagic(region, run.source);
+        assertMagicSamples(magicSamples(run.source.numerical), captured);
+        await assertMagicPublication(f, child, region.state.surface);
         expect(output.rasterResult.sampled).toBeGreaterThan(0);
-        expect(f.workspace.catalog.exportFeatures(f.id, f.root, null, 128)).toEqual(parentBefore);
-        if (depth === 1) {
+        const samples = magicSamples({ surface: region.state.surface });
+        await assertMagicMapUnchanged(f, f.root, parentBefore);
+        if (protectedBefore) await assertMagicMapUnchanged(f, f.child, protectedBefore);
+        if (step === "repeat") {
+          assertMagicSamples(samples, previous!);
+          expect(magicPlaces(run.features)).toEqual(places);
+        }
+        previous = samples;
+        places = magicPlaces(run.features);
+        if (step === "region") {
           await regionalOverview(region, [...run.features.values()]);
           await regionalReliefOverview(region);
         }
-        process.stdout.write(
-          JSON.stringify({
-            workload: "generated magic Standard region",
-            depth,
-            samples: output.samples,
-            generationMs: output.generationMs,
-            phases: output.phases,
-            features: output.counts,
-          }) + "\n"
-        );
-        if (depth === 1)
+        reportMagicWorkload(step, output);
+        if (step === "region")
           f = await nestedMagicRegion(output.output, f.workspace, region.state.surface);
       } finally {
         await run.close();
