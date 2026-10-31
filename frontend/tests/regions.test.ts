@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "./uiTest";
-import { mapPixel, mapEasting, openFixtureMap, openMapSettings, pointFeature } from "./harness";
+import { mapPixel, mapEastings, openFixtureMap, openMapSettings, pointFeature } from "./harness";
 import { readFile } from "node:fs/promises";
 import { installGenerationFixture, completeGenerationFixture } from "./generationFixture";
 
@@ -303,11 +303,11 @@ test("frames existing terrain and keeps a separate child map when zooming out @r
   const parentPixel = await mapPixel(page, 0.3, 0.35);
   await page.getByRole("button", { name: "Regions", exact: true }).click();
   await outline(page, "Hill country", source, [
-    [20_000, 20_000],
-    [80_000, 25_000],
-    [80_000, 70_000],
-    [50_000, 85_000],
-    [20_000, 60_000],
+    [35_000, 35_000],
+    [65_000, 37_500],
+    [65_000, 60_000],
+    [50_000, 67_500],
+    [35_000, 55_000],
   ]);
   await expect(canvas(page)).toHaveAttribute("aria-busy", "false");
   await page.screenshot({ path: "test-results/terrain-region.png" });
@@ -321,9 +321,11 @@ test("frames existing terrain and keeps a separate child map when zooming out @r
   await canvas(page).hover();
   await page.mouse.wheel(0, 600);
   await expect(canvas(page)).toHaveAttribute("aria-busy", "false");
-  const west = await mapEasting(page, 0.4),
-    east = await mapEasting(page, 0.6),
+  const [west, east] = await mapEastings(page),
+    context = 0.4 + ((30_000 - west) / (east - west)) * 0.2,
     outside = 0.4 + ((10_000 - west) / (east - west)) * 0.2;
+  // Context beyond the selected outline is real child geography; 10 km is outside its frame.
+  await expect.poll(() => mapPixel(page, context, 0.5)).not.toEqual([49, 87, 91]);
   // The area outside the child exposes the map-frame background, not the parent's terrain.
   await expect
     .poll(async () => {

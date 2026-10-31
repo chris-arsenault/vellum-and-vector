@@ -116,6 +116,23 @@ export async function mapEasting(page: Page, fraction: number) {
   return Number(coordinates!.match(/(-?[\d.]+) E/)![1]);
 }
 
+/** Stable view readings for a world-to-screen transform after wheel animation. */
+export async function mapEastings(page: Page) {
+  let west = NaN,
+    east = NaN;
+  await expect
+    .poll(async () => {
+      const a = await mapEasting(page, 0.4),
+        b = await mapEasting(page, 0.6);
+      const settled = a === west && b === east;
+      west = a;
+      east = b;
+      return settled;
+    })
+    .toBe(true);
+  return [west, east] as const;
+}
+
 /** Place a named point feature at a canvas pixel and wait for its panel. */
 export async function placePoint(page: Page, name: string, x = 300, y = 300) {
   await tool(page, "Place point").click();
