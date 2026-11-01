@@ -24,6 +24,12 @@ const grainAnisotropy = 2.5;
 /** Cost near a known summit or cone, so channels run around it and it stands on a divide. */
 const summitRepulsion = 12;
 /**
+ * Travel an exit, lake or sink root still owes per metre of its height: the fall to the sea
+ * beyond the frame. Dearer than running the same height down inside the frame, so water on a
+ * slope runs down to the low exit instead of leaving sideways where the exterior is level.
+ */
+const exitFall = 60;
+/**
  * Heterogeneity of the ground: it decides between routes the organizing terms leave equal,
  * so a channel wanders where nothing else steers it. On a plain nothing else does, and the
  * water finds its way through every local unevenness; on a slope the fall decides.
@@ -162,7 +168,9 @@ function route(state: RegionalState, network: NetworkWork, cost: Float64Array, r
   // instead of every edge cell draining its own strip.
   for (let i = 0; i < n; i++)
     if (root[i]) {
-      travel[i] = climbCost * Math.max(0, network.level[i]);
+      // An exit owes the fall beyond the frame; a lake or sink root is the water's own end.
+      const exit = network.lake[i] < 0 && !network.sink[i];
+      travel[i] = (exit ? exitFall : climbCost) * Math.max(0, network.level[i]);
       heap.push(i, travel[i]);
     }
   const blocked = (i: number, j: number) =>
@@ -224,8 +232,27 @@ export function gatherFlow(state: RegionalState, network: NetworkWork) {
   channel.fill(0);
   for (let k = 0; k < count; k++) {
     const i = order[k];
-    channel[i] = Number(flow[i] >= threshold && network.lake[i] < 0);
+    channel[i] = Number(
+      flow[i] >= threshold * slopeFactor(mesh, network, i) && network.lake[i] < 0
+    );
   }
+}
+/** Gradient of the captured base at which the channel threshold is the reference. */
+const referenceGradient = 0.02;
+/**
+ * The river network's slope factor (checklist row): gullies start earlier on steep ground
+ * and later on plains, so a channel on a slope five times the reference needs less than half
+ * the flow and one on a plain up to twice as much.
+ */
+function slopeFactor(
+  mesh: RegionalState["physical"]["map"]["mesh"],
+  network: NetworkWork,
+  i: number
+) {
+  const j = network.receiver[i];
+  if (j < 0) return 1;
+  const gradient = Math.abs(network.base[i] - network.base[j]) / distance(mesh, i, j);
+  return clamp(Math.sqrt(referenceGradient / Math.max(1e-4, gradient)), 0.5, 2);
 }
 
 /** Mark the tree path from a cell down to the nearest channel as channel: the stream it stands on. */

@@ -91,7 +91,10 @@ it("routes a constructed catchment to its local outlets and retains its water bu
     if (j < 0) out += map.FlowAccumulation.get(i);
     else expect(rank[j]).toBeLessThan(rank[i]);
   }
-  expect(out).toBeCloseTo(supplied, 6);
+  // The outflow is the supply less what the channels lose crossing the ground (seepage and
+  // evaporation over their belts, plan W1): a little in this humid country, never more.
+  expect(out).toBeLessThanOrEqual(supplied + 1e-9);
+  expect(out).toBeGreaterThan(supplied * 0.9);
 });
 
 it("leaves an unsupported depression dry and fills it when supplied with runoff", () => {

@@ -4,7 +4,9 @@ import { physicalGradients } from "../canonry/physicalMetric";
 import { releaseWorking } from "../canonry/physicalNumerics";
 import { applyGlaciation } from "./glacial";
 import { baseSmoothing } from "./base";
-import { featureCaps } from "./causes/registry";
+import { featureCaps, restoreFeatures } from "./causes/registry";
+import { networkDivides } from "./divides";
+import { transportSediment, wasteHillslopes } from "./sediment";
 import {
   blurContent,
   contentMask,
@@ -46,6 +48,10 @@ const knickpointGradient = 0.025;
 /** Hillslope steps from the channel over which the slope flattens toward its divide, and the floor it keeps. */
 const convexityLength = 20,
   divideFloor = 0.25;
+/** Extra rise of a hillslope cell on the trunk of the divide network (plan G2), at full crest strength. */
+const crestGain = 0.6;
+/** Crest strength above which a divide cell is a ridge the hillslope smoothing rounds toward, not with. */
+const crestFixed = 0.4;
 
 /** Per-cell rise above the receiver: the amplified process part and the unamplified base step. */
 interface Increments {
@@ -68,25 +74,33 @@ export function deriveRelief(state: RegionalState) {
   const map = state.physical.map,
     n = map.mesh.count,
     network = state.regional.network!,
-    increments = reliefIncrements(state),
+    crest = networkDivides(state),
+    increments = reliefIncrements(state, crest),
     amplification = calibrate(state, increments),
     h = new Float64Array(n),
     basin = new Uint8Array(n);
   construct(state, increments, amplification, h);
   conditionOnBase(state, h);
-  smoothHillslopes(state, h);
+  smoothHillslopes(state, h, crest);
   buildCones(state, h);
   for (let i = 0; i < n; i++) if (network.lake[i] >= 0 || network.sink[i]) basin[i] = 1;
   const relief: ReliefWork = { amplification, basin, iceFlux: new Float64Array(n) };
   applyGlaciation(state, h, relief);
   keepDrainable(network, h, basin);
+  // Oversteepened ground fails and its rock, with the valleys' incision, settles downstream.
+  const supply = new Float64Array(n);
+  wasteHillslopes(state, h, supply);
+  transportSediment(state, h, supply);
+  keepDrainable(network, h, basin);
   writeSurface(state, h);
   state.regional.relief = relief;
+  // Established landmarks restore their signatures on the written relief.
+  restoreFeatures(state);
   updateSlopes(state);
 }
 
 /** The rise each cell asks above its receiver, from the network and the present media. */
-function reliefIncrements(state: RegionalState): Increments {
+function reliefIncrements(state: RegionalState, crest: Float64Array): Increments {
   const map = state.physical.map,
     mesh = map.mesh,
     n = mesh.count,
@@ -116,8 +130,12 @@ function reliefIncrements(state: RegionalState): Increments {
       steps[j] = steps[i] + 1;
       const reworked = 1 - reworkedSoftening * (reworking?.[j] ?? 0),
         cover = 1 - coverSoftening * clamp(map.TreeCover.get(j)),
-        convexity = Math.max(divideFloor, 1 - steps[j] / convexityLength);
-      gradient = hillslopeGradient * material * reworked * cover * convexity;
+        convexity = Math.max(divideFloor, 1 - steps[j] / convexityLength),
+        // On the divide network the crest rises with the catchments it separates (plan G2),
+        // along long flanks; where valley heads approach from both sides the divide is a col.
+        ridge = crest[j] * clamp(steps[j] / convexityLength);
+      gradient =
+        hillslopeGradient * material * reworked * cover * convexity * (1 + crestGain * ridge);
     }
     if (cap[j] > 0) gradient = Math.min(gradient, cap[j]);
     increment[j] = length * gradient;
@@ -257,13 +275,15 @@ function rootHeight(network: NetworkWork, j: number) {
  * divide between two paths, so neighbouring slopes that drain to different channels meet in
  * a rounded interfluve instead of a wall. Channels and basins keep their own heights.
  */
-function smoothHillslopes(state: RegionalState, h: Float64Array) {
+function smoothHillslopes(state: RegionalState, h: Float64Array, crest: Float64Array) {
   const mesh = state.physical.map.mesh,
     n = mesh.count,
     network = state.regional.network!,
     around = new Int32Array(mesh.stride),
     previous = new Float64Array(n),
+    // A divide is a crest: its flanks round toward it, it does not round toward them.
     fixed = (i: number) =>
+      crest[i] > crestFixed ||
       network.sea[i] ||
       network.channel[i] ||
       network.lake[i] >= 0 ||

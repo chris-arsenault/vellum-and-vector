@@ -9,6 +9,7 @@ import {
   requireThat,
   type AtlasFeature,
   type DomainSnapshot,
+  type Landmark,
 } from "@atlas/domain";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
 import { landscape } from "../mapFixtures";
@@ -173,15 +174,14 @@ export function axisDifference(a: number, b: number) {
 }
 
 /** A coarse supplied parent (5 km samples) and the regional working state built from it. */
-export function regionalFixture(
-  height = (x: number, y: number) => 120 + x / 200 - y / 500,
-  north = 20000,
-  refinementLevel = 1,
-  extra: Record<string, [string, (x: number, y: number) => number]> = {}
+/** The fixture world's child map over the frame, with the parent's captured landmark records. */
+function supplyChildArea(
+  source: DomainSnapshot,
+  footprint: ReturnType<typeof rectangle>,
+  refinementLevel: number,
+  landmarks: Landmark[]
 ) {
-  const initial = landscape(),
-    source = initial.domain,
-    footprint = rectangle([0, 0, 40000, north]);
+  source.world.landmarks = [...(source.world.landmarks ?? []), ...landmarks];
   source.world.id = "df8d14c5-4f19-4f11-aa7c-fba42fbde872";
   source.world.areas.parent = { ...source.world.areas.area, id: "parent", footprint };
   source.world.areas.area = {
@@ -197,6 +197,18 @@ export function regionalFixture(
   source.world.epochs = [
     { id: "Present", tectonics: 1, hydrology: 1, ice: 0, coasts: 1, temperature: 15, seaLevel: 0 },
   ];
+}
+export function regionalFixture(
+  height = (x: number, y: number) => 120 + x / 200 - y / 500,
+  north = 20000,
+  refinementLevel = 1,
+  extra: Record<string, [string, (x: number, y: number) => number]> = {},
+  landmarks: Landmark[] = []
+) {
+  const initial = landscape(),
+    source = initial.domain,
+    footprint = rectangle([0, 0, 40000, north]);
+  supplyChildArea(source, footprint, refinementLevel, landmarks);
   // The parent is captured over the frame and its padding, as a completed world supplies it:
   // the exterior continues the supplied country instead of clamping to the frame edge.
   const padding = 100_000,

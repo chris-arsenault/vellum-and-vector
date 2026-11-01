@@ -1,6 +1,6 @@
 import { oceanDistance } from "../canonry/geography";
 import { latitudeAt } from "../canonry/latitude";
-import { isContent, regionalSpan, smoothOverLength } from "./lattice";
+import { distance, isContent, regionalSpan, smoothOverLength } from "./lattice";
 import { materialBands } from "./material";
 import { heightGradients } from "./relief";
 import { clamp, naturalBand, type RegionalState } from "./state";
@@ -50,6 +50,34 @@ export function deriveMedia(state: RegionalState) {
   deriveInsolation(state, gx, gy, media.insolation);
   derivePooling(state, gx, gy, media.pooling);
   deriveWetness(state, media.wetness);
+  deriveGeothermal(state);
+}
+
+/** Geothermal (0..1000) a fully opened fracture adds, and a cone adds at its centre. */
+const fractureHeat = 300,
+  coneHeat = 400;
+/**
+ * Geothermal re-derived from the captured value (plan: geothermal row): heat rises where the
+ * fracture set opened beyond the captured conductance and near the character's cones; the
+ * plume and boundary terms of the world are not captured and are left off. Read by the magic
+ * engine's Fire sources.
+ */
+function deriveGeothermal(state: RegionalState) {
+  const map = state.physical.map,
+    mesh = map.mesh,
+    natural = naturalBand(state, "Geothermal"),
+    captured = naturalBand(state, "FractureConductance"),
+    cones = state.regional.character?.cones ?? [];
+  for (let i = 0; i < mesh.count; i++) {
+    if (!isContent(mesh, i)) continue;
+    const opened = Math.max(0, map.FractureConductance.get(i) - captured.get(i)) / 1000;
+    let cone = 0;
+    for (const c of cones) cone = Math.max(cone, 1 - distance(mesh, c.cell, i) / c.radius);
+    map.Geothermal.set(
+      i,
+      Math.round(clamp(natural.get(i) + fractureHeat * opened + coneHeat * clamp(cone), 0, 1000))
+    );
+  }
 }
 
 /**

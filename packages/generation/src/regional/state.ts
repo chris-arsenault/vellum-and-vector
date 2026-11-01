@@ -1,7 +1,8 @@
-import type { Band } from "@atlas/domain";
+import type { Band, Landmark } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import type { AtlasPhysicalWorkspace } from "../canonry/atlasWorkspace";
 import type { PhysicalBufferName, PhysicalField } from "../canonry/field";
+import type { Placed } from "../canonry/landmarkGeometry";
 import type { RegionalCharacter } from "./character";
 import type { CapturedCourse } from "./courses";
 import type { Contributions } from "./media";
@@ -59,6 +60,8 @@ export interface Evidence {
   seats: Seat[];
   /** Captured rivers entering across the frame edge, with the discharge they bring (m³/s). */
   entries: { cell: number; discharge: number }[];
+  /** Captured landmark records standing in the frame, placed on this lattice. */
+  landmarks: { landmark: Landmark; placed: Placed }[];
 }
 
 /**
@@ -127,6 +130,8 @@ export interface RegionalWork {
   contributions: Contributions;
   /** Media the field has no band for (insolation, cold pooling, wetness), derived after each round's water. */
   media?: SharedMedia;
+  /** This round's sediment reaching the sea at each root cell (m³), for the coast. */
+  sediment?: { mouthLoad: Float64Array };
   /** The round being evaluated: 0 before the schedule, 1..3 inside it, 4 at the final refresh. */
   round: number;
   character?: RegionalCharacter;

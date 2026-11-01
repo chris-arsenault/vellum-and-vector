@@ -27,6 +27,8 @@ const fracturedSeepage = 1.5;
 const poolDepth = 2;
 /** The fewest cells a pool spans before the map holds it as a lake. */
 const lakeCells = 3;
+/** Surface gradient at which a drawn river's threshold is the reference. */
+const riverReferenceGradient = 0.02;
 
 /**
  * Transport and access on the present surface: the spill graph, discharge, mapped streams,
@@ -225,10 +227,32 @@ function accumulate(state: RegionalState) {
       j = receiver[i];
     if (j < 0) continue;
     map.CatchmentArea.add(j, map.CatchmentArea.get(i));
-    map.FlowAccumulation.add(j, map.FlowAccumulation.get(i));
+    const flow = map.FlowAccumulation.get(i);
+    map.FlowAccumulation.add(j, flow - transmissionLoss(state, i, j, flow));
   }
   qualifyChannels(state);
   orderChannels(state);
+}
+
+/** Channel belt half-width per square root of discharge (m), the ground a flow wets as it passes. */
+const beltWidth = 80;
+/**
+ * Channel persistence (plan W1): the water a flow loses crossing a cell to seepage through
+ * the bed (intact and fractured ground) and to evaporation where the climate takes more than
+ * it gives, over the belt it wets. In dry or fractured country a channel loses more than its
+ * catchment adds and falls below the river threshold: a dry valley with its incision kept.
+ */
+function transmissionLoss(state: RegionalState, i: number, j: number, flow: number) {
+  if (flow <= 0) return 0;
+  const map = state.physical.map,
+    mesh = map.mesh,
+    wetted = Math.min(regionalSpan(state), beltWidth * Math.sqrt(flow)) * distance(mesh, i, j),
+    evaporation = Math.max(
+      0,
+      potentialEvaporation(celsius(state, i)) - regionalPrecipitation(state, i)
+    ),
+    rate = seepageRate(state, i) + evaporation;
+  return Math.min(flow, (wetted * rate) / secondsPerYear);
 }
 
 /**
@@ -244,11 +268,15 @@ function qualifyChannels(state: RegionalState) {
     flowPath = upstreamLengths(state, () => true);
   // A channel gathers water from a catchment wider than one sample; a strip
   // accumulating down a planar slope is sheet flow, however much it carries.
+  // The river network's slope factor: a river is drawn at less flow on steep ground and at
+  // more on a plain (gullies start earlier on slopes), as the network's channels are.
+  const slopeFactor = (i: number) =>
+    clamp(Math.sqrt(riverReferenceGradient / Math.max(1e-4, map.Slope.get(i))), 0.5, 2);
   for (let i = 0; i < mesh.count; i++)
     if (
       isContent(mesh, i) &&
       map.WaterKindCodes.get(i) !== 1 &&
-      map.FlowAccumulation.get(i) >= threshold &&
+      map.FlowAccumulation.get(i) >= threshold * slopeFactor(i) &&
       map.CatchmentArea.get(i) / (flowPath[i] + span) >= resolutionCells * span
     )
       map.RiverOrders.set(i, 1);

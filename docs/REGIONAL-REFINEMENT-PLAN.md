@@ -1359,6 +1359,150 @@ Steps:
   integrated once more per run; nothing writes the `Temperature` ledger before M5; the
   fracture check reads the band, not a consumer.
 
+### M2 expansion (2026-11-01)
+
+Under the lean process. Read before expanding: `regional/relief.ts`, `network.ts`,
+`drainage.ts`, `margins.ts`, `divides.ts`, `base.ts`, `material.ts`, the landmark cause table
+above, the world's `landmarks.ts` (`maintainLandmark`), `landmarkKinds.ts`, `landforms.ts`
+(waterfall rule) and `floodplains.ts`.
+
+Decisions (mechanism choices, with reasons):
+
+- **Divide network as a crest term.** The network tree already holds the dual: a hillslope
+  cell whose neighbours drain to another channel segment stands on a divide, and the smaller
+  of the two catchments it separates says how far up the ridge tree it stands (trunk divides
+  between large catchments, tributary divides between small ones). The crest term raises the
+  hillslope increment on divide cells by the logarithm of that catchment size, bounded, so
+  ridgelines grow along the trunk and dip to cols between small catchments; a seat's footprint
+  cap still holds the crest down near it. No separate ridge-tree data structure: the divides
+  module reads the network, as it reads the drainage for the classifier.
+- **Valley persistence and channel persistence.** The relief is derived from the network, so
+  a valley's incision is kept whether or not a river is drawn in it. The drawn river is a
+  function of persistent discharge: the routed flow loses water along its path to seepage
+  through the ground (intact and fractured, as the lake stage already reads) and to
+  evaporation over its wetted width where the climate takes more than it gives, so in dry or
+  fractured country channels fall below the river threshold and leave dry valleys with their
+  incision. Capture and abandoned channels (W2) follow: the routed water takes the derived
+  valleys, and a network valley the routing left keeps its form. Recorded as covered by the
+  derivation, not a new term.
+- **Landmark evidence and support.** A `landmark` cause reads the captured landmark records
+  placed on the lattice (the world's `placeLandmark`, no drift: a region has no epochs);
+  influence by kind: mountains repel the network like summits and anchor the crest, canyons
+  and falls are corridors the network is drawn into, rings repel along the rim, an
+  escarpment's fault is a trunk of the fracture set (conductance along the path). Support is
+  the world's own `maintainLandmark` run on the regional field after each structure step's
+  relief is written (a new `restore` stage of the registry): the signature is measured and
+  the smallest correction applied, re-derived each round (the correction never stacks because
+  the relief is re-derived first). A falls where a river crosses an escarpment is the world's
+  waterfall class on the restored step. The spring line at an escarpment foot is M5's
+  (springs are magic sites); recorded as not done here.
+- **Cone extension.** Cones already build; the hard apron enters the material resistance
+  within the cone's radius. The caldera (a closed-basin root) and lava plateau are deferred
+  with the reason: a new root kind in the network for a feature the fixtures do not hold.
+- **Geothermal.** The captured geothermal plus a term for conductance opened above the
+  captured fracture set and a term for cone proximity; written where the media are derived.
+  Consumed by the magic engine's Fire sources as before.
+- **Mass wasting.** One capped pass after the relief is drainable: a hillslope cell steeper
+  above its receiver than the material's stable gradient (beyond the base's own step) fails
+  by a bounded share of the excess; the failed rock is booked as sediment supply.
+- **Fluvial incision, sediment transport, floors, fans, lake deltas.** The channel profile is
+  the incision term (exists); incision below the captured base and failed hillslope rock are
+  the sediment supply, carried down the network tree with a capacity proportional to flow
+  times gradient; the excess deposits (bounded per cell) as alluvial floors where gradients
+  fall, fans where a steep channel meets flat ground, a small fan where a channel enters a
+  lake (F5), and a mouth load at the sea for M3. Deposits raise the derived surface by their
+  thickness and write `SedimentThickness` with the ledger total.
+- **River network slope factor.** The channel threshold scales with the inverse square root
+  of the base gradient, bounded, so gullies start earlier on steep ground and later on plains.
+  The entering-river hook exists.
+- **Floodplain valley floor.** A breadth-first floor from each river cell over ground within a
+  few metres of the channel (growing with discharge and sediment), in the same basin, within a
+  geographic maximum width, replaces the one-ring margin.
+- **Runoff loss structure.** The captured runoff is the budget; developed cover changes it:
+  trees intercept, wetland holds, so a cleared or afforested cell changes its runoff and the
+  next round's water. A full per-term water balance is not rebuilt (the captured budget already
+  carries the parent's).
+- **Structural relief.** Differential erosion of the material bands is the existing
+  hillslope and channel gradient dependence on material resistance; recorded as covered.
+- **Dam crests (F3).** A captured dam feature on a channel holds a reservoir: the crest is the
+  lower of the two banks across the valley at the dam cell; the water stage behind it fills
+  the connected ground below the crest upstream of the dam, written as a lake body after the
+  routing. A dam feature cause carries it (`respond` after water).
+
+Steps:
+
+1. **Divides, mass wasting, sediment, slope factor, apron, geothermal** (`divides.ts`,
+   `sediment.ts`, `network.ts`, `material.ts`, `sharedMedia.ts`). Evidence: divide cells stand
+   above their non-divide neighbours; the foot of a mountain front holds more sediment than
+   its slopes; a steep fixture draws channels at a smaller catchment than a gentle one.
+2. **Persistence, valley floor, runoff loss, dams** (`drainage.ts`, `margins.ts`,
+   `climate.ts`, `causes/dam.ts`). Evidence: a dry, fractured fixture holds network valleys
+   with incision and no drawn river; a captured dam holds a lake upstream of it.
+3. **Landmark cause and restore stage** (`causes/landmark.ts`, `causes/registry.ts`,
+   `relief.ts`, fixture landmarks). Evidence: a fixture with an escarpment landmark shows a
+   waterfall class where a river crosses it, and the measured throw holds within a tenth.
+4. **Record, review, commit.**
+
+#### M2 execution record (2026-11-01)
+
+- **Built as decided**, with these mechanism findings from running the fixtures: the frame's
+  roots owed only the climb cost per metre of height, so on a slope whose exterior is level
+  water left sideways at the nearest edge instead of running down to the low exit, and no
+  sediment reached the foot of a mountain front; an exit, lake or sink root now owes a larger
+  fall cost per metre of height (`exitFall`), which keeps water on the slope. A strict "lower
+  exterior only" exit rule was tried and withdrawn: a level plain then had no exit at all.
+  Sediment settled within a few cells because the conditioned channel profiles are stair-
+  stepped (flat reaches between knickpoints) and the settling share was per cell; settling is
+  now a rate per length (a load crosses kilometres of flat ground). Hillslope smoothing eroded
+  the crests the divide term built; divide cells are now fixed in that smoothing (their flanks
+  round toward them). The sediment band is added to after the glacial step writes it, so
+  moraines survive. A dam's crest is read from the second-highest ground around the dam cell
+  that is neither channel nor below the bed (the river leaves the cell diagonally, so face
+  neighbours include the channel's own next cells). The refresh step re-runs the features'
+  responses after its water routing, or a reservoir written in round three vanished.
+- **Evidence (fixture scale, `terrain.test.ts`, six checks).** Ridges and passes exist and
+  seven in ten divide cells stand above their flanks; the foot of a sampled mountain front
+  holds more sediment than the slope above it (the fan lies on the lower ramp of the parent's
+  five-kilometre sample, not on the drawn plain beyond it, where loads are exhausted);
+  channels start at a smaller catchment on steep ground than on a plain; dry, fractured
+  country leaves a larger share of its network valleys without a river, with incision kept,
+  than humid country; a captured dam on a gently falling trunk holds a reservoir of several
+  cells behind it; an escarpment landmark in the captured ground keeps its measured throw
+  within a tenth and a river crossing it is classed a waterfall.
+- **Disclosed.** The divide term's first check ("trunk divides stand higher than tributary
+  divides") was wrong and withdrawn: the divide between two large catchments is lowest at
+  their confluence, so catchment size at a divide cell does not order crest heights. The
+  escarpment check first gave the landmark a smooth captured base; the world's symmetric throw
+  then dug a 150 m trench along the foot and rivers ran along it to the frame edge, so the
+  check now carries the scarp in the captured ground as a parent would. Valley persistence,
+  incision memory, capture and abandoned channels and structural relief are covered by the
+  derivation (the relief comes from the network, not the drawn river) and recorded as such;
+  the spring line at an escarpment foot and the caldera and lava plateau are not built (M5
+  springs; a new root kind for a feature the fixtures do not hold). Mouth loads are recorded
+  in the state for M3's coast; nothing reads them yet. The runoff loss structure is the cover
+  retention factor on the captured budget, not a rebuilt water balance.
+- **Review (read-only subagent) and what was done.** Fixed: the incision sediment supply was
+  taken at every cell, not only channels; mouth loads were booked at every root (exits, sinks,
+  lake roots), now only where a root meets the sea; the world's landmark correction wrote
+  halo cells, where nothing re-derives them, so corrections stacked round on round (the halo
+  now keeps the parent's ground) and the maintenance band accumulated across rounds (reset
+  each restore); the exit fall cost also taxed lake and sink roots, shifting catchments away
+  from inland waters (exits only now); the valley floor's channel datum counted sediment the
+  surface already carried; the slope factor applied to the network's channels only, so no
+  drawn river started earlier on steep ground (drawn rivers now carry it too); the crest term
+  raised cols as much as crests (it is now weighted by hillslope length, and only ridges above
+  a crest strength are fixed in the hillslope smoothing). Disclosed, not changed: mass wasting
+  softens a knickpoint step by the same bounded share as any oversteepened flank; lacustrine
+  deltas form at captured lakes only (the routing's own lakes and reservoirs are not network
+  roots); the landmark cause carries the table's influence column in reduced form (massif
+  repulsion, canyon and falls corridors, ring rims, the escarpment fault) and no response
+  column (rim retreat, lip retreat, scarp retreat and breach deepening are M3/M5 work on the
+  coast and ice terms); the terrain checks have no "mechanism off" controls, and the
+  escarpment check, with the scarp in the captured ground, exercises the conditioning and the
+  knickpoint step as much as the landmark's restore; Gate C is not measured (withdrawn as a
+  gate), and M2 adds per-landmark path scans, a cone loop in every material read and a
+  per-river-cell floor walk.
+
 ### Sulion mapping
 
 Root plan `5732ab12-bbaf-45e0-a972-55a163ae8ff9` "Regional refinement at world depth (one
@@ -1373,9 +1517,9 @@ milestones), both canceled as superseded by the one-representation decision.
 
 ### Current state
 
-M0 (software organization) and M1 (shared media and repairs) committed as recorded above.
-Next: M2 (terrain and water at depth) through plan-phase, under the lean per-phase process the
-owner set on 2026-11-01.
+M0 (software organization), M1 (shared media and repairs) and M2 (terrain and water at depth)
+committed as recorded above. Next: M3 (coast, climate and ice at depth) through plan-phase,
+under the lean per-phase process the owner set on 2026-11-01.
 
 ## New namespace `packages/generation/src/regional`
 

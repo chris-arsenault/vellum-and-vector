@@ -1,6 +1,50 @@
 import { Landform } from "../canonry/codes";
-import { neighborsOf } from "./lattice";
+import { neighborsOf, regionalSpan } from "./lattice";
+import { channelCells } from "./network";
 import type { RegionalState } from "./state";
+
+/** A tree over the cells: receivers, and the cells in root-first order. */
+interface Tree {
+  receiver: Int32Array;
+  order: Int32Array;
+  count: number;
+}
+
+/** Catchments this many times the channel threshold stand on the highest crests. */
+const trunkCatchments = 64;
+
+/**
+ * The divide network of the drainage network (the ridge tree, plan G2): a hillslope cell
+ * whose neighbours drain to another channel segment of the network stands on a divide, and
+ * the smaller of the two catchments it separates says how far up the ridge tree it stands:
+ * the trunk divide between two large basins, the tributary divides between small ones.
+ * Returns a crest strength 0..1 per cell (0 off a divide), read by the relief derivation so
+ * ridgelines branch like an inverted river and dip to cols between small catchments.
+ */
+export function networkDivides(state: RegionalState) {
+  const mesh = state.physical.map.mesh,
+    network = state.regional.network!,
+    channel = (i: number) => network.channel[i] === 1,
+    label = segmentLabels(network, channel),
+    threshold = channelCells * regionalSpan(state) ** 2,
+    crest = new Float64Array(mesh.count),
+    around = new Int32Array(mesh.stride);
+  for (let k = 0; k < network.count; k++) {
+    const i = network.order[k];
+    if (channel(i) || network.sea[i]) continue;
+    const m = neighborsOf(mesh, i, around);
+    let smallest = Infinity;
+    for (let n = 0; n < m; n++) {
+      const j = around[n];
+      if (label[j] < 0 || label[j] === label[i] || network.sea[j]) continue;
+      // The catchment on the far side, read at the segment's own mouth.
+      smallest = Math.min(smallest, network.area[label[j]], network.area[label[i]]);
+    }
+    if (smallest < Infinity)
+      crest[i] = Math.min(1, Math.log2(1 + smallest / threshold) / Math.log2(1 + trunkCatchments));
+  }
+  return crest;
+}
 
 /**
  * Drainage divides on the routed surface: land cells, off the channels, whose neighbours
@@ -14,7 +58,7 @@ export function divides(state: RegionalState) {
     mesh = map.mesh,
     { order, count } = state.regional.drainage!,
     channel = (i: number) => map.RiverOrders.get(i) > 0,
-    label = segmentLabels(state, channel),
+    label = segmentLabels(state.regional.drainage!, channel),
     divide = new Uint8Array(mesh.count),
     around = new Int32Array(mesh.stride);
   for (let k = 0; k < count; k++) {
@@ -50,9 +94,9 @@ export function markPasses(state: RegionalState, divide: Uint8Array) {
 }
 
 /** The channel segment each cell's water first reaches, as the id of that segment's lowest cell. */
-function segmentLabels(state: RegionalState, channel: (i: number) => boolean) {
-  const n = state.physical.map.mesh.count,
-    { receiver, order, count } = state.regional.drainage!,
+function segmentLabels(tree: Tree, channel: (i: number) => boolean) {
+  const n = tree.receiver.length,
+    { receiver, order, count } = tree,
     joins = new Uint8Array(n),
     label = new Int32Array(n).fill(-1);
   for (let k = 0; k < count; k++) {

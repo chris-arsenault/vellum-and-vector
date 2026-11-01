@@ -53,10 +53,16 @@ export function respondClimate(state: RegionalState) {
           applied.appliedTo("SoilDepth", i)
       )
     );
-    // Retain the captured runoff regime; exposure changes its local precipitation supply.
+    // The captured runoff regime is the budget; exposure changes its supply and the developed
+    // cover changes what reaches the channels (plan: runoff loss structure).
     map.Runoff.set(
       i,
-      Math.max(0, Math.round(runoff.get(i) * rainFactor + applied.appliedTo("Runoff", i)))
+      Math.max(
+        0,
+        Math.round(
+          runoff.get(i) * rainFactor * coverRetention(state, i) + applied.appliedTo("Runoff", i)
+        )
+      )
     );
   }
 }
@@ -76,6 +82,21 @@ function localTemperature(state: RegionalState, i: number, delta: number) {
   );
 }
 const nativeTemperature = (celsius: number) => Math.round(clamp((celsius + 30) * 10, 0, 1000));
+
+/** Share of runoff a full canopy intercepts, and a full wetland holds, beyond the captured cover. */
+const canopyInterception = 0.3,
+  wetlandHold = 0.3;
+/**
+ * What the developed cover does to the captured runoff: trees grown since the capture
+ * intercept, wetland holds, cleared ground sheds more. Bounded, so the cover shifts the
+ * budget and never replaces it.
+ */
+function coverRetention(state: RegionalState, i: number) {
+  const map = state.physical.map,
+    trees = map.TreeCover.get(i) - naturalBand(state, "TreeCover").get(i),
+    wetland = map.WetlandCover.get(i) - naturalBand(state, "WetlandCover").get(i);
+  return clamp(1 - canopyInterception * trees - wetlandHold * wetland, 0.4, 1.5);
+}
 
 /**
  * The captured precipitation, changed by exposure and the ledger, falls as snow for the share

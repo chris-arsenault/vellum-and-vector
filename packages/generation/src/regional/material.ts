@@ -1,6 +1,6 @@
 import { hashUnit } from "../canonry/noise";
 import { grainAt } from "./character";
-import { regionalSpan } from "./lattice";
+import { distance, regionalSpan } from "./lattice";
 import { clamp, type RegionalState } from "./state";
 
 /** Erodibility contrast between the weakest and most resistant band, as an exponent at full coherence. */
@@ -12,6 +12,8 @@ const rockWeight = 0.6,
 const bandLength = 1.5;
 /** Added resistance of fully warded ground (the lore's stable rivers and coasts). */
 const wardResistance = 0.5;
+/** Added resistance of a cone's lava apron at the cone, fading to its base radius (plan: cone extension). */
+const apronHardness = 0.8;
 /** The world's baseline rock resistance; relative resistance is read against it. */
 export const baselineRock = 1000;
 
@@ -97,8 +99,17 @@ export function materialResistance(state: RegionalState, bands: Float64Array, i:
     ward = clamp(map.Warding.get(i));
   return clamp(
     Math.exp(bandContrast * bands[i] + rockWeight * (rock - 1) - fractureWeight * fracture) *
-      (1 + wardResistance * ward),
+      (1 + wardResistance * ward) *
+      (1 + apronHardness * apron(state, i)),
     0.35,
     3.5
   );
+}
+/** How far inside a cone's hard apron the cell lies: 1 at the cone, 0 at and beyond its base. */
+function apron(state: RegionalState, i: number) {
+  const mesh = state.physical.map.mesh;
+  let inside = 0;
+  for (const cone of state.regional.character?.cones ?? [])
+    inside = Math.max(inside, 1 - distance(mesh, cone.cell, i) / cone.radius);
+  return clamp(inside);
 }

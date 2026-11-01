@@ -75,6 +75,8 @@ export function regionalSchedule(domains: string[]): ScheduledStep[] {
       state.regional.round = rounds + 1;
       updateSlopes(state);
       routeWater(state);
+      // The water was routed afresh: the features' responses on it (reservoirs, seats) too.
+      respondFeatures(state);
       deriveMedia(state);
       respondClimate(state);
       if (d.geography) respondCover(state);

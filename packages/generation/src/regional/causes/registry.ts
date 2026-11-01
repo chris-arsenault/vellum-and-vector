@@ -19,6 +19,8 @@ export interface FeatureCause {
   influence?(state: RegionalState, cost: Float64Array): void;
   support?(state: RegionalState): void;
   caps?(state: RegionalState, cap: Float64Array): void;
+  /** After a structure step's relief is written: restore the feature's signature on it. */
+  restore?(state: RegionalState): void;
   conjoin?(state: RegionalState): void;
   respond?(state: RegionalState): void;
 }
@@ -38,10 +40,18 @@ export function featureCauses(): readonly FeatureCause[] {
  * reads the same evidence in the same order whatever order the last publication left.
  */
 export function readEvidence(state: RegionalState): Evidence {
-  const evidence: Evidence = { courses: [], lakes: [], summits: [], seats: [], entries: [] };
+  const evidence: Evidence = {
+    courses: [],
+    lakes: [],
+    summits: [],
+    seats: [],
+    entries: [],
+    landmarks: [],
+  };
   for (const cause of causes) cause.read?.(state, evidence);
   const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
   evidence.courses.sort((a, b) => byId(a.feature.id, b.feature.id));
+  evidence.landmarks.sort((a, b) => byId(a.landmark.id, b.landmark.id));
   evidence.summits.sort((a, b) => byId(a.featureId, b.featureId));
   evidence.seats.sort((a, b) => byId(a.featureId, b.featureId));
   evidence.entries.sort((a, b) => a.cell - b.cell);
@@ -63,6 +73,10 @@ export function featureCaps(state: RegionalState) {
   const cap = new Float64Array(state.physical.map.mesh.count);
   for (const cause of causes) cause.caps?.(state, cap);
   return cap;
+}
+/** After the relief is written: each feature's signature restored by the smallest correction. */
+export function restoreFeatures(state: RegionalState) {
+  for (const cause of causes) cause.restore?.(state);
 }
 /** Round two: pairings between features. */
 export function conjoinFeatures(state: RegionalState) {
