@@ -1950,6 +1950,75 @@ Steps:
   utilities, road, event and politics registry entries and work decay (F4) are not built; the
   mill search scans the mesh per place.
 
+### M7 expansion (2026-11-01)
+
+Scope as replanned under the owner's correction of 2026-11-01 (recorded in the root plan's
+boundaries): the four-case harness, Gate A/B/C and the timing and count parity with
+`b4d8163` are withdrawn as gates and run only when the owner asks. M7 therefore delivers the
+durable records of the mechanisms M1–M6 built (ADR 0008 and the regional section of the
+workflow design, mechanisms only, no parameter values), the list of what the owner judges on
+renders, the open items with their source, and the harness command for that judgement. The
+ADOPT or REJECT decision is the owner's, on the renders.
+
+Steps:
+
+1. **Records to the mechanisms** (`docs/adr/0008-…`, `docs/generation-workflows.md`): the
+   worked relief (crests, mass wasting and sediment, transmission loss, valley floors), the
+   coast, the ice, the climate reads, the hosted ecology engine, the magic ground writes and
+   the society at depth, as built; one read-only review of the two documents against the code.
+2. **Record, commit.** This record; the final commit; one push (the plan's only push).
+
+#### M7 execution record (2026-11-01)
+
+- **Records updated.** ADR 0008 gains four decision paragraphs (the worked relief, the hosted
+  living landscape, magic through the ledger from captured materials, society at depth) and a
+  consequences paragraph naming the added cost; the workflow design's regional section gains
+  the same mechanisms in its own order (relief work and coast, climate and ecology, magic
+  evaluation and writes, fields and ways). Both name mechanisms only.
+- **Not run, by the owner's instruction.** The four-case harness (P1, P2, M1, M2) and the
+  browser matrix. The harness command stands in the "Frozen evaluation" section above:
+  `ATLAS_REGIONAL_VARIANT=candidate pnpm --dir frontend exec vitest run -c vitest.regional.config.ts`,
+  renders under `frontend/.artifacts/regional/evaluation/candidate/`. It has not run since
+  commit `833de50` (M0); the gates it served are withdrawn, so its result is the owner's
+  render judgement, not a pass or fail.
+- **What the owner judges on renders (collected from the M1–M6 records).**
+  1. Relief: flat parent ground stays flat (the hillslope term scaled by the parent's local
+     gradient was withdrawn in M4); ridgelines branch and cols sit where the network leaves
+     them; nothing reads as a lattice (no straight grid-aligned channels or ways).
+  2. Shore: the realized coast sits seaward of the drawn one in every band (a property of
+     the capture's smoothing, M3); on resistant rock the shore relief stands too high where
+     the parent has little (M3 item); the network keeps the captured sea as its roots, so a
+     cell the coast turned to sea is cut again each round from the same exposure (whether a
+     re-root is needed); no barred lagoons (longshore drift is not modelled).
+  3. Ecology: conifers on cold aspects did not move measurably within the horizons (the
+     cohorts are set by the captured temperature and the engine's rates are slow); the bog
+     behind a moraine is covered only in kind (peat on wet flats).
+  4. Magic: the per-system balance (no class vanishes, no system owns most places) on a real
+     world; dried basins crusting salt (F6) has no fixture; the carriers stand where the
+     parent put their stocks (X2'); no storm medium (X5); no regional ocean depth classes.
+  5. Society: ways by use, fords and bridges on the channels they cross, mills at falling
+     channels, fields as cleared cover around the places that farm them; not built: bounded
+     support works, hamlets and shrines, canals, portage pairs, fortress gorge dams, harbour
+     and pass demand, the connection graph and work decay; the acceptance's canal fixture.
+- **Open items with their source.** Each is recorded in its milestone's record above with the
+  reason it was left: M2 (the spring line at an escarpment foot, the caldera and lava plateau
+  as a new root kind), M3 (network re-root at the moved shore, barred lagoon, bathymetry classes, fog
+  belts, the world's column march), M4 (the hillslope term, conifer aspect, the moraine bog),
+  M5 (X2', X5, F6, ocean depth classes, magic-landmark conjunctions), M6 (S3, S5, F1–F3, the
+  not-built registry entries). None is a defect in what was built; each is a process the
+  checklist admitted that has no fixture yet or a judgement that needs a render.
+- **Review (read-only subagent) of the records against the code.** Five claims corrected in
+  both documents: the ecology engine is prepared from the captured state in the context step
+  (only its history memory is reset to the first derived geography), not on the first derived
+  relief; site classes are read when places are proposed in round two, only the ways at
+  extraction; toxicity, held ice and the door rings' grass and saplings are floors on their
+  own bands, not ledger totals; cold pooling reads a gentle floor below the surface around
+  it, not a closed basin; the cover changes runoff both ways against the captured cover. The
+  captured frame-edge inflow was added to the discharge sentence. Two parameter values stated
+  in prose (the neighbour share, the pass count) were replaced by their mechanism; the three
+  rounds stay because the product contract fixes them. Everything else in the two documents
+  was verified against the code.
+
 ### Sulion mapping
 
 Root plan `5732ab12-bbaf-45e0-a972-55a163ae8ff9` "Regional refinement at world depth (one
@@ -1965,9 +2034,10 @@ milestones), both canceled as superseded by the one-representation decision.
 ### Current state
 
 M0 (software organization), M1 (shared media and repairs), M2 (terrain and water at depth),
-M3 (coast, climate and ice at depth), M4 (ecology at depth), M5 (magic at depth) and M6
-(society at depth) committed as recorded above. Next: M7 (evaluate, record, adopt) through
-plan-phase, under the lean per-phase process the owner set on 2026-11-01.
+M3 (coast, climate and ice at depth), M4 (ecology at depth), M5 (magic at depth), M6
+(society at depth) and M7 (records to the mechanisms) committed as recorded above; the plan
+is complete and this file is frozen. The owner's render judgement (the harness command and
+the list in the M7 record) decides ADOPT or REJECT and opens any follow-on plan.
 
 ## New namespace `packages/generation/src/regional`
 

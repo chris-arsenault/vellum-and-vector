@@ -61,6 +61,65 @@ displace other fields to their rims and resist cutting inside; brine crusts in c
 closed basins; tears form from strain; effects, coasts, relief and meetings go through the
 ledger.
 
+**The derived relief is then worked by the processes that act on real ground.** Where the
+network leaves divides, the crests between neighbouring catchments carry a crest term so
+ridgelines branch like an inverted river rather than standing as isolated knobs; hillslopes
+above their angle of repose shed material downslope and the sediment is carried along the
+network, settling along the captured base gradient, dropping where a channel enters a lake and
+leaving its load at the shore roots. Drainage loses water to the ground along its length, so
+a channel's discharge is what the country between its head and the reach supplies plus the
+captured inflow that enters across the frame edge; valley
+floors are read as the flat ground a channel can reach from its own cells. The coast is
+developed on the derived surface: exposure is read from the fetch each shore cell faces and
+spreads a short way inland, exposed shores are cut back and sheltered shallows filled, and
+rivers meet the sea as deltas or estuaries according to their load and the shore's exposure.
+Ice is routed over the surface the relief gives it, thinning as it descends and melting where
+the lapsed climate does not hold it; what it removes is booked once as glacial erosion and
+what it releases enters the runoff as meltwater. Climate re-derives each round from the
+captured copies on the developed relief: temperature by lapse, aspect and cold pooling where
+a gentle floor lies below the surface around it, snow re-split from precipitation by the
+world's own seasonality rule, wind deflected by the relief it meets through the world's
+terrain rule, runoff changed by the present cover against the captured cover (cleared ground
+sheds more, grown ground holds more) and increased by the meltwater. The ground's soil develops under the
+living landscape once the ecology has begun and is not re-written by the climate after that.
+
+**The living landscape is the world's own engine, hosted on the regional field.** The world
+ecology engine is prepared once from the captured state in the context step, its history
+memory reset to the first derived geography, and then
+responds each round over a short span of horizons, forced by the regional climate, the
+magic systems' living effects and the fire causes the country holds; its soil water is capped
+by the soil's own capacity after the soils have evolved and its history is remembered between
+rounds, so the second round develops what the first grew and does not restart it.
+
+**Magic writes the ground through the ledger, from captured materials.** Each system is
+prepared once from the captured sources and intensities, with the parent's doors kept as
+established evidence and the captured intensity held along the frame edge where the parent's
+country continues. Each round the systems are evaluated against the present media in the
+lore's order, their meetings read the covered classes, and their ground effects are declared
+as this evaluation's totals: hardened rock as the change from the captured intensity,
+confluence soils against the natural soil, the hallowed spill, the Veil's wild relief, door
+chill and pools, and salt's glass and desiccation against the natural ground. Three writes
+are floors on their own bands rather than ledger totals: toxicity is reset from the captured
+band and raised to the meetings' maximum, ice held by charge is written to the persistence
+the ice budget reads above its relict floor, and the door rings' grass and saplings are held
+as floors. The applied heat is the forcing the rivers carry
+downstream. Nothing accumulates: a round re-derives from the captured materials and the
+present medium, and the ledger's replace rule turns a re-evaluation into an update.
+
+**Society develops at depth from the places the country holds.** Each settled place takes
+its fields and pasture from its hinterland, ranked by farming suitability and travel decay,
+and declares their clearance on the tree cohorts each round as the difference to the cleared
+target, so the engine grows on cleared ground and the fields stay cleared without ratcheting;
+an abandoned seat clears nothing. At extraction every settled place sends its residents to
+the market seat and a smaller share to its nearest larger neighbour; the flows are traced
+over the present surface with captured roads as worn ground and door ends as free edges, in
+repeated passes over the ground the previous pass wore, so later ways bend into earlier
+ones, and each way is published at the class its own flow earns. A way that crosses a channel fords it: the crossing is read geometrically against the
+drainage tree's links (the tree joins channel cells a knight's step apart, so a path can
+cross a channel without touching one of its cells), a road over a sizeable river crosses by
+a bridge, a settled place with a falling channel within reach turns a mill, and every
+settlement inside a captured control polygon carries that control.
+
 **Established features are terms in the processes, not shapes stamped on the result.** An
 inherited summit is a divide node the channels route around; it keeps its identity and
 moves to the realized summit of its massif. A captured river's course is a corridor the
@@ -109,8 +168,10 @@ captured-channel contract, so a grandchild develops from the child's organizatio
 Ranges develop separate massifs, strike ridges and cols because divides are where the
 network leaves them; tarns appear where ice gathered and nowhere else; established rivers
 keep their names, bring their discharge and gain feeding geography; towns on unusable flanks
-acquire a visible bench or valley floor. A refinement costs one network growth with its
-capture passes, three relief derivations with their calibration blurs, and three rounds of
-drainage, climate, magic and cover; site classes are read once. The implementation lives in
-`packages/generation/src/regional`; parameter values stay in that code and this record names
-the mechanisms only.
+acquire a visible bench or valley floor; fields clear the woods around the places that farm
+them and ways ford the rivers they cross where they cross them. A refinement costs one
+network growth with its capture passes, three relief derivations with their calibration blurs,
+mass wasting, sediment and coast development, and three rounds of drainage, climate, magic,
+the ecology engine's response and the fields' clearance; site classes are read when places
+are proposed, and the ways once at extraction. The implementation lives in `packages/generation/src/regional`; parameter
+values stay in that code and this record names the mechanisms only.

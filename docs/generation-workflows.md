@@ -126,13 +126,31 @@ the present surface, and take their support in the last round or are dropped. Se
 summits are re-sited from their captured positions and this map's own products are
 regenerated on every refinement, so a repeated refinement reproduces itself.
 
-Climate re-derives each round from the captured copies under the developed relief: lapse,
-exposure on the captured wind, moisture, soil gained from deposition, the captured runoff
-regime. Cover re-derives from the captured prior under the present tree line, soil, slope,
-wetness and magical media, opening forest where it cannot be carried and passing the tree
-line on cold new relief, and binds the next round's hillslopes and runoff. Surface classes
-and habitat outlines use the raster's shared class-boundary evaluator, the mesh footprint,
-named-biome extent and small-gap rules; smaller patches remain field coverage.
+The derived relief is worked by the processes that act on real ground: the crests between
+neighbouring catchments carry a crest term so ridgelines branch; hillslopes above their angle
+of repose shed material that the network carries, settling along the captured base gradient,
+dropping at lake entries and leaving its load at the shore roots; drainage loses water to the
+ground along its length; valley floors are the flat ground a channel reaches from its cells.
+The coast develops on that surface from the fetch each shore cell faces: exposed shores cut
+back, sheltered shallows fill, and rivers meet the sea as deltas or estuaries by their load
+and the shore's exposure. Ice is routed over the surface, thins as it descends and melts where
+the lapsed climate does not hold it; its erosion is booked once and its melt enters the runoff.
+
+Climate re-derives each round from the captured copies under the developed relief:
+temperature by lapse, aspect and cold pooling where a gentle floor lies below the surface
+around it; snow re-split from precipitation by the world's seasonality rule; wind deflected
+by the relief through the world's terrain rule; moisture and wetness on the present surface;
+runoff changed by the present cover against the captured cover (cleared ground sheds more,
+grown ground holds more) and increased by meltwater. Soil develops under the living landscape
+once the ecology has begun and is not re-written by the climate after that. The living
+landscape is the world's ecology engine hosted on the regional field: prepared once from the
+captured state in the context step with its history memory reset to the first derived
+geography, responding each round over a short span of horizons under the regional climate,
+the magic systems' living effects and the country's fire causes, with its soil water capped by
+the soil's capacity and its history remembered between rounds. Cover binds the next round's
+hillslopes and runoff. Surface classes and habitat outlines use the raster's shared
+class-boundary evaluator, the mesh footprint, named-biome extent and small-gap rules; smaller
+patches remain field coverage.
 
 Topographic prominence locates summits and their joining cols; a summit is named only above
 a prominence that scales with the parent sample span, so a regional map names the major
@@ -153,10 +171,18 @@ brine, follow drainage, crust in captured closed basins and supply wind-carried 
 exposed beds harden or collapse, and Fire consumes their material. A captured Hallowed ward
 does not spread again, only its located sources do; wards displace other magical fields to
 their rims and the ground inside resists cutting. Veil develops strain
-where systems compete and pairs coherent tears into doors at extraction. Effects, coasts,
-relief and meetings write through the ledger; a resolvable relief change reroutes water
-within the round. These operations develop the captured present without another physical
-epoch or human era. The child publishes its developed grain for its own refinement.
+where systems compete and pairs coherent tears into doors at extraction; the parent's
+captured doors stand as established evidence beside them. Each round the systems are
+evaluated against the present media in the lore's order, with the captured intensity held
+along the frame edge where the parent's country continues, and their ground effects are
+declared as that evaluation's totals through the ledger: hardened rock as the change from the
+captured intensity, confluence soils against the natural soil, the hallowed spill, the Veil's
+wild relief, door chill and pools, and salt's glass and desiccation against the natural
+ground. Toxicity, the ice held by charge above its relict floor and the door rings' grass and
+saplings are floors written on their own bands. The applied heat is the forcing
+the rivers carry downstream. A resolvable relief change reroutes water within the round.
+These operations develop the captured present without another physical epoch or human era.
+The child publishes its developed grain for its own refinement.
 
 Named magic places use the existing connected-class and minimum-component rules;
 local peaks within one site complex do not create separate places. Class coverage
@@ -166,7 +192,18 @@ field context, while captured source places remain available. Regional refinemen
 does not place new global sources, renew historical stocks or replay ocean
 impulses. Known places and completed society history remain context. Smaller
 settlements, local ways and physical sites come from regional terrain and useful
-locations, without demographic allocation gates or another society era. Regenerating society alone
+locations, without demographic allocation gates or another society era. Each settled place
+takes its fields and pasture from its hinterland, ranked by farming suitability and travel
+decay, and declares their clearance on the tree cohorts each round as the difference to the
+cleared target, so the engine grows on cleared ground and the fields stay cleared without
+ratcheting; an abandoned seat clears nothing. At extraction every settled place sends its
+residents to the market seat and a smaller share to its nearest larger neighbour; the flows
+are traced over the present surface with captured roads as worn ground and door ends as free
+edges, in repeated passes over the ground the previous pass wore, so later ways bend into
+earlier ones, and each way is published at the class its own flow earns. A way crossing a channel fords it, read geometrically against the
+drainage tree's links (which join channel cells a knight's step apart); a road over a sizeable
+river crosses by a bridge; a settled place with a falling channel within reach turns a mill;
+every settlement inside a captured control polygon carries that control. Regenerating society alone
 uses this map's current surface and preserves terrain; physical refinement starts
 from its pinned inputs. Neither path reads live geography from another map.
 
