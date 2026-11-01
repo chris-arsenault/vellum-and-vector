@@ -1,69 +1,14 @@
-import { spatial, translateGeometry, KeyedHeap, type AtlasFeature } from "@atlas/domain";
-import { regionalCommunitySpacing } from "../regionalSociety";
-import { putRegionalFeature, putRegionalNetwork } from "./extraction/features";
-import { distance, isContent, neighborhood, neighborhoodCapacity, positionOf } from "./lattice";
+import { KeyedHeap } from "@atlas/domain";
+import { distance, isContent, neighborhood, neighborhoodCapacity } from "./lattice";
 import type { RegionalState } from "./state";
 
 /** Travel cost of slope, shared by local ways and hinterland competition. */
 export const slopeCost = 12;
 
-/** Connect each seat to its nearest neighbour by a local way over dry, passable ground. */
-export function connectSeats(
-  state: RegionalState,
-  seats: { feature: AtlasFeature; cell: number }[]
-) {
-  if (seats.length < 2) return;
-  const mesh = state.physical.map.mesh,
-    shapes = seats.map((s) => {
-      const p = positionOf(mesh, s.cell),
-        coordinate = (s.feature.geometry as GeoJSON.Point).coordinates;
-      return translateGeometry(s.feature.geometry, p.x - coordinate[0]);
-    }),
-    pairs = new Set<string>(),
-    size = regionalCommunitySpacing(state) * 3;
-  spatial.withIndex(shapes, (index) => {
-    for (const [a, seat] of seats.entries()) {
-      const p = positionOf(mesh, seat.cell),
-        nearby = index
-          .query([p.x - size, p.y - size, p.x + size, p.y + size])
-          .filter((b) => b !== a && seats[b].cell !== seat.cell)
-          .sort(
-            (b, c) =>
-              distance(mesh, seat.cell, seats[b].cell) - distance(mesh, seat.cell, seats[c].cell)
-          ),
-        b = nearby[0];
-      if (b === undefined) continue;
-      const key = [a, b].sort((x, y) => x - y).join(":");
-      if (pairs.has(key)) continue;
-      pairs.add(key);
-      publishWay(state, key, seat, seats[b]);
-    }
-  });
-}
-
-function publishWay(
-  state: RegionalState,
-  key: string,
-  from: { feature: AtlasFeature; cell: number },
-  to: { feature: AtlasFeature; cell: number }
-) {
-  const cells = regionalPath(state, from.cell, to.cell);
-  if (!cells || cells.length < 2) return;
-  const mesh = state.physical.map.mesh,
-    coordinates = cells.map((i) => {
-      const p = positionOf(mesh, i);
-      return [p.x, p.y];
-    }),
-    f = putRegionalFeature(
-      state,
-      `way:${key}`,
-      "road",
-      "roads",
-      { type: "LineString", coordinates },
-      { from: from.feature.id, to: to.feature.id, routeType: "local" },
-      "Local way"
-    );
-  putRegionalNetwork(state, f, 0, coordinates);
+/** What a path search reads beside the ground: a cost factor per step (worn ways, fords on or under the step) and free links (door ends). */
+export interface PathOptions {
+  factor?: (i: number, j: number) => number;
+  links?: Map<number, number>;
 }
 
 /** Search arrays shared by every path on one map; a stamp marks each search's own entries. */
@@ -91,37 +36,53 @@ function pathSearch(state: RegionalState) {
   s.search++;
   return s;
 }
-/** A* follows dry, passable ground; the search is sized by this map's cells. */
-export function regionalPath(state: RegionalState, start: number, end: number): number[] | null {
+/**
+ * A* over dry, passable ground on the present surface: slope costs travel, the caller's factor
+ * discounts worn ground or taxes a crossing, and a link (a door) joins two cells for nothing.
+ * The search is sized by this map's cells.
+ */
+export function regionalPath(
+  state: RegionalState,
+  start: number,
+  end: number,
+  options: PathOptions = {}
+): number[] | null {
   const map = state.physical.map,
     mesh = map.mesh,
     front = new KeyedHeap(),
     s = pathSearch(state),
     around = new Int32Array(neighborhoodCapacity(mesh)),
     known = (j: number) => (s.stamp[j] === s.search ? s.cost[j] : Infinity),
-    height = (i: number) => map.Elevation.get(i) / 1024;
+    height = (i: number) => map.Elevation.get(i) / 1024,
+    relax = (i: number, j: number, next: number) => {
+      if (next >= known(j)) return;
+      s.stamp[j] = s.search;
+      s.cost[j] = next;
+      s.previous[j] = i;
+      front.push(j, next + distance(mesh, j, end));
+    };
   s.stamp[start] = s.search;
   s.cost[start] = 0;
   s.previous[start] = -1;
   front.push(start, 0);
-  while (front.size) {
-    const i = front.pop();
-    if (i === end) return walkPath(s.previous, start, end);
-    if (s.settled[i] === s.search) continue;
-    s.settled[i] = s.search;
+  const expand = (i: number) => {
+    const linked = options.links?.get(i);
+    if (linked !== undefined && isContent(mesh, linked)) relax(i, linked, s.cost[i]);
     const m = neighborhood(mesh, i, around);
     for (let k = 0; k < m; k++) {
       const j = around[k];
       if (!isContent(mesh, j) || map.WaterKindCodes.get(j) !== 0) continue;
       const step = distance(mesh, i, j),
-        slope = Math.abs(height(j) - height(i)) / step,
-        next = s.cost[i] + step * (1 + slope * slopeCost);
-      if (next >= known(j)) continue;
-      s.stamp[j] = s.search;
-      s.cost[j] = next;
-      s.previous[j] = i;
-      front.push(j, next + distance(mesh, j, end));
+        slope = Math.abs(height(j) - height(i)) / step;
+      relax(i, j, s.cost[i] + step * (1 + slope * slopeCost) * (options.factor?.(i, j) ?? 1));
     }
+  };
+  while (front.size) {
+    const i = front.pop();
+    if (i === end) return walkPath(s.previous, start, end);
+    if (s.settled[i] === s.search) continue;
+    s.settled[i] = s.search;
+    expand(i);
   }
   return null;
 }

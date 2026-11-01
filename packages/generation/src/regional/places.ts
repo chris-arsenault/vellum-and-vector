@@ -25,7 +25,8 @@ import {
 } from "./lattice";
 import { proposedSeat, usableSite } from "./seats";
 import { clamp, type ProposedPlace, type RegionalState } from "./state";
-import { connectSeats, slopeCost } from "./ways";
+import { developSociety } from "./society";
+import { slopeCost } from "./ways";
 
 const societyDomains = ["built", "cultural", "political"];
 export function placesEnabled(domains: string[]) {
@@ -177,19 +178,34 @@ function eventCandidates(
  * the least travel cost over the present surface, within the hinterland reach.
  */
 function hinterlandResidents(state: RegionalState, places: number[]) {
+  const mesh = state.physical.map.mesh,
+    density = state.regional.populationDensity!,
+    { owner } = hinterlandOwners(state, places),
+    residents = new Map<number, number>();
+  for (const p of places) residents.set(p, 0);
+  for (let i = 0; i < mesh.count; i++)
+    if (owner[i] >= 0)
+      residents.set(
+        owner[i],
+        residents.get(owner[i])! + (Math.max(0, density[i]) * mesh.contentArea(i)) / 1e6
+      );
+  return residents;
+}
+/**
+ * The hinterland partition: every land cell belongs to the place it can reach at the least
+ * travel cost over the present surface, within the hinterland reach; the cost of reaching it.
+ */
+export function hinterlandOwners(state: RegionalState, places: number[]) {
   const map = state.physical.map,
     mesh = map.mesh,
     n = mesh.count,
-    density = state.regional.populationDensity!,
     cost = new Float64Array(n).fill(Infinity),
     owner = new Int32Array(n).fill(-1),
     heap = new KeyedHeap(),
     around = new Int32Array(neighborhoodCapacity(mesh)),
     reach = regionalCommunitySpacing(state) * hinterlandReach,
-    residents = new Map<number, number>(),
     height = (i: number) => map.Elevation.get(i) / 1024;
   for (const p of places) {
-    residents.set(p, 0);
     cost[p] = 0;
     owner[p] = p;
     heap.push(p, 0);
@@ -214,13 +230,7 @@ function hinterlandResidents(state: RegionalState, places: number[]) {
     const m = neighborhood(mesh, i, around);
     for (let k = 0; k < m; k++) if (passable(around[k])) claim(i, around[k]);
   }
-  for (let i = 0; i < n; i++)
-    if (owner[i] >= 0)
-      residents.set(
-        owner[i],
-        residents.get(owner[i])! + (Math.max(0, density[i]) * mesh.contentArea(i)) / 1e6
-      );
-  return residents;
+  return { owner, cost };
 }
 
 /**
@@ -272,7 +282,7 @@ export function extractPlaces(state: RegionalState) {
       .filter((seat) => seat.cell >= 0);
   for (const proposal of state.regional.proposed)
     if (proposal.accepted) seats.push({ feature: village(state, proposal), cell: proposal.cell });
-  connectSeats(state, seats);
+  developSociety(state, seats);
 }
 
 function village(state: RegionalState, proposal: ProposedPlace) {

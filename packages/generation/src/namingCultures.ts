@@ -228,6 +228,9 @@ export const workTerms = {
   burning: "Burn|Burnt Ground|Firebreak|Char|Ash Field|Clearing|Burned Grove|Firing",
   quarrying: "Prism Quarry|Crystal Cut|Quarry|Ice Cut|Shard Pit|Prism Works|Cold Quarry|Cutting",
   weir: "Weir|Fish Weir|Breakwater|Tide Trap|Stone Weir|Fish Walls|Shoal Works|Trap Wall",
+  ford: "Ford|Shallows|Crossing|Wade|Stepping Stones|Gravel Ford|Low Water|Causeway",
+  bridge: "Bridge|Span|Arches|Crossing|Stone Bridge|Timber Bridge|Great Bridge|Footbridge",
+  mill: "Mill|Watermill|Millrace|Grindstone|Mill Leat|Fulling Mill|Sawmill|Mill Pond",
 } satisfies Record<SocietyWorkKind, string>;
 
 /** GIS naming vocabulary is independent of the reference game's entity taxonomy. */

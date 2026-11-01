@@ -26,7 +26,6 @@ import {
 } from "../../canonry/magicSources";
 import { inheritMagicChannel } from "../../canonry/magicInheritance";
 import { initializeMagic, magicKey, systemSeed, type MagicField } from "../../canonry/magicState";
-import type { PhysicalBufferName } from "../../canonry/field";
 import type { RegionalState } from "../state";
 
 /**
@@ -140,17 +139,16 @@ function regionalStrategies(work: MagicWork, field: MagicField) {
  * world engine's own locating, propagation, warding and shared forcing. Pressure's rays are
  * not retraced (the captured field stands; retracing would replay the ocean's impulses), a
  * captured ward does not spread again but stays, and nothing accumulates: every evaluation
- * re-derives from the captured sources and the present medium. Returns the bands whose
- * applied total changed through the ledger (the ground writes of M5; the engine's own forcing
+ * re-derives from the captured sources and the present medium. The ground writes are declared
+ * in the round's ledger cycle, which the schedule begins and commits (the engine's own forcing
  * replaces its previous contribution itself).
  */
-export function respondMagic(state: RegionalState): Map<PhysicalBufferName, number> {
+export function respondMagic(state: RegionalState) {
   const magic = state.physical.magic,
     work = works.get(state);
-  if (!magic || !work || !state.regional.input.domains.includes("magic")) return new Map();
+  if (!magic || !work || !state.regional.input.domains.includes("magic")) return;
   const seed = systemSeed(state.regional.input.seed, "regional"),
     map = state.physical.map,
-    applied = state.regional.contributions,
     fields = [...magic.fields]
       .filter((field) => field.definition.enabled)
       .sort((a, b) => order(a.definition.id) - order(b.definition.id));
@@ -167,9 +165,8 @@ export function respondMagic(state: RegionalState): Map<PhysicalBufferName, numb
   // feedback above has marked the ward rim).
   coverSystems(state, seed);
   evaluateConfluences(state, seed, false);
-  // What the systems and meetings do to the ground, as this evaluation's declared totals; the
-  // ledger writes the change from the last evaluation, so nothing accumulates (M5).
-  applied.begin();
+  // What the systems and meetings do to the ground, as this evaluation's declared totals in
+  // the round's ledger cycle (the schedule begins and commits it), so nothing accumulates (M5).
   declareRockWrites(state, work.capturedIntensity);
   declareConfluenceWrites(state, seed);
   declareHallowedWrites(state);
@@ -180,24 +177,6 @@ export function respondMagic(state: RegionalState): Map<PhysicalBufferName, numb
   for (let i = 0; i < map.mesh.count; i++)
     map.ExternalHeatForcing.set(i, Math.max(0, Math.round(magic.heat.get(i))));
   riverWarmth(map);
-  return applied.commit(
-    map,
-    {
-      RockResistance: 0,
-      FractureConductance: 0,
-      SoilDepth: 0,
-      Moisture: 0,
-      IceThickness: 0,
-      ExternalCoastalForcing: 0,
-      Temperature: 0,
-    },
-    {
-      RockResistance: 4000,
-      FractureConductance: 1000,
-      ExternalCoastalForcing: 1000,
-      Moisture: 1000,
-    }
-  );
 }
 const order = (id: string) => {
   const index = evaluationOrder.indexOf(id);

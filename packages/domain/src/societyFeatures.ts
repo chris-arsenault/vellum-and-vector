@@ -16,6 +16,9 @@ export const societyWorkLayers: Record<SocietyWorkKind, string> = {
   burning: "landUse",
   quarrying: "magicPractices",
   weir: "waterworks",
+  ford: "transportSites",
+  bridge: "transportSites",
+  mill: "waterworks",
 };
 /** Legacy authored works remain editable; newly published works use their concrete kind. */
 export function isSocietyWork(feature: Pick<AtlasFeature, "kind" | "attributes">) {

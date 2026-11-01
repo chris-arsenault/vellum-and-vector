@@ -227,7 +227,11 @@ it("reroutes water after a magical physical change without error", () => {
   }
   const fire = state.physical.magic!.fields.find((f) => f.definition.id === "fire")!;
   fire.intensity.fill(600);
-  const changed = respondMagic(state);
+  // The round's ledger cycle, as the schedule runs it: declare, then commit the change.
+  const applied = state.regional.contributions;
+  applied.begin();
+  respondMagic(state);
+  const changed = applied.commit(state.physical.map);
   expect(changed.size).toBeGreaterThanOrEqual(0);
   routeWater(state);
   expect(

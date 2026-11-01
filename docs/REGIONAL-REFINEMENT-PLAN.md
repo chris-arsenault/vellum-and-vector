@@ -1841,6 +1841,115 @@ Steps:
   (meetings displace parents in the engine, unobserved by a check); the regional magic
   duplicates were retired in M0.
 
+### M6 expansion (2026-11-01)
+
+Under the lean process. Read before expanding: `regional/places.ts`, `ways.ts`, `seats.ts`,
+`extraction/features.ts`, `media.ts`, the society checklist rows and S1–S6, F1–F4 above, the
+domain's `society.ts` (work kinds), `societyFeatures.ts` (work layers), `featureCatalogue.ts`,
+the world's `atlasPublications.ts` (which kinds each layer publishes).
+
+Decisions (mechanism choices, with reasons):
+
+- **The ledger cycle belongs to the schedule.** Until now the magic step began and committed
+  the ledger itself; society's declarations (fields) would have been wiped by the next round's
+  begin before any commit. Each round's environment step now begins the cycle, lets climate,
+  magic and society declare, and commits once; the committed relief change still drives the
+  declared reroute follow-up. Nothing else changes for the readers of applied totals.
+- **Ways by use (S1).** The nearest-neighbour lanes go. Every settled place sends its
+  residents as commuting flow to the market seat (the largest place) and half as much to its
+  nearest larger neighbour (a static central-place allocation; nobody moves). Flows are traced
+  over the present surface's travel cost (slope, fords at channels), with captured road cells
+  as inherited wear and door ends as free edges, in two passes: the second pass discounts the
+  cells the first pass wore, so later lanes bend into earlier ways and trunks emerge. A way's
+  class is its own flow: a road above the road count, a track above the track count, a lane
+  below; the regional counts are a tenth of the world's.
+- **Fields and pasture (S2, S6).** Per settled place, its hinterland's cells (the existing
+  travel-cost partition) are ranked by farming suitability times travel decay and taken until
+  the residents' need is met, pasture on the next best ground; the clearance is declared on the
+  ecology cohorts (broadleaf and conifer down, grass up) through the ledger each round, so the
+  engine's next round grows on cleared ground and the clearance never ratchets. Field features
+  are not published (the cleared cover is the visible record); recorded.
+- **Crossings and mills (S4).** Where a traced way crosses a channel it publishes a ford, or a
+  bridge when the way is a road over a sizeable river; a place with a falling channel within
+  reach gets a mill. The domain's work-kind union gains `ford`, `bridge` and `mill` with their
+  layers, catalogue rows and publication entries (the owner's decision above: no mislabelling).
+- **Ruins (F4) and control.** An abandoned or ruined captured seat sends no flow and clears no
+  fields, so the engine regrows its ground. Every settlement inside a captured control polygon
+  carries that control (`controlledBy`); nothing changes control.
+- **Not built, with the reason:** bounded support works (S3), hamlets and shrines (S5), canals
+  (F1), portage pairs (F2), fortress gorge dams (F3 beyond the captured dam of M2), practice
+  siting, the demand realization of harbours and passes, and the legacy child society path
+  (retired in M0). Each is a feature-publication process with no fixture in the suite; M7
+  judges what the renders show without them.
+
+Steps:
+
+1. **Ways by use, fields, crossings, ruins, control** (`society.ts`, `ways.ts`, `places.ts`,
+   `schedule.ts`, `magic/index.ts`, domain and publication entries). Evidence: on a fixture with
+   a market seat, two villages and a hamlet, the flows into the market are tracks and the
+   hamlet's is a lane; the fields around a seat lower the tree cohorts below the capture and
+   the engine's tree cover reads lower there than beyond the hinterland; a way crossing the
+   trunk publishes a ford or bridge on a channel cell; an abandoned seat has no fields;
+   settlements inside a captured control polygon carry its control.
+2. **Record, review, commit.**
+
+#### M6 execution record (2026-11-01)
+
+- **Built as decided.** `regional/society.ts` declares the fields and pasture each round and
+  develops the ways, crossings, mills and control at extraction; `ways.ts` keeps the path
+  search, now with a cost factor and free links; the nearest-neighbour lanes are gone. The
+  ledger cycle moved into the schedule's environment step (begin, climate and magic and
+  society declare, one commit, the relief follow-up), with the world's bounds on the bands it
+  writes. The domain's work-kind union, editing schema, layer map, catalogue, naming vocabulary
+  and publication lists gained `ford`, `bridge` and `mill`. Found while running the fixtures:
+  a ledger total declared once lets the ecology engine regrow a field unchecked (the ledger
+  writes only the change since the last declaration), so clearance is declared as the
+  difference from the present cohorts to the cleared target, against the captured cohorts; a
+  path over the sixteen-direction neighbourhood can step across a channel without touching
+  it, and the drainage tree itself links channel cells a knight's step apart, so two segments
+  cross where no cell is shared. A crossing is therefore read geometrically: the drainage
+  links between channel cells are indexed by every cell they run through (ends and the cells
+  passed between), a step gathers the links indexed at its own cells, and a step whose segment
+  crosses a link's segment fords the link's nearer channel end. The same read prices the ford
+  in the path search. The ways, crossings and this read live in `regional/societyWays.ts`;
+  `society.ts` keeps fields, places, mills and control.
+- **Evidence (fixture scale, `society.test.ts`, five checks).** On a country with a market seat
+  south of the trunk, two villages north of it, a hamlet and an abandoned seat: the villages'
+  flows are tracks and the hamlet's a lane; the market's fields hold tree cohorts well below
+  the capture and the engine's tree cover reads lower there than beyond the hinterlands; the
+  ways' river crossings publish fords or bridges on channel cells; the abandoned seat has no
+  fields; every settlement inside the captured control polygon carries its control and none
+  outside does.
+- **Disclosed.** Field features are not published (the cleared cover is the record). The ways'
+  classes are read from each flow's own travellers; a trunk's higher traffic is visible in the
+  overlapping geometries and the crossings' counts, not as a merged feature. The hamlet's lane
+  and the villages' tracks come from the fixture's populations, not from the fixture's
+  geography. Not built: bounded support works (S3), hamlets and shrines (S5), canals (F1),
+  portage pairs (F2), fortress gorge dams (F3), practice siting, harbour and pass demand
+  realization, population publication per hinterland, the world's settlement hierarchy roles;
+  the acceptance's canal fixture and "no straight lattice" judgement are M7's on renders.
+- **Review (read-only subagent) and what was done.** Fixed: the second tracing pass added its
+  wear on top of the first's instead of replacing it, so crossings read about twice the flow
+  (each pass now wears the inherited ground afresh); the "nearest larger" neighbour was chosen
+  by cell index, not distance; a knight's step over a one-cell channel paid no ford (the step
+  now prices the geometric crossing read described above; the first repair, a midpoint cell,
+  still missed the trunk where the drainage tree itself steps diagonally); a seat standing on a
+  channel published a crossing on its own cell (seat cells are excluded); the ways carried a
+  class the map does not read (`routeType`) and the smallest flows were published as the
+  catalogue's shipping `lane` (every way is a land `road` with the frontend's `roadClass`,
+  `track` for the small flows; `routeType` keeps the plan's lane class on the record). The
+  fields check now compares the settled country against the same country unsettled; the
+  crossing check requires a channel cell away from every seat. Disclosed, not changed: a cell
+  that leaves the field set has its whole cleared amount restored at once by the ledger's
+  replace rule (the ceiling bounds it); grass is declared as a floor, not to a target, so grass
+  the engine shades is not re-sown while trees are re-cleared; a bridge is read from the cell's
+  aggregated traffic, so two tracks meeting make one; villages are named by position, not in
+  the owning community's language (the regional naming helper takes no language); door edges
+  enter the path search only with the magic domain on; a captured road is worn at the road
+  count whatever its class; the connection graph, hazards read, per-cell livelihood, contact
+  utilities, road, event and politics registry entries and work decay (F4) are not built; the
+  mill search scans the mesh per place.
+
 ### Sulion mapping
 
 Root plan `5732ab12-bbaf-45e0-a972-55a163ae8ff9` "Regional refinement at world depth (one
@@ -1856,9 +1965,9 @@ milestones), both canceled as superseded by the one-representation decision.
 ### Current state
 
 M0 (software organization), M1 (shared media and repairs), M2 (terrain and water at depth),
-M3 (coast, climate and ice at depth), M4 (ecology at depth) and M5 (magic at depth)
-committed as recorded above. Next: M6 (society at depth) through plan-phase, under the lean
-per-phase process the owner set on 2026-11-01.
+M3 (coast, climate and ice at depth), M4 (ecology at depth), M5 (magic at depth) and M6
+(society at depth) committed as recorded above. Next: M7 (evaluate, record, adopt) through
+plan-phase, under the lean per-phase process the owner set on 2026-11-01.
 
 ## New namespace `packages/generation/src/regional`
 

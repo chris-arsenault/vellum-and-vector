@@ -20,7 +20,32 @@ import {
 } from "./places";
 import { deriveRelief, updateSlopes } from "./relief";
 import { deriveMedia, openFractures } from "./sharedMedia";
+import { declareFields } from "./society";
+import type { PhysicalBufferName } from "../canonry/field";
 import type { RegionalState } from "./state";
+
+/** The bands the ledger writes keep the world's bounds: nothing below zero, the per-mille and resistance scales capped. */
+const ledgerFloors: Partial<Record<PhysicalBufferName, number>> = {
+  RockResistance: 0,
+  FractureConductance: 0,
+  SoilDepth: 0,
+  Moisture: 0,
+  IceThickness: 0,
+  ExternalCoastalForcing: 0,
+  Temperature: 0,
+  BroadleafCover: 0,
+  ConiferCover: 0,
+  GrassCover: 0,
+};
+const ledgerCeilings: Partial<Record<PhysicalBufferName, number>> = {
+  RockResistance: 4000,
+  FractureConductance: 1000,
+  ExternalCoastalForcing: 1000,
+  Moisture: 1000,
+  BroadleafCover: 1,
+  ConiferCover: 1,
+  GrassCover: 1,
+};
 
 export interface ScheduledStep {
   id: string;
@@ -166,11 +191,16 @@ function roundSteps(d: Domains, round: number): ScheduledStep[] {
         id: `round-${round}/environment`,
         message: `Round ${round}: evaluating climate and magic on the shared media`,
         run(state) {
+          // One ledger cycle per round: climate, magic and society declare their totals
+          // against the captured ground; one commit writes the change since the last round.
+          const applied = state.regional.contributions;
+          applied.begin();
           respondClimate(state);
-          if (!d.magic) return;
+          if (d.magic) respondMagic(state);
+          if (d.society) declareFields(state);
+          const changed = applied.commit(state.physical.map, ledgerFloors, ledgerCeilings);
           // The one declared follow-up: relief magic changed by a resolvable amount reroutes
           // water before the living landscape and places read it.
-          const changed = respondMagic(state);
           if ((changed.get("Elevation") ?? 0) >= reliefFollowUp * 1024) {
             updateSlopes(state);
             routeWater(state);

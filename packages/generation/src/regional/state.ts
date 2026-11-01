@@ -132,6 +132,8 @@ export interface RegionalWork {
   media?: SharedMedia;
   /** This round's sediment reaching the sea at each root cell (m³), for the coast. */
   sediment?: { mouthLoad: Float64Array };
+  /** The settled places' land: per cell the owning place's cell (-1 none) and 1 field, 2 pasture. */
+  fields?: { place: Int32Array; kind: Uint8Array };
   /** The round being evaluated: 0 before the schedule, 1..3 inside it, 4 at the final refresh. */
   round: number;
   character?: RegionalCharacter;
