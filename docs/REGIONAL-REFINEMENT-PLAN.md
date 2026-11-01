@@ -1727,6 +1727,120 @@ Steps:
   cell beside a river a floodplain reading regardless of discharge; habitat features are
   extracted by the world's own rules in `canonry.features`, untested here.
 
+### M5 expansion (2026-11-01)
+
+Under the lean process. Read before expanding: `regional/magic/index.ts` (the host as M0 left
+it), the world's `magicProcesses.ts` (the evaluation order and the writes it sequences),
+`magicFeedback.ts` (rock, thermal, living, ocean, coastal; `heldCharge`, `holdIce`),
+`magicConfluences.ts` (evaluate, displace, bound, apply), `magicHallowed.ts` (`markRim`,
+`hallowedWrites`), `magicVeil.ts` (`pairingSources`, `veilWrites`), `magicSalt.ts`,
+`magicWeather.ts`, `magicFeatures.ts` (`coverSystems`), `riverWarmth.ts`, `media.ts`.
+
+Decisions (mechanism choices, with reasons):
+
+- **The host keeps the engine's operations and adds the ground writes through the ledger.**
+  M0's host already locates, propagates, wards, and runs the thermal, living and ocean
+  feedbacks and the meetings' evaluation each round. M5 adds what the world sequences after
+  them, each as a declared ledger total so a re-evaluation replaces rather than adds (the
+  checklist's rule two): rock hardening and weakening and conduit opening from the systems'
+  intensities; the meetings' own processes (fractures, rock, bounded signed relief with a
+  per-cell hash, soil removal, coastal forcing, ice melt) scaled by their coverage, read from
+  the engine's own confluence states; the Hallowed spill (the first unwarded reach below a ward
+  loses resistance); Veil's wild relief and door chill and pool; Salt's glass, desiccation and
+  Fire's burn of the stocks once (round one), so the burn is not double-counted. Fog and
+  toxicity are written as maxima (idempotent); the door's grass ring likewise. The ledger
+  cycle (begin, declare, commit) runs inside the magic step; the committed relief change is
+  what the schedule's declared reroute follow-up reads. Storm writes (X5) and the coastal
+  forcing consumer are left to the coast's ledger reads and disclosed.
+- **Cover systems before meetings, rim marked.** The engine's class coverage runs before the
+  meetings' evaluation (the meetings read it), and the ward rim is marked each round (X3's
+  band, from the engine's own marking).
+- **Ice held by charge.** `IcePersistence` is derived each round from the systems' persistence
+  effects at their held charge (the engine's gate on intensity), and the glacier's melt is
+  reduced by it; the world's history-based `holdIce` is not run (a round is not an epoch).
+- **Doors seeded from captured door features** (a line's two ends, or one end when the far end
+  is outside the frame), kept while both ends qualify by the engine's own pairing.
+- **Boundary inflow (X1).** The captured intensity stands as a floor along the frame edge,
+  fading inward over a parent span, so a field the parent carries across the frame does not
+  stop at the edge for lack of a source inside.
+- **River warmth (X6).** The world's own down-tree warmth pass runs after the fields.
+- **Not built, with the reason:** X2' carrier resolution (the captured stocks stand where the
+  parent put them), X5 storm medium, F6 dried basins crusting salt (a stock write with no
+  captured-lake-dries fixture; M7 judges on renders), the ocean feedback's regional depth
+  classes, the magic-landmark conjunctions beyond what the engine's sources already do.
+
+Steps:
+
+1. **Writes, hold, doors, inflow** (`magic/writes.ts`, `magic/index.ts`, `glacial.ts`).
+   Evidence: Fire's intensity changes rock resistance through the ledger and a second
+   evaluation leaves it unchanged; a captured ward has a rim band of cells beside it; a
+   captured door chills its ends; a captured field at the frame edge keeps its intensity there
+   with no source inside; Aurora's charge holds ice where it is strong.
+2. **Record, review, commit.**
+
+#### M5 execution record (2026-11-01)
+
+- **Built as decided.** `magic/writes.ts` declares the ground writes as ledger totals (rock
+  and conduits by intensity, the meetings' effects by their coverage from the engine's own
+  confluence states, the Hallowed spill below a ward, Veil's wild relief and door chill and
+  pool, Salt's glass and desiccation, with Fire's burn of the stocks in round one only),
+  holds ice by the systems' persistence at their held charge (read by the glacier's melt),
+  seeds doors from captured door features and keeps them as established evidence while the
+  engine's pairing adds its own, and gives every field the captured intensity as a floor
+  along the frame edge fading inward over a parent span. The host runs the engine's class
+  coverage before the meetings, marks the ward rim, runs the world's down-tree river warmth,
+  and commits the ledger each round so the schedule's declared relief follow-up reads the
+  change. The ledger thereby gained its first writers: until M5 it had readers only.
+- **Evidence (fixture scale, `magicDepth.test.ts`, five checks).** Fire's intensity changes
+  the rock's resistance where it reaches, re-evaluations converge (each moves fewer cells than
+  the last) and never stack beyond one evaluation's declared total over the captured rock; a
+  captured Hallowed ground has a rim band of unwarded cells each beside a warded one; a
+  captured door's two ends are kept and stand colder than the capture by its chill; a field
+  the parent carries across the frame keeps its intensity along the edge with no source
+  inside, well above the interior; Aurora's charge holds ice where its field is strong and
+  nowhere it is weak (the hold is read; a thickness comparison with and without Aurora sat
+  inside the relief's own variation at fixture scale, because the field re-derives weaker
+  inside the frame than the capture and the hold's persistence with it). The existing magic
+  checks (M0) still pass. Noted from the probe: declaring rock from the change in intensity
+  restores hardening where the regional field is weaker than the parent's (Aurora's weakening
+  undone where its field thinned), which is the row's intent.
+- **Disclosed.** A captured door is kept whether or not its ends still carry tear strength (a
+  deviation from the pairing row's "while both ends qualify": the parent's door is evidence
+  like a seat, and a fixture cannot supply the engine's tear strength without two other systems
+  meeting there). Re-evaluation is convergent, not identical: an opened conduit lets the next
+  propagation reach further. The salt burn runs once in round one and not on a later
+  refinement of the same map (the stocks are re-read from the capture each run). Not built:
+  the carrier resolution (X2'), the storm medium (X5), dried basins crusting salt (F6), the
+  ocean feedback's regional depth classes, the coastal forcing consumer in the coast process
+  (the ledger total is declared; the shore reads exposure only), the magic-landmark
+  conjunctions beyond the engine's own sources; the dam, canal and portage conjunctions are
+  M6's.
+- **Review (read-only subagent) and what was done.** Fixed: the soil and moisture totals were
+  declared as shares of the band as last written, so they chased themselves round to round
+  (glass soil flipping between gone and restored, desiccation halving and recovering); every
+  total is now declared against the captured ground. Rock and conduit totals re-added the
+  parent's hardening the captured rock already holds (declared from the change in intensity
+  since the capture, as the checklist row asks). The ledger recorded what it wanted rather
+  than what the band took when a floor clamped it, so later totals drifted; it records the
+  applied amount and bounds the magic bands above as the world does. The ice hold read the
+  intensity alone (it reads the engine's held charge, with its ice-presence gate). The river
+  warmth pass read a heat forcing band nothing regional wrote (the applied heat is written to
+  it first). Door seeding ran before the earlier products were cleared and could read this
+  map's own last doors (only the parent's are read). Toxicity was a ratchet (it re-forms from
+  the capture each evaluation). The rim call was redundant (the engine's living feedback marks
+  it). Two checks were rewritten to observe M5 rather than M0: the ward check reads the spill
+  (resistance lost below the ring), the ice check compares ice thickness with and without
+  Aurora. Corrected in the decisions: the rim is the engine's one-cell rim, not X3's weighted
+  band; a captured door is kept outright and is not a Veil source, and the engine's pairing
+  cannot add a door inside a frame at its three-hundred-kilometre distance (not rescaled).
+  Disclosed, not changed: the ocean rays' retrace, the system-level coastal forcing producer,
+  the meetings' debris and soil-water scaling, Veil's cover shuffle, the burn's fuse of burnt
+  ground, the geothermal captured-core release, the aquifer catchment and the normalised
+  strain rows are not built; the acceptance's coverage table, Fire vein structure, charge
+  moving to a cirque, meeting displacement and door hinterland are not evidenced here
+  (meetings displace parents in the engine, unobserved by a check); the regional magic
+  duplicates were retired in M0.
+
 ### Sulion mapping
 
 Root plan `5732ab12-bbaf-45e0-a972-55a163ae8ff9` "Regional refinement at world depth (one
@@ -1742,9 +1856,9 @@ milestones), both canceled as superseded by the one-representation decision.
 ### Current state
 
 M0 (software organization), M1 (shared media and repairs), M2 (terrain and water at depth),
-M3 (coast, climate and ice at depth) and M4 (ecology at depth) committed as recorded above.
-Next: M5 (magic at depth) through plan-phase, under the lean per-phase process the owner set
-on 2026-11-01.
+M3 (coast, climate and ice at depth), M4 (ecology at depth) and M5 (magic at depth)
+committed as recorded above. Next: M6 (society at depth) through plan-phase, under the lean
+per-phase process the owner set on 2026-11-01.
 
 ## New namespace `packages/generation/src/regional`
 

@@ -7,6 +7,16 @@ import type { PhysicalBufferName, PhysicalField } from "../canonry/field";
  * before. Re-evaluating a round therefore updates the contribution instead of adding it again
  * (spec 7.3).
  */
+/** A band's bounds and integer-ness as one clamp. */
+function bounded(minimum: number | undefined, maximum: number | undefined, integer: boolean) {
+  return (value: number) => {
+    let next = value;
+    if (minimum !== undefined) next = Math.max(minimum, next);
+    if (maximum !== undefined) next = Math.min(maximum, next);
+    return integer ? Math.round(next) : next;
+  };
+}
+
 export class Contributions {
   private readonly applied = new Map<PhysicalBufferName, Float64Array>();
   private readonly desired = new Map<PhysicalBufferName, Float64Array>();
@@ -34,7 +44,11 @@ export class Contributions {
    * Write each band's declared total, replacing what the previous evaluation applied.
    * Returns, per band whose applied total changed, the largest change at any cell.
    */
-  commit(map: PhysicalField, floor: Partial<Record<PhysicalBufferName, number>> = {}) {
+  commit(
+    map: PhysicalField,
+    floor: Partial<Record<PhysicalBufferName, number>> = {},
+    ceiling: Partial<Record<PhysicalBufferName, number>> = {}
+  ) {
     const changed = new Map<PhysicalBufferName, number>();
     for (const [name, wanted] of this.desired) {
       const target = map[name];
@@ -43,16 +57,16 @@ export class Contributions {
         previous = new Float64Array(this.length);
         this.applied.set(name, previous);
       }
-      const minimum = floor[name],
-        integer = target.type === "int32";
+      const bound = bounded(floor[name], ceiling[name], target.type === "int32");
       for (let i = 0; i < this.length; i++) {
         const delta = wanted[i] - previous[i];
         if (!delta) continue;
         changed.set(name, Math.max(changed.get(name) ?? 0, Math.abs(delta)));
-        let next = target.get(i) + delta;
-        if (minimum !== undefined) next = Math.max(minimum, next);
-        target.set(i, integer ? Math.round(next) : next);
-        previous[i] = wanted[i];
+        const before = target.get(i),
+          next = bound(before + delta);
+        target.set(i, next);
+        // What the band could take is what was applied; a bound keeps the ledger honest.
+        previous[i] += next - before;
       }
     }
     return changed;

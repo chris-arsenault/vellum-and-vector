@@ -97,7 +97,8 @@ function iceBudget(state: RegionalState, h: Float64Array): IceBudget {
       share = mesh.contentArea(i) / cellArea;
     accumulation[i] = snow * share;
     warmth[i] = clamp((t - accumulationTemperature) / meltSpan);
-    melt[i] = warmth[i] * meltStrength * share;
+    // Charge a system holds in the ground keeps its ice (plan M5): the melt it allows.
+    melt[i] = warmth[i] * meltStrength * share * (1 - clamp(map.IcePersistence.get(i)));
     cold[i] = Number(snow > 0 || history[i] > recordedFloor);
   }
   return { accumulation, melt, warmth, cold };

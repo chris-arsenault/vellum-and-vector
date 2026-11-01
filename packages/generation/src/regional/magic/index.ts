@@ -6,8 +6,19 @@ import {
   magicOceanFeedback,
   magicThermalFeedback,
 } from "../../canonry/magicFeedback";
-import { classifyMagicFeatures, projectMagic } from "../../canonry/magicFeatures";
+import { classifyMagicFeatures, coverSystems, projectMagic } from "../../canonry/magicFeatures";
 import { propagateMagic } from "../../canonry/magicPropagation";
+import { riverWarmth } from "../../canonry/riverWarmth";
+import {
+  declareConfluenceWrites,
+  declareHallowedWrites,
+  declareRockWrites,
+  declareSaltWrites,
+  declareVeilWrites,
+  edgeFloor,
+  holdIce,
+  seedDoors,
+} from "./writes";
 import {
   locateMagicSources,
   magicSourceStrategies,
@@ -26,6 +37,10 @@ import type { RegionalState } from "../state";
 export interface MagicWork {
   capturedSources: Map<string, Map<string, Band>>;
   capturedIntensity: Map<string, Band>;
+  /** How far each cell stands inside the frame edge, 1 at the edge to 0 a parent span in. */
+  edge: Float64Array;
+  /** The doors the parent captured, per system: established evidence the pairing keeps. */
+  capturedDoors: Map<string, { a: number; b: number }[]>;
 }
 const works = new WeakMap<RegionalState, MagicWork>();
 
@@ -54,7 +69,12 @@ export function prepareMagic(state: RegionalState) {
   const enabled = state.regional.input.domains.includes("magic");
   initializeMagic(state, enabled);
   const magic = state.physical.magic!,
-    work: MagicWork = { capturedSources: new Map(), capturedIntensity: new Map() };
+    work: MagicWork = {
+      capturedSources: new Map(),
+      capturedIntensity: new Map(),
+      edge: edgeFloor(state),
+      capturedDoors: new Map(),
+    };
   for (const field of magic.fields) {
     // The world inherits what travels with the crust; a refinement also starts from the
     // parent's present field, which it keeps where the engine does not re-derive it. A
@@ -62,6 +82,9 @@ export function prepareMagic(state: RegionalState) {
     if (field.definition.enabled)
       for (const channel of ["intensity", "wake", "rogue"] as const)
         inheritMagicChannel(state, magicKey(field, channel), field[channel]);
+    // A system that pairs doors starts from the doors the parent captured.
+    if (field.definition.enabled && field.definition.origins.some((o) => o.source === "pairing"))
+      work.capturedDoors.set(field.definition.id, seedDoors(state, field));
     const origins = new Map<string, Band>();
     for (const [id, values] of Object.entries(field.originSources))
       origins.set(id, retainedCopy(state, values));
@@ -118,7 +141,7 @@ function regionalStrategies(work: MagicWork, field: MagicField) {
  * not retraced (the captured field stands; retracing would replay the ocean's impulses), a
  * captured ward does not spread again but stays, and nothing accumulates: every evaluation
  * re-derives from the captured sources and the present medium. Returns the bands whose
- * applied total changed through the ledger (none in this delivery; the engine's own forcing
+ * applied total changed through the ledger (the ground writes of M5; the engine's own forcing
  * replaces its previous contribution itself).
  */
 export function respondMagic(state: RegionalState): Map<PhysicalBufferName, number> {
@@ -126,6 +149,8 @@ export function respondMagic(state: RegionalState): Map<PhysicalBufferName, numb
     work = works.get(state);
   if (!magic || !work || !state.regional.input.domains.includes("magic")) return new Map();
   const seed = systemSeed(state.regional.input.seed, "regional"),
+    map = state.physical.map,
+    applied = state.regional.contributions,
     fields = [...magic.fields]
       .filter((field) => field.definition.enabled)
       .sort((a, b) => order(a.definition.id) - order(b.definition.id));
@@ -138,8 +163,41 @@ export function respondMagic(state: RegionalState): Map<PhysicalBufferName, numb
   magicThermalFeedback(state);
   magicLivingFeedback(state);
   magicOceanFeedback(state);
+  // The classes' coverage, then the meetings that read it and take their share (the living
+  // feedback above has marked the ward rim).
+  coverSystems(state, seed);
   evaluateConfluences(state, seed, false);
-  return new Map();
+  // What the systems and meetings do to the ground, as this evaluation's declared totals; the
+  // ledger writes the change from the last evaluation, so nothing accumulates (M5).
+  applied.begin();
+  declareRockWrites(state, work.capturedIntensity);
+  declareConfluenceWrites(state, seed);
+  declareHallowedWrites(state);
+  declareVeilWrites(state);
+  declareSaltWrites(state, state.regional.round <= 1);
+  holdIce(state);
+  // The applied heat is the forcing the river carries downstream (X6).
+  for (let i = 0; i < map.mesh.count; i++)
+    map.ExternalHeatForcing.set(i, Math.max(0, Math.round(magic.heat.get(i))));
+  riverWarmth(map);
+  return applied.commit(
+    map,
+    {
+      RockResistance: 0,
+      FractureConductance: 0,
+      SoilDepth: 0,
+      Moisture: 0,
+      IceThickness: 0,
+      ExternalCoastalForcing: 0,
+      Temperature: 0,
+    },
+    {
+      RockResistance: 4000,
+      FractureConductance: 1000,
+      ExternalCoastalForcing: 1000,
+      Moisture: 1000,
+    }
+  );
 }
 const order = (id: string) => {
   const index = evaluationOrder.indexOf(id);
@@ -155,10 +213,17 @@ function evaluateField(state: RegionalState, work: MagicWork, field: MagicField,
     return;
   }
   locateMagicSources(state, field, seed, 0, regionalStrategies(work, field));
+  // A captured door is established evidence: the engine's pairing drops a door whose ends
+  // lost their tears, but the parent's doors stand (the pairing adds new ones beside them).
+  for (const door of work.capturedDoors.get(field.definition.id) ?? [])
+    if (!field.doors.some((d) => d.a === door.a && d.b === door.b)) field.doors.push(door);
   propagateMagic(state, field, seed, field.definition.strength);
-  if (warding)
-    for (let i = 0; i < field.intensity.length; i++)
-      field.intensity.set(i, Math.max(field.intensity.get(i), captured.get(i)));
+  // A ward the parent established stays; every field keeps the captured intensity along the
+  // frame edge, where the parent's country continues beyond it (X1).
+  for (let i = 0; i < field.intensity.length; i++) {
+    const floor = captured.get(i) * (warding ? 1 : work.edge[i]);
+    if (floor > field.intensity.get(i)) field.intensity.set(i, floor);
+  }
 }
 
 /** The present classes and their projection to the surface, once after the last round. */
