@@ -47,15 +47,18 @@ export function respondClimate(state: RegionalState) {
         clamp(moisture.get(i) * rainFactor - delta / 10 + applied.appliedTo("Moisture", i), 0, 1000)
       )
     );
-    map.SoilDepth.set(
-      i,
-      Math.max(
-        0.02,
-        soil.get(i) +
-          (map.SedimentThickness.get(i) / 1024) * 0.3 +
-          applied.appliedTo("SoilDepth", i)
-      )
-    );
+    // Until the ecology engine owns the soil, the captured depth plus this round's deposits
+    // and the ledger; once it does, its own soil step evolves the depth and reads the deposits.
+    if (!map.EcologyInitialized)
+      map.SoilDepth.set(
+        i,
+        Math.max(
+          0.02,
+          soil.get(i) +
+            (map.SedimentThickness.get(i) / 1024) * 0.3 +
+            applied.appliedTo("SoilDepth", i)
+        )
+      );
     // The captured runoff regime is the budget; exposure changes its supply and the developed
     // cover changes what reaches the channels (plan: runoff loss structure).
     map.Runoff.set(

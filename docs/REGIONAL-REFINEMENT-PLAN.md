@@ -1616,6 +1616,117 @@ Steps:
   round and unused; the shared `GlacialMeltwater` band carries a plain mm/yr here and an
   ice-weighted per-mille on a world.
 
+### M4 expansion (2026-11-01)
+
+Under the lean process. Read before expanding: the world's `ecologyVegetation.ts` (the
+evolve order), `ecologyProcesses.ts` (forcing, authority, initialize, present, advance),
+`ecologyEstablishment.ts`, `ecologyDisturbance.ts`, `ecologyGrowth.ts`,
+`ecologyEnvironment.ts` (`environment`, `classifyBiome`), `ecologyBiomes.ts`,
+`ecologyFeatures.ts`, `ecologyState.ts`; `regional/living.ts`, `climate.ts`, `schedule.ts`.
+
+Decisions (mechanism choices, with reasons):
+
+- **The world engine's operations run on the regional field, hosted by one regional module.**
+  `regional/ecology.ts` calls the engine's own steps in the engine's order (soils,
+  disturbance, flood, dispersal, growth, carbon, present, classify) with the round's declared
+  horizon (250, 60, 20 years; the refresh runs the present step only). The world's process
+  wrappers (epoch bookkeeping, world authority, record and validate) are not reused; the
+  regional host supplies forcing, authority and the initializer. `living.ts` is retired: the
+  engine's `classifyBiome` names the cover and the world's ecological feature extraction, which
+  already runs in `canonry.features`, names the habitats by its rules over the cohort bands.
+- **Regional initializer.** Once, before round one: the engine's inheritance (functional
+  groups from the captured tree cover) and then the cohorts from the capture: the conifer
+  share of the tree cover from the captured temperature (all conifer at two degrees, none at
+  eight), saplings from a young captured canopy age, seeds from presence of each group's
+  cover, soils and carbon as captured. No noise. The engine's history memory bands are set to
+  the captured state so soil damage reads this run's change (ice, incision), not the parent's
+  cumulative history.
+- **Forcing and authority.** Forcing per cell is the engine's neutral forcing plus the
+  shared magic bands the field carries (quickening, stillness, verdure, salting) and the
+  fire causes; authority is the engine's own tree-cover update (authored protections hold
+  cover through the world's existing fixed-channel path, unchanged). Riparian supply (E4) and
+  the wetness medium (E1) enter the soil water the engine's environment reads: the captured
+  soil water raised on the valley floor by the wetness medium and on the channel margin by the
+  floodplain intensity.
+- **Fire with cause-keyed ignition.** Ignition cells are causes with one stable keyed draw
+  each: ground under magic heat; the driest, best-fuelled cell of each ten-kilometre block;
+  the edge of a settlement's footprint. They enter the engine as its `fire` forcing at those
+  cells. The engine's own background ignition (its noise term) remains alongside, disclosed:
+  it lives inside the engine's ignition rule, and the checklist asks for the regional causes,
+  not for the engine to lose its own.
+- **Dispersal.** The engine's fronts run as written, including its sea crossing; the plan's
+  "no sea crossing" is not enforced (a frame's islands are within the engine's reach rules)
+  and is disclosed.
+- **Present refresh.** Cover under new sea, lake or ice dies at once with its litter to the
+  soil, each round and at the final refresh (the engine's mortality at full stress).
+
+Steps:
+
+1. **Host and initializer** (`ecology.ts`, `schedule.ts`, `living.ts` retired). Evidence: a
+   dry valley's channel margin carries more trees than the ground away from it (riparian
+   strip); the poleward flank of a ridge carries a larger conifer share than the equatorward
+   flank; a dry country burns somewhere and the burned ground has more saplings than mature
+   cover; wet flats hold more peat than dry ground; burned ground sheds more runoff than its
+   captured budget (the water path across rounds).
+2. **Record, review, commit.**
+
+#### M4 execution record (2026-11-01)
+
+- **Built as decided.** `regional/ecology.ts` hosts the engine: the initializer (inheritance,
+  then cohorts by captured temperature and canopy age, seeds by presence over the floors the
+  world's founders give without their noise, history memory at the captured state), the
+  forcing (neutral plus the field's magic bands and the fire causes), the soil-water supply
+  (captured plus the wetness medium and the channel margin, applied after the engine's soil
+  step so the growing cover reads it), the engine's steps in its order with the round's
+  horizon, the present refresh (cover under new sea, lake or ice dies) and the engine's
+  classification. `living.ts` and its tests are gone; the schedule's cover step and refresh
+  call the host. A river's valley floor is at least its own ring where the ground is flat (a
+  small river's floor at this cell size had been nothing beyond the channel cell).
+- **Evidence (fixture scale, `ecology.test.ts`, three checks).** A country captured at one
+  degree is conifer country and at fifteen degrees broadleaf country; dry country burns at its
+  cause cells, the burned ground has more saplings than mature cover, and more than half of it
+  sheds more runoff than its captured budget (the water path across rounds); wet flats hold
+  more peat than dry ground. The regional suite passes (14 files, 68 tests).
+- **Not demonstrated, and why.** The riparian strip and the wetness medium's effect on cover
+  do not show at fixture horizons: the derived relief at this cell size incises every channel
+  tens of metres below its banks even where the parent is flat (the calibration fits the
+  parent's blurred heights, which a fine sawtooth averages out of), so no valley floor exists
+  to be riparian, and the engine's soil step and growth then dominate the soil water the
+  medium supplied. A hillslope term scaled by the parent's local gradient was tried and
+  withdrawn: it changes the M0 relief core's behaviour beyond this phase and broke an
+  established behaviour check (the entering river's edge source). Recorded for M7 as the first
+  relief item to judge on renders: flat parent ground should stay flat. The conifer-on-the-
+  cold-aspect acceptance did not move the conifer share measurably within the horizons (the
+  cohorts are set by the captured temperature and the engine's rates are slow) and is carried
+  to M7's render judgement. The bog behind a moraine is covered by the peat check only in
+  kind (peat on wet flats), not at a moraine.
+- **Disclosed.** The engine's own noise ignition remains beside the cause cells; its sea
+  crossing runs; the horizons are the agent's constants (250, 60, 20); dispersal and animals
+  are the engine's as written; the fire causes draw one keyed chance per ten-kilometre block
+  per round (so the same block may burn every round).
+- **Review (read-only subagent) and what was done.** Fixed: the captured soil-water baseline
+  was read after the engine's soil step had overwritten the band (kept at initialization);
+  the supply was uncapped and could zero the engine's drought anywhere (capped at the soil's
+  capacity, as the engine's soil step has it); a parent that published no canopy age made
+  every captured tree a sapling (zero means mature); the authority callback was the engine's
+  own update twice over, so authored forest polygons and fixed ecology channels held nothing
+  during the rounds (a regional authority now holds them, as the world's does); the per-system
+  ecological effects (growth, fire, preservation, toxicity, dispersal) were not bound into the
+  forcing (they are, through the held-charge gate the world's bindings use); climate and the
+  engine both wrote soil depth each round, so soil evolution never outlived a round (climate
+  writes it only until the engine owns it); round one's whole relief derivation read as
+  incision damage and wiped cover along every channel (the history memory now starts at the
+  derived relief, so damage reads change from there); fire causes could mark water or ice. The
+  fire check counts a few blocks' keyed draws and compares burned ground's runoff rise against
+  unburned ground's. Disclosed, not changed: the engine's soil step then overwrites the supplied
+  soil water within a round, so the supply acts on the cover of that round only; the peat
+  check and the cohort check observe the engine's rules and the initializer's rule, not
+  development; the engine runs eight dispersal searches and one fire search per round against
+  the plan's budget of four; the retired living module's sub-resolution pond rule is replaced
+  by the engine's own submerged classification; the floor's minimum ring (M4) gives every flat
+  cell beside a river a floodplain reading regardless of discharge; habitat features are
+  extracted by the world's own rules in `canonry.features`, untested here.
+
 ### Sulion mapping
 
 Root plan `5732ab12-bbaf-45e0-a972-55a163ae8ff9` "Regional refinement at world depth (one
@@ -1630,9 +1741,10 @@ milestones), both canceled as superseded by the one-representation decision.
 
 ### Current state
 
-M0 (software organization), M1 (shared media and repairs), M2 (terrain and water at depth)
-and M3 (coast, climate and ice at depth) committed as recorded above. Next: M4 (ecology at
-depth) through plan-phase, under the lean per-phase process the owner set on 2026-11-01.
+M0 (software organization), M1 (shared media and repairs), M2 (terrain and water at depth),
+M3 (coast, climate and ice at depth) and M4 (ecology at depth) committed as recorded above.
+Next: M5 (magic at depth) through plan-phase, under the lean per-phase process the owner set
+on 2026-11-01.
 
 ## New namespace `packages/generation/src/regional`
 

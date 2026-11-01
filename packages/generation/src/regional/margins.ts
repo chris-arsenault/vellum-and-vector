@@ -1,4 +1,4 @@
-import { distance, isContent, neighborsOf } from "./lattice";
+import { distance, isContent, neighborsOf, regionalSpan } from "./lattice";
 import { clamp, type RegionalState } from "./state";
 
 /** Floodplain half-width per square root of mean discharge, in metres. */
@@ -42,7 +42,8 @@ function floorFrom(
   const map = state.physical.map,
     mesh = map.mesh,
     flow = map.FlowAccumulation.get(source),
-    width = floodWidth * Math.sqrt(flow),
+    // At least the channel's own ring: a small river's floor is its banks, where the ground is flat.
+    width = Math.max(1.5 * regionalSpan(state), floodWidth * Math.sqrt(flow)),
     reach = Math.max(0, floorRelief + floorReliefPerLog * Math.log10(1 + flow)),
     // The channel's surface already carries its deposits; the floor is read from it.
     channel = map.Elevation.get(source) / 1024,

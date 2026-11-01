@@ -8,7 +8,7 @@ import { divides, markPasses } from "./divides";
 import { routeWater } from "./drainage";
 import { clearRegionalProducts } from "./extraction/features";
 import { carryIdentities } from "./extraction/identity";
-import { respondCover } from "./living";
+import { prepareEcology, respondEcology } from "./ecology";
 import { mapMagic, respondMagic } from "./magic/index";
 import { growNetwork } from "./network";
 import {
@@ -79,7 +79,7 @@ export function regionalSchedule(domains: string[]): ScheduledStep[] {
       respondFeatures(state);
       deriveMedia(state);
       respondClimate(state);
-      if (d.geography) respondCover(state);
+      if (d.geography) respondEcology(state);
       classifyLandforms(state);
     },
   });
@@ -126,6 +126,7 @@ function contextStep(d: Domains): ScheduledStep {
     message: "Reading the captured country's character and established geography",
     run(state) {
       state.regional.character = deriveCharacter(state);
+      if (d.geography) prepareEcology(state);
       preparePlaces(state);
       readEvidence(state);
       if (!d.physical) {
@@ -182,7 +183,7 @@ function roundSteps(d: Domains, round: number): ScheduledStep[] {
     steps.push({
       id: `round-${round}/cover`,
       message: `Round ${round}: developing the living landscape`,
-      run: (state) => respondCover(state),
+      run: (state) => respondEcology(state),
     });
   if (d.society && round >= 2)
     steps.push({

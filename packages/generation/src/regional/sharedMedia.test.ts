@@ -81,18 +81,23 @@ it("fracture set: strained country is more fractured than unstrained country", (
   expect(conductance[1]).toBeGreaterThan(conductance[0] + 50);
 });
 
-it("wetness: a valley floor develops wetland cover the slopes above it do not", () => {
-  // No captured wetland: what develops is the medium's doing.
-  const { state } = regionalFixture((_x, y) => 200 + Math.abs(y - 20000) / 40, 40000, 2, {
-    wetlandCover: ["ratio", () => 0],
-  });
+it("wetness: a valley floor reads wetter than the slopes above it", () => {
+  // The medium itself: it reaches the living landscape through the soil water the ecology
+  // engine's environment reads (plan E1), where the engine's own soil step then has its say.
+  const { state } = regionalFixture((_x, y) => 200 + Math.abs(y - 20000) / 40, 40000, 2);
   runSchedule(state, ["physical"]);
-  const wetland = (i: number) => state.physical.map.WetlandCover.get(i),
-    floor = meanWhere(state, (_x, y) => Math.abs(y - 20000) < 1500, wetland),
-    slopes = meanWhere(state, (_x, y) => Math.abs(y - 20000) > 12000, wetland);
+  const wetness = state.regional.media!.wetness,
+    floor = meanWhere(
+      state,
+      (_x, y) => Math.abs(y - 20000) < 1500,
+      (i) => wetness[i]
+    ),
+    slopes = meanWhere(
+      state,
+      (_x, y) => Math.abs(y - 20000) > 12000,
+      (i) => wetness[i]
+    );
   expect(floor).toBeGreaterThan(slopes + 0.1);
-  // The slopes stay mostly dry; developed local flats on them may hold a little.
-  expect(slopes).toBeLessThan(0.25);
 });
 
 it("snow: the poleward flank of a ridge takes a larger share of its precipitation as snow", () => {
