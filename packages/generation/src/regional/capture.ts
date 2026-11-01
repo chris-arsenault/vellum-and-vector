@@ -27,6 +27,7 @@ const presentChannels = new Set([
   "fracture",
   "geothermal",
   "margin",
+  "oceanDistance",
   "glacialErosion",
   "continentalFraction",
   "tectonicStrain",

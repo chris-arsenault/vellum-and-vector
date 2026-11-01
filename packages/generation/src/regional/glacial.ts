@@ -15,9 +15,8 @@ const recordedAccumulation = 0.6,
   recordedFloor = 0.05;
 /** Flux (in cells of full accumulation) a glacier gathers before it leaves its cirque. */
 const cirqueFlux = 10;
-/** Cirque depth at full strength: a share of the parent span, at least this many metres. */
-const cirqueDepthShare = 0.012,
-  cirqueDepthMinimum = 40;
+/** Cirque depth at full strength (m): a physical size, the same at every refinement level. */
+const cirqueDepth = 120;
 /** Trough deepening per square root of flux beyond the cirque, and its limit, as shares of cirque depth. */
 const troughShare = 0.4,
   troughLimit = 3;
@@ -45,7 +44,7 @@ interface IceBudget {
 export function applyGlaciation(state: RegionalState, h: Float64Array, relief: ReliefWork) {
   const budget = iceBudget(state, h),
     { present, relict } = iceFlow(state, budget),
-    depth = Math.max(cirqueDepthMinimum, cirqueDepthShare * state.regional.parentSpan),
+    depth = cirqueDepth,
     flux = relief.iceFlux;
   for (let i = 0; i < flux.length; i++) flux[i] = Math.max(present[i], relict[i]);
   const lowering = carving(state, budget, flux, depth);
@@ -71,17 +70,16 @@ function iceBudget(state: RegionalState, h: Float64Array): IceBudget {
     { sea, base } = state.regional.network!,
     cellArea = regionalSpan(state) ** 2,
     history = recorded(state),
-    applied = state.regional.contributions,
     accumulation = new Float64Array(n),
     melt = new Float64Array(n),
     cold = new Uint8Array(n);
   for (let i = 0; i < n; i++) {
     if (sea[i] || !isContent(mesh, i)) continue;
+    // Aurora's held ice is the ledger's contribution to the written thickness (once, in
+    // `writeIce`); it is not snow that flows and carves. M5 decides whether it should.
     const t = capturedCelsius(state, i) - lapse * (h[i] - base[i]) + magicHeat(state, i),
-      // Aurora's held ice counts as accumulation the climate alone would not give.
-      held = Math.max(0, applied.appliedTo("IceThickness", i)) / 1000,
       precipitation = (map.Rainfall.get(i) + map.Snowfall.get(i)) / 1000,
-      snow = clamp((accumulationTemperature - t) / accumulationSpan) * (0.3 + precipitation) + held,
+      snow = clamp((accumulationTemperature - t) / accumulationSpan) * (0.3 + precipitation),
       share = mesh.contentArea(i) / cellArea;
     accumulation[i] = snow * share;
     melt[i] = clamp((t - accumulationTemperature) / meltSpan) * meltStrength * share;

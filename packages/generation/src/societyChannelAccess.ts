@@ -3,14 +3,20 @@ import type { GenerationState } from "./process";
 import { nativePosition } from "./canonry/atlasWorkspace";
 
 type ChannelPoint = readonly [number, number, number];
-/** The live mesh also serves rounds before geographic extraction has run. */
+/**
+ * The field, when present, is the current terrain and its channels are read live; the
+ * retained reaches are the last publication (a refinement's are its parent's captured
+ * rivers) and serve only a run without a field.
+ */
 function* channelPoints(state: GenerationState): Iterable<ChannelPoint> {
   const work = state.physical;
-  if (work && (state.society?.cycle || !state.domain.world.drainage?.[state.domain.scope.areaId])) {
-    yield* liveChannels(work);
-  } else {
-    yield* retainedChannels(state);
-  }
+  if (work && carriesChannels(work)) yield* liveChannels(work);
+  else yield* retainedChannels(state);
+}
+/** A field built for a society-only run may carry no routed channels; then the publication serves. */
+function carriesChannels(work: NonNullable<GenerationState["physical"]>) {
+  for (let i = 0; i < work.map.mesh.count; i++) if (work.map.RiverOrders.get(i) > 0) return true;
+  return false;
 }
 function* liveChannels(work: NonNullable<GenerationState["physical"]>): Iterable<ChannelPoint> {
   for (let i = 0; i < work.map.mesh.count; i++) {

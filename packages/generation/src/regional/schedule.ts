@@ -19,6 +19,7 @@ import {
   supportProposals,
 } from "./places";
 import { deriveRelief, updateSlopes } from "./relief";
+import { deriveMedia, openFractures } from "./sharedMedia";
 import type { RegionalState } from "./state";
 
 export interface ScheduledStep {
@@ -74,6 +75,7 @@ export function regionalSchedule(domains: string[]): ScheduledStep[] {
       state.regional.round = rounds + 1;
       updateSlopes(state);
       routeWater(state);
+      deriveMedia(state);
       respondClimate(state);
       if (d.geography) respondCover(state);
       classifyLandforms(state);
@@ -128,6 +130,8 @@ function contextStep(d: Domains): ScheduledStep {
         updateSlopes(state);
         return;
       }
+      // The fracture set steers the network's cost; the other media follow each round's water.
+      openFractures(state);
       growNetwork(state);
       supportFeatures(state);
     },
@@ -152,6 +156,7 @@ function roundSteps(d: Domains, round: number): ScheduledStep[] {
         run(state) {
           routeWater(state);
           respondFeatures(state);
+          deriveMedia(state);
         },
       },
       {
@@ -166,6 +171,7 @@ function roundSteps(d: Domains, round: number): ScheduledStep[] {
           if ((changed.get("Elevation") ?? 0) >= reliefFollowUp * 1024) {
             updateSlopes(state);
             routeWater(state);
+            deriveMedia(state);
           }
         },
       },

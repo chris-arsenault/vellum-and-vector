@@ -5,6 +5,7 @@ import type { PhysicalBufferName, PhysicalField } from "../canonry/field";
 import type { RegionalCharacter } from "./character";
 import type { CapturedCourse } from "./courses";
 import type { Contributions } from "./media";
+import type { SharedMedia } from "./sharedMedia";
 
 export interface RegionalInput {
   areaId: string;
@@ -124,6 +125,8 @@ export interface RegionalWork {
   natural: Partial<Record<PhysicalBufferName, Band>>;
   /** Tracked changes the processes apply to shared media. */
   contributions: Contributions;
+  /** Media the field has no band for (insolation, cold pooling, wetness), derived after each round's water. */
+  media?: SharedMedia;
   /** The round being evaluated: 0 before the schedule, 1..3 inside it, 4 at the final refresh. */
   round: number;
   character?: RegionalCharacter;

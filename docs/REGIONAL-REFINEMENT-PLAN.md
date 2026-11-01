@@ -1252,6 +1252,113 @@ mechanism decision made while the code was read and run; none changes a user req
   a phase is judged by its behaviour existing at fixture scale (touched tests, lint,
   typecheck, a short review); the harness and the browser matrix run only on request.
 
+### M1 expansion (2026-11-01)
+
+Under the lean process: each step's evidence is a fixture-scale behaviour test or a one-off
+probe, lint and typecheck; no harness runs. Read before expanding: `regional/climate.ts`,
+`glacial.ts`, `living.ts`, `material.ts`, `character.ts`, `drainage.ts` (seepage), the
+world's `climate.ts` (`seasonality`, `snowShare`), `geography.ts` (`oceanDistance`),
+`latitude.ts`, and `societyChannelAccess.ts`.
+
+Decisions (mechanism choices, with reasons):
+
+- **Media the field has a band for use the band; media it has none for are retained arrays
+  in the state record.** `OceanDistance` and `FractureConductance` are field bands and are
+  written in place (the world's `oceanDistance` runs on the lattice as it is). Insolation,
+  cold pooling and topographic wetness have no world band; adding bands means a schema and
+  publication change for three regional-only quantities, so they live in
+  `state.regional.media` (one lattice, mesh-indexed, never published) and are re-derived after
+  each round's water. The plan's "native bands owned once" principle is read as "one place,
+  on the lattice", which this satisfies; the record notes the adaptation.
+- **Temperature.** Captured temperature, lapsed by the height the relief gained, plus an
+  aspect term (equatorward slope warms, poleward cools, scaled by slope), minus cold pooling
+  (depth of a hollow below the surrounding smoothed surface, on gentle ground), plus magic's
+  heat and the ledger's `Temperature` total. Precipitation is re-split each round with the
+  world's `snowShare` from the new temperature and a seasonal half-range from the world's
+  `seasonality` (latitude from the parent's frame, continentality from `OceanDistance`), so
+  new high ground turns rain into snow and a warmed valley turns snow into rain.
+- **Fracture set.** `FractureConductance` is the captured conductance plus an opening term
+  where captured tectonic strain is high and the material band is weak, oriented by nothing
+  (the bands already follow the grain); the ledger's total sits on top for M5's magic rocks.
+  Consumed by material resistance (network cost, relief) and seepage. `tectonicStrain` is
+  thereby consumed.
+- **Wetness.** A topographic wetness index, ln(upslope area per unit contour length over
+  slope), normalized over the frame's content; `regionalWetness` reads it in place of the
+  captured floodplain and delta intensities, which are the parent's and never developed.
+  Consumers: wetland cover, soil water through moisture.
+- **Glacial repairs.** The ledger's held ice is counted once (in the written thickness, where
+  the ledger commits it; it no longer also feeds accumulation, so Aurora's ice does not carve
+  in M1; M5 decides whether it should). The cirque depth is a fixed physical depth at full
+  strength instead of a share of the parent span. Sea ice and sediment were already repaired
+  in M0 (sea cells keep the captured ice; sediment starts from the captured thickness plus the
+  ledger). The rock reading is already the captured `RockResistance` against the world's
+  baseline. The regional Salt double burn is moot: the regional magic reimplementation was
+  retired in M0.
+- **Cover and ledger totals.** `respondCover` and `respondClimate` already read the ledger's
+  tree, grass, wetland, moisture and soil totals; no change beyond wetness.
+- **`channelAccess`.** The world's helper reads retained reaches whenever the area has a
+  published drainage network, so a refinement read the parent's captured reaches instead of
+  the live regional network. Fixed in place: when the physical field is present it is the
+  current terrain and the live channels are read; retained reaches serve runs without a field.
+
+Steps:
+
+1. **Shared media.** `regional/sharedMedia.ts`: `deriveMedia(state)` writes `OceanDistance`
+   (world helper), insolation, cold pooling and wetness; `openFractures(state)` writes the
+   fracture set at context. Called at context (fractures, ocean distance) and after each
+   round's water (all). Evidence: a fixture with a ridge has warmer sun-facing cells than
+   shaded ones; a closed hollow is colder than its rim; a high-strain fixture has more
+   conductance than a low-strain one; valley cells are wetter than ridge cells.
+2. **Temperature and snow.** `respondClimate` reads the media and re-splits precipitation.
+   Evidence: on the mountain fixture, new high ground carries more snow than its captured
+   share; the existing climate assertions hold.
+3. **Glacial repairs and `channelAccess`.** As decided. Evidence: a probe that the held-ice
+   contribution appears once in `IceThickness`; `societySupport` tests pass; a regional
+   places test sees river access from the developed network.
+4. **Record, review, commit.** Plan record, one short read-only review, commit.
+
+#### M1 execution record (2026-11-01)
+
+- **Built as decided.** `regional/sharedMedia.ts` derives the media; the context step opens
+  the fracture set before the network is grown and derives the rest after it; each round's
+  water step re-derives them. `respondClimate` reads insolation and pooling into the
+  temperature and re-splits precipitation with the world's `snowShare` and `seasonality`
+  (the `Seasonality` band is written for the extraction). `regionalWetness` reads the wetness
+  medium once a round has derived it and the captured floodplain and delta intensities before
+  that (a run without the physical domain). `glacial.ts`: the ledger's held ice enters the
+  written thickness once and no longer feeds accumulation; the cirque depth is a fixed physical
+  depth. `societyChannelAccess.ts`: live channels whenever the field is present.
+- **Evidence (fixture scale, `sharedMedia.test.ts`).** On an east–west ridge the equatorward
+  flank is warmer than the poleward flank and takes a smaller snow share; the floor of a
+  closed hollow is colder than its rim; strained country is more fractured than unstrained;
+  a valley floor is wetter than the slopes above it. The regional suite and the society tests
+  pass (45 files, 192 tests). The held-ice and `channelAccess` repairs are judged by reading:
+  one addition site remains for the ledger's ice, and the live branch is the only one taken
+  with a field.
+- **Disclosed.** The media the field has no band for are mesh-indexed arrays in the state
+  record, not field bands (see the expansion's first decision). The temperature band is the
+  annual mean, so "colder in winter" is read as colder on the mean. The snow check was first
+  written as "new high ground is snowier" and withdrawn: the captured temperature already
+  carries the parent's lapse, so only the height a cell gains over the capture cools it, and
+  that is small against the aspect term; the milestone's own acceptance (two sides of one
+  relief) is the check. Aurora's held ice does not carve in M1 (M5 decides). The regional
+  Salt double burn is moot since the regional magic reimplementation was retired in M0.
+- **Review (read-only subagent) and what was done.** Fixed: the parent's `oceanDistance` was
+  not among the captured channels and the regional field was not an open boundary, so a frame
+  without sea read a constant distance and every landlocked region got maritime seasonality
+  (captured now; the field is open, so a cell is as near the sea as the parent said or as the
+  sea inside the frame); the media were not re-derived at the refresh or after the magic
+  reroute (they are); the wetness medium reached only the wetland cover, not the ground's
+  water (it now raises the aridity index that cover reads, scaled by the climate's own
+  water); the wetland rule was frame-relative (a dry upland's wettest cells became marsh; the
+  topographic term is now scaled by the climate); the live channel read for `channelAccess`
+  applies only when the field carries routed channels (a society-only world run's field may
+  not); the wetness check reads the developed wetland cover, not the medium. Disclosed, not
+  changed: the ledger term in `openFractures` is zero at context (magic's rock work lands on
+  the band through the ledger's commit; the term documents the path); `materialBands` is
+  integrated once more per run; nothing writes the `Temperature` ledger before M5; the
+  fracture check reads the band, not a consumer.
+
 ### Sulion mapping
 
 Root plan `5732ab12-bbaf-45e0-a972-55a163ae8ff9` "Regional refinement at world depth (one
@@ -1266,8 +1373,9 @@ milestones), both canceled as superseded by the one-representation decision.
 
 ### Current state
 
-M0 (software organization) committed as recorded above. Next: M1 (shared media and repairs)
-through plan-phase, under the lean per-phase process the owner set on 2026-11-01.
+M0 (software organization) and M1 (shared media and repairs) committed as recorded above.
+Next: M2 (terrain and water at depth) through plan-phase, under the lean per-phase process the
+owner set on 2026-11-01.
 
 ## New namespace `packages/generation/src/regional`
 
