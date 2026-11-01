@@ -31,7 +31,7 @@ import {
  * and a finer map the lesser ones.
  */
 const minimumProminence = 50;
-const namedProminenceShare = 0.012;
+const namedProminenceShare = 0.03;
 /** Mountain country combines elevation and relief; a high flat plateau is not a range. */
 const mountainRelief = 150;
 const mountainElevation = 300;
@@ -132,44 +132,31 @@ function extractSummits(state: RegionalState, ridge: Band) {
         elevation: g.channels.elevation.get(i),
         geometryMeaning: "prominent summit",
       });
-    const col = saddle.get(i);
-    if (!usableCol(state, col, ridge, passes)) continue;
-    passes.add(col);
-    g.channels.landform.set(col, L.Pass);
-    putRegionalFeature(state, `pass:${col}`, "pass", "geology", point(gridPosition(g, col)), {
-      elevation: g.channels.elevation.get(col),
-      geometryMeaning: "joining col between summits",
-    });
+    publishCol(state, saddle.get(i), ridge, passes);
   }
   g.coverage.release(rise);
   g.coverage.release(saddle);
 }
 
+function publishCol(state: RegionalState, col: number, ridge: Band, passes: Set<number>) {
+  const g = state.surface;
+  if (!usableCol(state, col, ridge, passes)) return;
+  passes.add(col);
+  g.channels.landform.set(col, L.Pass);
+  putRegionalFeature(state, `pass:${col}`, "pass", "geology", point(gridPosition(g, col)), {
+    elevation: g.channels.elevation.get(col),
+    geometryMeaning: "joining col between summits",
+  });
+}
+
 /** An inherited peak feature moves to the most prominent realized summit within its reach. */
 function reanchorKnownSummits(state: RegionalState, rise: Band) {
   const g = state.surface,
-    [dx, dy] = spacing(g),
-    reach = state.parentSpan,
-    rx = Math.ceil(reach / dx),
-    ry = Math.ceil(reach / dy),
     taken = new Set<number>();
-  for (const peak of state.terrain?.peaks ?? []) {
+  for (const peak of state.evidence?.summits ?? []) {
     const feature = generationFeature(state, peak.featureId);
     if (!feature) continue;
-    const cx = peak.cell % g.width,
-      cy = Math.floor(peak.cell / g.width);
-    let best = -1,
-      bestRise = 0;
-    for (let y = Math.max(0, cy - ry); y <= Math.min(g.height - 1, cy + ry); y++)
-      for (let x = Math.max(0, cx - rx); x <= Math.min(g.width - 1, cx + rx); x++) {
-        const i = y * g.width + x;
-        if (taken.has(i) || g.channels.water.get(i) || onFrameEdge(g, i)) continue;
-        if (distance(g, peak.cell, i) > reach) continue;
-        if (rise.get(i) > bestRise) {
-          bestRise = rise.get(i);
-          best = i;
-        }
-      }
+    const best = mostProminentNear(state, rise, peak.cell, taken);
     if (best < 0) continue;
     taken.add(best);
     peak.cell = best;
@@ -179,12 +166,38 @@ function reanchorKnownSummits(state: RegionalState, rise: Band) {
       ...feature.attributes,
       anchoredFrom: feature.attributes.anchoredFrom ?? [from[0], from[1]],
       capturedProminence: feature.attributes.capturedProminence ?? feature.attributes.prominence,
-      prominence: bestRise,
+      prominence: rise.get(best),
       elevation: g.channels.elevation.get(best),
     };
     writeGenerationFeature(state, feature);
   }
   return taken;
+}
+
+/** The most prominent free summit cell within a parent span of a captured position, or -1. */
+function mostProminentNear(state: RegionalState, rise: Band, cell: number, taken: Set<number>) {
+  const g = state.surface,
+    [dx, dy] = spacing(g),
+    reach = state.parentSpan,
+    rx = Math.ceil(reach / dx),
+    ry = Math.ceil(reach / dy),
+    cx = cell % g.width,
+    cy = Math.floor(cell / g.width),
+    excluded = (i: number) =>
+      taken.has(i) ||
+      Boolean(g.channels.water.get(i)) ||
+      onFrameEdge(g, i) ||
+      distance(g, cell, i) > reach;
+  let best = -1,
+    bestRise = 0;
+  for (let y = Math.max(0, cy - ry); y <= Math.min(g.height - 1, cy + ry); y++)
+    for (let x = Math.max(0, cx - rx); x <= Math.min(g.width - 1, cx + rx); x++) {
+      const i = y * g.width + x;
+      if (excluded(i) || rise.get(i) <= bestRise) continue;
+      bestRise = rise.get(i);
+      best = i;
+    }
+  return best;
 }
 
 function usableCol(state: RegionalState, col: number, ridge: Band, passes: Set<number>) {

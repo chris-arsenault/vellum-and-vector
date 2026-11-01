@@ -1,6 +1,6 @@
 import { potentialEvaporation } from "../canonry/ecologyEnvironment";
 import { channel, clamp, naturalChannel, type RegionalState } from "./state";
-import { gradient } from "./terrain";
+import { gradient } from "./relief";
 
 /**
  * Local conditions on the developed relief. Each round derives the shared climate channels

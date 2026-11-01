@@ -81,24 +81,31 @@ class reads and display interpolation locate canonical coordinates in that chart
 Regional terrain, water, living cover, magic and places develop in a fixed coupled
 schedule (`packages/generation/src/regional/schedule.ts`, recorded in
 [ADR 0008](adr/0008-regional-refinement-is-conditioned-amplification.md)): context once,
-three rounds in a declared order (relief and support, then water and access, then climate
-and magic on the shared media, then the living landscape and places), one refresh of derived
-reads and one extraction. A round is not an epoch; nothing replays world history. Processes
-are prepared once and respond each round: working structures (uplift intent, material
-bands, basins, the drainage graph, settlement supports, proposed places, magic materials)
-persist and evolve, and the shared media are natural copies of the captured present plus a
-ledger of tracked contributions, so a round updates an influence instead of adding it again.
+three rounds in a declared order (relief derived from the network, then water and access,
+then climate and magic on the shared media, then the living landscape and places), one
+refresh of derived reads and one extraction. A round is not an epoch; nothing replays world
+history. The network is grown once and the relief is re-derived from it each round through
+the media as they are then; working structures (the network, the evidence, seats and their
+footprints, proposed places, magic materials) persist and evolve, and the shared media are
+natural copies of the captured present plus a ledger of tracked contributions, so a round
+updates an influence instead of adding it again.
 
 The captured country's character enters as the world's structural grain, strain, glacial
-reworking and volcanic construction. Relief develops as uplift intent against stream-power
-incision and hillslope creep: intent follows the captured height of strained ground and its
-local relief, is organized along the grain into separate massifs and across it into material
-bands of varying spacing, rises around inherited summits and volcanic cones, and is lowered
-along captured river courses; erodibility reads the present rock, fractures, living cover,
-bands and a fine substrate heterogeneity. A long-wavelength anchor keeps the captured broad
-character while summits rise above it and valleys cut below. Where ice reworked high ground,
-headwater bowls are excavated once behind rock rims that hold; whether each holds a tarn
-follows its water supply. Spill routes resolve basins and flats; sheet runoff becomes a
+reworking and volcanic construction. The drainage network is a geodesic tree over the land
+rooted at the established waters (the connected sea, open frame edges starting with their
+remaining fall to the sea, captured lakes at their level, the floors of the parent's closed
+basins) and descending a cost field of process terms: climbing the captured base, crossing
+the grain, resistant material bands integrated along the grain, hard rock, open fractures
+and warded ground cost; captured courses, the parent's channel raster and a river seat's
+ground are cheap; the ground around known summits and cones is dear; gathered water makes
+its channel cheaper and the country is routed again through it. Ground heterogeneity decides
+only between routes those terms leave equal, most on plains. Relief is derived from that
+tree: each cell rises above its receiver by a concave channel profile or a material
+hillslope gradient, capped inside a seat's footprint, amplified so that the relief blurred
+to the parent span is the captured base; hillslopes are coupled sideways; ice accumulates
+where the lapsed climate and the recorded history allow, flows down the network, hollows
+cirques behind lips, deepens troughs and leaves moraines; cones add their construction.
+Spill routes resolve basins and flats; sheet runoff becomes a
 channel where the terrain gathers it, with the map-sample discharge threshold, the strip test
 and headwater pruning as before. Closed depressions without a cause fill. Lake supply
 balances precipitation and runoff against evaporation and seepage; shores follow the water
@@ -106,15 +113,18 @@ stage against continuous terrain; ocean outlines use connected sea membership. T
 rule applies to mapped shores as well as names; unresolved ponds remain numerical water
 context. Floodplain coverage follows local channel margins.
 
-Established features are evidence: an inherited summit moves to the realized summit of its
-massif; a captured river's course gathers the developed drainage and the stem that follows it
-carries the river's name and identity; a river entering across the frame keeps its edge
-source and discharge. A known settlement takes a nearby usable site consistent with its
-broad situation or, where none exists, a bounded terrace with an access ramp shaped into the
-terrain; new villages are proposed once from the sites the developed terrain offers, with
-hinterlands by site class and water access rather than a fixed lattice, and take their support
-in the last round or are dropped. Seats and summits are re-sited from their captured
-positions on every refinement, so a repeated refinement reproduces itself.
+Established features are terms in the processes: an inherited summit is a divide node the
+channels route around and moves to the realized summit of its massif; a captured river's
+course is a corridor the network follows, its discharge enters across the frame edge, and
+the stem that follows it carries the river's name, identity and the course itself as
+evidence for the next refinement; a captured lake is the base level its tributaries rise
+from. A known settlement's footprint caps the hillslope relief around it in the form the
+network gives that ground, a river seat draws its channel, and a seat still on unusable
+ground moves to the best usable ground within reach that keeps its situation. New villages
+are proposed once at the network's events, compete for hinterland over the travel cost of
+the present surface, and take their support in the last round or are dropped. Seats and
+summits are re-sited from their captured positions and this map's own products are
+regenerated on every refinement, so a repeated refinement reproduces itself.
 
 Climate re-derives each round from the captured copies under the developed relief: lapse,
 exposure on the captured wind, moisture, soil gained from deposition, the captured runoff
@@ -139,9 +149,10 @@ its ice and ground reservoirs against the present cold. Pressure fronts follow c
 ocean water, focus over shallow bathymetry and reflect from coasts; the traced field is kept
 while the ocean's extent is unchanged. Greenwood spreads through connected vegetation, while
 groundwater leaches buried charge toward supported spring breaks. Salt beds dissolve into
-brine, follow drainage and supply wind-carried dust once; exposed beds harden or collapse,
-and Fire consumes their material. A captured Hallowed ward does not spread again, only its
-located sources do; wards displace other magical fields to their rims. Veil develops strain
+brine, follow drainage, crust in captured closed basins and supply wind-carried dust once;
+exposed beds harden or collapse, and Fire consumes their material. A captured Hallowed ward
+does not spread again, only its located sources do; wards displace other magical fields to
+their rims and the ground inside resists cutting. Veil develops strain
 where systems compete and pairs coherent tears into doors at extraction. Effects, coasts,
 relief and meetings write through the ledger; a resolvable relief change reroutes water
 within the round. These operations develop the captured present without another physical

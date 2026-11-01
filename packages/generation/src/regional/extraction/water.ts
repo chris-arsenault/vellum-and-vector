@@ -10,8 +10,12 @@ import {
   type DrainageReach,
 } from "@atlas/domain";
 import type { Geometry } from "geojson";
-import { generationFeature, writeGenerationFeature } from "../../generationFeatures";
-import { courseIndex } from "../courses";
+import {
+  generationFeature,
+  removeGenerationFeature,
+  writeGenerationFeature,
+} from "../../generationFeatures";
+import { courseIndex, type CapturedCourse } from "../courses";
 import { putRegionalFeature, putRegionalNetwork } from "./features";
 import { spacing, type RegionalState } from "../state";
 
@@ -164,18 +168,36 @@ function carryIdentity(state: RegionalState, stems: number[][], reaches: Drainag
       if (!taken.has(index) && count > most) [best, most] = [index, count];
     if (best < 0 || most < course.cells.length * identityShare) return;
     taken.add(best);
-    const feature = generationFeature(state, reaches[best].featureIds[0]);
-    if (!feature) return;
-    feature.name = course.feature.name;
-    feature.placeId = course.feature.placeId ?? course.feature.id;
-    feature.attributes = {
-      ...feature.attributes,
-      nameStatus: course.feature.attributes.nameStatus ?? "proper",
-      namingCulture: course.feature.attributes.namingCulture,
-      namingLanguage: course.feature.attributes.namingLanguage,
-    };
-    writeGenerationFeature(state, feature);
+    takeIdentity(state, reaches[best].featureIds[0], course);
   });
+}
+
+/**
+ * The developed river stands for the captured course from now on: it takes the name and
+ * place identity, carries the course as evidence for the next refinement, and the coarse
+ * line leaves the map.
+ */
+function takeIdentity(state: RegionalState, featureId: string, course: CapturedCourse) {
+  const feature = generationFeature(state, featureId);
+  if (!feature) return;
+  const carried = course.carried ?? {
+    sourceId: course.feature.id,
+    geometry: course.feature.geometry,
+    discharge: course.discharge,
+    order: course.order,
+  };
+  feature.name = course.feature.name;
+  feature.placeId = course.feature.placeId ?? carried.sourceId;
+  feature.attributes = {
+    ...feature.attributes,
+    nameStatus: course.feature.attributes.nameStatus ?? "proper",
+    namingCulture: course.feature.attributes.namingCulture,
+    namingLanguage: course.feature.attributes.namingLanguage,
+    capturedCourse: carried,
+  };
+  writeGenerationFeature(state, feature);
+  if (!course.carried && generationFeature(state, course.feature.id))
+    removeGenerationFeature(state, course.feature.id);
 }
 function publishRiver(
   state: RegionalState,

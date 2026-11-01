@@ -10,7 +10,7 @@ import {
   spacing,
   type RegionalState,
 } from "./state";
-import { referenceDischarge, updateSlopes } from "./terrain";
+import { referenceDischarge, updateSlopes } from "./relief";
 
 const secondsPerYear = 365.25 * 24 * 3600;
 /** Reference-runoff samples a mapped river drains, in this map's own samples. */
@@ -122,9 +122,11 @@ function spillRoutes(state: RegionalState, height: Band, filled: Band, sea: Band
 
 /** Open frame edges drain out, except where a captured river enters across them. */
 function outlet(state: RegionalState, i: number, sea: Band) {
-  return (
-    Boolean(sea.get(i)) || (onFrameEdge(state.surface, i) && !(state.captured?.inflow.get(i) ?? 0))
-  );
+  return Boolean(sea.get(i)) || (onFrameEdge(state.surface, i) && !enteringFlow(state, i));
+}
+/** Discharge a captured river brings across the frame edge at this cell (m³/s). */
+function enteringFlow(state: RegionalState, i: number) {
+  return state.network?.inflow[i] ?? 0;
 }
 
 /** The spill tree resolves flats; sloping ground follows its steepest descending neighbor. */
@@ -161,7 +163,7 @@ function accumulate(state: RegionalState) {
     cellArea = dx * dy;
   for (let i = 0; i < g.active.length; i++) {
     const land = g.channels.water.get(i) !== 1,
-      entering = state.captured?.inflow.get(i) ?? 0,
+      entering = enteringFlow(state, i),
       // An entering river drains country beyond the frame, at about reference runoff.
       beyond = (entering / referenceDischarge(state)) * cellArea;
     area.set(i, land ? g.measures.get(i) + beyond : 0);
@@ -210,7 +212,7 @@ function qualifyChannels(state: RegionalState, river: Band, flow: Band) {
     length = upstreamLengths(
       state,
       (i) => river.get(i) > 0,
-      (i) => ((state.captured?.inflow.get(i) ?? 0) > 0 ? shortest : 0)
+      (i) => (enteringFlow(state, i) > 0 ? shortest : 0)
     );
   for (let i = 0; i < g.active.length; i++) if (length[i] < shortest) river.set(i, 0);
 }
@@ -255,12 +257,16 @@ function waterLand(state: RegionalState, i: number) {
   return state.surface.channels.water.get(i) !== 1;
 }
 
-/** Standing water is supported by runoff and rain, not by the routing flood's fill height. */
+/**
+ * Standing water is supported by runoff and rain, not by the routing flood's fill height. A
+ * captured lake is established evidence: it stands at its level wherever its bed lies under it.
+ */
 function fillLakes(state: RegionalState) {
   const g = state.surface,
     seen = g.coverage.scratch("uint8", "regional:lake-seen", g.active.length),
     spill = g.channels.drainageElevation,
     height = g.channels.elevation;
+  placeCapturedLakes(state, seen);
   for (let i = 0; i < g.active.length; i++) {
     if (seen.get(i) || g.channels.water.get(i) === 1 || spill.get(i) - height.get(i) <= 2) continue;
     const cells = pool(state, i, seen),
@@ -274,6 +280,24 @@ function fillLakes(state: RegionalState) {
     }
   }
   g.coverage.release(seen);
+}
+/** A captured lake stands at its level, or at its spill where the developed rim is higher. */
+function placeCapturedLakes(state: RegionalState, seen: Band) {
+  const g = state.surface,
+    c = g.channels,
+    network = state.network;
+  if (!network) return;
+  for (let i = 0; i < g.active.length; i++) {
+    const k = network.lake[i];
+    if (k < 0 || c.water.get(i) === 1) continue;
+    const level = Math.max(state.evidence!.lakes[k].level, c.drainageElevation.get(i)),
+      depth = level - c.elevation.get(i);
+    if (depth <= 0) continue;
+    seen.set(i, 1);
+    c.water.set(i, 2);
+    c.waterDepth.set(i, depth);
+    c.waterLevel.set(i, level);
+  }
 }
 function pool(state: RegionalState, start: number, seen: Band) {
   const g = state.surface,
@@ -294,11 +318,19 @@ function pool(state: RegionalState, start: number, seen: Band) {
     }
   return cells;
 }
+/**
+ * The stage a basin's supply supports: the runoff its floor and its inflowing channels bring
+ * fills a surface over which evaporation and seepage exceed the rain that falls on it. The
+ * rain over dry parts of the basin is already in their runoff; it is not counted twice.
+ */
 function waterStage(state: RegionalState, cells: number[], spill: number) {
   const g = state.surface,
     height = g.channels.elevation,
-    { inflow, area, temperature, seepage } = poolSupply(state, cells);
-  const loss = potentialEvaporation(temperature / area) + seepage / area,
+    { inflow, area, temperature, seepage, precipitation } = poolSupply(state, cells);
+  const loss = Math.max(
+      0.01,
+      potentialEvaporation(temperature / area) + seepage / area - precipitation / area
+    ),
     supportedArea = inflow / loss;
   if (supportedArea >= area) return spill;
   cells.sort((a, b) => height.get(a) - height.get(b));
@@ -315,18 +347,20 @@ function poolSupply(state: RegionalState, cells: number[]) {
   let inflow = 0,
     area = 0,
     temperature = 0,
-    seepage = 0;
+    seepage = 0,
+    precipitation = 0;
   for (const i of cells) {
     const measure = g.measures.get(i);
     area += measure;
-    inflow += regionalPrecipitation(state, i) * measure;
+    inflow += Math.max(0, g.channels.runoff?.get(i) ?? 0) * measure;
+    precipitation += regionalPrecipitation(state, i) * measure;
     temperature += (g.channels.temperature?.get(i) ?? 15) * measure;
     seepage += measure * seepageRate(state, i);
     for (const j of neighbors(g, i))
       if (!members.has(j) && state.drainage!.receiver.get(j) === i)
         inflow += g.channels.flow.get(j) * secondsPerYear;
   }
-  return { inflow, area, temperature, seepage };
+  return { inflow, area, temperature, seepage, precipitation };
 }
 function seepageRate(state: RegionalState, i: number) {
   const c = state.surface.channels;

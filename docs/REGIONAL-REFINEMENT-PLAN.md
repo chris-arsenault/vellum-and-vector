@@ -18,12 +18,12 @@ settlement dots, summit triangles, col crosses, magic-site dots). Three runs per
 case; the median is the case time; equal surface signatures across the runs are the
 deterministic-repeat check.
 
-| Case | Parent situation (fixed before any candidate ran)                                                                                                                                                                                                           | Must expose                                                                                   |
-| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Case | Parent situation (fixed before any candidate ran)                                                                                                                                                                                                                                                                | Must expose                                                                                     |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | P1   | Constructed 1500×1000 km world at 200 km² samples: one NE-trending range dome, structural grain along it, glaciated north-eastern half, wet windward flank, southern coast, river Vell from the crest to the sea, town Harrowgate at its foothill exit, river Ash entering across the frame, summit Mount Carrow | Separate summits and cols, passages, feeding geography, a usable town site; not a noisier ridge |
-| P2   | Constructed dry plateau (hard caprock, no grain, no glacial history, one volcanic cone) above an escarpment, grassy lowland, wooded coast, ephemeral river Dunmere to the coastal town Saltmere                                                             | Different spatial organization; water, material and habitat relationships; settlement support   |
-| M1   | 100 km bin of the generated draft world (2000×1000 km, seed 73) with the most Fire and Aurora coverage, both present, inland                                                                                                                             | Interacting carriers and altered surroundings, not overlays or cancellation                     |
-| M2   | Coastal 100 km bin with the most Pressure, Greenwood, Salt and Hallowed coverage, all present                                                                                                                                                             | Cross-domain organization of coast, water, habitat, deposits and kept geography                 |
+| P2   | Constructed dry plateau (hard caprock, no grain, no glacial history, one volcanic cone) above an escarpment, grassy lowland, wooded coast, ephemeral river Dunmere to the coastal town Saltmere                                                                                                                  | Different spatial organization; water, material and habitat relationships; settlement support   |
+| M1   | 100 km bin of the generated draft world (2000×1000 km, seed 73) with the most Fire and Aurora coverage, both present, inland                                                                                                                                                                                     | Interacting carriers and altered surroundings, not overlays or cancellation                     |
+| M2   | Coastal 100 km bin with the most Pressure, Greenwood, Salt and Hallowed coverage, all present                                                                                                                                                                                                                    | Cross-domain organization of coast, water, habitat, deposits and kept geography                 |
 
 Selections: P1 `[480000, 280000, 1020000, 680000]`, P2 `[500000, 320000, 1040000, 720000]`,
 M1/M2 a 400×300 km rectangle centred on the selected bin. The world generation of
@@ -35,29 +35,44 @@ the numbers are copied into the final report, not into this file.
 
 ## Input → producer → handoff → consumer → geographic effect → check
 
-| Input                                   | Producer                                                        | Handoff                                                                     | Consumer                                                 | Geographic effect                                                                    | Check                             |
-| --------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------ | --------------------------------- |
-| `structuralGrainX/Y` (doubled-angle axial direction × coherence) | orogenic construction records its source boundary tangent on belt cells; carried by plate transport | `atlasChannels` binding, geology layer; regional allowlist; regional character record | terrain erodibility banding and along-strike relief modulation | ridges and strike valleys follow the grain; separate summits along the belt           | Direction has an effect           |
-| `tectonicStrain`, `glacialErosion`      | existing                                                        | already published and allowlisted; previously unused by terrain             | uplift amplitude; glacial reworking (cirque basins, trough deepening, retained tarns) | lakes with a cause in glaciated high ground; none in dry unglaciated ranges            | Character changes organization    |
-| `volcanicConstruction`                  | existing                                                        | add to the regional allowlist                                               | cone-shaped constructive uplift at local maxima           | discrete cones instead of a smeared bump                                              | Character changes organization    |
-| captured `peak` features                | world landform publication                                      | captured features (retained point places)                                   | uplift concentration; summit identity re-anchored to the realized summit | an inherited significant peak organizes its massif                                     | structures survive interaction    |
-| captured `river` features and edge flow | world river publication, `riverOrder`/`flow`                    | source features; edge inlets                                                | course imprint on uplift/erodibility; inlet discharge; identity carried to the developed stem | tributaries feed the known river; no fabricated interior source for an entering river  | River develops surroundings       |
-| captured settlements and communities    | society publication                                             | captured features, society record                                           | settlement-support realization (site search, bounded terrace, access)   | a usable local site visibly shaped into the terrain                                   | Town realizes support             |
-| cover, soil, wetness                    | existing                                                        | existing                                                                    | habitat organization; hillslope binding and runoff response fed back to terrain and water | connected patches, valley meadows, tree line; round 2 terrain reads round 1 cover       | Feedback crosses rounds           |
-| magic stocks, sources, coverage         | existing                                                        | existing                                                                    | idempotent evaluation against current media; tracked physical contributions | seven systems act through their media each round without ratcheting                    | All seven remain meaningful       |
-| child's developed grain                 | regional publication                                            | child fields captured by its descendants                                    | descendant character record                               | a grandchild develops from the child's organization                                   | Descendants use their parent      |
+| Input                                                            | Producer                                                                                            | Handoff                                                                               | Consumer                                                                                                 | Geographic effect                                                                     | Check                          |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------ |
+| `structuralGrainX/Y` (doubled-angle axial direction × coherence) | orogenic construction records its source boundary tangent on belt cells; carried by plate transport | `atlasChannels` binding, geology layer; regional allowlist; regional character record | terrain erodibility banding and along-strike relief modulation                                           | ridges and strike valleys follow the grain; separate summits along the belt           | Direction has an effect        |
+| `tectonicStrain`, `glacialErosion`                               | existing                                                                                            | already published and allowlisted; previously unused by terrain                       | hillslope softening by reworking; recorded ice flow down the network (cirques, troughs, moraines, tarns) | lakes with a cause in glaciated high ground; none in dry unglaciated ranges           | Character changes organization |
+| `volcanicConstruction`                                           | existing                                                                                            | add to the regional allowlist                                                         | dear ground in the network cost and constructional relief at local maxima                                | discrete cones instead of a smeared bump                                              | Character changes organization |
+| captured `peak` features                                         | world landform publication                                                                          | captured features (retained point places)                                             | divide node (dear ground in the network cost); identity re-anchored to the realized summit               | an inherited significant peak organizes its massif                                    | structures survive interaction |
+| captured `river` features and edge flow                          | world river publication, `riverOrder`/`flow`                                                        | source features; edge inlets                                                          | corridor in the network cost; entry discharge; identity and course carried by the developed stem         | tributaries feed the known river; no fabricated interior source for an entering river | River develops surroundings    |
+| captured settlements and communities                             | society publication                                                                                 | captured features, society record                                                     | footprint caps on hillslope relief; channel drawn to river seats; re-siting within reach                 | a usable local site visibly shaped into the terrain                                   | Town realizes support          |
+| cover, soil, wetness                                             | existing                                                                                            | existing                                                                              | habitat organization; hillslope binding and runoff response fed back to terrain and water                | connected patches, valley meadows, tree line; round 2 terrain reads round 1 cover     | Feedback crosses rounds        |
+| magic stocks, sources, coverage                                  | existing                                                                                            | existing                                                                              | idempotent evaluation against current media; tracked physical contributions                              | seven systems act through their media each round without ratcheting                   | All seven remain meaningful    |
+| child's developed grain                                          | regional publication                                                                                | child fields captured by its descendants                                              | descendant character record                                                                              | a grandchild develops from the child's organization                                   | Descendants use their parent   |
 
 ## Schedule (spec 7)
 
 ```
-capture context; establish surface; derive character
-initialize once: grain, uplift intent, known peaks, river courses, settlement seats, magic stocks
-round 1: broad organization   — long-wavelength relief, drainage, magic on the new media, cover
-round 2: coupled responses    — relief reads cover/magic media, drainage, magic, cover; propose villages once
-round 3: local consequences   — fine relief, supports for accepted places, drainage, magic, cover
-final refresh: slopes, pits, routing, landforms, water geometry, habitats, magic classes, places
+context: character; society seats; evidence (courses, lakes, summits, seats, entries);
+         grow the network once (roots at established waters, process-term costs, capture passes)
+round 1: broad organization   — relief derived from the network (established seats cap it), water, climate, magic, cover
+round 2: coupled responses    — relief re-derived through round-1 media, water, climate, magic, cover; propose villages at network events
+round 3: local consequences   — relief re-derived with proposed footprints, water, climate, magic, cover; support or drop proposals
+final refresh: slopes, routing, climate, cover; landforms, water geometry, magic classes, habitats, places
 publish fields and features once; publish the child's grain for its descendants
 ```
+
+## Network-first core (2026-11-01 redesign)
+
+The first build (noise-modulated uplift under a stream-power solver, features as kernels) was
+rejected by the owner: "a shitty noise layer that feeds pre determined types", with feature
+influence limited to the three examples already given. The replacement:
+
+| Structure                                                                           | Development                                                                                                                                                                                     | Established features as terms                                                                                                                           |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| network (`network.ts`)                                                              | geodesic tree from roots over a process-term cost field; capture passes re-route through gathered channels                                                                                      | coast/edge/lake/sink roots; courses and channel raster as corridors; summits and cones as repulsion; river seats as attraction; entries carry discharge |
+| relief (`relief.ts`)                                                                | increments per receiver (concave channel, material hillslope), amplification calibrated to the parent-span blur of the base, sideways hillslope coupling, monotone along the tree except basins | seat footprints cap the gradient; lakes are base levels; cones construct                                                                                |
+| ice (`glacial.ts`)                                                                  | accumulation from lapsed climate and recorded history, flux down the tree, cirque/trough/moraine from flux                                                                                      | Aurora's held ice adds accumulation; present ice published for Aurora                                                                                   |
+| seats (`seats.ts`, `evidence.ts`)                                                   | footprint caps, channel drawn to river seats, re-siting within reach keeping situation                                                                                                          | `sitedFrom` keeps the captured position across runs                                                                                                     |
+| places (`places.ts`)                                                                | candidates at network events (site classes), hinterland competition by travel cost, proposals supported or dropped                                                                              | established seats hold their hinterland first                                                                                                           |
+| evidence continuity (`courses.ts`, `extraction/water.ts`, `extraction/features.ts`) | own products regenerated each run; captured geography retained; a developed stem carries its captured course                                                                                    | repeat runs reproduce                                                                                                                                   |
 
 ## Decisions log
 
@@ -75,6 +90,26 @@ publish fields and features once; publish the child's grain for its descendants
   incision and creep, and inflows grade to the basin's water surface.
 - 2026-11-01 A pure cosine band pattern across the grain rendered as a washboard; bands are now
   anisotropic noise with variable spacing that pinches out along strike.
+- 2026-11-01 Owner rejected the uplift/solver build; network-first core replaces terrain,
+  landscape and supports (see above). Bands are now a line integral along the grain.
+- 2026-11-01 First network renders: grid-aligned straight channels in uniform country and
+  parallel non-merging streams. Capture passes (gathered water cheapens its channel), ground
+  heterogeneity scaled up on plains, edge roots starting with their remaining fall, and
+  sideways hillslope coupling were added as process terms; the 8-direction metric remains.
+- 2026-11-01 P2's plateau river spread the escarpment's fall along its whole profile: a step
+  of the captured base steeper than any profile is now climbed in place (knickpoint term, not
+  amplified). Edge roots are the lowest edge cells within a parent span and the parent's
+  channel exits, not every edge cell. Captured courses are corridors over a share of the
+  parent span, not one-cell trenches. Hillslopes are creep-shaped: steepest above the
+  channel, flattening toward the divide, so sparse-channel country ends in flat tops.
+- 2026-11-01 The hinterland competition was cut off after six rounds and then culled every
+  still-unsupported candidate, so its outcome depended on the elimination order (P1 swung
+  between 272 and 59 villages on an order-only change). It now runs until every remaining
+  place is supported (bounded), removing the weakest half of the unsupported each round.
+- 2026-11-01 Repeat runs differed because the first run deleted the parent's captured rivers
+  as regenerated products. Captured geography is now retained; only `developedBy: regional`
+  products are regenerated, and a developed stem that takes a course's identity carries the
+  course (`capturedCourse`) as evidence for the next run.
 
 ## New namespace `packages/generation/src/regional`
 
@@ -93,9 +128,9 @@ when the new module carries them):
       into the map's features; retained places (protected, landmarks, placeId points,
       political layers) and removal of regenerated products with their reaches; final
       boundary with facts, publications, workspaces; band release.
-- [x] terrain: datum from `seaLevel`; connected sea from frame edges and captured ocean;
-      river inlets at edge samples with inward descent; captured lake basins; erosion and
-      sediment channels; slopes; society-only runs leave terrain untouched.
+- [x] terrain (now network + relief): datum from `seaLevel`; connected sea from frame edges
+      and captured ocean; river entries at edge samples with inward descent; captured lake
+      basins; erosion and sediment channels; slopes; society-only runs derive no relief.
 - [x] drainage: priority flood with inlets as non-outlets; `drainageElevation`, `water`,
       `waterDepth`, `waterLevel`; flow and catchment with beyond-frame area at inlets;
       river qualification (map-sample threshold, strip test, headwater pruning counting

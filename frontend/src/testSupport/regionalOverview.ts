@@ -19,20 +19,27 @@ export async function regionalOverview(
   directory = ".artifacts/regional"
 ) {
   const image = paintedSurface(result);
-  for (const f of features) {
-    if (f.kind === "river")
-      strokeGeometry(image, f.geometry, [34, 98, 143], Number(f.attributes.order ?? 1) > 2 ? 2 : 1);
-    if (f.kind === "lake") strokeGeometry(image, f.geometry, [20, 70, 110], 1);
-    if (f.kind === "road") strokeGeometry(image, f.geometry, [122, 84, 40], 1);
-  }
-  for (const f of features) {
-    if (f.geometry.type !== "Point") continue;
-    if (f.kind === "settlement") dot(image, f.geometry.coordinates, [39, 37, 29]);
-    else if (f.kind === "peak") triangle(image, f.geometry.coordinates, [60, 30, 20]);
-    else if (f.kind === "pass") cross(image, f.geometry.coordinates, [60, 30, 20]);
-    else if (f.layerId === "magic") dot(image, f.geometry.coordinates, [170, 40, 160], 1);
-  }
+  for (const f of features) drawLine(image, f);
+  for (const f of features) drawSymbol(image, f);
   await savePng(image, name, directory);
+}
+
+/** Rivers by order, lake shores and roads, in that order. */
+function drawLine(image: Image, f: AtlasFeature) {
+  if (f.kind === "river")
+    strokeGeometry(image, f.geometry, [34, 98, 143], Number(f.attributes.order ?? 1) > 2 ? 2 : 1);
+  if (f.kind === "lake") strokeGeometry(image, f.geometry, [20, 70, 110], 1);
+  if (f.kind === "road") strokeGeometry(image, f.geometry, [122, 84, 40], 1);
+}
+
+/** Settlement dots, summit triangles, col crosses and magic-site dots. */
+function drawSymbol(image: Image, f: AtlasFeature) {
+  if (f.geometry.type !== "Point") return;
+  const p = f.geometry.coordinates;
+  if (f.kind === "settlement") dot(image, p, [39, 37, 29]);
+  else if (f.kind === "peak") triangle(image, p, [60, 30, 20]);
+  else if (f.kind === "pass") cross(image, p, [60, 30, 20]);
+  else if (f.layerId === "magic") dot(image, p, [170, 40, 160], 1);
 }
 
 /** The production painter alone, for inspecting developed relief and cover. */

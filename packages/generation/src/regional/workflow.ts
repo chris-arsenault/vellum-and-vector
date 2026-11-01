@@ -91,7 +91,6 @@ export async function refineRegionalMap(
 function releaseWorkingState(state: RegionalState) {
   const coverage = state.surface.coverage;
   coverage.release(state.inheritedHeight);
-  if (state.captured) for (const band of Object.values(state.captured)) coverage.release(band);
   if (state.drainage) {
     coverage.release(state.drainage.receiver);
     coverage.release(state.drainage.order);

@@ -15,6 +15,8 @@ const effectChannels = [
   "fog",
 ] as const;
 
+type Add = (channel: string, i: number, amount: number) => void;
+
 /**
  * What the evaluated fields do to the shared media. Effect channels are functions of the
  * present intensities. Physical changes (heat, rock, fractures, ice, soil, water supply,
@@ -30,7 +32,7 @@ export function applyMagicEffects(
   const g = state.surface,
     c = g.channels,
     ledger = state.contributions,
-    add = (name: string, i: number, amount: number) => ledger.add(name, i, amount);
+    add: Add = (name, i, amount) => ledger.add(name, i, amount);
   for (const name of [
     "ice",
     "runoff",
@@ -42,51 +44,17 @@ export function applyMagicEffects(
     "rock",
   ])
     naturalChannel(state, name, naturalUnit(name), name === "rock" ? 1 : 0);
-  const naturalIce = state.natural.ice,
-    naturalRunoff = state.natural.runoff,
-    naturalMoisture = state.natural.moisture,
-    naturalRain = state.natural.rainfall,
-    outputs = Object.fromEntries(
-      effectChannels.map((name) => [name, channel(state, name, "ratio")])
-    );
+  const outputs = Object.fromEntries(
+    effectChannels.map((name) => [name, channel(state, name, "ratio")])
+  );
   for (const name of effectChannels) outputs[name].fill(0);
   ledger.begin();
   for (const system of systems) {
     const intensity = c[`magic:${system.id}:intensity`],
-      before = inherited.get(system.id)!,
-      e = system.effects;
-    for (const name of effectChannels) {
-      const strength = e[name];
-      if (!strength) continue;
-      const output = outputs[name];
-      for (let i = 0; i < intensity.length; i++)
-        output.set(i, Math.max(output.get(i), clamp((intensity.get(i) / 1000) * strength)));
-    }
-    for (let i = 0; i < intensity.length; i++) {
-      const delta = (intensity.get(i) - before.get(i)) / 1000;
-      if (e.heat) add("temperature", i, ((intensity.get(i) - before.get(i)) * e.heat) / 10);
-      if (!delta) continue;
-      add("rock", i, (delta * e.rockResistance) / 4000);
-      add("fracture", i, (delta * e.conduitOpening) / 1000);
-      const heldIce = delta * e.icePersistence * clamp(1 - Math.max(0, c.temperature.get(i)) / 15),
-        melted = delta * e.iceMelt * Math.min(1, naturalIce.get(i));
-      add("ice", i, heldIce - melted);
-      if (c.water.get(i) !== 0) continue;
-      if (e.verdure) {
-        add("soilDepth", i, delta * e.verdure * 0.3);
-        add("runoff", i, -naturalRunoff.get(i) * delta * e.verdure * 0.25);
-        add("wetlandCover", i, Math.max(0, delta) * e.verdure * clamp(1 - c.slope.get(i) / 0.01));
-      }
-      if (e.salting) {
-        const drying = clamp(1 - delta * e.salting * system.parameters.desiccation, 0.1, 2) - 1;
-        add("moisture", i, naturalMoisture.get(i) * drying);
-        add("rainfall", i, naturalRain.get(i) * drying);
-        add("runoff", i, naturalRunoff.get(i) * drying);
-      }
-    }
-    if (system.id === "pressure") pressureCoast(state, system, intensity, before, outputs.fog);
-    if (system.id === "veil") veilRelief(state, system);
-    if (system.id === "salt") saltGroundEffects(state, system, add);
+      before = inherited.get(system.id)!;
+    effectFields(system, intensity, outputs);
+    physicalEffects(state, system, intensity, before, add);
+    systemGround(state, system, intensity, before, outputs.fog, add);
   }
   meetingEffects(state, (name, i, amount) =>
     name === "fog" ? outputs.fog.set(i, Math.max(outputs.fog.get(i), amount)) : add(name, i, amount)
@@ -95,6 +63,80 @@ export function applyMagicEffects(
   if (c.iceThickness && changed.has("ice"))
     for (let i = 0; i < c.ice.length; i++) c.iceThickness.set(i, c.ice.get(i) * 1000);
   return changed;
+}
+
+/** The ground effects particular to a system's medium: coasts, wild relief, salt beds. */
+function systemGround(
+  state: RegionalState,
+  system: MagicSystem,
+  intensity: Band,
+  before: Band,
+  fog: Band,
+  add: Add
+) {
+  if (system.id === "pressure") pressureCoast(state, system, intensity, before, fog);
+  if (system.id === "veil") veilRelief(state, system);
+  if (system.id === "salt") saltGroundEffects(state, system, add);
+}
+
+/** Effect channels are the maximum any system asks of them. */
+function effectFields(system: MagicSystem, intensity: Band, outputs: Record<string, Band>) {
+  for (const name of effectChannels) {
+    const strength = system.effects[name];
+    if (!strength) continue;
+    const output = outputs[name];
+    for (let i = 0; i < intensity.length; i++)
+      output.set(i, Math.max(output.get(i), clamp((intensity.get(i) / 1000) * strength)));
+  }
+}
+
+/** A system's physical changes, declared relative to the captured intensity. */
+function physicalEffects(
+  state: RegionalState,
+  system: MagicSystem,
+  intensity: Band,
+  before: Band,
+  add: Add
+) {
+  const c = state.surface.channels,
+    e = system.effects,
+    naturalIce = state.natural.ice;
+  for (let i = 0; i < intensity.length; i++) {
+    const delta = (intensity.get(i) - before.get(i)) / 1000;
+    if (e.heat) add("temperature", i, ((intensity.get(i) - before.get(i)) * e.heat) / 10);
+    if (!delta) continue;
+    add("rock", i, (delta * e.rockResistance) / 4000);
+    add("fracture", i, (delta * e.conduitOpening) / 1000);
+    const heldIce = delta * e.icePersistence * clamp(1 - Math.max(0, c.temperature.get(i)) / 15),
+      melted = delta * e.iceMelt * Math.min(1, naturalIce.get(i));
+    add("ice", i, heldIce - melted);
+    if (c.water.get(i) !== 0) continue;
+    if (e.verdure) verdureEffects(state, e.verdure, delta, i, add);
+    if (e.salting) saltingEffects(state, e.salting * system.parameters.desiccation, delta, i, add);
+  }
+}
+
+/** Greenwood's verdure deepens soil, holds runoff and wets level ground. */
+function verdureEffects(state: RegionalState, verdure: number, delta: number, i: number, add: Add) {
+  const slope = state.surface.channels.slope.get(i),
+    naturalRunoff = state.natural.runoff;
+  add("soilDepth", i, delta * verdure * 0.3);
+  add("runoff", i, -naturalRunoff.get(i) * delta * verdure * 0.25);
+  add("wetlandCover", i, Math.max(0, delta) * verdure * clamp(1 - slope / 0.01));
+}
+
+/** Salt's desiccation dries the ground's moisture, rain and runoff. */
+function saltingEffects(
+  state: RegionalState,
+  desiccation: number,
+  delta: number,
+  i: number,
+  add: Add
+) {
+  const drying = clamp(1 - delta * desiccation, 0.1, 2) - 1;
+  add("moisture", i, state.natural.moisture.get(i) * drying);
+  add("rainfall", i, state.natural.rainfall.get(i) * drying);
+  add("runoff", i, state.natural.runoff.get(i) * drying);
 }
 
 function naturalUnit(name: string) {

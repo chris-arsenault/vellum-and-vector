@@ -30,20 +30,9 @@ export function deriveCharacter(state: RegionalState): RegionalCharacter {
     grainX = new Float64Array(n),
     grainY = new Float64Array(n),
     reworking = new Float64Array(n),
-    strain = new Float64Array(n);
-  let captured = false;
-  if (c.structuralGrainX && c.structuralGrainY)
-    for (let i = 0; i < n; i++) {
-      const x = c.structuralGrainX.get(i),
-        y = c.structuralGrainY.get(i),
-        coherence = Math.hypot(x, y);
-      if (coherence < 0.05) continue;
-      captured = true;
-      const scale = Math.min(1, coherence) / coherence;
-      grainX[i] = x * scale;
-      grainY[i] = y * scale;
-    }
-  if (!captured) inferGrain(state, grainX, grainY);
+    strain = new Float64Array(n),
+    captured = readCapturedGrain(state, grainX, grainY);
+  if (!captured) measureGrain(state, state.inheritedHeight, grainX, grainY);
   for (let i = 0; i < n; i++) {
     reworking[i] = clamp((c.glacialErosion?.get(i) ?? 0) / fullReworking);
     strain[i] = clamp(c.tectonicStrain?.get(i) ?? 0);
@@ -58,6 +47,24 @@ export function deriveCharacter(state: RegionalState): RegionalCharacter {
   };
 }
 
+/** The world's published grain, where any cell carries one; returns whether any did. */
+function readCapturedGrain(state: RegionalState, grainX: Float64Array, grainY: Float64Array) {
+  const c = state.surface.channels;
+  if (!c.structuralGrainX || !c.structuralGrainY) return false;
+  let captured = false;
+  for (let i = 0; i < grainX.length; i++) {
+    const x = c.structuralGrainX.get(i),
+      y = c.structuralGrainY.get(i),
+      coherence = Math.hypot(x, y);
+    if (coherence < 0.05) continue;
+    captured = true;
+    const scale = Math.min(1, coherence) / coherence;
+    grainX[i] = x * scale;
+    grainY[i] = y * scale;
+  }
+  return captured;
+}
+
 /** Axis angle θ (radians) and coherence at a cell, from the doubled-angle components. */
 export function grainAt(character: RegionalCharacter, i: number) {
   const x = character.grainX[i],
@@ -67,16 +74,12 @@ export function grainAt(character: RegionalCharacter, i: number) {
 }
 
 /**
- * Maps captured before the world published a grain: the orientation of the captured relief
- * at the parent sample scale. The structure tensor of the height gradient, averaged over a
- * parent span, gives the across-relief direction; the grain is perpendicular to it and its
- * coherence is the tensor's anisotropy, weighted by how much relief there is to organize.
+ * The axial organization of a height field at the parent sample scale: the structure tensor
+ * of the height gradient, averaged over a parent span, gives the across-relief direction;
+ * the grain is perpendicular to it and its coherence is the tensor's anisotropy, weighted by
+ * how much relief there is to organize. Used where a map was captured before the world
+ * published a grain, and to publish the child's own developed grain.
  */
-function inferGrain(state: RegionalState, grainX: Float64Array, grainY: Float64Array) {
-  measureGrain(state, state.inheritedHeight, grainX, grainY);
-}
-
-/** The axial organization of a height field at the parent sample scale (see `inferGrain`). */
 export function measureGrain(
   state: RegionalState,
   h: { get(i: number): number },
@@ -91,14 +94,7 @@ export function measureGrain(
     yy = new Float64Array(n),
     xy = new Float64Array(n);
   for (let i = 0; i < n; i++) {
-    const x = i % g.width,
-      y = Math.floor(i / g.width),
-      left = x > 0 ? i - 1 : i,
-      right = x + 1 < g.width ? i + 1 : i,
-      below = y > 0 ? i - g.width : i,
-      above = y + 1 < g.height ? i + g.width : i,
-      gx = (h.get(right) - h.get(left)) / ((right - left) * dx || dx),
-      gy = (h.get(above) - h.get(below)) / (((above - below) / g.width) * dy || dy);
+    const { gx, gy } = heightGradient(state, h, i);
     xx[i] = gx * gx;
     yy[i] = gy * gy;
     xy[i] = gx * gy;
@@ -119,6 +115,22 @@ export function measureGrain(
     grainX[i] = -Math.cos(phi2) * coherence;
     grainY[i] = -Math.sin(phi2) * coherence;
   }
+}
+
+/** Central-difference gradient of a height field, one-sided at the frame edges. */
+function heightGradient(state: RegionalState, h: { get(i: number): number }, i: number) {
+  const g = state.surface,
+    [dx, dy] = spacing(g),
+    x = i % g.width,
+    y = Math.floor(i / g.width),
+    left = x > 0 ? i - 1 : i,
+    right = x + 1 < g.width ? i + 1 : i,
+    below = y > 0 ? i - g.width : i,
+    above = y + 1 < g.height ? i + g.width : i;
+  return {
+    gx: (h.get(right) - h.get(left)) / ((right - left) * dx || dx),
+    gy: (h.get(above) - h.get(below)) / (((above - below) / g.width) * dy || dy),
+  };
 }
 
 /** Separable box average over ±radius cells, in place. */
@@ -153,22 +165,7 @@ function volcanicCones(state: RegionalState) {
   for (let i = 0; i < g.active.length; i++) {
     const value = values.get(i);
     if (value < coneFloor || g.channels.water?.get(i) === 1) continue;
-    const x = i % g.width,
-      y = Math.floor(i / g.width);
-    let maximum = true;
-    for (let oy = -window; oy <= window && maximum; oy++)
-      for (let ox = -window; ox <= window; ox++) {
-        const xx = x + ox,
-          yy = y + oy;
-        if (xx < 0 || yy < 0 || xx >= g.width || yy >= g.height) continue;
-        const other = values.get(yy * g.width + xx),
-          j = yy * g.width + xx;
-        if (other > value || (other === value && j < i)) {
-          maximum = false;
-          break;
-        }
-      }
-    if (!maximum) continue;
+    if (!localMaximum(values, g.width, g.height, i, window)) continue;
     cones.push({
       cell: i,
       radius: Math.max(2.5 * Math.min(dx, dy), state.parentSpan * 0.5 * Math.sqrt(value / 300)),
@@ -176,4 +173,27 @@ function volcanicCones(state: RegionalState) {
     });
   }
   return cones;
+}
+
+/** Whether the cell holds the strict maximum of its window, ties going to the lower index. */
+function localMaximum(
+  values: { get(i: number): number },
+  width: number,
+  height: number,
+  i: number,
+  window: number
+) {
+  const x = i % width,
+    y = Math.floor(i / width),
+    value = values.get(i);
+  for (let oy = -window; oy <= window; oy++)
+    for (let ox = -window; ox <= window; ox++) {
+      const xx = x + ox,
+        yy = y + oy;
+      if (xx < 0 || yy < 0 || xx >= width || yy >= height) continue;
+      const j = yy * width + xx,
+        other = values.get(j);
+      if (other > value || (other === value && j < i)) return false;
+    }
+  return true;
 }

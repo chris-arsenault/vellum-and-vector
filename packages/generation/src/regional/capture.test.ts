@@ -44,7 +44,7 @@ it("prepares a dedicated regional schedule and rejects accidental world initiali
   expect(prepared.diagnostics).toEqual([]);
   const ids = prepared.input.configuration.sequence.map((s) => s.process);
   expect(ids.every((id) => id.startsWith("refinement."))).toBe(true);
-  expect(ids.filter((id) => /round-\d\/terrain/.test(id))).toHaveLength(3);
+  expect(ids.filter((id) => /round-\d\/structure/.test(id))).toHaveLength(3);
   expect(ids.at(-1)).toBe("refinement.descendant-context");
 });
 

@@ -4,7 +4,7 @@ import { extractLandforms } from "./extraction/landforms";
 import { regionalEnvironment } from "./fixture";
 import { Landform } from "../canonry/codes";
 import { channel } from "./state";
-import { updateSlopes } from "./terrain";
+import { updateSlopes } from "./relief";
 
 function mountainChain(col = 0.4) {
   const { state } = regionalEnvironment(2),

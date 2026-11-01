@@ -23,25 +23,29 @@ export function magicValue(state: RegionalState, owner: string, key: string, i: 
 }
 const readBand = (state: RegionalState, key: string, i: number) =>
   state.surface.channels[key]?.get(i) ?? 0;
+/** The world's rule vocabulary for a located scatter: a seeded field in 0..1. */
+function scatterValue(state: RegionalState, salt: number, i: number) {
+  const g = state.surface,
+    p = gridPosition(g, i);
+  return (
+    (fractalNoise(
+      p.x,
+      p.y,
+      state.input.seed ^ salt,
+      Math.max(state.parentSpan / 2, (g.scope.resolution ?? 1000) * 4),
+      2
+    ) +
+      1) /
+    2
+  );
+}
 function localValue(state: RegionalState, owner: string, key: string, i: number, salt: number) {
   const g = state.surface;
-  if (["noise", "scatter"].includes(key)) {
-    const p = gridPosition(g, i);
-    return (
-      (fractalNoise(
-        p.x,
-        p.y,
-        state.input.seed ^ salt,
-        Math.max(state.parentSpan / 2, (g.scope.resolution ?? 1000) * 4),
-        2
-      ) +
-        1) /
-      2
-    );
-  }
+  if (["noise", "scatter"].includes(key)) return scatterValue(state, salt, i);
   if (key === "river") return g.channels.riverOrder?.get(i) ?? 0;
   if (key === "temperature") return g.channels.temperature.get(i) * 10 + 300;
-  const value = g.channels[`magic:${owner}:${key}`]?.get(i) ?? g.channels[key]?.get(i) ?? 0;
+  const own = g.channels[`magic:${owner}:${key}`],
+    value = own ? own.get(i) : readBand(state, key, i);
   return nativeRatios.has(key) ? value * 1000 : value;
 }
 function passes(state: RegionalState, owner: string, test: MagicCondition, i: number) {

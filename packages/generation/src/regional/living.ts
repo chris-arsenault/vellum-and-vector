@@ -172,14 +172,19 @@ function coverName(state: RegionalState, i: number, lake: boolean, prior: number
  */
 function developedCover(state: RegionalState, i: number, captured: BiomeName): BiomeName {
   const c = state.surface.channels,
-    tree = c.treeCover.get(i);
-  if (c.temperature.get(i) < treeLine && !coldCover.has(captured)) return "Tundra";
-  if ((c.delta?.get(i) ?? 0) >= 0.5) return wetlandName(tree);
-  if (c.wetlandCover.get(i) > 0.55 && !coldCover.has(captured)) return wetlandName(tree);
-  const forest = ["Temperate forest", "Boreal forest", "Rainforest", "Woodland"].includes(captured);
-  if (forest && tree < 0.12) return "Grassland";
-  if (forest && captured !== "Woodland" && tree < 0.3) return "Woodland";
-  return captured;
+    tree = c.treeCover.get(i),
+    warm = !coldCover.has(captured);
+  if (warm && c.temperature.get(i) < treeLine) return "Tundra";
+  if ((c.delta?.get(i) ?? 0) >= 0.5 || (warm && c.wetlandCover.get(i) > 0.55))
+    return wetlandName(tree);
+  return openedForest(captured, tree);
+}
+/** Forest opens into woodland and grassland where the cover no longer carries trees. */
+function openedForest(captured: BiomeName, tree: number): BiomeName {
+  if (!["Temperate forest", "Boreal forest", "Rainforest", "Woodland"].includes(captured))
+    return captured;
+  if (tree < 0.12) return "Grassland";
+  return captured !== "Woodland" && tree < 0.3 ? "Woodland" : captured;
 }
 function climateCover(state: RegionalState, i: number): BiomeName {
   const c = state.surface.channels,

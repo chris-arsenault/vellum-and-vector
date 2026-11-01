@@ -47,25 +47,32 @@ export function meetingEffects(
   for (const meeting of world.confluences ?? []) {
     if (!confluenceEffective(meeting, world.magicSystems ?? [])) continue;
     if (!meetingPossible(state, meeting)) continue;
-    const e = meeting.effects;
     for (let i = 0; i < g.active.length; i++) {
       const coverage = meetingShare(state, meeting, i);
-      if (!coverage) continue;
-      const p = gridPosition(g, i),
-        detail = fractalNoise(
-          p.x,
-          p.y,
-          state.input.seed ^ 0x6471,
-          (g.scope.resolution ?? 1000) * 4,
-          2
-        );
-      add("fracture", i, (e.fractureConductance / 1000) * coverage);
-      add("rock", i, (e.rockResistance / 4000) * coverage);
-      add("soilDepth", i, -soil.get(i) * e.soilRemoval * coverage);
-      add("elevation", i, e.relief * detail * coverage);
-      if (c.ice) add("ice", i, -(e.iceMelt / 1000) * coverage);
-      if (e.fog) add("fog", i, e.fog * coverage);
-      add("sediment", i, e.debris * coverage);
+      if (coverage) applyMeeting(state, meeting, i, coverage, soil, Boolean(c.ice), add);
     }
   }
+}
+
+/** One meeting's writes at one cell, scaled by its coverage there. */
+function applyMeeting(
+  state: RegionalState,
+  meeting: MagicConfluence,
+  i: number,
+  coverage: number,
+  soil: { get(i: number): number },
+  ice: boolean,
+  add: (channel: string, i: number, amount: number) => void
+) {
+  const g = state.surface,
+    e = meeting.effects,
+    p = gridPosition(g, i),
+    detail = fractalNoise(p.x, p.y, state.input.seed ^ 0x6471, (g.scope.resolution ?? 1000) * 4, 2);
+  add("fracture", i, (e.fractureConductance / 1000) * coverage);
+  add("rock", i, (e.rockResistance / 4000) * coverage);
+  add("soilDepth", i, -soil.get(i) * e.soilRemoval * coverage);
+  add("elevation", i, e.relief * detail * coverage);
+  if (ice) add("ice", i, -(e.iceMelt / 1000) * coverage);
+  if (e.fog) add("fog", i, e.fog * coverage);
+  add("sediment", i, e.debris * coverage);
 }

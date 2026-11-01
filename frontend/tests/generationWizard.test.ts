@@ -124,7 +124,7 @@ test("regional refinement submits a dedicated surface operation and retains comp
     };
   });
   expect(child).toMatchObject({ quality: "draft", seed: parent.seed });
-  expect(child.configuration?.id).toBe("regional-surface-refinement");
+  expect(child.configuration?.id).toBe("regional-bidirectional-refinement");
   expect(child.configuration!.sequence.length).toBeGreaterThan(0);
   expect(
     child.configuration!.sequence.every(

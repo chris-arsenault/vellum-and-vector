@@ -56,7 +56,13 @@ export function prepareFire(state: RegionalState, system: MagicSystem) {
           depositDensity(state, origin, stock, values, pattern.get(i), i) * g.measures.get(i)
         );
   }
-  // A captured core place is a located source whether or not its stock was resolved here.
+  seedCapturedCores(state, source);
+  capturedSource(state, system.id).copyFrom(source);
+  g.coverage.release(pattern);
+}
+
+/** A captured core place is a located source whether or not its stock was resolved here. */
+function seedCapturedCores(state: RegionalState, source: Band) {
   for (const f of generationFeatures(state, { areaId: state.input.areaId })) {
     if (f.kind !== "fire:core" || f.geometry.type !== "Point") continue;
     const [x, y] = f.geometry.coordinates;
@@ -64,8 +70,6 @@ export function prepareFire(state: RegionalState, system: MagicSystem) {
     const i = cellAt(state, x, y);
     source.set(i, Math.max(source.get(i), Number(f.attributes.intensity ?? 500)));
   }
-  capturedSource(state, system.id).copyFrom(source);
-  g.coverage.release(pattern);
 }
 
 export function respondFire(state: RegionalState, system: MagicSystem, intensity: Band) {
@@ -161,33 +165,19 @@ function spreadFire(state: RegionalState, system: MagicSystem, source: Band, int
     front = new KeyedHeap("max"),
     carried = g.coverage.scratch("float64", "regional:fire-conduit", intensity.length),
     p = system.parameters,
-    origins = system.origins.map((origin) => ({
-      source: g.channels[`magic:fire:origin:${origin.id}:source`],
-      conductive: origin.propagation === "fracture",
-    }));
+    sealed = (j: number) =>
+      g.channels.water.get(j) === 1 || presentValue(state, "magic:hallowed:intensity", j) >= 500;
   for (let i = 0; i < source.length; i++) {
-    let attributed = 0,
-      release = 0;
-    for (const origin of origins) {
-      const own = origin.source?.get(i) ?? 0;
-      attributed = Math.max(attributed, own);
-      if (origin.conductive) release = Math.max(release, own);
-    }
-    const conduit = attributed === 0 ? Math.max(release, source.get(i)) : release;
-    if (conduit > 0) {
-      carried.set(i, conduit);
-      front.push(i, conduit);
-    }
+    const conduit = conduitRelease(state, system, source, i);
+    if (conduit <= 0) continue;
+    carried.set(i, conduit);
+    front.push(i, conduit);
   }
   while (front.size) {
     const i = front.pop();
     if (front.poppedKey() !== carried.get(i)) continue;
     for (const j of neighbors(g, i)) {
-      if (
-        g.channels.water.get(j) === 1 ||
-        presentValue(state, "magic:hallowed:intensity", j) >= 500
-      )
-        continue;
+      if (sealed(j)) continue;
       const fracture = (g.channels.fracture.get(i) + g.channels.fracture.get(j)) / 2,
         cost =
           ((p.baseCost + ((1 - clamp(fracture)) * 1000) / p.conductanceDivisor) *
@@ -202,6 +192,19 @@ function spreadFire(state: RegionalState, system: MagicSystem, source: Band, int
   for (let i = 0; i < intensity.length; i++)
     intensity.set(i, Math.max(intensity.get(i), carried.get(i)));
   g.coverage.release(carried);
+}
+
+/** The release at a cell that travels along fractures: vein origins, or an unattributed source. */
+function conduitRelease(state: RegionalState, system: MagicSystem, source: Band, i: number) {
+  const g = state.surface;
+  let attributed = 0,
+    release = 0;
+  for (const origin of system.origins) {
+    const own = g.channels[`magic:fire:origin:${origin.id}:source`]?.get(i) ?? 0;
+    attributed = Math.max(attributed, own);
+    if (origin.propagation === "fracture") release = Math.max(release, own);
+  }
+  return attributed === 0 ? Math.max(release, source.get(i)) : release;
 }
 
 export { intensityChannel };

@@ -120,9 +120,12 @@ function routeBrine(state: RegionalState, r: SaltReservoirs) {
       flushed =
         r.brine.get(i) * r.p.brineFlush * state.surface.channels.moisture.get(i) * (1 - retained);
     r.brine.add(i, -flushed);
+    // Brine crusts where it can go no further: a lake bed, the floor of a closed basin the
+    // parent holds (the dried lake of the lore), or the foot of a ward line.
     if (
       j < 0 ||
       state.surface.channels.water.get(i) === 2 ||
+      state.network?.sink[i] ||
       presentValue(state, "magic:hallowed:intensity", j) >= 500
     ) {
       const crust = r.brine.get(i) * r.p.crustShare;

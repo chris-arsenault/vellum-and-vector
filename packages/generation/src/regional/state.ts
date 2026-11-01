@@ -20,15 +20,23 @@ export interface RegionalInput {
   domains: string[];
 }
 
-/** A settlement's realized local situation: the site it took, or the terrace shaped for it. */
-export interface Support {
+/** A settlement's broad situation, read from the captured geography at its position. */
+export type Situation = "coast" | "river" | "lake" | "inland";
+
+/**
+ * An established place that takes part in the processes: its footprint caps hillslope
+ * relief so a usable site develops around it, and a river seat draws a channel to itself.
+ * The cell follows the seat when the developed ground moves it.
+ */
+export interface Seat {
   featureId: string;
   cell: number;
-  kind: "site" | "terrace";
-  /** Terrace level (m), footprint radius in cells and the fixed form; absent for a found site. */
-  level?: number;
-  radius?: number;
-  footprint?: { cell: number; height: number }[];
+  situation: Situation;
+  /** Footprint radius in cells and the hillslope gradient its ground is held to. */
+  radius: number;
+  gradient: number;
+  /** An established seat has substantial influence; a proposed village only a local one. */
+  strength: "established" | "proposed";
 }
 
 /** A village proposed in round two, supported or rejected in round three. */
@@ -40,19 +48,61 @@ export interface ProposedPlace {
   accepted: boolean;
 }
 
-/** Terrain working structures, initialized once and evolved through the rounds. */
-export interface TerrainWork {
-  base: Float64Array;
-  sea: Uint8Array;
-  inlet: Uint8Array;
+/**
+ * The established geography this map develops from: evidence with identity and situation,
+ * whose coordinates and surroundings develop (spec 5.3).
+ */
+export interface Evidence {
+  courses: CapturedCourse[];
+  /** Captured standing water: its cells and surface level. */
+  lakes: { cells: Int32Array; level: number }[];
+  /** Inherited significant summits, read from their captured positions. */
+  summits: { featureId: string; cell: number; prominence: number }[];
+  seats: Seat[];
+  /** Captured rivers entering across the frame edge, with the discharge they bring (m³/s). */
+  entries: { cell: number; discharge: number }[];
+}
+
+/**
+ * The drainage network grown once in round one: a tree over the land cells rooted at the
+ * established waters. Every later structure (relief, ice, places, ways) is derived from it.
+ */
+export interface NetworkWork {
+  /** Downstream cell per land cell, -1 at a root or in the sea. */
+  receiver: Int32Array;
+  /** Cells in order of increasing travel cost from the roots: roots first, heads last. */
+  order: Int32Array;
+  count: number;
+  /** Geodesic cost from the roots: the potential the network descends. */
+  cost: Float64Array;
+  /** Upstream area (m²) including the country an entering river drains beyond the frame. */
+  area: Float64Array;
+  /** Reference discharge (m³/s) gathered down the tree, for channel qualification. */
+  flow: Float64Array;
+  /** Discharge entering across the frame edge at this cell (m³/s). */
   inflow: Float64Array;
+  /** Whether the cell carries a channel at this map's scale. */
+  channel: Uint8Array;
+  /** Water surface level each cell's tributaries rise from (datum, edge base, lake level). */
+  level: Float64Array;
+  /** Connected sea on the captured base. */
+  sea: Uint8Array;
+  /** The smoothed captured base: the macro character the developed relief is calibrated to. */
+  base: Float64Array;
+  /** Captured lake index per cell, or -1. */
+  lake: Int32Array;
+  /** Closed depressions the parent holds (desert basins, pans) kept as sinks. */
+  sink: Uint8Array;
+}
+
+/** Relief derived from the network in the latest round, with the fields the derivation produced. */
+export interface ReliefWork {
+  /** Local amplification of the network's increments that fits the captured macro relief. */
+  amplification: Float64Array;
+  /** Cells allowed to lie below their receiver: lakes, sinks, ice-carved hollows. */
   basin: Uint8Array;
-  /** Total uplift intent (m) over the whole schedule. */
-  uplift: Float64Array;
-  /** Material organization of erodibility (grain bands, course imprint), before cover. */
-  banding: Float64Array;
-  /** Known summits with the cell they currently stand on. */
-  peaks: { featureId: string; cell: number; prominence: number }[];
+  /** Ice flux (reference units) that carved the surface, present or relict. */
+  iceFlux: Float64Array;
 }
 
 /** The drainage graph of the present surface: a working structure other processes read. */
@@ -84,20 +134,18 @@ export interface RegionalState {
   /** The round being evaluated: 0 before the schedule, 1..3 inside it, 4 at the final refresh. */
   round: number;
   character?: RegionalCharacter;
+  evidence?: Evidence;
+  /** The captured courses, kept where the extraction reads them. */
   courses?: CapturedCourse[];
-  terrain?: TerrainWork;
-  /** Captured lake basins and river discharge entering across the frame edge (m³/s). */
-  captured?: { basin: Band; inflow: Band };
+  network?: NetworkWork;
+  relief?: ReliefWork;
   drainage?: DrainageWork;
-  supports: Support[];
   proposed: ProposedPlace[];
   /** Site classes of the developed terrain, read in round two and kept for round three. */
   sites?: (import("../societySites").SiteOpportunity | null)[];
   /** Products of an earlier refinement of this map, removed before the schedule. */
   removedProducts?: Set<string>;
   magic?: import("./magic/index").MagicWork;
-  /** Ice-carved hollows excavated in round one. */
-  cirques?: number;
 }
 
 export function channel(state: RegionalState, name: string, unit: string, initial = 0) {
@@ -131,6 +179,19 @@ export function* neighbors(grid: RegularGrid, i: number) {
         continue;
       yield i + dy * grid.width + dx;
     }
+}
+
+/** The eight neighbours written into `out`; returns how many there are. */
+export function gridNeighbors(width: number, height: number, i: number, out: Int32Array) {
+  const x = i % width,
+    y = Math.floor(i / width);
+  let m = 0;
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++) {
+      if ((!dx && !dy) || x + dx < 0 || x + dx >= width || y + dy < 0 || y + dy >= height) continue;
+      out[m++] = i + dy * width + dx;
+    }
+  return m;
 }
 
 /** Connected class components, matching place extraction on the initial mesh. */
@@ -217,3 +278,38 @@ export function onFrameEdge(grid: RegularGrid, i: number) {
 }
 
 export const clamp = (value: number, low = 0, high = 1) => Math.max(low, Math.min(high, value));
+
+/** Separable Gaussian blur in place, with the kernel renormalized at the frame edges. */
+export function gaussianBlur(
+  values: Float64Array,
+  width: number,
+  height: number,
+  sx: number,
+  sy: number
+) {
+  const pass = (sigma: number, length: number, stride: number, lines: number, step: number) => {
+    if (sigma < 0.5) return;
+    const radius = Math.ceil(sigma * 3),
+      kernel = Float64Array.from({ length: radius * 2 + 1 }, (_, k) =>
+        Math.exp(-((k - radius) ** 2) / (2 * sigma * sigma))
+      ),
+      line = new Float64Array(length);
+    for (let l = 0; l < lines; l++) {
+      const start = l * step;
+      for (let k = 0; k < length; k++) line[k] = values[start + k * stride];
+      for (let k = 0; k < length; k++) {
+        let sum = 0,
+          weight = 0;
+        for (let o = -radius; o <= radius; o++) {
+          const at = k + o;
+          if (at < 0 || at >= length) continue;
+          sum += kernel[o + radius] * line[at];
+          weight += kernel[o + radius];
+        }
+        values[start + k * stride] = sum / weight;
+      }
+    }
+  };
+  pass(sx, width, 1, height, width);
+  pass(sy, height, width, width, 1);
+}

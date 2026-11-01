@@ -247,7 +247,6 @@ export function createRegionalState(
     natural: {},
     contributions: new Contributions(surface.active.length),
     round: 0,
-    supports: [],
     proposed: [],
   };
 }

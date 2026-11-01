@@ -1,5 +1,4 @@
-import { gridPosition, type Band, type MagicSystem } from "@atlas/domain";
-import { fractalNoise } from "../../canonry/noise";
+import { type Band, type MagicSystem } from "@atlas/domain";
 import { channel, clamp, neighbors, regionalComponents, type RegionalState } from "../state";
 import { applyMagicEffects } from "./effects";
 import { prepareFire, respondFire } from "./fire";
@@ -29,6 +28,25 @@ const effectNames = [
   "fog",
 ] as const;
 
+type SystemStep = (state: RegionalState, system: MagicSystem, intensity: Band) => void;
+/** Salt last: its burn reads the captured Fire; Fire after Hallowed: cores unward their cell. */
+const preparations: [string, (state: RegionalState, system: MagicSystem) => void][] = [
+  ["hallowed", prepareHallowed],
+  ["fire", prepareFire],
+  ["aurora", prepareAurora],
+  ["pressure", preparePressure],
+  ["greenwood", prepareGreenwood],
+  ["salt", prepareSalt],
+];
+const responses_: [string, SystemStep][] = [
+  ["hallowed", respondHallowed],
+  ["fire", respondFire],
+  ["aurora", respondAurora],
+  ["pressure", respondPressure],
+  ["greenwood", respondGreenwood],
+  ["salt", respondSalt],
+];
+
 /**
  * One evaluation of the enabled systems against the shared media as they are now. The first
  * evaluation prepares each system's materials once (deposits, drained charge, leached
@@ -39,26 +57,10 @@ const effectNames = [
 export function respondMagic(state: RegionalState): Map<string, number> {
   if (!state.input.domains.includes("magic")) return new Map();
   channel(state, "treeCover", "ratio", 0.2);
-  const g = state.surface,
-    work = (state.magic ??= {
-      systems: activeSystems(state),
-      inherited: new Map(),
-      prepared: false,
-    });
-  for (const system of work.systems)
-    if (!work.inherited.has(system.id))
-      work.inherited.set(system.id, g.coverage.copyBand(intensityChannel(state, system.id)));
-  const by = (id: string) => work.systems.find((s) => s.id === id);
+  const work = magicWork(state),
+    by = (id: string) => work.systems.find((s) => s.id === id);
   if (!work.prepared) {
-    // Salt last: its burn reads the captured Fire; Fire after Hallowed: cores unward their cell.
-    for (const [id, prepare] of [
-      ["hallowed", prepareHallowed],
-      ["fire", prepareFire],
-      ["aurora", prepareAurora],
-      ["pressure", preparePressure],
-      ["greenwood", prepareGreenwood],
-      ["salt", prepareSalt],
-    ] as const) {
+    for (const [id, prepare] of preparations) {
       const system = by(id);
       if (system) prepare(state, system);
     }
@@ -69,17 +71,34 @@ export function respondMagic(state: RegionalState): Map<string, number> {
     intensity.copyFrom(work.inherited.get(system.id)!);
     if (system.id !== "hallowed") resolveMedium(state, system, intensity);
   }
-  for (const [id, respond] of [
-    ["hallowed", respondHallowed],
-    ["fire", respondFire],
-    ["aurora", respondAurora],
-    ["pressure", respondPressure],
-    ["greenwood", respondGreenwood],
-    ["salt", respondSalt],
-  ] as const) {
+  for (const [id, respond] of responses_) {
     const system = by(id);
     if (system) respond(state, system, intensityChannel(state, system.id));
   }
+  wardAndTear(state, work, by);
+  return applyMagicEffects(state, work.systems, work.inherited);
+}
+
+/** The kept per-system state, with each system's captured intensity copied once. */
+function magicWork(state: RegionalState) {
+  const g = state.surface,
+    work = (state.magic ??= {
+      systems: activeSystems(state),
+      inherited: new Map(),
+      prepared: false,
+    });
+  for (const system of work.systems)
+    if (!work.inherited.has(system.id))
+      work.inherited.set(system.id, g.coverage.copyBand(intensityChannel(state, system.id)));
+  return work;
+}
+
+/** Hallowed wards the other fields; Veil tears where they strain against each other. */
+function wardAndTear(
+  state: RegionalState,
+  work: MagicWork,
+  by: (id: string) => MagicSystem | undefined
+) {
   const fields = work.systems
     .filter((s) => !["hallowed", "veil"].includes(s.id))
     .map((s) => intensityChannel(state, s.id));
@@ -87,7 +106,6 @@ export function respondMagic(state: RegionalState): Map<string, number> {
     for (const field of fields) wardField(state, field, intensityChannel(state, "hallowed"));
   const veil = by("veil");
   if (veil) respondVeil(state, veil, intensityChannel(state, "veil"), fields);
-  return applyMagicEffects(state, work.systems, work.inherited);
 }
 
 /** Enabled systems; a disabled system's captured fields and effects are zeroed, not developed. */
@@ -135,18 +153,11 @@ const responses: Record<string, (c: Record<string, Band>, i: number, t: number) 
   hallowed: (c, i) => (c.water.get(i) === 0 ? 1 : 0),
   veil: (c, i, t) => (c.water.get(i) === 0 ? 0.8 + c.fracture.get(i) * 0.4 + t * 0.15 : 0),
 };
+/** The captured field through its present medium alone; the medium's own organization is the texture. */
 function resolveMedium(state: RegionalState, system: MagicSystem, intensity: Band) {
   const g = state.surface;
   for (let i = 0; i < intensity.length; i++) {
-    const p = gridPosition(g, i),
-      texture = fractalNoise(
-        p.x,
-        p.y,
-        state.input.seed ^ system.id.length,
-        Math.max((g.scope.resolution ?? 1000) * 4, state.parentSpan / 2),
-        3
-      ),
-      medium = responses[system.id]?.(g.channels, i, texture) ?? 1;
+    const medium = responses[system.id]?.(g.channels, i, 0) ?? 1;
     intensity.set(i, clamp(intensity.get(i) * medium, 0, 1000));
   }
 }

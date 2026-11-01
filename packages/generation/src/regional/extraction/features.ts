@@ -60,38 +60,26 @@ export function putRegionalFeature(
   return feature;
 }
 /**
- * Regenerated products leave; places with identity, protections and political layers stay.
- * The removed ids are remembered so an earlier refinement's own rivers are not read back
- * as captured evidence.
+ * This map's own earlier products leave and are regenerated from the same evidence; the
+ * captured geography (a parent's rivers, peaks and seats), authored and protected features
+ * stay, whatever identity publication gave the products. The removed ids are remembered so
+ * an earlier refinement's own rivers are not read back as captured evidence.
  */
 export function clearRegionalProducts(state: RegionalState) {
   const removed = (state.removedProducts ??= new Set());
   for (const f of generationFeatures(state, { areaId: state.input.areaId })) {
-    if (retainPlace(f) || !state.input.domains.includes(f.generationDomain ?? "")) continue;
-    // Only this map's own earlier products are struck from the evidence; captured source
-    // geography (a parent's river) remains the context it was.
-    if (f.attributes.developedBy === "regional") removed.add(f.id);
+    if (retainPlace(f)) continue;
+    // A product of a domain this run does not regenerate stays (a society-only run keeps
+    // the rivers); a product whose layer records no domain is this run's to regenerate.
+    if (f.generationDomain && !state.input.domains.includes(f.generationDomain)) continue;
+    removed.add(f.id);
     removeGenerationFeature(state, f.id);
     for (const reach of state.networks?.reaches({ featureId: f.id }) ?? [])
       state.networks!.removeReach(reach.id);
   }
 }
 function retainPlace(f: AtlasFeature) {
-  return (
-    f.state !== "generated" ||
-    f.protected ||
-    f.kind === "landmark" ||
-    !!(f.placeId && f.geometry.type === "Point") ||
-    [
-      "sovereignty",
-      "control",
-      "claims",
-      "administration",
-      "cultures",
-      "languages",
-      "religions",
-    ].includes(f.layerId)
-  );
+  return f.state !== "generated" || f.protected || f.attributes.developedBy !== "regional";
 }
 export function putRegionalNetwork(
   state: RegionalState,
