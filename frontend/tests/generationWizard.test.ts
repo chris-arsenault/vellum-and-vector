@@ -126,11 +126,13 @@ test("regional refinement submits a dedicated surface operation and retains comp
   expect(child).toMatchObject({ quality: "draft", seed: parent.seed });
   expect(child.configuration?.id).toBe("regional-bidirectional-refinement");
   expect(child.configuration!.sequence.length).toBeGreaterThan(0);
-  expect(
-    child.configuration!.sequence.every(
-      (step) => step.kind === "process" && step.process.startsWith("refinement.")
-    )
-  ).toBe(true);
+  // The regional run is a process sequence on the world's registry: the world's
+  // initialization and extraction around the refinement's own steps.
+  const processes = child.configuration!.sequence.map((step) =>
+    step.kind === "process" ? step.process : ""
+  );
+  expect(processes).toContain("canonry.initialize");
+  expect(processes.some((process) => process.startsWith("refinement."))).toBe(true);
   expect(history).toEqual({
     epochs: parent.settings!.epochs,
     humanEras: parent.settings!.humanEras,

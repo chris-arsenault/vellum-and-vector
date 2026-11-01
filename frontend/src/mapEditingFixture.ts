@@ -17,6 +17,8 @@ export async function mapEditingFixture(roadEnd: [number, number] = [650, 650]) 
       areaId: root,
       feature: { ...feature, protected: false, relations: [] },
     });
+  // A child region sharing the parent's features: the mapped-edit rules are tested on it, and
+  // generation runs on the root (a child is generated only once captured as its own map).
   await command("createArea", {
     parentId: root,
     name: "Geographic region",

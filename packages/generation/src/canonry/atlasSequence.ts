@@ -160,11 +160,9 @@ export function atlasPhysicalSequence(
   source: DomainSnapshot,
   input: AtlasGenerationInput
 ): ProcessSequence {
-  const physical = input.domains.includes("physical");
-  const area = source.world.areas[input.areaId],
+  const physical = input.domains.includes("physical"),
     inherited = inheritsPhysical(source, input);
   const context = composition(source, input);
-  if (area.parentId && area.profile === "region") return regionalPhysicalSequence(input);
   const result: ProcessSequence = [
     invoke("canonry.initialize"),
     {
@@ -221,28 +219,6 @@ function inheritsPhysical(source: DomainSnapshot, input: AtlasGenerationInput) {
     !input.domains.includes("physical") ||
     Boolean(source.world.areas[input.areaId].parentId && source.world.fields.length)
   );
-}
-function regionalPhysicalSequence(input: AtlasGenerationInput): ProcessSequence {
-  const regional = (name: string, feature?: string): ProcessInvocation => ({
-    kind: "process",
-    id: name,
-    process: name,
-    version: "1",
-    ...(feature ? { feature } : {}),
-  });
-  const ecology = input.resolvedFeatures!.selection["ecology.living"]?.enabled,
-    magic = input.resolvedFeatures!.selection["magic.configured"]?.enabled;
-  return [
-    invoke("canonry.initialize"),
-    ...(input.domains.includes("physical") ? [regional("regional.relief")] : []),
-    regional("regional.climate", "physical.climate"),
-    regional("regional.water", "water.routing"),
-    ...(magic ? [regional("regional.magic")] : []),
-    ...(ecology ? [regional("atlas.ecology-initialize"), regional("atlas.ecology-present")] : []),
-    invoke("canonry.project"),
-    ...(magic ? [regional("regional.magic-map")] : []),
-    invoke("canonry.features"),
-  ];
 }
 function presentExtraction(context: Composition): ProcessSequence {
   return [

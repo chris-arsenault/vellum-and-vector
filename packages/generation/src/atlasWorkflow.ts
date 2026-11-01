@@ -39,7 +39,6 @@ import { inheritedChannelNames, inheritedNativeFacts } from "./canonry/inherited
 import { societySequence } from "./societyProcesses";
 import { atlasInitialState } from "./atlasInitialState";
 import { boundaryDiagnostics, migrateBoundarySelection, inheritMapBoundary } from "./worldBoundary";
-import { regionalInputDiagnostics } from "./regionalInputs";
 import { isRegionalRefinement } from "./regional/capture";
 import { refineRegionalMap } from "./regional/workflow";
 
@@ -110,6 +109,14 @@ export function prepareAtlasGeneration(
     "regional_pipeline",
     "Use dedicated regional preparation for an independently owned map."
   );
+  // A child area's geography is an independent captured map (ADR 0008); the world pipeline
+  // generates root maps and the built interiors placed on them.
+  const child = source.world.areas[input.areaId];
+  requireThat(
+    !child?.parentId || ["site", "interior"].includes(child.profile),
+    "regional_pipeline",
+    "Capture the region as an independent map before generating it."
+  );
   const mappedDiagnostics = mappedGenerationDiagnostics(
     source,
     input.areaId,
@@ -136,7 +143,6 @@ export function prepareAtlasGeneration(
   const registry = atlasRegistry(source, input);
   const diagnostics = [
     ...mappedDiagnostics,
-    ...regionalInputDiagnostics(source, input.areaId),
     ...boundaryDiagnostics(input),
     ...resolvedFeatures.diagnostics.filter((item) => item.code !== "feature_dependency"),
   ];
@@ -282,7 +288,7 @@ function configuredSequence(source: DomainSnapshot, input: AtlasGenerationInput)
         (id) => input.resolvedFeatures!.selection[id]?.enabled
       )
     )
-      sequence.push(...societySequence(input, !!area.parentId));
+      sequence.push(...societySequence(input));
     sequence.push(
       ...atlasGenerationModules.contribute(slot, input.resolvedFeatures!, {
         source,
@@ -299,7 +305,10 @@ function configuredSequence(source: DomainSnapshot, input: AtlasGenerationInput)
   sequence.push(invoke(finalizeNamesProcess(source)));
   return sequence;
 }
-function resolveInput(source: DomainSnapshot, input: AtlasGenerationInput): AtlasGenerationInput {
+export function resolveInput(
+  source: DomainSnapshot,
+  input: AtlasGenerationInput
+): AtlasGenerationInput {
   const suppliedSettings = generationSettingsSchema.parse(
     input.settings ?? worldGenerationSettings(source.world)
   );

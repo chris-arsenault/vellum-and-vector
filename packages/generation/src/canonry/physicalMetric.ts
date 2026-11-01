@@ -1,5 +1,5 @@
 import type { PhysicalMesh } from "./mesh";
-import { adaptivePointSampler, Band, type Coverage } from "@atlas/domain";
+import { adaptivePointSampler, Band, prepareAdaptivePatches, type Coverage } from "@atlas/domain";
 import { triangleSampler } from "./triangleSampling";
 import { meshDeltaX, edgeLeadingTo } from "./mesh";
 
@@ -103,6 +103,17 @@ export function physicalSampler(
         ? (i: number) => values.get(i)
         : (i: number) => values[i];
   if (!mesh.topology) return triangleSampler(mesh, read);
-  const at = adaptivePointSampler(mesh.topology, (leaf) => read(mesh.leafToCell(leaf)));
+  // Generation sweeps every cell of its lattice: the patch caches hold the whole lattice, so
+  // no cell's patch is fitted twice (a viewport reader keeps the default budget).
+  const topology = mesh.topology,
+    leafValue = (leaf: number) => read(mesh.leafToCell(leaf)),
+    at = adaptivePointSampler(
+      topology,
+      leafValue,
+      undefined,
+      prepareAdaptivePatches(topology, leafValue, mesh.count * samplerBytesPerCell)
+    );
   return (x: number, y: number) => at(x + mesh.origin[0], y + mesh.origin[1]);
 }
+/** Prepared patch, vertex and fit records per cell, with their cache overhead. */
+const samplerBytesPerCell = 1024;

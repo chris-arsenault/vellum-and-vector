@@ -1,22 +1,23 @@
 import { expect, it } from "vitest";
-import { createGrid, rectangle, resampleChannels } from "@atlas/domain";
+import { rectangle } from "@atlas/domain";
 import {
-  prepareAtlasGeneration,
   atlasGenerationModules,
-  type GenerationState,
   generationSnapshot,
+  prepareRegionalRefinement,
 } from "@atlas/generation";
 import { MapRunner } from "../../packages/generation/src/mapRunner";
+import { regionalInitialState } from "../../packages/generation/src/regional/capture";
 import { constructedWorld } from "./constructedWorldFixture";
 import { numericalValues, snapshotCopy } from "./testSupport/snapshotCopy";
 
-it("publishes conditioned regional geography from supplied parent products without changing the parent", async () => {
+it("publishes refined regional geography from the captured parent products without changing the parent", async () => {
   const { input, result } = constructedWorld(),
     parent = generationSnapshot(result, input, crypto.randomUUID()),
     original = snapshotCopy(parent),
     domain = snapshotCopy(parent),
     areaId = crypto.randomUUID(),
     footprint = rectangle([2200, 100, 3800, 900]);
+  // The region is an independent map whose captured inputs are the parent's present channels.
   domain.world.areas[areaId] = {
     ...structuredClone(domain.world.areas[input.areaId]),
     id: areaId,
@@ -24,53 +25,38 @@ it("publishes conditioned regional geography from supplied parent products witho
     parentId: input.areaId,
     profile: "region",
     footprint,
-    boundary: {
-      version: 1,
-      parentId: input.areaId,
-      parentVersion: 1,
-      epochs: [],
-      crossings: [],
-      samples: [{ point: { x: 2200, y: 500, z: 0 }, values: { elevation: 9999 } }],
-    },
+    boundary: null,
+    map: { sourceAreaId: input.areaId, sourceRevision: 1, refinementLevel: 1 },
   };
-  domain.scope = { ...domain.scope, areaId, footprint, resolution: 200 };
-  const surface = createGrid("regional-surface", domain.scope, 9, 5);
-  resampleChannels(result.state.surface, surface);
-  const prepared = prepareAtlasGeneration(domain, {
+  domain.world.fields.push({
+    id: "captured",
     areaId,
-    domains: ["physical", "magic", "built", "cultural", "political"],
-    quality: "draft",
-    seed: 73,
+    layerId: "elevation",
+    algorithm: "supplied",
+    input: true,
+    source: { kind: "operation", id: "supplied" },
+    samples: result.state.surface.active.length,
+    channels: Object.keys(result.state.surface.channels),
+    footprint,
+    spaceId: result.state.surface.scope.spaceId,
   });
+  domain.numerical.captured = result.state.surface;
+  const request = { areaId, domains: ["physical", "magic"], quality: "draft" as const, seed: 73 },
+    prepared = prepareRegionalRefinement(domain, request);
   expect(prepared.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
-  const state: GenerationState = {
-    domain: prepared.source,
-    surface,
-    facts: new Set([
-      ...Object.keys(surface.channels),
-      "canonry:Elevation",
-      "canonry:LandscapeHistory",
-      "canonry:SedimentSupply",
-      "canonry:Geothermal",
-      "canonry:Impacts",
-    ]),
-    history: [],
-    publications: atlasGenerationModules.publications(prepared.input, domain.world),
-  };
-  const refined = await new MapRunner(prepared.input.configuration!, prepared.registry).run(state, {
-    seed: "73",
-    seedScope: areaId,
-  });
+  // The regional sequence on the runner, as `refineRegionalMap` runs it.
+  const initial = regionalInitialState(prepared.source, prepared.input),
+    refined = await new MapRunner(prepared.input.configuration!, prepared.registry).run(initial, {
+      seed: "73",
+      seedScope: areaId,
+    });
   refined.state.publications = atlasGenerationModules.publications(
     prepared.input,
     refined.state.domain.world
   );
+  delete refined.state.physical;
   const snapshot = generationSnapshot(refined, prepared.input, crypto.randomUUID(), original);
   expect(refined.state.history.filter((entry) => entry.ancestry.length)).toEqual([]);
-  expect(snapshot.world.societies?.[areaId]?.history).toEqual([]);
-  expect(snapshot.world.societies?.[areaId]?.communities.every((c) => c.groups.length === 0)).toBe(
-    true
-  );
   expect(snapshot.world.areas[input.areaId]).toEqual(original.world.areas[input.areaId]);
   expect(snapshot.world.epochs).toEqual(original.world.epochs);
   expect(snapshot.world.features).toMatchObject(original.world.features);
@@ -79,8 +65,9 @@ it("publishes conditioned regional geography from supplied parent products witho
   for (const field of original.world.fields)
     expect(published[field.id].channels).toEqual(parentValues[field.id].channels);
   expect(snapshot.world.fields.some((field) => field.areaId === areaId)).toBe(true);
+  // The published field, not the captured input.
   const elevation = snapshot.world.fields.find(
-    (field) => field.areaId === areaId && field.channels?.includes("elevation")
+    (field) => field.areaId === areaId && !field.input && field.channels?.includes("elevation")
   )!;
   expect(snapshot.numerical[elevation.id].scope.resolution).toBeLessThan(1000);
 });

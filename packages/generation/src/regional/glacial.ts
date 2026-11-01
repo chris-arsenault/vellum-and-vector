@@ -1,11 +1,6 @@
-import {
-  channel,
-  clamp,
-  gridNeighbors,
-  spacing,
-  type ReliefWork,
-  type RegionalState,
-} from "./state";
+import { units } from "../canonry/math";
+import { isContent, neighborsOf, regionalSpan } from "./lattice";
+import { clamp, naturalBand, type ReliefWork, type RegionalState } from "./state";
 
 /** Lapse of temperature with the height the relief gained over the captured base (°C/m). */
 const lapse = 0.0065;
@@ -50,7 +45,7 @@ interface IceBudget {
 export function applyGlaciation(state: RegionalState, h: Float64Array, relief: ReliefWork) {
   const budget = iceBudget(state, h),
     { present, relict } = iceFlow(state, budget),
-    depth = Math.max(cirqueDepthMinimum, cirqueDepthShare * state.parentSpan),
+    depth = Math.max(cirqueDepthMinimum, cirqueDepthShare * state.regional.parentSpan),
     flux = relief.iceFlux;
   for (let i = 0; i < flux.length; i++) flux[i] = Math.max(present[i], relict[i]);
   const lowering = carving(state, budget, flux, depth);
@@ -59,28 +54,35 @@ export function applyGlaciation(state: RegionalState, h: Float64Array, relief: R
   writeIce(state, present);
 }
 
+/** The captured temperature in °C at a cell. */
+export function capturedCelsius(state: RegionalState, i: number) {
+  return naturalBand(state, "Temperature").get(i) / 10 - 30;
+}
+/** Magic's applied heat at a cell, in °C: the workspace's replace-contribution. */
+export function magicHeat(state: RegionalState, i: number) {
+  return (state.physical.magic?.heat.get(i) ?? 0) / 10;
+}
+
 /** Accumulation and melt per cell from the lapsed climate, the record and Aurora's held ice. */
 function iceBudget(state: RegionalState, h: Float64Array): IceBudget {
-  const g = state.surface,
-    n = g.active.length,
-    { sea, base } = state.network!,
-    [dx, dy] = spacing(g),
-    cellArea = dx * dy,
+  const map = state.physical.map,
+    mesh = map.mesh,
+    n = mesh.count,
+    { sea, base } = state.regional.network!,
+    cellArea = regionalSpan(state) ** 2,
     history = recorded(state),
-    temperatureAt = lapsedTemperature(state, h, base),
-    precipitationAt = precipitation(state),
-    applied = state.contributions,
+    applied = state.regional.contributions,
     accumulation = new Float64Array(n),
     melt = new Float64Array(n),
     cold = new Uint8Array(n);
   for (let i = 0; i < n; i++) {
-    if (sea[i]) continue;
-    const t = temperatureAt(i),
+    if (sea[i] || !isContent(mesh, i)) continue;
+    const t = capturedCelsius(state, i) - lapse * (h[i] - base[i]) + magicHeat(state, i),
       // Aurora's held ice counts as accumulation the climate alone would not give.
-      held = Math.max(0, applied.appliedTo("ice", i)),
-      snow =
-        clamp((accumulationTemperature - t) / accumulationSpan) * (0.3 + precipitationAt(i)) + held,
-      share = g.measures.get(i) / cellArea;
+      held = Math.max(0, applied.appliedTo("IceThickness", i)) / 1000,
+      precipitation = (map.Rainfall.get(i) + map.Snowfall.get(i)) / 1000,
+      snow = clamp((accumulationTemperature - t) / accumulationSpan) * (0.3 + precipitation) + held,
+      share = mesh.contentArea(i) / cellArea;
     accumulation[i] = snow * share;
     melt[i] = clamp((t - accumulationTemperature) / meltSpan) * meltStrength * share;
     cold[i] = Number(snow > 0 || history[i] > recordedFloor);
@@ -90,18 +92,7 @@ function iceBudget(state: RegionalState, h: Float64Array): IceBudget {
 
 /** The recorded glacial reworking, or none. */
 function recorded(state: RegionalState) {
-  return state.character?.reworking ?? new Float64Array(state.surface.active.length);
-}
-/** Captured temperature lapsed over the height the relief gained, with magic's heat on top. */
-function lapsedTemperature(state: RegionalState, h: Float64Array, base: Float64Array) {
-  const temperature = state.natural.temperature ?? state.surface.channels.temperature,
-    applied = state.contributions;
-  return (i: number) =>
-    (temperature?.get(i) ?? 15) - lapse * (h[i] - base[i]) + applied.appliedTo("temperature", i);
-}
-function precipitation(state: RegionalState) {
-  const c = state.surface.channels;
-  return (i: number) => (c.rainfall?.get(i) ?? 0.8) + (c.snowfall?.get(i) ?? 0);
+  return state.regional.character?.reworking ?? new Float64Array(state.physical.map.mesh.count);
 }
 
 /**
@@ -109,11 +100,10 @@ function precipitation(state: RegionalState) {
  * reached exactly as far as the record says.
  */
 function iceFlow(state: RegionalState, { accumulation, melt }: IceBudget) {
-  const g = state.surface,
-    n = g.active.length,
-    { receiver, order, count } = state.network!,
-    [dx, dy] = spacing(g),
-    cellArea = dx * dy,
+  const mesh = state.physical.map.mesh,
+    n = mesh.count,
+    { receiver, order, count } = state.regional.network!,
+    cellArea = regionalSpan(state) ** 2,
     history = recorded(state),
     present = new Float64Array(n),
     relict = new Float64Array(n);
@@ -124,7 +114,7 @@ function iceFlow(state: RegionalState, { accumulation, melt }: IceBudget) {
     present[i] = Math.max(0, present[i] + accumulation[i] - (flowing ? melt[i] : 0));
     relict[i] =
       history[i] > recordedFloor
-        ? relict[i] + history[i] * recordedAccumulation * (g.measures.get(i) / cellArea)
+        ? relict[i] + history[i] * recordedAccumulation * (mesh.contentArea(i) / cellArea)
         : 0;
     if (j < 0) continue;
     present[j] += present[i];
@@ -140,7 +130,7 @@ function carving(
   flux: Float64Array,
   depth: number
 ) {
-  const network = state.network!,
+  const network = state.regional.network!,
     history = recorded(state),
     lowering = new Float64Array(flux.length),
     uncut = (i: number) => network.sea[i] || flux[i] <= 0 || network.lake[i] >= 0;
@@ -159,7 +149,8 @@ function carving(
 
 /**
  * Apply the cuts. Troughs take their flanks with them; a cirque floor and a trough floor
- * may lie below the lip and the moraine that close them.
+ * may lie below the lip and the moraine that close them. Sediment starts each derivation
+ * from the captured thickness plus the ledger, so moraines are placed, not stacked.
  */
 function cutTroughs(
   state: RegionalState,
@@ -169,29 +160,33 @@ function cutTroughs(
   depth: number,
   basin: Uint8Array
 ) {
-  const g = state.surface,
-    n = g.active.length,
-    sea = state.network!.sea,
+  const map = state.physical.map,
+    mesh = map.mesh,
+    n = mesh.count,
+    sea = state.regional.network!.sea,
     flank = troughFlanks(state, flux, lowering),
-    sediment = g.channels.sediment,
-    applied = state.contributions;
+    natural = naturalBand(state, "SedimentThickness"),
+    applied = state.regional.contributions;
   for (let i = 0; i < n; i++) {
     if (lowering[i] > 0.25 * depth || (lowering[i] > 0 && flux[i] >= cirqueFlux)) basin[i] = 1;
-    if (sea[i]) continue;
+    if (sea[i] || !isContent(mesh, i)) continue;
     h[i] -= lowering[i] + flank[i];
-    sediment.set(i, applied.appliedTo("sediment", i));
+    map.SedimentThickness.set(
+      i,
+      Math.max(0, natural.get(i) + Math.round(applied.appliedTo("SedimentThickness", i)))
+    );
   }
 }
 
 /** The lowering a trough's uncut neighbours take with it. */
 function troughFlanks(state: RegionalState, flux: Float64Array, lowering: Float64Array) {
-  const g = state.surface,
-    sea = state.network!.sea,
-    around = new Int32Array(8),
+  const mesh = state.physical.map.mesh,
+    sea = state.regional.network!.sea,
+    around = new Int32Array(mesh.stride),
     flank = new Float64Array(flux.length);
   for (let i = 0; i < flux.length; i++) {
     if (lowering[i] <= 0 || flux[i] < cirqueFlux) continue;
-    const m = gridNeighbors(g.width, g.height, i, around);
+    const m = neighborsOf(mesh, i, around);
     for (let k = 0; k < m; k++) {
       const j = around[k];
       if (!sea[j] && lowering[j] <= 0) flank[j] = Math.max(flank[j], lowering[i] * flankShare);
@@ -202,26 +197,31 @@ function troughFlanks(state: RegionalState, flux: Float64Array, lowering: Float6
 
 /** The terminus: the ice dropped its load where it ended. */
 function leaveMoraines(state: RegionalState, h: Float64Array, flux: Float64Array, depth: number) {
-  const { receiver, sea } = state.network!,
-    sediment = state.surface.channels.sediment;
+  const map = state.physical.map,
+    { receiver, sea } = state.regional.network!;
   for (let i = 0; i < flux.length; i++) {
     if (sea[i] || flux[i] < cirqueFlux * 0.5) continue;
     const j = receiver[i];
     if (j < 0 || sea[j] || flux[j] > 0) continue;
     const moraine = moraineShare * depth * clamp(flux[i] / cirqueFlux);
     h[j] += moraine;
-    sediment.add(j, moraine);
+    map.SedimentThickness.add(j, units(moraine));
   }
 }
 
-/** Present ice for Aurora, with the ledger's held ice on top. */
+/**
+ * Present ice (m) for Aurora, with the ledger's held ice on top. Sea cells keep the captured
+ * sea ice; only land is re-derived.
+ */
 function writeIce(state: RegionalState, present: Float64Array) {
-  const c = state.surface.channels,
-    ice = channel(state, "ice", "ratio"),
-    applied = state.contributions;
+  const map = state.physical.map,
+    mesh = map.mesh,
+    sea = state.regional.network!.sea,
+    applied = state.regional.contributions;
   for (let i = 0; i < present.length; i++) {
+    if (sea[i] || !isContent(mesh, i)) continue;
     const thickness = present[i] > 0 ? iceThicknessScale * Math.sqrt(present[i] / cirqueFlux) : 0;
-    ice.set(i, clamp(thickness / 1000 + applied.appliedTo("ice", i)));
-    if (c.iceThickness) c.iceThickness.set(i, ice.get(i) * 1000);
+    map.IceThickness.set(i, Math.max(0, thickness + applied.appliedTo("IceThickness", i)));
+    map.GroundedIce.set(i, Number(map.IceThickness.get(i) > 0));
   }
 }

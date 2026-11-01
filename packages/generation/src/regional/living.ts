@@ -1,24 +1,8 @@
-import {
-  biomeCode,
-  biomes,
-  gridPosition,
-  surfaceCode,
-  naturalSurfaceNames,
-  type Band,
-  type NaturalSurfaceName,
-} from "@atlas/domain";
+import { biomeCode, biomes } from "@atlas/domain";
 import { fractalNoise } from "../canonry/noise";
-import { Landform } from "../canonry/codes";
-import { regionalMoisture, regionalWetness } from "./climate";
-import {
-  channel,
-  clamp,
-  naturalChannel,
-  regionalComponents,
-  resolvesRegionalComponent,
-  spacing,
-  type RegionalState,
-} from "./state";
+import { celsius, regionalMoisture, regionalWetness } from "./climate";
+import { components, isContent, regionalSpan, resolvesComponent } from "./lattice";
+import { clamp, naturalBand, type RegionalState } from "./state";
 
 type BiomeName = (typeof biomes)[number]["name"];
 
@@ -34,33 +18,6 @@ const coldCover = new Set<BiomeName>([
   "Rime forest",
   "Glow-lichen barrens",
 ]);
-/** Classes this map's own relief and channels can impose on captured cover. */
-const resolvedCovers = new Set<BiomeName>(["Tundra", "Marsh", "Swamp", "Grassland", "Woodland"]);
-/** Captured surfaces describing coarse water, channels or relief, which this map resolves itself. */
-const resolvedSurfaces = new Set<NaturalSurfaceName>([
-  "Ridge",
-  "Lake",
-  "Fjord",
-  "Exposed shelf",
-  "Shelf",
-  "Ocean",
-  "Reef",
-  "Pack ice",
-  "Sea ice",
-  "Ice shelf",
-  "Polynya",
-  "Scree field",
-  "River valley",
-  "River channel",
-  "Floodplain",
-  "Delta",
-  "Gorge",
-  "Waterfall",
-  "Current channel",
-  "Trench",
-  "Upwelling water",
-  "Warm-water reach",
-]);
 
 /**
  * The living landscape's response. The captured cover is the prior for what grows where;
@@ -68,99 +25,99 @@ const resolvedSurfaces = new Set<NaturalSurfaceName>([
  * captured copies, so a forest cell can open into valley meadow, a ridge can bare, high new
  * relief can pass the tree line, and the result is the same whether it is evaluated once or
  * three times. The developed cover binds hillslopes and holds runoff for the next round's
- * terrain and water.
+ * terrain and water. Cover bands are the field's own (ratios); the biome is its code.
  */
 export function respondCover(state: RegionalState) {
-  if (!state.input.domains.some((id) => id === "physical" || id === "magic")) return;
-  const g = state.surface,
-    tree = channel(state, "treeCover", "ratio"),
-    grass = channel(state, "grassCover", "ratio"),
-    wetland = channel(state, "wetlandCover", "ratio"),
-    biome = channel(state, "biome", "category"),
-    natural = channel(state, "naturalSurface", "category"),
-    final = channel(state, "finalSurface", "category"),
-    material = channel(state, "physicalMaterial", "category"),
-    priorTree = naturalChannel(state, "treeCover", "ratio"),
-    priorGrass = naturalChannel(state, "grassCover", "ratio"),
-    priorWetland = naturalChannel(state, "wetlandCover", "ratio"),
-    priorBiome = displacedPrior(state, naturalChannel(state, "biome", "category")),
-    priorSurface = displacedPrior(state, naturalChannel(state, "naturalSurface", "category")),
+  if (!state.regional.input.domains.some((id) => id === "physical" || id === "magic")) return;
+  const map = state.physical.map,
+    mesh = map.mesh,
+    priorTree = naturalBand(state, "TreeCover"),
+    priorGrass = naturalBand(state, "GrassCover"),
+    priorWetland = naturalBand(state, "WetlandCover"),
+    priorBiome = displacedPrior(state, naturalBand(state, "BiomeCodes")),
     lakes = realizedLakeCells(state),
-    applied = state.contributions;
-  for (let i = 0; i < g.active.length; i++) {
-    const temperature = g.channels.temperature.get(i),
-      soil = clamp(0.55 + g.channels.soilDepth.get(i) / 1.2),
-      steep = clamp(1 - (g.channels.slope.get(i) - 0.08) / 0.2),
+    applied = state.regional.contributions;
+  for (let i = 0; i < mesh.count; i++) {
+    if (!isContent(mesh, i)) continue;
+    const temperature = celsius(state, i),
+      soil = clamp(0.55 + map.SoilDepth.get(i) / 1.2),
+      steep = clamp(1 - (map.Slope.get(i) - 0.08) / 0.2),
       dryness = clamp(regionalMoisture(state, i) / 0.35),
-      salting = g.channels.salting?.get(i) ?? 0,
-      verdure = g.channels.verdure?.get(i) ?? 0,
+      salting = map.Salting.get(i),
+      verdure = map.Verdure.get(i),
       cold = clamp((temperature - treeLine) / 6);
-    tree.set(
+    map.TreeCover.set(
       i,
       clamp(
         (priorTree.get(i) * soil * steep * Math.min(1, 0.4 + dryness) * cold + verdure * 0.3) *
-          (1 - salting)
+          (1 - salting) +
+          applied.appliedTo("TreeCover", i)
       )
     );
-    grass.set(i, clamp(priorGrass.get(i) * Math.max(steep, 0.4) * (1 - salting)));
-    wetland.set(
+    map.GrassCover.set(
       i,
       clamp(
-        Math.max(priorWetland.get(i), (regionalWetness(state, i) - 0.5) * 2) +
-          applied.appliedTo("wetlandCover", i)
+        priorGrass.get(i) * Math.max(steep, 0.4) * (1 - salting) +
+          applied.appliedTo("GrassCover", i)
       )
     );
-    const name = coverName(state, i, lakes.get(i) > 0, priorBiome[i]);
-    biome.set(i, biomeCode(name));
-    natural.set(i, surfaceCode(naturalName(state, i, name, priorSurface[i])));
-    // Magic cartography lays its own surfaces over this afterwards.
-    final.set(i, natural.get(i));
-    material.set(i, materialCode(state, i));
+    // Greenwood divides the river that crosses it into wetland channels: the braided reach.
+    const braided = verdure > 0.3 && map.RiverOrders.get(i) >= 1 ? 0.5 * verdure : 0;
+    map.WetlandCover.set(
+      i,
+      clamp(
+        Math.max(priorWetland.get(i), (regionalWetness(state, i) - 0.5) * 2, braided) +
+          applied.appliedTo("WetlandCover", i)
+      )
+    );
+    map.BiomeCodes.set(i, biomeCode(coverName(state, i, lakes[i] > 0, priorBiome[i])));
   }
-  g.coverage.release(lakes);
 }
 
 /**
  * The captured class at a displaced position. Parent classes arrive as whole parent
  * samples; displacing the lookup turns their square corners into natural boundaries.
  */
-function displacedPrior(state: RegionalState, band: Band) {
-  const g = state.surface,
-    [dx, dy] = spacing(g),
-    reach = state.parentSpan * priorDisplacement,
-    prior = new Int32Array(g.active.length);
+function displacedPrior(state: RegionalState, band: { get(i: number): number }) {
+  const mesh = state.physical.map.mesh,
+    span = state.regional.parentSpan,
+    reach = span * priorDisplacement,
+    prior = new Int32Array(mesh.count);
   for (let i = 0; i < prior.length; i++) {
-    const p = gridPosition(g, i),
-      ox = fractalNoise(p.x, p.y, state.input.seed ^ 0x2b71, state.parentSpan, 3) * reach,
-      oy = fractalNoise(p.x, p.y, state.input.seed ^ 0x6d19, state.parentSpan, 3) * reach,
-      x = clamp(Math.round((i % g.width) + ox / dx), 0, g.width - 1),
-      y = clamp(Math.round(Math.floor(i / g.width) + oy / dy), 0, g.height - 1);
-    prior[i] = band.get(y * g.width + x);
+    const x = mesh.x(i),
+      y = mesh.y(i),
+      px = x + mesh.origin[0],
+      py = y + mesh.origin[1],
+      ox = fractalNoise(px, py, state.regional.input.seed ^ 0x2b71, span, 3) * reach,
+      oy = fractalNoise(px, py, state.regional.input.seed ^ 0x6d19, span, 3) * reach,
+      j = mesh.cellAt(x + ox, y + oy);
+    prior[i] = band.get(j < 0 ? i : j);
   }
   return prior;
 }
 
 /** Standing water wide enough to resolve on this map; a submesh pond stays water context. */
 function realizedLakeCells(state: RegionalState) {
-  const g = state.surface,
-    mask = g.coverage.scratch("uint8", "regional:realized-lakes", g.active.length);
-  regionalComponents(
-    g,
-    (i) => g.channels.water.get(i) === 2,
+  const map = state.physical.map,
+    mesh = map.mesh,
+    mask = new Uint8Array(mesh.count);
+  components(
+    mesh,
+    (i) => map.WaterKindCodes.get(i) === 2,
     (members) => {
-      if (!resolvesRegionalComponent(g, members)) return;
-      for (const i of members) mask.set(i, 1);
+      if (!resolvesComponent(mesh, members, regionalSpan(state))) return;
+      for (const i of members) mask[i] = 1;
     }
   );
   return mask;
 }
 
 function coverName(state: RegionalState, i: number, lake: boolean, prior: number): BiomeName {
-  const c = state.surface.channels,
+  const map = state.physical.map,
     captured = biomes[prior]?.name;
-  if (c.water.get(i) === 1) return "Ocean";
+  if (map.WaterKindCodes.get(i) === 1) return "Ocean";
   if (lake) return "Freshwater";
-  if ((c.ice?.get(i) ?? 0) > 0.3) return "Ice";
+  if (map.IceThickness.get(i) > 300) return "Ice";
   // Land the captured map held as water, or never classified, takes its climate's cover.
   if (!captured || ["Unclassified", "Ocean", "Freshwater"].includes(captured))
     return climateCover(state, i);
@@ -171,11 +128,11 @@ function coverName(state: RegionalState, i: number, lake: boolean, prior: number
  * wetlands, and the opening of forest where soil, slope or dryness no longer carry trees.
  */
 function developedCover(state: RegionalState, i: number, captured: BiomeName): BiomeName {
-  const c = state.surface.channels,
-    tree = c.treeCover.get(i),
+  const map = state.physical.map,
+    tree = map.TreeCover.get(i),
     warm = !coldCover.has(captured);
-  if (warm && c.temperature.get(i) < treeLine) return "Tundra";
-  if ((c.delta?.get(i) ?? 0) >= 0.5 || (warm && c.wetlandCover.get(i) > 0.55))
+  if (warm && celsius(state, i) < treeLine) return "Tundra";
+  if (map.DeltaIntensity.get(i) >= 500 || (warm && map.WetlandCover.get(i) > 0.55))
     return wetlandName(tree);
   return openedForest(captured, tree);
 }
@@ -187,13 +144,13 @@ function openedForest(captured: BiomeName, tree: number): BiomeName {
   return captured !== "Woodland" && tree < 0.3 ? "Woodland" : captured;
 }
 function climateCover(state: RegionalState, i: number): BiomeName {
-  const c = state.surface.channels,
-    t = c.temperature.get(i);
+  const map = state.physical.map,
+    t = celsius(state, i);
   if (t < treeLine) return "Tundra";
-  if (c.wetlandCover.get(i) > 0.55) return wetlandName(c.treeCover.get(i));
+  if (map.WetlandCover.get(i) > 0.55) return wetlandName(map.TreeCover.get(i));
   if (regionalMoisture(state, i) < 0.18) return "Desert";
-  if (c.treeCover.get(i) < 0.3) return "Grassland";
-  return forestName(c.treeCover.get(i), t, regionalMoisture(state, i));
+  if (map.TreeCover.get(i) < 0.3) return "Grassland";
+  return forestName(map.TreeCover.get(i), t, regionalMoisture(state, i));
 }
 function forestName(tree: number, temperature: number, moisture: number) {
   if (tree < 0.55) return "Woodland";
@@ -201,52 +158,3 @@ function forestName(tree: number, temperature: number, moisture: number) {
   return temperature > 23 && moisture > 0.7 ? "Rainforest" : "Temperate forest";
 }
 const wetlandName = (tree: number) => (tree > 0.5 ? ("Swamp" as const) : ("Marsh" as const));
-
-function naturalName(
-  state: RegionalState,
-  i: number,
-  biome: BiomeName,
-  prior: number
-): NaturalSurfaceName {
-  const water = waterSurface(state, i, biome);
-  if (water) return water;
-  // As in initial geography, cover owns the surrounding land. A small stream
-  // does not replace a whole resolved cell with wet-looking valley colour.
-  if ((state.surface.channels.floodplain?.get(i) ?? 0) >= 0.25) return "Floodplain";
-  return bareSurface(state, i) ?? landSurface(biome, naturalSurfaceNames[prior]);
-}
-/**
- * A cover this map developed (new tundra, a valley meadow, a coastal marsh) names its own
- * surface; otherwise the captured surface stays, unless it depicted coarse water or relief.
- */
-function landSurface(biome: BiomeName, captured: NaturalSurfaceName | undefined) {
-  const own = (naturalSurfaceNames as readonly string[]).includes(biome)
-    ? (biome as NaturalSurfaceName)
-    : null;
-  if (own && resolvedCovers.has(biome) && captured !== biome) return own;
-  if (captured && !resolvedSurfaces.has(captured)) return captured;
-  return own ?? "Barren";
-}
-function waterSurface(state: RegionalState, i: number, biome: BiomeName) {
-  if (biome === "Ocean")
-    return state.surface.channels.waterDepth.get(i) < 150 ? ("Shelf" as const) : ("Ocean" as const);
-  if (biome === "Freshwater") return "Lake" as const;
-  if (biome === "Ice") return "Glacier" as const;
-  return null;
-}
-function bareSurface(state: RegionalState, i: number): NaturalSurfaceName | null {
-  const c = state.surface.channels;
-  const bare = c.treeCover.get(i) + c.grassCover.get(i) + c.wetlandCover.get(i) < 0.12;
-  if (bare && c.slope.get(i) >= 0.0235) return "Scree field";
-  if (bare && [Landform.Ridge, Landform.Peak, Landform.Pass].includes(c.landform?.get(i) ?? 0))
-    return "Ridge";
-  return null;
-}
-function materialCode(state: RegionalState, i: number) {
-  const c = state.surface.channels;
-  if (c.water.get(i) === 1) return 6;
-  if (c.water.get(i) === 2) return 3;
-  if ((c.ice?.get(i) ?? 0) > 0.3) return 5;
-  if (c.slope.get(i) > 0.15) return 0;
-  return regionalMoisture(state, i) > 0.3 ? 3 : 2;
-}

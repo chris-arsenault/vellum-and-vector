@@ -1,73 +1,93 @@
-import { fieldInterpolator, gridPosition, KeyedHeap } from "@atlas/domain";
+import { KeyedHeap } from "@atlas/domain";
 import { fractalNoise } from "../canonry/noise";
+import { physicalSampler } from "../canonry/physicalMetric";
+import type { PhysicalMesh } from "../canonry/mesh";
 import {
-  clamp,
-  gaussianBlur,
-  gridNeighbors,
-  onFrameEdge,
-  regionalComponents,
-  resolvesRegionalComponent,
-  spacing,
-  type RegionalState,
-} from "./state";
+  components,
+  frameEdge,
+  isContent,
+  neighborsOf,
+  regionalSpan,
+  resolvesComponent,
+  smoothOverLength,
+} from "./lattice";
+import { clamp, type RegionalState } from "./state";
 
 /** Horizontal displacement varies the parent's blocky patch edges without serrating heights. */
 const displacementShare = 0.18;
-/** Smoothing radius, as a share of the parent sample span, removing the parent's patch creases. */
-const baseSmoothing = 0.35;
+/**
+ * Smoothing radius, as a share of the parent sample span: enough to round the parent's patch
+ * creases, small enough that a valley floor the parent sampled keeps most of its depth, so
+ * the base meets the inherited exterior closely along the frame edge.
+ */
+export const baseSmoothing = 0.15;
 /** Sea floor below this depth keeps its sampled value; shallower water is smoothed with the shore. */
 const shelfDepth = 30;
 /** Depth distinguishing a captured closed basin (a desert pan) from sampling roughness. */
 const capturedBasinDepth = 20;
 
-/** Sample the parent surface with a gentle displacement, then smooth its interpolation creases. */
+/**
+ * Sample the captured surface (metres above the datum) with a gentle displacement, then
+ * smooth its interpolation creases over a share of the parent span.
+ */
 export function smoothedBase(state: RegionalState, datum: number) {
-  const g = state.surface,
-    n = g.active.length,
-    [dx, dy] = spacing(g),
-    at = fieldInterpolator({ ...g, channels: { elevation: state.inheritedHeight } }, "elevation"),
-    [w, s, e, nn] = g.bounds,
-    sample = (x: number, y: number) => at({ x: clamp(x, w, e), y: clamp(y, s, nn), z: 0 }),
-    wavelength = Math.max(state.parentSpan, Math.max(dx, dy) * 4),
+  const map = state.physical.map,
+    mesh = map.mesh,
+    n = mesh.count,
+    inherited = state.regional.inheritedHeight,
+    at = physicalSampler(mesh, (i) => inherited.get(i) / 1024 - datum),
+    [w, s, e, nn] = mesh.bounds,
+    sample = (x: number, y: number) => at(clamp(x, w, e), clamp(y, s, nn)),
+    wavelength = Math.max(state.regional.parentSpan, regionalSpan(state) * 4),
     sampled = new Float64Array(n),
     clamped = new Float64Array(n);
   for (let i = 0; i < n; i++) {
-    const p = gridPosition(g, i),
-      warpX = fractalNoise(p.x, p.y, state.input.seed ^ 0x51a3, wavelength * 2, 2),
-      warpY = fractalNoise(p.x, p.y, state.input.seed ^ 0x7c4b, wavelength * 2, 2);
+    const x = mesh.x(i),
+      y = mesh.y(i),
+      px = x + mesh.origin[0],
+      py = y + mesh.origin[1],
+      warpX = fractalNoise(px, py, state.regional.input.seed ^ 0x51a3, wavelength * 2, 2),
+      warpY = fractalNoise(px, py, state.regional.input.seed ^ 0x7c4b, wavelength * 2, 2);
     sampled[i] = sample(
-      p.x + warpX * wavelength * displacementShare,
-      p.y + warpY * wavelength * displacementShare
+      x + warpX * wavelength * displacementShare,
+      y + warpY * wavelength * displacementShare
     );
-    clamped[i] = Math.max(sampled[i], datum - shelfDepth);
+    clamped[i] = Math.max(sampled[i], -shelfDepth);
   }
-  const sigma = state.parentSpan * baseSmoothing;
-  gaussianBlur(clamped, g.width, g.height, sigma / dx, sigma / dy);
+  const reach = state.regional.parentSpan * baseSmoothing;
+  smoothOverLength(state, clamped, reach);
   // The sea floor is smoothed on its own so deep water keeps its depth without the
   // parent's patch creases, and never pulls the shore down with it.
-  gaussianBlur(sampled, g.width, g.height, sigma / dx, sigma / dy);
-  for (let i = 0; i < n; i++) if (clamped[i] < datum) clamped[i] = Math.min(clamped[i], sampled[i]);
+  smoothOverLength(state, sampled, reach);
+  for (let i = 0; i < n; i++) if (clamped[i] < 0) clamped[i] = Math.min(clamped[i], sampled[i]);
   return clamped;
 }
 
-/** Water below the datum joined to the captured ocean or an open frame edge. */
-export function connectedSea(state: RegionalState, height: Float64Array, datum: number) {
-  const g = state.surface,
+/**
+ * Water at or below the datum joined to the captured ocean, the inherited exterior or the
+ * lattice edge. Heights are metres above the datum.
+ */
+export function connectedSea(state: RegionalState, height: Float64Array) {
+  const map = state.physical.map,
+    mesh = map.mesh,
     n = height.length,
     sea = new Uint8Array(n),
     queue = new Int32Array(n),
-    around = new Int32Array(8);
+    around = new Int32Array(mesh.stride);
   let write = 0;
   for (let i = 0; i < n; i++)
-    if (height[i] <= datum && (onFrameEdge(g, i) || g.channels.water?.get(i) === 1)) {
+    if (
+      height[i] <= 0 &&
+      (!isContent(mesh, i) || mesh.boundary(i) || map.WaterKindCodes.get(i) === 1)
+    ) {
       sea[i] = 1;
       queue[write++] = i;
     }
   for (let read = 0; read < write; read++) {
-    const m = gridNeighbors(g.width, g.height, queue[read], around);
+    const m = neighborsOf(mesh, queue[read], around);
     for (let k = 0; k < m; k++) {
       const j = around[k];
-      if (sea[j] || height[j] > datum) continue;
+      if (sea[j] || height[j] > 0) continue;
       sea[j] = 1;
       queue[write++] = j;
     }
@@ -86,14 +106,20 @@ export function capturedSinks(
   sea: Uint8Array,
   lake: Int32Array
 ) {
-  const g = state.surface,
+  // The frame edge drains at its own height: the exterior beyond it is read at the parent's
+  // coarser cells, which cannot carry a valley narrower than themselves across the edge.
+  const mesh = state.physical.map.mesh,
     n = base.length,
     sink = new Uint8Array(n),
-    filled = floodLevels(g.width, g.height, base, (i) => Boolean(sea[i]) || onFrameEdge(g, i)),
+    filled = floodLevels(
+      mesh,
+      base,
+      (i) => Boolean(sea[i]) || mesh.boundary(i) || frameEdge(mesh, i)
+    ),
     depth = new Float64Array(n);
   for (let i = 0; i < n; i++) depth[i] = sea[i] || lake[i] >= 0 ? 0 : filled[i] - base[i];
-  regionalComponents(
-    g,
+  components(
+    mesh,
     (i) => depth[i] > 1e-3,
     (members) => {
       let deepest = 0,
@@ -103,7 +129,8 @@ export function capturedSinks(
         if (base[i] < base[lowest]) lowest = i;
       }
       // The bowl's lowest cell is its sink; the rest of the bowl drains to it.
-      if (deepest >= capturedBasinDepth && resolvesRegionalComponent(g, members)) sink[lowest] = 1;
+      if (deepest >= capturedBasinDepth && resolvesComponent(mesh, members, regionalSpan(state)))
+        sink[lowest] = 1;
     }
   );
   return sink;
@@ -111,8 +138,7 @@ export function capturedSinks(
 
 /** Priority-flood fill levels from the given outlets: the spill level over each cell. */
 export function floodLevels(
-  width: number,
-  height: number,
+  mesh: PhysicalMesh,
   values: Float64Array,
   outlet: (i: number) => boolean
 ) {
@@ -120,7 +146,7 @@ export function floodLevels(
     filled = new Float64Array(n),
     seen = new Uint8Array(n),
     heap = new KeyedHeap(),
-    around = new Int32Array(8);
+    around = new Int32Array(mesh.stride);
   filled.set(values);
   for (let i = 0; i < n; i++)
     if (outlet(i)) {
@@ -129,7 +155,7 @@ export function floodLevels(
     }
   while (heap.size) {
     const i = heap.pop(),
-      m = gridNeighbors(width, height, i, around);
+      m = neighborsOf(mesh, i, around);
     for (let k = 0; k < m; k++) {
       const j = around[k];
       if (seen[j]) continue;

@@ -6,27 +6,92 @@ import {
   gridPosition,
   putChannel,
   rectangle,
+  requireThat,
   type AtlasFeature,
+  type DomainSnapshot,
 } from "@atlas/domain";
+import type { AtlasGenerationInput } from "../atlasWorkflow";
 import { landscape } from "../mapFixtures";
-import { createRegionalState } from "./capture";
+import type { GenerationState, MapProcessContext, ProcessInvocation } from "../process";
+import { executeProcessBehavior } from "../processTraits";
+import { regionalInitialState } from "./capture";
 import { measureGrain } from "./character";
-import { clearRegionalProducts } from "./extraction/features";
-import { regionalSchedule } from "./schedule";
-import { channel, type RegionalState } from "./state";
+import { prepareMagic } from "./magic/index";
+import type { RegionalState } from "./state";
+import { prepareRegionalRefinement, regionalSequence } from "./workflow";
+
+type Prepared = ReturnType<typeof prepareRegionalRefinement>;
+const prepared = new WeakMap<
+  GenerationState,
+  { source: DomainSnapshot; input: AtlasGenerationInput }
+>();
+
+/** A process context with the run's bindings and no runner: enough for every regional process. */
+function stubContext(run: Prepared, invocation: ProcessInvocation): MapProcessContext {
+  return {
+    scope: structuredClone(run.source.scope),
+    invocation: [invocation.id],
+    parameters: {},
+    inputs: structuredClone(run.input.configuration!.inputs ?? {}),
+    epochs: [],
+    epochIndices: [],
+    causes: [],
+    recordCause() {},
+    random: () => 0,
+    cancelled: () => false,
+    progress() {},
+  };
+}
+function runInvocations(
+  state: GenerationState,
+  run: Prepared,
+  include: (invocation: ProcessInvocation) => boolean
+) {
+  for (const invocation of regionalSequence(run.input)) {
+    if (invocation.kind !== "process" || !include(invocation)) continue;
+    const process = run.registry.get(invocation.process, invocation.version),
+      outcome = executeProcessBehavior(process, state, stubContext(run, invocation));
+    requireThat(
+      !(outcome instanceof Promise),
+      "fixture_process",
+      `${invocation.id} is synchronous.`
+    );
+  }
+}
+const preparation = new Set(["canonry.initialize", "refinement.begin"]);
 
 /**
- * Run the fixed schedule on a supplied state as the workflow would: the captured features
- * become the source reader, and regenerated products are cleared before the schedule.
+ * The initial state of a refinement with its physical workspace built and the regional work
+ * attached, as the runner leaves it after `canonry.initialize` and `refinement.begin`.
  */
-export function runSchedule(state: RegionalState, domains = state.input.domains) {
+export function regionalWorkingState(
+  source: DomainSnapshot,
+  input: AtlasGenerationInput
+): RegionalState {
+  const run = prepareRegionalRefinement(source, input),
+    state = regionalInitialState(run.source, run.input);
+  runInvocations(state, run, (invocation) => preparation.has(invocation.process));
+  prepared.set(state, { source, input });
+  return state as RegionalState;
+}
+
+/**
+ * Run the schedule, the world's projection and extraction and the regional identity and
+ * place steps on a working state, through the same processes the runner executes. The
+ * supplied features become the source reader, and regenerated products are cleared before
+ * the schedule as in production.
+ */
+export function runSchedule(state: RegionalState, domains = state.regional.input.domains) {
   freezeSourceFeatures(state);
-  clearRegionalProducts(state);
-  for (const step of regionalSchedule(domains)) step.run(state);
+  const kept = prepared.get(state)!,
+    run = prepareRegionalRefinement(kept.source, { ...kept.input, domains });
+  state.regional.input.domains = domains;
+  if (!domains.includes("magic") && state.physical.magic?.fields.length) prepareMagic(state);
+  runInvocations(state, run, (invocation) => !preparation.has(invocation.process));
   return state;
 }
 /** The supplied features as the capture left them, read-only, like the production source reader. */
-export function freezeSourceFeatures(state: RegionalState) {
+export function freezeSourceFeatures(state: GenerationState) {
   if (state.sourceFeatures) return state.sourceFeatures;
   const frozen = new Map(
     Object.values(state.domain.world.features).map((f) => [f.id, structuredClone(f)])
@@ -47,6 +112,8 @@ export function enableMagic(state: RegionalState, ids?: string[]) {
     enabled: !ids || ids.includes(s.id),
   }));
   state.domain.world.confluences = canonryConfluencePresets();
+  if (!state.regional.input.domains.includes("magic")) state.regional.input.domains.push("magic");
+  prepareMagic(state);
   return state.domain.world.magicSystems;
 }
 /** A captured feature on this map, as the capture path would leave it. */
@@ -62,7 +129,7 @@ export function suppliedFeature(
   const feature: AtlasFeature = {
     id,
     placeId: id,
-    areaId: state.input.areaId,
+    areaId: state.regional.input.areaId,
     layerId,
     kind,
     name,
@@ -82,18 +149,22 @@ export function suppliedFeature(
 }
 /** The mean axis (radians, 0..π) and coherence of the realized relief's organization. */
 export function dominantAxis(state: RegionalState) {
-  const n = state.surface.active.length,
+  const map = state.physical.map,
+    n = map.mesh.count,
     x = new Float64Array(n),
     y = new Float64Array(n);
-  measureGrain(state, state.surface.channels.elevation, x, y);
+  measureGrain(state, (i) => map.Elevation.get(i) / 1024, x, y);
   let sx = 0,
-    sy = 0;
+    sy = 0,
+    cells = 0;
   for (let i = 0; i < n; i++) {
+    if (map.mesh.membership(i) !== 1) continue;
     sx += x[i];
     sy += y[i];
+    cells++;
   }
   const theta = Math.atan2(sy, sx) / 2;
-  return { theta: theta < 0 ? theta + Math.PI : theta, coherence: Math.hypot(sx, sy) / n };
+  return { theta: theta < 0 ? theta + Math.PI : theta, coherence: Math.hypot(sx, sy) / cells };
 }
 /** Smallest angle between two axes (radians, 0..π/2). */
 export function axisDifference(a: number, b: number) {
@@ -101,7 +172,7 @@ export function axisDifference(a: number, b: number) {
   return Math.min(d, Math.PI - d);
 }
 
-/** A coarse supplied parent (5 km samples) and the regional state sampled from it. */
+/** A coarse supplied parent (5 km samples) and the regional working state built from it. */
 export function regionalFixture(
   height = (x: number, y: number) => 120 + x / 200 - y / 500,
   north = 20000,
@@ -122,10 +193,24 @@ export function regionalFixture(
   };
   source.world.reference.domain = footprint;
   source.scope.footprint = footprint;
-  const grid = createGrid("captured", { ...source.scope, resolution: 5000 }, 9, 5);
+  // A refinement reads a completed world; the fixture world has had one epoch.
+  source.world.epochs = [
+    { id: "Present", tectonics: 1, hydrology: 1, ice: 0, coasts: 1, temperature: 15, seaLevel: 0 },
+  ];
+  // The parent is captured over the frame and its padding, as a completed world supplies it:
+  // the exterior continues the supplied country instead of clamping to the frame edge.
+  const padding = 100_000,
+    spacing = [5000, north / 4],
+    grid = createGrid(
+      "captured",
+      { ...source.scope, resolution: 5000 },
+      (40000 + 2 * padding) / spacing[0] + 1,
+      (north + 2 * padding) / spacing[1] + 1,
+      [-padding, -padding, 40000 + padding, north + padding]
+    );
   const values: Record<string, [string, (x: number, y: number) => number]> = {
     elevation: ["metre", height],
-    rock: ["ratio", () => 1],
+    rock: ["ratio", () => 0.25],
     temperature: ["celsius", () => 16],
     moisture: ["ratio", () => 0.65],
     rainfall: ["metre/year", () => 1.2],
@@ -140,6 +225,7 @@ export function regionalFixture(
       name,
       unit,
       generateBand(grid.coverage, "float64", name, (i) => {
+        // representation-exempt: the supplied parent is a world grid; the test values are sampled at its own samples.
         const p = gridPosition(grid, i);
         return value(p.x, p.y);
       }),
@@ -164,23 +250,19 @@ export function regionalFixture(
     seed: 73,
     domains: ["physical", "magic", "built"],
   };
-  return { source, input, grid, state: createRegionalState(source, input) };
+  return { source, input, grid, state: regionalWorkingState(source, input) };
 }
 /** Directly supplied present conditions; tests choose the real process they exercise. */
 export function regionalEnvironment(refinementLevel = 1) {
-  const f = regionalFixture(() => 100, 20000, refinementLevel);
-  for (const [name, unit, value] of [
-    ["water", "category", 0],
-    ["waterDepth", "metre", 0],
-    ["slope", "ratio", 0],
-    ["sediment", "metre", 0],
-    ["catchmentArea", "square-metre", 1e7],
-    ["riverOrder", "category", 0],
-    ["fracture", "ratio", 0.2],
-    ["ice", "ratio", 0],
-    ["naturalSurface", "category", 28],
-    ["finalSurface", "category", 28],
-  ] as const)
-    channel(f.state, name, unit, value);
+  const f = regionalFixture(() => 100, 20000, refinementLevel),
+    map = f.state.physical.map;
+  map.WaterKindCodes.fill(0);
+  map.WaterDepths.fill(0);
+  map.Slope.fill(0);
+  map.SedimentThickness.fill(0);
+  map.CatchmentArea.fill(1e7);
+  map.RiverOrders.fill(0);
+  map.FractureConductance.fill(200);
+  map.IceThickness.fill(0);
   return f;
 }

@@ -1,31 +1,26 @@
-import { gridPosition, KeyedHeap } from "@atlas/domain";
+import { KeyedHeap } from "@atlas/domain";
 import { fractalNoise } from "../canonry/noise";
 import { capturedSinks, connectedSea, smoothedBase } from "./base";
+import { influenceCosts } from "./causes/registry";
 import { grainAt } from "./character";
-import { courseIndex } from "./courses";
-import { edgeRing } from "./evidence";
-import { materialBands, materialResistance } from "./material";
 import {
-  clamp,
-  gridNeighbors,
-  onFrameEdge,
-  spacing,
-  type NetworkWork,
-  type RegionalState,
-} from "./state";
+  distance,
+  frameEdge,
+  isContent,
+  neighborhood,
+  neighborhoodCapacity,
+  neighborsOf,
+  positionOf,
+  regionalSpan,
+  stepVector,
+} from "./lattice";
+import { materialBands, materialResistance } from "./material";
+import { clamp, type NetworkWork, type RegionalState } from "./state";
 
 /** Cost per metre of flowing uphill on the captured base, in metres of travel. */
 const climbCost = 25;
 /** Extra cost of a step across the grain at full coherence; along-strike steps are free. */
 const grainAnisotropy = 2.5;
-/**
- * A captured course is a valley at the parent's scale, not a one-cell trench: its ground is
- * cheaper over a share of the parent span either side, most on the line, so the developed
- * channel wanders within that valley. The parent's channel raster is a weaker corridor.
- */
-const courseCorridor = 0.15,
-  courseReachShare = 0.3,
-  rasterCorridor = 0.5;
 /** Cost near a known summit or cone, so channels run around it and it stands on a divide. */
 const summitRepulsion = 12;
 /**
@@ -38,8 +33,6 @@ const steepRoughness = 0.5,
   flatGradient = 0.01,
   roughnessCells = 20,
   roughnessOctaves = 4;
-/** A river seat draws a channel to itself: the ground around it is cheaper to run through. */
-const seatCorridor = 0.5;
 /**
  * Capture: a channel that has gathered water is easier ground for more water, so its
  * neighbours' routes bend into it. The passes after the first re-route the country through
@@ -52,29 +45,29 @@ const capturePasses = 2,
 /** Reference-runoff samples a mapped channel drains, in this map's own samples. */
 export const channelCells = 128;
 export const referenceRunoff = 0.4;
-const secondsPerYear = 365.25 * 24 * 3600;
+export const secondsPerYear = 365.25 * 24 * 3600;
 
 /** Discharge of one interior sample at reference runoff, in m³/s. */
 export function referenceDischarge(state: RegionalState) {
-  const [dx, dy] = spacing(state.surface);
-  return (referenceRunoff * dx * dy) / secondsPerYear;
+  return (referenceRunoff * regionalSpan(state) ** 2) / secondsPerYear;
 }
 
 /**
  * Grow the drainage network once (spec 7.3): a geodesic tree over the land, rooted at the
- * established waters (the connected sea, open frame edges, captured lakes and the parent's
- * closed basins), descending a cost field built from the captured base, the material bands
- * along the grain, the captured courses and the known summits, then re-routed through its
- * own channels. Where the network branches, joins, runs along strike or breaks through a
- * band is a consequence of those terms; no random geography is drawn.
+ * established waters (the connected sea, the valleys that leave the frame, captured lakes and
+ * the parent's closed basins), descending a cost field built from the captured base, the
+ * material bands along the grain, the captured courses and the known summits, then re-routed
+ * through its own channels. Where the network branches, joins, runs along strike or breaks
+ * through a band is a consequence of those terms; no random geography is drawn. Heights are
+ * metres above the present sea level.
  */
 export function growNetwork(state: RegionalState): NetworkWork {
-  const g = state.surface,
-    n = g.active.length,
-    datum = g.channels.seaLevel?.get(0) ?? 0,
-    evidence = state.evidence!,
+  const map = state.physical.map,
+    n = map.mesh.count,
+    datum = map.EffectiveSeaLevel / 1024,
+    evidence = state.regional.evidence!,
     base = smoothedBase(state, datum),
-    sea = connectedSea(state, base, datum),
+    sea = connectedSea(state, base),
     lake = new Int32Array(n).fill(-1);
   evidence.lakes.forEach(({ cells }, k) => {
     for (const i of cells) if (!sea[i]) lake[i] = k;
@@ -88,14 +81,14 @@ export function growNetwork(state: RegionalState): NetworkWork {
     flow: new Float64Array(n),
     inflow: new Float64Array(n),
     channel: new Uint8Array(n),
-    level: new Float64Array(n).fill(datum),
+    level: new Float64Array(n),
     sea,
     base,
     lake,
     sink: capturedSinks(state, base, sea, lake),
   };
   for (const entry of evidence.entries) network.inflow[entry.cell] = entry.discharge;
-  const root = networkRoots(state, network, datum),
+  const root = networkRoots(state, network),
     ground = cellCosts(state, sea, base),
     cost = new Float64Array(ground),
     gathering = channelCells * referenceDischarge(state) * captureShare;
@@ -111,36 +104,41 @@ export function growNetwork(state: RegionalState): NetworkWork {
     route(state, network, cost, root);
     gatherFlow(state, network);
   }
-  const { receiver, level } = network;
-  for (let i = 0; i < n; i++) if (receiver[i] >= 0) level[i] = level[receiver[i]];
-  state.network = network;
+  // Every cell takes its root's level, receivers first (the order the tree was grown in).
+  const { receiver, order, level } = network;
+  for (let k = 0; k < network.count; k++) {
+    const i = order[k];
+    if (receiver[i] >= 0) level[i] = level[receiver[i]];
+  }
+  state.regional.network = network;
   return network;
 }
 
 /**
  * Roots: every land cell beside the sea or at an exit across the frame drains out; lake cells
- * receive their tributaries at the lake's level; a captured sink's floor receives its own.
+ * receive their tributaries at the lake's level; a captured sink's floor receives its own. An
+ * exit leaves at the base there, which the relief holds to along the whole frame edge.
  */
-function networkRoots(state: RegionalState, network: NetworkWork, datum: number) {
-  const g = state.surface,
-    n = g.active.length,
+function networkRoots(state: RegionalState, network: NetworkWork) {
+  const mesh = state.physical.map.mesh,
+    n = mesh.count,
     { sea, base, lake, sink, level } = network,
-    evidence = state.evidence!,
+    evidence = state.regional.evidence!,
     root = new Uint8Array(n),
-    around = new Int32Array(8),
+    around = new Int32Array(mesh.stride),
     guarded = entryProtection(state, evidence.entries),
-    exits = edgeExits(state, base),
+    exits = edgeExits(state),
     shore = (i: number) => {
-      const m = gridNeighbors(g.width, g.height, i, around);
+      const m = neighborsOf(mesh, i, around);
       for (let k = 0; k < m; k++) if (sea[around[k]]) return true;
       return false;
     };
   for (let i = 0; i < n; i++) {
-    if (sea[i]) continue;
+    if (sea[i] || !isContent(mesh, i)) continue;
     if (lake[i] >= 0) level[i] = evidence.lakes[lake[i]].level;
     else if (sink[i]) level[i] = base[i];
-    else if (onFrameEdge(g, i) && !guarded[i] && exits[i]) level[i] = Math.max(base[i], datum + 1);
-    else if (shore(i)) level[i] = datum;
+    else if (exits[i] && !guarded[i]) level[i] = Math.max(base[i], 1);
+    else if (shore(i)) level[i] = 0;
     else continue;
     root[i] = 1;
   }
@@ -149,15 +147,13 @@ function networkRoots(state: RegionalState, network: NetworkWork, datum: number)
 
 /** The geodesic tree from the roots over the cost field, written into the network. */
 function route(state: RegionalState, network: NetworkWork, cost: Float64Array, root: Uint8Array) {
-  const g = state.surface,
-    n = g.active.length,
-    [dx, dy] = spacing(g),
-    { receiver, order, sea, base, level } = network,
+  const mesh = state.physical.map.mesh,
+    n = mesh.count,
+    { receiver, order, sea, base } = network,
     travel = network.cost,
     heap = new KeyedHeap(),
-    around = new Int32Array(8),
-    character = state.character!,
-    datum = g.channels.seaLevel?.get(0) ?? 0;
+    around = new Int32Array(neighborhoodCapacity(mesh)),
+    character = state.regional.character!;
   travel.fill(Infinity);
   receiver.fill(-1);
   let count = 0;
@@ -166,24 +162,24 @@ function route(state: RegionalState, network: NetworkWork, cost: Float64Array, r
   // instead of every edge cell draining its own strip.
   for (let i = 0; i < n; i++)
     if (root[i]) {
-      travel[i] = climbCost * Math.max(0, level[i] - datum);
+      travel[i] = climbCost * Math.max(0, network.level[i]);
       heap.push(i, travel[i]);
     }
-  const blocked = (i: number, j: number) => sea[j] || root[j] || travel[j] <= travel[i];
+  const blocked = (i: number, j: number) =>
+    sea[j] || root[j] || !isContent(mesh, j) || travel[j] <= travel[i];
   while (heap.size) {
     const i = heap.pop();
     if (heap.poppedKey() !== travel[i]) continue;
     order[count++] = i;
-    const m = gridNeighbors(g.width, g.height, i, around),
+    const m = neighborhood(mesh, i, around),
       { theta, coherence } = grainAt(character, i);
     for (let k = 0; k < m; k++) {
       const j = around[k];
       if (blocked(i, j)) continue;
-      const ox = (j % g.width) - (i % g.width),
-        oy = Math.floor(j / g.width) - Math.floor(i / g.width),
-        length = Math.hypot(ox * dx, oy * dy),
+      const { dx, dy } = stepVector(mesh, i, j),
+        length = Math.hypot(dx, dy),
         // The component of the step across the grain axis.
-        across = Math.abs(-ox * dx * Math.sin(theta) + oy * dy * Math.cos(theta)) / length,
+        across = Math.abs(-dx * Math.sin(theta) + dy * Math.cos(theta)) / length,
         anisotropy = 1 + grainAnisotropy * coherence * across * across,
         // Water runs from j to i: it must not climb the captured base on the way.
         climb = Math.max(0, base[i] - base[j]),
@@ -204,19 +200,18 @@ function route(state: RegionalState, network: NetworkWork, cost: Float64Array, r
  * similar stream density and dry country needs a larger catchment for the same flow.
  */
 export function gatherFlow(state: RegionalState, network: NetworkWork) {
-  const g = state.surface,
-    c = g.channels,
+  const map = state.physical.map,
+    mesh = map.mesh,
     { receiver, order, count, area, flow, inflow, channel } = network,
     reference = referenceDischarge(state),
-    [dx, dy] = spacing(g),
-    cellArea = dx * dy;
+    cellArea = regionalSpan(state) ** 2;
   area.fill(0);
   flow.fill(0);
   for (let k = 0; k < count; k++) {
     const i = order[k],
-      runoff = Math.max(0, c.runoff?.get(i) ?? referenceRunoff);
-    area[i] = g.measures.get(i) + (inflow[i] / reference) * cellArea;
-    flow[i] = (runoff * g.measures.get(i)) / secondsPerYear + inflow[i];
+      runoff = Math.max(0, map.Runoff.get(i) / 1000);
+    area[i] = mesh.contentArea(i) + (inflow[i] / reference) * cellArea;
+    flow[i] = (runoff * mesh.contentArea(i)) / secondsPerYear + inflow[i];
   }
   for (let k = count - 1; k >= 0; k--) {
     const i = order[k],
@@ -235,7 +230,7 @@ export function gatherFlow(state: RegionalState, network: NetworkWork) {
 
 /** Mark the tree path from a cell down to the nearest channel as channel: the stream it stands on. */
 export function promoteChannel(state: RegionalState, cell: number) {
-  const network = state.network!,
+  const network = state.regional.network!,
     reference = referenceDischarge(state);
   for (let i = cell; i >= 0 && !network.channel[i]; i = network.receiver[i]) {
     if (network.flow[i] < channelCells * reference * 0.2) return false;
@@ -246,162 +241,132 @@ export function promoteChannel(state: RegionalState, cell: number) {
 
 /**
  * The cost of running water through a cell: material resistance (bands, rock, fractures),
- * repulsion around known summits and cones, the cheapness of captured courses and the
- * parent's channel raster, the pull of a river seat, and the heterogeneity that decides
- * between routes the organizing terms leave equal.
+ * the heterogeneity that decides between routes the organizing terms leave equal, repulsion
+ * around the character's cones, and the established features' influence (summit massifs,
+ * course corridors, river seats) through the cause registry.
  */
 function cellCosts(state: RegionalState, sea: Uint8Array, base: Float64Array) {
-  const g = state.surface,
-    n = g.active.length,
-    [dx, dy] = spacing(g),
-    cell = Math.min(dx, dy),
-    evidence = state.evidence!,
+  const map = state.physical.map,
+    mesh = map.mesh,
+    n = mesh.count,
+    span = regionalSpan(state),
     bands = materialBands(state),
-    course = courseWeight(state, courseIndex(state, evidence.courses)),
-    raster = g.channels.riverOrder,
-    cost = new Float64Array(n);
+    cost = new Float64Array(n),
+    flat = flatness(state, base);
   for (let i = 0; i < n; i++) {
     if (sea[i]) continue;
-    const p = gridPosition(g, i),
-      amplitude =
-        steepRoughness + (flatRoughness - steepRoughness) * flatness(state, base, i, dx, dy),
+    const p = positionOf(mesh, i),
+      amplitude = steepRoughness + (flatRoughness - steepRoughness) * flat[i],
       roughness = fractalNoise(
         p.x,
         p.y,
-        state.input.seed ^ 0x3a27,
-        cell * roughnessCells,
+        state.regional.input.seed ^ 0x3a27,
+        span * roughnessCells,
         roughnessOctaves
-      ),
-      corridor = Math.min(
-        1 - (1 - courseCorridor) * course[i],
-        (raster?.get(i) ?? 0) > 0 ? rasterCorridor : 1
       );
-    cost[i] = materialResistance(state, bands, i) * Math.exp(amplitude * roughness) * corridor;
+    cost[i] = materialResistance(state, bands, i) * Math.exp(amplitude * roughness);
   }
-  // A summit's massif is as wide as its prominence suggests; a cone's as its footprint.
-  for (const summit of evidence.summits)
-    repel(state, cost, summit.cell, clamp(summit.prominence / 1000, 0.25, 1) * state.parentSpan);
-  for (const cone of state.character!.cones) repel(state, cost, cone.cell, cone.radius);
-  for (const seat of evidence.seats)
-    if (seat.situation === "river") scaleAround(state, cost, seat.cell, 2, seatCorridor);
+  influenceCosts(state, cost);
+  for (const cone of state.regional.character!.cones) repel(state, cost, cone.cell, cone.radius);
   return cost;
 }
 
-/** How flat the captured base is at a cell: one on a plain, zero on a slope. */
-function flatness(state: RegionalState, base: Float64Array, i: number, dx: number, dy: number) {
-  const g = state.surface,
-    x = i % g.width,
-    y = Math.floor(i / g.width),
-    gx =
-      (base[Math.min(g.width - 1, x + 1) + y * g.width] - base[Math.max(0, x - 1) + y * g.width]) /
-      (2 * dx),
-    gy =
-      (base[x + Math.min(g.height - 1, y + 1) * g.width] - base[x + Math.max(0, y - 1) * g.width]) /
-      (2 * dy);
-  return clamp(1 - Math.hypot(gx, gy) / flatGradient);
+/** How flat the captured base is at each cell: one on a plain, zero on a slope. */
+function flatness(state: RegionalState, base: Float64Array) {
+  const mesh = state.physical.map.mesh,
+    around = new Int32Array(mesh.stride),
+    flat = new Float64Array(mesh.count);
+  for (let i = 0; i < mesh.count; i++) {
+    const m = neighborsOf(mesh, i, around);
+    let steepest = 0;
+    for (let k = 0; k < m; k++) {
+      const j = around[k];
+      steepest = Math.max(steepest, Math.abs(base[j] - base[i]) / distance(mesh, i, j));
+    }
+    flat[i] = clamp(1 - steepest / flatGradient);
+  }
+  return flat;
+}
+
+/** Cells within `reach` of a centre, by breadth-first walk, with their distances. */
+function within(state: RegionalState, center: number, reach: number) {
+  const mesh = state.physical.map.mesh,
+    around = new Int32Array(mesh.stride),
+    cells = [center],
+    distances = [0],
+    seen = new Uint8Array(mesh.count);
+  seen[center] = 1;
+  for (let head = 0; head < cells.length; head++) {
+    const m = neighborsOf(mesh, cells[head], around);
+    for (let k = 0; k < m; k++) {
+      const j = around[k];
+      if (seen[j]) continue;
+      const d = distance(mesh, center, j);
+      if (d > reach) continue;
+      seen[j] = 1;
+      cells.push(j);
+      distances.push(d);
+    }
+  }
+  return { cells, distances };
 }
 
 /** Dear ground around a summit or cone, dearest on the cell itself. */
-function repel(state: RegionalState, cost: Float64Array, center: number, reach: number) {
-  const g = state.surface,
-    [dx, dy] = spacing(g),
-    cx = center % g.width,
-    cy = Math.floor(center / g.width),
-    rx = Math.ceil((reach * 2.5) / dx),
-    ry = Math.ceil((reach * 2.5) / dy);
-  for (let y = Math.max(0, cy - ry); y <= Math.min(g.height - 1, cy + ry); y++)
-    for (let x = Math.max(0, cx - rx); x <= Math.min(g.width - 1, cx + rx); x++) {
-      const i = y * g.width + x,
-        d = Math.hypot((x - cx) * dx, (y - cy) * dy) / reach;
-      cost[i] *= 1 + summitRepulsion * Math.exp(-d * d);
-    }
+export function repel(state: RegionalState, cost: Float64Array, center: number, reach: number) {
+  const { cells, distances } = within(state, center, reach * 2.5);
+  for (const [k, i] of cells.entries()) {
+    const d = distances[k] / reach;
+    cost[i] *= 1 + summitRepulsion * Math.exp(-d * d);
+  }
   cost[center] *= 50;
 }
 
-function scaleAround(
+/** Scale the cost of every cell within `reach` of a centre. */
+export function scaleAround(
   state: RegionalState,
   cost: Float64Array,
   center: number,
-  r: number,
+  reach: number,
   by: number
 ) {
-  const g = state.surface,
-    cx = center % g.width,
-    cy = Math.floor(center / g.width);
-  for (let y = Math.max(0, cy - r); y <= Math.min(g.height - 1, cy + r); y++)
-    for (let x = Math.max(0, cx - r); x <= Math.min(g.width - 1, cx + r); x++)
-      cost[y * g.width + x] *= by;
-}
-
-/** 1 on a captured course, falling off over a share of the parent span beside it. */
-function courseWeight(state: RegionalState, owner: Int32Array) {
-  const g = state.surface,
-    n = owner.length,
-    [dx, dy] = spacing(g),
-    reach = Math.max(2, Math.round((state.parentSpan * courseReachShare) / Math.min(dx, dy))),
-    steps = new Int32Array(n).fill(-1),
-    queue = new Int32Array(n),
-    weight = new Float64Array(n),
-    around = new Int32Array(8);
-  let write = 0;
-  for (let i = 0; i < n; i++)
-    if (owner[i] >= 0) {
-      steps[i] = 0;
-      queue[write++] = i;
-    }
-  for (let read = 0; read < write; read++) {
-    const i = queue[read],
-      d = steps[i] / reach;
-    weight[i] = Math.exp(-2 * d * d);
-    if (steps[i] >= reach) continue;
-    const m = gridNeighbors(g.width, g.height, i, around);
-    for (let k = 0; k < m; k++) {
-      const j = around[k];
-      if (steps[j] >= 0) continue;
-      steps[j] = steps[i] + 1;
-      queue[write++] = j;
-    }
-  }
-  return weight;
+  for (const i of within(state, center, reach).cells) cost[i] *= by;
 }
 
 /**
- * Water leaves the frame through the valleys that cross it, not through every edge cell:
- * an exit is an edge cell that is the lowest of the captured base within a parent span
- * along the edge, or that the parent's channel raster leaves through.
+ * Water leaves the frame wherever the exterior is no higher: an exit is a frame-edge cell
+ * that the parent's channel raster leaves through, or that has exterior ground no higher
+ * than itself to run on to. Every exit is a root at the parent's own ground there, so the
+ * derived relief meets the exterior along the whole edge; a valley crossing the edge still
+ * gathers the country around it, because its exit is the lowest root and the cost of
+ * climbing the captured base keeps the flanks' water in it.
  */
-function edgeExits(state: RegionalState, base: Float64Array) {
-  const g = state.surface,
-    [dx, dy] = spacing(g),
-    ring = edgeRing(g.width, g.height),
-    window = Math.max(2, Math.round(state.parentSpan / Math.min(dx, dy))),
-    exits = new Uint8Array(g.active.length),
-    lowestAt = (k: number) => {
-      const i = ring[k];
-      for (let o = -window; o <= window; o++) {
-        if (!o) continue;
-        const j = ring[(k + o + ring.length) % ring.length];
-        if (base[j] < base[i] || (base[j] === base[i] && j < i)) return false;
-      }
-      return true;
-    };
-  for (let k = 0; k < ring.length; k++) {
-    const i = ring[k];
-    if ((g.channels.riverOrder?.get(i) ?? 0) > 0 || lowestAt(k)) exits[i] = 1;
-  }
+function edgeExits(state: RegionalState) {
+  const map = state.physical.map,
+    mesh = map.mesh,
+    n = mesh.count,
+    exits = new Uint8Array(n),
+    inherited = state.regional.inheritedHeight,
+    around = new Int32Array(mesh.stride);
+  const descends = (i: number) => {
+    const m = neighborsOf(mesh, i, around);
+    let exterior = false;
+    for (let k = 0; k < m; k++) {
+      const j = around[k];
+      if (isContent(mesh, j)) continue;
+      exterior = true;
+      if (inherited.get(j) <= inherited.get(i)) return true;
+    }
+    return !exterior && mesh.boundary(i);
+  };
+  for (let i = 0; i < n; i++)
+    if (frameEdge(mesh, i) && (map.RiverOrders.get(i) > 0 || descends(i))) exits[i] = 1;
   return exits;
 }
 
 /** Edge cells beside a river entry do not drain the entering river straight back out. */
 function entryProtection(state: RegionalState, entries: { cell: number }[]) {
-  const g = state.surface,
-    guarded = new Uint8Array(g.active.length);
-  for (const { cell } of entries) {
-    const cx = cell % g.width,
-      cy = Math.floor(cell / g.width);
-    for (let y = Math.max(0, cy - 2); y <= Math.min(g.height - 1, cy + 2); y++)
-      for (let x = Math.max(0, cx - 2); x <= Math.min(g.width - 1, cx + 2); x++)
-        guarded[y * g.width + x] = 1;
-  }
+  const guarded = new Uint8Array(state.physical.map.mesh.count),
+    reach = 2 * regionalSpan(state);
+  for (const { cell } of entries) for (const i of within(state, cell, reach).cells) guarded[i] = 1;
   return guarded;
 }

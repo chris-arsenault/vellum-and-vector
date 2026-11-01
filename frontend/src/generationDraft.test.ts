@@ -137,15 +137,27 @@ it("prepares a region using its actual area identity and complete source snapsho
     settings: draft.recipe.settings,
   });
   const parent = source.world.areas[source.scope.areaId];
+  // A region is an independent map; the draft is prepared through the regional preparation.
   const child = {
     ...structuredClone(parent),
     id: crypto.randomUUID(),
     parentId: parent.id,
     profile: "region" as const,
     footprint: rectangle([1000, 1000, 100_000, 100_000]),
+    map: { sourceAreaId: parent.id, sourceRevision: 1, refinementLevel: 1 },
   };
   source.world.areas[child.id] = child;
   source.numerical.retained = createGrid("retained", source.scope, 2, 2);
+  source.world.fields.push({
+    id: "retained",
+    areaId: child.id,
+    layerId: "elevation",
+    algorithm: "supplied",
+    input: true,
+    source: { kind: "operation", id: "supplied" },
+    samples: 4,
+    channels: [],
+  });
   const prepared = prepareDraft(normalizeGenerationDraft(draft, source), source, child.id);
   expect(prepared.source.world.id).toBe(source.world.id);
   expect(prepared.source.scope.areaId).toBe(child.id);

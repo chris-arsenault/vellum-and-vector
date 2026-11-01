@@ -1,55 +1,57 @@
-import type { Band } from "@atlas/domain";
+import type { PhysicalBufferName, PhysicalField } from "../canonry/field";
 
 /**
- * Tracked physical contributions. A process that changes a shared medium (magic lowering a
- * coast, opening fractures, deepening soil) declares the total it wants applied; the
- * tracker writes only the difference from what it applied before. Re-evaluating a round
- * therefore updates the contribution instead of adding it again (spec 7.3).
+ * Tracked physical contributions to the field's bands, in their native units. A process that
+ * changes a shared medium (magic lowering a coast, opening fractures, deepening soil) declares
+ * the total it wants applied; the tracker writes only the difference from what it applied
+ * before. Re-evaluating a round therefore updates the contribution instead of adding it again
+ * (spec 7.3).
  */
 export class Contributions {
-  private readonly applied = new Map<string, Float64Array>();
-  private readonly desired = new Map<string, Float64Array>();
+  private readonly applied = new Map<PhysicalBufferName, Float64Array>();
+  private readonly desired = new Map<PhysicalBufferName, Float64Array>();
   constructor(private readonly length: number) {}
 
-  /** Begin declaring this evaluation's totals; every channel starts from zero. */
+  /** Begin declaring this evaluation's totals; every band starts from zero. */
   begin() {
     for (const values of this.desired.values()) values.fill(0);
   }
-  /** Declare part of the total change this evaluation wants on `channel` at `i`. */
-  add(channel: string, i: number, amount: number) {
+  /** Declare part of the total change this evaluation wants on `band` at `i`. */
+  add(band: PhysicalBufferName, i: number, amount: number) {
     if (!amount) return;
-    let values = this.desired.get(channel);
+    let values = this.desired.get(band);
     if (!values) {
       values = new Float64Array(this.length);
-      this.desired.set(channel, values);
+      this.desired.set(band, values);
     }
     values[i] += amount;
   }
-  /** The total currently applied to `channel` at `i`. */
-  appliedTo(channel: string, i: number) {
-    return this.applied.get(channel)?.[i] ?? 0;
+  /** The total currently applied to `band` at `i`. */
+  appliedTo(band: PhysicalBufferName, i: number) {
+    return this.applied.get(band)?.[i] ?? 0;
   }
   /**
-   * Write each channel's declared total, replacing what the previous evaluation applied.
-   * Returns, per channel whose applied total changed, the largest change at any cell.
+   * Write each band's declared total, replacing what the previous evaluation applied.
+   * Returns, per band whose applied total changed, the largest change at any cell.
    */
-  commit(channels: Record<string, Band>, floor: Record<string, number> = {}) {
-    const changed = new Map<string, number>();
-    for (const [channel, wanted] of this.desired) {
-      const target = channels[channel];
-      if (!target) continue;
-      let previous = this.applied.get(channel);
+  commit(map: PhysicalField, floor: Partial<Record<PhysicalBufferName, number>> = {}) {
+    const changed = new Map<PhysicalBufferName, number>();
+    for (const [name, wanted] of this.desired) {
+      const target = map[name];
+      let previous = this.applied.get(name);
       if (!previous) {
         previous = new Float64Array(this.length);
-        this.applied.set(channel, previous);
+        this.applied.set(name, previous);
       }
-      const minimum = floor[channel];
+      const minimum = floor[name],
+        integer = target.type === "int32";
       for (let i = 0; i < this.length; i++) {
         const delta = wanted[i] - previous[i];
         if (!delta) continue;
-        changed.set(channel, Math.max(changed.get(channel) ?? 0, Math.abs(delta)));
-        const next = target.get(i) + delta;
-        target.set(i, minimum === undefined ? next : Math.max(minimum, next));
+        changed.set(name, Math.max(changed.get(name) ?? 0, Math.abs(delta)));
+        let next = target.get(i) + delta;
+        if (minimum !== undefined) next = Math.max(minimum, next);
+        target.set(i, integer ? Math.round(next) : next);
         previous[i] = wanted[i];
       }
     }

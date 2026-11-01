@@ -1,20 +1,11 @@
 import {
-  cloneSnapshot,
-  createGrid,
-  fieldInterpolator,
-  gridPosition,
-  putChannel,
-  rectangle,
-  spatial,
-  semanticId,
-  requireThat,
-  adaptivePointLocator,
   canonicalGeometry,
-  canonicalPosition,
   compactGeometryBounds,
+  rectangle,
   regionMapFootprint,
   regionalScale,
   mapRefinementLevel,
+  spatial,
   type DomainSnapshot,
   type BlockCache,
   type Bounds,
@@ -22,8 +13,8 @@ import {
 } from "@atlas/domain";
 import type { Geometry } from "geojson";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
-import { Contributions } from "./media";
-import type { RegionalState } from "./state";
+import { atlasInitialState } from "../atlasInitialState";
+import type { GenerationState } from "../process";
 
 /**
  * The present channels a child map reads from its pinned inputs. Physical history channels
@@ -116,12 +107,21 @@ export function refinementReads(source: DomainSnapshot, areaId: string, physical
     }))
     .filter((field) => field.names.length);
 }
-function sampleSpan(grid: Grid) {
-  if (grid.scope.resolution) return grid.scope.resolution;
+/** A grid's actual sample spacing from its geometry; the declared resolution only where it has none. */
+export function sampleSpan(grid: Grid) {
   const [w, s, e, n] = grid.bounds;
-  return grid.topology
-    ? Math.sqrt(((e - w) * (n - s)) / grid.active.length)
-    : Math.max((e - w) / (grid.width - 1), (n - s) / (grid.height - 1));
+  if (grid.topology) return Math.sqrt(((e - w) * (n - s)) / grid.active.length);
+  if (grid.width > 1 && grid.height > 1)
+    return Math.max((e - w) / (grid.width - 1), (n - s) / (grid.height - 1));
+  return grid.scope.resolution ?? 0;
+}
+/** The pinned parent's sample span: the scale of the captured macro character. */
+export function parentSampleSpan(source: DomainSnapshot, areaId: string, physical: boolean) {
+  const grids = refinementInputFields(source, areaId, physical)
+    .filter((f) => f.channels?.includes("elevation") && source.numerical[f.id])
+    .map((f) => source.numerical[f.id])
+    .sort((a, b) => sampleSpan(b) - sampleSpan(a));
+  return grids.length ? sampleSpan(grids[0]) : (source.scope.resolution ?? 0) * 4;
 }
 
 /** Use the pinned selection, so rerunning a map does not repeatedly expand its frame. */
@@ -180,96 +180,30 @@ export function refinementResolution(
   return { cellSpan, cellArea: cellSpan ** 2, cellAreaKm2: cellSpan ** 2 / 1e6, cells };
 }
 
-/** Sample the pinned present onto this map's working surface. */
-export function createRegionalState(
+/**
+ * The initial generation state of a refinement: the generator's own child surface over this
+ * map's frame at the refinement cell span, with the pinned present channels inherited onto
+ * it. The physical field is built from it by `canonry.initialize`, like any other run.
+ */
+export function regionalInitialState(
   source: DomainSnapshot,
   input: AtlasGenerationInput,
   cache?: BlockCache
-): RegionalState {
-  const domain = cloneSnapshot(source),
-    area = domain.world.areas[input.areaId],
-    { cellSpan } = refinementResolution(source, input),
+): GenerationState {
+  const area = source.world.areas[input.areaId],
     physical = input.domains.includes("physical"),
-    inputs = sampledChannels(source, area.id, physical);
-  const parent = inputs.get("elevation");
-  requireThat(parent, "regional_parent", "Capture terrain on this map before refining it.");
-  const { bounds, footprint } = refinementFrame(source, area.id, physical);
-  const current = currentLayout(source, parent, physical, cellSpan);
-  const surface = createGrid(
-    semanticId(domain.world.id, "regional-surface", `${area.id}:${input.seed}`),
-    { ...source.scope, areaId: area.id, footprint: rectangle(bounds), resolution: cellSpan },
-    current?.width ?? Math.ceil((bounds[2] - bounds[0]) / cellSpan) + 1,
-    current?.height ?? Math.ceil((bounds[3] - bounds[1]) / cellSpan) + 1,
-    bounds,
-    cache
-  );
-  surface.scope.footprint = footprint;
-  area.footprint = footprint;
-  domain.scope = { ...surface.scope };
-  const worldBounds =
-    domain.world.reference.boundaryMode === "cylinder"
-      ? spatial.bounds(domain.world.reference.domain)
-      : undefined;
-  if (worldBounds) surface.periodicWidth = worldBounds[2] - worldBounds[0];
-  const locate = adaptivePointLocator(),
-    evaluators = [...inputs].map(([name, grid]) => {
-      const values = surface.coverage.scratch("float64", name, surface.active.length);
-      putChannel(surface, name, grid.units[name], values, grid.quantities?.[name]);
-      const at = fieldInterpolator(grid, name, grid.units[name] === "category", locate);
-      const measure =
-        grid.quantities?.[name] === "extensive"
-          ? fieldInterpolator(
-              { ...grid, channels: { measure: grid.measures }, units: { measure: "square-metre" } },
-              "measure",
-              true,
-              locate
-            )
-          : null;
-      return { at, values, measure };
-    });
-  // All channels share each position lookup. No intermediate physical mesh or second projection.
-  for (let i = 0; i < surface.active.length; i++) {
-    const p = canonicalPosition(domain.world.reference, gridPosition(surface, i), worldBounds);
-    for (const { at, values, measure } of evaluators)
-      values.set(i, at(p) * (measure ? surface.measures.get(i) / Math.max(1, measure(p)) : 1));
-  }
-  return {
-    domain,
-    surface,
-    input: {
-      areaId: input.areaId,
-      quality: input.quality,
-      seed: input.seed,
-      domains: input.domains,
-    },
-    parentSpan: sampleSpan(parent),
-    inheritedHeight: surface.coverage.copyBand(surface.channels.elevation),
-    natural: {},
-    contributions: new Contributions(surface.active.length),
-    round: 0,
-    proposed: [],
-  };
-}
-
-function sampledChannels(source: DomainSnapshot, areaId: string, physical: boolean) {
-  const fields = refinementInputFields(source, areaId, physical)
-      .filter((f) => source.numerical[f.id])
-      .sort(
-        (a, b) =>
-          Number(!!b.input) - Number(!!a.input) ||
-          sampleSpan(source.numerical[b.id]) - sampleSpan(source.numerical[a.id])
-      )
-      .map((f) => source.numerical[f.id]),
-    inputs = new Map<string, Grid>();
-  for (const grid of fields)
-    for (const name of Object.keys(grid.channels))
-      if (refinementChannel(name)) inputs.set(name, grid);
-  return inputs;
-}
-/** A society-only run keeps this map's present surface layout instead of resampling it. */
-function currentLayout(source: DomainSnapshot, parent: Grid, physical: boolean, span: number) {
-  if (physical || parent.topology || span < sampleSpan(parent)) return null;
-  return source.world.fields.some((f) => !f.input && source.numerical[f.id] === parent)
-    ? parent
-    : null;
+    { cellSpan } = refinementResolution(source, input),
+    { footprint } = refinementFrame(source, area.id, physical),
+    framed: DomainSnapshot = {
+      ...source,
+      world: {
+        ...source.world,
+        areas: { ...source.world.areas, [area.id]: { ...area, footprint } },
+      },
+    };
+  return atlasInitialState(framed, input, cache, {
+    cellSpan,
+    channels: refinementChannel,
+    surfaceSpan: Math.max(cellSpan, parentSampleSpan(source, area.id, physical)),
+  });
 }

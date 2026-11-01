@@ -9,6 +9,7 @@ import { fieldPosition, seamNeighbors } from "./gridPeriodicity";
 import {
   sampleAdaptivePoint,
   adaptivePointSampler,
+  prepareAdaptivePatches,
   type AdaptivePointLocator,
 } from "./adaptivePoint";
 import type { Band } from "./lattice/band";
@@ -345,47 +346,26 @@ function discreteChannel(grid: Grid, channel: string, discrete: boolean) {
   );
 }
 
-export function resample(
-  source: GridSurface,
-  target: Grid,
-  channel: string,
-  discrete = false
-): void {
-  requireThat(
-    source.scope.crsId === target.scope.crsId && source.scope.spaceId === target.scope.spaceId,
-    "field_reference_mismatch",
-    "Resampling requires a shared CRS and located space."
-  );
-  requireThat(
-    spatial.covers(source.scope.footprint, target.scope.footprint),
-    "missing_parent_field",
-    "Parent coverage must contain the refined field."
-  );
-  const valueAt = fieldInterpolator(source, channel, discrete);
-  putChannel(
-    target,
-    channel,
-    source.units[channel],
-    generateChannel(target, channel, (i) => valueAt(gridPosition(target, i))),
-    source.quantities?.[channel]
-  );
-}
-
-/** Prepared base polynomial, including numerical-halo extension; public reads use gridSampler. */
+/**
+ * Prepared base polynomial, including numerical-halo extension; public reads use gridSampler.
+ * A viewport reader keeps the default patch caches; a sweep over the grid passes a budget
+ * with room for every cell (`sweepBudget`).
+ */
 export function fieldInterpolator(
   grid: GridSurface,
   channel: string,
   discrete = false,
-  locate?: AdaptivePointLocator
+  locate?: AdaptivePointLocator,
+  budget?: number
 ): (p: Position) => number {
   const overlays = [...(grid.overlays ?? [])]
     .reverse()
     .filter((overlay) => overlay.channels.includes(channel))
     .map((overlay) => ({
       covered: spatial.pointCoverage(overlay.grid.scope.footprint),
-      at: fieldInterpolator(overlay.grid, channel, discrete, locate),
+      at: fieldInterpolator(overlay.grid, channel, discrete, locate, budget),
     }));
-  const base = baseInterpolator(grid, channel, discrete, locate);
+  const base = baseInterpolator(grid, channel, discrete, locate, budget);
   return (p: Position) => {
     const overlay = overlays.find((candidate) => candidate.covered(p));
     return overlay ? overlay.at(p) : base(fieldPosition(grid, p));
@@ -395,13 +375,21 @@ function baseInterpolator(
   grid: Grid,
   channel: string,
   discrete: boolean,
-  locate?: AdaptivePointLocator
+  locate?: AdaptivePointLocator,
+  budget?: number
 ) {
   if (!grid.topology) return (p: Position) => rawSample(grid, channel, p, discrete);
   const t = grid.topology,
     values = grid.channels[channel];
   const categorical = discreteChannel(grid, channel, discrete);
-  const surface = categorical ? null : adaptivePointSampler(t, values, locate);
+  const surface = categorical
+    ? null
+    : adaptivePointSampler(
+        t,
+        values,
+        locate,
+        budget === undefined ? undefined : prepareAdaptivePatches(t, values, budget)
+      );
   return (p: Position) => {
     const x = Math.max(t.bounds[0], Math.min(t.bounds[2], p.x)),
       y = Math.max(t.bounds[1], Math.min(t.bounds[3], p.y));

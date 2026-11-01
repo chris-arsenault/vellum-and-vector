@@ -1,7 +1,8 @@
 import { expect, it } from "vitest";
 import type { Geometry } from "geojson";
 import { fromWorld, point, rectangle, spatial, toWorld, transformGeometry } from "./spatial";
-import { createGrid, gridPosition, neighbors, putChannel, resample, sample } from "./grids";
+import { createGrid, gridPosition, neighbors, putChannel, sample } from "./grids";
+import { resample } from "./gridResampling";
 import { generateBand } from "./lattice/bandValues";
 import type { SpatialScope } from "./schemas";
 

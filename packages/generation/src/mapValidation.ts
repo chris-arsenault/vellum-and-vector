@@ -40,6 +40,8 @@ export function validateWorkingMap(state: GenerationState, original: DomainSnaps
   validateSurface(state, original);
 }
 
+/** Surfaces whose structure the schema has already checked; a replaced surface is checked anew. */
+const schemaChecked = new WeakSet<object>();
 function validateScope(state: GenerationState, original: DomainSnapshot) {
   const scope = original.scope;
   requireThat(
@@ -49,7 +51,11 @@ function validateScope(state: GenerationState, original: DomainSnapshot) {
     "generation_context",
     "Generation retains the pinned world, located context and spatial reference."
   );
-  gridSchema.parse(state.surface);
+  // The schema walk over a large surface is slow; the same surface object is checked once.
+  if (!schemaChecked.has(state.surface)) {
+    gridSchema.parse(state.surface);
+    schemaChecked.add(state.surface);
+  }
   requireThat(
     state.surface.scope.worldId === scope.worldId &&
       state.surface.scope.spaceId === scope.spaceId &&

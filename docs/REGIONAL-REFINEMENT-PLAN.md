@@ -965,6 +965,43 @@ Decisions made while expanding (plan adaptation, with reason):
   and `regionalSociety.ts` are dead for every current map and are deleted. If a non-map child
   surfaces in a saved world the conversion runs first, so no behaviour is lost.
 
+Architecture settled while reading for step 1 (recorded before any edit):
+
+- The world already has a complete child path on the field: `atlasInitialState` builds an
+  adaptive child surface and inherits channels into it; `canonry.initialize`
+  (`createAtlasWorkspace` → `createChildMesh`, `inheritNumerical`) builds the field;
+  `canonry.project` (`projectNative`) writes the surface; `canonry.features`
+  (`extractNativeGeography`) publishes oceans, lakes, rivers with reaches, peaks, ranges,
+  valleys, landforms, magic places, biomes and landmarks from the field. The regional
+  namespace of `b4d8163` duplicated all of it on a square grid because `isRegionalRefinement`
+  short-circuits map areas before the world path.
+- **Regional refinement is therefore a configured process sequence run by the `MapRunner`**,
+  like every other generation: `canonry.initialize`, `refinement.begin` (regional work record,
+  regional profile values such as relief radius and peak prominence set on the workspace
+  profile), `refinement.context`, `refinement.round-N/*`, `refinement.refresh`,
+  `canonry.project`, `refinement.clear-products`, `canonry.features`, `refinement.identity`
+  (captured courses, summits and seats carry their identity onto the developed features; the
+  coarse captured lines leave), `refinement.places`, `refinement.descendant-context`. The
+  registry is `atlasRegistry` plus the regional processes; `refineRegionalMap` is
+  `atlasInitialState` (with the refinement cell span and the present-channel allowlist) and a
+  runner call, then the same stripping of `physical` and `society` that `generateAtlas` does.
+  Products, publications, progress, cancellation, the block cache's per-process lifetime and
+  the browser worker path are the world's.
+- Regional processes run in mesh space (`PhysicalField` bands on the child lattice, halo
+  cells carrying the inherited exterior); the surface is only read for channels the field has
+  no band for (`populationDensity`) and written by projection. Working structures are
+  retained bands or typed arrays of mesh length held in `state.regional`.
+- The legacy world child path is dead for every current map and goes: `regionalPhysicalSequence`
+  and its `regional.relief/climate/water/magic` processes (`canonry/regionalPhysical.ts`,
+  `regionalClimate.ts`, `regionalCorridors.ts`, `regionalMagic.ts`), the child branch of
+  `societySequence`, `regionalSociety.ts`'s `realizeRegionalPlaces`, and the 17 `inherited`
+  guards. `generateAtlas` refuses a child area that is not a map; `captureExistingMaps`
+  converts legacy ones on open.
+- The regional extraction files (`extraction/landforms.ts`, `water.ts`, `habitats.ts`,
+  `magic.ts`) go; their regional thresholds become profile values on the regional workspace
+  and their one regional behaviour with no world counterpart (identity carry) is
+  `refinement.identity`.
+
 Steps (each with its outcome and the evidence that closes it):
 
 1. **Guard and state.** `RegionalState extends GenerationState` with `physical` required and
@@ -1017,6 +1054,204 @@ Steps (each with its outcome and the evidence that closes it):
    lint, typecheck, the whole frontend unit suite, the browser wizard journey; a read-only
    review by a subagent against this expansion before the commit.
 
+#### M0 execution record (2026-11-01)
+
+What was built, where it departs from the steps above, and why. Each departure is a
+mechanism decision made while the code was read and run; none changes a user requirement.
+
+- **Representation (steps 1–3).** `RegionalState` is the generator's `GenerationState` with a
+  `regional` record; the regional run is a `MapRunner` sequence (`canonry.initialize`,
+  `refinement.begin`, the schedule steps, `canonry.project`, `canonry.features`,
+  `refinement.identity`, `refinement.places`, `atlas.names`) on the world's registry plus
+  the regional processes. All regional work runs on the physical field's bands over the
+  child lattice; the surface is read only for channels the field has no band for and written
+  by projection. `lattice.ts` holds the lattice helpers (positions, frame membership, face and
+  corner neighbourhoods, components, a geometric diffusion); `media.ts` the ledger keyed by
+  band name; `profile.ts` the regional reading of the world's extraction thresholds.
+- **Neighbourhoods are geometric.** The eight-cell neighbourhood is "boxes that touch", not
+  "within a multiple of the nominal span": the nominal span differs from the lattice's cell
+  width, and a span-based reach let a step skip a cell, which the world's river-path curve
+  then subdivided without end (the heap exhaustion seen in the suite). The curve code also
+  gained a guard for a zero-length chord.
+- **The exterior is the parent's ground.** A map area's own captured inputs are its parent
+  channels in `inheritNumerical`, so the halo carries the country beyond the frame rather than
+  the frame edge clamped outward (commit `c8f7268` had emptied the parent channels for map
+  areas). A run without the physical domain reads the terrain already made: the initial facts
+  carry `terrain:present` and the present (non-input) fields are preferred. The fixture's
+  parent grid is captured over the frame's padding like a real parent.
+- **Diffusion is geometric.** The lattice blur is explicit finite-volume diffusion with each
+  cell's own rate (the finest cell's step over the cell's area), so a large exterior cell no
+  longer swamps the fine cells beside it; blurs used for calibration are taken over the
+  frame's content only, so an edge mismatch is not hidden behind the exterior's agreement
+  with itself.
+- **The frame edge drains.** Every frame-edge cell whose exterior is no higher is a network
+  root (a valley crossing the edge still gathers its country through the cost of climbing the
+  base); frame-edge cells are flood outlets when reading captured sinks, since the coarse
+  exterior cannot carry a valley narrower than itself; the steepest-descent routing may exit
+  to the exterior or sea; each cell takes its root's level in tree order (an index-order pass
+  had left most levels at zero, inflating every calibration).
+- **Relief is conditioned on the base (ADR 0008), not only calibrated.** After the network
+  construction, the base's blur replaces the construction's blur at the base's own smoothing
+  length, so at the scales the parent resolves the relief is the parent's and the network
+  decides the detail within them; exits return to the parent's ground at the edge. The base
+  smoothing length was reduced so a sampled valley floor keeps most of its depth. Without
+  this the construction drifted hundreds of metres from the parent (long hillslopes flatten
+  toward their divides) and the amplification fit could not recover it. A steep base step is
+  climbed in place only where it is steeper than the profile that would carry it (a channel's
+  knickpoint gradient, a hillslope's own gradient).
+- **Divides and passes.** The world's ridge and pass classes read tectonic ridge influence,
+  which a region does not carry; the region marks drainage divides (cells beside ground of
+  another channel segment) into that band, and marks a pass where a ridge cell is the low
+  point along its divide. The world's own pass rule reads a wide sampling ring that at a
+  region's scale sees the flanks more than the crest.
+- **Captured rivers.** A developed stem takes a captured course's identity when it runs
+  beside enough of the course within the course's valley corridor (not on the same cells);
+  the whole stem along the course (upstream by the larger own inflow, downstream) carries
+  the name; the name is marked as named in its era so the naming pass leaves it; a course no
+  stem stands for stays on the map as captured.
+- **FeatureCause registry (step 6).** `regional/causes/`: the interface (`read`, `influence`,
+  `support`, `caps`, `conjoin`, `respond`) and the first entries: summit (divide anchor,
+  massif repulsion), river course (valley corridor, raster corridor, identity through the
+  extraction), lake (captured standing water), river entry (entering discharge), settlement
+  seat (river corridor, channel support, footprint caps, settling). The schedule calls the
+  registry at context, after the network, every structure step, round two and after each
+  round's water. Lake roots and entry inflow are consumed in `growNetwork` from the registry's
+  evidence (one place for the network's roots). No landmark entry yet (M2 adds the table).
+- **Magic (step 4).** The world engine's inheritance, locating with a regional strategy table
+  (budgeted locators replaced by the captured source), propagation, warding, thermal, living
+  and ocean feedback and classification run on the regional field each round. Departure: the
+  regional Salt ledger effects and door publication were not kept; the whole regional magic
+  reimplementation was retired and M5 brings those behaviours through the engine. M1/M2
+  renders change in magic organization accordingly.
+- **Dead code (step 7).** Deleted: `canonry/regionalPhysical.ts`, `regionalClimate.ts`,
+  `regionalCorridors.ts`, `regionalMagic.ts`, `regionalEnvironmentFixture.ts`, their tests,
+  the world sequence's child branch (`regionalPhysicalSequence`), `societySequence`'s child
+  branch, `realizeRegionalPlaces` and its tests, the `parentId` branch of population
+  inheritance, and the regional branches of the society environment refresh. Kept: the
+  `inherited` flag and its guards, because they also encode same-area regeneration with a
+  prior society (world policy), which the first plan text had not distinguished.
+  `prepareAtlasGeneration` refuses a child area that is not a map (site and interior profiles
+  excepted; they are built interiors on the world pipeline). The setup projection's regional
+  tests now prepare a map through the regional preparation; the regional water and
+  environment steps carry the `water.routing` and `physical.climate` feature tags for the
+  setup view. Deferred: the ecology engine's per-step exports (M4 hosts the engine; nothing
+  consumes them before).
+- **Review findings (read-only subagent, 2026-11-01) and what was done.** Blocker fixed:
+  the production sequence never initialised the magic workspace (`prepareMagic` was called
+  only by the test fixture); `refinement.begin` now prepares it when the run develops magic.
+  Also fixed: the settlement cause moved under `causes/` with its own domain gate; the dead
+  regional-input diagnostic (unreachable once non-map children are refused) removed.
+  Disclosed, not changed in M0: `refinement.begin` reads the surface's derived `flow` and
+  `waterLevel` channels into the field (the world binds no inheritance for derived channels);
+  the place proposal projects the field to the surface to run the society engine's site
+  ranking and maps the samples back (the society host extraction is M6); four module-level
+  WeakMaps hold per-state caches (adjacency, path searches, magic work, fixture preparation);
+  the ledger (`Contributions`) has readers but no regional writer yet and `respondMagic`
+  reports no relief change, so the declared magic reroute follow-up does not fire before M5;
+  `refinement.refresh` produces the extraction's `canonry:Validated` fact itself, since the
+  world's validation operation checks world-process invariants a refinement does not run;
+  `regionalSociety.ts` keeps its spacing, allocation, connection and seat helpers (used by the
+  world and the regional places), so the file stays despite the plan text; the world magic
+  engine's per-field evaluation is not exported (the regional host composes the engine's
+  exported operations instead). Reclassified: the base conditioning, the full-edge exits, the
+  divide and pass marking and the geometric diffusion are mechanisms pulled forward from M2's
+  terrain work because the re-expressed core did not reproduce the parent without them (edge
+  inflation, dammed valleys, summits hundreds of metres below the parent's); they are plan
+  adaptations, judged on the four-case renders, not behaviour preservation. Left for M1:
+  one unit-conversion helper pair across the regional modules (elevation, temperature,
+  per-mille), one lattice reach-walk helper for the four hand-rolled BFS walks, cell area
+  taken from the mesh wherever the nominal span squared appears beside it, and a guard rule
+  for raw unit literals.
+- **After the review, from the gates.** The calibration and conditioning blurs are a separable
+  Gaussian over the content grid (the frame's cells lie on one spacing), not diffusion passes:
+  a frame-sized blur on the harness cases had made a run minutes long. The regional
+  preparation now reports mapped-edit overlaps like the world's (a drawing on the map must
+  survive its regeneration) and no longer writes the resolved settings back into the world's
+  epoch records (completed history stays as recorded). The draft preparation dispatches a map
+  area to the regional preparation. Frontend tests that built legacy non-map children now
+  build captured maps, generate the root where they test mapped-edit rules, and one asserts
+  the refusal of a non-map child. The regional test files declare a longer per-test budget
+  (world-depth runs); the world's ecological region extraction on the adaptive surface
+  dominated a run: the adaptive point sampler fitted a Hermite patch per query because its
+  caches (sized for a viewport reader) thrashed on a lattice-wide sweep, and the contour
+  tracer samples each region tens of millions of times. The generation's sampler now sizes
+  the patch caches to the lattice; the contour sampler on an adaptive lattice uses it. A
+  bilinear read over the frame's regular block was tried and withdrawn: it is a different
+  reconstruction from the adaptive one the world contracts on (the adaptive geology, river
+  end and marine region tests failed), and M0 changes no world behaviour. The channel resampling and inheritance sweeps
+  (`resample`, `inheritChannels`, the derived-channel reads) pass the same lattice-sized
+  budget to the field interpolator (`sweepBudget`), while viewport readers keep the small
+  default caches. Ecology extraction on the fixture fell from twenty-five seconds to about
+  seven; it still creates one sampler per term and piece and is an M1 repair item. The
+  surface that carries the inherited channels until the lattice exists is built at the
+  parent's sample span, not the cell span: it carried nothing finer than the parent, and at
+  the cell span it was a quarter-million samples that initialization resampled onto the
+  lattice (two minutes of a P1 run; fifteen seconds now). A refinement's content cells are
+  not square (the frame's own aspect), so the dense grids behind the blur and the block
+  sampler step separately on each axis. The runner's per-process validation parsed the whole
+  surface against its schema after every process (a third of a minute on P1); the same
+  surface object is now parsed once. Remaining P1 cost after these (one profiled run,
+  165 thousand lattice cells against the earlier pipeline's 52 thousand samples): the world's
+  feature extraction (ecology contouring foremost), the round-two place proposal (the
+  society engine's site ranking over a projected surface), initialization, and the magic
+  classification; the harness report records the measured per-process times. The first P1 render after the eight-direction
+  neighbourhood showed channels ruled along the belt's strike in straight parallel lines
+  (D8 routing with the grain's anisotropy); the neighbourhood now has sixteen directions
+  (faces, corners and knight's steps, never a cell straight across a gap), which the earlier
+  twelve-cell neighbourhood had given by accident. The channel-margin step moved to its own
+  module to keep the drainage file within the size rule.
+- **From the first full harness run on the new core.** M1 was not deterministic and its begin
+  step took five minutes: the magic inheritance read the carrier surface without the sweep
+  budget (fixed), and the reconstruction of a sharp captured stock edge undershot below zero,
+  a negative ice stock turned Aurora's logarithmic concentration to NaN, and the NaN spread
+  through the heat into the ice and the relief (inherited intensities and stocks are now
+  floored at zero; three fixture refinements in one process now repeat exactly). The five
+  minutes were the magic channels being reconstructed from the lattice-sized surface, one
+  Hermite patch per cell per channel; a magic channel is now read from the captured parent
+  grid that carries it, like the native bands, or copied leaf for leaf when only the surface
+  on this very lattice holds it. A third M1 run differed although its source held the
+  same features and fields as the second's. The evidence lists and the feature scans that
+  feed them were first ordered by identity (store order changes after a publication), which
+  did not cure it; a dump of what each chained run read and produced did. Two things drifted
+  through publication while the surfaces repeated: the inherited summit's captured anchor and
+  prominence were dropped when the world's extraction found a realized summit where the moved
+  feature already stood (its identity reuse writes the realized peak's attributes over the
+  feature's), so the third run read the summit from its moved position; and a carried course
+  was read once per river of the stem that carried it, so each run claimed one more reach for
+  the captured river. The identity step now writes the anchor and prominence from the evidence
+  read at context, and a carried course is read once. Three chained M1 refinements (each
+  reading the last publication) now repeat in every channel; the only publication difference
+  left is the realized summit's own area and cause text on the inherited peak. P1 held
+  seven hundred one-cell ponds (every pit two metres deep became a lake): a pool now needs
+  three cells to be standing water. The world's gorge and fjord rules read a region's incision
+  (every channel cuts below the smoothed base) and its cell-scale inlets as hundreds of gorges
+  and fjords: the regional profile raises the gorge slope and incision and the fjord's glacial
+  erosion. Still open after this run and recorded for M2/M5, not hidden: the mountain belts
+  show strike-parallel streaks (the grain's anisotropy and the material bands through the
+  conditioning), valley, pass and range counts differ widely from the earlier pipeline, and
+  the magic engine on the regional field publishes floods of Aurora prisms and wells where
+  the old regional magic published few.
+- **Tests.** Gate A tests were rewritten to assert behaviour on the field; where a check named
+  a grid detail or a mechanism this delivery replaced (exact pass cell, single-reach identity,
+  lake "resolution" on both axes) it now asserts the behaviour (a pass within a few cells of
+  the parent's col, the stem's reaches, a lake several cells long). Two tolerances are
+  recorded: land drains to within the pool depth (flats shallower than drawn water remain);
+  an entering river's discharge is read at the edge cell by interpolation (within a tenth).
+
+- **Gates at the commit, and the owner's correction.** Lint, typecheck, formatting and the
+  architecture guard (a CI vitest check under `make test-architecture`, not an eslint rule as
+  the acceptance text said) pass; the whole unit suite passes (289 files, 1,588 tests); the
+  default-world digest is unchanged in content (379 plain channels and the feature counts
+  equal; the 32 entity-keyed channels differ only in the run's ids); the browser journeys pass
+  after one assertion was updated to the sequence's new shape (the regional run carries the
+  world's initialization and extraction around the refinement steps). Gate C was last measured
+  at about 3.5× the earlier pipeline on P1 and P2 and 6.7× on M1, before the block read was
+  withdrawn; the feature counts differ widely from the earlier renders. The owner withdrew
+  Gate C and count parity as gates on 2026-11-01: the earlier pipeline is broken and is no
+  reference, and M0 had consumed a day chasing them through half-hour harness runs. From here
+  a phase is judged by its behaviour existing at fixture scale (touched tests, lint,
+  typecheck, a short review); the harness and the browser matrix run only on request.
+
 ### Sulion mapping
 
 Root plan `5732ab12-bbaf-45e0-a972-55a163ae8ff9` "Regional refinement at world depth (one
@@ -1031,9 +1266,8 @@ milestones), both canceled as superseded by the one-representation decision.
 
 ### Current state
 
-Planning complete with the per-process checklist, the open points decided and the
-representation settled; no implementation started. Next action: owner's go-ahead, then
-plan-phase on M0 (software organization).
+M0 (software organization) committed as recorded above. Next: M1 (shared media and repairs)
+through plan-phase, under the lean per-phase process the owner set on 2026-11-01.
 
 ## New namespace `packages/generation/src/regional`
 

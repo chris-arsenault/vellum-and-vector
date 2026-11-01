@@ -104,13 +104,21 @@ function unconstrainedVertex(
   }
   return result;
 }
-/** Shared vertex values and derivatives also constrain fine faces to their coarse patch. */
-export function prepareAdaptivePatches(t: AdaptiveTopology, values: Samples) {
-  const coefficients = new ByteCache<number, PreparedAdaptiveCell>(adaptiveChannelCacheBytes);
-  const fit = adaptiveFits(t, values),
+/**
+ * Shared vertex values and derivatives also constrain fine faces to their coarse patch. The
+ * budget bounds each cache: a viewport reader keeps the default, a sweep over a whole lattice
+ * (generation sampling every cell) passes room for every cell so nothing is prepared twice.
+ */
+export function prepareAdaptivePatches(
+  t: AdaptiveTopology,
+  values: Samples,
+  budget = adaptiveChannelCacheBytes
+) {
+  const coefficients = new ByteCache<number, PreparedAdaptiveCell>(budget);
+  const fit = adaptiveFits(t, values, budget),
     geometry = adaptivePatchGeometry(t);
-  const vertices = new ByteCache<number, number[]>(adaptiveChannelCacheBytes),
-    baseValues = new ByteCache<number, number>(adaptiveChannelCacheBytes);
+  const vertices = new ByteCache<number, number[]>(budget),
+    baseValues = new ByteCache<number, number>(budget);
   const baseValue = (x: number, y: number, epsilon: number) => {
     const vertex = geometry.vertex(x, y, epsilon);
     const previous = baseValues.get(vertex.id);

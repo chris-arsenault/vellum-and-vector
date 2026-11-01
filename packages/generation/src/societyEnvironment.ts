@@ -44,8 +44,6 @@ import { irrigateChannels } from "./societyWaterUse";
 import { workSamples } from "./societyWorks";
 import { damCandidateCell } from "./societyDemand";
 import { isWorldSociety } from "./societyMapScope";
-import { regionalIncomingWater } from "./canonry/regionalCorridors";
-import { refreshRegionalInfluence } from "./canonry/regionalMagic";
 import { generationFeatures, removeGenerationFeature } from "./generationFeatures";
 
 function synchronizeNative(state: GenerationState) {
@@ -108,19 +106,16 @@ function refreshWater(state: GenerationState, context: MapProcessContext) {
     (dams ??= retainedArray(work.map, "uint8", "engineered-dams")).set(i, 1);
   work.map.EngineeredDams = dams;
   // Repair present dependencies only. No tectonic motion, incision epochs or new geological events.
-  const incoming = state.domain.world.areas[state.domain.scope.areaId].parentId
-    ? regionalIncomingWater(state)
-    : undefined;
   for (const operation of [
     oceanConnectivity,
     bathymetry,
     oceanDistance,
     oceanCurrents,
     drainageConditioning,
-    (map: PhysicalField) => lakeBasins(map, c, incoming),
+    (map: PhysicalField) => lakeBasins(map, c),
     drainageGuidance,
     flowRouting,
-    (map: PhysicalField) => riverNetwork(map, c, incoming),
+    (map: PhysicalField) => riverNetwork(map, c),
     riverChannelGeometry,
   ])
     operation(work.map, c);
@@ -369,13 +364,6 @@ function refreshMagicPathways(
     else restorePresentMagic(state);
   }
   const seed = bound.seed;
-  if (state.domain.world.areas[state.domain.scope.areaId].parentId) {
-    refreshRegionalInfluence(state, seed);
-    classifyMagicFeatures(state, seed);
-    projectMagic(state);
-    state.society!.magicTouched?.clear();
-    return;
-  }
   repropagateMovedMedia(state, seed, oceanChanged);
   // The society phase: systems made of what people did, and systems whose stocks people
   // drew or deposited this cycle (cracked cores at a forge, planted seed, cleared sap).

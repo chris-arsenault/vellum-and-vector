@@ -52,7 +52,7 @@ it("rejects overlapping generation before creating a worker or job", async () =>
   vi.stubGlobal("Worker", worker);
   await expect(
     startGeneration(f.id, {
-      areaId: f.child,
+      areaId: f.root,
       quality: "draft",
       seed: 17,
       domains: ["physical"],

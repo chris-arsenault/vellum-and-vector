@@ -20,10 +20,21 @@ import { atlasQuality } from "./canonry/atlasProfile";
 import { regionalInputFields, regionalInputChannels, regionalResolution } from "./regionalInputs";
 import { atlasGenerationModules } from "./atlasModules";
 
+/**
+ * A refinement supplies its own cell span, the present channels it admits as inputs, and the
+ * span of the surface that carries the inherited channels until the physical lattice exists
+ * (the parent's own sample span: finer carries nothing the parent does not have).
+ */
+export interface InitialStateOptions {
+  cellSpan?: number;
+  channels?: (name: string) => boolean;
+  surfaceSpan?: number;
+}
 export function atlasInitialState(
   source: DomainSnapshot,
   input: AtlasGenerationInput,
-  cache?: BlockCache
+  cache?: BlockCache,
+  options: InitialStateOptions = {}
 ): GenerationState {
   const domain = cloneSnapshot(source),
     area = domain.world.areas[input.areaId];
@@ -45,7 +56,7 @@ export function atlasInitialState(
   };
   domain.scope = scope;
   const extent = spatial.bounds(area.footprint),
-    { cellSpan } = regionalResolution(source, area.id, input.quality);
+    cellSpan = options.cellSpan ?? regionalResolution(source, area.id, input.quality).cellSpan;
   scope.resolution = cellSpan;
   // A child keeps the parent's boundary band; interior samples refine inside that interface.
   const band = Math.min(cellSpan, (extent[2] - extent[0]) / 4, (extent[3] - extent[1]) / 4);
@@ -64,7 +75,7 @@ export function atlasInitialState(
       ? createAdaptiveField(
           id,
           { ...scope, footprint: interior },
-          initialTopology(scope, cellSpan, cache),
+          initialTopology(scope, options.surfaceSpan ?? cellSpan, cache),
           cache
         )
       : createGrid(
@@ -75,11 +86,11 @@ export function atlasInitialState(
           undefined,
           cache
         );
-  inheritSurface(source, surface, input);
+  inheritSurface(source, surface, input, options.channels);
   return {
     domain,
     surface,
-    facts: initialFacts(surface),
+    facts: initialFacts(surface, input),
     history: [],
     causes: [],
     publications: atlasGenerationModules.publications(input, domain.world),
@@ -97,12 +108,17 @@ function initialTopology(scope: SpatialScope, cellSpan: number, cache?: BlockCac
     cache
   );
 }
-function inheritSurface(source: DomainSnapshot, target: Grid, input: AtlasGenerationInput) {
+function inheritSurface(
+  source: DomainSnapshot,
+  target: Grid,
+  input: AtlasGenerationInput,
+  admits: (name: string) => boolean = () => true
+) {
   const world = source.world;
   const channels = regionalInputChannels(
     regionalInputFields(source, input.areaId, input.domains.includes("physical"))
   );
-  for (const [name, grid] of channels) resampleChannels(grid, target, [name]);
+  for (const [name, grid] of channels) if (admits(name)) resampleChannels(grid, target, [name]);
   requireThat(
     input.domains.includes("physical") ||
       target.channels.elevation ||
@@ -111,9 +127,11 @@ function inheritSurface(source: DomainSnapshot, target: Grid, input: AtlasGenera
     "Generate physical geography first, or include it in this request."
   );
 }
-function initialFacts(surface: Grid) {
+function initialFacts(surface: Grid, input: AtlasGenerationInput) {
   const facts = new Set(Object.keys(surface.channels));
   if (surface.channels.bedrock) facts.add("geology");
   if (surface.channels.receiver) facts.add("drainage");
+  // A run without the physical domain reads the terrain already made instead of making it.
+  if (!input.domains.includes("physical")) facts.add("terrain:present");
   return facts;
 }

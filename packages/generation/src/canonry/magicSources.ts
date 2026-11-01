@@ -101,7 +101,7 @@ export interface LocateContext {
   origin: MagicOrigin;
   epochIndex: number;
 }
-interface SourceStrategy {
+export interface SourceStrategy {
   label: string;
   requires: string[];
   parameters: (keyof MagicSystem["parameters"])[];
@@ -228,11 +228,13 @@ export const magicSourceStrategies: Record<MagicSource, SourceStrategy> = {
  * of the origin that set it. Sources placed on the map join the first origin. A system with
  * one origin locates exactly as it did before origins existed.
  */
+/** A host supplies its own strategy table when some world locators do not apply to its map. */
 export function locateMagicSources(
   state: GenerationState,
   field: MagicField,
   seed: number,
-  epochIndex = 0
+  epochIndex = 0,
+  strategies: Record<MagicSource, SourceStrategy> = magicSourceStrategies
 ) {
   const count = field.source.length;
   field.source.fill(0);
@@ -248,7 +250,7 @@ export function locateMagicSources(
     field.radii.fill(0);
     const before = field.located.length;
     withOrigin(field, origin, () => {
-      magicSourceStrategies[origin.source].locate(
+      strategies[origin.source].locate(
         state,
         field,
         index === 0 ? seed : systemSeed(seed, origin.id),
@@ -272,11 +274,16 @@ export function locateMagicSources(
   // An origin whose strategy does not keep a stock of its own holds its located strength as
   // an amount in its first reservoir: strength times the cell's area, so the stock can be
   // carried and its budget closed. A finite origin's stock is the source, not the mirror.
-  mirrorHeldStocks(map, field, count);
+  mirrorHeldStocks(map, field, count, strategies);
 }
-function mirrorHeldStocks(map: PhysicalField, field: MagicField, count: number) {
+function mirrorHeldStocks(
+  map: PhysicalField,
+  field: MagicField,
+  count: number,
+  strategies: Record<MagicSource, SourceStrategy>
+) {
   for (const origin of field.definition.origins) {
-    if (magicSourceStrategies[origin.source].managesStock) continue;
+    if (strategies[origin.source].managesStock) continue;
     const own: Band = field.originSources[origin.id],
       held = field.stocks[stockKey(origin, originStocks(origin)[0])];
     for (let i = 0; i < count; i++) held.set(i, own.get(i) * map.mesh.area(i));

@@ -2,6 +2,7 @@ import {
   gridSampler,
   interpolateSample,
   fieldInterpolator,
+  sweepBudget,
   point,
   spatial,
   type Band,
@@ -65,20 +66,33 @@ function preferInput(candidate: Grid, previous: Grid | undefined): boolean {
     !previous || (candidate.scope.resolution ?? Infinity) < (previous.scope.resolution ?? Infinity)
   );
 }
-/** Ancestor grids that cover this surface, keyed by channel, finest resolution preferred. */
+/**
+ * Ancestor grids that cover this surface, keyed by channel, finest resolution preferred. An
+ * independent map's own fields are its ancestors: its captured inputs when this run makes
+ * the physical geography, otherwise its present fields (the terrain already made) first.
+ */
 export function parentChannels(state: GenerationState) {
-  const inputs = new Map<string, Grid>();
+  const chosen = new Map<string, { grid: Grid; present: boolean }>(),
+    owned = ownsMapGeography(state.domain.world, state.surface.scope.areaId);
   for (const field of state.domain.world.fields) {
     const grid = state.domain.numerical[field.id];
     if (!grid || grid.scope.spaceId !== state.surface.scope.spaceId) continue;
     if (!inputOwner(state, field)) continue;
     if (!spatial.covers(grid.scope.footprint, state.surface.scope.footprint)) continue;
-    for (const name of Object.keys(grid.channels)) {
-      const previous = inputs.get(name);
-      if (preferInput(grid, previous)) inputs.set(name, grid);
-    }
+    const candidate = { grid, present: owned && !field.input };
+    for (const name of Object.keys(grid.channels))
+      if (preferCandidate(candidate, chosen.get(name))) chosen.set(name, candidate);
   }
-  return inputs;
+  return new Map([...chosen].map(([name, choice]) => [name, choice.grid]));
+}
+/** A present field beats a captured input; among the same kind the finer grid wins. */
+function preferCandidate(
+  candidate: { grid: Grid; present: boolean },
+  previous: { grid: Grid; present: boolean } | undefined
+) {
+  if (!previous) return true;
+  if (candidate.present !== previous.present) return candidate.present;
+  return preferInput(candidate.grid, previous.grid);
 }
 function inputOwner(
   state: GenerationState,
@@ -86,8 +100,12 @@ function inputOwner(
 ) {
   const id = state.surface.scope.areaId;
   return ownsMapGeography(state.domain.world, id)
-    ? field.areaId === id && !!field.input
+    ? field.areaId === id && (!!field.input || !makesTerrain(state))
     : field.areaId !== id && isDescendant(state.domain.world.areas, id, field.areaId);
+}
+/** The physical geography is being made in this run, not read from the terrain already made. */
+function makesTerrain(state: GenerationState) {
+  return !state.facts.has("terrain:present");
 }
 function initializeInheritedMaterial(map: PhysicalField, surface: Grid) {
   for (let i = 0; i < map.mesh.count; i++) {
@@ -105,10 +123,10 @@ function initializeInheritedMaterial(map: PhysicalField, surface: Grid) {
   if (!surface.channels.geothermal) map.Geothermal.fill(0);
 }
 function inheritNumerical(state: GenerationState, work: AtlasPhysicalWorkspace) {
+  // A map's own captured inputs are its parent channels: they carry the country beyond the
+  // frame, so the exterior halo is the parent's ground and not the frame edge clamped outward.
   const map = work.map,
-    parent = state.domain.world.areas[state.domain.scope.areaId].map
-      ? new Map<string, Grid>()
-      : parentChannels(state),
+    parent = parentChannels(state),
     surface = state.surface;
   const datum = surface.channels.seaDatum?.get(0) ?? 0;
   map.OpenBoundary = true;
@@ -137,7 +155,13 @@ function inheritChannels(
   for (const binding of atlasChannels) {
     const grid = parent.get(binding.name) ?? surface;
     if (!grid.channels[binding.name]) continue;
-    const valueAt = fieldInterpolator(grid, binding.name, binding.unit === "category"),
+    const valueAt = fieldInterpolator(
+        grid,
+        binding.name,
+        binding.unit === "category",
+        undefined,
+        sweepBudget(grid)
+      ),
       band = map[binding.native],
       integer = band.type === "int32";
     for (let i = 0; i < map.mesh.count; i++) {

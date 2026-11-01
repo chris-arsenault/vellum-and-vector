@@ -1,4 +1,7 @@
-import { clamp, spacing, type RegionalState } from "./state";
+import { physicalGradients } from "../canonry/physicalMetric";
+import { releaseWorking } from "../canonry/physicalNumerics";
+import { distance, isContent, neighborsOf, regionalSpan, smoothOverLength } from "./lattice";
+import { clamp, type RegionalState } from "./state";
 
 /**
  * Macro character: how this country's local organization can develop (spec 3). Each
@@ -22,20 +25,22 @@ export interface RegionalCharacter {
 const fullReworking = 40;
 /** Captured volcanic construction (m) below which no cone is resolved. */
 const coneFloor = 50;
+/** Grain below this coherence is noise, not organization. */
+const coherenceFloor = 0.05;
 
 export function deriveCharacter(state: RegionalState): RegionalCharacter {
-  const g = state.surface,
-    c = g.channels,
-    n = g.active.length,
+  const map = state.physical.map,
+    n = map.mesh.count,
     grainX = new Float64Array(n),
     grainY = new Float64Array(n),
     reworking = new Float64Array(n),
     strain = new Float64Array(n),
     captured = readCapturedGrain(state, grainX, grainY);
-  if (!captured) measureGrain(state, state.inheritedHeight, grainX, grainY);
+  if (!captured)
+    measureGrain(state, (i) => state.regional.inheritedHeight.get(i) / 1024, grainX, grainY);
   for (let i = 0; i < n; i++) {
-    reworking[i] = clamp((c.glacialErosion?.get(i) ?? 0) / fullReworking);
-    strain[i] = clamp(c.tectonicStrain?.get(i) ?? 0);
+    reworking[i] = clamp(map.CumulativeGlacialErosion.get(i) / 1024 / fullReworking);
+    strain[i] = clamp(map.TectonicStrain.get(i) / 1000);
   }
   return {
     grainX,
@@ -49,14 +54,13 @@ export function deriveCharacter(state: RegionalState): RegionalCharacter {
 
 /** The world's published grain, where any cell carries one; returns whether any did. */
 function readCapturedGrain(state: RegionalState, grainX: Float64Array, grainY: Float64Array) {
-  const c = state.surface.channels;
-  if (!c.structuralGrainX || !c.structuralGrainY) return false;
+  const map = state.physical.map;
   let captured = false;
   for (let i = 0; i < grainX.length; i++) {
-    const x = c.structuralGrainX.get(i),
-      y = c.structuralGrainY.get(i),
+    const x = map.StructuralGrainX.get(i) / 1000,
+      y = map.StructuralGrainY.get(i) / 1000,
       coherence = Math.hypot(x, y);
-    if (coherence < 0.05) continue;
+    if (coherence < coherenceFloor) continue;
     captured = true;
     const scale = Math.min(1, coherence) / coherence;
     grainX[i] = x * scale;
@@ -82,26 +86,28 @@ export function grainAt(character: RegionalCharacter, i: number) {
  */
 export function measureGrain(
   state: RegionalState,
-  h: { get(i: number): number },
+  height: (i: number) => number,
   grainX: Float64Array,
   grainY: Float64Array
 ) {
-  const g = state.surface,
-    n = g.active.length,
-    [dx, dy] = spacing(g),
-    radius = Math.max(2, Math.round(state.parentSpan / Math.min(dx, dy))),
+  const map = state.physical.map,
+    mesh = map.mesh,
+    n = mesh.count,
+    gradients = physicalGradients(mesh, height, map.coverage),
     xx = new Float64Array(n),
     yy = new Float64Array(n),
     xy = new Float64Array(n);
   for (let i = 0; i < n; i++) {
-    const { gx, gy } = heightGradient(state, h, i);
+    const gx = gradients.x.get(i),
+      gy = gradients.y.get(i);
     xx[i] = gx * gx;
     yy[i] = gy * gy;
     xy[i] = gx * gy;
   }
-  boxBlur(xx, g.width, g.height, radius);
-  boxBlur(yy, g.width, g.height, radius);
-  boxBlur(xy, g.width, g.height, radius);
+  releaseWorking(map, gradients.x, gradients.y);
+  // A box average over a parent span either side has about this Gaussian spread.
+  const reach = state.regional.parentSpan * 0.6;
+  for (const values of [xx, yy, xy]) smoothOverLength(state, values, reach);
   for (let i = 0; i < n; i++) {
     const trace = xx[i] + yy[i];
     if (trace <= 0) continue;
@@ -109,7 +115,7 @@ export function measureGrain(
       // The relief must be organized enough to matter: slopes of a few metres per km count little.
       relief = clamp(Math.sqrt(trace) / 0.02),
       coherence = clamp(anisotropy * relief);
-    if (coherence < 0.05) continue;
+    if (coherence < coherenceFloor) continue;
     // Doubled angle of the gradient direction, then rotated by 180° for the perpendicular axis.
     const phi2 = Math.atan2(2 * xy[i], xx[i] - yy[i]);
     grainX[i] = -Math.cos(phi2) * coherence;
@@ -117,83 +123,48 @@ export function measureGrain(
   }
 }
 
-/** Central-difference gradient of a height field, one-sided at the frame edges. */
-function heightGradient(state: RegionalState, h: { get(i: number): number }, i: number) {
-  const g = state.surface,
-    [dx, dy] = spacing(g),
-    x = i % g.width,
-    y = Math.floor(i / g.width),
-    left = x > 0 ? i - 1 : i,
-    right = x + 1 < g.width ? i + 1 : i,
-    below = y > 0 ? i - g.width : i,
-    above = y + 1 < g.height ? i + g.width : i;
-  return {
-    gx: (h.get(right) - h.get(left)) / ((right - left) * dx || dx),
-    gy: (h.get(above) - h.get(below)) / (((above - below) / g.width) * dy || dy),
-  };
-}
-
-/** Separable box average over ±radius cells, in place. */
-export function boxBlur(values: Float64Array, width: number, height: number, radius: number) {
-  const line = new Float64Array(Math.max(width, height)),
-    prefix = new Float64Array(Math.max(width, height) + 1);
-  const pass = (length: number, stride: number, lines: number, step: number) => {
-    for (let l = 0; l < lines; l++) {
-      const start = l * step;
-      for (let k = 0; k < length; k++) line[k] = values[start + k * stride];
-      prefix[0] = 0;
-      for (let k = 0; k < length; k++) prefix[k + 1] = prefix[k] + line[k];
-      for (let k = 0; k < length; k++) {
-        const lo = Math.max(0, k - radius),
-          hi = Math.min(length, k + radius + 1);
-        values[start + k * stride] = (prefix[hi] - prefix[lo]) / (hi - lo);
-      }
-    }
-  };
-  pass(width, 1, height, width);
-  pass(height, width, width, 1);
-}
-
 /** Local maxima of the captured volcanic construction become cones with a footprint. */
 function volcanicCones(state: RegionalState) {
-  const g = state.surface,
-    values = g.channels.volcanicConstruction,
-    cones: RegionalCharacter["cones"] = [];
-  if (!values) return cones;
-  const [dx, dy] = spacing(g),
-    window = Math.max(2, Math.round(state.parentSpan / Math.min(dx, dy)));
-  for (let i = 0; i < g.active.length; i++) {
-    const value = values.get(i);
-    if (value < coneFloor || g.channels.water?.get(i) === 1) continue;
-    if (!localMaximum(values, g.width, g.height, i, window)) continue;
+  const map = state.physical.map,
+    mesh = map.mesh,
+    cones: RegionalCharacter["cones"] = [],
+    span = regionalSpan(state),
+    window = Math.max(2 * span, state.regional.parentSpan),
+    construction = (i: number) => map.VolcanicConstructionHistory.get(i) / 1024;
+  for (let i = 0; i < mesh.count; i++) {
+    const value = construction(i);
+    if (!isContent(mesh, i) || value < coneFloor || map.WaterKindCodes.get(i) === 1) continue;
+    if (!localMaximum(mesh, construction, i, window)) continue;
     cones.push({
       cell: i,
-      radius: Math.max(2.5 * Math.min(dx, dy), state.parentSpan * 0.5 * Math.sqrt(value / 300)),
+      radius: Math.max(2.5 * span, state.regional.parentSpan * 0.5 * Math.sqrt(value / 300)),
       height: Math.min(900, value) * 0.6,
     });
   }
   return cones;
 }
 
-/** Whether the cell holds the strict maximum of its window, ties going to the lower index. */
+/** Whether the cell holds the strict maximum within `radius`, ties going to the lower index. */
 function localMaximum(
-  values: { get(i: number): number },
-  width: number,
-  height: number,
+  mesh: RegionalState["physical"]["map"]["mesh"],
+  value: (i: number) => number,
   i: number,
-  window: number
+  radius: number
 ) {
-  const x = i % width,
-    y = Math.floor(i / width),
-    value = values.get(i);
-  for (let oy = -window; oy <= window; oy++)
-    for (let ox = -window; ox <= window; ox++) {
-      const xx = x + ox,
-        yy = y + oy;
-      if (xx < 0 || yy < 0 || xx >= width || yy >= height) continue;
-      const j = yy * width + xx,
-        other = values.get(j);
-      if (other > value || (other === value && j < i)) return false;
+  const own = value(i),
+    queue: number[] = [i],
+    seen = new Set<number>([i]), // hpc-exempt: a window of a few dozen cells around one cone
+    around = new Int32Array(mesh.stride);
+  for (let head = 0; head < queue.length; head++) {
+    const m = neighborsOf(mesh, queue[head], around);
+    for (let k = 0; k < m; k++) {
+      const j = around[k];
+      if (seen.has(j) || distance(mesh, i, j) > radius) continue;
+      seen.add(j);
+      queue.push(j);
+      const other = value(j);
+      if (other > own || (other === own && j < i)) return false;
     }
+  }
   return true;
 }

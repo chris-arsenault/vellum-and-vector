@@ -23,7 +23,8 @@ export function putRegionalFeature(
   attributes: Record<string, unknown> = {},
   label = kind
 ): AtlasFeature {
-  const id = semanticId(state.domain.world.id, `regional:${state.input.areaId}`, key),
+  const areaId = state.regional.input.areaId,
+    id = semanticId(state.domain.world.id, `regional:${areaId}`, key),
     named =
       kind === "settlement"
         ? atlasName(state.domain.world, {
@@ -36,7 +37,7 @@ export function putRegionalFeature(
     feature: AtlasFeature = {
       id,
       placeId: undefined,
-      areaId: state.input.areaId,
+      areaId,
       layerId,
       kind,
       name: named?.name ?? label,
@@ -66,12 +67,13 @@ export function putRegionalFeature(
  * an earlier refinement's own rivers are not read back as captured evidence.
  */
 export function clearRegionalProducts(state: RegionalState) {
-  const removed = (state.removedProducts ??= new Set());
-  for (const f of generationFeatures(state, { areaId: state.input.areaId })) {
+  const removed = (state.regional.removedProducts ??= new Set()),
+    domains = state.regional.input.domains;
+  for (const f of generationFeatures(state, { areaId: state.regional.input.areaId })) {
     if (retainPlace(f)) continue;
     // A product of a domain this run does not regenerate stays (a society-only run keeps
     // the rivers); a product whose layer records no domain is this run's to regenerate.
-    if (f.generationDomain && !state.input.domains.includes(f.generationDomain)) continue;
+    if (f.generationDomain && !domains.includes(f.generationDomain)) continue;
     removed.add(f.id);
     removeGenerationFeature(state, f.id);
     for (const reach of state.networks?.reaches({ featureId: f.id }) ?? [])
@@ -88,11 +90,12 @@ export function putRegionalNetwork(
   coordinates = feature.geometry.type === "LineString" ? feature.geometry.coordinates : null
 ) {
   if (!coordinates) return;
-  const ends = [coordinates[0], coordinates.at(-1)!],
+  const areaId = state.regional.input.areaId,
+    ends = [coordinates[0], coordinates.at(-1)!],
     nodes = ends.map(([x, y, z = 0]) => ({
       id: semanticId(
         state.domain.world.id,
-        `regional-node:${state.input.areaId}`,
+        `regional-node:${areaId}`,
         `${feature.layerId}:${x}:${y}`
       ),
       kind: `network:${feature.layerId}`,

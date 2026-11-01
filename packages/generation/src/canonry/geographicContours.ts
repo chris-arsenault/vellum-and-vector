@@ -1,5 +1,4 @@
 import {
-  adaptivePointSampler,
   contourSupport,
   createGrid,
   fieldContour,
@@ -93,8 +92,12 @@ export function oceanFootprint(state: GenerationState) {
 
 export function membershipSampler(state: GenerationState, includes: (cell: number) => number) {
   const mesh = state.physical!.map.mesh;
-  if (mesh.topology)
-    return adaptivePointSampler(mesh.topology, (leaf) => includes(mesh.leafToCell(leaf)));
+  // On an adaptive lattice the contour sweeps whole regions: the sampler is the generation's
+  // own (its patch caches hold the whole lattice), in the lattice's coordinates.
+  if (mesh.topology) {
+    const sample = physicalSampler(mesh, includes);
+    return (x: number, y: number) => sample(x - mesh.origin[0], y - mesh.origin[1]);
+  }
   const sample = triangleSampler(mesh, includes);
   return (x: number, y: number) => sample(x - mesh.origin[0], y - mesh.origin[1]);
 }

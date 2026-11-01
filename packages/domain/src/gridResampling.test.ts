@@ -4,12 +4,11 @@ import {
   gridPosition,
   gridSampler,
   putChannel,
-  resample,
   sample,
   type GridSurface,
 } from "./grids";
 import { point, rectangle, spatial } from "./spatial";
-import { resampleChannels } from "./gridResampling";
+import { resample, resampleChannels } from "./gridResampling";
 import { materializeField } from "./fieldComposition";
 import { generateBand } from "./lattice/bandValues";
 

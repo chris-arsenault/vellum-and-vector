@@ -174,7 +174,7 @@ it("uses actual brush footprints, excludes unrelated located spaces and restores
 it("explains the mapped edits that prevent overlapping generation", async () => {
   const f = await mapEditingFixture();
   await editTown(f, 550, 450);
-  const input = { areaId: f.child, quality: "draft", seed: 17, domains: ["physical"] };
+  const input = { areaId: f.root, quality: "draft", seed: 17, domains: ["physical"] };
   const errors = prepareAtlasGeneration(f.current(), input).diagnostics.filter(
     (diagnostic) => diagnostic.code === "mapped_edit_overlap"
   );

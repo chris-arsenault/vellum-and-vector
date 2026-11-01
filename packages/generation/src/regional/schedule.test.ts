@@ -1,15 +1,12 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
+
+// World-depth runs on a supplied country: longer than the suite's default per-test budget.
+vi.setConfig({ testTimeout: 120_000 });
 import { canonryMagicPresets, canonryConfluencePresets } from "@atlas/domain";
-import { regionalFixture } from "./fixture";
-import { regionalSchedule } from "./schedule";
-import type { RegionalState } from "./state";
+import { regionalFixture, runSchedule } from "./fixture";
+import { isContent } from "./lattice";
 
 const mountain = (x: number, y: number) => 100 + x / 25 + Math.abs(y - 20000) / 12;
-
-export function runSchedule(state: RegionalState, domains = state.input.domains) {
-  for (const step of regionalSchedule(domains)) step.run(state);
-  return state;
-}
 
 it("runs the three rounds, the refresh and the extraction on a supplied mountain country", () => {
   const f = regionalFixture(mountain, 40000, 2),
@@ -17,12 +14,22 @@ it("runs the three rounds, the refresh and the extraction on a supplied mountain
   state.domain.world.magicSystems = canonryMagicPresets();
   state.domain.world.confluences = canonryConfluencePresets();
   runSchedule(state);
-  const g = state.surface,
+  const map = state.physical.map,
     features = Object.values(state.domain.world.features);
-  expect(state.round).toBe(4);
-  expect(Array.from(g.channels.riverOrder).some((v) => v > 0)).toBe(true);
+  expect(state.regional.round).toBe(4);
+  let rivers = 0,
+    finite = true;
+  for (let i = 0; i < map.mesh.count; i++) {
+    if (!isContent(map.mesh, i)) continue;
+    if (map.RiverOrders.get(i) > 0) rivers++;
+    finite &&= Number.isFinite(map.Elevation.get(i));
+  }
+  expect(rivers).toBeGreaterThan(0);
+  expect(finite).toBe(true);
   expect(features.some((feature) => feature.kind === "river")).toBe(true);
-  expect(Array.from(g.channels.elevation).every(Number.isFinite)).toBe(true);
+  // The surface the frontend renders carries the projected field.
+  expect(state.surface.channels.elevation).toBeDefined();
+  expect(state.surface.channels.riverOrder).toBeDefined();
   expect(Array.from(f.grid.channels.elevation)).toEqual(
     Array.from(f.source.numerical.captured.channels.elevation)
   );

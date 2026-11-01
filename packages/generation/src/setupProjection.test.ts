@@ -12,6 +12,7 @@ import { landmarksInExtent } from "./featureDependencies";
 import { atlasFeatureDefinitions, prepareAtlasGeneration } from "./atlasWorkflow";
 import { atlasGenerationModules } from "./atlasModules";
 import { landscape, source as locatedSource } from "./mapFixtures";
+import { prepareRegionalRefinement } from "./regional/workflow";
 import { projectGenerationSetup } from "./setupProjection";
 import type { FeatureSelection } from "./features";
 import type { GenerationModule } from "./generationModules";
@@ -100,16 +101,19 @@ it("places the shared sea-level control with its scheduled ocean consumer while 
   ).toBe(false);
 });
 
+/** A region is an independent captured map: its inputs are the parent's present channels, pinned. */
 function region() {
   const state = world(),
-    domain = state.domain;
+    domain = state.domain,
+    footprint = rectangle([1000, 0, 3000, 1000]);
   domain.world.areas.region = {
     ...structuredClone(domain.world.areas.area),
     id: "region",
     name: "New region",
     parentId: "area",
     profile: "region",
-    footprint: rectangle([1000, 0, 3000, 1000]),
+    footprint,
+    map: { sourceAreaId: "area", sourceRevision: 1, refinementLevel: 1 },
   };
   putChannel(
     state.surface,
@@ -119,20 +123,21 @@ function region() {
   );
   putChannel(state.surface, "province", "category", residentBand("float64", Array(10).fill(0)));
   domain.world.fields.push({
-    id: "parent",
-    areaId: "area",
-    layerId: "physical",
-    algorithm: "generation",
-    source: { kind: "run", id: "parent-run" },
+    id: "captured",
+    areaId: "region",
+    layerId: "elevation",
+    algorithm: "supplied",
+    input: true,
+    source: { kind: "operation", id: "supplied" },
     samples: 10,
     channels: Object.keys(state.surface.channels),
     resourceId: state.surface.id,
     state: "generated",
-    footprint: domain.scope.footprint,
+    footprint,
     spaceId: "surface",
   });
-  domain.numerical.parent = state.surface;
-  return prepareAtlasGeneration(domain, {
+  domain.numerical.captured = state.surface;
+  return prepareRegionalRefinement(domain, {
     areaId: "region",
     seed: 73,
     quality: "draft",

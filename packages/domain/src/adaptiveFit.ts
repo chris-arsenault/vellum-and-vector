@@ -40,8 +40,13 @@ function solve(prepared: ReturnType<typeof factor>, rhs: number[]) {
   for (let i = n; i < 5; i++) rhs[i] = 0;
   return rhs;
 }
+/** Bytes a cell's stencil record takes, for sizing the shared cache to the whole topology. */
+const stencilRecordBytes = 2200;
 function prepareFits(t: AdaptiveTopology) {
-  const cache = new ByteCache<number, ReturnType<typeof stencil>>(adaptiveStencilCacheBytes);
+  // A sweep over every cell (generation on an adaptive lattice) must not thrash the cache.
+  const cache = new ByteCache<number, ReturnType<typeof stencil>>(
+    Math.max(adaptiveStencilCacheBytes, t.leaves.length * stencilRecordBytes)
+  );
   function stencil(i: number) {
     const box = adaptiveCell(t, i),
       width = box[2] - box[0],
@@ -80,11 +85,19 @@ function prepareFits(t: AdaptiveTopology) {
 // Geometry is immutable after assembly. A new refinement gets a new preparation;
 // retaining a channel evaluator never retains any other channel's values.
 const preparations = new WeakMap<AdaptiveTopology, ReturnType<typeof prepareFits>>();
-/** Local curvature is needed to reconstruct smooth terrain without cell-centre humps. */
-export function adaptiveFits(t: AdaptiveTopology, values: AdaptiveSamples) {
+/**
+ * Local curvature is needed to reconstruct smooth terrain without cell-centre humps. The
+ * budget bounds the fit cache: a viewport reader keeps the default, a sweep over a whole
+ * lattice passes room for every cell.
+ */
+export function adaptiveFits(
+  t: AdaptiveTopology,
+  values: AdaptiveSamples,
+  budget = adaptiveFitCacheBytes
+) {
   if (!preparations.has(t)) preparations.set(t, prepareFits(t));
   const geometry = preparations.get(t)!,
-    cache = new ByteCache<number, number[]>(adaptiveFitCacheBytes);
+    cache = new ByteCache<number, number[]>(budget);
   return (i: number) => {
     const previous = cache.get(i);
     if (previous) return previous;

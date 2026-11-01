@@ -1,73 +1,85 @@
 import { potentialEvaporation } from "../canonry/ecologyEnvironment";
-import { channel, clamp, naturalChannel, type RegionalState } from "./state";
-import { gradient } from "./relief";
+import { capturedCelsius, magicHeat } from "./glacial";
+import { isContent } from "./lattice";
+import { heightGradients } from "./relief";
+import { clamp, naturalBand, type RegionalState } from "./state";
+
+/** Lapse of temperature with height (°C/m). */
+const lapse = 0.0065;
 
 /**
- * Local conditions on the developed relief. Each round derives the shared climate channels
- * from their captured copies: the lapse of new height, exposure to the captured wind, soil
- * gained from deposition. Magic's heat and drying sit on top as tracked contributions, so a
- * second evaluation changes what changed and nothing else.
+ * Local conditions on the developed relief. Each round derives the shared climate bands from
+ * their captured copies: the lapse of new height, exposure to the captured wind, soil gained
+ * from deposition. Magic's heat and drying sit on top as the workspace's own replaced
+ * contribution and the ledger's totals, so a second evaluation changes what changed and
+ * nothing else. Bands keep their native units: temperature in tenths of a degree above
+ * -30 °C, rainfall and runoff in millimetres a year, moisture per mille, soil in metres.
  */
 export function respondClimate(state: RegionalState) {
-  const g = state.surface,
-    temperature = naturalChannel(state, "temperature", "celsius", 15),
-    moisture = naturalChannel(state, "moisture", "ratio", 0.5),
-    rain = naturalChannel(state, "rainfall", "metre/year", 0.8),
-    runoff = naturalChannel(state, "runoff", "metre/year", 0.4),
-    soil = naturalChannel(state, "soilDepth", "metre", 0.6),
-    c = g.channels,
-    natural = channel(state, "naturalTemperature", "celsius"),
-    applied = state.contributions,
-    windX = c.windEast,
-    windY = c.windNorth;
-  if (!state.input.domains.includes("physical")) {
-    for (let i = 0; i < g.active.length; i++) natural.set(i, c.temperature.get(i));
-    return;
-  }
-  for (let i = 0; i < g.active.length; i++) {
-    const delta = c.elevation.get(i) - state.inheritedHeight.get(i),
-      { gx, gy } = gradient(state, i),
-      exposure = gx * (windX?.get(i) ?? 1) + gy * (windY?.get(i) ?? 0),
+  const map = state.physical.map,
+    mesh = map.mesh,
+    moisture = naturalBand(state, "Moisture"),
+    rain = naturalBand(state, "Rainfall"),
+    runoff = naturalBand(state, "Runoff"),
+    soil = naturalBand(state, "SoilDepth"),
+    applied = state.regional.contributions;
+  if (!state.regional.input.domains.includes("physical")) return;
+  const { gx, gy } = heightGradients(state);
+  for (let i = 0; i < mesh.count; i++) {
+    if (!isContent(mesh, i)) continue;
+    const delta = (map.Elevation.get(i) - state.regional.inheritedHeight.get(i)) / 1024,
+      exposure = (gx[i] * map.WindX.get(i) + gy[i] * map.WindY.get(i)) / 1000,
       rainFactor = 1 + 0.35 * Math.tanh(exposure / 0.01),
-      cooled = temperature.get(i) - delta * 0.0065;
-    natural.set(i, cooled);
-    c.temperature.set(i, cooled + applied.appliedTo("temperature", i));
-    c.rainfall.set(i, Math.max(0, rain.get(i) * rainFactor + applied.appliedTo("rainfall", i)));
-    c.moisture.set(
+      cooled = capturedCelsius(state, i) - delta * lapse;
+    map.Temperature.set(i, Math.round(clamp((cooled + magicHeat(state, i) + 30) * 10, 0, 1000)));
+    map.Rainfall.set(
       i,
-      clamp(moisture.get(i) * rainFactor - delta / 10000 + applied.appliedTo("moisture", i))
+      Math.max(0, Math.round(rain.get(i) * rainFactor + applied.appliedTo("Rainfall", i)))
     );
-    c.soilDepth.set(
+    map.Moisture.set(
+      i,
+      Math.round(
+        clamp(moisture.get(i) * rainFactor - delta / 10 + applied.appliedTo("Moisture", i), 0, 1000)
+      )
+    );
+    map.SoilDepth.set(
       i,
       Math.max(
         0.02,
-        soil.get(i) + (c.sediment?.get(i) ?? 0) * 0.3 + applied.appliedTo("soilDepth", i)
+        soil.get(i) +
+          (map.SedimentThickness.get(i) / 1024) * 0.3 +
+          applied.appliedTo("SoilDepth", i)
       )
     );
     // Retain the captured runoff regime; exposure changes its local precipitation supply.
-    c.runoff.set(i, Math.max(0, runoff.get(i) * rainFactor + applied.appliedTo("runoff", i)));
+    map.Runoff.set(
+      i,
+      Math.max(0, Math.round(runoff.get(i) * rainFactor + applied.appliedTo("Runoff", i)))
+    );
   }
 }
 
+/** Present temperature in °C. */
+export function celsius(state: RegionalState, i: number) {
+  return state.physical.map.Temperature.get(i) / 10 - 30;
+}
+/** Rain plus snow (m/yr). */
 export function regionalPrecipitation(state: RegionalState, i: number) {
-  const c = state.surface.channels;
-  return (c.rainfall?.get(i) ?? 0) + (c.snowfall?.get(i) ?? 0);
+  const map = state.physical.map;
+  return (map.Rainfall.get(i) + map.Snowfall.get(i)) / 1000;
 }
 /** Existing physical ecology's aridity index; column humidity is an atmospheric input. */
 export function regionalMoisture(state: RegionalState, i: number) {
-  return clamp(
-    regionalPrecipitation(state, i) /
-      potentialEvaporation(state.surface.channels.temperature.get(i))
-  );
+  return clamp(regionalPrecipitation(state, i) / potentialEvaporation(celsius(state, i)));
 }
 export function regionalWetness(state: RegionalState, i: number) {
-  const c = state.surface.channels;
-  if (c.water.get(i)) return clamp(1 - c.waterDepth.get(i) / 3);
+  const map = state.physical.map;
+  if (map.WaterKindCodes.get(i)) return clamp(1 - map.WaterDepths.get(i) / 1024 / 3);
   return (
-    clamp(1 - c.slope.get(i) / 0.015) *
+    clamp(1 - map.Slope.get(i) / 0.015) *
     clamp(
-      (c.floodplain?.get(i) ?? 0) +
-        (c.delta?.get(i) ?? 0) +
+      map.FloodplainIntensity.get(i) / 1000 +
+        map.DeltaIntensity.get(i) / 1000 +
         Math.max(0, (regionalMoisture(state, i) - 0.7) * 1.8)
     )
   );

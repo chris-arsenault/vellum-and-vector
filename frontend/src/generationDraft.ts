@@ -12,6 +12,8 @@ import {
   mapBoundaryName,
   migrateBoundarySelection,
   inheritMapBoundary,
+  isRegionalRefinement,
+  prepareRegionalRefinement,
   type FeatureSelection,
   type GenerationRecipe,
 } from "@atlas/generation";
@@ -144,6 +146,9 @@ export function prepareDraft(draft: GenerationDraft, source?: DomainSnapshot, ar
     ? { ...source, scope: worldScope(source.world, areaId ?? source.scope.areaId) }
     : draftWorldSnapshot(draft);
   const input = { ...recipe, areaId: areaId ?? snapshot.scope.areaId };
+  // An independent captured map is refined through the regional preparation.
+  if (isRegionalRefinement(snapshot, input.areaId))
+    return prepareRegionalRefinement(snapshot, input);
   return prepareAtlasGeneration(
     snapshot,
     source ? inheritMapBoundary(snapshot, input, true) : input

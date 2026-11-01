@@ -1,6 +1,5 @@
 import { population, spatial, type SocietyCommunity, type SocietyConnection } from "@atlas/domain";
 import type { GenerationState } from "./process";
-import { communityName } from "./societyNaming";
 import { concentration, communityContacts } from "./societySettlements";
 import { nearestSocietySample } from "./societySpatial";
 import { dryLand } from "./societySupport";
@@ -11,40 +10,6 @@ export function unresolvedTownResidents(c: SocietyCommunity, contacts = 0) {
   return Math.min(
     Math.max(0, population(c) - (c.settlement?.population ?? 0)),
     c.latentSettlementPopulation ?? concentration(c, contacts) * 0.15
-  );
-}
-
-/** A concentration is a subset of existing residents, with no elapsed demographic step. */
-export function realizeRegionalPlaces(state: GenerationState) {
-  const region = state.society!.region;
-  for (const c of region.communities) {
-    if (!canRevealTown(c)) continue;
-    const cell = nearestSocietySample(state.surface, c.position, (i) => dryLand(state, i));
-    if (cell < 0) continue;
-    const residents = Math.min(population(c), c.latentSettlementPopulation ?? 0);
-    const era = region.history.at(-1)?.id ?? "Inherited settlement";
-    const named = communityName(state.domain.world, c, era);
-    c.name = named.name;
-    c.naming = { language: named.namingLanguage, culture: named.namingCulture, era };
-    c.founded = `Existing settlement revealed from ${era}`;
-    c.status = "inhabited";
-    c.settlement = { population: residents, peak: residents, recoveryYears: 0 };
-    c.latentSettlementPopulation = Math.max(0, (c.latentSettlementPopulation ?? 0) - residents);
-    c.causes.push(
-      "Local town residents resolved at an inherited geographic opportunity; no population or years added."
-    );
-  }
-}
-/** The existing occupation model uses eighty residents for an inhabited mapped town. */
-const minimumMappedTown = 80;
-function canRevealTown(c: SocietyCommunity) {
-  return (
-    !c.founded &&
-    !!c.parentCommunity &&
-    !c.protected &&
-    Math.min(population(c), c.latentSettlementPopulation ?? 0) >= minimumMappedTown &&
-    !!c.site &&
-    c.support.capacity > 0
   );
 }
 

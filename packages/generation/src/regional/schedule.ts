@@ -1,13 +1,15 @@
+import type { MapProcessContext } from "../process";
+import { physicalContext } from "../canonry/context";
+import { landformClassification } from "../canonry/landforms";
+import { conjoinFeatures, readEvidence, respondFeatures, supportFeatures } from "./causes/index";
 import { deriveCharacter, measureGrain } from "./character";
 import { respondClimate } from "./climate";
+import { divides, markPasses } from "./divides";
 import { routeWater } from "./drainage";
-import { readEvidence } from "./evidence";
-import { extractHabitats } from "./extraction/habitats";
-import { extractLandforms } from "./extraction/landforms";
-import { extractMagicPlaces } from "./extraction/magic";
-import { extractWaterGeometry } from "./extraction/water";
+import { clearRegionalProducts } from "./extraction/features";
+import { carryIdentities } from "./extraction/identity";
 import { respondCover } from "./living";
-import { respondMagic } from "./magic/index";
+import { mapMagic, respondMagic } from "./magic/index";
 import { growNetwork } from "./network";
 import {
   extractPlaces,
@@ -16,14 +18,15 @@ import {
   proposePlaces,
   supportProposals,
 } from "./places";
-import { deriveRelief, ensureSurfaceChannels, updateSlopes } from "./relief";
-import { drawChannelsToSeats, settleSeats } from "./seats";
-import { channel, type RegionalState } from "./state";
+import { deriveRelief, updateSlopes } from "./relief";
+import type { RegionalState } from "./state";
 
 export interface ScheduledStep {
   id: string;
   message: string;
-  run(state: RegionalState): void;
+  /** A step that writes features rather than the workspace. */
+  publishes?: boolean;
+  run(state: RegionalState, context?: MapProcessContext): void;
 }
 
 export const rounds = 3;
@@ -40,38 +43,77 @@ interface Domains {
 function domainsOf(domains: string[]): Domains {
   const physical = domains.includes("physical"),
     magic = domains.includes("magic");
-  return {
-    physical,
-    magic,
-    geography: physical || magic,
-    society: placesEnabled({ input: { domains } } as RegionalState),
-  };
+  return { physical, magic, geography: physical || magic, society: placesEnabled(domains) };
 }
 
 /**
  * The fixed coupled realization schedule (spec 7): context once, three rounds in a declared
- * order, one final refresh, one extraction. The network is grown once in round one; every
- * round derives the relief from it through the media as they are then, routes water,
- * evaluates climate and magic, develops the living landscape and settles places. A round is
- * not an epoch; the schedule ends after round three and the refresh. Magic's relief changes
- * trigger the one declared follow-up read (routing) inside the round that made them.
+ * order, one final refresh. The network is grown once in round one; every round derives the
+ * relief from it through the media as they are then, routes water, evaluates climate and
+ * magic, develops the living landscape and settles places. A round is not an epoch; the
+ * schedule ends after round three and the refresh. Magic's relief changes trigger the one
+ * declared follow-up read (routing) inside the round that made them. The world's projection
+ * and extraction follow (`workflow.ts`), then the regional identity and place steps.
  */
 export function regionalSchedule(domains: string[]): ScheduledStep[] {
   const d = domainsOf(domains),
-    steps: ScheduledStep[] = [contextStep(d)];
+    steps: ScheduledStep[] = [
+      {
+        id: "clear-products",
+        message: "Removing this map's earlier products",
+        publishes: true,
+        run: clearRegionalProducts,
+      },
+      contextStep(d),
+    ];
   for (let round = 1; round <= rounds; round++) steps.push(...roundSteps(d, round));
   steps.push({
     id: "refresh",
     message: "Refreshing derived reads after the last changes",
     run(state) {
-      state.round = rounds + 1;
+      state.regional.round = rounds + 1;
       updateSlopes(state);
       routeWater(state);
       respondClimate(state);
       if (d.geography) respondCover(state);
+      classifyLandforms(state);
     },
   });
-  return [...steps, ...extractionSteps(d)];
+  if (d.physical)
+    steps.push({
+      id: "descendant-context",
+      message: "Recording this map's organization for its own refinement",
+      run: publishDescendantContext,
+    });
+  return steps;
+}
+
+/** After the world has published the field's geography: what only a refinement knows. */
+export function regionalExtraction(domains: string[]): ScheduledStep[] {
+  const d = domainsOf(domains),
+    steps: ScheduledStep[] = [
+      {
+        id: "magic-map",
+        message: "Classifying magical geography",
+        publishes: true,
+        run: mapMagic,
+      },
+      { id: "features", message: "Publishing the developed geography", publishes: true, run() {} },
+      {
+        id: "identity",
+        message: "Carrying captured identities onto the developed geography",
+        publishes: true,
+        run: carryIdentities,
+      },
+    ];
+  if (d.society)
+    steps.push({
+      id: "places",
+      message: "Placing villages and local ways",
+      publishes: true,
+      run: extractPlaces,
+    });
+  return steps;
 }
 
 function contextStep(d: Domains): ScheduledStep {
@@ -79,8 +121,7 @@ function contextStep(d: Domains): ScheduledStep {
     id: "context",
     message: "Reading the captured country's character and established geography",
     run(state) {
-      ensureSurfaceChannels(state);
-      state.character = deriveCharacter(state);
+      state.regional.character = deriveCharacter(state);
       preparePlaces(state);
       readEvidence(state);
       if (!d.physical) {
@@ -88,7 +129,7 @@ function contextStep(d: Domains): ScheduledStep {
         return;
       }
       growNetwork(state);
-      drawChannelsToSeats(state);
+      supportFeatures(state);
     },
   };
 }
@@ -100,8 +141,9 @@ function roundSteps(d: Domains, round: number): ScheduledStep[] {
         id: `round-${round}/structure`,
         message: `Round ${round}: deriving relief from the network (${label})`,
         run(state) {
-          state.round = round;
+          state.regional.round = round;
           if (d.physical) deriveRelief(state);
+          if (round === 2) conjoinFeatures(state);
         },
       },
       {
@@ -109,7 +151,7 @@ function roundSteps(d: Domains, round: number): ScheduledStep[] {
         message: `Round ${round}: routing water and access`,
         run(state) {
           routeWater(state);
-          if (d.society && d.physical) settleSeats(state);
+          respondFeatures(state);
         },
       },
       {
@@ -121,7 +163,7 @@ function roundSteps(d: Domains, round: number): ScheduledStep[] {
           // The one declared follow-up: relief magic changed by a resolvable amount reroutes
           // water before the living landscape and places read it.
           const changed = respondMagic(state);
-          if ((changed.get("elevation") ?? 0) >= reliefFollowUp) {
+          if ((changed.get("Elevation") ?? 0) >= reliefFollowUp * 1024) {
             updateSlopes(state);
             routeWater(state);
           }
@@ -146,58 +188,37 @@ function roundSteps(d: Domains, round: number): ScheduledStep[] {
   return steps;
 }
 
-function extractionSteps(d: Domains): ScheduledStep[] {
-  const steps: ScheduledStep[] = [];
-  if (d.geography)
-    steps.push(
-      {
-        id: "landforms",
-        message: "Naming summits, cols, ranges and valleys",
-        run: extractLandforms,
-      },
-      {
-        id: "water-geometry",
-        message: "Drawing shores, lakes and rivers",
-        run: extractWaterGeometry,
-      }
-    );
-  if (d.magic)
-    steps.push({
-      id: "magic-places",
-      message: "Classifying magical geography",
-      run: extractMagicPlaces,
-    });
-  if (d.geography)
-    steps.push({ id: "habitats", message: "Outlining named habitats", run: extractHabitats });
-  if (d.society)
-    steps.push({ id: "places", message: "Placing villages and local ways", run: extractPlaces });
-  if (d.physical)
-    steps.push({
-      id: "descendant-context",
-      message: "Recording this map's organization for its own refinement",
-      run: publishDescendantContext,
-    });
-  return steps;
+/**
+ * The world's landform classes on the developed field, read by its peak and range extraction.
+ * The classifier reads ridges and passes where tectonics raised a ridge; on a region that
+ * mark is the drainage divide between the routed channels.
+ */
+function classifyLandforms(state: RegionalState) {
+  const work = state.physical,
+    divide = divides(state);
+  for (let i = 0; i < divide.length; i++) work.map.RidgeInfluence.set(i, divide[i]);
+  landformClassification(work.map, physicalContext(state.regional.input.seed, 0, work.profile));
+  markPasses(state, divide);
 }
 
 /**
  * The child's compact context for its descendants (spec 8.3): the developed grain, measured
- * from the realized relief and carrying the inherited organization where it still holds.
+ * from the realized relief and carrying the inherited organization where it still holds,
+ * written to the field's grain bands so the projection publishes it.
  */
 function publishDescendantContext(state: RegionalState) {
-  const g = state.surface,
-    n = g.active.length,
+  const map = state.physical.map,
+    n = map.mesh.count,
     measuredX = new Float64Array(n),
     measuredY = new Float64Array(n),
-    outX = channel(state, "structuralGrainX", "ratio"),
-    outY = channel(state, "structuralGrainY", "ratio"),
-    character = state.character!;
-  measureGrain(state, g.channels.elevation, measuredX, measuredY);
+    character = state.regional.character!;
+  measureGrain(state, (i) => map.Elevation.get(i) / 1024, measuredX, measuredY);
   for (let i = 0; i < n; i++) {
     const x = 0.5 * character.grainX[i] + 0.5 * measuredX[i],
       y = 0.5 * character.grainY[i] + 0.5 * measuredY[i],
-      coherence = Math.hypot(x, y);
-    outX.set(i, coherence > 1 ? x / coherence : x);
-    outY.set(i, coherence > 1 ? y / coherence : y);
+      coherence = Math.hypot(x, y),
+      scale = coherence > 1 ? 1 / coherence : 1;
+    map.StructuralGrainX.set(i, Math.round(x * scale * 1000));
+    map.StructuralGrainY.set(i, Math.round(y * scale * 1000));
   }
 }

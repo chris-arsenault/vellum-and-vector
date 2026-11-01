@@ -149,6 +149,9 @@ function flatness(a: Coordinate, b: Coordinate, c: Coordinate, d: Coordinate) {
   const dx = d[0] - a[0],
     dy = d[1] - a[1],
     length = Math.hypot(dx, dy);
+  // A chord of no length (a step through a cell corner whose portal is the path point itself)
+  // is already flat; dividing it would never end.
+  if (!(length > 0)) return 0;
   return (
     Math.max(
       Math.abs(dx * (b[1] - a[1]) - dy * (b[0] - a[0])),

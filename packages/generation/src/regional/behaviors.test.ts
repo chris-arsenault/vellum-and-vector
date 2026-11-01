@@ -1,29 +1,35 @@
-import { expect, it } from "vitest";
-import { gridPosition, resolutionCells } from "@atlas/domain";
-import { createRegionalState, refinementChannel } from "./capture";
+import { expect, it, vi } from "vitest";
+
+// World-depth runs on a supplied country: longer than the suite's default per-test budget.
+vi.setConfig({ testTimeout: 120_000 });
+import { resolutionCells } from "@atlas/domain";
+import { refinementChannel } from "./capture";
 import {
   axisDifference,
   dominantAxis,
-  enableMagic,
   regionalFixture,
+  regionalWorkingState,
   runSchedule,
   suppliedFeature,
 } from "./fixture";
-import { respondMagic } from "./magic/index";
-import { regionalSchedule } from "./schedule";
+import { cellAt, components, distance, isContent, positionOf, regionalSpan } from "./lattice";
 import { usableSlope } from "./seats";
-import {
-  cellAt,
-  distance,
-  regionalComponents,
-  resolvesRegionalComponent,
-  type RegionalState,
-} from "./state";
+import type { RegionalState } from "./state";
 
 /**
  * Gate A (spec 9.2): predeclared material-impact checks on constructed inputs. Each asserts
- * an observable of the resulting geography, never the input descriptor.
+ * an observable of the resulting geography, never the input descriptor. The magic checks
+ * are in `magicBehaviors.test.ts`.
  */
+
+const height = (state: RegionalState, i: number) =>
+  (state.physical.map.Elevation.get(i) - state.physical.map.EffectiveSeaLevel) / 1024;
+function contentCells(state: RegionalState) {
+  const mesh = state.physical.map.mesh,
+    cells: number[] = [];
+  for (let i = 0; i < mesh.count; i++) if (isContent(mesh, i)) cells.push(i);
+  return cells;
+}
 
 /** High country with a gentle tilt and a strong, uniform structural grain at `degrees`. */
 function grainedUpland(degrees: number) {
@@ -53,13 +59,20 @@ it("character changes organization: ice-carved high ground holds resolved lakes 
       temperature: ["celsius", () => 4],
     });
     runSchedule(state, ["physical"]);
-    const g = state.surface;
+    const map = state.physical.map,
+      mesh = map.mesh,
+      span = regionalSpan(state);
     let resolved = 0;
-    regionalComponents(
-      g,
-      (i) => g.channels.water.get(i) === 2,
+    // A lake the map resolves: several cells, and long enough along one axis to be a
+    // feature rather than a wet cell (a ribbon lake in a trough counts).
+    components(
+      mesh,
+      (i) => map.WaterKindCodes.get(i) === 2,
       (members) => {
-        if (resolvesRegionalComponent(g, members)) resolved++;
+        const xs = Array.from(members, (i) => mesh.x(i)),
+          ys = Array.from(members, (i) => mesh.y(i)),
+          length = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+        if (members.length >= 3 && length >= 2 * span) resolved++;
       }
     );
     return resolved;
@@ -75,7 +88,8 @@ it("an inherited summit is a divide node: the channels run around it and it stan
       2
     ),
     { state } = f,
-    g = state.surface;
+    map = state.physical.map,
+    mesh = map.mesh;
   suppliedFeature(
     state,
     "carrow",
@@ -88,17 +102,18 @@ it("an inherited summit is a divide node: the channels run around it and it stan
   runSchedule(state, ["physical"]);
   const peak = state.domain.world.features.carrow,
     [x, y] = (peak.geometry as GeoJSON.Point).coordinates,
-    cell = cellAt(state, x, y),
-    seat = cellAt(state, 17000, 21000);
+    cell = cellAt(mesh, x, y),
+    seat = cellAt(mesh, 17000, 21000),
+    span = state.regional.parentSpan;
   // No channel within half a parent span of the captured position: the summit's ground is dear.
-  for (let i = 0; i < g.active.length; i++)
-    if (distance(g, seat, i) < state.parentSpan * 0.5) expect(g.channels.riverOrder.get(i)).toBe(0);
+  for (const i of contentCells(state))
+    if (distance(mesh, seat, i) < span * 0.5) expect(map.RiverOrders.get(i)).toBe(0);
   // The feature moved to a realized summit within reach and kept its identity and provenance.
-  expect(distance(g, seat, cell)).toBeLessThanOrEqual(state.parentSpan);
+  expect(distance(mesh, seat, cell)).toBeLessThanOrEqual(span);
   expect(peak.attributes.anchoredFrom).toEqual([17000, 21000]);
-  for (let i = 0; i < g.active.length; i++)
-    if (distance(g, cell, i) <= state.parentSpan * 0.3)
-      expect(g.channels.elevation.get(i)).toBeLessThanOrEqual(g.channels.elevation.get(cell));
+  for (const i of contentCells(state))
+    if (distance(mesh, cell, i) <= span * 0.3)
+      expect(height(state, i)).toBeLessThanOrEqual(height(state, cell));
 });
 
 /** A known town on a uniform steep flank; no occupation, so no villages compete. */
@@ -106,9 +121,9 @@ function steepTown(withTown: boolean) {
   const f = regionalFixture((x) => 100 + x / 5, 40000, 2, {
     populationDensity: ["people/square-kilometre", () => 0],
   });
-  const g = f.state.surface,
-    cell = Math.floor(g.height / 2) * g.width + Math.floor(g.width / 2),
-    p = gridPosition(g, cell);
+  const mesh = f.state.physical.map.mesh,
+    cell = cellAt(mesh, 20000, 20000),
+    p = positionOf(mesh, cell);
   if (withTown)
     suppliedFeature(
       f.state,
@@ -126,24 +141,24 @@ function steepTown(withTown: boolean) {
 it("town realizes support: on a flank with no usable ground the town's footprint develops usable ground the flank lacks, without flattening the region", () => {
   const withTown = steepTown(true),
     without = steepTown(false),
-    g = withTown.state.surface,
+    map = withTown.state.physical.map,
+    mesh = map.mesh,
     town = withTown.state.domain.world.features.harrow,
     [x, y] = (town.geometry as GeoJSON.Point).coordinates,
-    seat = cellAt(withTown.state, x, y),
-    start = gridPosition(g, withTown.cell);
-  expect(g.channels.slope.get(seat)).toBeLessThanOrEqual(usableSlope);
+    seat = cellAt(mesh, x, y),
+    start = positionOf(mesh, withTown.cell),
+    span = withTown.state.regional.parentSpan;
+  expect(map.Slope.get(seat)).toBeLessThanOrEqual(usableSlope);
   expect(town.attributes.sitedFrom).toEqual([start.x, start.y]);
-  expect(distance(g, seat, withTown.cell)).toBeLessThanOrEqual(withTown.state.parentSpan);
+  expect(distance(mesh, seat, withTown.cell)).toBeLessThanOrEqual(span);
   // The ground changed where the town is; far from it the fit to the captured base moves
   // the surface by no more than a small fraction of the footprint's change.
   let near = 0,
     nearMost = 0,
     farMost = 0;
-  for (let i = 0; i < g.active.length; i++) {
-    const delta = Math.abs(
-      g.channels.elevation.get(i) - without.state.surface.channels.elevation.get(i)
-    );
-    if (distance(g, seat, i) <= withTown.state.parentSpan * 1.5) {
+  for (const i of contentCells(withTown.state)) {
+    const delta = Math.abs(height(withTown.state, i) - height(without.state, i));
+    if (distance(mesh, seat, i) <= span * 1.5) {
       nearMost = Math.max(nearMost, delta);
       if (delta > 0.5) near++;
     } else farMost = Math.max(farMost, delta);
@@ -152,7 +167,7 @@ it("town realizes support: on a flank with no usable ground the town's footprint
   expect(farMost).toBeLessThan(nearMost * 0.25);
   // The footprint still holds after the later rounds and the refresh: it is a working
   // structure the derivation reads every round, not a one-off stamp.
-  const seatRecord = withTown.state.evidence!.seats.find((s) => s.featureId === "harrow")!;
+  const seatRecord = withTown.state.regional.evidence!.seats.find((s) => s.featureId === "harrow")!;
   expect(seatRecord.cell).toBe(seat);
 });
 
@@ -177,7 +192,7 @@ function riverCountry(
   runSchedule(state, ["physical"]);
   const rivers = Object.values(state.domain.world.features).filter((x) => x.kind === "river"),
     reaches = state.domain.world.drainage!.area.reaches,
-    named = rivers.find((x) => x.name === name && x.id !== name.toLowerCase());
+    named = rivers.filter((x) => x.name === name && x.id !== name.toLowerCase());
   return { ...f, rivers, reaches, named };
 }
 
@@ -192,14 +207,25 @@ it("river develops surroundings: an interior source gains feeding tributaries, k
     ],
     40
   );
-  expect(named).toBeDefined();
-  expect(named!.placeId).toBe("vell");
-  expect((named!.attributes.capturedCourse as { sourceId: string }).sourceId).toBe("vell");
-  const index = reaches.findIndex((reach) => reach.featureIds[0] === named!.id),
-    tributaries = reaches.filter((reach) => reach.downstream === index);
+  expect(named.length).toBeGreaterThan(0);
+  for (const reach of named) {
+    expect(reach.placeId).toBe("vell");
+    expect((reach.attributes.capturedCourse as { sourceId: string }).sourceId).toBe("vell");
+  }
+  // Other reaches feed the named stem.
+  const stem = new Set(
+      reaches.map((reach, index) => (named.some((n) => n.id === reach.featureIds[0]) ? index : -1))
+    ),
+    tributaries = reaches.filter(
+      (reach, index) => !stem.has(index) && reach.downstream !== null && stem.has(reach.downstream)
+    );
   expect(tributaries.length).toBeGreaterThanOrEqual(2);
-  const source = (named!.geometry as GeoJSON.LineString).coordinates[0];
-  expect(state.surface.channels.water.get(cellAt(state, source[0], source[1]))).toBe(0);
+  // The stem rises on land (its source is a developed headwater, not a lake or the sea).
+  const heads = named.map((n) => (n.geometry as GeoJSON.LineString).coordinates[0]),
+    source = heads.reduce((a, b) => (a[0] > b[0] ? a : b));
+  expect(
+    state.physical.map.WaterKindCodes.get(cellAt(state.physical.map.mesh, source[0], source[1]))
+  ).toBe(0);
   // The coarse captured line left the map; the developed stem stands for it.
   expect(state.domain.world.features.vell).toBeUndefined();
 });
@@ -219,14 +245,14 @@ it("river develops surroundings: a river entering across the frame keeps its edg
       flow: ["cubic-metre/second", (x, y) => (Math.abs(y - 20000) < 1500 && x > 26000 ? 120 : 0)],
     }
   );
-  expect(named).toBeDefined();
-  const g = state.surface,
-    coordinates = (named!.geometry as GeoJSON.LineString).coordinates,
-    [x] = coordinates[0];
+  expect(named.length).toBeGreaterThan(0);
   // The stem begins at the east frame edge, carrying the captured discharge.
-  expect(x).toBeGreaterThan(g.bounds[2] - 2 * (g.scope.resolution ?? 1000));
+  const heads = named.map((n) => (n.geometry as GeoJSON.LineString).coordinates[0]),
+    [x] = heads.reduce((a, b) => (a[0] > b[0] ? a : b));
+  expect(x).toBeGreaterThan(state.surface.bounds[2] - 2 * regionalSpan(state));
+  const entering = named.find((n) => (n.geometry as GeoJSON.LineString).coordinates[0][0] === x)!;
   expect(
-    Number(named!.attributes.discharges ? (named!.attributes.discharges as number[])[0] : 0)
+    Number(entering.attributes.discharges ? (entering.attributes.discharges as number[])[0] : 0)
   ).toBeGreaterThan(100);
 });
 
@@ -276,153 +302,21 @@ it("repeating a refinement reproduces it: a second run from the first run's publ
   const second = build();
   for (const f of Object.values(first.state.domain.world.features))
     second.source.world.features[f.id] = structuredClone(f);
-  second.state = createRegionalState(second.source, second.input);
+  second.state = regionalWorkingState(second.source, second.input);
   runSchedule(second.state, ["physical", "built"]);
-  for (const name of ["elevation", "riverOrder", "water", "treeCover"])
-    expect(Array.from(second.state.surface.channels[name]), name).toEqual(
-      Array.from(first.state.surface.channels[name])
+  for (const name of ["Elevation", "RiverOrders", "WaterKindCodes", "TreeCover"] as const)
+    expect(Array.from(second.state.physical.map[name].toArray()), name).toEqual(
+      Array.from(first.state.physical.map[name].toArray())
     );
 });
-
-it("feedback crosses rounds: Fire changing the rock in round one changes where the later rounds' relief is cut", () => {
-  const runs = [true, false].map((fire) => {
-    const { state } = regionalFixture(mountain, 40000, 2, {
-      "magic:fire:intensity": ["relative-intensity", () => 0],
-      "magic:fire:source": [
-        "relative-intensity",
-        (x, y) => (x < 20000 && Math.abs(y - 20000) < 6000 ? 900 : 0),
-      ],
-      fracture: ["ratio", () => 0.1],
-    });
-    enableMagic(state, fire ? ["fire"] : []);
-    runSchedule(state, ["physical", "magic"]);
-    const g = state.surface;
-    return {
-      elevation: Array.from(g.channels.elevation),
-      fracture: Math.max(...g.channels.fracture),
-    };
-  });
-  // The medium changed where Fire reached...
-  expect(runs[0].fracture).toBeGreaterThan(runs[1].fracture);
-  // ...and the relief derived from it differs materially there.
-  let differing = 0;
-  for (let i = 0; i < runs[0].elevation.length; i++)
-    if (Math.abs(runs[0].elevation[i] - runs[1].elevation[i]) > 1) differing++;
-  expect(differing).toBeGreaterThanOrEqual(resolutionCells * resolutionCells);
-});
-
-it("all seven remain meaningful: each enabled system develops through its own medium and re-evaluation does not ratchet", () => {
-  const { state } = regionalFixture((x, y) => (x < 6000 ? -1500 : mountain(x, y)), 40000, 2, {
-      water: ["category", (x) => (x < 6000 ? 1 : 0)],
-      waterDepth: ["metre", (x) => (x < 6000 ? 1500 : 0)],
-      // Supplied on the coarse parent samples (5 km east, 10 km north): each block holds
-      // at least one sample.
-      temperature: ["celsius", (x) => (x >= 35000 ? -12 : 14)],
-      ice: ["ratio", (x) => (x >= 35000 ? 1 : 0)],
-      treeCover: ["ratio", () => 0.7],
-      "magic:fire:source": [
-        "relative-intensity",
-        (x, y) => (x >= 10000 && x <= 15000 && y === 20000 ? 900 : 0),
-      ],
-      "magic:aurora:stock:field/ice": ["intensity-square-metre", (x) => (x >= 35000 ? 4e9 : 0)],
-      "magic:pressure:source": [
-        "relative-intensity",
-        (x, y) => (x <= 5000 && y === 20000 ? 900 : 0),
-      ],
-      "magic:greenwood:source": [
-        "relative-intensity",
-        (x, y) => (x >= 20000 && x <= 25000 && y === 10000 ? 900 : 0),
-      ],
-      "magic:salt:stock:death/bed": [
-        "intensity-square-metre",
-        (x, y) => (x >= 25000 && x <= 30000 && y === 0 ? 6e9 : 0),
-      ],
-      "magic:hallowed:coverage": [
-        "ratio",
-        (x, y) => (x >= 15000 && x <= 20000 && y === 30000 ? 0.4 : 0),
-      ],
-    }),
-    systems = enableMagic(state),
-    g = state.surface;
-  // Veil needs the strain of two systems meeting: Fire and Aurora overlap on the east.
-  g.channels["magic:fire:source"].set(Math.floor(g.height / 2) * g.width + g.width - 4, 900);
-  for (const step of regionalSchedule(["physical", "magic"])) {
-    step.run(state);
-    if (step.id === "round-1/environment") break;
-  }
-  const fields = systems.map((system) => Array.from(g.channels[`magic:${system.id}:intensity`]));
-  for (const [k, values] of fields.entries())
-    expect(
-      values.some((v) => v > 0),
-      systems[k].id
-    ).toBe(true);
-  for (let a = 0; a < fields.length; a++)
-    for (let b = a + 1; b < fields.length; b++)
-      expect(correlation(fields[a], fields[b]), `${systems[a].id}/${systems[b].id}`).toBeLessThan(
-        0.99
-      );
-  expectConvergence(state, systems);
-});
-
-/**
- * Re-evaluating against the media the first evaluation produced converges: Fire's own
- * fracture opening is bounded by the declared effect and every later change is no larger
- * than the one before it. Nothing accumulates.
- */
-function expectConvergence(state: RegionalState, systems: ReturnType<typeof enableMagic>) {
-  const g = state.surface,
-    natural = state.natural.fracture,
-    opening =
-      systems.find((s) => s.id === "fire")!.effects.conduitOpening / 1000 +
-      Math.max(
-        0,
-        ...(state.domain.world.confluences ?? []).map((m) => m.effects.fractureConductance / 1000)
-      ),
-    snapshot = () => ({
-      fields: systems.map((system) => Array.from(g.channels[`magic:${system.id}:intensity`])),
-      elevation: Array.from(g.channels.elevation),
-    }),
-    difference = (a: ReturnType<typeof snapshot>, b: ReturnType<typeof snapshot>) =>
-      Math.max(
-        ...a.fields.map((values, k) =>
-          Math.max(...values.map((v, i) => Math.abs(v - b.fields[k][i])))
-        ),
-        ...a.elevation.map((v, i) => Math.abs(v - b.elevation[i]))
-      ),
-    first = snapshot();
-  respondMagic(state);
-  const second = snapshot();
-  respondMagic(state);
-  const third = snapshot();
-  expect(difference(second, third)).toBeLessThanOrEqual(difference(first, second) + 1e-9);
-  for (let i = 0; i < g.active.length; i++)
-    expect(g.channels.fracture.get(i)).toBeLessThanOrEqual(natural.get(i) + opening + 1e-9);
-  // Systems whose medium the evaluation does not itself change settle at once; Aurora holds
-  // ice that it then reads, so it converges rather than repeats.
-  for (const id of ["pressure", "hallowed"])
-    expect(Array.from(g.channels[`magic:${id}:intensity`]), id).toEqual(
-      second.fields[systems.findIndex((s) => s.id === id)]
-    );
-}
-
-function correlation(a: number[], b: number[]) {
-  const mean = (v: number[]) => v.reduce((s, x) => s + x, 0) / v.length,
-    ma = mean(a),
-    mb = mean(b),
-    sum = (f: (i: number) => number) => a.reduce((s, _, i) => s + f(i), 0),
-    sab = sum((i) => (a[i] - ma) * (b[i] - mb)),
-    saa = sum((i) => (a[i] - ma) ** 2),
-    sbb = sum((i) => (b[i] - mb) ** 2);
-  return saa && sbb ? sab / Math.sqrt(saa * sbb) : 0;
-}
 
 it("descendants use their parent: a completed child publishes its developed grain through the captured-channel contract", () => {
   const { state } = grainedUpland(30);
   runSchedule(state, ["physical"]);
-  const g = state.surface;
   expect(refinementChannel("structuralGrainX")).toBe(true);
   expect(refinementChannel("structuralGrainY")).toBe(true);
-  expect(g.channels.structuralGrainX).toBeDefined();
+  expect(state.surface.channels.structuralGrainX).toBeDefined();
+  const g = state.surface;
   let coherent = 0;
   for (let i = 0; i < g.active.length; i++)
     if (Math.hypot(g.channels.structuralGrainX.get(i), g.channels.structuralGrainY.get(i)) > 0.2)

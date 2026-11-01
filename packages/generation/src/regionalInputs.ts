@@ -4,7 +4,6 @@ import {
   spatial,
   type DomainSnapshot,
   type Grid,
-  type Diagnostic,
   ownsMapGeography,
 } from "@atlas/domain";
 import { generationResolution } from "./resolution";
@@ -34,21 +33,6 @@ export function regionalInputChannels(fields: Grid[]) {
   const result = new Map<string, Grid>();
   for (const grid of fields) for (const name of Object.keys(grid.channels)) result.set(name, grid);
   return result;
-}
-export function regionalInputDiagnostics(source: DomainSnapshot, areaId: string): Diagnostic[] {
-  const area = source.world.areas[areaId];
-  if (!area.parentId || area.profile !== "region") return [];
-  if (regionalInputFields(source, areaId).some((field) => field.channels.elevation)) return [];
-  return [
-    {
-      code: "regional_parent",
-      severity: "error",
-      invocation: null,
-      resource: areaId,
-      message:
-        "Generate or supply terrain on the parent map before refining this region. Region selection remains available without generation.",
-    },
-  ];
 }
 /** Linear refinement per quality; hierarchy depth and named administrative ranks are irrelevant. */
 const regionalSubdivision = { draft: 2, standard: 4, fine: 8 };

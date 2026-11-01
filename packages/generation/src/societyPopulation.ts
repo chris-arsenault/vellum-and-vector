@@ -36,8 +36,6 @@ export function initializePopulation(state: GenerationState, context: MapProcess
   if (prior) {
     inheritSociety(state, prior);
     work.inherited = true;
-  } else if (state.domain.world.areas[state.domain.scope.areaId].parentId) {
-    work.inherited = true;
   } else {
     // The rounds of earlier epochs are this society's earlier history.
     work.region.history.push(

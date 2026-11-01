@@ -1,13 +1,8 @@
-import {
-  gridPosition,
-  spatial,
-  translateGeometry,
-  KeyedHeap,
-  type AtlasFeature,
-} from "@atlas/domain";
+import { spatial, translateGeometry, KeyedHeap, type AtlasFeature } from "@atlas/domain";
 import { regionalCommunitySpacing } from "../regionalSociety";
 import { putRegionalFeature, putRegionalNetwork } from "./extraction/features";
-import { distance, neighbors, type RegionalState } from "./state";
+import { distance, isContent, neighborhood, neighborhoodCapacity, positionOf } from "./lattice";
+import type { RegionalState } from "./state";
 
 /** Travel cost of slope, shared by local ways and hinterland competition. */
 export const slopeCost = 12;
@@ -18,8 +13,9 @@ export function connectSeats(
   seats: { feature: AtlasFeature; cell: number }[]
 ) {
   if (seats.length < 2) return;
-  const shapes = seats.map((s) => {
-      const p = gridPosition(state.surface, s.cell),
+  const mesh = state.physical.map.mesh,
+    shapes = seats.map((s) => {
+      const p = positionOf(mesh, s.cell),
         coordinate = (s.feature.geometry as GeoJSON.Point).coordinates;
       return translateGeometry(s.feature.geometry, p.x - coordinate[0]);
     }),
@@ -27,14 +23,13 @@ export function connectSeats(
     size = regionalCommunitySpacing(state) * 3;
   spatial.withIndex(shapes, (index) => {
     for (const [a, seat] of seats.entries()) {
-      const p = gridPosition(state.surface, seat.cell),
+      const p = positionOf(mesh, seat.cell),
         nearby = index
           .query([p.x - size, p.y - size, p.x + size, p.y + size])
           .filter((b) => b !== a && seats[b].cell !== seat.cell)
           .sort(
             (b, c) =>
-              distance(state.surface, seat.cell, seats[b].cell) -
-              distance(state.surface, seat.cell, seats[c].cell)
+              distance(mesh, seat.cell, seats[b].cell) - distance(mesh, seat.cell, seats[c].cell)
           ),
         b = nearby[0];
       if (b === undefined) continue;
@@ -54,8 +49,9 @@ function publishWay(
 ) {
   const cells = regionalPath(state, from.cell, to.cell);
   if (!cells || cells.length < 2) return;
-  const coordinates = cells.map((i) => {
-      const p = gridPosition(state.surface, i);
+  const mesh = state.physical.map.mesh,
+    coordinates = cells.map((i) => {
+      const p = positionOf(mesh, i);
       return [p.x, p.y];
     }),
     f = putRegionalFeature(
@@ -80,7 +76,7 @@ interface PathSearch {
 }
 const searches = new WeakMap<RegionalState, PathSearch>();
 function pathSearch(state: RegionalState) {
-  const n = state.surface.active.length;
+  const n = state.physical.map.mesh.count;
   let s = searches.get(state);
   if (!s || s.cost.length !== n) {
     s = {
@@ -97,10 +93,13 @@ function pathSearch(state: RegionalState) {
 }
 /** A* follows dry, passable ground; the search is sized by this map's cells. */
 export function regionalPath(state: RegionalState, start: number, end: number): number[] | null {
-  const g = state.surface,
+  const map = state.physical.map,
+    mesh = map.mesh,
     front = new KeyedHeap(),
     s = pathSearch(state),
-    known = (j: number) => (s.stamp[j] === s.search ? s.cost[j] : Infinity);
+    around = new Int32Array(neighborhoodCapacity(mesh)),
+    known = (j: number) => (s.stamp[j] === s.search ? s.cost[j] : Infinity),
+    height = (i: number) => map.Elevation.get(i) / 1024;
   s.stamp[start] = s.search;
   s.cost[start] = 0;
   s.previous[start] = -1;
@@ -110,16 +109,18 @@ export function regionalPath(state: RegionalState, start: number, end: number): 
     if (i === end) return walkPath(s.previous, start, end);
     if (s.settled[i] === s.search) continue;
     s.settled[i] = s.search;
-    for (const j of neighbors(g, i)) {
-      if (g.channels.water.get(j) !== 0) continue;
-      const slope =
-          Math.abs(g.channels.elevation.get(j) - g.channels.elevation.get(i)) / distance(g, i, j),
-        next = s.cost[i] + distance(g, i, j) * (1 + slope * slopeCost);
+    const m = neighborhood(mesh, i, around);
+    for (let k = 0; k < m; k++) {
+      const j = around[k];
+      if (!isContent(mesh, j) || map.WaterKindCodes.get(j) !== 0) continue;
+      const step = distance(mesh, i, j),
+        slope = Math.abs(height(j) - height(i)) / step,
+        next = s.cost[i] + step * (1 + slope * slopeCost);
       if (next >= known(j)) continue;
       s.stamp[j] = s.search;
       s.cost[j] = next;
       s.previous[j] = i;
-      front.push(j, next + distance(g, j, end));
+      front.push(j, next + distance(mesh, j, end));
     }
   }
   return null;
