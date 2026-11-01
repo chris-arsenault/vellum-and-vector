@@ -1,6 +1,8 @@
 import { seasonality, snowShare } from "../canonry/climate";
 import { potentialEvaporation } from "../canonry/ecologyEnvironment";
 import { latitudeAt } from "../canonry/latitude";
+import { releaseWorking } from "../canonry/physicalNumerics";
+import { deflectWind, windTerrain } from "../canonry/windTerrain";
 import { capturedCelsius, magicHeat } from "./glacial";
 import { isContent } from "./lattice";
 import { heightGradients } from "./relief";
@@ -30,6 +32,7 @@ export function respondClimate(state: RegionalState) {
     runoff = naturalBand(state, "Runoff"),
     applied = state.regional.contributions;
   if (!state.regional.input.domains.includes("physical")) return;
+  deflectCapturedWind(state);
   const { gx, gy } = heightGradients(state);
   for (let i = 0; i < mesh.count; i++) {
     if (!isContent(mesh, i)) continue;
@@ -60,7 +63,9 @@ export function respondClimate(state: RegionalState) {
       Math.max(
         0,
         Math.round(
-          runoff.get(i) * rainFactor * coverRetention(state, i) + applied.appliedTo("Runoff", i)
+          runoff.get(i) * rainFactor * coverRetention(state, i) +
+            map.GlacialMeltwater.get(i) +
+            applied.appliedTo("Runoff", i)
         )
       )
     );
@@ -82,6 +87,31 @@ function localTemperature(state: RegionalState, i: number, delta: number) {
   );
 }
 const nativeTemperature = (celsius: number) => Math.round(clamp((celsius + 30) * 10, 0, 1000));
+
+/**
+ * The captured wind deflected by the developed relief with the world's own rule (valley
+ * channelling, lee turning), written each round from the captured direction so a change in
+ * relief updates the wind rather than turning it further each round.
+ */
+function deflectCapturedWind(state: RegionalState) {
+  const map = state.physical.map,
+    mesh = map.mesh,
+    profile = state.physical.profile,
+    windX = naturalBand(state, "WindX"),
+    windY = naturalBand(state, "WindY"),
+    terrain = windTerrain(map, profile);
+  for (let i = 0; i < mesh.count; i++) {
+    if (!isContent(mesh, i)) continue;
+    const x = windX.get(i) / 1000,
+      y = windY.get(i) / 1000,
+      speed = Math.hypot(x, y);
+    if (speed === 0) continue;
+    const [dx, dy] = deflectWind(terrain, profile, i, x / speed, y / speed);
+    map.WindX.set(i, Math.round(dx * speed * 1000));
+    map.WindY.set(i, Math.round(dy * speed * 1000));
+  }
+  releaseWorking(map, terrain.terrain, terrain.gradientX, terrain.gradientY, terrain.height);
+}
 
 /** Share of runoff a full canopy intercepts, and a full wetland holds, beyond the captured cover. */
 const canopyInterception = 0.3,

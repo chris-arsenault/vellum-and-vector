@@ -1503,6 +1503,119 @@ Steps:
   gate), and M2 adds per-landmark path scans, a cone loop in every material read and a
   per-river-cell floor walk.
 
+### M3 expansion (2026-11-01)
+
+Under the lean process. Read before expanding: `regional/relief.ts`, `glacial.ts`,
+`climate.ts`, `sediment.ts`, `base.ts`, the world's `windTerrain.ts` (`deflectWind`),
+`glacialLandforms.ts`, `geography.ts` (`landmasses`), the coast rows of the checklist and
+W3/W4/C1/C4 above.
+
+Decisions (mechanism choices, with reasons):
+
+- **Shore development (W4) as a relief term.** After sediment, each shore cell (land beside
+  the sea) reads its exposure: the fetch of open sea upwind along the captured wind and two
+  flanking rays, sheltered by the present coast. Exposed shore is cut in proportion to
+  exposure over the material's resistance (weak bands and fractured ground give way, resistant
+  bands stand as headlands); a cell cut below the datum becomes sea, so coves follow the weak
+  bands. The cut volume and the rivers' mouth loads settle in shelter: the least exposed
+  shallow sea cells beside land fill first, emerging as spits and bars in a headland's lee.
+  Exposure is written to `WaveExposure` for the readers the world has. Re-derived each round
+  from the same captured wind and material, so it updates rather than ratchets; the water
+  stage reads the moved shore (sea is wherever the surface lies below the datum and connects).
+  The network re-root follow-up is not built: the network keeps the captured sea as its roots
+  and the relief at a cell the coast turned to sea is cut again each round from the same
+  exposure (recorded; M7 judges whether a re-root is needed).
+- **Mouth form (W3).** At a shore root with a mouth load: a large load into sheltered water
+  builds a delta (the shallow sea within reach fills and emerges, the routing finds the
+  distributaries); otherwise the mouth is an estuary, deepened in proportion to the river's
+  discharge (a drowned valley). The barred lagoon is left out (longshore drift beyond the
+  lee-fill above is not modelled).
+- **Bathymetry and landmasses.** The world's shelf class stands; regional depth classes are
+  not added (the field's code vocabulary is the world's and its readers test the shelf code).
+  Islands are named at the footprint rule: the regional profile's island threshold is the
+  published footprint minimum, not ten thousand square kilometres.
+- **Wind on the developed relief (C1 in part).** The captured wind is deflected by the world's
+  own rule on the developed relief with the terrain smoothing length rescaled to the parent
+  span (valley channelling, lee turning); the orographic rain factor already reads the wind
+  against the slope, so windward rainfall exceeds lee rainfall across a range. The world's
+  column march is not ported (the captured rainfall is the budget; the factor is the regional
+  term).
+- **Ice (C4).** Ice flows on its own surface (bed plus thickness), down the steepest descent
+  of that surface over the neighbourhood rather than down the water network, so a glacier
+  crosses a col into the next valley when its surface stands above it; thickness is
+  scale-free (proportional to the square root of the ice-covered area feeding the cell, not to
+  a cell count) and bounded. Glacial erosion stays inside the derivation (exists); the moraine
+  is the terminus deposit (exists); melt is written to `GlacialMeltwater` and enters runoff;
+  the glacial cut is booked in `CumulativeGlacialErosion` so the world's fjord and trough
+  readers see it. The regional snowline is the per-cell lapsed temperature already in the
+  budget (recorded as the local snowline).
+- **Fog belts (C6)** are owned with Pressure coasts and are M5's.
+
+Steps:
+
+1. **Shore and mouth** (`shore.ts`, `relief.ts` writes sea cells from the derived surface,
+   `profile.ts` island threshold). Evidence: a straight coast of alternating weak and
+   resistant bands under an onshore wind retreats further in the weak bands; a steep country
+   shedding sediment into a sheltered shallow sea gains land beyond its captured shore.
+2. **Wind and ice** (`climate.ts` wind deflection and meltwater into runoff; `glacial.ts`
+   surface-routed flow, scale-free thickness, erosion band). Evidence: windward rainfall
+   exceeds lee rainfall across a ridge; a cold frame's ice stands on divide cells (a
+   transfluent col) and its trough is wider than the same valley unglaciated.
+3. **Record, review, commit.**
+
+#### M3 execution record (2026-11-01)
+
+- **Built as decided**, with these findings from running the fixtures: the shore's cut was
+  undone a step later by the drainability pass (a cut cell was lifted back above its receiver),
+  so the shore now works after that pass; exposure read only on the cells touching water
+  could cut one row in one derivation and each round re-derived the same row, so exposure now
+  spreads three cells inland, fading, and the sea works a belt rather than a line; a river
+  mouth's load builds a delta in the smoothed shallows beside the captured shore, so weak
+  bands (which carry more rivers) gain delta ground seaward while losing coves landward.
+- **Evidence (fixture scale, `coast.test.ts`, four checks).** Behind the shore roots (which
+  stand a metre above the sea and go in any band), a low coast of alternating ten-kilometre
+  weak and resistant bands under an onshore wind loses 45 cells to coves in the weak bands
+  and 26 in the resistant ones; a steep country shedding sediment into a sheltered shallow sea
+  gains land beyond its captured shore; rainfall on a ridge's windward flank exceeds the lee
+  flank's by more than a tenth; with the captured temperature falling with the captured
+  height, ice from the cold heights stands on divide cells too warm to snow on (a transfluent
+  col) and the glacier's cut spans more cells across its valley than the river's own (a
+  trough wider than its river), where the unglaciated valley has none.
+- **Disclosed.** The fixture's rock bands must be two parent samples wide to be captured at
+  all (a five-kilometre band on a five-kilometre parent averages to one value), and a shallow
+  sea beside land is smoothed above the datum within about a kilometre of the captured shore,
+  so the realized coast sits seaward of the drawn one in every band; both are properties of the
+  capture, recorded for M7. On resistant rock the derived relief stands a hundred to two
+  hundred metres high at the very shore where the parent has three to thirty: the hillslope
+  gradient's material factor outruns the base conditioning there (M7 item). Not built: the
+  network re-root at the moved shore (the water stage reads the moved shore; the network keeps
+  the captured sea), the barred lagoon, regional bathymetry classes, fog belts (M5), and the
+  world's column march (the orographic factor on the captured budget stands in). Melt enters
+  runoff only on ice-covered cells. The ice flow's two passes resolve one spill over a col,
+  not a glacier's full thickness-flow equilibrium.
+- **Review (read-only subagent) and what was done.** Fixed: the shore's cut could leave a
+  sub-datum pit behind an uncut headland and a weak cell below its receiver (the cut now
+  works inward from the water's edge, a cell only once a nearer neighbour is water, and ground
+  cut to the sea is held there while the rest drains); the lee fill and delta fill could raise
+  a lake floor or ground the cut had just taken (only the sea's own shallows fill); a cove's
+  lowering was booked as river incision (it is not); moraines were placed at the water
+  network's receiver although the ice now flows on its own surface (placed where the ice went);
+  the island threshold was dead on a region (removed) and the world's wind blocking height of
+  fifteen hundred metres left the deflection inert on regional ranges (three hundred); the
+  delta's exposure limit is named. Two checks passed for the wrong reason and were rewritten:
+  the mouth check counted captured land as gained (now: sea the network held that is land);
+  the ice check counted snow on divides as transfluence (now: the captured temperature falls
+  with the captured height, so only the heights snow, and ice is sought on divides too warm to
+  snow on; the width is read across the glaciated valley against the same valley unglaciated).
+  Disclosed, not changed: the wind check measures the orographic rain factor (M0), which the
+  deflection can only weaken; exposure reads the captured coast each round (the cut never
+  compounds, by design); a ray leaving the lattice counts as open sea; glacial and coastal
+  landform classes are not classified on a region (the world's trough and moraine classes run
+  in its own extraction; the fjord class reads the booked glacial erosion on land only);
+  meltwater starts one cell above the terminus; the wind terrain's sampler cache is built each
+  round and unused; the shared `GlacialMeltwater` band carries a plain mm/yr here and an
+  ice-weighted per-mille on a world.
+
 ### Sulion mapping
 
 Root plan `5732ab12-bbaf-45e0-a972-55a163ae8ff9` "Regional refinement at world depth (one
@@ -1517,9 +1630,9 @@ milestones), both canceled as superseded by the one-representation decision.
 
 ### Current state
 
-M0 (software organization), M1 (shared media and repairs) and M2 (terrain and water at depth)
-committed as recorded above. Next: M3 (coast, climate and ice at depth) through plan-phase,
-under the lean per-phase process the owner set on 2026-11-01.
+M0 (software organization), M1 (shared media and repairs), M2 (terrain and water at depth)
+and M3 (coast, climate and ice at depth) committed as recorded above. Next: M4 (ecology at
+depth) through plan-phase, under the lean per-phase process the owner set on 2026-11-01.
 
 ## New namespace `packages/generation/src/regional`
 

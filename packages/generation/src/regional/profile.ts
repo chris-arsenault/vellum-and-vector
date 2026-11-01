@@ -25,4 +25,8 @@ export function regionalProfile(profile: PhysicalProfile, parentSpan: number, ce
   profile.FjordMinimumGlacialErosion = 30;
   profile.RangeMinimumArea = (resolutionCells * cellSpan) ** 2;
   profile.PlainSlopeThreshold = 0.012;
+  // The wind's terrain smoothing reads the relief at the parent's scale, and a regional range
+  // of a few hundred metres blocks the low air as a world range of fifteen hundred does.
+  profile.WindTerrainLength = Math.max(2 * cellSpan, 0.5 * parentSpan);
+  profile.WindBlockingHeight = 300;
 }

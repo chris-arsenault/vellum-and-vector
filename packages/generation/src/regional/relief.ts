@@ -7,6 +7,7 @@ import { baseSmoothing } from "./base";
 import { featureCaps, restoreFeatures } from "./causes/registry";
 import { networkDivides } from "./divides";
 import { transportSediment, wasteHillslopes } from "./sediment";
+import { developShore } from "./shore";
 import {
   blurContent,
   contentMask,
@@ -92,7 +93,12 @@ export function deriveRelief(state: RegionalState) {
   wasteHillslopes(state, h, supply);
   transportSediment(state, h, supply);
   keepDrainable(network, h, basin);
-  writeSurface(state, h);
+  // The sea works the shore: exposed ground is cut, the lee and the river mouths fill. Ground
+  // the cut took below the datum is sea and stays there; the rest drains as before.
+  const cut = developShore(state, h),
+    taken = cut.map((c, j) => (c && h[j] <= 0 ? 1 : 0)) as Uint8Array;
+  keepDrainable(network, h, basin, taken);
+  writeSurface(state, h, cut);
   state.regional.relief = relief;
   // Established landmarks restore their signatures on the written relief.
   restoreFeatures(state);
@@ -320,12 +326,17 @@ function buildCones(state: RegionalState, h: Float64Array) {
 }
 
 /** The derived surface drains along its network; only basins with a cause lie below their receiver. */
-function keepDrainable(network: NetworkWork, h: Float64Array, basin: Uint8Array) {
+function keepDrainable(
+  network: NetworkWork,
+  h: Float64Array,
+  basin: Uint8Array,
+  held?: Uint8Array
+) {
   const { receiver, order, count, level, lake } = network;
   for (let k = 0; k < count; k++) {
     const j = order[k],
       i = receiver[j];
-    if (i < 0 || basin[j]) continue;
+    if (i < 0 || basin[j] || held?.[j]) continue;
     const floor = (lake[i] >= 0 ? level[i] : h[i]) + monotoneRise;
     if (h[j] < floor) h[j] = floor;
   }
@@ -336,7 +347,7 @@ function keepDrainable(network: NetworkWork, h: Float64Array, basin: Uint8Array)
  * its inherited exterior. Incision below the captured base is booked as cumulative fluvial
  * erosion, which the landform classifier and the valley extraction read.
  */
-function writeSurface(state: RegionalState, h: Float64Array) {
+function writeSurface(state: RegionalState, h: Float64Array, cut: Uint8Array) {
   const map = state.physical.map,
     mesh = map.mesh,
     datum = map.EffectiveSeaLevel,
@@ -345,11 +356,13 @@ function writeSurface(state: RegionalState, h: Float64Array) {
   for (let i = 0; i < h.length; i++) {
     if (!isContent(mesh, i)) continue;
     if (sea[i]) {
-      map.Elevation.set(i, datum + units(Math.min(base[i], -1)));
+      // The captured sea floor, unless the shore's work raised it toward a bar or delta.
+      map.Elevation.set(i, datum + units(Math.max(h[i], Math.min(base[i], -1))));
       map.CumulativeFluvialErosion.set(i, 0);
     } else {
       map.Elevation.set(i, datum + units(h[i]) + Math.round(applied.appliedTo("Elevation", i)));
-      map.CumulativeFluvialErosion.set(i, units(Math.max(0, base[i] - h[i])));
+      // Ground the sea cut is not a river's incision.
+      map.CumulativeFluvialErosion.set(i, cut[i] ? 0 : units(Math.max(0, base[i] - h[i])));
     }
     map.BedrockElevation.set(i, map.Elevation.get(i) - map.SedimentThickness.get(i));
   }
