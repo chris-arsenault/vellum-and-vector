@@ -10,7 +10,7 @@ vi.mock("../../packages/generation/src/atlasWorkflow", async (original) => ({
     );
   },
 }));
-vi.mock("../../packages/generation/src/refinement/workflow", async (original) => ({
+vi.mock("../../packages/generation/src/regional/workflow", async (original) => ({
   ...(await original<Record<string, unknown>>()),
   refineRegionalMap() {
     throw new Error(

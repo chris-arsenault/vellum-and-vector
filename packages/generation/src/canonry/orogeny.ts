@@ -138,7 +138,35 @@ function constructTriangle(
   const admitted = roots ? roots.get(i) : changeThickness(map, context, c, i, section, drive);
   map.OrogenicConstruction.set(i, admitted);
   recordActivity(map, context, i, admitted);
+  recordGrain(map, c, i, source, section, admitted);
   constructSurface(map, context, c, i, source, section, admitted);
+}
+/**
+ * Constructed relief remembers the strike that organized it. The grain is the boundary's
+ * tangent as a doubled-angle axis, weighted by how much of the belt's cross-section built
+ * this cell; a stronger later construction replaces a weaker earlier one, and the crust
+ * carries the result away from the boundary.
+ */
+function recordGrain(
+  map: PhysicalField,
+  c: BoundaryComponent,
+  i: number,
+  source: number,
+  section: number,
+  admitted: number
+) {
+  if (toUnits(admitted) <= 0 || c.code !== 1) return;
+  const tx = map.TectonicTangentX.get(source) / 1000,
+    ty = map.TectonicTangentY.get(source) / 1000,
+    length = Math.hypot(tx, ty);
+  if (length < 0.01) return;
+  const coherence = clamp(section / 0.9, 0, 1) * clamp(c.prominence / 1500, 0.4, 1),
+    existing = Math.hypot(map.StructuralGrainX.get(i), map.StructuralGrainY.get(i)) / 1000;
+  if (coherence <= existing) return;
+  const ux = tx / length,
+    uy = ty / length;
+  map.StructuralGrainX.set(i, round((ux * ux - uy * uy) * coherence * 1000));
+  map.StructuralGrainY.set(i, round(2 * ux * uy * coherence * 1000));
 }
 export function orogenicConstruction(map: PhysicalField, context: PhysicalContext) {
   map.OrogenicComponentIds.fill(-1);

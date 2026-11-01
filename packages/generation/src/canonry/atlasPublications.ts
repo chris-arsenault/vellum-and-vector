@@ -42,6 +42,8 @@ const nativeOwnership: Ownership[] = [
       "tectonicBoundary",
       "boundaryPair",
       "tectonicHistory",
+      "structuralGrainX",
+      "structuralGrainY",
     ],
   ],
   [["physical.fractures", "physical.impacts", "physical.volcanism"], "geology", ["fracture"]],

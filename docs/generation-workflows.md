@@ -78,78 +78,74 @@ clipping it to the starting outline. Mapped ways split at the chart edge while
 retaining one feature identity and their network junctions. Physical queries,
 class reads and display interpolation locate canonical coordinates in that chart.
 
-Regional terrain displaces coasts and divides, then develops connected valley
-profiles and hillsides through local drainage and substrate resistance. Small
-surface variation supplies local differences; drainage gathering, stream power
-and repeated routing develop the relief without advancing chronology. Spill
-routes resolve basins and flats; sloping ground follows downhill gradients.
-Sheet runoff becomes a channel where the terrain gathers it. Stream discharge
-uses the existing basin-relative headwater criteria as the mesh becomes finer.
-Bare fractured country develops weathered gullies even when its present discharge
-cannot support a mapped flowing stream.
-Small artificial pits settle, while captured basins and newly developed coherent
-basins can change shape and hold water. A captured basin does not make each new
-sampling pit into a lake. Lake supply balances precipitation and runoff against
-evaporation and seepage; shores follow the water stage against continuous terrain.
-Ocean outlines use connected sea membership, so closed basins below sea level do
-not become coastal water.
-The footprint rule applies to mapped shores as well as names. Unresolved ponds
-remain numerical water context without removing the surrounding terrestrial cover.
-Magical changes to relief pass through the same basin cleanup before water reroutes.
-Floodplain coverage follows local channel
-margins rather than repeating a coarse floodplain over the fine map.
-Climate and living cover
-respond to the resulting relief, wetness and soil. Ground moisture follows
-precipitation over evaporative demand; atmospheric humidity is a separate input.
-Local exposure modulates captured runoff rather than replacing a dry regime.
-Flooding and supported water supply wetland cover;
-catchment area alone supplies neither water nor habitation. Surface classes are recomputed
-on that grid; habitat outlines use the raster's shared class-boundary evaluator.
-Habitat outlines also use the existing mesh footprint, named-biome extent and small-gap
-rules; physical water and other named landscapes keep their openings. Smaller patches
-remain field coverage. Raster water masks union geographic window
-fragments, so overlapping reads do not create invalid polygon collections.
-Contour crossing searches use the map's geometric tolerance. Stored coordinate
-precision does not dictate their numerical accuracy.
+Regional terrain, water, living cover, magic and places develop in a fixed coupled
+schedule (`packages/generation/src/regional/schedule.ts`, recorded in
+[ADR 0008](adr/0008-regional-refinement-is-conditioned-amplification.md)): context once,
+three rounds in a declared order (relief and support, then water and access, then climate
+and magic on the shared media, then the living landscape and places), one refresh of derived
+reads and one extraction. A round is not an epoch; nothing replays world history. Processes
+are prepared once and respond each round: working structures (uplift intent, material
+bands, basins, the drainage graph, settlement supports, proposed places, magic materials)
+persist and evolve, and the shared media are natural copies of the captured present plus a
+ledger of tracked contributions, so a round updates an influence instead of adding it again.
 
-Topographic prominence locates summits and their joining cols. Measured opposing
-flanks identify ridges and valleys; connected mountain relief becomes range
-footprints. Named summit bodies use the existing mesh footprint rule; smaller
-summits remain landform classes. Waterfalls require sharp channel-profile breaks,
-so an uninterrupted steep reach does not become a string of falls.
+The captured country's character enters as the world's structural grain, strain, glacial
+reworking and volcanic construction. Relief develops as uplift intent against stream-power
+incision and hillslope creep: intent follows the captured height of strained ground and its
+local relief, is organized along the grain into separate massifs and across it into material
+bands of varying spacing, rises around inherited summits and volcanic cones, and is lowered
+along captured river courses; erodibility reads the present rock, fractures, living cover,
+bands and a fine substrate heterogeneity. A long-wavelength anchor keeps the captured broad
+character while summits rise above it and valleys cut below. Where ice reworked high ground,
+headwater bowls are excavated once behind rock rims that hold; whether each holds a tarn
+follows its water supply. Spill routes resolve basins and flats; sheet runoff becomes a
+channel where the terrain gathers it, with the map-sample discharge threshold, the strip test
+and headwater pruning as before. Closed depressions without a cause fill. Lake supply
+balances precipitation and runoff against evaporation and seepage; shores follow the water
+stage against continuous terrain; ocean outlines use connected sea membership. The footprint
+rule applies to mapped shores as well as names; unresolved ponds remain numerical water
+context. Floodplain coverage follows local channel margins.
 
-Smaller settlements use the existing pass, river-node, harbour and material-site
-classifiers, with captured occupation and local support. Within a site class,
-terrain and support rank ahead of random ties. Plain-site draws vary
-locations without grid-row ties. Where a captured density field is absent,
-located community footprints supply their present population per area. Explicit
-fields remain authoritative, and suitable empty ground remains empty. Refinement
-neither spends a parent population budget nor advances demographic history.
-Living cover remains the surface around a small stream; its presence does not
-paint a whole cell as a wet valley. Bare ridges and actual floodplains retain
-their physical surface classes.
+Established features are evidence: an inherited summit moves to the realized summit of its
+massif; a captured river's course gathers the developed drainage and the stem that follows it
+carries the river's name and identity; a river entering across the frame keeps its edge
+source and discharge. A known settlement takes a nearby usable site consistent with its
+broad situation or, where none exists, a bounded terrace with an access ramp shaped into the
+terrain; new villages are proposed once from the sites the developed terrain offers, with
+hinterlands by site class and water access rather than a fixed lattice, and take their support
+in the last round or are dropped. Seats and summits are re-sited from their captured
+positions on every refinement, so a repeated refinement reproduces itself.
 
-Magic refinement develops captured material stocks and fractional coverage into
-local deposits and pathways before classifying their geography. Material stays
-extensive when sampled onto finer cells; unresolved deposits retain their trace
-context. Coverage can support a newly resolved local source without an inherited
-point. An effects-only Fire halo does not establish an ore deposit.
+Climate re-derives each round from the captured copies under the developed relief: lapse,
+exposure on the captured wind, moisture, soil gained from deposition, the captured runoff
+regime. Cover re-derives from the captured prior under the present tree line, soil, slope,
+wetness and magical media, opening forest where it cannot be carried and passing the tree
+line on cold new relief, and binds the next round's hillslopes and runoff. Surface classes
+and habitat outlines use the raster's shared class-boundary evaluator, the mesh footprint,
+named-biome extent and small-gap rules; smaller patches remain field coverage.
 
-Fire separates held and spent material, exposure and release, with fractures
-carrying vein heat while fallen and forge deposits remain local. Aurora charge
-moves toward cold traps and remains in ice or weaker relict ground. Pressure
-fronts follow connected ocean water, focus over shallow bathymetry and reflect
-from coasts. Greenwood spreads through connected vegetation, while groundwater
-leaches buried charge toward supported spring breaks. Salt beds dissolve into
-brine, follow drainage and supply wind-carried dust; exposed beds harden or
-collapse, and Fire consumes their material. Captured Hallowed kept geography
-develops wards that displace other magical fields to their own sanctuary rims.
-Veil develops strain where systems compete and pairs coherent tears through network doors.
+Topographic prominence locates summits and their joining cols; a summit is named only above
+a prominence that scales with the parent sample span, so a regional map names the major
+peaks and a finer map the lesser ones. Measured opposing flanks identify ridges and valleys;
+connected mountain relief becomes range footprints. Waterfalls require sharp channel-profile
+breaks.
 
-Present magical changes affect rock, ice, soil, water and living cover; altered
-relief and water supply feed back through local drainage. System meetings retain
-their own processes. These operations develop the captured present without
-another physical epoch or human era.
+Each magic system resolves its captured materials once (deposits, drained charge, leached
+strata, weathered and burnt beds, located sources) and derives its field each round from
+those materials and the present medium through its own carrier. Fire separates held and
+spent material, exposure and release, with fractures carrying vein heat while fallen and
+forge deposits remain local. Aurora charge drains toward cold traps once and is read from
+its ice and ground reservoirs against the present cold. Pressure fronts follow connected
+ocean water, focus over shallow bathymetry and reflect from coasts; the traced field is kept
+while the ocean's extent is unchanged. Greenwood spreads through connected vegetation, while
+groundwater leaches buried charge toward supported spring breaks. Salt beds dissolve into
+brine, follow drainage and supply wind-carried dust once; exposed beds harden or collapse,
+and Fire consumes their material. A captured Hallowed ward does not spread again, only its
+located sources do; wards displace other magical fields to their rims. Veil develops strain
+where systems compete and pairs coherent tears into doors at extraction. Effects, coasts,
+relief and meetings write through the ledger; a resolvable relief change reroutes water
+within the round. These operations develop the captured present without another physical
+epoch or human era. The child publishes its developed grain for its own refinement.
 
 Named magic places use the existing connected-class and minimum-component rules;
 local peaks within one site complex do not create separate places. Class coverage
@@ -773,8 +769,8 @@ connections without drawing a new coastline template.
 
 The retained Canonry regional adapters are legacy implementation, including their
 conserved-cell and boundary-band behavior. Independently owned regional maps
-dispatch to `refinement/workflow.ts` before world preparation. They use the
-dedicated surface algorithms described above, without those numerical locks.
+dispatch to `regional/workflow.ts` before world preparation. They use the
+coupled regional schedule described above, without those numerical locks.
 
 The optional offline `tools/canonry-reference` program reads the original C#
 library to produce reference fixtures and `contracts.generated.json`. With the

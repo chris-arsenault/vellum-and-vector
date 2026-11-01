@@ -9,27 +9,39 @@ const imageSize = 1400;
 
 /**
  * Local generated artifact: the production terrain painter (cover, relief shading and
- * lakes) with the published rivers, lake shores and settlements drawn over it.
+ * lakes) with the published rivers, lake shores, roads, summits, cols, magic sites and
+ * settlements drawn over it. One fixed symbol set serves every comparison render.
  */
 export async function regionalOverview(
   result: CompletedBoundary,
   features: AtlasFeature[],
-  name = "standard-overview"
+  name = "standard-overview",
+  directory = ".artifacts/regional"
 ) {
   const image = paintedSurface(result);
   for (const f of features) {
     if (f.kind === "river")
       strokeGeometry(image, f.geometry, [34, 98, 143], Number(f.attributes.order ?? 1) > 2 ? 2 : 1);
     if (f.kind === "lake") strokeGeometry(image, f.geometry, [20, 70, 110], 1);
-    if (f.kind === "settlement" && f.geometry.type === "Point")
-      dot(image, f.geometry.coordinates, [39, 37, 29]);
+    if (f.kind === "road") strokeGeometry(image, f.geometry, [122, 84, 40], 1);
   }
-  await savePng(image, name);
+  for (const f of features) {
+    if (f.geometry.type !== "Point") continue;
+    if (f.kind === "settlement") dot(image, f.geometry.coordinates, [39, 37, 29]);
+    else if (f.kind === "peak") triangle(image, f.geometry.coordinates, [60, 30, 20]);
+    else if (f.kind === "pass") cross(image, f.geometry.coordinates, [60, 30, 20]);
+    else if (f.layerId === "magic") dot(image, f.geometry.coordinates, [170, 40, 160], 1);
+  }
+  await savePng(image, name, directory);
 }
 
 /** The production painter alone, for inspecting developed relief and cover. */
-export async function regionalReliefOverview(result: CompletedBoundary, name = "standard-relief") {
-  await savePng(paintedSurface(result), name);
+export async function regionalReliefOverview(
+  result: CompletedBoundary,
+  name = "standard-relief",
+  directory = ".artifacts/regional"
+) {
+  await savePng(paintedSurface(result), name, directory);
 }
 
 interface Image {
@@ -100,13 +112,28 @@ function strokeGeometry(image: Image, geometry: Geometry, color: number[], width
     }
 }
 
-function dot(image: Image, position: Position, color: number[]) {
+function dot(image: Image, position: Position, color: number[], radius = 2) {
   const [x, y] = pixel(image, position);
-  for (let oy = -2; oy <= 2; oy++)
-    for (let ox = -2; ox <= 2; ox++) if (ox * ox + oy * oy <= 5) plot(image, x + ox, y + oy, color);
+  for (let oy = -radius; oy <= radius; oy++)
+    for (let ox = -radius; ox <= radius; ox++)
+      if (ox * ox + oy * oy <= radius * radius + 1) plot(image, x + ox, y + oy, color);
 }
 
-async function savePng(image: Image, name: string) {
+function triangle(image: Image, position: Position, color: number[]) {
+  const [x, y] = pixel(image, position);
+  for (let row = 0; row <= 4; row++)
+    for (let ox = -row / 2; ox <= row / 2; ox += 0.5) plot(image, x + ox, y - 3 + row, color);
+}
+
+function cross(image: Image, position: Position, color: number[]) {
+  const [x, y] = pixel(image, position);
+  for (let k = -2; k <= 2; k++) {
+    plot(image, x + k, y + k, color);
+    plot(image, x + k, y - k, color);
+  }
+}
+
+async function savePng(image: Image, name: string, directory: string) {
   const raw = Buffer.alloc((image.width * 4 + 1) * image.height);
   for (let y = 0; y < image.height; y++)
     Buffer.from(
@@ -124,8 +151,8 @@ async function savePng(image: Image, name: string) {
     chunk("IDAT", deflateSync(raw)),
     chunk("IEND", Buffer.alloc(0)),
   ]);
-  await mkdir(".artifacts/regional", { recursive: true });
-  await writeFile(`.artifacts/regional/${name}.png`, png);
+  await mkdir(directory, { recursive: true });
+  await writeFile(`${directory}/${name}.png`, png);
 }
 
 function chunk(type: string, data: Buffer) {

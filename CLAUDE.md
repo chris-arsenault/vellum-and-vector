@@ -11,7 +11,8 @@ the [spatial ADR](docs/adr/0001-spatial-authority.md),
 [scale contract ADR](docs/adr/0005-scale-contract.md),
 [landmarks ADR](docs/adr/0006-landmarks-are-injected-causes.md) and
 [magic materials ADR](docs/adr/0007-magic-systems-are-materials.md) and
-[regional refinement ADR](docs/adr/0008-regional-refinement-is-conditioned-amplification.md) record
+[regional refinement ADR](docs/adr/0008-regional-refinement-is-conditioned-amplification.md)
+(regional refinement is a bidirectional, multi-pass process) record
 implementation direction. User requirements and explicitly agreed boundaries govern revisions
 to agent-derived choices in those documents and the plan.
 

@@ -77,6 +77,8 @@ export const atlasChannels: ChannelBinding[] = [
   scalar("sutureStrength", "CrustSutureStrength"),
   scalar("geothermal", "Geothermal"),
   scalar("tectonicStrain", "TectonicStrain"),
+  scalar("structuralGrainX", "StructuralGrainX", true),
+  scalar("structuralGrainY", "StructuralGrainY", true),
   scalar("crustMotionX", "CrustMotionX", true),
   scalar("crustMotionY", "CrustMotionY", true),
   scalar("moisture", "Moisture"),

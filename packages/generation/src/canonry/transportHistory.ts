@@ -40,6 +40,8 @@ const intensive = [
   "Tearing",
   "RiverWarmth",
   "EcologyStillness",
+  "StructuralGrainX",
+  "StructuralGrainY",
 ] as const;
 const extensive = [
   ...ecologyCarbon,

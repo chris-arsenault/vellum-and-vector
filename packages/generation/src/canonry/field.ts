@@ -44,6 +44,12 @@ const integerFields = [
   "TectonicTangentY",
   "OrogenicComponentIds",
   "OrogenicSystemProminence",
+  // Persistent structural grain of constructed relief: doubled-angle axial direction of the
+  // belt's strike times its coherence (per-mille). Kept where construction happened and
+  // carried with the crust, so a region can read how its relief is organized long after
+  // the boundary that built it has moved or closed.
+  "StructuralGrainX",
+  "StructuralGrainY",
   "OceanCurrentX",
   "OceanCurrentY",
   "OceanCurrentStrength",

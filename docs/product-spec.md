@@ -292,8 +292,11 @@ subject, with surrounding land and sea available for independent development eve
 outside the source map's footprint. Climate responds to finer relief; habitats
 and existing magical landscapes follow their own media without creating another
 history or renewing inherited material stocks. Captured cover is the habitat
-prior: finer relief, river margins and coastal flats change it only where they
-are resolved, so uniform country stays uniform rather than gaining noise patches. Known places remain available;
+prior; it develops under the new relief, soil, wetness and magical media (a tree
+line, valley meadows, coastal marsh) without noise patches. Refinement runs as a
+fixed three-round schedule in which relief, water, climate, magic, habitats and
+places respond to one another through shared media; established summits, rivers
+and towns shape their own surroundings and keep their identities. Known places remain available;
 regional algorithms add smaller settlements, local ways and POIs from useful
 sites. Completed society history provides context without a population-accounting
 gate or another settlement era.

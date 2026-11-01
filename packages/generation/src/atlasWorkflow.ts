@@ -40,8 +40,8 @@ import { societySequence } from "./societyProcesses";
 import { atlasInitialState } from "./atlasInitialState";
 import { boundaryDiagnostics, migrateBoundarySelection, inheritMapBoundary } from "./worldBoundary";
 import { regionalInputDiagnostics } from "./regionalInputs";
-import { isRegionalRefinement } from "./refinement/inputs";
-import { refineRegionalMap } from "./refinement/workflow";
+import { isRegionalRefinement } from "./regional/capture";
+import { refineRegionalMap } from "./regional/workflow";
 
 export interface AtlasGenerationInput {
   areaId: string;
