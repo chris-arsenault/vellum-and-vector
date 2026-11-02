@@ -158,7 +158,7 @@ function route(state: RegionalState, network: NetworkWork, cost: Float64Array, r
     { receiver, order, sea, base } = network,
     travel = network.cost,
     heap = new KeyedHeap(),
-    around = new Int32Array(neighborhoodCapacity(mesh)),
+    around = new Int32Array(neighborhoodCapacity),
     character = state.regional.character!;
   travel.fill(Infinity);
   receiver.fill(-1);

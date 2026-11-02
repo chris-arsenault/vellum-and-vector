@@ -40,7 +40,7 @@ it("keeps physical mesh spacing constant when a larger rectangle requests more c
   expect((meshes[0].spacing ** 2 * 3 * Math.sqrt(3)) / 4).toBeCloseTo(area, 4);
 });
 
-it("uses the physical preset in the actual workspace and refines a child without refining its exterior halo", () => {
+it("builds world and child maps on the same lattice, the child at its own cell span with a narrow halo", () => {
   const state = landscape();
   const workspaces = [1, 2].map((scale) => {
     const footprint = rectangle([0, 0, 200_000 * scale, 100_000]);
@@ -52,7 +52,6 @@ it("uses the physical preset in the actual workspace and refines a child without
   });
   expect(workspaces[1].map.mesh.spacing).toBeCloseTo(workspaces[0].map.mesh.spacing, 8);
   expect(workspaces[1].map.mesh.contentCount).toBeGreaterThan(workspaces[0].map.mesh.contentCount);
-  expect(workspaces[0].sampling.maximumSize).toBe(generationResolution("draft").cellSpan);
 
   const footprint = rectangle([0, 0, 100, 100]);
   state.domain.scope.footprint = footprint;
@@ -60,14 +59,17 @@ it("uses the physical preset in the actual workspace and refines a child without
   state.domain.world.areas.area.profile = "site";
   state.surface = createGrid("child", state.domain.scope, 2, 2);
   const mesh = createAtlasWorkspace(state, "draft").map.mesh;
-  const cellSpan = generationResolution("draft", "site").cellSpan;
-  expect(mesh.topology).not.toBeNull();
+  const cellArea = generationResolution("draft", "site").cellArea;
+  // One lattice class for every map; the child's cells are uniform at about its own cell
+  // area (a footprint of a few cells rounds to whole cells).
+  expect(mesh.constructor).toBe(workspaces[0].map.mesh.constructor);
   expect(mesh.contentCount).toBeGreaterThan(1);
-  for (let i = 0; i < mesh.count; i++) {
-    if (mesh.membership(i) !== 1) continue;
-    expect(mesh.cellWidth(i)).toBeLessThanOrEqual(cellSpan);
-    expect(mesh.cellHeight(i)).toBeLessThanOrEqual(cellSpan);
-  }
-  // The existing 100 km inherited halo remains coarse instead of creating millions of site cells.
+  const content = Array.from({ length: mesh.count }, (_, i) => i).filter(
+    (i) => mesh.membership(i) === 1
+  );
+  for (const i of content) expect(mesh.area(i)).toBe(mesh.area(content[0]));
+  expect(Math.abs(mesh.area(content[0]) / cellArea - 1)).toBeLessThan(0.3);
+  // The halo is a few of the child's own cells, not the world's 100 km padding at site
+  // spacing (tens of millions of cells).
   expect(mesh.count).toBeLessThan(1000);
 });

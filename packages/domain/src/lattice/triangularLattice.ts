@@ -55,7 +55,6 @@ const parityOf = (d: number) => d & 1;
  * inverted`. Adjacency and geometry are arithmetic on the id; the footprint is a mask.
  */
 export class TriangularLattice implements Lattice {
-  readonly kind = "triangular" as const;
   readonly count: number;
   readonly contentCount: number;
   readonly blockCount: number;
@@ -67,7 +66,6 @@ export class TriangularLattice implements Lattice {
   readonly periodic?: PeriodicFrame;
   readonly contentRadius: number;
   readonly workRadius: number;
-  readonly topology = null;
   readonly stride = 3;
   readonly offset: [number, number];
   readonly rows: number;
@@ -279,12 +277,6 @@ export class TriangularLattice implements Lattice {
   identity(cell: number) {
     const [u, v, inverted] = this.address(cell);
     return Math.imul(u, 73856093) ^ Math.imul(v, 19349663) ^ (inverted ? 83492791 : 0);
-  }
-  cellToLeaf(cell: number) {
-    return cell;
-  }
-  leafToCell(leaf: number) {
-    return leaf;
   }
   deltaX(dx: number) {
     const width = this.periodic?.width;

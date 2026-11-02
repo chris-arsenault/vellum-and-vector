@@ -1,7 +1,7 @@
 import type { AtlasFeature } from "@atlas/domain";
 import { generationFeatures } from "../generationFeatures";
 import { putRegionalFeature, putRegionalNetwork } from "./extraction/features";
-import { cellAt, distance, isContent, positionOf } from "./lattice";
+import { cellAt, distance, isContent, positionOf, stepVector } from "./lattice";
 import type { RegionalState } from "./state";
 import { regionalPath, type PathOptions } from "./ways";
 
@@ -120,8 +120,8 @@ function channelLinks(state: RegionalState): Channels {
 }
 /**
  * The channel cell a step fords, or -1: the channel cell it lands on, or the nearer channel end
- * of a drainage link whose segment the step's segment crosses (the tree links cells a knight's
- * step apart, so a channel runs between cells a path never touches).
+ * of a drainage link whose segment the step's segment crosses (both the tree and a path link
+ * cells across the vertex ring, so a channel runs between cells a path never touches).
  */
 function fordAt(state: RegionalState, channels: Channels, i: number, j: number) {
   const map = state.physical.map,
@@ -157,28 +157,20 @@ function segmentsCross(a: Position, b: Position, c: Position, d: Position) {
   return turn(a, b, c) * turn(a, b, d) < 0 && turn(c, d, a) * turn(c, d, b) < 0;
 }
 /**
- * The cells a step passes between without landing on them: the two corner cells of a diagonal
- * step, the two cells beside the middle of a knight's step. With its ends they are every cell
- * the step's segment runs through; a face step passes nothing.
+ * The cells a step passes through without landing on them, read at its quarter points. A step
+ * reaches at most two centroid spacings across the vertex ring, so the segment crosses at
+ * most the cells around one shared vertex; a face step passes nothing.
  */
 function swept(state: RegionalState, i: number, j: number) {
   const mesh = state.physical.map.mesh,
     a = positionOf(mesh, i),
-    b = positionOf(mesh, j),
-    dx = Math.abs(a.x - b.x),
-    dy = Math.abs(a.y - b.y),
-    mx = (a.x + b.x) / 2,
-    my = (a.y + b.y) / 2,
-    at = (x: number, y: number) => cellAt(mesh, x, y),
-    candidates =
-      Math.abs(dx - dy) < 1
-        ? [at(a.x, b.y), at(b.x, a.y)]
-        : dy > dx
-          ? [at(a.x, my), at(b.x, my)]
-          : [at(mx, a.y), at(mx, b.y)];
-  return candidates.filter(
-    (c, k) => c >= 0 && c !== i && c !== j && isContent(mesh, c) && candidates.indexOf(c) === k
-  );
+    { dx, dy } = stepVector(mesh, i, j),
+    cells: number[] = [];
+  for (const t of [0.25, 0.5, 0.75]) {
+    const c = cellAt(mesh, a.x + dx * t, a.y + dy * t);
+    if (c >= 0 && c !== i && c !== j && isContent(mesh, c) && !cells.includes(c)) cells.push(c);
+  }
+  return cells;
 }
 
 /** Residents to the market seat, half as many to the nearest larger place. */

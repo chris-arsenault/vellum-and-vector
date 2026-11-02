@@ -205,6 +205,7 @@ export function regionalInitialState(
   return atlasInitialState(framed, input, cache, {
     cellSpan,
     channels: refinementChannel,
-    surfaceSpan: Math.max(cellSpan, parentSampleSpan(source, area.id, physical)),
+    // The display surface is sampled at this map's own cell span, the lattice's span.
+    surfaceSpan: cellSpan,
   });
 }

@@ -50,7 +50,6 @@ function fixture(pattern: "plane" | "coast" | "island") {
     grid: state.surface.coverage,
     fixed: [],
     inherited: false,
-    sampling: { maximumSize: map.mesh.spacing, minimumSize: map.mesh.spacing, featureSamples: 2 },
   };
   refreshWorkspaceSamples(state, state.physical);
   projectNative(state);

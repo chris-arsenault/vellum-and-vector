@@ -1,5 +1,3 @@
-import type { AdaptiveTopology } from "../adaptiveTopology";
-
 /** Cells are numbered block-major: a cell id is `(block << blockShift) | offset`. Blocks are
  * the unit of residency, storage chunks, iteration and tiling; cells close in space have
  * close ids. */
@@ -20,11 +18,10 @@ export interface PeriodicFrame {
   poles?: { rows: number; spacingY: number };
 }
 
-/** The spatial domain of a coverage: cell geometry, adjacency and blocking. Geometry and
- * adjacency are arithmetic on the triangular lattice and stored on adaptive ones; either
- * way they are resident and never go through a band store. */
+/** The spatial domain of a coverage: the triangular lattice every map, world or region, is
+ * built on. Geometry and adjacency are arithmetic and resident; they never go through a
+ * band store. */
 export interface Lattice {
-  readonly kind: "triangular" | "adaptive";
   /** Ids, including nodata slots inside blocks. */
   readonly count: number;
   readonly contentCount: number;
@@ -38,16 +35,14 @@ export interface Lattice {
   readonly periodic?: PeriodicFrame;
   readonly contentRadius: number;
   readonly workRadius: number;
-  /** The adaptive tree, or null on the triangular lattice. */
-  readonly topology: AdaptiveTopology | null;
   /** Largest degree; edge slots are `edge < degree(i)`. */
   readonly stride: number;
-  /** Offset of the lattice frame from the origin (triangular); zero on adaptive lattices. */
+  /** Offset of the lattice frame from the origin. */
   readonly latticeOffset: [number, number];
   /** Live (content or halo) cells in a block; 0 means the block is absent. */
   blockLive(block: number): number;
   membership(cell: number): number;
-  /** Whether the triangle points down (triangular lattice); false on adaptive lattices. */
+  /** Whether the triangle points down. */
   inverted(cell: number): boolean;
   x(cell: number): number;
   y(cell: number): number;
@@ -67,8 +62,10 @@ export interface Lattice {
   cellAt(x: number, y: number): number;
   /** A stable integer identity of the cell's position, for seeded hashes. */
   identity(cell: number): number;
-  cellToLeaf(cell: number): number;
-  leafToCell(leaf: number): number;
+  /** The cell at a lattice address, or -1 off the lattice. */
+  addressCell(u: number, v: number, inverted: boolean): number;
+  /** The lattice address of a cell. */
+  address(cell: number): [number, number, boolean];
   /** Short east/west displacement in a periodic chart. */
   deltaX(dx: number): number;
   /** Canonical easting inside a periodic chart. */

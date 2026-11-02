@@ -226,7 +226,6 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
     "physical.climate",
     "Climate",
     {
-      "climate.refinement": ["refine-climate"],
       "climate.atmosphere": [
         "temperature",
         "atmospheric-flow",
@@ -238,14 +237,12 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
       settings: [...climateSettings],
       requires: ["ocean.geography"],
       inherited: true,
-      when: (slot, context) => slot !== "climate.refinement" || isRefinement(context),
     }
   ),
   definition(
     "water.routing",
     "Water balance and routing",
     {
-      "water.refinement": ["refine-water"],
       "water.runoff": ["runoff"],
       "water.routing": [
         "drainage-conditioning",
@@ -258,7 +255,6 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
     {
       requires: ["physical.climate", "ocean.geography"],
       inherited: true,
-      when: (slot, context) => slot !== "water.refinement" || isRefinement(context),
     }
   ),
   definition(
@@ -285,7 +281,6 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
     "physical.land-ice",
     "Land ice and meltwater",
     {
-      "after.model-pass": ["refine-ice"],
       "ice.model": ["land-ice-mass-balance", "ice-flow"],
       "ice.flow": ["ice-flow"],
       "ice.meltwater": ["glacial-meltwater"],
@@ -295,11 +290,6 @@ export const physicalFeatureDefinitions: GenerationFeature[] = [
       requires: ["physical.climate", "water.routing", "material.load-response"],
       absent: ["LandIce", "IceFlow", "GlacialMeltwater"],
       inherited: true,
-      when: (slot, context) =>
-        slot !== "after.model-pass" ||
-        (isRefinement(context) &&
-          Boolean(context?.iceLoad) &&
-          context?.process === "canonry.ice-flow"),
     }
   ),
   definition(

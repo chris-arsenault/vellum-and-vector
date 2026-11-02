@@ -76,7 +76,6 @@ function nativeState(): GenerationState {
     grid: state.surface.coverage,
     fixed: [],
     inherited: false,
-    sampling: { maximumSize: 1000, minimumSize: 1000, featureSamples: 2 },
   };
   return state;
 }

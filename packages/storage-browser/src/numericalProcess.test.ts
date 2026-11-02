@@ -2,15 +2,11 @@ import { expect, it } from "vitest";
 import {
   attachGrid,
   Band,
-  createAdaptiveTopology,
   detachGrid,
-  everySample,
   generateBand,
-  rectangle,
   putChannel,
   type BlockCache,
 } from "@atlas/domain";
-import { adaptivePhysicalMesh } from "../../generation/src/canonry/adaptiveMesh";
 import { createField, type PhysicalField } from "../../generation/src/canonry/field";
 import { atlasPhysicalProfile } from "../../generation/src/canonry/atlasProfile";
 import { physicalContext } from "../../generation/src/canonry/context";
@@ -29,9 +25,6 @@ import { riverNetwork } from "../../generation/src/canonry/rivers";
 import { createWorldMesh } from "../../generation/src/canonry/worldMesh";
 import { buildTransportPlan } from "../../generation/src/canonry/transportPlan";
 import { transportHistory } from "../../generation/src/canonry/transportHistory";
-import { marineRegions } from "../../generation/src/canonry/marineRegions";
-import { createSocietyGeography } from "../../generation/src/societyGeography";
-import { numericalProcessLifetime } from "../../generation/src/generationWorkingState";
 
 function execute(map: PhysicalField) {
   for (let i = 0; i < map.mesh.count; i++) map.Elevation.set(i, map.mesh.x(i) / 10);
@@ -94,12 +87,7 @@ it("scatters connected crust and history on disk with the same material and prov
 });
 it("runs real ocean, distance, bathymetry and climate processes on file-backed physical state", () => {
   const bounds: [number, number, number, number] = [-100_000, -100_000, 100_000, 100_000];
-  const topology = createAdaptiveTopology(bounds, {
-    maximumSize: 12_500,
-    minimumSize: 6250,
-    refine: ([x, y]) => x < 0 && y < 0,
-  });
-  const mesh = adaptivePhysicalMesh(topology, rectangle(bounds)),
+  const mesh = createWorldMesh(bounds, (200_000 * 200_000) / 6250 ** 2, 0),
     fixture = blockCacheFixture(32_768);
   try {
     const native = createField(mesh),
@@ -130,66 +118,6 @@ function runnerProcess(
     validate: () => [],
   };
 }
-it("keeps marine regions and community ownership valid across paged frontiers and scratch release", () => {
-  const f = blockCacheFixture(2048),
-    blocks = blockCacheFixture(2048);
-  try {
-    const box: [number, number, number, number] = [-100000, -50000, 100000, 50000],
-      mesh = adaptivePhysicalMesh(
-        createAdaptiveTopology(box, {
-          maximumSize: 12500,
-          minimumSize: 12500,
-        }),
-        rectangle(box)
-      ),
-      map = createField(mesh, blocks.cache);
-    for (let i = 0; i < mesh.count; i++) {
-      const wet = Math.abs(mesh.x(i)) > 25000 || Math.abs(mesh.y(i)) < 12500;
-      map.WaterKindCodes.set(i, wet ? 1 : 0);
-      map.WaterDepths.set(i, wet ? 3000 * 1024 : 0);
-    }
-    const result = marineRegions(map, 800 * 1024);
-    expect(result.regions).toHaveLength(2);
-    const ids = new Set(result.regions.map((region) => region.id));
-    for (const region of result.regions) expect(region.area).toBeGreaterThan(0);
-    for (let i = 0; i < mesh.count; i++)
-      expect(map.WaterKindCodes.get(i) !== 1 || ids.has(result.labels.get(i))).toBe(true);
-    const state = onCache(landscape(), f.cache);
-    state.domain.world.id = "6ff5503b-19c4-4d95-a407-bf1fc53ac70b";
-    putChannel(
-      state.surface,
-      "elevation",
-      "metre",
-      generateBand(state.surface.coverage, "float64", "elevation", () => 100)
-    );
-    const end = numericalProcessLifetime(state);
-    const work = createSocietyGeography(state, {
-      scope: state.domain.scope,
-      invocation: [],
-      parameters: {},
-      epochs: [],
-      epochIndices: [],
-      causes: [],
-      recordCause() {},
-      random: () => 0.5,
-      cancelled: () => false,
-      progress() {},
-    });
-    // The process boundary releases the pass's scratch; society's bands stay reachable.
-    state.society = work;
-    end();
-    expect(everySample(work.owner, (owner) => owner >= 0 && !!work.region.communities[owner])).toBe(
-      true
-    );
-    expect(work.region.communities.every((community) => community.areaKm2 > 0)).toBe(true);
-    expect(everySample(work.river, Number.isFinite)).toBe(true);
-    expect(blocks.cache.stats.loads).toBeGreaterThan(0);
-    expect(blocks.cache.stats.evictions).toBeGreaterThan(0);
-  } finally {
-    f.close();
-    blocks.close();
-  }
-});
 function lifetimeProcesses(): MapProcess[] {
   let scratch: Band, failedScratch: Band;
   return [

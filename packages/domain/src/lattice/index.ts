@@ -25,7 +25,6 @@ export {
   createCenteredLattice,
   type WorldLatticeOptions,
 } from "./worldLattice";
-export { AdaptiveLattice, createAdaptiveWorldLattice } from "./adaptiveLattice";
 export {
   BlockScratch,
   blockConstructors,

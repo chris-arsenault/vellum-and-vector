@@ -124,7 +124,7 @@ function surfaceFlow(state: RegionalState, { accumulation, melt }: IceBudget, h:
     thickness = new Float64Array(n),
     surface = new Float64Array(n),
     target = new Int32Array(n).fill(-1),
-    around = new Int32Array(neighborhoodCapacity(mesh)),
+    around = new Int32Array(neighborhoodCapacity),
     land: number[] = [];
   for (let i = 0; i < n; i++) if (isContent(mesh, i) && !sea[i]) land.push(i);
   for (let pass = 0; pass < 2; pass++) {

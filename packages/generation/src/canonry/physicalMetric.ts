@@ -1,5 +1,5 @@
 import type { PhysicalMesh } from "./mesh";
-import { adaptivePointSampler, Band, prepareAdaptivePatches, type Coverage } from "@atlas/domain";
+import { Band, type Coverage } from "@atlas/domain";
 import { triangleSampler } from "./triangleSampling";
 import { meshDeltaX, edgeLeadingTo } from "./mesh";
 
@@ -20,26 +20,6 @@ export function physicalFace(mesh: PhysicalMesh, i: number, edge: number) {
     x = mesh.x(i) + (nx * mesh.edgeLength(i, edge)) / 2;
     y = mesh.y(i) + (ny * mesh.edgeLength(i, edge)) / 2;
   }
-  if (mesh.topology) return adaptiveFace(mesh, i, edge);
-  return { x, y, nx, ny, length: mesh.faceLength(i, edge) };
-}
-function adaptiveFace(mesh: PhysicalMesh, i: number, edge: number) {
-  const topology = mesh.topology!,
-    j = mesh.neighbor(i, edge),
-    leaf = mesh.cellToLeaf(i),
-    start = topology.offsets.get(leaf),
-    local = edge < topology.offsets.get(leaf + 1) - start,
-    nx = local ? topology.normalX.get(start + edge) : Math.sign(mesh.edgeX(i, edge)),
-    ny = local ? topology.normalY.get(start + edge) : 0,
-    otherX = mesh.x(j) + (local ? 0 : nx * mesh.periodic!.width),
-    x =
-      (Math.max(mesh.x(i) - mesh.cellWidth(i) / 2, otherX - mesh.cellWidth(j) / 2) +
-        Math.min(mesh.x(i) + mesh.cellWidth(i) / 2, otherX + mesh.cellWidth(j) / 2)) /
-      2,
-    y =
-      (Math.max(mesh.y(i) - mesh.cellHeight(i) / 2, mesh.y(j) - mesh.cellHeight(j) / 2) +
-        Math.min(mesh.y(i) + mesh.cellHeight(i) / 2, mesh.y(j) + mesh.cellHeight(j) / 2)) /
-      2;
   return { x, y, nx, ny, length: mesh.faceLength(i, edge) };
 }
 
@@ -102,18 +82,5 @@ export function physicalSampler(
       : values instanceof Band
         ? (i: number) => values.get(i)
         : (i: number) => values[i];
-  if (!mesh.topology) return triangleSampler(mesh, read);
-  // Generation sweeps every cell of its lattice: the patch caches hold the whole lattice, so
-  // no cell's patch is fitted twice (a viewport reader keeps the default budget).
-  const topology = mesh.topology,
-    leafValue = (leaf: number) => read(mesh.leafToCell(leaf)),
-    at = adaptivePointSampler(
-      topology,
-      leafValue,
-      undefined,
-      prepareAdaptivePatches(topology, leafValue, mesh.count * samplerBytesPerCell)
-    );
-  return (x: number, y: number) => at(x + mesh.origin[0], y + mesh.origin[1]);
+  return triangleSampler(mesh, read);
 }
-/** Prepared patch, vertex and fit records per cell, with their cache overhead. */
-const samplerBytesPerCell = 1024;

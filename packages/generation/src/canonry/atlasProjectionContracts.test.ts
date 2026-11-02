@@ -47,7 +47,6 @@ function fixture(disabled: string[] = []) {
     grid: state.surface.coverage,
     fixed: [],
     inherited: false,
-    sampling: { maximumSize: 1000, minimumSize: 1000, featureSamples: 2 },
   };
   const registry = new MapProcessRegistry();
   for (const process of atlasNativeProcesses(input, state.domain)) registry.register(process);

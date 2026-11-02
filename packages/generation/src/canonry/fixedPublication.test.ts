@@ -21,7 +21,6 @@ it("publishes a fixed triangle world as continuous metre channels and discrete m
   state.physical = createAtlasWorkspace(state, "draft");
   const work = state.physical!,
     mesh = work.map.mesh;
-  expect(mesh.topology).toBeNull();
   for (let i = 0; i < mesh.count; i++) {
     work.map.Elevation.set(i, (500 + mesh.x(i) * 0.002) * 1024);
     work.map.BedrockElevation.set(i, work.map.Elevation.get(i) - 10 * 1024);

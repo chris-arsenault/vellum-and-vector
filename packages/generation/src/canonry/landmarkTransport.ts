@@ -2,7 +2,6 @@ import type { PhysicalField } from "./field";
 import type { TransportPlan } from "./transportPlan";
 import { physicalSampler } from "./physicalMetric";
 import { meshPoint } from "./mesh";
-import type { prepareAdaptiveTransfer } from "@atlas/domain";
 
 /** Corridor indices are moving material, not permanent locations in a mesh. */
 export function advectLandmarkDrainage(map: PhysicalField, plan: TransportPlan, distance: number) {
@@ -21,24 +20,5 @@ export function advectLandmarkDrainage(map: PhysicalField, plan: TransportPlan, 
       capture.x + (vx(capture.x, capture.y) * distance) / 1000,
       capture.y + (vy(capture.x, capture.y) * distance) / 1000
     );
-  }
-}
-
-export function remeshLandmarkDrainage(
-  previous: PhysicalField,
-  next: PhysicalField,
-  transfer: ReturnType<typeof prepareAdaptiveTransfer>
-) {
-  for (const record of next.landmarkLedger?.values() ?? []) {
-    const source = new Set(record.corridor.map((cell) => previous.mesh.cellToLeaf(cell)));
-    const moved = transfer((leaf) => Number(source.has(leaf)), "category");
-    record.corridor = [];
-    for (let cell = 0; cell < next.mesh.count; cell++)
-      if (moved.get(next.mesh.cellToLeaf(cell)) === 1) record.corridor.push(cell);
-    moved.release();
-    if (record.capture) {
-      record.capture.x += previous.mesh.origin[0] - next.mesh.origin[0];
-      record.capture.y += previous.mesh.origin[1] - next.mesh.origin[1];
-    }
   }
 }

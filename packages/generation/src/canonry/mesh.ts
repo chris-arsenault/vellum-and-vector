@@ -1,24 +1,18 @@
 // Canonry PhysicalGeographyGrid.cs and MicrotriangleCoord.cs, commit 0f62584c.
-import {
-  AdaptiveLattice,
-  TriangularLattice,
-  createCenteredLattice,
-  edgeTo,
-  type Lattice,
-} from "@atlas/domain";
+import { TriangularLattice, createCenteredLattice, edgeTo, type Lattice } from "@atlas/domain";
 
-/** The physical mesh is a lattice: arithmetic on the world's triangular raster, stored
- * adjacency on a region's adaptive leaves. */
+/** The physical mesh of every map, world or region: the triangular lattice, whose geometry
+ * the `Lattice` interface describes. */
 export type PhysicalMesh = Lattice;
-export { AdaptiveLattice, TriangularLattice };
+export { TriangularLattice };
 
-/** Cell of a lattice address on the triangular lattice, -1 off it or on adaptive meshes. */
+/** Cell of a lattice address, -1 off the lattice. */
 export function triangleIndex(mesh: PhysicalMesh, u: number, v: number, inverted: boolean) {
-  return mesh instanceof TriangularLattice ? mesh.addressCell(u, v, inverted) : -1;
+  return mesh.addressCell(u, v, inverted);
 }
-/** The lattice address of a triangular cell; adaptive cells have none. */
+/** The lattice address of a cell. */
 export function triangleAddress(mesh: PhysicalMesh, cell: number): [number, number, boolean] {
-  return mesh instanceof TriangularLattice ? mesh.address(cell) : [0, 0, false];
+  return mesh.address(cell);
 }
 /** The unit-spacing reference disk for process tests. */
 export function createMesh(contentCount: number, padding: number): PhysicalMesh {

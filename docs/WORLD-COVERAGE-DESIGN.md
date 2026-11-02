@@ -26,10 +26,11 @@ neighbours; a **connected pass** walks the lattice through a frontier (floods,
 routing, components, gyres, groups). Frontiers and scratch are the resident
 structures in `packages/domain/src/hpc`. Everything else above is a band.
 
-The world lattice is a regular triangular lattice: a cell is `(u, v, inverted)`
-on rows, with a content footprint and a halo, optionally periodic in x with
-polar rows. A region lattice is an adaptive quadtree of leaves with stored
-adjacency. Regions nest arbitrarily; a child reads its parent through
+Every map, world or region, is a regular triangular lattice: a cell is
+`(u, v, inverted)` on rows, with a content footprint and a halo, optionally
+periodic in x with polar rows. A region's lattice is the same class at the
+region's own cell span, with a halo a few of its cells wide (its context land
+and sea are inside its frame). Regions nest arbitrarily; a child reads its parent through
 interpolation samples and publishes its own resource; the parent is
 authoritative at its mesh (ADR 0005).
 
@@ -57,11 +58,11 @@ exists outside a coverage except the resident hpc structures.
 ### 3.1 Lattice
 
 A lattice defines cells, their geometry, their adjacency and their blocking.
-Two implementations behind one interface:
+There is one implementation, the triangular lattice; the interface names what
+coverages and processes read from it:
 
 ```ts
 interface Lattice {
-  readonly kind: "triangular" | "adaptive";
   readonly count: number; // cells, including nodata cells inside blocks
   readonly blockShift: number; // block = 1 << blockShift cells (14 → 16 384)
   readonly blockCount: number;
@@ -88,13 +89,7 @@ the address table, `neighbors`, `degree`, `edgeLength`, `edgeX/Y`,
 `faceLength`, `faceDistance`, `cellWidth/Height`, `boundary`, `x`, `y`,
 `areas` as stored columns on the world mesh.
 
-**Adaptive lattice.** Leaves in Morton order over the quadtree, so a block is a
-spatially compact Morton range. Adjacency is stored: an `offsets` band
-(int32, per cell) and a neighbour table blocked by cell, plus edge metrics;
-these are ordinary bands on the lattice and page like any other. Positions
-and areas derive from the quadtree boxes.
-
-Both lattices keep the ordering invariant that matters to the algorithms:
+The lattice keeps the ordering invariant that matters to the algorithms:
 **cells close in space are close in id.** That is what makes block residency
 match a frontier's working set.
 
@@ -185,8 +180,8 @@ so a typical pass touching five bands holds ~500 KB per block.
 ### 3.5 World and regions
 
 A world is a tree of coverages. The root is the world coverage on the
-triangular lattice. Each region is a coverage on its own adaptive lattice with
-a footprint polygon in the parent's frame. Refinement warps parent bands into
+triangular lattice. Each region is a coverage on its own triangular lattice at
+its cell span, with a footprint polygon in the parent's frame. Refinement warps parent bands into
 the child through projection samples; the child publishes its own resource;
 inherited facts are the parent's published bands read through the warp. The
 tree, footprints and resource references live in the catalog as they do now.
@@ -250,8 +245,7 @@ directly.
   retained arrays, plus magic and society. The compiler enumerates them once
   bands stop satisfying `[index]`.
 - World mesh construction, periodic seams and polar rows are rewritten as
-  lattice arithmetic. The adaptive mesh keeps its stored adjacency but as
-  bands.
+  lattice arithmetic.
 - Results may change where a process relied on content-first ordering for tie
   breaking, or where a whole-world sort becomes a frontier walk; those sites
   are documented as they are converted. The Canonry algorithms are design, not
@@ -265,7 +259,7 @@ directly.
 - Block size `2^14` cells, fixed per lattice; one size for all bands.
 - One block cache per worker with a byte budget; no per-band budgets.
 - Copy-on-write snapshots rather than explicit retained-history copies.
-- Adjacency arithmetic for the triangular lattice; stored for adaptive.
+- Adjacency arithmetic on the triangular lattice, for every map.
 - `float32` only where a band's schema says so; defaults stay as today's types.
 
 ## 8. Order of construction, if accepted
@@ -279,6 +273,6 @@ directly.
 3. Schema registration for the physical field, magic, ecology and society.
 4. Conversion by process class behind the compiler: local, stencil, connected.
    The shared node generation on a forced-evicting cache is the gate.
-5. Adaptive lattice as bands; region warp; overviews.
+5. Regions on the same triangular lattice; region warp; overviews.
 6. Delete the replaced code; move the mechanisms into ADR 0003 and the
    generation design.

@@ -113,7 +113,7 @@ function spillRoutes(state: RegionalState, filled: Float64Array, sea: Uint8Array
     order = new Int32Array(n),
     visited = new Uint8Array(n),
     heap = new KeyedHeap(),
-    around = new Int32Array(neighborhoodCapacity(mesh));
+    around = new Int32Array(neighborhoodCapacity);
   seedOutlets(state, filled, sea, visited, heap);
   const spill = (from: number, to: number) => {
     visited[to] = 1;
@@ -172,7 +172,7 @@ function downhillRoutes(state: RegionalState, filled: Float64Array) {
   const mesh = state.physical.map.mesh,
     graph = state.regional.drainage!,
     rank = new Int32Array(mesh.count).fill(-1),
-    around = new Int32Array(neighborhoodCapacity(mesh));
+    around = new Int32Array(neighborhoodCapacity);
   for (let k = 0; k < graph.count; k++) rank[graph.order[k]] = k;
   for (let k = 0; k < graph.count; k++) {
     const i = graph.order[k];

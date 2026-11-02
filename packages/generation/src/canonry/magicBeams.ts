@@ -1,4 +1,3 @@
-import { visitAdaptiveOverlap } from "@atlas/domain";
 import type { PhysicalField } from "./field";
 import type { MagicField } from "./magicState";
 import { nearestTriangle } from "./mesh";
@@ -30,19 +29,6 @@ function kernelWeight(map: PhysicalField, i: number, x: number, y: number, radiu
 function beamCells(map: PhysicalField, x: number, y: number, radius: number) {
   const mesh = map.mesh,
     cells: number[] = [];
-  if (mesh.topology) {
-    visitAdaptiveOverlap(
-      mesh.topology,
-      [
-        x + mesh.origin[0] - radius,
-        y + mesh.origin[1] - radius,
-        x + mesh.origin[0] + radius,
-        y + mesh.origin[1] + radius,
-      ],
-      (leaf) => cells.push(mesh.leafToCell(leaf))
-    );
-    return cells;
-  }
   const start = nearestTriangle(mesh, x, y),
     queue = [start],
     visited = new Set(queue);

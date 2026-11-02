@@ -57,7 +57,7 @@ function named(sequence: ProcessSequence, occurrence: string): ProcessSequence {
   return sequence.map((step) => ({ ...step, id: `${occurrence}/${step.id}` }));
 }
 function climate(occurrence: string, context: Composition, material = false): ProcessSequence {
-  const result = named(contributions("climate.refinement", context), occurrence);
+  const result: ProcessSequence = [];
   for (const slot of ["climate.ocean", "climate.circulation", "climate.atmosphere"])
     result.push(...nativeGroup(slot, occurrence, context, { material }));
   return result;
@@ -124,7 +124,6 @@ function epochBody(context: Composition, inherited: boolean): ProcessSequence {
     ...contributions("epoch.climate-forcing", context),
     ...contributions("epoch.material-forcing", context),
     ...drainage("epoch.initial-water", context),
-    ...contributions("water.refinement", context),
     ...contributions("epoch.ecology-evolve", context),
     ...drainage("epoch.after-ecology-water", context),
     ...nativeGroup("epoch.incision", "epoch", context),

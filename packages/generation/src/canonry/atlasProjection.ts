@@ -48,11 +48,7 @@ function projectChannel(state: GenerationState, binding: ChannelBinding) {
     const value = values.get(i);
     values.set(
       i,
-      binding.unit === "cell-index"
-        ? value < 0
-          ? -1
-          : map.mesh.cellToLeaf(value)
-        : (value - datum) * scale + offset
+      binding.unit === "cell-index" ? (value < 0 ? -1 : value) : (value - datum) * scale + offset
     );
   }
   putChannel(grid, binding.name, binding.unit, values);

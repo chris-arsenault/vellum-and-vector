@@ -1,9 +1,10 @@
-import { Band, builtinLayers, createAdaptiveField, createAdaptiveTopology } from "@atlas/domain";
+import { builtinLayers, createAdaptiveField, createAdaptiveTopology, spatial } from "@atlas/domain";
 import { landscape } from "../../packages/generation/src/mapFixtures";
+import { createWorldMesh } from "../../packages/generation/src/canonry/worldMesh";
 import {
-  adaptivePhysicalMesh,
-  type AdaptiveLattice,
-} from "../../packages/generation/src/canonry/adaptiveMesh";
+  refreshWorkspaceSamples,
+  type AtlasPhysicalWorkspace,
+} from "../../packages/generation/src/canonry/atlasWorkspace";
 import { createField } from "../../packages/generation/src/canonry/field";
 import { atlasPhysicalProfile } from "../../packages/generation/src/canonry/atlasProfile";
 import { extractEcologicalFeatures } from "../../packages/generation/src/canonry/ecologyFeatures";
@@ -18,20 +19,27 @@ export function ecologicalPolygons() {
     minimumSize: 250,
   });
   state.surface = createAdaptiveField("ecological-gis", state.domain.scope, topology);
-  const map = createField(adaptivePhysicalMesh(topology, state.domain.scope.footprint));
-  state.physical = {
-    map,
-    profile: atlasPhysicalProfile(),
-    fixed: [],
-    inherited: false,
-    samples: Band.over(
-      (map.mesh as AdaptiveLattice).leafCells(),
-      { name: "physical:samples", type: "int32", lifetime: "run" },
-      state.surface.coverage.cache
+  // The map's own lattice at the cell size, projected onto the display surface as in a run.
+  const bounds = state.surface.bounds,
+    covers = spatial.pointCoverage(state.domain.scope.footprint),
+    map = createField(
+      createWorldMesh(
+        bounds,
+        ((bounds[2] - bounds[0]) * (bounds[3] - bounds[1])) / 250 ** 2,
+        0,
+        (x, y) => covers({ x, y, z: 0 })
+      )
     ),
-    grid: state.surface.coverage,
-    sampling: { maximumSize: 250, minimumSize: 250, featureSamples: 2 },
-  };
+    work: AtlasPhysicalWorkspace = {
+      map,
+      profile: atlasPhysicalProfile(),
+      fixed: [],
+      inherited: false,
+      samples: state.surface.coverage.scratch("int32", "physical:samples", 0),
+      grid: state.surface.coverage,
+    };
+  refreshWorkspaceSamples(state, work);
+  state.physical = work;
   map.Elevation.fill(100 * 1024);
   map.Temperature.fill(450);
   map.Rainfall.fill(800);

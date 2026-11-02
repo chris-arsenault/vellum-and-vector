@@ -53,7 +53,6 @@ it("uses evolved native terrain and its metre datum at epoch boundaries", () => 
     grid: state.surface.coverage,
     fixed: [],
     inherited: false,
-    sampling: { maximumSize: 500, minimumSize: 500, featureSamples: 1 },
   };
   const preview = generationPreview(state);
   const values = Array.from(preview.channels.elevation).filter(

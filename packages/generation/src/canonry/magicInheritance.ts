@@ -16,17 +16,13 @@ export function inheritMagicChannel(
   into: Band,
   quantity: Quantity = "intensive"
 ): boolean {
-  const work = state.physical!,
-    grid = parentChannels(state).get(key) ?? state.surface,
+  const grid = parentChannels(state).get(key) ?? state.surface,
     values = grid.channels[key];
   if (!values) return false;
   // Intensities and stocks are never negative; the reconstruction can undershoot a sharp
   // captured edge, and a negative stock would turn a logarithmic propagation to NaN.
   const floor = (value: number) => (quantity === "category" ? value : Math.max(0, value));
-  if (grid.topology && grid.topology === work.map.mesh.topology)
-    for (let i = 0; i < into.length; i++)
-      into.set(i, floor(values.get(work.map.mesh.cellToLeaf(i))));
-  else interpolate(state, grid, key, into, quantity, floor);
+  interpolate(state, grid, key, into, quantity, floor);
   return true;
 }
 /** Every cell of the field reads the grid once: a sweep, with room for every patch. */

@@ -9,7 +9,6 @@ import {
   type Coverage,
   type Grid,
   type Position,
-  rectangle,
   isDescendant,
   ownsMapGeography,
 } from "@atlas/domain";
@@ -18,7 +17,6 @@ import { authoredFields } from "../mapAuthored";
 import { createField, type PhysicalField } from "./field";
 import { nearestTriangle } from "./mesh";
 import { createWorldMesh } from "./worldMesh";
-import { createAdaptiveWorldMesh } from "./adaptiveMesh";
 import type { ProjectionInterpolation } from "./atlasSampling";
 import { refreshWorkspaceSamples } from "./atlasSurfaceProjection";
 export { refreshWorkspaceSamples } from "./atlasSurfaceProjection";
@@ -52,7 +50,6 @@ export interface AtlasPhysicalWorkspace {
   interpolationKey?: string;
   fixed: { binding: ChannelBinding; values: Band }[];
   inherited: boolean;
-  sampling: { maximumSize: number; minimumSize: number; featureSamples: number };
 }
 export function nativePosition(work: AtlasPhysicalWorkspace, i: number): Position {
   return {
@@ -225,6 +222,33 @@ function fixedAuthoring(state: GenerationState, work: AtlasPhysicalWorkspace) {
     }
   }
 }
+/** Width of a child map's halo in its own cells: two stencil rings and the projection's support. */
+const childHaloCells = 4;
+/**
+ * Every map, world or region, is the same triangular lattice at its own cell span: a child
+ * wraps only when its frame spans the cylinder, and only a whole world closes its poles. A
+ * child's context land and sea are already inside its frame; its halo only carries the
+ * stencils and interpolation support past the frame edge, a few of its own cells wide.
+ */
+function mapLattice(state: GenerationState, profile: PhysicalProfile, cellSpan: number) {
+  const bounds = state.surface.bounds,
+    footprint = state.domain.scope.footprint,
+    covers = spatial.pointCoverage(footprint),
+    anchor = spatial.interiorPosition(footprint),
+    world = state.domain.world.areas[state.domain.scope.areaId].profile === "world",
+    wraps = world ? profile.MapBoundary === 1 : crossesChartSeam(state),
+    padding = world ? profile.BoundaryPadding : childHaloCells * cellSpan;
+  return createWorldMesh(
+    bounds,
+    ((bounds[2] - bounds[0] + 2 * padding) * (bounds[3] - bounds[1] + 2 * padding)) / cellSpan ** 2,
+    padding,
+    (x, y) => covers({ x, y, z: 0 }),
+    spatial.area(footprint),
+    [anchor.x, anchor.y],
+    wraps,
+    world && wraps && profile.LatitudeSouth === -90 && profile.LatitudeNorth === 90
+  );
+}
 export function createAtlasWorkspace(
   state: GenerationState,
   quality: keyof typeof atlasQuality,
@@ -237,7 +261,6 @@ export function createAtlasWorkspace(
   profile.WorldExtentX = [frame[0], frame[2]];
   profile.MapBoundary = mapBoundaryValue(state.domain.world.reference.boundaryMode);
   profile.WrapLongitude = Number(profile.MapBoundary === 1);
-  const bounds = state.surface.bounds;
   const resolution = generationResolution(
     quality,
     state.domain.world.areas[state.domain.scope.areaId].profile
@@ -245,28 +268,7 @@ export function createAtlasWorkspace(
   const cellSpan = state.domain.world.areas[state.domain.scope.areaId].parentId
       ? (state.domain.scope.resolution ?? resolution.cellSpan)
       : resolution.cellSpan,
-    cellArea = cellSpan ** 2;
-  const maximumSize = cellSpan;
-  const featureSamples = { draft: 2, standard: 4, fine: 8 }[quality];
-  const sampling = { maximumSize, minimumSize: maximumSize / 16, featureSamples };
-  const covers = spatial.pointCoverage(state.domain.scope.footprint),
-    anchor = spatial.interiorPosition(state.domain.scope.footprint);
-  const fixed = state.domain.world.areas[state.domain.scope.areaId].profile === "world";
-  const mesh = fixed
-    ? createWorldMesh(
-        bounds,
-        ((bounds[2] - bounds[0] + 2 * profile.BoundaryPadding) *
-          (bounds[3] - bounds[1] + 2 * profile.BoundaryPadding)) /
-          cellArea,
-        profile.BoundaryPadding,
-        (x, y) => covers({ x, y, z: 0 }),
-        spatial.area(state.domain.scope.footprint),
-        [anchor.x, anchor.y],
-        profile.MapBoundary === 1,
-        profile.MapBoundary === 1 && profile.LatitudeSouth === -90 && profile.LatitudeNorth === 90
-      )
-    : createChildMesh(state, sampling, profile.BoundaryPadding);
-  const map = createField(mesh, state.cache);
+    map = createField(mapLattice(state, profile, cellSpan), state.cache);
   const work: AtlasPhysicalWorkspace = {
     map,
     profile,
@@ -274,75 +276,17 @@ export function createAtlasWorkspace(
     grid: state.surface.coverage,
     fixed: [],
     inherited: Boolean(state.surface.channels.elevation),
-    sampling,
   };
   if (work.inherited) inheritNumerical(state, work);
   refreshWorkspaceSamples(state, work);
   refreshWorkspaceProtection(state, work);
   return work;
 }
-function createChildMesh(
-  state: GenerationState,
-  sampling: AtlasPhysicalWorkspace["sampling"],
-  padding: number
-) {
-  const targetSize = sampling.maximumSize;
-  // The inherited exterior is context; only the requested interior needs the finer samples.
-  sampling.maximumSize = Math.max(targetSize, padding / 2);
-  const support = [
-    { footprint: state.surface.scope.footprint, size: targetSize },
-    ...protectedSampling(state, targetSize),
-  ];
-  sampling.minimumSize = support.reduce(
-    (size, patch) => Math.min(size, patch.size),
-    sampling.minimumSize
-  );
-  return createAdaptiveWorldMesh(
-    state.surface.bounds,
-    {
-      ...sampling,
-      refine: (box) =>
-        support.some(
-          (patch) =>
-            Math.max(box[2] - box[0], box[3] - box[1]) > patch.size &&
-            spatial.intersects(rectangle(box), patch.footprint)
-        ),
-    },
-    padding,
-    state.domain.scope.footprint,
-    crossesChartSeam(state)
-  );
-}
 function crossesChartSeam(state: GenerationState) {
   if (state.domain.world.reference.boundaryMode !== "cylinder") return false;
   const [west, , east] = spatial.bounds(state.domain.world.reference.domain),
     [low, , high] = spatial.bounds(state.domain.scope.footprint);
   return Math.abs(low - west) < 1e-6 && Math.abs(high - east) < 1e-6;
-}
-function protectedSampling(state: GenerationState, size: number) {
-  const bounds = state.surface.bounds,
-    span = Math.max(bounds[2] - bounds[0], bounds[3] - bounds[1]);
-  const supports = authoredFields(state.domain)
-    .filter(
-      (field) =>
-        field.source &&
-        field.resolution &&
-        (!field.spaceId || field.spaceId === state.domain.scope.spaceId) &&
-        spatial.intersects(
-          field.footprint ?? field.source!.scope.footprint,
-          state.domain.scope.footprint
-        )
-    )
-    .map((field) => ({
-      footprint: field.footprint ?? field.source!.scope.footprint,
-      size: field.resolution!,
-    }));
-  if (span < 2 * size)
-    supports.push({
-      footprint: state.surface.scope.footprint,
-      size: span / 4,
-    });
-  return supports;
 }
 export function refreshWorkspaceProtection(state: GenerationState, work: AtlasPhysicalWorkspace) {
   for (const fixed of work.fixed) releaseWorking(work.map, fixed.values);
@@ -368,10 +312,6 @@ export function composeNativeAuthoring(work: AtlasPhysicalWorkspace) {
 }
 export function sampleSurfaceAtNative(state: GenerationState, name: string, i: number): number {
   const work = state.physical!;
-  // Publication and physical feedback share these exact cell centres. Reading
-  // their stored samples avoids rebuilding a Hermite evaluator for every cell.
-  if (state.surface.topology === work.map.mesh.topology && state.surface.topology)
-    return state.surface.channels[name].get(work.map.mesh.cellToLeaf(i));
   return interpolateSample(state.surface, name, nativePosition(work, i));
 }
 export function nativeIndexAtSurface(state: GenerationState, x: number, y: number) {

@@ -1,5 +1,4 @@
 import {
-  contourSupport,
   createGrid,
   fieldContour,
   rectangle,
@@ -42,13 +41,6 @@ export function lakeFootprint(
     depth = (i: number) => level - map.Elevation.get(i),
     connected = membershipSampler(state, inBody),
     wet = (x: number, y: number) => level - floor(x - mesh.origin[0], y - mesh.origin[1]);
-  if (mesh.topology)
-    return geographicContour(
-      state,
-      members,
-      (x, y) => Math.min(wet(x, y), (connected(x, y) - 0.1) * 1e6),
-      0
-    );
   const footprint = linearFieldContour(
     triangleFans(mesh, members, depth),
     wet,
@@ -77,27 +69,19 @@ export function oceanFootprint(state: GenerationState) {
     depth = physicalSampler(mesh, depths),
     read = (i: number) => depths.get(i),
     at = (x: number, y: number) => depth(x - mesh.origin[0], y - mesh.origin[1]);
-  const shape = mesh.topology
-    ? fieldContour(mesh.topology, at, undefined, 0, undefined, state.contours)
-    : linearFieldContour(
-        triangleFans(mesh, undefined, read),
-        at,
-        0,
-        triangleBoundary(mesh, read),
-        state.contours
-      );
+  const shape = linearFieldContour(
+    triangleFans(mesh, undefined, read),
+    at,
+    0,
+    triangleBoundary(mesh, read),
+    state.contours
+  );
   releaseWorking(map, depths);
   return areaGeometry(shape && spatial.intersection(shape, state.domain.scope.footprint));
 }
 
 export function membershipSampler(state: GenerationState, includes: (cell: number) => number) {
   const mesh = state.physical!.map.mesh;
-  // On an adaptive lattice the contour sweeps whole regions: the sampler is the generation's
-  // own (its patch caches hold the whole lattice), in the lattice's coordinates.
-  if (mesh.topology) {
-    const sample = physicalSampler(mesh, includes);
-    return (x: number, y: number) => sample(x - mesh.origin[0], y - mesh.origin[1]);
-  }
   const sample = triangleSampler(mesh, includes);
   return (x: number, y: number) => sample(x - mesh.origin[0], y - mesh.origin[1]);
 }
@@ -109,8 +93,7 @@ export function membershipContour(
 ) {
   const mesh = state.physical!.map.mesh,
     valueAt = membershipSampler(state, includes);
-  if (mesh.topology || supportTouchesBoundary(mesh, members))
-    return geographicContour(state, members, valueAt);
+  if (supportTouchesBoundary(mesh, members)) return geographicContour(state, members, valueAt);
   return linearFieldContour(
     triangleFans(mesh, members, includes),
     valueAt,
@@ -133,8 +116,7 @@ export function combinedContour(
   const mesh = state.physical!.map.mesh,
     samplers = terms.map((term) => membershipSampler(state, term)),
     valueAt = (x: number, y: number) => combine(samplers.map((sample) => sample(x, y)));
-  if (mesh.topology || supportTouchesBoundary(mesh, members))
-    return geographicContour(state, members, valueAt, 0);
+  if (supportTouchesBoundary(mesh, members)) return geographicContour(state, members, valueAt, 0);
   return linearFieldContour(
     combinedFans(mesh, members, terms, combine),
     valueAt,
@@ -233,15 +215,6 @@ export function geographicContour(
   level = 0.5
 ) {
   const mesh = state.physical!.map.mesh;
-  if (mesh.topology)
-    return fieldContour(
-      mesh.topology,
-      valueAt,
-      contourSupport(mesh.topology, memberLeaves(mesh, members)),
-      level,
-      undefined,
-      state.contours
-    );
   const bounds: Bounds = [Infinity, Infinity, -Infinity, -Infinity];
   for (const i of members) {
     bounds[0] = Math.min(bounds[0], mesh.x(i) + mesh.origin[0]);
@@ -267,7 +240,4 @@ export function geographicContour(
     grid.coverage.release(grid.active);
     grid.coverage.release(grid.measures);
   }
-}
-function* memberLeaves(mesh: PhysicalMesh, members: Iterable<number>) {
-  for (const i of members) yield mesh.cellToLeaf(i);
 }

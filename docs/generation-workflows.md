@@ -201,7 +201,7 @@ residents to the market seat and a smaller share to its nearest larger neighbour
 are traced over the present surface with captured roads as worn ground and door ends as free
 edges, in repeated passes over the ground the previous pass wore, so later ways bend into
 earlier ones, and each way is published at the class its own flow earns. A way crossing a channel fords it, read geometrically against the
-drainage tree's links (which join channel cells a knight's step apart); a road over a sizeable
+drainage tree's links (which join channel cells across a vertex); a road over a sizeable
 river crosses by a bridge; a settled place with a falling channel within reach turns a mill;
 every settlement inside a captured control polygon carries that control. Regenerating society alone
 uses this map's current surface and preserves terrain; physical refinement starts
@@ -1746,6 +1746,12 @@ without introducing spherical geodesic transport.
 
 ## Continuous terrain and adaptive generation — replacement plan
 
+**History only (2026-11-02).** The adaptive physical lattice described in this
+section no longer exists. Every map, world or region, runs on the triangular
+lattice; regions use it at their own cell span. The adaptive quadtree survives
+only as the display surface's raster layout. Remeshing, support refinement and the
+water, climate and ice refinement processes were deleted with the lattice.
+
 State: execute the complete **top-level world generation and display** replacement.
 The user's 2026-10-19 scope correction supersedes the earlier agent expansion into
 editors and lower-level map generation. Sulion root:
@@ -1950,12 +1956,8 @@ a debugging loop. The large-world structural result remains relevant evidence.
 Algorithm changes use small deterministic tests as their first feedback loop.
 `fieldContours.test.ts` covers exact-level vertices, disconnected islands, holes,
 coarse/fine joins and fragmented label fields, checking geometry and coverage.
-`adaptiveGeology.test.ts` includes an independent four-cell analytical diffusion
-solution and material/history transfer cases. `atlasPublication.test.ts` supplies
-small evolved states directly to lake/landform/event extraction, channel projection
-and physical/magical refinement; no epoch generation is needed to test those
-boundaries. Magic feedback tests use the adaptive mesh. Tile tests check the same
-terrain painter used by OpenLayers without a browser or world generation.
+Tile tests check the same terrain painter used by OpenLayers without a browser or
+world generation.
 
 The smaller five-epoch integration run completed physical history in about eleven
 minutes but failed during landform polygon assembly. Sixteen small reconstructed

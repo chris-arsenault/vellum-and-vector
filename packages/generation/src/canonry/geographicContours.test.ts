@@ -60,7 +60,6 @@ function fixture(bounds: Bounds = [0, 0, 2000, 1000], cylinder = false) {
     grid: state.surface.coverage,
     fixed: [],
     inherited: false,
-    sampling: { maximumSize: mesh.spacing, minimumSize: mesh.spacing, featureSamples: 2 },
   };
   return { state, mesh };
 }

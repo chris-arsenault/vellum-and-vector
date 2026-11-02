@@ -28,8 +28,6 @@ export const generationSlots = [
   "water.runoff",
   "water.routing",
   "water.glacial-runoff",
-  "water.refinement",
-  "climate.refinement",
   "terrain.refinement",
   "epoch.incision",
   "epoch.after-incision.hillslopes",

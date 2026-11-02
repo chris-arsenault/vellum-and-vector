@@ -2,7 +2,6 @@
 import type { PhysicalField } from "./field";
 import { nearestTriangle, meshDeltaX, meshPoint } from "./mesh";
 import { clamp, round } from "./math";
-import { adaptiveCell, visitAdaptiveOverlap, type Bounds } from "@atlas/domain";
 import { triangleOverlap } from "./triangleOverlap";
 import { tectonicTransport } from "./tectonicTransport";
 import { BandList, type Band } from "@atlas/domain";
@@ -76,23 +75,6 @@ function scatter(
     add(map, plan, source, candidates[n], weight);
   }
 }
-function scatterVolume(map: PhysicalField, plan: Builder, source: number, x: number, y: number) {
-  const mesh = map.mesh,
-    topology = mesh.topology!;
-  const box: Bounds = [
-    x + mesh.origin[0] - mesh.cellWidth(source) / 2,
-    y + mesh.origin[1] - mesh.cellHeight(source) / 2,
-    x + mesh.origin[0] + mesh.cellWidth(source) / 2,
-    y + mesh.origin[1] + mesh.cellHeight(source) / 2,
-  ];
-  visitAdaptiveOverlap(topology, box, (leaf) => {
-    const old = adaptiveCell(topology, leaf);
-    const area =
-      (Math.min(box[2], old[2]) - Math.max(box[0], old[0])) *
-      (Math.min(box[3], old[3]) - Math.max(box[1], old[1]));
-    add(map, plan, source, mesh.leafToCell(leaf), (area / mesh.area(source)) * weightScale);
-  });
-}
 export function buildTransportPlan(map: PhysicalField, step: number): TransportPlan {
   const count = map.mesh.count;
   const transform = tectonicTransport(map, step);
@@ -113,7 +95,7 @@ export function buildTransportPlan(map: PhysicalField, step: number): TransportP
           map.mesh.x(i) + (map.CrustMotionX.get(i) * step) / 1000,
           map.mesh.y(i) + (map.CrustMotionY.get(i) * step) / 1000,
         ];
-    (map.mesh.topology ? scatterVolume : scatter)(map, plan, i, x, y, move);
+    scatter(map, plan, i, x, y, move);
   }
   plan.offsets.set(count, plan.targets.length);
   const ready: TransportPlan = {

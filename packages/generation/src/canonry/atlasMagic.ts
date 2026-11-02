@@ -22,8 +22,7 @@ export const advectAtlasMagic: MapProcess = {
         (name) => name.startsWith("magic:") && name.endsWith(":stored")
       );
       if (!histories.length) return;
-      const covered = spatial.pointCoverage(grid.scope.footprint),
-        sameTopology = grid.topology && grid.topology === work.map.mesh.topology;
+      const covered = spatial.pointCoverage(grid.scope.footprint);
       for (const name of histories) {
         const previous = { ...grid, channels: { [name]: grid.channels[name] } };
         const valueAt = fieldInterpolator(previous, name);
@@ -37,13 +36,7 @@ export const advectAtlasMagic: MapProcess = {
           const source = work.map.AdvectionSourceIndex.get(work.samples.get(i));
           if (source < 0) continue;
           const p = nativePosition(work, source);
-          if (covered(p))
-            moved.set(
-              i,
-              sameTopology
-                ? previous.channels[name].get(work.map.mesh.cellToLeaf(source))
-                : valueAt(p)
-            );
+          if (covered(p)) moved.set(i, valueAt(p));
         }
         putChannel(grid, name, grid.units[name], moved);
       }

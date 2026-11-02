@@ -115,7 +115,7 @@ the market seat and a smaller share to its nearest larger neighbour; the flows a
 over the present surface with captured roads as worn ground and door ends as free edges, in
 repeated passes over the ground the previous pass wore, so later ways bend into earlier
 ones, and each way is published at the class its own flow earns. A way that crosses a channel fords it: the crossing is read geometrically against the
-drainage tree's links (the tree joins channel cells a knight's step apart, so a path can
+drainage tree's links (the tree joins channel cells across a vertex, so a path can
 cross a channel without touching one of its cells), a road over a sizeable river crosses by
 a bridge, a settled place with a falling channel within reach turns a mill, and every
 settlement inside a captured control polygon carries that control.

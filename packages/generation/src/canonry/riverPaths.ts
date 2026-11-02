@@ -64,13 +64,7 @@ function relax(map: PhysicalField, paths: RiverPaths) {
         map.mesh.x(i),
       dy = (y.get(previous) + y.get(next) + 2 * yi) / 4 - map.mesh.y(i);
     // The centroid-to-edge distance is h/2. Keep the point strictly inside its cell.
-    const factor = map.mesh.topology
-      ? Math.min(
-          1,
-          (map.mesh.cellWidth(i) * 0.45) / Math.abs(dx),
-          (map.mesh.cellHeight(i) * 0.45) / Math.abs(dy)
-        )
-      : Math.min(1, (map.mesh.spacing * 0.45) / Math.hypot(dx, dy));
+    const factor = Math.min(1, (map.mesh.spacing * 0.45) / Math.hypot(dx, dy));
     paths.x.set(i, map.mesh.x(i) + dx * factor);
     paths.y.set(i, map.mesh.y(i) + dy * factor);
   }
@@ -188,119 +182,6 @@ function appendCurve(
     pending.push({ points: [a, ab, abc, center], start, end: middle });
   }
 }
-function cellHandle(map: PhysicalField, i: number, a: Coordinate, vector: Coordinate) {
-  const low = [
-    map.mesh.x(i) - map.mesh.cellWidth(i) / 2,
-    map.mesh.y(i) - map.mesh.cellHeight(i) / 2,
-  ];
-  const high = [
-    map.mesh.x(i) + map.mesh.cellWidth(i) / 2,
-    map.mesh.y(i) + map.mesh.cellHeight(i) / 2,
-  ];
-  let factor = 1;
-  for (let axis = 0; axis < 2; axis++) {
-    if (vector[axis] > 0) factor = Math.min(factor, (high[axis] - a[axis]) / vector[axis]);
-    if (vector[axis] < 0) factor = Math.min(factor, (low[axis] - a[axis]) / vector[axis]);
-  }
-  return [
-    a[0] + vector[0] * Math.max(0, factor),
-    a[1] + vector[1] * Math.max(0, factor),
-  ] as Coordinate;
-}
-function portal(
-  map: PhysicalField,
-  i: number,
-  j: number,
-  a: Coordinate,
-  b: Coordinate
-): Coordinate {
-  const mesh = map.mesh;
-  const low = [
-    Math.max(mesh.x(i) - mesh.cellWidth(i) / 2, mesh.x(j) - mesh.cellWidth(j) / 2),
-    Math.max(mesh.y(i) - mesh.cellHeight(i) / 2, mesh.y(j) - mesh.cellHeight(j) / 2),
-  ];
-  const high = [
-    Math.min(mesh.x(i) + mesh.cellWidth(i) / 2, mesh.x(j) + mesh.cellWidth(j) / 2),
-    Math.min(mesh.y(i) + mesh.cellHeight(i) / 2, mesh.y(j) + mesh.cellHeight(j) / 2),
-  ];
-  const axis = Math.abs(high[0] - low[0]) < Math.abs(high[1] - low[1]) ? 0 : 1;
-  const fraction = (low[axis] - a[axis]) / (b[axis] - a[axis]);
-  const point = mix(a, b, fraction);
-  return [
-    Math.max(low[0], Math.min(high[0], point[0])),
-    Math.max(low[1], Math.min(high[1], point[1])),
-  ];
-}
-function curvedHandle(
-  map: PhysicalField,
-  paths: RiverPaths,
-  i: number,
-  a: Coordinate,
-  b: Coordinate,
-  reverse = false
-) {
-  const t = tangent(map, paths, i),
-    chord: Coordinate = [b[0] - a[0], b[1] - a[1]];
-  const vector = t[0] * chord[0] + t[1] * chord[1] > 0 ? t : chord;
-  const scale = (Math.hypot(...chord) / (3 * Math.hypot(...vector))) * (reverse ? -1 : 1);
-  return cellHandle(map, i, reverse ? b : a, [vector[0] * scale, vector[1] * scale]);
-}
-function appendAdaptiveSegment(
-  map: PhysicalField,
-  paths: RiverPaths,
-  i: number,
-  j: number,
-  segment: number,
-  stations: Station[]
-) {
-  const a = position(paths, i),
-    d = position(paths, j),
-    crossing = portal(map, i, j, a, d);
-  const chord: Coordinate = [d[0] - a[0], d[1] - a[1]];
-  const before = Math.hypot(crossing[0] - a[0], crossing[1] - a[1]);
-  const after = Math.hypot(d[0] - crossing[0], d[1] - crossing[1]);
-  const fraction = before / (before + after),
-    length = Math.hypot(...chord);
-  const tolerance = Math.min(
-    100,
-    Math.min(
-      map.mesh.cellWidth(i),
-      map.mesh.cellHeight(i),
-      map.mesh.cellWidth(j),
-      map.mesh.cellHeight(j)
-    ) / 64
-  );
-  appendCurve(
-    [
-      a,
-      curvedHandle(map, paths, i, a, crossing),
-      cellHandle(map, i, crossing, [
-        (-chord[0] * before) / (3 * length),
-        (-chord[1] * before) / (3 * length),
-      ]),
-      crossing,
-    ],
-    segment,
-    tolerance,
-    stations,
-    [0, fraction]
-  );
-  appendCurve(
-    [
-      crossing,
-      cellHandle(map, j, crossing, [
-        (chord[0] * after) / (3 * length),
-        (chord[1] * after) / (3 * length),
-      ]),
-      curvedHandle(map, paths, j, crossing, d, true),
-      d,
-    ],
-    segment,
-    tolerance,
-    stations,
-    [fraction, 1]
-  );
-}
 function profile(members: number[], stations: Station[], values: Band, scale = 1, offset = 0) {
   return stations.map(
     ({ segment, fraction }) =>
@@ -365,10 +246,6 @@ export function riverPath(map: PhysicalField, paths: RiverPaths, members: number
   for (let segment = 0; segment < members.length - 1; segment++) {
     const i = members[segment],
       j = members[segment + 1];
-    if (map.mesh.topology) {
-      appendAdaptiveSegment(map, paths, i, j, segment, stations);
-      continue;
-    }
     const a = position(paths, i),
       d = position(paths, j);
     d[0] = a[0] + meshDeltaX(map.mesh, d[0] - a[0]);

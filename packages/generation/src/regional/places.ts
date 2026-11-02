@@ -202,7 +202,7 @@ export function hinterlandOwners(state: RegionalState, places: number[]) {
     cost = new Float64Array(n).fill(Infinity),
     owner = new Int32Array(n).fill(-1),
     heap = new KeyedHeap(),
-    around = new Int32Array(neighborhoodCapacity(mesh)),
+    around = new Int32Array(neighborhoodCapacity),
     reach = regionalCommunitySpacing(state) * hinterlandReach,
     height = (i: number) => map.Elevation.get(i) / 1024;
   for (const p of places) {

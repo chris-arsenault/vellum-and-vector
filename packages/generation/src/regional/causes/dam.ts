@@ -116,7 +116,7 @@ function holdReservoir(
 export function crestAt(state: RegionalState, dam: number) {
   const map = state.physical.map,
     mesh = map.mesh,
-    around = new Int32Array(neighborhoodCapacity(mesh)),
+    around = new Int32Array(neighborhoodCapacity),
     m = neighborhood(mesh, dam, around),
     bed = map.Elevation.get(dam),
     banks: number[] = [];

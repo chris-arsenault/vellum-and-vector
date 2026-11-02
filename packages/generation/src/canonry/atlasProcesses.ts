@@ -21,11 +21,7 @@ import type { NativeStep } from "./sequence";
 import { advectMagic } from "./magicState";
 import { retainGeographicIdentities } from "./geographicIdentity";
 import { refreshGrounding } from "./glacierSurface";
-import { refineGeologicalCauses, refineWorkspace, remeshInvalidations } from "./adaptiveWorkspace";
-import { adaptiveWaterProcess } from "./adaptiveWater";
-import { adaptiveClimateProcess, adaptiveIceProcess, shoreSupport } from "./adaptiveClimate";
 import { adaptiveReliefProcess } from "./adaptiveRelief";
-import { prepareAdaptiveFractures } from "./adaptiveFractures";
 import { nativeFeatureContract } from "../physicalFeatureSequence";
 import type { ResolvedFeatures } from "../features";
 import { generationBindings } from "../generationBindings";
@@ -67,19 +63,6 @@ function restoreAuthoring(work: AtlasPhysicalWorkspace) {
   }
   refreshGrounding(work.map, work.profile);
 }
-function prepareSpatialStep(
-  state: GenerationState,
-  c: ReturnType<typeof nativeContext>,
-  step: NativeStep
-) {
-  if (!state.physical!.map.mesh.topology) return step;
-  const [name, salt] = step;
-  refineGeologicalCauses(state, c, name, "declared");
-  if (name === "coastal-detail") refineWorkspace(state, shoreSupport(state, c), "declared");
-  return name === "fracture-network"
-    ? ([name, salt, prepareAdaptiveFractures(state, c, "declared")] as const)
-    : step;
-}
 function executionStep(state: GenerationState, step: NativeStep, iceLoad: boolean): NativeStep {
   const [name, salt] = step;
   if (iceLoad && name === "crustal-support")
@@ -91,8 +74,7 @@ function executionStep(state: GenerationState, step: NativeStep, iceLoad: boolea
 function nativeProcess(
   step: NativeStep,
   selection: ResolvedFeatures,
-  inheritedAbsences: string[],
-  adaptive: boolean
+  inheritedAbsences: string[]
 ): MapProcess {
   const [name] = step,
     source = nativeFeatureContract(name, selection, inheritedAbsences);
@@ -110,7 +92,6 @@ function nativeProcess(
         ]
       ),
       invalidates: source.invalidates.map(prefix),
-      ...nativeRemeshContract(name, adaptive),
       products: [
         ...source.produces.map(physicalProduct),
         ...(name === "land-ice-mass-balance"
@@ -135,13 +116,10 @@ function nativeProcess(
         c.EpochIndex = 0;
         c.Seed = generationBindings(context).seed ^ source.salt ^ 0x45d9f3b;
       }
-      const oldMesh = work.map.mesh;
-      const spatialStep = prepareSpatialStep(state, c, step);
-      if (oldMesh !== work.map.mesh) await context.reconcile!();
       const map = work.map;
       restoreAuthoring(work);
       if (name === "temperature" && context.parameters.unforced) map.ExternalHeatForcing.fill(0);
-      const selected = executionStep(state, spatialStep, Boolean(context.parameters.iceLoad));
+      const selected = executionStep(state, step, Boolean(context.parameters.iceLoad));
       applyNativeStep(map, c, selected, source);
       restoreAuthoring(work);
       if (name === "physical-epoch-history")
@@ -154,14 +132,6 @@ function nativeProcess(
     }),
     validate: validateWorkspace,
   };
-}
-function nativeRemeshContract(name: string, adaptive: boolean) {
-  return adaptive &&
-    ["impact-cratering", "volcanic-construction", "fracture-network", "coastal-detail"].includes(
-      name
-    )
-    ? { reconciliation: { invalidates: remeshInvalidations, sequence: [], guarantees: [] } }
-    : {};
 }
 export function atlasNativeProcesses(
   input: AtlasGenerationInput,
@@ -199,21 +169,9 @@ export function atlasNativeProcesses(
     forcingProcess(),
     epochStartProcess(),
     finishProcess(original),
-    ...(original.world.areas[input.areaId].profile === "world"
-      ? []
-      : [
-          adaptiveWaterProcess(input.resolvedFeatures!),
-          adaptiveClimateProcess(),
-          adaptiveReliefProcess(),
-          adaptiveIceProcess(input.resolvedFeatures!),
-        ]),
+    ...(original.world.areas[input.areaId].profile === "world" ? [] : [adaptiveReliefProcess()]),
     ...Array.from(implementations.values(), (step) =>
-      nativeProcess(
-        step,
-        input.resolvedFeatures!,
-        inheritedAbsences,
-        original.world.areas[input.areaId].profile !== "world"
-      )
+      nativeProcess(step, input.resolvedFeatures!, inheritedAbsences)
     ),
   ];
 }

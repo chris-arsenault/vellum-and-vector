@@ -42,7 +42,6 @@ it("extracts complete connected catchment pieces on disk and releases membership
       grid: state.surface.coverage,
       fixed: [],
       inherited: false,
-      sampling: { maximumSize: mesh.spacing, minimumSize: mesh.spacing, featureSamples: 2 },
     };
     map.FlowTargets.fill(-1);
     const all = new Set<number>();

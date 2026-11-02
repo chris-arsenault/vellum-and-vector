@@ -1,15 +1,8 @@
-import { adaptiveWindowLeaves, type Bounds } from "@atlas/domain";
+import type { Bounds } from "@atlas/domain";
 import { triangleAddress, triangleIndex, type PhysicalMesh } from "./mesh";
 
-/** Exact centroid candidates in world coordinates, using the adaptive tree or lattice index. */
+/** Exact centroid candidates in world coordinates, from the lattice index. */
 export function* meshWindowCells(mesh: PhysicalMesh, bounds: Bounds) {
-  if (mesh.topology) {
-    for (const leaf of adaptiveWindowLeaves(mesh.topology, bounds)) {
-      const cell = mesh.leafToCell(leaf);
-      if (cell >= 0 && inside(mesh, cell, bounds)) yield cell;
-    }
-    return;
-  }
   yield* latticeWindowCells(mesh, bounds);
 }
 function* latticeWindowCells(mesh: PhysicalMesh, bounds: Bounds) {

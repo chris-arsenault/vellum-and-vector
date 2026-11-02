@@ -51,7 +51,7 @@ export function regionalPath(
     mesh = map.mesh,
     front = new KeyedHeap(),
     s = pathSearch(state),
-    around = new Int32Array(neighborhoodCapacity(mesh)),
+    around = new Int32Array(neighborhoodCapacity),
     known = (j: number) => (s.stamp[j] === s.search ? s.cost[j] : Infinity),
     height = (i: number) => map.Elevation.get(i) / 1024,
     relax = (i: number, j: number, next: number) => {

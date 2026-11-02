@@ -272,8 +272,8 @@ history; they do not require generating a world first. For example:
 
 ```sh
 pnpm test packages/domain/src/fieldContours.test.ts
-pnpm test packages/generation/src/canonry/atlasPublication.test.ts
-pnpm test packages/generation/src/canonry/adaptiveGeology.test.ts
+pnpm test packages/generation/src/canonry/drainageFlood.test.ts
+pnpm test packages/generation/src/canonry/metricSearch.test.ts
 pnpm --dir frontend test src/rasterTiles.test.ts
 ```
 

@@ -1,11 +1,8 @@
 import { expect, it } from "vitest";
-import { createAdaptiveTopology, rectangle, refineAdaptiveTopology } from "@atlas/domain";
 import { createField, type PhysicalField } from "./field";
 import { createWorldMesh } from "./worldMesh";
-import { adaptivePhysicalMesh } from "./adaptiveMesh";
 import { buildTransportPlan } from "./transportPlan";
 import { advectLandmarkDrainage } from "./landmarkTransport";
-import { remeshPhysical } from "./physicalRemesh";
 import { captureInto } from "./landmarkCanyon";
 import { meshDeltaX } from "./mesh";
 import type { LandmarkRecord } from "./landmarkLedger";
@@ -68,16 +65,4 @@ it("moves capture coordinates and corridor indices along the actual periodic sca
     expect(plan.dominant.get(cell)).toBe(source);
     expect(map.mesh.x(cell)).toBeLessThan(0);
   }
-});
-
-it("preserves the physical corridor area when its mesh cells are refined", () => {
-  const bounds: [number, number, number, number] = [0, 0, 400_000, 400_000];
-  const topology = createAdaptiveTopology(bounds, { maximumSize: 100_000, minimumSize: 100_000 });
-  const map = createField(adaptivePhysicalMesh(topology, rectangle(bounds))),
-    value = record(map, 0),
-    area = map.mesh.area(0);
-  const refined = refineAdaptiveTopology(topology, [0], 50_000);
-  const next = remeshPhysical(map, refined, rectangle(bounds));
-  expect(value.corridor.length).toBeGreaterThan(1);
-  expect(value.corridor.reduce((sum, cell) => sum + next.mesh.area(cell), 0)).toBe(area);
 });
