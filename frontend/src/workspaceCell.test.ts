@@ -19,6 +19,8 @@ it("reads every published channel at the stored cell and leaves the catalog unch
       current.working.cache
     ),
     values = result.cells.flatMap((cell) => cell.values);
+  // Every layer's samples of the clicked cell form one card.
+  expect(result.cells).toHaveLength(1);
   expect(values.find((value) => value.channel === "elevation")).toMatchObject({
     value: 100,
     unit: "metre",
@@ -43,7 +45,7 @@ it("inspects an independent child's own captured cells without including its par
     fields = new Set(
       world.fields.filter((field) => field.areaId === f.child).map((field) => field.id)
     );
-  expect(result.cells.length).toBeGreaterThan(0);
+  expect(result.cells).toHaveLength(1);
   expect(
     result.cells.flatMap((cell) => cell.values).every((value) => fields.has(value.fieldId))
   ).toBe(true);

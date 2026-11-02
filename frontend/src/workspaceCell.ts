@@ -66,7 +66,9 @@ export async function workspaceCell(
           resourceId: sources.get(`${cell.gridId}:${name}`)!,
           input: !!field.input,
         });
-        const key = `${cell.gridId}:${cell.index}`,
+        // One card per stored cell: every layer's samples of the same cell (same bounds) are
+        // merged, whichever layer or resource stores them.
+        const key = cellKey(cell),
           previous = cells.get(key);
         if (previous) previous.values.push(...cell.values);
         else cells.set(key, cell);
@@ -77,6 +79,9 @@ export async function workspaceCell(
     working.close();
   }
 }
+
+/** A stored cell's identity on the map: its bounds, to a millimetre. */
+const cellKey = (cell: InspectedCell) => cell.bounds.map((value) => value.toFixed(3)).join(",");
 
 async function inspectedField(
   current: Pick<BrowserWorkspace, "catalog" | "resources">,
