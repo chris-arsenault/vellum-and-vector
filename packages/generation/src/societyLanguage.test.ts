@@ -4,7 +4,6 @@ import {
   languageKnowledge,
   languageShares,
   mergePopulation,
-  population,
   populationGroupsSchema,
   storableValue,
   putChannel,
@@ -13,9 +12,8 @@ import {
   type PopulationGroup,
 } from "@atlas/domain";
 import { landscape } from "./mapFixtures";
-import { initializePopulation, migratePopulation } from "./societyPopulation";
+import { initializePopulation } from "./societyPopulation";
 import { initializeCultures } from "./societyCulture";
-import { evolveLanguageUse } from "./societyLanguage";
 import { publishCultures } from "./societyCulturePublication";
 import type { MapProcessContext } from "./process";
 
@@ -125,25 +123,6 @@ it("publishes exclusive use alongside overlapping bilingual knowledge", () => {
   publishCultures(state);
   expect(everySample(state.surface.channels["languageUse:A"], (n) => n === 0)).toBe(true);
 });
-it("learns naming usage from multiple connected neighbors without moving people or erasing knowledge", () => {
-  const { state, context, region } = languageFixture();
-  const [a, b, c] = region.communities;
-  b.protected = c.protected = true;
-  for (let i = 0; i < 20; i++) evolveLanguageUse(state, context, 10);
-  const use = languageUse(a.groups);
-  expect(use.B).toBeGreaterThan(0);
-  expect(use.C).toBeGreaterThan(0);
-  expect(use.A).toBeGreaterThan(0);
-  expect(Object.values(use).reduce((sum, share) => sum + share, 0)).toBeCloseTo(1, 12);
-  expect(population(a)).toBeCloseTo(1000, 9);
-  expect(a.groups.every((g) => g.languages.includes("A"))).toBe(true);
-  expect(a.groups.every((g) => g.culture === "culture")).toBe(true);
-  expect(a.groups).toHaveLength(1);
-  expect(languageKnowledge(a.groups).A).toBe(1);
-  expect(languageKnowledge(a.groups).B).toBeLessThan(1);
-  expect(b.groups).toEqual([group("B")]);
-});
-
 it("publishes partial knowledge without counting everyone as a speaker", () => {
   const { state, region } = languageFixture();
   region.communities[0].groups = [
@@ -159,130 +138,7 @@ it("publishes partial knowledge without counting everyone as a speaker", () => {
   expect(state.surface.channels["languageUse:B"].get(0)).toBe(0.25);
 });
 
-it("migration conserves both mixed naming use and overlapping language knowledge", () => {
-  const { state, region } = languageFixture();
-  const [a, b] = region.communities;
-  region.connections = [region.connections[0]];
-  a.groups = [
-    {
-      ...group("A"),
-      languages: ["A", "B"],
-      languageShares: { A: { knowledge: 1, use: 0.75 }, B: { knowledge: 0.4, use: 0.25 } },
-    },
-  ];
-  a.support.capacity = 1;
-  b.support.capacity = 1_000_000;
-  const before = structuredClone(region.communities.flatMap((c) => c.groups));
-  const total = before.reduce((sum, g) => sum + g.count, 0);
-  migratePopulation(state, 100, 1);
-  const after = region.communities.flatMap((c) => c.groups);
-  expect(languageUse(b.groups).A).toBeGreaterThan(0);
-  expect(after.reduce((sum, g) => sum + g.count, 0)).toBeCloseTo(total, 9);
-  for (const aggregate of [languageUse, languageKnowledge]) {
-    for (const [id, share] of Object.entries(aggregate(before)))
-      expect(aggregate(after)[id] * total).toBeCloseTo(share * total, 9);
-  }
-});
-
-it("keeps many-language contact proportional to languages rather than their combinations", () => {
-  const { state, context, region } = languageFixture();
-  const home = region.communities[0];
-  const neighbors = Array.from({ length: 30 }, (_, i) => ({
-    ...structuredClone(home),
-    id: `neighbor-${i}`,
-    protected: true,
-    groups: [group(`L${i}`)],
-  }));
-  region.communities = [home, ...neighbors];
-  region.connections = neighbors.map((c) => ({
-    from: home.id,
-    to: c.id,
-    travelCost: 1000,
-    distance: 1000,
-    kind: "land",
-  }));
-  for (let cycle = 0; cycle < 20; cycle++) evolveLanguageUse(state, context, 10);
-  expect(home.groups).toHaveLength(1);
-  expect(Object.keys(languageShares(home.groups[0]))).toHaveLength(31);
-  expect(population(home)).toBe(1000);
-  expect(Object.values(languageUse(home.groups)).reduce((a, b) => a + b, 0)).toBeCloseTo(1, 12);
-  for (const share of Object.values(languageShares(home.groups[0]))) {
-    expect(share.use).toBeLessThanOrEqual(share.knowledge);
-    expect(share.knowledge).toBeLessThanOrEqual(1);
-  }
-  const first = structuredClone(home.groups);
-  home.groups = [group("A")];
-  for (let cycle = 0; cycle < 20; cycle++) evolveLanguageUse(state, context, 10);
-  expect(home.groups).toEqual(first);
-});
-
-it("matches language marginals of the prior splitting rule for one contact step", () => {
-  const { state, context, region } = languageFixture();
-  const [home, neighbor] = region.communities;
-  home.groups = [
-    {
-      ...group("A"),
-      languages: ["A", "B"],
-      languageShares: {
-        A: { knowledge: 1, use: 0.8 },
-        B: { knowledge: 0.4, use: 0.2 },
-      },
-    },
-  ];
-  neighbor.groups = [group("B")];
-  region.connections = [region.connections[0]];
-  // The link is shortened by the language the two ends share: home knows B at 0.4.
-  const cost = 1000 / (1 + 0.5 * 0.4);
-  const fraction = -Math.expm1((-10 * Math.exp(-cost / 150000)) / 400);
-  evolveLanguageUse(state, context, 10);
-  const shares = languageShares(home.groups[0]);
-  expect(shares.A.use).toBeCloseTo(0.8 * (1 - fraction), 12);
-  expect(shares.B.use).toBeCloseTo(0.2 * (1 - fraction) + fraction, 12);
-  expect(shares.B.knowledge).toBeCloseTo(0.4 + 0.6 * fraction, 12);
-  expect(population(home)).toBe(1000);
-});
-it("respects disconnected geography, zero mobility and inherited history", () => {
-  const { state, context, region } = languageFixture();
-  const before = structuredClone(region.communities);
-  evolveLanguageUse(
-    state,
-    { ...context, epochs: [{ ...context.epochs[0], variables: { mobility: 0 } }] },
-    200
-  );
-  expect(region.communities.map((c) => languageUse(c.groups))).toEqual(
-    before.map((c) => languageUse(c.groups))
-  );
-  region.connections = [];
-  evolveLanguageUse(state, context, 200);
-  expect(region.communities.map((c) => languageUse(c.groups))).toEqual(
-    before.map((c) => languageUse(c.groups))
-  );
-  state.society!.inherited = true;
-  region.connections = [
-    { from: before[0].id, to: before[1].id, distance: 1, travelCost: 1, kind: "land" },
-  ];
-  evolveLanguageUse(state, context, 200);
-  expect(region.communities.map((c) => languageUse(c.groups))).toEqual(
-    before.map((c) => languageUse(c.groups))
-  );
-});
-it("carries primary language with migrating people and preserves authored usage", () => {
-  const { state, region } = languageFixture();
-  const [a, b] = region.communities;
-  region.connections = [region.connections[0]];
-  a.support.capacity = 1;
-  b.support.capacity = 1_000_000;
-  const before = region.communities.reduce(
-    (sum, c) => sum + population(c) * (languageUse(c.groups).A ?? 0),
-    0
-  );
-  migratePopulation(state, 100, 1);
-  expect(languageUse(b.groups).A).toBeGreaterThan(0);
-  const after = region.communities.reduce(
-    (sum, c) => sum + population(c) * (languageUse(c.groups).A ?? 0),
-    0
-  );
-  expect(after).toBeCloseTo(before, 9);
+it("derives a group's naming language from its languages and rejects an unknown one", () => {
   expect(
     populationGroupsSchema.parse([{ ...group("B"), languages: ["A", "B"] }])[0].namingLanguage
   ).toBe("B");

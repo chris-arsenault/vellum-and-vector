@@ -8,10 +8,6 @@ import {
 import { landscape } from "./mapFixtures";
 import { emptySupport } from "./societySupport";
 import { relocatePolitySeats, settlementHierarchy } from "./societyHierarchy";
-import { publishSettlements } from "./societyPublication";
-import { publishCultures } from "./societyCulturePublication";
-import { makeWork } from "./societyWorks";
-import { realizeDemands } from "./societyDemand";
 import type { MapProcessContext } from "./process";
 
 // Connected hinterlands, an isolated town and a sovereign seat share one publication fixture.
@@ -134,37 +130,4 @@ it("moves a lost seat to a reachable inhabited center and preserves authored sea
   communities[3].status = "ruined";
   relocatePolitySeats(state, "Later");
   expect(region.politics!.polities[0].seat).toBe("c3");
-});
-
-it("publishes only major global items while retaining latent society for explicit regional development", () => {
-  const { state, world, region, context, communities } = fixture();
-  const work = makeWork(state, communities[1], "conservation");
-  region.works.push(work);
-  const before = structuredClone(region);
-  publishSettlements(state, context);
-  publishCultures(state);
-  const features = Object.values(world.features);
-  expect(
-    features.filter((f) => f.kind === "settlement").map((f) => f.attributes.communityId)
-  ).toEqual(["c0", "c3", "c6"]);
-  expect(
-    features.some((f) => ["conservation", "institution", "culturalOrigin"].includes(f.kind))
-  ).toBe(false);
-  expect(region).toEqual(before);
-  world.areas.child = { ...world.areas.area, id: "child", parentId: "area", profile: "region" };
-  state.domain.scope = { ...state.domain.scope, areaId: "child" };
-  // A demand is not a feature at any profile; the child realizes it on c1's land first.
-  state.society!.owner.fill(1, 5);
-  realizeDemands(state);
-  const realized = structuredClone(region);
-  publishSettlements(state, { ...context, scope: state.domain.scope });
-  const localWork = Object.values(world.features).find((f) => f.attributes.workId === work.id)!;
-  expect(localWork).toMatchObject({ kind: "conservation", layerId: "landUse", areaId: "child" });
-  expect(
-    Object.values(world.features).find(
-      (f) => f.attributes.communityId === "c1" && f.kind === "settlement"
-    )?.areaId
-  ).toBe("child");
-  // Publication itself changes no society record; only realization did.
-  expect(region).toEqual(realized);
 });

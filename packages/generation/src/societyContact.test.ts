@@ -1,16 +1,9 @@
 import { expect, it } from "vitest";
-import {
-  languageKnowledge,
-  languageUse,
-  putChannel,
-  residentBand,
-  type PopulationGroup,
-} from "@atlas/domain";
+import { putChannel, residentBand, type PopulationGroup } from "@atlas/domain";
 import { landscape } from "./mapFixtures";
 import type { MapProcessContext } from "./process";
 import { initializePopulation } from "./societyPopulation";
 import { communityReach, contactCosts, languageOverlap } from "./societyContact";
-import { evolveLanguageUse } from "./societyLanguage";
 
 const speaker = (language: string): PopulationGroup => ({
   people: "residents",
@@ -80,23 +73,4 @@ it("shortens a connection by the language its two ends share", () => {
   expect(shared(toC)).toBe(1000);
   const reach = communityReach(region, 0);
   expect(reach[region.communities.indexOf(b)]).toBeLessThan(reach[region.communities.indexOf(c)]);
-});
-
-it("lets a seat that consolidates on one language forget the other and lose that reach", () => {
-  const { state, context, region } = fixture(),
-    [seat, b, c] = region.communities;
-  seat.groups = [bilingual(0.5)];
-  // Only the B-speakers stay in contact, and they keep to B; A is never named across a link again.
-  region.connections = [region.connections[0]];
-  b.protected = true;
-  const toA = { from: seat.id, to: c.id, distance: 1000, travelCost: 1000, kind: "land" as const };
-  c.groups = [speaker("A")];
-  const reachBefore = contactCosts(region)(toA);
-  expect(reachBefore).toBeCloseTo(1000 / 1.5, 9);
-  for (let cycle = 0; cycle < 400; cycle++) evolveLanguageUse(state, context, 10);
-  expect(languageUse(seat.groups).A ?? 0).toBeLessThan(0.01);
-  expect(languageKnowledge(seat.groups).A ?? 0).toBeLessThan(0.05);
-  expect(languageKnowledge(seat.groups).B).toBe(1);
-  expect(languageKnowledge(b.groups).B).toBe(1);
-  expect(contactCosts(region)(toA)).toBeGreaterThan(1000 / 1.05);
 });

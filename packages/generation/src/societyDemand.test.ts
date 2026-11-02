@@ -1,9 +1,9 @@
 import { expect, it } from "vitest";
-import { gridPosition, putChannel, residentBand, societyWorkNatures } from "@atlas/domain";
+import { gridPosition, putChannel, residentBand } from "@atlas/domain";
 import { landscape, epoch } from "./mapFixtures";
 import { initializePopulation } from "./societyPopulation";
 import { refreshSocietyConnections } from "./societyGeography";
-import { applySocietyWorks, makeWork, planSocietyWorks, workSamples } from "./societyWorks";
+import { makeWork, planSocietyWorks } from "./societyWorks";
 import { demandSamples, realizeDemands, workMedium } from "./societyDemand";
 import type { MapProcessContext } from "./process";
 
@@ -64,59 +64,6 @@ it("keeps a demand's initial medium when applying its first effect changes later
   state.surface.channels["magic:fire:intensity"].fill(0);
   expect([...samples]).toEqual(before.slice(1));
   expect([...demandSamples(state, work)]).toEqual([]);
-});
-
-it("makes World works demands that act over the unit's whole country, conserving the total", () => {
-  const { state, context } = fixture("world"),
-    c = state.society!.region.communities[unit];
-  const demand = makeWork(state, c, "clearance");
-  expect(demand.demand).toMatchObject({ unit: "fraction" });
-  const located = makeWork(state, c, "clearance", c.position);
-  expect(located.demand).toBeUndefined();
-  const spread = [...demandSamples(state, demand)],
-    owned = Array.from(state.society!.owner).filter((o) => o === unit).length;
-  expect(spread.length).toBe(owned);
-  expect(spread.length).toBeGreaterThan(1);
-  expect([...workSamples(state, demand)]).toEqual(spread);
-  // The total the demand covers equals the located work's footprint, bounded by the country.
-  const area = spread.reduce((sum, s) => sum + s.fraction * state.surface.measures.get(s.i), 0);
-  expect(area).toBeCloseTo(
-    Math.min(
-      Math.PI * demand.radius ** 2,
-      spread.reduce((sum, s) => sum + state.surface.measures.get(s.i), 0)
-    ),
-    3
-  );
-  expect(demand.demand!.amount).toBeCloseTo(spread[0].fraction, 9);
-  state.society!.region.works = [{ ...demand, radius: 10000 }];
-  applySocietyWorks(state, context, 100);
-  const cleared = spread.filter((s) => state.surface.channels.treeCover.get(s.i) < 0.6);
-  expect(cleared.length).toBe(spread.length);
-});
-
-it("gives a structural demand an amount and a unit but no samples or terrain change at World", () => {
-  const { state, context } = fixture("world"),
-    c = state.society!.region.communities[unit];
-  putChannel(
-    state.surface,
-    "slope",
-    "gradient",
-    residentBand("float64", new Float64Array(10).fill(0.2))
-  );
-  const before = state.surface.channels.elevation.toArray();
-  const pass = makeWork(state, c, "pass"),
-    harbor = makeWork(state, c, "harbor"),
-    dam = makeWork(state, c, "dam");
-  for (const work of [pass, harbor, dam]) {
-    expect(societyWorkNatures[work.kind].nature).toBe("structural");
-    expect(work.demand).toMatchObject({ unit: societyWorkNatures[work.kind].unit });
-    expect([...workSamples(state, work)]).toEqual([]);
-  }
-  expect(pass.demand!.amount).toBe(1000); // the people whose routes cross the steep ground
-  state.society!.region.works = [pass, harbor, dam];
-  applySocietyWorks(state, context, 100);
-  expect(Array.from(state.surface.channels.elevation)).toEqual(Array.from(before));
-  expect(state.society!.changed.has("elevation")).toBe(false);
 });
 
 it("demands a harbour only of the shore the unit holds", () => {

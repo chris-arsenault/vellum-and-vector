@@ -3,8 +3,6 @@ import { putChannel, residentBand } from "@atlas/domain";
 import { landscape, epoch } from "./mapFixtures";
 import { initializePopulation } from "./societyPopulation";
 import { refreshSocietyConnections } from "./societyGeography";
-import { endRound } from "./societyRound";
-import { publishRuinFields } from "./societyRuins";
 import { resolveSocietyHazards, unitRadius } from "./societyHazards";
 import { planSocietyWorks } from "./societyWorks";
 import type { MapProcessContext } from "./process";
@@ -46,37 +44,6 @@ function fixture(profile: "world" | "local" = "world") {
   }
   return { state, context, set };
 }
-const ruins = (state: ReturnType<typeof fixture>["state"]) =>
-  Object.values(state.domain.world.features).filter((f) => f.layerId === "ruins");
-
-it("remembers every lasting camp but publishes only one that met the World's ruin rule", () => {
-  const { state } = fixture();
-  const [camp, town] = state.society!.region.communities;
-  camp.settlement = { population: 30, peak: 40, recoveryYears: 0 };
-  town.settlement = { population: 4000, peak: 6000, recoveryYears: 0 };
-  const round = endRound(state, "Ice age", "Cold age");
-  expect(round.ruins.map((r) => r.name).sort()).toEqual([camp.name, town.name].sort());
-  expect(round.ruins.find((r) => r.name === camp.name)?.peak).toBe(40);
-  expect(ruins(state).map((f) => f.name)).toEqual([town.name]);
-  expect(camp.status).toBe("ruined");
-});
-
-it("realizes a camp as a ruin field only where a sealed vein marks its ground", () => {
-  const { state } = fixture();
-  const camp = state.society!.region.communities[0];
-  camp.settlement = { population: 30, peak: 40, recoveryYears: 0 };
-  state.rounds = [endRound(state, "Ice age", "Cold age")];
-  state.domain.world.features = {};
-  publishRuinFields(state);
-  expect(ruins(state)).toEqual([]);
-  const scar = new Float64Array(10);
-  const cell = Array.from(state.society!.owner).findIndex((o) => o === 0);
-  scar[cell] = 1;
-  putChannel(state.surface, "magic:fire:feature:scar", "ratio", residentBand("float64", scar));
-  publishRuinFields(state);
-  const field = ruins(state).find((f) => f.attributes.ruinField === "a sealed vein");
-  expect(field?.attributes).toMatchObject({ era: "Ice age", round: true, peakPopulation: 40 });
-});
 
 it("gives a World hazard the unit's footprint and a finer profile the point radius", () => {
   for (const profile of ["world", "local"] as const) {

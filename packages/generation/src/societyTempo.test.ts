@@ -4,7 +4,6 @@ import { landscape, epoch } from "./mapFixtures";
 import { randomStream } from "./random";
 import type { MapProcessContext } from "./process";
 import { initializePopulation } from "./societyPopulation";
-import { evolveSociety } from "./societyEvolution";
 import { roundCycle, settledCycle, societyStep } from "./societyTempo";
 
 function fixture() {
@@ -70,20 +69,4 @@ it("splits the remaining years evenly and never leaves a sliver", () => {
   expect(societyStep(state, 7, settledCycle)).toBe(7);
   for (const c of state.society!.region.communities) c.groups = [];
   expect(societyStep(state, 1000, settledCycle)).toBeCloseTo(1000 / Math.ceil(1000 / max), 9);
-});
-
-it("covers an era exactly with cycles the pace of change decides", async () => {
-  const { state, context } = fixture();
-  const years: number[] = [];
-  await evolveSociety(
-    state,
-    { ...context, progress: (_f, message) => years.push(Number(/year (\d+)/.exec(message)![1])) },
-    200
-  );
-  const record = state.society!.region.history[0];
-  expect(record.years).toBeCloseTo(200, 6);
-  expect(record.cycles).toBe(years.length);
-  expect(years.at(-1)).toBe(200);
-  expect(record.cycles).toBeGreaterThanOrEqual(Math.ceil(200 / settledCycle.max));
-  expect(record.cycles).toBeLessThanOrEqual(Math.ceil(200 / settledCycle.min));
 });

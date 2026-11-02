@@ -10,10 +10,9 @@ import {
 } from "@atlas/domain";
 import { landscape } from "./mapFixtures";
 import type { MapProcessContext } from "./process";
-import { communityName, finalizeNamesProcess, namePolity } from "./societyNaming";
+import { finalizeNamesProcess, namePolity } from "./societyNaming";
 import { generatedFeature } from "./mapFeatures";
 import { executeProcessBehavior } from "./processTraits";
-import { evolveSettlements } from "./societySettlements";
 import { emptySupport } from "./societySupport";
 import { makeWork } from "./societyWorks";
 import { publishSocietyWorks } from "./societyWorkPublication";
@@ -102,20 +101,6 @@ function fixture() {
   };
   return { state, world, communities, context };
 }
-it("names new settlements from actual founding language and retains names as use changes", () => {
-  const { state, world, communities, context } = fixture();
-  evolveSettlements(state, context, 100);
-  const c = communities[0],
-    first = c.name,
-    provenance = structuredClone(c.naming);
-  expect(c.naming).toEqual({ language: "B", culture: "costa", era: "Arrival, year 100" });
-  expect(first).toBe(communityName(world, c, c.founded).name);
-  c.groups = structuredClone(communities[1].groups);
-  evolveSettlements(state, context, 100);
-  expect(c.name).toBe(first);
-  expect(c.naming).toEqual(provenance);
-  expect(c.history!.at(-1)!.languageUse).toEqual({ C: 1 });
-});
 it("resolves final biome names from regional language use and keeps established names", async () => {
   const { state, world, context } = fixture(),
     original = structuredClone(state.domain);

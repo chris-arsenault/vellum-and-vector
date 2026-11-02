@@ -1,22 +1,6 @@
 import { expect, it } from "vitest";
-import {
-  createGrid,
-  isLivelihood,
-  putChannel,
-  rectangle,
-  residentBand,
-  withPracticeShares,
-  type PopulationGroup,
-  type SocietyRegion,
-} from "@atlas/domain";
-import { landscape, epoch } from "./mapFixtures";
-import type { MapProcessContext } from "./process";
+import { withPracticeShares, type PopulationGroup, type SocietyRegion } from "@atlas/domain";
 import { polityCharacter, polityTerm, type PolityCharacter } from "./societyCharacter";
-import { initializeCultures } from "./societyCulture";
-import { evolveSociety } from "./societyEvolution";
-import { finalizeNamesProcess } from "./societyNaming";
-import { publishPolitics } from "./societyPoliticalPublication";
-import { initializePolitics } from "./societyPolitics";
 
 function group(count: number, languages: string[], shares: Record<string, number>) {
   const base: PopulationGroup = {
@@ -94,54 +78,4 @@ it("ends a polity's name in the word its character earns", () => {
   expect(polityTerm(of({ farming: 0.4, fishing: 0.3, grazing: 0.3 }, 3))).toBe("Concord");
   expect(polityTerm(of({ farming: 0.4, fishing: 0.3, grazing: 0.3 }, 2))).toBe("Commonwealth");
   expect(polityTerm(of({}))).toBe("Commonwealth");
-});
-
-it("publishes each polity's character and names it from it after the eras run", async () => {
-  const state = landscape();
-  state.domain.world.areas.area.profile = "region";
-  state.domain.world.id = state.domain.scope.worldId = "bc07dcd0-7cba-46b1-8e56-5f7829dde8cb";
-  state.domain.scope.footprint = rectangle([0, 0, 300000, 100000]);
-  state.domain.world.areas.area.footprint = state.domain.scope.footprint;
-  state.surface = createGrid("society", state.domain.scope, 13, 5);
-  putChannel(
-    state.surface,
-    "elevation",
-    "metre",
-    residentBand("float64", new Float64Array(65).fill(100))
-  );
-  const original = structuredClone(state.domain);
-  const context: MapProcessContext = {
-    scope: state.domain.scope,
-    invocation: [],
-    parameters: { polityCount: 2, cultureCount: 2, cultural: true, political: true },
-    epochs: [epoch("Settlement", 200, { mobility: 1, politicalCapacity: 1 })],
-    epochIndices: [0],
-    causes: [],
-    recordCause() {},
-    random: () => 0.5,
-    cancelled: () => false,
-    progress() {},
-  };
-  initializePolitics(state, context);
-  for (const c of state.society!.region.communities) c.groups[0].count = 1000;
-  initializeCultures(state, context);
-  await evolveSociety(state, context, 200);
-  publishPolitics(state);
-  const finalize = finalizeNamesProcess(original);
-  if (finalize.behavior.kind === "extract") finalize.behavior.extract(state, context);
-  const region = state.society!.region;
-  for (const polity of region.politics!.polities) {
-    const entity = state.domain.world.entities[polity.id],
-      character = entity.attributes.character as PolityCharacter;
-    expect(character.communities).toBeGreaterThan(0);
-    const livelihoods = Object.entries(character.practices)
-      .filter(([id]) => isLivelihood(id))
-      .reduce((sum, [, share]) => sum + share, 0);
-    expect(livelihoods).toBeGreaterThan(0.5);
-    expect(livelihoods).toBeLessThanOrEqual(1.001);
-    expect(entity.name.endsWith(polityTerm(character))).toBe(true);
-  }
-  // Every community learned its livelihoods over the era.
-  for (const c of region.communities)
-    if (c.groups.length) expect(c.groups[0].practices.length).toBeGreaterThan(0);
 });

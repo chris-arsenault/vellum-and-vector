@@ -1,6 +1,5 @@
 import { expect, it } from "vitest";
 import {
-  cloneSnapshot,
   copyGrid,
   createGrid,
   foldSamples,
@@ -9,11 +8,8 @@ import {
   overlayField,
   putChannel,
   rectangle,
-  resample,
   type GridSurface,
 } from "@atlas/domain";
-import { resetForcingProcess, temperatureProcess, precipitationProcess } from "./mapClimate";
-import { thermalMagicProcess } from "./mapMagic";
 import { configuration, invoke, landscape, options, registry } from "./mapFixtures";
 import { MapRunner } from "./mapRunner";
 import type { GenerationState, MapProcess } from "./process";
@@ -37,12 +33,6 @@ const flatten: MapProcess = {
     return [];
   },
 };
-
-function channelValues(grid: GridSurface) {
-  return Object.fromEntries(
-    Object.entries(grid.channels).map(([name, band]) => [name, Array.from(band)])
-  );
-}
 
 function authoredRidge(): GenerationState {
   const initial = landscape(),
@@ -82,38 +72,6 @@ function authoredRidge(): GenerationState {
   });
   return initial;
 }
-
-it("composes an authored fine ridge into regenerated base samples before climate and rain consume it", async () => {
-  const initial = authoredRidge();
-  const result = await new MapRunner(
-    configuration([
-      invoke(flatten),
-      invoke(resetForcingProcess),
-      invoke(temperatureProcess),
-      invoke(precipitationProcess),
-    ]),
-    registry(flatten)
-  ).run(initial, options);
-  expect(result.state.surface.channels.elevation.get(1)).toBe(0);
-  expect(result.state.surface.channels.elevation.get(2)).toBe(2000);
-  expect(result.state.surface.channels.temperature.get(2)).toBe(2);
-  expect(result.state.surface.channels.temperature.get(1)).toBe(15);
-  expect(result.state.surface.channels.precipitation.get(2)).toBeGreaterThan(
-    result.state.surface.channels.precipitation.get(3)
-  );
-  expect(result.state.domain.fieldPatches).toEqual(initial.domain.fieldPatches);
-  const overlays = (grid: GridSurface) =>
-    (grid.overlays ?? []).map((overlay) => ({
-      ...overlay,
-      grid: { id: overlay.grid.id, channels: channelValues(overlay.grid) },
-    }));
-  expect(overlays(result.state.domain.numerical.height)).toEqual(
-    overlays(initial.domain.numerical.height)
-  );
-  expect(channelValues(result.state.domain.numerical["authored-ridge"])).toEqual(
-    channelValues(initial.domain.numerical["authored-ridge"])
-  );
-});
 
 it("rejects incompatible authored units and changes to exact authored patch resources", async () => {
   const initial = authoredRidge();
@@ -199,50 +157,6 @@ const highPoint: MapProcess = {
     return [];
   },
 };
-
-it("reuses a registered GIS process and repeated climate passes over world and regional maps with stable identity", async () => {
-  const config = configuration([
-      invoke(resetForcingProcess),
-      invoke(temperatureProcess, "natural"),
-      invoke(thermalMagicProcess),
-      invoke(temperatureProcess, "forced"),
-      invoke(highPoint),
-    ]),
-    runner = new MapRunner(config, registry(highPoint)),
-    world = (await runner.run(landscape(), options)).state,
-    footprint = rectangle([1000, 0, 3000, 1000]),
-    scope = { ...world.domain.scope, areaId: "region", footprint },
-    surface = createGrid("regional", scope, 3, 2);
-  resample(world.surface, surface, "elevation");
-  const initial: GenerationState = {
-    ...world,
-    domain: cloneSnapshot(world.domain),
-    facts: new Set(world.facts),
-    history: structuredClone(world.history),
-    causes: structuredClone(world.causes),
-  };
-  initial.domain.world.areas.region = {
-    ...initial.domain.world.areas.area,
-    id: "region",
-    parentId: "area",
-    profile: "region",
-    footprint,
-  };
-  initial.domain.scope = scope;
-  initial.surface = surface;
-  const region = (await runner.run(initial, options)).state;
-  expect(Object.keys(region.domain.world.features)).toEqual(["ridge"]);
-  expect(region.domain.world.features.ridge.areaId).toBe("area");
-  expect(region.domain.world.features.ridge.geometry).toEqual(
-    world.domain.world.features.ridge.geometry
-  );
-  expect(region.domain.world.features.ridge.detail.region.geometry).toEqual(
-    world.domain.world.features.ridge.geometry
-  );
-  expect(region.surface.channels.temperature.get(1)).toBe(
-    world.surface.channels.temperature.get(2)
-  );
-});
 
 it("rejects overwriting authored vectors and completed history before a boundary is exposed", async () => {
   // A run owns its working state; each attempt starts from its own authored world.

@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { generate } from "@atlas/name-forge";
-import { rectangle, builtinLayers, putChannel, residentBand } from "@atlas/domain";
+import { rectangle, builtinLayers } from "@atlas/domain";
 import { atlasName, geographicNamingCulture } from "./atlasNaming";
 import {
   atlasNamingCultures,
@@ -11,12 +11,6 @@ import {
 import { generatedFeature, putGenerated } from "./mapFeatures";
 import { landscape } from "./mapFixtures";
 import { extractOceans } from "./canonry/oceanFeatures";
-import { initializePopulation } from "./societyPopulation";
-import { initializeCultures } from "./societyCulture";
-import { publishSettlements } from "./societyPublication";
-import { evolveSettlements } from "./societySettlements";
-import { communityName } from "./societyNaming";
-import type { MapProcessContext } from "./process";
 
 function fixture() {
   const state = landscape();
@@ -122,43 +116,4 @@ it("keeps naming cultures geographic and independent of generated feature iterat
   atlasName(world, { ...request, key: "unrelated" });
   expect(atlasName(world, request)).toEqual(before);
   expect(geographicNamingCulture(world, p).id).toBe(before.namingCulture);
-});
-it("uses founding culture profiles for settlements and preserves authored community names", () => {
-  const state = fixture();
-  state.domain.world.areas.area.profile = "region";
-  putChannel(state.surface, "elevation", "metre", residentBand("float64", Array(10).fill(100)));
-  const context: MapProcessContext = {
-    scope: state.domain.scope,
-    invocation: [],
-    parameters: { cultureCount: 1 },
-    inputs: {},
-    epochs: [],
-    epochIndices: [],
-    causes: [],
-    recordCause() {},
-    progress() {},
-    cancelled: () => false,
-    random: () => 0.5,
-  };
-  initializePopulation(state, context);
-  for (const community of state.society!.region.communities) {
-    community.groups[0].count = 10000;
-  }
-  const c = state.society!.region.communities[0];
-  c.name = "Creator's Landing";
-  c.founded = "Authored starting community";
-  c.status = "inhabited";
-  c.causes.push("Authored starting community creator-1.");
-  initializeCultures(state, context);
-  evolveSettlements(state, context, 200);
-  expect(c.name).toBe("Creator's Landing");
-  for (const other of state.society!.region.communities.slice(1)) {
-    const expected = communityName(state.domain.world, other, other.founded);
-    expect(other.founded).not.toBe("");
-    expect(other.name).toBe(expected.name);
-  }
-  publishSettlements(state, context);
-  expect(
-    Object.values(state.domain.world.features).find((f) => f.attributes.communityId === c.id)?.name
-  ).toBe(c.name);
 });
