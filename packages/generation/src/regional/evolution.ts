@@ -19,7 +19,7 @@ import type { NetworkWork, RegionalState } from "./state";
  * the drainage is the one erosion organizes rather than the smoothed base's slope; the
  * relief itself is derived and calibrated to the parent afterwards.
  */
-const evolutionSteps = 160;
+const evolutionSteps = 400;
 /** Uplift of one step as a share of the captured base's height above its base level. */
 const upliftPerStep = 0.02;
 /** Incision of one step where the upstream area is a channel's (implicit, so any value is stable). */
@@ -29,9 +29,12 @@ const areaExponent = 0.5;
 /** Share of a channel's area below which water runs as sheet flow and only creep acts. */
 const channelInitiation = 0.1;
 /** Share of the difference to the neighbours' mean that hillslope creep removes per step. */
-const creepPerStep = 0.2;
+const creepPerStep = 0.35;
 /** Unevenness (m) of the ground below the parent's resolution. */
 const microRelief = 3;
+/** A captured river's bed as a share of the smoothed base under it, and its least fall per cell (m). */
+const courseDepth = 0.85,
+  courseFall = 0.01;
 
 /** A cell's neighbourhood, gathered once: the evolution reads it every step. */
 interface Neighbourhood {
@@ -91,6 +94,7 @@ export function evolveNetwork(
     h[i] = root[i]
       ? network.level[i]
       : network.base[i] + microRelief * hashUnit(seed, mesh.identity(i), 0);
+  carveCourses(state, network, root, h);
   for (let step = 0; step <= evolutionSteps; step++) {
     drain(state, network, root, h, around);
     if (step === evolutionSteps) break;
@@ -101,6 +105,30 @@ export function evolveNetwork(
     creep(state, network, root, h);
   }
   network.cost.set(h);
+}
+
+/**
+ * The parent's rivers are valleys of the ground the region starts from: each captured course
+ * is cut below the smoothed base and made to descend along its own line, from its higher end
+ * to its lower. Erosion then deepens it by the water it gathers and creep widens it; it stays
+ * the trunk because it is the lowest and largest channel, not because it is held.
+ */
+function carveCourses(
+  state: RegionalState,
+  network: NetworkWork,
+  root: Uint8Array,
+  h: Float64Array
+) {
+  for (const course of state.regional.evidence?.courses ?? []) {
+    const cells = Array.from(course.cells).filter((i) => !network.sea[i]);
+    if (cells.length < 2) continue;
+    if (network.base[cells[0]] < network.base[cells.at(-1)!]) cells.reverse();
+    let level = Infinity;
+    for (const i of cells) {
+      level = Math.min(level - courseFall, courseDepth * network.base[i]);
+      if (!root[i]) h[i] = Math.min(h[i], level);
+    }
+  }
 }
 
 /** Steepest descent over the depression-filled surface, every cell reaching a root. */

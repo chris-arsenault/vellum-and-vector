@@ -14,6 +14,12 @@ const rulingGrade = 0.08;
 export function gradeCost(grade: number) {
   return 1 + (grade / rulingGrade) ** 2;
 }
+/**
+ * Extra cost of crossing ground floods soak, at full floodplain: carts mire on it and it is
+ * under water in the wet season, so ways keep to the terrace edge beside a river and cross
+ * its floor where it is shortest.
+ */
+const wetGroundCost = 3;
 
 /** What a path search reads beside the ground: a cost factor per step (worn ways, fords on or under the step) and free links (door ends). */
 export interface PathOptions {
@@ -83,8 +89,9 @@ export function regionalPath(
       const j = around[k];
       if (!isContent(mesh, j) || map.WaterKindCodes.get(j) !== 0) continue;
       const step = distance(mesh, i, j),
-        slope = Math.abs(height(j) - height(i)) / step;
-      relax(i, j, s.cost[i] + step * gradeCost(slope) * (options.factor?.(i, j) ?? 1));
+        slope = Math.abs(height(j) - height(i)) / step,
+        wet = 1 + (wetGroundCost * map.FloodplainIntensity.get(j)) / 1000;
+      relax(i, j, s.cost[i] + step * gradeCost(slope) * wet * (options.factor?.(i, j) ?? 1));
     }
   };
   while (front.size) {

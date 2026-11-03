@@ -1,4 +1,6 @@
+import { potentialEvaporation } from "../canonry/ecologyEnvironment";
 import { fractalNoise } from "../canonry/noise";
+import { celsius, regionalPrecipitation } from "./climate";
 import { capturedSinks, connectedSea, smoothedBase } from "./base";
 import { influenceCosts } from "./causes/registry";
 import { evolveNetwork } from "./evolution";
@@ -77,9 +79,22 @@ export function growNetwork(state: RegionalState): NetworkWork {
 }
 
 /**
+ * Precipitation over potential evaporation below which a basin's floor loses more water than
+ * reaches it, so the basin stays closed: a terminal lake, a salt flat or a dry pan. A wetter
+ * basin fills to its spill and overflows; its river continues.
+ */
+const closedBasinAridity = 0.5;
+function closedBasin(state: RegionalState, i: number) {
+  return (
+    regionalPrecipitation(state, i) < closedBasinAridity * potentialEvaporation(celsius(state, i))
+  );
+}
+
+/**
  * Roots: every land cell beside the sea or at an exit across the frame drains out; lake cells
- * receive their tributaries at the lake's level; a captured sink's floor receives its own. An
- * exit leaves at the base there, which the relief holds to along the whole frame edge.
+ * receive their tributaries at the lake's level; a captured sink's floor receives its own
+ * where the climate keeps the basin closed. An exit leaves at the base there, which the relief
+ * holds to along the whole frame edge.
  */
 function networkRoots(state: RegionalState, network: NetworkWork) {
   const mesh = state.physical.map.mesh,
@@ -95,16 +110,25 @@ function networkRoots(state: RegionalState, network: NetworkWork) {
       for (let k = 0; k < m; k++) if (sea[around[k]]) return true;
       return false;
     };
+  openWetBasins(state, sink);
+  const rootLevel = (i: number) => {
+    if (lake[i] >= 0) return evidence.lakes[lake[i]].level;
+    if (sink[i]) return base[i];
+    if (exits[i] && !guarded[i]) return Math.max(base[i], 1);
+    return shore(i) ? 0 : null;
+  };
   for (let i = 0; i < n; i++) {
     if (sea[i] || !isContent(mesh, i)) continue;
-    if (lake[i] >= 0) level[i] = evidence.lakes[lake[i]].level;
-    else if (sink[i]) level[i] = base[i];
-    else if (exits[i] && !guarded[i]) level[i] = Math.max(base[i], 1);
-    else if (shore(i)) level[i] = 0;
-    else continue;
+    const at = rootLevel(i);
+    if (at === null) continue;
+    level[i] = at;
     root[i] = 1;
   }
   return root;
+}
+/** A wet basin is a hollow its water overflows, not an end: it keeps its bowl, not its sink. */
+function openWetBasins(state: RegionalState, sink: Uint8Array) {
+  for (let i = 0; i < sink.length; i++) if (sink[i] && !closedBasin(state, i)) sink[i] = 0;
 }
 
 /**
