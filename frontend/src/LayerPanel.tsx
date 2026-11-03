@@ -5,6 +5,7 @@ import { LayerBrowser } from "./LayerBrowser";
 import { RasterPanel } from "./RasterPanel";
 import { VectorAppearance } from "./VectorAppearance";
 import { FeatureDrawOrder } from "./FeatureDrawOrder";
+import { PanelBoundary } from "./PanelBoundary";
 
 const SymbolEditor = lazy(() => import("./SymbolEditor"));
 export function LayerPanel({ world, editor }: { world: World; editor: EditorState }) {
@@ -77,20 +78,22 @@ function AdvancedSymbols({
 }) {
   return (
     <StyleDialog name={editor.world.layers[presentation.layerId].name} close={close}>
-      <Suspense fallback={<p>Loading style editor…</p>}>
-        <SymbolEditor
-          world={editor.world}
-          presentation={presentation}
-          close={close}
-          apply={(symbols) =>
-            editor.setStyles(
-              editor.styles.map((item) =>
-                item.layerId === presentation.layerId ? { ...item, symbols } : item
+      <PanelBoundary name="The style editor">
+        <Suspense fallback={<p>Loading style editor…</p>}>
+          <SymbolEditor
+            world={editor.world}
+            presentation={presentation}
+            close={close}
+            apply={(symbols) =>
+              editor.setStyles(
+                editor.styles.map((item) =>
+                  item.layerId === presentation.layerId ? { ...item, symbols } : item
+                )
               )
-            )
-          }
-        />
-      </Suspense>
+            }
+          />
+        </Suspense>
+      </PanelBoundary>
       <label>
         Minimum metres per pixel
         <input

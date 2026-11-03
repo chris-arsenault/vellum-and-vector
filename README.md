@@ -54,7 +54,8 @@ change the communities inherited by later epochs. Configure **Ecological regime*
 beside Living ecology for the selected shared epoch, or start with the
 wet/dry/cold/recovery cycle preset in **Edit shared history**.
 **Biomes and life** exposes the resulting fields and selectable land-biome regions;
-the Biomes overlay uses named categories and is visible by default. Organic deposits
+the Biomes overlay uses named categories. Every map opens with its feature layers
+off; turn layers on under **Map → Layers** or choose a layer preset. Organic deposits
 and their later burial remain downstream consequences. See the
 [ecology model](docs/generation-workflows.md#ecology-and-organic-geology).
 

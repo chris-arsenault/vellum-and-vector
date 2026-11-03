@@ -14,6 +14,7 @@ import type { World } from "./types";
 import { useJobs } from "./useAtlas";
 import { MapStorage } from "./MapStorage";
 import { RegionList } from "./RegionsPanel";
+import { PanelBoundary } from "./PanelBoundary";
 
 interface Props {
   world: World;
@@ -244,7 +245,9 @@ function SelectionSidebar({ world, editor }: { world: World; editor: EditorState
         <span>Inspect a place · choose a region · add detail</span>
       </header>
       <div className="panel-content">
-        <SelectionPanel world={world} editor={editor} />
+        <PanelBoundary name="The selection panel">
+          <SelectionPanel world={world} editor={editor} />
+        </PanelBoundary>
         <ErrorMessage
           error={
             editor.commit.error ??

@@ -168,6 +168,23 @@ async function expectFieldOrder(page: Page) {
   await expect(fields.nth(1)).toHaveAttribute("aria-label", "Show Temperature");
 }
 
+test("a style editor that cannot load leaves the open map in place", async ({ page }) => {
+  // A redeployed site no longer serves the deferred module this page was built against.
+  await page.route(/SymbolEditor/, (route) => route.fulfill({ status: 403, body: "" }));
+  await openFixtureMap(page, "Stale page", {
+    features: [pointFeature("Old road", "road", "roads")],
+  });
+  await openLayers(page);
+  await page.getByLabel("Search features").fill("Roads");
+  await page.getByRole("button", { name: "Style Roads and routes", exact: true }).click();
+  await page.getByRole("button", { name: "Advanced symbol rules", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "Save the map" })).toBeVisible();
+  await expect(canvas(page)).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Style Roads and routes", exact: true })
+  ).toBeVisible();
+});
+
 test("road symbols are styled with GeoStyler and kept in a session view", async ({ page }) => {
   const errors = pageErrors(page);
   const road = pointFeature("Old road", "road", "roads");

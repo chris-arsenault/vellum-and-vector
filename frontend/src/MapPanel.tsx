@@ -6,6 +6,7 @@ import { LayerPanel } from "./LayerPanel";
 import { DrawnSheetPanel } from "./DrawnSheetPanel";
 import { MapViews } from "./MapViews";
 import { ErrorMessage } from "./ErrorMessage";
+import { PanelBoundary } from "./PanelBoundary";
 import "./mapSettings.css";
 
 export type MapSection = "appearance" | "layers" | "sheet" | "views";
@@ -97,10 +98,12 @@ export function MapPanel({ editor, section, choose, chooseRegion }: Props) {
         ))}
       </nav>
       <div className="map-settings-content" id="map-settings-content">
-        {section === "appearance" && <MapAppearance editor={editor} />}
-        {section === "layers" && <LayerPanel world={editor.world} editor={editor} />}
-        {section === "sheet" && <SheetSettings editor={editor} />}
-        {section === "views" && <MapViews editor={editor} />}
+        <PanelBoundary key={section} name="This map setting">
+          {section === "appearance" && <MapAppearance editor={editor} />}
+          {section === "layers" && <LayerPanel world={editor.world} editor={editor} />}
+          {section === "sheet" && <SheetSettings editor={editor} />}
+          {section === "views" && <MapViews editor={editor} />}
+        </PanelBoundary>
         <ErrorMessage error={editor.compositionError} />
       </div>
       <footer className="map-view-status">

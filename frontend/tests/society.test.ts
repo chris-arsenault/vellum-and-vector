@@ -8,6 +8,7 @@ import {
   openFixtureMap,
   pageErrors,
   panel,
+  showPreset,
 } from "./harness";
 
 /** The legend items of a share bar on the inspection surface, by the bar's label. */
@@ -125,6 +126,7 @@ async function settlementWorld(
     { features: [settlement], society: societyState(settlement) },
     { width: 4, height: 1 }
   );
+  await showPreset(page);
   const box = (await canvas(page).boundingBox())!;
   await canvas(page).click({ position: { x: box.width / 2, y: box.height / 2 } });
   await expect(panel(page).locator("h2")).toHaveText("River town");

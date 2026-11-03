@@ -20,14 +20,16 @@ describe("geographic presentation", () => {
   });
   it("keeps fault traces available as an explicit overlay without mixing them into surface landforms", async () => {
     const world = fixtureWorld({ name: "Geology", seed: 1, width: 100_000, height: 100_000 }),
-      styles = defaultStyles(world);
+      styles = defaultStyles(world, "physical");
     expect(world.layers.faults.name).toBe("Fault traces");
     expect(styles.find((style) => style.layerId === "faults")?.visible).toBe(false);
     expect(styles.find((style) => style.layerId === "geology")?.visible).toBe(true);
   });
   it("separates society overlays and enables practices with the magical preset", async () => {
     const world = fixtureWorld({ name: "Society", seed: 1, width: 1000, height: 1000 });
-    expect(defaultStyles(world).find((s) => s.layerId === "waterworks")?.visible).toBe(false);
+    expect(defaultStyles(world, "physical").find((s) => s.layerId === "waterworks")?.visible).toBe(
+      false
+    );
     expect(
       defaultStyles(world, "infrastructure").find((s) => s.layerId === "waterworks")?.visible
     ).toBe(true);
@@ -37,6 +39,10 @@ describe("geographic presentation", () => {
     expect(
       defaultStyles(world, "cultural").find((s) => s.layerId === "institutions")?.visible
     ).toBe(true);
+  });
+  it("opens every map with its feature layers off until a preset is chosen", async () => {
+    const world = fixtureWorld({ name: "Quiet", seed: 1, width: 1000, height: 1000 });
+    expect(defaultStyles(world).every((style) => !style.visible)).toBe(true);
   });
   it("shows magical geography on the physical map without switching presets", async () => {
     const world = fixtureWorld({ name: "Magic", seed: 1, width: 1000, height: 1000 });

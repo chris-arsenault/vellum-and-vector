@@ -104,6 +104,9 @@ test("feature types toggle individually and a saved view restores them", async (
     ],
   });
   await openLayers(page);
+  await expect(page.getByLabel("Show Hot spring", { exact: true })).not.toBeChecked();
+  await page.getByLabel("Show Waterfalls", { exact: true }).check();
+  await page.getByLabel("Show Hot spring", { exact: true }).check();
   await page.getByLabel("Show Waterfalls", { exact: true }).uncheck();
   await expect(page.getByLabel("Show Hot spring", { exact: true })).toBeChecked();
   await openMapSettings(page, "Views");

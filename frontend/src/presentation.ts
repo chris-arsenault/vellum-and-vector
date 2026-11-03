@@ -11,7 +11,8 @@ export function lineage(world: World, areaId: string): Area[] {
   return result;
 }
 
-export function defaultStyles(world: World, preset = "physical"): LayerStyle[] {
+/** Every map opens with its feature layers off; a preset turns on its families. */
+export function defaultStyles(world: World, preset?: string): LayerStyle[] {
   const families: Record<string, string[]> = {
     // Magical geography is part of the physical map, not a theme of its own.
     physical: ["physical", "water", "magic", "transport", "built", "custom"],
@@ -22,7 +23,9 @@ export function defaultStyles(world: World, preset = "physical"): LayerStyle[] {
   };
   return Object.values(world.layers).map((layer) => ({
     layerId: layer.id,
-    visible: defaultLayerVisibility(layer.id, layer.family, preset, families[preset]),
+    visible:
+      preset !== undefined &&
+      defaultLayerVisibility(layer.id, layer.family, preset, families[preset] ?? []),
     opacity: layer.family === "political" ? 0.4 : 0.85,
     color:
       (

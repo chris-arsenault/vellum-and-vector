@@ -190,6 +190,12 @@ export async function openMapSettings(
 export async function openLayers(page: Page) {
   await openMapSettings(page, "Layers");
 }
+/** Maps open with their feature layers off; turn on a preset's layers as a creator does. */
+export async function showPreset(page: Page, preset = "physical") {
+  await openLayers(page);
+  await page.getByLabel("View preset", { exact: true }).selectOption(preset);
+  await closeDrawer(page);
+}
 /** Close the map or atlas drawer. */
 export async function closeDrawer(page: Page) {
   await page.getByRole("button", { name: "Close map drawer", exact: true }).click();

@@ -11,6 +11,7 @@ import {
   openRegistry,
   pageErrors,
   pointFeature,
+  showPreset,
 } from "./harness";
 import { completeGenerationFixture, installGenerationFixture } from "./generationFixture";
 
@@ -102,6 +103,7 @@ test("inspection offers information and a geographic next step without authoring
   await expect(page.getByLabel("Working layer")).toHaveCount(0);
   await expectMapOverview(page);
   const before = await exportMap(page);
+  await showPreset(page);
   await clickWorld(page, 500, 500, [0, 0, 1000, 1000]);
   await expect(panel.getByRole("heading", { name: "Known falls", exact: true })).toBeVisible();
   await expect(panel).toContainText("42");
