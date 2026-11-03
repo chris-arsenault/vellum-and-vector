@@ -6,6 +6,7 @@ import { deriveCharacter, measureGrain } from "./character";
 import { respondClimate } from "./climate";
 import { divides, markPasses } from "./divides";
 import { routeWater } from "./drainage";
+import { erodeRegion } from "./erosion";
 import { clearRegionalProducts } from "./extraction/features";
 import { carryIdentities } from "./extraction/identity";
 import { prepareEcology, respondEcology } from "./ecology";
@@ -177,6 +178,8 @@ function roundSteps(d: Domains, round: number): ScheduledStep[] {
         run(state) {
           state.regional.round = round;
           if (d.physical) deriveRelief(state);
+          // The last round's ground is worked by the world's erosion at this map's scale.
+          if (d.physical && round === rounds) erodeRegion(state);
           if (round === 2) conjoinFeatures(state);
         },
       },
