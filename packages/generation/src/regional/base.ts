@@ -111,6 +111,7 @@ export function capturedSinks(
   const mesh = state.physical.map.mesh,
     n = base.length,
     sink = new Uint8Array(n),
+    bowl = new Uint8Array(n),
     filled = floodLevels(
       mesh,
       base,
@@ -128,12 +129,42 @@ export function capturedSinks(
         deepest = Math.max(deepest, depth[i]);
         if (base[i] < base[lowest]) lowest = i;
       }
-      // The bowl's lowest cell is its sink; the rest of the bowl drains to it.
-      if (deepest >= capturedBasinDepth && resolvesComponent(mesh, members, regionalSpan(state)))
-        sink[lowest] = 1;
+      // The bowl's lowest cell is its sink; the rest of the bowl drains to it, and the whole
+      // bowl may lie below its spill, so the routing can stand water in it.
+      if (deepest < capturedBasinDepth || !resolvesComponent(mesh, members, regionalSpan(state)))
+        return;
+      sink[lowest] = 1;
+      for (const i of members) bowl[i] = 1;
     }
   );
-  return sink;
+  return { sink, bowl };
+}
+
+/** Water deeper than this (m) over a spill-filled floor is standing water worth a stage. */
+export const poolDepth = 2;
+/** The fewest cells a pool spans before the map holds it as a lake. */
+export const lakeCells = 3;
+
+/**
+ * Hollows of the derived surface that can hold a lake: at least `poolDepth` below their spill
+ * and `lakeCells` across. A slide that dams a valley or a fan that blocks a tributary leaves
+ * such a hollow; the relief keeps it rather than draining it, and the routing stands water in
+ * it as far as the supply allows. Shallower or smaller pits are the derivation's noise.
+ */
+export function lakeHollows(state: RegionalState, h: Float64Array, sea: Uint8Array) {
+  const mesh = state.physical.map.mesh,
+    held = new Uint8Array(h.length),
+    filled = floodLevels(mesh, h, (i) => Boolean(sea[i]) || mesh.boundary(i) || frameEdge(mesh, i));
+  components(
+    mesh,
+    (i) => !sea[i] && filled[i] - h[i] > 1e-3,
+    (members) => {
+      if (members.length < lakeCells) return;
+      if (!members.some((i) => filled[i] - h[i] >= poolDepth)) return;
+      for (const i of members) held[i] = 1;
+    }
+  );
+  return held;
 }
 
 /** Priority-flood fill levels from the given outlets: the spill level over each cell. */

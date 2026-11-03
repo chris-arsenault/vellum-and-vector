@@ -91,7 +91,7 @@ export function growNetwork(state: RegionalState): NetworkWork {
     sea,
     base,
     lake,
-    sink: capturedSinks(state, base, sea, lake),
+    ...capturedSinks(state, base, sea, lake),
   };
   for (const entry of evidence.entries) network.inflow[entry.cell] = entry.discharge;
   const root = networkRoots(state, network),

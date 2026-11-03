@@ -7,6 +7,7 @@ import {
 import { celsius } from "./climate";
 import { cellAt, distance, isContent, neighborsOf, positionOf, regionalSpan } from "./lattice";
 import { promoteChannel } from "./network";
+import { gradeSeat } from "./grading";
 import { clamp, type RegionalState, type Seat, type Situation } from "./state";
 
 /** Slope above which a seat's own cell is not usable ground. */
@@ -153,6 +154,8 @@ export function settleSeats(state: RegionalState) {
     if (target !== seat.cell) {
       seat.cell = target;
       feature.geometry = point(positionOf(state.physical.map.mesh, target));
+      // The relief was graded under the old site; the new one is graded where it now stands.
+      gradeSeat(state, seat);
     }
     feature.attributes = {
       ...feature.attributes,

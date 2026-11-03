@@ -28,6 +28,7 @@ import { isWorldGeography } from "../worldSignificance";
 import { partitionWorldRegion } from "./worldRegionPartition";
 import { significantLandform } from "./worldSiteEvidence";
 import { significantMagicArea, significantMagicPlace } from "./worldMagicSignificance";
+import { secondSurfaceFloor } from "./magicFeatures";
 export { extractLakes } from "./lakeFeatures";
 
 /** Largest enclosed gap, in square metres, that a landform or magic region absorbs. */
@@ -253,7 +254,7 @@ export function extractMagicPlaces(state: GenerationState) {
       (region, extent) =>
         (isWorldGeography(state)
           ? significantMagicArea(state, region, (i) => held.coverage.get(i))
-          : region.length >= placeMinimumCells.area) &&
+          : localMagicPlace(region, placeMinimumCells.area, (i) => held.coverage.get(i))) &&
         publishPlace(
           state,
           `confluence:${held.definition.id}`,
@@ -281,6 +282,16 @@ export function extractMagicPlaces(state: GenerationState) {
   for (const field of magic?.fields ?? [])
     for (const rule of field.definition.features) publishRulePlaces(state, field, rule);
 }
+/**
+ * A finer map's place: the declared extent, and a class that holds the cells it spans (mean
+ * coverage at least the share at which a class shows on the surface). Fainter coverage stays
+ * on the map as tint, not as an outlined, named place.
+ */
+function localMagicPlace(region: Int32Array, minimum: number, coverage: (i: number) => number) {
+  if (region.length < minimum) return false;
+  const mean = region.reduce((sum, i) => sum + coverage(i), 0) / region.length;
+  return mean >= secondSurfaceFloor;
+}
 /** World places require causal significance; finer profiles retain local class components. */
 function publishRulePlaces(state: GenerationState, field: MagicField, rule: MagicFeatureRule) {
   const cartography = rule.cartography ?? "area",
@@ -296,7 +307,7 @@ function publishRulePlaces(state: GenerationState, field: MagicField, rule: Magi
     (region, extent) => {
       const eligible = isWorldGeography(state)
         ? significantMagicPlace(state, field, rule, region)
-        : region.length >= minimum;
+        : localMagicPlace(region, minimum, (i) => coverage?.get(i) ?? 1);
       if (!eligible) return;
       const placement = extent ? magicPlaceGeometry(state, field, rule.id, region, extent) : null;
       if (isWorldGeography(state) && cartography === "course" && !placement) return;

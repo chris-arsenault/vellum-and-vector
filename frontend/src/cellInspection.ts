@@ -29,10 +29,21 @@ export interface InspectedCell {
   active: boolean;
   values: CellValue[];
 }
+/** A map feature at the clicked point: an area covering it, or a line or place within a cell. */
+export interface InspectedFeature {
+  id: string;
+  name: string;
+  kind: string;
+  layerId: string;
+  geometryType: string;
+  attributes: [string, string | number | boolean][];
+  causes: string[];
+}
 export interface CellInspection {
   areaId: string;
   position: Position;
   cells: InspectedCell[];
+  features: InspectedFeature[];
 }
 
 /** Read the owning stored sample; never interpolate its value or average a polygon. */

@@ -3,7 +3,7 @@ import { units } from "../canonry/math";
 import { physicalGradients } from "../canonry/physicalMetric";
 import { releaseWorking } from "../canonry/physicalNumerics";
 import { applyGlaciation } from "./glacial";
-import { baseSmoothing } from "./base";
+import { baseSmoothing, lakeHollows } from "./base";
 import { featureCaps, restoreFeatures } from "./causes/registry";
 import { networkDivides } from "./divides";
 import { transportSediment, wasteHillslopes } from "./sediment";
@@ -84,7 +84,7 @@ export function deriveRelief(state: RegionalState) {
   conditionOnBase(state, h);
   smoothHillslopes(state, h, crest);
   buildCones(state, h);
-  for (let i = 0; i < n; i++) if (network.lake[i] >= 0 || network.sink[i]) basin[i] = 1;
+  for (let i = 0; i < n; i++) if (network.lake[i] >= 0 || network.bowl[i]) basin[i] = 1;
   const relief: ReliefWork = { amplification, basin, iceFlux: new Float64Array(n) };
   applyGlaciation(state, h, relief);
   keepDrainable(network, h, basin);
@@ -92,6 +92,9 @@ export function deriveRelief(state: RegionalState) {
   const supply = new Float64Array(n);
   wasteHillslopes(state, h, supply);
   transportSediment(state, h, supply);
+  // A slide or fan that dams a valley leaves a hollow deep and wide enough for a lake: it stays.
+  const hollows = lakeHollows(state, h, network.sea);
+  for (let i = 0; i < n; i++) basin[i] |= hollows[i];
   keepDrainable(network, h, basin);
   // The sea works the shore: exposed ground is cut, the lee and the river mouths fill. Ground
   // the cut took below the datum is sea and stays there; the rest drains as before.

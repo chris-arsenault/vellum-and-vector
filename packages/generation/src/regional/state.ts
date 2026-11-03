@@ -95,6 +95,8 @@ export interface NetworkWork {
   lake: Int32Array;
   /** Closed depressions the parent holds (desert basins, pans) kept as sinks. */
   sink: Uint8Array;
+  /** Every cell of those depressions: ground the relief may leave below its spill. */
+  bowl: Uint8Array;
 }
 
 /** Relief derived from the network in the latest round, with the fields the derivation produced. */

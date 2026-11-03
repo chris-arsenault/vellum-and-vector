@@ -29,6 +29,8 @@ it("reads every published channel at the stored cell and leaves the catalog unch
     new Set(["elevation", "temperature", "water", "impactExcavation"])
   );
   expect(values.every((value) => value.fieldId && value.resourceId)).toBe(true);
+  // The constructed coast has fields only: no mapped feature explains the cell.
+  expect(result.features).toEqual([]);
   expect(await current.catalog.readEditor(snapshot.world.id)).toEqual(before);
 });
 

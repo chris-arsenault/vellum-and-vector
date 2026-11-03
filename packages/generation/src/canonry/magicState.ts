@@ -147,6 +147,8 @@ function createMagicField(state: GenerationState, definition: MagicSystem): Magi
   inheritMagicField(state, field);
   return field;
 }
+/** Locators that place discrete sites (a vein, a locus, a placed source, a forge), not ground. */
+const siteSources = new Set<string>(["geothermal", "deep-ocean", "placed", "forge"]);
 function inheritMagicField(state: GenerationState, field: MagicField) {
   for (const channel of carriedMagicChannels)
     inheritMagicChannel(
@@ -155,10 +157,24 @@ function inheritMagicField(state: GenerationState, field: MagicField) {
       field[channel],
       magicFieldDefinitions[channel].quantity
     );
-  for (const [key, values] of Object.entries(field.stocks))
-    inheritMagicChannel(state, magicKey(field, `stock:${key}`), values, "extensive");
-  for (const [id, values] of Object.entries(field.originSources))
-    inheritMagicChannel(state, magicKey(field, `origin:${id}:source`), values);
+  // Sources and the stock a forge holds are located sites; the other stocks are spread fields.
+  for (const origin of field.definition.origins)
+    for (const stock of originStocks(origin)) {
+      const key = stockKey(origin, stock);
+      inheritMagicChannel(
+        state,
+        magicKey(field, `stock:${key}`),
+        field.stocks[key],
+        stock.reservoir === "forge" ? "site-amount" : "extensive"
+      );
+    }
+  for (const origin of field.definition.origins)
+    inheritMagicChannel(
+      state,
+      magicKey(field, `origin:${origin.id}:source`),
+      field.originSources[origin.id],
+      siteSources.has(origin.source) ? "site-strength" : "intensive"
+    );
   // Falls the parent already seeded arrive with their stock, not again.
   for (const event of state.physical!.map.events)
     if (event.kind === "impact") field.seeded.add(event.id);

@@ -22,10 +22,12 @@ test("reuses completed map resources while keeping each scenario copy independen
   );
   await tool(page, "Inspect cell").click();
   await canvas(page).click();
-  const inspection = page.locator(".cell-inspection"),
-    elevation = inspection
-      .getByRole("row")
-      .filter({ has: page.getByRole("rowheader", { name: "elevation", exact: true }) });
+  const inspection = page.locator(".cell-inspection");
+  await expect(inspection.getByRole("heading", { name: "Why it looks like this" })).toBeVisible();
+  await inspection.getByText(/^Stored values/).click();
+  const elevation = inspection
+    .getByRole("row")
+    .filter({ has: page.getByRole("rowheader", { name: "elevation", exact: true }) });
   await expect(elevation.getByRole("cell").last()).toHaveText("metre");
   const index = Number(
     (await inspection.locator(".cell-data h3").first().innerText()).match(/^Cell (\d+)/)![1]

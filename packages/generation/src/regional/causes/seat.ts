@@ -3,6 +3,7 @@ import { scaleAround } from "../network";
 import { placesEnabled } from "../places";
 import { drawChannelsToSeats, knownSeats, seatCaps, settleSeats } from "../seats";
 import { registerCause } from "./registry";
+import { gradeSeats } from "../grading";
 
 /** A river seat draws a channel to itself: the ground around it is cheaper to run through. */
 const seatCorridor = 0.5;
@@ -26,6 +27,8 @@ registerCause({
   },
   support: drawChannelsToSeats,
   caps: seatCaps,
+  // The written relief is graded under every seat: the cap alone is undone by later steps.
+  restore: gradeSeats,
   respond(state) {
     const domains = state.regional.input.domains;
     if (domains.includes("physical") && placesEnabled(domains)) settleSeats(state);

@@ -9,6 +9,7 @@ import {
 import { FieldWorkingSet, type BrowserWorkspace } from "@atlas/storage-browser";
 import { mapRasterFields } from "./workspaceRasters";
 import { inspectStoredCell, type CellInspection, type InspectedCell } from "./cellInspection";
+import { featuresAtCell } from "./cellFeatures";
 
 /** Open lazy immutable arrays in the workspace worker; only selected cell blocks are decoded. */
 export async function workspaceCell(
@@ -74,7 +75,9 @@ export async function workspaceCell(
         else cells.set(key, cell);
       }
     }
-    return { areaId, position, cells: [...cells.values()] };
+    const stored = [...cells.values()],
+      features = await featuresAtCell(current, worldId, areaId, position, cellReach(stored));
+    return { areaId, position, cells: stored, features };
   } finally {
     working.close();
   }
@@ -82,6 +85,12 @@ export async function workspaceCell(
 
 /** A stored cell's identity on the map: its bounds, to a millimetre. */
 const cellKey = (cell: InspectedCell) => cell.bounds.map((value) => value.toFixed(3)).join(",");
+
+/** Lines and places count as "here" within half the finest stored cell of the point. */
+function cellReach(cells: InspectedCell[]) {
+  const widths = cells.map(({ bounds: [w, s, e, n] }) => Math.min(e - w, n - s));
+  return widths.length ? Math.min(...widths) / 2 : 0;
+}
 
 async function inspectedField(
   current: Pick<BrowserWorkspace, "catalog" | "resources">,

@@ -3,15 +3,15 @@ import { useQuery } from "@tanstack/react-query";
 import { atlasWorkspace } from "./atlasWorkspace";
 import type { EditorState } from "./useEditor";
 import type { World } from "./types";
-import type { InspectedCell, CellValue } from "./cellInspection";
+import type { CellInspection, InspectedCell, CellValue } from "./cellInspection";
 import { categoryPalette } from "./rasterPresentation";
 import { ErrorMessage } from "./ErrorMessage";
 import { Facts } from "./InspectionSurface";
+import { CellExplanation } from "./CellExplanation";
 import "./cellInspection.css";
 
 export function CellInspectionPanel({ world, editor }: { world: World; editor: EditorState }) {
-  const [filter, setFilter] = useState(""),
-    point = editor.cellPoint?.areaId === editor.area.id ? editor.cellPoint.position : null,
+  const point = editor.cellPoint?.areaId === editor.area.id ? editor.cellPoint.position : null,
     cell = useQuery({
       queryKey: ["cell", world.id, editor.area.id, world.version, point],
       enabled: point !== null,
@@ -20,9 +20,9 @@ export function CellInspectionPanel({ world, editor }: { world: World; editor: E
     });
   return (
     <section className="cell-inspection">
-      <p className="eyebrow">NUMERICAL CELL</p>
+      <p className="eyebrow">WHAT IS HERE</p>
       <h2>Inspect cell</h2>
-      <p>Click the map to read that cell’s stored values.</p>
+      <p>Click the map to see what is at that place and why it looks the way it does.</p>
       {point && (
         <p>
           Clicked {point.x.toFixed(2)}, {point.y.toFixed(2)} m
@@ -30,29 +30,43 @@ export function CellInspectionPanel({ world, editor }: { world: World; editor: E
       )}
       {point && cell.isPending && <p role="status">Reading cell…</p>}
       <ErrorMessage error={cell.error} />
-      {cell.data && (
-        <>
-          <label>
-            Filter channels
-            <input
-              type="search"
-              value={filter}
-              onChange={(event) => setFilter(event.target.value)}
-              placeholder="water, treeCover, elevation…"
-            />
-          </label>
-          {!cell.data.cells.length && <p>No stored numerical cell at this position on this map.</p>}
-          {cell.data.cells.map((data) => (
-            <CellData
-              key={`${data.gridId}:${data.index}`}
-              cell={data}
-              world={world}
-              filter={filter}
-            />
-          ))}
-        </>
-      )}
+      {cell.data && <CellResult world={world} data={cell.data} />}
     </section>
+  );
+}
+
+function CellResult({ world, data }: { world: World; data: CellInspection }) {
+  const [filter, setFilter] = useState("");
+  if (!data.cells.length && !data.features.length)
+    return <p>No stored numerical cell at this position on this map.</p>;
+  // The finest stored cell speaks first: its class is the one the map draws here.
+  const values = [...data.cells]
+    .sort((a, b) => a.measure - b.measure)
+    .flatMap((cell) => cell.values);
+  return (
+    <>
+      <CellExplanation world={world} values={values} features={data.features} />
+      <details className="cell-stored">
+        <summary>Stored values ({values.length} channels)</summary>
+        <label>
+          Filter channels
+          <input
+            type="search"
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            placeholder="water, treeCover, elevation…"
+          />
+        </label>
+        {data.cells.map((cell) => (
+          <CellData
+            key={`${cell.gridId}:${cell.index}`}
+            cell={cell}
+            world={world}
+            filter={filter}
+          />
+        ))}
+      </details>
+    </>
   );
 }
 
@@ -64,7 +78,7 @@ function CellData({ cell, world, filter }: { cell: InspectedCell; world: World; 
     <section className="cell-data">
       <h3>
         Cell {cell.index}
-        {cell.row === null ? " · adaptive" : ` · row ${cell.row}, column ${cell.column}`}
+        {cell.row === null ? "" : ` · row ${cell.row}, column ${cell.column}`}
       </h3>
       <Facts
         items={[
