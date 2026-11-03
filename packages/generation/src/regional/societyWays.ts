@@ -9,7 +9,7 @@ import { regionalPath, type PathOptions } from "./ways";
 export const trackTravellers = 10,
   roadTravellers = 100;
 /** How much worn ground discounts travel, and the cost of fording a channel. */
-const wearDiscount = 0.6,
+const wearDiscount = 1.2,
   fordCost = 3;
 /** River flow (m³/s) above which a road crosses by a bridge. */
 const bridgeFlow = 20;
@@ -38,36 +38,35 @@ export function traceWays(state: RegionalState, places: Place[]) {
     links = doorLinks(state),
     channels = channelLinks(state),
     flows = commutingFlows(mesh, settled);
+  // The busiest journeys make their ways first; each wears the ground for the journeys after
+  // it, so smaller traffic joins the made ways rather than laying its own beside them.
+  const ordered = [...flows].sort(
+    (a, b) => b.travellers - a.travellers || a.from.cell - b.from.cell || a.to.cell - b.to.cell
+  );
   let traffic = Float64Array.from(inherited),
-    crossed = new Float64Array(mesh.count);
+    crossed = new Float64Array(mesh.count),
+    paths: Path[] = [];
   for (let pass = 0; pass < 2; pass++) {
-    const worn = traffic,
-      options: PathOptions = {
-        links,
-        factor: (i, j) => wornFactor(state, channels, worn, i, j),
-      },
-      paths: Path[] = flows.map((flow) => ({
-        ...flow,
-        cells: regionalPath(state, flow.from.cell, flow.to.cell, options),
-      }));
-    // Each pass wears the inherited ground afresh with this pass's flows.
+    // Each pass wears the inherited ground afresh, reading the previous pass's ways as made.
+    const made = traffic;
     traffic = Float64Array.from(inherited);
     crossed = new Float64Array(mesh.count);
-    for (const path of paths) wear(state, channels, path, traffic, crossed);
-    if (pass === 1) for (const path of paths) if (path.cells) publishWay(state, path);
+    const options: PathOptions = {
+      links,
+      factor: (i, j) => wornFactor(Math.max(made[j], traffic[j]), fordAt(state, channels, i, j)),
+    };
+    paths = ordered.map((flow) => {
+      const path = { ...flow, cells: regionalPath(state, flow.from.cell, flow.to.cell, options) };
+      wear(state, channels, path, traffic, crossed);
+      return path;
+    });
   }
+  for (const path of paths) if (path.cells) publishWay(state, path);
   return { traffic, crossed };
 }
 /** Worn ground is cheaper to travel; a channel on the way, under the step or across it, costs a ford. */
-function wornFactor(
-  state: RegionalState,
-  channels: Channels,
-  worn: Float64Array,
-  i: number,
-  j: number
-) {
-  const ford = fordAt(state, channels, i, j) >= 0 ? fordCost : 1;
-  return ford / (1 + wearDiscount * Math.log2(1 + worn[j] / trackTravellers));
+function wornFactor(worn: number, ford: number) {
+  return (ford >= 0 ? fordCost : 1) / (1 + wearDiscount * Math.log2(1 + worn / trackTravellers));
 }
 /** A path wears its cells and fords the channel cells its steps land on or cross. */
 function wear(
