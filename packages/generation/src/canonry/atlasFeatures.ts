@@ -15,6 +15,7 @@ import { coordinateKey } from "./worldSources";
 import { extractGeologicalEvents } from "./geologicalFeatures";
 import { extractLakes, extractNamedLandforms, extractMagicPlaces } from "./geographicRegions";
 import { createRiverPaths, riverPath, type RiverPaths } from "./riverPaths";
+import { meanderReach } from "./riverMeanders";
 import type { PhysicalField } from "./field";
 import { oceanFootprint } from "./geographicContours";
 import { extractEcologicalFeatures } from "./ecologyFeatures";
@@ -57,7 +58,11 @@ function publishReach(
   const work = state.physical!,
     map = work.map,
     ids: string[] = [];
-  const { geometry, profiles } = riverPath(map, paths, members);
+  const valley = riverPath(map, paths, members),
+    // A reach on a floodplain migrates across it; elsewhere it keeps the valley line.
+    meandered = meanderReach(map, paths, valley.geometry, valley.profiles, start),
+    geometry = meandered?.geometry ?? valley.geometry,
+    profiles = (meandered?.profiles ?? valley.profiles) as typeof valley.profiles;
   for (const copy of chartCopies(state.domain.world.reference, geometry)) {
     ids.push(
       ...publishReachCopy(

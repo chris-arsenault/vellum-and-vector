@@ -202,6 +202,25 @@ function inheritedWear(state: RegionalState) {
   }
   return traffic;
 }
+/**
+ * The line through cell centres carries the lattice's stair steps; corner cutting (two
+ * Chaikin passes, ends kept) draws the way the path takes without them.
+ */
+function cutCorners(line: number[][]) {
+  let out = line;
+  for (let pass = 0; pass < 2 && out.length > 2; pass++) {
+    const next = [out[0]];
+    for (let k = 0; k < out.length - 1; k++) {
+      const [ax, ay] = out[k],
+        [bx, by] = out[k + 1];
+      next.push([0.75 * ax + 0.25 * bx, 0.75 * ay + 0.25 * by]);
+      next.push([0.25 * ax + 0.75 * bx, 0.25 * ay + 0.75 * by]);
+    }
+    next.push(out.at(-1)!);
+    out = next;
+  }
+  return out;
+}
 /** A door's ends join the travel graph for nothing (plan X4). */
 function doorLinks(state: RegionalState) {
   const links = new Map<number, number>();
@@ -219,10 +238,12 @@ function doorLinks(state: RegionalState) {
  */
 function publishWay(state: RegionalState, path: Path) {
   const mesh = state.physical.map.mesh,
-    coordinates = path.cells!.map((i) => {
-      const p = positionOf(mesh, i);
-      return [p.x, p.y];
-    }),
+    coordinates = cutCorners(
+      path.cells!.map((i) => {
+        const p = positionOf(mesh, i);
+        return [p.x, p.y];
+      })
+    ),
     routeType =
       path.travellers >= roadTravellers
         ? "road"

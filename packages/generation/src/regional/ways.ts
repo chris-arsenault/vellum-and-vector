@@ -2,8 +2,18 @@ import { KeyedHeap } from "@atlas/domain";
 import { distance, isContent, neighborhood, neighborhoodCapacity } from "./lattice";
 import type { RegionalState } from "./state";
 
-/** Travel cost of slope, shared by local ways and hinterland competition. */
+/** Travel cost of slope, read by the hinterland competition. */
 export const slopeCost = 12;
+/**
+ * The grade a laden cart or pack train holds on a made way. Effort grows with the square of
+ * the grade over it, so a direct climb up a steep slope costs more than a longer oblique one:
+ * ways keep to valleys, cross at passes and zigzag up the slopes they must climb.
+ */
+const rulingGrade = 0.08;
+/** Travel cost per metre of a step at a grade. */
+export function gradeCost(grade: number) {
+  return 1 + (grade / rulingGrade) ** 2;
+}
 
 /** What a path search reads beside the ground: a cost factor per step (worn ways, fords on or under the step) and free links (door ends). */
 export interface PathOptions {
@@ -74,7 +84,7 @@ export function regionalPath(
       if (!isContent(mesh, j) || map.WaterKindCodes.get(j) !== 0) continue;
       const step = distance(mesh, i, j),
         slope = Math.abs(height(j) - height(i)) / step;
-      relax(i, j, s.cost[i] + step * (1 + slope * slopeCost) * (options.factor?.(i, j) ?? 1));
+      relax(i, j, s.cost[i] + step * gradeCost(slope) * (options.factor?.(i, j) ?? 1));
     }
   };
   while (front.size) {
