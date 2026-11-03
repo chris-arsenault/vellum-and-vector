@@ -201,6 +201,31 @@ export function typePresentation(type: FeatureType, style: LayerStyle) {
   );
   return { ...style, ...own, visible: style.visible && !grouped && own.visible !== false };
 }
+/**
+ * Show or hide exactly the targeted feature types of one layer. Every type of the layer first
+ * takes its current effective visibility as an explicit value and group flags are cleared, so a
+ * layer switched on for one type does not reveal its other types, and a branch switched on does
+ * not reveal siblings hidden through a shared ancestor. The layer is on while any type is.
+ */
+export function setTypeVisibility(
+  style: LayerStyle,
+  layerTypes: FeatureType[],
+  targets: ReadonlySet<string>,
+  visible: boolean
+): LayerStyle {
+  const types: Record<string, FeatureTypeStyle> = { ...style.types };
+  for (const type of layerTypes)
+    types[type.id] = {
+      ...types[type.id],
+      visible: targets.has(type.id) ? visible : typePresentation(type, style).visible,
+    };
+  return {
+    ...style,
+    groups: {},
+    types,
+    visible: layerTypes.some((type) => types[type.id].visible),
+  };
+}
 export function presentedFeatureStyle(world: World, feature: AtlasFeature, style: LayerStyle) {
   return typePresentation(describeFeature(world, feature), style);
 }

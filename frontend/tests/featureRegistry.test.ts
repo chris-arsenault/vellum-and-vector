@@ -100,12 +100,15 @@ test("feature types toggle individually and a saved view restores them", async (
   await openFixtureMap(page, "Type world", {
     features: [
       pointFeature("Falls", "waterfall", "geology"),
+      pointFeature("Summit", "peak", "geology", {}, [300, 300]),
       pointFeature("Spring", "fire:spring", "magic", { system: "fire", rule: "spring" }),
     ],
   });
   await openLayers(page);
   await expect(page.getByLabel("Show Hot spring", { exact: true })).not.toBeChecked();
   await page.getByLabel("Show Waterfalls", { exact: true }).check();
+  // Peaks share the waterfalls' layer under another branch; they stay as they were.
+  await expect(page.getByLabel("Show Peaks", { exact: true })).not.toBeChecked();
   await page.getByLabel("Show Hot spring", { exact: true }).check();
   await page.getByLabel("Show Waterfalls", { exact: true }).uncheck();
   await expect(page.getByLabel("Show Hot spring", { exact: true })).toBeChecked();

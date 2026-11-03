@@ -1,6 +1,13 @@
 import { expect, it } from "vitest";
 import { createWorldBlueprint } from "./worldCreation";
-import { describeFeature, availableFeatureTypes, typePresentation } from "./featureCatalogue";
+import {
+  describeFeature,
+  availableFeatureTypes,
+  featureGroupKey,
+  setTypeVisibility,
+  typePresentation,
+  type FeatureType,
+} from "./featureCatalogue";
 import { canonryMagicPresets } from "./magicPresets";
 import { canonryConfluencePresets } from "./magicConfluences";
 import { readAtlasFeatures } from "./featureReads";
@@ -148,4 +155,47 @@ it("shows a footprint added in a finer representation only at its supported prof
   expect(composeFootprint(world, f, "region")).toEqual(
     spatial.canonical(f.detail.child.footprint!)
   );
+});
+
+const geologyTypes: FeatureType[] = [
+  { id: "peak", layerId: "geology", kind: "peak", label: "Peaks", path: ["Terrain", "Peaks"] },
+  { id: "hill", layerId: "geology", kind: "hill", label: "Hills", path: ["Terrain", "Hills"] },
+  {
+    id: "waterfall",
+    layerId: "geology",
+    kind: "waterfall",
+    label: "Waterfalls",
+    path: ["Water", "Waterfalls"],
+  },
+];
+const hidden = { layerId: "geology", visible: false, opacity: 1, color: "#000", minScale: 0 };
+const shown = (style: Parameters<typeof typePresentation>[1]) =>
+  geologyTypes.filter((type) => typePresentation(type, style).visible).map((type) => type.id);
+
+it("switching one type on shows only that type, not its layer's other types", () => {
+  const style = setTypeVisibility(hidden, geologyTypes, new Set(["peak"]), true);
+  expect(shown(style)).toEqual(["peak"]);
+  expect(style.visible).toBe(true);
+  expect(shown(setTypeVisibility(style, geologyTypes, new Set(["peak"]), false))).toEqual([]);
+});
+
+it("a branch toggle changes its members and leaves types elsewhere in the tree alone", () => {
+  const onlyFalls = setTypeVisibility(hidden, geologyTypes, new Set(["waterfall"]), true);
+  const terrain = setTypeVisibility(onlyFalls, geologyTypes, new Set(["peak", "hill"]), true);
+  expect(shown(terrain)).toEqual(["peak", "hill", "waterfall"]);
+  expect(shown(setTypeVisibility(terrain, geologyTypes, new Set(["peak", "hill"]), false))).toEqual(
+    ["waterfall"]
+  );
+});
+
+it("a sibling hidden through an older group flag stays hidden when another type is shown", () => {
+  const legacy = {
+    ...hidden,
+    visible: true,
+    groups: { [featureGroupKey(["Terrain"])]: false },
+  };
+  expect(shown(setTypeVisibility(legacy, geologyTypes, new Set(["peak"]), true))).toEqual([
+    "peak",
+    "waterfall",
+  ]);
 });

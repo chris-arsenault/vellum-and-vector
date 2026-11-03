@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect, useRef } from "react";
 import {
   availableFeatureTypes,
   describeFeature,
-  featureGroupKey,
+  setTypeVisibility,
   typePresentation,
   type FeatureType,
   type FeatureTypeStyle,
@@ -17,6 +17,7 @@ interface Context {
   features: AtlasFeature[];
   edit: (target: string) => void;
   search: string;
+  allTypes: FeatureType[];
 }
 const noFeatures: AtlasFeature[] = [];
 export function FeatureThemes({ editor, edit }: Pick<Context, "editor" | "edit">) {
@@ -30,7 +31,12 @@ export function FeatureThemes({ editor, edit }: Pick<Context, "editor" | "edit">
   const matches = types.filter((t) =>
     t.path.join(" ").toLowerCase().includes(search.toLowerCase())
   );
-  const context = { editor, edit, features, search };
+  // Every type a layer can hold, so switching one on never reveals an unlisted sibling.
+  const allTypes = useMemo(
+    () => availableFeatureTypes(editor.world, features, true),
+    [editor.world, features]
+  );
+  const context = { editor, edit, features, search, allTypes };
   return (
     <details className="feature-themes" open>
       <summary>
@@ -104,24 +110,13 @@ function TypeGroup({
   const count = context.features.filter((f) =>
     types.some((t) => t.id === describeFeature(editor.world, f).id)
   ).length;
-  const toggle = (enabled: boolean) =>
-    editor.setStyles(
-      editor.styles.map((style) => {
-        if (!types.some((t) => t.layerId === style.layerId)) return style;
-        const groups = { ...style.groups, [featureGroupKey(path)]: enabled };
-        if (enabled)
-          path.forEach((_, i) => {
-            groups[featureGroupKey(path.slice(0, i + 1))] = true;
-          });
-        return { ...style, visible: enabled || style.visible, groups };
-      })
-    );
+  const toggle = (enabled: boolean) => showTypes(context, types, enabled);
   return (
     <details className="feature-type-group" open={true}>
       <summary>
         <MixedCheck
           label={`Show ${path.at(-1)}`}
-          checked={visible > 0}
+          checked={visible === types.length}
           mixed={visible > 0 && visible < types.length}
           change={toggle}
         />
@@ -166,22 +161,15 @@ function TypeRow({ type, context }: { type: FeatureType; context: Context }) {
   const effective = typePresentation(type, style);
   const members = features.filter((f) => describeFeature(editor.world, f).id === type.id);
   const update = (changes: FeatureTypeStyle) =>
-    editor.setStyles(
-      editor.styles.map((s) => {
-        if (s.layerId !== type.layerId) return s;
-        const groups = { ...s.groups };
-        if (changes.visible)
-          type.path.forEach((_, i) => {
-            groups[featureGroupKey(type.path.slice(0, i + 1))] = true;
-          });
-        return {
-          ...s,
-          visible: changes.visible || s.visible,
-          groups,
-          types: { ...s.types, [type.id]: { ...s.types?.[type.id], ...changes } },
-        };
-      })
-    );
+    changes.visible === undefined
+      ? editor.setStyles(
+          editor.styles.map((s) =>
+            s.layerId === type.layerId
+              ? { ...s, types: { ...s.types, [type.id]: { ...s.types?.[type.id], ...changes } } }
+              : s
+          )
+        )
+      : showTypes(context, [type], changes.visible);
   return (
     <details className="feature-type-row">
       <summary>
@@ -283,6 +271,24 @@ function TypeAppearance({
         Layer symbols and draw order
       </button>
     </div>
+  );
+}
+/** Only the targeted types change; every other type keeps what it shows now. */
+function showTypes(context: Context, targets: FeatureType[], visible: boolean) {
+  const { editor } = context,
+    ids = new Set(targets.map((type) => type.id)),
+    layers = new Set(targets.map((type) => type.layerId));
+  editor.setStyles(
+    editor.styles.map((style) =>
+      layers.has(style.layerId)
+        ? setTypeVisibility(
+            style,
+            context.allTypes.filter((type) => type.layerId === style.layerId),
+            ids,
+            visible
+          )
+        : style
+    )
   );
 }
 function geometrySymbol(features: AtlasFeature[]) {
