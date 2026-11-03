@@ -101,10 +101,13 @@ export function materialResistance(state: RegionalState, bands: Float64Array, i:
     Math.exp(bandContrast * bands[i] + rockWeight * (rock - 1) - fractureWeight * fracture) *
       (1 + wardResistance * ward) *
       (1 + apronHardness * apron(state, i)),
-    0.35,
-    3.5
+    minimumResistance,
+    maximumResistance
   );
 }
+/** Range of relative resistance: soft shale to hard quartzite differ by more than an order of magnitude. */
+const minimumResistance = 0.35,
+  maximumResistance = 3.5;
 /** How far inside a cone's hard apron the cell lies: 1 at the cone, 0 at and beyond its base. */
 function apron(state: RegionalState, i: number) {
   const mesh = state.physical.map.mesh;

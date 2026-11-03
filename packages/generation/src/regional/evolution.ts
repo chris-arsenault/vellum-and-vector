@@ -8,6 +8,7 @@ import {
   neighborsOf,
   regionalSpan,
 } from "./lattice";
+import { materialBands } from "./material";
 import { channelCells, referenceDischarge } from "./network";
 import type { NetworkWork, RegionalState } from "./state";
 
@@ -22,6 +23,8 @@ import type { NetworkWork, RegionalState } from "./state";
 const evolutionSteps = 400;
 /** Uplift of one step as a share of the captured base's height above its base level. */
 const upliftPerStep = 0.02;
+/** How much a belt's structure varies its uplift: a fold axis rises this much more per band unit. */
+const structuralUplift = 0.5;
 /** Incision of one step where the upstream area is a channel's (implicit, so any value is stable). */
 const incisionPerStep = 0.35;
 /** Area exponent of stream power: larger rivers cut faster than their area alone. */
@@ -95,12 +98,17 @@ export function evolveNetwork(
       ? network.level[i]
       : network.base[i] + microRelief * hashUnit(seed, mesh.identity(i), 0);
   carveCourses(state, network, root, h);
+  // A belt rises along its structure: fold axes and resistant strata (the material bands,
+  // continuous along the grain) stand up, the troughs between them lag.
+  const bands = materialBands(state),
+    uplift = new Float64Array(n);
+  for (let i = 0; i < n; i++)
+    uplift[i] = upliftPerStep * Math.max(0, network.base[i]) * (1 + structuralUplift * bands[i]);
   for (let step = 0; step <= evolutionSteps; step++) {
     drain(state, network, root, h, around);
     if (step === evolutionSteps) break;
     gatherArea(state, network, area, inflowArea);
-    for (let i = 0; i < n; i++)
-      if (!root[i] && !network.sea[i]) h[i] += upliftPerStep * Math.max(0, network.base[i]);
+    for (let i = 0; i < n; i++) if (!root[i] && !network.sea[i]) h[i] += uplift[i];
     incise(state, network, h, area, cost, reference);
     creep(state, network, root, h);
   }
