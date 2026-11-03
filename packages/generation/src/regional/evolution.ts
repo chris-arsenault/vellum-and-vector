@@ -21,6 +21,8 @@ import type { NetworkWork, RegionalState } from "./state";
  * relief itself is derived and calibrated to the parent afterwards.
  */
 const evolutionSteps = 400;
+/** Steps between re-readings of the drainage. */
+const routingInterval = 8;
 /** Uplift of one step as a share of the captured base's height above its base level. */
 const upliftPerStep = 0.02;
 /** How much a belt's structure varies its uplift: a fold axis rises this much more per band unit. */
@@ -98,21 +100,32 @@ export function evolveNetwork(
       ? network.level[i]
       : network.base[i] + microRelief * hashUnit(seed, mesh.identity(i), 0);
   carveCourses(state, network, root, h);
-  // A belt rises along its structure: fold axes and resistant strata (the material bands,
-  // continuous along the grain) stand up, the troughs between them lag.
-  const bands = materialBands(state),
-    uplift = new Float64Array(n);
-  for (let i = 0; i < n; i++)
-    uplift[i] = upliftPerStep * Math.max(0, network.base[i]) * (1 + structuralUplift * bands[i]);
+  const uplift = structuralUpliftField(state, network, root);
   for (let step = 0; step <= evolutionSteps; step++) {
-    drain(state, network, root, h, around);
+    // The drainage shifts slowly between steps: it is re-read every few steps and at the end.
+    if (step % routingInterval === 0 || step === evolutionSteps) {
+      drain(state, network, root, h, around);
+      gatherArea(state, network, area, inflowArea);
+    }
     if (step === evolutionSteps) break;
-    gatherArea(state, network, area, inflowArea);
-    for (let i = 0; i < n; i++) if (!root[i] && !network.sea[i]) h[i] += uplift[i];
+    for (let i = 0; i < n; i++) h[i] += uplift[i];
     incise(state, network, h, area, cost, reference);
     creep(state, network, root, h);
   }
   network.cost.set(h);
+}
+
+/**
+ * A belt rises along its structure: fold axes and resistant strata (the material bands,
+ * continuous along the grain) stand up, the troughs between them lag. Base levels hold.
+ */
+function structuralUpliftField(state: RegionalState, network: NetworkWork, root: Uint8Array) {
+  const bands = materialBands(state),
+    uplift = new Float64Array(bands.length);
+  for (let i = 0; i < uplift.length; i++)
+    if (!root[i] && !network.sea[i])
+      uplift[i] = upliftPerStep * Math.max(0, network.base[i]) * (1 + structuralUplift * bands[i]);
+  return uplift;
 }
 
 /**

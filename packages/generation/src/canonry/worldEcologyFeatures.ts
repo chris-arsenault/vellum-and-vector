@@ -18,13 +18,21 @@ import type { RegionMembers } from "./regionMembers";
 import type { PhysicalField } from "./field";
 import type { Geometry } from "geojson";
 
-function dryExtent(state: GenerationState, shape: Geometry) {
-  let extent = spatial.intersection(shape, state.domain.scope.footprint);
-  if (extent && state.surface.ocean) extent = spatial.difference(extent, state.surface.ocean);
-  for (const lake of state.surface.lakes ?? [])
-    if (extent && spatial.intersects(extent, lake.geometry))
-      extent = spatial.difference(extent, lake.geometry);
-  return extent;
+/**
+ * The dry part of a landscape inside the map: the map's footprint and its standing water
+ * (sea and lakes, as one shape) are prepared once, since every landscape is cut by them.
+ */
+function dryExtents(state: GenerationState) {
+  const clip = spatial.intersectionWith(state.domain.scope.footprint),
+    water = [
+      ...(state.surface.ocean ? [state.surface.ocean] : []),
+      ...(state.surface.lakes ?? []).map((lake) => lake.geometry),
+    ],
+    subtract = water.length ? spatial.differenceFrom(spatial.unionAll(water)) : null;
+  return (shape: Geometry) => {
+    const extent = clip(shape);
+    return extent && subtract ? subtract(extent) : extent;
+  };
 }
 
 type Summarize = (
@@ -68,13 +76,12 @@ export function extractWorldEcologicalFeatures(
     biome = biomeRules(state),
     world = worldExtent(state),
     scale = mapScale(state),
-    // A hole smaller than the least landscape at this scale could never be named on its own.
-    holes = landscapeMinimumArea * scale.area,
     land = landArea(state),
     codes = projectedValues(work, map.BiomeCodes, true),
     field = { ...state.surface, channels: { biome: codes }, overlays: [] },
-    labels = workingArray(map, "int32", "world-biome:pieces").fill(-1);
-  const family = (code: number) => families[biomes[code]?.name ?? ""],
+    labels = workingArray(map, "int32", "world-biome:pieces").fill(-1),
+    dry = dryExtents(state),
+    family = (code: number) => families[biomes[code]?.name ?? ""],
     wet = (i: number) => map.WaterKindCodes.get(i) !== 0;
   try {
     for (const rule of biome.rules) {
@@ -88,20 +95,19 @@ export function extractWorldEcologicalFeatures(
         if (!judgment.publish) return;
         const pieces = partitionWorldRegion(state, members, land);
         pieces.forEach((piece, index) => piece.forEach((i) => labels.set(i, index)));
-        const shares = pieces.map((_, index) =>
-          membershipSampler(state, (i) => Number(labels.get(i) === index))
-        );
         pieces.forEach((piece, index) => {
-          const at = (x: number, y: number) => {
-            const other = shares.reduce(
-              (largest, sample, j) => (j === index ? largest : Math.max(largest, sample(x, y))),
-              0.1
-            );
-            return Math.min(margin({ x, y, z: 0 }), shares[index](x, y) - other);
-          };
+          // A piece meets its neighbours where its share passes theirs, read together.
+          const own = membershipSampler(state, (i) => Number(labels.get(i) === index)),
+            others = membershipSampler(state, (i) => {
+              const label = labels.get(i);
+              return Number(label >= 0 && label !== index);
+            }),
+            at = (x: number, y: number) =>
+              Math.min(margin({ x, y, z: 0 }), own(x, y) - Math.max(0.1, others(x, y)));
           const shape = geographicContour(state, piece, at, 0);
           if (!shape) return;
-          const extent = dryExtent(state, fillSmallHoles(state, shape, holes, wet));
+          // A hole smaller than the least landscape at this scale could never be named alone.
+          const extent = dry(fillSmallHoles(state, shape, landscapeMinimumArea * scale.area, wet));
           if (!extent) return;
           const summary = summarize(state, piece, biome);
           publishPlace(

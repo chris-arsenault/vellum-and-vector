@@ -1,4 +1,3 @@
-import { interpolateProfile } from "@atlas/domain";
 import type { LineString } from "geojson";
 import type { PhysicalField } from "./field";
 import { migrateMeanders } from "./meanders";
@@ -11,8 +10,8 @@ type Point = [number, number];
 const widthPerRootDischarge = 4;
 /** Meander wavelength in channel widths, used only to decide whether bends resolve on this map. */
 const wavelengthWidths = 11;
-/** Shortest wavelength a map draws, as a share of its cell spacing. */
-const resolvedWavelength = 0.25;
+/** Shortest wavelength a map draws, as a share of its cell spacing: a drawn line zooms past its cells. */
+const resolvedWavelength = 0.1;
 /** Valley gradient above which a channel is confined to its line and does not meander. */
 const meanderingGradient = 0.004;
 /** Height above the channel (m) a flood reaches: a base and more for larger rivers. */
@@ -64,17 +63,44 @@ export function meanderReach(
     type: "LineString",
     coordinates: line.map(([x, y]) => [x + ox, y + oy]),
   };
-  const carried: Record<string, number[]> = {};
-  for (const key of Object.keys(profiles)) {
-    const values = interpolateProfile(geometry, profiles, moved, key);
-    if (!values) return null;
-    carried[key] = values;
-  }
   return {
     geometry: moved,
-    profiles: carried,
+    profiles: carryProfiles(valley, profiles, line),
     oxbows: oxbows.map((loop) => loop.map(([x, y]) => [x + ox, y + oy] as Point)),
   };
+}
+
+/**
+ * Profiles move with the course: a point of the meandering course reads the valley line's
+ * values at the same share of the way down. Both lines share their ends, and the values
+ * keep their downstream order.
+ */
+function carryProfiles(valley: Point[], profiles: Record<string, number[]>, course: Point[]) {
+  const along = (line: Point[]) => {
+      const out = [0];
+      for (let k = 1; k < line.length; k++)
+        out.push(out[k - 1] + Math.hypot(line[k][0] - line[k - 1][0], line[k][1] - line[k - 1][1]));
+      return out;
+    },
+    from = along(valley),
+    to = along(course),
+    total = from.at(-1)! || 1,
+    length = to.at(-1)! || 1,
+    carried: Record<string, number[]> = {};
+  let k = 0;
+  const positions = to.map((d) => {
+    const target = (d / length) * total;
+    while (k < from.length - 2 && from[k + 1] < target) k++;
+    const span = from[k + 1] - from[k];
+    return { k, t: span > 0 ? Math.min(1, Math.max(0, (target - from[k]) / span)) : 0 };
+  });
+  for (const [key, values] of Object.entries(profiles))
+    carried[key] = positions.map(({ k: at, t }) => {
+      const a = values[at] ?? values.at(-1)!,
+        b = values[at + 1] ?? a;
+      return a + (b - a) * t;
+    });
+  return carried;
 }
 
 /** Fall per metre along the valley line, from its bed profile. */

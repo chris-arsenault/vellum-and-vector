@@ -4,6 +4,7 @@ import { putRegionalFeature, putRegionalNetwork } from "./extraction/features";
 import { cellAt, distance, isContent, positionOf, stepVector } from "./lattice";
 import type { RegionalState } from "./state";
 import { regionalPath, type PathOptions } from "./ways";
+import { wayLine } from "./wayLines";
 
 /** Travellers a year that wear a track and a road: a tenth of the world's counts. */
 export const trackTravellers = 10,
@@ -236,13 +237,7 @@ function doorLinks(state: RegionalState) {
  * class on the record). The catalogue's `lane` is a shipping lane and is never used for land.
  */
 function publishWay(state: RegionalState, path: Path) {
-  const mesh = state.physical.map.mesh,
-    coordinates = cutCorners(
-      path.cells!.map((i) => {
-        const p = positionOf(mesh, i);
-        return [p.x, p.y];
-      })
-    ),
+  const coordinates = cutCorners(wayLine(state, path.cells!)),
     routeType =
       path.travellers >= roadTravellers
         ? "road"

@@ -29,6 +29,8 @@ const bendRoom = 2;
 /** Widths across which a flood takes a chute over a bend, and how much longer the bend must be. */
 const chuteReach = 3,
   chuteRatio = 6;
+/** Migration steps between looks for necks and chutes a flood would cut. */
+const cutoffInterval = 4;
 /** Stations at either end held in place: the reach joins its confluences there. */
 const heldEnds = 3;
 /** Unevenness of the initial course (widths): what starts the bends; it decides nothing else. */
@@ -67,10 +69,11 @@ export function migrateMeanders(input: MeanderInput): MeanderResult {
   });
   for (let step = 0; step < input.steps; step++) {
     line = migrate(line, width, floor);
-    line = cutoffs(line, width, oxbows);
+    // A neck closes by at most a step's bank movement; floods are looked for every few steps.
+    if (step % cutoffInterval === cutoffInterval - 1) line = cutoffs(line, width, oxbows);
     line = resample(line, spacing);
   }
-  return { line: resample(line, spacing), oxbows };
+  return { line: resample(cutoffs(line, width, oxbows), spacing), oxbows };
 }
 
 /** One step of bank migration along the left normal, driven by local and upstream curvature. */
@@ -130,12 +133,12 @@ function smoothed(values: number[]) {
 function cutoffs(line: Point[], width: number, oxbows: Point[][]): Point[] {
   const spacing = meanSpacing(line),
     reach = chuteReach * width,
-    grid = new Map<string, number[]>(), // hpc-exempt: a few hundred stations of one river
-    key = (p: Point) => `${Math.floor(p[0] / reach)},${Math.floor(p[1] / reach)}`;
+    grid = new Map<number, number[]>(); // hpc-exempt: the stations of one river
   line.forEach((p, k) => {
-    const cell = grid.get(key(p));
+    const at = gridKey(Math.floor(p[0] / reach), Math.floor(p[1] / reach)),
+      cell = grid.get(at);
     if (cell) cell.push(k);
-    else grid.set(key(p), [k]);
+    else grid.set(at, [k]);
   });
   for (let a = 0; a < line.length; a++) {
     const b = shortWay(line, a, grid, reach, width, spacing);
@@ -149,7 +152,7 @@ function cutoffs(line: Point[], width: number, oxbows: Point[][]): Point[] {
 function shortWay(
   line: Point[],
   a: number,
-  grid: Map<string, number[]>,
+  grid: Map<number, number[]>,
   reach: number,
   width: number,
   spacing: number
@@ -166,10 +169,12 @@ function shortWay(
   let found = -1;
   for (let dx = -1; dx <= 1; dx++)
     for (let dy = -1; dy <= 1; dy++)
-      for (const b of grid.get(`${cx + dx},${cy + dy}`) ?? [])
+      for (const b of grid.get(gridKey(cx + dx, cy + dy)) ?? [])
         if (b > found && b > a + 2 && floods(b)) found = b;
   return found;
 }
+/** One number per grid square: columns and rows offset to stay positive. */
+const gridKey = (column: number, row: number) => (column + 2 ** 20) * 2 ** 21 + (row + 2 ** 20);
 
 function signedCurvature(line: Point[], k: number) {
   if (k === 0 || k === line.length - 1) return 0;

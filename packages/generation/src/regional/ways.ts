@@ -9,7 +9,7 @@ export const slopeCost = 12;
  * the grade over it, so a direct climb up a steep slope costs more than a longer oblique one:
  * ways keep to valleys, cross at passes and zigzag up the slopes they must climb.
  */
-const rulingGrade = 0.08;
+export const rulingGrade = 0.08;
 /** Travel cost per metre of a step at a grade. */
 export function gradeCost(grade: number) {
   return 1 + (grade / rulingGrade) ** 2;
