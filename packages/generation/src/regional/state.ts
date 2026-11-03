@@ -75,7 +75,7 @@ export interface NetworkWork {
   /** Cells in order of increasing travel cost from the roots: roots first, heads last. */
   order: Int32Array;
   count: number;
-  /** Geodesic cost from the roots: the potential the network descends. */
+  /** The eroded surface (m above the datum) the network was routed down. */
   cost: Float64Array;
   /** Upstream area (m²) including the country an entering river drains beyond the frame. */
   area: Float64Array;

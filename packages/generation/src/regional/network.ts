@@ -1,53 +1,23 @@
-import { KeyedHeap } from "@atlas/domain";
 import { fractalNoise } from "../canonry/noise";
 import { capturedSinks, connectedSea, smoothedBase } from "./base";
 import { influenceCosts } from "./causes/registry";
-import { grainAt } from "./character";
-import {
-  distance,
-  frameEdge,
-  isContent,
-  neighborhood,
-  neighborhoodCapacity,
-  neighborsOf,
-  positionOf,
-  regionalSpan,
-  stepVector,
-} from "./lattice";
+import { evolveNetwork } from "./evolution";
+import { distance, frameEdge, isContent, neighborsOf, positionOf, regionalSpan } from "./lattice";
 import { materialBands, materialResistance } from "./material";
 import { clamp, type NetworkWork, type RegionalState } from "./state";
 
-/** Cost per metre of flowing uphill on the captured base, in metres of travel. */
-const climbCost = 25;
-/** Extra cost of a step across the grain at full coherence; along-strike steps are free. */
-const grainAnisotropy = 2.5;
-/** Cost near a known summit or cone, so channels run around it and it stands on a divide. */
+/** Resistance near a known summit or cone, so channels cut around it and it stands on a divide. */
 const summitRepulsion = 12;
 /**
- * Travel an exit, lake or sink root still owes per metre of its height: the fall to the sea
- * beyond the frame. Dearer than running the same height down inside the frame, so water on a
- * slope runs down to the low exit instead of leaving sideways where the exterior is level.
- */
-const exitFall = 60;
-/**
- * Heterogeneity of the ground: it decides between routes the organizing terms leave equal,
- * so a channel wanders where nothing else steers it. On a plain nothing else does, and the
- * water finds its way through every local unevenness; on a slope the fall decides.
+ * Heterogeneity of the ground's erodibility: it decides between valleys the organizing terms
+ * leave equal. On a plain nothing else does, and the water finds its way through every local
+ * unevenness; on a slope the fall decides.
  */
 const steepRoughness = 0.5,
   flatRoughness = 1.6,
   flatGradient = 0.01,
   roughnessCells = 20,
   roughnessOctaves = 4;
-/**
- * Capture: a channel that has gathered water is easier ground for more water, so its
- * neighbours' routes bend into it. The passes after the first re-route the country through
- * the channels the previous pass found; that is how tributaries join trunks.
- */
-const capturePasses = 2,
-  captureStrength = 0.7,
-  captureFloor = 0.08,
-  captureShare = 1 / 8;
 /** Reference-runoff samples a mapped channel drains, in this map's own samples. */
 export const channelCells = 128;
 export const referenceRunoff = 0.4;
@@ -59,13 +29,12 @@ export function referenceDischarge(state: RegionalState) {
 }
 
 /**
- * Grow the drainage network once (spec 7.3): a geodesic tree over the land, rooted at the
- * established waters (the connected sea, the valleys that leave the frame, captured lakes and
- * the parent's closed basins), descending a cost field built from the captured base, the
- * material bands along the grain, the captured courses and the known summits, then re-routed
- * through its own channels. Where the network branches, joins, runs along strike or breaks
- * through a band is a consequence of those terms; no random geography is drawn. Heights are
- * metres above the present sea level.
+ * Grow the drainage network once (spec 7.3) by eroding the smoothed captured base down to
+ * the established waters (the connected sea, the valleys that leave the frame, captured
+ * lakes and the parent's closed basins) through the ground's erodibility: the material
+ * bands along the grain, the captured courses and the known summits. Where the network
+ * branches, joins, runs along strike or breaks through a band is a consequence of that
+ * erosion; no random geography is drawn. Heights are metres above the present sea level.
  */
 export function growNetwork(state: RegionalState): NetworkWork {
   const map = state.physical.map,
@@ -94,22 +63,9 @@ export function growNetwork(state: RegionalState): NetworkWork {
     ...capturedSinks(state, base, sea, lake),
   };
   for (const entry of evidence.entries) network.inflow[entry.cell] = entry.discharge;
-  const root = networkRoots(state, network),
-    ground = cellCosts(state, sea, base),
-    cost = new Float64Array(ground),
-    gathering = channelCells * referenceDischarge(state) * captureShare;
-  for (let pass = 0; pass <= capturePasses; pass++) {
-    if (pass > 0)
-      for (let i = 0; i < n; i++)
-        cost[i] =
-          ground[i] *
-          Math.max(
-            captureFloor,
-            1 / (1 + captureStrength * Math.log2(1 + network.flow[i] / gathering))
-          );
-    route(state, network, cost, root);
-    gatherFlow(state, network);
-  }
+  const root = networkRoots(state, network);
+  evolveNetwork(state, network, root, cellCosts(state, sea, base));
+  gatherFlow(state, network);
   // Every cell takes its root's level, receivers first (the order the tree was grown in).
   const { receiver, order, level } = network;
   for (let k = 0; k < network.count; k++) {
@@ -149,56 +105,6 @@ function networkRoots(state: RegionalState, network: NetworkWork) {
     root[i] = 1;
   }
   return root;
-}
-
-/** The geodesic tree from the roots over the cost field, written into the network. */
-function route(state: RegionalState, network: NetworkWork, cost: Float64Array, root: Uint8Array) {
-  const mesh = state.physical.map.mesh,
-    n = mesh.count,
-    { receiver, order, sea, base } = network,
-    travel = network.cost,
-    heap = new KeyedHeap(),
-    around = new Int32Array(neighborhoodCapacity),
-    character = state.regional.character!;
-  travel.fill(Infinity);
-  receiver.fill(-1);
-  let count = 0;
-  // The country continues beyond the frame: an exit across the edge, a lake or a sink still
-  // has the fall to the sea ahead of it, so the lowest exits gather the largest catchments
-  // instead of every edge cell draining its own strip.
-  for (let i = 0; i < n; i++)
-    if (root[i]) {
-      // An exit owes the fall beyond the frame; a lake or sink root is the water's own end.
-      const exit = network.lake[i] < 0 && !network.sink[i];
-      travel[i] = (exit ? exitFall : climbCost) * Math.max(0, network.level[i]);
-      heap.push(i, travel[i]);
-    }
-  const blocked = (i: number, j: number) =>
-    sea[j] || root[j] || !isContent(mesh, j) || travel[j] <= travel[i];
-  while (heap.size) {
-    const i = heap.pop();
-    if (heap.poppedKey() !== travel[i]) continue;
-    order[count++] = i;
-    const m = neighborhood(mesh, i, around),
-      { theta, coherence } = grainAt(character, i);
-    for (let k = 0; k < m; k++) {
-      const j = around[k];
-      if (blocked(i, j)) continue;
-      const { dx, dy } = stepVector(mesh, i, j),
-        length = Math.hypot(dx, dy),
-        // The component of the step across the grain axis.
-        across = Math.abs(-dx * Math.sin(theta) + dy * Math.cos(theta)) / length,
-        anisotropy = 1 + grainAnisotropy * coherence * across * across,
-        // Water runs from j to i: it must not climb the captured base on the way.
-        climb = Math.max(0, base[i] - base[j]),
-        next = travel[i] + length * ((cost[i] + cost[j]) / 2) * anisotropy + climbCost * climb;
-      if (next >= travel[j]) continue;
-      travel[j] = next;
-      receiver[j] = i;
-      heap.push(j, next);
-    }
-  }
-  network.count = count;
 }
 
 /**
