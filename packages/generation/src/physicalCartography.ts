@@ -81,7 +81,7 @@ export const physicalCartography: Record<string, CartographicControl | Cartograp
     label: "Shoreline",
     section: "land",
     initialOnly: true,
-    defaultChoice: "smooth",
+    defaultChoice: "inlets",
     explanation:
       "Broad reworked outlines, intricate inlets, or deposited river-mouth lowlands. Sediment supply and coastal exposure still matter.",
     choices: [
@@ -108,7 +108,7 @@ export const physicalCartography: Record<string, CartographicControl | Cartograp
       label: "Climate coverage",
       section: "environment",
       initialOnly: true,
-      defaultChoice: "northern",
+      defaultChoice: "hemispheres",
       explanation:
         "The latitude zones represented by this map, independent of its dimensions and map boundary.",
       choices: [
@@ -139,7 +139,7 @@ export const physicalCartography: Record<string, CartographicControl | Cartograp
     label: "Distinctive landmarks",
     section: "land",
     initialOnly: true,
-    defaultChoice: "scattered",
+    defaultChoice: "prominent",
     explanation:
       "The prominence of volcanic districts and crater landforms. Prevalence scales with map area; physical footprints stay in kilometres and history determines what survives.",
     choices: [
