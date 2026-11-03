@@ -6,15 +6,16 @@ Read and follow [AGENTS.md](AGENTS.md) for the product direction, application
 boundaries and working instructions. The [README](README.md) provides setup and
 deployment context. The [product contract](docs/product-spec.md) defines behavior;
 the [spatial ADR](docs/adr/0001-spatial-authority.md),
-[application ADR](docs/adr/0002-relational-spatial-storage.md),
+[frontend session ADR](docs/adr/0003-frontend-session.md),
 [coupling ADR](docs/adr/0004-coupling-through-each-systems-medium.md),
 [scale contract ADR](docs/adr/0005-scale-contract.md),
-[landmarks ADR](docs/adr/0006-landmarks-are-injected-causes.md) and
+[landmarks ADR](docs/adr/0006-landmarks-are-injected-causes.md),
 [magic materials ADR](docs/adr/0007-magic-systems-are-materials.md) and
 [regional refinement ADR](docs/adr/0008-regional-refinement-is-conditioned-amplification.md)
 (regional refinement is a bidirectional, multi-pass process) record
 implementation direction. User requirements and explicitly agreed boundaries govern revisions
-to agent-derived choices in those documents and the plan.
+to agent-derived choices in those documents and in open plans. The
+[documentation index](docs/README.md) lists every durable document.
 
 ## Project overview
 
@@ -24,28 +25,33 @@ overlapping thematic layers and located templates.
 
 ## Code layout
 
-| Path                                                | Current contents                                                 |
-| --------------------------------------------------- | ---------------------------------------------------------------- |
-| `frontend/src`                                      | React/OpenLayers editor, in-memory session and generation worker |
-| `frontend/tests`                                    | Browser journeys                                                 |
-| `packages/domain`                                   | Shared TypeScript spatial model, commands and validation         |
-| `packages/generation`                               | Pure TypeScript geography and built/human process sequences      |
-| `infrastructure/terraform`                          | Frontend-only Ahara website hosting                              |
-| `backend`, `db`, `infrastructure/backend-prototype` | Preserved backend prototype, outside the active build            |
-| `docs/adr`                                          | Current spatial, generation, storage and platform decisions      |
+| Path                                                | Current contents                                                        |
+| --------------------------------------------------- | ----------------------------------------------------------------------- |
+| `frontend/src`                                      | React/OpenLayers editor, browser workspace client and generation worker |
+| `frontend/tests`                                    | Browser UI wiring tests on fixture worlds                               |
+| `packages/domain`                                   | Shared TypeScript spatial model, lattice, typed-array structures, magic |
+| `packages/application`                              | Command planning, normalization and authoring operations                |
+| `packages/storage-browser`                          | SQLite/RTree catalog, GEOS geography, numerical resources and saves     |
+| `packages/generation`                               | Pure TypeScript geography, regional refinement and human processes      |
+| `packages/name-forge`                               | Name generation (PolyForm Noncommercial license)                        |
+| `infrastructure/terraform`                          | Frontend-only Ahara website hosting                                     |
+| `backend`, `db`, `infrastructure/backend-prototype` | Preserved backend prototype, outside the active build                   |
+| `docs/adr`                                          | Current spatial, generation, storage and platform decisions             |
 
 ## Architecture patterns
 
 Shared TypeScript domain and generation modules underpin the browser editor.
-Read [ADR 0003](docs/adr/0003-frontend-session.md): no backend, persistence or MCP.
-Reloading or closing the tab discards the session. The
+Read [ADR 0003](docs/adr/0003-frontend-session.md): no backend, server persistence
+or MCP. The workspace keeps records in a local SQLite/RTree catalog with GEOS and
+numerical resources in OPFS; **Save map** keeps a map across reloads, and unsaved
+changes disappear on reload. The
 [generation workflow design](docs/generation-workflows.md) defines the common
 GIS/domain-backed process contract, profile-selected sequences, parameters and
 epoch cycles. Canonry supplies the generation structure and algorithmic baseline:
 shared working state, application/validation, fact validity and causal magic.
-Keep all state in browser memory. Workers report progress and can be terminated;
-there are no restart or recovery mechanisms. Completed results become one
-undoable session operation after validation and a world-revision check.
+Workers report progress and can be terminated; there are no restart or recovery
+mechanisms. Initial generation installs streamed output progressively;
+regeneration publishes after validation and a world-revision check.
 
 ## Development commands
 

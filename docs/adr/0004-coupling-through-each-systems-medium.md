@@ -17,7 +17,8 @@ the cover it produced. There is no generic "altered" plant group, cover, trait o
 biome.
 
 Society reads geography when it settles: each population unit takes the best
-site class its country offers (pass, Fire seat, river node, harbour, melt line,
+site class its country offers (pass, Fire seat, river node, harbour, Veil door
+house, Hallowed sanctuary, melt line, Greenwood healing well, Salt necropolis,
 fishery coast, halo edge, plain node) and holds a fortress only when a route
 node or hazard gives a reason. At the World profile a unit's works are demands
 of its country rather than located earthworks; what a demand does there and how

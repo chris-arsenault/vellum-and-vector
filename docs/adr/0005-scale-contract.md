@@ -40,8 +40,9 @@ extent and morphology, exceptional relief or causal/network/institutional
 importance in the feature's own domain. A classified component does not
 automatically become a place. Physical water and local-condition raster color remain independent of
 named coverage. Corresponding ecological edges reuse existing raster sampling.
-Only genuinely continental domains receive geographic subdivisions; the minimum
-size of an eligible region is not a general maximum-size rule.
+Only domains large relative to the map's own land, at the map's scale, receive
+geographic subdivisions; the minimum size of an eligible region is not a general
+maximum-size rule.
 
 **Significance is judged at each map's scale (user direction 2026-11-03).** Every
 map holds about the same number of cells, so a finer map is the same kind of map
@@ -49,9 +50,8 @@ of a smaller country. One set of significance rules, subdivision included,
 applies to every profile, with the World's thresholds scaled by the map's cell
 span over a World cell's at the same quality: lengths linearly, areas and
 discharges by its square, heights by its square root. The World's factor is one.
-A finer map that published every resolved component instead named over a
-thousand magic places and a river on every coastal slope. What a map does not
-name stays latent on it.
+A per-map cell minimum alone would name every resolved fragment of a finer map.
+What a map does not name stays latent on it.
 
 **Intensive and structural society works.** An intensive work (clearance,
 burning, hunting, conservation, irrigation, tapping, quarrying) is a fraction
@@ -64,7 +64,7 @@ profile. A demand is never published as a feature at any profile. The
 classification is one labelled declaration in the domain. Magic practices are
 located at every profile and force one cell at their seat.
 
-**A World cycle recomputes only mesh-scale consequences.** The ten-year cycle
+**A World cycle recomputes only mesh-scale consequences.** The World cycle
 writes intensive field forcing, advances the ecology for the elapsed years and
 refreshes society support and connections. Hydrology re-routes when a located
 structure or authored terrain changed the surface; magic re-propagates when its
@@ -82,7 +82,7 @@ consequences, not point radii.
 and completed historical context. Dedicated algorithms add local relief, coasts,
 drainage, habitats, magic detail and places at the selected physical scale. They
 do not allocate demographic heirs, conserve parent-cell heights, run society eras
-or replay world processes. Known places remain available and smaller settlements
+or replay world history. Known places remain available and smaller settlements
 can appear without an inherited population budget. Neither a revised parent nor
 a refined sibling changes the child's captured inputs. The child never writes
 its new geography into another map.

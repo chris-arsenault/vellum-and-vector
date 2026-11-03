@@ -1,7 +1,7 @@
 # 0007 — Magic systems are materials the world carries
 
-User direction recorded 2026-10-24 and 2026-10-25; adopted 2026-10-25 with the
-seven magic systems plan. Applies to every magic system in generation. Refines
+User direction recorded 2026-10-24 and 2026-10-25; adopted 2026-10-25. Applies
+to every magic system in generation. Refines
 [ADR 0004](0004-coupling-through-each-systems-medium.md), which keeps each
 system acting through its own medium, and holds under
 [ADR 0005](0005-scale-contract.md).
@@ -21,10 +21,22 @@ drift carries every solid reservoir by the transport plan, conserving the
 amount), ice (charge rides the flow and is dumped at the terminus and on the
 shelf), rivers (placers and brine move one cell down the drainage), groundwater
 (aquifers leach a buried stratum to a spring), wind (dust and sand lift and
-settle), currents, animals (sap in the gut of grazing herds) and people (trade
-ledgers along the ways). Intensity is derived from stock and medium at
-evaluation, and a budget of created, carried, stored, released and lost closes
-per system. Sinks are physical: flushing to the sea, burning, extraction.
+settle), animals (sap in the gut of grazing herds) and people (trade ledgers
+along the ways). Ocean currents can be declared as a carrier, but no stock is
+moved by them yet. Intensity is derived from stock and medium at evaluation, and
+a budget of created, carried, stored, released and lost closes per system. Sinks
+are physical: flushing to the sea, burning, extraction.
+
+Every stock changes in one stock advance per epoch, run from the history pass;
+locating sources only reads stocks, so re-evaluating a system within an epoch
+never counts a stock twice. An origin that feeds on a record consumes it: Salt's
+death origin uses up the mass-death record and its dead-lake origin the lake
+memory, so Salt never re-makes itself from the same dead each epoch. Some
+carriers are excluded by what the medium is: meltwater is Aurora's sink, not its
+carrier; grazers avoid Salt, so Salt has no animal carrier; Pressure charge sits
+in water, not crust; Veil carries nothing itself. Crust drift decays the stocks
+it carries, so crust-borne tracks (spent Fire behind a drifting hotspot, a
+displaced Salt bed) are features of an early world.
 
 **Origins on the schema.** A system holds several origins, each with its own
 source, propagation, renewal and parameter overrides; a system's effects and
@@ -35,8 +47,9 @@ before origins existed is parsed into one origin.
 **Cells carry shares.** A class covers a fraction of a cell, derived from the
 rule's own continuous quantity through a declared mapping, never from sub-cell
 geometry. The drawn surface shows the class with the largest coverage and
-hatches the next where it holds a fifth of the ground; places are outlined at
-half their peak coverage; society seats where coverage passes a tenth. Magic is
+hatches the next where it holds a declared share of the ground; places are
+outlined at a declared fraction of their peak coverage, and society seats where
+coverage passes a declared floor. Magic is
 never netted on a shared scalar: Fire is not a warming term that cancels
 Aurora's cold.
 
@@ -46,8 +59,9 @@ stock, which moves, accumulates and feeds the field, but it is no source and
 seeds no site, so a trace a river or a trade road carried is never a labelled
 core. A class component is published as a named place only past a minimum of
 cells declared with its cartography (one for a site, more for a course or an
-area); below it the class stays on the map as coverage, and an area wider than
-a landform may be is split along drainage divides into several places. Density
+area) and significant at the map's scale
+([ADR 0005](0005-scale-contract.md)); below that the class stays on the map as
+coverage, and only a domain large relative to the map's land is subdivided. Density
 is lowered by locating sites and keeping places whole, never by thinning stocks
 or intensities, and the seven systems are judged against each other: no one of
 them may own the map's places.
@@ -59,7 +73,9 @@ between them, and it displaces the parents, so a meeting is never the mean of
 what made it. Hallowed and Veil are the any-system meetings: warding scales
 every other system inside a ring and lays what it removed on the rim; tearing
 reads the strain of every pair plus the meetings' coverage, so a triple meeting
-tears more than its pairs.
+tears more than its pairs. Each connected patch of warding is one ring and pays
+its own rim. Veil answers Fire's release at a cell, not Fire's presence, because a
+Fire and Aurora front always has Fire under its tears.
 
 **People are a carrier and a source.** Trade moves held cores, seed and salt
 along the ways; cores cracked at a forge are a Fire source; extraction, hunting,
@@ -82,7 +98,14 @@ drawn as a way.
   with the charge, and extraction had nothing to draw down.
 - Separate systems per origin (two Fires with two forges). Rejected: the bible
   gives one effect set per system and distinct places per origin.
-- Winner-takes-all classification of a 50 to 200 km² cell. Rejected by the user:
+- More systems, one per trope. The ten candidate systems were folded into seven by
+  joining those that share a medium or a physical cause, never those that merely
+  share a mood: Starfall into Fire, Gale into Pressure, Wellwater into Greenwood,
+  Grave into Salt, Doors and Wild zones into Veil, Bound lines into Hallowed.
+  Folding Gale gave up air as an independent medium.
+- Rejecting a meeting whose parent system the world lacks. Rejected: it would
+  break every custom system list; such a meeting validates and never holds.
+- Winner-takes-all classification of a World cell. Rejected by the user:
   at that size a few percent of each class is real ground, and a meeting cannot
   displace part of a cell that has only one class.
 - Interference as a surface-only class. Rejected: a class with no process is a
@@ -95,10 +118,8 @@ drawn as a way.
 
 Each system's reach, rarity and signature are tuned in its preset and curated
 controls (`packages/generation/src/magicCartography.ts`); documents describe
-mechanisms and leave the values to code. Every milestone of the plan was
-accepted on fields and couplings; classes, names and drawing trail. A world with
-no human era has no Hallowed and no forge, and its other systems are unchanged.
-The Salt detachment effect on orogeny is deferred (backlog item 16); mirages,
-detour routes, vow practice and door-keeper economies remain reads with no field
-behind them. The frontend's whole unit suite, which runs real draft worlds, is
-the integration gate for every change to these systems.
+mechanisms and leave the values to code. Fields and couplings come first;
+classes, names and drawing follow from them. A world with no human era has no
+Hallowed and no forge, and its other systems are unchanged. The Salt detachment
+effect on orogeny, mirages, detour routes, vow practice and door-keeper economies
+are open work in the [backlog](../backlog.md).

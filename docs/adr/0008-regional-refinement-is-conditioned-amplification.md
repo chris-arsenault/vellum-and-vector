@@ -3,11 +3,44 @@
 User direction recorded 2026-10-29 to 2026-11-01; adopted 2026-11-01 from the regional
 refinement specification. Applies to independent regional maps under
 [ADR 0005](0005-scale-contract.md) and the dedicated regional refinement correction in the
-[product contract](../product-spec.md). It replaces the 2026-10-31 decision recorded under
-this number: a smoothed parent surface plus noise, relaxed toward that surface, is no longer
-the organizing strategy, and no later work should restore it.
+[product contract](../product-spec.md). A smoothed parent surface plus noise, relaxed toward
+that surface, is not the organizing strategy (see Alternatives).
 
 ## Decision
+
+**One representation (user direction 2026-11-01).** A region is a `GenerationState` whose
+geography is the generator's physical field on the child's own triangular lattice, the same
+lattice class the World uses at the region's cell span. Refinement is a process sequence
+over the world's process registry plus the regional processes: the world's initialization
+builds the field on the child lattice, then the regional begin step, the schedule, the
+world's projection and feature extraction, the regional identity, magic-map and place
+steps, and naming. There is no second grid, channel vocabulary, unit table, bridge or
+adapter; world code that fails on a region is fixed in place. The world's epoch and phase
+control is not reused. `regional/representation.architecture.ts` (`make test-architecture`)
+rejects the substitute shapes. A world process enters refinement only with a verdict:
+included, modified, replaced or left off. World locators that place a budgeted count per
+area are replaced by the captured source, because a budget floored at one would invent a
+source per map; bands are re-derived every round, so every effect is a derivation term or a
+ledger total; thresholds stated in cells, flow units or epochs are restated in physical
+units.
+
+**Established features enter through one cause registry.** Each established-feature kind
+(summit, course, lake, seat, dam, landmark, frame entry) is one entry with hooks at fixed
+schedule points: read its captured evidence, influence the network's cost field, state the
+support the ground must provide, cap the relief gradients under its footprint, restore its
+signature after each relief write, conjoin with other features, and respond to the round.
+Evidence is read in identity order, so a repeated refinement reads it identically. A new
+established-feature process is a registry entry, not a new schedule call. The landmark cause
+places captured landmark records on the lattice without drift: a mountain repels the
+network, a canyon or falls is a corridor, a ring repels along its rim and an escarpment's
+fault is a trunk of the fracture set; its support is the world's `maintainLandmark`, run
+after every relief write and booked afresh each round, and a falls emerges as the world's
+waterfall class on the restored step. The dam cause holds a reservoir: the crest is set by
+the valley banks at the dam, the water fills the ground upstream below the crest, and the
+lake is written after each water step and at the refresh. The seat cause grades the ground
+under established seats, and under proposed ones from round three, by the owner's decision
+that seats may reshape bounded ground: cut and fill within the footprint until no step is
+steeper than the seat's gradient, leaving channels, rivers and kept hollows alone.
 
 **World generation establishes macro character; the child develops from it.** Besides the
 present fields, the world publishes the structural grain of constructed relief
@@ -20,8 +53,8 @@ relief. Classifications bias mechanisms; none selects a finished landscape.
 **Shared media are natural copies plus tracked contributions.** The captured present media
 are copied once. A process that changes a medium declares the total it wants and a ledger
 writes the difference from what it applied before, so re-evaluating a round updates an
-influence and never adds it again. Elevation is the one medium the processes also evolve
-directly; a contribution to it is applied once and then develops with the rest.
+influence and never adds it again. Elevation follows the same replace rule: the ledger's
+applied elevation total is written onto every re-derived surface.
 
 **The network comes first; relief is derived from it.** The drainage network is a geodesic
 tree over the land, grown once in round one from the established waters: land beside the
@@ -45,16 +78,20 @@ of its discharge through its material, on a hillslope by the material's gradient
 glacial reworking and living cover, and in no case above the gradient a seat's footprint
 holds. The increments are amplified so that the relief blurred to the parent sample span is
 the captured base: the parent sets the macro character and the network decides where within
-it summits, cols, valleys and low ground lie. Hillslopes are coupled sideways so paths that
+it summits, cols, valleys and low ground lie. After the fit the base's blur replaces the
+construction's blur at the base's own smoothing length, so the derivation is conditioned on
+the parent and not only calibrated to it; a base step steeper than the profile is climbed in
+place as a knickpoint, and exits return to the parent's ground at the frame edge. Hillslopes are coupled sideways so paths that
 drain to different channels meet in a rounded interfluve. Glaciation is then a process on
 that surface: snow accumulates where the lapsed climate and the recorded history allow, ice
-flows down the network melting as it descends, hollows a cirque behind a lip where it first
+flows down its own surface melting as it descends (the recorded glacier follows the
+network), hollows a cirque behind a lip where it first
 gathers, deepens and widens a trough where it runs full and leaves a moraine where it ends;
 tarns and ribbon lakes follow from those shapes and the water supply. Volcanic cones add
 their construction. Drainage, climate and the living landscape re-derive each round from
 the present surface and the natural copies; the developed cover softens the next round's
-hillslopes; magic's hardening, cracking, heat and held ice enter the next derivation through
-the ledger. Each magic system resolves its captured materials once and derives its field
+hillslopes; magic's hardening, cracking and heat enter the next derivation through the
+ledger, and held ice as a floor on its own band. Each magic system resolves its captured materials once and derives its field
 each round from those materials and the present medium through its own carrier, without
 added texture; a captured ward does not spread again, only located sources do; wards
 displace other fields to their rims and resist cutting inside; brine crusts in captured
@@ -117,7 +154,8 @@ repeated passes over the ground the previous pass wore, so later ways bend into 
 ones, and each way is published at the class its own flow earns. A way that crosses a channel fords it: the crossing is read geometrically against the
 drainage tree's links (the tree joins channel cells across a vertex, so a path can
 cross a channel without touching one of its cells), a road over a sizeable river crosses by
-a bridge, a settled place with a falling channel within reach turns a mill, and every
+a bridge, a settled place with a falling channel within reach turns a mill (ford, bridge
+and mill are work kinds of their own in the domain, not dams or weirs), and every
 settlement inside a captured control polygon carries that control.
 
 **Established features are terms in the processes, not shapes stamped on the result.** An
@@ -160,6 +198,9 @@ captured-channel contract, so a grandchild develops from the child's organizatio
   on 2026-11-01: the organization was a noise layer selecting predetermined forms, and
   features influenced little beyond the three examples given. The network-first derivation
   replaced it.
+- A regional field mirrored to a square grid and synchronized with it, or a lattice adapter
+  with unit-converting views over the world field. Rejected by the user on 2026-11-01: two
+  representations need bridges and drift apart; one field on one lattice class does not.
 - A universal geographic-object framework or constraint solver. Rejected by the
   specification: typed working structures and ordinary composition suffice.
 

@@ -115,6 +115,15 @@ and shows independent epoch previews; interrupted delivery stays incomplete.
 Generation runs in a Web Worker and ends when the tab closes. Pure generation
 modules remain independent of that browser adapter.
 
+Every map, world or region, is a generation state whose geography is the same
+physical field on the same triangular lattice class at its own cell span. Fix
+world code in place when it fails on a region; do not add a regional grid,
+channel vocabulary, unit table, bridge or adapter
+([ADR 0008](docs/adr/0008-regional-refinement-is-conditioned-amplification.md)).
+Geographic significance, the rule that decides what a map names and outlines,
+is one rule for every map, judged at that map's scale
+([ADR 0005](docs/adr/0005-scale-contract.md)).
+
 ### Magic source authority
 
 Per the user's 2026-10-22 clarification, the magic systems are first-class world
@@ -142,7 +151,7 @@ Ground society effects in fire-core extraction/use, Aurora crystal and ice-memor
 practices, and depth-dependent Pressure use and ocean propagation. Do not replace
 them with generic abundance, mana, wards or explosions. Treat lore-derived social
 uses and practitioner costs as adaptation proposals, not mandatory setting canon.
-The society plan records the proposed aggregate adaptation. Configuration and
+Configuration and
 shaping should expose these systems' actual behavior, not require users to invent
 the systems before generation can work.
 
@@ -156,7 +165,10 @@ keep network crossings and authored protections attached to that geography.
 Use shared spatial contracts with GEOS in each execution context, composed feature geometry
 and typed numerical blocks backed by local resources. SQLite/RTree indexes own
 canonical records; boundary pieces and display products derive from those records.
-Keep reads and writes scoped to the affected geography. Backend
+Keep reads and writes scoped to the affected geography. Nearest points,
+clipping, Voronoi cells, linear referencing and nearest-item lookups go through
+the shared `spatial` adapter (GEOS, R-tree or STRtree); do not add hand-written
+geometry scans. Backend
 and SQL files remain historical source outside the active runtime/build.
 `infrastructure/terraform` hosts only public frontend assets through Ahara's
 website module; the earlier backend Terraform is preserved in
@@ -178,24 +190,26 @@ Assess changes through representative map behavior, geographic output and
 focused domain and browser checks. Keep scope tied to the atlas's authoring
 workflows and the product's physical-plausibility requirements.
 
+Lint is a CI gate (complexity, lines per function and lines per file on every
+`.ts`); lint the touched directory before testing. `make test-architecture`,
+part of `make ci`, flags object, `Map`, Proxy or comparator substitutes for the
+typed-array structures in `packages/domain/src/hpc/` and any regional
+representation outside the shared field and lattice. A generation site that no
+structure fits carries `// hpc-exempt: <reason>` on its line or the line before.
+
 ### Test boundaries — hard requirements
 
-- Algorithm changes use constructed worlds: explicitly provide terrain, water,
-  climate, materials, stocks or society, then call the relevant process. Do not
-  generate a world or execute a physical schedule to obtain test preconditions.
-- Before writing a test, identify the behavior, its controlled preconditions and
-  the smallest set of real processes needed to observe it. Supply unrelated
-  upstream products directly. Test a perturbation and relevant unchanged state;
-  do not mock the algorithm being tested or merely assert fixture assignments.
-- Reproduce an integration failure in a constructed test before changing its
-  mechanism. Compare controlled inputs, analytic results, geometry, budgets and
-  state transitions; do not tune a seed's geography or weaken an assertion to
-  recover a passing result.
+- Routine tests are of two kinds only: unit tests of pure functions, data
+  structures, contracts and publication rules on explicit inputs, and UI tests
+  of interactions. Do not write tests that run a process on a fixture world and
+  assert its simulated outcome, determinism or ledger totals; delete such tests
+  rather than repairing their timeouts. Judge generated geography on real maps.
 - Browser tests test UI behavior on small supplied worlds. Import `test` from
   `frontend/tests/uiTest.ts`; its automatic fixture uses at most 256 cells and
   blocks real generation workers. Numerical preconditions and raster presentation
-  are separate: `numerical: true` supplies data; only `@rendering` scenarios enable
-  the raster adapter. Those scenarios must assert rendered output, not merely
+  are separate: `numerical: true` supplies data; only `@rendering` (and retained
+  `@deferred-authoring`) scenarios enable the raster adapter. Those scenarios must
+  assert rendered output, not merely
   controls, metadata, or job completion. Do not opt in to rendering to satisfy an
   unrelated fixture dependency.
   A large dimension entered to test a form is configuration, not permission to
@@ -210,16 +224,16 @@ workflows and the product's physical-plausibility requirements.
 - Exercise the supplied generation worker only when configuration submission,
   progress, cancellation or publication is the assertion under test. Declare
   `@generation` on that scenario, or a reason in `test.use({ generationLifecycle:
-  "..." })` for a file dedicated to that boundary. The fixture rejects undeclared
+"..." })` for a file dedicated to that boundary. The fixture rejects undeclared
   generation. This declaration does not justify unrelated upstream setup; reuse
   the parent map even when the test must run a regional job.
 - Before adding a browser scenario, identify its UI assertion, the existing map
   fixture it can reuse, and whether generation or rendering is actually observed.
   Extend a suitable existing scenario when it can share the same setup. Keep
-  numerical, geometric and combinatorial cases in constructed Vitest tests.
+  numerical, geometric and combinatorial cases in Vitest unit tests.
   See `frontend/tests/README.md` for the fixture lifecycle and examples.
 - Select checks by the changed boundary. A pure algorithm change uses its
-  constructed Vitest cases and the routine unit suite. Run browser cases for
+  unit tests and the routine unit suite. Run browser cases for
   changed controls, rendering, editing or worker/UI publication; an algorithm
   adjustment alone does not justify another browser suite.
 - Keep automated end-to-end coverage to a few shared full generations in
@@ -239,7 +253,7 @@ workflows and the product's physical-plausibility requirements.
   tests enforce shared generation setup. Do not disguise expensive setup as a
   unit test, route it through another routine runner or increase unit-test
   timeouts to hide it. Use `pnpm --dir frontend test <file>` for focused feedback;
-  run the routine suite once the relevant constructed cases pass.
+  run the routine suite once the relevant unit tests pass.
 
 ### Documentation
 

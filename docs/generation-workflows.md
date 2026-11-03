@@ -22,9 +22,12 @@ magic and society records. Each geographic record belongs to the new map; a
 separate place identity relates it to the source. Numerical inputs have map-owned
 descriptors pinned to immutable resource bytes. Replacing a parent's resource
 does not change those captured inputs, and creating a child does not copy scalar
-arrays. The dedicated regional operation samples present channels directly onto
-one finer surface. It does not create a world physical field, initialize the
-world generator, execute its process schedule or replay physical or human history.
+arrays. Refinement builds the world's physical field on the child's own triangular
+lattice (`canonry.initialize`), then runs `refinement.begin`, the regional schedule,
+the world's projection and feature extraction (`canonry.project`,
+`canonry.features`), the regional identity, magic-map and place steps, and
+`atlas.names`, all through the shared runner. It runs none of the world's epoch
+schedule and replays no physical or human history.
 Preparation reads metadata; resource loading selects the target map's needed
 present channels. Complete-map reads page owned identities directly and include
 unconnected network junctions; narrower reads follow declared dependencies.
@@ -90,6 +93,25 @@ footprints, proposed places, magic materials) persist and evolve, and the shared
 natural copies of the captured present plus a ledger of tracked contributions, so a round
 updates an influence instead of adding it again.
 
+A world process enters refinement only with a recorded verdict: included, modified,
+replaced or left off. Three rules apply to every included process. A world locator that
+places a budgeted count per area is replaced by the captured source, because a budget
+that floors at one would invent a source on every map. Bands are re-derived every round,
+so every effect is a derivation term or a ledger total, never an in-place addition.
+Thresholds stated in cells, flow units or epochs are restated in physical units.
+
+Established features enter through a cause registry. Each established-feature kind
+declares the hooks it needs (`read`, `influence`, `support`, `caps`, `restore`,
+`conjoin`, `respond`), and the schedule calls them at fixed points; a new kind of
+established feature is a registry entry, not a new schedule call. Evidence is ordered by
+identity, so a repeated refinement reads it identically.
+
+The exterior of the frame is the parent's ground. The halo carries the parent's country;
+frame-edge exits sit wherever the exterior is no higher, at the parent's height, and exit
+roots owe a fall cost so water runs down to the low exits. Spill routing treats the
+exterior as an outlet at its own height. Calibration and conditioning blurs are taken
+over the frame's cells only.
+
 The captured country's character enters as the world's structural grain, strain, glacial
 reworking and volcanic construction. The drainage network is a geodesic tree over the land
 rooted at the established waters (the connected sea, open frame edges starting with their
@@ -103,11 +125,17 @@ only between routes those terms leave equal, most on plains. Relief is derived f
 tree: each cell rises above its receiver by a concave channel profile or a material
 hillslope gradient, capped inside a seat's footprint, amplified so that the relief blurred
 to the parent span is the captured base; hillslopes are coupled sideways; ice accumulates
-where the lapsed climate and the recorded history allow, flows down the network, hollows
-cirques behind lips, deepens troughs and leaves moraines; cones add their construction.
-Spill routes resolve basins and flats; sheet runoff becomes a
-channel where the terrain gathers it, with the map-sample discharge threshold, the strip test
-and headwater pruning as before. Closed depressions without a cause fill. Lake supply
+where the lapsed climate and the recorded history allow, hollows cirques behind lips,
+deepens troughs and leaves moraines; present ice flows down its own surface while the
+recorded glacier follows the network; cones add their construction.
+Spill routes resolve basins and flats. Sheet runoff becomes a channel where the terrain
+gathers it: the channel threshold is a reference runoff in the map's own samples, scaled
+by a bounded slope factor, applied with the strip test and headwater pruning. Those
+channels form the drainage network; which of them are named rivers is decided by the
+river significance rule at the map's scale. Because relief comes from the network, a
+channel lost to transmission loss leaves a dry valley with its incision kept. Closed
+depressions without a cause fill. The parent's closed basins are kept whole, and hollows
+dammed by a slide or a fan that are deep and wide enough to hold a lake stay. Lake supply
 balances precipitation and runoff against evaporation and seepage; shores follow the water
 stage against continuous terrain; ocean outlines use connected sea membership. The footprint
 rule applies to mapped shores as well as names; unresolved ponds remain numerical water
@@ -122,69 +150,94 @@ from. A known settlement's footprint caps the hillslope relief around it in the 
 network gives that ground, a river seat draws its channel, and a seat still on unusable
 ground moves to the best usable ground within reach that keeps its situation. New villages
 are proposed once at the network's events, compete for hinterland over the travel cost of
-the present surface, and take their support in the last round or are dropped. Seats and
-summits are re-sited from their captured positions and this map's own products are
-regenerated on every refinement, so a repeated refinement reproduces itself.
+the present surface, and take their support in the last round or are dropped. Each round
+the weakest half of the unsupported candidates gives way, a bounded number of times,
+until the remaining places are supported, so the outcome does not depend on the order of
+elimination. Seats and summits are re-sited from their captured positions and this map's
+own products are regenerated on every refinement, so a repeated refinement reproduces itself.
 
 The derived relief is worked by the processes that act on real ground: the crests between
-neighbouring catchments carry a crest term so ridgelines branch; hillslopes above their angle
-of repose shed material that the network carries, settling along the captured base gradient,
-dropping at lake entries and leaving its load at the shore roots; drainage loses water to the
-ground along its length; valley floors are the flat ground a channel reaches from its cells.
+neighbouring catchments carry a crest term so ridgelines branch; drainage divides are
+written into the ridge band and a pass is the low point along a divide, so the world's
+landform classifier reads them; ridges above a crest strength are held fixed in hillslope
+smoothing; hillslopes above their angle of repose shed material that the network carries,
+settling along the captured base gradient, dropping at lake entries and leaving its load
+at the shore roots; drainage loses water to the ground along its length; valley floors are
+the flat ground a channel reaches from its cells.
 The coast develops on that surface from the fetch each shore cell faces: exposed shores cut
 back, sheltered shallows fill, and rivers meet the sea as deltas or estuaries by their load
 and the shore's exposure. Ice is routed over the surface, thins as it descends and melts where
 the lapsed climate does not hold it; its erosion is booked once and its melt enters the runoff.
 
+The shared media are re-derived from the capture each round. The fracture set is the
+captured value, opened further where captured strain is high and the material band is
+weak, plus the ledger; material resistance and seepage read it. Geothermal heat is
+re-derived from the captured value plus opened fractures and cone proximity, and Fire
+sources read it. Insolation, cold pooling and wetness are unpublished per-cell arrays;
+ocean distance is captured.
+
 Climate re-derives each round from the captured copies under the developed relief:
 temperature by lapse, aspect and cold pooling where a gentle floor lies below the surface
 around it; snow re-split from precipitation by the world's seasonality rule; wind deflected
-by the relief through the world's terrain rule; moisture and wetness on the present surface;
-runoff changed by the present cover against the captured cover (cleared ground sheds more,
-grown ground holds more) and increased by meltwater. Soil develops under the living landscape
-once the ecology has begun and is not re-written by the climate after that. The living
-landscape is the world's ecology engine hosted on the regional field: prepared once from the
-captured state in the context step with its history memory reset to the first derived
-geography, responding each round over a short span of horizons under the regional climate,
-the magic systems' living effects and the country's fire causes, with its soil water capped by
-the soil's capacity and its history remembered between rounds. Cover binds the next round's
-hillslopes and runoff. Surface classes and habitat outlines use the raster's shared
-class-boundary evaluator, the mesh footprint, named-biome extent and small-gap rules; smaller
-patches remain field coverage.
+by the relief through the world's terrain rule; captured precipitation, moisture and runoff
+scaled by each slope's exposure to the deflected captured wind, so windward slopes are
+wetter and lee slopes drier; moisture and wetness on the present surface; runoff changed
+by the present cover against the captured cover (cleared ground sheds more, grown ground
+holds more) and increased by meltwater. Soil develops under the living landscape
+once the ecology has begun and is not re-written by the climate after that.
 
-Topographic prominence locates summits and their joining cols; a summit is named only above
-a prominence that scales with the parent sample span, so a regional map names the major
-peaks and a finer map the lesser ones. Measured opposing flanks identify ridges and valleys;
-connected mountain relief becomes range footprints. Waterfalls require sharp channel-profile
-breaks.
+The living landscape is the world's ecology engine hosted on the regional field: prepared
+once from the captured state in the context step with its history memory reset to the
+first derived geography, responding each round over a fixed span of horizons under the
+regional climate, the magic systems' living effects and the country's fire causes, with
+its soil water capped by the soil's capacity and its history remembered between rounds.
+Preparation reads the capture without noise: conifer share from captured temperature,
+saplings from a young canopy, seeds from presence, and soils and carbon as captured. The
+fire causes are magic heat, the driest fuelled ground in each block and settlement edges,
+each with a stable keyed draw, beside the engine's own background ignition. Cover under
+new sea, lake or ice dies and its litter goes to the soil; authored forest polygons and
+fixed channels hold. Cover binds the next round's hillslopes and runoff. Surface classes
+use the raster's shared class-boundary evaluator; habitat outlines come from the world's
+ecological extractor judged at the map's scale, with its margin and small-gap rules;
+smaller patches remain field coverage.
 
-Each magic system resolves its captured materials once (deposits, drained charge, leached
-strata, weathered and burnt beds, located sources) and derives its field each round from
-those materials and the present medium through its own carrier. Fire separates held and
-spent material, exposure and release, with fractures carrying vein heat while fallen and
-forge deposits remain local. Aurora charge drains toward cold traps once and is read from
-its ice and ground reservoirs against the present cold. Pressure fronts follow connected
-ocean water, focus over shallow bathymetry and reflect from coasts; the traced field is kept
-while the ocean's extent is unchanged. Greenwood spreads through connected vegetation, while
-groundwater leaches buried charge toward supported spring breaks. Salt beds dissolve into
-brine, follow drainage, crust in captured closed basins and supply wind-carried dust once;
-exposed beds harden or collapse, and Fire consumes their material. A captured Hallowed ward
-does not spread again, only its located sources do; wards displace other magical fields to
-their rims and the ground inside resists cutting. Veil develops strain
-where systems compete and pairs coherent tears into doors at extraction; the parent's
-captured doors stand as established evidence beside them. Each round the systems are
-evaluated against the present media in the lore's order, with the captured intensity held
-along the frame edge where the parent's country continues, and their ground effects are
-declared as that evaluation's totals through the ledger: hardened rock as the change from the
-captured intensity, confluence soils against the natural soil, the hallowed spill, the Veil's
-wild relief, door chill and pools, and salt's glass and desiccation against the natural
-ground. Toxicity, the ice held by charge above its relict floor and the door rings' grass and
-saplings are floors written on their own bands. The applied heat is the forcing
-the rivers carry downstream. A resolvable relief change reroutes water within the round.
-These operations develop the captured present without another physical epoch or human era.
-The child publishes its developed grain for its own refinement.
+Topographic prominence locates summits and their joining cols above a prominence floor
+read at the parent's span; a summit is named by the world's prominence-and-isolation rule
+at the map's scale (see [Geographic significance at every scale](#geographic-significance-at-every-scale)),
+so a regional map names its major peaks and a finer map the lesser ones. Measured
+opposing flanks identify ridges and valleys; connected mountain relief becomes range
+footprints. Waterfalls require sharp channel-profile breaks.
 
-Named magic places use the existing connected-class and minimum-component rules;
+Each magic system inherits its captured channels and sources once when refinement begins.
+Origins the world places by a budget per area (geothermal, deep-ocean, death, dead-lake,
+tenure, kept-line) keep the captured source. Point sources (veins, loci, placed sources and
+forges) arrive as sites on the cell under each parent peak of the captured field. Captured
+heat and melt are marked as already applied. From then on the world's engine locates and
+propagates every system each round against the present media through its own carrier.
+Fire separates held and spent material, exposure and release, with fractures carrying vein
+heat while fallen and forge deposits remain local. Aurora charge drains toward cold traps
+and is read from its ice and ground reservoirs against the present cold. The Pressure
+field is copied from the capture and not retraced. Greenwood spreads through connected
+vegetation, while groundwater leaches buried charge toward supported spring breaks. Salt
+beds dissolve into brine, follow drainage, crust in captured closed basins and supply
+wind-carried dust; exposed beds harden or collapse, and Fire consumes their material in the
+first round only. A captured Hallowed ward does not spread again, only its located sources
+do; wards displace other magical fields to their rims and the ground inside resists
+cutting. Veil develops strain where systems compete and pairs coherent tears into doors at
+extraction; the parent's captured doors stand as established evidence beside them. Each
+round the systems are evaluated against the present media in the lore's order, with the
+captured intensity held along the frame edge where the parent's country continues, and
+their ground effects are declared as that evaluation's totals through the ledger: hardened
+rock as the change from the captured intensity, confluence soils against the natural soil,
+the hallowed spill, the Veil's wild relief, door chill and pools, and salt's glass and
+desiccation against the natural ground. Toxicity, the ice held by charge above its relict
+floor and the door rings' grass and saplings are floors written on their own bands. The
+applied heat is the forcing the rivers carry downstream. A resolvable relief change
+reroutes water within the round. These operations develop the captured present without
+another physical epoch or human era. The child publishes its developed grain for its own
+refinement.
+
+Named magic places are judged by the world's magic-place significance at the map's scale;
 local peaks within one site complex do not create separate places. Class coverage
 remains a field even when no named outline qualifies. The physical footprint rule
 also applies to new lakes and non-source sites; unresolved water and magic remain
@@ -200,12 +253,13 @@ ratcheting; an abandoned seat clears nothing. At extraction every settled place 
 residents to the market seat and a smaller share to its nearest larger neighbour; the flows
 are traced over the present surface with captured roads as worn ground and door ends as free
 edges, in repeated passes over the ground the previous pass wore, so later ways bend into
-earlier ones, and each way is published at the class its own flow earns. A way crossing a channel fords it, read geometrically against the
-drainage tree's links (which join channel cells across a vertex); a road over a sizeable
-river crosses by a bridge; a settled place with a falling channel within reach turns a mill;
-every settlement inside a captured control polygon carries that control. Regenerating society alone
-uses this map's current surface and preserves terrain; physical refinement starts
-from its pinned inputs. Neither path reads live geography from another map.
+earlier ones, and each way is published at the class its own flow earns. A way crossing a
+channel fords it, read geometrically against the drainage tree's links (which join channel
+cells across a vertex); a road over a sizeable river crosses by a bridge; a settled place
+with a falling channel within reach turns a mill; every settlement inside a captured
+control polygon carries that control. Regenerating society alone uses this map's current
+surface and preserves terrain; physical refinement starts from its pinned inputs. Neither
+path reads live geography from another map.
 
 Ordinary map authoring uses linked feature representations and surface overlays.
 Procedural inputs omit those drawings, leaving terrain, drainage, material stocks
@@ -255,25 +309,25 @@ Atlas Features registry, including authored magic sources and unknown custom
 types. Continuous fields retain independent display controls. Registry discovery
 can open existing finer geography; it does not generate that geography.
 
-**Magic clarification — 2026-10-22:** Fire, Aurora and Pressure are first-class
-world effects and processes. Preserve their physical motivations, media,
-feedback and interference without importing named setting lore. Read
-[product specification 10.3](product-spec.md#103-magical-generation--fire-aurora-and-pressure)
-and [magic source authority](../AGENTS.md#magic-source-authority) before extending
-them. Future magic systems remain open through the shared process structure;
-extension must preserve the current three's specific behavior. The representation described in the
-implementation history below remains existing code, not a requirement to express
-every behavior through a generic vocabulary or avoid system-specific operations.
-Society's reads of magic and the coupling between the pillars are decided in
+### Magic systems
+
+The seven magic systems are first-class world effects and processes. Their physical
+motivations, media, feedback and interference follow
+[product specification 10.3](product-spec.md#103-magical-generation--the-seven-systems)
+and the [magic source authority](../AGENTS.md#magic-source-authority), without importing
+named setting lore. The systems share the process structure where it serves them and use
+system-specific operations where their behavior requires it. Society's reads of magic and
+the coupling between the pillars are decided in
 [ADR 0004](adr/0004-coupling-through-each-systems-medium.md).
 
-**Society delivery — 2026-10-23:** `world.societies[areaId]` retains aggregate
-communities, joint population groups, connections, completed eras, political
-relationships, works, events and magic practice resources. Registered human-era
-processes evolve population and migration, cultural contact, works/practices and
-political reach. Culture, language and religious membership remain separate from
-sovereignty, administration, control and claims. Settlements and roads consume
-that state instead of the former capped placeholder selection.
+### Society
+
+`world.societies[areaId]` retains aggregate communities, joint population groups,
+connections, completed eras, political relationships, works, events and magic practice
+resources. Registered human-era processes evolve population and migration, cultural
+contact, works/practices and political reach. Culture, language and religious membership
+remain separate from sovereignty, administration, control and claims. Settlements and
+roads consume that state.
 
 World publication contains major centers and their routes, political territories,
 population and affiliation fields, and major historical events. World settlements
@@ -342,66 +396,42 @@ for forest, sodden ground and river crossings, and finds saddles through the
 slope term. `pnpm --dir frontend inventory:society` prints a generated world's
 demographic and route measures headlessly.
 
+### Controls and module contracts
+
 The current module contracts, feature-owned recipes, validity model and output
 registration are described in [Generation modules and recipes](generation-modules.md).
 
 Curated generation controls map a creator's outcome choice to the coefficients
 that produce it: physical and living map outcomes, independent cultural and
-political patterns, and distinct Fire, Aurora and Pressure controls that follow
-the magic source authority and product contract above. Each control is declared
+political patterns, and distinct controls for each of the seven magic systems that
+follow the magic source authority and product contract above. Each control is declared
 once with its alternatives and the values each alternative sets, in
 `packages/generation/src/physicalCartography.ts` and `terrainCartography.ts`
 for the land controls, `domainCartography.ts` for the living landscape and the
 people controls, and `magicCartography.ts` for the magic controls; those
-declarations are the record of the values. All three systems support
-independent inclusion.
+declarations are the record of the values. Every system supports independent
+inclusion.
 
-This is the generation direction for Vellum & Vector. The
-[product contract](product-spec.md#10-procedural-generation-domains) defines
-behavior; [ADR 0002](adr/0002-relational-spatial-storage.md) records application
+The [product contract](product-spec.md#10-procedural-generation-domains) defines
+generation behavior; [ADR 0003](adr/0003-frontend-session.md) records application
 boundaries. User requirements and explicitly agreed constraints govern changes
 to the implementation choices described here.
-
-**Current replacement plan — 2026-10-19:**
-[Fixed sampling replacement](#fixed-sampling-replacement-current-direction-2026-10-19)
-restores a fixed metre-aware triangle workspace while retaining all causal epochs,
-physical processes and configurable magic. Continuous scalar publication and
-OpenLayers tiles retain the display work. The adaptive rewrite's global support
-refinement and remeshing are retired from the active world path because their
-measured cost did not deliver useful map quality. Scope is top-level world
-generation and display; editor development and lower-level generation are excluded.
-
-## Reference parity requirement
-
-The user's explicit requirement is **semantic algorithm parity**, not numerical
-equivalence to Canonry. Compare the operations inside each process: the causes
-it reads, transformations it applies, feedback it supplies, state it carries
-between epochs and geography it produces. Preserve those mechanisms and their
-causal relationships while adapting units, parameters and representations to the
-atlas. A matching process name or a passing numerical fixture is not sufficient.
-
-Matching output values, hashes, seed mappings, rounding and arrays is not an
-acceptance target. Do not pursue such matching during metre conversion or treat
-its absence as missing algorithmic work. Existing reference fixtures remain
-regression aids. Numerical differences matter when they change a required
-mechanism, physical meaning, creator control or useful geographic behavior.
-Deterministic generation within the atlas remains required.
-
-The source inventory below distinguishes present operations, concrete semantic
-gaps and atlas adaptations. It supersedes the earlier emphasis on numerical
-counterexamples as evidence of incomplete generation.
 
 ## Structure and reference
 
 Use Canonry's generation structure and algorithms as the baseline: configured
 process sequences operate on a shared working map, check required facts, apply
 changes, validate results and update fact validity. Adapt that structure to the
-atlas's TypeScript GIS/domain model.
+atlas's TypeScript GIS/domain model. Canonry is compared by mechanism: the causes a
+process reads, the transformations it applies, the feedback it supplies, the state it
+carries between epochs and the geography it produces. Its numerical values, hashes,
+seed mappings and rounding are not targets, and its parameters are retuned or replaced
+freely for the atlas. Generation within the atlas is deterministic.
 
-This structure governs initial world generation. Independent regional maps use
-the dedicated surface operation described above. They share numerical/spatial
-primitives and publication infrastructure, rather than the world initializer,
-physical schedule, epoch runner or society working state.
+This structure governs initial world generation. Independent regional maps build the
+same physical field on their own lattice and run the regional schedule described
+above in place of the world's physical schedule, epoch runner and society working
+state, sharing the numerical and spatial primitives and publication infrastructure.
 
 Registered processes can perform GIS operations, initialize fields, evolve
 terrain, propagate magic, change populations or generate features. They share
@@ -428,9 +458,9 @@ profile configuration. Its private working state includes:
 - Historical states, forcing and accumulated consequences.
 
 Resource references identify committed numerical inputs, which open as immutable
-bands over their chunks. Every numerical value of a run is a band in a coverage
-(`docs/WORLD-COVERAGE-DESIGN.md`): the physical world, the surface grid and its
-topology, society and the projection tables. One block cache per worker keeps blocks
+bands over their chunks. Every numerical value of a run is a band in a coverage:
+the physical world, the surface grid and its topology, society and the projection
+tables. One block cache per worker keeps blocks
 resident within its budget and spills them to scratch beyond it; process lifetimes
 release bands the state no longer reaches. Processes share typed domain state directly, independently of React,
 database connections and browser messaging. Completed history retains causal
@@ -459,7 +489,7 @@ as ordinary authoring. Final publication establishes committed authority.
 | Lifecycle        | Apply to working state, then validate the resulting domain behavior                            |
 | Result           | Changed geography, fact validity, meaningful causes and diagnostics                            |
 
-The target interface has this shape; concrete state/context types follow the
+The interface has this shape; concrete state/context types follow the
 actual process needs:
 
 ```ts
@@ -505,7 +535,7 @@ Conditional work must supply the facts required by the subsequent sequence.
 | Context      | Applicable composition                                                                                  |
 | ------------ | ------------------------------------------------------------------------------------------------------- |
 | World        | Initialize broad geography; evolve physical/magical epochs; derive present features and human geography |
-| Region/Local | Resolve parent history, neighboring influence and fixed interfaces; evolve finer local state            |
+| Region/Local | Capture the parent's present and completed history; develop finer present geography in rounds           |
 | Site         | Resolve terrain/access; evolve settlement and construction; derive parcels, structures and connections  |
 | Cave         | Resolve substrate, fractures, water and inherited epochs; evolve dissolution, collapse and deposits     |
 | Interior     | Bind a located frame/access; lay out spaces; apply occupation/change episodes and derive furnishings    |
@@ -522,8 +552,8 @@ The new-world wizard resolves one versioned JSON recipe before creating and
 generating the world. `generationRecipeSchema` validates the seed, quality,
 domains, feature-owned parameters and complete physical/ecological,
 human and magical settings. `atlasParameterDefinitions` owns creator parameter
-defaults, limits, units and display labels; the existing nested domain schemas
-continue to own ecological and magical settings.
+defaults, limits, units and display labels; the nested domain schemas
+own ecological and magical settings.
 
 `prepareAtlasGeneration` binds those inputs to the configured causal sequence,
 checks actual registry contracts and produces ordered diagnostics. The reviewed
@@ -541,24 +571,23 @@ towns and cities (the World town size and how far a city draws its
 hinterland) and roads and travel (the traffic that makes a road, market
 travel and a polity's highways). Each alternative sets a bundle of feature
 settings; the society coefficients those bundles move are atlas parameters
-whose defaults are the constants the code used before, read once per cycle
-into the society workspace (`societyProfile`). Adjust opens the advanced
-panel on the underlying settings and the era schedule.
+with declared defaults, read once per cycle into the society workspace
+(`societyProfile`). Adjust opens the advanced panel on the underlying settings
+and the era schedule.
 
 The workflow edits version 2 `features`: `physical.impacts` omits the impact
 capability, `physical.river-incision` omits cutting while retaining river output,
 and `physical.glacial-sculpting` owns erosion, deposition and glacial relief
 together. Shared routing, ocean and material providers have explicit dependencies;
 they are capabilities rather than a permanent bulk of required support processes.
-The older `processes` object remains a compatibility input. The resolver maps its
-operation IDs to feature ownership and rejects conflicting coupled selections.
+The recipe's `processes` map is also accepted; the resolver maps its operation IDs
+to feature ownership and rejects conflicting coupled selections.
 
 Feature-owned cartographic descriptors compose existing settings and selections
 into curated choices for land, landscape and human geography. Independent
 choices preserve unrelated inputs; advanced departures appear as Custom. Exact
 controls and rich history/system editors remain available on request, with closed
-forms unmounted. The former feature catalogue, stage/family metadata and full
-execution inspector are removed. `projectGenerationSetup` supplies editable
+forms unmounted. `projectGenerationSetup` supplies editable
 controls, inherited restrictions and diagnostic owner IDs without copying the
 execution contract into the UI. One canonical draft owns shared epochs, ecology
 regimes, configured magic and cultural eras.
@@ -599,26 +628,102 @@ A landscape sequence follows Canonry's causal interleaving:
 4. Apply cold/ocean influences at the positions where physical processes consume them.
 5. Evolve coasts and retain the epoch's geographic consequences and causes.
 
-Profiles provide changed forcing for each epoch, for example:
+Profiles change each epoch's forcing: a temperature offset, a sea-level offset and
+multipliers on heat and cold sources. A warm period is warmer with higher seas and
+stronger heat sources; a glacial period is colder with lower seas and stronger cold
+sources. The epoch presets in code declare the values.
 
-| Epoch          | Temperature offset (°C) | Sea-level offset (m) | Heat-source multiplier | Cold-source multiplier |
-| -------------- | ----------------------: | -------------------: | ---------------------: | ---------------------: |
-| Warm period    |                      +4 |                   +8 |                    1.2 |                    0.1 |
-| Glacial period |                     -10 |                  -30 |                    0.3 |                    1.5 |
-| Present        |                       0 |                    0 |                    0.6 |                    0.4 |
-
-Fire, Aurora and Pressure settings shape their sources, activity and retained
-consequences. Preserve fracture-carried geothermal Fire, coldward Aurora
-accumulation and ice retention, and the deep-ocean Pressure locus with ocean
-propagation and coastal stress. Keep natural background, applied forcing and
-retained consequences distinguishable. Magic changes physical facts consumed
+Each system's settings shape its sources, activity and retained consequences; the
+mechanisms are in [Magic in the epoch sequence](#magic-in-the-epoch-sequence) and
+product specification 10.3. Natural background, applied forcing and retained
+consequences stay distinguishable. Magic changes physical facts consumed
 downstream; these fields do not by themselves implement social use or its costs.
 
-Child history starts from the applicable retained parent historical state and
-forcing. Advance finer local processes through corresponding epochs while
-preserving fixed spatial interfaces and parent-history mappings. Human eras
+Regional maps run no epochs: refinement develops the captured present, as described
+under [Geographic regional refinement](#geographic-regional-refinement). Human eras
 can reference physical epochs and supply their own durations and variables.
 Ordinary present-day edits preserve completed history.
+
+### Magic in the epoch sequence
+
+`World.magicSystems` holds the configured systems. Each declares its origins (sources
+located from physical geography, history, people or authored records), its stocks and
+the carriers that move them, and the propagation its medium implies. Meetings between
+systems are a separate list of confluences (`packages/domain/src/magicConfluences.ts`).
+A confluence that names a system the world lacks is valid and never holds.
+Configurations participate in the generation hash.
+
+Each epoch advects accumulated activity, first occurrence, storage and coastal
+history with Canonry's crust source map. Climate-phase systems (Fire, Pressure)
+alter heat, moved water and rock before hydrology; post-glacial systems (Aurora,
+Greenwood, Salt, Veil) act after ice responds, Aurora through the charge its ice holds,
+carrying ice persistence into the following epoch; every evaluation re-applies the
+shared forcings. Society-phase systems (Hallowed) are made of what people did: each
+society cycle, inside a round or in the present, the environmental refresh records
+tenure, walked ways and the dead on the mesh, evaluates society-phase systems and
+re-evaluates any system whose stocks people drew or deposited (cores cracked at a
+forge, seed planted, sap cleared), then reclassifies. A world without a human era
+never runs it. Final classification retains every feature mask, natural geography and
+physical materials. The surface class of a cell is the class with the largest coverage,
+with rule priority breaking ties, and a second surface records the runner-up where it
+holds a substantial share. An inland map has no fabricated pressure locus. A warm
+present may have no active Aurora while preserving its glacial activity history.
+
+### Named relief
+
+The atlas publishes lakes as geographic polygons and extracts named peaks,
+mountain ranges, valleys, craters, volcanoes, calderas, cirques, fjords,
+moraines, gorges, waterfalls and magical landmark regions alongside its river
+network. Landmark points identify connected regions; numerical masks retain
+their full extent. Completed session generations retain epoch and magical
+definitions when current settings change.
+
+Named relief reads the final surface. Detection distinguishes summit prominence,
+mountain relief, incised river flanks, glacially enclosed marine inlets, deposited
+moraines and ice-carved hollows. A crater must retain a rim above its floor and
+surrounding plain. Publication additionally evaluates the geographic significance
+described below, at the map's scale; a detected local landform need not become a
+name.
+
+Regions receive internal divisions only at continental extent for the map's scale.
+Terrain, drainage and broad climate transitions guide those divisions on every
+map. Small internal gaps can join a surrounding
+landscape while physical water remains separate.
+
+### Landmarks
+
+Major landmarks ([ADR 0006](adr/0006-landmarks-are-injected-causes.md)) run
+inside the epoch loop. `physical.landmarks` carries the counts of landscape and
+magic landmarks a world is owed and contributes `landmark.emplace` after each
+epoch's impacts and `landmark.maintain` before its history. At a top-level run
+the emplacement pass draws a seeded roster for the shortfall between the counts
+and the records already in the extent, each entry a kind and the epoch it forms
+in; at that epoch the kind's siting rule scores the physical field (plains for a
+cone, a plateau beside a large river for a canyon, a large river above base
+level for falls, a long fall of the land for a scarp, a heat maximum for a
+wellspring, deep ice for a vault, deep water for a locus, a wet wood for a
+heartwood, a dead lake in a dry basin for a pan), the best separated anchor is
+taken, measures are fitted to the site and the mesh, and the record is written to
+`world.landmarks` at the present-day position the remaining drift gives it.
+Records already present are walked back through the drift of the epochs still to
+come and re-formed. A landscape kind writes its causes: a mountain is
+constructed rock with resistant core, heat, fractures and volcanic activity; a
+canyon is resistant rims with a channel cut as incision and a river captured
+along a corridor; a ring structure is a dome of alternating resistance or an
+impact; an escarpment is a fault trace with the two sides offset; a falls is
+caprock and a step on a river. A magic kind writes a kept source record of its
+system into `world.magic`, which the system's own evaluation picks up.
+Maintenance measures each kind's signature from whole cells and applies the
+smallest correction through the same quantities, booking relief in
+`LandmarkMaintenance` and raising a source's strength to the cap its system's
+activity allows. Extraction re-measures at present, names each landmark once
+from the geography's vocabulary, publishes one `landmark` feature per record
+under the record's id (geology layer for landscape kinds, magic layer for magic
+kinds) with target and measured signature, drops detected landforms standing on
+a landscape landmark's claimed cells, and keeps the landmark's fault trace out
+of the faults layer. The great falls is latent at World: its step is held cell to
+cell. A Region places its captured landmarks on its own lattice through the landmark
+cause and sites none ([ADR 0008](adr/0008-regional-refinement-is-conditioned-amplification.md)).
 
 ## Fact validity and selected generation
 
@@ -639,7 +744,7 @@ The worker receives configuration, seed, scope and a workspace connection. It
 resolves generation inputs through the catalog and opens selected field channels
 from immutable resources without sending samples through the catalog worker.
 Status, stage progress and failure diagnostics live in memory. Terminating the
-worker cancels generation. Closing or reloading the tab discards the session.
+worker cancels generation. Closing or reloading the tab discards unsaved session state.
 
 Numerical working storage belongs to the execution worker. A run owns its initial
 state's working parts; a caller that needs that state afterwards builds another.
@@ -666,11 +771,27 @@ Shared crossings retain canonical endpoint order when recomputed. This bounds th
 decoded edge graph and tracing buffers; the native overlay and final geometry still require memory
 proportional to the feature being assembled.
 
+Processes touch the lattice in three shapes, with one code path at every map size. A
+local pass reads and writes a few bands at the same cell, block by block over pinned
+native arrays. A stencil pass reads a cell's lattice neighbours through the band. A
+connected pass walks the lattice through a frontier with per-cell reads and writes.
 Connected numerical passes keep frontiers resident and sized by the frontier;
 per-cell labels, ranks, marks and scratch channels are bands. Whole-world orderings
 stream over block runs held in bands. Society demands capture their eligible medium
 before applying changes, then stream the forcing across those cells. Local work
 queries traverse the sampling topology without collecting the entire surface.
+
+Frontiers and scratch structures (`packages/domain/src/hpc/`) hold their entries in
+typed arrays only, with no per-entry objects, string keys, proxies or comparator
+closures. They grow by doubling and are garbage-collected, never paged. A pop returns
+the item; its key or fields are read through an accessor. Float keys are ordered
+exactly through their bits, with negative zero equal to zero, and ties break by
+ascending cell. A monotone frontier needs no decrease-key: a popped entry whose key no
+longer matches the stored value is skipped. The set covers cell and record queues,
+keyed and multi-key heaps with top-k selection, radix ordering, union-find, grouping by
+label, bit sets, epoch stamps, typed lists, small integer sets and worklists.
+`make test-architecture` flags substitute shapes in generation code; a site no structure
+fits carries `// hpc-exempt: <reason>` on its line or the line before.
 
 The worker finalizes immutable Zarr resources and publishes their references with
 geographic records. Fields share masks and topology by reference. The catalog
@@ -684,25 +805,7 @@ intervening edits changed the world, keep
 the edits and report the out-of-date generation result. No automatic retry occurs.
 Domain processes remain independent of the browser adapter.
 
-## Behavior to establish
-
-- Reuse an actual process at two map profiles and twice in a configured sequence.
-- Compose GIS, magical and physical processes over shared working state.
-- Produce accumulated consequences through warm/glacial/present epochs with
-  changing variables, persistent state and reset forcing.
-- Produce repeatable geographic consequences from the same scoped inputs.
-- Diagnose stale facts caused by incorrect ordering and execute the corrected sequence.
-- Refine independent regional present geography without history replay; cave
-  development remains separate future scope.
-- Preserve a job's effective configuration when future profile settings change.
-- Publish selected regeneration safely across cancellation, validation failure
-  and concurrent authoring.
-
 ## Physical port and atlas adapter
-
-This section describes the current implementation. The
-[world-generation execution plan](#world-generation-with-physical-dimensions--execution-plan)
-below replaces its mesh-density calibration; that rewrite has not started.
 
 `packages/generation/src/canonry/` ports Canonry commit
 `0f62584c114863ffadeb5e29e021f5fce6b37a61`. The physical kernel uses the original
@@ -717,22 +820,23 @@ steps update private numerical arrays; projection and feature extraction update
 GIS state. Numerical checks cover ranges, landscape budgets, flow topology,
 river coverage and grounding. GIS validation runs when spatial state changes,
 at completed epoch boundaries and before publication. Authored samples are also
-composed into the native workspace before physical consumers run.
+composed into the native workspace before physical consumers run. Per-layer
+validation is consolidated in `layerValidation.ts`.
 
 The standalone `physicalProfile` retains Canonry's defaults. `atlasPhysicalProfile`
 adapts them for the atlas rather than copying the game's frozen-world setting:
 
 - Geological causes use world metres and sampling-independent initial sites.
-- The native snow threshold of 300 represents zero Celsius, with ten native
-  climate units per degree. Epoch temperature settings remain Celsius and sea
-  levels remain metres relative to the world's calibrated sea datum.
+- Native climate units map to Celsius through a declared freezing point and
+  scale. Epoch temperature settings remain Celsius and sea levels remain metres
+  relative to the world's calibrated sea datum.
 - The game's central warmth source and mandatory scattered warmth pockets are
   disabled. User-configured sources provide magical forcing. Land and sea ice
   form where the latitude climate is cold enough, without coverage quotas.
-- Each mantle plume's head moves 56–80 km per epoch along one heading, and that
-  epoch's cone forms at the new head. Older cones go dormant and leave a chain.
-  Fracture conductance moves with the plates, and 60 % of its excess over the
-  floor heals each later epoch, so cooled conduits stop venting.
+- Each mantle plume's head moves a bounded distance per epoch along one heading,
+  and that epoch's cone forms at the new head. Older cones go dormant and leave a
+  chain. Fracture conductance moves with the plates, and part of its excess over
+  the floor heals each later epoch, so cooled conduits stop venting.
 - Crust-bound magical amounts follow every internal material transport. Thermal
   forcing refreshes with climate; material feedback and elapsed storage advance
   once per epoch.
@@ -769,7 +873,7 @@ profile selects the physical scale; world dimensions determine how many cells
 are required. `resolution.ts` owns the presets and workload calculation shared
 by setup and generation. Setup shows live estimates for every preset and warns
 above the default world's Standard workload. This warning does not limit map
-size or detail. Numerical boundary support and authored refinement can add cells.
+size or detail. Numerical boundary support adds halo cells.
 
 All qualities execute the physical processes and configured epochs. Generation
 cost increases with physical extent and numerical detail. Scratch bands and the
@@ -815,18 +919,109 @@ separately from plume chains. Constructed rock moves and loads the crust after
 activity stops. Shelf exposure, basin opening and closure can therefore change
 connections without drawing a new coastline template.
 
-The retained Canonry regional adapters are legacy implementation, including their
-conserved-cell and boundary-band behavior. Independently owned regional maps
-dispatch to `regional/workflow.ts` before world preparation. They use the
-coupled regional schedule described above, without those numerical locks.
+Independently owned regional maps dispatch to `regional/workflow.ts`, which
+composes the world's registered initialization, projection and extraction with the
+regional schedule described above.
 
 The optional offline `tools/canonry-reference` program reads the original C#
 library to produce reference fixtures and `contracts.generated.json`. With the
 pinned reference repository at `../the-canonry-game` and .NET 8 available, run
-`make canonry-fixtures`. Fixtures compare mesh topology, hashing, default
-parameters and numerical field hashes across initial geology, transport and a
-complete two-epoch evolution. Ordinary app builds and CI consume committed
+`make canonry-fixtures`. Ordinary app builds and CI consume committed
 fixtures and need neither that repository nor .NET.
+
+### Latitude climate
+
+The climate steps keep Canonry's names, order and feature ownership. Their
+bodies implement a latitude-organised climate in place of the reference's
+radial frozen-world climate; the coefficients are declared in code.
+
+- `ocean-currents`: belt-driven drift turned along coasts into gyres
+  (`oceanGyres.ts`). Western boundaries are intensified and upwelling forms on
+  subtropical eastern boundaries. A sea-surface anomaly is carried along the current
+  from its source latitudes. Eddy mixing applies only where opposing drifts meet, so
+  a cell boundary forms a front instead of a step.
+- `temperature`: a global mean plus the epoch offset, a latitude profile and a lapse
+  rate, plus the sea-surface anomaly and external heat. Crustal heat warms only
+  geothermal vents. Hydrothermal heat carried by currents feeds sea ice and reefs,
+  not air temperature. A seasonal half-range grows with latitude and continentality.
+- `atmospheric-flow`: Hadley, Ferrel and polar cells by latitude, with terrain
+  deflection, belt speed, crest exposure, lee shelter and gap channelling
+  (`windTerrain.ts`).
+- `moisture-transport`: air columns marched downwind in one ordered pass
+  (`airColumn.ts`). They gather moisture over the sea and rain out with distance and
+  uplift; pressure-belt rainout comes from `belts.ts`. Marine heat, maritime
+  character and magical heat travel with the air; air relaxes toward part of the
+  magical forcing beneath it with travel, and that heat spreads across the wind.
+- `precipitation`: column precipitation with the epoch multiplier, in mm/year up to a
+  ceiling, split into rain and snow by the share of a sinusoidal year below freezing.
+  The equatorial convergence spreads to stand in for the rain belt's seasonal
+  migration; subtropical subsidence dries the subtropics and caps uplift rain there.
+- `land-ice-mass-balance` and `sea-ice`: ice extent follows mass balance and cold
+  rather than a coverage quota. Epoch glaciation scales growth and melting scales with
+  the deficit. Current, wave exposure and local variation move the sea-ice edge only
+  slightly, so polar seas well below freezing freeze.
+
+**World frame.** The initial latitude frame is inherited by regions and places
+the map between equator and poles independently of its physical size. An
+equal-area projection or even-degree spacing maps northing to latitude.
+
+Map boundary is a separate world setting. Cylinder, the new-world default,
+joins east and west for crust, terrain, transport, drainage, climate and display.
+The triangular world lattice has reciprocal short links across the seam;
+geographic noise and reconstructed samples share the same period. Extracted
+geometry is cut into chart pieces, retaining network junctions and directed river
+profiles. The editor repeats the metre chart and normalizes edits into it.
+The Ocean surrounded choice is shown unavailable. Configurations with an explicit
+legacy longitude choice retain that choice.
+
+The setup's Latitude frame choice offers a northern band, both hemispheres
+and pole-to-pole coverage. It does not change the map boundary. Pole-to-pole
+cylinders retain local terrain and the same metre-scale noise up to their
+north/south edges. Those faces close drainage and reflect transported material
+locally; they do not merge longitudes into a single point or provide a shortcut
+through a spherical pole. The connected ocean starts in the deepest basin. Physical
+transport lengths stay in map kilometres; only the front-mixing width is capped in
+degrees of latitude, so a small full-globe map keeps distinct belts. A numerical
+patch without a world frame sits at the mid latitude.
+
+**Rainfall regimes.** The `rainfall` setting scales moisture supply (column
+saturation and the precipitation baseline), not rain output. Its Dry, Mixed and
+Wet anchors live in one table, `rainfallRegimes`, read by the setup choice and the
+Arid and Wet world presets. Each anchor is fitted to its own outcome: Dry stays
+desert and steppe; Mixed gives Earth-like equatorial, tropical-margin, dry-belt and
+westerly-coast rainfall; Wet is wetter than Mixed everywhere. Ecology reads plant
+water as the aridity index, precipitation over a temperature-dependent potential
+evaporation, not column humidity.
+
+### River centrelines
+
+The physical lattice is the drainage solver, but its triangle-centre edges
+are not the published river geometry. `riverPaths.ts` removes cell-scale stair
+steps along the dominant upstream/downstream path, keeping each relaxed node
+inside its original triangle. All reaches use the same junction position.
+Headwaters and water outlets remain fixed. Cubic segments follow the resulting
+channel, with control points constrained to the convex union of each pair of
+adjacent drainage triangles. This prevents smoothing across an unrelated valley
+or watershed. The main stem shares its tangent through confluences; tributaries
+join without being forced to turn upstream.
+
+Curves are sampled with a geometric error tolerance, and elevation, width,
+depth, discharge and catchment-area profiles are interpolated along their
+directed source spans. The feature, network, clipping, inspection and
+export paths consume this one geometry. Flow targets, water budgets, erosion
+and authored geometry are unchanged, so the smoothing removes lattice artifacts
+without changing the terrain.
+
+### Inland work-area drainage
+
+Open rectangular meshes describe a finite planar work area. If an epoch leaves
+no connected ocean in that area, priority flooding uses its boundary as the
+external drainage outlet. Ocean-connected drainage is the default whenever
+an ocean is present; subsequent epochs recompute the roots. This preserves sea
+level and terrain instead of creating water to satisfy the solver. This numerical
+drainage boundary is separate from the inherited parent-boundary fields used by
+refinement. Cylinder has no east/west outlet; pole-to-pole coverage also closes the
+polar faces. Transport uses the planar metre chart.
 
 ## Reference and implementation state
 
@@ -842,1692 +1037,10 @@ Read the corresponding Canonry bodies before adapting their structure:
 The TypeScript runner applies registered processes to one working map in a browser
 worker. The workspace publishes semantic field groups through immutable resources, retains
 completed causes by area, and uses direct shared domain validation for edits.
-World generation, located refinement, manual editing, templates, cancellation and
-undo have browser journeys. The physical kernel is a source-traceable port;
-atlas profile settings, GIS projection and user-configurable magic are explicit
-adaptations. The cultural, political and macro-settlement generators now use the
-aggregate society state described above; site/interior layouts retain their
-existing processes. Earlier SQL migration and backend source are historical material
-outside the current execution path.
-
-## Completion work
-
-The implementation history below follows Sulion plan `01c3a7d3-a35c-425c-b4c1-b9640d8bd670`.
-Its generalized magic design is superseded by the 2026-10-22 correction above;
-the implementation descriptions remain evidence of what was built.
-The requested outcome is complete Canonry physical and magical generation in the
-browser, including configurable epochs, impacts, glacial history and the Fire,
-Aurora and Pressure systems. Backend and persistence remain outside this work.
-The completed implementation milestones below establish process coverage, not
-complete reference fidelity or satisfactory geographic output. The subsequent
-investigation found generation, projection and display gaps documented below.
-
-1. Physical history and configuration: expose event and landscape controls,
-   epoch duration and ordering, and extract geographic features from the native
-   fields. Check declining impacts and retained ice/erosion histories.
-2. Configurable magic and causal integration: port fracture propagation, cold
-   drainage and ocean rays; apply heat, ice, resistance, coastal, living (quickening,
-   stillness) and ocean (upwelling, sea surface, fog) feedback in the physical
-   sequence. Presets use declarative source, propagation, effect,
-   feature and interaction definitions. Retain and advect accumulated histories.
-3. Workflow and publication: configure and combine those systems through the
-   existing generation and magic surfaces, expose natural/final geography and
-   history channels, run focused generation checks and ordinary CI.
-
-Implementation choices at that stage: the shared mesh and process runner used
-transient arrays and represented the three systems through a bounded declarative
-vocabulary. The earlier rule treating their identities as presets and forbidding
-branches on system names is withdrawn. Preserve shared process contracts where
-useful, and implement specific behavior where the authored systems require it.
-Existing manually placed effects remain usable; this documentation correction
-does not migrate runtime data. The numerical-scaling notes here describe the
-initial port; later sections record metre conversion. Cultural and built
-generation are atlas processes rather than missing Canonry physical layers.
-
-At each milestone, evidence is the resulting geography and focused behavioral
-checks. Deployment uses the existing platform workflow without repeated live
-walkthroughs or additional infrastructure.
-
-The physical sequence now exposes meteor count/size, volcanic construction,
-plate drift, glacier transport and coastal erosion. Epochs can be ordered, named
-and configured independently; presets include repeated glacial cycles and the
-four Ice Remembers epochs. Physical algorithms still take per-epoch activity
-strengths as in Canonry. Duration records elapsed years and controls annual
-local-source storage; it does not turn the geological model into a yearly solver.
-
-`World.magicSystems` holds declarative systems. Source strategies select geothermal
-maxima, cold/high terrain, deep-ocean basins or authored map sources. Propagation
-strategies port Fire's priority-queue fracture transport, Aurora's coldward
-accumulation and ice retention, and Pressure's standing rays, coastal rays and
-wandering wakes. Radial propagation supports located variants in the current
-implementation. Definitions currently specify feedback, feature thresholds,
-hysteresis and interactions, including thermal war rims, steam fractures and
-pressure/Aurora breaches. Configurations participate in the generation hash.
-
-Each epoch advects accumulated activity, first occurrence, storage and coastal
-history with Canonry's crust source map. Climate-phase fields (Fire, Pressure)
-alter heat, moved water and rock before hydrology; post-glacial fields (Aurora)
-act through the charge their ice holds and carry ice persistence into the
-following epoch; every evaluation re-applies the shared forcings. Society-phase
-fields are made of what people did: each society cycle, inside a round or in the
-present, the environmental refresh records tenure, walked ways and the dead on
-the mesh, evaluates society-phase systems and re-evaluates any system whose
-stocks people drew or deposited (cores cracked at a forge, seed planted, sap
-cleared), then reclassifies. A world without a human era never runs it. Final
-classification retains every
-feature mask, natural geography, physical materials and a priority-selected
-surface. An inland refinement has no fabricated pressure locus. A warm present
-may have no active Aurora while preserving its glacial activity history.
-
-The atlas publishes lakes as geographic polygons and extracts named peaks,
-mountain ranges, valleys, craters, volcanoes, calderas, cirques, fjords,
-moraines, gorges, waterfalls and magical landmark regions alongside its river
-network. Landmark points identify connected regions; numerical masks retain
-their full extent. Completed session generations retain epoch and magical
-definitions when current settings change.
-
-Named relief reads the final surface. Detection distinguishes summit prominence,
-mountain relief, incised river flanks, glacially enclosed marine inlets, deposited
-moraines and ice-carved hollows. A crater must retain a rim above its floor and
-surrounding plain. Publication additionally evaluates the geographic significance
-described below, at the map's scale; a detected local landform need not become a
-name.
-
-Regions receive internal divisions only at continental extent for the map's scale.
-Terrain, drainage and broad climate transitions guide those divisions on every
-map. Small internal gaps can join a surrounding
-landscape while physical water remains separate.
-
-Major landmarks ([ADR 0006](adr/0006-landmarks-are-injected-causes.md)) run
-inside the epoch loop. `physical.landmarks` carries the counts of landscape and
-magic landmarks a world is owed and contributes `landmark.emplace` after each
-epoch's impacts and `landmark.maintain` before its history. At a top-level run
-the emplacement pass draws a seeded roster for the shortfall between the counts
-and the records already in the extent, each entry a kind and the epoch it forms
-in; at that epoch the kind's siting rule scores the physical field (plains for a
-cone, a plateau beside a large river for a canyon, a large river above base
-level for falls, a long fall of the land for a scarp, a heat maximum for a
-wellspring, deep ice for a vault, deep water for a locus, a wet wood for a
-heartwood, a dead lake in a dry basin for a pan), the best separated anchor is
-taken, measures are fitted to the site and the mesh, and the record is written to
-`world.landmarks` at the present-day position the remaining drift gives it.
-Records already present are walked back through the drift of the epochs still to
-come and re-formed. A landscape kind writes its causes: a mountain is
-constructed rock with resistant core, heat, fractures and volcanic activity; a
-canyon is resistant rims with a channel cut as incision and a river captured
-along a corridor; a ring structure is a dome of alternating resistance or an
-impact; an escarpment is a fault trace with the two sides offset; a falls is
-caprock and a step on a river. A magic kind writes a kept source record of its
-system into `world.magic`, which the system's own evaluation picks up.
-Maintenance measures each kind's signature from whole cells and applies the
-smallest correction through the same quantities, booking relief in
-`LandmarkMaintenance` and raising a source's strength to the cap its system's
-activity allows. Extraction re-measures at present, names each landmark once
-from the geography's vocabulary, publishes one `landmark` feature per record
-under the record's id (geology layer for landscape kinds, magic layer for magic
-kinds) with target and measured signature, drops detected landforms standing on
-a landscape landmark's claimed cells, and keeps the landmark's fault trace out
-of the faults layer. The great falls is latent at World: its step is held cell to
-cell and its lip, plunge pool and gorge belong to regional refinement. A child
-run re-forms its parent's landmarks and sites none.
-
-## Generation and display findings (2026-10-18)
-
-The core physical operations and all three magical propagation mechanisms are
-implemented. End-to-end semantic parity remains incomplete because specific
-classification, causal timing and feature-grouping operations are missing or
-changed, as recorded below. Different numerical results do not establish missing
-operations. Output measurements assess geographic consequences; implementation
-comparison establishes whether the semantic operations are present.
-
-The investigation read the original specification in
-`.sulion-paste/world_atlas_creator_design.md`, relevant generation and rendering
-bodies in the local Canonry reference, and the atlas generation, projection and
-display code. Existing reference captures were inspected; they were not newly
-generated comparison runs. The original specification requires geographically
-meaningful current maps and refinement. A history slider and a 3D renderer are
-not prerequisites for that behavior.
-
-### Observed generation behavior
-
-Read-only diagnostics at application commit
-`7f4635adcc37e4cfd2b6a07318ea6e1a2fe506f6` used seed **104729**, default
-parameters and the default Formation / Cold age / Present epochs.
-
-For the default **4,000 km × 3,000 km** world at **Standard** quality with
-physical and magical generation:
-
-| Measurement                                                |     Result |
-| ---------------------------------------------------------- | ---------: |
-| Maximum native elevation inside the world rectangle        |   971.84 m |
-| Maximum native elevation across the generated content disk | 1,469.53 m |
-| Native peaks / ridges / passes inside the world            |  0 / 0 / 0 |
-| Native peaks / ridges / passes across the content disk     | 3 / 10 / 5 |
-| Exported crater / gorge / waterfall features               |  4 / 4 / 3 |
-| Exported river / lake features                             |     17 / 5 |
-
-The few surviving peaks and ridges are outside the world rectangle. The mapping
-in `canonry/atlasWorkspace.ts` fits a circular native domain around the rectangular
-world using its diagonal; generation therefore spends part of its domain outside
-the atlas extent. The measurements establish a consequential extent mismatch,
-but do not establish its best correction.
-
-A separate **100 km × 100 km**, Standard, **physical-only** run traced the maximum
-elevation inside its world rectangle through the configured process sequence:
-
-| Stage                                                  | Maximum elevation |
-| ------------------------------------------------------ | ----------------: |
-| Initial flexure, after initial geological construction |           2,177 m |
-| First epoch, after plate advection                     |           1,373 m |
-| First epoch, after mass wasting                        |           1,247 m |
-| Final classification, after three epochs               |             871 m |
-
-That trace locates relief loss within generation, before GIS projection. It does
-not prove whether transport, support, erosion, profile adaptation or their
-combination is mathematically wrong. Do not infer a root cause from those maxima
-alone. Current peak classification requires 1,250 m elevation and ridge
-classification requires 1,000 m, alongside other criteria; this run cannot produce
-either at its final elevation. Lowering classification thresholds alone would
-not resolve the loss of relief.
-
-The corresponding 100 km square with magic ended at 952.25 m, also with no native
-peaks or ridges. It retained impact-rim, gorge and waterfall cells in both the
-native arrays and published raster. Resolution and raster projection therefore
-do not explain all missing detail. Results vary with extent, quality and magic;
-these measurements are examples, not a claim about every seed.
-
-### Known algorithm and unit limitations
-
-- `canonry/atlasProfile.ts` scales selected distances and step counts against
-  the reference triangle count and adjusts two height-per-step parameters.
-  World extent does not participate in that profile calculation. Horizontal
-  metric meaning is introduced separately through `metresPerStep` in the
-  workspace. This is not consistent physical dimensional treatment throughout
-  the algorithms. Elevations already use 1,024 fixed-point subunits per metre.
-- `canonry/geography.ts::measureSlopes` stores neighboring elevation differences
-  without dividing by horizontal distance. `canonry/flowGraph.ts::contributingArea`
-  accumulates triangle counts, which `canonry/fluvial.ts` uses directly in its
-  erosion calculation. Converting output distance and discharge channels later
-  does not make those calculations independent of sampling density or extent.
-  These lattice-based calculations also occur in the reference. They establish
-  work needed for the atlas's metric model, not an omitted reference algorithm.
-- `canonry/atlasSequence.ts` retains the earlier regional adapter for legacy
-  callers. Independent-map refinement bypasses that sequence and the world
-  physical-field initializer entirely.
-- Sea-ice behavior, atlas climate/profile settings and configurable magic contain
-  deliberate adaptations. These require behavior checks in the atlas context;
-  source provenance alone does not validate them.
-
-### Bounded source inventory
-
-Reference checkout: `../the-canonry-game` at
-`0f62584c114863ffadeb5e29e021f5fce6b37a61`, matching the port's pinned commit.
-The comparison follows `PhysicalGeographyEvolutionSession` and
-`IceRemembersWorldGenerationOrchestrator`, including final classification and
-`PhysicalGeologicalFeatureIdentification`. The separate non-epoch
-`PhysicalGeographyPipeline.CreateDefault` has a different schedule; it must not
-be mistaken for a missing phase in the reference's multi-epoch orchestrator.
-
-The physical source has **54 layer classes and 55 contracts**. `MassWastingLayer`
-supplies both ordinary and post-fluvial contracts. All 55 have executable native
-implementations and appear in `physicalSchedule` with an epoch. A one-epoch
-schedule contains 149 invocations: 23 initial geology, 21 epoch geology, 10 climate,
-25 hydrology, 6 glaciation, 26 post-glacial reconciliation, 2 coastal, 1 history
-and 35 final-state steps. Repeated climate, drainage and ice passes are present.
-
-The following table enumerates implementation coverage. Names in its first
-column are C# classes with the `Layer` suffix omitted; TypeScript paths are under
-`packages/generation/src/canonry/`. These implementations contain the physical
-operations, including material transport, orogenic construction, impact
-excavation/rims/ejecta, water-budget lakes, erosion/deposition and ice response.
-All rows receive the atlas profile adaptations; the additional execution changes
-are described after the table. Exact numerical equivalence is not required.
-
-| Reference class             | Native TypeScript implementation                               |
-| --------------------------- | -------------------------------------------------------------- |
-| AtmosphericFlow             | `atmosphere.ts::atmosphericFlow`                               |
-| Bathymetry                  | `geography.ts::bathymetry`                                     |
-| CoastalDetail               | `coastalDetail.ts::coastalDetail`                              |
-| CoastalErosion              | `coastalEvolution.ts::coastalErosion`                          |
-| ContinentalDomain           | `provinces.ts::continentalDomains`                             |
-| ContinentalMarginEvolution  | `continentalMargins.ts::continentalMarginEvolution`            |
-| ContinentalSuture           | `sutures.ts::continentalSutures`                               |
-| CrustalSupport              | `support.ts::crustalSupport`, with and without ice load        |
-| DeltaFormation              | `deltas.ts::deltaFormation`                                    |
-| DrainageConditioning        | `drainageFlood.ts::drainageConditioning`                       |
-| DrainageGuidance            | `flowGuidance.ts::drainageGuidance`                            |
-| ExternalCoastalForcing      | `coastalEvolution.ts::externalCoastalForcing`                  |
-| Floodplain                  | `floodplains.ts::floodplains`                                  |
-| FlowRouting                 | `routing.ts::flowRouting`                                      |
-| FluvialErosion              | `fluvial.ts::fluvialErosion`                                   |
-| FractureNetwork             | `fractures.ts::fractureNetwork`                                |
-| Geothermal                  | `geothermal.ts::geothermal`                                    |
-| GlacialDeposition           | `glacialEvolution.ts::glacialDeposition`                       |
-| GlacialErosion              | `glacialEvolution.ts::glacialErosion`                          |
-| GlacialLandform             | `glacialLandforms.ts::glacialLandforms`                        |
-| GlacialMeltwater            | `glacialEvolution.ts::glacialMeltwater`                        |
-| GlacialRunoff               | `glacialEvolution.ts::glacialRunoff`                           |
-| IceFlow                     | `iceFlow.ts::iceFlow`                                          |
-| ImpactCratering             | `impacts.ts::impactCratering`                                  |
-| LakeBasin                   | `lakes.ts::lakeBasins` and `lakeStage.ts`                      |
-| LandIce                     | `landIce.ts::landIce`                                          |
-| LandformClassification      | `landforms.ts::landformClassification`                         |
-| Landmass                    | `geography.ts::landmasses`                                     |
-| LandscapeInitialization     | `surface.ts::initializeLandscape`                              |
-| LithosphericFlexure         | `support.ts::lithosphericFlexure`                              |
-| MantlePlumeRoot             | `plumes.ts::mantlePlumeRoots`                                  |
-| MarineSedimentation         | `continentalMargins.ts::marineSedimentation`                   |
-| MassWasting                 | `massWasting.ts::massWasting`, ordinary and post-fluvial modes |
-| Moisture                    | `climate.ts::moisture`                                         |
-| OceanConnectivity           | `ocean.ts::oceanConnectivity`                                  |
-| OceanCurrent                | `currents.ts::oceanCurrents`                                   |
-| OceanDistance               | `geography.ts::oceanDistance`                                  |
-| OrogenicConstruction        | `orogeny.ts`, `orogenicComponents.ts`, `orogenicShape.ts`      |
-| PhysicalEpochHistory        | `validation.ts::epochHistory`                                  |
-| PhysicalGeographyValidation | `validation.ts::validatePhysical`                              |
-| PlateAdvection              | `advection.ts`, `transportPlan.ts`, `transportHistory.ts`      |
-| Precipitation               | `climate.ts::precipitation`                                    |
-| RiverChannelGeometry        | `channelGeometry.ts::riverChannelGeometry`                     |
-| RiverNetwork                | `rivers.ts::riverNetwork`                                      |
-| Runoff                      | `climate.ts::runoff`                                           |
-| SeaIce                      | `seaIce.ts::seaIce`                                            |
-| SedimentTransport           | `fluvial.ts::sedimentTransport`                                |
-| TectonicEpoch               | `margins.ts::tectonicEpoch`                                    |
-| TectonicMargin              | `margins.ts::tectonicMargins`                                  |
-| TectonicProvince            | `provinces.ts::tectonicProvinces` and `provinceSites.ts`       |
-| TectonicUplift              | `uplift.ts::tectonicUplift`                                    |
-| Temperature                 | `climate.ts::temperature`                                      |
-| VolcanicConstruction        | `volcanism.ts::volcanicConstruction`                           |
-| WarmthSource                | `warmth.ts::warmthSources`                                     |
-
-This investigation read every physical layer's `Apply` body and the native
-implementations, with detailed helper comparison for the landform classifier,
-fluvial erosion and mass wasting. It did not exhaustively compare every private
-helper in all 54 C# classes. The existing reference fixture tests passed, but
-their numerical comparisons are not the user's parity criterion or a prerequisite
-for adapting these operations to metres.
-
-For world generation, the atlas preserves the multi-epoch physical sequence.
-Its declared differences include profile/density scaling, disabled central
-warmth/pockets, per-epoch impact and volcanic controls, hotspot tracks with
-fracture healing, authored-sample restoration and the latitude climate described below. Regional generation
-additionally skips the 23 initial-geology and 21 per-epoch geology invocations.
-
-#### Latitude climate
-
-The climate steps keep Canonry's names, order and feature ownership. Their
-bodies implement a latitude-organised climate in place of the reference's
-radial frozen-world climate.
-
-| Step                                  | Atlas operation                                                                                                                                                                                                                                                                                                                                                                           |
-| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ocean-currents`                      | Belt-driven drift turned along coasts into gyres (`oceanGyres.ts`). Western boundaries are intensified. Upwelling forms on subtropical eastern boundaries. A sea-surface anomaly is carried along the current from its source latitudes. Eddy mixing over 250 km applies only where opposing drifts meet, so a cell boundary forms a front instead of a step.                             |
-| `temperature`                         | Global mean + epoch offset − 28 °C × P2(sin latitude) − 6.5 °C/km lapse, plus sea-surface anomaly and external heat. Crustal heat warms only geothermal vents, by up to about 3 °C. Hydrothermal heat carried by currents feeds sea ice and reefs, not air temperature. A seasonal half-range grows with latitude and continentality.                                                     |
-| `atmospheric-flow`                    | Hadley, Ferrel and polar cells by latitude, with terrain deflection, belt speed, crest exposure, lee shelter and gap channelling (`windTerrain.ts`).                                                                                                                                                                                                                                      |
-| `moisture-transport`                  | Air columns marched downwind in one ordered pass (`airColumn.ts`). They gather moisture over the sea and rain out with distance and uplift; pressure-belt rainout comes from `belts.ts`. Marine heat, maritime character and magical heat travel with the air. Air relaxes toward half the magical forcing beneath it over 300 km of travel, and that heat spreads 60 km across the wind. |
-| `precipitation`                       | Column precipitation with the epoch multiplier, in mm/year up to a 4 m ceiling, split into rain and snow by the share of a sinusoidal year below freezing. The equatorial convergence spreads over 15° to stand in for the rain belt's seasonal migration; subtropical subsidence dries 20–35° and also caps uplift rain there.                                                           |
-| `land-ice-mass-balance` and `sea-ice` | Ice extent follows mass balance and cold rather than a coverage quota. Epoch glaciation scales growth. Melting scales with the deficit. Current, wave exposure and local variation move the sea-ice edge by a few degrees only, so polar seas well below freezing freeze.                                                                                                                 |
-
-**World frame.** The initial latitude frame is inherited by regions and places
-the map between equator and poles independently of its physical size. An
-equal-area projection or even-degree spacing maps northing to latitude.
-
-Map boundary is a separate world setting. Cylinder, the new-world default,
-joins east and west for crust, terrain, transport, drainage, climate and display.
-The triangular world lattice has reciprocal short links across the seam;
-geographic noise and reconstructed samples share the same period. Extracted
-geometry is cut into chart pieces, retaining network junctions and directed river
-profiles. The editor repeats the metre chart and normalizes edits into it.
-Nothing retains open edges. Ocean surrounded remains unavailable pending an
-ocean-rim condition that survives the physical epochs. Existing configurations
-with an explicit legacy longitude choice retain that choice.
-
-The setup's Latitude frame choice offers a northern band, both hemispheres
-and pole-to-pole coverage. It does not change the map boundary. Pole-to-pole
-cylinders retain local terrain and the same metre-scale noise up to their
-north/south edges. Those faces close drainage and reflect transported material
-locally; they do not merge longitudes into a single point or provide a shortcut
-through a spherical pole. The connected ocean starts in the deepest basin. Physical
-transport lengths stay in map kilometres; only the front-mixing width is capped
-at 6° of latitude, so a small full-globe map keeps distinct belts. A numerical
-patch without a world frame sits at the mid latitude.
-
-**Rainfall regimes.** The `rainfall` setting scales moisture supply (column
-saturation and the precipitation baseline), not rain output. Its Dry (0.07),
-Mixed (1) and Wet (2) anchors live in one table, `rainfallRegimes`, read by the
-setup choice and the Arid and Wet world presets. Each anchor is fitted to its own
-outcome: Dry stays desert and steppe and no wetter than the former arid preset;
-Mixed gives about 2 m at the equator, 1–1.6 m on tropical margins, under 0.35 m
-in the dry belt and about 1 m on westerly coasts; Wet is at least 1.4 times Mixed
-everywhere. Ecology reads plant water as the aridity index, precipitation over
-potential evaporation (0.3 + 0.045 m/year per °C), not column humidity.
-Open-boundary drainage and inherited fields are atlas extensions. These are
-specific changes to execution and inputs, not missing meteor or ice-age modules.
-Per-layer validation is consolidated in `layerValidation.ts`; it is not a literal
-port of every reference layer's `Validate` body.
-
-### Magic semantic operations
-
-The source has **15 magic/domain layer classes**. All their implementation
-bodies and the shared region classifier were read alongside the atlas code.
-The same core source-selection, propagation, feedback and history operations
-are present for Fire, Aurora and Pressure. The table separates those mechanisms
-from specific missing behavior. Seed mixing, rounding, thresholds and exact
-field values are not semantic omissions by themselves.
-
-| Reference layer                      | Semantic operations in the atlas                                                                                                                                   | Status or material gap                                                                                                                                                                                    |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| FireField                            | Select geothermal maxima with spacing; seed sources; propagate intensity through a priority queue with fracture-dependent traversal cost                           | Present. Core identity exists as source data and a feature rule; omission of a duplicate native flag is a representation difference. The separate high-intensity magma-chamber classification is missing. |
-| FireClimateFeedback                  | Replace the previous heat contribution, alter temperature and melt ice; retain forcing for later climate consumers                                                 | Present. The final invocation has different causal timing, described below.                                                                                                                               |
-| MagicRockResistance                  | Harden or weaken geological rock from magical intensity before physical erosion consumes resistance                                                                | Present; generalized to configurable system effects.                                                                                                                                                      |
-| AuroraField                          | Derive cold/altitude input; route accumulation toward colder neighbors; retain some in ice; derive intensity and apply activity strength                           | Present. Different arithmetic does not establish a missing propagation operation.                                                                                                                         |
-| PressureField                        | Select a deep-ocean basin locus; trace standing rays and coastal rays with reflections; trace wandering wakes and mark rogue impacts                               | Present. Inland scopes permit no locus. Locus identity exists in source/feature data without a duplicate native flag.                                                                                     |
-| MagicAdvection                       | Carry accumulated magical activity and first occurrence using the crust source mapping                                                                             | Present. Coastal first-occurrence data is missing because it is never recorded. Configurable stored influence is an addition.                                                                             |
-| MagicHistory                         | Accumulate activity and record first occurrence per system across configured epochs                                                                                | Present. Shared epoch execution replaces the separate reference magic-epoch counter; absence of that duplicate counter is not a missing history operation.                                                |
-| PressureCoastFeedback                | Read adjacent-ocean pressure, waves and currents; apply coastal forcing; accumulate its history                                                                    | Present, except recording the first epoch of coastal influence is missing.                                                                                                                                |
-| NaturalSurface                       | Classify physical land/water, ice, fluvial features, relief and climate through the reference decision ladder                                                      | Present. Fixed atlas defaults versus reference profile settings are a configuration difference.                                                                                                           |
-| FireFeature                          | Classify core vents, thermal veins, hot springs, hydrothermal vents, basalt flats and thawed halos; grow connected regions from seeds through retention predicates | Present. Zero activity can still publish a core from selected source data, so inactive-source feature suppression is incomplete. Magma chambers are the separate missing classification noted above.      |
-| AuroraFeature                        | Classify fields, light wells, frost prisms and melt lines using causal predicates and connected retention                                                          | Present.                                                                                                                                                                                                  |
-| PressureFeature                      | Classify the locus, crush zones, wake scars, interference lattice and rogue impacts                                                                                | Present.                                                                                                                                                                                                  |
-| MagicInteraction                     | Derive thermal war rims, steam fractures and pressure/Aurora breaches from overlapping causes                                                                      | Present, but the rules belong to the Pressure definition; disabling it also disables the Fire/Aurora interaction.                                                                                         |
-| FinalSurface                         | Preserve individual feature masks and choose a dominant surface by precedence                                                                                      | Present. Different default priorities are configuration differences, not an omitted selection operation.                                                                                                  |
-| IceRemembersMicrogeographyValidation | Check generated magic state and update dependency facts                                                                                                            | Reference-specific checks/facts are absent from the atlas magic actions. This is an execution-contract difference, not evidence of a missing terrain-generating mechanism.                                |
-
-The configurable examples contain **all 18 significant magic feature kinds**
-(6 Fire, 4 Aurora, 5 Pressure and 3 interactions). A magma chamber is an additional
-physical feature flag in the reference, not one of those 18 kinds. Its missing
-classification must therefore remain explicit despite the complete feature-kind
-list.
-
-The final feedback order is a semantic difference: the reference finalizes
-physical climate, drainage, ice and classification, then reevaluates Fire and its
-heat feedback, Aurora, Pressure and feature classification. The atlas evaluates
-final Fire/heat before final drainage and ice, and post-glacial systems after
-physical validation. That changes which physical operations consume refreshed
-magical forcing. Describe and resolve the intended causal relationship; do not
-try to repair it by chasing identical output arrays.
-
-The earlier numerical Aurora counterexample has been removed from the parity
-assessment. Both implementations contain input, coldward routing, accumulation,
-ice retention, activity scaling and saturation. A numerical difference between
-them is not evidence that one of those semantic operations is absent.
-
-### Geographic extraction comparison
-
-`PhysicalGeologicalFeatureIdentification` sits outside the physical layer
-classes and retains triangle membership for named features. The atlas publishes
-GIS geography using summit prominence, surviving causal crater footprints,
-water-body polygons and connected river reaches. River reaches retain their
-station profiles; they do not imply a separate whole-river-system identity.
-Additional landforms and magical places use their supported site, course and
-area geometry. Field-only geography remains distinct from named features.
-
-### Recommended order
-
-**Convert the generation algorithms to declared world units next**, as requested
-in [backlog item 1](backlog.md). This recommendation does not assume that every
-process is already complete or correct. The conversion should include comparison
-with the actual reference bodies and correction of demonstrated algorithm gaps
-in each process being changed. Preserve deterministic process order and causal
-state; retain meaningful metre-based elevations already present.
-
-The bounded comparison above must remain the starting inventory. The physical
-port is not missing whole event or epoch modules; its atlas scaling and domain
-mapping need work. Magic and extraction have separately identified differences
-that metre conversion will not fix. Carry these as explicit work rather than
-assuming generation parity and assigning all remaining defects to display.
-
-Distances and areas must derive from mesh geometry in world units; slopes must
-use rise over physical run. Erosion, transport, runoff and their parameters need
-consistent declared dimensions. Declare per-epoch quantities explicitly rather
-than implying a yearly physical solver. Compare representative extents and
-qualities so detail changes sampling rather than the meaning of a parameter.
-
-Then resolve domain coverage and relief preservation using stage measurements,
-carry meaningful landform geometry through extraction/projection, and render the
-physical categories and networks recognizably. Domain coverage belongs with the
-metric workspace work where their geometry overlaps. Metre conversion alone
-will not recover discarded feature geometry or implement missing cartographic
-display behavior. Backend, persistence, MCP and migrations remain out of scope.
-
-## World generation with physical dimensions — execution plan
-
-Sulion plan: `c024ba6d-9344-47a2-b9ac-10a6c3faf42a`.
-State: execution authorized for all M0–M4 by the user's subsequent request.
-Implementation is local; deployment is outside this plan. Expand milestones just
-before execution and keep their changes and evidence in this document.
-
-### Outcome and agreed scope
-
-For the same world seed, extent and physical settings, Standard and Fine describe
-the same physically sized geography. Fine increases sampling and resolves smaller
-detail; it does not systematically shrink rivers, mountain belts, craters,
-glaciers, coastal features or magical influence. Defaults should give broadly
-Earth-like dimensions with substantial geographic variation.
-
-User requirements come from the 2026-10-18 conversation: size and dimension aware
-generation rather than an output conversion; preserve semantic algorithm parity
-rather than numerical equivalence; implement this first for **top-level world
-generation only**. The five-part direction immediately preceding this request
-establishes the work: physical profile, world-space causes, dimensional operators,
-physical river sizing and terrain wavelengths. The
-[product contract](product-spec.md#3-vocabulary-and-conceptual-separation) already
-separates extent, profile, quality and cartographic scale; these are not new
-product modes.
-
-The world physical and configurable magical processes, extraction and consumers
-of their changed quantities are in scope. Regional/local/site/interior generation
-and inherited drainage are not being redesigned. Make necessary shared-call and
-unit-contract compatibility changes without implementing regional refinement.
-Political/cultural generator redesign remains backlog item 3; new cartographic
-toolsets and cosmetic styling remain separate work. Existing world human/built
-consumers must continue to read valid quantities and must not introduce a
-quality-dependent size conversion.
-
-Keep the browser worker, one shared process state, deterministic epochs, local
-catalog publication, authored protection and undo. No backend, execution persistence, MCP,
-recovery, new deployment machinery or automatic resource caps.
-
-### Implementation choices and boundaries
-
-These choices are the proposed implementation of the agreed direction. Revise a
-choice when source inspection or representative output supports a simpler complete
-solution; do not treat an agent-selected mechanism as another user requirement.
-
-- **Physical profile and sampling are separate inputs.** Define distances,
-  heights, areas, volumes, fluxes and dimensionless strengths explicitly. Counts
-  intentionally requested by the creator remain counts; implicit feature density
-  uses physical area and spacing. World extent can affect broad layout, but must
-  not multiply every feature's dimensions to make the same miniature landscape
-  fit any rectangle. Choose plausible physical distributions, not one fixed size
-  per feature or a quota of visible landforms.
-- **Historical metre-plan choice, superseded by the continuous-terrain plan:
-  retain triangular topology where it serves the algorithms.** Supply actual
-  world positions, represented cell areas, neighbor distances and edge geometry.
-  Cover the declared footprint with a physically defined surrounding work area;
-  stop fitting a circular game world onto the rectangle by its diagonal. Local
-  coordinate origins may keep numerical geometry precise; physical calculations
-  must use metres rather than raw lattice coordinates. Existing fixed-point
-  metre elevations may remain if useful; changing their representation is not
-  the objective.
-- **Resolve seeded causes in world space.** Plate sites, assemblies, impacts,
-  plume roots and fracture origins must not be selected from a quality-dependent
-  list of triangle IDs. Use deterministic world-space candidates and physical
-  spacing; derive source strengths from the same geological causes. Sample those
-  causes on the requested mesh. Derived systems such as geothermal source
-  selection still follow their causes; do not replace them with arbitrary dots.
-- **Replace mesh-step meaning inside each operation.** Distances used by slopes,
-  influence, transport, smoothing, fetch and propagation must remain physical
-  when sample density changes. Material accounting distinguishes thickness from
-  volume; water accounting distinguishes precipitation depth from discharge.
-  Numerical iterations are solver work, not extra elapsed geological activity.
-  Keep dimensionless activity controls where appropriate. Declare per-epoch
-  amounts versus annual rates; this does not introduce a yearly Earth simulator.
-- **Preserve broad terrain; resolve finer wavelengths.** Noise and other spatial
-  variation use world-coordinate wavelengths and physical amplitudes. Finer
-  sampling adds supported detail without choosing a differently sized base world.
-  Do not require unresolved features to occupy an entire terrain cell. Retain
-  their physical width, extent or support geometry alongside sampled fields.
-- **Publish useful physical facts for later refinement.** Retain world-coordinate
-  cause/feature identities, water-body and basin relationships, river topology,
-  elevation/datum, catchment area, discharge and channel dimension profiles through
-  the existing domain representation. Internal numerical node indices are not
-  cross-scale feature identities. Do not build a second generation engine,
-  speculative refinement framework or parallel authoritative map representation.
-
-Exact Earth-like defaults and empirical channel coefficients are engineering
-choices to calibrate against resulting geography, not settled constants in this
-plan. A world seeded anew need not reproduce the old atlas or the C# output.
-Qualities must retain physical scale and recognizable broad causes; small drainage
-paths can change as finer terrain becomes available. Matching every vertex or
-array across resolutions is not an acceptance condition.
-
-### Source and ownership map
-
-Use the pinned reference bodies identified in the bounded source inventory above
-as the semantic baseline, particularly the evolution session and the physical/
-magical orchestrator. Read relevant helpers before changing a process, not only
-its registered name. Reuse the common application/fact contracts and epoch order.
-
-| Area                               | Current source and planned responsibility                                                                                                                                                                                                                                        |
-| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Physical geometry and parameters   | `canonry/mesh.ts`, `atlasWorkspace.ts`, `atlasProfile.ts`, `profile.ts`, `context.ts`, `field.ts`, `atlasParameters.ts`: replace triangle-count calibration and implicit dimensions                                                                                              |
-| Geological causes and construction | `provinceSites.ts`, `provinces.ts`, `sutures.ts`, `margins.ts`, `uplift.ts`, `orogeny.ts`, `orogenicComponents.ts`, `orogenicShape.ts`, `plumes.ts`, `volcanism.ts`, `impacts.ts`, `fractures.ts`, `noise.ts`: world-space causes, physical distances and wavelengths            |
-| Water and fluvial geography        | `geography.ts`, `drainageFlood.ts`, `flowGraph.ts`, `flowGuidance.ts`, `routing.ts`, `rivers.ts`, `lakes.ts`, `lakeStage.ts`, `fluvial.ts`, `channelGeometry.ts`, `floodplains.ts`, `deltas.ts`: physical gradients, catchments, water budgets and channel dimensions            |
-| Other physical evolution           | `advection.ts`, `transportPlan.ts`, `transportHistory.ts`, `massWasting.ts`, `support.ts`, `continentalMargins.ts`, `climate.ts`, `atmosphere.ts`, `currents.ts`, `warmth.ts`, ice/glacial and coastal modules: distance/area aware evolution and retained histories             |
-| Configurable magic                 | `magicSources.ts`, `magicPropagation.ts`, `magicOcean.ts`, `magicFeedback.ts`, `magicFeatures.ts`, `magicState.ts` and domain magic definitions/presets: physical source spacing, influence distances, storage meaning and dimensional feature predicates                        |
-| Publication and consumption        | `atlasChannels.ts`, `atlasProjection.ts`, `atlasFeatures.ts`, `geographicRegions.ts`, `atlasProcesses.ts`, `atlasSequence.ts`, `atlasWorkflow.ts`; domain feature/field consumers and relevant frontend reads/rendering: preserve dimensions without post-generation size repair |
-
-Except where noted, module names in this table are under
-`packages/generation/src/canonry/`. Shared types and entry points remain scoped
-to their existing domain/generation/frontend boundaries. Backend source is not
-part of this dependency graph.
-
-### M0 — Physical world geometry and parameter contract
-
-Sulion phase: `b8cba060-1bb2-4ed6-9b0a-b0c3cbea5b68`. State: completed.
-
-Scope: implement metric mesh geometry, footprint/work-area separation and a
-physical world profile independent of Standard/Fine. Classify dimensional inputs,
-outputs and parameters for all 55 physical contracts and 15 magic layers in the
-existing inventory, with each assigned to M1, M2 or M3. Include embedded constants,
-counts, categorical size filters and numerical iteration controls. Preserve
-meaningful existing units and update shared callers where signatures change.
-
-Acceptance: identical physical settings produce identical parameter meanings
-under different qualities. Mesh spacing and areas describe the requested world,
-including a non-square footprint, without relocating the boundary or cropping
-the world to a fitted game disk. Every world-process dimensional dependency has
-an explicit conversion owner; no unclassified per-cell size assumptions are
-silently carried forward as complete.
-
-Evidence: geometry/coverage checks, profile inspection and focused area/distance
-checks at two qualities and differently sized extents. This milestone establishes
-the foundation; it does not claim the remaining operators are already corrected.
-
-#### M0 execution
-
-Expansion `308d9374-df20-4776-b45f-e942ec9a7494`:
-
-1. Metric mesh and profile (`2ae3361e-0d28-46e1-aec3-d886469f135c`): retain
-   triangular adjacency, add physical geometry and world-footprint coverage,
-   remove quality-dependent profile calibration, and update workspace callers.
-   Primary files: `mesh.ts`, `worldMesh.ts`, `atlasProfile.ts`, `atlasWorkspace.ts`.
-2. Inventory and geometry checks (`ab44c27d-d045-4490-a049-f8396997a1f5`): assign
-   dimensional process families to later phases, test area/distance/coverage and
-   profile independence, and typecheck the affected consumers. M0 does not claim
-   unconverted operators are already functional in physical units.
-
-Dimensional ownership: M1 owns geological site selection, spatial noise,
-construction footprints and geological size filters; M2 owns gradients,
-catchment/flow, lake budgets, fluvial/channel/floodplain/delta dimensions; M3 owns
-material transport, smoothing, climate/current fetch, ice and coastal evolution,
-all magical influence/storage/feature predicates and remaining classifications.
-M4 owns publication units, physical-size extraction, identity and consumption.
-The 55 physical contracts and 15 magic layers in the inventory above remain the
-complete review list, including their helpers and embedded constants. Elevation
-storage remains fixed-point metres; scalar/categorical channels remain explicitly
-dimensionless. Amounts per epoch remain distinct from annual hydrology rates.
-
-### M1 — World-space geological causes and terrain
-
-#### M1 execution
-
-Expansion `8cd1dc17-d933-42f6-8422-c6bcd0d57a3f`:
-`953a00b0-a58e-4f70-894b-190c56d2c8b9` implements world-space plate/event
-candidates, geological footprints and physical influence; `667c1ffd-eecb-40d7-a31e-1670d145a213`
-checks identical cause positions/radii and meaningful construction at different
-meshes. Reuse existing construction/transport histories, recording event geometry
-for extraction. M0 geometry/profile checks and generation typecheck passed.
-
-Sulion phase: `9677f66d-35b4-4209-8ae0-05234e294e68`. State: completed.
-Depends on M0.
-
-Scope: move geological event/site selection to world-space candidates and stable
-cause identities. Express continental transitions, mountain construction widths,
-rift shoulders, plume/apron/cone dimensions, crater excavation/rim/ejecta radii,
-fracture structure and terrain variation in physical dimensions. Preserve
-construction and material-history semantics. Any geological spacing that uses
-area or reach must consume the M0 geometry rather than triangle density.
-
-Acceptance: the same world settings keep broad assemblies, plate sites and
-geological events at their intended locations and physical scale across Standard
-and Fine. Mountain and crater dimensions do not halve as linear sampling density
-doubles. Fine reveals additional supported terrain structure. Changes to actual
-world dimensions have physically meaningful consequences rather than uniformly
-stretching every geological feature.
-
-Evidence: world-space cause inspection plus representative construction footprints
-and wavelength measurements at matched settings. Assess relief after downstream
-evolution in M3; initial construction alone is not completed terrain behavior.
-
-### M2 — Catchments, discharge and channel dimensions
-
-Sulion phase: `9a157445-4c4f-4b2f-86fc-6e944a5dac29`. State: completed.
-Depends on M0 and M1.
-
-Scope: compute physical gradients and contributing area; turn precipitation and
-runoff into water volume/flow before routing, lake support, river selection and
-erosion consume them. Replace cell-count discharge thresholds, minimum reach/lake
-size and channel expansion steps with physical criteria. Derive river width and
-depth from discharge with slope/substrate influences and broad calibrated
-variation. Carry longitudinal dimension profiles. Express bank relief, floodplain
-reach, delta dimensions and fluvial transport/accounting consistently. Remove
-the output-only discharge repair in `atlasProjection.ts` and `atlasFeatures.ts`.
-
-Acceptance: changing cell size does not change the water supply of the same
-catchment merely by changing its cell count. Major rivers keep comparable
-physical dimensions across qualities; river initiation and lake support describe
-the same physical quantities. Narrow channels retain their real dimensions even
-where terrain cells cannot resolve both banks. Extra detail can add supported
-tributaries without making the main network a smaller copy.
-
-Evidence: a known-area runoff case, connected flow/lake checks and matched-world
-catchment/discharge/channel measurements. Use multiple cells to represent the
-same physical case rather than expecting matching array values or identical
-small drainage paths.
-
-### M3 — Physical epochs and configurable magic
-
-#### M2 execution
-
-Expansion `2fc2fbc1-f195-4722-8747-1fb7e284dd06` completed catchments/water budgets
-(`1d614a4b-ab92-4f4e-9e30-1b9b95f79403`) and fluvial/channel dimensions
-(`ba179ff0-aa34-4e06-86f0-5e44d3118d1f`). A 10,000 km² catchment with 500 mm/year
-runoff produces the same discharge at two meshes. River width/depth remain metres
-below terrain cell size. Lake budgets and sediment accounting now use physical
-area/volume before routing; publication no longer repairs flow with a cell multiplier.
-
-#### M3 execution
-
-Expansion `d7888bad-9de5-48f6-9335-7f63a1931532`:
-
-1. Physical epochs (`3284db76-0a60-4542-adaa-a712fa103e32`): physical transport,
-   flexure reach, climate/current travel, ice flux, coasts and classification.
-2. Configurable magic (`f68e9add-0b68-457b-ae80-1de455ef2014`): physical source
-   spacing, fracture loss per kilometre, area-based cold accumulation/retention,
-   ocean ray/wake distance and width, feature predicates and editable presets.
-3. Coupled checks (`40d3a8df-8d80-463c-bac2-ebfe621d9401`): warm/glacial/present
-   physical history, repeated ice ages with magic, material budgets and shared callers.
-
-The profile now declares physical defaults directly; no quality/count conversion
-table remains. Flexure uses a metre-length Helmholtz smoothing solve instead of
-giving a fixed iteration count a hidden physical radius. This retains regional
-support spreading and local surface relief while allowing finer numerical sampling.
-Sediment ledgers are m³, slopes are rise/run, ice thickness is metres and ice flux
-is m³/year using an explicit transport time. Extensively transported material is
-weighted by represented area, rather than treating each triangle as equal material.
-Floating volume budgets use relative numerical tolerances, not integer equality.
-
-The existing causal order is retained: climate-phase magic feeds temperature,
-drainage and ice; post-glacial systems use formed ice and force subsequent coasts.
-No extra final history or epoch activity is introduced. The old 100 km “world”
-integration fixtures were miniature landscapes; continental-scale fixtures now
-exercise the same physical defaults. An all-ocean result validly skips land ice.
-
-Sulion phase: `214632cc-692e-4514-b33c-273acc45296e`. State: completed.
-Depends on M0–M2.
-
-Scope: complete the M0 dimensional inventory through plate/material transport,
-hillslope response, support/flexure, continental margins, climate/moisture,
-ocean currents, glacier/ice transport and grounding, coasts and classification.
-Use physical travel/influence distances, gradients and represented areas; keep
-depths, volumes and fluxes distinct in erosion/deposition budgets. Convert all
-configured magic strategies and predicates, including fracture traversal costs,
-coldward accumulation/retention, ocean rays/wakes, source spacing and forcing.
-Update editable example presets and only necessary parameter labels/defaults.
-Preserve repeated causal refreshes, epoch state and declared activity semantics.
-
-Acceptance: every world process in the inventory uses consistent declared
-dimensions. More mesh cells do not introduce extra material, water, magical
-source density, influence reach or epoch activity merely through cell/step counts.
-Fine does not systematically erase relief or shrink influence zones. Impacts,
-volcanism, warm/glacial/present history and the three configurable magic mechanisms
-still affect geography through their original semantic operations. Resolve
-causal-order changes explicitly rather than treating different numbers as a defect.
-
-Evidence: focused distance/transport and material/water budget checks plus a
-representative coupled world through its epochs at Standard and Fine. Retain
-existing correctness controls; do not add a physical simulation service, new
-recovery machinery or reference-hash acceptance gate.
-
-### M4 — Publish dimensional world geography
-
-Sulion phase: `b305fe35-069c-4d3d-8cfa-beb6c63b9e5b`. State: completed.
-Depends on M0–M3.
-
-Scope: publish physical quantities, extent/membership, cause identities and river
-dimension profiles through the existing fields/features/networks. Replace
-mesh-index feature identity and count-based extraction filters where they defeat
-world-scale coherence. Keep small-feature dimensions available without expanding
-them to cell size. Adapt existing reads, exports, manual world edits and rendering
-only where necessary to consume the corrected units and geometry; this is not a
-palette, CSS or cartographic-tool redesign. Confirm that current world-stage
-human/built consumers and existing child entry points remain compatible, without
-redesigning those generators.
-
-Acceptance: generated dimensions survive publication and are the same facts used
-by inspection, drawing and export. Standard/Fine outputs at the same world extent
-retain comparable feature scales and recognizable major geography. Different
-world extents no longer reuse the same miniature landscape with relabeled units.
-Determinism, authored protection, cancellation, atomic session publication and
-undo continue to work.
-
-Evidence: representative same-world Standard/Fine comparisons and a smaller and
-larger world extent, inspecting real widths/areas/lengths and the existing map
-surface. Choose a small set of contrasting seeds/landscapes during phase
-expansion; no exhaustive seed sweep or repeated live-deployment walkthrough.
-Run focused domain/generation checks and the relevant existing browser journey;
-broaden checks only for changed behavior or unresolved failures. Record useful
-timings and any geographic limits in this document/chat, not a separate report.
-
-### Execution guidance and deferred decisions
-
-The geometric representation, physical defaults and numerical tolerances are
-implementation choices. M0 establishes whether the current triangular topology
-is sufficient; modify its domain construction if necessary before considering a
-replacement. Later calibration must evaluate geographically meaningful cases,
-not lower thresholds or alter checks solely to make a result pass. Existing C#
-fingerprints may need to become isolated reference-port checks as the active
-algorithms change; do not preserve old game-unit behavior to satisfy them.
-
-No user-owned decision currently blocks M0. Regional boundary fluxes, tributary
-refinement and parent-history reconstruction are deferred to later regional
-work. Their future design consumes the world-coordinate identities, dimensional
-fields and network geometry retained here; it must not require unscaling a
-world mesh or recovering physical widths from rendering pixels. Performance
-targets can guide measurement but do not authorize caps or a new execution host.
-
-#### M4 execution
-
-Expansion `f7428db2-11f8-4048-8859-06ab82f92b1f` covers dimensional publication
-and consumers, then representative completion checks. Its corrective sub-plan
-`bf35a12e-977a-4f95-a342-059e0e31f774` addresses findings from three independent
-reviews of geology, hydrology, magic and publication.
-
-Published channels declare physical dimensions; river station profiles retain
-width, depth, discharge and contributing area. Nodes use the elevation profile,
-and network reaches retain downstream discharge. Resolved river drawing uses
-physical station widths; the existing minimum screen glyph remains readable.
-Fault influence widths remain geological attributes, not drawn stroke widths;
-browser inspection caught and corrected that unit-consumption error.
-Crater, volcano and caldera footprints come from causal event radii. Connected
-gorges, glacial landforms and magical regions publish their geographic extents,
-rather than a point standing in for their entire area.
-
-Existing input geography is associated across resampling by kind, layer, magic
-rule and spatial correspondence. Directed river endpoints and sampled line
-distances prevent matching crossed rivers merely because their bounds overlap.
-Exact cause identities take precedence. Existing names, relations, authored
-details, protected geometry and boundary interfaces survive. When a retained
-river anchors regenerated tributaries, their endpoints and elevation profiles
-use the retained junction. This association is approximate for changing regions;
-it does not reconstruct regional history or redistribute tributary flow to force
-agreement with a retained river's earlier discharge.
-
-The reviews exposed physical operations that the first conversion had missed:
-
-- Sediment deposition and cold retention attenuated once per cell. Both now
-  attenuate over physical travel distance. Hillslope transport uses physical
-  activity with numerical substeps and a volume-per-contour-width limit.
-- Coast erosion occupied one cell regardless of spacing. It now integrates a
-  physical active band and deposition reach. A matched straight coast eroded
-  5.883 and 5.850 billion m³ at two mesh densities, instead of approximately
-  halving its affected volume. Fractional band coverage uses cell-distance
-  approximation, not exact polygon clipping.
-- Ocean smoothing crossed land and heat propagation lost local/upstream mixing.
-  Masked smoothing and physical-travel mixing restore these operations.
-- Coastal roughness amplitudes are metres; plume wander remains bounded per
-  epoch rather than multiplying displacement by the epoch index.
-- Magic retains physical coastal source bands, geothermal neighborhood maxima,
-  beam-width wakes, magma chamber flags and coastal first-activity epochs.
-  Independent system interactions remain active when the example container
-  system is disabled. Editable presets expose the physical influence controls.
-- Marine deposition could overspend its final remaining budget through floating
-  allocation error. It now debits actual deposited volume and preserves exports.
-- Tiny or narrow valid footprints could contain no lattice centroid. Only in
-  that case, the same mesh is translated onto a covered anchor; its physical
-  spacing and halo stay unchanged. A 1 km square has 1/1/6 content cells at
-  Draft/Standard/Fine. Narrow footprints and disconnected components can remain
-  undersampled; alignment does not add resolution or shrink physical features.
-
-Focused checks include known-area runoff, physical sediment attenuation,
-conservative hillslope spreading, coast volumes, ocean barriers/mixing, magic
-distance/width behavior and preserved network junctions. Hillslope spreading at
-two meshes measured 3.613 and 3.694 km, with relative volume error below 9e-15.
-Finite sampling still shifts unresolved boundaries and sampled geothermal maxima;
-additional samples do not promise vertexwise equality or reveal sub-cell terrain.
-
-For seed 104729, a 4,000 × 2,000 km world through all three epochs and configured
-magic systems produced the following matched comparison. Both qualities completed
-and passed the physical publication and scale checks; the combined test took
-about six minutes while other checks also ran.
-
-| Quantity                | Standard |     Fine |
-| ----------------------- | -------: | -------: |
-| Maximum river discharge | 672 m³/s | 601 m³/s |
-| Maximum river width     |    118 m |    100 m |
-| Maximum river depth     |   2.47 m |   2.45 m |
-| Terrain relief          |  2,911 m |  2,857 m |
-| Land coverage           |    21.1% |    21.6% |
-| Published river reaches |    1,060 |    1,482 |
-
-Crater cause IDs and radii were identical. These are plausibility and physical
-scale observations, not numeric parity targets. The earlier isolated timing was
-about 55 seconds for Standard and 282 seconds for Fine; Fine remains expensive.
-The unit suite also exercises other seeds, rectangular extents and contrasting
-warm/glacial histories. Existing child entry points and authored thermal feedback
-remain compatible; these checks do not claim regional refinement is implemented.
-
-Completion checks: 96 unit/integration tests passed, including the full
-Standard/Fine comparison; workspace typechecks and lint passed (two existing
-nonblocking lint warnings). Production frontend build passed with its existing
-large-chunk warning. The browser world/refinement/manual-edit/template/session
-journey passed in about 2.8 minutes; its former 90-second wait expired while named
-generation processes were still advancing, so the test now allows their observed
-runtime. A separate continental landscape browser journey passed in 17 seconds,
-and its screenshot confirmed that fault influence widths no longer cover terrain
-with oversized strokes. Temporary test servers stopped on completion. No backend,
-database, infrastructure or deployment changes were needed.
-
-This plan does not close the broader product backlog. Regional boundary fluxes,
-tributary refinement and history reconstruction remain deferred as agreed.
-
-### Continuous river centreline publication
-
-The physical mesh remains the drainage solver, but its triangle-centre edges
-are not the published river geometry. `riverPaths.ts` removes cell-scale stair
-steps along the dominant upstream/downstream path, keeping each relaxed node
-inside its original triangle. All reaches use the same junction position.
-Headwaters and water outlets remain fixed. Cubic segments follow the resulting
-channel, with control points constrained to the convex union of each pair of
-adjacent drainage triangles. This prevents smoothing across an unrelated valley
-or watershed. The main stem shares its tangent through confluences; tributaries
-join without being forced to turn upstream.
-
-Curves are sampled with a geometric error tolerance, and elevation, width,
-depth, discharge and catchment-area profiles are interpolated along their
-directed source spans. The existing feature, network, clipping, inspection and
-export paths consume this one geometry. Flow targets, water budgets, erosion
-and authored geometry are unchanged. This removes lattice artifacts; it does
-not invent finer terrain or implement physical meander migration.
-
-### Inland work-area drainage
-
-Open rectangular meshes describe a finite planar work area. If an epoch leaves
-no connected ocean in that area, priority flooding uses its boundary as the
-external drainage outlet. Ocean-connected drainage remains the default whenever
-an ocean is present; subsequent epochs recompute the roots. This preserves sea
-level and terrain instead of creating water to satisfy the solver. The reference
-disk retains its closed-world requirement. This numerical drainage boundary is
-separate from the inherited parent-boundary fields used by refinement.
-Cylinder has no east/west outlet; pole-to-pole coverage also closes the polar
-faces. These boundaries retain the existing approximate physical metre chart,
-without introducing spherical geodesic transport.
-
-## Continuous terrain and adaptive generation — replacement plan
-
-**History only (2026-11-02).** The adaptive physical lattice described in this
-section no longer exists. Every map, world or region, runs on the triangular
-lattice; regions use it at their own cell span. The adaptive quadtree survives
-only as the display surface's raster layout. Remeshing, support refinement and the
-water, climate and ice refinement processes were deleted with the lattice.
-
-State: execute the complete **top-level world generation and display** replacement.
-The user's 2026-10-19 scope correction supersedes the earlier agent expansion into
-editors and lower-level map generation. Sulion root:
-`4aa8fb20-3d26-40a8-939a-ddf9a8bca02b`.
-
-### Outcome and boundaries
-
-Generate one physically scaled world with the existing geological, hydrological,
-climatic, glacial, coastal, magical and human/built semantic operations. Display
-its evolved terrain continuously, with useful physical detail around meaningful
-features, coherent layer geometry and view-resolution rendering.
-
-Complete the world generator and map display together. Do not stop at a terrain
-demo or ship a second world engine. Preserve the existing epoch order, causal
-feedback, feature identities, authored input protection and configurable magic.
-
-**Excluded:** editor development, regional/site/interior generation, template,
-routing-tool, analysis or export redesign, new river simulation, deliberate
-landmark injection, political/cultural generator redesign, backend, persistence,
-MCP, deployment machinery and style changes. Make existing-consumer compatibility
-fixes only when the changed world output requires them. World units and outputs
-must remain usable for later lower-level work.
-
-**Numerical equivalence is not a target.** Preserve semantic operations and
-plausible map behavior. Quantity and topology checks protect real geography;
-they do not justify engineering-grade accuracy, unbounded numerical tuning or
-repeated expensive worlds without a concrete unresolved question.
-
-### Implementation direction
-
-- Retain the TypeScript generation modules, existing process runner, browser
-  worker, session publication and React/OpenLayers presentation.
-- Use adaptive numerical support and shared continuous reconstruction instead
-  of the fixed microtriangle world mesh and nearest-cell raster publication.
-  Quality changes sampling, not physical feature dimensions or elapsed history.
-- Refine causes and evolving relief where physical support is needed. Mountains,
-  craters, volcanoes, shores and valleys remain products of the existing processes.
-  Do not add an independent river-bed lowering or bank-shaping model to drawing.
-- Waterfalls and gorges remain emergent consequences and detections of physical
-  and magical evolution. Landmark injection was delivered afterwards as
-  [ADR 0006](adr/0006-landmarks-are-injected-causes.md) and does not change
-  this rule: a sited landmark injects causes and holds a measured signature.
-- Render the committed field with standard OpenLayers view-resolution tiles.
-  Terrain, lake geometry, relief and thematic layers must describe the generated
-  world. Panning and zooming do not run new generation.
-- Preserve categories as categories and scalar fields as scalar fields.
-  Transfer conserved physical quantities appropriately across adaptive support.
-- Keep expensive generation checks headless. Reuse completed output for overview
-  and close display checks; browser journeys use small fixtures. Alert the user
-  promptly if a conversion exposes a design mismatch or disproportionate cost.
-
-Research that informed the representation choice:
-[adaptive fields](https://basilisk.fr/src/grid/tree-common.h),
-[coarse/fine water operations](https://basilisk.fr/src/saint-venant.h),
-[continuous terrain research](https://perso.liris.cnrs.fr/eric.galin/Articles/2013-river-networks.pdf),
-and [terrain display LOD](https://hhoppe.com/proj/geomclipmap/).
-These inform spatial machinery, not permission to replace Canonry's generators
-with a river-first terrain generator.
-
-### World process coverage
-
-The following assigns **all 55 current physical contract IDs** to milestones.
-It is registration coverage, not a fresh claim that every implementation already
-has semantic parity. For each operation, read its current implementation and
-corresponding pinned Canonry body/helpers while porting, preserve its input causes,
-transformation, feedback, retained history and outputs, and record any intentional
-adaptation in this document. A process name, empty invocation or generic noise
-replacement does not establish preservation.
-
-| Owner                                  | Existing physical contracts to migrate                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M2, geology (17)                       | `tectonic-provinces`, `continental-sutures`, `tectonic-margins`, `continental-domains`, `tectonic-uplift`, `landscape-initialization`, `orogenic-construction`, `mantle-plume-roots`, `volcanic-construction`, `impact-cratering`, `mass-wasting`, `crustal-support`, `lithospheric-flexure`, `fracture-network`, `geothermal`, `plate-advection`, `tectonic-epoch-activity`                                                                                                                                              |
-| M3, water and sediment (12)            | `runoff`, `drainage-conditioning`, `lake-basins`, `drainage-guidance`, `flow-routing`, `river-network`, `ancestral-fluvial-erosion`, `post-fluvial-mass-wasting`, `sediment-transport`, `river-channel-geometry`, `river-floodplains`, `river-delta-formation`                                                                                                                                                                                                                                                            |
-| M4, remaining physical evolution (24)  | `continental-margin-evolution`, `marine-sedimentation`, `coastal-detail`, `ocean-connectivity`, `ocean-distance`, `bathymetry`, `landmasses-and-shelf-groups`, `ocean-currents`, `warmth-sources`, `temperature`, `atmospheric-flow`, `moisture-transport`, `precipitation`, `land-ice-mass-balance`, `ice-flow`, `glacial-erosion`, `glacial-deposition`, `glacial-meltwater`, `glacial-runoff`, `external-coastal-forcing`, `coastal-erosion-and-deposition`, `sea-ice`, `glacial-landforms`, `landform-classification` |
-| M5, coupled history and validation (2) | `physical-epoch-history`, `physical-structural-validation`                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-
-M5 additionally owns the complete configurable magic mechanism set: automatic and
-placed sources; Fire fracture propagation and thermal/rock feedback; Aurora cold
-routing, accumulation and ice retention; Pressure ocean rays, reflections, coastal
-rays, wakes and rogue effects; storage, decay, first-occurrence and coastal history;
-crust advection; feature growth/classification; cross-system interactions;
-natural/final surface classifications; and existing placed forcing operations.
-Preserve configurable variants, disable/enable behavior, source timing and
-per-epoch activity. Use the earlier 15-reference-layer inventory as source
-navigation, not as evidence that its historical gap statuses are still current.
-
-The remaining world boundaries are `atlasWorkflow`, `atlasSequence`,
-`atlasWorkspace`, `atlasProjection`, geographic extraction, the existing
-`mapPeople`/`mapBuilt` world layers, worker/session publication and map tiles.
-Editor and lower-level consumers are dependency context, not additional milestones.
-
-### Milestones and acceptance
-
-#### M0 — Shared world terrain contract
-
-Record physical coordinates, adaptive-field ownership, reconstruction, publication
-and the complete world process inventory. Preserve semantic algorithms rather
-than array/hash/rounding equivalence. Existing source review and contract work is
-retained; broaden no further into editor or lower-level generation requirements.
-
-#### M1 — Adaptive support and continuous operators
-
-Implement lookup, physical cell/face geometry, gradients, reconstruction and
-appropriate quantity transfer. Focused coarse/fine, rotated-plane, narrow-feature
-and categorical checks establish the representation. Do not create new landscape
-behavior to satisfy an interpolation test.
-
-#### M2 — Geological generation
-
-Migrate all 17 assigned geological operations: world-space causes, crust,
-tectonics, impacts, volcanism, fractures, support, mass wasting and material/history
-advection. Preserve construction and later erosion/deformation. Actual relief,
-not a crater or mountain label alone, must survive into the displayed field.
-
-#### M3 — Hydrology and sediment
-
-Migrate all 12 assigned operations with physical catchments, discharge, dimensions,
-lake budgets, routing, incision, sediment, floodplains and deltas. Preserve topology
-and receiving waters. Use the existing evolved terrain; no separate river simulator,
-extra channel-carving stage or independently placed gorge/waterfall is required.
-
-#### M4 — Climate, oceans, glaciers and coasts
-
-Migrate all 24 assigned operations and retain orographic, oceanic, ice-load,
-erosion/deposition, meltwater and coastal feedback. Focused cold/warm, wet/dry and
-coarse/fine checks establish retained causal effects.
-
-#### M5 — Magic and complete epoch coupling
-
-Preserve all configurable Fire, Aurora and Pressure mechanisms, placed forcing,
-interactions, history, storage, advection and physical feedback. Complete the
-existing interleaved initialization, repeated epochs and finalization sequence.
-The complete-world check must finish structural validation; a completed epoch log
-is insufficient.
-
-Evidence: one complete top-level world with repeated cold/warm epochs and all
-existing world domains, plus focused causal magic variants and physical cases.
-The previous requirement for multiple expensive full-world seeds was an agent
-acceptance choice, not a user requirement; focused contrasting cases supply that
-additional causal coverage without repeating an entire planet unnecessarily.
-
-#### M6 — World publication and displayed layers
-
-Finish geographic extraction and publish typed adaptive fields through the
-existing worker/session path. Preserve current world-level cultural, political,
-built and magical output. Eliminate nearest-cell world raster projection and
-raster-strip lake/region outlines. Existing authored protection, cancellation and
-stale-publication checks remain compatibility checks.
-
-No editor improvements, child-profile work, template/routing-tool changes,
-analytics or GIS export expansion are required for completion.
-
-#### M7 — Continuous map display
-
-Replace whole-field image stretching with OpenLayers tiles evaluated from the
-shared field. Preserve current colors and interactions. Coasts, lake shores,
-mountain relief, craters, volcanoes and valleys must show their actual generated
-shape at overview and close extents. Thematic fields retain scalar/category
-meaning. No zoom-dependent generation or extra landscape shaping is allowed.
-
-Evidence: focused tile seams/category/patch checks, one existing fixture browser
-journey, and geographic review of the same completed world at several extents.
-Reuse generated output; do not regenerate worlds through browser journeys.
-
-#### M8 — Finish and retire the active old world path
-
-Check that the top-level world entry point uses the adaptive engine with no
-legacy lattice/projection/display fallback. Retain useful reference fixtures and
-the backend prototype. Run the applicable default tests, typechecks, lint/build
-and complete-world check. Update current generation documentation and close the
-corrected plan only after world generation and display work together.
-
-Deployment is outside this request.
-
-### Adaptive execution (superseded by the fixed sampling replacement)
-
-M0–M8 are complete for top-level world generation and display. The active world
-path uses adaptive SI control volumes, shared curvature-aware Hermite reconstruction,
-typed publication and view-resolution OpenLayers tiles. Physical/magical epochs
-and all existing world layers are retained. The failed terrain review led to the
-reconstruction, physical slope and underwater presentation corrections below.
-The experimental extra river carving and bank formula have been removed.
-
-The execution notes below retain work history. Their earlier mentions of all
-editors, child profiles, every consumer or mandatory river-profile machinery are
-superseded by this corrected contract and are not further implementation scope.
-
-M8 source inspection confirms that fixed triangle constructors remain reference-test
-fixtures, with no active old world lattice/projection/display path. Existing editor
-behavior and the backend prototype are preserved. Editor development, lower-level
-generation and deployment were excluded from this plan.
-
-The 4,000 × 2,000 km five-epoch run completed physical/magical history and final
-structural validation in about 26 minutes, then exposed a lake-contour join defect.
-A small reconstructed-shore fixture reproduced it. Shared contour-face stations
-now prevent independently refined cells from choosing different crossings.
-The complete publication/display check uses a 2,000 × 1,000 km world with the same
-five epochs, processes, parameters and Draft detail. This changes the test extent,
-not generation behavior or fidelity, and avoids repeating the largest history as
-a debugging loop. The large-world structural result remains relevant evidence.
-
-Algorithm changes use small deterministic tests as their first feedback loop.
-`fieldContours.test.ts` covers exact-level vertices, disconnected islands, holes,
-coarse/fine joins and fragmented label fields, checking geometry and coverage.
-Tile tests check the same terrain painter used by OpenLayers without a browser or
-world generation.
-
-The smaller five-epoch integration run completed physical history in about eleven
-minutes but failed during landform polygon assembly. Sixteen small reconstructed
-label cases reproduced self-touching/retraced contour walks in milliseconds per
-case. The existing GIS engine now nodes and polygonizes that linework; face
-selection samples the same field. Those cases check interior/exterior coverage as
-well as validity. Full-world runs remain integration evidence, never a substitute
-for reproducing a local algorithm defect. The commands are in README's development
-section; no custom test runner or documentation-freshness assertions are involved.
-
-After that correction, the five-epoch run completed geological extraction and
-cultures, then exposed a separate political-contour support error. A 75 ms territory
-case with a numerical halo reproduced it. Political boundaries now trace the full
-field before clipping to the world; a stencil around owned interior samples cannot
-bound a Voronoi field that remains positive in that halo. Single- and three-polity
-regressions verify closure, world clipping and located polity coverage. The final
-display review uses a single-epoch all-domain world, rather than repeating physical
-history to verify an extraction correction. The five-epoch all-domain test remains
-available explicitly; its last full run failed before this political fix.
-
-The initial single-epoch all-domain world completed in 247.82 seconds with 132,079 adaptive
-cells and 128 channels, including natural and magical features, three polities and
-eight settlements. The ignored `frontend/.artifacts/generation/completed-world.bin` contains
-its published field and features. Overview and feature images use the same terrain
-painter as OpenLayers. That initial review exposed cell-shaped slope shading and
-weak recognizable feature relief. Small reconstruction and physical-relief tests
-using analytic inputs and the saved output isolated the failures described below.
-Feature counts alone were not treated as visual acceptance.
-
-Before the M7 corrections, normal CI passed 168 tests in 15.77 seconds, with shared
-package tests run once. This established the fast regression loop and publication
-corrections; it did not establish satisfactory terrain presentation.
-
-M7 correction: the C0 bilinear/bubble reconstruction allowed slope jumps at cell
-faces. Shared bicubic Hermite values and derivatives now constrain coarse/fine
-faces; a quartic interior correction retains each measured height while vanishing
-with its first derivatives at the edges. Monotone face slope limits and bounded
-cell values prevent invented extrema. Point queries and bulk reconstruction use
-the same patches; clipped extrema bound that same polynomial with Bernstein
-controls. No renderer-only terrain, added noise or extra landscape shaping is used.
-Local normalized quadratic fits recover corner curvature and mixed derivatives;
-linear estimates alone biased curved surfaces and created repeated centre humps.
-A direct curved-surface regression catches that defect. Sparse stencils fall back
-to their fitted plane. Discrete quantities retain their category/extensive semantics
-in both point reads and clipped extrema, including metre-valued lake stages.
-
-The weak relief also exposed an incorrect physical parameter from the metre
-conversion: `MassWastingStableGradient = 0.0072` treated slopes of about 0.4 degrees
-as unstable. The baseline is now 0.7 rise/run, approximately 35 degrees, with the
-existing material-resistance variation. This is the appropriate scale for the
-model's rock/talus failure operation; [USGS talus examples](https://pubs.usgs.gov/of/1993/0278a/report.pdf)
-give approximately 35 degrees. The earlier test requiring a gentle Gaussian hill
-to spread was an agent assumption and has been replaced by an actually unstable
-slope at two resolutions. A separate test requires gentle relief to remain intact.
-The conservative transport algorithm and its physical reach/budgets are retained.
-
-Direct generated-cone/crater cases now check relief before/after relaxation and
-after material advection, including event location. Geological events already move
-with the material; no extra relocation model was needed. Ocean hillshade now reads
-the actual floor rather than suppressing all submerged relief. Lake surfaces stay
-flat. Image review extents use event radii, so a 73 km crater is not judged from a
-60 km-wide crop of its interior.
-
-The world with corrected physical defaults completed all-domain generation and
-publication in 267.11 seconds, with 131,974 adaptive cells and 128 channels. Its
-overview and feature extents were reviewed, then redrawn with the final curvature
-fit without regenerating history. A newly active volcanic island retains a summit
-near 658 m where the earlier over-relaxed counterpart stayed submerged. Historical
-event footprints can still be eroded or submerged; the renderer does not restore
-pristine cones/craters over evolved terrain. Landmark preservation remains backlog
-item 9. Draft output retains its finite sampling detail.
-
-Final checks: normal CI passed 174 tests in 16.10 seconds, with lint, formatting,
-workspace typechecks and Terraform formatting passing. The production build and
-existing fixture browser workflow passed; the final browser journey took 37.9 s.
-An interrupted browser invocation produced no test verdict and left an orphaned
-preview process; that owned process was stopped before the successful rerun.
-A subsequent category-extrema predicate correction passed its focused field suite.
-No five-epoch all-domain rerun or Standard/Fine world matrix was used to debug these
-local changes. Earlier coupled physical-history evidence and focused epoch/magic
-cases remain the basis for epoch behavior.
-
-Completed field data and terrain images live in the ignored
-`frontend/.artifacts/generation/` directory. Browser tests clear `test-results/`, so
-these reusable generation inputs are kept outside it. This is test output, with
-no product persistence, recovery host or backend change.
-
-### Adaptive M0 execution — shared contract and migration decisions
-
-Sulion expansion `3aa87351-3837-4f7b-b87c-12b335954cc7`, anchored to
-`46f83e56-f843-46dc-b44f-3d6e821633f0`.
-
-1. **Fix semantic and spatial authority contract**
-   (`e5c7ae6a-61c8-4d1a-b010-17f93df085dd`). Read the current field, mesh,
-   projection, region extraction and domain field/worker contracts; record the
-   emergent-feature correction and the shared data contract below. Verify by
-   tracing the four M0 examples through generation, publication and authoring.
-2. **Resolve migration dependencies and examples**
-   (`e7a9d96d-b992-4522-a41b-127cd628b9ab`). Reconcile all 55 physical IDs and
-   magic actions with the existing ownership table, including direct array users
-   and exported prototype callers. Identify shared spatial operators before
-   changing individual physical mechanisms. Source review establishes this
-   design milestone; it does not establish implementation of later milestones.
-
-Implementation decisions from the actual source contracts:
-
-- Keep the existing process functions, registry and epoch orchestration. Replace
-  their numerical spatial substrate: variable neighbor ranges, physical shared
-  faces and cell measures replace three-neighbor triangle slots. A loop rewrite
-  alone does not establish correctness: constant-cell arithmetic, counts,
-  directional traversal and transport weights must be adapted in each family.
-- Domain numerical fields support adaptive leaf data and regular authored patches.
-  Both use the same scoped sampling, composition, integration and editing APIs.
-  Regular grids remain a valid brush/template input, not a second world generator
-  or a mandatory uniform raster through which generated terrain must pass.
-- Adaptive data uses a serializable quadtree, leaf geometry and reciprocal
-  variable-degree adjacency with shared-face lengths. Physical algorithms carry
-  cell values and declared quantities; terrain reconstruction shares edge values
-  across coarse/fine boundaries. Categorical fields use explicit discrete queries.
-- Fields carry present evolved values. Geological sources seed initial physical
-  construction, while subsequent operations update that state. Extracted gorge,
-  waterfall and ridge geometry is derived from physical state and can guide
-  resolution; it cannot reapply an un-eroded feature after evolution.
-- Refinement transfers intensive quantities using physical measures, extensive
-  quantities by apportioned support, and discrete categories by explicit ownership.
-  Index-valued routing and derived fluxes must be recomputed after topology changes.
-  Plain interpolation of those indices is forbidden. Quantities such as lake stage
-  also require their domain relationship, not independent smoothing of each cell.
-- Construction/remeshing happens at causal boundaries before dependent climate,
-  drainage and transport passes. A shared transfer invalidates derived facts and
-  those passes rebuild them. Do not remesh independently inside each domain or
-  turn extra numerical work into extra geological elapsed time.
-
-Concrete contract examples:
-
-- An impact crossing patches is one world-space source. Adaptive samples resolve
-  its initial bowl/rim/ejecta; later incision and deposition change those samples.
-  Queries and tiles reconstruct the evolved surface, never the pristine impact.
-- A river entering a lake shares its reach identity, bed profile and receiving
-  body. Discharge is routed across the connected topology; the body's stage and
-  terrain determine the shore. Neither topology nor shore is derived from painted
-  raster rectangles.
-- A protected authored stroke is a scoped patch of the same field. Physical
-  sampling respects it, reconstruction and tiles show it, boundary validation
-  constrains it, and undo restores the same prior geographic state.
-- A material or polity ID is discrete at a query point; prevalence is a scalar
-  distribution. Render antialiasing may cover pixels fractionally but does not
-  interpolate category IDs or turn cultural overlap into exclusive territories.
-
-M0 source review: the physical contract registry has 55 IDs, each assigned once
-above. `PhysicalField` is typed arrays plus a mesh, event/fault causes and budget
-totals; most process bodies depend on fixed three-neighbor slots. `GridSurface`
-currently owns regular-grid overlays and the frontend materializes them at base
-resolution. M1 supplies shared adaptive operators; M2–M5 migrate all those physical
-and magic consumers; M6 replaces the mandatory base-grid materialization and
-remaining authoring/human consumers; M7 replaces field-sized image presentation.
-No implementation milestone is complete on the strength of this source review.
-
-### Adaptive M1 execution
-
-Sulion expansion `01762f8b-bf7a-49b7-bd0a-ac2d7b2b0756`, anchored to
-`58041cc4-d5f0-4267-9ec9-19d2ff0db507`.
-
-1. `1a4fadc9-da4c-41a1-b7c3-cd4ee9dc56e4`: implement serializable adaptive
-   topology, leaf lookup and reciprocal physical face adjacency in domain modules.
-   Verify partition area, boundary coverage and coarse/fine shared-face measures.
-2. `366d3821-6b3f-452b-9c6f-ac0e68f53f32`: implement shared-edge reconstruction,
-   gradients, category sampling and physical transfer between nested topologies.
-   Verify linear-field reproduction, continuity and conservation through refinement.
-3. `b577bbf4-22f3-4af2-995e-351a602331a8`: exercise a localized narrow feature,
-   rotated fields, nonuniform interfaces and representative topology sizes. Use
-   focused domain tests and typechecks, recording actual results here. The
-   algorithms remain shared domain code; production generation cutover is M8.
-
-M1 implementation: domain adaptive topology uses reciprocal variable-degree
-faces, 2:1 cell grading, physical measures and tree lookup. Reconstruction shares
-corner/edge values at nonconforming interfaces and retains physical interior
-samples; categories remain discrete. Transfer integrates overlap and gradients
-to conserve intensive integrals and extensive totals. Generated-field data can
-retain adaptive samples directly, with footprint clipping and scoped evaluators.
-
-An ungraded initial topology spread narrow relief into an overly coarse adjacent
-cell. The focused narrow-feature case exposed it; standard 2:1 grading fixed it
-without broadening the feature or loosening the geometric assertion. Field-shaped
-construction stays with its owning physical operation in M2/M3, rather than
-introducing independently placed gorge/waterfall primitives into M1.
-
-The five focused cases cover variable-degree reciprocity/area, rotated-plane
-reconstruction and coarse/fine continuity, conservative transfer/categories,
-narrow feature support, and clipped fields/category queries. A representative
-4,000 km × 2,000 km topology with a locally refined corridor used 15,532 cells
-and 3.34 MB of topology arrays and built in about 0.25 s. This measures topology
-construction only, not full generation performance. Domain typecheck and focused
-lint passed; 87 other domain/generation checks passed during the shared run.
-
-### Adaptive M2 execution
-
-Sulion expansion `36671812-61ae-40e6-aa52-2b3a80b4c6a3`, anchored to
-`b725cb8a-545e-4fe4-bcf2-cfb7b85d1f4c`.
-
-1. `8266b407-5d3c-48f0-a5c8-7a44b3a7f6ea`: generalize physical spatial access
-   to variable-degree cells, local size and physical shared-face geometry; add
-   adaptive world workspace construction. Preserve the existing physical bodies
-   and registry rather than introduce another generator. Convert common neighbor
-   traversal together; semantic/weight conversions remain with each owning family.
-2. `47f6b52c-8419-4e52-9f51-3092217a5978`: review and convert the assigned 17
-   geological bodies and helpers, including source construction, physical distances,
-   area-weighted components, transport and support. Remove fixed four-target
-   advection assumptions and conserve material during spatial transfer. Refine
-   physical state at declared causal boundaries with proper invalidation.
-3. `ecda9086-205b-491a-bd0d-d5a51079e4e1`: check geological consequences,
-   construction/evolution, material budgets, source scales and adaptive interfaces.
-   Read the corresponding Canonry bodies/helpers and retain meaningful regression
-   checks. Full coupled-world acceptance remains M5/M8.
-
-M2 implementation retains the existing 17 process bodies and sequence. Province
-warping, continental composition, relative plate motion, convergence/rifting,
-finite crustal deformation, prominence ranking and shortening distribution remain
-causal inputs to relief. Component statistics now weight physical area; influence
-and suture contact searches use physical shortest distances. Airy support and
-load/rebound retain their material interface, with conservative finite-volume
-screened diffusion replacing equal-cell flexure. Hillslope transfer uses shared
-faces, stable gradients, material budgets and physical substeps. Fractures steer
-in world space with the existing novelty/strain/branching mechanisms, rather than
-choosing lattice headings. Geothermal feedback still consumes those fractures,
-plate boundaries, impacts and plume activity.
-
-Impact and volcanic causes request local support before excavation/construction;
-they are evaluated at the added physical samples. Remeshing conserves represented
-material/history, keeps provenance discrete and resets index-valued diagnostics
-for the already scheduled reconciliation. It never restores pristine event
-relief. Plate advection now transports translated control-volume footprints by
-overlap, including coarse/fine crossings, rather than scattering one coarse
-column at its centre. The adaptive workspace is wired into the existing runner;
-publication and display remain transitional until M6–M8.
-
-Five focused adaptive geology cases cover support conservation, remeshing evolved
-material/provenance, hillslope transfer, footprint advection and collision/rift
-consequences. The complete draft initial geological sequence (4,000 × 2,000 km,
-seed 104729) passes with 19,222 cells and physical impact/volcanic relief and fault
-geometry. Its first measured run took 71.6 s: repeated overlap searches cost
-31.1 s for volcanic remeshing and 34.6 s for impact remeshing. Reusing the same
-geometric transfer calculation across channels reduced the complete pass to
-7.6 s. Hillslope transport itself took 2.2 s, so replacing that solver is not
-justified by this case. The user was alerted when the initial cost exposed this
-design risk. Focused tests, generation typecheck and adaptive/physical lint pass.
-Full multi-epoch, water/ice/magic and display acceptance remains outstanding.
-
-### Adaptive M3 execution
-
-Migrate the existing 12 water/sediment operations and their consumers of physical
-geometry. Preserve priority flooding, lake volume/stage/spill budgets, drainage
-capture, runoff/discharge, Strahler connectivity, incision, sediment deposition,
-channel dimensions, floodplains and deltas. Continuous paths must remain inside
-their drainage corridor and describe terrain modified by those processes.
-
-1. Replace remaining global-spacing/count assumptions with actual travel
-   distances and local/shared-face measures. Review the reference bodies while
-   retaining each physical operation and budget.
-2. Couple adaptive valley support and continuous paths to incision/routing;
-   preserve confluences, lake/coast interfaces and emergent drops. Rebuild routing
-   after remeshing at an existing causal reconciliation boundary.
-3. Check branching/coarse-fine flow, closed/spilling lakes, sediment conservation,
-   physical channel profiles and rotated corridor geometry. Keep full histories
-   headless, with final cross-family acceptance at M5/M8.
-
-M3 cost correction: the first river-supported world grew from 19,222 to 377,875
-cells; refinement/reconciliation took 30.5 s and incision 24.0 s, before the global
-finest-cell hillslope clock dominated subsequent work. Alerted the user rather
-than continuing to force that integration scheme. Refine sharp drops at the
-waterfall scale rather than applying that scale to every slope meeting the much
-lower gorge-gradient threshold. Retain broad valley support. Replace the global
-explicit clock with conservative implicit shared-face exchanges, preserving
-rock-dependent stable gradients, source transport budgets and geological time.
-This changes numerical integration, not the hillslope mechanism or product scope.
-
-The corrective sub-plan is `f82a6759-a218-4701-9d8c-fd816a42c460`. It is complete:
-implicit exchanges solve the thresholded shared-face material flux with finite
-source budgets, preserving each configured geological pass. A queue revisits only
-faces whose neighboring heights changed; there is no global finest-cell clock
-or runtime cap. The existing physical-reach and material-conservation checks pass.
-The world-sized first geology/river/sediment sequence now completes in 52.8 s at
-207,442 cells: refinement/reconciliation 17.3 s, incision 12.0 s, post-fluvial
-hillslope transport 3.9 s and ocean currents 13.1 s. Ocean transport is M4 work.
-
-M3 implementation also separates the reference's heavy-tailed cheap-corridor
-cost from physical flood height. Dijkstra propagation uses actual segment lengths
-through a seeded world-space resistance field; flood height remains the minimum
-physical spill surface, with ranks ordering flat drainage. This retains preferred
-branching corridors without adding one vertical epsilon per refined sample.
-Runoff, catchment and lake losses remain area-weighted. Reach lengths, sediment
-residence, channel/floodplain expansion and delta extent use physical travel.
-
-Adaptive river paths cross shared-face portals, with each curve bounded by its
-own control volume. Confluences share positions/tangents; receiving-water endpoints
-meet water level on the same continuous terrain evaluator. Valley support is
-refined before incision and all drainage indices/lake budgets are rebuilt there,
-without rerunning geological time. Sharp-drop support uses the waterfall gradient,
-not the lower gorge threshold. No independent gorge or waterfall primitive was
-introduced. Six focused cases cover corridor continuity, receiving shore, runoff
-conservation, flat conditioning, closed/spilling lake budgets and incision/drop
-consequences. Publication/extraction and final terrain-profile agreement remain
-part of M6–M8 integration, rather than another uniform raster projection here.
-
-### Adaptive M4 execution
-
-Keep all 24 assigned physical operations and the existing causal schedule. Replace
-remaining equal-distance/area assumptions, including initial sea coverage,
-ocean/shelf distances, current and atmospheric transport, orographic gradients,
-ice balance/flow and coastal erosion. Use existing physical influence lengths;
-refinement must not create additional elapsed climate or glacial activity.
-
-1. Convert ocean connectivity, shelf/marine structure and atmosphere/current
-   transport to physical area, travel and shared-face geometry. Preserve currents,
-   geothermal mixing/cooling, wave fetch, wind bands, rain shadows and runoff.
-2. Convert ice support/flow, erosion, deposition, meltwater, coastal forcing and
-   derived landforms. Preserve load/rebound and subsequent water reconciliation.
-3. Check wet/dry and warm/cold contrasts, coarse/fine transport, ice retreat and
-   material accounting. Reuse the measured world scene; full magic/history and
-   application publication/display remain M5–M8.
-
-Coupled review must also resolve physical source support for fractures: their
-paths now steer in world space, but painting a source into an unresolved coarse
-cell still broadens its conductance. Prepare the actual path, refine its support,
-then apply the source at the added physical samples before geothermal feedback.
-This is an M2 integration miss to finish in M5, not a reason to drop fracture
-feedback or accept a visual-only curve. Final continuous terrain/profile
-constraints and their authoring/query agreement remain explicit M6–M8 work.
-
-M4 sampling correction: a predicted-cold/roughness policy grew the draft to
-602,797 cells and the test process reached about 2.9 GB RSS before publication.
-Alerted the user and removed that broad trigger. Climate temperature alone does
-not request detailed physical terrain. Actual grounded ice-flow paths request
-support immediately before scour; thickness transfers conservatively and ice
-routing is rebuilt without repeating accumulation. Coastal support remains
-before its construction and scheduled climate reconciliation. Full coupled
-spatial-fact reconciliation remains part of M5 acceptance.
-
-M4 implementation uses physical area for ocean and ice coverage, weighted
-shortest paths for shore/shelf/ocean distance, local gradients and travel for
-precipitation and atmospheric fetch, and characteristic upwind interpolation
-with source floors/cooling for ocean heat. Screened diffusion assembles only
-participating cells and conserves each disconnected component independently.
-Coastal exposure/erosion uses actual shared-face segments and local strip
-coverage. Ice curvature/advance uses physical faces/distances; ice flux,
-grounding, scour, deposition, meltwater, runoff and retained history keep their
-existing causal bodies. Landform neighborhoods sample the continuous field at
-their physical radius rather than counting the mesh's neighbors.
-
-Six focused cases cover area-based connected ocean, coarse/fine heat and cooling,
-independent basins, physical ice flux/scour/retreat, coastal strip conservation
-and floating frozen-lake ice without bed scour. The coastal physical fixtures
-now use adaptive work cells; their convergence assertions were retained.
-The focused physical suite has 65 passing cases. Generation typecheck and physical
-lint pass. The world-sized geological/river/sediment/glacial transition completes
-in 228.1 s at 358,546 cells, including actual ice-loaded support and warm retreat.
-Grounded-flow refinement added 24,300 cells instead of the earlier broad cold
-policy. This is a substantial headless runtime; remeshing, flexure and current
-solves remain costs to measure in complete M5 worlds. No M5–M8 completion is claimed.
-
-### Adaptive M5 execution
-
-Sulion expansion `77de2eef-c5c7-4206-8953-387428348fc7`, anchored to root M5.
-
-Retain all configurable magic mechanisms and causal interleaving; test semantic
-effects rather than reference hashes. Fix the discovered fracture-support miss
-before claiming complete coupling. Keep one shared state and the existing worker.
-
-1. Prepare/refine physical fracture sources before applying conductance. Convert
-   automatic/placed magic sources, physical propagation and beams, history,
-   storage, advection, feature growth and interactions to the adaptive geography.
-   Preserve independent configured variants, timing, enable/disable and feedback.
-2. Reconcile spatial facts after topology changes without duplicating physical
-   growth or elapsed epochs. Check the complete 55-process schedule, feedback and
-   structural validation against the shared numerical state.
-3. Run focused magic causal checks and full headless worlds with different seeds
-   and histories. Measure cost/memory; alert when a mechanism/design needs revision.
-   Complete publication, authoring, renderer and retirement remain M6–M8.
-
-M5 source and spatial conversion is implemented; coupled-world validation remains
-open while independent M6 integration proceeds. Fractures retain their planned
-world-space network during support refinement. Ocean magic integrates continuous
-headings and physical beam footprints, with configured rays, reflection, decay
-and wakes retained. Cold transport uses local travel and extensive retained
-activity; thermal/rock/coastal feedback and advected history remain interleaved.
-Remeshing rebuilds lake levels from retained inventory rather than independently
-interpolating level and depth. The focused physical suite has 67 passing cases;
-the complete five-epoch headless run completed all five epochs in 2,596 seconds,
-then failed final grounded-ice support validation. The failure is unresolved;
-this run does not establish complete coupling. It loaded the earlier remeshing
-implementation, so it does not measure the subsequent transfer optimizations.
-
-### Adaptive M6 execution
-
-1. Publish adaptive topology and evolved physical samples directly through the
-   shared evaluator. Remove the experimental extra river carving and bank formula;
-   no new physical shaping model is required to finish world generation.
-2. Complete world-level geographic extraction and preserve existing human/built
-   world layers. Pass typed output through the existing worker/session publication.
-3. Editor development, lower-level profiles and analytics/export expansion are
-   excluded. Existing authored-protection and publication checks remain useful
-   compatibility checks, not new product work.
-
-M5 acceptance remains required while independent consumer/display work proceeds.
-Its final grounded-ice support failure needs a focused reproduction before another
-complete world run. No M5 completion is recorded.
-
-The ice-history failure has a small reproduction: separately limited intensive
-transfer made grounded historical flux exceed total historical flux after a split.
-Refinement now inherits recorded maxima from their parent support, matching the
-meaning of a historical observation; it does not interpolate independent new
-extrema. Grounding is recomputed after remeshing and authored-floor restoration.
-Structural validation remains unchanged. The complete-world rerun is still required.
-
-Coupled-cost blocker (`c896975a-7436-4741-9c1f-d5e6d6b282c2`): the first full
-five-epoch Draft run exceeded thirteen minutes with about 2.3 GB process RSS.
-A three-second live Node CPU profile located the work in the screened-diffusion
-solve called by ocean-current direction smoothing. The run was stopped. Replace
-Jacobi-only conditioning with a symmetric aggregation multigrid V-cycle while
-CG still solves the same fine physical equation to the same residual tolerance.
-Connected aggregates and Galerkin coarse operators preserve independent basins;
-this is numerical acceleration, with no reduced transport reach, epochs or
-physical activity. This follows the established aggregation/Galerkin mechanism
-described in the [PETSc solver manual](https://petsc.org/main/manual/ksp/).
-The logged coupled run will be repeated after focused operator checks.
-
-### Fixed sampling replacement (current direction, 2026-10-19)
-
-The user rejected the adaptive rewrite's cost and a proposal that reduced the
-multi-epoch generator. Restore one fixed triangle sampling mesh per run. Preserve
-all physical operations, evolving epoch state, metre-aware parameters and the
-three configurable magic systems. Continuous publication and display must read
-the evolved geography rather than expose nearest-cell polygons or add cosmetic
-terrain. Dynamic global refinement is no longer required. The earlier adaptive
-plan below records history, not a requirement for the active generator.
-
-Scope remains top-level world generation and display. There is no backend,
-editor, child-generation or landmark-injection work in this replacement. Runtime
-improvement is measured; it does not authorize budgets or omitted processes.
-
-Sulion root `045cca39-e0ba-4f46-b1be-5d864d9ed1d6`:
-
-1. Restore fixed sampling and continuous publication for the full generator.
-2. Repair demonstrated terrain/drainage defects with focused algorithm cases.
-3. Update detail labels and check complete Draft/Standard worlds and display.
-
-Phase 1 expansion `eea3c53a-63db-4b3a-9d3b-97755d57c92a`:
-construct a fixed workspace and reusable interpolation weights; reconnect every
-process, magic and geographic output; then exercise short complete histories.
-Regular field publication is an implementation choice, not a new product
-requirement. It must preserve categorical reads and continuous physical values.
-
-Phase 2 expansion `07b361f6-6cd6-4588-8986-0fe530a82bb8`: restore Canonry's
-outlet-rank progress comparison on conditioned flats, then inspect evolved terrain
-and geographic extraction. A focused flat-routing case fails with the parent-only
-bonus and passes with rank progress. Profiling the fixed world identified nearest
-triangle search as the largest remaining cost; an exact lattice calculation
-replaces neighborhood scanning inside the numerical boundary. Brute-force nearest
-site comparisons, planar interpolation and cross-face continuity check this choice.
-
-The fixed field shares centre, face and vertex values. Face averages preserve
-connections between adjacent classified cells; vertex averages join incident fans
-without discontinuities or invented extrema. Continuous channels reuse prepared
-weights for publication, while categories retain discrete identities. Retained
-magic inventory is published from density times the destination sample's area.
-Classified-region contours follow these linear fans directly, avoiding adaptive
-root searches on a fixed linear field. Boundary-aware contour selection checks
-the complete interpolation support, including neighboring cells added around a
-region. Interpolation preserves constant fields at contour thresholds. Lake
-contours retain floor/stage and body membership, including the numerical halo
-before clipping to the world.
-
-Existing child generation remains on its prior path; this replacement does not
-redesign it. Focused tests cover metre planes, shared faces, nearest-site lookup,
-connected and disconnected region extraction, publication units and magic
-inventory dimensions. The fixed world geology/glacial transition check takes
-about two seconds of test execution. Full world timing and visual review remain
-separate from the fast algorithm suite.
-
-Phase 3 expansion `3356bd6f-e90e-4aa2-af81-df51c2e0daca`: complete three-epoch
-Draft and Standard worlds with all domains and Fire/Aurora/Pressure; check existing
-authored/inherited compatibility; check labels, display interaction and required
-repository checks. Headless 4,000 × 3,000 km runs with seed 104729 completed in
-41.7 seconds at 435 MiB peak RSS (Draft) and 75.5 seconds at 657 MiB (Standard),
-including final publication. The earlier adaptive Draft with those settings took
-449.1 seconds at 4,315 MiB. These are local Node measurements, with some concurrent
-test load, not browser runtime guarantees. Every run retains the full three-epoch
-schedule and all configured magic. Standard's headless run completes without OOM.
-
-Visual review confirms that relief, water, geological events and river networks
-are present, but coastal drainage still includes excessively parallel stretches
-and Draft cannot resolve small terrain. Fixed sampling addresses the runtime and
-memory failure; it does not establish that those remaining geographic quality
-problems are solved. Do not hide them by pruning rivers to a quota or adding
-display-only terrain. Further quality work must address the physical causes or
-the map's scale-aware presentation explicitly.
-
-World river publication assembles continuous main courses through confluences.
-Each tributary qualifies from its own pre-confluence discharge, drainage extent
-and course length. A major basin does not promote all its tributaries. Complete
-runoff routing, physical channels, erosion and landform detection remain
-independent of World vector qualification. The retained drainage preserves
-unpublished reaches for refinement; network nodes retain confluences within a
-single named course.
-River symbols distinguish measured channel widths at continental zoom and use
-the longitudinal physical width profile when zoomed in.
-
-On completely flat terrain, routing uses the immediate flood-parent direction.
-Long-range direction smoothing had cut across the flood's least-resistance
-corridors. Small cases at two sampling densities reproduce that loss and check
-that the selected paths retain those corridors without changing water levels.
-Varying terrain retains lookahead, capture and inherited-valley guidance. The
-same complete Standard world now publishes 193 river reaches rather than 1,481;
-its waterfall and gorge outputs remain present. The overview loses the excessive
-coastal comb, although individual bends can still expose coarse sampling. This
-is a qualification, routing and display correction, not evidence that every
-remaining river-shape limitation is resolved.
-
-Water-boundary repair (`00fb900c-c121-44e3-b8b5-e39e1b1d4cb8`): the fixed
-world's regular scalar grid approximates the physical field between publication
-samples. Reconstructing a second shoreline from that grid moved it away from
-the physical river mouths. Completed fields now carry the physical ocean extent
-as geometry; river clipping and both raster renderers use that boundary. Lake
-inlets and raster water likewise use retained physical lake polygons, whether or
-not those lakes qualify for names. Explicit terrain
-overlays still expose authored islands. Small curved-coast and island cases check
-this through physical generation, scalar publication, field validation and tile
-sampling, including nonzero sea level and intentionally coarse publication.
-Fixed-world lake extraction also intersects floor and body-membership contours
-directly on the physical fans. A local resampling grid had missed a shallow wet
-cell and left one inlet disconnected. The complete Standard check now accounts
-for every terminal reach: 11 ocean mouths, 30 lake inlets and two map-edge outlets.
-
-Geological event and fault coordinates now use the continuous physical motion
-field rather than independent nearest-cell velocities. Fault segments receive
-additional support before movement so their geometry follows the deformation.
-The material transport and epoch schedule remain unchanged. Faults have their
-own optional `Fault traces` layer with a dashed symbol; physical map views leave
-it off by default. Surface landform extents stop at the ocean, while fjords retain
-their marine extent. This separates subsurface geological traces from the
-topographic surface without removing their physical effects or history.
-
-### Adaptive M7 execution
-
-Sulion expansion `c5d32e35-ec91-45f2-ba6b-d2c4a40021bf` runs against the shared
-field contract while world publication and complete generation checks stay open.
-This scheduling overlap does not waive M6 acceptance or authorize a partial cutover.
-
-1. Replace whole-field image creation and `ImageStatic` with OpenLayers'
-   `ImageTile` source and ordinary canvas tile layer. Evaluate the committed field
-   at tile pixel positions and derive hillshade using neighboring world positions.
-   Reuse current colors and map interactions. Field reads retain typed samples and
-   authored patch resolution; they do not copy a world into JSON number arrays.
-2. Check neighboring tile edges, footprint clipping, categorical queries, zoom,
-   edits and picking using fixtures and one small worker path. Complete physical
-   histories stay headless; no new history or facts are generated by panning.
-
-The field-backed tile path is implemented. `ImageStatic`, whole-world canvas
-encoding and copied JSON sample arrays are removed from frontend presentation.
-Tile pixels and hillshade query the shared evaluator, including authored overlays;
-one-pixel gutters sample neighboring geography. Sixteen focused checks pass for
-tile partition equivalence, discrete materials, clipping, small patches, strokes,
-publication and undo. Frontend typechecking passes. Interior reconstructed vertices
-are bounded by their contributing samples to prevent invented brush peaks; planar
-and coarse/fine continuity checks still pass. All 111 package tests pass, and the
-existing browser terrain/culture/politics/magic authoring workflow passes against
-the tile renderer (36 seconds; fixture generation). The temporary test server is
-stopped. This does not establish real-world relief fidelity. The complete headless
-world and its display at multiple extents remain required for M7/M8 acceptance.
+The physical kernel is a source-traceable port; atlas profile settings, GIS projection
+and user-configurable magic are explicit adaptations. The cultural, political and
+macro-settlement generators use the aggregate society state described above;
+site/interior layouts retain their own processes.
 
 ## Geographic significance at every scale
 
@@ -2575,7 +1088,7 @@ regions. Existing saved maps are not reclassified when opened.
 
 ## Ecology and organic geology
 
-Physical generation now runs atlas ecology processes on the same numerical map as
+Physical generation runs atlas ecology processes on the same numerical map as
 climate, drainage, erosion, ice and magic. The biome field describes living cover;
 `landform` continues to describe relief. A plain can carry forest or grassland.
 The **Biomes and life** layer contains cover, productivity, functional animal
@@ -2603,10 +1116,10 @@ direction, waterborne transport and configured migration strength. Ice
 interrupts colonization.
 
 Propagules also cross the sea (`ecologyCrossing.ts`). Grass and wetland groups
-travel with the wind; tree groups raft on currents. Arrival waits
-`interval × exp(effective distance / reach)`, where the carrier shortens
-distances downwind or down-current and islands act as stepping stones. Nearby
-downwind islands colonize within decades, upwind and remote islands much later,
+travel with the wind; tree groups raft on currents. Arrival time grows
+exponentially with the effective distance over the carrier's reach; the carrier
+shortens distances downwind or down-current and islands act as stepping stones.
+Nearby downwind islands colonize within decades, upwind and remote islands much later,
 and a very remote island gains grass long before trees. Suitable climate alone
 cannot recreate an extinct forest on an isolated island that no crossing reaches.
 
@@ -2644,7 +1157,8 @@ Magic acts on the living landscape through each system's own medium, never throu
 generic altered plant group. `quickening` speeds growth, decomposition and succession
 and names Ember groves and Thaw meadows; `stillness` holds charged cold and names
 Rime forests and Glow-lichen barrens; a Pressure front's fog names Fog heath and
-Moss forest. `vegetationGrowth`, `fire`, `organicPreservation`, `seedDispersal` and
+Moss forest; Greenwood's `verdure` is its own medium in the living cover.
+`vegetationGrowth`, `fire`, `organicPreservation`, `seedDispersal` and
 `animalToxicity` scale growth, burning, preservation, migration speed and habitat
 toxicity by configured system intensity, independently of the system's name. Toxic
 habitat changes forage and animal passage. Magical feature conditions can inspect
@@ -2657,6 +1171,23 @@ geographic identity matcher associates ecological polygons after resampling, so
 matching regions retain their names and relationships when contours move.
 Protected biome samples also govern polygon classification.
 
+Epoch durations are in years. Analytical cohort responses and graph travel times
+avoid annual iteration over geological ages. Each epoch has two coupled biological
+responses. Animal feeding and soil nitrogen act as resource constraints on the
+cohorts. Authored woodland and sampled fields remain geographic authorities.
+Refinement inherits the existing community without replaying its age. Completed
+causes record biome transitions, fire-affected cover, animal biomass and migration.
+Numerical state follows material transport, inheritance and atomic publication.
+
+Organic geology is a downstream consequence. Waterlogging preserves litter
+as peat and aquatic organic sediment; actual sediment gain buries it. Erosion,
+burial temperature and geological time change the source pools into coal, oil and
+gas potential. Source transformations conserve represented carbon. Each cell has
+one mixed buried horizon. A forest-to-swamp-to-buried-source history is one
+supported consequence among many ecological histories.
+
+## Naming
+
 Names use the standalone `@atlas/name-forge` runtime in `packages/name-forge`.
 The atlas owns its configuration in `packages/generation/src/namingCultures.ts`:
 five spelling traditions loosely inspired by English, Italian/Iberian, Nordic,
@@ -2667,7 +1198,7 @@ corpora and grammars are independent of Ice Remembers' naming configuration.
 
 The naming vocabulary describes GIS features: `biome` with the classified biome
 type as its subkind, `ocean`, `river`, `lake`, `landform`, `settlement`, `polity`,
-`culture` and configured magical places. Existing ecological feature kinds such
+`culture` and configured magical places. Ecological feature kinds such
 as `forest` and `wetland` retain their rendering and geometry contracts; the naming
 adapter maps them to `biome` and carries `attributes.biome` as the naming subkind.
 The Oceans and seas layer names significant marine regions from the physical sea
@@ -2676,8 +1207,8 @@ substantially; shallow sills support this distinction, while minor seafloor reli
 and changes below the sampling scale do not create more names. Smaller adjoining
 basins and shelf-dominated regions use the Sea descriptor. Detection follows the
 physical mesh across the cylindrical seam and does not use plate or province
-boundaries. Named extents preserve the existing shoreline and islands without
-requiring all water to belong to a named region. The existing naming and
+boundaries. Named extents preserve the shoreline and islands without
+requiring all water to belong to a named region. The naming and
 authored-protection rules apply.
 
 Names depend on the world seed and stable geographic key, using a separate random
@@ -2695,8 +1226,8 @@ shifts usage through all occupied connections without removing multilingual
 knowledge or changing population totals. Political control does not overwrite
 resident languages. Isolation can change cultural identity while retaining language.
 Language contact updates shares without splitting groups by every language
-combination. Exact individual multilingual correlations are not retained; people,
-culture, religious and practice affiliations still distinguish demographic groups.
+combination; people, culture, religious and practice affiliations distinguish
+demographic groups.
 
 The Languages layer publishes both overlapping `language:<id>` knowledge and
 exclusive `languageUse:<id>` shares. Empty communities have no language-use signal.
@@ -2727,26 +1258,5 @@ Vocabulary revisions do not move the initial geographic traditions.
 Society works receive names at construction from the local naming-language mix,
 with several readable terms for each work kind (for example Forge, Foundry or
 Smithy). The work kind remains in the feature attributes. Work names and their
-language/era provenance survive later population changes and republication;
-the map no longer labels every work as its internal kind followed by a town name.
-
-Epoch durations are in years. Analytical cohort responses and graph travel times
-avoid annual iteration over geological ages. Each epoch has two coupled biological
-responses; it does not resolve seasonal weather, every fire, population cycles or
-the full succession sequence inside a long epoch. Coefficients are atlas-scale
-approximations, not calibrated ecosystem predictions. Animal feeding and soil
-nitrogen are coarse resource constraints, not complete energy or nutrient budgets.
-Magic shapes the same four groups through quickening, stillness and fog rather
-than through a lineage of its own. Authored woodland and sampled fields
-remain geographic authorities. Refinement inherits the existing community without
-replaying its age. Completed causes record biome transitions, fire-affected cover,
-animal biomass and migration. Numerical state follows existing
-material transport, adaptive transfer, inheritance and atomic publication.
-
-Organic geology remains a downstream consequence. Waterlogging preserves litter
-as peat and aquatic organic sediment; actual sediment gain buries it. Erosion,
-burial temperature and geological time change the source pools into coal, oil and
-gas potential. Source transformations conserve represented carbon. Each cell has
-one mixed buried horizon; there is no stratigraphic column, petroleum migration,
-reservoir/trap simulation or recoverable reserve estimate. A forest-to-swamp-to-
-buried-source history is one supported consequence among many ecological histories.
+language/era provenance survive later population changes and republication,
+and a work is labelled by its own name rather than by its kind and a town name.

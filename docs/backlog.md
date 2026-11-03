@@ -1,335 +1,172 @@
 # Product backlog
 
-Requested 2026-10-18. The current product remains browser-only, with explicit local
-map saves and no backend or MCP; preserve the existing backend source. Manual
-editing, associated authoring tools and undo are deferred under the
-[current product scope](product-spec.md). Older entries involving them do not
-authorize implementation, repair or deletion of their existing code.
+The product is browser-only, with explicit local map saves and no backend or MCP.
+The backend source stays in the repository. Manual editing, its authoring tools and
+undo are deferred under the [current product scope](product-spec.md); an entry
+that involves them does not authorize implementation, repair or deletion of their
+existing code.
 
-- [ ] **1. Use metric units inside the generation algorithms.** Express distances,
-      elevations, areas and physical rates in declared world units inside the
-      algorithms and their parameters. Replace lattice-unit assumptions and output
-      adapters that compensate for them. Changing sampling resolution must not change
-      the physical meaning of a parameter. Retain deterministic generation and its
-      causal process sequence.
+## World generation
 
-      Recommended next physical-generation work. The source inventory maps all
-      55 physical contracts and 15 magic layers; it establishes concrete magic,
-      execution and extraction differences, not complete application parity.
-      Compare reference algorithms while converting their dimensions. Relief
-      loss already occurs during generation. Domain coverage,
-      feature geometry and cartographic display also need correction; unit
-      conversion alone will not resolve them. See the recorded
-      [generation and display findings](generation-workflows.md#generation-and-display-findings-2026-10-18).
+- [ ] **1. Express every generation parameter in world units.** Distances,
+      elevations, areas and physical rates are declared in world units inside the
+      algorithms and their parameters, so changing sampling resolution never
+      changes a parameter's physical meaning. Restate the remaining thresholds
+      that are written in cells, flow units or epochs, and remove output adapters
+      that compensate for lattice units. Keep generation deterministic and its
+      causal process sequence intact.
 
-      Execution is now scoped to **top-level world generation** in the
-      [physical-dimensions plan](generation-workflows.md#world-generation-with-physical-dimensions--execution-plan),
-      Sulion `c024ba6d-9344-47a2-b9ac-10a6c3faf42a`. Standard/Fine must change
-      sampling rather than feature size. Regional generation remains later work;
-      world outputs must retain physical dimensions, identities and topology for it.
-      Top-level M0–M4 implementation is complete, including physical dimensions,
-      reviewed algorithm corrections and continuous river geometry. Regional
-      generation remains pending.
+- [ ] **2. Decide what an ice-age round's bands become.** A mobile band in the
+      round grows under the same support as a settled era, so many lasting camps
+      reach the resident concentration of a present town and publish as World
+      ruins by the [ADR 0005](adr/0005-scale-contract.md) rule. Decide whether a
+      round produces towns at all, and whether its survivors seed the present
+      instead of the settled eras starting again from founders.
 
-- [x] **2. Make the UI a workflow surface.** Organize the editor around creating a
-      world, choosing geography, refining it, generating selected systems and
-      authoring the result. Present tools and next actions in the context of the
-      current creation profile, layer and selection. Forms and record inspectors
-      support those workflows rather than defining the product's navigation.
+- [ ] **3. Ocean-surrounded worlds.** The map-boundary setting reserves this
+      choice. Add a physical ocean rim that survives tectonic, erosional and
+      sea-level epochs, using the existing conditioning and authored-protection
+      rules; a painted border or land clipped at the map edge is not an ocean
+      boundary.
 
-- [x] **3. Design and implement substantial political and cultural generators.**
-      Develop both domains beyond their initial implementations, with explicit
-      geographic and historical causes and meaningful creator controls. Preserve
-      overlapping cultural prevalence, languages, religions and communities.
-      Distinguish political sovereignty, administration, claims, disputes and actual
-      control. Keep cultures and polities independent, with stable identities and
-      coherent regional refinement.
+- [ ] **4. Let buried Salt beds shape the fold belt above them.** A thick Salt bed
+      carried under a collision acts as a detachment, so the belt above it folds
+      broad and low. Add that response to mountain building when a concrete
+      requirement reaches into that module
+      ([ADR 0007](adr/0007-magic-systems-are-materials.md)).
 
-      Delivered as bounded aggregate society generation: population and migration,
-      joint affiliations and diffusion, political reach/collapse/recovery, present
-      authoring and inherited refinement.
-      The subsequent population correction replaces whole-era single-pass updates
-      with repeated environmental feedback and settlement establishment,
-      abandonment and recovery. Local histories distinguish settlement residents
-      from rural catchment populations; unoccupied catchments are not towns.
-      Four-pillar integration followed; see
-      [ADR 0004](adr/0004-coupling-through-each-systems-medium.md).
+- [ ] **5. Support true spherical worlds.** Generate a complete planet with
+      spherical distances, cell areas and adjacency and no physical boundary at the
+      poles. Adapt physical operators, directional fields and conservative
+      material transport to the surface, and move plates by rotations about the
+      planet's centre. Keep feature identity, authoring and refinement coherent
+      across projection seams and poles, with local metre frames for finer
+      geography. Start from an approximately uniform triangular spherical mesh
+      with projected atlas views, reusing the process pipeline and epoch history
+      where their geometry permits; a 3D globe viewer is separate work. Today
+      pole-to-pole coverage uses cylindrical metre geometry with independent
+      terrain along its closed north and south edges.
 
-- [x] **4. Fix map interaction behavior.** Reported symptom: attempts to interact
-      with the map pan it instead of performing the selected action. Make selection,
-      drawing, feature manipulation and brushes work alongside navigation, with clear
-      active-tool feedback and cancellation. Verify the actual pointer and keyboard
-      workflows on the map, including editing existing geometry.
+## Magic
 
-- [ ] **5. Provide cartography toolsets for different layers.** Supply tools suited
-      to terrain, water networks, transport, settlements and structures, political
-      boundaries, cultural distributions and magical geography. Include the relevant
-      drawing, reshaping and field-editing operations, together with symbols, labels,
-      colours, fills, line styles and presentation at different scales. Tools must
-      edit the shared world geography and preserve feature identity.
+- [ ] **6. Hold sea ice with Aurora shelf charge.** Shelf charge already writes
+      ice persistence on ocean cells; let sea ice read it as land ice does.
+- [ ] **7. Drift stocks with ocean currents.** Move the stocks that declare a
+      current carrier during the stock advance, alongside river, ice, animal and
+      crust carriers.
+- [ ] **8. Green river mouths.** Carry Greenwood litter with river sediment to
+      floodplains and deltas.
+- [ ] **9. Raise brine under clearance.** Let Salt stocks read soil water, so
+      clearance that lifts the water table brings brine up.
+- [ ] **10. Dry closed lagoons into Salt sources.** A closed warm lagoon behind a
+      Pressure coast dries to a sabkha that becomes a Salt source, and storm
+      tracks lift its dust.
+- [ ] **11. Mark Veil wild zones as unreliable on the map,** publishing the
+      previous epoch's feature positions beside the current ones.
+- [ ] **12. Society practices for every system.** Add Greenwood tending (with a
+      lumber taboo as a clearance cost), Hallowed vows, Veil door-keeping,
+      Pressure sky-reading, temple cities, pilgrim economies, fortresses at doors,
+      mirages and detour routes, each with a field behind it.
+- [ ] **13. Author ward lines and paired doors.** Let an authored magic source be a
+      line for a ward and two linked ends for a door.
 
-      Interaction toolsets implemented: terrain strokes and landforms; rivers and
-      lakes; roads; settlements, buildings and interiors; sovereignty,
-      administration, claims and control; cultural origins and distributions;
-      magical source placement and movement; typed custom surveys. Presentation
-      changes are excluded by the user's current direction and remain untouched.
+## Regional refinement
 
-- [x] **6. Create regions directly on the map.** Let creators draw or select an
-      extent, adjust its outline visually, choose its creation profile and see its
-      parent context and inherited interfaces. Region creation must not require
-      typing coordinates and dimensions into text boxes. Keep numeric entry available
-      as an optional precision control.
+- [ ] **14. Regional terrain.** Add calderas as closed-basin roots with crater
+      lakes, lava plateaus, and spring lines at escarpment feet. Add landmark
+      responses (falls lip retreat lengthening the gorge, scarp and rim retreat,
+      breach deepening) and conjunctions (a canyon bridge town, falls portages,
+      dome-ring trough roads, escarpment pass towns). Keep flat parent ground flat
+      so small rivers get valley floors and riparian strips, and keep shore relief
+      on resistant rock near the parent's low coastal heights.
+- [ ] **15. Regional coasts.** Re-root the drainage network at a moved shore, add
+      barred lagoons through longshore drift, add depth classes (shoal and
+      intertidal, bay, shelf), and let the shore read magic's declared coastal
+      forcing.
+- [ ] **16. Regional climate.** Carry moisture downwind on the captured wind and
+      form fog belts on Pressure coasts.
+- [ ] **17. Regional ecology.** Form peat bogs behind moraines.
+- [ ] **18. Regional magic.** Resolve captured stocks onto their carriers, add a
+      regional storm medium, crust dried basins as Salt beds, retrace Pressure rays
+      near a changed coast, give the Hallowed rim a geographic width, measure Veil
+      strain per metre, release Fire from captured cores, base aquifer springs on
+      network catchment, scale door pairing distance to the frame, and add
+      magic-landmark conjunctions.
+- [ ] **19. Regional society.** Add embankments, drained marsh and breakwaters;
+      hamlets, shrines and way-stations; canals, portage pairs, and fortress gorge
+      dams sited by dam demand at narrows. Realize harbour and pass demands and site
+      forges, dive sites and archives. Publish population per hinterland, give
+      captured seats hierarchy roles and name villages in the owning community's
+      language. Add the connection graph with sea links, let hazards penalize
+      proposals, and read livelihood per cell. Decay the works of ruins, keep
+      captured highways and roads as worn ground by class, publish land-use
+      features, and merge trunk ways by their combined traffic.
+- [ ] **20. Let different people own and refine different regions** of one world.
 
-- [ ] **7. Preserve the three authored magic systems.** Per the user's 2026-10-22
-      clarification, treat Fire, Aurora and Pressure as first-class world effects
-      and processes: physical motivations, media, propagation, feedback and
-      interference. Adapt social uses without importing named setting lore.
-      Retain source shaping and system-specific controls, and leave future magic
-      systems open through shared process contracts. See [the product contract](product-spec.md#103-magical-generation--fire-aurora-and-pressure).
+## Editor and storage
 
-      Implemented automatic and placed sources, fracture transport, cold drainage
-      and ice retention, ocean rays and wakes, heat/ice/rock/coastal feedback,
-      advected history, configurable feature regions and cross-system interactions.
-      Each system also has its own living and climatic medium
-      ([ADR 0004](adr/0004-coupling-through-each-systems-medium.md)): Fire's
-      quickening and conduit evolution, Aurora's stored charge,
-      stillness and ice persistence, Pressure's climate-phase upwelling, sea
-      surface, fog and wake warming. Those mechanisms use declarative
-      definitions, per-epoch activity, storage and source timing. Society retains
-      finite core extraction/use, crystal charge and reader access, depth-limited
-      Pressure practice, and aggregate injuries/strain, and reads magic in its
-      site choice. Item 10's magic/ecology gaps are closed by that plan.
+- [ ] **21. Provide cartography toolsets for different layers.** Supply tools for
+      terrain, water networks, transport, settlements and structures, political
+      boundaries, cultural distributions and magical geography: drawing,
+      reshaping and field editing, with symbols, labels, colours, fills, line
+      styles and presentation at each scale. Tools edit the shared world geography
+      and keep feature identity. Interaction toolsets exist for terrain strokes and
+      landforms, rivers and lakes, roads, settlements, buildings and interiors,
+      political layers, cultural origins and distributions, magical source
+      placement and typed custom surveys; presentation changes wait for the
+      owner's direction.
+- [ ] **22. Mark blocks used on sample reads.** The
+      [block cache](../packages/domain/src/lattice/blockCache.ts) evicts by a clock
+      whose used flag is set only when a block is pinned, so per-sample passes
+      through `Band.get` and `Band.set` evict first-in, first-out. Set the flag on
+      reads at a cost the resident path does not notice, and compare with
+      `make test-perf`.
+- [ ] **23. Send generated records to the catalog as one encoding.** Carry the
+      stored form (value text plus WKB geometry bytes) across the worker port
+      instead of a structured clone, and compare in-progress records, protection
+      and identity against the source in that form.
+- [ ] **24. Count features without a per-commit scan.** Catalog commits recount
+      a world's features with a full count on every commit; maintain the count
+      with the commit.
+- [ ] **25. Store presentation attribute discovery.** The presentation catalog
+      discovers feature attributes with a JSON scan per request; derive them once
+      per record revision like the other stored products.
 
-- [x] **8. Expose meaningful generation parameters beyond detail level.** Provide
-      understandable controls for the applicable physical, magical, cultural and
-      political processes, including history and epoch settings. Show units, useful
-      defaults and the expected effect of controls; offer presets and advanced
-      settings where appropriate. Keep sampling/detail separate from the settings
-      that determine the world's character, and retain the chosen configuration for
-      reproducibility within the session.
+## Hosted workspace
 
-      Implemented landscape presets, fifteen parameters including initial culture and
-      polity counts, physical history presets and per-epoch controls, cultural
-      spread history, magical source settings and retained session configurations.
-      Further political and cultural controls belong with the generators in item 3.
-
-- [x] **9. Inject and preserve major landscape landmarks during epochs.** Provide
-      an optional generation process for deliberately introducing exceptional
-      landscapes at chosen points within the epoch sequence: Niagara-scale falls,
-      a Grand Canyon-scale gorge, a Matterhorn-like peak, and other epic locations.
-      Let creators guarantee these landmarks' presence, location and defining
-      physical characteristics. Preserve those characteristics through subsequent
-      epochs while integrating the surrounding procedural terrain, geology,
-      drainage and magical effects into coherent geography.
-
-      Keep naturally emerging landforms and their existing generation and feature
-      detection routes available alongside deliberate injection. Injected landmarks
-      participate in the shared causal generation system and remain identifiable
-      through later evolution.
-
-      Delivered 2026-10-26 ([ADR 0006](adr/0006-landmarks-are-injected-causes.md)),
-      replacing a first delivery that asked the creator to place landmarks before
-      generation: the generator sites a configured number of landscape landmarks
-      (two great mountains, great canyon, two great ring structures, great
-      escarpment, great falls) and of magic landmarks (a great source of Fire,
-      Aurora, Pressure, Greenwood or Salt) during the physical epochs, from each
-      kind's reading of the terrain at its forming epoch; emplacement and
-      maintenance hold every signature with the maintenance booked; rivers are
-      captured; each landmark is named once and published as one registry row
-      with target and measured signature on the geology or magic layer; a rerun
-      keeps the landmarks it has, and creators edit or remove the result. The
-      great falls is held cell to cell at World and left to the terrain and
-      rivers subplan of the regional refinement plan to realize. Observed cost: a
-      tall volcanic cone pays a large share of its relief per epoch to isostatic
-      subsidence; the other kinds hold with corrections only where sea level or
-      deposition moves their reference bands. Hallowed and Veil have no initial
-      origin to inject and remain outside the magic count.
-
-- [x] **10. Rework the interaction between magic and ecology.** Delivered
-      2026-10-24 ([ADR 0004](adr/0004-coupling-through-each-systems-medium.md)):
-      each system acts through its own medium (quickening, stillness, fog) and
-      names its own biomes; the generic altered group, cover and biome names are
-      removed. Original statement kept below. Magic reaches
-      vegetation only through generic ecological effects, so the three systems'
-      own rules barely shape the living landscape. Fire heats land to 46–60 °C
-      and its fire effect holds grass along its veins; Aurora and Pressure have
-      no ecological effect at all. Ecology itself shows gaps the named biomes
-      exposed (2026-10-23 Draft world): fire activity and flood frequency are
-      zero everywhere, conifer cover is essentially absent, and 58–62% of land
-      carries under 12% plant cover. Define how each system's physical rules
-      change vegetation, and make the ecological disturbance regimes produce
-      results that biome naming can use.
-
-      Remove "altered" as an ecological descriptor. It is too generic: the
-      altered plant group, altered cover, and biome names such as
-      "Wildwood-altered woodland" say that magic changed something without
-      saying what. Replace it with effects and names that follow the
-      responsible system's rules.
-
-      **Sequencing correction, 2026-10-23:** complete the society generation
-      plan through M4, including E1's society/environmental feedback, before
-      this item. Address it in the
-      separately designed society–magic–physical–geology discussion, alongside
-      the other cross-system gaps. The latest user correction explicitly excludes
-      this work from society delivery. B1 was stopped before runtime changes;
-      its goals and design require separate agreement.
-
-- [ ] **11. Decide what an ice-age round's bands become.** On the default draft
-      World most lasting camps of the round reach the concentrated-resident
-      threshold that makes a present town a World feature, because a mobile
-      band grows under the same support and growth as a settled era. Under
-      [ADR 0005](adr/0005-scale-contract.md) those camps publish as World ruins
-      by the same rule as present towns, which is consistent; whether a round
-      should produce towns at all is a design question for the round, not for
-      the publication rule. The round's people are discarded when it ends; the
-      settled eras start again from founders. With the adaptive cycle and the
-      three default settled eras the land fills without them, so whether the
-      round's survivors should seed the present remains open on its own merits
-      (2026-10-25).
-
-- [x] **12. Reach seven magic systems.** Done 2026-10-25 by the
-      [seven magic systems plan](MAGIC-SYSTEMS-PLAN.md): Greenwood, Salt,
-      Hallowed and Veil implemented, Fire extended with fallen and forge cores
-      and Pressure with sea-born weather, every system a material with origins,
-      stocks and carriers, meetings as processes, people as carrier and source,
-      a society phase and door edges ([ADR 0007](adr/0007-magic-systems-are-materials.md)).
-      The [magic lore bible](lore/magic.md) carries each system's character.
-      Mirages, detour routes, vow practice and door-keeper economies stay as
-      reads with no field behind them.
-
-- [ ] **13. Keep a child's epochs from moving its parent's cell means.** A Region
-      over a mountain belt ends its epochs with its land about 150 m away, on
-      average per parent cell, from the World surface it inherited (worst cells
-      above 350 m), with or without realized relief. Incision, hillslopes and
-      Cold-age glacial erosion at the child's mesh do this. Under
-      [ADR 0005](adr/0005-scale-contract.md) the parent is authoritative at its
-      mesh; decide whether child epochs should conserve parent-cell means, or
-      whether the World should carry the erosion its children will do.
-
-- [ ] **14. Generalize Region relief features for the map.** Realized relief gives
-      a 300 km belt Region on the order of a thousand peaks and two thousand
-      cirque cells, plus lakes where the texture closes depressions. The
-      classification is right at cell scale; what the map shows at a zoom is a
-      cartographic generalization question
-      ([ADR 0005](adr/0005-scale-contract.md)).
-
-- [ ] **15. Ocean-surrounded worlds.** The map-boundary setting reserves this
-      choice but leaves it unavailable. Add a physical ocean rim that survives
-      tectonic, erosional and sea-level epochs, using the existing conditioning
-      and authored-protection rules. A painted border or clipping land at the
-      map edge does not establish an ocean boundary.
-
-- [ ] **16. Salt beds shaping the fold belt above them.** A thick Salt bed
-      buried in an early epoch and later carried under a collision acts as a
-      detachment in nature: the belt above it folds broad and low. The Salt
-      system carries, domes and dissolves its beds but does not change the
-      orogeny over them. Reach into the mountain-building module only with a
-      concrete requirement; the effect shows on few seeds
-      ([magic systems plan](MAGIC-SYSTEMS-PLAN.md)).
-
-- [ ] **17. Support true spherical worlds.** Generate a complete planet using
-      spherical distances, cell areas and adjacency, without physical boundaries
-      at the poles. Adapt physical operators, directional fields and conservative
-      material transport to the surface; move tectonic plates by rotations about
-      the planet's centre. Preserve feature identity and coherent authoring and
-      refinement across projection seams and poles, with local metre frames for
-      finer geography.
-
-      Recommended approach: an approximately uniform triangular spherical mesh
-      with projected atlas views first. A 3D globe viewer is separate work. Reuse
-      the process pipeline, epoch history and local physical rules where their
-      geometry permits. Establish geometry and conservation on small constructed
-      worlds before shared integration generation.
-
-      Deferred per the user's 2026-10-26 direction. For now, pole-to-pole coverage
-      uses cylindrical metre geometry with independent terrain along its closed
-      north/south edges; latitude coverage does not enable spherical geometry.
-
-- [ ] **18. Mark blocks used on sample reads.** The [block cache](../packages/domain/src/lattice/blockCache.ts)
-      evicts by a clock whose used flag is set only when a block is pinned;
-      `Band.get` and `Band.set` never set it, so per-sample passes evict first-in,
-      first-out. On a 16 MiB budget, random reads of a million samples took
-      1767 ms against 74 ms resident (`make test-perf`). Set the flag on reads at a
-      cost the resident path does not notice, then rerun the same comparison.
-
-- [ ] **19. Send generated records to the catalog as one encoding.** Each
-      published record's geometry is encoded to WKB once, by the generation worker,
-      and the catalog stores those bytes. The record value still crosses the port by
-      structured clone, and generation keeps CBOR working and source-baseline tables
-      for in-progress records, protection and identity comparison. Carry the stored
-      form (value text plus geometry bytes) across the port and compare against the
-      source in that form.
-
-## Browser GIS defects — 2026-10-28
-
-Recorded from the review of `bc719c5` and resolved the same day by the structural
-remediation (saved roots under the lock, native numerical vectors, lazy geometry
-derivation from one owner, per-query feature composition, host-owned cancellation,
-viewport-independent raster and sketch lifetimes). [ADR 0003](adr/0003-frontend-session.md)
-describes the resulting mechanisms; the entries stay as the record of what was fixed.
-
-- [x] **18. P1 — Read saved-map roots under the cleanup lock.**
-      [Workspace startup](../frontend/src/atlasWorkspace.ts) reads IndexedDB roots
-      before [storage cleanup](../packages/storage-browser/src/storageSession.ts)
-      acquires its exclusive lease. Another tab can save and close in that gap;
-      cleanup then deletes the new catalog and its resources using the stale root
-      list. Coordinate authoritative root discovery, save publication and deletion
-      under the same storage boundary. The race is source-confirmed, not yet
-      reproduced in a browser; verify the interleaving with small supplied data.
-
-- [x] **19. P2 — Bound nearest-boundary preparation during region picking.**
-      [BoundaryIndex.nearest](../packages/storage-browser/src/boundaryIndex.ts)
-      prepares every boundary intersecting an eastward ray across the world before
-      choosing its nearest hit. A constructed two-rectangle example confirmed
-      indexing of unrelated distant geography. Expand the indexed search locally
-      until the nearest hit is established. This finding establishes excess work,
-      not the cause of the originally reported non-noded intersection exception.
-
-- [x] **20. P2 — Keep numerical raster resources alive across viewport changes.**
-      [Raster identity](../frontend/src/rasterIdentity.ts) includes viewport
-      geography, so [RasterSources](../frontend/src/RasterSources.ts) releases and
-      recreates unchanged numerical sources when panning. When the final reader
-      closes, reopening [Zarr inputs](../packages/storage-browser/src/zarrInput.ts)
-      enumerates every chunk and [OPFS](../packages/storage-browser/src/opfsStore.ts)
-      retains a File object for each. Separate immutable resource lifetime from
-      viewport geometry and bound input metadata preparation. The repeated setup
-      path is confirmed; its latency and memory impact are unmeasured.
-
-- [x] **21. P2 — Preserve all display fragments across the cylindrical seam.**
-      [Display queries](../packages/storage-browser/src/displayFeatures.ts) return
-      clipped geometry per viewport window, but [useScene](../frontend/src/useScene.ts)
-      overwrites earlier fragments with the same canonical feature identity.
-      Compose the fragments or identify display pieces separately while retaining
-      their canonical identity. The loss was reproduced with SQLite, GEOS and a
-      constructed polygon spanning both windows.
-
-- [x] **22. P2 — Let cancellation stop a busy generation worker.**
-      [cancelGeneration](../frontend/src/generationJobs.ts) only posts a message;
-      a synchronous process cannot receive it until it yields. A stuck stage keeps
-      the job active and prevents another run or reopening a save. Give the host
-      ownership of termination and disposal of unpublished staging, preserving
-      already-published initial geography as incomplete. This is cancellation,
-      not restart or recovery. Existing fixture workers acknowledge immediately,
-      so verification must exercise a busy worker with a small controlled task.
-
-- [x] **23. P2 — Retain incomplete publication status across generation attempts.**
-      After interrupted initial publication, start another attempt and cancel or
-      fail it before publication. The newest [job](../frontend/src/generationJobs.ts)
-      has no partial flag, while [saving](../frontend/src/savedMaps.ts) and
-      [map status](../frontend/src/Editor.tsx) inspect only that newest flag. The
-      incomplete map becomes saveable and appears committed. Represent completion
-      on the published world state rather than deriving it from the latest UI job;
-      cover this retry sequence with supplied publication batches.
-
-- [x] **24. P2 — Preserve an unfinished region outline during unrelated updates.**
-      [MapCanvas](../frontend/src/MapCanvas.tsx) recreates interactions when the world
-      revision or selected feature object changes; cleanup removes the active Draw
-      interaction. An OpenLayers reproduction confirmed sketch abortion. Tie
-      interaction lifetime to the selected tool and its actual target, updating
-      unrelated canonical data independently. Scope this correction to active
-      region selection and refinement, without resuming manual feature editing.
+- [ ] **26. Add a hosted workspace with agent operations.** Private persistent
+      geography in PostgreSQL/PostGIS, numerical resources in S3, authenticated
+      spatial and domain operations, MCP and agent operations over the same
+      contracts, and long-running generation for an eventual paid deployment. - Requirements: separate domain logic from the browser implementation;
+      preserve geographic identity, representation precedence, authored
+      protection, scoped spaces, semantic profiles, completed history and
+      map-only editing. The local browser product stays usable without an
+      account, and nothing uploads automatically. - Owner decisions: hosted job lifetime and save semantics (how Save map and
+      named versions appear in hosted mode), paid access and billing scope,
+      authorization of any data upload or production cutover, and Fine
+      generation. - Boundaries: build on the `SpatialStore` and `ResourceStore` ports with a
+      PostGIS adapter that is its own query implementation, not a SQL
+      translation of SQLite or a second copy of the authoring rules. Use scoped
+      SQL, indexed predicates and bulk transactions, never per-cell RPC or whole
+      `World` rebuilds. Keep binary formats and partition ids identical across
+      OPFS and S3, with short-lived scoped resource access and a private bucket.
+      Authorize at the service boundary: the shared load balancer validates the
+      token issuer and signature, the service checks the token's purpose and
+      this application's client id, and the token subject owns the data; no
+      client-supplied tenant id grants access. - Generation runs as a job outside the HTTP functions, pinned to its inputs,
+      recipe, seed and code versions, with one attempt, explicit retry from the
+      pinned inputs, and cancellation that stops compute and blocks
+      publication. Initial generation stays visibly incomplete while it
+      publishes; regeneration switches references atomically. Moving a local
+      map to hosted is an explicit export and import with stable identities. - Platform: use the shared Ahara load balancer, VPC, RDS, Cognito and state
+      bucket, with no NAT gateway or remote-state reads, and reconcile the
+      existing Ahara registrations for this project. - Starting material: `backend/`, `db/migrations` and
+      `infrastructure/backend-prototype` are preserved for inspection, not
+      reactivation. Derive a fresh reviewed schema from the browser domain;
+      inspect the applied migration history before choosing a transition and
+      never rewrite an applied migration.
 
 The [product contract](product-spec.md) supplies the geographic and authoring
-requirements. [ADR 0003](adr/0003-frontend-session.md) defines the current execution
-and session boundary; the [generation design](generation-workflows.md) records
-the existing physical port and its atlas adapters.
+requirements. [ADR 0003](adr/0003-frontend-session.md) defines the execution and
+session boundary, and the [generation design](generation-workflows.md) describes
+the generation processes.

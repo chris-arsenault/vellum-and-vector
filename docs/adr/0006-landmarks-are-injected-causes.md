@@ -1,6 +1,6 @@
 # 0006 — Major landmarks are sited by the generator as injected causes with a guaranteed signature
 
-User direction recorded 2026-10-18 (backlog item 9) and corrected 2026-10-26; adopted
+User direction recorded 2026-10-18 and corrected 2026-10-26; adopted
 2026-10-26. Applies to major landscape and magic points of interest in world generation.
 Refines [ADR 0004](0004-coupling-through-each-systems-medium.md),
 [ADR 0005](0005-scale-contract.md) and [ADR 0007](0007-magic-systems-are-materials.md).
@@ -108,5 +108,6 @@ source editing. Names come from the geography's naming vocabulary once and are k
   disabling the capability leaves the records and removes the effects.
 - Adding a kind means one declaration in the domain catalogue and, in generation, its siting
   rule and its causes, measure and correction; nothing else changes.
-- Regional refinement (the terrain and rivers subplan) reads the landmark records and realizes
-  latent forms within the parent's cells.
+- Regional refinement's landmark cause places the captured records on the child lattice
+  without drift, lets each kind steer the drainage network, and restores each signature
+  through the world's `maintainLandmark` after every relief write of every round.

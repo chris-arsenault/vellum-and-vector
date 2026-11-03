@@ -486,10 +486,14 @@ Continuous fields remain independent overlays. Their discovery groups distinguis
 magic systems, population and cultural, language and religious distributions.
 Turning off site symbols does not remove a field or alter the base surface.
 
-**Inspect cell** reads the clicked numerical cell directly. It shows its index,
-coordinates, bounds, area and stored channels with values, units and source fields.
-Layers on different grids remain separate cells; inspection does not interpolate
-the clicked point or aggregate a biome or polygon. The header shows the application
+**Inspect cell** reads the clicked numerical cell directly and explains it. It
+leads with **Why it looks like this**: the drawn surface and any second surface,
+the biome category with its swatch, and the magic system behind a magic class.
+**Here** then lists the mapped features at the clicked place, each with its kind,
+layer, shape, scalar attributes and causes. The stored channels, with values,
+units and source fields, sit folded under **Stored values** with a filter. One
+card is shown per stored-cell size, finest first; inspection does not interpolate
+the clicked point. The header shows the application
 build's Git commit, with its full SHA available on hover.
 
 The Atlas provides **Maps** for mapped-area navigation and **Features** for a
@@ -685,9 +689,18 @@ establishes which geographic mechanisms exist. Named gods, peoples, artifacts,
 places and events are reference context, not atlas content requirements. Social
 applications below are setting-independent adaptations.
 
+Each system names a source the generator can locate from physical geography or
+history; a medium no other system uses, with the propagation that medium implies;
+a physical consequence on climate, water, rock or living cover; a map signature
+(a field, feature, line or point, and biomes named for the system and the cover it
+produced); a society reading (a site class, an extraction, a hazard or a route
+effect); and interference with at least one other system, with its own cause. A
+trope that acts only on characters, such as illusion or mind control, has no
+geographic footprint and is no system.
+
 Every system is a material: stocks in named reservoirs that the world's own
-transports carry (crust, ice, rivers, groundwater, wind, currents, animals and
-people), with origins that make it, a medium it propagates through and a forcing
+transports carry (crust, ice, rivers, groundwater, wind, animals and people),
+with origins that make it, a medium it propagates through and a forcing
 it writes into the shared physical fields the ordinary processes consume. Each
 cell carries shares of every class rather than one winner, and the meetings
 between systems are processes of their own, never a blend or a net of their
@@ -698,16 +711,27 @@ parents.
   what they mined and carried. Fire follows fracture conductance, heats terrain,
   melts ice and hardens rock, quickens the living, opens the conduits it flows
   through until a spent vein seals, and carries warmth down the rivers below it;
-  spent ore rides the crust and is exhumed, placers wash downstream.
+  spent ore rides the crust and is exhumed, placers wash downstream. Fallen stock
+  releases only while exposed, so burial under sediment stops it, and its release
+  rises with tectonic strain, ice load, frost on bare ground and impact shock;
+  impact heat fades with the epochs since the fall. Strain across a sealed conduit
+  reopens it with part of its budget, and exposed spent ore feeds the vein at
+  reduced strength. Fire melting ice from below joins the glacial meltwater the
+  runoff cuts with, and river warmth raises evaporation, so a Fire country's closed
+  lakes die sooner and become Salt sources.
 - **Aurora:** charge accumulating toward colder terrain and held in ice, ground,
   moraine and shelf; ice carries it and dumps it where it ends, meltwater takes a
   share. Stored charge keeps ice from ablating, casts a cold shadow, stills the
-  life within and cuts deeper under charged sliding ice; thawing ground settles.
+  life within and cuts deeper under charged sliding ice; thawing ground settles,
+  within a bound each cell carries. Held ground charge acts without ice at a
+  reduced relict strength, so a deglaciated valley stays cold and still.
 - **Pressure:** a deep-ocean locus whose rays, reflections and wakes crush,
   stress coasts and move water: upwelling and a cold sea surface where a ray
   shoals, fog on the coast it faces, warm still water in its wakes, and storms
   raised on sharp sea fronts that the air columns carry inland as rain, scour
-  and dunes.
+  and dunes. Storms form on the sharpness of the sea-surface front, not its
+  level; Fire heat in the air strengthens them, and Aurora's stillness and
+  Hallowed warding pin them. A harbour on a strong track is a seasonal harbour.
 - **Greenwood:** sap and groundwater. Old stands and deep peat are its sources,
   springs on soft rock below a catchment its wells; it travels between roots
   through connected cover, rides in the gut of grazing herds, is gathered and
@@ -719,17 +743,21 @@ parents.
   by moisture and kept by peat, crusts to bed at pits; bed dissolves on wet
   ground, blows as dust on bare ground, domes under strain and burns under
   Fire. Salting thins cover, starves soil, turns grazers away and dries the air;
-  deep bed fuses the pan to glass.
+  deep bed fuses the pan to glass. Each origin consumes the record it feeds on,
+  so Salt never re-makes itself from the same dead each epoch.
 - **Hallowed:** made by people. Kept seats ward rings that reach with their
   tenure; kept frontiers, works and pilgrim roads are lines. Inside a ward every
   other system is scaled down and what is removed lands on the rim; fractures,
   brine, storms and coasts are turned and their burden displaced; rivers and
-  coasts hold inside. An abandoned seat fades.
+  coasts hold inside. Each connected patch of warding is one ring and pays its
+  own rim. Fractures do not enter warded ground, so a sealed conduit keeps its
+  budget and opens at once when the ward lapses. An abandoned seat fades.
 - **Veil:** derived from the strain between every other system. Strain above a
   floor is a tear; a tear that shifts is a wild zone whose ground and cover move
   within a bound; stable tears far apart pair into doors that join distant
-  places in the travel graph. Aurora's charge closes a door, a Fire release
-  ruptures it, a ward seals it.
+  places in the travel graph. Aurora's charge closes a door, a Fire release at
+  the cell ruptures it, a ward seals it; verdure relaxes strain and knits tears
+  shut, and salted ground holds a tear at its last strength.
 - **Meetings:** each named meeting is a confluence with its own process, hazard
   and class, taking coverage from the systems that made it: Shatter rim, Boiling
   shore, Breach, Overgrowth rot, Frozen Deepwood, Brackish wending, Preserved
@@ -882,7 +910,7 @@ Whether later edits to a template propagate to existing instances is **not accep
 
 A generation request exposes: area, domains, inherited constraints, proposed boundary contract, seed/reproducibility, quality/detail preset, estimated complexity if known, and expected resource/time category. Generation can take minutes or **up to an hour**; that is acceptable as a stated product constraint.
 
-The UI must show server-backed job state and meaningful stage progress (for example geology → climate/hydrology → magic → cultural/political → validation), as well as cancellation and failure diagnostics. Intermediate previews are desirable but must be distinguished from committed valid output. Closing the browser must not turn a running server job into an invisible or unknowable operation.
+The UI must show server-backed job state and meaningful stage progress (for example geology → climate/hydrology → magic → cultural/political → validation), as well as cancellation and failure diagnostics. Intermediate previews are desirable but must be distinguished from committed valid output. Closing the browser must not turn a running server job into an invisible or unknowable operation. In the current browser-only product, generation runs in a worker and stops when the tab closes ([ADR 0003](adr/0003-frontend-session.md)).
 
 Quality presets should primarily control **spatial sampling/detail, algorithm depth, optional generation stages, and quality/accuracy tradeoffs**, not randomly remove causally required checks. A low-detail preview may be approximate; a committed full-quality result must satisfy structural contracts.
 
@@ -907,6 +935,9 @@ Suggested performance target—not a previously approved SLA—is perceptibly im
 ---
 
 ## 14. Persistent domain service and agent/MCP access
+
+The current product is browser-only with no backend, server persistence or MCP
+([ADR 0003](adr/0003-frontend-session.md)); this section states the hosted target.
 
 ### 14.1 Architecture boundary — accepted
 
@@ -953,7 +984,7 @@ Potential implementations include PostGIS for authoritative spatial features and
 
 The Canonry engine provides domain-neutral physical layers and domain-specific magical layers. The replacement/extension should preserve the **causal contracts and algorithms**, not assume its Godot UI, hex runtime kernel, fixed-size simulation buffers, or icebound setting belong in the atlas product.
 
-Current Canonry generation uses a global algebraic microtriangle lattice; its hex cells are later projections. That separation is useful. Whether the atlas retains the microtriangle grid for all physical generation, uses regional local meshes/rasters, or introduces hybrid sampling is a major technical decision. Whatever is chosen must satisfy reciprocal adjacency, projection integrity, boundary constraints, physically coherent hydrology, and deterministic cross-scale results.
+Current Canonry generation uses a global algebraic microtriangle lattice; its hex cells are later projections. That separation is useful. The atlas runs every map, world and region, on the same triangular lattice at that map's own cell span ([ADR 0003](adr/0003-frontend-session.md), [ADR 0008](adr/0008-regional-refinement-is-conditioned-amplification.md)). It must satisfy reciprocal adjacency, projection integrity, boundary constraints, physically coherent hydrology, and deterministic cross-scale results.
 
 Canonry's full-generation pipeline was designed for globally constructed fields and may take minutes. Selected-area refinement with halo constraints, local fields, cross-level summaries, and edit-aware invalidation is a new subsystem, not a trivial interface wrapper.
 
@@ -977,7 +1008,7 @@ If a decision cannot be resolved by a narrow prototype or documented trade-off, 
 1. **Spatial foundation:** World reference, mapped area hierarchy, local frames, vector/field layer registry, geometry operations, persistence, basic web map and layer viewer. Test transforms and authoritative feature identity.
 2. **Physical generation + first refinement:** Reuse Canonry physical/history core, coarse world result, Region refinement with locked physical/hydrological crossings, user-selectable quality and long-running jobs.
 3. **Editing and regeneration:** Manual terrain/feature editing, semantic feature operations, authored protections, per-domain invalidation, previews, undo, explicit reconciliation.
-4. **Magic authoring:** Shape Fire, Aurora and Pressure sources, works and conditions, preserving their distinct propagation, physical consequences, social uses and historical effects.
+4. **Magic authoring:** Shape the seven systems' sources, works and conditions, preserving their distinct propagation, physical consequences, social uses and historical effects.
 5. **Political/cultural axes:** World/Region generators, population/cultural fields, polities/claims/control, historical inheritance, layer presets and scale-specific refinement.
 6. **Local/site/interior and templates:** Settlement/network layouts, cave and construction histories, vertical coordinates, building interiors and template instantiation.
 7. **Agent integration and expansion:** Expose existing domain service through MCP, propose/preview/commit flows, generalized custom GIS layers/import-export, broader content coverage.
@@ -1002,7 +1033,7 @@ The following are target-product requirements. `Core` means foundational to the 
 | LYR-03  | Arbitrary user-defined GIS-compatible layers can be created without new generators.                          | Core                    |
 | LYR-04  | Map views provide layer combinations, styling, visibility, and scale-dependent presentation.                 | Core                    |
 | GEN-01  | Causal, deterministic multi-epoch physical world generation preserves Canonry's major processes.             | Core                    |
-| GEN-02  | Fire, Aurora and Pressure retain their distinct mechanisms and affect geography, society and history.        | Core                    |
+| GEN-02  | Each of the seven magic systems retains its distinct mechanisms and affects geography, society and history.  | Core                    |
 | GEN-03  | Independent cultural and political generators exist at applicable creation profiles.                         | Core                    |
 | GEN-04  | Generators can operate on selected areas/domains and respect parent constraints and protected edits.         | Core                    |
 | GEN-05  | Generation quality is configurable; jobs expose progress/failure and may run for up to an hour.              | Core                    |
@@ -1078,14 +1109,13 @@ An agent proposes “Add a river through the center of this region.” It reads 
 These issues need engineering decisions/prototypes, but **do not block the product specification**:
 
 1. **Global topology and projection:** Cylinder and open metre charts are supported. Ocean-rim generation and geodesic spherical geometry remain deferred.
-2. **Numerical refinement strategy:** How Canonry's globally connected microtriangle graph is adapted to selected child extents/halos and possibly other geometry; verify drainage, erosion and glacial boundary correctness.
-3. **Authority across varying detail:** How coarse parent constraint geometry, high-resolution child geometry, cross-area patches, and cartographic generalization are stored and reconciled.
-4. **GIS persistence split:** Which data live in a spatial database versus raster/tile/object storage versus generator artifacts; evaluate costs and query/edit patterns.
-5. **Magic fidelity and social use:** Represent fire-core extraction and release, Aurora crystal/ice-memory practices, depth-dependent Pressure use and their distinct costs and interference at atlas scale. Distinguish lore-supported additions from existing implementations.
-6. **Political/cultural generation fidelity:** Select plausible initial algorithms and scale-dependent state without inventing a full agent-based history simulation.
-7. **Large-region resource budget:** Implement deterministic job execution, reproducible intermediate state, bounded resource use, cancel/restart, stage reporting, and failure recovery.
-8. **Template updates:** Defaults for propagating improvements to already placed instances; never silently rewrite existing instances.
-9. **Cross-area reconciliation UX:** Start with locked boundaries and impact-reporting; more automatic propagation can come later if demonstrated safe.
+2. **Authority across varying detail:** How coarse parent constraint geometry, high-resolution child geometry, cross-area patches, and cartographic generalization are stored and reconciled.
+3. **GIS persistence split:** Which data live in a spatial database versus raster/tile/object storage versus generator artifacts; evaluate costs and query/edit patterns.
+4. **Magic fidelity and social use:** Represent each of the seven systems' practices (fire-core extraction and release, Aurora crystal/ice-memory practices, depth-dependent Pressure use and the rest) with their distinct costs and interference at atlas scale. Distinguish lore-supported additions from existing implementations.
+5. **Political/cultural generation fidelity:** Select plausible initial algorithms and scale-dependent state without inventing a full agent-based history simulation.
+6. **Large-region resource budget:** Implement deterministic job execution, reproducible intermediate state, bounded resource use, cancel/restart, stage reporting, and failure recovery.
+7. **Template updates:** Defaults for propagating improvements to already placed instances; never silently rewrite existing instances.
+8. **Cross-area reconciliation UX:** Start with locked boundaries and impact-reporting; more automatic propagation can come later if demonstrated safe.
 
 Agent teams should document design decisions with invariants, alternatives, constraints, and a smallest proving prototype. They should not replace this product scope with a conventional raster map painter or a purely GIS dataset viewer.
 

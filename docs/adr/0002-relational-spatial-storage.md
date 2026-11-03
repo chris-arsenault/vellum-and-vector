@@ -146,7 +146,7 @@ application entitlements; the API scopes operations to that authenticated owner.
 The first platform migration invocation provisions the project database and
 application credentials. After provisioning, an administrator manually enables
 `postgis` and `btree_gist` once in that database, following the
-[README setup](../../README.md#deployment-and-database-setup). Extension upgrades
+[README setup](../../README.md#deployment). Extension upgrades
 remain administrator maintenance. Application migrations use the normal project
 role and check the prerequisite. Dense field arrays use PostgreSQL's numeric
 storage; PostGIS supplies vector geometry and spatial queries.

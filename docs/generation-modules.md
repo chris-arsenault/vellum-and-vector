@@ -1,6 +1,6 @@
 # Generation modules and recipes
 
-Generation runs in browser memory through the same TypeScript modules in the
+Generation runs in a browser worker through the same TypeScript modules in the
 editor and worker. A recipe contains plain data. Process implementations, schemas
 and publication factories stay in the application and are rebound before the
 worker executes the reviewed recipe.
@@ -93,7 +93,7 @@ floodplains and deltas while omitting incision. No generator is introduced by a
 choice. Controls are discovered from the module registry; adding a raw setting
 does not automatically add a primary wizard decision.
 
-The wizard progresses through map brief, land, landscape, people and review.
+The wizard progresses through map brief, land, landscape, magic, people and review.
 Independent controls preserve unrelated settings. Matching compares only a
 choice's declared inputs; other combinations appear as Custom. Initial-only
 controls and choices are omitted for inherited regions. Source activity scales
@@ -104,8 +104,7 @@ guaranteed geographic coverage.
 Exact numeric settings and rich clocks, ecology, magic and culture configuration
 remain reachable through one focused advanced editor. Closed rich disclosures
 do not mount their forms. There is no full capability catalogue or execution
-contract inspector in the wizard. The former stage/family/order/summary metadata
-and unused occurrence/publication display copies were removed.
+contract inspector in the wizard.
 
 `frontend/src/generationFeatureAdapters.ts` registers a specialized editor,
 changed-value summary and field mapping together. Adding a nested form does not
@@ -150,8 +149,7 @@ then full-duration burial; present classification adds no biological age. Native
 land-ice passes remain repeated state-changing passes. Configured magical history
 advances once per epoch; located-source storage uses elapsed years.
 
-Every process must bind a behavior; the legacy `apply` fallback is removed.
-Material transformation awaits both transformation and balance, including
+Every process binds a behavior. Material transformation awaits both transformation and balance, including
 asynchronous failure. Behaviors remain trusted operations over shared mutable
 state, rather than a runtime capability sandbox.
 
@@ -167,8 +165,7 @@ Process product definitions are the provider authority. Distinct processes
 cannot both produce an exclusive product; repeated invocations of one provider
 remain legal. Shared-state/additive products explicitly permit multiple writers.
 Preflight and runtime enforce the same rule. Retained products use separate
-identities; there is no unused `freshness` option or second feature-level delivery
-list. Declarations remain implementation obligations: the ledger does not infer
+identities. Declarations remain implementation obligations: the ledger does not infer
 numerical correctness from channel allocation. The forcing-only projector has
 its own contract and does not claim flow or drainage; full projection declares
 only the selected output aliases it actually creates.
@@ -176,16 +173,14 @@ only the selected output aliases it actually creates.
 The numerical map stays shared and typed. Several mechanisms contribute to the
 same material budget or fracture conductivity without requiring the optional
 fault-network generator. Material transformations check the common sediment
-budget. Conditional regional reconciliation uses the same executor, selection,
-bound settings and ledger; it cannot introduce another epoch or replay ice
-accumulation.
+budget.
 
-A transfer's `reconciliation` declares its possible invalidations, child sequence
-and guaranteed products. These declarations travel in the reviewed recipe.
-Preflight checks both changed and unchanged outcomes; execution runs only the
-declared child branch and checks its guarantees before committing the outer
-operation's products. Carried lake inventory is separate from outlet topology
-that remeshing invalidates.
+A transfer can declare a `reconciliation`: its possible invalidations, a child
+sequence and guaranteed products, carried in the reviewed recipe. Preflight
+checks both outcomes; execution runs only the declared child branch, with the
+same executor, selection, bound settings and ledger, and checks its guarantees
+before committing the outer operation's products. No current process declares
+one.
 
 ## Output publication
 
@@ -207,8 +202,7 @@ Configured magic's source/propagation declarations hold their operations,
 requirements, applicable parameters and displayed choices together. Adding a
 built-in strategy extends its domain schema and strategy declaration. Magic field
 descriptors supply unit, quantity, initial value, carried lifetime and publication
-to allocation, remeshing, advection, inheritance and projection; those adapters
-no longer infer semantics from field-name suffixes.
+to allocation, advection, inheritance and projection.
 
 These are current implementation mechanics. Per the user's 2026-10-22
 clarification, the seven magic systems are first-class world processes;
@@ -230,13 +224,10 @@ exercise the actual browser worker.
 Located-source heat, cold, coastal pressure and erosion resistance have physical
 consumers. Uplift, gravity, fertility and luminous sources currently publish
 intensity only. Their existing definitions remain valid; authoring and preparation
-explicitly identify the missing physical feedback. This refactor adds no new
-physical model for those effects.
+explicitly identify the missing physical feedback.
 
 The climate sequence retains its existing approximation: configured thermal magic
 adjusts temperature and ice after the native precipitation pass. Precipitation
 from that pass remains retained until the next scheduled climate calculation.
 At that calculation, the moisture-transport step carries part of each cell's
 external heat forcing downwind with the air.
-The refactor changes contracts and composition without adding hidden climate or
-ice passes to erase that approximation.

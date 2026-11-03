@@ -2,8 +2,7 @@
 
 ![Seven realms on one chart: fire, ice, deep water, forest, salt, veil and a hallowed city around a parchment map](images/banner.webp)
 
-This guide describes the seven magic systems in
-[magic system candidates](../magic-system-candidates.md). Each entry covers a system's physical
+This guide describes the atlas's seven magic systems. Each entry covers a system's physical
 nature, where it occurs, its effects on the landscape, and how people use it. The lore sections
 offer beliefs and customs that a world author can adapt without adopting a particular setting.
 Peoples, gods, places and events are left to the author. "Practitioner" means anyone who works with
@@ -55,7 +54,7 @@ maintenance of the boundaries they protect.
 | Aurora / Greenwood   | frozen forest front                                                                                                                                |
 | Aurora / Salt        | undeath: preserved dead on the Barrow heath                                                                                                        |
 | Pressure / Greenwood | salted coastal springs                                                                                                                             |
-| Pressure / Salt      | brine shore: a lagoon closed behind a still coast dries to a sabkha, and its storms lift the dust                                                  |
+| Pressure / Salt      | brine shore: fog and poisoned ground where a Pressure coast meets Salt land                                                                        |
 | Greenwood / Salt     | dying trees, Veil where fields change sharply                                                                                                      |
 | Hallowed / any       | weaker effects inside, concentrated effects at the rim                                                                                             |
 | Veil / any           | closed by Aurora, ruptured by Fire, sealed by Hallowed; knit shut by Greenwood over epochs, held open on Salt ground; carried Pressure cannot pass |

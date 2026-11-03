@@ -10,7 +10,7 @@ const firePreset = magicSystemSchema.parse({
   id: "fire",
   name: "Fire",
   // Vein cores: fracture-hosted ore fed while the conduit is open, held in the rock and
-  // carried with the crust. The fallen origin joins in M1c of docs/MAGIC-SYSTEMS-PLAN.md.
+  // carried with the crust.
   origins: [
     {
       id: "vein",

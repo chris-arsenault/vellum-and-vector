@@ -32,7 +32,8 @@ template downloads remain local user actions.
 
 Keep the existing spatial model: geographically parented areas, planar metric
 coordinates, stable feature identity, distinct located floors, layer composition,
-authored protection and fixed refinement interfaces. Reuse domain validation
+authored protection and independent child maps that keep their captured inputs.
+Reuse domain validation
 directly. The application layer resolves domain read requirements and maps domain
 changes to transactional catalog writes. Domain values contain no SQL, WASM
 handles or file paths. `SpatialStore` and `ResourceStore` describe geographic and
@@ -58,7 +59,12 @@ feature's canonical identity. Render workers register a raster by the immutable
 resources it samples and update viewport geography in place; immutable inputs
 are bands over their chunks in the renderer's block cache.
 Raster ranges and category legends include applicable patches and finer map coverage.
-The UI and each worker initialize the same GEOS spatial adapter. There is no JSTS
+The UI and each worker initialize the same GEOS spatial adapter. Nearest points,
+rectangle clips, Voronoi cells, linear referencing and nearest-item lookups go
+through that adapter (GEOS, R-tree or STRtree); hand-written geometry scans are not
+added beside it. Per-record read products are stored once per record revision: the
+settlement view reads a community index stored with each society record, and field
+legends and raster references are stored per area. There is no JSTS
 fallback or snapshot-based session engine. Released snapshot saves retain a narrow
 importer so existing explicit saves remain readable.
 
@@ -70,8 +76,16 @@ working map and report stage progress. The physical world is a coverage of typed
 over a block-major lattice: a band is blocks of one native typed-array type, a read is
 two indexings, and a block cache keeps blocks resident within the worker's budget and
 spills them to worker-owned scratch beyond it, owning process lifetimes, release and
-retention either way (`docs/WORLD-COVERAGE-DESIGN.md`). Grids, adaptive topologies,
-society and committed field inputs are coverages in the same cache; an input band
+retention either way. Every map, world or region, is the same triangular lattice at
+its own cell span. A cell id is a lattice address: neighbours, position and area are
+arithmetic on the id, so no adjacency is stored, and the periodic seam and polar rows
+are modular arithmetic. Cells close in space are close in id, so block residency
+follows a frontier's working set. A membership band marks each cell as content, halo
+or nodata; blocks outside the halo are absent, and loops skip by per-block live
+counts rather than by cell order. A band snapshot copies only the blocks dirty in
+memory and shares spill slots with its source. Cells meet the vector catalog through
+label bands grouped by label. Grids, society and committed field inputs are
+coverages in the same cache; an input band
 decodes the chunks under each block on demand and reloads them instead of spilling.
 Grids cross a worker port only as detached arrays (previews, tile grids). No indirection
 sits on the sample path. Canonical feature inputs arrive in revision-pinned pages. The
@@ -100,8 +114,8 @@ world was edited during the run, retain the edits and report that its generation
 result is out of date. The creator can generate again from the current state.
 There is no automatic retry.
 
-Regional generation reads its ancestors and constructs finer present geography
-without replaying physical epochs or human eras. Existing crossings, landmarks,
+Regional generation reads only the inputs it captured from its ancestors and
+constructs finer present geography without replaying physical epochs or human eras. Existing crossings, landmarks,
 material quantities and located settlements retain their context and identities.
 One semantic Region profile supports arbitrary geographic nesting.
 
@@ -121,7 +135,8 @@ than erasing its procedural records.
 ## Repository boundaries
 
 The active pnpm workspace, checks and build contain `frontend`, `packages/domain`,
-`packages/application`, `packages/storage-browser` and `packages/generation`.
+`packages/application`, `packages/storage-browser`, `packages/generation` and
+`packages/name-forge`.
 Prototype backend and database files remain outside
 that path as historical source. The earlier combined Terraform and platform
 registration are preserved under `infrastructure/backend-prototype` with disabled

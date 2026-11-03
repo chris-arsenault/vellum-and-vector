@@ -8,10 +8,11 @@ connected world. The current application runs entirely in the browser.
 The [product contract](docs/product-spec.md) defines the behavior. Project
 implementation guidance lives in [AGENTS.md](AGENTS.md), with decisions in the
 [spatial ADR](docs/adr/0001-spatial-authority.md),
-[frontend session ADR](docs/adr/0003-frontend-session.md), which supersedes the
-earlier backend and persistence direction, and
+[frontend session ADR](docs/adr/0003-frontend-session.md) for the browser-only
+workspace, and
 [coupling ADR](docs/adr/0004-coupling-through-each-systems-medium.md) for how
-society, magic, climate and geology shape one another.
+society, magic, climate and geology shape one another. The
+[documentation index](docs/README.md) lists every durable document.
 
 Open product work is tracked in the [backlog](docs/backlog.md). Files named
 `docs/*-PLAN.md` are the working copies of plans still open; a closed plan's
@@ -24,12 +25,12 @@ describes mechanisms and leaves parameter values to the code, per the
 Start with the generation workflow: define the world, then choose land and
 materials, water/climate/life, magical influences, and people/places. Each feature
 has its switch and operative settings together. Direct navigation preserves the
-draft; **Use defaults & review** skips ahead when the defaults suit the map.
+draft; **Review defaults** skips ahead when the defaults suit the map.
 Select **Blank world** to create an empty atlas for geographic selection and presentation.
 Initial generation belongs to **New world** and never appears in the editor sidebar.
 
 World size and latitude are independent. **Latitude frame** places any map as a
-northern band (10° to 70°), two hemispheres or a full globe; latitudes use an
+northern band, two hemispheres or a full globe; latitudes use an
 equal-area spacing, and a full globe wraps air and ocean east to west. **Rainfall
 regime** chooses Dry, Mixed (Earth-like) or Wet worlds; the raw `rainfall`
 setting scales moisture supply between those anchors. See
@@ -40,8 +41,7 @@ operations such as glacial sculpting appear as one choice. Rivers and incision
 remain independent. Dependency messages link to their providers and offer explicit
 repairs. One shared epoch selector connects physical, ecological and magical
 controls, and a human era can bind to a physical epoch so that it runs inside
-it. Review shows resolved choices and output layers; execution traits and
-causal order sit behind **Execution details**.
+it. Review shows resolved choices and output layers.
 
 Advanced JSON configuration edits the same feature-owned recipe. Applying JSON
 regenerates compatibility fields without starting generation. Invalid field text
@@ -76,6 +76,11 @@ Click a feature to read its
 properties, origin and relationships; settlements also show their residents,
 livelihoods and retained history. **Inspect** returns to feature selection.
 **Atlas → Features** searches existing geography across the world.
+
+**Inspect cell** explains a clicked place: the map colour and its blended class,
+the biome and any magic system behind it, and the mapped features that cover the
+place, each with its causes. The stored values of each cell size stay folded
+underneath.
 
 Choose **Regions** to explore a smaller geographic subject. Use an existing
 boundary, trace a custom outline, or combine a dividing line with rivers, shores
@@ -160,7 +165,7 @@ database or MCP.
 
 | Responsibility | Direction                                                                               |
 | -------------- | --------------------------------------------------------------------------------------- |
-| Editor         | React, OpenLayers, explicit geographic refinement and responsive manual tools           |
+| Editor         | React, OpenLayers, geographic selection, refinement and inspection                      |
 | Domain         | Shared TypeScript types, spatial identity, constraints and versioned commands           |
 | Generation     | Shared working map, registered processes and causal epoch sequences in a browser worker |
 
@@ -216,8 +221,8 @@ GIS and template exports download local files.
 Physical generation includes continental assemblies and sutures, plate advection,
 mountain construction, volcanism, impacts, flexure, continental margins, ocean
 currents, atmospheric transport, water-budget lakes, capture drainage, rivers,
-sediment, grounded glaciers, coasts and landforms. Reference fixtures compare
-the TypeScript numerical output with the original C# implementation. Atlas profile
+sediment, grounded glaciers, coasts and landforms. A reference fixture checks the
+port's hashes, noise and mesh construction against the original C#. Atlas profile
 and unit adaptations are described in the [generation design](docs/generation-workflows.md#physical-port-and-atlas-adapter).
 Cultural prevalence, political territory/claims/control and basic settlement,
 site and interior layouts remain atlas-specific processes.
@@ -264,11 +269,8 @@ the WebGL context required for raster layers. Install `xvfb` and `xauth` for loc
 Linux runs; Ahara's Playwright CI container already includes them. Chromium and
 WebKit keep their default headless execution.
 
-Use small deterministic inputs to test algorithm changes first. The normal Vitest
-suite exercises actual reconstruction, contour topology, conservative remeshing,
-physical processes, configurable magic and publication. Expectations include
-analytical solutions, known geometry and budgets, parameter effects and causal
-history; they do not require generating a world first. For example:
+The normal Vitest suite holds pure-function, data-structure, contract and
+publication-rule unit tests; none generates a world. For example:
 
 ```sh
 pnpm test packages/domain/src/fieldContours.test.ts
@@ -276,11 +278,6 @@ pnpm test packages/generation/src/canonry/drainageFlood.test.ts
 pnpm test packages/generation/src/canonry/metricSearch.test.ts
 pnpm --dir frontend test src/rasterTiles.test.ts
 ```
-
-When the shared integration check exposes a defect, reproduce it on constructed
-cells and call the relevant algorithm directly. A unit test's setup must specify
-the coast, ridge, river, ice stock or population it needs. It must not run a
-generator, a physical schedule or a seed sweep to find those preconditions.
 
 `pnpm test:generation` is opt-in and generates a shared small Draft world using
 the SQLite/GEOS execution adapters and file-backed numerical storage.
@@ -327,12 +324,13 @@ The project registration in `ahara-infra` provisions the standard deployer role
 and repository Actions secrets (`OIDC_ROLE`, `STATE_BUCKET`, `PREFIX`). Deploy
 that registration before the initial product push. Later pushes to `main` use
 the shared CI workflow to test, build and deploy the frontend automatically.
-The earlier combined backend Terraform and its registration remain preserved
-under `infrastructure/backend-prototype` as disabled source files. User data
+The backend Terraform and its registration are preserved under
+`infrastructure/backend-prototype` as disabled source files. User data
 stays in the tab; publishing data or using a hosted presentation service requires
 explicit authorization.
 
 ## License
 
-Project code is under the [MIT license](LICENSE). Source currently present under
+Project code is under the [MIT license](LICENSE), except `packages/name-forge`,
+which carries its own PolyForm Noncommercial 1.0.0 license. Source under
 `backend/vendor` retains its [provenance](backend/vendor/README.md).
