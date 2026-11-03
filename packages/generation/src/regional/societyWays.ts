@@ -62,7 +62,10 @@ export function traceWays(state: RegionalState, places: Place[]) {
       return path;
     });
   }
-  for (const path of paths) if (path.cells) publishWay(state, path);
+  // How many ways run through each cell: a shared cell is drawn alike by all of them.
+  const ways = new Uint16Array(mesh.count);
+  for (const path of paths) for (const i of path.cells ?? []) ways[i]++;
+  for (const path of paths) if (path.cells) publishWay(state, path, (i) => ways[i] > 1);
   return { traffic, crossed };
 }
 /** Worn ground is cheaper to travel; a channel on the way, under the step or across it, costs a ford. */
@@ -236,8 +239,8 @@ function doorLinks(state: RegionalState) {
  * below (the smallest flows are tracks the map draws thin; `routeType` keeps the plan's lane
  * class on the record). The catalogue's `lane` is a shipping lane and is never used for land.
  */
-function publishWay(state: RegionalState, path: Path) {
-  const coordinates = cutCorners(wayLine(state, path.cells!)),
+function publishWay(state: RegionalState, path: Path, shared: (cell: number) => boolean) {
+  const coordinates = cutCorners(wayLine(state, path.cells!, shared)),
     routeType =
       path.travellers >= roadTravellers
         ? "road"

@@ -268,6 +268,37 @@ export const neighborhoodCapacity = 12;
  * how many there are.
  */
 export function neighborhood(mesh: PhysicalMesh, i: number, out: Int32Array) {
+  const table = neighborhoodTable(mesh),
+    from = table.start[i],
+    m = Math.min(out.length, table.start[i + 1] - from);
+  out.set(table.cells.subarray(from, from + m));
+  return m;
+}
+/**
+ * Every cell's neighbourhood, gathered once per lattice: searches and floods read it at
+ * every step, and the lattice does not change under them.
+ */
+const tables = new WeakMap<PhysicalMesh, { start: Int32Array; cells: Int32Array }>();
+function neighborhoodTable(mesh: PhysicalMesh) {
+  let table = tables.get(mesh);
+  if (table) return table;
+  const n = mesh.count,
+    start = new Int32Array(n + 1),
+    cells = new Int32Array(n * neighborhoodCapacity),
+    out = new Int32Array(neighborhoodCapacity);
+  let write = 0;
+  for (let i = 0; i < n; i++) {
+    start[i] = write;
+    const m = gatherNeighborhood(mesh, i, out);
+    cells.set(out.subarray(0, m), write);
+    write += m;
+  }
+  start[n] = write;
+  table = { start, cells };
+  tables.set(mesh, table);
+  return table;
+}
+function gatherNeighborhood(mesh: PhysicalMesh, i: number, out: Int32Array) {
   // The vertex ring lies within two centroid spacings; every member is reached through
   // members, so the walk never leaves the ring.
   const reach = 2 * mesh.spacing * (1 + 1e-6);

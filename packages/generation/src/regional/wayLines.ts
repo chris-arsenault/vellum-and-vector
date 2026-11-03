@@ -9,11 +9,21 @@ import { rulingGrade } from "./ways";
  * steeper than the ruling grade, the way runs straight between them at whatever bearing that
  * is; elsewhere it keeps the path.
  */
-export function wayLine(state: RegionalState, cells: number[]): number[][] {
+export function wayLine(
+  state: RegionalState,
+  cells: number[],
+  shared: (cell: number) => boolean
+): number[][] {
   const on = new Set(cells), // hpc-exempt: the cells of one way
     anchors = [0];
+  // A cell another way also runs through is kept: ways sharing a road draw the same line.
+  const reach = (i: number) => {
+    let last = i + 1;
+    while (last < cells.length - 1 && !shared(cells[last])) last++;
+    return last;
+  };
   for (let i = 0; i < cells.length - 1;) {
-    let j = cells.length - 1;
+    let j = reach(i);
     while (j > i + 1 && !clear(state, cells[i], cells[j], on)) j--;
     anchors.push(j);
     i = j;
