@@ -13,9 +13,9 @@ undesired. This supersedes the older single-authority and frozen-boundary
 requirements throughout this design baseline.
 
 **Dedicated regional refinement — 2026-10-30 user correction:** Refine the captured
-present surface with regional algorithms at the selected physical scale. Do not
-initialize another world, reconstruct tectonics, replay epochs or run society
-eras. Shared physical calculations and browser execution/storage infrastructure
+present surface with regional algorithms at the selected physical scale, deforming
+and fractalizing it by physical processes. Do not repeat the world's history:
+no tectonic reconstruction, epochs or society eras. Shared physical calculations and browser execution/storage infrastructure
 remain useful. Refinement must add actual terrain, coastal structure, smaller
 drainage, habitat patches and places; denser samples of unchanged classes do not
 meet this requirement. Smaller settlements do not require exact inherited
@@ -577,7 +577,7 @@ identity and outline; it does not load and copy every numerical layer.
 2. **Resolve:** Read this map's pinned present fields, known places and completed history; do not read live parent or sibling products.
 3. **Locate:** Keep the map's world coordinates and source relationships.
 4. **Choose:** Select regional detail, seed and applicable domains.
-5. **Refine:** Develop finer surface geography through dedicated regional algorithms without world initialization or advancing time.
+5. **Refine:** Develop finer surface geography through dedicated regional algorithms without repeating the world's history or advancing time.
 6. **Validate:** Check product ownership, located space, identity and authored protection without requiring outline containment or parent-height agreement.
 7. **Publish:** Install the finer map as one coherent regional operation; preserve its source map and existing drawings.
 8. **Present:** Explore and export the separate map. Manual authoring remains deferred.
