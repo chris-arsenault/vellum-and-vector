@@ -1,17 +1,23 @@
 import { chartCopies, point } from "@atlas/domain";
 import type { GenerationState } from "../process";
-import { fallsSignificance, summitSignificance, worldPeakIsolation } from "../worldSignificance";
+import {
+  fallsSignificance,
+  mapScale,
+  summitSignificance,
+  worldPeakIsolation,
+} from "../worldSignificance";
 import { nativePosition } from "./atlasWorkspace";
 import { physicalDistance } from "./physicalMetric";
 import { meshWindowCells } from "./meshWindow";
 import { regionEvidence } from "./worldRegionEvidence";
 import type { RegionMembers } from "./regionMembers";
 
-/** Isolation only needs searching as far as the World qualification distance. */
+/** Isolation only needs searching as far as the qualification distance at the map's scale. */
 export function significantSummit(state: GenerationState, summit: number, prominence: number) {
   const work = state.physical!,
     map = work.map,
-    radius = worldPeakIsolation;
+    scale = mapScale(state),
+    radius = worldPeakIsolation * scale.length;
   let isolation = radius;
   for (const copy of chartCopies(
     state.domain.world.reference,
@@ -23,12 +29,13 @@ export function significantSummit(state: GenerationState, summit: number, promin
       if (map.Elevation.get(i) > map.Elevation.get(summit))
         isolation = Math.min(isolation, physicalDistance(map.mesh, i, summit));
   }
-  return summitSignificance(prominence, isolation).publish;
+  return summitSignificance(prominence, isolation, scale).publish;
 }
 
-/** World landforms need their actual distinguishing mechanism as well as extent. */
+/** Landforms need their actual distinguishing mechanism as well as extent, at the map's scale. */
 export function significantLandform(state: GenerationState, kind: string, members: RegionMembers) {
-  const map = state.physical!.map;
+  const map = state.physical!.map,
+    scale = mapScale(state);
   if (kind === "waterfall") {
     for (const i of members) {
       const target = map.FlowTargets.get(i);
@@ -36,7 +43,8 @@ export function significantLandform(state: GenerationState, kind: string, member
         target >= 0 &&
         fallsSignificance(
           (map.Elevation.get(i) - map.Elevation.get(target)) / 1024,
-          map.FlowAccumulation.get(i)
+          map.FlowAccumulation.get(i),
+          scale
         ).publish
       )
         return true;
@@ -45,10 +53,19 @@ export function significantLandform(state: GenerationState, kind: string, member
   }
   const evidence = regionEvidence(map, members);
   if (kind === "gorge")
-    return evidence.span >= worldGorgeLength && evidence.relief >= worldGorgeRelief;
+    return (
+      evidence.span >= worldGorgeLength * scale.length &&
+      evidence.relief >= worldGorgeRelief * scale.height
+    );
   if (kind === "fjord")
-    return evidence.span >= worldFjordLength && evidence.breadth >= worldFjordBreadth;
-  return evidence.area >= worldGlacialComplexArea && evidence.relief >= worldGlacialComplexRelief;
+    return (
+      evidence.span >= worldFjordLength * scale.length &&
+      evidence.breadth >= worldFjordBreadth * scale.length
+    );
+  return (
+    evidence.area >= worldGlacialComplexArea * scale.area &&
+    evidence.relief >= worldGlacialComplexRelief * scale.height
+  );
 }
 /** Connected incised courses need a substantial longitudinal form. */
 export const worldGorgeLength = 100_000;

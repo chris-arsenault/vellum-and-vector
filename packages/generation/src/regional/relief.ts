@@ -15,6 +15,7 @@ import {
   isContent,
   neighborsOf,
   regionalSpan,
+  releaseBlurs,
 } from "./lattice";
 import { materialBands, materialResistance } from "./material";
 import { channelCells } from "./network";
@@ -82,6 +83,8 @@ export function deriveRelief(state: RegionalState) {
     basin = new Uint8Array(n);
   construct(state, increments, amplification, h);
   conditionOnBase(state, h);
+  // The calibration and conditioning shared their smoothers; nothing later blurs.
+  releaseBlurs(state);
   smoothHillslopes(state, h, crest);
   buildCones(state, h);
   for (let i = 0; i < n; i++) if (network.lake[i] >= 0 || network.bowl[i]) basin[i] = 1;

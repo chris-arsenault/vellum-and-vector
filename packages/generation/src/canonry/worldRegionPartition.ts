@@ -4,7 +4,7 @@ import type { PhysicalField } from "./field";
 import type { RegionMembers } from "./regionMembers";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import { regionEvidence } from "./worldRegionEvidence";
-import { largeWorldDomain, landscapeMinimumBreadth } from "../worldSignificance";
+import { largeWorldDomain, landscapeMinimumBreadth, mapScale } from "../worldSignificance";
 
 /** Cross-basin travel is harder than movement along the same broad drainage structure. */
 const basinCrossingCost = 2;
@@ -65,12 +65,13 @@ function distantAnchor(map: PhysicalField, members: RegionMembers, start: number
  */
 export function partitionWorldRegion(state: GenerationState, members: RegionMembers, land: number) {
   const map = state.physical!.map,
+    scale = mapScale(state),
     pending = [members instanceof Int32Array ? members : Int32Array.from(members)],
     result: Int32Array[] = [];
   while (pending.length) {
     const current = pending.pop()!,
       evidence = regionEvidence(map, current);
-    if (!largeWorldDomain(evidence.area, evidence.span, land)) {
+    if (!largeWorldDomain(evidence.area, evidence.span, land, scale)) {
       result.push(current);
       continue;
     }
@@ -85,7 +86,10 @@ export function partitionWorldRegion(state: GenerationState, members: RegionMemb
     const credible = pieces.every((piece) => {
       if (!piece.length) return false;
       const e = regionEvidence(map, piece);
-      return e.area >= evidence.area * provinceMinimumShare && e.breadth >= landscapeMinimumBreadth;
+      return (
+        e.area >= evidence.area * provinceMinimumShare &&
+        e.breadth >= landscapeMinimumBreadth * scale.length
+      );
     });
     if (credible) pending.push(...pieces);
     else {

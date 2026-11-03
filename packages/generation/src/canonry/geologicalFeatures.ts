@@ -8,7 +8,7 @@ import {
 import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
 import { physicalSampler } from "./physicalMetric";
-import { isWorldGeography } from "../worldSignificance";
+import { mapScale } from "../worldSignificance";
 
 type Event = NonNullable<GenerationState["physical"]>["map"]["events"][number];
 /** Surviving relief distinguishes a major volcanic mountain from an old event location. */
@@ -145,12 +145,13 @@ function selectedEvent(
   if (event.kind === "plume" || event.kind === "landmark") return false;
   if (event.kind !== "impact") return selected.volcanism && selectedVolcano(state, event);
   const relief = craterRelief(state, event);
-  if (isWorldGeography(state) && (event.radius < worldCraterRadius || relief < worldCraterRelief))
+  const scale = mapScale(state);
+  if (event.radius < worldCraterRadius * scale.length || relief < worldCraterRelief * scale.height)
     return false;
   return selected.impacts && relief >= state.physical!.profile.ImpactVisibleRelief && { relief };
 }
 function selectedVolcano(state: GenerationState, event: Event) {
-  return (!isWorldGeography(state) || volcanicRelief(state, event) >= worldVolcanicRelief) && {};
+  return volcanicRelief(state, event) >= worldVolcanicRelief * mapScale(state).height && {};
 }
 function extractFaults(state: GenerationState) {
   const { map } = state.physical!,
@@ -165,7 +166,7 @@ function extractFaults(state: GenerationState) {
           sum + Math.hypot(p[0] - fault.coordinates[i][0], p[1] - fault.coordinates[i][1]),
         0
       );
-    if (isWorldGeography(state) && length < worldFaultLength) continue;
+    if (length < worldFaultLength * mapScale(state).length) continue;
     const line = {
       type: "LineString" as const,
       coordinates: unwrapCoordinates(

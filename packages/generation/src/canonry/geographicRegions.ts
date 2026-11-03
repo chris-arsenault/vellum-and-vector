@@ -19,16 +19,14 @@ import {
   membershipContour,
   areaGeometry,
 } from "./geographicContours";
-import { landArea, largestRegionShare, partitionRegion } from "./regionPartition";
+import { landArea } from "./regionPartition";
 import { naturalPlaceGeometry, magicPlaceGeometry, type PlaceGeometry } from "./placeGeometry";
 import type { MagicField } from "./magicState";
 import type { RegionMembers } from "./regionMembers";
 import { workingValues, releaseWorking } from "./physicalNumerics";
-import { isWorldGeography } from "../worldSignificance";
 import { partitionWorldRegion } from "./worldRegionPartition";
 import { significantLandform } from "./worldSiteEvidence";
 import { significantMagicArea, significantMagicPlace } from "./worldMagicSignificance";
-import { secondSurfaceFloor } from "./magicFeatures";
 export { extractLakes } from "./lakeFeatures";
 
 /** Largest enclosed gap, in square metres, that a landform or magic region absorbs. */
@@ -64,7 +62,7 @@ export function components(
   includes: (i: number) => boolean,
   publish: (members: Int32Array, geometry?: Geometry) => void,
   polygonal = false,
-  maximum = Infinity,
+  splits = false,
   weight?: (i: number) => number
 ) {
   const map = state.physical!.map,
@@ -72,16 +70,13 @@ export function components(
     // Regions are made of content cells; the halo never starts or joins one.
     content = (i: number) => mesh.membership(i) === 1 && includes(i),
     visited = workingValues(map, "int32", "region:labels", (i) => (content(i) ? -2 : -1)),
-    worldLand = isWorldGeography(state) && Number.isFinite(maximum) ? landArea(state) : null;
+    // A splittable kind divides only a continental domain at the map's scale, on every map.
+    land = splits ? landArea(state) : null;
   let serial = 0;
   for (let i = 0; i < visited.length; i++) {
     if (visited.get(i) !== -2) continue;
     const members = connectedMembers(state, visited, content, i, serial);
-    // Oversized regions split along drainage divides; each piece is its own label.
-    const pieces =
-      worldLand === null
-        ? partitionRegion(state, members, maximum)
-        : partitionWorldRegion(state, members, worldLand);
+    const pieces = land === null ? [members] : partitionWorldRegion(state, members, land);
     pieces.forEach((piece, n) => piece.forEach((cell) => visited.set(cell, serial + n)));
     pieces.forEach((piece, n) =>
       publish(piece, polygonal ? regionShape(state, visited, serial + n, piece, weight) : undefined)
@@ -214,13 +209,12 @@ export function extractNamedLandforms(state: GenerationState) {
     ["waterfall", "Waterfall", (i) => map.LandformCodes.get(i) === Landform.Waterfall],
     ["gorge", "Gorge", (i) => map.LandformCodes.get(i) === Landform.Gorge],
   ];
-  const maximum = largestRegionShare * landArea(state);
   for (const [kind, name, includes] of classes)
     components(
       state,
       includes,
       (members, extent) => {
-        if (isWorldGeography(state) && !significantLandform(state, kind, members)) return;
+        if (!significantLandform(state, kind, members)) return;
         const surface = extent && kind !== "fjord" ? dry(extent) : extent;
         if (extent && !surface) return;
         publishPlace(
@@ -235,7 +229,7 @@ export function extractNamedLandforms(state: GenerationState) {
         );
       },
       kind !== "waterfall",
-      kind === "fjord" ? Infinity : maximum
+      kind !== "fjord"
     );
 }
 /**
@@ -252,9 +246,8 @@ export function extractMagicPlaces(state: GenerationState) {
       state,
       (i) => Boolean(held.members.get(i)) && held.coverage.get(i) > 0,
       (region, extent) =>
-        (isWorldGeography(state)
-          ? significantMagicArea(state, region, (i) => held.coverage.get(i))
-          : localMagicPlace(region, placeMinimumCells.area, (i) => held.coverage.get(i))) &&
+        region.length >= placeMinimumCells.area &&
+        significantMagicArea(state, region, (i) => held.coverage.get(i)) &&
         publishPlace(
           state,
           `confluence:${held.definition.id}`,
@@ -276,41 +269,30 @@ export function extractMagicPlaces(state: GenerationState) {
           null
         ),
       true,
-      Infinity,
+      false,
       (i) => held.coverage.get(i)
     );
   for (const field of magic?.fields ?? [])
     for (const rule of field.definition.features) publishRulePlaces(state, field, rule);
 }
 /**
- * A finer map's place: the declared extent, and a class that holds the cells it spans (mean
- * coverage at least the share at which a class shows on the surface). Fainter coverage stays
- * on the map as tint, not as an outlined, named place.
+ * A class component is a named place where it spans the declared minimum of cells and is
+ * significant at the map's scale; every class remains field coverage whatever its size.
  */
-function localMagicPlace(region: Int32Array, minimum: number, coverage: (i: number) => number) {
-  if (region.length < minimum) return false;
-  const mean = region.reduce((sum, i) => sum + coverage(i), 0) / region.length;
-  return mean >= secondSurfaceFloor;
-}
-/** World places require causal significance; finer profiles retain local class components. */
 function publishRulePlaces(state: GenerationState, field: MagicField, rule: MagicFeatureRule) {
   const cartography = rule.cartography ?? "area",
     members = field.features[rule.id],
     coverage = field.coverage[rule.id],
     minimum = placeMinimumCells[cartography],
-    maximum = cartography === "course" ? Infinity : largestRegionShare * landArea(state),
     mesh = state.physical!.map.mesh;
   if (!members) return;
   components(
     state,
     (i) => Boolean(members.get(i)) && (coverage?.get(i) ?? 1) > 0,
     (region, extent) => {
-      const eligible = isWorldGeography(state)
-        ? significantMagicPlace(state, field, rule, region)
-        : localMagicPlace(region, minimum, (i) => coverage?.get(i) ?? 1);
-      if (!eligible) return;
+      if (region.length < minimum || !significantMagicPlace(state, field, rule, region)) return;
       const placement = extent ? magicPlaceGeometry(state, field, rule.id, region, extent) : null;
-      if (isWorldGeography(state) && cartography === "course" && !placement) return;
+      if (cartography === "course" && !placement) return;
       publishPlace(
         state,
         `${field.definition.id}:${rule.id}`,
@@ -330,7 +312,7 @@ function publishRulePlaces(state: GenerationState, field: MagicField, rule: Magi
       );
     },
     true,
-    maximum,
+    cartography !== "course",
     coverage ? (i) => coverage.get(i) : undefined
   );
 }

@@ -7,7 +7,7 @@ import { marineRegions, type MarineRegion } from "./marineRegions";
 import { metricSearch } from "./metricSearch";
 import { units } from "./math";
 import { workingValues, releaseWorking } from "./physicalNumerics";
-import { isWorldGeography, marineSignificance } from "../worldSignificance";
+import { isWorldGeography, mapScale, marineSignificance } from "../worldSignificance";
 import { generationFeatures, removeGenerationFeature } from "../generationFeatures";
 import { retainGeographicIdentities } from "./geographicIdentity";
 
@@ -104,11 +104,10 @@ export function extractOceans(state: GenerationState) {
     return;
   }
   const { labels, regions } = marineRegions(work.map, units(work.profile.ShelfBreakDepth));
-  const selected = isWorldGeography(state)
-    ? regions.filter(
-        (region) => marineSignificance(region.area, region.breadth, region.type).publish
-      )
-    : regions;
+  const scale = mapScale(state),
+    selected = regions.filter(
+      (region) => marineSignificance(region.area, region.breadth, region.type, scale).publish
+    );
   if (!selected.length) {
     releaseWorking(work.map, labels);
     return;

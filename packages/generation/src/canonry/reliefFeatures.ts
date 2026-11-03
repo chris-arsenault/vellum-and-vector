@@ -9,7 +9,7 @@ import { prominence } from "./landforms";
 import { physicalSampler } from "./physicalMetric";
 import { releaseWorking } from "./physicalNumerics";
 import { generationFeature } from "../generationFeatures";
-import { isWorldGeography, rangeSignificance } from "../worldSignificance";
+import { mapScale, rangeSignificance } from "../worldSignificance";
 import { regionEvidence } from "./worldRegionEvidence";
 import { significantSummit, worldGorgeLength, worldGorgeRelief } from "./worldSiteEvidence";
 
@@ -20,7 +20,8 @@ import { significantSummit, worldGorgeLength, worldGorgeRelief } from "./worldSi
 function rings(state: GenerationState) {
   const { map, profile } = state.physical!,
     height = physicalSampler(map.mesh, map.Elevation),
-    radius = Math.max(profile.ReliefRadius, map.mesh.spacing, isWorldGeography(state) ? 50_000 : 0);
+    // The flanks a named valley is measured against stand as far out on every map's scale.
+    radius = Math.max(profile.ReliefRadius, map.mesh.spacing, 50_000 * mapScale(state).length);
   return (i: number) => {
     const values: number[] = [],
       x = map.mesh.x(i),
@@ -67,8 +68,7 @@ export function extractReliefFeatures(state: GenerationState) {
     (i) => map.LandformCodes.get(i) === Landform.Peak,
     (members) => {
       const summit = members.reduce((best, i) => (rise.get(i) > rise.get(best) ? i : best));
-      if (isWorldGeography(state) && !significantSummit(state, summit, rise.get(summit) / 1024))
-        return;
+      if (!significantSummit(state, summit, rise.get(summit) / 1024)) return;
       publishPlace(
         state,
         "peak",
@@ -98,10 +98,7 @@ export function extractReliefFeatures(state: GenerationState) {
         surface = extent && dry(extent);
       if (area < profile.RangeMinimumArea || !surface) return;
       const evidence = regionEvidence(map, members);
-      if (
-        isWorldGeography(state) &&
-        !rangeSignificance(evidence, evidence.relief, evidence.span).publish
-      )
+      if (!rangeSignificance(evidence, evidence.relief, evidence.span, mapScale(state)).publish)
         return;
       const summits = members.filter(
         (i) => rise.get(i) >= profile.PeakMinimumProminence * 1024
@@ -117,7 +114,7 @@ export function extractReliefFeatures(state: GenerationState) {
       );
     },
     true,
-    isWorldGeography(state) ? 0 : Infinity
+    true
   );
   releaseWorking(map, rise);
 }
@@ -172,7 +169,9 @@ function valleySurface(state: GenerationState, shape: Geometry) {
 }
 /** Consecutive incised cells of a source-to-mouth reach, kept when long enough to name. */
 function incisedRuns(state: GenerationState, ring: (i: number) => number[], members: number[]) {
-  const { map, profile } = state.physical!,
+  // A valley is named where it is as long and as deep as a gorge is at the map's scale.
+  const map = state.physical!.map,
+    scale = mapScale(state),
     runs: number[][] = [];
   let run: number[] = [];
   const close = () => {
@@ -182,15 +181,14 @@ function incisedRuns(state: GenerationState, ring: (i: number) => number[], memb
         meshDeltaX(map.mesh, map.mesh.x(run[k]) - map.mesh.x(run[k - 1])),
         map.mesh.y(run[k]) - map.mesh.y(run[k - 1])
       );
-    const minimum = isWorldGeography(state) ? worldGorgeLength : profile.ValleyMinimumLength;
+    const minimum = worldGorgeLength * scale.length;
     if (run.length > 1 && length >= minimum) runs.push(run);
     run = [];
   };
   for (const i of members)
     if (
       map.WaterKindCodes.get(i) === 0 &&
-      valleyDepth(state, ring, i) >=
-        (isWorldGeography(state) ? worldGorgeRelief : profile.ValleyMinimumDepth)
+      valleyDepth(state, ring, i) >= worldGorgeRelief * scale.height
     )
       run.push(i);
     else close();

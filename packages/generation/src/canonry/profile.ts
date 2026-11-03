@@ -379,10 +379,6 @@ export const physicalProfile = {
   MountainLocalRelief: 300,
   // Metres from a cell to the terrain that measures its local relief and valley flanks.
   ReliefRadius: 15_000,
-  // A river corridor whose flanks stand this many metres above it is a named valley.
-  ValleyMinimumDepth: 100,
-  // Metres of continuous incised river before a valley is named.
-  ValleyMinimumLength: 40_000,
   // Square metres of mountain land below which a range is left unnamed.
   RangeMinimumArea: 2_000_000_000,
   CliffSlopeThreshold: 0.012,

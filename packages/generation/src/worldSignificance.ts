@@ -6,14 +6,39 @@ export function isWorldGeography(state: GenerationState) {
   return state.domain.world.areas[state.domain.scope.areaId].profile === "world";
 }
 
+/**
+ * The scale a map's significance is judged at (ADR 0005). Every map holds about the same
+ * number of cells, so a finer map is the same kind of map of a smaller country: what is
+ * significant on it is what would be significant on the World map, shrunk by the ratio of its
+ * cell span to a World cell's at the same quality. Lengths and breadths scale with that ratio,
+ * areas, catchments and discharges with its square, and heights, depths and drops with its
+ * square root (relief grows more slowly than extent). The World's scale is exactly one, so
+ * its rules are the constants below. What a map does not name stays latent there: physical
+ * water, stored drainage reaches, cover and magic coverage remain as fields.
+ */
+export interface MapScale {
+  length: number;
+  area: number;
+  height: number;
+}
+export const worldScale: MapScale = { length: 1, area: 1, height: 1 };
+export function mapScale(state: GenerationState): MapScale {
+  const k = state.physical?.scale ?? 1;
+  return { length: k, area: k * k, height: Math.sqrt(k) };
+}
+
 export interface WorldExtent {
   area: number;
   span: number;
 }
+/** The extent a map's shares are taken of: the World's domain, or a finer map's own footprint. */
 export function worldExtent(state: GenerationState): WorldExtent {
-  const bounds = spatial.bounds(state.domain.world.reference.domain);
+  const shape = isWorldGeography(state)
+      ? state.domain.world.reference.domain
+      : state.domain.scope.footprint,
+    bounds = spatial.bounds(shape);
   return {
-    area: spatial.area(state.domain.world.reference.domain),
+    area: spatial.area(shape),
     span: Math.hypot(bounds[2] - bounds[0], bounds[3] - bounds[1]),
   };
 }
@@ -47,11 +72,12 @@ export interface LandscapeEvidence {
 export function landscapeSignificance(
   world: WorldExtent,
   kind: string,
-  evidence: LandscapeEvidence
+  evidence: LandscapeEvidence,
+  scale = worldScale
 ) {
   const share = kind === "wetland" ? wetlandWorldShare : landscapeWorldShare;
-  const minimum = Math.max(landscapeMinimumArea, world.area * share);
-  if (evidence.area < minimum || evidence.breadth < landscapeMinimumBreadth)
+  const minimum = Math.max(landscapeMinimumArea * scale.area, world.area * share);
+  if (evidence.area < minimum || evidence.breadth < landscapeMinimumBreadth * scale.length)
     return decision(false, "local extent or narrow habitat");
   if (evidence.coherence < landscapeCoherence)
     return decision(false, "dispersed patches without a coherent landscape");
@@ -67,9 +93,10 @@ export const largeDomainLandShare = 0.2;
 export const largeDomainSpan = 900_000;
 /** Absolute continental area also triggers subdivision on very large worlds. */
 export const largeDomainArea = 1.2e12;
-export function largeWorldDomain(area: number, span: number, land: number) {
+export function largeWorldDomain(area: number, span: number, land: number, scale = worldScale) {
   return (
-    span >= largeDomainSpan && (area >= land * largeDomainLandShare || area >= largeDomainArea)
+    span >= largeDomainSpan * scale.length &&
+    (area >= land * largeDomainLandShare || area >= largeDomainArea * scale.area)
   );
 }
 
@@ -85,11 +112,14 @@ export interface RiverEvidence {
   length: number;
   outlet: boolean;
 }
-export function riverSignificance(e: RiverEvidence) {
-  const substantial = e.discharge >= worldRiverDischarge && e.catchment >= worldRiverCatchment;
+export function riverSignificance(e: RiverEvidence, scale = worldScale) {
+  const substantial =
+    e.discharge >= worldRiverDischarge * scale.area &&
+    e.catchment >= worldRiverCatchment * scale.area;
   return decision(
     substantial &&
-      (e.length >= worldRiverLength || (e.outlet && e.discharge >= worldOutletDischarge)),
+      (e.length >= worldRiverLength * scale.length ||
+        (e.outlet && e.discharge >= worldOutletDischarge * scale.area)),
     "major water transport and drainage role"
   );
 }
@@ -100,10 +130,11 @@ export const worldPeakProminence = 1_000;
 export const worldPeakIsolation = 60_000;
 /** Extreme prominence stands out even within an extensive mountain system. */
 export const worldPeakExtremeProminence = 1_800;
-export function summitSignificance(prominence: number, isolation: number) {
+export function summitSignificance(prominence: number, isolation: number, scale = worldScale) {
   return decision(
-    prominence >= worldPeakExtremeProminence ||
-      (prominence >= worldPeakProminence && isolation >= worldPeakIsolation),
+    prominence >= worldPeakExtremeProminence * scale.height ||
+      (prominence >= worldPeakProminence * scale.height &&
+        isolation >= worldPeakIsolation * scale.length),
     "exceptional prominence or isolated mountain"
   );
 }
@@ -113,10 +144,11 @@ export const worldFallsDischarge = 250;
 /** A very high cascade can qualify at a lower, still substantial, discharge. */
 export const worldFallsExtremeDrop = 200;
 export const worldFallsCascadeDischarge = 40;
-export function fallsSignificance(drop: number, discharge: number) {
+export function fallsSignificance(drop: number, discharge: number, scale = worldScale) {
   return decision(
-    (drop >= worldFallsDrop && discharge >= worldFallsDischarge) ||
-      (drop >= worldFallsExtremeDrop && discharge >= worldFallsCascadeDischarge),
+    (drop >= worldFallsDrop * scale.height && discharge >= worldFallsDischarge * scale.area) ||
+      (drop >= worldFallsExtremeDrop * scale.height &&
+        discharge >= worldFallsCascadeDischarge * scale.area),
     "exceptional channel drop with sustained flow"
   );
 }
@@ -125,12 +157,17 @@ export const worldRangeArea = 8_000_000_000;
 export const worldRangeBreadth = 15_000;
 export const worldRangeSpan = 100_000;
 export const worldRangeRelief = 600;
-export function rangeSignificance(e: LandscapeEvidence, relief: number, span: number) {
+export function rangeSignificance(
+  e: LandscapeEvidence,
+  relief: number,
+  span: number,
+  scale = worldScale
+) {
   return decision(
-    e.area >= worldRangeArea &&
-      e.breadth >= worldRangeBreadth &&
-      span >= worldRangeSpan &&
-      relief >= worldRangeRelief &&
+    e.area >= worldRangeArea * scale.area &&
+      e.breadth >= worldRangeBreadth * scale.length &&
+      span >= worldRangeSpan * scale.length &&
+      relief >= worldRangeRelief * scale.height &&
       e.coherence >= landscapeCoherence,
     "broad mountain system with substantial relief"
   );
@@ -139,11 +176,17 @@ export function rangeSignificance(e: LandscapeEvidence, relief: number, span: nu
 export const worldLakeArea = 2_000_000_000;
 export const worldExceptionalLakeArea = 300_000_000;
 export const worldLakeDepth = 200;
-export function lakeSignificance(area: number, depth: number, throughflow: number) {
+export function lakeSignificance(
+  area: number,
+  depth: number,
+  throughflow: number,
+  scale = worldScale
+) {
   return decision(
-    area >= worldLakeArea ||
-      (area >= worldExceptionalLakeArea &&
-        (depth >= worldLakeDepth || throughflow >= worldOutletDischarge)),
+    area >= worldLakeArea * scale.area ||
+      (area >= worldExceptionalLakeArea * scale.area &&
+        (depth >= worldLakeDepth * scale.height ||
+          throughflow >= worldOutletDischarge * scale.area)),
     "major waterbody or exceptional deep or through-flowing lake"
   );
 }
@@ -152,9 +195,15 @@ export function lakeSignificance(area: number, depth: number, throughflow: numbe
 export const worldSeaArea = 8e9;
 export const worldOceanArea = 50e9;
 export const worldMarineBreadth = 30_000;
-export function marineSignificance(area: number, breadth: number, type: "sea" | "ocean") {
+export function marineSignificance(
+  area: number,
+  breadth: number,
+  type: "sea" | "ocean",
+  scale = worldScale
+) {
   return decision(
-    area >= (type === "sea" ? worldSeaArea : worldOceanArea) && breadth >= worldMarineBreadth,
+    area >= (type === "sea" ? worldSeaArea : worldOceanArea) * scale.area &&
+      breadth >= worldMarineBreadth * scale.length,
     "substantial coastal basin or open ocean domain"
   );
 }

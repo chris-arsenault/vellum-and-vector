@@ -1,7 +1,7 @@
-import { CellList, content, halo } from "@atlas/domain";
+import { CellList, content, halo, type Band } from "@atlas/domain";
 import type { PhysicalMesh } from "../canonry/mesh";
 import { meshDeltaX } from "../canonry/mesh";
-import { smoothMetric } from "../canonry/metricSmoothing";
+import { prepareMetricSmoother } from "../canonry/metricSmoothing";
 import { releaseWorking, workingValues } from "../canonry/physicalNumerics";
 import type { RegionalState } from "./state";
 
@@ -218,17 +218,44 @@ function conductances(
  * Low-pass the content cells alone at standard deviation `sigma` (m) with the world's own
  * screened-diffusion smoother: nothing crosses the frame edge, each connected part keeps its
  * total, and the cost does not grow with the length. The screening length is σ/√2, which
- * gives the kernel the Gaussian's second moment. Halo cells keep their values.
+ * gives the kernel the Gaussian's second moment. Halo cells keep their values. A smoother is
+ * built once per length and reused until `releaseBlurs`.
  */
 export function blurContent(state: RegionalState, values: Float64Array, sigma: number) {
   if (sigma <= 0) return;
   const map = state.physical.map,
     mesh = map.mesh,
-    active = workingValues(map, "uint8", "regional:blur-active", (i) => Number(isContent(mesh, i))),
     input = workingValues(map, "float64", "regional:blur-input", (i) => values[i]),
-    smoothed = smoothMetric(map, input, sigma / Math.SQRT2, active);
+    smoothed = smootherFor(state, sigma / Math.SQRT2)(input);
   for (let i = 0; i < values.length; i++) if (isContent(mesh, i)) values[i] = smoothed.get(i);
-  releaseWorking(map, active, input, smoothed);
+  releaseWorking(map, input, smoothed);
+}
+type Smoother = ReturnType<typeof prepareMetricSmoother>;
+const blurs = new WeakMap<RegionalState, { active: Band; lengths: Map<number, Smoother> }>();
+function smootherFor(state: RegionalState, length: number) {
+  const map = state.physical.map;
+  let held = blurs.get(state);
+  if (!held) {
+    const active = workingValues(map, "uint8", "regional:blur-active", (i) =>
+      Number(isContent(map.mesh, i))
+    );
+    held = { active, lengths: new Map() };
+    blurs.set(state, held);
+  }
+  let smooth = held.lengths.get(length);
+  if (!smooth) {
+    smooth = prepareMetricSmoother(map, length, held.active);
+    held.lengths.set(length, smooth);
+  }
+  return smooth;
+}
+/** Close the smoothers `blurContent` built; the next blur builds afresh. */
+export function releaseBlurs(state: RegionalState) {
+  const held = blurs.get(state);
+  if (!held) return;
+  for (const smooth of held.lengths.values()) smooth.close();
+  releaseWorking(state.physical.map, held.active);
+  blurs.delete(state);
 }
 /** Room for a cell's neighbourhood: the cells sharing a vertex with a triangle, three faces
  * and nine around its corners. */

@@ -34,14 +34,24 @@ feature belongs to a category P designates as major, whose influence is
 cell-scale even when its geometry is a point. Whatever the process would decide
 below that footprint becomes a latent quantity on the unit that contains it. The
 cell count is declared once in code where it is consumed. Cell classifications
-(biome, landform and magic classes) are fields at cell fidelity. World names and
-outlines additionally require geographic significance: coherent extent and
-morphology, exceptional relief or causal/network/institutional importance in the
-feature's own domain. A classified component does not automatically become a
-place. Physical water and local-condition raster color remain independent of
+(biome, landform and magic classes) are fields at cell fidelity. Names and
+outlines on every map additionally require geographic significance: coherent
+extent and morphology, exceptional relief or causal/network/institutional
+importance in the feature's own domain. A classified component does not
+automatically become a place. Physical water and local-condition raster color remain independent of
 named coverage. Corresponding ecological edges reuse existing raster sampling.
 Only genuinely continental domains receive geographic subdivisions; the minimum
 size of an eligible region is not a general maximum-size rule.
+
+**Significance is judged at each map's scale (user direction 2026-11-03).** Every
+map holds about the same number of cells, so a finer map is the same kind of map
+of a smaller country. One set of significance rules, subdivision included,
+applies to every profile, with the World's thresholds scaled by the map's cell
+span over a World cell's at the same quality: lengths linearly, areas and
+discharges by its square, heights by its square root. The World's factor is one.
+A finer map that published every resolved component instead named over a
+thousand magic places and a river on every coastal slope. What a map does not
+name stays latent on it.
 
 **Intensive and structural society works.** An intensive work (clearance,
 burning, hunting, conservation, irrigation, tapping, quarrying) is a fraction

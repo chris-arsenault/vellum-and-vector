@@ -929,12 +929,13 @@ definitions when current settings change.
 Named relief reads the final surface. Detection distinguishes summit prominence,
 mountain relief, incised river flanks, glacially enclosed marine inlets, deposited
 moraines and ice-carved hollows. A crater must retain a rim above its floor and
-surrounding plain. World publication additionally evaluates the geographic
-significance described below; a detected local landform need not become a name.
+surrounding plain. Publication additionally evaluates the geographic significance
+described below, at the map's scale; a detected local landform need not become a
+name.
 
-World regions receive internal divisions only at continental extent. Terrain,
-drainage and broad climate transitions guide those divisions. Finer profiles keep
-their catchment-based partitioning. Small internal gaps can join a surrounding
+Regions receive internal divisions only at continental extent for the map's scale.
+Terrain, drainage and broad climate transitions guide those divisions on every
+map. Small internal gaps can join a surrounding
 landscape while physical water remains separate.
 
 Major landmarks ([ADR 0006](adr/0006-landmarks-are-injected-causes.md)) run
@@ -2528,14 +2529,23 @@ the tile renderer (36 seconds; fixture generation). The temporary test server is
 stopped. This does not establish real-world relief fidelity. The complete headless
 world and its display at multiple extents remain required for M7/M8 acceptance.
 
-## World geographic significance
+## Geographic significance at every scale
 
-World publication recognizes coherent places before evaluating their significance.
+Publication recognizes coherent places before evaluating their significance.
 The domain judgments in `worldSignificance.ts` combine physical extent with
 breadth, occupation, relief, contrast, network role or supported authority as
 appropriate to each kind. They do not impose a feature quota or named coverage.
 Resolution controls evidence precision; zoom does not reveal a hidden local
-catalog. Finer creation profiles retain their own publication rules.
+catalog.
+
+Every map applies the same judgments at its own scale. A map holds about the same
+number of cells at every refinement level, so a finer map is the same kind of map
+of a smaller country. Its scale factor is its cell span over a World cell's at the
+same quality, exactly one on the World map. Lengths and breadths scale with the
+factor; areas, catchments and discharges with its square; heights, depths and
+drops with its square root. Large connected areas split only through the
+continental partition, judged at the same scale. What a map does not name stays
+latent on it: physical water, stored drainage reaches, cover and magic coverage.
 
 Ecological families preserve broad forests and wetland complexes across ordinary
 internal variation. Their outer margins reuse the existing categorical sampler;
@@ -2571,8 +2581,8 @@ climate, drainage, erosion, ice and magic. The biome field describes living cove
 The **Biomes and life** layer contains cover, productivity, functional animal
 biomass and organic source fields. Local-condition surface coloring is independent
 of named biomes. Significant forests, wetlands, grasslands, barren landscapes and
-magical ecological complexes become selectable polygons at World; ordinary
-patches remain in the fields.
+magical ecological complexes become selectable polygons, judged at each map's
+scale; ordinary patches remain in the fields.
 Default vector colors follow the
 biome palette. GeoStyler starts with biome-specific rules, so editing symbols
 retains the classification. Categorical legends use composed coverage, including

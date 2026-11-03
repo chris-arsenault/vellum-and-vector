@@ -214,7 +214,7 @@ Geographic **views** and thematic **features** may overlap freely. Two independe
 
 ### 4.5 Geographic region selection
 
-World geography is selective. Named regions represent coherent major landscapes,
+Geography is selective on every map, at that map's scale. Named regions represent coherent major landscapes,
 water systems and supported political territories; exceptional mountains, falls
 and magical sites can qualify without large area. Extent alone does not establish
 significance. Ordinary local patches and tributaries remain in the physical

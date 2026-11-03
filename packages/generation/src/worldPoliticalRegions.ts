@@ -1,6 +1,6 @@
 import { spatial, type AtlasFeature } from "@atlas/domain";
 import type { GenerationState } from "./process";
-import { largeWorldDomain, largeDomainSpan } from "./worldSignificance";
+import { largeWorldDomain, largeDomainSpan, mapScale } from "./worldSignificance";
 import { landArea } from "./canonry/regionPartition";
 import { partitionWorldRegion } from "./canonry/worldRegionPartition";
 import { components, publishPlace } from "./canonry/geographicRegions";
@@ -13,9 +13,10 @@ export function publishPoliticalRegions(state: GenerationState, parent: AtlasFea
   if (!state.physical) return;
   const bounds = spatial.bounds(parent.geometry),
     span = Math.hypot(bounds[2] - bounds[0], bounds[3] - bounds[1]);
-  if (span < largeDomainSpan) return;
+  const scale = mapScale(state);
+  if (span < largeDomainSpan * scale.length) return;
   const land = landArea(state);
-  if (!largeWorldDomain(spatial.area(parent.geometry), span, land)) return;
+  if (!largeWorldDomain(spatial.area(parent.geometry), span, land, scale)) return;
   const work = state.physical,
     map = work.map,
     covers = spatial.pointCoverage(parent.geometry),

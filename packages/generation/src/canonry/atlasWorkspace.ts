@@ -22,6 +22,7 @@ import { refreshWorkspaceSamples } from "./atlasSurfaceProjection";
 export { refreshWorkspaceSamples } from "./atlasSurfaceProjection";
 import { atlasPhysicalProfile, atlasQuality } from "./atlasProfile";
 import { generationResolution } from "../resolution";
+import { isWorldGeography } from "../worldSignificance";
 import { continentalWorldProfile } from "./worldScale";
 import type { PhysicalProfileOverrides } from "../physicalProfileConfiguration";
 import { atlasChannels, type ChannelBinding } from "./atlasChannels";
@@ -50,6 +51,8 @@ export interface AtlasPhysicalWorkspace {
   interpolationKey?: string;
   fixed: { binding: ChannelBinding; values: Band }[];
   inherited: boolean;
+  /** This map's cell span over a World cell's at the same quality: 1 (or absent) on the World map. */
+  scale?: number;
 }
 export function nativePosition(work: AtlasPhysicalWorkspace, i: number): Position {
   return {
@@ -276,6 +279,9 @@ export function createAtlasWorkspace(
     grid: state.surface.coverage,
     fixed: [],
     inherited: Boolean(state.surface.channels.elevation),
+    scale: isWorldGeography(state)
+      ? 1
+      : Math.min(1, cellSpan / generationResolution(quality, "world").cellSpan),
   };
   if (work.inherited) inheritNumerical(state, work);
   refreshWorkspaceSamples(state, work);

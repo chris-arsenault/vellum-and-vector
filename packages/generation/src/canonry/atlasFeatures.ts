@@ -23,7 +23,7 @@ import { extractOceans } from "./oceanFeatures";
 import { dropClaimedFeatures, extractLandmarks, landmarkClaims } from "./landmarkFeatures";
 import { workingArray, releaseWorking } from "./physicalNumerics";
 import { generationFeature, generationFeatures } from "../generationFeatures";
-import { isWorldGeography } from "../worldSignificance";
+import { isWorldGeography, mapScale } from "../worldSignificance";
 import { worldRiverCourses } from "./worldRiverCourses";
 
 function riverReach(state: GenerationState, start: number, incoming: Band) {
@@ -283,9 +283,11 @@ function extractRiverGeography(
   const records = [...drainageReaches(state, incoming)],
     reaches = records.map((record) => record.reach);
   function* publish() {
-    // The map shows a subset; the stored network keeps every reach for finer areas.
+    // The map shows the rivers significant at its scale; the stored network keeps every reach
+    // as latent drainage for finer maps.
+    const courses = worldRiverCourses(reaches, mapScale(state));
     if (isWorldGeography(state)) {
-      for (const course of worldRiverCourses(reaches)) {
+      for (const course of courses) {
         const members = course.flatMap((i, n) => records[i].members.slice(n ? 1 : 0)),
           first = records[course[0]],
           ids = publishReach(
@@ -300,7 +302,10 @@ function extractRiverGeography(
       }
       return;
     }
-    for (const { start, members, reach } of records) {
+    // A finer map publishes the significant courses reach by reach, inside its footprint.
+    const significant = new Set(courses.flat());
+    for (const [index, { start, members, reach }] of records.entries()) {
+      if (!significant.has(index)) continue;
       const discharge = basinDischarge.get(reach.basin);
       if (!spatial.covers(state.domain.scope.footprint, point(nativePosition(work, start))))
         continue;

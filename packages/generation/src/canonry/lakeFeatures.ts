@@ -1,11 +1,11 @@
 import { spatial } from "@atlas/domain";
 import type { GenerationState } from "../process";
 import { generatedFeature, putGenerated } from "../mapFeatures";
-import { isWorldGeography, lakeSignificance } from "../worldSignificance";
+import { lakeSignificance, mapScale } from "../worldSignificance";
 import { lakeFootprint, areaGeometry } from "./geographicContours";
 import { lakeMembership } from "./lakeMembership";
 
-/** Every physical shoreline survives; only significant water bodies receive World names. */
+/** Every physical shoreline survives; only water bodies significant at the map's scale are named. */
 export function extractLakes(state: GenerationState) {
   const map = state.physical!.map,
     membership = lakeMembership(map);
@@ -21,7 +21,7 @@ export function extractLakes(state: GenerationState) {
     const area = spatial.area(shape),
       depth = members.reduce((v, i) => Math.max(v, map.WaterDepths.get(i) / 1024), 0),
       throughflow = members.reduce((v, i) => Math.max(v, map.FlowAccumulation.get(i)), 0),
-      judgment = lakeSignificance(area, depth, throughflow),
+      judgment = lakeSignificance(area, depth, throughflow, mapScale(state)),
       feature = generatedFeature(
         state,
         `lake:${spatial
@@ -46,6 +46,7 @@ export function extractLakes(state: GenerationState) {
       level: Number(feature.attributes.waterLevel),
     });
     state.physical!.lakeOutlines.set(body, shape);
-    if (!isWorldGeography(state) || judgment.publish) putGenerated(state, feature);
+    // The water is physical on every map; its name and outline belong only where significant.
+    if (judgment.publish) putGenerated(state, feature);
   }
 }

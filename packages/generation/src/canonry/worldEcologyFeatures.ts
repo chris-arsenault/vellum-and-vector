@@ -1,6 +1,11 @@
 import { biomes, classMarginInterpolator, spatial, type Band } from "@atlas/domain";
 import type { GenerationState } from "../process";
-import { landscapeSignificance, worldExtent } from "../worldSignificance";
+import {
+  landscapeMinimumArea,
+  landscapeSignificance,
+  mapScale,
+  worldExtent,
+} from "../worldSignificance";
 import { biomeRules, type BiomeSummary } from "./ecologyBiomes";
 import { components, publishPlace } from "./geographicRegions";
 import { geographicContour, fillSmallHoles, membershipSampler } from "./geographicContours";
@@ -62,11 +67,15 @@ export function extractWorldEcologicalFeatures(
     map = work.map,
     biome = biomeRules(state),
     world = worldExtent(state),
+    scale = mapScale(state),
+    // A hole smaller than the least landscape at this scale could never be named on its own.
+    holes = landscapeMinimumArea * scale.area,
     land = landArea(state),
     codes = projectedValues(work, map.BiomeCodes, true),
     field = { ...state.surface, channels: { biome: codes }, overlays: [] },
     labels = workingArray(map, "int32", "world-biome:pieces").fill(-1);
-  const family = (code: number) => families[biomes[code]?.name ?? ""];
+  const family = (code: number) => families[biomes[code]?.name ?? ""],
+    wet = (i: number) => map.WaterKindCodes.get(i) !== 0;
   try {
     for (const rule of biome.rules) {
       const includes = (i: number) =>
@@ -75,7 +84,7 @@ export function extractWorldEcologicalFeatures(
       const margin = classMarginInterpolator(field, "biome", (code) => family(code) === rule.kind);
       components(state, includes, (members) => {
         const evidence = regionEvidence(map, members, strength, includes),
-          judgment = landscapeSignificance(world, rule.kind, evidence);
+          judgment = landscapeSignificance(world, rule.kind, evidence, scale);
         if (!judgment.publish) return;
         const pieces = partitionWorldRegion(state, members, land);
         pieces.forEach((piece, index) => piece.forEach((i) => labels.set(i, index)));
@@ -92,8 +101,7 @@ export function extractWorldEcologicalFeatures(
           };
           const shape = geographicContour(state, piece, at, 0);
           if (!shape) return;
-          const filled = fillSmallHoles(state, shape, 2e9, (i) => map.WaterKindCodes.get(i) !== 0);
-          const extent = dryExtent(state, filled);
+          const extent = dryExtent(state, fillSmallHoles(state, shape, holes, wet));
           if (!extent) return;
           const summary = summarize(state, piece, biome);
           publishPlace(

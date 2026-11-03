@@ -1,5 +1,5 @@
 import { BitSet, type DrainageReach } from "@atlas/domain";
-import { riverSignificance } from "../worldSignificance";
+import { riverSignificance, worldScale } from "../worldSignificance";
 
 /** Confluence samples include the receiving river; tributary evidence stops upstream of it. */
 function contribution(reach: DrainageReach) {
@@ -17,7 +17,7 @@ function length(reach: DrainageReach) {
 }
 
 /** Follow the strongest upstream continuation through junctions; other branches stand alone. */
-export function worldRiverCourses(reaches: DrainageReach[]) {
+export function worldRiverCourses(reaches: DrainageReach[], scale = worldScale) {
   const upstream = reaches.map(() => [] as number[]),
     visited = new BitSet(reaches.length);
   reaches.forEach((reach, i) => {
@@ -41,11 +41,14 @@ export function worldRiverCourses(reaches: DrainageReach[]) {
       visited.add(i);
       course.unshift(i);
     }
-    const judgment = riverSignificance({
-      ...contribution(reaches[end]),
-      length: course.reduce((sum, i) => sum + length(reaches[i]), 0),
-      outlet: reaches[end].waterBody !== null,
-    });
+    const judgment = riverSignificance(
+      {
+        ...contribution(reaches[end]),
+        length: course.reduce((sum, i) => sum + length(reaches[i]), 0),
+        outlet: reaches[end].waterBody !== null,
+      },
+      scale
+    );
     return judgment.publish ? [course] : [];
   });
 }

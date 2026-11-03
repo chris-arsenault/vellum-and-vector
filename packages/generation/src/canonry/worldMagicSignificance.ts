@@ -1,6 +1,11 @@
 import type { MagicFeatureRule } from "@atlas/domain";
 import type { GenerationState } from "../process";
-import { landscapeSignificance, worldExtent, worldRiverDischarge } from "../worldSignificance";
+import {
+  landscapeSignificance,
+  mapScale,
+  worldExtent,
+  worldRiverDischarge,
+} from "../worldSignificance";
 import type { MagicField } from "./magicState";
 import type { RegionMembers } from "./regionMembers";
 import { regionEvidence } from "./worldRegionEvidence";
@@ -14,7 +19,8 @@ export function significantMagicArea(
   return landscapeSignificance(
     worldExtent(state),
     "magic",
-    regionEvidence(state.physical!.map, members, coverage)
+    regionEvidence(state.physical!.map, members, coverage),
+    mapScale(state)
   ).publish;
 }
 /** Thermal sites must mark an exceptional source in genuinely hot ground. */
@@ -42,7 +48,9 @@ function exceptionalSource(
       map.IceThickness.get(i) >= exceptionalIceThickness &&
       map.IceCharge.get(i) >= exceptionalIceCharge,
     pressure: () => rule.id === "locus" && field.source.get(i) > 0,
-    greenwood: () => map.FlowAccumulation.get(i) >= worldRiverDischarge && field.source.get(i) > 0,
+    greenwood: () =>
+      map.FlowAccumulation.get(i) >= worldRiverDischarge * mapScale(state).area &&
+      field.source.get(i) > 0,
     veil: () => rule.id === "door" && (field.originSources.door?.get(i) ?? 0) > 0,
   };
   return tests[field.definition.id]?.() ?? false;
@@ -58,7 +66,10 @@ export function significantMagicPlace(
     for (const i of members) if (exceptionalSource(state, field, rule, i)) return true;
   if (rule.cartography === "course") {
     const evidence = regionEvidence(state.physical!.map, members, coverage);
-    return evidence.span >= magicalCourseLength && evidence.strength >= magicalCourseCoverage;
+    return (
+      evidence.span >= magicalCourseLength * mapScale(state).length &&
+      evidence.strength >= magicalCourseCoverage
+    );
   }
   return significantMagicArea(state, members, coverage);
 }

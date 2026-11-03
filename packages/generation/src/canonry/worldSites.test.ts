@@ -23,7 +23,9 @@ it("keeps a small lake physical while omitting its World name", () => {
   expect(state.surface.lakes).toHaveLength(1);
   expect(spatial.area(state.surface.lakes![0].geometry)).toBeGreaterThan(0);
   expect(map.WaterKindCodes.get(20)).toBe(2);
+  // The same lake is significant on a map a hundred times finer than the World.
   state.domain.world.areas.area.profile = "region";
+  state.physical!.scale = 0.01;
   extractLakes(state);
   expect(Object.values(state.domain.world.features).filter((f) => f.kind === "lake")).toHaveLength(
     1
