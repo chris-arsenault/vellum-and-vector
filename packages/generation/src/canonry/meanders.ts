@@ -62,7 +62,7 @@ export function migrateMeanders(input: MeanderInput): MeanderResult {
   if (line.length < 2 * heldEnds + 3) return { line: input.line, oxbows };
   line = line.map((p, k) => {
     if (k < heldEnds || k >= line.length - heldEnds) return p;
-    const n = normal(line, k),
+    const n = normalAt(line, k),
       offset = (input.draw(k) * 2 - 1) * initialUnevenness * width;
     const moved: Point = [p[0] + n[0] * offset, p[1] + n[1] * offset];
     return floor(moved) ? moved : p;
@@ -78,49 +78,49 @@ export function migrateMeanders(input: MeanderInput): MeanderResult {
 
 /** One step of bank migration along the left normal, driven by local and upstream curvature. */
 function migrate(line: Point[], width: number, floor: (p: Point) => boolean): Point[] {
-  const curvature = smoothed(line.map((_, k) => signedCurvature(line, k) * width)),
+  const curvature = smoothedCurvature(line, width),
     spacing = meanSpacing(line),
-    decay = spacing / (upstreamReach * width),
-    next = line.map((p) => [p[0], p[1]] as Point);
+    fade = Math.exp(-spacing / (upstreamReach * width)),
+    room = bendRoom * width,
+    probe: Point = [0, 0],
+    // The floor reaches a point offset from a station along its normal.
+    reaches = (k: number, nx: number, ny: number, d: number) => {
+      probe[0] = line[k][0] + nx * d;
+      probe[1] = line[k][1] + ny * d;
+      return floor(probe);
+    },
+    next = line.slice();
   let carried = 0,
     weight = 0;
   for (let k = 0; k < line.length; k++) {
     // The upstream curvature, an exponentially weighted memory of the course above.
     const rate = localWeight * curvature[k] + upstreamWeight * (weight ? carried / weight : 0);
-    carried = carried * Math.exp(-decay) + curvature[k];
-    weight = weight * Math.exp(-decay) + 1;
+    carried = carried * fade + curvature[k];
+    weight = weight * fade + 1;
     if (k < heldEnds || k >= line.length - heldEnds) continue;
     // Along the left normal: with the upstream bend dominant the bank moves outward, so
-    // bends grow and travel downstream; the local term damps the station-scale ones.
-    const n = normal(line, k),
+    // bends grow and travel downstream; the local term damps the station-scale ones. A
+    // bank moves only where the floor gives room for a bend on both sides: in a confined
+    // reach the valley walls hold the channel to the valley's own line.
+    const [nx, ny] = normalAt(line, k),
       shift = Math.max(-largestShift, Math.min(largestShift, erosionPerStep * rate)) * width;
-    next[k] = bankMove(line[k], n, shift, width, floor);
+    if (reaches(k, nx, ny, room) && reaches(k, nx, ny, -room))
+      next[k] = [line[k][0] + nx * shift, line[k][1] + ny * shift];
   }
   return next;
 }
-/**
- * A bank moves only where the floor gives the channel room for a bend on both sides; in a
- * confined reach the valley walls hold the channel to the valley's own line.
- */
-function bankMove(
-  p: Point,
-  n: Point,
-  shift: number,
-  width: number,
-  floor: (p: Point) => boolean
-): Point {
-  const room = bendRoom * width;
-  if (!floor([p[0] + n[0] * room, p[1] + n[1] * room])) return p;
-  if (!floor([p[0] - n[0] * room, p[1] - n[1] * room])) return p;
-  return [p[0] + n[0] * shift, p[1] + n[1] * shift];
-}
-/** Dimensionless curvature filtered along the course. */
-function smoothed(values: number[]) {
-  let out = values;
-  for (let pass = 0; pass < curvatureSmoothing; pass++)
-    out = out.map((v, k) =>
-      k === 0 || k === out.length - 1 ? v : 0.25 * out[k - 1] + 0.5 * v + 0.25 * out[k + 1]
-    );
+/** Dimensionless curvature, filtered along the course in two reused buffers. */
+function smoothedCurvature(line: Point[], width: number) {
+  let out = new Float64Array(line.length),
+    spare = new Float64Array(line.length);
+  for (let k = 0; k < line.length; k++) out[k] = signedCurvature(line, k) * width;
+  for (let pass = 0; pass < curvatureSmoothing; pass++) {
+    spare[0] = out[0];
+    spare[out.length - 1] = out[out.length - 1];
+    for (let k = 1; k < out.length - 1; k++)
+      spare[k] = 0.25 * out[k - 1] + 0.5 * out[k] + 0.25 * out[k + 1];
+    [out, spare] = [spare, out];
+  }
   return out;
 }
 
@@ -189,7 +189,7 @@ function signedCurvature(line: Point[], k: number) {
     length = (Math.hypot(ux, uy) + Math.hypot(vx, vy)) / 2;
   return length > 0 ? turn / length : 0;
 }
-function normal(line: Point[], k: number): Point {
+function normalAt(line: Point[], k: number): Point {
   const a = line[Math.max(0, k - 1)],
     b = line[Math.min(line.length - 1, k + 1)],
     dx = b[0] - a[0],
