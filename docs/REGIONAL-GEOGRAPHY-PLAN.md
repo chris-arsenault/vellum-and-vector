@@ -66,38 +66,31 @@ Sources: Leopold and Wolman, river meanders (USGS); Langbein and Leopold, sine-g
 meanders; Williams 1986 (USDA-ARS meander design summary); Hack's law and Sassolas-Serrayet
 et al. 2018 (Nature Communications); Leopold and Maddock downstream hydraulic geometry.
 
-## Rivers — proposed design (for owner review)
+## Rivers, relief and ways — processes built (phases 2–4)
 
-Each item follows the existing order: network, relief derived from it, then publication. The
-same rules apply at every map scale through the map's cell span and the significance rule.
+Owner correction 2026-11-03: the first design constructed outcomes; the work names processes
+and lets their running make the geography. Built:
 
-1. **Lakes overflow.** A lake is not a root: it fills to its lowest rim and its outflow
-   continues down the network. Only a basin whose water balance is negative (evaporation
-   above inflow, as the world's water-budget lakes decide) stays terminal, and then it is a
-   terminal lake or salt flat on the map.
-2. **Mouths compete.** The shore is not uniformly a root. Mouths form where the parent's rivers
-   reach the sea and where the coastal plain's gradient converges; elsewhere the shore is an
-   outlet only for its own short streams. Water on a coastal plain follows the plain's
-   gradient to a mouth rather than the nearest shore cell, so lowlands gather long trunks.
-   The parent's significant rivers are the trunks of their basins.
-3. **Valley floors widen with discharge.** Relief beside a channel starts with a flat floor
-   whose width grows with the river's size; the hillslope rises from the floor's edge. Small
-   streams keep V valleys; large rivers sit in broad floodplains.
-4. **Channels bend in their valleys.** The drawn river is a centreline inside the valley
-   floor, not the cell path: where the slope is gentle and the floor wide, it meanders with
-   wavelength and bend radius set by its width (and so its discharge), confined by the floor;
-   steep reaches stay near the valley line. The bends are deterministic per river identity.
-   Cut-off loops become oxbow lakes where the floor is wide.
-5. **Lakes along courses.** Lakes form where the processes already make basins: glacial
-   overdeepening behind a rock bar or moraine, slide and fan dams (kept hollows), fault-angle
-   basins along the fracture set, and oxbows from item 4. Each overflows by item 1.
-6. **Mountain drainage is not a comb.** Along-strike channels collect into a few longitudinal
-   trunks that break through the range at gaps, instead of every groove running parallel to
-   the frame (the grain term picks direction; capture, not cost, picks which grooves join).
+1. **Drainage by erosion** (`regional/evolution.ts`). The network is the drainage an erosion
+   process organizes on the smoothed parent surface: uplift follows the parent's height and the
+   material bands along the grain, the established waters are base levels, the parent's rivers
+   are carved in as the valleys the region starts from, and each step routes water by steepest
+   descent over the filled surface, cuts channels by stream power through the ground's
+   erodibility and lets hillslopes creep, from the unresolved unevenness below the parent's
+   cells. Closed basins stay closed only where the climate keeps them dry.
+2. **The world's erosion on the region** (`regional/erosion.ts`). The last round runs the
+   world's drainage, water-budget lakes, fluvial incision, mass wasting and sediment transport
+   for a few epochs, with the channel catchment and the slope a cell step holds read at the
+   map's scale; established features restore their signatures afterwards.
+3. **Hillslope steps** (`regional/relief.ts`). A step between cells rises over one
+   hillslope's length, not the cell's width.
+4. **Meander migration** (`canonry/meanders.ts`, `canonry/riverMeanders.ts`). A reach on a
+   gentle floor migrates across it by its own and upstream curvature (Howard and Knutson),
+   with neck and chute cutoffs; width follows discharge; confined reaches keep the valley line.
+5. **Ways** (`regional/ways.ts`, `regional/societyWays.ts`, `regional/wayLines.ts`). Travel
+   pays the square of the grade over a ruling grade and extra on floodplain ground; the
+   busiest journeys make their ways first and later traffic joins made roads; a way's line
+   runs straight wherever the ground allows and shared roads are drawn alike.
 
-Owner decisions:
-
-- Should meanders change the cells the river occupies (floodplain cells, oxbow lakes on the
-  field) or only the drawn line? Recommendation: both; the floodplain and oxbows are
-  geography the other domains read (settlements, roads, ecology).
-- Terminal lakes and salt flats in dry basins: keep (recommended), or always drain to the sea?
+Open: lakes along unglaciated courses are rare (glaciated regions hold many); range flanks
+drain by close parallel valleys; the oxbows the migration leaves are not published.
