@@ -1,62 +1,134 @@
-import { unwritten, type PoiEntry } from "../poiContract";
+import type { GenerationState } from "../../process";
+import { carryWhereItLands, costNear, goes } from "../poiCarry";
+import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
+import { holdsRecord, recordPlaces, settlementWithin, within } from "../poiPlaces";
+import { cellSpan, celsiusAt, iceAt, isLand, magicValue } from "../poiReads";
+import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import { cultureOfWork, isWork, seatPeople, strengthOf } from "./settlementRecords";
+
+/** Ice and cold that hold a memory in full, in metres and degrees of frost, as societyMagic holds them. */
+const fullIce = 10,
+  fullCold = 10;
+/** Readers' traffic, and what crystals do to carried Pressure, which dissipates near them. */
+const readersRoad = 0.9,
+  dissipated = 3;
+/** People at whose seat an archive is half as great as archives get. */
+const typicalPeople = 5000;
+/** How far reading strains the mind, against what else endangers people. */
+const strainSeverity = 0.2;
+
+const places = recordPlaces("archive", isWork("aurora-archive"));
+const isA = holdsRecord("archive", places);
+const seat = (state: GenerationState) => cellSpan(state);
+const around = (state: GenerationState) => 6 * cellSpan(state);
+const auroraAt = (state: GenerationState, cell: number) =>
+  Math.min(1, magicValue(state, "aurora", "intensity", cell) / 1000);
+/** How much of a memory the ground retains, as `auroraUse` reckons it. */
+const retentionAt = (state: GenerationState, cell: number) =>
+  Math.min(1, iceAt(state, cell) / fullIce) *
+  Math.max(0, Math.min(1, -celsiusAt(state, cell) / fullCold));
+const held = (state: GenerationState, cell: number) =>
+  iceAt(state, cell) > 0 && auroraAt(state, cell) > 0;
+const factors = {
+  magnitude: sized(seatPeople, typicalPeople),
+  localConditions: standsOut(auroraAt, around),
+  isolation: aloneAmong(places, (state) => 2 * around(state)),
+  cultural: attachment(around),
+};
+const memoryOf = (state: GenerationState, place: PoiPlace) =>
+  retentionAt(state, place.anchor) * strengthOf(place);
 
 export const archive: PoiEntry = {
   id: "archive",
   group: "settlements",
   name: "Archive",
-  recognition: { distinct: unwritten, isA: unwritten },
+  recognition: {
+    distinct:
+      "A published practice of `kind` aurora-archive (`workKind` aurora-archive), at its community's seat: people reading memory out of crystals in cold ice. A frost prism and a light well are Aurora's own rule cells with no record, and an aurora field the intensity they stand in; a forge is the same kind of practice on Fire.",
+    isA,
+  },
   existence: {
-    statement: unwritten,
-    way: unwritten,
-    requires: unwritten,
-    suitability: unwritten,
-    places: unwritten,
+    statement:
+      "Sited at a community's seat once Aurora and ice under it give it crystals. The simulation runs this as a practice today, but the world map publishes no generated works and refined maps do not make archives: an archive reaches the map only as an authored record.",
+    way: "sited",
+    requires: (state, cell) =>
+      isLand(state, cell) && held(state, cell) && settlementWithin(state, cell, seat(state)),
+    /** Strong Aurora over thick ice in hard frost: what charges the crystals and what keeps them. */
+    suitability: (state, cell) => auroraAt(state, cell) * retentionAt(state, cell),
+    places,
   },
   fields: {
-    statement: unwritten,
-    terrain: unwritten,
-    water: unwritten,
-    climate: unwritten,
-    cover: unwritten,
-    magic: unwritten,
+    statement:
+      "An archive takes and changes nothing in any field. It is held by them: ice and frost keep its crystals and Aurora charges them, so it reads the country and leaves no mark on it.",
+    terrain: notApplicable("Its readers work in chambers below anything the field resolves."),
+    water: notApplicable("It keeps the ice it needs; its people draw none away."),
+    climate: notApplicable("It needs the cold and adds nothing to it."),
+    cover: notApplicable("It stands on ice, where there is no cover to change."),
+    magic: notApplicable(
+      "`auroraUse` draws charge from the community's crystal ledger, which has no band; Aurora's field is not reduced by reading."
+    ),
   },
   acrossMaps: {
-    statement: unwritten,
-    carry: unwritten,
-    realize: unwritten,
-    counterpart: unwritten,
-    unrealized: unwritten,
-    settle: unwritten,
+    statement:
+      "A refined map does not yet realize archives. An authored archive captured from a coarser map stands at its seat only if ice and Aurora reach the finer ground there, and otherwise goes.",
+    carry: carryWhereItLands,
+    realize: notApplicable("It requires ground of a kind; it does not shape any."),
+    counterpart: (state, carried) => (held(state, carried.cell) ? carried.cell : -1),
+    unrealized: goes,
+    settle: notApplicable("It moves only if its seat does, which is the settlement's rule."),
   },
   movement: {
-    statement: unwritten,
-    roads: unwritten,
-    boats: unwritten,
-    drainage: unwritten,
-    magic: unwritten,
-    crosses: unwritten,
+    statement:
+      "Readers wear a modest road to an archive. Its crystals dissipate any Pressure people carry near them, so it is costly ground for that carrier though it stops nothing else.",
+    roads: (state, place, cell) => costNear(readersRoad, around(state))(state, place, cell),
+    boats: notApplicable("It stands on land in hard frost, away from open water."),
+    drainage: notApplicable("It holds no ground water can feel; ice decides the flow here."),
+    magic: (state, place, cell) => costNear(dissipated, around(state))(state, place, cell),
+    crosses: notApplicable("Reading a crystal takes no route over anything."),
   },
   others: {
-    statement: unwritten,
-    needs: unwritten,
-    excludes: unwritten,
-    contains: unwritten,
-    pairsWith: unwritten,
+    statement:
+      "An archive stands in a settlement on Aurora's ground, often near a light well or the prisms its crystals come from. A forge at the same seat melts the ice it depends on, and once the ice has gone the two no longer stand together.",
+    needs: [{ kind: "settlement", holds: within(seat) }],
+    excludes: [
+      {
+        kind: "forge",
+        holds: (state, a, b) => a.anchor === b.anchor && iceAt(state, a.anchor) <= 0,
+      },
+    ],
+    contains: notApplicable("An archive is one practice at one seat."),
+    pairsWith: [
+      { kind: "lightWell", holds: within(around) },
+      { kind: "frostPrism", holds: within(around) },
+      { kind: "auroraField", holds: within(around) },
+    ],
   },
-  people: { statement: unwritten, offers: unwritten, threatens: unwritten },
-  time: { statement: unwritten, fate: unwritten },
+  people: {
+    statement:
+      "An archive gives what a people has known, which draws scholars and pilgrims and trade in proportion to how well it remembers. Reading strains those who do it.",
+    offers(state, place) {
+      const memory = memoryOf(state, place);
+      return { sanctity: memory, trade: memory * factors.magnitude(state, place) };
+    },
+    threatens: (state) => [
+      { hazard: "cognitive strain", reach: seat(state), severity: strainSeverity },
+    ],
+  },
+  time: {
+    statement:
+      "Memory decays as its ice and frost do, so a warming epoch ends an archive whatever its keepers do, and nothing is left of what it knew. It lasts while the ice does.",
+    fate: (state, place) => (held(state, place.anchor) ? { fate: "persists" } : { fate: "ends" }),
+  },
   visibility: {
-    statement: unwritten,
-    magnitude: unwritten,
-    localConditions: unwritten,
-    isolation: unwritten,
-    cultural: unwritten,
-    visibleAt: unwritten,
+    statement:
+      "An archive shows by the people who keep it and by how strongly Aurora stands over its country; its fame reaches further than its size, carried by the town that holds it.",
+    ...factors,
+    visibleAt: drawnWhen(factors, { magnitude: 0.5, localConditions: 0.2, isolation: 0.3 }),
   },
   naming: {
-    statement: unwritten,
-    namedBy: unwritten,
-    takesNameFrom: unwritten,
-    lendsNameTo: unwritten,
+    statement: "Named by the community that keeps it, in its record, after its settlement.",
+    namedBy: cultureOfWork,
+    takesNameFrom: [{ kind: "settlement", holds: within(seat) }],
+    lendsNameTo: notApplicable("Its name is carried by readers, not by any place around it."),
   },
 };

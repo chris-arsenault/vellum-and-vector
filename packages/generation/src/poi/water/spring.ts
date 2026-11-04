@@ -1,62 +1,277 @@
-import { unwritten, type PoiEntry } from "../poiContract";
+import type { GenerationState } from "../../process";
+import { frameEdge } from "../../regional/lattice";
+import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry";
+import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
+import { namingCultureNear, regionPlaces, within } from "../poiPlaces";
+import {
+  celsiusAt,
+  dischargeAt,
+  fieldOf,
+  fractureAt,
+  gap,
+  iceAt,
+  isLand,
+  isRiver,
+  magicRule,
+  magicValue,
+  rainfallAt,
+  rockAt,
+  slopeAt,
+  toNative,
+} from "../poiReads";
+import { aloneAmong, attachment, drawnWhen, sized } from "../poiVisibilityRules";
+import { drynessAround, inflows, spans, standsIn } from "./waterReads";
+
+/** Rock softer than this share of the hardest, or fractured past this share, lets water rise. */
+const softRock = 0.5,
+  openFracture = 0.32;
+/** Ground this much gentler than the slope above it is a break where groundwater comes out. */
+const slopeBreak = 0.5;
+/** Discharge at which a spring is half as great as springs get, in cubic metres a second. */
+const typicalDischarge = 5;
+/** Metres a rising spring saps its head hollow below the ground above it. */
+const sappedHollow = 2;
+/** Native rock resistance of the sinter a hot spring lays down. */
+const sinter = 2400;
+/** Metres of soil water a spring's flush holds; cover a flush holds, under a wetland's own. */
+const flushWater = 0.3,
+  flushCover = 0.15;
+/** River warmth, in the band's native tenths of a degree, of a reach that stays thawed. */
+const warmReach = 50;
+
+const hotRule = magicRule("fire", "spring"),
+  greenwoodRule = magicRule("greenwood", "wellspring"),
+  oasisRule = magicRule("greenwood", "oasis");
+
+/** The steepest slope draining into a cell; zero where nothing does. */
+function steepestAbove(state: GenerationState, cell: number) {
+  let above = 0;
+  for (const next of inflows(state, cell)) above = Math.max(above, slopeAt(state, next));
+  return above;
+}
+/** A channel's first cell: a river no river runs into, and not one entering across the frame. */
+function isChannelHead(state: GenerationState, cell: number) {
+  if (!isRiver(state, cell) || frameEdge(fieldOf(state).mesh, cell)) return false;
+  for (const next of inflows(state, cell)) if (isRiver(state, next)) return false;
+  return true;
+}
+const unfrozen = (state: GenerationState, cell: number) =>
+  iceAt(state, cell) <= 0 &&
+  fieldOf(state).GlacialMeltwater.get(cell) <= 0 &&
+  celsiusAt(state, cell) > 0;
+const permeable = (state: GenerationState, cell: number) =>
+  rockAt(state, cell) <= softRock || fractureAt(state, cell) >= openFracture;
+/** Where the slope breaks, so that groundwater reaches the surface rather than a gully forming. */
+const atSlopeBreak = (state: GenerationState, cell: number) => {
+  const above = steepestAbove(state, cell);
+  return above > 0 && slopeAt(state, cell) <= slopeBreak * above;
+};
+const naturalSpring = (state: GenerationState, cell: number) =>
+  isLand(state, cell) &&
+  isChannelHead(state, cell) &&
+  unfrozen(state, cell) &&
+  permeable(state, cell) &&
+  atSlopeBreak(state, cell);
+
+const isA = (state: GenerationState, cell: number) =>
+  !oasisRule(state, cell) &&
+  (hotRule(state, cell) || greenwoodRule(state, cell) || naturalSpring(state, cell));
+
+/** What the spring is fed by, a property of one kind: hot and Greenwood water are read from magic. */
+export const springWater = (state: GenerationState, cell: number) => {
+  if (hotRule(state, cell)) return "hot";
+  return greenwoodRule(state, cell) ? "greenwood" : "natural";
+};
+const strengthAt = (state: GenerationState, cell: number) =>
+  magicValue(state, "fire", "intensity", cell) + magicValue(state, "greenwood", "source", cell);
+const places = regionPlaces("spring", isA, strengthAt);
+const watersOf = (state: GenerationState, place: PoiPlace) => springWater(state, place.anchor);
+const flowOf = (state: GenerationState, place: PoiPlace) => dischargeAt(state, place.anchor);
+const around = spans(6);
+const counterpart = counterpartOf(isA, 1);
+/** A magic spring is as great as its charge; any spring as great as its flow. */
+const greatness = (state: GenerationState, place: PoiPlace) =>
+  Math.max(
+    sized(flowOf, typicalDischarge)(state, place),
+    Math.min(1, strengthAt(state, place.anchor) / 1000)
+  );
+const factors = {
+  magnitude: greatness,
+  localConditions: drynessAround(around),
+  isolation: aloneAmong(places, around),
+  cultural: attachment(around),
+};
+
+/** A cold spring saps a hollow under the ground above it; a hot one hardens its ground with sinter. */
+function headShape(state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] {
+  const anchor = place.anchor;
+  if (watersOf(state, place) === "hot")
+    return [{ change: "atLeast", band: "RockResistance", cell: anchor, value: sinter }];
+  const map = fieldOf(state);
+  let ground = -Infinity;
+  for (const next of inflows(state, anchor)) ground = Math.max(ground, map.Elevation.get(next));
+  return ground === -Infinity
+    ? []
+    : [
+        {
+          change: "atMost",
+          band: "Elevation",
+          cell: anchor,
+          value: ground - toNative(sappedHollow),
+        },
+      ];
+}
+/** The spring holds its channel open and its ground wet, whatever the climate takes above it. */
+const headWater = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] => [
+  ...(isLand(state, place.anchor)
+    ? [{ change: "atLeast", band: "RiverOrders", cell: place.anchor, value: 1 } as const]
+    : []),
+  ...place.cells.map(
+    (cell) => ({ change: "atLeast", band: "SoilWater", cell, value: flushWater }) as const
+  ),
+];
+/** A cold flush holds wet sedge; water near boiling holds bare ground. */
+const flush = (state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] =>
+  place.cells.map((cell) =>
+    watersOf(state, place) === "hot"
+      ? { change: "atMost", band: "TreeCover", cell, value: flushCover }
+      : { change: "atLeast", band: "WetlandCover", cell, value: flushCover }
+  );
+/** Hot water carries Fire's heat down its channel; Greenwood's carries verdure into the ground. */
+function chargeCarried(state: GenerationState, place: PoiPlace): readonly PoiFieldChange[] {
+  const waters = watersOf(state, place);
+  if (waters === "hot")
+    return [{ change: "atLeast", band: "RiverWarmth", cell: place.anchor, value: warmReach }];
+  if (waters === "natural") return [];
+  return place.cells.map((cell) => ({
+    change: "atLeast",
+    band: "Verdure",
+    cell,
+    value: magicValue(state, "greenwood", "source", cell) / 1000,
+  }));
+}
+/** A spring saves most where water is scarce: a track bends to it in dry country, hardly in wet. */
+function drawsTracks(state: GenerationState, place: PoiPlace, cell: number) {
+  if (gap(state, place.anchor, cell) > spans(2)(state)) return 1;
+  return 1 - 0.3 * Math.max(0, 1 - rainfallAt(state, place.anchor));
+}
 
 export const spring: PoiEntry = {
   id: "spring",
   group: "water",
   name: "Spring",
-  recognition: { distinct: unwritten, isA: unwritten },
+  recognition: {
+    distinct:
+      "Where water comes out of the ground, by any of three tests over one kind: Fire's spring rule (hot), Greenwood's wellspring rule, or a natural head: an unfrozen land cell with RiverOrders above zero that no river cell drains into, not on the frame edge, on soft or fractured rock (RockResistance, FractureConductance), whose Slope is at most half the steepest slope draining into it. A channel head without the break or the permeable rock is only runoff gathering; a head fed by GlacialMeltwater or IceThickness is a melt source; a wellspring on bare ground is an oasis; a seep through the sea floor is a vent.",
+    isA,
+  },
   existence: {
-    statement: unwritten,
-    way: unwritten,
-    requires: unwritten,
-    suitability: unwritten,
-    places: unwritten,
+    statement:
+      "Emerges where the drainage and the rock bring groundwater out, or where Fire's conduit or Greenwood's aquifer does; a seep, a hot pool and a holy wellspring are one kind with their water recorded as a property.",
+    way: "emerges",
+    requires: notApplicable(
+      "Its test reads the river, rock and magic at the cell; nothing has to stand there first."
+    ),
+    suitability: notApplicable(
+      "Water comes out where the rock lets it; no process chooses the cell."
+    ),
+    places,
   },
   fields: {
-    statement: unwritten,
-    terrain: unwritten,
-    water: unwritten,
-    climate: unwritten,
-    cover: unwritten,
-    magic: unwritten,
+    statement:
+      "A spring is a source: it holds its channel open against the dry season, wets the ground at its head and shapes that head, sapping a hollow in soft ground or laying hard sinter when hot. Hot water carries Fire's warmth downstream and Greenwood's feeds verdure.",
+    terrain: headShape,
+    water: headWater,
+    climate: notApplicable(
+      "Its water is too little to move the air, and a hot spring's heat is Fire's own heat effect, already in Temperature."
+    ),
+    cover: flush,
+    magic: chargeCarried,
   },
   acrossMaps: {
-    statement: unwritten,
-    carry: unwritten,
-    realize: unwritten,
-    counterpart: unwritten,
-    unrealized: unwritten,
-    settle: unwritten,
+    statement:
+      "A spring lands on the finer ground, which must hold a wet channel head there; each round it moves to the nearest head the developed water shows, and with none it keeps its realized head, because the parent's water still has to come out somewhere.",
+    carry: carryWhereItLands,
+    realize: (state, carried) => [
+      { change: "atLeast", band: "RiverOrders", cell: carried.cell, value: 1 },
+      { change: "atLeast", band: "SoilWater", cell: carried.cell, value: flushWater },
+    ],
+    counterpart,
+    unrealized: movesTo(counterpart),
+    settle: movesTo(counterpart),
   },
   movement: {
-    statement: unwritten,
-    roads: unwritten,
-    boats: unwritten,
-    drainage: unwritten,
-    magic: unwritten,
-    crosses: unwritten,
+    statement:
+      "Tracks bend to a spring in proportion to how dry the country is; the drainage grows from it; magic's underground carriers run easily through the fractured or soluble rock of a hot or Greenwood spring.",
+    roads: drawsTracks,
+    boats: notApplicable("A spring is the top of a channel, above anything a boat can reach."),
+    drainage: costNear(0.7),
+    magic(state, place, cell) {
+      return watersOf(state, place) === "natural" ? 1 : costNear(0.7)(state, place, cell);
+    },
+    crosses: notApplicable("A route rounds a river's head at a spring; nothing there is crossed."),
   },
   others: {
-    statement: unwritten,
-    needs: unwritten,
-    excludes: unwritten,
-    contains: unwritten,
-    pairsWith: unwritten,
+    statement:
+      "A wellspring on bare ground is an oasis and not a spring. Shrines and settlements gather at springs; a Greenwood spring that failed leaves sinkholes and a hot one lies along a thermal vein.",
+    needs: notApplicable("Its own test holds everything it depends on."),
+    excludes: [
+      { kind: "oasis", holds: (_state, a, b) => a.cells.includes(b.anchor) },
+      { kind: "riverMouth", holds: (_state, a, b) => a.anchor === b.anchor },
+    ],
+    contains: notApplicable("A spring is a single rising; a field of them is one spring."),
+    pairsWith: [
+      { kind: "shrine", holds: within(spans(2)) },
+      { kind: "settlement", holds: within(around) },
+      { kind: "thermalVein", holds: within(around) },
+      { kind: "sinkholeField", holds: within(around) },
+      { kind: "lake", holds: standsIn },
+    ],
   },
-  people: { statement: unwritten, offers: unwritten, threatens: unwritten },
-  time: { statement: unwritten, fate: unwritten },
+  people: {
+    statement:
+      "A spring gives water that does not fail, and is often held sacred; hot springs add minerals and can scald, and the rest threaten no one.",
+    offers(state, place) {
+      const great = greatness(state, place),
+        waters = watersOf(state, place);
+      return {
+        water: sized(flowOf, typicalDischarge)(state, place),
+        sanctity: waters === "natural" ? great / 2 : great,
+        materials: waters === "hot" ? great / 2 : 0,
+      };
+    },
+    threatens: (state, place) =>
+      watersOf(state, place) === "hot"
+        ? [{ hazard: "scalding water", reach: spans(1)(state), severity: greatness(state, place) }]
+        : [],
+  },
+  time: {
+    statement:
+      "A natural spring lasts while the rock and the catchment do. A hot spring whose conduit is spent leaves a basalt scar; a Greenwood spring drawn past its recharge falls in and leaves a sinkhole field; one whose cover is lost stands on as an oasis.",
+    fate(state, place) {
+      if (magicRule("fire", "scar")(state, place.anchor))
+        return { fate: "ends", leaves: "basaltFlat" };
+      if (magicRule("greenwood", "sinkhole")(state, place.anchor))
+        return { fate: "ends", leaves: "sinkholeField" };
+      return oasisRule(state, place.anchor)
+        ? { fate: "becomes", kind: "oasis" }
+        : { fate: "persists" };
+    },
+  },
   visibility: {
-    statement: unwritten,
-    magnitude: unwritten,
-    localConditions: unwritten,
-    isolation: unwritten,
-    cultural: unwritten,
-    visibleAt: unwritten,
+    statement:
+      "A spring earns its mark mostly by the dryness of its country and how far the next water lies; its flow or charge counts less, and a town that drinks from one carries it.",
+    ...factors,
+    visibleAt: drawnWhen(factors, { magnitude: 0.25, localConditions: 0.45, isolation: 0.3 }),
   },
   naming: {
-    statement: unwritten,
-    namedBy: unwritten,
-    takesNameFrom: unwritten,
-    lendsNameTo: unwritten,
+    statement:
+      "Named by those who drink from it; a town or shrine at its water often takes its name.",
+    namedBy: namingCultureNear,
+    takesNameFrom: notApplicable("A spring is older than what gathers at it and gives the name."),
+    lendsNameTo: [
+      { kind: "settlement", holds: within(around) },
+      { kind: "shrine", holds: within(spans(2)) },
+    ],
   },
 };

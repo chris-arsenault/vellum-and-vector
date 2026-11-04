@@ -1,5 +1,6 @@
 import { expect, it } from "vitest";
 import { poiCatalogue, poiPages, unwrittenFields } from "./catalogue";
+import { unwritten } from "./poiContract";
 import { poiGroupIds, poiKindIds } from "./poiKinds";
 
 /**
@@ -42,8 +43,21 @@ it("holds every entry to exactly the agreed roles and fields", () => {
 });
 
 it("lists an entry's unwritten fields as its open work", () => {
-  const every = Object.entries(contract).flatMap(([role, fields]) =>
-    fields.map((field) => `${role}.${field}`)
+  const open = {
+    ...poiCatalogue.summit,
+    naming: { ...poiCatalogue.summit.naming, namedBy: unwritten },
+  };
+  expect(unwrittenFields(poiCatalogue.summit)).toEqual([]);
+  expect(unwrittenFields(open)).toEqual(["naming.namedBy"]);
+});
+
+it("leaves no field of any entry unwritten", () => {
+  const open = Object.values(poiCatalogue).flatMap((entry) =>
+    unwrittenFields(entry).map((field) => `${entry.id}.${field}`)
   );
-  expect(unwrittenFields(poiCatalogue.pass)).toEqual(every);
+  expect(open).toEqual([]);
+  for (const page of Object.values(poiPages)) {
+    expect(page.belongs).not.toBe(unwritten);
+    expect(page.excludes).not.toBe(unwritten);
+  }
 });

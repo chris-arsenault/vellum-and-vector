@@ -1,62 +1,124 @@
-import { unwritten, type PoiEntry } from "../poiContract";
+import type { GenerationState } from "../../process";
+import { carryWhereItLands, costNear, counterpartOf, goes, movesTo } from "../poiCarry";
+import { notApplicable, type PoiEntry } from "../poiContract";
+import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import { namingCultureNear, regionPlaces, within } from "../poiPlaces";
+import { magicRule, magicValue } from "../poiReads";
+import { areaOf, holdAt, lastsWhile, meanOf, spans, standsIn, strengthOf } from "./reliefShape";
+
+/** Area at which a prism's ground is half as great as prisms get. */
+const typicalArea = 400_000_000;
+
+const isA = magicRule("aurora", "prism");
+const chargeAt = (state: GenerationState, cell: number) =>
+  magicValue(state, "aurora", "intensity", cell);
+const places = regionPlaces("frostPrism", isA, chargeAt);
+const counterpart = counterpartOf(isA, 1);
+const chargeOf = strengthOf("aurora");
+const factors = {
+  magnitude: meanOf(chargeOf, sized(areaOf, typicalArea)),
+  localConditions: standsOut(chargeAt, spans(6)),
+  isolation: aloneAmong(places, spans(8)),
+  cultural: attachment(spans(8)),
+};
 
 export const frostPrism: PoiEntry = {
   id: "frostPrism",
   group: "relief",
   name: "Frost prism",
-  recognition: { distinct: unwritten, isA: unwritten },
+  recognition: {
+    distinct:
+      "A cell in Aurora's prism rule: strong Aurora intensity on ground classed Peak or Ridge. The landform decides against the system's other classes on the same charge: an aurora field is general charge over ice, a light well sits in a hollow, a melt line lies at the thawing edge. An ordinary iced summit has no charge and is only a summit; a prism outlasts its ice for as long as stored charge holds.",
+    isA,
+  },
   existence: {
-    statement: unwritten,
-    way: unwritten,
-    requires: unwritten,
-    suitability: unwritten,
-    places: unwritten,
+    statement:
+      "Emerges where Aurora's charge, gathering with the cold, stands on a high crest or top; a lesser prism can grow by scatter at lower charge. It is not sited, though a great vault record feeds the charge around it.",
+    way: "emerges",
+    requires: notApplicable("The rule reads Aurora's own intensity and the ground's own class."),
+    suitability: notApplicable(
+      "A prism stands wherever the charge reaches a height; nothing chooses."
+    ),
+    places,
   },
   fields: {
-    statement: unwritten,
-    terrain: unwritten,
-    water: unwritten,
-    climate: unwritten,
-    cover: unwritten,
-    magic: unwritten,
+    statement:
+      "A prism is a store of charged cold on high rock: the rock is weakened, ice is kept against thaw, the air stays cold and still, nothing grows, and charge is held for the ice to carry away down its glaciers.",
+    terrain: (state, place) => holdAt(state, "atMost", "RockResistance", place.cells),
+    water: (state, place) => [
+      ...holdAt(state, "atLeast", "IceThickness", place.cells),
+      ...holdAt(state, "atLeast", "IcePersistence", place.cells),
+    ],
+    climate: (state, place) => holdAt(state, "atMost", "Temperature", place.cells),
+    cover: (state, place) => holdAt(state, "atLeast", "Stillness", place.cells),
+    magic: (state, place) => holdAt(state, "atLeast", "IceCharge", place.cells),
   },
   acrossMaps: {
-    statement: unwritten,
-    carry: unwritten,
-    realize: unwritten,
-    counterpart: unwritten,
-    unrealized: unwritten,
-    settle: unwritten,
+    statement:
+      "A captured prism lands where Aurora's class still reads on the refined map, since magic classes are captured and each round re-derives crests; it takes the nearest such crest, and goes if none is charged.",
+    carry: carryWhereItLands,
+    realize: notApplicable(
+      "The rule asks for a top that relief supplies; a prism adds no shape of its own at any scale."
+    ),
+    counterpart,
+    unrealized: (state, carried) =>
+      counterpart(state, carried) >= 0 ? movesTo(counterpart)(state, carried) : goes(),
+    settle: notApplicable("Charge gathers over epochs; a round's water does not move it."),
   },
   movement: {
-    statement: unwritten,
-    roads: unwritten,
-    boats: unwritten,
-    drainage: unwritten,
-    magic: unwritten,
-    crosses: unwritten,
+    statement:
+      "A charged height is hard going and a place travellers avoid. Ice that slides off it carries charge down its glaciers, so it feeds that carrier more readily than ordinary ice does.",
+    roads: costNear(2.5),
+    boats: notApplicable("A prism stands on a height no boat reaches."),
+    drainage: notApplicable("Water up there is ice; drainage begins below where it melts."),
+    magic: costNear(0.7),
+    crosses: notApplicable("A height of charged ice is a barrier itself."),
   },
   others: {
-    statement: unwritten,
-    needs: unwritten,
-    excludes: unwritten,
-    contains: unwritten,
-    pairsWith: unwritten,
+    statement:
+      "A prism stands on a summit's or ridge's ground inside an aurora field and looks down on light wells below; it cannot stand in a lake.",
+    needs: notApplicable(
+      "Its rule reads charge and a high class alone; a relict outlasts the aurora field that charged it."
+    ),
+    excludes: [{ kind: "lake", holds: standsIn }],
+    contains: notApplicable("A prism is a small body of ice and rock with nothing inside it."),
+    pairsWith: [
+      { kind: "ridge", holds: standsIn },
+      { kind: "summit", holds: within(spans(4)) },
+      { kind: "lightWell", holds: within(spans(6)) },
+      { kind: "auroraField", holds: standsIn },
+    ],
   },
-  people: { statement: unwritten, offers: unwritten, threatens: unwritten },
-  time: { statement: unwritten, fate: unwritten },
+  people: {
+    statement:
+      "A prism draws pilgrims and those who gather charged ice, and stills what stays near it; anyone staying too long slows and freezes.",
+    offers: (state, place) => ({
+      sanctity: factors.magnitude(state, place),
+      materials: chargeOf(state, place) / 2,
+    }),
+    threatens: (state, place) => [
+      { hazard: "stillness", reach: spans(1)(state), severity: chargeOf(state, place) },
+    ],
+  },
+  time: {
+    statement:
+      "A prism stands while charge does, and the system keeps a share of it through warm epochs, so a relict can outlast its ice. When charge falls below the rule, it ends, and the ground under it is simply the crest.",
+    fate: lastsWhile(isA),
+  },
   visibility: {
-    statement: unwritten,
-    magnitude: unwritten,
-    localConditions: unwritten,
-    isolation: unwritten,
-    cultural: unwritten,
-    visibleAt: unwritten,
+    statement:
+      "A prism shows by its charge more than by its size and by how far it stands over the field around it; a pilgrim town carries a faint one.",
+    ...factors,
+    visibleAt: drawnWhen(factors, { magnitude: 0.5, localConditions: 0.3, isolation: 0.2 }),
   },
   naming: {
-    statement: unwritten,
-    namedBy: unwritten,
-    takesNameFrom: unwritten,
-    lendsNameTo: unwritten,
+    statement:
+      "Named by pilgrims and the people below, usually for the height it stands on or the light it throws.",
+    namedBy: namingCultureNear,
+    takesNameFrom: [
+      { kind: "summit", holds: within(spans(4)) },
+      { kind: "ridge", holds: standsIn },
+    ],
+    lendsNameTo: [{ kind: "shrine", holds: within(spans(6)) }],
   },
 };

@@ -1,62 +1,131 @@
-import { unwritten, type PoiEntry } from "../poiContract";
+import type { GenerationState } from "../../process";
+import { carryWhereItLands, costNear, counterpartOf, movesTo } from "../poiCarry";
+import { notApplicable, type PoiEntry, type PoiPlace } from "../poiContract";
+import { holds, namingCultureNear, regionPlaces, within } from "../poiPlaces";
+import { fieldOf, iceAt, landformAt, Landform, slopeAt } from "../poiReads";
+import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import {
+  areaOf,
+  holdAt,
+  lastsWhile,
+  loweredAsCaptured,
+  meanOf,
+  reliefOf,
+  sameSpot,
+  spans,
+} from "./reliefShape";
+
+/** Area and relief at which a cirque is half as great as they get: part of a world complex. */
+const typicalArea = 8e8,
+  typicalRelief = 300;
+/** The gradient of a head wall steep enough to shed its snow. */
+const sheddingGrade = 0.15;
+
+const isA = (state: GenerationState, cell: number) => landformAt(state, cell) === Landform.Cirque;
+const maxIceAt = (state: GenerationState, cell: number) =>
+  fieldOf(state).MaximumIceThickness.get(cell);
+const places = regionPlaces("cirque", isA, maxIceAt);
+const counterpart = counterpartOf(isA, 1);
+const iced = (state: GenerationState, place: PoiPlace) => iceAt(state, place.anchor) > 0;
+const factors = {
+  magnitude: meanOf(sized(areaOf, typicalArea), sized(reliefOf, typicalRelief)),
+  localConditions: standsOut(maxIceAt, spans(6)),
+  isolation: aloneAmong(places, spans(8)),
+  cultural: attachment(spans(6)),
+};
 
 export const cirque: PoiEntry = {
   id: "cirque",
   group: "relief",
   name: "Cirque",
-  recognition: { distinct: unwritten, isA: unwritten },
+  recognition: {
+    distinct:
+      "A land cell the generator classes Landform.Cirque: on mountain ground under sustained ice flux, where the deepest ice ever held there stood strictly thicker than on every side. That strict maximum is what makes it an ice-cut head: a level ice sheet has none, a U-valley is the trough ice flowed down from one, and a moraine is what the ice dropped lower. The test keeps reading after the ice has gone; whether ice remains is a property.",
+    isA,
+  },
   existence: {
-    statement: unwritten,
-    way: unwritten,
-    requires: unwritten,
-    suitability: unwritten,
-    places: unwritten,
+    statement:
+      "Emerges where a valley glacier's head sat long enough to quarry a bowl into a mountain; only ice makes one, and it outlives its ice.",
+    way: "emerges",
+    requires: notApplicable(
+      "The class exists only where the ice test passed; nothing else is asked."
+    ),
+    suitability: notApplicable("Nothing chooses a cirque's ground; the ice flux does."),
+    places,
   },
   fields: {
-    statement: unwritten,
-    terrain: unwritten,
-    water: unwritten,
-    climate: unwritten,
-    cover: unwritten,
-    magic: unwritten,
+    statement:
+      "A cirque is a held hollow and, while iced, a source of glacier and melt: it stores what falls on it, gives it down the valley over the year, and pools cold air.",
+    terrain: (state, place) => holdAt(state, "atMost", "Elevation", place.cells),
+    water: (state, place) => holdAt(state, "atLeast", "IceThickness", place.cells),
+    climate: notApplicable(
+      "Its cold pool is a regional shared medium; the field holds no band for it."
+    ),
+    cover: notApplicable("Bare rock and thin soil there already follow height and ice."),
+    magic: notApplicable(
+      "It sources nothing itself; Aurora's light well admits its class by its own rule and is its own entry."
+    ),
   },
   acrossMaps: {
-    statement: unwritten,
-    carry: unwritten,
-    realize: unwritten,
-    counterpart: unwritten,
-    unrealized: unwritten,
-    settle: unwritten,
+    statement:
+      "A captured cirque keeps its class on the refined map through the captured landform band, and its floor lies no higher than the parent's. If no cirque cell reads there it takes the nearest.",
+    carry: carryWhereItLands,
+    realize: (state, carried) => loweredAsCaptured(state, carried, counterpart(state, carried)),
+    counterpart,
+    unrealized: movesTo(counterpart),
+    settle: notApplicable("A bowl is cut over epochs; a round's water does not shift it."),
   },
   movement: {
-    statement: unwritten,
-    roads: unwritten,
-    boats: unwritten,
-    drainage: unwritten,
-    magic: unwritten,
-    crosses: unwritten,
+    statement:
+      "A head wall ends a valley road; water and ice both start here, so the network is drawn from it, and the ice carries what charge it holds down from here.",
+    roads: costNear(2),
+    boats: notApplicable("A tarn in a bowl is too high and closed for boats to matter."),
+    drainage: costNear(0.6),
+    magic: costNear(0.8),
+    crosses: notApplicable("A bowl ends a route; it takes none across the ice or anything else."),
   },
   others: {
-    statement: unwritten,
-    needs: unwritten,
-    excludes: unwritten,
-    contains: unwritten,
-    pairsWith: unwritten,
+    statement:
+      "A cirque heads a valley, stands below summits and pairs with moraines lower down. A tarn or a light well may lie in it; a moraine does not stand at the same spot.",
+    needs: notApplicable("Its class already required the ice and mountain it stands in."),
+    excludes: [{ kind: "moraine", holds: sameSpot }],
+    contains: [
+      { kind: "lake", holds },
+      { kind: "lightWell", holds },
+    ],
+    pairsWith: [
+      { kind: "valley", holds: within(spans(4)) },
+      { kind: "moraine", holds: within(spans(8)) },
+      { kind: "summit", holds: within(spans(4)) },
+    ],
   },
-  people: { statement: unwritten, offers: unwritten, threatens: unwritten },
-  time: { statement: unwritten, fate: unwritten },
+  people: {
+    statement:
+      "A cirque feeds the valley below with melt in dry months and is a holy high place for those who climb to it; its walls shed snow and rock on anyone inside.",
+    offers: (state, place) => ({
+      water: iced(state, place) ? factors.magnitude(state, place) : 0,
+      sanctity: factors.magnitude(state, place) / 2,
+    }),
+    threatens: (state, place) =>
+      iced(state, place) && slopeAt(state, place.anchor) >= sheddingGrade
+        ? [{ hazard: "avalanche", reach: spans(2)(state), severity: 0.5 }]
+        : [],
+  },
+  time: {
+    statement:
+      "A cirque deepens while ice sits in it and stands empty when the ice is gone, often with a tarn; it outlasts its glacier by many epochs and ends only when its class is no longer retained.",
+    fate: lastsWhile(isA),
+  },
   visibility: {
-    statement: unwritten,
-    magnitude: unwritten,
-    localConditions: unwritten,
-    isolation: unwritten,
-    cultural: unwritten,
-    visibleAt: unwritten,
+    statement:
+      "A cirque shows by its width and depth and by how its deepest ice stood over the country around; ordinary cirques are local and only a complex of them, or one above a town, reaches a broad view.",
+    ...factors,
+    visibleAt: drawnWhen(factors, { magnitude: 0.6, localConditions: 0.2, isolation: 0.2 }),
   },
   naming: {
-    statement: unwritten,
-    namedBy: unwritten,
-    takesNameFrom: unwritten,
-    lendsNameTo: unwritten,
+    statement: "Named by the valley below, if anyone climbs high enough to name it.",
+    namedBy: namingCultureNear,
+    takesNameFrom: [{ kind: "summit", holds: within(spans(4)) }],
+    lendsNameTo: [{ kind: "lake", holds }],
   },
 };

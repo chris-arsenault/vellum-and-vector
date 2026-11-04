@@ -1,62 +1,221 @@
-import { unwritten, type PoiEntry } from "../poiContract";
+import type { AtlasFeature } from "@atlas/domain";
+import type { GenerationState } from "../../process";
+import { carryWhereItLands, stays } from "../poiCarry";
+import { notApplicable, type PoiEntry, type PoiFieldChange, type PoiPlace } from "../poiContract";
+import { holdsRecord, namingCultureNear } from "../poiPlaces";
+import { cellSpan, fieldOf, gap, heightAt, iceAt, slopeAt, toNative } from "../poiReads";
+import { aloneAmong, attachment, drawnWhen, sized, standsOut } from "../poiVisibilityRules";
+import {
+  areaPlaces,
+  attribute,
+  avoidedGround,
+  damagedGround,
+  deadGround,
+  deadOf,
+  eventFate,
+  eventKindOf,
+  eventMagnitude,
+  eventReach,
+  isEvent,
+  restlessDead,
+  saltedHazard,
+} from "./settlementRecords";
+
+/** The exposures of `physicalExposures`: steep iced ground, a coast low and near, as societyHazards holds them. */
+const avalancheSlope = 0.15,
+  avalancheIce = 1,
+  waveHeight = 20,
+  waveShore = 10_000;
+/** How a place's yearly chance counts toward suitability: the chance of one in about a thousand years. */
+const remembered = 1000;
+/** The dead and displaced at which a disaster is half as great as disasters get. */
+const typicalLoss = 3000;
+/** What each kind of disaster leaves on the ground, in metres, at full strength. */
+const deposit: Record<string, number> = { avalanche: 5, flood: 0.5, tsunami: 1 };
+/** A fracture event leaves the rock this much more conductive, per mille, at full strength. */
+const cracked: Record<string, number> = { "thermal-fracture": 900, "steam-fracture": 900 };
+/** The share of living cover a disaster's ground loses at full strength. */
+const scoured = 0.8;
+
+const eventsNotDisasters = ["siege", "collapse"];
+const isDisaster = (f: AtlasFeature) =>
+  isEvent(f) && !eventsNotDisasters.includes(String(f.attributes.eventKind));
+const places = areaPlaces("disasterSite", isDisaster);
+const isA = holdsRecord("disasterSite", places);
+const around = (state: GenerationState) => 6 * cellSpan(state);
+const reachOf = (state: GenerationState, place: PoiPlace) =>
+  Math.max(eventReach(state, place), around(state));
+const atThePlace = (state: GenerationState, a: PoiPlace, b: PoiPlace) =>
+  gap(state, a.anchor, b.anchor) <= reachOf(state, a);
+const lossOf = (state: GenerationState, place: PoiPlace) =>
+  deadOf(state, place) + attribute(place, "displaced");
+const deadAt = (state: GenerationState, cell: number) => fieldOf(state).MassDeath.get(cell);
+/** The yearly chance of each physical exposure at a cell, as `physicalExposures` rates them. */
+function exposure(state: GenerationState, cell: number) {
+  const map = fieldOf(state),
+    avalanche = slopeAt(state, cell) > avalancheSlope && iceAt(state, cell) > avalancheIce,
+    coastal = heightAt(state, cell) < waveHeight && map.OceanDistance.get(cell) < waveShore;
+  return (
+    (avalanche ? 0.002 : 0) +
+    map.FloodFrequency.get(cell) * 0.02 +
+    (coastal ? (map.TectonicStrain.get(cell) / 1000) * 0.00001 : 0)
+  );
+}
+/** Whether two systems meet at a cell: magic's own hazards fall on any such ground. */
+const strained = (state: GenerationState, cell: number) =>
+  (state.physical?.magic?.confluences.strain.get(cell) ?? 0) > 0;
+const factors = {
+  magnitude: sized(lossOf, typicalLoss),
+  localConditions: standsOut(deadAt, reachOf),
+  isolation: aloneAmong(places, reachOf),
+  cultural: attachment(reachOf),
+};
+const asPlace = (feature: AtlasFeature, cell: number): PoiPlace => ({
+  id: feature.id,
+  kind: "disasterSite",
+  cells: [cell],
+  anchor: cell,
+  feature,
+});
+/** What it left in the ground: debris, silt or a sand sheet, and cracked rock. */
+function scar(place: PoiPlace): readonly PoiFieldChange[] {
+  const kind = eventKindOf(place),
+    strength = eventMagnitude(place),
+    cell = place.anchor;
+  return [
+    ...(deposit[kind]
+      ? ([
+          {
+            change: "atLeast",
+            band: "SedimentThickness",
+            cell,
+            value: toNative(deposit[kind] * strength),
+          },
+        ] as const)
+      : []),
+    ...(cracked[kind]
+      ? ([
+          { change: "atLeast", band: "FractureConductance", cell, value: cracked[kind] * strength },
+        ] as const)
+      : []),
+  ];
+}
+/** Wreck on the road: worst at the anchor, gone at the edge of what it struck, or where salted. */
+function roadCost(state: GenerationState, place: PoiPlace, cell: number) {
+  const reach = 3 * cellSpan(state),
+    d = gap(state, place.anchor, cell),
+    wreck = d < reach ? 1 + eventMagnitude(place) * (1 - d / reach) : 1;
+  return Math.max(wreck, avoidedGround(state, place, cell));
+}
 
 export const disasterSite: PoiEntry = {
   id: "disasterSite",
   group: "settlements",
   name: "Disaster site",
-  recognition: { distinct: unwritten, isA: unwritten },
+  recognition: {
+    distinct:
+      "A published `societyEvent` whose `attributes.eventKind` is neither siege nor collapse: avalanche, flood, tsunami, or a magical meeting's hazard such as thermal-fracture, steam-fracture, pressure-ice-breach, rot-fever or undead. A battlefield is the same record at siege; collapse is a polity's end with no ground in it. A rogue wave's impact or a crater are the field's own marks with no event record.",
+    isA,
+  },
   existence: {
-    statement: unwritten,
-    way: unwritten,
-    requires: unwritten,
-    suitability: unwritten,
-    places: unwritten,
+    statement:
+      "Sited by the rates a community's own ground gives it: steep ice for an avalanche, flood frequency for a flood, a low straining coast for a tsunami, a meeting's coverage for its hazard. A drawn event strikes that community; those below ten thousand dead and displaced stay off the world map, and a refined map retains each that reaches it as a record of its affected area.",
+    way: "sited",
+    requires: (state, cell) => exposure(state, cell) > 0 || strained(state, cell),
+    /** The chance of one here within what a culture could remember; magic's meetings are read as a share of it. */
+    suitability: (state, cell) => {
+      const chance = 1 - Math.exp(-exposure(state, cell) * remembered);
+      return Math.max(chance, strained(state, cell) ? 0.5 : 0);
+    },
+    places,
   },
   fields: {
-    statement: unwritten,
-    terrain: unwritten,
-    water: unwritten,
-    climate: unwritten,
-    cover: unwritten,
-    magic: unwritten,
+    statement:
+      "A disaster leaves a one-time mark: debris, silt or a sand sheet in the ground, rock cracked by a fracture, ice opened by a breach, cover scoured, and its dead in the band Salt reads. The mark is held at what the event left, never added to again.",
+    terrain: (_state, place) => scar(place),
+    water: (_state, place) =>
+      eventKindOf(place) === "pressure-ice-breach"
+        ? [{ change: "atMost", band: "IceThickness", cell: place.anchor, value: 0 }]
+        : [],
+    climate: notApplicable(
+      "Each is over within a season, and the climate field carries no such short forcing."
+    ),
+    cover: (_state, place) => damagedGround(place, scoured),
+    magic: (_state, place) => deadGround(place),
   },
   acrossMaps: {
-    statement: unwritten,
-    carry: unwritten,
-    realize: unwritten,
-    counterpart: unwritten,
-    unrealized: unwritten,
-    settle: unwritten,
+    statement:
+      "A captured disaster keeps its place on the refined map, its mark and dead landing on the finer cell it reaches, whatever the ground has become there. Its affected area is not re-derived from the finer terrain.",
+    carry: carryWhereItLands,
+    realize: (_state, carried) => {
+      const place = asPlace(carried.feature, carried.cell);
+      return [...scar(place), ...deadGround(place)];
+    },
+    counterpart: (_state, carried) => carried.cell,
+    unrealized: stays,
+    settle: notApplicable("What has happened does not move with a round's water."),
   },
   movement: {
-    statement: unwritten,
-    roads: unwritten,
-    boats: unwritten,
-    drainage: unwritten,
-    magic: unwritten,
-    crosses: unwritten,
+    statement:
+      "Wreck costs a road close to where it struck, and people shun any ground the dead have salted. Avalanche debris blocks a valley's drainage until it is cut through. A pressure-ice breach is the one disaster that opens a way, across the ice it broke.",
+    roads: roadCost,
+    boats: notApplicable(
+      "Wreckage in a channel is below what boat costs resolve; a breach's open water is the sea's."
+    ),
+    drainage: (_state, place, cell) =>
+      eventKindOf(place) === "avalanche" && cell === place.anchor ? 2 : 1,
+    magic: notApplicable(
+      "It lays down dead for Salt and takes nothing from any carrier; the brine rides the crust by Salt's own rule."
+    ),
+    crosses: (_state, place) => (eventKindOf(place) === "pressure-ice-breach" ? ["ice"] : []),
   },
   others: {
-    statement: unwritten,
-    needs: unwritten,
-    excludes: unwritten,
-    contains: unwritten,
-    pairsWith: unwritten,
+    statement:
+      "A disaster strikes a settlement exposed to it, which it may leave a ruin; a shrine may mark it, and its dead may feed a killing ground. It can happen on any ground with a hazard, so it excludes nothing.",
+    needs: [{ kind: "settlement", holds: atThePlace }],
+    excludes: notApplicable("Hazards fall on whatever stands in their way."),
+    contains: notApplicable("Its record has one location and a reach; the reach holds no place."),
+    pairsWith: [
+      { kind: "ruin", holds: atThePlace },
+      { kind: "killingGround", holds: atThePlace },
+      { kind: "shrine", holds: atThePlace },
+    ],
   },
-  people: { statement: unwritten, offers: unwritten, threatens: unwritten },
-  time: { statement: unwritten, fate: unwritten },
+  people: {
+    statement:
+      "It gives survivors a place to mourn, and a flood's silt also feeds its fields. Above all it warns: what struck once may strike again, as far as it reached, and its dead may have salted the ground.",
+    offers: (state, place) => {
+      const toll = factors.magnitude(state, place) / 2;
+      return eventKindOf(place) === "flood"
+        ? { sanctity: toll, food: eventMagnitude(place) / 2 }
+        : { sanctity: toll };
+    },
+    threatens: (state, place) => [
+      {
+        hazard: eventKindOf(place),
+        reach: eventReach(state, place),
+        severity: eventMagnitude(place),
+      },
+      ...saltedHazard(state, place),
+      ...restlessDead(state, place),
+    ],
+  },
+  time: {
+    statement:
+      "An event happens once, and its record stays as history; its silt and debris become ordinary ground. As an epoch closes, ground its dead have salted carries on as a killing ground; elsewhere only the memory persists.",
+    fate: eventFate,
+  },
   visibility: {
-    statement: unwritten,
-    magnitude: unwritten,
-    localConditions: unwritten,
-    isolation: unwritten,
-    cultural: unwritten,
-    visibleAt: unwritten,
+    statement:
+      "A disaster shows by the people it took and drove off, and by standing alone in its country's history; one that ruined a capital shows however small, and the tenth flood on the same plain shows late.",
+    ...factors,
+    visibleAt: drawnWhen(factors, { magnitude: 0.6, localConditions: 0.15, isolation: 0.25 }),
   },
   naming: {
-    statement: unwritten,
-    namedBy: unwritten,
-    takesNameFrom: unwritten,
-    lendsNameTo: unwritten,
+    statement:
+      "Named by those who remember it, after the town it struck and the era it struck in; its record's name holds its event and era.",
+    namedBy: namingCultureNear,
+    takesNameFrom: [{ kind: "settlement", holds: atThePlace }],
+    lendsNameTo: notApplicable("Places keep their own names through a disaster, not take its."),
   },
 };
