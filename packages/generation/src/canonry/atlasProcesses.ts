@@ -2,7 +2,7 @@ import { requireThat, type DomainSnapshot } from "@atlas/domain";
 import type { GenerationState, MapProcess } from "../process";
 import type { AtlasGenerationInput } from "../atlasWorkflow";
 import { landformClassification } from "./landforms";
-import { markPeakLandforms } from "../poi/relief/peakTops";
+import { markPoiLandforms } from "../poi/poiLandforms";
 import { applyNativeStep } from "./contracts";
 import { nativeContext } from "./context";
 import { atlasEpoch, atlasQuality } from "./atlasProfile";
@@ -80,7 +80,7 @@ function executionStep(state: GenerationState, step: NativeStep, iceLoad: boolea
       salt,
       (map, context) => {
         landformClassification(map, context);
-        markPeakLandforms(state);
+        markPoiLandforms(state);
       },
     ];
   return step;

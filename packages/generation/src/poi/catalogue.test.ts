@@ -7,8 +7,8 @@ import { poiGroupIds, poiKindIds } from "./poiKinds";
 
 /** The contract's shape: every entry answers exactly these. */
 const contract = {
-  recognition: ["distinct", "isA"],
-  existence: ["statement", "way", "requires", "suitability", "places"],
+  recognition: ["distinct", "isA", "landform"],
+  existence: ["statement", "way", "requires", "suitability", "places", "origins"],
   publication: ["statement", "moment", "record"],
   fields: ["statement", "terrain", "water", "climate", "cover", "magic"],
   acrossMaps: ["statement", "carry", "realize", "counterpart", "unrealized", "settle", "schedule"],
@@ -17,8 +17,17 @@ const contract = {
   people: ["statement", "offers", "threatens"],
   time: ["statement", "fate"],
   visibility: ["statement", "magnitude", "localConditions", "isolation", "cultural", "importance"],
-  naming: ["statement", "namedBy", "takesNameFrom", "lendsNameTo"],
+  naming: ["statement", "namedBy", "takesNameFrom", "lendsNameTo", "term"],
 };
+/** The slots kinds answer as their turn comes; everything else is already answered. */
+const openSlots = new Set([
+  "variety",
+  "appearance",
+  "account",
+  "recognition.landform",
+  "existence.origins",
+  "naming.term",
+]);
 
 it("gives every place rule of every magic system a kind in the catalogue", () => {
   const presets = canonryMagicPresets();
@@ -44,11 +53,13 @@ it("has one page per group and one entry per kind, on its own group", () => {
 
 it("holds every entry to exactly the agreed roles and fields", () => {
   for (const entry of Object.values(poiCatalogue)) {
-    const { id, group, name, ...roles } = entry;
-    expect([id, group, name].every(Boolean)).toBe(true);
-    expect(Object.keys(roles)).toEqual(Object.keys(contract));
+    const { id, group, name, variety, appearance, account, ...roles } = entry;
+    expect([id, group, name, variety, appearance, account].every(Boolean)).toBe(true);
+    expect(Object.keys(roles).sort()).toEqual(Object.keys(contract).sort());
     for (const [role, fields] of Object.entries(contract))
-      expect(Object.keys(roles[role as keyof typeof roles]), `${id}.${role}`).toEqual(fields);
+      expect(Object.keys(roles[role as keyof typeof roles]).sort(), `${id}.${role}`).toEqual(
+        [...fields].sort()
+      );
   }
 });
 
@@ -57,13 +68,15 @@ it("lists an entry's unwritten fields as its open work", () => {
     ...poiCatalogue.peak,
     naming: { ...poiCatalogue.peak.naming, namedBy: unwritten },
   };
-  expect(unwrittenFields(poiCatalogue.peak)).toEqual([]);
-  expect(unwrittenFields(open)).toEqual(["naming.namedBy"]);
+  expect(unwrittenFields(poiCatalogue.peak)).toEqual(["appearance", "account"]);
+  expect(unwrittenFields(open)).toEqual(["appearance", "account", "naming.namedBy"]);
 });
 
-it("leaves no field of any entry unwritten", () => {
+it("leaves no field of any entry unwritten but the slots still open", () => {
   const open = Object.values(poiCatalogue).flatMap((entry) =>
-    unwrittenFields(entry).map((field) => `${entry.id}.${field}`)
+    unwrittenFields(entry)
+      .filter((field) => !openSlots.has(field))
+      .map((field) => `${entry.id}.${field}`)
   );
   expect(open).toEqual([]);
   for (const page of Object.values(poiPages)) {

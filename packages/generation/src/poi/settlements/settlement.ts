@@ -40,6 +40,12 @@ const carriage = 0.8;
 /** A river seat draws a channel to itself: the ground around it is cheaper to run through. */
 const seatCorridor = 0.5;
 
+/** The share of towns near a peak that take its name. */
+const peakNameChance = 0.2;
+const seatRoles = new Set(["capital", "regionalCapital"]);
+/** A polity is named from its seat, so a seat keeps the name it has. */
+const isSeat = (place: PoiPlace) => seatRoles.has(String(place.feature?.attributes.settlementRole));
+
 const places = settlementPlaces;
 const isA = holdsRecord("settlement", places);
 const peopleOf = (_state: GenerationState, place: PoiPlace) =>
@@ -210,7 +216,12 @@ export const settlement: PoiEntry = {
     statement: "Named by its own people, and it may take the name of a landmark beside it.",
     namedBy: namingCultureNear,
     takesNameFrom: [
-      { kind: "peak", holds: within((state) => 6 * cellSpan(state)) },
+      {
+        kind: "peak",
+        chance: peakNameChance,
+        holds: (state, town, peak) =>
+          !isSeat(town) && within((s) => 6 * cellSpan(s))(state, town, peak),
+      },
       { kind: "waterfall", holds: within(around) },
     ],
     lendsNameTo: [{ kind: "ruin", holds: (_state, a, b) => a.anchor === b.anchor }],

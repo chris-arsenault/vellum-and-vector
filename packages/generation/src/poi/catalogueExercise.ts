@@ -45,6 +45,10 @@ function placeCalls(entry: PoiEntry, state: GenerationState, p: PoiPlace): Call[
     onCell = (fn: never) => (fn as (s: GenerationState, c: number) => unknown)(state, p.anchor);
   const { fields, people, time, visibility, naming, others, existence, recognition } = entry;
   return [
+    ["variety.of", entry.variety && "of" in entry.variety ? entry.variety.of : null, onPlace],
+    ["appearance", entry.appearance, onPlace],
+    ["account", entry.account, onPlace],
+    ["naming.term", naming.term, onPlace],
     ["recognition.isA", recognition.isA, onCell],
     ["existence.requires", existence.requires, onCell],
     ["existence.suitability", existence.suitability, onCell],

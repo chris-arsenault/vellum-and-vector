@@ -11,8 +11,11 @@ import type { RegionalState } from "../regional/state";
 import { poiCatalogue } from "./catalogue";
 import type { PoiCarried, PoiEntry, PoiMoment, PoiPlace } from "./poiContract";
 import type { PoiKindId } from "./poiKinds";
+import { applyNameTerm, takeNames } from "./poiNames";
+import { originsOf } from "./poiOrigins";
 import { forgetSettlements, heldFor, releaseHeld } from "./poiReads";
 import { realized } from "./poiRealized";
+import { varietyOfEntry } from "./poiVariety";
 
 interface Published {
   entry: PoiEntry;
@@ -53,18 +56,54 @@ export function publishKinds(
   for (const entry of entries())
     if (entry.publication.moment === moment && delivered(entry)) publishKind(state, entry, written);
 }
-function publishKind(state: GenerationState, entry: PoiEntry, written: Published[]) {
+/** What every record says of its place, whichever kind's record it is. */
+function placeAttributes(state: GenerationState, entry: PoiEntry, place: PoiPlace) {
+  const variety = varietyOfEntry(state, entry, place);
+  return {
+    poi: entry.id,
+    ...(place.origin ? { origin: place.origin } : {}),
+    ...(variety ? { variety } : {}),
+  };
+}
+function publishKind(
+  state: GenerationState,
+  entry: PoiEntry,
+  written: Published[],
+  wanted: (place: PoiPlace) => boolean = () => true
+) {
   const record = called<(s: GenerationState, p: PoiPlace) => AtlasFeature | null>(
     entry.publication.record
   );
   for (const place of placesOf(state, entry)) {
-    const feature = record?.(state, place);
+    const feature = wanted(place) ? record?.(state, place) : null;
     if (!feature) continue;
-    feature.attributes = { ...feature.attributes, poi: entry.id };
+    feature.attributes = { ...feature.attributes, ...placeAttributes(state, entry, place) };
+    applyNameTerm(state, entry, place, feature);
     if (putGenerated(state, feature)) written.push({ entry, place, featureId: feature.id });
   }
   if (entry.id === "settlement" || entry.id === "ruin") forgetSettlements(state);
 }
+/**
+ * A World's places whose origins read a later moment's kinds: a town's mountain waits for towns.
+ * A refined map needs no such pass, since its society exists before its geography publishes.
+ */
+export function publishLatePlaces(state: GenerationState, moment: PoiMoment) {
+  releaseHeld(state);
+  const written = published.get(state) ?? [];
+  for (const entry of entries()) {
+    const late = new Set(
+      originsOf(entry)
+        .filter(({ reads }) => reads.some((k) => poiCatalogue[k].publication.moment === moment))
+        .map(({ id }) => id)
+    );
+    // A kind this map did not deliver at its own moment stays undelivered.
+    if (late.size && written.some((item) => item.entry.id === entry.id))
+      publishKind(state, entry, written, (place) => late.has(place.origin ?? ""));
+  }
+}
+/** The shared naming step, over everything this map published. */
+export const takePublishedNames = (state: GenerationState) =>
+  takeNames(state, published.get(state) ?? []);
 
 /** Maps saved before a kind took its one name still carry the old one on their records. */
 const formerKinds: Record<string, PoiKindId> = { summit: "peak" };

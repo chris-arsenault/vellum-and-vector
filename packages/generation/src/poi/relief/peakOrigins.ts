@@ -1,33 +1,16 @@
-import { Landform } from "../../canonry/codes";
-import { hashUnit } from "../../canonry/noise";
 import { keyCols, leastRise, prominence } from "../../canonry/landforms";
-import { rangeGroups } from "../../canonry/reliefFeatures";
+import { hashUnit } from "../../canonry/noise";
+import { rangeGroups } from "../../canonry/rangeGroups";
 import type { GenerationState } from "../../process";
 import type { RegionalState } from "../../regional/state";
 import { mapScale } from "../../worldSignificance";
+import type { PoiClaim, PoiOrigin } from "../poiContract";
 import { carriedPlaces } from "../poiPublish";
-import {
-  cellSpan,
-  cellsWithin,
-  fieldOf,
-  heightAt,
-  gap,
-  heldFor,
-  isLand,
-  isSea,
-  releaseHeld,
-} from "../poiReads";
+import { cellSpan, cellsWithin, fieldOf, gap, heightAt, heldFor, isLand, isSea } from "../poiReads";
 import { settlementPlaces } from "../settlements/communityRecords";
 import { peopleOfRecord } from "../settlements/settlementRecords";
 
-/**
- * Why a top is a peak. Height is one reason among several: a range's highest point is a peak
- * however it rises, a town can make a modest top the mountain it lives under, and sailors can
- * make one of the headland they steer by. This is the one definition of a peak: the place, the
- * landform and a range's count all read it.
- */
-export type PeakCause = "crown" | "carried" | "high" | "lone" | "seaMark" | "horn" | "town";
-type Chosen = Map<number, PeakCause>;
+type Claimed = ReadonlyMap<number, PoiClaim>;
 
 /** Rise in metres at the World's scale that makes a top a peak within a range and alone. */
 const rangeRise = 400,
@@ -78,112 +61,140 @@ const highestRising = (state: GenerationState, cells: readonly number[]) => {
     if (rise.get(cell) >= leastRise && (best < 0 || rise.get(cell) > rise.get(best))) best = cell;
   return best;
 };
-
-const clear = (state: GenerationState, chosen: Chosen, cell: number, apart: number) => {
-  for (const other of chosen.keys()) if (gap(state, cell, other) < apart) return false;
+const clear = (state: GenerationState, taken: Iterable<number>, cell: number, apart: number) => {
+  for (const other of taken) if (gap(state, cell, other) < apart) return false;
   return true;
 };
+/** Those of the candidates that pass, each standing clear of every peak before it. */
+function spaced(
+  state: GenerationState,
+  claimed: Claimed,
+  apart: number,
+  passes: (cell: number) => boolean
+) {
+  const taken = new Set(claimed.keys());
+  for (const cell of candidates(state))
+    if (passes(cell) && clear(state, taken, cell, apart)) taken.add(cell);
+  return [...taken].filter((cell) => !claimed.has(cell)).map((anchor) => ({ anchor }));
+}
+
 /** The tallest point of a range is always a peak, whatever it rises above its col. */
-function crowns(state: GenerationState, chosen: Chosen) {
+function crowns(state: GenerationState) {
   const elevation = fieldOf(state).Elevation;
-  for (const { members } of rangeGroups(state)) {
+  return rangeGroups(state).map(({ members }) => {
     let crown = members[0];
     for (const cell of members) if (elevation.get(cell) > elevation.get(crown)) crown = cell;
-    chosen.set(crown, "crown");
-  }
+    return { anchor: crown };
+  });
 }
 /** A peak the coarser map named stays one: the greatest top within its cell. */
-function carried(state: GenerationState, chosen: Chosen) {
-  if (!("regional" in state)) return;
+function carried(state: GenerationState) {
+  if (!("regional" in state)) return [];
   const region = state as RegionalState;
-  for (const { entry, carried: place } of carriedPlaces(region)) {
-    if (entry.id !== "peak") continue;
-    const top = highestRising(state, cellsWithin(state, place.cell, region.regional.parentSpan));
-    if (top >= 0 && !chosen.has(top)) chosen.set(top, "carried");
-  }
+  return carriedPlaces(region)
+    .filter(({ entry }) => entry.id === "peak")
+    .map(({ carried: place }) =>
+      highestRising(state, cellsWithin(state, place.cell, region.regional.parentSpan))
+    )
+    .filter((top) => top >= 0)
+    .map((anchor) => ({ anchor }));
 }
 /** Among a range's other tops, those that rule their part of it. */
-function high(state: GenerationState, chosen: Chosen) {
-  const span = cellSpan(state),
-    apart = rangeApart * span,
-    bars = new Map<number, number>();
+function high(state: GenerationState, claimed: Claimed) {
+  const bars = new Map<number, number>();
   for (const { members, relief } of rangeGroups(state)) {
     const bar = Math.max(scaled(state, rangeRise), rangeShare * relief);
     for (const cell of members) bars.set(cell, bar);
   }
-  for (const cell of candidates(state)) {
+  return spaced(state, claimed, rangeApart * cellSpan(state), (cell) => {
     const bar = bars.get(cell);
-    if (bar !== undefined && metresOf(state, cell) >= bar && clear(state, chosen, cell, apart))
-      chosen.set(cell, "high");
-  }
+    return bar !== undefined && metresOf(state, cell) >= bar;
+  });
 }
 /** Out of any range, a top must stand well clear of the country around it. */
-function lone(state: GenerationState, chosen: Chosen) {
+function lone(state: GenerationState, claimed: Claimed) {
   const inRange = new Set(rangeGroups(state).flatMap(({ members }) => [...members])),
-    apart = loneApart * cellSpan(state),
     bar = scaled(state, loneRise);
-  for (const cell of candidates(state))
-    if (!inRange.has(cell) && metresOf(state, cell) >= bar && clear(state, chosen, cell, apart))
-      chosen.set(cell, "lone");
+  return spaced(
+    state,
+    claimed,
+    loneApart * cellSpan(state),
+    (cell) => !inRange.has(cell) && metresOf(state, cell) >= bar
+  );
 }
 /** A top rising straight from the sea is what sailors steer by, though nobody would climb it. */
-function seaMarks(state: GenerationState, chosen: Chosen) {
+function seaMarks(state: GenerationState, claimed: Claimed) {
   const span = cellSpan(state),
     bar = scaled(state, seaMarkRise);
-  for (const cell of candidates(state)) {
-    if (metresOf(state, cell) < bar || !clear(state, chosen, cell, seaMarkApart * span)) continue;
-    if (cellsWithin(state, cell, 2 * span).some((near) => isSea(state, near)))
-      chosen.set(cell, "seaMark");
-  }
+  return spaced(
+    state,
+    claimed,
+    seaMarkApart * span,
+    (cell) =>
+      metresOf(state, cell) >= bar &&
+      cellsWithin(state, cell, 2 * span).some((near) => isSea(state, near))
+  );
 }
 /** A great crossing is known by the top above it: some passes name their horn. */
-function horns(state: GenerationState, chosen: Chosen) {
+function horns(state: GenerationState, claimed: Claimed) {
   const span = cellSpan(state),
-    bar = scaled(state, hornRise) * 1024;
+    bar = scaled(state, hornRise) * 1024,
+    taken = new Set(claimed.keys()),
+    found: { anchor: number }[] = [];
   for (const [col, rise] of keyCols(fieldOf(state))) {
     if (rise < bar || hashUnit(salts.horn, col, 0) >= hornChance) continue;
     const top = highestRising(state, cellsWithin(state, col, hornApart * span));
-    if (top >= 0 && clear(state, chosen, top, hornApart * span)) chosen.set(top, "horn");
+    if (top < 0 || !clear(state, taken, top, hornApart * span)) continue;
+    taken.add(top);
+    found.push({ anchor: top });
   }
+  return found;
 }
 function townChanceOf(role: unknown, people: number) {
   if (seats.has(String(role))) return seatChance;
   return townChance + (bigTownChance * people) / (people + bigTown);
 }
 /** People name what they live under: a mountain town sometimes makes its nearest top a peak. */
-function towns(state: GenerationState, chosen: Chosen) {
+function towns(state: GenerationState) {
   const hills = state.physical!.profile.HillElevation,
     reach = Math.max(townSpans * cellSpan(state), townMetres);
-  for (const town of settlementPlaces(state)) {
-    if (town.anchor < 0 || heightAt(state, town.anchor) < hills) continue;
+  return settlementPlaces(state).flatMap((town) => {
+    if (town.anchor < 0 || heightAt(state, town.anchor) < hills) return [];
     const record = town.feature,
       chance = townChanceOf(record?.attributes.settlementRole, record ? peopleOfRecord(record) : 0);
-    if (hashUnit(salts.town, town.anchor, 0) >= chance) continue;
+    if (hashUnit(salts.town, town.anchor, 0) >= chance) return [];
     const top = highestRising(state, cellsWithin(state, town.anchor, reach));
-    if (top >= 0 && !chosen.has(top)) chosen.set(top, "town");
-  }
-}
-/** Every peak on this map and why it is one; what is not here stays a latent top. */
-export const peakTops = (state: GenerationState): ReadonlyMap<number, PeakCause> =>
-  heldFor(state, "peak:tops", () => {
-    const chosen: Chosen = new Map();
-    if (!state.physical) return chosen;
-    crowns(state, chosen);
-    carried(state, chosen);
-    high(state, chosen);
-    lone(state, chosen);
-    seaMarks(state, chosen);
-    horns(state, chosen);
-    towns(state, chosen);
-    return chosen;
+    return top >= 0 ? [{ anchor: top }] : [];
   });
-
-/** The terrain's landform mark: a peak is a peak, whichever reader asks. */
-export function markPeakLandforms(state: GenerationState) {
-  releaseHeld(state);
-  const codes = fieldOf(state).LandformCodes;
-  for (const cell of peakTops(state).keys())
-    if (isLand(state, cell) && codes.get(cell) !== Landform.Waterfall)
-      codes.set(cell, Landform.Peak);
-  releaseHeld(state);
 }
+
+/** Why a top is a peak, in order of claim. Height is one reason among several. */
+export const peakOrigins: readonly PoiOrigin[] = [
+  {
+    id: "crown",
+    statement: "The tallest point of a range, however it rises.",
+    reads: [],
+    finds: crowns,
+  },
+  {
+    id: "carried",
+    statement: "The greatest top where the coarser map named a peak.",
+    reads: [],
+    finds: carried,
+  },
+  { id: "high", statement: "A top ruling its part of a range.", reads: [], finds: high },
+  { id: "lone", statement: "A top standing well clear of its country.", reads: [], finds: lone },
+  {
+    id: "seaMark",
+    statement: "A top rising from the sea that sailors steer by.",
+    reads: [],
+    finds: seaMarks,
+  },
+  { id: "horn", statement: "The top a great crossing is known by.", reads: [], finds: horns },
+  {
+    id: "town",
+    statement: "The mountain a town in the hills lives under, by chance and by its size.",
+    reads: ["settlement"],
+    finds: towns,
+  },
+];

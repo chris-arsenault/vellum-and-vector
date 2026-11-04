@@ -10,7 +10,7 @@ import type { PublicationDefinition } from "./publication";
 import type { AtlasGenerationInput } from "./atlasWorkflow";
 import { generatedFeature, putGeneratedNetwork, putGeneratedDetail } from "./mapFeatures";
 import { findRoute } from "./mapRouting";
-import { publishKinds } from "./poi/poiPublish";
+import { publishKinds, publishLatePlaces } from "./poi/poiPublish";
 import { communityRoutes } from "./societyContact";
 import { profileOf } from "./societyProfile";
 import { wayClass, wayClasses } from "./societyWays";
@@ -43,6 +43,7 @@ export function publishSettlements(state: GenerationState, context: MapProcessCo
   nameLatentWorks(state);
   publishUnkindedRecords(state);
   publishKinds(state, "society");
+  publishLatePlaces(state, "society");
   publishRoutes(state, context, mapped, hierarchy);
 }
 type RoadClass = NonNullable<ReturnType<typeof wayClass>>;

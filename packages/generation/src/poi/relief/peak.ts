@@ -1,3 +1,4 @@
+import { Landform } from "../../canonry/codes";
 import { hashUnit } from "../../canonry/noise";
 import { prominence } from "../../canonry/landforms";
 import { meshDeltaX } from "../../canonry/mesh";
@@ -11,8 +12,11 @@ import {
   type PoiCarried,
   type PoiEntry,
   type PoiFieldChange,
+  type PoiNameTerm,
   type PoiPlace,
+  type PoiVariety,
 } from "../poiContract";
+import { claimsOf, placesFromOrigins } from "../poiOrigins";
 import { namingCultureNear, within } from "../poiPlaces";
 import { siteRecord } from "../poiRecords";
 import {
@@ -34,9 +38,10 @@ import {
   slopeAt,
   toNative,
 } from "../poiReads";
+import { varietyOf } from "../poiVariety";
 import { attachment, sized, standsOut, weighed } from "../poiVisibilityRules";
 import { peakForm, peakShape, type PeakForm } from "./peakForms";
-import { peakTops, type PeakCause } from "./peakTops";
+import { peakOrigins } from "./peakOrigins";
 import { bareOf, ringHeights, sectionRadius, thinSoilOf } from "./reliefShape";
 
 /** A peak rules over this many times its prominence around it; seen against this many times its height. */
@@ -44,7 +49,16 @@ const dominance = 20;
 /** Prominence at which a peak is half as great as peaks get. */
 const typicalProminence = 1000;
 /** What some peaks weigh for the reason they are peaks, whatever their size. */
-const causeWeight: Partial<Record<PeakCause, number>> = { crown: 0.85, carried: 0.7 };
+const originWeight: Readonly<Record<string, number>> = { crown: 0.85, carried: 0.7 };
+/** The word people use for a peak of each form. */
+const formTerms: Readonly<Record<PeakForm, string>> = {
+  horn: "Horn",
+  crag: "Crag",
+  scarred: "Scar",
+  dome: "Dome",
+  shattered: "Scree",
+  table: "Table",
+};
 /** The size a form works at: a share of the rise, and a floor at the World's scale, in metres. */
 const formShare = 0.25,
   formFloor = 80,
@@ -64,18 +78,11 @@ const unit = (value: number) => Math.max(0, Math.min(1, value));
 const rise = (state: GenerationState) =>
   heldFor(state, "prominence", () => prominence(fieldOf(state)));
 const riseOf = (state: GenerationState, place: PoiPlace) => metres(rise(state).get(place.anchor));
-const isA = (state: GenerationState, cell: number) => peakTops(state).has(cell);
-const causeOf = (state: GenerationState, place: PoiPlace): PeakCause =>
-  peakTops(state).get(place.anchor) ?? "high";
-const places = (state: GenerationState): readonly PoiPlace[] =>
-  heldFor(state, "places:peak", () =>
-    [...peakTops(state).keys()].map((cell) => ({
-      id: `peak:${cell}`,
-      kind: "peak" as const,
-      cells: [cell],
-      anchor: cell,
-    }))
-  );
+const claims = (state: GenerationState) => claimsOf(state, "peak", peakOrigins);
+const isA = (state: GenerationState, cell: number) => claims(state).has(cell);
+const originOf = (state: GenerationState, place: PoiPlace) =>
+  claims(state).get(place.anchor)?.origin ?? "high";
+const places = (state: GenerationState) => placesFromOrigins("peak", peakOrigins)(state);
 const foot = (state: GenerationState, place: PoiPlace) =>
   Math.max(2 * cellSpan(state), riseOf(state, place) * dominance);
 /** The greatest peak within the parent's cell of where a captured peak stood, or -1. */
@@ -105,6 +112,18 @@ function formOf(state: GenerationState, cell: number): PeakForm {
     hashUnit(salts.form, cell, 0)
   );
 }
+const variety: PoiVariety = {
+  statement:
+    "Rock, ice and weather weigh each form and chance picks among them, so hard rock usually stands as a crag and sometimes does not.",
+  of: (state, place) => formOf(state, place.anchor),
+};
+const formIn = (state: GenerationState, place: PoiPlace) =>
+  varietyOf(state, variety, place) as PeakForm;
+const nameTerm = (state: GenerationState, place: PoiPlace): PoiNameTerm => ({
+  kind: "landform",
+  subkind: "peak",
+  term: formTerms[formIn(state, place)],
+});
 /** The way a peak's chosen face looks: down its steepest side, give or take a quarter turn. */
 function faceOf(state: GenerationState, cell: number) {
   const ring = ringHeights(state, cell, sectionRadius(state));
@@ -122,7 +141,7 @@ const formReach = (state: GenerationState, place: PoiPlace) =>
 const formed = (state: GenerationState, place: PoiPlace) =>
   heldFor(state, `peak:form:${place.anchor}`, () => {
     const mesh = fieldOf(state).mesh,
-      form = formOf(state, place.anchor),
+      form = formIn(state, place),
       face = faceOf(state, place.anchor),
       reach = formReach(state, place);
     return cellsWithin(state, place.anchor, reach)
@@ -198,8 +217,10 @@ export const peak: PoiEntry = {
     distinct:
       "A top that is known as one: the tallest point of its range, a top ruling its part of a range, a top standing well clear of its country, a mark sailors steer by, the horn above a great crossing, or the mountain a town lives under. Most tops are none of these and stay latent. A pass is the saddle between tops, a ridge the crest line joining them.",
     isA,
+    landform: { code: Landform.Peak, yieldsTo: [Landform.Waterfall] },
   },
   existence: {
+    origins: peakOrigins,
     statement:
       "Emerges from uplift, volcanism and erosion, and is made a peak by standing as something: a range always has its crown, its other tops need to rule their part of it, and out of a range a top must stand well clear. People and movement make others: mountain towns sometimes name the top above them, passes the horn above them, and sailors the top they see from the sea. A peak the coarser map named stays one.",
     way: "emerges",
@@ -209,7 +230,7 @@ export const peak: PoiEntry = {
   },
   publication: {
     statement:
-      "Each peak publishes with what it rises above its key col, why it is one and its form.",
+      "Each peak publishes with what it rises above its key col, why it is one and its form. A peak a town makes on the World comes later than the rest, once there are towns; the World's ground is settled by then, so it is a named top without a form in the ground.",
     moment: "geography",
     record: siteRecord({
       kind: "peak",
@@ -217,8 +238,6 @@ export const peak: PoiEntry = {
       name: "Peak",
       attributes: (state, place) => ({
         prominence: riseOf(state, place),
-        cause: causeOf(state, place),
-        form: formOf(state, place.anchor),
       }),
     }),
   },
@@ -261,7 +280,7 @@ export const peak: PoiEntry = {
   },
   others: {
     statement:
-      "A peak is never a pass; a pass lies on its shoulder. A settlement within what it rules over may take its name.",
+      "A peak is never a pass; a pass lies on its shoulder. A mountain town may make its nearest top a peak (see its origins), and a town near a peak may take its name.",
     needs: notApplicable("A peak needs nothing else to stand."),
     excludes: [{ kind: "pass", holds: (_state, a, b) => a.anchor === b.anchor }],
     contains: notApplicable("A peak is one point."),
@@ -288,7 +307,7 @@ export const peak: PoiEntry = {
       "A peak shows by how far it rises above its own country, how large it is and how alone it stands; a range's crown and a peak the coarser map named show for being those; a capital at its foot or a town named after it carries it regardless.",
     ...factors,
     importance: (state, place) =>
-      Math.max(weight(state, place), causeWeight[causeOf(state, place)] ?? 0),
+      Math.max(weight(state, place), originWeight[originOf(state, place)] ?? 0),
   },
   naming: {
     statement:
@@ -296,5 +315,7 @@ export const peak: PoiEntry = {
     namedBy: namingCultureNear,
     takesNameFrom: notApplicable("Peaks give names; they do not take them."),
     lendsNameTo: [{ kind: "settlement", holds: within((state) => 6 * cellSpan(state)) }],
+    term: nameTerm,
   },
+  variety,
 };

@@ -38,9 +38,17 @@ export interface PoiPlace {
   readonly anchor: number;
   /** Its published feature, once it has one. */
   readonly feature?: AtlasFeature;
+  /** Which of its kind's origins made it, where the kind declares origins. */
+  readonly origin?: string;
 }
 type OnCell<T> = (state: GenerationState, cell: number) => T;
 type OnPlace<T> = (state: GenerationState, place: PoiPlace) => T;
+
+/** The terrain code a kind's places stamp on their anchors, and the codes it leaves standing. */
+export interface PoiLandformMark {
+  readonly code: number;
+  readonly yieldsTo?: readonly number[];
+}
 
 /** Recognition: what makes it this kind and no other, in the data. */
 export interface PoiRecognition {
@@ -48,10 +56,40 @@ export interface PoiRecognition {
   readonly distinct: Must<string>;
   /** The same test over the state: whether this cell belongs to a place of this kind. */
   readonly isA: Must<OnCell<boolean>>;
+  /** Filled as `unwritten` by the catalogue where a kind has not reached this work. */
+  readonly landform?: Slot<PoiLandformMark>;
+}
+
+/** Where an origin says a place stands. */
+export interface PoiFound {
+  readonly anchor: number;
+  /** Every cell it occupies; its anchor alone when omitted. */
+  readonly cells?: readonly number[];
+}
+/** A place an earlier origin of the kind already claimed, by its anchor. */
+export interface PoiClaim extends PoiFound {
+  readonly origin: string;
+}
+/**
+ * One reason places of a kind come to exist. An origin runs once the kinds it reads exist on
+ * this map. Earlier origins in a kind's list claim first, and a cell belongs to one origin.
+ */
+export interface PoiOrigin {
+  readonly id: string;
+  readonly statement: string;
+  /** Other kinds it reads. */
+  readonly reads: readonly PoiKindId[];
+  /** The places it claims, given those already claimed. */
+  readonly finds: (
+    state: GenerationState,
+    claimed: ReadonlyMap<number, PoiClaim>
+  ) => readonly PoiFound[];
 }
 
 /** Coming to exist: whether it emerges from the fields or is sited, and how. */
 export interface PoiExistence {
+  /** Why places of this kind exist, where the reasons differ; `places` then reads their claims. */
+  readonly origins?: Slot<readonly PoiOrigin[]>;
   readonly statement: Must<string>;
   readonly way: Must<"emerges" | "sited" | "both">;
   /** What must already be at a cell for one to stand there. */
@@ -175,7 +213,10 @@ export interface PoiRelation {
 }
 type Relations = Slot<readonly PoiRelation[]>;
 
-/** Other POIs: what it needs, excludes, contains and pairs with. */
+/**
+ * Other POIs: what it needs, excludes, contains and pairs with. These relations are declared
+ * and not enforced yet: generation does not read them. A kind's turn turns its own on.
+ */
 export interface PoiOthers {
   readonly statement: Must<string>;
   readonly needs: Relations;
@@ -235,19 +276,50 @@ export interface PoiVisibility {
   readonly importance: Must<OnPlace<number>>;
 }
 
+/** The words a place's name is made with. */
+export interface PoiNameTerm {
+  readonly kind: "landform";
+  readonly subkind?: string;
+  readonly term?: string;
+}
+/** A place another may take its name from: the shared naming step acts on those with a chance. */
+export interface PoiNameRelation extends PoiRelation {
+  /** How likely a place is to take the name, in [0, 1]. Without one the relation is not read. */
+  readonly chance?: number;
+}
+
 /** Naming: who names it and what takes its name. */
 export interface PoiNaming {
   readonly statement: Must<string>;
   /** The naming culture that names it, or null when it goes unnamed. */
   readonly namedBy: Slot<OnPlace<string | null>>;
   /** Places it takes its name from. */
-  readonly takesNameFrom: Relations;
+  readonly takesNameFrom: Slot<readonly PoiNameRelation[]>;
   /** Places that take their name from it. */
   readonly lendsNameTo: Relations;
+  /** The words of its name, where a place's own character chooses them. */
+  readonly term?: Slot<OnPlace<PoiNameTerm>>;
 }
 
-/** One catalogue entry: every role, every field, written out. */
+/** Which type of its kind a place is, chosen once per place and kept: a peak's form, a lake's. */
+export interface PoiVariety {
+  readonly statement: string;
+  /** Chooses from the place's readings and chance. */
+  readonly of: OnPlace<string>;
+}
+/** How a place shows on the map. Open work: every kind answers it when symbols reach it. */
+export type PoiAppearance = Record<string, unknown>;
+
+/**
+ * One catalogue entry: every role, every field, written out. The slots marked optional are
+ * open work: a kind leaves them out until its turn, and the catalogue fills them as `unwritten`,
+ * so they stay listed.
+ */
 export interface PoiEntry {
+  readonly variety?: Slot<PoiVariety>;
+  readonly appearance?: Slot<OnPlace<PoiAppearance>>;
+  /** A sentence on why this place is here. */
+  readonly account?: Slot<OnPlace<string>>;
   readonly id: PoiKindId;
   readonly group: PoiGroupId;
   readonly name: string;

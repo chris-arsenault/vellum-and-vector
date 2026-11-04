@@ -90,19 +90,6 @@ const landformTerms: Record<string, string> = {
   dome: "Dome",
   escarpment: "Escarpment",
 };
-/** The word people use for a peak of each form. */
-const peakTerms: Record<string, string> = {
-  horn: "Horn",
-  crag: "Crag",
-  scarred: "Scar",
-  dome: "Dome",
-  shattered: "Scree",
-  table: "Table",
-};
-const formTerm = (kind: string, attributes: Record<string, unknown>) => {
-  const term = kind === "peak" ? peakTerms[String(attributes.form)] : undefined;
-  return term ? { term } : {};
-};
 const geographicDescriptors: Record<string, Pick<AtlasNameRequest, "kind" | "subkind" | "term">> = {
   ...Object.fromEntries(
     Object.entries(landformTerms).map(([subkind, term]) => [
@@ -112,6 +99,10 @@ const geographicDescriptors: Record<string, Pick<AtlasNameRequest, "kind" | "sub
   ),
   politicalRegion: { kind: "polity", subkind: "province", term: "Province" },
 };
+/** The words a catalogue kind chose for this place, kept on its record, or its kind's own. */
+const descriptorOf = (kind: string, attributes: Record<string, unknown>) =>
+  (attributes.nameTerm as Pick<AtlasNameRequest, "kind" | "subkind" | "term"> | undefined) ??
+  geographicDescriptors[kind];
 const biomeFamilies = new Set([
   "forest",
   "grassland",
@@ -141,13 +132,13 @@ export function nameGeographicFeature(
 ) {
   const [w, s, e, n] = spatial.bounds(geometry),
     position = { x: (w + e) / 2, y: (s + n) / 2 };
+  const descriptor = descriptorOf(kind, attributes);
   if (biomeFamilies.has(kind) && typeof attributes.biome === "string")
     return atlasName(world, { key, kind: "biome", subkind: attributes.biome, position, ...source });
-  if (geographicDescriptors[kind])
+  if (descriptor)
     return atlasName(world, {
       key,
-      ...geographicDescriptors[kind],
-      ...formTerm(kind, attributes),
+      ...descriptor,
       position,
       ...source,
     });

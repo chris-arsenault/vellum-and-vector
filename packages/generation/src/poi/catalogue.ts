@@ -1,4 +1,4 @@
-import type { PoiEntry, PoiGroupPage } from "./poiContract";
+import { unwritten, type PoiEntry, type PoiGroupPage } from "./poiContract";
 import type { PoiGroupId, PoiKindId } from "./poiKinds";
 import { reliefPage } from "./relief/page";
 import { peak } from "./relief/peak";
@@ -100,8 +100,23 @@ export const poiPages: Readonly<Record<PoiGroupId, PoiGroupPage>> = {
   settlements: settlementsPage,
 };
 
+/** A kind's slots it has not reached yet, stated as open work. */
+const withOpenWork = (entry: PoiEntry): PoiEntry => ({
+  ...entry,
+  variety: entry.variety ?? unwritten,
+  appearance: entry.appearance ?? unwritten,
+  account: entry.account ?? unwritten,
+  recognition: { ...entry.recognition, landform: entry.recognition.landform ?? unwritten },
+  existence: { ...entry.existence, origins: entry.existence.origins ?? unwritten },
+  naming: { ...entry.naming, term: entry.naming.term ?? unwritten },
+});
+const opened = (entries: Readonly<Record<PoiKindId, PoiEntry>>) =>
+  Object.fromEntries(
+    Object.entries(entries).map(([kind, entry]) => [kind, withOpenWork(entry)])
+  ) as Record<PoiKindId, PoiEntry>;
+
 /** One entry per kind; a missing or unknown kind does not compile. */
-export const poiCatalogue: Readonly<Record<PoiKindId, PoiEntry>> = {
+export const poiCatalogue: Readonly<Record<PoiKindId, PoiEntry>> = opened({
   peak,
   pass,
   ridge,
@@ -183,7 +198,7 @@ export const poiCatalogue: Readonly<Record<PoiKindId, PoiEntry>> = {
   shrine,
   battlefield,
   disasterSite,
-};
+});
 
 /** Every field of an entry still unwritten, as `role.field`: the catalogue's open work. */
 export function unwrittenFields(entry: PoiEntry): string[] {
@@ -191,9 +206,12 @@ export function unwrittenFields(entry: PoiEntry): string[] {
     (pair): pair is [string, Record<string, unknown>] =>
       typeof pair[1] === "object" && pair[1] !== null
   );
-  return roles.flatMap(([role, fields]) =>
-    Object.entries(fields)
-      .filter(([, value]) => (value as { slot?: string }).slot === "unwritten")
-      .map(([field]) => `${role}.${field}`)
+  const slots = roles.filter(([, value]) => value.slot === "unwritten").map(([role]) => role);
+  return slots.concat(
+    roles.flatMap(([role, fields]) =>
+      Object.entries(fields)
+        .filter(([, value]) => (value as { slot?: string }).slot === "unwritten")
+        .map(([field]) => `${role}.${field}`)
+    )
   );
 }

@@ -14,6 +14,7 @@ import {
 import { createRNG, pickWeighted } from "@atlas/name-forge";
 import type { Geometry } from "geojson";
 import type { GenerationState, MapProcess } from "./process";
+import { takePublishedNames } from "./poi/poiPublish";
 import {
   generationFeatures,
   writeGenerationFeature,
@@ -184,6 +185,8 @@ function finalizeGeography(state: GenerationState, original: DomainSnapshot) {
         }
     }
   );
+  // Last: a town takes the name its peak ended up with.
+  takePublishedNames(state);
 }
 function finalizePolities(state: GenerationState, original: DomainSnapshot, era: string) {
   const world = state.domain.world,
