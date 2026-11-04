@@ -138,10 +138,15 @@ export function* featuresOf(state: GenerationState, kind: string, layerId?: stri
     if (layerId === undefined || feature.layerId === layerId) yield feature;
 }
 /** The settlements published on this map, ruins excluded. */
-export function* settlementsOf(state: GenerationState) {
-  for (const feature of featuresOf(state, "settlement", "settlements"))
-    if (inhabited(feature)) yield feature;
-}
+export const settlementsOf = (state: GenerationState): readonly AtlasFeature[] =>
+  heldFor(state, settlementsKey, () =>
+    [...featuresOf(state, "settlement", "settlements")].filter(inhabited)
+  );
+const settlementsKey = "settlementRecords";
+/** Settlements were just written: what was kept of them no longer stands. */
+export const forgetSettlements = (state: GenerationState) => {
+  held.get(state)?.delete(settlementsKey);
+};
 /** Regional seats keep ruined communities on the settlement layer; only their status tells. */
 export const inhabited = (feature: AtlasFeature) =>
   !["abandoned", "ruined"].includes(String(feature.attributes.status));

@@ -126,6 +126,8 @@ export function combinedContour(
   );
 }
 function supportTouchesBoundary(mesh: PhysicalMesh, members: Iterable<number>) {
+  // A sea reaching the frame answers from its own cells, without building its whole support.
+  for (const cell of members) if (touchesChartBoundary(mesh, cell)) return true;
   for (const cell of triangleSupport(mesh, members))
     if (touchesChartBoundary(mesh, cell)) return true;
   return false;

@@ -11,7 +11,7 @@ import type { RegionalState } from "../regional/state";
 import { poiCatalogue } from "./catalogue";
 import type { PoiCarried, PoiEntry, PoiMoment, PoiPlace } from "./poiContract";
 import type { PoiKindId } from "./poiKinds";
-import { heldFor, releaseHeld } from "./poiReads";
+import { forgetSettlements, heldFor, releaseHeld } from "./poiReads";
 import { realized } from "./poiRealized";
 
 interface Published {
@@ -50,18 +50,20 @@ export function publishKinds(
   releaseHeld(state);
   const written = published.get(state) ?? [];
   published.set(state, written);
-  for (const entry of entries()) {
-    if (entry.publication.moment !== moment || !delivered(entry)) continue;
-    const record = called<(s: GenerationState, p: PoiPlace) => AtlasFeature | null>(
-      entry.publication.record
-    );
-    for (const place of placesOf(state, entry)) {
-      const feature = record?.(state, place);
-      if (!feature) continue;
-      feature.attributes = { ...feature.attributes, poi: entry.id };
-      if (putGenerated(state, feature)) written.push({ entry, place, featureId: feature.id });
-    }
+  for (const entry of entries())
+    if (entry.publication.moment === moment && delivered(entry)) publishKind(state, entry, written);
+}
+function publishKind(state: GenerationState, entry: PoiEntry, written: Published[]) {
+  const record = called<(s: GenerationState, p: PoiPlace) => AtlasFeature | null>(
+    entry.publication.record
+  );
+  for (const place of placesOf(state, entry)) {
+    const feature = record?.(state, place);
+    if (!feature) continue;
+    feature.attributes = { ...feature.attributes, poi: entry.id };
+    if (putGenerated(state, feature)) written.push({ entry, place, featureId: feature.id });
   }
+  if (entry.id === "settlement" || entry.id === "ruin") forgetSettlements(state);
 }
 
 /**

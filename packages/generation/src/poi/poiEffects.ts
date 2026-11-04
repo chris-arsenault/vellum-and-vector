@@ -52,9 +52,23 @@ function collect(declared: Declared, change: PoiFieldChange) {
   }
 }
 type PlaceEffect = (state: GenerationState, place: PoiPlace) => readonly PoiFieldChange[];
+const nothingDeclared = (): Declared => ({ bands: new Map(), magic: new Map(), caps: new Map() });
+/** What a parent's places must be given on this refined map. */
+function declareCarried(state: GenerationState, declared: Declared) {
+  if (!("regional" in state)) return;
+  const region = state as RegionalState;
+  for (const { entry, carried } of carriedPlaces(region)) {
+    const realize = entry.acrossMaps.realize;
+    if (typeof realize !== "function") continue;
+    for (const change of (
+      realize as (s: RegionalState, c: PoiCarried) => readonly PoiFieldChange[]
+    )(region, carried))
+      collect(declared, change);
+  }
+}
 /** Every change every place declares on this map, and those a parent's places must be given. */
 function declaredChanges(state: GenerationState) {
-  const declared: Declared = { bands: new Map(), magic: new Map(), caps: new Map() };
+  const declared = nothingDeclared();
   for (const entry of Object.values(poiCatalogue)) {
     const effects = roles
       .map((role) => entry.fields[role])
@@ -64,17 +78,7 @@ function declaredChanges(state: GenerationState) {
       for (const effect of effects)
         for (const change of effect(state, place)) collect(declared, change);
   }
-  if ("regional" in state) {
-    const region = state as RegionalState;
-    for (const { entry, carried } of carriedPlaces(region)) {
-      const realize = entry.acrossMaps.realize;
-      if (typeof realize !== "function") continue;
-      for (const change of (
-        realize as (s: RegionalState, c: PoiCarried) => readonly PoiFieldChange[]
-      )(region, carried))
-        collect(declared, change);
-    }
-  }
+  declareCarried(state, declared);
   return declared;
 }
 /** The total a cell's change comes to, over what the band holds without any declared change. */
@@ -113,6 +117,7 @@ export function declarePlaceEffects(state: GenerationState, ledger: Contribution
   releaseHeld(state);
   const declared = declaredChanges(state),
     map = fieldOf(state);
+  latestCaps.set(state, declared.caps);
   for (const [band, cells] of declared.bands)
     for (const [cell, change] of cells) {
       const total = totalOver(map[band].get(cell) - ledger.appliedTo(band, cell), change);
@@ -131,12 +136,20 @@ export function declarePlaceEffects(state: GenerationState, ledger: Contribution
   releaseHeld(state);
 }
 
+/** The gradient caps of the round's declaration: the relief that follows holds to them. */
+const latestCaps = new WeakMap<GenerationState, Map<number, number>>();
+/** Before a round has declared anything, only the parent's places stand on this ground. */
+function carriedCaps(state: RegionalState) {
+  const declared = nothingDeclared();
+  releaseHeld(state);
+  declareCarried(state, declared);
+  releaseHeld(state);
+  return declared.caps;
+}
 /** Per-cell gradient caps from every place's declared change, for the relief step (0 = none). */
 export function placeCaps(state: RegionalState, cap: Float64Array) {
-  releaseHeld(state);
-  for (const [cell, gradient] of declaredChanges(state).caps)
+  for (const [cell, gradient] of latestCaps.get(state) ?? carriedCaps(state))
     cap[cell] = cap[cell] > 0 ? Math.min(cap[cell], gradient) : gradient;
-  releaseHeld(state);
 }
 
 /**

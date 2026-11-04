@@ -4,6 +4,14 @@ export interface TriangleVertex {
   position: [number, number];
   members: number[];
 }
+/** Insert into a sorted fan of at most six members, skipping absent cells and repeats. */
+function addMember(members: number[], cell: number) {
+  if (cell < 0) return;
+  let at = members.length;
+  while (at > 0 && members[at - 1] > cell) at--;
+  if (at > 0 && members[at - 1] === cell) return;
+  members.splice(at, 0, cell);
+}
 /** Six incident lattice triangles, derived locally instead of indexing every world vertex. */
 export function triangleVertex(mesh: PhysicalMesh, cell: number, corner: number): TriangleVertex {
   const [u, v, inverted] = triangleAddress(mesh, cell),
@@ -12,23 +20,13 @@ export function triangleVertex(mesh: PhysicalMesh, cell: number, corner: number)
   const y = -u + v + (corner === 0 ? 0 : corner === 1 ? -1 : 1);
   const a = (x / 3 - y) / 2,
     b = (x / 3 + y) / 2;
-  const candidates = [
-    [a, b, false],
-    [a - 1, b, false],
-    [a, b - 1, false],
-    [a - 1, b - 1, true],
-    [a, b - 1, true],
-    [a - 1, b, true],
-  ] as const;
-  const members = [
-    ...new Set(
-      candidates.flatMap(([u, v, inverted]) => {
-        const index = triangleIndex(mesh, u, v, inverted);
-        return index < 0 ? [] : [index];
-      })
-    ),
-    // hpc-exempt: at most six fan members.
-  ].sort((left, right) => left - right);
+  const members: number[] = [];
+  addMember(members, triangleIndex(mesh, a, b, false));
+  addMember(members, triangleIndex(mesh, a - 1, b, false));
+  addMember(members, triangleIndex(mesh, a, b - 1, false));
+  addMember(members, triangleIndex(mesh, a - 1, b - 1, true));
+  addMember(members, triangleIndex(mesh, a, b - 1, true));
+  addMember(members, triangleIndex(mesh, a - 1, b, true));
   return {
     members,
     position: [

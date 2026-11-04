@@ -53,6 +53,7 @@ export function stageRecorder() {
         });
     },
     inspect(path, process, state) {
+      const milliseconds = Math.round(performance.now() - started);
       // The run's last step: the map is complete, so the POI catalogue's rules can read it.
       if (process === lastStep) Object.assign(catalogue, exerciseCatalogue(state));
       const now = new Set(Object.keys(state.surface.channels));
@@ -60,7 +61,7 @@ export function stageRecorder() {
         path: path.join("/"),
         process,
         outcome: "completed",
-        milliseconds: Math.round(performance.now() - started),
+        milliseconds,
         surfaceCells: state.surface.active.length,
         activeCells: foldSamples(state.surface.active, (sum, value) => sum + value, 0),
         latticeCells: state.physical?.map.mesh.count,
