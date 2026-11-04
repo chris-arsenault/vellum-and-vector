@@ -1,0 +1,62 @@
+import { unwritten, type PoiEntry } from "../poiContract";
+
+export const fjord: PoiEntry = {
+  id: "fjord",
+  group: "water",
+  name: "Fjord",
+  recognition: { distinct: unwritten, isA: unwritten },
+  existence: {
+    statement: unwritten,
+    way: unwritten,
+    requires: unwritten,
+    suitability: unwritten,
+    places: unwritten,
+  },
+  fields: {
+    statement: unwritten,
+    terrain: unwritten,
+    water: unwritten,
+    climate: unwritten,
+    cover: unwritten,
+    magic: unwritten,
+  },
+  acrossMaps: {
+    statement: unwritten,
+    carry: unwritten,
+    realize: unwritten,
+    counterpart: unwritten,
+    unrealized: unwritten,
+    settle: unwritten,
+  },
+  movement: {
+    statement: unwritten,
+    roads: unwritten,
+    boats: unwritten,
+    drainage: unwritten,
+    magic: unwritten,
+    crosses: unwritten,
+  },
+  others: {
+    statement: unwritten,
+    needs: unwritten,
+    excludes: unwritten,
+    contains: unwritten,
+    pairsWith: unwritten,
+  },
+  people: { statement: unwritten, offers: unwritten, threatens: unwritten },
+  time: { statement: unwritten, fate: unwritten },
+  visibility: {
+    statement: unwritten,
+    magnitude: unwritten,
+    localConditions: unwritten,
+    isolation: unwritten,
+    cultural: unwritten,
+    visibleAt: unwritten,
+  },
+  naming: {
+    statement: unwritten,
+    namedBy: unwritten,
+    takesNameFrom: unwritten,
+    lendsNameTo: unwritten,
+  },
+};
