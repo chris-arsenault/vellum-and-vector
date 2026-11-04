@@ -1,5 +1,5 @@
 import { tileProcessor } from "./tileProcessor";
-import type { TileMessage } from "./tileProtocol";
+import type { TileMessage, TileReply } from "./tileProtocol";
 import { openRenderResources } from "./renderResources";
 import { WorkspaceClient } from "./WorkspaceClient";
 import { openSpatialRuntime } from "./spatialRuntime";
@@ -37,16 +37,24 @@ async function next() {
   scheduled = queue.length > 0 && !closing;
   if (scheduled) setTimeout(next, 0);
 }
+/** A drawn tile carries what it cost, for the rendering readout. */
+function timed(reply: TileReply, geography: number, sampling: number): TileReply {
+  return "values" in reply
+    ? { ...reply, timing: { geography, sample: performance.now() - sampling } }
+    : reply;
+}
 /** A terrain tile reads the sea and lakes of its own block at its own scale. */
 async function tile(message: Extract<TileMessage, { kind: "tile" }>) {
   const failure = failures.get(message.id);
   if (failure) return { request: message.request, error: failure };
-  const raster = registrations.get(message.id)?.raster;
-  if (raster?.channel !== "elevation" || !resources) return process(message)!;
+  const raster = registrations.get(message.id)?.raster,
+    started = performance.now();
+  if (raster?.channel !== "elevation" || !resources) return timed(process(message)!, 0, started);
   try {
     const reader = await resources;
-    const geography = await reader.tileGeography(raster, message.extent, message.size);
-    return process({ ...message, geography })!;
+    const geography = await reader.tileGeography(raster, message.extent, message.size),
+      read = performance.now();
+    return timed(process({ ...message, geography })!, read - started, read);
   } catch (error) {
     return {
       request: message.request,

@@ -26,6 +26,11 @@ export type TileMessage =
   | { kind: "cancel"; request: number }
   | { kind: "close" };
 export type TileReply =
-  | { request: number; values: Float32Array }
+  | {
+      request: number;
+      values: Float32Array;
+      /** Milliseconds the worker spent reading the tile's geography and sampling it. */
+      timing?: { geography: number; sample: number };
+    }
   | { request: number; error: string }
   | { kind: "closed" };

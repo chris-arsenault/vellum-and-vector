@@ -2,12 +2,15 @@ import { detachGrid, type GridSurface } from "@atlas/domain";
 import { resourceRaster, type Raster } from "./types";
 import type { TileMessage, TileReply } from "./tileProtocol";
 import { connectAtlasWorker } from "./connectAtlasWorker";
+import { renderingDiagnostics } from "./renderingDiagnostics";
 
 interface Pending {
   raster: number;
   resolve: (values: Float32Array) => void;
   reject: (error: Error) => void;
   cleanup: () => void;
+  /** When the tile was asked for, for its round trip. */
+  started: number;
 }
 export class TileWorkerClient {
   private worker: Worker | null = null;
@@ -52,8 +55,17 @@ export class TileWorkerClient {
     if (!item) return;
     this.pending.delete(reply.request);
     item.cleanup();
-    if ("error" in reply) item.reject(new Error(reply.error));
-    else item.resolve(reply.values);
+    if ("error" in reply) {
+      renderingDiagnostics.count("failed");
+      item.reject(new Error(reply.error));
+      return;
+    }
+    renderingDiagnostics.drawn({
+      geography: reply.timing?.geography ?? 0,
+      sample: reply.timing?.sample ?? 0,
+      roundTrip: performance.now() - item.started,
+    });
+    item.resolve(reply.values);
   }
   private grid(grid: GridSurface) {
     let entry = this.grids.get(grid);
@@ -101,6 +113,7 @@ export class TileWorkerClient {
         this.pending.delete(request);
         signal.removeEventListener("abort", abort);
         this.send({ kind: "cancel", request });
+        renderingDiagnostics.count("cancelled");
         reject(new DOMException("Tile cancelled", "AbortError"));
       };
       this.pending.set(request, {
@@ -108,7 +121,9 @@ export class TileWorkerClient {
         resolve,
         reject,
         cleanup: () => signal.removeEventListener("abort", abort),
+        started: performance.now(),
       });
+      renderingDiagnostics.count("requested");
       signal.addEventListener("abort", abort, { once: true });
       this.send({ kind: "tile", id: raster, request, extent, size });
     });
@@ -183,9 +198,14 @@ export class TileWorkerPool implements TileClient {
       { length: tileWorkerCount() },
       () => new TileWorkerClient()
     )
-  ) {}
+  ) {
+    renderingDiagnostics.pool(clients.length, () =>
+      clients.reduce((sum, client) => sum + client.busy, 0)
+    );
+  }
   register(raster: Raster) {
     const id = ++this.sequence;
+    renderingDiagnostics.count("registrations");
     this.registrations.set(
       id,
       this.clients.map((client) => client.register(raster))

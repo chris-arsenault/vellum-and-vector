@@ -306,3 +306,17 @@
 .map-sheet-intro p {
   margin: 0;
 }
+.rendering-readout {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 12px;
+}
+.rendering-readout dt {
+  color: #6b7965;
+}
+.rendering-readout dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}

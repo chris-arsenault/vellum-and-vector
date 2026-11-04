@@ -3,6 +3,7 @@ import type { EditorState } from "./useEditor";
 import type { CartographicPresentation } from "@atlas/domain";
 import { BaseChoices } from "./LayerBrowser";
 import { TerrainControls, SurfaceLegend } from "./RasterPanel";
+import { RenderingReadout } from "./RenderingReadout";
 import "./drawnMap.css";
 
 export function MapAppearance({ editor }: { editor: EditorState }) {
@@ -68,6 +69,7 @@ function RasterAppearance({ editor }: { editor: EditorState }) {
           <SurfaceLegend world={editor.world} base={editor.baseRaster.data ?? []} />
         )}
       </details>
+      <RenderingReadout />
     </div>
   );
 }

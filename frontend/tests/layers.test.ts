@@ -161,6 +161,10 @@ async function checkTerrainControl(page: Page) {
   await page.getByRole("button", { name: "Adjust terrain appearance", exact: true }).click();
   await expect(page.getByRole("slider", { name: /Sun azimuth/ })).toBeVisible();
   await page.getByText("Terrain appearance", { exact: true }).click();
+  await page.getByText("Rendering diagnostics", { exact: true }).click();
+  const readout = page.getByLabel("Rendering diagnostics", { exact: true });
+  await expect(readout).toContainText("Tile workers");
+  await expect(readout).toContainText("Tile reloads");
 }
 async function expectFieldOrder(page: Page) {
   const fields = page.locator(".active-overlays").getByRole("checkbox");

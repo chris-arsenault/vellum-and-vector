@@ -3,6 +3,7 @@ import type DataTileSource from "ol/source/DataTile.js";
 import { resourceRaster, type Raster, type ResourceRaster } from "./types";
 import { numericTileSource } from "./numericTiles";
 import { TileWorkerPool, type TileClient } from "./TileWorkerClient";
+import { renderingDiagnostics } from "./renderingDiagnostics";
 import type { GridSurface } from "@atlas/domain";
 import { rasterGeographyKey, rasterIdentity } from "./rasterIdentity";
 
@@ -59,6 +60,7 @@ export class RasterSources {
     this.used.add(key);
     let entry = this.sources.get(key);
     if (entry && !sameData(entry.raster, raster)) {
+      renderingDiagnostics.count("reloads");
       this.release(key);
       entry = undefined;
     } else if (entry && resourceRaster(raster) && resourceRaster(entry.raster)) {
@@ -67,6 +69,7 @@ export class RasterSources {
       if (geographyRevision(entry.raster) !== geographyRevision(raster)) {
         this.client.update(entry.registration, raster);
         entry.source.refresh();
+        renderingDiagnostics.count("reloads");
       }
       entry.raster = raster;
     }
