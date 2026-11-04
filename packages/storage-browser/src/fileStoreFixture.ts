@@ -3,9 +3,12 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { BinaryStore } from "./opfsStore";
 
-/** Host filesystem transport for tests of the real resource encoding and readers. */
-export function fileStoreFixture() {
-  const directory = mkdtempSync(join(tmpdir(), "atlas-resources-"));
+/**
+ * Host filesystem transport for tests of the real resource encoding and readers. A given
+ * directory is kept on close: the harness checkpoints its resources there.
+ */
+export function fileStoreFixture(at?: string) {
+  const directory = at ?? mkdtempSync(join(tmpdir(), "atlas-resources-"));
   const path = (key: string) => join(directory, key);
   const read = (key: string) =>
     existsSync(path(key)) ? new Uint8Array(readFileSync(path(key))) : undefined;
@@ -33,7 +36,7 @@ export function fileStoreFixture() {
   return {
     store,
     close() {
-      rmSync(directory, { recursive: true, force: true });
+      if (!at) rmSync(directory, { recursive: true, force: true });
     },
   };
 }

@@ -52,7 +52,7 @@ const yieldControl = () => new Promise<void>((resolve) => setTimeout(resolve, 0)
 export async function executeGeneration(
   start: GenerationWorkspaceStart,
   execution: GenerationExecution,
-  observers: Pick<MapRunnerOptions, "diagnostic" | "progress">
+  observers: Pick<MapRunnerOptions, "diagnostic" | "progress" | "inspect">
 ) {
   const { worldId, input, expectedVersion } = start;
   const source = await execution.workspace.generationSource(worldId, input.areaId);

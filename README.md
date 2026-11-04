@@ -288,6 +288,35 @@ Reuse that result across assertions; add a shared fixture only when different
 preconditions require one. There is no fixed generation quota or time limit on
 development work. Fine verification requires separate authorization.
 
+### Generation harness
+
+`pnpm --dir frontend harness` runs a headless generation harness in Node, outside the
+unit suites and CI. It generates a world from the app's default draft and refines a
+region from it through the app's own generation and publication code
+(`executeGeneration`), then records what each map holds. Both maps are kept as
+checkpoints (catalog and resources) under `.artifacts/harness/checkpoints`; a later
+run reuses them, so rendering, publication and feature work is measured on a
+published region in seconds. Each run writes a report directory under
+`.artifacts/harness/reports`:
+
+- `world-run.json`, `region-run.json`: each generation step's time, cells, the surface
+  channels it added or dropped, skipped steps and diagnostics (only for runs that
+  generated);
+- `world.json`, `region.json`: provenance, scale against the intended cell size, fields
+  and the raster layers offered by source, rivers by where they end, waterfalls,
+  peaks, ranges, lakes, settlements, roads, and terrain tile timing at two views;
+- `*-channels.json`: each channel's range and invalid count;
+- `*-overview.png`, `*-relief.png`: the terrain painter with published features.
+
+The report states what was made; it checks nothing. Environment variables choose
+the run: `HARNESS_WORLD` and `HARNESS_REGION` name the checkpoints,
+`HARNESS_WORLD_QUALITY` and `HARNESS_REGION_QUALITY` choose draft, standard or fine,
+`HARNESS_REGION_AT=x,y` picks the region under a point (default: the world's highest
+land), and `HARNESS_FRESH=world` or `HARNESS_FRESH=region` makes a checkpoint again.
+
+Map → Appearance → Rendering diagnostics shows the same kind of record live in the
+app: tile workers, tiles waiting, drawn, cancelled and reloaded, and what a tile costs.
+
 Browser tests import `test` from `frontend/tests/uiTest.ts`. Every journey receives
 the small generation fixture automatically, and a real generation worker throws
 before it can start. Fixture grids have 256 cells; a form may display larger

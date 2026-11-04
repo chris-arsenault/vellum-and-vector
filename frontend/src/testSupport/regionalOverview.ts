@@ -4,8 +4,11 @@ import type { AtlasFeature } from "@atlas/domain";
 import type { CompletedBoundary } from "@atlas/generation";
 import type { Geometry, Position } from "geojson";
 import { rasterLimits, tilePainter } from "../rasterTiles";
+import type { LoadedRaster } from "../types";
 
 const imageSize = 1400;
+/** What a drawing reads of a feature. */
+type Drawn = Pick<AtlasFeature, "kind" | "layerId" | "geometry" | "attributes">;
 
 /**
  * Local generated artifact: the production terrain painter (cover, relief shading and
@@ -18,27 +21,41 @@ export async function regionalOverview(
   name = "standard-overview",
   directory = ".artifacts/regional"
 ) {
-  const image = paintedSurface(result);
+  await rasterOverview(surfaceRaster(result), features, name, directory);
+}
+/** The same overview from any loaded terrain raster, such as a published map's. */
+export async function rasterOverview(
+  raster: LoadedRaster,
+  features: Drawn[],
+  name: string,
+  directory: string
+) {
+  const image = paintedRaster(raster);
   for (const f of features) drawLine(image, f);
   for (const f of features) drawSymbol(image, f);
   await savePng(image, name, directory);
 }
+/** The painted terrain alone, from any loaded terrain raster. */
+export async function rasterRelief(raster: LoadedRaster, name: string, directory: string) {
+  await savePng(paintedRaster(raster), name, directory);
+}
 
 /** Rivers by order, lake shores and roads, in that order. */
-function drawLine(image: Image, f: AtlasFeature) {
+function drawLine(image: Image, f: Drawn) {
   if (f.kind === "river")
     strokeGeometry(image, f.geometry, [34, 98, 143], Number(f.attributes.order ?? 1) > 2 ? 2 : 1);
   if (f.kind === "lake") strokeGeometry(image, f.geometry, [20, 70, 110], 1);
   if (f.kind === "road") strokeGeometry(image, f.geometry, [122, 84, 40], 1);
 }
 
-/** Settlement dots, summit triangles, col crosses and magic-site dots. */
-function drawSymbol(image: Image, f: AtlasFeature) {
+/** Settlement dots, summit triangles, col crosses, waterfall and magic-site dots. */
+function drawSymbol(image: Image, f: Drawn) {
   if (f.geometry.type !== "Point") return;
   const p = f.geometry.coordinates;
   if (f.kind === "settlement") dot(image, p, [39, 37, 29]);
   else if (f.kind === "peak") triangle(image, p, [60, 30, 20]);
   else if (f.kind === "pass") cross(image, p, [60, 30, 20]);
+  else if (f.kind === "waterfall") dot(image, p, [30, 90, 230]);
   else if (f.layerId === "magic") dot(image, p, [170, 40, 160], 1);
 }
 
@@ -48,7 +65,7 @@ export async function regionalReliefOverview(
   name = "standard-relief",
   directory = ".artifacts/regional"
 ) {
-  await savePng(paintedSurface(result), name, directory);
+  await savePng(paintedRaster(surfaceRaster(result)), name, directory);
 }
 
 interface Image {
@@ -59,27 +76,29 @@ interface Image {
   span: number;
 }
 
-function paintedSurface(result: CompletedBoundary): Image {
-  const g = result.state.surface,
-    [w, s, e, n] = g.bounds,
+function surfaceRaster(result: CompletedBoundary): LoadedRaster {
+  const g = result.state.surface;
+  return {
+    id: g.id,
+    areaId: g.scope.areaId,
+    field: g,
+    water: g,
+    ice: g,
+    footprint: g.scope.footprint,
+    bounds: g.bounds,
+    channel: "elevation",
+  };
+}
+function paintedRaster(raster: LoadedRaster): Image {
+  const [w, s, e, n] = raster.field.bounds,
     span = Math.max(e - w, n - s),
-    raster = {
-      id: g.id,
-      areaId: g.scope.areaId,
-      field: g,
-      water: g,
-      ice: g,
-      footprint: g.scope.footprint,
-      bounds: g.bounds,
-      channel: "elevation",
-    },
     square = tilePainter(raster, rasterLimits([raster]))([w, n - span, w + span, n], imageSize),
     width = Math.round((imageSize * (e - w)) / span),
     height = Math.round((imageSize * (n - s)) / span),
     pixels = new Uint8ClampedArray(width * height * 4);
   for (let y = 0; y < height; y++)
     pixels.set(square.subarray(y * imageSize * 4, (y * imageSize + width) * 4), y * width * 4);
-  return { pixels, width, height, bounds: g.bounds, span };
+  return { pixels, width, height, bounds: raster.field.bounds, span };
 }
 
 function pixel(image: Image, [x, y]: Position) {

@@ -38,6 +38,11 @@ export interface MapRunnerOptions {
   progress?(path: string[], fraction: number, message: string): void;
   diagnostic?(diagnostic: GenerationDiagnostic): void;
   /**
+   * Observation of the state after each completed process, while its working arrays are
+   * still open: a monitoring harness reads what the process produced. Must not mutate.
+   */
+  inspect?(path: string[], process: string, state: GenerationState): void;
+  /**
    * Worker-owned block cache for every coverage of the run (physical, surface, society);
    * resident when absent. Never serialized into a boundary or save.
    */
@@ -199,6 +204,7 @@ export class MapRunner {
         validate
       );
       record(diagnostics, "retained");
+      options.inspect?.(stage.path, process.contract.id, state);
     } catch (error) {
       this.checkCancelled(options);
       if (unrecoverableProcessFailure(error)) throw error;
