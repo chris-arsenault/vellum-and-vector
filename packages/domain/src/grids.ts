@@ -381,7 +381,15 @@ function baseInterpolator(
   if (!grid.topology) return (p: Position) => rawSample(grid, channel, p, discrete);
   const t = grid.topology,
     values = grid.channels[channel];
-  const categorical = discreteChannel(grid, channel, discrete);
+  const categorical = discreteChannel(grid, channel, discrete),
+    uniform = categorical ? NaN : uniformValue(values);
+  // A smooth surface through one repeated value is that value: no patch is worth building.
+  if (!Number.isNaN(uniform))
+    return (p: Position) => {
+      const x = Math.max(t.bounds[0], Math.min(t.bounds[2], p.x)),
+        y = Math.max(t.bounds[1], Math.min(t.bounds[3], p.y));
+      return (locate ? locate(t, x, y).leaf : adaptiveLeafAt(t, x, y)) < 0 ? NaN : uniform;
+    };
   const surface = categorical
     ? null
     : adaptivePointSampler(
@@ -396,6 +404,13 @@ function baseInterpolator(
     if (surface) return surface(x, y);
     return values.get(locate ? locate(t, x, y).leaf : adaptiveLeafAt(t, x, y));
   };
+}
+/** The value every sample holds, or NaN when they differ or any is not finite. */
+export function uniformValue(values: Band) {
+  const first = values.length ? values.get(0) : NaN;
+  if (!Number.isFinite(first)) return NaN;
+  for (let i = 1; i < values.length; i++) if (values.get(i) !== first) return NaN;
+  return first;
 }
 export function interpolateSample(
   grid: Grid,

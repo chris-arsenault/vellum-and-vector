@@ -31,19 +31,35 @@ async function registrationReady(id: number) {
 async function next() {
   const message = queue.shift();
   if (message && (await registrationReady(message.id)) && !closing) {
-    const failure = failures.get(message.id);
-    const reply = failure ? { request: message.request, error: failure } : process(message)!;
+    const reply = await tile(message);
     self.postMessage(reply, { transfer: "values" in reply ? [reply.values.buffer] : [] });
   }
   scheduled = queue.length > 0 && !closing;
   if (scheduled) setTimeout(next, 0);
+}
+/** A terrain tile reads the sea and lakes of its own block at its own scale. */
+async function tile(message: Extract<TileMessage, { kind: "tile" }>) {
+  const failure = failures.get(message.id);
+  if (failure) return { request: message.request, error: failure };
+  const raster = registrations.get(message.id)?.raster;
+  if (raster?.channel !== "elevation" || !resources) return process(message)!;
+  try {
+    const reader = await resources;
+    const geography = await reader.tileGeography(raster, message.extent, message.size);
+    return process({ ...message, geography })!;
+  } catch (error) {
+    return {
+      request: message.request,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 async function register(message: Extract<TileMessage, { kind: "resourceRaster" }>) {
   if (registrations.get(message.id) !== message) return;
   try {
     const reader = await (resources ??= openRenderResources(workspace));
     if (obsolete(message)) return;
-    const loaded = await reader.load(message.raster);
+    const loaded = await reader.load(message.raster, true);
     if (obsolete(message)) {
       loaded.close();
       return;

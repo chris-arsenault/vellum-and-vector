@@ -133,6 +133,10 @@ export class TileWorkerClient {
       }
     this.send({ kind: "release", id, grids });
   }
+  /** Tiles requested and not yet answered. */
+  get busy() {
+    return this.pending.size;
+  }
   dispose() {
     const worker = this.worker;
     if (worker) {
@@ -155,5 +159,57 @@ export class TileWorkerClient {
     this.pending.clear();
     this.rasters.clear();
     this.grids.clear();
+  }
+}
+
+/** Tile workers beside the page's own thread and the workspace worker. */
+export function tileWorkerCount(cores = globalThis.navigator?.hardwareConcurrency ?? 2) {
+  return Math.max(1, Math.min(4, cores - 2));
+}
+export type TileClient = Pick<
+  TileWorkerClient,
+  "register" | "update" | "load" | "release" | "dispose"
+>;
+
+/**
+ * Tiles drawn by several workers at once. Every worker registers every raster; a tile goes
+ * to the worker with the fewest tiles outstanding.
+ */
+export class TileWorkerPool implements TileClient {
+  private sequence = 0;
+  private registrations = new Map<number, number[]>();
+  constructor(
+    private clients: TileWorkerClient[] = Array.from(
+      { length: tileWorkerCount() },
+      () => new TileWorkerClient()
+    )
+  ) {}
+  register(raster: Raster) {
+    const id = ++this.sequence;
+    this.registrations.set(
+      id,
+      this.clients.map((client) => client.register(raster))
+    );
+    return id;
+  }
+  update(id: number, raster: Raster) {
+    this.registrations.get(id)?.forEach((own, k) => this.clients[k].update(own, raster));
+  }
+  load(id: number, extent: number[], size: number, signal: AbortSignal) {
+    const owns = this.registrations.get(id);
+    if (!owns) return Promise.reject(new DOMException("Tile cancelled", "AbortError"));
+    let chosen = 0;
+    this.clients.forEach((client, k) => {
+      if (client.busy < this.clients[chosen].busy) chosen = k;
+    });
+    return this.clients[chosen].load(owns[chosen], extent, size, signal);
+  }
+  release(id: number) {
+    this.registrations.get(id)?.forEach((own, k) => this.clients[k].release(own));
+    this.registrations.delete(id);
+  }
+  dispose() {
+    for (const client of this.clients) client.dispose();
+    this.registrations.clear();
   }
 }

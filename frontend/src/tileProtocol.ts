@@ -1,5 +1,5 @@
 import type { GridArrays } from "@atlas/domain";
-import type { LoadedRaster, ResourceRaster } from "./types";
+import type { LoadedRaster, RasterGeography, ResourceRaster } from "./types";
 
 export type TileRaster = Omit<LoadedRaster, "field" | "water" | "ice" | "surface"> & {
   field: number;
@@ -13,7 +13,15 @@ export type TileMessage =
   | { kind: "grid"; id: number; grid: GridArrays }
   | { kind: "raster"; id: number; raster: TileRaster }
   | { kind: "resourceRaster"; id: number; raster: ResourceRaster }
-  | { kind: "tile"; id: number; request: number; extent: number[]; size: number }
+  | {
+      kind: "tile";
+      id: number;
+      request: number;
+      extent: number[];
+      size: number;
+      /** Sea and lakes read for this tile at its scale; absent for in-memory rasters. */
+      geography?: RasterGeography;
+    }
   | { kind: "release"; id: number; grids: number[] }
   | { kind: "cancel"; request: number }
   | { kind: "close" };

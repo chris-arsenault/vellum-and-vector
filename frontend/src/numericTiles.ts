@@ -11,20 +11,47 @@ import {
 import DataTileSource from "ol/source/DataTile.js";
 import type Projection from "ol/proj/Projection.js";
 import { createXYZ } from "ol/tilegrid.js";
-import type { Raster, LoadedRaster } from "./types";
+import type { Raster, LoadedRaster, RasterGeography as TileGeography } from "./types";
 import { categorical } from "./rasterTiles";
 import { scaledValue } from "./rasterPresentation";
-import { terrainWater } from "./terrainWater";
+import { tileWater } from "./terrainWater";
 import { terrainDisplaySampler } from "./terrainDisplay";
 import { insideAt, sampledExtent, tileCoverage, type TileInside } from "./tileCoverage";
+import { polygonTileMask } from "./tileMask";
 
+/** On an adaptive field without terrain edits, the display height is the physical height. */
+function displayHeight(raster: LoadedRaster, locate: AdaptivePointLocator) {
+  const field = raster.field,
+    edited = (field.overlays ?? []).some((overlay) => overlay.channels.includes("elevation"));
+  return field.topology && !edited ? null : terrainDisplaySampler(field, locate);
+}
+/** The terrain companions of one tile, written after the value and mask bands. */
 function terrainAt(raster: LoadedRaster, locate: AdaptivePointLocator) {
-  const waterAt = terrainWater(raster, locate);
+  const water = tileWater(raster, locate);
   const ice = raster.ice ? fieldInterpolator(raster.ice, "ice", false, locate) : () => 0;
-  return (p: Position, height: number) => {
-    const water = waterAt(p, height);
-    return [height - water.level, water.kind, Math.min(1, ice(p))];
+  const surface = surfaceAt(raster, "finalSurface", locate),
+    natural = surfaceAt(raster, "naturalSurface", locate),
+    display = displayHeight(raster, locate);
+  return (extent: number[], size: number, fold: Fold, own?: TileGeography) => {
+    const waterAt = water(extent, size, fold, own),
+      step = (extent[2] - extent[0]) / size;
+    return (values: Float32Array, at: number, pixel: number, p: Position, height: number) => {
+      waterAt(values, at + 2, pixel, p, height);
+      values[at + 4] = Math.min(1, ice(p));
+      values[at + 5] = step;
+      values[at + 6] = surface(p);
+      values[at + 7] = natural(p);
+      values[at + 8] = display ? display(p) : height;
+    };
   };
+}
+type Fold = (x: number) => number;
+/** Samples east of the chart fold back into it on a cylindrical world. */
+function chartFold(wrap?: number[]): Fold | undefined {
+  if (!wrap) return undefined;
+  const [west, east] = wrap,
+    width = east - west;
+  return (x) => west + ((((x - west) % width) + width) % width);
 }
 /** Surface class for the base map; -1 where no classification exists. */
 function surfaceAt(raster: LoadedRaster, channel: string, locate: AdaptivePointLocator) {
@@ -38,9 +65,42 @@ function surfaceAt(raster: LoadedRaster, channel: string, locate: AdaptivePointL
 /** Terrain tiles: physical value, mask, relative height, water, ice, step, final/natural classes, display height. */
 export const terrainSampleBands = 9;
 
-/** Physical bands share geographic reads; display height only generalizes contours and relief. */
+/** A tile's footprint: whole, absent, or a pixel mask for a tile on the footprint's edge. */
+function footprintAt(raster: LoadedRaster) {
+  const coverage = tileCoverage(raster.footprint);
+  return (extent: number[], size: number, fold?: Fold): boolean | Uint8Array => {
+    const inside = coverage(sampledExtent(extent, raster.wrap));
+    return typeof inside === "boolean"
+      ? inside
+      : polygonTileMask(raster.footprint, extent, size, fold);
+  };
+}
+/**
+ * Writes a pixel's value, mask and companion bands; a pixel whose bands are not all finite
+ * is cleared and stays outside the drawn raster.
+ */
+function writePixel(
+  values: Float32Array,
+  at: number,
+  bands: number,
+  value: number,
+  companions: (at: number, value: number) => void
+) {
+  if (!Number.isFinite(value)) return;
+  values[at] = value;
+  values[at + 1] = 1;
+  companions(at, value);
+  for (let k = at; k < at + bands; k++)
+    if (!Number.isFinite(values[k])) return values.fill(0, at, at + bands);
+}
+
+/**
+ * Physical bands share geographic reads; display height only generalizes contours and relief.
+ * A terrain tile can carry its own sea and lake shapes, read at its scale.
+ */
 export function numericTileSampler(raster: LoadedRaster) {
-  const footprint = tileCoverage(raster.footprint);
+  const footprint = footprintAt(raster),
+    fold = chartFold(raster.wrap);
   const locate = adaptivePointLocator();
   // Classes are reconstructed from memberships so their boundaries match region outlines.
   const valueAt = categorical(raster)
@@ -48,35 +108,27 @@ export function numericTileSampler(raster: LoadedRaster) {
     : fieldInterpolator(raster.field, raster.channel, false, locate);
   const active = activeSampler(raster.field, raster.channel, locate);
   const terrain = raster.channel === "elevation" ? terrainAt(raster, locate) : null;
-  const display = terrain ? terrainDisplaySampler(raster.field, locate) : null;
-  const surface = terrain ? surfaceAt(raster, "finalSurface", locate) : null;
-  const natural = terrain ? surfaceAt(raster, "naturalSurface", locate) : null;
   const bands = terrain ? terrainSampleBands : 3;
-  return (extent: number[], size: number) => {
+  return (extent: number[], size: number, own?: TileGeography) => {
     const values = new Float32Array(size * size * bands);
     const dx = (extent[2] - extent[0]) / size,
       dy = (extent[3] - extent[1]) / size;
-    const sampled = sampledExtent(extent, raster.wrap),
-      inside = footprint(sampled);
+    const inside = footprint(extent, size, fold);
     if (inside === false) return values;
-    const activeAt = active(sampled);
-    for (let row = 0; row < size; row++)
-      for (let col = 0; col < size; col++) {
-        const p = { x: extent[0] + (col + 0.5) * dx, y: extent[3] - (row + 0.5) * dy, z: 0 };
-        if (raster.wrap) {
-          const [west, east] = raster.wrap,
-            width = east - west;
-          p.x = west + ((((p.x - west) % width) + width) % width);
-        }
-        if (!insideAt(inside, p) || !activeAt(p)) continue;
-        const value = valueAt(p);
-        if (!Number.isFinite(value)) continue;
-        const companions = terrain
-          ? [...terrain(p, value), dx, surface!(p), natural!(p), display!(p)]
-          : [scaledValue(value, "log")];
-        if (!companions.every(Number.isFinite)) continue;
-        values.set([value, 1, ...companions], (row * size + col) * bands);
-      }
+    const activeAt = active(sampledExtent(extent, raster.wrap)),
+      companions = terrain ? terrain(extent, size, fold ?? Number, own) : null,
+      p = { x: 0, y: 0, z: 0 };
+    for (let pixel = 0; pixel < size * size; pixel++) {
+      if (inside !== true && !inside[pixel]) continue;
+      const col = pixel % size;
+      p.x = (fold ?? Number)(extent[0] + (col + 0.5) * dx);
+      p.y = extent[3] - ((pixel - col) / size + 0.5) * dy;
+      if (activeAt(p))
+        writePixel(values, pixel * bands, bands, valueAt(p), (at, value) => {
+          if (companions) companions(values, at, pixel, p, value);
+          else values[at + 2] = scaledValue(value, "log");
+        });
+    }
     return values;
   };
 }

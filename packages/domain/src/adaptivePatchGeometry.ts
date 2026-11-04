@@ -5,7 +5,7 @@ import { ByteCache } from "./byteCache";
 const geometryCacheBytes = 1024 * 1024;
 
 export interface AdaptiveVertex {
-  id: number;
+  id: string;
   x: number;
   y: number;
   epsilon: number;
@@ -32,7 +32,6 @@ function incident(t: AdaptiveTopology, x: number, y: number, epsilon: number) {
 function prepare(t: AdaptiveTopology) {
   const vertices = new ByteCache<string, AdaptiveVertex>(geometryCacheBytes),
     cells = new ByteCache<number, Cell>(geometryCacheBytes);
-  let nextVertexId = 0;
   function vertex(x: number, y: number, epsilon: number): AdaptiveVertex {
     const key = `${x}:${y}`,
       previous = vertices.get(key);
@@ -43,7 +42,9 @@ function prepare(t: AdaptiveTopology) {
       return (x > b[0] && x < b[2]) || (y > b[1] && y < b[3]);
     });
     const result = {
-      id: nextVertexId++,
+      // The position is the identity: a vertex prepared again after eviction keeps it, so
+      // channel caches keyed on it still hold.
+      id: key,
       x,
       y,
       epsilon,

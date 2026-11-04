@@ -117,8 +117,8 @@ export function prepareAdaptivePatches(
   const coefficients = new ByteCache<number, PreparedAdaptiveCell>(budget);
   const fit = adaptiveFits(t, values, budget),
     geometry = adaptivePatchGeometry(t);
-  const vertices = new ByteCache<number, number[]>(budget),
-    baseValues = new ByteCache<number, number>(budget);
+  const vertices = new ByteCache<string, number[]>(budget),
+    baseValues = new ByteCache<string, number>(budget);
   const baseValue = (x: number, y: number, epsilon: number) => {
     const vertex = geometry.vertex(x, y, epsilon);
     const previous = baseValues.get(vertex.id);

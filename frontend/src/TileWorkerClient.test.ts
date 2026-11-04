@@ -8,7 +8,7 @@ import {
   rectangle,
   cloneSnapshot,
 } from "@atlas/domain";
-import { TileWorkerClient } from "./TileWorkerClient";
+import { TileWorkerClient, TileWorkerPool } from "./TileWorkerClient";
 import { tileProcessor } from "./tileProcessor";
 import { numericTileSampler, terrainSampleBands } from "./numericTiles";
 import type { TileMessage, TileReply } from "./tileProtocol";
@@ -76,6 +76,34 @@ class WorkerFixture {
     this.terminated = true;
   }
 }
+it("spreads tiles over the pool's workers, each holding every raster", async () => {
+  const workers = [new WorkerFixture(), new WorkerFixture()],
+    pool = new TileWorkerPool(
+      workers.map((worker) => new TileWorkerClient(() => worker as unknown as Worker))
+    );
+  const raster = fixture(),
+    id = pool.register(raster),
+    signal = new AbortController().signal;
+  const tiles = [
+    pool.load(id, [20, 20, 80, 80], 6, signal),
+    pool.load(id, [0, 0, 50, 50], 6, signal),
+  ];
+  for (const worker of workers) {
+    expect(worker.messages.filter((m) => m.kind === "tile")).toHaveLength(1);
+    worker.flush();
+  }
+  const expected = numericTileSampler(raster)([0, 0, 50, 50], 6),
+    output = terrainSampleBands + 2;
+  expect((await tiles[1]).slice(0, terrainSampleBands)).toEqual(
+    expected.slice(0, terrainSampleBands)
+  );
+  expect((await tiles[0]).length).toBe(36 * output);
+  pool.release(id);
+  for (const worker of workers)
+    expect(worker.messages.some((m) => m.kind === "release")).toBe(true);
+  pool.dispose();
+  for (const worker of workers) worker.flush();
+});
 it("shares immutable grid registration across channels and preserves actual sampler values", async () => {
   const worker = new WorkerFixture(),
     client = new TileWorkerClient(() => worker as unknown as Worker);
@@ -259,9 +287,18 @@ it("retains a raster source across equivalent references and viewport geography 
   const registrations = () => worker.messages.filter((m) => m.kind === "resourceRaster");
   await settle();
   expect(registrations()).toHaveLength(1);
-  // A new geographic window updates the same registration in place: no release, no reopen.
-  const changed = structuredClone(raster);
-  changed.geography.windows = [[20, 20, 80, 80]];
+  // Tiles read their own geography: a new window or scale changes nothing registered.
+  const panned = structuredClone(raster);
+  panned.geography.windows = [[20, 20, 80, 80]];
+  panned.geography.tolerance = 4;
+  sources.begin();
+  expect(sources.source(panned)).toBe(first);
+  sources.end();
+  await settle();
+  expect(registrations()).toHaveLength(1);
+  // A new geography revision updates the same registration in place: no release, no reopen.
+  const changed = structuredClone(panned);
+  changed.geography.revision = "next";
   sources.begin();
   expect(sources.source(changed)).toBe(first);
   sources.end();

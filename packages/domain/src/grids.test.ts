@@ -1,7 +1,17 @@
 import { expect, it } from "vitest";
 import type { Geometry } from "geojson";
-import { createGrid, gridPosition } from "./grids";
+import { createGrid, gridPosition, uniformValue } from "./grids";
 import { point, rectangle, spatial, type Bounds } from "./spatial";
+import { generateBand, sampleCoverage } from "./lattice/bandValues";
+
+it("finds the one value a channel holds, and none when samples differ or are missing", () => {
+  const band = (value: (i: number) => number) =>
+    generateBand(sampleCoverage(6), "float64", "test", value);
+  expect(uniformValue(band(() => 2.5))).toBe(2.5);
+  expect(uniformValue(band((i) => (i === 5 ? 3 : 2.5)))).toBeNaN();
+  expect(uniformValue(band((i) => (i === 3 ? NaN : 0)))).toBeNaN();
+  expect(uniformValue(band(() => NaN))).toBeNaN();
+});
 
 function compareClipping(footprint: Geometry, bounds: Bounds) {
   const covers = spatial.pointCoverage(footprint);

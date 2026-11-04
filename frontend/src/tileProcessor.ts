@@ -14,8 +14,15 @@ function rasterSampler(
     ice: r.ice === undefined ? undefined : grids.get(r.ice),
     surface: r.surface === undefined ? undefined : grids.get(r.surface),
   });
-  return (extent: number[], size: number) =>
-    r.channel === "elevation" ? terrainTile(sample(extent, size), size) : sample(extent, size);
+  return terrainOrValues(r.channel, sample);
+}
+type Sample = ReturnType<typeof numericTileSampler>;
+/** Terrain tiles add their relief gradients; other channels return their samples. */
+function terrainOrValues(channel: string, sample: Sample): Sample {
+  return (extent, size, own) =>
+    channel === "elevation"
+      ? terrainTile(sample(extent, size, own), size)
+      : sample(extent, size, own);
 }
 
 /** Worker-owned evaluators share registered grids and never mutate session arrays. */
@@ -25,14 +32,11 @@ export function tileProcessor() {
   return (
     message: TileMessage | { kind: "loadedRaster"; id: number; raster: LoadedRaster }
   ): Exclude<TileReply, { kind: string }> | null => {
-    if (message.kind === "loadedRaster") {
-      const sample = numericTileSampler(message.raster);
-      samplers.set(message.id, (extent, size) =>
-        message.raster.channel === "elevation"
-          ? terrainTile(sample(extent, size), size)
-          : sample(extent, size)
+    if (message.kind === "loadedRaster")
+      samplers.set(
+        message.id,
+        terrainOrValues(message.raster.channel, numericTileSampler(message.raster))
       );
-    }
     if (message.kind === "grid") grids.set(message.id, attachGrid(message.grid));
     if (message.kind === "raster") {
       samplers.set(message.id, rasterSampler(message.raster, grids));
@@ -45,7 +49,10 @@ export function tileProcessor() {
     try {
       const sample = samplers.get(message.id);
       if (!sample) throw new Error("Raster source was released.");
-      return { request: message.request, values: sample(message.extent, message.size) };
+      return {
+        request: message.request,
+        values: sample(message.extent, message.size, message.geography),
+      };
     } catch (error) {
       return {
         request: message.request,

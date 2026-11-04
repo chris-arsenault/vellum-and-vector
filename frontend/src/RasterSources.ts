@@ -1,8 +1,8 @@
 import type Projection from "ol/proj/Projection.js";
 import type DataTileSource from "ol/source/DataTile.js";
-import { resourceRaster, type Raster } from "./types";
+import { resourceRaster, type Raster, type ResourceRaster } from "./types";
 import { numericTileSource } from "./numericTiles";
-import { TileWorkerClient } from "./TileWorkerClient";
+import { TileWorkerPool, type TileClient } from "./TileWorkerClient";
 import type { GridSurface } from "@atlas/domain";
 import { rasterGeographyKey, rasterIdentity } from "./rasterIdentity";
 
@@ -33,6 +33,10 @@ function sameData(a: Raster, b: Raster) {
     a.footprint === b.footprint
   );
 }
+/** The geography a raster's tiles read, apart from the viewport's window and scale. */
+function geographyRevision(raster: ResourceRaster) {
+  return rasterGeographyKey({ ...raster.geography, windows: [], tolerance: 0 });
+}
 export class RasterSources {
   private sources = new Map<
     string,
@@ -41,7 +45,7 @@ export class RasterSources {
   private used = new Set<string>();
   constructor(
     private projection: Projection,
-    private client = new TileWorkerClient()
+    private client: TileClient = new TileWorkerPool()
   ) {}
   begin() {
     this.used.clear();
@@ -58,13 +62,13 @@ export class RasterSources {
       this.release(key);
       entry = undefined;
     } else if (entry && resourceRaster(raster) && resourceRaster(entry.raster)) {
-      // Same immutable inputs, new viewport geography: update the registration in place
-      // and let the tiles reload against the refreshed ocean and lake shapes.
-      if (rasterGeographyKey(entry.raster.geography) !== rasterGeographyKey(raster.geography)) {
+      // Each tile reads its own sea and lakes at its own scale, so a new viewport window or
+      // scale leaves loaded tiles valid. Only a new revision of the geography reloads them.
+      if (geographyRevision(entry.raster) !== geographyRevision(raster)) {
         this.client.update(entry.registration, raster);
-        entry.raster = raster;
         entry.source.refresh();
       }
+      entry.raster = raster;
     }
     if (!entry) {
       const registration = this.client.register(raster);
