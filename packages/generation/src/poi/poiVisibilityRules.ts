@@ -1,6 +1,6 @@
 import type { GenerationState } from "../process";
 import type { PoiPlace, PoiVisibility } from "./poiContract";
-import { cellSpan, cellsWithin, fieldOf, gap, settlementsOf, featureCell } from "./poiReads";
+import { cellsWithin, fieldOf, gap, settlementsOf, featureCell } from "./poiReads";
 import { nearestPlace } from "./poiPlaces";
 
 type Factor = (state: GenerationState, place: PoiPlace) => number;
